@@ -23,6 +23,8 @@
 import { motionTier, scaledMs, MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getImageHeroRuntime, isImageHeroTransitionRunning } from '@/lib/hero/runtime';
 import { DURATION, EASE } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
 import { captureVisualClone, restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 
 /** How long a press on a row stays the reason for the next open: the navigation, with room. */
@@ -205,10 +207,10 @@ export function playDetailExit(exit: DetailExitSnapshot) {
       { opacity: 1, transform: 'none' },
       { opacity: 0, transform: `translateY(${travel()}px)` },
     ],
-    { duration: scaledMs(DURATION.short * 1000, 'image'), easing: EASE.accelerate, fill: 'forwards' },
+    { ...springTiming('defaultEffects', 'image'), fill: 'forwards' },
   );
   const remove = () => node.remove();
   leaving.finished.then(remove, remove);
   /* By the wall-clock rule, in case the animation never settles (a frozen tab). */
-  window.setTimeout(remove, DURATION.short * 1000 * MOTION_SPEED_SCALE.slow + 300);
+  window.setTimeout(remove, SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow + 300);
 }

@@ -11,7 +11,7 @@
  * every frame: every element with a box on screen in either pane — the 全部 / 本站讨论 row, the
  * banner, the heading, the rows, the pager — must travel with its pane, never more than the lean
  * behind it, and on the home route's leaning panel the upper blocks must lead the lower ones —
- * further along at some frame, and halfway across at least 5ms earlier. The GSAP lean moved only the
+ * further along at some frame, and halfway across at least 4ms earlier. The GSAP lean moved only the
  * blocks it had marked, and the view row, inside a wrapper with no box of its own, stood still
  * while the gallery slid out from under it.
  *
@@ -212,21 +212,31 @@ const show = (label, s) => {
    same string against the dev server). Every element with a box on screen in either pane is read
    every frame of the run, and three things must hold. **Nothing is left behind**: no element's
    displacement ever differs from its pane's by more than 45% of the window (the lean's own peak is
-   16%; an element that stood still while its pane slid a window reaches 100%). **Everything
+   about 12%; an element that stood still while its pane slid a window reaches 100%). **Everything
    moves**: each travels at least half as far as its pane. **The lean is there**, on a leaning
    panel, in space and in time: at some frame the elements in the upper third of the view are, on
-   average, at least 3% of the window further along than those in the lower third; and the lower
-   third is halfway across at least 5ms after the upper one (interpolated between frames — the
-   delays run from 0 at the top of the view to 24ms at its bottom; measured 9–16ms at 1440 and
-   390 on a loaded dev server, and exactly 0 without the lean). The arriving pane is
-   collected on the first frame after the tap, once it has a
-   box. */
+   average, at least 3% of the window further along than those in the lower third (measured 8–9%);
+   and the lower third is halfway across at least 4ms after the upper one (interpolated between
+   frames — each block lags its pane by a lag that grows down the view, so the lower third trails
+   the upper one while the pane leaves; measured 8–11ms at 1440 on a production build, and exactly
+   0 without the lean). The bound was 5ms while the lean was a 24ms delay. The window is
+   read off the run — the column and its faded margin on a wide screen — and the arriving pane is
+   collected on the first frame after the tap, once it has a box. */
 const WHOLE_PANE_SAMPLER = `async (tabLabel) => {
   const scroller = document.querySelector('.app-scroller');
   const panel = document.querySelector('[data-tab-panel]');
   const panes = [...panel.querySelectorAll(':scope > [data-tab-pane]')];
   const view = scroller.getBoundingClientRect();
-  const window_ = scroller.clientWidth + 96;
+  /* The window the strip slides past: the scroller and the plate, or on a wide screen the column
+     and its faded margin — read off the run itself, the arriving pane's first pose. */
+  let window_ = scroller.clientWidth + 96;
+  const readWindow = () => {
+    const starts = document.getAnimations().filter((a) => a.id === 'tab-strip')
+      .map((a) => a.effect.getKeyframes()[0]?.transform ?? '')
+      .map((t) => Math.abs(new DOMMatrix(t || 'none').m41));
+    return starts.length >= 2 ? Math.max(...starts) : null;
+  };
+  let windowRead = false;
   const describe = (el) => {
     const bits = [el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ').slice(0, 2).join('.') : '')];
     if (el.getAttribute('role')) bits.push('role=' + el.getAttribute('role'));
@@ -277,6 +287,13 @@ const WHOLE_PANE_SAMPLER = `async (tabLabel) => {
           collected = true;
         }
       }
+      if (!windowRead) {
+        const travel = readWindow();
+        if (travel) {
+          window_ = travel;
+          windowRead = true;
+        }
+      }
       read();
       if (performance.now() < until) requestAnimationFrame(step);
       else done();
@@ -315,8 +332,8 @@ const WHOLE_PANE_SAMPLER = `async (tabLabel) => {
     let lean = 0;
     /* When each element is halfway across: the first frame it has moved half the window,
        interpolated. Halfway, not the first 5%: the strip leaves fast, so 5% falls inside the
-       first frame or two, where interpolating between frames reads as noise; with a 24ms lean,
-       timing 5% gave the lower third anywhere from 5 to 28ms on one loaded machine. */
+       first frame or two, where interpolating between frames reads as noise; timing 5% gave the
+       lower third anywhere from 5 to 28ms on one loaded machine. */
     const departed = els.map(() => null);
     const lastDisp = els.map(() => null);
     for (const f of frames) {
@@ -364,14 +381,14 @@ const WHOLE_PANE_SAMPLER = `async (tabLabel) => {
       viewRow: viewRow === -1 ? null : { travel: Math.round(travel[viewRow]), behind: behind.has(viewRow) },
     });
   }
-  return { frames: history.length, leans, report };
+  return { frames: history.length, leans, window: Math.round(window_), report };
 }`;
 /* sampler:end */
 
 const wholePane = async (label) => {
   const result = await evaluate(`(${WHOLE_PANE_SAMPLER})(${JSON.stringify(label)})`);
   console.log(
-    `whole pane, tap ${label}: ${result?.frames ?? 0} frames, panel ${result?.leans ? 'leans' : 'does not lean'}` +
+    `whole pane, tap ${label}: ${result?.frames ?? 0} frames over a ${result?.window ?? '?'}px window, panel ${result?.leans ? 'leans' : 'does not lean'}` +
       `${result?.error ? ` (${result.error})` : ''}`,
   );
   let bad = !result?.report;
@@ -398,8 +415,8 @@ const wholePane = async (label) => {
       console.error(`\nFAIL: the ${r.pane} pane left without a lean (${(r.lean * 100).toFixed(1)}% of the window, 3% wanted)`);
       bad = true;
     }
-    if (result.leans && !(r.stagger >= 5)) {
-      console.error(`\nFAIL: the ${r.pane} pane's lower third did not leave after its upper third (${r.stagger ?? '?'}ms, 5 wanted)`);
+    if (result.leans && !(r.stagger >= 4)) {
+      console.error(`\nFAIL: the ${r.pane} pane's lower third did not leave after its upper third (${r.stagger ?? '?'}ms, 4 wanted)`);
       bad = true;
     }
   }

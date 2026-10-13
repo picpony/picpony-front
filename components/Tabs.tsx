@@ -1,11 +1,13 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useSlidingIndicator } from '@/lib/slidingIndicator';
 import { useScrollFade } from '@/lib/useScrollFade';
 import { useMediaQuery } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
+import { afterFirstFrame } from '@/lib/afterFirstFrame';
 import { motionTier } from '@/lib/appearance';
+import { playPrimedTabTransition, primeTabTransition } from '@/lib/motionLazy';
 import { cn } from '@/lib/utils';
 import { CountBadge } from './Badge';
 import { tabId, tabPanelId } from './TabPanes';
@@ -71,6 +73,14 @@ interface TabsProps<T extends string = string> {
  */
 const EDGE_ROOM = 32;
 
+/** A finger held this long is a long press, not a tap: its lift does not start the switch (the
+ *  browser sends no click after a long press either). Under the platform's 500ms. */
+const LONG_PRESS_MS = 400;
+
+/** How long a switch started on a finger's lift waits for the click before selecting the tab
+ *  itself: the click follows the lift by a task or two. */
+const LIFT_CLICK_GRACE_MS = 400;
+
 /**
  * Scroll `list` along its inline axis just enough to show `tab` with `EDGE_ROOM` to
  * spare. Its own scroll position only — `scrollIntoView` would also scroll every
@@ -126,7 +136,7 @@ export default function Tabs<T extends string = string>({
   label = '标签页',
   panelId,
 }: TabsProps<T>) {
-  const { containerRef, indicatorRef } = useSlidingIndicator<HTMLDivElement, HTMLSpanElement>(value);
+  const { containerRef, indicatorRef, glideTo } = useSlidingIndicator<HTMLDivElement, HTMLSpanElement>(value);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const revealed = useRef(false);
   /* The rail's active state is its own container fill, so it has nothing to
@@ -155,7 +165,8 @@ export default function Tabs<T extends string = string>({
     const list = containerRef.current;
     if (!list) return;
     const tab = list.querySelector<HTMLElement>(`[data-tab="${CSS.escape(value)}"]`);
-    if (tab) {
+    /* A pill row never scrolls, and asking would lay it out inside the switch's commit. */
+    if (tab && variant !== 'pill') {
       revealTab(list, tab, revealed.current && motionTier('tabs') !== 'off');
       revealed.current = true;
     }
@@ -163,11 +174,93 @@ export default function Tabs<T extends string = string>({
       const stop = button.dataset.tab === value ? 0 : -1;
       if (button.tabIndex !== stop) button.tabIndex = stop;
     }
-  }, [containerRef, value, vertical, tabSet]);
+  }, [containerRef, value, vertical, tabSet, variant]);
 
   /* Which edges hide tabs, as two attributes the `scroll-fade-x` mask reads. A pill row never
      scrolls. */
   useScrollFade(containerRef, variant !== 'pill');
+
+  /* **A tap's switch is moving before its selection renders.** The press primes it
+     (`primeTabTransition`): the arriving pane is restyled, laid out and painted while the finger is
+     still down, a window to the side and out of sight, so starting it costs only the clock — on a
+     phone-class CPU that work was the 150–240ms between lifting the finger and the first frame
+     that moved. A finger's switch then starts on the lift, as a native tab row selects on it,
+     without waiting for the click the browser synthesises a task or two later; a mouse's starts on
+     its click, which comes with the button's release (`playPrimedTabTransition`). The mark glides
+     with it (`glideTo`).
+
+     **And the selection renders after that switch's first frame** (`afterFirstFrame`), or at once
+     ahead of the next press or key. A click's update is rendered inside the click's own task, and
+     the frame that starts the strip waited for the whole screen to render: 30–40ms of a
+     phone-class CPU on /policy, /settings and /messages. The strip runs on the compositor, so the
+     render no longer holds it; the driver adopts the run when the commit lands. A press that
+     becomes a scroll or a long press lets the primed switch go, and a lift whose click never comes
+     selects the tab itself. Located through the arriving pane, the one `aria-controls` will name,
+     so a row primes only the panel it drives. */
+  const pressed = useRef<{ to: T; pointerId: number; at: number } | null>(null);
+  /** A switch already moving for `to`, and the selection still to make: `cancel` drops the wait. */
+  const started = useRef<{ to: T; cancel: () => void } | null>(null);
+  const panelFor = (to: T) => {
+    const panel = document.getElementById((panelId ?? tabPanelId)(to))?.parentElement;
+    return panel?.hasAttribute('data-tab-panel') ? panel : null;
+  };
+  const wait = (to: T, cancel: () => void) => {
+    started.current?.cancel();
+    started.current = { to, cancel };
+  };
+  const onPress = (event: React.PointerEvent<HTMLButtonElement>, to: T) => {
+    pressed.current = null;
+    if (to === value || event.button !== 0 || !event.isPrimary) return;
+    const panel = panelFor(to);
+    if (!panel) return;
+    pressed.current = { to, pointerId: event.pointerId, at: event.timeStamp };
+    /* Direction from the panes' order, as the driver derives it. */
+    const order = [...panel.children].map((child) => (child as HTMLElement).dataset.tabPane);
+    primeTabTransition(panel, value, to, order.indexOf(to) > order.indexOf(value) ? 1 : -1, {
+      pointerId: event.pointerId,
+      deferred: event.pointerType !== 'touch',
+    });
+  };
+  const onLift = (event: React.PointerEvent<HTMLButtonElement>, to: T) => {
+    const press = pressed.current;
+    pressed.current = null;
+    if (event.pointerType !== 'touch' || !press || press.to !== to || press.pointerId !== event.pointerId) return;
+    if (event.timeStamp - press.at >= LONG_PRESS_MS) return;
+    const panel = panelFor(to);
+    if (!panel || !playPrimedTabTransition(panel, to)) return;
+    glideTo(to);
+    const timer = window.setTimeout(() => {
+      started.current = null;
+      onChange(to);
+    }, LIFT_CLICK_GRACE_MS);
+    wait(to, () => window.clearTimeout(timer));
+  };
+  const select = (to: T) => {
+    const pending = started.current;
+    started.current = null;
+    pending?.cancel();
+    const panel = pending?.to === to ? null : to !== value ? panelFor(to) : null;
+    const moving = pending?.to === to || (panel !== null && playPrimedTabTransition(panel, to));
+    if (!moving) {
+      onChange(to);
+      return;
+    }
+    if (pending?.to !== to) glideTo(to);
+    wait(
+      to,
+      afterFirstFrame(() => {
+        started.current = null;
+        onChange(to);
+      }),
+    );
+  };
+  useEffect(
+    () => () => {
+      started.current?.cancel();
+      started.current = null;
+    },
+    [],
+  );
 
   const focusTab = (index: number) => {
     const tab = buttons.current[index];
@@ -246,7 +339,9 @@ export default function Tabs<T extends string = string>({
         /* Roving: one tab stop for the whole group — the first render's here, every later
            move in the layout effect above, so React never writes it during a switch. */
         tabIndex={tab.value === firstValue ? 0 : -1}
-        onClick={() => onChange(tab.value)}
+        onPointerDown={(event) => onPress(event, tab.value)}
+        onPointerUp={(event) => onLift(event, tab.value)}
+        onClick={() => select(tab.value)}
         onKeyDown={(event) => onKeyDown(event, index)}
         onFocus={(event) => {
           const list = containerRef.current;

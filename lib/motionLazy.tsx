@@ -117,6 +117,29 @@ export function startTabTransition(from: string, to: string, direction: 1 | -1):
   if (scroller) rememberTabScroll(panel, from, scroller.scrollTop);
 }
 
+/** The press on a tab primes its switch, for its release to start (`primeTabTransition` in
+ *  `lib/motion/tabs.ts`). Without the engine there is no run to prime: the click takes the
+ *  fallback above. */
+export function primeTabTransition(
+  panel: HTMLElement,
+  from: string,
+  to: string,
+  direction: 1 | -1,
+  press: { pointerId: number; deferred: boolean },
+): void {
+  if (motion) {
+    motion.primeTabTransition(panel, from, to, direction, press);
+    return;
+  }
+  void load();
+}
+
+/** A finger's lift starts the switch its press primed (`playPrimedTabTransition`). False without
+ *  the engine: nothing was primed, and the click does the switch. */
+export function playPrimedTabTransition(panel: HTMLElement, to: string): boolean {
+  return motion ? motion.playPrimedTabTransition(panel, to) : false;
+}
+
 /**
  * The drawer's edge-swipe, on a phone.
  *

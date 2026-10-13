@@ -18,6 +18,7 @@
     "test:primitives": "node scripts/testPrimitives.mjs",
     "test:presence": "node scripts/testPresenceFocus.mjs",
     "test:drawer": "node scripts/testDrawerSwipe.mjs",
+    "test:tab-press": "node scripts/testTabPress.mjs",
     "test:ui": "node scripts/reviewUiTest.mjs",
     "test:auth-loading": "node scripts/reviewBrowser.mjs --auth-loading",
     "test:sanitize": "node scripts/testSanitizeHtml.mjs",
@@ -46,6 +47,7 @@
     "perf:ripple": "node scripts/probeRipple.mjs",
     "perf:glass": "node scripts/probeFlutedGlass.mjs",
     "perf:pageturn": "node scripts/probePageTurn.mjs",
+    "perf:tab-latency": "node scripts/probeTabLatency.mjs",
     "perf:sharpness": "node scripts/probeHeroSharpness.mjs",
     "perf:sharpness:warm": "node scripts/probeHeroSharpness.mjs 1920 --fake-cdn"
   },

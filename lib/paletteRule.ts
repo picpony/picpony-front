@@ -232,7 +232,7 @@ type InkPolicy = 'exact-custom' | 'built-in';
 
 /**
  * `on-primary-variant`: the app bar's own ink — its icons and the wordmark — a step quieter than
- * `on-primary` (the owner: 「header里的图标（含logo）能不能稍微浅一点点」, a little less contrast
+ * `on-primary` (a little less contrast on the bar than the fill's own ink carries — a refinement
  * against the bar). The ramp tone on the line from `on-primary` toward the fill whose contrast
  * against that fill is `ON_PRIMARY_VARIANT_SHARE` of `on-primary`'s own, floored at
  * `ON_PRIMARY_VARIANT_FLOOR` so it would still carry text, and never past `on-primary`: where
@@ -409,7 +409,7 @@ export const isGuardedHue = (hue: number) => {
  * the hue can hold and the colour reads as 明清色; at tone 30 the gamut is two to four times as
  * wide, so the same 16 leaves most of it unused and what fills the gap is grey — 浊色, "a pure
  * hue plus grey". Measured over the ten, as a share of the hue's own deep register at that tone:
- * the four containers the owner called muddy hold 0.37–0.51 (天琴 0.43 brown, 苹果嘉儿 0.51 olive,
+ * the four containers that read muddy hold 0.37–0.51 (天琴 0.43 brown, 苹果嘉儿 0.51 olive,
  * 小蝶 0.37 plum, 云宝 0.39), the four he called clean hold 0.68–0.81 (邪茧, 露娜, 瑞瑞, 碧琪).
  * It is not simply the hue, and it is not the absolute chroma: 默认's and 暮光's periwinkle holds
  * 0.43 at chroma 18, the same share as the brown, while 碧琪's blue holds 0.81 at the same 18.
@@ -498,7 +498,7 @@ export function relatedHue(seedHue: number, relation: 'auto' | AccentPreset): nu
 
 /**
  * The custom palette's accents. One hue, shared by the second colour and the accent
- * (the owner's call: the ten get two hues from an artist; one chosen by hand is
+ * (the ten get two hues from an artist; one chosen by hand is
  * the one least likely to clash). A *relation* — 自动 or a preset — tapers its
  * chroma with the seed's confidence in its own hue, so a grey seed gets grey
  * accents, as `rampChroma` gives it a near-grey ramp; **a hue the user named is
@@ -930,7 +930,7 @@ export const deriveCustomTheme = (spec: CustomSpec) =>
  * populous tones are offered instead, 12 tones apart — a greyscale photograph
  * has a perfectly good theme here, since `rampChroma` tapers its floor away.
  *
- * **Monet decides the first four; the picture can offer four more** (the owner's request: four
+ * **Monet decides the first four; the picture can offer four more** (four
  * options were too few, and a picture whose four all read as muddy left nothing worth taking).
  * Past `MONET_SEEDS`, `morePictureColours` fills the rest from the same quantised clusters —
  * still colours in the picture, never a style's transform of one.

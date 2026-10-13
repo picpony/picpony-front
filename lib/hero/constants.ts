@@ -119,13 +119,14 @@ export const HERO_MEDIA_MAX_WIDTH_PX = 944;
 // ---------------------------------------------------------------------------
 
 /**
- * **250ms, mirrored — M3's `medium1`.**
+ * **220ms, mirrored — and the flight is over before the next thing you do.**
  *
- * Deliberately off the spring ladder: the ladder's entries are spring settle times, but a
- * from-rest leg flies `HERO_FLIGHT_CURVE` (a Bézier), so this is a *transition* whose length
- * is a step on M3's duration scale. Both neighbours read wrong (`defaultSpatial` 194ms
- * snatched, `slowSpatial` 296ms slack) and 500ms measured too slow. An interrupted leg
- * becomes a ζ0.9 spatial spring settling in 250ms — same shape, interpolated clock.
+ * Keeping up with the hand — the flight is over before the next thing the user does — is what sets
+ * the length: 90% of the way by 124ms and landed by 200. The curve decides how it gets there.
+ * 250ms on the curve before read slow; 350ms on the tab strip's response, which crept on until
+ * 325ms, slower still; and 200ms on a flatter curve, quick enough, lost its life. Earlier, 194ms
+ * on a spring read snatched, 296ms slack and 500ms too slow. An interrupted leg becomes a ζ0.9 spatial
+ * spring settling in the time it has left (`HERO_FLIGHT_RESPONSE`).
  *
  * The duration and the shape mirror; the *path* does not — `createHeroPointArc` mirrors the
  * arc rather than retracing it — and the rest of the direction asymmetry lives in the
@@ -134,33 +135,47 @@ export const HERO_MEDIA_MAX_WIDTH_PX = 944;
  * When a transition reads wrong, check what it is doing before changing how long it takes —
  * a duration is the cheapest knob and the least likely to be the fault.
  *
- * Couplings: 48 samples → 47 intervals of 5.32ms; the gallery card's FastEffects fade must
- * finish inside the leg; the reveal windows are progress fractions, so they cannot outlive
- * it. The swipe-down dismiss is deliberately not here — see `PULL_RELEASE_DURATION_MS`.
+ * Couplings: 48 samples → 47 segments, 4.68ms on average; the gallery card's FastEffects fade
+ * (108ms) must finish inside the leg; the reveal windows are progress fractions, so they cannot
+ * outlive it. The swipe-down dismiss is deliberately not here — see `PULL_RELEASE_DURATION_MS`.
  */
 export const HERO_DURATIONS: Record<HeroDirection, number> = {
-  forward: 250,
-  back: 250,
+  forward: 220,
+  back: 220,
 };
 
-
 /**
- * The flight's shape: `Curves.fastOutSlowIn`, which is what Flutter's Hero flies — the
- * reverse curve is the same shape read backwards. A spring cannot take this shape: the curve
- * hangs back ~2.6% of the travel in its first tenth, and no ζ puts a from-rest spring's peak
- * velocity that late. It leaves and arrives exactly at rest (`y'(0) = y'(1) = 0`, asserted by
- * `npm run hero:path`).
+ * **The flight answers the press on the next frame, swoops through a crest in the air and lands
+ * at rest.** Per 60Hz frame of its 220ms, as a share of the way: 8.5, 13.8, 19.4, 18.4, 13.0,
+ * 8.8, 6.1, 4.3, 3.1, 2.1, 1.4, 0.8, 0.3 — halfway at 57ms, 90% at 124ms, within 0.3% of its
+ * landing at 200ms, and still there (`y'(1) = 0`). It cannot overshoot, so every edge of the box
+ * travels one way.
  *
+ * What makes it read alive is contrast: it leaves at under a third of its crest (`y1 / x1` = 7/8
+ * of its mean speed) and builds over two frames to a crest of 2.70× its mean speed 22% of the way
+ * in, the two fastest frames in the air, then lets go over a soft 76ms settle. Four shapes shipped
+ * before it, each right in one way (`npm run hero:path` tables the first two beside it):
+ * - Flutter's `Curves.fastOutSlowIn` (0.4, 0, 0.2, 1) over 250ms, until 2026-10: the same crest,
+ *   2.73× at 75ms — the whoosh — after a hang-back of 1.1% in the first frame, which read as the
+ *   one press in the app that did not answer at once.
+ * - The tab strip's launched response over 350ms: it went on the press (15.7% in the first frame),
+ *   but its fastest frame was its first, spent while the box was card-sized, and its last tenth
+ *   crept on for 160ms — it went on the press, but read slower and with less life in it, for
+ *   all that it read more elegant.
+ * - `cubic-bezier(0.2, 0.15, 0.25, 1)` over 250ms: moving at once (8.1%), cresting at 2.31×, landing
+ *   at 231ms — still read slow.
+ * - `cubic-bezier(0.3, 0.35, 0.4, 1)` over 200ms: landed at 186ms, but a crest of only 1.83× left
+ *   its first five frames all at 11–15% — an even slide, with little life in it.
  * Spelled as an object with a `css` twin rather than only a string: sampled tracks need the
- * coefficients, two-keyframe tracks need the string, and deriving one from the other is what
- * stops them drifting.
+ * coefficients, two-keyframe tracks need the string, and deriving one from the other is what stops
+ * them drifting.
  */
 export const HERO_FLIGHT_CURVE: ProgressCurve = {
-  x1: 0.4,
-  y1: 0,
-  x2: 0.2,
+  x1: 0.32,
+  y1: 0.28,
+  x2: 0.16,
   y2: 1,
-  css: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  css: 'cubic-bezier(0.32, 0.28, 0.16, 1)',
 };
 
 /** The shape a leg gets when it leaves from rest, which is every leg the user starts. */
@@ -213,7 +228,7 @@ export const HERO_CONTENT_FADE: Record<HeroDirection, { start: number; end: numb
  * The forward row is a second deliberate divergence from Material's enter thresholds, and it
  * is the answer to "the flight looks stiff": at 0 → 0.25 every track finished within the
  * first ~98ms, so box, page and chrome arrived as one event. 0.15 → 0.85 lets the box lead
- * and the page follow — two events instead of one — spanning 55–155ms of the leg.
+ * and the page follow — two events instead of one — spanning 26–108ms of the leg.
  */
 /**
  * `MaterialContainerTransform`'s `shapeMask` thresholds, which let the corner resolve ahead
@@ -233,8 +248,11 @@ export const HERO_CONTAINER_SHAPE: Record<HeroDirection, { start: number; end: n
  *
  * 48 because the container's anisotropy is the binding constraint: WAAPI lerps the window's
  * `scale(sx, sy)` and the compensator's `scale(fx, fy)` independently, and that between-sample
- * error goes as the square of the spacing — 0.99% at 32 against 0.441% at 48, measured on the
- * real geometry matrix. 250/47 is 5.32ms per segment, inside a frame at 120Hz.
+ * error goes as the square of a segment's step. A leg that leaves moving does the most travel
+ * where a tall card's window is narrowest, so the samples are spaced on travel and bend as well
+ * as time (`sampleOffsets`): 0.332% on the real geometry matrix, against 0.499% evenly spaced
+ * (`fastOutSlowIn`, which left from rest, held 0.441% at 48; a flatter curve leaving at 7/6 of its
+ * mean speed needed 64). 220/47 is 4.68ms per segment on average, inside a frame at 144Hz.
  */
 export const HERO_PROGRESS_SAMPLES = 48;
 
@@ -287,8 +305,8 @@ export const HERO_TARGET_RADIUS_PX = 16;
 
 /**
  * Reverse duration scales with how much of the trip is left to undo. The 90ms floor is for a
- * reversal caught late in a leg: at 250ms the ratio bottoms out at 0.35 (87.5ms), so the last
- * third of a leg clamps to 90.
+ * reversal with almost nothing left to undo: at 220ms the ratio bottoms out at 0.35 (77ms), so a
+ * reverse with under 0.8% of its way left clamps to 90 — scaled with the leg, so at every speed.
  */
 export const HERO_REVERSE_MIN_DURATION_MS = 90;
 export const HERO_REVERSE_BASE_RATIO = 0.35;

@@ -186,6 +186,7 @@ const settle = async () => {
 
 function loadHomeTabs(browser) {
   return load('lib/homeTabs.ts', {
+    '@/lib/afterFirstFrame': load('lib/afterFirstFrame.ts', {}, { window: browser.window }),
     '@/lib/historyLayers': { settleHistoryLayers: () => Promise.resolve() },
   }, { window: browser.window, URL, URLSearchParams });
 }
@@ -310,28 +311,32 @@ function framesOf(strip, leg, count) {
   return out;
 }
 
-test('the tab strip moves in the first frame after a tap and never lurches', () => {
+test('the tab strip leaves at its fastest without lunging, and only slows from there', () => {
   const strip = loadStrip();
   const full = strip.STRIP_DURATION_MS;
   const leg = strip.freshStripLeg(full);
-  const first = framesOf(strip, leg, 6);
+  const frames = framesOf(strip, leg, Math.ceil(full / FRAME_MS));
   /* `emphasized` over 500ms moved 0.9% of the window in its first frame and 23.6% in its sixth:
-     nothing, then a lurch — the slow start the owner reported. */
-  for (const travel of first) {
-    assert.ok(travel >= 0.08 && travel <= 0.12, `first 100ms, per frame: ${first.map((v) => (v * 100).toFixed(1)).join(' ')}%`);
+     nothing, then a lurch. The launch-2 strip after it moved 9.5% in its first frame and gained
+     speed for 34ms: an even glide that was halfway only after 82ms, which read on a phone as the
+     page dragging behind the finger. Thrown at 4.5 over 300ms it moved 22.7% in its first frame and
+     was 90% there by 133ms: a lunge. Between the two, and never gaining speed. */
+  assert.ok(frames[0] >= 0.13 && frames[0] <= 0.18, `first frame ${(frames[0] * 100).toFixed(1)}% of the window`);
+  for (let k = 1; k < frames.length; k += 1) {
+    assert.ok(frames[k] <= frames[k - 1] + 1e-12, `frame ${k + 1} carries no more than frame ${k}: ${frames.slice(0, 8).map((v) => (v * 100).toFixed(1)).join(' ')}%`);
   }
-  let t10 = null;
+  let half = null;
+  let most = null;
   let previous = 0;
-  let largest = 0;
-  for (let ms = 0; ms <= full; ms += 1) {
+  for (let ms = 0; ms <= full; ms += 0.5) {
     const { p } = strip.stripPose(leg, ms);
     assert.ok(p >= previous - 1e-12 && p <= 1 + 1e-12, `monotone and never past its end, at ${ms}ms`);
-    if (t10 === null && p >= 0.1) t10 = ms;
+    if (half === null && p >= 0.5) half = ms;
+    if (most === null && p >= 0.9) most = ms;
     previous = p;
   }
-  for (const travel of framesOf(strip, leg, Math.ceil(full / FRAME_MS))) largest = Math.max(largest, travel);
-  assert.ok(t10 !== null && t10 <= 20, `10% of the way by ${t10}ms`);
-  assert.ok(largest <= 0.12, `no frame carries more than 12% of the way (${(largest * 100).toFixed(1)}%)`);
+  assert.ok(half !== null && half >= 50 && half <= 70, `halfway at ${half}ms`);
+  assert.ok(most !== null && most >= 150 && most <= 190, `90% of the way at ${most}ms`);
   assert.equal(strip.stripPose(leg, full).p, 1);
 });
 
@@ -365,7 +370,10 @@ test('a second tap turns the strip from where it is, the other way at once', () 
     }
     if (before.p >= 0.3) {
       const start = strip.stripPose(next, 0).speed;
-      assert.ok(start >= fresh * 0.99, `leaves at a fresh tap's speed or more, ${elapsed}ms in`);
+      /* Or as fast as a leg of that length can leave without overshooting the side it returns to:
+         a tap's launch over a short way back would pass the critically damped ceiling. */
+      const ceiling = strip.stripPose({ ...next, launch: strip.STRIP_MAX_LAUNCH }, 0).speed;
+      assert.ok(start >= Math.min(fresh, ceiling) * 0.99, `leaves at a fresh tap's speed or more, ${elapsed}ms in`);
       assert.ok(start >= before.speed * 0.95, `and no slower than it was going, ${elapsed}ms in`);
       /* `Animation.reverse` played a late tap back through the tail: 1–1.6% per frame. */
       assert.ok(framesOf(strip, next, 1)[0] >= 0.05, `moves in its first frame, ${elapsed}ms in`);
@@ -385,68 +393,127 @@ test('rapid alternation starts every leg moving', () => {
   }
 });
 
+test('on a wide screen the strip slides past the column and a faded margin, out of sight at both ends', () => {
+  const strip = loadStrip();
+  const inner = (width) => ({ left: 0, right: width });
+  const centred = (width, column) => ({ left: (width - column) / 2, right: (width + column) / 2 });
+  /* A list column on a 1920 desktop, the drawer docked: the full fade, the window well inside. */
+  const wide = strip.columnWindow(centred(1588, 896), inner(1588));
+  assert.deepEqual({ ...wide }, { width: 896 + 2 * 120, reach: 120, fade: 96 });
+  /* The same column at 1440: the fade takes what room there is and ends at the scroller's edge. */
+  const laptop = strip.columnWindow(centred(1116, 896), inner(1116));
+  assert.equal(laptop.fade, 86);
+  assert.equal(laptop.width, 1116);
+  /* A phone's column is the scroller less its gutter: the scroller stays the window. */
+  assert.equal(strip.columnWindow(centred(390, 358), inner(390)), null);
+  assert.equal(strip.columnWindow(centred(1012, 964), inner(1012)), null);
+  /* Each side is out of sight at its end of the run: the arriving pane starts its own reach past
+     the window, the leaving one ends there — however wide the column, a gutter's bleed included. */
+  for (const [scroller, column] of [[1588, 896], [1588, 1280], [2248, 896], [1116, 896], [1012, 896]]) {
+    const at = centred(scroller, column);
+    const window = strip.columnWindow(at, inner(scroller));
+    if (!window) continue;
+    const bleed = strip.STRIP_EDGE_CLEAR;
+    assert.ok(at.left + window.width - bleed >= at.right + window.reach, `${column} in ${scroller}: arrives from out of sight`);
+    assert.ok(at.right - window.width + bleed <= at.left - window.reach, `${column} in ${scroller}: leaves out of sight`);
+    assert.ok(at.left - window.reach >= 0 && at.right + window.reach <= scroller, `${column} in ${scroller}: inside the scroller`);
+  }
+});
+
 test('a block leans by a small continuous function of its height, top first', () => {
   const strip = loadStrip();
   const view = { top: 64, height: 836 };
-  assert.equal(strip.leanDelay(64, view.top, view.height), 0);
-  assert.equal(strip.leanDelay(64 + 20, view.top, view.height), 0, 'the top band leads, with no delay');
-  assert.equal(strip.leanDelay(64 + 2000, view.top, view.height), strip.LEAN_MAX_MS, 'capped below the fold');
+  assert.equal(strip.leanDepth(64, view.top, view.height), 0);
+  assert.equal(strip.leanDepth(64 + 20, view.top, view.height), 0, 'the top band rides its pane');
+  assert.equal(strip.leanDepth(64 + 2000, view.top, view.height), 1, 'capped below the fold');
   let previous = -1;
   for (let top = 0; top <= 1200; top += 8) {
-    const delay = strip.leanDelay(top, view.top, view.height);
-    assert.ok(delay >= previous, `never earlier lower down (${top}px)`);
-    previous = delay;
+    const depth = strip.leanDepth(top, view.top, view.height);
+    assert.ok(depth >= previous, `each depth leans further than the one above (${top}px)`);
+    previous = depth;
   }
-  /* Tops within a band — masonry cards that read as one row — share a beat. */
-  assert.equal(strip.leanDelay(64 + 640, view.top, view.height), strip.leanDelay(64 + 660, view.top, view.height));
+  /* Tops within a band — masonry cards that read as one row — move together. */
+  assert.equal(strip.leanDepth(64 + 640, view.top, view.height), strip.leanDepth(64 + 660, view.top, view.height));
 });
 
-test('a leaning block lands exactly where the strip was, and the lean stays within its budget', () => {
-  const strip = loadStrip();
-  const full = strip.STRIP_DURATION_MS;
-  const history = [{ leg: strip.freshStripLeg(full), start: 0 }];
-  const delay = strip.LEAN_MAX_MS;
-  const samples = strip.lagSamples(history, delay, 0, 0.5 / 1204);
-  assert.equal(samples[0][0], 0);
-  assert.equal(samples[0][1], 0, 'no lag before the strip moves');
-  assert.equal(samples.at(-1)[0], full + delay, 'the block lands one delay after the strip');
-  assert.ok(Math.abs(samples.at(-1)[1]) < 1e-12, 'and with no lag left');
-  let peak = 0;
-  for (const [, lag] of samples) {
-    assert.ok(lag >= -1e-12, 'a block never runs ahead of the strip');
-    peak = Math.max(peak, lag);
-  }
-  /* About a sixth of the window: a lean that reads without looking exaggerated (half the old 31%),
-     and well inside the old budget of 0.32, past which the top finishes before the bottom starts. */
-  assert.ok(peak > 0.12 && peak < 0.2, `peak lean ${(peak * 100).toFixed(1)}% of the window`);
-  /* Straight lines between the samples stay within half a pixel of the lag itself. */
+/** A block's lag, linear between its samples. */
+const lagOf = (samples, t) => {
+  if (t <= samples[0][0]) return samples[0][1];
   for (let i = 1; i < samples.length; i += 1) {
     const [t0, v0] = samples[i - 1];
     const [t1, v1] = samples[i];
-    const mid = (t0 + t1) / 2;
-    const exact = strip.stripAt(history, mid) - strip.stripAt(history, mid - delay);
-    assert.ok(Math.abs(exact - (v0 + v1) / 2) * 1204 < 0.75, `within tolerance at ${mid.toFixed(1)}ms`);
+    if (t <= t1) return v0 + ((v1 - v0) * (t - t0)) / (t1 - t0);
   }
+  return samples.at(-1)[1];
+};
+
+test('a leaning block eases after its pane: it moves at once, leans, and lands from behind', () => {
+  const strip = loadStrip();
+  const full = strip.STRIP_DURATION_MS;
+  const history = [{ leg: strip.freshStripLeg(full), start: 0 }];
+  const lag = strip.lagSampler(history, 0);
+  const px = 1 / 1204;
+  const fine = lag(1, 0.05 * px);
+  const samples = lag(1, 1.5 * px);
+  assert.equal(samples[0][0], 0);
+  assert.equal(samples[0][1], 0, 'no lag before the strip moves');
+  assert.equal(samples.at(-1)[1], 0, 'it lands on its pane');
+  const end = samples.at(-1)[0];
+  assert.ok(end > full - 20 && end < full + 40, `and lands with the strip, at ${end.toFixed(0)}ms`);
+  /* The delay it replaced held the bottom of the view still for the first frame and then jumped to
+     full speed; smoothing moves it from the first frame. */
+  const frame = 1000 / 60;
+  const moved = strip.stripAt(history, frame) - lagOf(samples, frame);
+  assert.ok(moved > 0.25 * strip.stripAt(history, frame), `the bottom of the view moves in the first frame: ${(moved * 100).toFixed(1)}%`);
+  let behind = 0;
+  let ahead = 0;
+  for (const [, value] of samples) {
+    behind = Math.max(behind, value);
+    ahead = Math.min(ahead, value);
+  }
+  /* About an eighth of the window: a lean that reads without looking exaggerated (the old 31%).
+     And never past its pane: the spring it replaced carried the lower rows 2.3% past and back, a
+     wobble while the top was already still. */
+  assert.ok(behind > 0.1 && behind < 0.14, `peak lean ${(behind * 100).toFixed(1)}% of the window`);
+  assert.ok(ahead > -1e-9, `never ahead of its pane (${(ahead * 100).toFixed(3)}%)`);
+  /* Straight lines between the samples stay within the run's pixel and a half of the lag itself. */
+  for (let t = 0; t <= end; t += 0.5) {
+    assert.ok(Math.abs(lagOf(samples, t) - lagOf(fine, t)) / px < 1.6, `within tolerance at ${t}ms`);
+  }
+  /* Lower down, further behind: each depth leans further, and the lowest lands last. */
+  let previous = { behind: 0, end: 0 };
+  for (const depth of [0.25, 0.5, 0.75, 1]) {
+    const own = lag(depth, 1.5 * px);
+    const peak = Math.max(...own.map(([, value]) => value));
+    assert.ok(peak > previous.behind, `leans further at ${depth}`);
+    previous = { behind: peak, end: own.at(-1)[0] };
+  }
+  assert.ok(previous.end >= lag(0.25, 1.5 * px).at(-1)[0], 'the lowest lands last');
 });
 
 test('a turn carries every leaning block on from where it is, top first', () => {
   const strip = loadStrip();
   const full = strip.STRIP_DURATION_MS;
   const fresh = strip.freshStripLeg(full);
+  const px = 1 / 1204;
   for (const at of [40, 100, 200, 330]) {
     const turned = strip.turnStrip(fresh, at, full);
+    const before = strip.lagSampler([{ leg: fresh, start: 0 }], 0);
     const history = [{ leg: fresh, start: 0 }, { leg: turned, start: at }];
-    for (const delay of [8, 24, strip.LEAN_MAX_MS]) {
-      const before = strip.stripAt([{ leg: fresh, start: 0 }], at - delay);
-      const samples = strip.lagSamples(history, delay, at, 0.5 / 1204);
-      /* The block's own position is the strip's, `delay` ago: continuous through the tap. */
-      const after = strip.stripAt(history, at) - samples[0][1];
-      assert.ok(Math.abs(after - before) < 1e-9, `no jump at the turn (${at}ms, ${delay}ms late)`);
-      /* It runs on the old way for its own delay, then follows the new leg — it never starts over. */
-      const heading = (t) => strip.stripAt(history, t - delay);
-      assert.ok(heading(at + delay * 0.5) >= heading(at) - 1e-9, 'still leaving just after the tap');
-      assert.ok(heading(at + delay + 60) < heading(at + delay), 'and on its way back once its delay has passed');
-      assert.ok(Math.abs(samples.at(-1)[1]) < 1e-12, 'landing with no lag left');
+    const after = strip.lagSampler(history, at);
+    for (const depth of [0.25, 0.5, 1]) {
+      const was = lagOf(before(depth, 0.02 * px), at);
+      const samples = after(depth, 0.5 * px);
+      /* The block's own position is continuous through the tap. */
+      assert.ok(Math.abs(samples[0][1] - was) < 2 * px, `no jump at the turn (${at}ms, depth ${depth})`);
+      assert.equal(samples.at(-1)[1], 0, 'landing on its pane');
+      if (at <= 100 && depth === 1) {
+        /* Mid-flight, the lowest block is still behind its pane, so it goes on the old way until
+           the pane comes back past it: the lean reverses top first. */
+        const position = (t) => strip.stripAt(history, t) - lagOf(samples, t);
+        assert.ok(position(at + 4) >= position(at) - 1e-9, `still leaving just after the tap (${at}ms)`);
+        assert.ok(position(at + 120) < position(at + 4), `and on its way back after (${at}ms)`);
+      }
     }
   }
 });

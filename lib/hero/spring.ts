@@ -42,9 +42,16 @@ export type SpringResponse = {
  * flyer stopped dead for a frame or two and restarted from rest (R10-007). At −3 the dip is
  * ≈10% of the return travel, the most that still reads as the picture being caught and thrown
  * back rather than as a second flight.
+ *
+ * The ceiling is a rebuild's: a leg rebuilt mid-flight (the address bar moving) carries the
+ * flyer's speed over the time the old leg had left, which around the flight's crest takes up to
+ * 3.7 in these units (3.3 on the `fastOutSlowIn` it flew before). At 2.5 such a rebuild braked the
+ * flyer by up to a third in the frame the viewport changed. The ζ0.9 spring still lands without
+ * passing its target at 4 (at 4.5 it passes by 0.03%, at 5 by 0.2%), so that is where the ceiling
+ * sits.
  */
 const MIN_VELOCITY = -3;
-const MAX_VELOCITY = 2.5;
+const MAX_VELOCITY = 4;
 
 export function clampSpringVelocity(velocity: number) {
   if (!Number.isFinite(velocity)) return 0;

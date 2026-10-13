@@ -1,7 +1,8 @@
 /**
  * `npm run hero:path` — the hero flight's standing checks, over a matrix of realistic box pairs
  * in both directions, exiting non-zero. Asserts: per-decile monotonicity of every rendered edge,
- * exact landing, crop retrace inside its budget, the flight curve leaving from rest, table
+ * exact landing, crop retrace inside its budget, the flight moving on its first frame, cresting
+ * early and arriving at rest, table
  * fidelity at the shipped sample count, and the container transform — accumulated content scale
  * isotropic and equal to the cover fit, clip ∘ compensator ∘ counter == identity parsed from the
  * emitted strings, the reconstructed box == the arc rect, corner containment under the browser's
@@ -215,8 +216,10 @@ const TABLE_TOLERANCE = 0.004;
 const MODELS = [
   ['HERO_FLIGHT_CURVE', HERO_FLIGHT_PROGRESS.forward],
   /* Down to the reversal floor: a caught flyer leaves at the speed it was travelling, −1…−2.5
-     on real legs, and its table has to hold the dip as faithfully as a from-rest curve. */
-  ...[-3, -2, -0.5, 0, 1, 2, 2.5].map((velocity) => [
+     on real legs, and its table has to hold the dip as faithfully as a from-rest curve. Up to the
+     ceiling: a rebuild of a leg carries the flyer's speed over the time it has left, up to 3.7 on
+     the shipped curve (3.3 on `fastOutSlowIn`). */
+  ...[-3, -2, -0.5, 0, 1, 2, 2.5, 4].map((velocity) => [
     `spring v=${velocity}`,
     { kind: 'spring', response: { ...constants.HERO_FLIGHT_RESPONSE.forward, velocity } },
   ]),
@@ -243,7 +246,9 @@ function tableError(model, samples) {
   return { worst, worstAt };
 }
 
-console.log('\nmodel               p(0) p(1) monotone  v(0)      table@24   table@32');
+console.log(
+  `\nmodel               p(0) p(1) monotone  v(0)      table@24   table@32   table@${HERO_PROGRESS_SAMPLES}`,
+);
 for (const [label, model] of MODELS) {
   const zero = progressAt(model, 0);
   const one = progressAt(model, 1);
@@ -256,17 +261,18 @@ for (const [label, model] of MODELS) {
   }
   const at24 = tableError(model, 24);
   const at32 = tableError(model, 32);
+  const shipped = tableError(model, HERO_PROGRESS_SAMPLES);
   const launch = velocityAt(model, 0);
   console.log(
     `${label.padEnd(19)} ${zero.toFixed(1)}  ${one.toFixed(1)}  ${(monotone ? 'yes' : 'dips').padEnd(8)} ` +
-      `${launch.toFixed(4).padStart(8)}  ${(at24.worst * 100).toFixed(3)}%    ${(at32.worst * 100).toFixed(3)}%`,
+      `${launch.toFixed(4).padStart(8)}  ${(at24.worst * 100).toFixed(3)}%    ${(at32.worst * 100).toFixed(3)}%` +
+      `    ${(shipped.worst * 100).toFixed(3)}%`,
   );
   if (zero !== 0 || one !== 1) fail('d/model', `${label} does not span [0, 1] exactly`);
   /* A negative-velocity leg is expected to dip below 0 before recovering — that dip is the
      catch, not a bug. Monotonicity is required of the from-rest models only. */
   const launchesBackwards = model.kind === 'spring' && model.response.velocity < 0;
   if (!monotone && !launchesBackwards) fail('d/model', `${label} is not monotone on [0, 1]`);
-  const shipped = tableError(model, HERO_PROGRESS_SAMPLES);
   if (shipped.worst > TABLE_TOLERANCE) {
     fail(
       'c/table',
@@ -312,10 +318,13 @@ function parseScaleTranslate(css) {
 const CONTAINER_SAMPLES = 97;
 /**
  * Anisotropy the WAAPI lerp may introduce between two keyframes, as a fraction: 0.6%, against a
- * measured 0.441% (4.2px of squash on a 948px box). The honest figure requires sampling between
- * the *real* keyframes — `HERO_PROGRESS_SAMPLES` offsets of eased progress, not uniform progress
- * steps, which sample finer than the compositor and under-report the error. Raising
- * `HERO_PROGRESS_SAMPLES` from 32 to 48 is what brought it down from 0.99%.
+ * measured 0.332%. The honest figure requires sampling between the *real* keyframes —
+ * `HERO_PROGRESS_SAMPLES` offsets of eased progress, not uniform progress steps, which sample
+ * finer than the compositor and under-report the error. The worst segment is a tall card's
+ * take-off on a wide screen, where its window is narrowest, so a leg that leaves moving is the
+ * hard case: the launched response, spaced evenly in time, reached 4.5% at 48 samples; the
+ * shipped curve reaches 0.499% at 48 evenly spaced and 0.332% spaced on its travel and bend too
+ * (`sampleOffsets`). `fastOutSlowIn`, leaving from rest, gave 0.441% at 48 and 0.99% at 32.
  */
 const ANISOTROPY_TOLERANCE = 0.006;
 
@@ -515,10 +524,42 @@ if (worstAnisotropy > ANISOTROPY_TOLERANCE) {
   );
 }
 
-/* The flight leaves from rest — asserted rather than commented, because the constants read
-   `velocity: 0.9` for a long time while claiming it. */
-if (velocityAt(HERO_FLIGHT_PROGRESS.forward, 0) !== 0) {
-  fail('d/model', 'HERO_FLIGHT_CURVE does not leave from rest');
+/* The flight answers the press on the next frame, crests in the air and lands at rest — asserted
+   rather than commented, because the constants once read `velocity: 0.9` for a long time while
+   claiming to leave from rest. Each half of the contract is a shape that shipped and read wrong:
+   `fastOutSlowIn` hung back (it left at 0), and the launched response crested at the press and
+   crept to its landing. */
+{
+  const flight = HERO_FLIGHT_PROGRESS.forward;
+  const launch = velocityAt(flight, 0);
+  let crest = 0;
+  let crestAt = 0;
+  for (let i = 0; i <= 400; i += 1) {
+    const value = velocityAt(flight, i / 400);
+    if (value > crest) {
+      crest = value;
+      crestAt = i / 400;
+    }
+  }
+  let oneCrest = true;
+  for (let i = 1; i <= 400; i += 1) {
+    const before = velocityAt(flight, (i - 1) / 400);
+    const after = velocityAt(flight, i / 400);
+    if (i / 400 <= crestAt ? after < before - 1e-9 : after > before + 1e-9) oneCrest = false;
+  }
+  const arrival = velocityAt(flight, 1);
+  console.log(
+    `\nflight: leaves at ${launch.toFixed(3)} (${((launch / crest) * 100).toFixed(0)}% of its crest), ` +
+      `crests at ${crest.toFixed(2)} ${(crestAt * 100).toFixed(0)}% in, ` +
+      `${oneCrest ? 'one crest' : 'SEVERAL CRESTS'}, arrives at ${arrival.toFixed(3)}`,
+  );
+  if (!(launch >= 0.25 * crest)) {
+    fail('d/model', `the flight leaves at ${launch.toFixed(3)}, under a quarter of its crest: a hang-back`);
+  }
+  if (!(crestAt > 0)) fail('d/model', 'the flight crests at the press, before anyone can see it move');
+  if (!(crestAt <= 0.25)) fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
+  if (!oneCrest) fail('d/model', 'the flight changes speed more than once');
+  if (!(Math.abs(arrival) < 1e-6)) fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
 }
 
 // ---------------------------------------------------------------------------
@@ -652,8 +693,13 @@ console.log(
     `${worstRawEscape.toFixed(0)}px, all of it outside the overlay`,
 );
 
+/* The two shapes the flight flew before, beside it: the evidence for the contract in (d). */
+const PREVIOUS = [
+  ['fastOutSlowIn (was)', { kind: 'curve', curve: { x1: 0.4, y1: 0, x2: 0.2, y2: 1 } }],
+  ['launched, 350 (was)', { kind: 'spring', response: { rate: 6.6408, velocity: 3.3204, damping: 1 } }],
+];
 console.log('\nper-tenth travel');
-for (const [label, model] of MODELS.slice(0, 2)) {
+for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
   const row = [];
   let previous = 0;
   for (let i = 1; i <= 10; i += 1) {

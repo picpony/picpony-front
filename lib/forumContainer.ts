@@ -12,14 +12,18 @@
  * the outgoing one, which stays opaque beneath it (`MaterialContainerTransform`'s `FADE_MODE_IN`),
  * so the container is never empty: whichever content is larger fills it.
  *
- * **Its clock is the tab strip's** (`lib/tabStrip.ts`): a critically damped response launched at
- * twice its mean speed, over the route cross-fade's 400ms. It moves on its first frame (9.5% of
- * the way at 60 Hz) and carries no more than 11% in any frame; `emphasized` at 500ms, the pairing
- * M3 gives a container transform, moves 0.8% in its first frame and 24% in its fastest — the
- * slow start the owner has turned down on every surface — and the hero's `fastOutSlowIn` still
- * hangs back for 45ms before it reaches 10%. On the page's own clock the container lands as the
- * incoming page finishes fading in, so the transform, the page and the tab strip are one gesture
- * in one duration, and the handoff to the live element happens at rest.
+ * **Its clock is the tab strip's response** (`lib/tabStrip.ts`): critically damped, launched at
+ * half the family's rate — the one launch with no jerk, leaving at its top speed and only slowing
+ * from there — over the route cross-fade's 400ms. It moves 13.9% of the way in its first 60 Hz
+ * frame and never more in any later one, halfway in 69ms and 90% in 194ms; `emphasized` at 500ms,
+ * the pairing M3 gives a container transform, moves 0.8% in its first frame and 24% in its
+ * fastest — the slow start the owner has turned down on every surface — and the hero's
+ * `fastOutSlowIn` still hangs back for 45ms before it reaches 10%. It launched at twice its mean
+ * speed once, as the strip did, and gained speed for its first 40ms: the glide that read as
+ * dragging on the tabs. The strip runs 350ms and this 400ms because it rides a navigation whose
+ * page arrives on the route's 400ms: the container lands as the incoming page finishes fading in,
+ * so the transform and the page are one gesture, and the handoff to the live element happens at
+ * rest.
  *
  * **Its clip is made of translations only.** A rounded rectangle whose size changes cannot be a
  * scaled box (the corners stretch into ellipses and anything inside scales with it), and an
@@ -37,7 +41,7 @@
  * speed it already had, over `full · clamp(√remaining, 0.6, 1)`), and the content that was coming
  * in goes back out over the same stretch of travel it came in on (`fadeTrack`).
  */
-import { STRIP_DURATION_MS, STRIP_LAUNCH, stripLaunchFor, stripProgress, turnStrip, type StripLeg } from '@/lib/tabStrip';
+import { stripLaunchFor, stripProgress, turnStrip, STRIP_LAUNCH, type StripLeg } from '@/lib/tabStrip';
 
 /** A rectangle, in the overlay's coordinates (px). */
 export interface Box {
@@ -50,11 +54,13 @@ export interface Box {
 /** Corner radii, clockwise from the top left: top-left, top-right, bottom-right, bottom-left. */
 export type Radii = readonly [number, number, number, number];
 
-/** The container transform's duration at the default speed — the route cross-fade's, and the strip's. */
-export const FORUM_TRANSFORM_MS = STRIP_DURATION_MS;
+/** The container transform's duration at the default speed — the route cross-fade's. */
+export const FORUM_TRANSFORM_MS = 400;
 
-/** A fresh leg's launch: a tap's, in the leg's own normalised units. */
-export const FORUM_TRANSFORM_LAUNCH = stripLaunchFor(STRIP_LAUNCH);
+/** A fresh leg's launch, in the leg's own normalised units: the strip's own. Also a turn's
+ *  floor (`turnContainer`). */
+const FORUM_TAP_LAUNCH = STRIP_LAUNCH;
+export const FORUM_TRANSFORM_LAUNCH = stripLaunchFor(FORUM_TAP_LAUNCH);
 
 /** Progress over the leg's own time, `t ∈ [0, 1]` → `p ∈ [0, 1]`. */
 export const forumTransformProgress = stripProgress(FORUM_TRANSFORM_LAUNCH);
@@ -70,7 +76,7 @@ export function freshContainerLeg(duration: number): StripLeg {
  * first end, 1 its second), so a turn of a turn heads for the second end again.
  */
 export function turnContainer(leg: StripLeg, elapsed: number, full: number): StripLeg {
-  return turnStrip(leg, elapsed, full);
+  return turnStrip(leg, elapsed, full, FORUM_TAP_LAUNCH);
 }
 
 /**

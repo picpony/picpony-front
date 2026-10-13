@@ -520,10 +520,11 @@ test('the container moves on its first frame and never lurches; the fades are wi
   const frame = 1000 / 60 / container.FORUM_TRANSFORM_MS;
   assert.equal(p(0), 0);
   assert.equal(p(1), 1);
-  assert.ok(p(frame) > 0.08, `first frame ${p(frame)}`);
-  let largest = 0;
-  for (let t = frame; t <= 1 + 1e-9; t += frame) largest = Math.max(largest, p(Math.min(1, t)) - p(t - frame));
-  assert.ok(largest < 0.12, `largest frame ${largest}`);
+  /* The strip's launch: its fastest frame is its first, and no later one carries more. */
+  assert.ok(p(frame) > 0.12 && p(frame) < 0.16, `first frame ${p(frame)}`);
+  for (let t = 2 * frame; t <= 1 + 1e-9; t += frame) {
+    assert.ok(p(Math.min(1, t)) - p(t - frame) <= p(t - frame) - p(Math.max(0, t - 2 * frame)) + 1e-12, `slows from the first frame (${t})`);
+  }
   for (let t = 0; t < 1; t += 0.01) assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
   assert.equal(container.fadeAt(container.FORUM_FADE.back, 0.3), 0);
   assert.equal(container.fadeAt(container.FORUM_FADE.back, 0.95), 1);

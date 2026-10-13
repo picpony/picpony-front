@@ -658,10 +658,9 @@ export class HeroMotion {
     /* The animation speed reaches the flight here rather than in `constants.ts`, and it must:
        `scripts/heroPath.mjs` imports that file directly and cannot resolve `lib/appearance`
        (it needs `matchMedia`). The scale also has to be applied at all, because the gallery
-       card's chrome fade is asserted to stay inside the flight's clock — an unscaled flight
-       at 缓慢 would be 250ms against a 280ms fade. Sample count stays safe across the range
-       (350ms / 47 intervals = 7.45ms), and the reverse floor starts binding at 快速, which is
-       what a floor is for. */
+       card's chrome fade is asserted to stay inside the flight's clock. Sample count stays
+       safe across the range (308ms at 缓慢 / 47 intervals = 6.55ms), and the reverse floor is
+       scaled with it, so it binds at the same point at every speed. */
     const duration = Math.round(HERO_DURATIONS[direction] * motionScale('image'));
     this.leg = createHeroLeg({
       from,

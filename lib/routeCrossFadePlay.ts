@@ -1,11 +1,61 @@
 'use client';
 
-import { gsap, playSharedAxis } from '@/lib/motion';
+import { gsap, playSharedAxis, supportsEdgeMask } from '@/lib/motion';
 import { DURATION, EASE, PAGE_FADE_TIMING } from '@/lib/motionTokens';
 import { motionScale, motionTier } from '@/lib/appearance';
+import { getAppScroller } from '@/lib/appScroller';
 import { setRouteTransit } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
 import { restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
+import { columnWindow } from '@/lib/tabStrip';
+
+/**
+ * **On a wide screen a route move slides past the pages' columns and a faded margin**, as a tab
+ * switch does (`columnWindow`): the window is both pages' columns together, and as far again as a
+ * tab's on either side. The leaving page is a clone in the cross-fade's layer and the arriving one
+ * sits in the scroller's plane; both of those are wider than the window already, so each is masked
+ * to it where it lies rather than widened. Returns the window's width, the strip's travel, and
+ * what gives the two their masks back — or null where the scroller stays the window.
+ */
+function maskRouteWindow(layer: HTMLElement, clone: HTMLElement, page: HTMLElement) {
+  const scroller = getAppScroller();
+  const plane = page.parentElement;
+  /* A page's column is its root, inside the content wrapper; the clone has the same structure. */
+  const column = (root: HTMLElement) => root.firstElementChild?.firstElementChild?.getBoundingClientRect() ?? null;
+  const leaving = column(clone);
+  const arriving = column(page);
+  if (!scroller || !plane || !leaving || !arriving) return null;
+  const view = scroller.getBoundingClientRect();
+  const inner = view.left + scroller.clientLeft;
+  const left = Math.min(leaving.left, arriving.left);
+  const span = columnWindow(
+    { left, right: Math.max(leaving.right, arriving.right) },
+    { left: inner, right: inner + scroller.clientWidth },
+  );
+  if (!span) return null;
+  const from = left - span.reach;
+  const image = `linear-gradient(to right, transparent, black ${span.fade}px, black calc(100% - ${span.fade}px), transparent)`;
+  const masked = [layer, plane].map((node) => {
+    const style = node.style;
+    const before = [style.maskImage, style.maskSize, style.maskPosition, style.maskRepeat] as const;
+    const offset = from - node.getBoundingClientRect().left;
+    return { style, before, offset };
+  });
+  for (const { style, offset } of masked) {
+    style.maskImage = image;
+    style.maskSize = `${span.width}px 100%`;
+    style.maskPosition = `${offset}px 0`;
+    style.maskRepeat = 'no-repeat';
+  }
+  return {
+    distance: span.width,
+    restore: () => {
+      for (const { style, before } of masked) {
+        [style.maskImage, style.maskSize, style.maskPosition, style.maskRepeat] = before;
+      }
+    },
+  };
+}
 
 /**
  * The animated half of the route cross-fade, loaded on demand — the sanctioned GSAP half. The
@@ -62,15 +112,23 @@ export function playRouteCrossFade(
        the whole fade. */
     page.style.animation = 'none';
     settleEntryAnimations(page);
+    const edge =
+      move.axis === 'x' && motionTier('tabs') === 'standard' && supportsEdgeMask()
+        ? maskRouteWindow(layer, snapshot.node, page)
+        : null;
     const handle = playSharedAxis({
       leaving: snapshot.node,
       entering: page,
       axis: move.axis,
       direction: move.direction,
+      distance: edge?.distance,
       /* The page moves as one piece — the only kind of run there is: a route change swaps the
          page's whole subtree the moment its data lands, and only `[data-page-content]` itself
          is guaranteed to survive. */
-      onSettle: cancelRouteCrossFade,
+      onSettle: () => {
+        edge?.restore();
+        cancelRouteCrossFade();
+      },
     });
     /* Nothing may leave a residual transform on an ancestor of a gallery card — the hero flight
        reads a plain `getBoundingClientRect` on press. This node is such an ancestor, and the

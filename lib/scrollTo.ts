@@ -2,6 +2,7 @@
 
 import { getAppScroller } from '@/lib/appScroller';
 import { motionTier, scaledMs } from '@/lib/appearance';
+import { stripProgress, STRIP_LAUNCH } from '@/lib/tabStrip';
 import { clamp } from '@/lib/utils';
 
 /**
@@ -10,38 +11,20 @@ import { clamp } from '@/lib/utils';
  * `scrollTop` is not a CSS property, so this is the one motion Web Animations cannot express —
  * it is a per-frame write either way. The plugin's cost was its host: `components/Pagination.tsx`
  * is on ten screens and imported `lib/motion` for these two functions alone, pulling GSAP into
- * every route's first document. Same curve (`0.33, 0, 0, 1`, below) and square-root duration
- * band; GSAP's `lagSmoothing` is deliberately not kept — a stalled frame is charged to the
- * scroll rather than delaying it, and arriving late at the right place beats arriving on time
- * at the wrong one.
+ * every route's first document. Same square-root duration band; GSAP's `lagSmoothing` is
+ * deliberately not kept — a stalled frame is charged to the scroll rather than delaying it, and
+ * arriving late at the right place beats arriving on time at the wrong one.
+ *
+ * **The glide is the tab strip's response** (`lib/tabStrip.ts`): critically damped, launched at
+ * half its family's rate, so it leaves at its top speed with no jerk and only slows from there —
+ * a page turn starts on the frame after the press, as a fling does. It was `cubic-bezier(0.33, 0,
+ * 0, 1)`, which leaves from rest: 0.1–0.8% of the way in its first frame and 10% only after
+ * 48–146ms, the same hesitation the strip was rid of. Over the same band it is now 5–15% of the
+ * way in the first frame, halfway at 17% of its length and 90% at 49%.
  */
 
-/** The distance-law scroll's dedicated curve, `cubic-bezier(0.33, 0, 0, 1)`. */
-const P1X = 0.33;
-const P1Y = 0;
-const P2X = 0;
-const P2Y = 1;
-
-/* Newton–Raphson on x, then evaluate y. Eight iterations is well past convergence for a curve
-   this shallow; the derivative only vanishes at the endpoints, which are exact. */
-function bezier(t: number): number {
-  const cx = 3 * P1X;
-  const bx = 3 * (P2X - P1X) - cx;
-  const ax = 1 - cx - bx;
-  const cy = 3 * P1Y;
-  const by = 3 * (P2Y - P1Y) - cy;
-  const ay = 1 - cy - by;
-
-  let x = t;
-  for (let i = 0; i < 8; i += 1) {
-    const error = ((ax * x + bx) * x + cx) * x - t;
-    if (Math.abs(error) < 1e-6) break;
-    const slope = (3 * ax * x + 2 * bx) * x + cx;
-    if (Math.abs(slope) < 1e-6) break;
-    x -= error / slope;
-  }
-  return ((ay * x + by) * x + cy) * x;
-}
+/** The glide's shape: progress at `t ∈ [0, 1]` of its duration. */
+const glide = stripProgress(STRIP_LAUNCH);
 
 /** One owner per scroller, including its input listeners and scroll-anchor lease. */
 const running = new WeakMap<HTMLElement, () => void>();
@@ -103,7 +86,7 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
   const start = performance.now();
   const step = (now: number) => {
     const p = duration <= 0 ? 1 : Math.min(1, (now - start) / duration);
-    scroller.scrollTop = from + (to - from) * bezier(p);
+    scroller.scrollTop = from + (to - from) * glide(p);
     if (p < 1) {
       frame = requestAnimationFrame(step);
       return;

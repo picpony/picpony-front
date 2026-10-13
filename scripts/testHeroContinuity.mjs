@@ -12,7 +12,7 @@ requireTypeStripping('testHeroContinuity');
 const { buildFlightKeyframes, createHeroLeg, evaluateLeg } = await import('../lib/hero/flight.ts');
 const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
-const { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
+const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
 const utils = { clamp, clamp01 };
 
@@ -486,22 +486,51 @@ function close(actual, expected, message) {
 test('concentric zoom retains nonzero speed and carries it into an interrupted leg', () => {
   const from = { left: 200, top: 200, width: 200, height: 200 };
   const to = { left: 0, top: 0, width: 600, height: 600 };
-  const options = { from, to, fromRadius: 20, toRadius: 16, direction: 'forward', duration: 250,
+  const options = { from, to, fromRadius: 20, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
     startedAt: 1000, baseAspect: 1 };
   const leg = createHeroLeg(options);
-  const caught = evaluateLeg(leg, 1050);
+  /** A fifth of the way in, wherever the leg's own length puts that. */
+  const caughtAt = 1000 + HERO_DURATIONS.forward * 0.2;
+  const caught = evaluateLeg(leg, caughtAt);
   const distance = Math.hypot(200, 200);
   close(heroRectCenterDistance(from, to), distance, 'half-size change contributes to travel');
   assert.ok(caught.speed > 0, 'a centered resize is still visibly moving');
-  close(caught.speed, distance * velocityAt(leg.progress, 0.2) / 250, 'pose uses leg distance units');
-  close(evaluateLeg(leg, 1000).speed, 0, 'a fresh flight leaves at rest');
-  close(evaluateLeg(leg, 1250).speed, 0, 'a fresh flight arrives at rest');
+  close(caught.speed, distance * velocityAt(leg.progress, 0.2) / HERO_DURATIONS.forward, 'pose uses leg distance units');
+  /* A fresh flight is moving in the frame after the press — not `fastOutSlowIn`'s hang-back — and
+     builds to one crest early in the leg, not at the press, then only slows, landing at rest. */
+  const launch = evaluateLeg(leg, 1000).speed;
+  close(launch, distance * velocityAt(leg.progress, 0) / HERO_DURATIONS.forward, 'pose speed at the press');
+  const speeds = [];
+  for (let step = 0; step <= 100; step += 1) speeds.push(evaluateLeg(leg, 1000 + (HERO_DURATIONS.forward * step) / 100).speed);
+  const crest = Math.max(...speeds);
+  const crestAt = speeds.indexOf(crest);
+  assert.ok(launch >= 0.25 * crest, `a fresh flight leaves moving (${launch.toFixed(2)} against a crest of ${crest.toFixed(2)})`);
+  assert.ok(crestAt > 0 && crestAt <= 25, `and crests in the air, early (${crestAt}% in)`);
+  for (let step = 1; step <= 100; step += 1) {
+    const rising = step <= crestAt;
+    assert.ok(rising ? speeds[step] >= speeds[step - 1] - 1e-9 : speeds[step] <= speeds[step - 1] + 1e-9,
+      `one crest: ${rising ? 'speeds up to it' : 'only slows after it'} (${step}%)`);
+  }
+  close(evaluateLeg(leg, 1000 + HERO_DURATIONS.forward).speed, 0, 'a fresh flight arrives at rest');
 
   const continued = createHeroLeg({ ...options, from: caught.rect, fromRadius: caught.radius,
-    duration: 150, startedAt: 1050, speed: caught.speed });
-  close(evaluateLeg(continued, 1050).speed, caught.speed, 'rebuilding retains launch speed');
-  assertRectClose(evaluateLeg(continued, 1050).rect, caught.rect, 'continued start');
-  assertRectClose(evaluateLeg(continued, 1200).rect, to, 'continued landing');
+    duration: 150, startedAt: caughtAt, speed: caught.speed });
+  close(evaluateLeg(continued, caughtAt).speed, caught.speed, 'rebuilding retains launch speed');
+  assertRectClose(evaluateLeg(continued, caughtAt).rect, caught.rect, 'continued start');
+  assertRectClose(evaluateLeg(continued, caughtAt + 150).rect, to, 'continued landing');
+
+  /* A rebuild over the rest of the leg — what a viewport change mid-flight does — keeps the
+     flyer's speed through the first half too: around the crest it needs a launch of up to 3.7
+     in these units, where the old ceiling of 2.5 braked it by up to a third. */
+  for (const share of [0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.5]) {
+    const at = 1000 + HERO_DURATIONS.forward * share;
+    const pose = evaluateLeg(leg, at);
+    const rebuilt = createHeroLeg({ ...options, from: pose.rect, fromRadius: pose.radius,
+      duration: HERO_DURATIONS.forward * (1 - share), startedAt: at, speed: pose.speed });
+    const kept = evaluateLeg(rebuilt, at).speed / pose.speed;
+    assert.ok(Math.abs(kept - 1) < 0.01, `a rebuild ${share * 100}% in keeps its speed (${(kept * 100).toFixed(1)}%)`);
+    assertRectClose(evaluateLeg(rebuilt, 1000 + HERO_DURATIONS.forward).rect, to, `and lands (${share * 100}%)`);
+  }
 });
 
 test('launch speed uses the same units for translation, resizing, and combined travel', () => {
@@ -522,7 +551,7 @@ test('a reversal leaves at the speed it was caught at, and carries on before it 
      start, so a caught flyer stood still for a frame or two and restarted from rest. */
   const from = { left: 1620, top: 650, width: 256, height: 197 };
   const to = { left: 632, top: 221, width: 944, height: 531 };
-  const options = { from, to, fromRadius: 16, toRadius: 16, direction: 'forward', duration: 250,
+  const options = { from, to, fromRadius: 16, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
     startedAt: 1000, baseAspect: to.width / to.height };
   const outbound = createHeroLeg(options);
   for (const at of [1040, 1070, 1100]) {
@@ -539,11 +568,21 @@ test('a reversal leaves at the speed it was caught at, and carries on before it 
     assert.ok(launch < 0 && -launch >= 0.98 * floor && -launch <= 1.05 * caught.speed,
       `launch ${launch} continues the caught ${-caught.speed} (floor ${-floor}) at ${at}ms`);
     assertRectClose(evaluateLeg(back, at).rect, caught.rect, `the reversal starts where it was caught (${at}ms)`);
-    // The dip: a few ms in, the flyer is still travelling the way it was heading (toward `to`).
-    const early = evaluateLeg(back, at + 12).rect;
+    /* The dip: for a few ms the flyer is still travelling the way it was heading (toward `to`),
+       and it turns within a frame — measured, because its depth goes as the caught speed and a
+       faster flight now leaves less of it. */
     const towardTo = Math.sign(to.left - from.left);
-    assert.ok(Math.sign(early.left - caught.rect.left) === towardTo,
-      `the caught flyer carries on before turning (${caught.rect.left} -> ${early.left})`);
+    let carried = 0;
+    for (let dt = 1; dt <= 40; dt += 1) {
+      const early = evaluateLeg(back, at + dt).rect;
+      if (Math.sign(early.left - caught.rect.left) === towardTo) carried = dt;
+    }
+    assert.ok(carried > 0, `the caught flyer carries on before turning (${caught.rect.left})`);
+    /* How long it carries on for goes as the momentum it was caught with, against a launch
+       velocity the spring floors at −3; the last two catches turn inside a frame, and the first
+       — 16% into a leg that leaves at its top speed, with the longest way home — takes a fifth of
+       the return leg. Bounded rather than pinned, because the floor is what sets the deep end. */
+    assert.ok(carried < 0.25 * 200, `and turns well inside the return leg (${carried}ms)`);
     assertRectClose(evaluateLeg(back, at + 200).rect, from, `the reversal lands home (${at}ms)`);
   }
 });

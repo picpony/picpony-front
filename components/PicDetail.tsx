@@ -832,14 +832,17 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     return () => window.removeEventListener('online', retryRecord);
   }, [recordFailedRetryably, retryRecord]);
 
-  // Fetch and final-media decode start immediately. Only the sizeable body subtree
-  // waits for resolved detail plus an idle slice, so its mount cannot steal the first
-  // event of a newly started wheel/touch stream.
+  // Fetch and final-media decode start immediately. Only the sizeable body subtree waits for
+  // resolved detail and the flight's two settling frames — no idle slice: the body is what the
+  // reader is about to read, and an idle wait on a busy phone held it back up to 240ms after the
+  // flight had landed. It mounts as a transition, so a
+  // wheel or touch stream that starts meanwhile still preempts it.
   const hasRecord = record !== null;
   const hasRecordError = recordError !== null;
   useEffect(() => {
     if (heroSeed && !hasRecord && !hasRecordError && !offline) return;
     return publishWhenHeroSettled(() => startTransition(() => setDeferredBodyId(imageId)), {
+      idle: false,
       canPublish: () => {
         if (!isImageHeroDetailDataPublishable(imageId)) return false;
         /* The whole `opening.` family, not just `opening.flight`: publication stays true
@@ -1245,6 +1248,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               size="md"
               shape="square"
               icon={<MdChevronLeft />}
+              data-image-detail-step-arrow
               aria-label="上一张"
               disabled={stepNeighbours.previous === null && !stepNeighbours.canLoadPrevious}
               loading={stepLoading === -1}
@@ -1255,6 +1259,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               size="md"
               shape="square"
               icon={<MdChevronRight />}
+              data-image-detail-step-arrow
               aria-label="下一张"
               disabled={stepNeighbours.next === null && !stepNeighbours.canLoadNext}
               loading={stepLoading === 1}

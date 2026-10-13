@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { motionTier, scaledMs } from '@/lib/appearance';
+import { springTiming } from '@/lib/springTiming';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
@@ -197,19 +198,20 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const wrapHeight = wrap.offsetHeight;
     const pose = getComputedStyle(card);
     const from = { transform: pose.transform, opacity: pose.opacity };
-    const exitMs = scaledMs(DURATION.short * 1000, 'overlay');
+    /* FastEffects, as every small surface leaves (the menu, the tooltip, the drawer closing): it
+       starts on the frame after the dismissal. The emphasized accelerate it left on held still for
+       its first 80ms. */
+    const leaveTiming = springTiming('fastEffects', 'overlay');
     running.current.forEach((animation) => animation.cancel());
     const exit = card.animate([from, { transform: 'translateY(-8px)', opacity: 0 }], {
-      duration: exitMs,
-      easing: EASE.accelerate,
+      ...leaveTiming,
       fill: 'forwards',
     });
-    /* Closing the gap is the same leg as the departing card, on its clock and curve.
-       It begins 80ms into the fade so the stack closes up smoothly. */
+    /* Closing the gap is the same response as the departing card. It begins 40ms into the fade,
+       with the card two thirds gone, so the stack closes up behind it rather than under it. */
     const collapse = wrap.animate([{ height: `${wrapHeight}px` }, { height: '0px' }], {
-      duration: exitMs,
-      delay: scaledMs(80, 'overlay'),
-      easing: EASE.accelerate,
+      ...leaveTiming,
+      delay: scaledMs(40, 'overlay'),
       fill: 'forwards',
     });
     running.current = [exit, collapse];

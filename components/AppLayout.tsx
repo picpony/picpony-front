@@ -434,7 +434,25 @@ export default function AppLayout({
      latched onto the non-scrollable host and stayed there after the flight landed — and the
      close waits a frame for that restyle before it flies (`runClosing`). */
   const detailCovers = isImageDetailOpen && imageHeroRuntime.direction !== 'back';
-  const galleryInert = detailCovers && heroSettledOnDetail;
+  /* And not in the commit that settles it either, but two frames later: that commit is the one
+     that shows the detail, and the gallery's restyle in it held the detail's first settled frame
+     back by ~50ms on a phone at 4× CPU. Nothing reaches the gallery meanwhile — the detail covers
+     it and has the focus. Lifting stays immediate: a return exposes the gallery in the commit
+     that starts it, as above. */
+  const gallerySettledUnder = detailCovers && heroSettledOnDetail;
+  const [galleryInertArmed, setGalleryInertArmed] = useState(false);
+  if (!gallerySettledUnder && galleryInertArmed) setGalleryInertArmed(false);
+  useEffect(() => {
+    if (!gallerySettledUnder) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setGalleryInertArmed(true);
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [gallerySettledUnder]);
+  const galleryInert = gallerySettledUnder && galleryInertArmed;
   // An intercepted detail also opens without a hero flight (reduced/off motion,
   // or an unavailable source bitmap). Keep that route's real background too:
   // guessing '/' changes the content key and remounts a multi-page favourites
@@ -637,7 +655,7 @@ export default function AppLayout({
      the resource, refreshed on their own TTLs (5min session / 1min badge). Never key these
      on an object identity: the earlier pathname/object-keyed pair re-read the session on
      every navigation and twice per run.
-     The badge also **polls every 60s while the tab is visible** (owner decision 13): a
+     The badge also **polls every 60s while the tab is visible** (decision 13): a
      message arriving while the user reads a thread must reach the bell without a
      navigation. `refetchInterval` skips hidden and offline ticks and reads once on return. */
   const session = useResource(sessionUser, token ? { token } : SKIP);

@@ -1350,12 +1350,13 @@ body {
   --motion-base-emphasized: 500ms;
   --transition-duration-emphasized: calc(var(--motion-base-emphasized) * var(--motion-scale));
 
-  /* The menu uses the shared short/state clock. The arrow follows its panel;
-     the anchored expansion pattern is independent of these global rates. */
+  /* The menu arrives on the shared short step and leaves on FastEffects, as every small surface
+     does. The arrow follows its panel; the anchored expansion pattern is independent of these
+     global rates. */
   --transition-duration-menu-enter: calc(var(--motion-base-standard) * var(--motion-scale-overlay));
-  --transition-duration-menu-exit: calc(var(--motion-base-state) * var(--motion-scale-overlay));
+  --transition-duration-menu-exit: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay));
   --ease-menu-enter: var(--ease-standard-decelerate);
-  --ease-menu-exit: var(--ease-standard-accelerate);
+  --ease-menu-exit: var(--ease-spring-effects);
 
   --transition-duration-100: var(--transition-duration-press);
   --transition-duration-150: var(--transition-duration-state);
@@ -1500,7 +1501,7 @@ body {
  * Sans SC web font is last, fetched only for a glyph no face on the device has.
  *
  * **Windows is the exception.** The one Chinese face every Windows machine has is Microsoft
- * YaHei, drawn as Segoe UI's companion, and beside Geist it reads as dated (the owner's call).
+ * YaHei, drawn as Segoe UI's companion, and beside Geist it reads as dated.
  * So there the web font leads, and YaHei only fills the moment before a slice arrives — the
  * swap changes glyph shapes, never layout: a Han glyph is one em wide in both faces and every
  * type role fixes its line height. PingFang SC is kept out of the Windows stack and HarmonyOS
@@ -2523,12 +2524,14 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 }
 
 /* While a shared-axis run is in flight, the scroller is the window the two pages slide
- * past (see `playSharedAxis`, which sets and clears this). It must be the scroller and not
- * the panel: the panel is the centred column, and clipping there would have the incoming
- * page appear out of the middle of the page. The one exception is a tab panel that lives in
- * a bounded region of the page — the admin console's panel, beside its rail in one card —
- * which marks that region `data-tab-window`: the strip slides the region's width and is
- * clipped here, so neither pane crosses the rail or leaves the card.
+ * past (see `playSharedAxis`, which sets and clears this). It must not be the panel's own
+ * box: the panel is the centred column, and clipping there would have the incoming page
+ * appear out of the middle of the page. On a wide screen the window is the column and a
+ * margin either side, faded at its edges — a mask on the panel, its box widened for the
+ * run (`columnWindow`) — and this clip is the backstop behind it. The one exception is a
+ * tab panel that lives in a bounded region of the page — the admin console's panel, beside
+ * its rail in one card — which marks that region `data-tab-window`: the strip slides the
+ * region's width and is clipped here, so neither pane crosses the rail or leaves the card.
  *
  * Clip, not hidden overflow: hidden overflow-x beside visible overflow-y forces the visible
  * one to compute to auto, making a second scroll container. Scoped to a live run, since a
@@ -3060,8 +3063,13 @@ html[data-image-hero-transition] #nprogress {
  * moments the transition says "this is one object". The step arrows are the same kind of
  * chrome (the Stage draws none) and stand down with it; on the buttons rather than their group,
  * so their own opacity transition fades them in after a landing, while the pull's veil on the
- * group follows the finger with none. */
-html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detail-step] > *) {
+ * group follows the finger with none.
+ *
+ * Every subject here names an attribute of its own. A subject with none (the step group's
+ * children as a bare universal) gives Blink nothing to narrow the invalidation by, so the
+ * attribute's arrival on <html> restyled the whole document — 653 of a gallery's 763 elements,
+ * about 50ms on a phone, at take-off and again at landing. */
+html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detail-step-arrow]) {
   opacity: 0 !important;
   transition: none !important;
 }

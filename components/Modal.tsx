@@ -15,6 +15,8 @@ import {
 import { ICON } from '@/lib/icons';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import { motionTier, scaledMs } from '@/lib/appearance';
+import { SPRING_MS } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
 
 interface ModalProps {
   isOpen: boolean;
@@ -67,7 +69,11 @@ interface ModalProps {
   onExited?: () => void;
 }
 
-const CLOSE_ANIM_DURATION = DURATION.short * 1000;
+/** A dialog leaves on DefaultEffects, as every dismissal of a surface this size does (the bottom
+ *  sheet's spring): it answers a press, and starts on the frame after it. It left on the
+ *  emphasized accelerate over 200ms, which holds still for its first 80ms — a 取消 that seemed not
+ *  to have been heard. Arriving stays the 400ms emphasized decelerate, which leaves at speed. */
+const CLOSE_ANIM_DURATION = SPRING_MS.defaultEffects;
 
 /**
  * Hide the scrims of dialogs that are still leaving and return the strongest opacity among
@@ -233,8 +239,9 @@ export default function Modal({
     }
 
     const timing = {
-      duration: scaledMs((isOpen ? DURATION.long : DURATION.short) * 1000, 'overlay'),
-      easing: isOpen ? EASE.decelerate : EASE.accelerate,
+      ...(isOpen
+        ? { duration: scaledMs(DURATION.long * 1000, 'overlay'), easing: EASE.decelerate }
+        : springTiming('defaultEffects', 'overlay')),
       fill: 'both' as const,
     };
     const running = [

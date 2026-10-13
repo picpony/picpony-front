@@ -12,12 +12,13 @@ import {
  * A leg's progress function, in one of two kinds — the shape is independent of the leg's
  * duration, and which kind a leg gets is decided by how it starts:
  *
- * - **From rest — a curve** (`Curves.fastOutSlowIn`, what Flutter's Hero flies). A spring
- *   cannot hang back: its peak velocity lands at 15–20% of the leg for every ζ this app
- *   ships, so "starts almost still, then goes" is not reachable by retuning ζ.
- * - **At a speed something already has — a spring.** A reversal, a mid-flight rebuild and the
- *   drag release have to leave at the flyer's visible speed, and a Bézier's launch slope is
- *   fixed by its own shape.
+ * - **From rest — a curve** (`HERO_FLIGHT_CURVE`): it moves on the first frame, crests a few
+ *   frames in and lands at rest. A curve, because a curve can land: a spring's last tenth of
+ *   travel creeps for as long again as the rest, and the flight flew one for a round that read
+ *   slow for exactly that.
+ * - **At a speed something already has — a spring solved for it.** A reversal, a mid-flight
+ *   rebuild and the drag release have to leave at the flyer's visible speed, and a Bézier's
+ *   launch slope is fixed by its own shape.
  *
  * Both kinds are differentiable in the same units, which is what keeps velocity-continuous
  * interruption and DOM-read-free pose measurement working across the split.
@@ -191,17 +192,69 @@ function quantize(model: HeroProgressModel): HeroProgressModel {
   return { kind: 'spring', response: { ...model.response, velocity } };
 }
 
+/** Resolution of the measure a table's samples are spaced on. 256 places them as well as 2048
+ *  did (`hero:path` reads the same to 0.005%) at a ninth of the cost — 0.1ms a table, which a
+ *  reversal pays at its tap. */
+const SPACING_STEPS = 256;
+/** How strongly a leg's travel draws samples to itself, against a floor of time (`sampleOffsets`). */
+const SPACING_TRAVEL = 1.5;
+/** How strongly a leg's bend draws samples to itself, against the same floor. */
+const SPACING_BEND = 1.5;
+
+/**
+ * Where a table's samples fall. Three things make a straight line between two samples wrong, and
+ * each draws the samples to itself: **travel**, because whatever is computed from the progress errs
+ * by the square of a segment's step — the window's scale pair and its compensator, which WAAPI lerps
+ * independently, most of all; **bend**, because the progress itself errs by a segment's bend times
+ * its length squared; and **time**, so that no segment is long. The density is whichever asks most,
+ * `max(1, SPACING_BEND · √|p''|, SPACING_TRAVEL · |p'|)` in normalised time, and the samples cut it
+ * into equal shares.
+ *
+ * Spaced evenly in time, a leg that leaves moving puts a long stretch of travel in its first
+ * segments, just where a tall card's window is narrowest and its width changes fastest, and the
+ * content under the compensator comes out squashed between samples: 0.499% for the shipped curve
+ * at 48 samples against `hero:path`'s 0.6%, and 4.5% for the launched response the flight flew
+ * for a round. Spaced on travel and bend too, the same 48 hold it to 0.332%, and every table —
+ * the fastest reversal's dip included — to under 0.04% of the way.
+ */
+function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
+  const step = 1 / SPACING_STEPS;
+  const values = new Float64Array(SPACING_STEPS + 1);
+  for (let index = 0; index <= SPACING_STEPS; index += 1) values[index] = progressAt(model, index * step);
+  const measure = new Float64Array(SPACING_STEPS + 1);
+  let bend = 0;
+  for (let index = 1; index <= SPACING_STEPS; index += 1) {
+    const slope = Math.abs(values[index] - values[index - 1]) / step;
+    if (index < SPACING_STEPS) {
+      bend = Math.sqrt(Math.abs(values[index + 1] - 2 * values[index] + values[index - 1])) / step;
+    }
+    measure[index] = measure[index - 1] + Math.max(1, SPACING_BEND * bend, SPACING_TRAVEL * slope) * step;
+  }
+  const total = measure[SPACING_STEPS];
+  const offsets = [0];
+  let index = 1;
+  for (let sample = 1; sample < samples - 1; sample += 1) {
+    const target = (sample / (samples - 1)) * total;
+    while (measure[index] < target) index += 1;
+    const share = (target - measure[index - 1]) / (measure[index] - measure[index - 1]);
+    offsets.push((index - 1 + share) * step);
+  }
+  offsets.push(1);
+  return offsets;
+}
+
 /**
  * Sampled progress table for WAAPI. The compositor interpolates between these fixed offsets
  * at whatever refresh rate the display runs, so the sample count is a fidelity constant —
- * never scaled by device class.
+ * never scaled by device class. The offsets are spaced on time, travel and bend together
+ * (`sampleOffsets`).
  *
  * Worth knowing which model the count is sized for: at 24 samples the largest error a linear
- * interpolation between offsets makes is 0.332% for `HERO_FLIGHT_CURVE` but **0.512%** for the
- * ζ0.9 spring at rest and **1.099%** at the −3 launch velocity a reversal may leave at (the
- * floor in `spring.ts`). The spring is the harder curve to table, and a fast reversal's dip is
- * its worst case. At 32 those are 0.189% / 0.297% / 0.632%; the shipped 48 holds them all under
- * the 0.4% `hero:path` tolerance. See `HERO_PROGRESS_SAMPLES`.
+ * interpolation between offsets makes is 0.096% for `HERO_FLIGHT_CURVE`, 0.087% for the ζ0.9
+ * spring at rest and **0.142%** at the −3 launch velocity a reversal may leave at (the floor in
+ * `spring.ts`) — a fast reversal's dip is the hardest leg to table. At 48 those are 0.023% /
+ * 0.021% / 0.034%, a tenth of the 0.4% `hero:path` tolerance; what sizes the count is the
+ * container's anisotropy, not the progress. See `HERO_PROGRESS_SAMPLES`.
  */
 export function sampleProgress(
   model: HeroProgressModel,
@@ -218,11 +271,8 @@ export function sampleProgress(
     return cached;
   }
 
-  const frames: ProgressFrame[] = new Array(samples);
-  for (let index = 0; index < samples; index += 1) {
-    const offset = index / (samples - 1);
-    frames[index] = { offset, progress: progressAt(quantized, offset) };
-  }
+  const offsets = sampleOffsets(quantized, samples);
+  const frames: ProgressFrame[] = offsets.map((offset) => ({ offset, progress: progressAt(quantized, offset) }));
   const table = frames as readonly ProgressFrame[];
   frameCache.set(key, table);
   while (frameCache.size > MAX_CACHED_TABLES) {

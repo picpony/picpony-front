@@ -4,10 +4,10 @@ import { motionScale, motionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { DURATION, EASE } from '@/lib/motionTokens';
 import {
-  freshStripLeg, lagSamples, stripProgress, turnStrip, STRIP_DURATION_MS,
+  freshStripLeg, lagSampler, stripProgress, turnStrip, STRIP_DURATION_MS,
   type StripLeg, type StripSegment,
 } from '@/lib/tabStrip';
-import type { LeanPlan } from './tabGeometry';
+import type { LeanPlan, PaneClip } from './tabGeometry';
 
 /* ---------------------------------------------------------------------------
  * Shared axis — Material 3, one plane rather than two layers, run by the compositor
@@ -31,16 +31,23 @@ import type { LeanPlan } from './tabGeometry';
  * as a unit, so everything inside it moves by construction — a row, a wrapper with no box of
  * its own, an inline error, whatever a later feature adds.
  *
- * **On a leaning panel (`TabPanes lean`) the blocks on screen follow a little late**, top
- * first, so the page leaves on a shear: the layered departure. Each such block is one more Web
- * Animations transform, set up once in the tap — the *difference* between the strip and the
- * strip `delay` ms earlier, `S(t) − S(t − delay)`, on top of the pane's own — so the block
- * lands exactly where the strip was `delay` ago while everything else keeps riding the pane.
+ * **On a leaning panel (`TabPanes lean`) the blocks on screen ease after their pane**, a little
+ * further behind the lower they sit, so the page leaves on a shear — the layered departure — and
+ * lands from the top down, never past its place (`lagSampler` in `lib/tabStrip.ts`). Each such
+ * block is one more Web Animations transform, set up once in the tap — its lag behind the pane, on
+ * top of the pane's own — while everything else keeps riding the pane.
  * The blocks come from the structure (`leanPlan`), never from marks, and only those on
  * screen lean. It used to be GSAP writing a transform to every marked block every frame (on
  * the production build one tap on 论坛 spent 25–35 layouts and ~540 forced style and layout
  * passes inside its run); marks it had not been given — the gallery's 全部 / 本站讨论 row, in a
  * wrapper with no box — stood still while their pane slid.
+ *
+ * **On a wide screen the window is the content column and a faded margin** (`columnWindow` in
+ * `lib/tabStrip.ts`), not the whole scroller: each side fades out as it passes the window's edge
+ * and in as it comes through the other one, rather than crossing the blank margins to be cut off
+ * at the drawer and the scrollbar. The fade is a mask on the panel, which does not move, so it
+ * stays at the window's edges while the panes pass through it — spatial, not a cross-fade: the two
+ * sides never share a pixel.
  *
  * Nothing waits for the router: both panes are already mounted, so the transition
  * only needs the *attribute* that gives the incoming one a box — which this owns.
@@ -50,12 +57,14 @@ import type { LeanPlan } from './tabGeometry';
 /**
  * Extra plate between the two pages, px, on top of whatever the layout gives.
  *
- * The window the pages slide past is the scroller — sidebar edge to screen edge —
- * and the content column is centred inside it, so the two side margins are already
- * empty space between the pages: they sit one window apart on the strip, content
- * centred in its own window, exactly as a paged carousel does it. This is the floor
- * under that, for the phone layout where the column fills the window. Without a
- * plate, edge-to-edge pages read as one page shoving the other.
+ * Where the window the pages slide past is the scroller — sidebar edge to screen edge —
+ * the content column is centred inside it, so the two side margins are already empty
+ * space between the pages: they sit one window apart on the strip, content centred in
+ * its own window, exactly as a paged carousel does it. This is the floor under that,
+ * for the phone layout where the column fills the window. Without a plate, edge-to-edge
+ * pages read as one page shoving the other. A window bounded to the column on a wide
+ * screen (`columnWindow`) needs none: the pages there sit twice its reach apart, at
+ * least 112px, which is a plate already.
  *
  * A delay on the incoming side would also open a gap, and is the wrong mechanism:
  * the plate would stretch and close over the run, so the strip reads as elastic
@@ -78,6 +87,21 @@ const REDUCED_AXIS_SHIFT_PX = 24;
 /** A turn's first frame later than this after the tap (1.5 frames at 60 Hz) restarts the new
  *  leg from that frame — see `turn` in `playSharedAxis`. */
 const STRIP_LATE_FRAME_MS = 25;
+
+/**
+ * A fresh run's lean, by speed, window, leg and depth. It depends on nothing else — a run's first
+ * leg is the same every time — so the lags are worked out once and every later switch at that
+ * width reuses them: planning happens inside the press, and on a phone at 4× CPU the home pill's
+ * two panes already outlast it. A turn's lean depends on its history and is never kept.
+ */
+const freshLean = new Map<string, Array<[number, number]>>();
+const FRESH_LEAN_LIMIT = 256;
+
+/** Whether the engine can fade a window's edges (`edge`): a strip bounded to the column without
+ *  them would show the arriving side waiting in the margin, so the scroller stays the window. */
+export function supportsEdgeMask(): boolean {
+  return typeof CSS !== 'undefined' && !!CSS.supports?.('mask-image', 'linear-gradient(#000, #000)');
+}
 
 /** Whether the engine takes a `linear()` easing — the strip's shape, and the lean's. */
 function supportsLinearEasing(): boolean {
@@ -112,9 +136,17 @@ export interface SharedAxisHandle {
   /**
    * Send the run back towards its start from wherever it is — a tap on the tab it is leaving
    * turns the strip round at once, rather than snapping to the end and sliding back — and
-   * settle there, with `onSettle(true)`. A second call turns it again. False once settled.
+   * settle there, with `onSettle(true)`. A second call turns it again. False once settled, and
+   * while the run is still held.
    */
   reverse(): boolean;
+  /**
+   * Start a run created `held`, with the outgoing pane's vertical compensation as it now is (the
+   * scroll restore is written with it, in the same task). A no-op on a run already moving.
+   */
+  play(leavingOffsetY?: number): void;
+  /** Let go of everything the run holds without settling it: nothing moved, nothing to land. */
+  cancel(): void;
 }
 
 /**
@@ -144,10 +176,28 @@ export function playSharedAxis(opts: {
   /** The blocks that lean (`leanPlan`, both panes). The standard tier on the x axis only:
    *  减弱 drops the stagger with the rest of the performance, and 关闭 is a cut. */
   lean?: LeanPlan;
+  /** What of each pane to clip for the run (`paneClip`): the rows the window cannot show, which
+   *  an animated transform would otherwise have painted whole. `offset` is the scroller's offset
+   *  they were measured for; a scroll away from it during the run widens them. */
+  clip?: { leaving: PaneClip | null; entering: PaneClip | null; offset: number };
+  /** On a wide screen, the window's edges (`columnWindow`): `panel`'s box is widened by `reach`
+   *  on either side for the run and masked to it, fading over `fade` at each edge. The standard
+   *  tier on the x axis only — the reduced tier's shift stays inside the column. */
+  edge?: { panel: HTMLElement; reach: number; fade: number };
   /** `reversed`: the run was sent back to its start (`reverse`), so `leaving` stays. */
   onSettle?: (reversed: boolean) => void;
+  /**
+   * Set it up at its first pose and hold it there until `play` — the press on a tab, which
+   * primes its switch (`primeTabTransition`). Held, every animation is in effect at its start:
+   * the panes and the blocks are composited and the arriving pane is painted whole (an animated
+   * transform's subtree is painted without culling) in the frames the finger is still down, so
+   * the click that follows has only to start the clock.
+   */
+  held?: boolean;
 }): SharedAxisHandle {
-  const { leaving, entering, axis = 'x', direction, leavingOffsetY = 0, onSettle } = opts;
+  const { leaving, entering, axis = 'x', direction, onSettle } = opts;
+  let leavingOffsetY = opts.leavingOffsetY ?? 0;
+  let held = opts.held === true;
   const tier = motionTier('tabs');
   const scale = motionScale('tabs');
 
@@ -169,6 +219,11 @@ export function playSharedAxis(opts: {
   const animations: Animation[] = [];
   /** Leaning blocks stacked for the run, with the inline position and z-index to give back. */
   const lifted: Array<[HTMLElement, string, string]> = [];
+  /** Panes clipped for the run, with the inline clip-path to give back. */
+  const clipped = new Map<HTMLElement, string>();
+  let stopClipWatch = () => {};
+  /* Gives the panel back the box and mask it had before the window's edges (`edge`). */
+  let restoreEdge = () => {};
 
   /* CSS transitions are frozen on the two moved panes, inline, for the length of the run,
      and handed back after the cancel is committed — otherwise a pane's own transform
@@ -183,8 +238,7 @@ export function playSharedAxis(opts: {
     }
   };
 
-  const settle = () => {
-    if (settled) return;
+  const teardown = () => {
     settled = true;
     view?.removeAttribute('data-axis-running');
     /* Nothing may keep a transform. `lib/hero/dom.ts` only compensates for a
@@ -200,11 +254,20 @@ export function playSharedAxis(opts: {
       el.style.position = position;
       el.style.zIndex = zIndex;
     }
+    stopClipWatch();
+    for (const [node, previous] of clipped) node.style.clipPath = previous;
+    clipped.clear();
+    restoreEdge();
+    restoreEdge = () => {};
     if (frozen.size > 0) {
       void getComputedStyle(leaving).transform;
       for (const [node, previous] of frozen) node.style.transition = previous;
       frozen.clear();
     }
+  };
+  const settle = () => {
+    if (settled) return;
+    teardown();
     onSettle?.(reversed);
   };
 
@@ -214,16 +277,41 @@ export function playSharedAxis(opts: {
     reversed = !reversed;
     for (const animation of animations) animation.reverse();
   };
+  /* The outgoing pane's keyframes for the leg in hand — rebuilt when `play` brings a vertical
+     compensation the held run was set up without. Replaced by each branch below. */
+  let leavingKeyframes: () => Keyframe[] = () => [];
   const handle: SharedAxisHandle = {
     finish: settle,
     reverse: () => {
-      if (settled || animations.length === 0) return false;
+      if (settled || held || animations.length === 0) return false;
       turn();
       return true;
+    },
+    play: (offsetY = 0) => {
+      if (settled || !held) return;
+      held = false;
+      if (offsetY !== leavingOffsetY) {
+        leavingOffsetY = offsetY;
+        (animations[0]?.effect as KeyframeEffect | null)?.setKeyframes(leavingKeyframes());
+      }
+      /* From its hold at 0: each is play-pending until the next frame the compositor draws,
+         which starts them together, as a fresh run's are. */
+      for (const animation of animations) animation.play();
+    },
+    cancel: () => {
+      if (settled) return;
+      teardown();
     },
   };
 
   if (tier === 'off' || distance <= 0 || scale <= 0) {
+    /* Nothing to hold: a held run settles when it is played, a moving one at once. */
+    if (held) {
+      handle.play = () => {
+        if (!settled) settle();
+      };
+      return handle;
+    }
     queueMicrotask(settle);
     return handle;
   }
@@ -239,6 +327,8 @@ export function playSharedAxis(opts: {
     animation.id = id;
     animation.addEventListener('finish', maybeSettle);
     animations.push(animation);
+    /* Held at its first pose: in effect, so composited and painted, but not running. */
+    if (held) animation.pause();
   };
   const run = (node: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions) =>
     adopt(node.animate(keyframes, timing), 'tab-strip');
@@ -252,6 +342,48 @@ export function playSharedAxis(opts: {
   view?.setAttribute('data-axis-running', axis);
   freeze([leaving, entering]);
 
+  /* Each pane cut to the rows the window can show (`clip`), in its own coordinates — so it moves
+     with the pane — and widened to whatever a scroll during the run brings into view: both panes
+     ride the scroller, so a scroll moves the band in each by the same amount. Read off the
+     scroller in a frame, never in the scroll event, and written only when it grows. */
+  const scroller = getAppScroller();
+  const bands: Array<{ node: HTMLElement; initial: PaneClip; band: PaneClip }> = [];
+  for (const [node, band] of [[leaving, opts.clip?.leaving], [entering, opts.clip?.entering]] as const) {
+    if (!band || axis !== 'x') continue;
+    clipped.set(node, node.style.clipPath);
+    bands.push({ node, initial: band, band: { ...band } });
+  }
+  const writeClip = (node: HTMLElement, band: PaneClip) => {
+    node.style.clipPath = `inset(${band.top}px -100vw ${band.bottom}px -100vw)`;
+  };
+  for (const { node, band } of bands) writeClip(node, band);
+  if (bands.length > 0 && scroller) {
+    const from = opts.clip?.offset ?? 0;
+    let frame = 0;
+    const widen = () => {
+      frame = 0;
+      if (settled) return;
+      const delta = scroller.scrollTop - from;
+      for (const { node, initial, band } of bands) {
+        const top = Math.min(band.top, Math.max(0, initial.top + delta));
+        const bottom = Math.min(band.bottom, Math.max(0, initial.bottom - delta));
+        if (top === band.top && bottom === band.bottom) continue;
+        band.top = top;
+        band.bottom = bottom;
+        writeClip(node, band);
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(widen);
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    stopClipWatch = () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+    };
+  }
+
   /* Reduced: the panes cross-fade with a short shift instead of sliding a window's
    * width. Dropped: the *distance* (a full-window slide is the performance). Survives:
    * direction — 24px reads "the next one came from the right", which a bare cross-fade
@@ -260,14 +392,15 @@ export function playSharedAxis(opts: {
    * destination's remembered offset. */
   if (tier === 'reduced') {
     const shift = REDUCED_AXIS_SHIFT_PX * direction;
-    run(
-      leaving,
-      [
-        { transform: place(0, leavingOffsetY), opacity: 1 },
-        { transform: place(-shift, leavingOffsetY), opacity: 0 },
-      ],
-      { duration: DURATION.press * 1000 * scale, easing: EASE.accelerate, fill: 'both' },
-    );
+    leavingKeyframes = () => [
+      { transform: place(0, leavingOffsetY), opacity: 1 },
+      { transform: place(-shift, leavingOffsetY), opacity: 0 },
+    ];
+    run(leaving, leavingKeyframes(), {
+      duration: DURATION.press * 1000 * scale,
+      easing: EASE.accelerate,
+      fill: 'both',
+    });
     run(
       entering,
       [
@@ -279,6 +412,26 @@ export function playSharedAxis(opts: {
     return handle;
   }
 
+  /* **The window's edges** (`edge`): the panel's box widened to the window for the run, and masked
+     to it — transparent at the box's edges, opaque from `fade` in. The widening is a margin and a
+     padding of the same size, so the panes keep their box and nothing they hold is laid out again;
+     the panel does not move, so the fade stays where the window ends while the panes pass through
+     it. A wider box rather than a mask allowed to reach past the panel's own box: Chromium drops
+     such a mask over composited content — over the panes, for the whole run (measured).
+     Written with the run's other styles, before its first frame, held runs included: an
+     arriving pane held at its first pose sits a window's width out, in the margin. */
+  if (opts.edge && axis === 'x') {
+    const { panel, reach, fade } = opts.edge;
+    const style = panel.style;
+    const before = [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight, style.maskImage];
+    style.marginLeft = style.marginRight = `${-reach}px`;
+    style.paddingLeft = style.paddingRight = `${reach}px`;
+    style.maskImage = `linear-gradient(to right, transparent, black ${fade}px, black calc(100% - ${fade}px), transparent)`;
+    restoreEdge = () => {
+      [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight, style.maskImage] = before;
+    };
+  }
+
   /* The strip as one number, `p`: 0 rests on `leaving`, 1 on `entering`. A leg runs `p` from
    * where the strip is to one side; both panes take the same keyframes and timing, so at every
    * instant the pair is exactly one window apart. Filling both ways holds the arriving pane
@@ -286,10 +439,10 @@ export function playSharedAxis(opts: {
    * lets go. */
   const full = STRIP_DURATION_MS * scale;
   let leg = freshStripLeg(full);
-  /* Every leg the strip has run, for the blocks: a block `delay` late is where the strip was
-     `delay` ago, which after a turn can still be on the leg before it. The times are the
-     timeline's, except while the first leg is waiting for the compositor to start it — then they
-     are that leg's own, from 0, and the blocks wait with it. */
+  /* Every leg the strip has run, for the blocks: each eases after the strip from the run's
+     start, and meets a turn from where it is. The times are the timeline's, except
+     while the first leg is waiting for the compositor to start it — then they are that leg's own,
+     from 0, and the blocks wait with it. */
   let history: StripSegment[] = [];
   let historyPending = false;
   /* The lean's shape is a `linear()` easing (below); an engine without one gets no lean. */
@@ -310,16 +463,16 @@ export function playSharedAxis(opts: {
       }
     });
   }
-  /* Blocks that share a delay share the lag's shape (one easing), and those that also share their
-     own transform share one parsed model (`startLeg`). */
-  const byDelay = new Map<number, Map<string, HTMLElement[]>>();
-  for (const { el, delay, base } of blocks) {
-    const bases = byDelay.get(delay * scale) ?? new Map<string, HTMLElement[]>();
-    byDelay.set(delay * scale, bases);
+  /* Blocks at one depth share the lag's shape (one easing), and those that also share their own
+     transform share one parsed model (`startLeg`). */
+  const byDepth = new Map<number, Map<string, HTMLElement[]>>();
+  for (const { el, depth, base } of blocks) {
+    const bases = byDepth.get(depth) ?? new Map<string, HTMLElement[]>();
+    byDepth.set(depth, bases);
     bases.set(base, [...(bases.get(base) ?? []), el]);
   }
-  /* A pixel and a half: invisible in a lag that is a third of a window at its peak, and it keeps
-     the lag's easing to 15–25 stops. */
+  /* A pixel and a half: invisible in a lag of an eighth of the window at its peak, and it keeps
+     the lag's easing to 6–12 stops a depth; a block counts as landed at a third of it. */
   const tolerance = 1.5 / distance;
 
   const startLeg = (next: StripLeg, startTime: number | null, prior: readonly StripSegment[]) => {
@@ -334,14 +487,11 @@ export function playSharedAxis(opts: {
       easing: linearEasingOf(stripProgress(next.launch)),
       fill: 'both' as const,
     };
-    run(
-      leaving,
-      [
-        { transform: place(-direction * distance * next.from, leavingOffsetY) },
-        { transform: place(-direction * distance * next.to, leavingOffsetY) },
-      ],
-      timing,
-    );
+    leavingKeyframes = () => [
+      { transform: place(-direction * distance * leg.from, leavingOffsetY) },
+      { transform: place(-direction * distance * leg.to, leavingOffsetY) },
+    ];
+    run(leaving, leavingKeyframes(), timing);
     run(
       entering,
       [
@@ -350,17 +500,33 @@ export function playSharedAxis(opts: {
       ],
       timing,
     );
-    /* A block's own transform is its lag behind the pane it sits in, the same on both sides —
-       `+d·(S(t) − S(t − delay))` in the direction of travel — sampled once per delay and
-       shared by every block of that delay. Linear between samples; the samples are the curve.
+    /* A block's own transform is its lag behind the pane it sits in, the same on both
+       sides, in the direction of travel — sampled once per depth (`lagSampler`, which samples the
+       strip once for all of them) and shared by every block at that depth. Linear between
+       samples; the samples are the curve.
        **One keyframe pair, and the lag's shape as the easing**: from the pane's own place to the
        peak lag, with a `linear()` easing that rises to 1 and comes back — `linear()` may leave
        [0, 1] and return, which a lag that swells and settles needs (and a turn, which sends it
        negative). The same curve as a keyframe per sample, at a fraction of the cost: each block's
-       effect is a copy of one model per delay (`new KeyframeEffect(model)`), which shares the
+       effect is a copy of one model per depth (`new KeyframeEffect(model)`), which shares the
        parsed easing, and the engine resolves two values per block instead of twenty. */
-    for (const [delay, bases] of byDelay) {
-      const samples = lagSamples(history, delay, at, tolerance);
+    const fresh = prior.length === 0 && startTime === null;
+    let lagAt: ((depth: number, tolerance: number) => Array<[number, number]>) | null = null;
+    const lagOf = (depth: number) => {
+      const key = fresh ? `${scale}|${Math.round(distance)}|${next.from}|${next.to}|${next.duration}|${next.launch}|${depth}` : null;
+      const kept = key ? freshLean.get(key) : undefined;
+      if (kept) return kept;
+      lagAt ??= lagSampler(history, at, scale);
+      const samples = lagAt(depth, tolerance);
+      if (key) {
+        if (freshLean.size >= FRESH_LEAN_LIMIT) freshLean.clear();
+        freshLean.set(key, samples);
+      }
+      return samples;
+    };
+    for (const [depth, bases] of byDepth) {
+      const samples = lagOf(depth);
+      if (samples.length < 2) continue;
       const span = samples[samples.length - 1][0] - at;
       const peak = samples.reduce((most, [, lag]) => Math.max(most, Math.abs(lag)), 0);
       if (!(span > 0) || !(peak > 0)) continue;
@@ -381,8 +547,8 @@ export function playSharedAxis(opts: {
           const effect = new KeyframeEffect(model);
           effect.target = el;
           const animation = new Animation(effect, document.timeline);
+          if (!held) animation.play();
           adopt(animation, 'tab-lean');
-          animation.play();
         }
       }
     }
@@ -393,9 +559,8 @@ export function playSharedAxis(opts: {
    * (`turnStrip`). Played backwards instead (`Animation.reverse`), a leg went on the old way for
    * a frame while the engine resolved the new rate, and a late tap retraced the slow end of the
    * curve — the brake at the start of every quick re-switch. The blocks turn from where each of
-   * them is, in the order they left: each is still where the strip was `delay` ago, so it runs
-   * on for its own delay and then follows the new leg — top first, the lean reversing as a wave
-   * rather than any block starting over.
+   * them is: a lower one, further behind its pane, goes on the old way until the pane comes back
+   * past it, so the lean reverses top first, as a wave, and no block starts over.
    *
    * The pose is the old leg's at the moment of the tap, and the new leg starts at that moment,
    * so a frame committed on time carries straight on from it. `performance.now()`, not the

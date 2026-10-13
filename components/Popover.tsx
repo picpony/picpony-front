@@ -80,14 +80,15 @@ export function estimateMenuHeight(rows: number, rowHeight?: number): number {
   return rows * (rowHeight ?? (coarse ? 48 : 40)) + Math.max(0, rows - 1) * 2 + 8 * 2;
 }
 
-/* The list opens out of its trigger, like Vuetify's VMenu. Its clock remains
- * the application's shared short/state pair: 200ms enter, 150ms exit, with the
- * user's speed scale. The arrangement is borrowed; the literal durations are not.
+/* The list opens out of its trigger, like Vuetify's VMenu, on the shared short step: 200ms on the
+ * standard decelerate, with the user's speed scale. The arrangement is borrowed; the literal
+ * durations are not. It leaves as every small surface does, on FastEffects — the drawer closing,
+ * the tooltip, the search view both ways: a dismissal answers a press, and starts on the frame
+ * after it (the 150ms standard accelerate it left on was 3% of the way after a frame).
  *
- * Menu duration and easing are one pair; the search view keeps FastEffects.
- * Reduced motion removes the travel. The exit hold uses the
- * unscaled duration because useExitAnimation applies the maximum speed itself. */
-const EXIT_MS = MENU_TRANSITION.exit.duration;
+ * Reduced motion removes the travel. The exit hold uses the unscaled duration because
+ * useExitAnimation applies the maximum speed itself. */
+const EXIT_MS = SPRING_MS.fastEffects;
 
 export interface PopoverHandle {
   /** The panel element, for callers that need to measure or scroll it. */
@@ -305,10 +306,9 @@ export default function Popover({
     if (tier === 'off') return;
 
     if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
-    const menu = MENU_TRANSITION[open ? 'enter' : 'exit'];
-    const timing = variant === 'search'
+    const timing = variant === 'search' || !open
       ? springTiming('fastEffects', 'overlay')
-      : { duration: scaledMs(menu.duration, 'overlay'), easing: menu.easing };
+      : { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing };
     const from: Keyframe = { opacity: fromOpacity };
     const to: Keyframe = { opacity };
     if (fromTransform !== transform) {

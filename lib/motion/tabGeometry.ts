@@ -1,6 +1,6 @@
 'use client';
 
-import { leanDelay, LEAN_BAND_PX } from '@/lib/tabStrip';
+import { leanDepth, LEAN_BAND_PX } from '@/lib/tabStrip';
 
 /**
  * Whether the stylesheet conceals this pane — attribute for attribute the rule in globals.css
@@ -18,11 +18,35 @@ export function isConcealedPane(el: Element): boolean {
   );
 }
 
-/* --- the lean: which blocks, and how late -------------------------------------------------- */
+/* --- the band a pane can show --------------------------------------------------------------- */
 
-/** A block of a leaning pane: its delay (ms at the default speed), and the transform its own
- *  style gives it, which every keyframe carries so the lean adds to it rather than replacing it. */
-export type LeanBlock = { el: HTMLElement; delay: number; base: string };
+/** Insets from a pane's own top and bottom edges, px: what is clipped for a run. */
+export type PaneClip = { top: number; bottom: number };
+
+/**
+ * **What of a pane the window can show for a run**, as the clip that cuts the rest away — or null
+ * when the band covers the pane. An element whose transform is animated is painted whole, without
+ * culling (the animation may carry any of it into view), and a pane is a whole page tall: the
+ * frame that started a switch painted every row and card of both panes, and laid out a layer list
+ * for all of it — on a phone-class CPU the largest single cost before anything moved. The strip
+ * moves the panes sideways only, so nothing outside the window's rows can come into view; `margin`
+ * keeps a band either side for a page scrolled during the run, and the run widens the clip as it
+ * is (`playSharedAxis`). `shiftY` is where the pane will sit for the run relative to where it is
+ * measured (a scroll restore moves the arriving pane). Reads only.
+ */
+export function paneClip(pane: HTMLElement, viewTop: number, viewBottom: number, shiftY: number, margin: number): PaneClip | null {
+  const rect = pane.getBoundingClientRect();
+  const top = Math.max(0, Math.floor(viewTop - margin - (rect.top + shiftY)));
+  const bottom = Math.max(0, Math.floor(rect.bottom + shiftY - (viewBottom + margin)));
+  return top > 0 || bottom > 0 ? { top, bottom } : null;
+}
+
+/* --- the lean: which blocks, and how far behind ------------------------------------------- */
+
+/** A block of a leaning pane: how deep it sits in the lean (`leanDepth`, which sets how far behind
+ *  its pane it eases), and the transform its own style gives it, which every keyframe carries so
+ *  the lean adds to it rather than replacing it. */
+export type LeanBlock = { el: HTMLElement; depth: number; base: string };
 
 /**
  * What a leaning run animates (`leanPlan`), and the blocks it restacks for the run (`lift`), with
@@ -117,20 +141,20 @@ function anyOverlap(kids: BoxChild[]): boolean {
  * by one, a card never comes apart from its caption, a surface never loses its content, and a
  * component added later is a block or inside one without anybody marking it.
  *
- * Only blocks on screen lean (their tops set the delay, `leanDelay`); the rest — below the fold,
- * above it, a block in the top band whose delay rounds to nothing — ride the pane's own transform,
+ * Only blocks on screen lean (their tops set how far behind the pane they fall, `leanDepth`); the rest — below
+ * the fold, above it, a block in the top band, which rides its pane — ride the pane's own transform,
  * so nothing is ever left behind, whatever the page does during the run. Bounded: a wrapper whose
  * pieces would take the pane past `LEAN_BLOCK_CAP` leans whole. Reads only — call it where the
  * switch has already laid the panes out, before anything is written. `shiftY` is where this pane
  * will sit vertically for the run relative to where it is measured (a scroll restore moves the
  * arriving pane).
  *
- * `leadTop` is where the delays count from: the panel's own top on screen, or the view's top once
+ * `leadTop` is where the depths count from: the panel's own top on screen, or the view's top once
  * the panel starts above it. So the first row of the panel that is on screen always leads, even
  * under shared chrome — the gallery's 全部 / 本站讨论 under the banner, a profile's tabs under its
  * header. Counted from the view's top instead, a panel starting halfway down the screen set off
- * 12ms late as a whole: a slow start rather than a lean. The slope stays one view height per
- * `LEAN_MAX_MS`, so a panel with less of itself on screen leans less rather than more steeply.
+ * 12ms late as a whole: a slow start rather than a lean. The slope stays one view height to the
+ * longest lag, so a panel with less of itself on screen leans less rather than more steeply.
  */
 export function leanPlan(pane: HTMLElement, viewTop: number, viewBottom: number, shiftY: number, leadTop: number): LeanPlan {
   const height = viewBottom - viewTop;
@@ -150,9 +174,9 @@ export function leanPlan(pane: HTMLElement, viewTop: number, viewBottom: number,
           continue;
         }
       }
-      const delay = leanDelay(kid.rect.top + shiftY, leadTop, height);
-      if (delay >= 1 && blocks.length < LEAN_BLOCK_CAP) {
-        blocks.push({ el: kid.el, delay, base: kid.style.transform });
+      const blockDepth = leanDepth(kid.rect.top + shiftY, leadTop, height);
+      if (blockDepth > 0 && blocks.length < LEAN_BLOCK_CAP) {
+        blocks.push({ el: kid.el, depth: blockDepth, base: kid.style.transform });
         if (kid.style.zIndex === 'auto') lift.push({ el: kid.el, position: kid.style.position === 'static' });
       }
     }

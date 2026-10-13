@@ -35,6 +35,7 @@
  * it, since the entry it was meant for is gone.
  */
 
+import { afterFirstFrame } from '@/lib/afterFirstFrame';
 import { settleHistoryLayers } from '@/lib/historyLayers';
 
 export type HomeTab = 'gallery' | 'forum';
@@ -127,37 +128,6 @@ function applyWanted(): void {
   window.history.replaceState(null, '', homeTabHref('gallery'));
 }
 
-/**
- * Runs `write` once the frame after this task has been drawn — or at once, ahead of the next
- * input that could start a navigation. A traversal first cancels it (see the module note).
- */
-function afterFirstFrame(write: () => void): void {
-  let frame = 0;
-  let timer = 0;
-  const stop = () => {
-    window.removeEventListener('pointerdown', flush, true);
-    window.removeEventListener('keydown', flush, true);
-    window.removeEventListener('popstate', cancel, true);
-    window.cancelAnimationFrame(frame);
-    window.clearTimeout(timer);
-  };
-  function flush() {
-    stop();
-    write();
-  }
-  function cancel() {
-    stop();
-    waiting = false;
-    wanted = null;
-  }
-  window.addEventListener('pointerdown', flush, true);
-  window.addEventListener('keydown', flush, true);
-  window.addEventListener('popstate', cancel, true);
-  frame = window.requestAnimationFrame(() => {
-    timer = window.setTimeout(flush, 0);
-  });
-}
-
 function schedule(): void {
   if (waiting || traversing) return;
   waiting = true;
@@ -165,7 +135,16 @@ function schedule(): void {
      push / back / replace against *that* entry would read the page itself as "the entry
      behind". Settling first unwinds it — a microtask when nothing is open — and the write
      then waits for the tap's first frame. */
-  const deferred = () => afterFirstFrame(applyWanted);
+  /* Once the frame is out, or at once ahead of the next input that could start a navigation. A
+     traversal first cancels it: the entry it was meant for is gone. */
+  const deferred = () =>
+    void afterFirstFrame(applyWanted, {
+      cancelOn: ['popstate'],
+      onCancel: () => {
+        waiting = false;
+        wanted = null;
+      },
+    });
   void settleHistoryLayers().then(deferred, deferred);
 }
 
