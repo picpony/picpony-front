@@ -23,7 +23,13 @@ interface SearchInputProps
  * offered, because every call site is a filter bar beside a 40dp dropdown and a
  * 32dp chip — the step is what this object *is*, not a per-site choice. A
  * search field that wants the 56dp box is a form slot and should use `Input`
- * directly.
+ * directly at `size="lg"`.
+ *
+ * **`shape="pill"` is baked in beside it**, because this is /search's bar one height down:
+ * the same corner, the same magnifier, the same clear control. Keyed on the shape rather
+ * than the size — a corner that only `lg` implied would have left the two search fields one
+ * shape apart. The 32dp clear button needs no corner of its own: it is round, and a centred
+ * circle in a pill is concentric at any radius.
  *
  * **It clears itself.** A 32dp clear control sits in the dense field's trailing slot
  * while there is text — the system's own, in place of the engine's cross (hidden in
@@ -49,6 +55,7 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function Sear
       }}
       type="search"
       size="sm"
+      shape="pill"
       icon={<MdSearch size={ICON.control} />}
       aria-label={ariaLabel ?? placeholder}
       value={value}

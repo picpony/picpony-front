@@ -265,7 +265,12 @@ export default function Tabs<T extends string = string>({
           /* 48dp, M3's tab height. The pill's own rows are 40dp because they sit
              inside a 48dp container carrying 4dp of padding, which is what makes
              the pill concentric. */
-          variant === 'underline' && 'h-12 px-4',
+          /* The secondary tab's shape: **top corners only**. It is the element's own shape
+             rather than the hover layer's, because the state layer and the ripple host both
+             inherit it (`border-radius: inherit`) — so the hover tint, the press wave and the
+             focus ring are one shape: a folder tab standing on the row's rule, its bottom
+             edge flush with the divider its indicator sits on. */
+          variant === 'underline' && 'h-12 rounded-t-md px-4',
           variant === 'pill' && 'z-10 h-10 rounded-full px-5',
           variant === 'rail' && 'h-12 rounded-full px-4 text-left whitespace-nowrap',
           variant === 'rail' && (orientation ? vertical && 'w-full' : 'md:w-full'),

@@ -22,10 +22,13 @@ import { cn } from '@/lib/utils';
  * placeholder is its whole identity, so it gets the filled treatment: a tone
  * step, no border, no shadow. Outlined fields take the 20dp large corner
  * (`--radius-xl`, a project divergence from the token files' text-field step);
- * filled fields use 8dp, matching the default Select shape. Their ordinary 56dp
- * box stays shared. Geometry, notch and float live in `.m3-field`
- * (globals.css), which turns on `:focus-within`/`:placeholder-shown` against a
- * *sibling* and a real `<legend>` to cut the notch.
+ * filled fields use 8dp, matching the default Select shape. The one exception is
+ * the *search* field: /search's bar and the dense filter fields are one object at
+ * two heights, so its pill corner (`shape="pill"`, implied by `size="lg"`) is a
+ * shape of its own rather than a size's. The ordinary 56dp box stays shared either
+ * way. Geometry, notch and float live in `.m3-field` (globals.css), which turns on
+ * `:focus-within`/`:placeholder-shown` against a *sibling* and a real `<legend>`
+ * to cut the notch.
  *
  * **An unlabelled field carries its own actions** via `trailing` — a flow item,
  * not an overlay, so any number of controls fit with no hand-typed width reserve.
@@ -62,12 +65,14 @@ const BARE_HEIGHT = 'h-14';
  */
 const DENSE_HEIGHT = 'h-10';
 /**
- * `size="lg"` — M3's *search bar* (`SearchBarTokens`): the same 56dp, but fully
- * rounded rather than the ordinary filled field's 8dp. Exists for the one field
- * on /search that is the point of the page. The pill also makes the
- * buttons inside it work: a centred pill inside a pill is concentric for free at
- * any size (40dp button, 56dp box, 8px gap ⇒ half the button's height), where a
- * small-cornered enclosure would need a remembered corner value.
+ * `size="lg"` — M3's *search bar* (`SearchBarTokens`): the same 56dp box with the search
+ * bar's insets. Its shape is no longer this size's own business: a field is a pill when
+ * `shape="pill"` says so, and `lg` implies it — so /search's field and the dense filter
+ * field (`SearchInput`, 40dp) are one object at two heights, and there is exactly one
+ * place that decides the corner. The pill is also what makes the buttons inside these
+ * fields work: a centred pill inside a pill is concentric for free at any size (40dp
+ * button, 56dp box, 8px gap ⇒ half the button's height), where a small-cornered enclosure
+ * would need a remembered corner value.
  */
 const HERO_HEIGHT = 'h-14';
 
@@ -212,6 +217,7 @@ function shellProps(opts: {
   multiline?: boolean;
   hero?: boolean;
   dense?: boolean;
+  pill?: boolean;
 }) {
   return {
     className: 'm3-field',
@@ -224,6 +230,9 @@ function shellProps(opts: {
     'data-trail': opts.trailing ? '' : undefined,
     'data-multiline': opts.multiline ? '' : undefined,
     'data-size': opts.hero ? 'lg' : opts.dense ? 'sm' : undefined,
+    // Its own axis, not a size's: the shape of a search field is the same object
+    // at 56dp and at the dense 40dp step, so it cannot hang off `data-size`.
+    'data-shape': opts.pill ? 'pill' : undefined,
   };
 }
 
@@ -237,11 +246,19 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> &
      */
     trailing?: ReactNode;
     /**
-     * `lg` is M3's search bar — 56dp and fully rounded. `sm` is the dense step,
+     * `lg` is M3's search bar — 56dp, with its insets. `sm` is the dense step,
      * 40dp with `body-m`, for a filter bar or a row. Both are **unlabelled only**.
      * See the docblock above.
      */
     size?: 'sm' | 'md' | 'lg';
+    /**
+     * The container's shape. `pill` is the app's search-bar shape — the fully rounded
+     * field the controls inside it are concentric in. **`size="lg"` implies it**;
+     * `SearchInput` asks for it at the dense 40dp step, which is why it is a shape and
+     * not a size. **Unlabelled only**, for the same reason `sm`/`lg` are: a labelled
+     * field's notch geometry is derived from a field with ordinary corners.
+     */
+    shape?: 'pill';
     /**
      * A `type="password"` field's show/hide toggle. On by default; pass `false` only
      * where the value must never be shown on screen.
@@ -260,6 +277,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     icon,
     trailing,
     size = 'md',
+    shape,
     revealable = true,
     type,
     className = '',
@@ -280,6 +298,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
      because a labelled field's whole notch geometry is derived from 56dp. A `sm`
      on a labelled field is a no-op rather than an error, the same way `lg` is. */
   const dense = !labelled && size === 'sm';
+  /* A search bar's shape, at either step: `lg` implies it, `shape="pill"` says it outright
+     for the dense search field. Gated on `!labelled` like both sizes, since the notch is
+     cut against an ordinary corner. */
+  const pill = !labelled && (hero || shape === 'pill');
   const [revealed, setRevealed] = useState(false);
   const reveal = type === 'password' && revealable;
   /* The toggle names the action (显示密码 / 隐藏密码), as its icon does. It keeps the
@@ -313,6 +335,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           trailing: Boolean(trailingSlot),
           hero,
           dense,
+          pill,
         })}
       >
         {icon && (

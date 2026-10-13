@@ -33,6 +33,11 @@ const ROW = 'flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-sm p
  * 订阅标签: type a tag (or pick one the dictionary suggests — a Chinese name finds its English tag)
  * and subscribe. One tag per field, unlike /search's: the whole text is the tag.
  *
+ * **The field is a search field, and wears the search box's shape** — a pill, the same corner
+ * here at 56dp as in `SearchInput`'s dense 40dp box, since the corner is a shape rather than a
+ * size's. It is also what keeps the clear button and 订阅 concentric in it: a centred circle or
+ * pill inside a pill is concentric at any radius, so neither needs a corner of its own.
+ *
  * The combobox is `useCombobox`: nothing is active until the arrows enter the list, so Enter
  * subscribes to what was typed; picking a suggestion subscribes to that tag. An IME's pinyin
  * fragments never trigger a lookup. While the live count is read and the subscription written
@@ -113,6 +118,7 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
         <Input
           ref={inputRef}
           type="text"
+          shape="pill"
           value={value}
           onChange={handleChange}
           placeholder="输入标签订阅，例如 rainbow dash"

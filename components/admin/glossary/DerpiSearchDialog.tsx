@@ -23,6 +23,10 @@ import type { DerpiTagRow } from './model';
  * (R9-037), and the dialog's own body scrolls them: no second scroller inside it. They sit one
  * container step above the dialog (`highest` on its `high`), as every list in a dialog does — on
  * `low` they read as a hole two steps down (G4-009).
+ *
+ * The field is a magnifier search box, so it takes the search box's shape (`shape="pill"`)
+ * rather than the filled field's 8dp — the same corner `SearchInput` wears, and concentric
+ * with its own 40dp submit beside it.
  */
 export default function DerpiSearchDialog({
   open,
@@ -54,6 +58,7 @@ export default function DerpiSearchDialog({
         >
           <Input
             size="sm"
+            shape="pill"
             aria-label="原站标签"
             icon={<MdSearch size={ICON.control} />}
             placeholder="输入英文标签名…"

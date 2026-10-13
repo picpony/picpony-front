@@ -3662,10 +3662,8 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
 /* ---------------------------------------------------------------------------
  * lg size — M3's search bar. Unlabelled only; see the note in `Input.tsx`.
  *
- * A pill rather than the 12dp step, and the corner is why the controls inside need no
- * compensation: concentric corners want inner = outer − gap, and a centred pill inside a
- * pill satisfies that identically at every size. 9999px rather than a shape token because
- * that is the same step the full-rounded utility compiles to.
+ * Its shape is not this size's own business: `lg` implies the pill, and the pill block below
+ * owns that corner. All this size adds is the taller box's insets.
  */
 .m3-field[data-size='lg'] {
   --field-lead: 1.5rem;
@@ -3683,12 +3681,30 @@ html:is([data-motion='reduced'], [data-motion='off']) .image-detail-route {
   --field-trail: 0.5rem;
 }
 
-.m3-field[data-size='lg'] > fieldset {
-  border-radius: 9999px;
-}
-
 .m3-field[data-size='lg'] > .m3-field-lead {
   inset-inline-start: 1.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * The pill — the app's search-bar corner, and its own axis rather than a size's.
+ *
+ * A search field is one object at two heights: /search's 56dp bar (`lg`) and the dense 40dp
+ * filter field (`SearchInput`) share the icon, the clear button and this corner. Keyed on
+ * `data-shape='pill'` for that reason — hung off `data-size`, the dense one would have had to
+ * be a 56dp bar to get its own shape, and the two would drift apart again the moment either
+ * height changed. The `lg` block above therefore names no radius: `Input` emits the shape
+ * *for* `lg`, so this is the one place a pill corner is written.
+ *
+ * The corner is also *why the controls inside need no compensation*: concentric corners want
+ * inner = outer − gap, and a centred pill inside a pill satisfies that identically at every
+ * size. 9999px rather than a shape token because that is the same step the full-rounded
+ * utility compiles to.
+ *
+ * Sits last of the shape rules so it wins at equal specificity over the filled field's 8dp
+ * (`.m3-field:not([data-labelled]) > fieldset`, also (0,2,1)) — a pill is a filled field.
+ */
+.m3-field[data-shape='pill'] > fieldset {
+  border-radius: 9999px;
 }
 
 /* ---------------------------------------------------------------------------
