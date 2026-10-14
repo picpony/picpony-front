@@ -1233,7 +1233,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           className="image-detail-back"
         />
         {/* 上一张 / 下一张 in the list the picture was opened from (decision 19): the
-            dialog's trailing actions, pinned opposite the back affordance and in its shape.
+            dialog's trailing actions, pinned opposite the back affordance and wearing what it
+            wears — `quiet`, so a disc at rest and the tonal 12dp square only under the pointer.
             Hidden outright when the picture belongs to no list; at a true end an arrow is
             unavailable, and it shows the wait while the next page loads. Absent from the
             hero Stage, so they stand down during a flight (globals.css); the pull fades
@@ -1241,9 +1242,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         {stepNeighbours.inSequence && (
           <div data-image-detail-step data-image-detail-chrome className="image-detail-step">
             <IconButton
-              variant="tonal"
+              variant="quiet"
               size="md"
-              shape="square"
               icon={<MdChevronLeft />}
               aria-label="上一张"
               disabled={stepNeighbours.previous === null && !stepNeighbours.canLoadPrevious}
@@ -1251,9 +1251,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               onClick={() => stepTo(-1)}
             />
             <IconButton
-              variant="tonal"
+              variant="quiet"
               size="md"
-              shape="square"
               icon={<MdChevronRight />}
               aria-label="下一张"
               disabled={stepNeighbours.next === null && !stepNeighbours.canLoadNext}

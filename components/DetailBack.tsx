@@ -10,21 +10,27 @@ type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 /**
- * Back affordance for the image detail view.
+ * Back affordance for the image detail view, and the app's one pinned back control.
  *
- * A Material 3 **filled tonal icon button** — what the spec uses for a leading
- * navigation action that sits on top of content rather than in a top app bar.
- * It takes the *square* shape deliberately: the button is pinned just inside the
- * content section's 12dp corner, where a pill reads as something stuck on top of
- * the frame. This is not a concentric pair (at a 16px inset the arithmetic gives
- * 0, and the gap is too large for the corners to read as one curve inside
- * another) — they are neighbours, and 12dp is the shape table's step for a
- * square icon button.
+ * **It keeps its distance until it is reached for**: the `quiet` variant (`IconButton`) holds a
+ * neutral disc at rest — the page's own material, which reads as part of the page rather than as
+ * a control sitting on top of the picture — and only under the pointer does it become what the
+ * spec has for a leading navigation action over content: a Material 3 **filled tonal icon
+ * button**. It takes the *square* shape there deliberately, because the button is pinned just
+ * inside the content section's 12dp corner, where a pill reads as something stuck on top of the
+ * frame. This is not a concentric pair (at a 16px inset the arithmetic gives 0, and the gap is
+ * too large for the corners to read as one curve inside another) — they are neighbours, and 12dp
+ * is the shape table's step for a square icon button.
+ *
+ * A touch screen has no hover, so a finger only ever sees the quiet disc. That is the intent
+ * rather than a gap in it: the morph is a reward for a pointer that has committed, and what a
+ * finger gets is the form that stays out of the picture's way.
  *
  * Icon-only is the M3 back affordance; the label survives as the accessible name
  * and the tooltip. The container, state layer and elevation step come from
  * `IconButton`; what is left here is the glyph, the wording and `passive`.
- * Motion is the state layer plus the shared ripple; no bespoke transform.
+ * Motion is the state layer, the container's own transition and the shared
+ * ripple; no bespoke transform.
  *
  * `passive` is the copy that rides along on a hero flight: still clickable, so a
  * tap during the flight still turns it around, but out of the tab order, out of
@@ -58,9 +64,11 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
         if (passive) event.preventDefault();
         onMouseDown?.(event);
       }}
-      variant="tonal"
+      /* Deliberately no `shape`: the 12dp corner is a *state* here and the `quiet` variant owns
+         it. Naming one at this call site would also suppress the resting disc — the call site's
+         corner outranks the shape axis (`HAS_RADIUS`), which is not what a morph wants. */
+      variant="quiet"
       size="md"
-      shape="square"
       icon={<MdArrowBack size={ICON.standard} aria-hidden="true" />}
       title={title}
       tabIndex={passive ? -1 : tabIndex}

@@ -9,10 +9,15 @@ import RichTextRenderer from '@/components/RichTextRenderer';
 import { showToast } from '@/components/Toast';
 import { derpiMarkdown, plainTextOf } from '@/lib/derpiMarkup';
 import { useTextTranslation } from '@/lib/translation';
-import { cn } from '@/lib/utils';
 
-/** The collapsed height fades out rather than stopping mid-line: the mask is alpha, not colour. */
-const COLLAPSED_FADE: CSSProperties = { maskImage: 'linear-gradient(to bottom, black 65%, transparent)' };
+/** The folded height (10rem). The overflow test measures against this rather than the body's own
+ *  box, so its answer does not flip with the fold it is deciding. */
+const COLLAPSED_MAX_HEIGHT = 160;
+
+/** The folded height fades out rather than stopping mid-line: the mask is alpha, not colour, and
+ *  unfolding carries its stop down to the bottom edge so the fade leaves with the clip. Two
+ *  two-stop gradients interpolate, so this rides the height's own transition. */
+const fadeMask = (open: boolean) => `linear-gradient(to bottom, black ${open ? 100 : 65}%, transparent)`;
 
 /**
  * The picture's description, rendered — Derpibooru writes Markdown, with its own picture
@@ -32,14 +37,20 @@ export default function DetailDescription({ description }: { description?: strin
   const [expanded, setExpanded] = useState<string | null>(null);
   const open = expanded === text;
   const [overflowing, setOverflowing] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
   const translation = useTextTranslation(plainTextOf(text), (message) => showToast(message, 'error'));
 
-  /* Whether the collapsed card hides anything — re-measured when its width changes, and when a
-     picture inside the description finishes loading and grows it. */
+  /* Whether the folded card hides anything, and how tall it stands unfolded — re-measured when
+     its width changes, when a picture inside the description finishes loading and grows it, and
+     across the fold. A scroll height reads the whole content in either state, so one measurement
+     answers both, and unfolding has a number to travel to: `none` cannot be interpolated. */
   useLayoutEffect(() => {
     const body = bodyRef.current;
-    if (!body || open) return;
-    const measure = () => setOverflowing(body.scrollHeight > body.clientHeight + 1);
+    if (!body) return;
+    const measure = () => {
+      setContentHeight(body.scrollHeight);
+      setOverflowing(body.scrollHeight > COLLAPSED_MAX_HEIGHT + 1);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(body);
@@ -47,6 +58,11 @@ export default function DetailDescription({ description }: { description?: strin
     if (content) observer.observe(content);
     return () => observer.disconnect();
   }, [open, text]);
+
+  const bodyStyle: CSSProperties = {
+    maxHeight: open ? contentHeight || 'none' : COLLAPSED_MAX_HEIGHT,
+  };
+  if (overflowing || open) bodyStyle.maskImage = fadeMask(open);
 
   return (
     <section aria-labelledby={headingId}>
@@ -67,8 +83,12 @@ export default function DetailDescription({ description }: { description?: strin
             <div
               id={bodyId}
               ref={bodyRef}
-              className={cn('text-body-m text-on-surface wrap-anywhere', !open && 'max-h-40 overflow-hidden')}
-              style={!open && overflowing ? COLLAPSED_FADE : undefined}
+              /* Clipped in both states: the fold travels as `max-height`, and unclipped content
+                 would paint past the moving edge. `spring-slow-effects` at the far end of the
+                 travel table's range — a description is hundreds of pixels, not a banner strip —
+                 and critically damped, so the fold never overshoots its own content. */
+              className="text-body-m text-on-surface wrap-anywhere overflow-hidden transition-[max-height,mask-image] spring-slow-effects"
+              style={bodyStyle}
             >
               <RichTextRenderer content={derpiMarkdown(text)} />
             </div>

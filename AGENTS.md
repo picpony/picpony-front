@@ -55,6 +55,7 @@ radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | An admin API call | `import * as adminApi from '@/lib/api/admin'` | `api.adminXxx` — `api` is a runtime spread, so it cannot tree-shake |
 | Bottom sheet | `components/Sheet.tsx` — `onExited` for work that must wait until it has left | a `Modal` on a phone |
 | Icon-only control | `components/IconButton.tsx` — `variant="media"` on a photo | `p-2.5 rounded-full` around a glyph |
+| A pinned control over the page's own content | `IconButton` `variant="quiet"` — a neutral disc at rest, the tonal square under the pointer | `variant="tonal"` on a back or step control, which competes with the picture behind it at rest |
 | Icon control on the app bar | `IconButton` `variant="on-primary"` | a 48px box repeating `focus-ring-on-primary` |
 | A close / dismiss control | `IconButton` `dismiss` | hand-writing the quarter-turn hover |
 | A hover/focus label | it is automatic — `IconButton` shows its own | `title=` on an icon-only control |
@@ -240,7 +241,7 @@ Both `Badge` and `Chip` are easy to write out by hand without noticing, because 
 
 **There is no outlined button**, and M3 does specify one. All four of its uses were a secondary action beside a filled primary one (取消 next to 保存, 重置 next to 检索), and at that job a 1dp keyline reads as a button that lost its fill rather than as a quieter button; `tonal` is the step M3 puts directly below `filled` for exactly this pairing, and it separates from the surface the way everything else here does, by a container tone rather than by an edge. Removed rather than left unused, because a variant that exists gets reached for. The same reasoning retired the filled field's border and the filter chip's: this app separates by tone.
 
-`IconButton` keeps its `outlined` variant, and that is not an inconsistency — it is the one "switch that is currently off", which is what M3's outlined icon button means. It also owns the shape axis: `shape="square"` is the back affordance's 12dp corner. `toggle` declares a two-state button: `aria-pressed` follows `selected` both ways, true *and* false, under a label that stays the same (收藏, not 收藏 / 取消收藏); without it `selected` is visual only, which is right for a popup trigger that already reports `aria-expanded`.
+`IconButton` keeps its `outlined` variant, and that is not an inconsistency — it is the one "switch that is currently off", which is what M3's outlined icon button means. It also owns the shape axis: `shape="square"` is a control that answers to the corner of the box it sits in — the image detail's step arrows, the composer's leading controls. **`quiet` is the pinned back affordance's variant**: `surface-container-highest` / `on-surface` — the material `Button variant="surface"` wears — round at rest, and the tonal container in that same 12dp square only under the pointer. The corner is a *state* rather than a `shape` because the axis describes the resting box, and a touch screen, which has no hover, only ever sees the disc: that is the intent, not a gap in it, since a control that reads as pressable from across the screen competes with the picture behind it. `toggle` declares a two-state button: `aria-pressed` follows `selected` both ways, true *and* false, under a label that stays the same (收藏, not 收藏 / 取消收藏); without it `selected` is visual only, which is right for a popup trigger that already reports `aria-expanded`.
 
 Its selected circle-to-square change uses `transition-icon-button`: FastSpatial for the corner and dismiss rotation, FastEffects for the material. The circular endpoint is 50%, rather than an oversized length whose radius stays visually clamped through most of the interpolation. This is selection feedback, not a press morph; the fixed square shape stays fixed. `Select`'s arrow instead uses `menu-enter` / `menu-exit`, the CSS twins of its popover's `MENU_TRANSITION`.
 
@@ -511,7 +512,7 @@ The step is decided by the role, never by eye:
 | Search field (`Input shape="pill"`, implied by `size="lg"`) | `rounded-full` | —     |
 | Search suggestions (`Popover variant="search"`) | `rounded-2xl` | 28dp |
 | Card, section surface, palette tile             | `rounded-md`   | 12dp  |
-| Square icon button (the back affordance)        | `rounded-md`   | 12dp  |
+| Square icon button (back affordance, hovered)   | `rounded-md`   | 12dp  |
 | Chip, small tag                                 | `rounded-sm`   | 8dp   |
 | Tab hover tint / focus ring, top corners only   | `rounded-t-md` | 12dp  |
 | Outlined text field (the `.m3-field` outline)   | `rounded-xl`   | 20dp  |
