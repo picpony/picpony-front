@@ -13,7 +13,7 @@ import {
 import { MdAdd, MdSearch } from 'react-icons/md';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
-import Popover, { estimateMenuHeight } from '@/components/Popover';
+import Popover, { estimateMenuHeight, suggestionRow } from '@/components/Popover';
 import type { TagSuggestion } from '@/lib/api/semantic';
 import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
@@ -27,9 +27,8 @@ import { cn } from '@/lib/utils';
 /** Long enough that a word typed at speed asks once, short enough to feel immediate. */
 const LOOKUP_DEBOUNCE_MS = 300;
 
-/** The ordinary autocomplete row: 40dp under a pointer, 48 under a finger, an 8dp corner. */
-const ROW =
-  'flex min-h-10 pointer-coarse:min-h-12 w-full cursor-pointer items-center gap-3 rounded-sm px-3 py-1.5 text-left select-none';
+/** The ordinary autocomplete row, at 56dp: each one is a name over its English tag. */
+const ROW = suggestionRow({ variant: 'menu', lines: 2 });
 
 const HAN = /[㐀-鿿]/;
 
@@ -181,13 +180,12 @@ const TagComboField = forwardRef<TagComboFieldHandle, TagComboFieldProps>(functi
         onClose={() => setListOpen(false)}
         anchorRef={wrapRef}
         maxHeight={288}
-        estimatedHeight={estimateMenuHeight(options.length, 48)}
-        className="p-2"
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
         {...box.listboxProps}
         aria-label="标签建议"
       >
         {options.map((tag, index) => (
-          <div key={tag.en} {...box.getOptionProps(index)} className={cn(ROW, box.optionClassName(index))}>
+          <div key={tag.en} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
             <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
               <span className={cn('size-2.5 rounded-full', tagCategoryDot(tag.category))} />
             </span>

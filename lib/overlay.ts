@@ -198,6 +198,38 @@ function focusableItems(roots: HTMLElement[]): HTMLElement[] {
   });
 }
 
+/**
+ * The box a popover's rows scroll in, from any element inside the panel — `Popover` marks
+ * it, because the panel itself is the frame around it.
+ */
+export function popoverScrollerOf(within: HTMLElement): HTMLElement {
+  return within.querySelector<HTMLElement>(':scope [data-popover-scroller]') ?? within;
+}
+
+/**
+ * Keep the row a list's cursor is on visible **inside that list**, never by scrolling the
+ * page — `scrollIntoView` walks every ancestor, and on a popover that means the page behind
+ * it moves. Both lists with a cursor need it (`useCombobox`'s `aria-activedescendant` row and
+ * `Select`'s), which is why the arithmetic is here rather than twice.
+ *
+ * **Layout offsets, never rects.** A menu's panel carries a scale transform through its whole
+ * entrance and the search view's box carries a height animation; `getBoundingClientRect`
+ * reports both and `offsetTop` reports neither. Measured against the scaled box, `Select`
+ * revealed the chosen row of twenty 448px short of it. `Popover` makes the scroller the rows'
+ * offset parent; the subtraction is the fallback for a caller whose rows share an outer one.
+ *
+ * The 8dp margin is the row gap's own step, and it leaves a sliver of the next row showing at
+ * each end — what tells the reader the list continues past the cursor.
+ */
+export function revealRow(scroller: HTMLElement, row: HTMLElement, inset = 8): void {
+  const top = row.offsetParent === scroller ? row.offsetTop : row.offsetTop - scroller.offsetTop;
+  const bottom = top + row.offsetHeight;
+  if (top < scroller.scrollTop + inset) scroller.scrollTop = top - inset;
+  else if (bottom > scroller.scrollTop + scroller.clientHeight - inset) {
+    scroller.scrollTop = bottom - scroller.clientHeight + inset;
+  }
+}
+
 /** A portalled menu is last in document order. Tab leaves it relative to its
  *  trigger, not relative to that portal's DOM position. */
 export function moveFocusFrom(

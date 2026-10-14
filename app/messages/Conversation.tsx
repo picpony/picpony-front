@@ -345,6 +345,9 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
             matchAnchorWidth={false}
             maxHeight={320}
             estimatedHeight={320}
+            /* Not a list of rows: the picker's own grid supplies the padding, and
+               nothing sits at its foot, so it stands the panel's inset down. */
+            inset={false}
             className="w-84 max-w-[calc(100vw-2rem)] px-2 pt-2"
           >
             {picker}

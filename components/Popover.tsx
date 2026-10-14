@@ -72,7 +72,12 @@ function visibleFraction(element: HTMLElement, clippers: HTMLElement[]): number 
  * A menu row has a 40dp minimum under a fine pointer and 48dp under a coarse one,
  * so the estimate has to read the same density axis or
  * `Popover` picks its side against the wrong number and flips the panel on the way in.
- * Include the 2dp row gaps and the 8dp padding at each end of the container.
+ * Include the 2dp row gaps and the 8dp padding at each end of the container — the
+ * panel's own inset now, so that term is true for every caller of this (the one
+ * panel that stands the inset down states its own estimate instead).
+ *
+ * Pass `suggestionRow`'s `height` rather than a literal, so the number the row lays
+ * out at and the number the side is chosen against cannot be two different numbers.
  */
 export function estimateMenuHeight(rows: number, rowHeight?: number): number {
   const coarse =
@@ -80,19 +85,71 @@ export function estimateMenuHeight(rows: number, rowHeight?: number): number {
   return rows * (rowHeight ?? (coarse ? 48 : 40)) + Math.max(0, rows - 1) * 2 + 8 * 2;
 }
 
-/* The list opens out of its trigger, like Vuetify's VMenu, on the shared short step: 200ms on the
- * standard decelerate, with the user's speed scale. The arrangement is borrowed; the literal
- * durations are not. It leaves as every small surface does, on FastEffects — the drawer closing,
- * the tooltip, the search view both ways: a dismissal answers a press, and starts on the frame
- * after it (the 150ms standard accelerate it left on was 3% of the way after a frame).
+/**
+ * `py-1` at every size, because the min-height is what decides each of these rows: the
+ * tallest content any of them holds is a `body-l` line over a `body-s` one (28 + 18 = 46px)
+ * and that still clears 56 with 8px of padding, so the padding only governs a line that
+ * *wraps* — the people search's failure sentence, the one row here that can.
+ */
+const ROW_BASE = 'flex w-full items-center gap-3 py-1 text-left select-none touch-manipulation';
+
+export interface SuggestionRow {
+  /** Spread with `useCombobox`'s `optionClassName(index)`, which adds the row's state. */
+  className: string;
+  /** For `estimateMenuHeight`; absent where the row takes the pointer-density default. */
+  height: number | undefined;
+}
+
+/**
+ * One row of a list a field suggests — `useCombobox`'s five screens: /search, 订阅标签, a
+ * block or tag group's tag field, the glossary's Derpibooru lookup, /messages' people search.
+ *
+ * It lives here because it is *derived* from the panel's own geometry rather than chosen:
+ * a row's corner is the panel's less the 8dp inset — 16 − 8 = 8dp under a menu, 28 − 8 = 20dp
+ * under a search bar — and `height` is the figure `estimateMenuHeight` must be handed. Five
+ * hand-copied strings had drifted to three geometries, two of each number that matters (8 and
+ * 20dp corners, 8 and 12dp inline padding, 12 and 16dp gaps, 40/48 and 56dp rows), and one of
+ * them disagreed with its own estimate: a two-line row declared the 40dp dense floor,
+ * estimated 48 and laid out at 50.
+ *
+ * `variant` has to match the `Popover`'s, since the corner is the panel's arithmetic:
+ *
+ * - **`search`** — M3's 56dp suggestion row, whatever it holds, with 12dp of inline padding,
+ *   which is what puts the row on the search bar's own columns: 8 + 12 = 20px is where
+ *   `.m3-field[data-size='lg'] > .m3-field-lead` draws the field's glyph, and + 24 + 12 = 56px
+ *   is `--field-lead`, where the text you typed starts. A 24dp leading slot and `gap-3` are
+ *   therefore not free numbers — they are the two that make both columns land.
+ * - **`menu`** — the ordinary density step, 40dp under a pointer and 48 under a finger, with
+ *   `Select`'s own 8dp inline padding, which with the panel's inset lands on the field's 16dp
+ *   text inset. `lines: 2` raises it to 56dp: a 20dp label over an 18dp supporting line does
+ *   not fit a dense row, and 56 is the next step the scale offers.
+ */
+export function suggestionRow({
+  variant = 'menu',
+  lines = 1,
+}: { variant?: 'menu' | 'search'; lines?: 1 | 2 } = {}): SuggestionRow {
+  if (variant === 'search') return { className: `${ROW_BASE} min-h-14 rounded-xl px-3`, height: 56 };
+  if (lines === 2) return { className: `${ROW_BASE} min-h-14 rounded-sm px-2`, height: 56 };
+  return { className: `${ROW_BASE} min-h-10 pointer-coarse:min-h-12 rounded-sm px-2`, height: undefined };
+}
+
+/* A **menu** opens out of its trigger, like Vuetify's VMenu, on the shared short step: 200ms on
+ * the standard decelerate, with the user's speed scale. The arrangement is borrowed; the literal
+ * durations are not. The **search view** is a collapsible panel rather than an anchored menu, so
+ * it arrives on DefaultSpatial with its height (see the height effect below). Both leave as every
+ * small surface does, on FastEffects — the drawer closing, the tooltip: a dismissal answers a
+ * press, and starts on the frame after it (the 150ms standard accelerate it left on was 3% of the
+ * way after a frame).
  *
  * Reduced motion removes the travel. The exit hold uses the unscaled duration because
  * useExitAnimation applies the maximum speed itself. */
 const EXIT_MS = SPRING_MS.fastEffects;
 
 export interface PopoverHandle {
-  /** The panel element, for callers that need to measure or scroll it. */
+  /** The panel element, for a caller that needs its box or its subtree. */
   readonly element: HTMLDivElement | null;
+  /** The box the rows scroll in — not the panel, which is the frame around it. */
+  readonly scroller: HTMLDivElement | null;
 }
 
 interface PopoverProps {
@@ -113,8 +170,16 @@ interface PopoverProps {
   maxHeight?: number;
   /** Match the anchor exactly. Intrinsically sized panels are centred on it. */
   matchAnchorWidth?: boolean;
-  /** Extra classes on the panel, for width and inner padding. */
+  /** Extra classes on the panel, for its width. The 8dp inset is the panel's own. */
   className?: string;
+  /**
+   * The 8dp inset its rows sit inside, on by default — one half of the concentric
+   * arithmetic `suggestionRow` does. Off for a panel that is *not* a list of rows and
+   * supplies its own padding (the emoji picker, which wants none at its foot): a
+   * `className` cannot stand it down, because `cn` is a plain join and `p-2` beside
+   * `pt-2` leaves Tailwind's output order to decide the other three sides.
+   */
+  inset?: boolean;
   /** Search suggestions extend the search bar's material and 28dp silhouette. */
   variant?: 'menu' | 'search';
   handleRef?: RefObject<PopoverHandle | null>;
@@ -129,7 +194,9 @@ interface PopoverProps {
  * Menu surfaces use a 16dp corner, `surface-container` and level 2. The search
  * variant extends the search bar's 28dp corner and highest container tone,
  * keeping a restrained level 1 shadow only to explain its overlap with the page.
- * Both recipes live here so width, material and motion cannot drift at call sites.
+ * Both carry the 8dp inset their rows sit inside. Both recipes live here so
+ * width, material, inset and motion cannot drift at call sites — and so does the
+ * row's own geometry (`suggestionRow`), which is derived from the panel's.
  *
  * **What this owns**: the surface, where it goes, how it arrives and leaves, and how
  * it is dismissed. **What it does not own**: the content, or any roving focus inside
@@ -144,6 +211,7 @@ export default function Popover({
   maxHeight = POPOVER_MAX_HEIGHT,
   matchAnchorWidth = true,
   className = '',
+  inset = true,
   variant = 'menu',
   handleRef,
   id,
@@ -152,12 +220,18 @@ export default function Popover({
 }: PopoverProps) {
   const mounted = useMounted();
   const panelRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   /* Kept in the tree past `open` so the exit has something to play on. The
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
   const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.fastEffects : EXIT_MS);
   const placedPanel = useRef<HTMLDivElement | null>(null);
+  /* The content box the search view's height runs on, the height it last had on screen (a
+     layout effect can only read the new one), and the run itself with where it is heading. */
+  const heightBox = useRef<HTMLDivElement | null>(null);
+  const heightSeen = useRef<number | null>(null);
+  const heightRun = useRef<{ animation: Animation; to: number } | null>(null);
   // measure() runs before placement's state update commits. The entrance needs
   // that freshly chosen side even on the first upward opening.
   const opensUp = useRef(false);
@@ -177,6 +251,9 @@ export default function Popover({
     () => ({
       get element() {
         return panelRef.current;
+      },
+      get scroller() {
+        return scrollRef.current;
       },
     }),
     [],
@@ -306,9 +383,18 @@ export default function Popover({
     if (tier === 'off') return;
 
     if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
-    const timing = variant === 'search' || !open
+    /* One clock per direction, shared with the search view's height below, because a gesture's
+       parts must agree. An anchored menu *grows out of its trigger* and keeps the measured
+       transform's own 200ms step. The search view is something else: a **collapsible panel**,
+       both ends of its travel on screen, which this app answers with the drawer's own pair of
+       springs rather than a one-sided curve — `default-spatial` open, `fast-effects` closed. It
+       arrived on FastEffects with no travel at all: 108ms of opacity for a panel that comes
+       to 462px at eight rows, which is the whole of what read as a pop. */
+    const timing = !open
       ? springTiming('fastEffects', 'overlay')
-      : { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing };
+      : variant === 'search'
+        ? springTiming('defaultSpatial', 'overlay')
+        : { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing };
     const from: Keyframe = { opacity: fromOpacity };
     const to: Keyframe = { opacity };
     if (fromTransform !== transform) {
@@ -349,6 +435,90 @@ export default function Popover({
       }
     };
   }, [open, mounted, rendering, placement.up, placement.width, anchorRef, variant, matchAnchorWidth]);
+
+  /* The search view's second track: its height.
+   *
+   * M3's docked search bar expands and shrinks its suggestion view vertically along with the
+   * fade — `DockedEnterTransition` is `fadeIn + expandVertically`, `DockedExitTransition` is
+   * `fadeOut + shrinkVertically`, both on one spec — where this panel only faded, so a list
+   * that comes to 462px at eight rows simply appeared over the page. The arrangement is
+   * borrowed; the literal durations are not (M3's are 600ms in and 350ms out, each behind a
+   * 100ms delay, and shared with its full-screen variant). It rides the clock above, both
+   * directions.
+   *
+   * **The box that moves is the content wrapper, never the scroller.** The rows are laid out
+   * at their final size and revealed by the wrapper's bottom edge, so the scroller's own box
+   * always fits exactly what is inside it and no scrollbar flickers through the run — which is
+   * the whole reason the height is not simply animated on the panel.
+   *
+   * One effect owns all three of its changes — arriving, leaving, and following the rows when
+   * a lookup replaces them (`keepPrevious` hands this panel a new list on nearly every
+   * keystroke, and it used to jump from five rows to two). Each starts from the height on
+   * screen, so they interrupt one another instead of fighting. Its dependency is the content
+   * itself: `children` is the same element while the panel merely repositions — this component
+   * re-renders on every scroll frame — so a scroll reads no layout here.
+   */
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const box = contentRef.current;
+    const scroller = scrollRef.current;
+    if (!mounted || !rendering || variant !== 'search' || !panel || !box || !scroller) return;
+    /* Already out, or on its way: a parent that re-renders mid-exit must not restart the
+       shrink, and one that re-renders after it must not let the box spring back to its
+       content behind the fading panel — which would also cost the next opening its
+       expansion, since the height it starts from is the height it is holding. */
+    if (!open && (heightRun.current?.to === 0 || heightSeen.current === 0)) return;
+
+    const first = heightBox.current !== box;
+    heightBox.current = box;
+    /* The height on screen. A run in flight *is* that height, and reading it before the run
+       is let go is what makes an interruption continuous. With nothing running, the commit has
+       already replaced the layout, so the only honest source is the height remembered from the
+       last pass — this is the one thing a layout effect cannot read, and the reason
+       `FollowHeight` reaches for `getSnapshotBeforeUpdate` instead. */
+    const live = heightRun.current ? box.getBoundingClientRect().height : heightSeen.current ?? 0;
+    heightRun.current?.animation.cancel();
+    heightRun.current = null;
+    box.style.height = '';
+    box.style.clipPath = '';
+
+    const natural = box.getBoundingClientRect().height;
+    heightSeen.current = natural;
+    if (motionTier('overlay') === 'off') return;
+    if (Math.abs((open ? natural : 0) - live) < 0.5) return;
+
+    /* Both ends are clamped to what the panel can actually show, because height above that
+       belongs to the scroller: a shrink from eight rows to two would otherwise spend its
+       first 58% invisible and then fall off a cliff. The frame is the panel's own padding,
+       measured rather than assumed, since a caller may set its own. */
+    const cap = Math.max(0, placement.available - (panel.offsetHeight - scroller.offsetHeight));
+    const from = first ? 0 : Math.min(live, cap);
+    const to = open ? Math.min(natural, cap) : 0;
+    if (Math.abs(to - from) < 0.5) return;
+
+    // Only the bottom edge, so a row's ring or its wave stays whole on the other three.
+    box.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
+    /* The first placement of an opening panel is the arrival and takes the clock above;
+       anything after it — a list replaced underneath, or a re-aim once the measured space
+       below arrives — takes `FollowHeight`'s response, critically damped, because a box
+       settling onto its content must not overshoot it. A leaving panel takes the dismissal. */
+    const timing = springTiming(open ? (first ? 'defaultSpatial' : 'defaultEffects') : 'fastEffects', 'overlay');
+    const animation = box.animate([{ height: `${from}px` }, { height: `${to}px` }], { ...timing, fill: 'both' });
+    heightRun.current = { animation, to };
+    const release = () => {
+      if (heightRun.current?.animation !== animation) return;
+      heightRun.current = null;
+      animation.cancel();
+      box.style.clipPath = '';
+      if (to === 0) {
+        /* Gone: hold the box closed rather than letting it spring back to its content behind
+           the fading panel, so a re-open inside the exit window starts from nothing. */
+        box.style.height = '0px';
+        heightSeen.current = 0;
+      }
+    };
+    animation.finished.then(release, release);
+  }, [open, mounted, rendering, variant, children, placement.available]);
 
   /* The latest close handler, for listeners that must not re-subscribe on every
      render of a caller passing an inline function. */
@@ -429,30 +599,71 @@ export default function Popover({
         maxWidth: `calc(100vw - ${VIEWPORT_PADDING * 2}px)`,
         maxHeight: `${placement.available}px`,
       }}
-      /* `popover-scrollbar`, not `main-scrollbar`: the latter reserves its gutter
-         permanently, right for a page column and wrong for a short menu, where it
-         leaves every row short of the right edge.
+      /* **The panel is the frame; the rows scroll inside its inset.**
+         It used to be the scroller itself, and a padded scroll container gives its
+         padding away the moment it scrolls: at any offset the content's top is above
+         the padding box, so a row sat flush against the panel's top edge and ran
+         under its 28dp corners (screenshotted) — the list read as bleeding out of
+         the surface rather than sitting in it. The frame keeps the inset at both
+         ends, puts the scrollbar 8dp inside the corner instead of across it, and
+         cuts a half-scrolled row at a straight edge. The emoji picker's caption
+         wants this too: it is `sticky bottom-0` against "whichever surface scrolls
+         the picker", and that is now the inner box, still flush with the panel's
+         own bottom edge (measured).
 
-         `overflow-y: auto` unconditionally, never a conditional hidden — the
-         condition it replaced used an *estimated* content height, so a panel a
-         few pixels past the estimate was judged to fit and clipped its last row.
-         `auto` already means "a scrollbar only when one is needed".
+         `overflow: clip` on the frame, not hidden: it is no scroll container, so
+         nothing can scroll it to a stray offset, and it still holds the rows inside
+         its silhouette. The panel was already clipping on both axes, since
+         `overflow-y: auto` beside an `overflow-x: visible` computes to `auto`.
 
-         Menu rows sit 8dp inside the 16dp outer corner. Both variants lay out
-         at final dimensions before animating. Menu content fades in as its
-         surface expands; search suggestions keep only the single panel fade. */
+         **The 8dp inset is the panel's, not the caller's.** Rows sit 8dp inside
+         the outer corner — that inset is one half of the concentric arithmetic
+         `suggestionRow` does (row corner = panel corner − inset), so a call site
+         that forgot it got 8dp rows flush against a 16dp panel and a crescent of
+         surface at each corner (/messages' people search did). Five of the seven
+         menu panels passed `p-2`, one forgot it, and one wants its own asymmetric
+         padding — the emoji picker, which says so with `inset={false}`.
+
+         Both variants lay out at final dimensions before animating. Menu content
+         fades in as its surface expands; the search view fades and expands. */
       className={cn(
         /* `forced-boundary`: forced colors flattens the surface tone and drops the
            shadow, the panel's only two separations from the page under it. */
-        'popover-scrollbar text-on-surface z-popover overflow-y-auto forced-boundary',
+        'text-on-surface z-popover flex flex-col overflow-clip forced-boundary',
+        inset && 'p-2',
         variant === 'search'
-          ? 'rounded-2xl bg-surface-container-highest p-2 shadow-e1'
+          ? 'rounded-2xl bg-surface-container-highest shadow-e1'
           : 'rounded-lg bg-surface-container shadow-e2',
         className,
       )}
     >
-      <div ref={contentRef} role="presentation" className="space-y-0.5">
-        {children}
+      {/* `popover-scrollbar`, not `main-scrollbar`: the latter reserves its gutter
+          permanently, right for a page column and wrong for a short menu, where it
+          leaves every row short of the right edge.
+
+          `overflow-y: auto` unconditionally, never a conditional hidden — the
+          condition it replaced used an *estimated* content height, so a panel a few
+          pixels past the estimate was judged to fit and clipped its last row. `auto`
+          already means "a scrollbar only when one is needed". `overflow-x: hidden`
+          beside it, spelled out: left `visible` it would compute to `auto` and make
+          the box a horizontal scroller too, and `clip` is *used* as hidden next to a
+          scrolling axis anyway (measured), so hidden is what applies either way.
+
+          Its corner is the rows' own — the same `outer − inset` arithmetic — so the
+          edge that cuts a half-scrolled row is the shape the rows already have, and
+          `relative` makes it the rows' offset parent, which is what lets `revealRow`
+          place the cursor from layout offsets rather than from a transformed rect. */}
+      <div
+        ref={scrollRef}
+        data-popover-scroller=""
+        className={cn(
+          'popover-scrollbar relative min-h-0 overflow-x-hidden overflow-y-auto',
+          inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
+        )}
+      >
+        <div ref={contentRef} role="presentation" className="space-y-0.5">
+          {children}
+        </div>
       </div>
     </div>
     </OverlayLayerContext.Provider>,

@@ -6,6 +6,7 @@ import CheckGlyph from './CheckGlyph';
 import { FieldLabel } from './Input';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
 import { ICON } from '@/lib/icons';
+import { revealRow } from '@/lib/overlay';
 import { cn } from '@/lib/utils';
 
 export interface SelectOption<T extends string = string> {
@@ -113,23 +114,16 @@ export default function Select<T extends string = string>({
     close();
   };
 
-  // The portal mounts after `open` commits. Wait for its row, then scroll only
-  // the list using layout offsets, which stay stable during the scale entrance.
+  /* The portal mounts after `open` commits. Wait for its row, then keep the cursor inside
+     the list's own scroller (the panel is the frame around it) — the same arithmetic the
+     combobox's cursor uses, so the two lists reveal a row the same way. */
   useEffect(() => {
     if (!open || cursorIndex < 0) return;
     const frame = requestAnimationFrame(() => {
-      const panel = popoverRef.current?.element;
-      const option = panel?.querySelectorAll<HTMLElement>('[data-option]')[cursorIndex];
-      if (!panel || !option) return;
-      const style = getComputedStyle(panel);
-      const start = parseFloat(style.paddingTop);
-      const end = parseFloat(style.paddingBottom);
-      const top = option.offsetTop;
-      const bottom = top + option.offsetHeight;
-      if (top < panel.scrollTop + start) panel.scrollTop = top - start;
-      else if (bottom > panel.scrollTop + panel.clientHeight - end) {
-        panel.scrollTop = bottom - panel.clientHeight + end;
-      }
+      const scroller = popoverRef.current?.scroller;
+      const option = scroller?.querySelectorAll<HTMLElement>('[data-option]')[cursorIndex];
+      if (!scroller || !option) return;
+      revealRow(scroller, option);
     });
     return () => cancelAnimationFrame(frame);
   }, [open, cursorIndex]);
@@ -357,8 +351,8 @@ export default function Select<T extends string = string>({
         </button>
       )}
 
-      {/* Popover owns the outer surface; this list owns one 8dp inset on all
-          four sides, keeping its rounded rows concentric with the panel. */}
+      {/* Popover owns the outer surface and the one 8dp inset on all four sides
+          that keeps these rounded rows concentric with it. */}
       <Popover
         open={open}
         onClose={close}
@@ -368,7 +362,6 @@ export default function Select<T extends string = string>({
         role="listbox"
         aria-label={labelled ? label : ariaLabel}
         estimatedHeight={estimateMenuHeight(options.length)}
-        className="p-2"
       >
         {optionRows()}
       </Popover>

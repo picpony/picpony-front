@@ -62,7 +62,11 @@ function harness() {
     dependencies: {
       react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
       // These fixtures exercise page state; actual popup geometry has browser coverage.
-      '@/components/Popover': { default: '@/components/Popover:default', estimateMenuHeight: () => 0 },
+      '@/components/Popover': {
+        default: '@/components/Popover:default',
+        estimateMenuHeight: () => 0,
+        suggestionRow: () => ({ className: 'row', height: undefined }),
+      },
     },
     render: (component) => { cursor = 0; return component(); },
     effects: async () => { const pending = pendingEffects; pendingEffects = []; pending.forEach((effect) => effect()); await flush(); },

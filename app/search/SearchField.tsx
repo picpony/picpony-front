@@ -13,7 +13,7 @@ import { MdClose, MdDeleteSweep, MdHistory, MdImageSearch, MdSearch, MdWarningAm
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
-import Popover, { estimateMenuHeight } from '@/components/Popover';
+import Popover, { estimateMenuHeight, suggestionRow } from '@/components/Popover';
 import type { TagSuggestion } from '@/lib/api/semantic';
 import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
@@ -59,11 +59,11 @@ function keywordAt(value: string, caret: number): string {
 const LOOKUP_DEBOUNCE_MS = 300;
 
 /**
- * 56dp rows, 8dp inside the 28dp view, 20dp corners — the search bar's own suggestion
- * geometry (AGENTS: "The search suggestion view belongs to the search bar"). A 24dp leading
- * slot and a 16dp gap put the label on the field's text column.
+ * The search bar's own suggestion row — 56dp, 8dp inside the 28dp view, a 20dp corner, and
+ * the 24dp leading slot `suggestionRow` sizes its padding and gap around, so the glyph sits
+ * on the field's magnifier and the label on the text you typed.
  */
-const ROW = 'flex min-h-14 w-full cursor-pointer items-center gap-4 rounded-xl px-2 py-1 text-left select-none';
+const ROW = suggestionRow({ variant: 'search' });
 
 interface SearchFieldProps {
   value: string;
@@ -289,13 +289,13 @@ export default function SearchField({
         variant="search"
         {...box.listboxProps}
         aria-label={empty ? '最近搜索' : '搜索建议'}
-        estimatedHeight={estimateMenuHeight(options.length, 56)}
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
       >
         {options.map((option, index) => (
           <div
             key={option.kind === 'tag' ? `tag:${option.tag.en}` : option.kind === 'recent' ? `recent:${option.query}` : 'clear'}
             {...box.getOptionProps(index)}
-            className={cn(ROW, box.optionClassName(index))}
+            className={cn(ROW.className, box.optionClassName(index))}
           >
             <OptionRow option={option} safeMode={safeMode} />
           </div>

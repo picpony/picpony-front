@@ -138,7 +138,11 @@ function fixture(file, api = {}, initialData = {}, { expose = '', expand = [], m
     ...hooks.dependencies,
     ...plainModules,
     // These fixtures exercise data writes; actual popup geometry has browser coverage.
-    '@/components/Popover': { default: '@/components/Popover:default', estimateMenuHeight: () => 0 },
+    '@/components/Popover': {
+      default: '@/components/Popover:default',
+      estimateMenuHeight: () => 0,
+      suggestionRow: () => ({ className: 'row', height: undefined }),
+    },
     '@/components/Toast': { showToast: (...args) => toasts.push(args) },
     '@/components/ConfirmDialog': {
       useConfirm: () => ({

@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from 'react';
+import { popoverScrollerOf, revealRow } from '@/lib/overlay';
 
 /**
  * One combobox contract — WAI-ARIA 1.2's editable combobox with a listbox popup
@@ -21,7 +22,8 @@ import {
  *
  * **What it owns:** the ARIA wiring, the keyboard, the cursor, and scrolling the cursor
  * into view *inside the list* (never the page). **What it does not:** fetching, the
- * surface (render the list in a `Popover` with `role="listbox"`), or what a pick means.
+ * surface (render the list in a `Popover` with `role="listbox"`, its rows on that panel's
+ * own `suggestionRow`), or what a pick means.
  *
  *     const box = useCombobox({
  *       options: suggestions,            // a stable array (state or memo)
@@ -37,7 +39,7 @@ import {
  *     }} />
  *     <Popover open={box.isOpen} {...box.listboxProps} anchorRef={…} onClose={() => setShowSuggestions(false)}>
  *       {suggestions.map((tag, i) => (
- *         <div key={tag.id} {...box.getOptionProps(i)} className={cn(rowClasses, box.optionClassName(i))}>…</div>
+ *         <div key={tag.id} {...box.getOptionProps(i)} className={cn(ROW.className, box.optionClassName(i))}>…</div>
  *       ))}
  *     </Popover>
  *
@@ -58,14 +60,18 @@ import {
  * - **A pointer** hovering a row shows the state layer only — it does not move the
  *   keyboard's cursor, so a mouse resting on the list cannot turn Enter into a pick.
  *   Pressing a row does not take focus from the field (`onMouseDown` is prevented), which
- *   also keeps a phone's keyboard up.
+ *   also keeps a phone's keyboard up; the press still paints its wave.
  * - **IME composition** is never interrupted: keys during a composition (including the
  *   keyCode 229 some engines report) are ignored, and `isComposing()` tells the caller to
  *   skip lookups for pinyin fragments; `onCompositionEnd` receives the committed text.
  *
  * The cursor row takes `state-layer-active` (a roving cursor is not focus), every other
- * row `state-layer` — `optionClassName` returns the one to use. A *chosen* value, where
- * a caller shows one, is the `secondary-container` pair, not the cursor.
+ * row `state-layer` — `optionClassName` returns the one to use, with the pointer the row
+ * deserves. **The cursor moves in one frame**, both ends: inside a listbox the layer's
+ * opacity is not transitioned (globals.css), or the row the cursor left would fade out
+ * behind the row it arrived on — measured at the cursor's own weight for the frame after
+ * an ArrowDown, and four rows at once under autorepeat. A *chosen* value, where a caller
+ * shows one, is the `secondary-container` pair, not the cursor.
  */
 export interface ComboboxConfig<T> {
   /** The options offered now, already filtered. Keep the array stable between renders. */
@@ -114,10 +120,14 @@ export interface ComboboxResult {
     role: 'option';
     'aria-selected': boolean;
     'aria-disabled': boolean | undefined;
+    'data-ripple': string;
     onMouseDown: (event: MouseEvent) => void;
     onClick: () => void;
   };
-  /** `state-layer-active` for the cursor row, `state-layer` for the rest. */
+  /**
+   * The row's *state* — its cursor and its state layer, or neither on a disabled option.
+   * Spread after `suggestionRow`'s `className`, which carries the geometry.
+   */
   optionClassName: (index: number) => string;
 }
 
@@ -183,17 +193,14 @@ export function useCombobox<T>({
   );
 
   /* Keep the cursor visible inside the list — the list's own scroll, never the page's
-     (`scrollIntoView` would scroll every ancestor, the page included). */
+     (`scrollIntoView` would scroll every ancestor, the page included). The box that scrolls
+     is the panel's inner scroller, not the panel, which is the frame around it. */
   useLayoutEffect(() => {
     if (activeIndex < 0) return;
     const option = document.getElementById(optionId(activeIndex));
     const list = document.getElementById(listboxId);
     if (!option || !list) return;
-    const view = list.getBoundingClientRect();
-    const row = option.getBoundingClientRect();
-    const inset = 8;
-    if (row.top < view.top + inset) list.scrollTop += row.top - view.top - inset;
-    else if (row.bottom > view.bottom - inset) list.scrollTop += row.bottom - view.bottom + inset;
+    revealRow(popoverScrollerOf(list), option);
   }, [activeIndex, listboxId, optionId]);
 
   const onKeyDown = useCallback(
@@ -277,10 +284,20 @@ export function useCombobox<T>({
       role: 'option',
       'aria-selected': index === activeIndex,
       'aria-disabled': enabled(index) ? undefined : true,
+      /* A row is pressed, so it paints a press wave, like every other list row in the app
+         (a `Select` option, a `Menu` item) — a tapped suggestion used to answer with its
+         tint alone. The delegated gate reads `aria-disabled` above, so a disabled row
+         carries the attribute and still paints nothing. */
+      'data-ripple': '',
       // Keep focus (and a phone's keyboard) in the field; the press still clicks.
       onMouseDown: (event: MouseEvent) => event.preventDefault(),
       onClick: () => pick(index),
     }),
-    optionClassName: (index: number) => (index === activeIndex ? 'state-layer-active' : 'state-layer'),
+    optionClassName: (index: number) =>
+      !enabled(index)
+        ? 'cursor-default'
+        : index === activeIndex
+          ? 'cursor-pointer state-layer-active'
+          : 'cursor-pointer state-layer',
   };
 }

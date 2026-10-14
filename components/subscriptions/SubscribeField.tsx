@@ -5,7 +5,7 @@ import { MdClose, MdNotificationAdd } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
-import Popover, { estimateMenuHeight } from '@/components/Popover';
+import Popover, { estimateMenuHeight, suggestionRow } from '@/components/Popover';
 import { showToast } from '@/components/Toast';
 import type { TagSuggestion } from '@/lib/api/semantic';
 import { formatCount } from '@/lib/format';
@@ -26,8 +26,12 @@ function keywordOf(text: string): string {
 
 const LOOKUP_DEBOUNCE_MS = 300;
 
-/** 56dp rows, 8dp inside the panel, 8dp corners — the ordinary autocomplete row. */
-const ROW = 'flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-sm px-2 py-1 text-left select-none';
+/**
+ * The field is a 56dp search bar (`Input size="lg"`), the app's other one beside /search's,
+ * so its list is the search *view*: the bar's 28dp silhouette, highest container tone and
+ * 56dp rows, rather than a menu panel under a pill.
+ */
+const ROW = suggestionRow({ variant: 'search' });
 
 /**
  * 订阅标签: type a tag (or pick one the dictionary suggests — a Chinese name finds its English tag)
@@ -154,15 +158,15 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
         open={box.isOpen}
         onClose={() => setListOpen(false)}
         anchorRef={wrapRef}
+        variant="search"
         {...box.listboxProps}
         aria-label="标签建议"
-        className="p-2"
-        estimatedHeight={estimateMenuHeight(options.length, 56)}
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
       >
         {options.map((option, index) => {
           const category = tagCategory(option.category);
           return (
-            <div key={option.en} {...box.getOptionProps(index)} className={cn(ROW, box.optionClassName(index))}>
+            <div key={option.en} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
               <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
                 <span className={cn('size-2.5 rounded-full', tagCategoryDot(option.category))} />
               </span>

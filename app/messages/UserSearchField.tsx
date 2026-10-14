@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useRef, useState } from 'react';
 import Avatar from '@/components/Avatar';
-import Popover, { estimateMenuHeight } from '@/components/Popover';
+import Popover, { estimateMenuHeight, suggestionRow } from '@/components/Popover';
 import SearchInput from '@/components/SearchInput';
 import Spinner from '@/components/Spinner';
 import { matchesName, useUserSearch } from '@/components/ShareToContactDialog';
@@ -18,6 +18,9 @@ type Option =
 
 /** Contacts shown for a query before the people the server finds. */
 const CONTACT_MATCHES = 5;
+
+/** A name over what picking it does, beside a 40dp portrait: the 56dp two-line row. */
+const ROW = suggestionRow({ variant: 'menu', lines: 2 });
 
 /**
  * 搜索用户 — the field above the contacts, and the way to write to somebody new.
@@ -115,7 +118,7 @@ export default function UserSearchField({
         anchorRef={wrapRef}
         {...box.listboxProps}
         aria-label="搜索结果"
-        estimatedHeight={estimateMenuHeight(options.length, 56)}
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
       >
         {options.map((option, index) => {
           const kindChanged = index > 0 && options[index - 1].kind !== option.kind && option.kind !== 'status';
@@ -130,8 +133,9 @@ export default function UserSearchField({
               <div
                 {...box.getOptionProps(index)}
                 className={cn(
-                  'flex min-h-14 w-full items-center gap-3 rounded-sm px-2 py-1 text-left select-none',
-                  option.kind === 'status' ? 'text-body-m text-on-surface-variant' : cn('cursor-pointer', box.optionClassName(index)),
+                  ROW.className,
+                  box.optionClassName(index),
+                  option.kind === 'status' && 'text-body-m text-on-surface-variant',
                 )}
               >
                 {option.kind === 'status' ? (

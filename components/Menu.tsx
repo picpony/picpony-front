@@ -153,9 +153,10 @@ export default function Menu({
       aria-label={ariaLabel}
       estimatedHeight={estimateMenuHeight(items.length)}
       /* A menu is as wide as its longest label, not as wide as the icon button
-         that opened it — unlike `Select`, whose trigger states the value. */
+         that opened it — unlike `Select`, whose trigger states the value. The
+         8dp inset its rows sit inside is the panel's own. */
       matchAnchorWidth={false}
-      className={cn('min-w-40 p-2', className)}
+      className={cn('min-w-40', className)}
     >
       {/* The panel and its rows enter together. Keyboard handling remains on
           each row, where focus and the key event both originate. */}

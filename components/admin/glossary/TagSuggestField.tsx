@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Input } from '@/components/Input';
-import Popover, { estimateMenuHeight } from '@/components/Popover';
+import Popover, { estimateMenuHeight, suggestionRow } from '@/components/Popover';
 import { SKIP, useResource } from '@/lib/resource';
 import { tagCategoryDot } from '@/lib/tagCategories';
 import { useCombobox } from '@/lib/useCombobox';
@@ -15,8 +15,8 @@ import type { DerpiTagRow } from './model';
 export const SUGGEST_DEBOUNCE_MS = 300;
 const MIN_QUERY = 2;
 
-const ROW =
-  'flex min-h-10 pointer-coarse:min-h-12 w-full cursor-pointer items-center gap-3 rounded-sm px-3 py-1.5 text-left select-none';
+/** One line — the tag's own name — so the row keeps the dense density step. */
+const ROW = suggestionRow({ variant: 'menu' });
 
 /**
  * The create dialog's 英文标签 field, with Derpibooru's tags as suggestions — `useCombobox`
@@ -105,13 +105,12 @@ export default function TagSuggestField({
         onClose={() => setOpen(false)}
         anchorRef={anchorRef}
         maxHeight={288}
-        estimatedHeight={estimateMenuHeight(options.length, 48)}
-        className="p-2"
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
         {...box.listboxProps}
         aria-label="原站标签建议"
       >
         {options.map((tag, index) => (
-          <div key={tag.name} {...box.getOptionProps(index)} className={cn(ROW, box.optionClassName(index))}>
+          <div key={tag.name} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
             <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
               <span className={cn('size-2.5 rounded-full', tagCategoryDot(tag.category))} />
             </span>

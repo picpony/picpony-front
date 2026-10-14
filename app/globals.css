@@ -4374,6 +4374,24 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   }
 }
 
+/* A roving cursor is a *position*, so it moves rather than cross-fading — the reasoning the
+ * slider's handle already follows (a transition on a position puts the mark behind the input).
+ * The utility above declares no transition, so the cursor arrives at once; the row it *left*
+ * falls back to `state-layer`, whose own 150ms response then fades the old mark out behind the
+ * new one. Measured per frame on one ArrowDown, the row left behind read 0.100, 0.049, 0.018
+ * against the cursor's own 0.100 — for the first frame the two were indistinguishable, and
+ * under autorepeat (~33ms against a 150ms fade) four rows were lit at once: a comet trail down
+ * a list where exactly one row is meant to be current. So inside a listbox or a menu the
+ * layer's opacity is not transitioned at all: a menu moves real focus and had the same trail,
+ * from both the keyboard and a pointer sweeping its rows. What it costs is the fade on hovering
+ * a single row, which is what a native list does anyway.
+ *
+ * Unlayered, like the forced-colors floor below: it has to beat the utilities it corrects,
+ * whatever order Tailwind emits them in. `::before` only — `touch-target` owns `::after`. */
+:is([role='listbox'], [role='menu']) :is(.state-layer, .state-layer-active)::before {
+  transition: none;
+}
+
 /* A drop zone's content sits above the zone's own target (a button behind it) and lets
    the pointer through to it; a control inside the content takes the pointer back, so it
    stays an ordinary control rather than part of the zone's. See `DropZone`. */
