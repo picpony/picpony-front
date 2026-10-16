@@ -116,6 +116,7 @@ import { scrollAppToElement } from '@/lib/scrollTo';
 import { loadTagCounts } from '@/lib/tagCounts';
 import { loadTagTranslations, peekTagTranslations, rememberTagTranslations } from '@/lib/tagTranslations';
 import { useImageTranslation } from '@/lib/translation';
+import { useIconToss } from '@/lib/useIconToss';
 import type { DetailSeed, ImagePreview, PonyImage } from '@/lib/types/image';
 import { cn, copyText } from '@/lib/utils';
 
@@ -549,6 +550,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
   const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
   const isFaved = favesRead.data?.ids.includes(imageId) ?? false;
+  const { ref: faveButtonRef, toss: tossFaveIcon } = useIconToss(imageId);
   const [favePending, setFavePending] = useState<{ imageId: number; token: string } | null>(null);
   const faveBusy = favePending?.imageId === imageId && favePending.token === session.token;
   const oneTapFave = useSyncedSetting('defaultFaveToMain');
@@ -1045,9 +1047,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     /* The full record when it has landed — the privacy space stores it whole — else the row. */
     const target = (record ?? image) as PonyImage;
     const targetId = target.id;
+    const cancelToss = oneTapFave && isFaved ? tossFaveIcon() : undefined;
     setFavePending({ imageId: targetId, token });
     void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
       setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));
+      if (readToken() !== token || !outcome.ok || outcome.kind !== 'unfaved') cancelToss?.();
       /* A different account now: nothing of this answer is said to it. */
       if (readToken() !== token) return;
       if (!outcome.ok) {
@@ -1478,6 +1482,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                     </div>
                     <div className="mx-auto flex items-center gap-1 sm:me-0 sm:ms-auto">
                       <IconButton
+                        ref={faveButtonRef}
                         toggle
                         selected={isFaved}
                         selectedTone="tertiary"

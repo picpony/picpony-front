@@ -747,6 +747,8 @@ A raw `cubic-bezier()` is a bug wherever the tokens can reach. Two exceptions, b
 
 `linear` is correct only for a spinner's rotation and for a keyframe track that has already been sampled along a curve (the hero flight, the sink).
 
+**A cancelled reaction throws its filled glyph into free fall.** `lib/useIconToss.ts` serves the image's favourite and the forum post's like: a random upward impulse, constant gravity and angular velocity, sampled into a linear WAAPI track. Its duration is the physical time to clear the viewport bottom, scaled by the speed preference, rather than an M3 settle time. The glyph stays opaque and full-sized until entirely off screen. Reduced/off retain the button's own state feedback without the decorative flight; scrolling, leaving the screen or a rejected mutation clears the flight.
+
 `emphasized` is two cubic segments, so it has no `cubic-bezier()` form — the CSS token is a sampled `linear()` and GSAP takes the spec path. It hangs back, then runs through the middle at 2.5x `standard`'s peak speed, which is why a value tuned against `standard` cannot be carried over: the GSAP tab wave's lag had to drop from 0.07 to 0.032 to keep the same visual shear. (Its compositor successor is tuned in milliseconds against the strip's spring instead: 24ms at the bottom of the view is a peak lean of 16% of the window, half the 0.32 budget; the full 48ms, 31%, read as exaggerated.)
 
 Durations: `DURATION` in `lib/motion.ts`, mirrored by Tailwind's `duration-*`.
