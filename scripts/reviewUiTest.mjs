@@ -10,6 +10,8 @@ import { Script } from 'node:vm';
 
 const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
+  /* ColorSwatch's dialog (components/Input.tsx) loads on demand and carries the HCT tools; no fixture here opens it. */
+  './ColorPicker': `module.exports=()=>null;`,
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
   '@/lib/hero': `exports.isImageHeroTransitionRunning=()=>false;exports.waitForImageHeroTransition=()=>Promise.resolve();`,
   '@/lib/resources': `exports.sessionUser={read:({token})=>window.fixtureUser(token)};`,

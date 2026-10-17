@@ -16,6 +16,9 @@ import { Script } from 'node:vm';
 
 const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
+  'next/dynamic': `module.exports=()=>()=>null;`,
+  /* ColorSwatch's dialog (components/Input.tsx) loads on demand and carries the HCT tools; no fixture here opens it. */
+  './ColorPicker': `module.exports=()=>null;`,
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={fast:1,default:1,slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
   '@/lib/motionLazy': `exports.TabPanesMotion=()=>null;`,
   '@/lib/hooks': `exports.useMediaQuery=()=>false;`,
