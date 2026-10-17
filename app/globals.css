@@ -3086,6 +3086,16 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   container: image-detail-frame / inline-size;
 }
 
+/* **The overlay's gutter on both edges, as the page scroller's** (`.app-scroller` below). On the
+ * trailing edge only, a classic scrollbar left the column half a gutter left of the frame's centre
+ * — off the axis the back affordance and the step arrows are pinned symmetrically about — and
+ * 5px left of the same column on a direct load, so a reload of an open detail moved everything
+ * sideways. The Stage wears the same classes, so the flight and the handoff measure one frame
+ * (`lib/hero/plane.ts` already reads the leading gutter through `clientLeft`). */
+.main-scrollbar.image-detail-overlay-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
 @container image-detail-frame (min-width: 48rem) {
   .image-detail-header-stage,
   .image-detail-header-route {
@@ -3129,11 +3139,90 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   }
 }
 
-@container page (min-width: 40rem) {
+/* **A narrow column on a wide screen** — a laptop beside the docked navigation drawer leaves the
+ * overlay's frame under 48rem, so the strip stays two stacked rows — **joins the chrome's row as
+ * well**: the stack (byline 20 + gap 4 + caption 18) is centred on the buttons' 40dp, its top
+ * 3px below the scroller (16 + 20 − 21 − the strip's 12px), and both rows keep clear of the back
+ * affordance and the step arrows by reserving their footprint (16px inset + 88dp + 16px of air),
+ * less the overlay gutter and the strip's padding the column already insets by. Only from `sm`:
+ * on a phone the strip stays below the chrome and keeps its full width. The Stage wears the same
+ * classes, so the handoff lands on the same pixels. */
+@media (min-width: 640px) {
+  @container image-detail-frame (width < 48rem) {
+    .image-detail-overlay-content {
+      padding-top: 0;
+    }
+
+    .image-detail-overlay-content .image-detail-page {
+      padding-top: 0.1875rem;
+    }
+
+    .image-detail-overlay-content .image-detail-header-rows {
+      padding-inline: 5rem;
+    }
+  }
+
+  /* The same on a direct load: the page gutter (24px) less 21px puts the strip 3px below the
+   * scroller, and the reserve is the overlay's — the column now has the overlay's insets. */
+  @container page (width < 45rem) {
+    .page-back-room-5xl.image-detail-page {
+      padding-top: 0;
+      margin-top: -1.3125rem;
+    }
+
+    .page-back-room-5xl .image-detail-header-rows {
+      padding-inline: 5rem;
+    }
+  }
+}
+
+/* **A direct load lays its column out as the overlay does**, from `sm` (a desktop window or a
+ * tablet; a phone keeps its own gutters). The overlay's column is the frame's width up to 64rem,
+ * centred, with a 16px gutter inside it (`px-2 sm:px-4`); the page's sat inside the page's 24px
+ * padding with none, so on a direct load the header, the picture and every row under it ran a
+ * different width and edge — 8px wider each side on a laptop, 16px on a wide screen. Here the
+ * column spans the same box: the frame's width up to 64rem (the parent's width plus the page
+ * padding it gives back through a negative margin while the frame is narrower than that) and
+ * the same 16px inside. Opening a link and opening from a list are one screen, pixel for pixel. */
+@media (min-width: 640px) {
+  .page-back-room-5xl.image-detail-page {
+    --image-detail-page-column: min(100% + 3rem, 64rem);
+    width: var(--image-detail-page-column);
+    max-width: none;
+    margin-inline: calc((100% - var(--image-detail-page-column)) / 2);
+    padding-inline: 1rem;
+  }
+}
+
+/* **A direct load matches the overlay.** A shared link, a reload or a new tab opens the same
+ * detail without the list under it, and it used to sit a band lower: the page reserved the back
+ * affordance's footprint above the column (`page-back-room-5xl`) and the strip, already one row,
+ * ran 34px under the button. From the overlay's own width (48rem of frame: 45rem of the page
+ * column's content box, inside its 24px padding), the strip joins the chrome's row here too — its
+ * top 14px below the scroller, as in the overlay (the page column's 24px gutter less 10px), so the
+ * byline's centre is the button's — and its row reserves the same span: 7.5rem from each edge of
+ * the scroller, less what the column's inset (its centring, its 16px gutter and the strip's 24px
+ * padding — the overlay's, see above) already covers. The page has no step arrows, but reserving
+ * their side too keeps the strip balanced and on the same pixels as in the overlay, so opening a
+ * link and opening from a list look like one screen. */
+@container page (min-width: 45rem) {
+  .page-back-room-5xl.image-detail-page {
+    padding-top: 0;
+    margin-top: -0.625rem;
+  }
+
+  /* The loading placeholder's strip is one row here too, so it is that row's height — at the
+   * two-row height it stood 22px taller than the strip that replaced it, and the picture rose. */
+  .page-back-room-5xl .image-detail-header-route {
+    --image-detail-header-height: calc(1.5rem + var(--image-detail-byline-line));
+  }
+
   .page-back-room-5xl .image-detail-header-rows {
+    --image-detail-column-inset: calc((100cqw + 3rem - min(100cqw + 3rem, 64rem)) / 2 + 2.5rem);
     flex-direction: row;
     justify-content: space-between;
     column-gap: 1.5rem;
+    padding-inline: max(0px, 7.5rem - var(--image-detail-column-inset));
   }
 
   .page-back-room-5xl .image-detail-header-rows > :first-child {
