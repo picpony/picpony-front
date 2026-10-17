@@ -40,6 +40,7 @@ import { FORUM_STAFF_ROLES } from '@/lib/api/forum';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
+import { useIconToss } from '@/lib/useIconToss';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
 import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumReturn } from '@/lib/forumTransition';
 import { formatCount, formatDateTime } from '@/lib/format';
@@ -155,6 +156,7 @@ export default function ForumThreadPage() {
      server answers; a failure puts it back and says why (R6-039). */
   const [likeLocal, setLikeLocal] = useState<{ liked: boolean; count: number } | null>(null);
   const likeBusy = useRef(false);
+  const { ref: likeButtonRef, toss: tossLikeIcon } = useIconToss(id);
   const liked = likeLocal?.liked ?? post?.is_liked ?? false;
   const likeCount = likeLocal?.count ?? post?.like_count ?? 0;
 
@@ -167,10 +169,12 @@ export default function ForumThreadPage() {
     }
     if (likeBusy.current) return;
     const before = { liked, count: likeCount };
+    const cancelToss = liked ? tossLikeIcon() : undefined;
     likeBusy.current = true;
     setLikeLocal({ liked: !liked, count: Math.max(0, likeCount + (liked ? -1 : 1)) });
     void sendLike(session, post.id).then((outcome) => {
       likeBusy.current = false;
+      if (readToken() !== session || !outcome.ok || outcome.liked) cancelToss?.();
       if (readToken() !== session) return;
       if (!outcome.ok) {
         setLikeLocal(before);
@@ -465,6 +469,7 @@ export default function ForumThreadPage() {
                 </div>
                 <div className="mt-6 flex items-center gap-1 border-t border-outline-variant pt-4">
                   <IconButton
+                    ref={likeButtonRef}
                     toggle
                     selected={liked}
                     selectedTone="tertiary"

@@ -26,6 +26,11 @@ interface SearchInputProps
  * message rail keeps `filter`, matching its adjacent 40dp collapse control.
  * Both are immediate actions, so neither borrows a form field's outlined label.
  *
+ * **`shape="pill"` is baked in**, because this is /search's bar: the same corner,
+ * the same magnifier, the same clear control. Keyed on the shape rather than the size.
+ * The clear button needs no corner of its own: it is round, and a centred circle in a
+ * pill is concentric at any radius.
+ *
  * **It clears itself.** A 32/40dp clear control sits in the matching trailing slot
  * while there is text — the system's own, in place of the engine's cross (hidden in
  * globals.css: an off-token blue glyph with no hit area). Clearing keeps the caret in
@@ -51,6 +56,7 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function Sear
       }}
       type="search"
       size={search ? 'lg' : 'sm'}
+      shape="pill"
       icon={<MdSearch size={search ? ICON.standard : ICON.control} />}
       aria-label={ariaLabel ?? placeholder}
       value={value}

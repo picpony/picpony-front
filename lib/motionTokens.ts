@@ -63,4 +63,5 @@ export const EASE = {
  */
 export const MENU_TRANSITION = {
   enter: { duration: DURATION.short * 1000, easing: EASE.standardDecelerate },
+  exit: { duration: DURATION.state * 1000, easing: EASE.standardAccelerate },
 } as const;

@@ -10,6 +10,7 @@ export type IconButtonVariant =
   | 'standard'
   | 'filled'
   | 'tonal'
+  | 'quiet'
   | 'outlined'
   | 'danger'
   | 'danger-text'
@@ -20,10 +21,16 @@ export type IconButtonSize = 'sm' | 'md' | 'lg';
 /**
  * Round is the default and covers every icon button in a row of actions. Square
  * exists for a control that has to answer to the *container* it sits in rather
- * than to its neighbours: the back affordance is pinned to the top-left of the
- * content section, whose own corner is 12dp, and a circle inside a rounded
- * rectangle at that distance reads as a sticker rather than as part of the
- * frame. M3 Expressive gives the icon button a shape axis for this.
+ * than to its neighbours: the image detail's step arrows sit on the media
+ * frame's corner and the composer's leading controls on their field's, and a
+ * circle inside a rounded rectangle at that distance reads as a sticker rather
+ * than as part of the frame. M3 Expressive gives the icon button a shape axis
+ * for this.
+ *
+ * The back affordance took that axis until `quiet` below gave it a shape
+ * *state* instead: a disc at rest and the same 12dp corner under the pointer,
+ * which an axis cannot express — it describes the resting box, and a call site
+ * that named its own corner would beat it either way (`HAS_RADIUS`).
  */
 export type IconButtonShape = 'round' | 'square';
 export type IconButtonSelectedTone = 'secondary' | 'tertiary';
@@ -45,7 +52,10 @@ export type IconButtonSelectedTone = 'secondary' | 'tertiary';
  *             wants — containers on all of them would read as four buttons
  *             competing rather than one group.
  *   tonal     secondary container. A leading action that has to sit on top of
- *             content and stay findable — this is what `DetailBack` is.
+ *             content and stay findable.
+ *   quiet     the neutral container `Button variant="surface"` wears, round, that becomes
+ *             the tonal one — and the 12dp corner — only under the pointer: the pinned
+ *             back affordance and the image detail's step arrows.
  *   filled    primary. One per screen at most.
  *   outlined  an outline instead of a fill, for a toggle that is currently off.
  *   media     sits on a photograph rather than on a surface, so it takes the
@@ -82,6 +92,21 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      to the canvas (the outlined variant's border survives on its own). */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
   tonal: 'bg-secondary-container text-on-secondary-container focus-ring forced-boundary',
+  /* A leading action on a plain page surface keeps its distance until it is reached for. At rest
+     it wears the neutral container `Button variant="surface"` wears — one material for a neutral
+     surface control across both primitives, round because a circle is what the page's own
+     background asks for — and only under the pointer does it become what the spec has for a
+     leading navigation action over content: the tonal container, in the *square* shape, since
+     the button is pinned just inside the content section's 12dp corner, where a pill reads as
+     something stuck on the frame. This is `DetailBack`, the back affordance.
+
+     `rounded-md` is `SHAPES.square`'s step, spelled out here because a *state* cannot come from
+     the shape axis — that axis describes the resting box — and emitted here rather than from
+     the call site's `className`, where the `HAS_RADIUS` guard would read it as the call site
+     naming its own corner and suppress the disc. It wins on specificity, and both radii are in
+     `transition-icon-button`'s list, so the disc turns into the tile as it fills. */
+  quiet:
+    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:rounded-md enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
   outlined:
     'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
