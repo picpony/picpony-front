@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MdAutoAwesome, MdInfoOutline, MdWarningAmber } from 'react-icons/md';
 import Button from '@/components/Button';
 import Chip from '@/components/Chip';
-import ProgressBar from '@/components/ProgressBar';
+import SwapContent from '@/components/SwapContent';
 import { ICON } from '@/lib/icons';
 import { useScrollFade } from '@/lib/useScrollFade';
 
@@ -25,9 +25,6 @@ interface SemanticLineProps {
   onRetry: () => void;
 }
 
-/** A progress update this often reads as continuous at the spring's 235ms settle. */
-const TICK_MS = 100;
-
 /**
  * How Chinese or natural-language words were read — one 40dp row under the field, in **every**
  * state: waiting for the parse, the tags it produced, the words searched as typed, or why they
@@ -44,7 +41,11 @@ export default function SemanticLine({ state, onSearchOriginal, onUseTags, onTog
 
   switch (state.kind) {
     case 'pending':
-      body = <PendingParse key={state.text} text={state.text} estimateMs={state.estimateMs} />;
+      /* Keyed on the estimate too: a re-parse that lands a different seconds figure restarts the
+         wait rather than inheriting 比预计的久. */
+      body = (
+        <PendingParse key={`${state.text}:${state.estimateMs}`} text={state.text} estimateMs={state.estimateMs} />
+      );
       action = (
         <Button variant="text" className="shrink-0" onClick={onSearchOriginal}>
           直接搜索原文
@@ -95,7 +96,12 @@ export default function SemanticLine({ state, onSearchOriginal, onUseTags, onTog
 
   return (
     <div className="flex h-10 min-w-0 items-center gap-2">
-      {body}
+      {/* Keyed on what the row is *saying* rather than on every field of it: a chip left out of
+          the search is the same sentence with one word changed, and re-entering the row for it
+          would be a swap nobody asked for. */}
+      <SwapContent contentKey={`${state.kind}:${state.text}`} className="min-w-0 flex-1">
+        {body}
+      </SwapContent>
       {action}
       {/* The row's news, once per change, without the chips: a live region full of
           buttons would read every one of them out. */}
@@ -118,38 +124,34 @@ function Note({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 }
 
 /**
- * The wait, measured against the backend's own recent average: a determinate bar that fills
- * over the expected time, then an indeterminate one with 比预计的久 — never a bar that sits at
- * 100% claiming to be done, and never a spinner that says nothing about how long.
+ * The wait, told by the sentence itself: **no bar under it**, and the estimate only ever quoted in
+ * words (「预计 8 秒…」, then 比预计的久 once it is past).
+ *
+ * A determinate bar was honest about the backend's *average* and dishonest about this run — the
+ * estimate has a spread, so the bar either sat full while the parse was still going or had to
+ * flip to indeterminate, which is the state `ProgressBar`'s own note forbids. It was also the only
+ * reason this state needed a second line inside the 40dp row every state shares. The sweep over
+ * the words carries "still running" instead (`text-shimmer`, globals.css), so nothing the row
+ * promises the reader rests on a figure that cannot be kept.
  */
 function PendingParse({ text, estimateMs }: { text: string; estimateMs: number }) {
-  const [elapsed, setElapsed] = useState(0);
-  const startedAt = useRef<number | null>(null);
+  /* One timer, not a ticker: with no progress to interpolate, the only thing left to notice is the
+     moment the estimate runs out. Nothing is written back here — the call site's `key` covers both
+     a new parse and an estimate that changed under one, and a remount is what resets the flag
+     (`set-state-in-effect` would refuse the alternative). */
+  const [late, setLate] = useState(false);
   useEffect(() => {
-    startedAt.current = performance.now();
-    const timer = window.setInterval(() => {
-      const now = performance.now() - (startedAt.current ?? performance.now());
-      setElapsed(now);
-      if (now >= estimateMs) window.clearInterval(timer);
-    }, TICK_MS);
-    return () => window.clearInterval(timer);
+    const timer = window.setTimeout(() => setLate(true), estimateMs);
+    return () => window.clearTimeout(timer);
   }, [estimateMs]);
-  const late = elapsed >= estimateMs;
   const seconds = Math.max(1, Math.round(estimateMs / 1000));
   return (
-    <div className="min-w-0 flex-1">
-      <p className="flex min-w-0 items-center gap-2 text-body-m text-on-surface-variant">
-        <MdAutoAwesome size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
-        <span className="min-w-0 truncate">
-          {late ? `比预计的久一些，仍在理解「${text}」…` : `正在理解「${text}」，预计 ${seconds} 秒…`}
-        </span>
-      </p>
-      <ProgressBar
-        className="mt-1.5"
-        label="智能解析进度"
-        value={late ? undefined : Math.min(100, (elapsed / estimateMs) * 100)}
-      />
-    </div>
+    <p className="flex min-w-0 flex-1 items-center gap-2 text-body-m text-on-surface-variant">
+      <MdAutoAwesome size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
+      <span className="text-shimmer min-w-0 truncate">
+        {late ? `比预计的久一些，仍在理解「${text}」…` : `正在理解「${text}」，预计 ${seconds} 秒…`}
+      </span>
+    </p>
   );
 }
 

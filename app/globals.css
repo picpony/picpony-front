@@ -1874,12 +1874,12 @@ html[data-motion='reduced'] {
       color-mix(in oklab, var(--foreground) 7%, transparent),
       transparent
     );
-    /* **Fast through the pass, easing out of the exit.** The one loop in the app that takes a
-       one-sided curve, and it is geometry rather than taste: the band is wholly outside the
-       box it is clipped to at *both* ends of the cycle (`translateX(∓100%)`), so the wrap is
-       drawn nowhere and the velocity step `--ease-loop` exists to hide is not on screen. What
-       is on screen is the pass, and easing out of it reads as light going past rather than a
-       conveyor belt.
+    /* **Fast through the pass, easing out of the exit.** One of the app's two sweeps that take a
+       one-sided curve — the semantic line's own sentence is the other, `.text-shimmer` below —
+       and it is geometry rather than taste: the band is wholly outside the box it is clipped to
+       at *both* ends of the cycle (`translateX(∓100%)`), so the wrap is drawn nowhere and the
+       velocity step `--ease-loop` exists to hide is not on screen. What is on screen is the
+       pass, and easing out of it reads as light going past rather than a conveyor belt.
        Not `--ease-decelerate`: that one spends 62% of its travel in the first tenth, which
        over a 1.6s pass is a flash and then a stall. */
     animation: shimmer calc(1.6s * var(--motion-scale)) ease-out infinite;
@@ -1892,6 +1892,49 @@ html[data-motion='reduced'] {
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+/* The semantic parse's wait, swept through the sentence itself — the same idea as the skeleton's
+   band, applied to glyphs rather than to a placeholder, because that row has no bar to sit the
+   wait on (see `SemanticLine`): a line that cannot report honest progress still has to read as
+   *running* rather than as stuck, and a sweep says that without claiming a position.
+
+   `background-clip: text` makes the gradient the glyphs' own fill, so the band is the letters
+   changing rather than a light laid over them; only the *text fill* is made transparent, never
+   `color`, so an icon or any descendant resolving `currentColor` is untouched — and in forced
+   colors the engine's text colour wins the glyphs back.
+
+   The band is the brand ink (`primary-ink`) against the row's `on-surface-variant` sentence. A
+   neutral step off that ink was the first version, and at this size it read as the line dimming
+   rather than as light crossing it. `primary-ink` is the one colour in the scheme that stays a
+   *colour* on both grounds — deep rose in the light scheme, pale pink in the dark — and it is
+   already the ink of the star beside this sentence, so what passes over the words is the mark's
+   own colour.
+
+   The rhythm and the travel are the skeleton's on purpose — the same 1.6s, the same one-sided
+   curve, and for the same geometric reason: at 150% and at 0% the whole 36–64% stop is outside
+   the box, so the wrap is drawn nowhere. */
+@layer components {
+  .text-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      var(--md-sys-color-on-surface-variant) 36%,
+      var(--md-sys-color-primary-ink) 50%,
+      var(--md-sys-color-on-surface-variant) 64%
+    );
+    background-size: 200% 100%;
+    background-position: 150% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: text-shimmer calc(1.6s * var(--motion-scale)) ease-out infinite;
+  }
+}
+
+@keyframes text-shimmer {
+  to {
+    background-position: 0% 0;
   }
 }
 
@@ -1974,6 +2017,15 @@ html[data-motion='off'] {
      first keyframe put it. */
   & .skeleton::after {
     display: none;
+  }
+
+  /* The semantic line's sweep is that same "still loading" indicator and stops with it, but it
+     is the sentence's own fill rather than a pseudo-element, so it cannot be hidden — it hands
+     the ink back instead. Left as a stopped gradient, the band would park on one half of the
+     sentence and the text would read as two shades of grey. */
+  & .text-shimmer {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
   }
 }
 
