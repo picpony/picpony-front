@@ -372,22 +372,22 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
       className={cn('image-detail-page mx-auto max-w-5xl', page && 'page-back-room-5xl', gutter)}
     >
       <div className="flex flex-col rounded-md bg-transparent">
-        {/* `DetailHeader`'s real shape: two centred one-line rows. Each row opens with an empty
-            run of the rows' own type — a strut — so it is exactly one `body-m` line tall, as the
-            real rows are; a fixed height would be a guess at the line box. */}
+        {/* `DetailHeader`'s real shape: a `label-l` byline and a `body-s` caption — stacked and centred
+            on a phone, one row edge to edge from `sm`. Each
+            row opens with an empty run of its own type — a strut — so it is exactly one line of
+            that role tall, as the real rows are; a fixed height would be a guess at the line box. */}
         <div className="image-detail-header-route px-4 py-3 sm:px-6">
-          <div className="flex flex-col items-center gap-y-1 text-body-m">
-            <div className="flex items-center justify-center gap-x-3 sm:gap-x-4">
+          <div className="image-detail-header-rows">
+            <div className="image-detail-header-byline flex items-center justify-center gap-x-2 text-label-l">
               <span aria-hidden="true">{'​'}</span>
-              <Skeleton className="h-4 w-28" delay={60} />
-              <Skeleton className="h-4 w-14" delay={120} />
-              <Skeleton className="h-4 w-10" delay={180} />
+              <Skeleton className="h-4 w-24" delay={60} />
+              <Skeleton className="h-4 w-28" delay={120} />
             </div>
-            <div className="flex items-center justify-center gap-x-3 sm:gap-x-4">
+            <div className="flex items-center justify-center gap-x-2 text-body-s">
               <span aria-hidden="true">{'​'}</span>
-              <Skeleton className="h-4 w-20" delay={90} />
-              <Skeleton className="h-4 w-8" delay={150} />
-              <Skeleton className="h-4 w-20" delay={210} />
+              <Skeleton className="h-3 w-24" delay={90} />
+              <Skeleton className="h-3 w-12" delay={150} />
+              <Skeleton className="h-3 w-8" delay={210} />
             </div>
           </div>
         </div>

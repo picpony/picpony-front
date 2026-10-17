@@ -3001,16 +3001,23 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 [data-image-detail-host] {
   /* Shared by the stage and the real route so both render the identical header/page stack and
      the hero handoff cannot shift. */
-  --image-detail-overlay-offset: 1.5rem;
+  /* On a phone the strip starts below the pinned chrome (12px inset + 40dp): offset + page
+     padding + the strip's 12px reach 56px, 4px of air under the buttons, so the byline keeps the
+     column's full width beside nothing. */
+  --image-detail-overlay-offset: 1.75rem;
   --image-detail-page-padding: 1rem;
-  /* The strip's header height: two metadata rows at every width (`DetailHeader` fixes the two,
-     and truncates rather than wraps). It must equal the rendered height exactly — Stage and
+  /* The strip's header height: the `label-l` byline over the `body-s` caption in a narrow
+     column, one row of the two in a wide one (`.image-detail-header-rows` below; `DetailHeader`
+     fixes the rows, and truncates rather than wraps). It must equal the rendered height exactly — Stage and
      route are laid out against it during a flight, and a strip that grew after the landing
      moved the picture — so it is derived from the same tokens that produce the rows rather
      than typed as a rem value. It promised one row from 640px up, where six items fit only on
      the widest screens: between 640 and 1279 the strip wrapped and the picture hopped. */
-  --image-detail-meta-line: calc(var(--text-body-m) * var(--text-body-m--line-height));
-  --image-detail-header-height: calc(1.5rem + 2 * var(--image-detail-meta-line) + 0.25rem);
+  --image-detail-byline-line: calc(var(--text-label-l) * var(--text-label-l--line-height));
+  --image-detail-caption-line: calc(var(--text-body-s) * var(--text-body-s--line-height));
+  --image-detail-header-height: calc(
+    1.5rem + var(--image-detail-byline-line) + var(--image-detail-caption-line) + 0.25rem
+  );
 }
 
 @media (min-width: 640px) {
@@ -3045,6 +3052,97 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 .image-detail-page {
   padding-top: var(--image-detail-page-padding);
   padding-bottom: var(--image-detail-page-padding);
+}
+
+/* `DetailHeader`'s rows. Stacked and centred while the column is narrow; in a wide one, one row
+ * — the byline leading, the caption trailing — the span and split of the votes and action rows
+ * under the picture. The switch measures the detail's own frame, not the viewport — beside the
+ * navigation drawer a 1024px window leaves a column too narrow for both halves on one line: the
+ * scroller (`image-detail-frame`, below) in the overlay and its Stage, the page column (`page`)
+ * on a direct load. The height token follows the same query, so Stage, route and skeleton agree on
+ * it at every width. */
+.image-detail-header-rows {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  row-gap: 0.25rem;
+}
+
+/* On a direct load below `sm` the stacked byline shares its band with the page's back
+ * affordance, so it keeps clear of it on both sides (inset + 40dp + air, less the strip's 16px
+ * gutter) and stays centred. The overlay never needs this: there the strip starts below its
+ * chrome on a phone (`--image-detail-overlay-offset`), and the byline keeps the full width — a
+ * reserve for the step arrows truncated every name on a phone the moment the route took over
+ * from the Stage, which has no arrows. */
+@media (max-width: 639.98px) {
+  .page-back-room-5xl .image-detail-header-byline {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* The overlay's scroller (the Stage wears the same class) is the frame its strip measures. */
+.image-detail-overlay-scroll {
+  container: image-detail-frame / inline-size;
+}
+
+@container image-detail-frame (min-width: 48rem) {
+  .image-detail-header-stage,
+  .image-detail-header-route {
+    --image-detail-header-height: calc(1.5rem + var(--image-detail-byline-line));
+  }
+
+  .image-detail-header-rows {
+    flex-direction: row;
+    justify-content: space-between;
+    column-gap: 1.5rem;
+  }
+
+  .image-detail-header-rows > :first-child {
+    justify-content: flex-start;
+  }
+
+  .image-detail-header-rows > :last-child {
+    justify-content: flex-end;
+  }
+
+  /* **The strip joins the chrome's row.** Once it is one line, it sits in the band the back
+   * affordance and step arrows already occupy — centred on their 40dp, at `sm`'s 16px inset —
+   * instead of under it, so the whole detail rises by that band, which was otherwise empty.
+   * The row keeps clear of the chrome horizontally by reserving, on each side, whatever of the
+   * arrows' footprint (16px inset + 88dp + 16px of air) the column's own inset does not already
+   * cover: the column's inset is half of what the 64rem page leaves of the frame, plus the
+   * overlay gutter (16px) and the strip's padding (24px). Both sides, so it stays balanced, and on
+   * the Stage too, which has no arrows, so the handoff does not move it. */
+  .image-detail-overlay-content {
+    padding-top: 0;
+  }
+
+  .image-detail-overlay-content .image-detail-page {
+    /* Byline centre on the chrome's centre: 16 + 20 − (12 + 10) = 14px. */
+    padding-top: 0.875rem;
+  }
+
+  .image-detail-overlay-content .image-detail-header-rows {
+    --image-detail-column-inset: calc((100cqw - min(100cqw, 64rem)) / 2 + 2.5rem);
+    padding-inline: max(0px, 7.5rem - var(--image-detail-column-inset));
+  }
+}
+
+@container page (min-width: 40rem) {
+  .page-back-room-5xl .image-detail-header-rows {
+    flex-direction: row;
+    justify-content: space-between;
+    column-gap: 1.5rem;
+  }
+
+  .page-back-room-5xl .image-detail-header-rows > :first-child {
+    justify-content: flex-start;
+  }
+
+  .page-back-room-5xl .image-detail-header-rows > :last-child {
+    justify-content: flex-end;
+  }
 }
 
 .image-detail-header-stage {
