@@ -1045,9 +1045,13 @@ export default function AppLayout({
                a negative margin closes the layout behind it: the content travels because it is
                *inside* the thing that moves, the panel never resizes, `translate` composites.
 
-               **A spring, and a different one per direction — M3's `NavigationDrawer.kt`:**
-               open = `DefaultSpatial` (ζ0.9, 194ms), close = `FastEffects` (ζ1.0, 108ms),
-               critically damped because a panel leaving must not overshoot back into view.
+               **Modal (phone): a spring, a different one per direction — M3's
+               `NavigationDrawer.kt`:** open = `DefaultSpatial` (ζ0.9, 194ms), close =
+               `FastEffects` (ζ1.0, 108ms), critically damped because a panel leaving must not
+               overshoot back into view. **Docked: Vuetify's timing instead** (`drawer-dock`):
+               docked, the motion is not the panel but the page beside it re-laying out wider or
+               narrower, and 108ms is six frames of that — it read as a jump. 200ms on standard
+               easing, the same both ways, as `v-navigation-drawer` and `v-main` do.
                Applied per branch and per breakpoint, because a transition is governed by the
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */
@@ -1058,9 +1062,11 @@ export default function AppLayout({
               modalOpen
                 ? 'spring-default-spatial translate-x-0'
                 : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
-              dockedCollapsed
-                ? 'md:spring-fast-effects md:-translate-x-full md:-mr-72'
-                : 'md:spring-default-spatial md:translate-x-0 md:mr-0',
+              /* Docked, one curve both ways (`drawer-dock`): the margin is the content area's
+                 width, and a page that widens on one curve and narrows on another reads as two
+                 different motions. */
+              'md:drawer-dock',
+              dockedCollapsed ? 'md:-translate-x-full md:-mr-72' : 'md:translate-x-0 md:mr-0',
             )}
           >
             {/* `w-full`, not a second width declaration. `popover-scrollbar`: the drawer is not

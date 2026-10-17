@@ -3602,6 +3602,16 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition-timing-function: var(--motion-local-standard-spatial);
   transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
 }
+/* The docked navigation drawer's open and close, and so the content area's change of width:
+ * Vuetify's `v-navigation-drawer` / `v-main` timing — 200ms on Material's standard easing
+ * (0.4, 0, 0.2, 1), the same both ways, never overshooting (an overshoot here would push the
+ * whole page past its width and back). The duration rides the same scale as the springs, so
+ * the aside's `data-motion-spring='overlay'` puts it on the overlay tier and `off` snaps it. */
+@utility drawer-dock {
+  --motion-spring-scale: var(--motion-scale);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: calc(200ms * var(--motion-spring-scale));
+}
 @utility spring-fast-effects {
   --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
