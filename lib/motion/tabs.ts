@@ -5,7 +5,7 @@ import { motionTier } from '@/lib/appearance';
 import { getAppScroller, heroOwnsScreen } from '@/lib/appScroller';
 import { beginPageTransit } from '@/lib/pageTransit';
 import { tabIntent } from '@/lib/tabIntent';
-import { recallTabScroll, rememberTabScroll, tabPanelTop, TAB_SHARED_CHROME_PX } from '@/lib/tabScroll';
+import { recallTabScroll, rememberTabScroll, tabMayRestore, tabPanelTop } from '@/lib/tabScroll';
 import { columnWindow } from '@/lib/tabStrip';
 import { runWhenIdle } from '@/lib/utils';
 import { AXIS_GAP, playSharedAxis, supportsEdgeMask } from './sharedAxis';
@@ -281,7 +281,7 @@ function prepareTabRun(
    * gallery's 全部 / 本站讨论 row under the banner, content a restored offset would drag
    * along. There the offset is not touched at all (see `holdFloor`). The threshold is
    * the app bar's 64dp, the smallest chrome this design system treats as a region. */
-  const mayRestore = scroller ? tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX : false;
+  const mayRestore = scroller ? tabMayRestore(panel, scroller) : false;
   /* The window the strip slides past: the scroller — or, for panes that live in a bounded region
    * of the page (the admin console's panel, beside its rail inside one card), that region
    * (`data-tab-window`). Sliding a scroller's width there swept the outgoing pane across the rail

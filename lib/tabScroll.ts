@@ -87,10 +87,23 @@ export function tabPanelTop(panel: HTMLElement, scroller: HTMLElement) {
   );
 }
 
+/**
+ * Whether a switch on this panel may move the page to the arriving tab's own offset: only when the
+ * panel *is* the page — no more than an app bar of shared chrome above it — and it is not a panel
+ * in a bounded region of the page (`data-tab-window`). The admin console's panel sits beside its
+ * rail inside one card near the top of the page, so on a wide screen it passed the first test: every
+ * section switch threw the page — rail and all — back to that section's last offset, or to the top
+ * for one never scrolled. The rail is the page there, not the panel, so the offset is kept.
+ */
+export function tabMayRestore(panel: HTMLElement, scroller: HTMLElement) {
+  if (panel.closest('[data-tab-window]')) return false;
+  return tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX;
+}
+
 export function applyInstantTabScroll(panel: HTMLElement, to: string) {
   const scroller = getAppScroller();
   if (!scroller) return;
-  if (tabPanelTop(panel, scroller) > TAB_SHARED_CHROME_PX) return;
+  if (!tabMayRestore(panel, scroller)) return;
   /* `?? 0`, matching the animated switch's fallback (`runTabTransition`, lib/motion.ts): on a
      panel that is the page, a tab with no
      remembered offset opens at its own top. Returning early instead left the outgoing tab's

@@ -541,6 +541,7 @@ export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(funct
           onClose={() => setOpen(false)}
           initial={{ seed: colour ?? '#e06c9f', accent: null }}
           hues="mono"
+          preview={false}
           onPick={(spec) => onChange(spec.seed.toLowerCase())}
         />
       )}

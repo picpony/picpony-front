@@ -143,13 +143,20 @@ export interface ColorPickerProps {
    * own, and opens with `hues="mono"`, which is the dialog without its 多色 part.
    */
   title?: string;
+  /**
+   * The docked theme miniature at the top. On /settings, where a whole theme is being chosen; an
+   * arbitrary colour field (`ColorSwatch`) picks one colour, which the board's own check and the
+   * hex field already show, so it leaves the miniature out.
+   */
+  preview?: boolean;
 }
 
-export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, onExited, title }: ColorPickerProps) {
+export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, onExited, title, preview = true }: ColorPickerProps) {
   const tools = usePaletteTools(isOpen);
   return (
     <PickerDialog
       title={title}
+      preview={preview}
       tools={tools}
       isOpen={isOpen}
       initial={initial}
@@ -167,12 +174,14 @@ export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, on
  * shape is known loads as that shape. The shape is known to the pixel: the chunk
  * decides the *colours*, not the layout.
  */
-function PickerSkeleton({ caption, hues }: { caption: string; hues: PaletteHues }) {
+function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: PaletteHues; preview: boolean }) {
   return (
     <div className="flex flex-col gap-5" aria-hidden="true">
-      <div className={PREVIEW_DOCK}>
-        <PalettePreview caption={caption} hues={hues} />
-      </div>
+      {preview && (
+        <div className={PREVIEW_DOCK}>
+          <PalettePreview caption={caption} hues={hues} />
+        </div>
+      )}
       <Group label="十六进制"><Skeleton className="h-10 w-40 rounded-sm" /></Group>
       <Group label="色相">
         <div className={RAIL_CLASS}>
@@ -210,6 +219,7 @@ function PickerSkeleton({ caption, hues }: { caption: string; hues: PaletteHues 
  */
 function PickerDialog({
   title = '自定义主题色',
+  preview,
   tools,
   isOpen,
   initial,
@@ -219,6 +229,7 @@ function PickerDialog({
   onExited,
 }: {
   title?: string;
+  preview: boolean;
   tools: PaletteTools | null;
   isOpen: boolean;
   initial: CustomSpec;
@@ -396,10 +407,12 @@ function PickerDialog({
         <div className="flex flex-col gap-5">
           {/* Docked while the controls under it scroll: the 副色相 tiles sit a whole board
               further down, and a choice made with its consequence out of view is a guess. */}
-          <div className={PREVIEW_DOCK}>
-            {/* Cached: the chosen 副色相 tile below derives the same spec. */}
-            <PalettePreview derived={tools.deriveCustomThemeCached({ seed: hex, accent: choice })} hues={hues} caption={hex} />
-          </div>
+          {preview && (
+            <div className={PREVIEW_DOCK}>
+              {/* Cached: the chosen 副色相 tile below derives the same spec. */}
+              <PalettePreview derived={tools.deriveCustomThemeCached({ seed: hex, accent: choice })} hues={hues} caption={hex} />
+            </div>
+          )}
 
           {/* Straight under the preview it drives, where it is on screen without
               scrolling past the whole board first. */}
@@ -599,7 +612,7 @@ function PickerDialog({
           )}
         </div>
       ) : (
-        <PickerSkeleton caption={initialSeed} hues={hues} />
+        <PickerSkeleton caption={initialSeed} hues={hues} preview={preview} />
       )}
     </Modal>
   );
