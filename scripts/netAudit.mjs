@@ -376,8 +376,18 @@ class Cdp {
  * before sending anything, so it is a real ancestor of every Derpibooru read and the number has
  * to show that dependency. `get_tag_subscriptions` is chrome too: the drawer's 标签订阅 row reads
  * it on every signed-in document for its count of new pictures, beside the screen's own reads.
+ *
+ * **The companion runtime is the same kind of read, and its chunk makes it the worst racer.**
+ * `get_mascot_config` and `get_my_ponies` mount with the shell on every signed-in document
+ * (`CompanionHost`, both `dynamic`), so whether they start before or after the page's own chunk
+ * has run is timing alone. Left in the chain, a runner slow enough for the mascot read to *finish*
+ * first moved `/history`'s and `/tasks`' own read from r1 to r2 and failed the baseline on a commit
+ * whose earlier run had passed — the same timing the count assertions are already immune to.
  */
-const CHROME_READS = new Set(['get_user', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions']);
+const CHROME_READS = new Set([
+  'get_user', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions',
+  'get_mascot_config', 'get_my_ponies',
+]);
 
 /**
  * Not counted at all, on either layer: `track_visitor`, the visit count a production build sends
