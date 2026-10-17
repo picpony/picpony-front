@@ -5,13 +5,14 @@ import { ColorSwatch, Input } from '@/components/Input';
 
 const HEX = /^#[\da-f]{6}$/i;
 
-/** A `#RRGGBB` colour — the only form `ColorSwatch` (the OS picker) speaks and a badge stores. */
+/** A `#RRGGBB` colour — the form `ColorSwatch` (the app's colour dialog) hands back and a badge stores. */
 export function isHexColor(value: string): boolean {
   return HEX.test(value.trim());
 }
 
 /**
- * A badge's colour in a console form (R9-039): the OS swatch beside a labelled outlined hex field,
+ * A badge's colour in a console form (R9-039): the swatch (which opens the app's own colour dialog,
+ * the 自定义主题色 panel without its 多色 part) beside a labelled outlined hex field,
  * one field family with the form around it. It was a caption `<p>`, the swatch and an unlabelled
  * filled field — three label systems in one row.
  *
@@ -43,9 +44,10 @@ export default function ColorField({
     <div className="flex items-start gap-3">
       <ColorSwatch
         aria-label={`${label}（取色）`}
+        dialogTitle={label}
         value={typed ?? lastColour}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={onChange}
       />
       <Input
         id={fieldId}

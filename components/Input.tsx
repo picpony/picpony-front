@@ -8,6 +8,7 @@ import {
   type TextareaHTMLAttributes,
   type ReactNode,
 } from 'react';
+import dynamic from 'next/dynamic';
 import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import IconButton from './IconButton';
 import { cn } from '@/lib/utils';
@@ -463,44 +464,87 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
 });
 
 /**
- * The native colour swatch, wearing the app's border, radius and focus ring.
- * `<input type="color">` opens the OS picker — no M3 component does that job, so
- * the control stays native. `p-0.5` is not decoration: the swatch paints across
- * the whole content box, so without the inset the border and swatch touch and
- * the corner radius is lost under the fill.
+ * The app's own colour dialog, fetched on the first press (or on intent): it carries the HCT
+ * tools, which no form should pay for until somebody actually picks a colour. `loading: null`
+ * keeps the suspense boundary the dialog's own rather than the route's.
  */
-type ColorSwatchProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> & {
-  'aria-label': string;
-};
+const ColorPicker = dynamic(() => import('./ColorPicker'), { loading: () => null });
+const warmColorPicker = () => void import('./ColorPicker').catch(() => {});
+
+const SWATCH_HEX = /^#[\da-f]{6}$/i;
 
 /**
- * Forwards its ref, like `Input` and `Textarea`.
+ * An arbitrary colour field's swatch: a button the colour of its value, which opens the
+ * 自定义主题色 dialog of /settings (`ColorPicker`) — the hue rail, the tone × chroma board and
+ * the hex field — **without its 多色 part** (the 副色相 group): a single colour has no second hue,
+ * so the dialog is opened as under 单色 and only its seed is taken. It was a native
+ * `<input type="color">`, whose OS dialog carries none of this app's tokens and speaks RGB where
+ * the rest of the app speaks HCT.
  *
- * Watch for one trap if a call site commits on change: React's `onChange` on an
- * `<input type="color">` is the native **`input`** event, which Chrome fires
- * continuously while the pointer moves inside the OS dialog — dozens of commits
- * per drag. The native **`change`** event is the one that means "the dialog
- * closed", and reaching it needs an `addEventListener` on the element.
+ * `onChange` receives the chosen `#rrggbb` once, on 使用此颜色 — never per pointer move, the trap
+ * the native `input` event set.
  */
-export const ColorSwatch = forwardRef<HTMLInputElement, ColorSwatchProps>(function ColorSwatch(
-  { className = '', 'aria-label': ariaLabel, ...rest },
+type ColorSwatchProps = {
+  'aria-label': string;
+  /** `#rrggbb`. Anything else opens the dialog on the brand's fill and paints no colour. */
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+  /** The dialog's headline; 自定义颜色 by default. */
+  dialogTitle?: string;
+};
+
+export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(function ColorSwatch(
+  { className = '', 'aria-label': ariaLabel, value, onChange, disabled, dialogTitle = '自定义颜色' },
   ref,
 ) {
+  /* Mounted from the first open on, and re-keyed per open so each starts on the current value. */
+  const [opens, setOpens] = useState(0);
+  const [open, setOpen] = useState(false);
+  const colour = SWATCH_HEX.test(value.trim()) ? value.trim().toLowerCase() : null;
   return (
-    <input
-      ref={ref}
-      type="color"
-      aria-label={ariaLabel}
-      className={cn(
-        /* The native colour swatch keeps its 4dp corner and the form family's
-           56dp height; the ordinary filled text field has the softer 8dp corner. */
-        'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
-        'focus-visible:outline-hidden transition-ui focus-visible:ring-2 focus-ring',
-        'disabled:cursor-not-allowed disabled:disabled-content',
-        className,
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={disabled}
+        onPointerEnter={warmColorPicker}
+        onFocus={warmColorPicker}
+        onClick={() => {
+          setOpens((count) => count + 1);
+          setOpen(true);
+        }}
+        className={cn(
+          /* The form family's 56dp height and the swatch's 4dp corner; `p-0.5` insets the fill so
+             the border and its corner stay visible around it. */
+          'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
+          'focus-visible:outline-hidden transition-ui focus-visible:ring-2 focus-ring',
+          'disabled:cursor-not-allowed disabled:disabled-content',
+          className,
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className="forced-boundary block size-full rounded-[2px]"
+          style={{ background: colour ?? 'transparent' }}
+        />
+      </button>
+      {opens > 0 && (
+        <ColorPicker
+          key={opens}
+          isOpen={open}
+          title={dialogTitle}
+          onClose={() => setOpen(false)}
+          initial={{ seed: colour ?? '#e06c9f', accent: null }}
+          hues="mono"
+          onPick={(spec) => onChange(spec.seed.toLowerCase())}
+        />
       )}
-      {...rest}
-    />
+    </>
   );
 });
 

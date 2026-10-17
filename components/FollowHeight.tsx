@@ -21,6 +21,16 @@ interface FollowHeightProps {
    * heading), so those commits read no layout here.
    */
   watch?: string | number | boolean | null;
+  /**
+   * Follow every change of the content's height, not only a commit of this component's: for a
+   * box whose content is resized outside React — a tab panel whose panes the motion layer shows
+   * and conceals by attribute, a pane whose data lands in a child's own commit. A
+   * `ResizeObserver` on an inner box reports the new height after layout and before paint, so the
+   * box is pinned back at the height on screen and springs from there in the same frame; nothing
+   * ever paints at the new height first. The commit path (`getSnapshotBeforeUpdate`) stands down,
+   * since the observer already covers every commit.
+   */
+  track?: boolean;
 }
 
 /**
@@ -55,10 +65,49 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     this.node = node;
   };
   private run: Animation | null = null;
+  private inner: HTMLDivElement | null = null;
+  private readonly setInner = (node: HTMLDivElement | null) => {
+    this.inner = node;
+  };
+  private observer: ResizeObserver | null = null;
+  /** The content's height the box last settled on (`track`). */
+  private settled: number | null = null;
+
+  componentDidMount() {
+    if (this.props.track) this.observe();
+  }
+
+  /**
+   * `track`: the content box is observed and the outer box follows it. At rest the outer box is
+   * `auto`, so by the time the observer is told the layout already holds the new height; the run
+   * starts from the height that was on screen (the running one, mid-run), before that frame paints.
+   */
+  private observe() {
+    const inner = this.inner;
+    if (!inner || typeof ResizeObserver === 'undefined') return;
+    this.settled = inner.getBoundingClientRect().height;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      const node = this.node;
+      if (!entry || !node) return;
+      const to = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+      const from = this.run ? node.getBoundingClientRect().height : this.settled;
+      this.settled = to;
+      if (from === null || motionTier('list') === 'off') return this.stop();
+      if (Math.abs(to - from) < 0.5) return;
+      this.stop();
+      /* Pinned inline as well as animated: the observer's own re-layout then lays the page out at
+         the old height in this frame, whatever the engine does with an animation created this late. */
+      node.style.height = `${from}px`;
+      this.animate(node, from, to);
+    });
+    observer.observe(inner);
+    this.observer = observer;
+  }
 
   getSnapshotBeforeUpdate(previous: FollowHeightProps): number | null {
     const node = this.node;
-    if (!node || motionTier('list') === 'off') return null;
+    if (!node || this.props.track || motionTier('list') === 'off') return null;
     if (this.props.watch !== undefined && Object.is(previous.watch, this.props.watch)) return null;
     /* Read with a running change included, then hold it in place of the animation. */
     const from = node.getBoundingClientRect().height;
@@ -73,18 +122,25 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     node.style.height = '';
     const to = node.getBoundingClientRect().height;
     if (Math.abs(to - from) < 0.5) return;
+    this.animate(node, from, to);
+  }
+
+  private animate(node: HTMLDivElement, from: number, to: number) {
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
     const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'defaultEffects', 'list'));
     const release = () => {
       if (this.run !== run) return;
       this.run = null;
       node.style.clipPath = '';
+      if (this.props.track) node.style.height = '';
     };
     run.finished.then(release, release);
     this.run = run;
   }
 
   componentWillUnmount() {
+    this.observer?.disconnect();
+    this.observer = null;
     this.stop();
   }
 
@@ -92,13 +148,16 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     const run = this.run;
     this.run = null;
     run?.cancel();
-    if (this.node) this.node.style.clipPath = '';
+    if (this.node) {
+      this.node.style.clipPath = '';
+      if (this.props.track) this.node.style.height = '';
+    }
   }
 
   render() {
     return (
       <div ref={this.setNode} className={this.props.className}>
-        {this.props.children}
+        {this.props.track ? <div ref={this.setInner}>{this.props.children}</div> : this.props.children}
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { MdDashboard, MdHome } from 'react-icons/md';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
+import FollowHeight from '@/components/FollowHeight';
 import SignInRequired from '@/components/SignInRequired';
 import { buttonClasses } from '@/components/buttonStyles';
 import { ICON } from '@/lib/icons';
@@ -172,15 +173,22 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
             not the scroller — sliding the scroller's width swept the panes across the rail and out
             past the card. The sections' own sub-tabs slide past it too. */}
         <div data-tab-window="" className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
-          <TabPanes value={shown}>
-            {offered.map(({ id, component: Panel }) =>
-              visited.has(id) ? (
-                <TabPane key={id} value={id}>
-                  <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
-                </TabPane>
-              ) : null,
-            )}
-          </TabPanes>
+          {/* The card's height follows the section on screen instead of jumping to it. A switch
+              stacks both panes in one cell for its run and conceals the leaving one at settle — by
+              attribute, outside React — and a section's first read swaps its skeleton for rows of
+              another height; each of those snapped the card's bottom edge (and the page under it)
+              by the difference in one frame. `track` follows every such change, not only commits. */}
+          <FollowHeight track>
+            <TabPanes value={shown}>
+              {offered.map(({ id, component: Panel }) =>
+                visited.has(id) ? (
+                  <TabPane key={id} value={id}>
+                    <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
+                  </TabPane>
+                ) : null,
+              )}
+            </TabPanes>
+          </FollowHeight>
         </div>
       </div>
     </ConsoleColumn>

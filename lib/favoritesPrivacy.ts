@@ -45,6 +45,22 @@ let present = 0;
 let bound = false;
 const listeners = new Set<() => void>();
 
+/**
+ * The pictures this session knows are in the space, kept apart from the list: the list is dropped
+ * on every lock, but a picture locked away is still favourited, and the image detail's 收藏 has to
+ * say so (a picture the auto-privacy rule sent there read as not favourited, and a second press
+ * sent it again). Filled by every read of the list (which replaces it — the server's word wins),
+ * by every add made here and emptied of every removal; in memory only, like the list, and cleared
+ * with the session or a reset. The backend offers no per-picture lookup while the space is locked,
+ * so after a reload a locked space's pictures are known again once it is next opened.
+ */
+let knownIds: ReadonlySet<number> = new Set();
+
+function setKnown(next: ReadonlySet<number>) {
+  knownIds = next;
+  for (const listener of listeners) listener();
+}
+
 function publish(next: Partial<PrivacySnapshot>) {
   snapshot = { ...snapshot, ...next };
   for (const listener of listeners) listener();
@@ -119,6 +135,7 @@ function sessionChanged() {
   stopHeartbeat();
   clearExpiry();
   present = 0;
+  knownIds = new Set();
   publish({ ...INITIAL, token });
 }
 
@@ -160,6 +177,7 @@ async function loadList(token: string) {
   try {
     const images = await api.getPrivacyFaves(token, controller.signal);
     if (!current()) return;
+    knownIds = new Set(images.map((image) => image.id));
     publish({ status: 'open', images, refreshing: false, error: null, autoLocked: false });
   } catch (error) {
     if (!current() || isAborted(error)) return;
@@ -242,6 +260,7 @@ export async function resetPrivacy(token: string, accountPassword: string) {
   cancelRead();
   stopHeartbeat();
   clearExpiry();
+  knownIds = new Set();
   publish({ status: 'no-password', images: null, error: null, autoLocked: false, refreshing: false });
   favouritesChanged(token);
 }
@@ -253,13 +272,17 @@ export async function reloadPrivacy(token: string) {
 }
 
 export function forgetPrivacyPictures(token: string, ids: readonly number[]) {
-  if (!ownSession(token) || !snapshot.images || ids.length === 0) return;
+  if (!ownSession(token) || ids.length === 0) return;
+  if (ids.some((id) => knownIds.has(id))) setKnown(new Set([...knownIds].filter((id) => !ids.includes(id))));
+  if (!snapshot.images) return;
   cancelRead();
   const gone = new Set(ids);
   publish({ images: snapshot.images.filter((image) => !gone.has(image.id)), refreshing: false });
 }
 export function addPrivacyPictures(token: string, images: readonly PonyImage[]) {
-  if (!ownSession(token) || !snapshot.images) return;
+  if (!ownSession(token)) return;
+  if (images.some((image) => !knownIds.has(image.id))) setKnown(new Set([...knownIds, ...images.map((image) => image.id)]));
+  if (!snapshot.images) return;
   const known = new Set(snapshot.images.map((image) => image.id));
   const fresh = images.filter((image) => !known.has(image.id));
   if (fresh.length === 0) return;
@@ -315,6 +338,14 @@ export function usePrivacySpace(token: string | null): PrivacySnapshot {
   const current = useSyncExternalStore(subscribe, () => snapshot, () => INITIAL);
   return current.token === token ? current : { ...INITIAL, token };
 }
+/** Whether this session knows the picture is in the account's privacy space (see `knownIds`). */
+export function isInPrivacySpace(token: string | null, imageId: number): boolean {
+  return token !== null && snapshot.token === token && knownIds.has(imageId);
+}
+export function usePrivacyFaved(token: string | null, imageId: number): boolean {
+  return useSyncExternalStore(subscribe, () => isInPrivacySpace(token, imageId), () => false);
+}
+
 /** The store's view for its regression tests. */
 export function privacySnapshot() {
   return { ...snapshot, present, beating: heartbeat !== null, expiring: expiresAt !== null };

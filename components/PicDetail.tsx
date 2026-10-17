@@ -69,7 +69,7 @@ import { addPrivacyFave } from '@/lib/api/favorites';
 import { getBrowsingSettings } from '@/lib/api/client';
 import { favoritesHref, goesToPrivacySpace, resolveDefaultFolder, type DefaultFolder } from '@/lib/favorites';
 import { favouriteImage, favouritesChanged, restoreFavourite, unfavouriteImage } from '@/lib/favoritesActions';
-import { addPrivacyPictures } from '@/lib/favoritesPrivacy';
+import { addPrivacyPictures, isInPrivacySpace, removeFromPrivacy, restoreToPrivacy, usePrivacyFaved } from '@/lib/favoritesPrivacy';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import FolderPicker from '@/components/favorites/FolderPicker';
 import { createShareLink, trackShare } from '@/lib/api/share';
@@ -290,6 +290,7 @@ type FavePress =
   | { ok: true; kind: 'faved'; folderName: string }
   | { ok: true; kind: 'unfaved'; previous: number[] }
   | { ok: true; kind: 'privacy' }
+  | { ok: true; kind: 'privacy-removed' }
   | { ok: true; kind: 'picker' }
   | { ok: false; message: string };
 
@@ -312,6 +313,13 @@ async function sendFavePress(
     const index = await faveIdsResource.read({ token });
     if (readToken() !== token) return { ok: false, message: '登录状态已改变，请重新操作' };
     const faved = index.ids.includes(image.id);
+    /* Favourited into the privacy space (by the auto-privacy rule, or from the space itself): the
+       star is lit, so a press takes it out again — never a second copy sent in. */
+    if (!faved && isInPrivacySpace(token, image.id)) {
+      const { failed } = await removeFromPrivacy(token, [image.id]);
+      if (failed[0]) throw failed[0].error;
+      return { ok: true, kind: 'privacy-removed' };
+    }
     const contentFilter = getBrowsingSettings().contentFilter;
     if (goesToPrivacySpace({ alreadyFaved: faved, autoPrivacy: choice.autoPrivacy, contentFilter, tags: image.tags })) {
       await addPrivacyFave(token, image);
@@ -543,7 +551,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const recordPending = record === null && recordError === null && !offline;
 
   const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
-  const isFaved = favesRead.data?.ids.includes(imageId) ?? false;
+  /* In the privacy space counts: the auto-privacy rule sends an explicit picture there rather than
+     to a folder, and the star went on reading 未收藏 after it. */
+  const privacyFaved = usePrivacyFaved(session.token, imageId);
+  const isFaved = (favesRead.data?.ids.includes(imageId) ?? false) || privacyFaved;
   const { ref: faveButtonRef, toss: tossFaveIcon } = useIconToss(imageId);
   const [favePending, setFavePending] = useState<{ imageId: number; token: string } | null>(null);
   const faveBusy = favePending?.imageId === imageId && favePending.token === session.token;
@@ -1044,11 +1055,14 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     /* The full record when it has landed — the privacy space stores it whole — else the row. */
     const target = (record ?? image) as PonyImage;
     const targetId = target.id;
-    const cancelToss = oneTapFave && isFaved ? tossFaveIcon() : undefined;
+    /* A press on a lit star unfavourites: with 一键收藏 on, or when the picture is only in the
+       privacy space, which a press takes it out of whatever that setting says. */
+    const privacyOnly = privacyFaved && !(favesRead.data?.ids.includes(targetId) ?? false);
+    const cancelToss = isFaved && (oneTapFave || privacyOnly) ? tossFaveIcon() : undefined;
     setFavePending({ imageId: targetId, token });
     void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
       setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));
-      if (readToken() !== token || !outcome.ok || outcome.kind !== 'unfaved') cancelToss?.();
+      if (readToken() !== token || !outcome.ok || (outcome.kind !== 'unfaved' && outcome.kind !== 'privacy-removed')) cancelToss?.();
       /* A different account now: nothing of this answer is said to it. */
       if (readToken() !== token) return;
       if (!outcome.ok) {
@@ -1062,6 +1076,16 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           action: showPrivacySpace
             ? { label: '查看', onClick: () => router.push(favoritesHref('privacy'), { scroll: false }) }
             : { label: '设置', onClick: () => router.push('/settings', { scroll: false }) },
+        });
+      } else if (outcome.kind === 'privacy-removed') {
+        showToast('已从隐私空间取消收藏', 'success', {
+          action: {
+            label: '撤销',
+            onClick: () =>
+              void restoreToPrivacy(token, target).catch((error: unknown) =>
+                showToast(apiErrorMessage(error, '撤销失败'), 'error'),
+              ),
+          },
         });
       } else if (outcome.kind === 'faved') {
         showToast(`已收藏到「${outcome.folderName}」`, 'success', {

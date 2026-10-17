@@ -55,6 +55,15 @@ function shownPane(panel: HTMLElement): HTMLElement | null {
 function holdFloor(panel: HTMLElement, scroller: HTMLElement, staying: HTMLElement) {
   suspendFloor(panel);
   const offset = scroller.scrollTop;
+  /* At the very top there is no offset to keep reachable: every height reaches 0. Measured here
+     anyway, a page shorter than its window read `scrollHeight` as the window's height, so the
+     floor came out as the panel's whole run height (both panes) — and, carried into the next
+     switch's read, it only ever grew: a short /admin section stood at the tallest one visited,
+     then dropped by hundreds of pixels on the first scroll. */
+  if (offset <= 0) {
+    panel.style.minHeight = '';
+    return;
+  }
   const view = scroller.clientHeight;
   /* Everything in the page but the panel. The panel's own height includes any floor it
      already carries, so this is floor-independent. */

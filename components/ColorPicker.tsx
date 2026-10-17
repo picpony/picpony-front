@@ -138,12 +138,18 @@ export interface ColorPickerProps {
   onPick: (spec: CustomSpec) => void;
   /** The dialog has finished leaving — where the theme wipe may start. */
   onExited?: () => void;
+  /**
+   * The headline. 自定义主题色 on /settings; an arbitrary colour field (`ColorSwatch`) names its
+   * own, and opens with `hues="mono"`, which is the dialog without its 多色 part.
+   */
+  title?: string;
 }
 
-export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, onExited }: ColorPickerProps) {
+export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, onExited, title }: ColorPickerProps) {
   const tools = usePaletteTools(isOpen);
   return (
     <PickerDialog
+      title={title}
       tools={tools}
       isOpen={isOpen}
       initial={initial}
@@ -203,6 +209,7 @@ function PickerSkeleton({ caption, hues }: { caption: string; hues: PaletteHues 
  * palette tools arrive, so loading cannot restart the overlay's entrance.
  */
 function PickerDialog({
+  title = '自定义主题色',
   tools,
   isOpen,
   initial,
@@ -211,6 +218,7 @@ function PickerDialog({
   onClose,
   onExited,
 }: {
+  title?: string;
   tools: PaletteTools | null;
   isOpen: boolean;
   initial: CustomSpec;
@@ -365,7 +373,7 @@ function PickerDialog({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="自定义主题色"
+      title={title}
       maxWidth="lg"
       onExited={onExited}
       footer={
