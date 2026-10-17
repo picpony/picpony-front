@@ -6,7 +6,7 @@ import re
 import sys
 import urllib.parse
 import urllib.request
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright, expect, TimeoutError as PlaywrightTimeout
 
 BASE, FIXTURES = sys.argv[1:3]
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -284,6 +284,13 @@ def inspect(page, name, route_path):
         page.get_by_text('FixtureDev', exact=True).first.wait_for(state='visible')
     elif route_path == '/user/1':
         page.get_by_role('heading', name='fixture', exact=True).wait_for(state='visible')
+    elif route_path == '/forum/create':
+        # The composer is a client component: it settles from its skeleton into the form
+        # (signed in) or the sign-in prompt (signed out) — see the placeholder wait below.
+        if 'guest' in name:
+            page.get_by_role('heading', name='需要登录', exact=True).wait_for(state='visible')
+        else:
+            page.get_by_role('button', name='发布帖子', exact=True).wait_for(state='visible')
     elif route_path == '/shop':
         page.get_by_text('Fixture item', exact=True).first.wait_for(state='visible')
     elif route_path == '/favorites/shared/fixture/1':
@@ -305,6 +312,23 @@ def inspect(page, name, route_path):
             page.get_by_text('每日登录', exact=True).first.wait_for(state='visible')
         elif route_path == '/subscriptions':
             page.get_by_text('还没有订阅标签', exact=True).first.wait_for(state='visible')
+    # **The audit sees the page, not its cold-load placeholder.** Every route paints one first
+    # (the route fallback, then its own skeleton). The composer's is taller than the scroller and
+    # holds the footer — the page's only focusable content while it is up — so `#app-main` is a
+    # scroll region no keyboard can reach until the session is known: axe's
+    # `scrollable-region-focusable`, raised on `/forum/create` on whichever runs the audit landed
+    # inside that window. Give the placeholder the app's own chance to leave (the selector is
+    # `lib/pageLoadingHold.ts`'s, so one in a pane that is not on screen does not count) and audit
+    # what the page became; a page that legitimately keeps one — a read still in flight — is
+    # audited as it is rather than on the clock.
+    try:
+        page.wait_for_function(
+            "() => !document.querySelector('[data-page-content] "
+            "[data-page-loading]:not([data-tab-pane]:not([data-tab-pane-active]) [data-page-loading])')",
+            timeout=3000,
+        )
+    except PlaywrightTimeout:
+        pass
     page.evaluate(AXE)
     report = page.evaluate("""async () => {
       const result = await axe.run(document, {
