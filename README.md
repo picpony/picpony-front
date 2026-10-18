@@ -42,4 +42,3 @@ npm run package:standalone
 - 每次发布的完整包：`/www/wwwroot/picpony-front-releases/<run_id>/`，`current` 指向最近一次成功发布
 - `scripts/deployServer.sh`：停项目 → rsync → 宝塔 CLI 启动 → 检查 `/sw.js`；失败自动回滚上一版
 - 需要的仓库 Secrets：`DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`
-
