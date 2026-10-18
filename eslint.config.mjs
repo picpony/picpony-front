@@ -22,6 +22,9 @@ const eslintConfig = defineConfig([
     '.next/**',
     'out/**',
     'build/**',
+    // `npm run package:standalone` stages the standalone build here; its chunks and bundled
+    // `browserponies.js` are build output, not source.
+    'dist/**',
     'next-env.d.ts',
     // Git-ignored screenshots, measurement harnesses and generated browser bundles.
     '.workbuddy/**',

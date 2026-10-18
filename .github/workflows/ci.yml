@@ -1,4 +1,4 @@
-# Every push to dev / master and every pull request: the checks that need no browser.
+# Every push to dev / master or a `v*` tag, and every pull request: the checks that need no browser.
 #
 # Dependencies install from the committed `bun.lock` with `--frozen-lockfile` (review P1-F3): the
 # README already makes bun the project's installer, so the lockfile it maintains is the one CI
@@ -7,11 +7,18 @@
 # Node 24 matches development (`.nvmrc`), and the TS-importing scripts
 # (`scripts/tsResolve.mjs`) need 22.18 or later for synchronous module hooks and type stripping
 # (`engines` in package.json).
+#
+# On a `v*` tag or a manual run it also packages what it built into `dist/picpony-front-linux-x64/`
+# and uploads that as an artifact: the standalone server with `.next/static` and `public/` copied
+# in, a launcher and a README (`scripts/packageStandalone.mjs`). Nothing is built twice — the
+# packaging rides the verification build, so a downloadable artifact implies the checks passed.
+# Pull requests skip it, because every one of them would upload a ~22MB artifact nobody opens.
 name: CI
 
 on:
   push:
     branches: [dev, master]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -90,5 +97,38 @@ jobs:
       - name: Emoji table
         run: npm run emoji
 
+      # A stable id per commit rather than next.config.ts's timestamp: the client bundles and the
+      # service worker's cache name carry it, so two builds of one commit should agree.
       - name: Production build
+        env:
+          NEXT_PUBLIC_BUILD_ID: ${{ github.sha }}
         run: npm run build
+
+      # `next build` alone is not a deployment: the standalone trace leaves out `.next/static` and
+      # `public/`. The script copies both in and writes `run.sh` and a README, so
+      # `dist/picpony-front-linux-x64/` is the whole thing.
+      - name: Package standalone artifact
+        id: package
+        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+        run: npm run package:standalone -- --platform linux-x64
+
+      # Artifact names reject `/` and branch names have them; `v*` tags and `workflow_dispatch` on
+      # a branch both land here, so one substitution keeps either valid.
+      - name: Name the artifact
+        id: artifact
+        if: ${{ steps.package.outcome == 'success' }}
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: echo "name=picpony-front-linux-x64-${REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload runnable artifact
+        if: ${{ steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: dist/picpony-front-linux-x64
+          # `.next/` is a dot-directory; without this the server, its chunks and everything else
+          # are dropped from the upload.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
