@@ -29,6 +29,7 @@ import {
   createHeroRectArc,
   formatHeroContainerCompensator,
   formatHeroContainerCounter,
+  formatHeroContainerCounterOrigin,
   formatHeroContainerRadius,
   formatHeroTransform,
   getHeroContainerPose,
@@ -343,6 +344,9 @@ function buildContainerAnimations(
     unclip: HTMLElement;
     /** The opening leg's flyer, iff it is inside the window. */
     flightLayer: HTMLElement | null;
+    /** The flight layer's box origin relative to the window's; see
+     *  `formatHeroContainerCounterOrigin`. */
+    flightLayerOffset: { x: number; y: number };
   },
   container: HeroContainerLeg,
   leg: HeroLeg,
@@ -386,7 +390,13 @@ function buildContainerAnimations(
     animateAt(nodes.clip, corner, timing),
     animateAt(nodes.unclip, counter, timing),
   ];
-  if (nodes.flightLayer) owners.push(animateAt(nodes.flightLayer, flight, timing));
+  if (nodes.flightLayer) {
+    /* Before the track starts, or its first frame is a whole gutter times (1 - f) out. */
+    nodes.flightLayer.style.transformOrigin = formatHeroContainerCounterOrigin(
+      nodes.flightLayerOffset,
+    );
+    owners.push(animateAt(nodes.flightLayer, flight, timing));
+  }
   return owners;
 }
 
@@ -1110,7 +1120,17 @@ export class HeroMotion {
           motionTier('image') === 'standard'
         ) {
           this.containerTracks = buildContainerAnimations(
-            { clip: this.clip, unclip: this.unclip, flightLayer: this.containedFlightLayer() },
+            {
+              clip: this.clip,
+              unclip: this.unclip,
+              flightLayer: this.containedFlightLayer(),
+              /* The plane host is the scroller's padding box (`createPlane`); the container
+                 host is the overlay, the window's untransformed box. */
+              flightLayerOffset: {
+                x: this.flight.plane.host.left - this.containerLeg.host.left,
+                y: this.flight.plane.host.top - this.containerLeg.host.top,
+              },
+            },
             this.containerLeg,
             this.leg,
           );

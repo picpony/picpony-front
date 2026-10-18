@@ -349,6 +349,9 @@ export function moveFlightToPlane(
   radius: number,
 ) {
   flight.layer.remove();
+  /* The container counter's origin belongs to the plane it was set for; the counter track is
+     rebuilt after every re-plant and sets its own (`formatHeroContainerCounterOrigin`). */
+  flight.layer.style.transformOrigin = '';
   flight.plane = plane;
   plane.anchor.appendChild(flight.layer);
   sizePlaneLayer(flight.layer, plane);

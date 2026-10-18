@@ -20,7 +20,7 @@ const ARGS = process.argv.slice(2);
 const WIDTH = Number(ARGS.find((a) => /^\d+$/.test(a)) || 1920);
 /* `--fake-cdn` rather than an env var, because an npm script cannot set one portably here. */
 const FAKE_CDN = process.env.PROBE_FAKE_CDN === '1' || ARGS.includes('--fake-cdn');
-const NO_WARM = process.env.PROBE_NO_WARM === '1' || ARGS.includes('--no-warm');
+const NO_HOVER = process.env.PROBE_NO_HOVER === '1' || ARGS.includes('--no-hover');
 
 /* Cached to disk after the first success: the live API rate-limits and answers a Cloudflare page
    when it does. Delete the file to refresh. */
@@ -125,9 +125,9 @@ if (MBPS > 0) console.log(`shaping the faked CDN to ${MBPS}Mbps, ${LATENCY_MS}ms
 
 /* PROBE_FAKE_CDN: answer the browser's own derpicdn requests locally.
  *
- * Not a convenience — the warm leg needs the detail-sized bytes inside a plausible hover, and
- * this machine takes ~25s to fetch derpicdn directly, so without this the warm never lands and
- * the probe can only ever report the cold path. It intercepts the BROWSER only: CDP cannot reach
+ * Not a convenience — the flyer sharpens only when the detail's final bytes land inside the
+ * flight, and this machine takes ~25s to fetch derpicdn directly, so without this they never do
+ * and the probe can only ever report the card-sized path. It intercepts the BROWSER only: CDP cannot reach
  * the Next server, so `/_next/image` still fetches the real file through the real optimizer and
  * the card-versus-flight comparison stays honest. A checkerboard rather than a flat fill, since
  * a flat image is sharp at every scale.
@@ -164,9 +164,9 @@ if (FAKE_CDN) {
     ]);
   };
   /* One body per rung, at the byte size that rung really costs — the question is a *timing*
-     one: `medium` is warmed instead of `large` precisely because 373KB cannot land inside a
-     hover and ~110KB can. A fake CDN answering every rung instantly at 7KB cannot tell those
-     apart, and would report the bug as fixed at any rung. */
+     one: whether the final's ~370KB `large` lands and decodes before the flyer does. A fake CDN
+     answering every rung instantly at 7KB cannot tell that apart, and with `--throttle` it
+     prices the slow-line case where the flight stays card-sized. */
   const RUNGS = [
     { match: /\/thumb[_a-z]*\./, w: 128, bytes: 8 * 1024 },
     { match: /\/small\./, w: 320, bytes: 25 * 1024 },
@@ -259,21 +259,20 @@ const out = await ev(`(async () => {
     dpr: window.devicePixelRatio,
   };
 
-  // The intent ladder: hover, then press. warmImageHeroSource hangs off this, so skipping it
-  // measures the un-warmed path.
-  const warm = ${NO_WARM ? 'false' : 'true'};
+  // The intent ladder: hover, then press — the route payload and the card's frame capture hang
+  // off it. Skipping it measures a cold tap.
+  const hover = ${NO_HOVER ? 'false' : 'true'};
   const link = card.querySelector('a');
   window.__hoverAt = performance.now();
-  if (warm) {
+  if (hover) {
     // pointerover, not pointerenter: React synthesises enter/leave from over/out at the root, so
-    // a dispatched pointerenter reaches no handler and the probe measures the un-warmed path.
+    // a dispatched pointerenter reaches no handler and the probe measures a cold tap.
     link.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerId: 1 }));
-    await new Promise((r) => setTimeout(r, ${Number(process.env.PROBE_WARM_MS || 1500)}));
+    await new Promise((r) => setTimeout(r, ${Number(process.env.PROBE_HOVER_MS || 1500)}));
   }
 
-  /* Everything the page requested during the hover, so a warm that never started can be told
-     from one that started and was not used. */
-  const warmRequests = performance.getEntriesByType('resource')
+  /* Everything the page requested during the hover. */
+  const hoverRequests = performance.getEntriesByType('resource')
     .filter((r) => r.startTime > window.__hoverAt)
     .map((r) => decodeURIComponent(r.name).slice(-58));
 
@@ -320,12 +319,10 @@ const out = await ev(`(async () => {
   });
   return {
     cardInfo,
-    warmRequests,
+    hoverRequests,
     samples,
-    /* Every derpicdn fetch with its duration, so one run prices both rungs: the warm fetches
-       medium and the final layer fetches large, on the same throttle. That is what decides whether
-       a rung can land inside a hover, and it is the number the medium-instead-of-large choice
-       rests on. */
+    /* Every derpicdn fetch with its duration, on the same throttle: whether the final layer's
+       rung lands inside the flight is what decides whether the flyer is repainted in the air. */
     cdn: performance.getEntriesByType('resource')
       // Not /_next/image, whose own query string contains the CDN URL — that matched the five
       // optimized card variants and reported them as direct CDN fetches.
@@ -379,7 +376,7 @@ else {
     for (const c of out.cdn) console.log(`   ${c.rung.padEnd(8)} ${String(c.kb).padStart(4)}KB  ${String(c.ms).padStart(4)}ms  (started ${c.start}ms)`);
   }
   console.log('requests during hover:');
-  for (const r of (out.warmRequests || []).slice(0, 8)) console.log('   ...' + r);
+  for (const r of (out.hoverRequests || []).slice(0, 8)) console.log('   ...' + r);
   console.log('opened:', JSON.stringify(out.opened));
   console.log(`after: url=${out.url} overlay=${out.overlay} heroActive=${out.heroActiveAttr} finalReady=${out.finalReady}`);
   for (const l of out.layers) console.log('   ' + JSON.stringify(l));
@@ -397,42 +394,43 @@ else {
 
 /* The assertion, and it is on the flyer canvas rather than on any img.
  *
- * Mechanism guarded: warmImageHeroSource rasterises the detail-sized source on the intent ladder
- * and prepareImageHero hands THAT canvas to the flight instead of one blitted from the card. It
- * was broken for four rounds in a way no probe could see, because the map fed previewSrc — the
- * img *behind* the canvas — so the measurement moved while the picture on screen did not.
- * Only asserted with PROBE_FAKE_CDN: a real derpicdn fetch takes ~25s here and no plausible
- * hover covers it. Without the flag this stays a report.
+ * Mechanism guarded: the flyer takes off from the card's own bitmap and is repainted in place
+ * from the detail's final `<img>` the moment that decodes (`lib/hero/upgrade.ts`). So the
+ * flight must reach a canvas bigger than the card's bitmap before it lands, and from that frame
+ * on stay inside the upscale bound. Sampling the img *behind* the canvas instead hid this for
+ * four rounds — the measurement moved while the picture on screen did not.
+ * Only asserted with PROBE_FAKE_CDN and no `--throttle`: a real derpicdn fetch takes ~25s here,
+ * and a shaped line is allowed to land after the flyer. Without them this stays a report.
  */
 let failed = false;
+const ASSERT = FAKE_CDN && !NO_HOVER && MBPS === 0;
 /* A run that measured nothing is not a pass when the assertions were asked for: with no decoded
    card image the guard below skipped every check and the probe exited 0 (G0-013, R12-023). */
-if (out?.error && FAKE_CDN && !NO_WARM) {
+if (out?.error && ASSERT) {
   console.log(`
 FAIL: nothing was measured (${out.error}), so the assertions could not run.`);
   failed = true;
 }
-if (!out?.error && FAKE_CDN && !NO_WARM) {
+if (!out?.error && ASSERT) {
   const flyerSamples = out.samples.filter((s) => s.layer === 'flyer' && s.naturalW > 0);
-  const canvas = flyerSamples[0]?.naturalW ?? 0;
   const card = out.cardInfo.naturalWidth;
-  const worst = flyerSamples.length
-    ? Math.max(...flyerSamples.map((s) => s.paintedW / s.naturalW))
-    : Infinity;
-  if (canvas <= card) {
+  const sharpFrom = flyerSamples.findIndex((s) => s.naturalW > card);
+  const sharp = sharpFrom >= 0 ? flyerSamples.slice(sharpFrom) : [];
+  const worst = sharp.length ? Math.max(...sharp.map((s) => s.paintedW / s.naturalW)) : Infinity;
+  if (!sharp.length) {
     console.log(
       `
-FAIL: the flight painted a ${canvas}px canvas, the card's own bitmap is ${card}px — ` +
-        'the warmed detail frame was not used. This is the regression this probe exists for.',
+FAIL: the flight never painted more than the card's own ${card}px bitmap — ` +
+        'the in-flight repaint from the final did not happen. This is the regression this probe exists for.',
     );
     failed = true;
   } else if (worst > 1.5) {
     console.log(`
-FAIL: flight upscale peaked at ${worst.toFixed(2)}x, over the 1.5x bound.`);
+FAIL: after the repaint at t=${sharp[0].t}ms, flight upscale peaked at ${worst.toFixed(2)}x, over the 1.5x bound.`);
     failed = true;
   } else {
     console.log(`
-OK: warmed flight paints a ${canvas}px canvas (card has ${card}px), peak ${worst.toFixed(2)}x.`);
+OK: flight repainted to a ${sharp[0].naturalW}px canvas at t=${sharp[0].t}ms (card has ${card}px), peak ${worst.toFixed(2)}x after.`);
   }
 }
 

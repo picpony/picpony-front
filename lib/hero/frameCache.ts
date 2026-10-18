@@ -42,6 +42,8 @@ type HeroFrameCapture = {
 };
 
 const heroFrameCache = new Map<string, FrameAsset>();
+/** Each asset's primary canvas, so a flyer canvas repainted in place can leave the cache. */
+const assetByPrimary = new WeakMap<HTMLCanvasElement, FrameAsset>();
 
 function getHeroFrameDimension(width: number, height: number) {
   const ratio = width / height;
@@ -130,7 +132,7 @@ function copyCanvas(source: HTMLCanvasElement) {
 function createFrameAsset(source: string, primary: HTMLCanvasElement): FrameAsset {
   let primaryLeased = false;
 
-  return {
+  const asset: FrameAsset = {
     source,
     width: primary.width,
     height: primary.height,
@@ -156,6 +158,8 @@ function createFrameAsset(source: string, primary: HTMLCanvasElement): FrameAsse
       };
     },
   };
+  assetByPrimary.set(primary, asset);
+  return asset;
 }
 
 export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
@@ -194,6 +198,60 @@ export function captureHeroFrame(media: VisualMedia | null): FrameAsset | null {
     trimHeroFrameCache();
   }
   return asset;
+}
+
+/**
+ * Repaint a **live flyer canvas** from a sharper decoded source of the same picture, in place.
+ * Returns whether it repainted. See `lib/hero/upgrade.ts` for why the flight needs this.
+ *
+ * - Same sizing rule as a capture (`getHeroFrameCapture`), so the result is exactly what a
+ *   capture of `media` would have been — never above the viewport × DPR cap.
+ * - Only upward: a source with no more pixels than the canvas already holds is ignored, so a final
+ *   smaller than the card's capture (a tiny original) never downgrades the flyer.
+ * - Drawn into a scratch canvas first: assigning `width` clears the live canvas, and a
+ *   `drawImage` that throws after that would leave the flyer blank. The second blit is
+ *   canvas-to-canvas, a GPU copy.
+ * - The canvas may be the primary of a cached asset (the card's capture). Its bitmap no longer
+ *   matches that asset's recorded size, so the asset leaves the cache; a later capture of the
+ *   card makes a fresh one. Anyone still holding the asset gets a sharper copy of the same
+ *   picture at the same aspect, which is harmless.
+ */
+export function repaintHeroFrame(canvas: HTMLCanvasElement, media: VisualMedia): boolean {
+  const capture = getHeroFrameCapture(media);
+  if (!capture) return false;
+  if (capture.width * capture.height <= canvas.width * canvas.height) return false;
+
+  const scratch = document.createElement('canvas');
+  scratch.width = capture.width;
+  scratch.height = capture.height;
+  const scratchContext = scratch.getContext('2d');
+  if (!scratchContext) return false;
+  scratchContext.imageSmoothingEnabled = capture.scale < 1;
+  scratchContext.imageSmoothingQuality = 'medium';
+  try {
+    scratchContext.drawImage(media, 0, 0, scratch.width, scratch.height);
+  } catch {
+    return false;
+  }
+
+  const context = canvas.getContext('2d');
+  if (!context) return false;
+  canvas.width = capture.width;
+  canvas.height = capture.height;
+  context.imageSmoothingEnabled = false;
+  try {
+    context.drawImage(scratch, 0, 0);
+  } catch {
+    return false;
+  }
+
+  const owner = assetByPrimary.get(canvas);
+  if (owner) {
+    heroFrameCache.forEach((asset, key) => {
+      if (asset === owner) heroFrameCache.delete(key);
+    });
+  }
+  return true;
 }
 
 /**

@@ -23,24 +23,18 @@ import type { ImageHeroSnapshot } from './types';
 let detailComponentWarmup: Promise<unknown> | null = null;
 
 /**
- * The detail-sized frames **already rasterised**, per image id — what the flyer actually paints.
+ * Detail-sized frames **already rasterised**, per image id — for steps (上一张 / 下一张) only.
  *
- * Not an `<img>`: the flight's sharpness is a property of the blitted canvas's bitmap and of
- * nothing else. In production the card's bitmap is sized *for a card* (304px against a 944px
- * flight box, 3.11x) and development looks sharp only because it skips the optimizer. So this
- * map holds a rasterised frame captured off the intent ladder, bounded by `captureHeroFrame`
- * itself.
+ * When the viewer arrives on a picture, both neighbours are warmed (`warmImageHeroSource`), so
+ * a step lands on a detail-sized preview instead of the gallery card's ~300px variant
+ * (`prepareImageHeroStep`). The opening flight does not read this: it takes off from the
+ * card's own frame and sharpens in the air from the detail's final `<img>`
+ * (`lib/hero/upgrade.ts`).
  *
- * Warming a *URL* did nothing — the flyer never reads `previewSrc`; warming has to produce the
- * thing the consumer consumes, which here is a rasterised frame the moment the detail bytes
- * decode.
+ * A canvas, not an `<img>`: the probe is dropped as soon as the canvas exists, and the canvas
+ * is the unit `heroFrameCache` budgets in pixels.
  *
- * **The card's `<img>` is dropped as soon as the canvas exists** — retaining 24 decoded
- * 1280x853 bitmaps is ~105MB, and the canvas is already the unit `heroFrameCache` budgets in
- * pixels.
- *
- * **Recorded only after `decode()` resolves**: the flight cannot wait for anything, and a
- * source that has not decoded paints nothing for the whole leg — far worse than a soft frame.
+ * **Recorded only after `decode()` resolves**: a source that has not decoded paints nothing.
  *
  * Cross-origin is fine: the canvas may be *tainted* (a derpicdn derivative is not same-origin),
  * and nothing in the hero path reads pixels back. Do not add a readback here without giving
@@ -50,24 +44,21 @@ const warmedDetailFrames = new Map<number, { src: string; asset: FrameAsset }>()
 /**
  * Four, and the number is a memory bound rather than a mirror of `HERO_FRAME_CACHE_LIMIT`.
  * These canvases also land in `heroFrameCache`, whose per-entry budget a landscape `medium`
- * capture slightly exceeds — six warms would flush every gallery-card frame out of that cache
- * *and* hold six of its own on top, ~22MB of backing store on a phone. Four keeps the pair
- * inside the cache's own intent while covering a run along a row of cards.
+ * capture slightly exceeds — six would flush every gallery-card frame out of that cache *and*
+ * hold six of its own on top, ~22MB of backing store on a phone. Four covers both neighbours of
+ * the current picture and of the one just left.
  */
 const MAX_WARMED_DETAIL_FRAMES = 4;
 
 /**
- * The same ladder `PicDetail` uses to choose what it will display, so this warms the bytes it is
- * about to request rather than a second, redundant download. Kept in step by hand; if that ladder
- * moves, this must move with it.
+ * The rung a step's preview paints: `medium`, the smallest rung that reads at the detail's
+ * size (800px against the ~944px well), falling back to whatever the detail itself would show.
+ * The same URL becomes the step's `previewSrc`, so it is one fetch for two consumers.
  */
-function detailSourceFor(image: ImagePreview): string {
-  const preferMedium =
-    (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
+function previewRungFor(image: ImagePreview): string {
   return (
-    (preferMedium ? image.representations?.medium : undefined) ||
-    image.representations?.large ||
     image.representations?.medium ||
+    image.representations?.large ||
     image.representations?.full ||
     image.view_url ||
     ''
@@ -75,26 +66,11 @@ function detailSourceFor(image: ImagePreview): string {
 }
 
 /**
- * The rung the **flight** warms, which is deliberately not the rung the detail displays.
- *
- * `detailSourceFor` is the 1280px rung — ~370KB for a real photograph, too big to land inside
- * a hover: that is the whole of "the first open is still soft, the second is fine". The
- * 800px `medium` rung against the 944px well is 1.18x (development's own figure) and arrives
- * in ~130ms at 10Mbps against ~340ms, so the flight warms the *smallest rung that is sharp
- * enough*. The bytes are not speculative waste: the same URL becomes `previewSrc`, so the
- * detail's preview layer paints it too — one fetch, two consumers. For a picture whose
- * original is under 800px this *is* the detail's source and the warm is a pure prefetch.
- */
-function flightSourceFor(image: ImagePreview): string {
-  return image.representations?.medium || detailSourceFor(image);
-}
-
-/**
  * A record whose `medium` is a *video file*, which must never be handed to an `Image()`.
  * `representations.medium` is the same expression `PicDetail` passes to `<DetailVideo>`, and
  * `isAnimatedVisualSource` does not catch it — so without this the warm issued an
  * `Accept: image/*` request for a file that can never yield a frame, recorded nothing, and
- * repeated on every hover and press of every video card.
+ * repeated on every arrival beside a video.
  */
 function isVideoRecord(image: ImagePreview): boolean {
   const source = image.representations?.full || image.view_url || '';
@@ -102,31 +78,27 @@ function isVideoRecord(image: ImagePreview): boolean {
   return format === 'WEBM' || format === 'MP4';
 }
 
-/** In-flight probes, so hover then pointerdown then click is one download rather than three. */
+/** In-flight probes, so arriving on the same neighbourhood twice is one download per picture. */
 const warmingDetail = new Set<number>();
 
 /**
- * Start decoding the detail's own picture, and remember it once it is genuinely ready.
+ * Start decoding a **viewer neighbour's** picture, and remember it once it is genuinely ready,
+ * so a step (上一张 / 下一张) lands on a detail-sized preview (`prepareImageHeroStep`).
+ *
+ * Steps only. The opening flight no longer warms anything: it takes off from the card's own
+ * frame and sharpens in the air from the detail's final `<img>` (`lib/hero/upgrade.ts`).
+ * Runs in every motion tier, because a step paints this rung as its preview in all of them.
  *
  * `toCurrentImageLine`, so the warmed URL is the one the detail view will request — warming the
- * raw host while the visitor is on a proxy line downloads the bytes twice and still hands the
- * flyer something the browser has to fetch again.
+ * raw host while the visitor is on a proxy line downloads the bytes twice.
  */
-export function warmImageHeroSource(
-  image: ImagePreview | null | undefined,
-  { forStep = false }: { forStep?: boolean } = {},
-) {
+export function warmImageHeroSource(image: ImagePreview | null | undefined) {
   if (!image || typeof window === 'undefined') return;
   if (warmedDetailFrames.has(image.id) || warmingDetail.has(image.id)) return;
-  /* Nothing to warm for a tier that cannot fly: no snapshot is registered, so the preview
-     layer is not rendered and the bytes and canvas would have no consumer whatsoever — unless
-     this is a viewer's neighbour, whose step paints this rung as its preview in every tier. */
-  if (!forStep && motionTier('image') !== 'standard') return;
   if (isVideoRecord(image)) return;
-  const url = toCurrentImageLine(flightSourceFor(image));
-  /* An animated source is excluded rather than captured: the flyer must start on the frame
-     the user was looking at, and a freshly decoded copy is at frame 0 — a visible jump on
-     take-off. Those cards keep the card's own capture, which is the frame on screen. */
+  const url = toCurrentImageLine(previewRungFor(image));
+  /* An animated source is excluded rather than captured: a freshly decoded copy is at frame 0,
+     and a still canvas of it would freeze the preview on a frame nobody chose. */
   if (!url || isAnimatedVisualSource(url)) return;
   const probe = new Image();
   probe.decoding = 'async';
@@ -144,8 +116,8 @@ export function warmImageHeroSource(
       warmedDetailFrames.set(image.id, { src: url, asset });
     })
     .catch(() => {
-      /* A dead line, a 404, a format the browser will not decode. The flight keeps the
-         card's own bitmap, which is what it had before this existed. */
+      /* A dead line, a 404, a format the browser will not decode. The step falls back to the
+         card's frame or the preview URL, which is what it had before this existed. */
     })
     .finally(() => {
       warmingDetail.delete(image.id);
@@ -173,30 +145,14 @@ export function prepareImageHero(
   if (!source) return null;
   const visual = getVisualMedia(source);
   const mediaType = visual instanceof HTMLVideoElement ? 'video' : 'image';
-  /* The warmed detail frame wins when it is ready, because the card's bitmap is a ~300px
-     variant about to fill the viewport. Only for a still image whose card is itself not
-     volatile: a video paints its own captured frame, and an animated card must take off on
-     the frame that is on screen. See `warmedDetailFrames`. */
-  const warmed =
-    mediaType === 'image' && visual && !isVolatileVisualMedia(visual)
-      ? warmedDetailFrames.get(image.id)
-      : undefined;
-  /* **Whichever frame has more pixels, rather than the warmed one on principle.**
-     `representations.medium` is a fit-*within* box and the card's variant is picked by DPR,
-     so for a portrait upload on a 2x screen the warmed canvas can be *smaller* than the frame
-     it was meant to replace — blurrier on the exact axis this mechanism exists to fix.
-     Comparing is cheap and assumes nothing about either derivative's box; deriving the rung
-     from `image.width`/`height` would be guessing. */
-  const cardFrame = captureHeroFrame(visual);
-  const previewFrame =
-    warmed && (!cardFrame || warmed.asset.pixels > cardFrame.pixels) ? warmed.asset : cardFrame;
+  /* **The card's own frame, always**, and the preview layer paints the same variant, so the two
+     cannot disagree. The card's bitmap is sized for a card; the flyer sharpens in the air from
+     the detail's final `<img>` (`lib/hero/upgrade.ts`) rather than needing anything sharper
+     before take-off. */
+  const previewFrame = captureHeroFrame(visual);
   if (!previewFrame) return null;
-  /* The preview layer paints whatever the flyer took off from, so the two cannot disagree about
-     which variant this picture is. */
-  const usedWarmed = previewFrame === warmed?.asset;
   const previewSrc = normalizeHeroSrc(
-    (usedWarmed ? warmed?.src : undefined) ||
-      visual?.currentSrc ||
+    visual?.currentSrc ||
       visual?.getAttribute('src') ||
       previewSrcOverride ||
       (mediaType === 'video'
@@ -228,9 +184,8 @@ export function prepareImageHero(
  * The snapshot a step (上一张 / 下一张) lands on: what the detail paints the moment it swaps,
  * before the record arrives. The list's own preview record, and the best bitmap already decoded
  * for the picture — the card's, when the list is showing it, or the rung warmed when the viewer
- * arrived beside it (`warmImageHeroSource(…, { forStep: true })`). There is no press to capture
- * from, so the frame may be absent: it matters only to a later flight home, which captures the
- * live frame first.
+ * arrived beside it (`warmImageHeroSource`). There is no press to capture from, so the frame
+ * may be absent: it matters only to a later flight home, which captures the live frame first.
  */
 export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
   const card = findImageHeroThumbnail(image.id);
@@ -248,7 +203,7 @@ export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
   const fallback = toCurrentImageLine(
     isVideoRecord(image)
       ? image.representations?.thumb || image.representations?.small || ''
-      : flightSourceFor(image) || image.representations?.small || '',
+      : previewRungFor(image) || image.representations?.small || '',
   );
   const previewSrc = normalizeHeroSrc(
     (usedWarmed ? warmed!.src : undefined) ||

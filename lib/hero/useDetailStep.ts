@@ -500,7 +500,7 @@ export function useDetailStep({
       const source = activeImageSequence();
       for (const id of ids) {
         void prefetchImageDetail(id, { priority: 'background' }).catch(() => undefined);
-        warmImageHeroSource(source?.preview?.(id) ?? peekImageDetail(id)?.image, { forStep: true });
+        warmImageHeroSource(source?.preview?.(id) ?? peekImageDetail(id)?.image);
       }
     });
     return () => {

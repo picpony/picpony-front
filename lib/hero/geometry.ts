@@ -213,6 +213,33 @@ export function formatHeroContainerCounter(pose: HeroBoxTransform) {
 }
 
 /**
+ * `transform-origin` for the flight layer while it carries `formatHeroContainerCounter`.
+ *
+ * The counter solves `d + f*T(p) = p` for a layer whose box origin **is** the window's local
+ * origin. It is not: the layer hangs off the plane anchor, which is `inset: 0` inside the
+ * Stage's scroller and therefore starts at the scroller's *padding* edge — one leading
+ * `scrollbar-gutter` in from the overlay (`.image-detail-overlay-scroll` reserves it on both
+ * edges, and `clientLeft` reads it). With the layer's own top-left as the origin the counter
+ * lands every flyer at `p + f*o` instead of `p + o`: `(1 - f)*o` short, i.e. the whole gutter
+ * times however small the window is. On a phone with a classic 8px scrollbar (MIUI's browser
+ * honours `::-webkit-scrollbar`) that is ~4.6px to the left on the take-off frame, shrinking
+ * to 0 as the window grows to the overlay — read by eye as a one-frame jolt left. Overlay
+ * scrollbars have `o = 0`, which is why emulators and most phones never showed it.
+ *
+ * Moving the origin to the window's own origin (`-o` in the layer's space) makes the same
+ * `scale(1/f) translate(-d)` exact for any `o`, keeps the keyframe strings — and the compositor
+ * path — untouched, and is a no-op whenever `o` is 0.
+ *
+ * @param offset the layer's untransformed box origin minus the window's (the container host's)
+ *   origin, in CSS px: the plane host's padding-edge offset from the overlay.
+ */
+export function formatHeroContainerCounterOrigin(offset: { x: number; y: number }) {
+  const x = Number.isFinite(offset.x) ? offset.x : 0;
+  const y = Number.isFinite(offset.y) ? offset.y : 0;
+  return `${-x}px ${-y}px`;
+}
+
+/**
  * The window's own corner, in its local space: **one circular value, divided by
  * `min(sx, sy)`, rounded up, capped.**
  *

@@ -50,7 +50,7 @@
     "perf:pageturn": "node scripts/probePageTurn.mjs",
     "perf:tab-latency": "node scripts/probeTabLatency.mjs",
     "perf:sharpness": "node scripts/probeHeroSharpness.mjs",
-    "perf:sharpness:warm": "node scripts/probeHeroSharpness.mjs 1920 --fake-cdn"
+    "perf:sharpness:assert": "node scripts/probeHeroSharpness.mjs 1920 --fake-cdn"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

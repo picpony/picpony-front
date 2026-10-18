@@ -48,6 +48,7 @@ import {
 import { clearInactiveHeroBackground, HeroMotion } from './motion';
 import { getElementScrollPlane, getGalleryScrollPlane, type HeroScrollPlane } from './plane';
 import { createHeroFlight } from './flight';
+import { watchImageHeroFlightUpgrade } from './upgrade';
 import { HeroPullSurface } from './pull';
 import { HeroRouteRegistry, type HeroRoute } from './routes';
 import {
@@ -992,6 +993,12 @@ export class HeroController {
       imageId: session.snapshot.image.id,
     });
     session.visual.add(flight.release);
+    /* The card's bitmap is sized for a card: repaint the flyer from the detail's final the
+       moment it decodes, mid-flight. It checks `canvas.isConnected` before every repaint, so
+       disposal order does not matter. See `lib/hero/upgrade.ts`. */
+    if (session.snapshot.mediaType === 'image') {
+      session.visual.add(watchImageHeroFlightUpgrade(flight.image, session.snapshot.image.id));
+    }
     session.visual.add(leaseHeroCardChrome(intent.source));
     session.visual.add(leaseHeroVisibility(intent.source, false));
 

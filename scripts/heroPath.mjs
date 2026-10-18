@@ -24,6 +24,7 @@ const { HERO_FLIGHT_CURVE, HERO_FLIGHT_PROGRESS, HERO_PROGRESS_SAMPLES } = const
 const {
   formatHeroContainerCompensator,
   formatHeroContainerCounter,
+  formatHeroContainerCounterOrigin,
   formatHeroContainerRadius,
   formatHeroTransform,
   getHeroContainerPose,
@@ -708,6 +709,45 @@ for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
     previous = value;
   }
   console.log(`${label.padEnd(19)}${row.join('')}`);
+}
+
+/* (e/gutter) The flight layer starts at the Stage scroller's padding edge, one leading
+   scrollbar gutter `o` in from the window's origin. With the origin the counter is emitted for,
+   a layer point `p` must land on screen at `p + o` for every window pose — the take-off frame
+   included, where a classic 8px gutter once put the flyer (1 - f)·8 ≈ 4.6px left on a phone. */
+{
+  const host = { left: 0, top: 0, width: 393, height: 743 };
+  const card = { left: 24, top: 300, width: 165, height: 165 };
+  let worst = 0;
+  for (const o of [{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 10, y: 3 }]) {
+    /* The emitted origin is in the layer's own space; the layer's box sits at `o` in the window's. */
+    const [lx, ly] = formatHeroContainerCounterOrigin(o).split(' ').map((v) => Number.parseFloat(v));
+    const ox = o.x + lx;
+    const oy = o.y + ly;
+    for (let i = 0; i <= 20; i += 1) {
+      const t = i / 20;
+      const box = {
+        left: card.left + (host.left - card.left) * t,
+        top: card.top + (host.top - card.top) * t,
+        width: card.width + (host.width - card.width) * t,
+        height: card.height + (host.height - card.height) * t,
+      };
+      const pose = getHeroContainerPose(box, host);
+      const clip = parseTranslateScale(formatHeroTransform(pose));
+      const comp = parseCompensator(formatHeroContainerCompensator(pose));
+      const counter = parseScaleTranslate(formatHeroContainerCounter(pose));
+      const fit = clip.a * comp.x;
+      for (const p of [{ x: 0, y: 0 }, { x: 120, y: 40 }]) {
+        /* Layer-local p → window-local about the origin (ox, oy) in window space. */
+        const wx = ox + counter.k * (o.x + p.x - ox + counter.a);
+        const wy = oy + counter.k * (o.y + p.y - oy + counter.b);
+        const sx = clip.x + fit * wx;
+        const sy = clip.y + fit * wy;
+        worst = Math.max(worst, Math.abs(sx - (p.x + o.x)), Math.abs(sy - (p.y + o.y)));
+      }
+    }
+  }
+  if (worst > 1e-6) fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off with a leading gutter`);
 }
 
 if (failures.length) {

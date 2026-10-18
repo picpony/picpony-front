@@ -19,7 +19,6 @@ import {
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
-  warmImageHeroSource,
   warmImageHeroFrame,
   type HeroNavigation,
   type ImageHeroSnapshot,
@@ -85,10 +84,6 @@ export function useHeroLink<T extends HTMLElement>({
       if (!image) return;
       getImageHeroNavigation()?.prefetch?.(href);
       void warmImageHero(image.id, priority);
-      /* The detail-sized bytes, on the same ladder: the exact bytes the final layer will
-         request. `prepareImageHero` uses them only once decoded, so a warm that has not
-         landed changes nothing. */
-      warmImageHeroSource(image);
       cancelFrameWarmRef.current?.();
       /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
          without it the tapped card's capture always lands synchronously in the click

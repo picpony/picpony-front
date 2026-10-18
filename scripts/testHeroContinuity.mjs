@@ -298,7 +298,7 @@ function inputTransferHarness(t) {
   const quietWaits = [];
   const dependencies = Object.fromEntries([
     './dom', './frameCache', './geometry', './gestures', './history', './motion',
-    './plane', './flight', './pull',
+    './plane', './flight', './pull', './upgrade',
   ].map(name => [name, {}]));
   Object.assign(dependencies, {
     './constants': { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS, HERO_INPUT_TRANSFER_QUIET_MS: 320 },
