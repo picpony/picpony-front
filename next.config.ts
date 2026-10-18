@@ -45,11 +45,13 @@ const nextConfig: NextConfig = {
    * `/mascot-shape` answers 502 and the figure draws its ellipse fallback.
    *
    * `'/*'` because the optimizer is not a route: its trace rides the server entry, and the files
-   * only have to reach `standalone/node_modules/@img/**` once. `sharp`'s own JS is already traced
-   * by `require`, so only the platform packages are added — a few files, not a package tree.
+   * only have to reach `standalone/node_modules/@img/**` once. `sharp`'s own JS is traced by the
+   * optimizer's `require('sharp')` — it is listed too because `/mascot-shape` now imports the
+   * package at runtime (`turbopackIgnore`, see `app/mascot-shape/route.ts`) and so traces none of
+   * it itself; the whole package is ~50 files, so carrying it explicitly costs nothing.
    */
   outputFileTracingIncludes: {
-    '/*': ['node_modules/@img/**/*'],
+    '/*': ['node_modules/sharp/**/*', 'node_modules/@img/**/*'],
   },
   /* `X-Powered-By: Next.js` tells a scanner which framework's advisories to try. */
   poweredByHeader: false,

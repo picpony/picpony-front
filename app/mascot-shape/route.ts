@@ -69,9 +69,16 @@ async function readImage(url: string): Promise<Uint8Array | null> {
    optional dependency (review P1-F8) — imported where it
    is used, so a host without it answers this one route with a failure the figure falls back from
    (to an ellipse over the artwork) rather than failing the route module. The first frame of an
-   animation; the orientation the browser shows. */
+   animation; the orientation the browser shows.
+
+   **`turbopackIgnore`: a native package is required, not bundled.** Left to the bundler, the
+   import becomes an external alias — `.next/node_modules/sharp-<hash>`, a junction Turbopack
+   creates on Windows with a `Global\` target Node's `readlink` refuses — and the standalone
+   copier then tries `copyFile` on that directory and logs `EPERM` for every build. Preserved as
+   a runtime import it resolves like any other package (`standalone/node_modules/sharp`, which
+   the optimizer's own trace already ships), and no alias exists to copy. */
 async function silhouette(bytes: Uint8Array): Promise<MascotShape | null> {
-  const { default: sharp } = await import('sharp');
+  const { default: sharp } = await import(/* turbopackIgnore: true */ 'sharp');
   const image = sharp(bytes, { limitInputPixels: MAX_PIXELS, animated: false, failOn: 'error' });
   const meta = await image.metadata();
   if (!meta.width || !meta.height) return null;
