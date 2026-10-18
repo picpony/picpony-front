@@ -11,3 +11,7 @@
 # than rewritten, so its own line endings are never touched.
 app/theme-palettes.css eol=lf
 lib/generated/*.ts eol=lf
+
+# Shell scripts run on the Ubuntu host, sometimes piped straight into `bash -s`; a CR before each
+# newline turns into `$'\r'` and breaks them.
+scripts/*.sh text eol=lf

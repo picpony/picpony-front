@@ -12,7 +12,11 @@
 # and uploads that as an artifact: the standalone server with `.next/static` and `public/` copied
 # in, a launcher and a README (`scripts/packageStandalone.mjs`). Nothing is built twice — the
 # packaging rides the verification build, so a downloadable artifact implies the checks passed.
-# Pull requests skip it, because every one of them would upload a ~22MB artifact nobody opens.
+#
+# The same run then deploys that artifact to the Ubuntu host over SSH: `scripts/deployServer.sh`
+# syncs it into `/www/wwwroot/picpony-front`, restarts the BaoTa project through the panel's own
+# CLI, health-checks `/sw.js`, and rolls back to the previous release if the check fails. Pull
+# requests do neither, because every one of them would upload and deploy bytes nobody asked for.
 name: CI
 
 on:
@@ -38,6 +42,9 @@ jobs:
     name: Typecheck, lint, unit tests, generated files, build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The deploy job downloads exactly the artifact these checks produced.
+    outputs:
+      artifact-name: ${{ steps.artifact.outputs.name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,3 +139,58 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
+
+  # The artifact is uploaded first and deployed second: a failed upload leaves the running release
+  # untouched. `scripts/deployServer.sh` runs on the server and stops/starts the BaoTa project
+  # through the panel's own CLI, so no panel API token is involved.
+  deploy:
+    name: Deploy to the Ubuntu server
+    needs: verify
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.verify.outputs.artifact-name }}
+          path: pkg
+
+      - name: Check the download
+        run: |
+          test -f pkg/server.js
+          test -d pkg/.next/static
+          test -d pkg/node_modules
+
+      - name: SSH setup
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Upload the release
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_ID: ${{ github.run_id }}
+        run: |
+          ssh -p "$PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$USER@$HOST" "mkdir -p /www/wwwroot/picpony-front-releases/$RELEASE_ID"
+          rsync -a --delete \
+            -e "ssh -p $PORT -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes" \
+            pkg/ "$USER@$HOST:/www/wwwroot/picpony-front-releases/$RELEASE_ID/"
+
+      - name: Restart and health check
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_ID: ${{ github.run_id }}
+        run: |
+          ssh -p "$PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o BatchMode=yes \
+            "$USER@$HOST" "RELEASE_ID=$RELEASE_ID bash -s" < scripts/deployServer.sh
