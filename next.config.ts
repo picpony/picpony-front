@@ -33,6 +33,24 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  /**
+   * **`sharp`'s platform libraries are invisible to a JS trace.** `sharp` is external to the
+   * server bundle, and Next's file tracer follows `require` calls: it finds the addon
+   * (`@img/sharp-<platform>/lib/sharp-<platform>-<abi>.node`) because a JS file names it, but
+   * the libvips shared libraries beside it (`libvips-42.dll`, `libvips-cpp-*.so`) are opened by
+   * the OS, never `require`d, so nothing traces them. A standalone build therefore ships the
+   * addon without its libraries: image optimization has no decoder, and Next's optimizer falls
+   * back to the **original bytes** rather than failing loudly (measured here: a `w=32` request
+   * answered the 972-byte source unchanged, where `next start` answers an optimized 1499), and
+   * `/mascot-shape` answers 502 and the figure draws its ellipse fallback.
+   *
+   * `'/*'` because the optimizer is not a route: its trace rides the server entry, and the files
+   * only have to reach `standalone/node_modules/@img/**` once. `sharp`'s own JS is already traced
+   * by `require`, so only the platform packages are added — a few files, not a package tree.
+   */
+  outputFileTracingIncludes: {
+    '/*': ['node_modules/@img/**/*'],
+  },
   /* `X-Powered-By: Next.js` tells a scanner which framework's advisories to try. */
   poweredByHeader: false,
   // Dependencies and source live in this checkout; unrelated parent lockfiles must
