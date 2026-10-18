@@ -67,7 +67,7 @@ start_app() {
 # `.next/cache` holds the image optimiser's output and is deliberately not part of a release; keep
 # whatever the previous run filled it with. `.env*` is deployment configuration, not build output.
 sync_release() {
-  rsync -a --delete \
+  rsync -a --no-owner --no-group --delete \
     --exclude '.next/cache' \
     --exclude '.env' \
     --exclude '.env.*' \

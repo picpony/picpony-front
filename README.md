@@ -33,3 +33,13 @@ sh run.sh   # 默认监听 http://localhost:3100
 npm run build
 npm run package:standalone
 ```
+
+## 自动部署
+
+推 `v*` tag，或在 Actions 里手动运行 CI 后，测试、构建、打包通过会自动部署到 Ubuntu 服务器：
+
+- 应用目录：`/www/wwwroot/picpony-front`，即宝塔 Node 项目 `picpony-front` 的路径
+- 每次发布的完整包：`/www/wwwroot/picpony-front-releases/<run_id>/`，`current` 指向最近一次成功发布
+- `scripts/deployServer.sh`：停项目 → rsync → 宝塔 CLI 启动 → 检查 `/sw.js`；失败自动回滚上一版
+- 需要的仓库 Secrets：`DEPLOY_HOST`、`DEPLOY_PORT`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`
+

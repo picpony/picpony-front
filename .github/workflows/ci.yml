@@ -181,7 +181,7 @@ jobs:
         run: |
           ssh -p "$PORT" -i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o BatchMode=yes \
             "$USER@$HOST" "mkdir -p /www/wwwroot/picpony-front-releases/$RELEASE_ID"
-          rsync -a --delete \
+          rsync -a --no-owner --no-group --delete \
             -e "ssh -p $PORT -i $HOME/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes" \
             pkg/ "$USER@$HOST:/www/wwwroot/picpony-front-releases/$RELEASE_ID/"
 
