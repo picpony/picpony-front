@@ -51,7 +51,9 @@ const STATIC_CACHE = `picpony-static-${VERSION}`;
    source id and every transform parameter, so it stays valid across deploys. Re-encoding the
    whole gallery on every release is the cost this avoids. */
 const IMAGE_CACHE = 'picpony-images';
-const IMAGE_LIMIT = 120;
+/* 一页画廊 50 张缩略图，120 只够两页多一点：翻回第三页前的内容就要重新向源站要。webp 缩略图中位
+   约 16–25KB，500 张约 10MB，远低于配额。 */
+const IMAGE_LIMIT = 500;
 
 /* A **static file**, not a routed page, and that distinction was measured rather than assumed.
    The worker serves this response at whatever URL the user asked for, so an `app/offline/page.tsx`
@@ -192,11 +194,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (path === '/_next/image') {
-    /* Stale-while-revalidate. A thumbnail that has already been decoded once should never make the
-       user wait again, and the bytes behind a given optimised URL never change. These are
-       same-origin and non-opaque - our own re-encoded bytes rather than the CDN's - which is why
-       this is the one image path safe to hold, and why the three cross-origin proxies need no rule
-       of their own beyond the origin check above.
+    /* **Cache-first, no background revalidation.** The bytes behind an optimised URL never
+       change (the URL carries the source id, width and quality), so the old stale-while-
+       revalidate pass bought nothing — and on every hit whose HTTP-cache copy had been evicted
+       it sent one more `/_next/image` request to the origin, which is exactly the traffic a
+       per-IP CC rule (宝塔 Nginx 防火墙) counts. A miss goes to the network once and is kept.
 
        **Every cache interaction here is optional.** Opening the store, reading it, writing it and
        trimming it can each fail on a device with storage blocked or full, and none of them may
@@ -205,19 +207,7 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         const cache = await caches.open(IMAGE_CACHE).catch(() => null);
         const cached = cache ? await cache.match(request).catch(() => undefined) : undefined;
-        if (cached) {
-          if (cache) {
-            background(
-              event,
-              fetch(request).then(async (response) => {
-                if (!response.ok) return;
-                await cache.put(request, response.clone());
-                await trimImages(cache);
-              }),
-            );
-          }
-          return cached;
-        }
+        if (cached) return cached;
         const response = await fetch(request);
         if (cache && response.ok) {
           const copy = response.clone();

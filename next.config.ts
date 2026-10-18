@@ -176,6 +176,14 @@ const nextConfig: NextConfig = {
      */
     minimumCacheTTL: 2_678_400,
     /*
+     * The optimizer's disk cache (`.next/cache/images`) defaults to **half of the free disk**
+     * (Next 16 `disk-lru-cache`): `remotePatterns` admits every path under derpicdn's `/img/`,
+     * so anyone can mint new variants (15 widths × 3 qualities × any picture) and grow it until
+     * the panel's disk alarm fires. 4GB holds ~200k thumbnails at ~20KB — every realistic
+     * working set — and evicts least-recently-used past that.
+     */
+    maximumDiskCacheSize: 4 * 1024 ** 3,
+    /*
      * `formats` deliberately left at its default (`['image/webp']`). AVIF is ~20-30% smaller
      * but far more expensive to encode, and this is a self-hosted server with 50 images on the
      * front page — every cold variant makes the *first* visitor wait on an encode. Revisit if
