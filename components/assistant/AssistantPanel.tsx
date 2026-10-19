@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { MdDeleteOutline, MdRefresh, MdSend } from 'react-icons/md';
-import Modal from '@/components/Modal';
+import SidePanel from '@/components/SidePanel';
 import Sheet from '@/components/Sheet';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
@@ -154,7 +154,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     {/* 全部记录 is a filter over the same thread, so a filter chip: one label, `aria-pressed`
         both ways. It was a text button whose label became the other state's name while it
         reported being pressed. No close control here on a phone: the sheet's handle, its scrim
-        and Back close it, as every other sheet's do; the dialog's header has its own. */}
+        and Back close it, as every other sheet's do; the side panel's header has its own. */}
     <div className="flex flex-wrap items-center gap-2">
       <Chip variant="filter" selected={history} onClick={() => setHistory(value => !value)}>全部记录</Chip>
       {history && <Button variant="danger-text" size="xs" disabled={state.busy || !state.messages.length} onClick={async () => {
@@ -209,7 +209,9 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     </form>
   </div>;
   return <>
-    {desktop ? <Modal isOpen={isOpen} onClose={close} title="彩彩 AI" maxWidth="xl">{content}</Modal> : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-4 pb-4`}>{content}</Sheet>}
+    {desktop
+      ? <SidePanel isOpen={isOpen} onClose={close} title="彩彩 AI" bodyClassName={styles.sideBody}>{content}</SidePanel>
+      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-4 pb-4`}>{content}</Sheet>}
     {confirmDialog}
   </>;
 }
