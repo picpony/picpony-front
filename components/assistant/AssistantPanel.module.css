@@ -6,3 +6,7 @@
 }
 .sheetBody { overflow: hidden; }
 .sheet .conversation { height: min(64dvh, calc(var(--picpony-assistant-height, 85dvh) - 136px)); }
+/* The desktop side panel is full-height, so the conversation stretches instead of the
+   dialog's capped height; the keyboard insets below are a phone's concern. */
+.sideBody { display: flex; flex-direction: column; overflow: hidden; padding: 0 16px 8px; }
+.sideBody .conversation { height: auto; flex: 1; min-height: 0; }

@@ -36,6 +36,7 @@ radii, five scrollbar appearances and 29 hand-copied primary buttons.
 | Menu (runs a command) | `components/Menu.tsx` | a `role="menu"` div with no keyboard support |
 | Any other floating panel | `components/Popover.tsx` | a fifth recipe for corner + elevation + border |
 | Dialog | `components/Modal.tsx` | a hand-rolled scrim + panel |
+| A surface docked to the right edge, full height (彩彩 AI's desktop window) | `components/SidePanel.tsx` | a centered `Modal` shoved to the edge with classes; a hand-rolled scrim + slide |
 | A dialog's action row | `Modal`'s `footer` prop | your own flex row — two `fullWidth` buttons in one cannot fit, since `buttonClasses` always emits `shrink-0`, and a row inside the body scrolls away with the content |
 | A tick in a selection control | `components/CheckGlyph.tsx` | `MdCheck`, or a second copy of the same path |
 | "Are you sure?" | `useConfirm` (`components/ConfirmDialog.tsx`) | `window.confirm`, or a `Modal` + 4 useStates |
