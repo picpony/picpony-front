@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { scaledMs } from '@/lib/appearance';
 import { MENU_TRANSITION, PAGE_FADE_TIMING } from '@/lib/motionTokens';
+import { springTiming } from '@/lib/springTiming';
 import { cn } from '@/lib/utils';
 
 /** The side the arriving content comes in from. The departing one leaves towards the opposite. */
@@ -56,8 +57,10 @@ interface SwapContentProps {
  * content is centred each one drags everything on screen with it. `FollowHeight` is the component
  * for a box whose height should travel instead; a 40dp row, whose height is its own, needs neither.
  *
- * The timing is `MENU_TRANSITION`, the app's one enter/exit pair, with the arrival held back by
- * `PAGE_FADE_TIMING`'s own delay so the two are never half-transparent through each other.
+ * The arrival is `MENU_TRANSITION.enter`, held back by `PAGE_FADE_TIMING`'s own delay; the departure
+ * is FastEffects, as every small surface leaves, so the two are never half-transparent through each
+ * other: by the 80ms the arrival waits the departing copy is 4% opaque. It used to leave on a 150ms
+ * standard-accelerate, which was still 59% opaque when the new content started to arrive.
  * Nothing plays on mount: a box that arrives on screen is not a box that changed what it shows —
  * which is also what keeps a development mount's double-invoked layout effect from playing an
  * entrance this component never had. Under 关闭 the change is a cut (`scaledMs` reaches 0).
@@ -86,7 +89,8 @@ export default function SwapContent({
 
   useLayoutEffect(() => {
     if (!leaving) return;
-    const { enter, exit } = MENU_TRANSITION;
+    const { enter } = MENU_TRANSITION;
+    const exit = springTiming('fastEffects');
     const { arrive, depart } = offsets(side, distance);
     enteringRef.current?.animate(
       [
@@ -107,7 +111,7 @@ export default function SwapContent({
         { opacity: 1, transform: 'none' },
         { opacity: 0, transform: depart },
       ],
-      { duration: scaledMs(exit.duration), easing: exit.easing, fill: 'forwards' },
+      { ...exit, fill: 'forwards' },
     );
     /* Only this departure clears the slot: a swap behind it has already replaced `leaving` with a
        node of its own (and the `key` below gave that one its own element, so this run is animating

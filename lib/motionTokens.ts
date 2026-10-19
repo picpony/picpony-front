@@ -57,11 +57,11 @@ export const EASE = {
 /**
  * Vuetify's VMenu/VDialogTransition supplies the anchored expansion pattern; its arrival uses this
  * app's short step and standard decelerate. It leaves on FastEffects (`springTiming`), as every
- * small surface does. CSS arrow twins live in globals.css. Durations here are milliseconds for
- * WAAPI.
+ * small surface does — `springTiming('fastEffects', …)`, which is why there is no `exit` here: the
+ * one this object carried (150ms standard-accelerate) disagreed with both `Popover` and the CSS twin
+ * `menu-exit`. CSS arrow twins live in globals.css. Durations here are milliseconds for WAAPI.
  * https://github.com/vuetifyjs/vuetify/blob/01c9e9115898118535865197660dd7399ae1626c/packages/vuetify/src/components/transitions/dialog-transition.tsx
  */
 export const MENU_TRANSITION = {
   enter: { duration: DURATION.short * 1000, easing: EASE.standardDecelerate },
-  exit: { duration: DURATION.state * 1000, easing: EASE.standardAccelerate },
 } as const;

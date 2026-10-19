@@ -50,7 +50,7 @@ import { forumThread } from '@/lib/resources';
 import { useScreenStateFor } from '@/lib/screenState';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { searchPage } from '@/lib/searchState';
-import { getAssetUrl } from '@/lib/utils';
+import { cn, getAssetUrl } from '@/lib/utils';
 import type { ForumComment, ForumPost, ForumPostDetailResponse } from '@/lib/types/forum';
 
 /** Writes the page of replies into the address — a replace: a page turn is not a place Back
@@ -156,6 +156,9 @@ export default function ForumThreadPage() {
      server answers; a failure puts it back and says why (R6-039). */
   const [likeLocal, setLikeLocal] = useState<{ liked: boolean; count: number } | null>(null);
   const likeBusy = useRef(false);
+  /* The thread whose like the user pressed on: the fill plays for that press only, never for a
+     thread that loads already liked. */
+  const [likeFillFor, setLikeFillFor] = useState<typeof id | null>(null);
   const { ref: likeButtonRef, toss: tossLikeIcon } = useIconToss(id);
   const liked = likeLocal?.liked ?? post?.is_liked ?? false;
   const likeCount = likeLocal?.count ?? post?.like_count ?? 0;
@@ -171,6 +174,7 @@ export default function ForumThreadPage() {
     const before = { liked, count: likeCount };
     const cancelToss = liked ? tossLikeIcon() : undefined;
     likeBusy.current = true;
+    if (!liked) setLikeFillFor(id);
     setLikeLocal({ liked: !liked, count: Math.max(0, likeCount + (liked ? -1 : 1)) });
     void sendLike(session, post.id, !before.liked).then((outcome) => {
       likeBusy.current = false;
@@ -474,7 +478,7 @@ export default function ForumThreadPage() {
                     selected={liked}
                     selectedTone="tertiary"
                     aria-label="点赞"
-                    icon={liked ? <MdThumbUp /> : <MdOutlineThumbUp />}
+                    icon={liked ? <MdThumbUp className={cn(likeFillFor === id && 'animate-reaction-fill')} /> : <MdOutlineThumbUp />}
                     onClick={toggleLike}
                     className="-ms-2"
                   />

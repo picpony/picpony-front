@@ -309,7 +309,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         }
         icon={
           <MdRefresh
-            className="transition-transform duration-standard ease-[var(--ease-standard)] group-hover:rotate-180 no-motion:group-hover:rotate-0"
+            className="transition-[rotate] spring-default-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
           />
         }
       >

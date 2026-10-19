@@ -1050,10 +1050,11 @@ export default function AppLayout({
                **Modal (phone): a spring, a different one per direction — M3's
                `NavigationDrawer.kt`:** open = `DefaultSpatial` (ζ0.9, 194ms), close =
                `FastEffects` (ζ1.0, 108ms), critically damped because a panel leaving must not
-               overshoot back into view. **Docked: Vuetify's timing instead** (`drawer-dock`):
+               overshoot back into view. **Docked: Vuetify's arrangement instead** (`drawer-dock`):
                docked, the motion is not the panel but the page beside it re-laying out wider or
-               narrower, and 108ms is six frames of that — it read as a jump. 200ms on standard
-               easing, the same both ways, as `v-navigation-drawer` and `v-main` do.
+               narrower, and 108ms is six frames of that — it read as a jump. One clock, the same
+               both ways, as `v-navigation-drawer` and `v-main` do, on the app's own SlowEffects
+               spring (235ms, critically damped) rather than Vuetify's Material 2 curve.
                Applied per branch and per breakpoint, because a transition is governed by the
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */

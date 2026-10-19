@@ -70,7 +70,7 @@ type ActiveFade = {
  * Mount-time entry keyframes, by name — precise (skeleton shimmer and button spinner iterate
  * forever, and `finish()` on those throws) and complete (nothing else in `@layer base` counts).
  */
-const ENTRY_KEYFRAMES = new Set(['fadeIn', 'pageIn', 'popIn']);
+const ENTRY_KEYFRAMES = new Set(['fadeIn', 'pageIn']);
 
 /**
  * Land every entry keyframe inside the incoming page before it starts moving: pages carry their

@@ -13,8 +13,7 @@ import {
   OverlayLayerContext,
 } from '@/lib/overlay';
 import { ICON } from '@/lib/icons';
-import { DURATION, EASE } from '@/lib/motionTokens';
-import { motionTier, scaledMs } from '@/lib/appearance';
+import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 
@@ -69,10 +68,12 @@ interface ModalProps {
   onExited?: () => void;
 }
 
-/** A dialog leaves on DefaultEffects, as every dismissal of a surface this size does (the bottom
- *  sheet's spring): it answers a press, and starts on the frame after it. It left on the
- *  emphasized accelerate over 200ms, which holds still for its first 80ms — a 取消 that seemed not
- *  to have been heard. Arriving stays the 400ms emphasized decelerate, which leaves at speed. */
+/** A dialog arrives and leaves on DefaultEffects, as the bottom sheet and the side panel do: one
+ *  critically damped spring both ways, so the three large surfaces open and close on one clock
+ *  and a reversal mid-way keeps its shape. Leaving, it answers a press on the frame after it (it
+ *  left on the emphasized accelerate over 200ms, which held still for its first 80ms). Arriving,
+ *  it ran 400ms on the emphasized decelerate beside the sheet's 166ms spring — two dialogs-worth
+ *  of surface on two clocks; the spring is 95% there by 118ms, where that curve was by 160. */
 const CLOSE_ANIM_DURATION = SPRING_MS.defaultEffects;
 
 /**
@@ -238,12 +239,7 @@ export default function Modal({
       return;
     }
 
-    const timing = {
-      ...(isOpen
-        ? { duration: scaledMs(DURATION.long * 1000, 'overlay'), easing: EASE.decelerate }
-        : springTiming('defaultEffects', 'overlay')),
-      fill: 'both' as const,
-    };
+    const timing = { ...springTiming('defaultEffects', 'overlay'), fill: 'both' as const };
     const running = [
       scrim.animate([{ opacity: fromScrim }, { opacity }], timing),
       panel.animate([{ opacity: fromOpacity, transform: fromTransform }, { opacity, transform }], timing),

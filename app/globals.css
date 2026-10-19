@@ -1413,18 +1413,12 @@ body {
      no per-token answer is right for all three — the switch is read at the call sites. */
   --animate-page-transition: pageIn calc(0.32s * var(--motion-scale-page)) var(--ease-decelerate)
     calc(0.08s * var(--motion-scale-page)) both;
-  /* 250ms on **standard**-decelerate: 200 was the *exit* step, and emphasized-decelerate
-     covers 62% of its travel in the first tenth, so a 200ms pop was over in 14ms. This is a
-     small utility entrance — the standard set's medium-1 pairing. */
-  --animate-pop-in: popIn calc(0.25s * var(--motion-scale)) var(--ease-standard-decelerate)
-    forwards;
   /* ── Micro-interactions, as named animations ────────────────────────────
    *
    * Named here so the duration and the curve travel with the animation (hand-assembled
    * arbitrary values drifted). The ones that are a control or mark *arriving in place* take
-   * the expressive fast spatial spring — what "it popped in" means. The star-burst keeps
-   * the decelerate curve because its overshoot is written into its own keyframes; the dot
-   * bounce keeps the loop easing because it repeats and has no arrival.
+   * the expressive fast spatial spring — what "it popped in" means, the reaction fill
+   * included; the dot bounce keeps the loop easing because it repeats and has no arrival.
    *
    * All four go through the motion scale, which is what makes them obey the animation
    * preference without being named anywhere else. */
@@ -1438,7 +1432,15 @@ body {
     icon-swap-turn var(--duration-spring-expressive-fast-spatial)
       var(--ease-spring-expressive-spatial-fast) both,
     icon-swap-fade var(--duration-spring-fast-effects) var(--ease-spring-effects) both;
-  --animate-star-burst: star-burst var(--transition-duration-enter) var(--ease-decelerate) both;
+  /* A reaction filling in (收藏's star, 点赞's thumb): the same expressive fast spring as
+     control-pop, so its overshoot is the spring's own 8.4% — removed by the reduced tier's shape
+     substitution like every other — rather than a 1.28 scale written into keyframes, which no
+     tier could take out. It played on emphasized-decelerate over 400ms, and a timing function
+     applies per keyframe segment, so the 55% stop got two separate decelerates: the star
+     reached its 1.28 peak in about 30ms and then crawled back for 180. Transform only — the
+     glyph's colour belongs to the icon button's own FastEffects. */
+  --animate-reaction-fill: reaction-fill var(--duration-spring-expressive-fast-spatial)
+    var(--ease-spring-expressive-spatial-fast) both;
   /* **Unscaled**, the fourth documented exception: the "加载更多" dots are an indeterminate
      progress indicator — at scale 0 they would freeze into three static dots claiming the
      fetch had stopped. Slowed under the off tier instead, in the rule beside the other
@@ -1479,16 +1481,6 @@ body {
     }
   }
 
-  @keyframes popIn {
-    from {
-      opacity: 0;
-      transform: translateY(-4px) scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
 
 }
 
@@ -1866,6 +1858,17 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
       box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects),
       background-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
   }
+
+  /* The same fallback for anything else that takes keyboard focus and names no transition of
+     its own — an avatar link, a focusable row or scroller, a tab panel: its focus ring arrived in
+     one frame while a `Button`'s faded in. Ink only, never geometry, and in `base` so any
+     transition utility at the call site still wins outright. */
+  :where(a[href], summary, [tabindex]:not([tabindex='-1'])) {
+    transition:
+      color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      text-decoration-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
+  }
 }
 
 /* Press ripple: spawned by the ripple layer component on any element carrying the ripple
@@ -1966,15 +1969,12 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 /* (The emoji picker's own keyframes are gone: it renders through the shared popover
    container transform now. Spelled in prose — Tailwind scans comment text.) */
 
-/* Favourite star: overshoot with a quarter turn as it fills in. */
-@keyframes star-burst {
-  0% {
+/* A reaction filling in: a quarter-ish turn and a grow, landing on the spring. */
+@keyframes reaction-fill {
+  from {
     transform: scale(0.4) rotate(-40deg);
   }
-  55% {
-    transform: scale(1.28) rotate(6deg);
-  }
-  100% {
+  to {
     transform: none;
   }
 }
@@ -2207,10 +2207,11 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
     transparent
   );
   background-color: transparent;
-  /* The standard 200ms: the veil is the whole of a tile's hover — the tile no longer scales
-     and has no caption to fade — so it is a lone colour change settling in place, not a
-     composite gesture whose parts share a longer clock (R4-051). */
-  transition: background-color var(--transition-duration-standard) var(--ease-standard);
+  /* The state layer's own clock (150ms, standard): the veil is the whole of a tile's hover —
+     the tile no longer scales and has no caption to fade (R4-051) — which makes it a photograph's
+     state layer, and every other hover in the app settles on `state-layer`'s timing. At 200ms a
+     tile's hover lagged the row or button beside it. */
+  transition: background-color var(--transition-duration-state) var(--ease-standard);
 }
 
 .group:is(:focus-visible, :has(:focus-visible)) .media-hover-scrim {
@@ -2542,11 +2543,15 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
  * exists to avoid, caused by the rule itself. With no delay, a backwards fill gives a
  * byte-identical first frame and releases the element the instant it ends.
  *
- * The duration is the app's own token, so it rides the motion scale: 0s under the off tier,
- * unchanged under reduced (a picture arriving from the side *is* the basic form). */
+ * The timing is DefaultEffects, the clock of every large surface's arrival and departure (the
+ * dialog, the bottom sheet, the side panel) and of the viewer's own container fade
+ * (`PicLightbox`), so the picture and its backdrop arrive as one surface; it was 400ms on
+ * emphasized-decelerate beside a 300ms standard backdrop. It rides the motion scale: 0s under
+ * the off tier, unchanged under reduced (a picture arriving from the side *is* the basic form). */
 .yarl__slide {
   transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
-  animation: m3-lightbox-in calc(var(--motion-base-enter) * var(--motion-scale-image)) var(--ease-decelerate) backwards;
+  animation: m3-lightbox-in calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+    var(--ease-spring-effects) backwards;
 }
 
 @keyframes m3-lightbox-in {
@@ -3546,11 +3551,31 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
      v4 compiles its translate/scale/rotate utilities to those standalone CSS properties, NOT
      to transform — a list naming only the shorthand silently animates none of them (that is
      what broke the sidebar's slide and every hover-lift). */
+  /* **Ink on FastEffects, travel on FastSpatial** — the same pair `transition-icon-button`,
+     `Button`, `Chip`, `Tabs` and `Menu` run. It was 200ms on `standard`, so a sidebar row, a
+     page number or a link changed colour and drew its focus ring at nearly twice the time of the
+     tab, chip or button beside it. The hover itself is the state layer's (150ms), as everywhere.
+     The eight ink properties lead the list in the off tier's order, so that tier's property
+     override keeps every index on the effects clock. */
   transition-property:
     color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity,
-    transform, translate, scale, rotate, filter, backdrop-filter;
-  transition-timing-function: var(--ease-standard);
-  transition-duration: var(--transition-duration-standard);
+    outline-color, filter, backdrop-filter, transform, translate, scale, rotate;
+  transition-timing-function:
+    var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
+    var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
+    var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
+    var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-standard-spatial),
+    var(--ease-spring-standard-spatial), var(--ease-spring-standard-spatial),
+    var(--ease-spring-standard-spatial);
+  transition-duration:
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects), var(--duration-spring-fast-spatial),
+    var(--duration-spring-fast-spatial), var(--duration-spring-fast-spatial),
+    var(--duration-spring-fast-spatial);
 }
 
 /* Icon-button selection changes both material and shape. Effects stop without overshoot;
@@ -3602,15 +3627,20 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition-timing-function: var(--motion-local-standard-spatial);
   transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
 }
-/* The docked navigation drawer's open and close, and so the content area's change of width:
- * Vuetify's `v-navigation-drawer` / `v-main` timing — 200ms on Material's standard easing
- * (0.4, 0, 0.2, 1), the same both ways, never overshooting (an overshoot here would push the
- * whole page past its width and back). The duration rides the same scale as the springs, so
- * the aside's `data-motion-spring='overlay'` puts it on the overlay tier and `off` snaps it. */
+/* The docked navigation drawer's open and close, and so the content area's change of width.
+ * The arrangement is Vuetify's `v-navigation-drawer` / `v-main` — one clock and one shape, the
+ * same both ways, never overshooting (an overshoot here would push the whole page past its width
+ * and back) — but the shape is the app's own: SlowEffects (ζ1.0, 235ms), the softest critically
+ * damped spring the scheme has. It used to spell out Material 2's cubic-bezier(0.4, 0, 0.2, 1),
+ * the one raw curve outside the documented exceptions, which also held still for its first frame
+ * (1.7% of the way after 16ms against 8.2% here) beside a phone drawer and a /messages rail that
+ * answer on the next frame. FastEffects (108ms) stays wrong for this: six frames of a page
+ * re-laying out read as a jump. The duration rides the same scale as the springs, so the aside's
+ * `data-motion-spring='overlay'` puts it on the overlay tier and `off` snaps it. */
 @utility drawer-dock {
   --motion-spring-scale: var(--motion-scale);
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: calc(200ms * var(--motion-spring-scale));
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: calc(var(--motion-base-spring-slow-effects) * var(--motion-spring-scale));
 }
 @utility spring-fast-effects {
   --motion-spring-scale: var(--motion-scale);
@@ -4026,7 +4056,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   border-radius: var(--radius-xl);
   pointer-events: none;
   transition-property: border-color;
-  transition-duration: var(--duration-spring-default-effects);
+  /* FastEffects, the clock every other focus indicator in the app uses — native inputs,
+     `CodeInput`, the rich-text editor's boundary, buttons, chips and rows. It was DefaultEffects
+     (166ms), so a labelled field drew its focus half as slow again as the editor under it. The
+     fade over the resting outline is what keeps it continuous, not the length. */
+  transition-duration: var(--duration-spring-fast-effects);
   transition-timing-function: var(--ease-spring-effects);
 }
 
@@ -4062,12 +4096,15 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   border-radius: var(--radius-sm);
   border-color: transparent;
   background-color: var(--md-sys-color-surface-container-highest);
-  transition-property: background-color, box-shadow;
+  /* The fill's hover is a state layer mixed in (below), so it takes the state layer's clock. */
+  transition:
+    background-color var(--transition-duration-state) var(--ease-standard),
+    box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 /* Filled fields have no resting outline. Their focus ring fades as a whole,
-   instead of growing a box-shadow from zero spread. DefaultEffects (166ms at
-   normal speed) keeps this state change visible and matches the outlined field. */
+   instead of growing a box-shadow from zero spread, on FastEffects like the outlined field and
+   every other focus indicator. */
 .m3-field:not([data-labelled]) > fieldset::after {
   content: '';
   position: absolute;
@@ -4075,7 +4112,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   border-radius: inherit;
   box-shadow: 0 0 0 2px var(--md-sys-color-focus);
   opacity: 0;
-  transition: opacity var(--duration-spring-default-effects) var(--ease-spring-effects);
+  transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 /* Hover is a **state layer**, not the next tone step — M3 never moves a field's container
@@ -4572,6 +4609,12 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   text-underline-offset: 2px;
   border-radius: var(--radius-xs);
   outline: none;
+  /* Its hover colour and focus ring on the same FastEffects as every other link and control;
+     it had no transition, so a prose link snapped where a `transition-ui` link beside it eased. */
+  transition:
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    text-decoration-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
 
   &:hover {
     color: var(--md-sys-color-link-hover);

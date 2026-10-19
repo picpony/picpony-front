@@ -552,6 +552,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const isFaved = (favesRead.data?.ids.includes(imageId) ?? false) || privacyFaved;
   const { ref: faveButtonRef, toss: tossFaveIcon } = useIconToss(imageId);
   const [favePending, setFavePending] = useState<{ imageId: number; token: string } | null>(null);
+  /* The picture whose star the user pressed on: the fill plays for that press only. Keyed on the
+     picture, so walking to a neighbour that is already a favourite does not replay it, and the
+     star lighting up because the favourites list arrived after the detail did is not a press. */
+  const [faveFillFor, setFaveFillFor] = useState<number | null>(null);
   const faveBusy = favePending?.imageId === imageId && favePending.token === session.token;
   const oneTapFave = useSyncedSetting('defaultFaveToMain');
   const defaultFolder = useSyncedSetting('defaultFaveFolder');
@@ -1054,6 +1058,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
        privacy space, which a press takes it out of whatever that setting says. */
     const privacyOnly = privacyFaved && !(favesRead.data?.ids.includes(targetId) ?? false);
     const cancelToss = isFaved && (oneTapFave || privacyOnly) ? tossFaveIcon() : undefined;
+    if (!isFaved) setFaveFillFor(targetId);
     setFavePending({ imageId: targetId, token });
     void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
       setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));
@@ -1505,7 +1510,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                         selectedTone="tertiary"
                         loading={faveBusy}
                         aria-label="收藏"
-                        icon={isFaved ? <MdStar className="animate-star-burst" /> : <MdStarBorder />}
+                        icon={isFaved ? <MdStar className={cn(faveFillFor === imageId && 'animate-reaction-fill')} /> : <MdStarBorder />}
                         onClick={handleToggleFave}
                       />
                       <IconButton

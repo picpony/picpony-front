@@ -15,6 +15,7 @@ import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
 import { useMotionScale } from '@/lib/appearance';
 import { DURATION, EASE } from '@/lib/motionTokens';
+import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
 /**
@@ -135,11 +136,14 @@ export default function PicLightbox({
          tracks. A CSS-only fade left slow exits cut off at 250ms and kept an
          invisible portal blocking input under the off tier. */
       animation={{
-        fade: DURATION.medium * 1000 * scale,
+        /* The container fade is DefaultEffects both ways, as every large surface's (the dialog,
+           the sheet): a close answers the press on the next frame instead of lingering 300ms on
+           `standard`, and the open shares the slide's own entrance clock (globals.css). */
+        fade: SPRING_MS.defaultEffects * scale,
         swipe: DURATION.emphasized * 1000 * scale,
         zoom: DURATION.emphasized * 1000 * scale,
         easing: {
-          fade: EASE.standard,
+          fade: springToLinear(SPRINGS.defaultEffects),
           swipe: EASE.standard,
           navigation: EASE.standard,
         },
