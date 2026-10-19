@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { blockFiltersEnvelope } from './netAuditFixtures.mjs';
+import { blockFiltersEnvelope, publicBlacklistPage } from './netAuditFixtures.mjs';
 import { requireTypeStripping } from './tsResolve.mjs';
 
 requireTypeStripping('testGallery');
@@ -205,40 +205,37 @@ test('the server’s seeds and the client’s resources build one key', () => {
 
 // --- decision 15 adapters --------------------------------------------------------------------
 
-test('本站讨论: a page of ids with PicPony’s counts, deduplicated and validated', async () => {
+test('本站讨论: a page of ids with PicPony’s counts, read from /api/v1', async () => {
   let asked;
   globalThis.fetch = async (url) => {
     asked = new URL(String(url), 'https://app.invalid');
     return json({
-      success: true,
       images: [
-        { image_id: 922467, comment_count: 3, last_commented_at: '2026-09-23 14:01:48' },
-        { image_id: 922467, comment_count: 9 },
-        { image_id: 'x' },
-        { image_id: 3898930, comment_count: 0 },
+        { image_id: 922467, comment_count: 3, last_commented_at: '2026-09-23T06:01:48Z' },
+        { image_id: 3898930, comment_count: 1, last_commented_at: '2026-09-22T06:01:48Z' },
       ],
       total: 248,
       total_pages: 5,
     });
   };
   const page = await gallery.getDiscussedImages(2);
-  assert.equal(asked.searchParams.get('action'), 'get_discussed_images');
+  assert.equal(asked.pathname, '/api/v1/images/discussed');
   assert.equal(asked.searchParams.get('limit'), '50');
   assert.equal(asked.searchParams.get('page'), '2');
-  assert.deepEqual(page.images.map((row) => [row.imageId, row.comments]), [[922467, 3], [3898930, 0]]);
+  assert.deepEqual(page.images.map((row) => [row.imageId, row.comments]), [[922467, 3], [3898930, 1]]);
   assert.equal(page.total, 248);
   assert.equal(page.totalPages, 5);
-  globalThis.fetch = async () => json({ success: false, message: '服务不可用' }, { status: 200 });
-  await assert.rejects(gallery.getDiscussedImages(1), ApiError, 'an unsuccessful envelope is a failure, not an empty page');
+  globalThis.fetch = async () => json({ error: { code: 'UNAVAILABLE', message: '服务不可用' } }, { status: 503 });
+  await assert.rejects(gallery.getDiscussedImages(1), ApiError, 'a refusal is a failure, not an empty page');
 });
 
-test('PicPony comment counts: one POST per page, positive counts only', async () => {
+test('PicPony comment counts: one POST per page', async () => {
   let body;
   globalThis.fetch = async (url, init) => {
     body = JSON.parse(init.body);
-    assert.equal(new URL(String(url), 'https://app.invalid').searchParams.get('action'), 'get_batch_comment_counts');
+    assert.equal(new URL(String(url), 'https://app.invalid').pathname, '/api/v1/images/comment-counts');
     assert.equal(init.method, 'POST');
-    return json({ success: true, counts: { 1: 2, 2: 0, 3: '4', x: 5 } });
+    return json({ counts: { 1: 2, 3: 4 } });
   };
   assert.deepEqual(await gallery.getBatchCommentCounts([1, 2, 3]), { 1: 2, 3: 4 });
   assert.deepEqual(body, { image_ids: [1, 2, 3] });
@@ -252,7 +249,7 @@ test('the featured seed is anonymous, keyed like the resource, and carries the d
   const reads = [];
   globalThis.fetch = async (url, init) => {
     const target = new URL(String(url));
-    if (target.searchParams.get('action') === 'get_block_tags') return json(blockFiltersEnvelope());
+    if (target.pathname === '/api/v1/filters/block-tags') return json(blockFiltersEnvelope());
     reads.push(target);
     assert.equal(target.searchParams.get('key'), null, 'no user key reaches a shared server read');
     assert.ok(init?.signal, 'bounded by the document’s wait');
@@ -281,8 +278,8 @@ test('the feed seed reads the page in the address, and only a bounded range of t
   globalThis.fetch = async (url) => {
     const target = new URL(String(url));
     const action = target.searchParams.get('action');
-    if (action === 'get_block_tags') return json(blockFiltersEnvelope());
-    if (action === 'get_public_blacklist') return json({ success: true, blacklist: [] });
+    if (String(url).includes('/api/v1/filters/block-tags')) return json(blockFiltersEnvelope());
+    if (String(url).includes('/api/v1/image-blocklist')) return json(publicBlacklistPage([]));
     pages.push(target.searchParams.get('page'));
     return json({ total: 500, images: [{ id: 1, representations: {}, view_url: '' }] });
   };

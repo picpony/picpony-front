@@ -1,8 +1,8 @@
 /**
  * The profiles' pure contracts, with no browser and no live service: what a profile shows
  * (`lib/profiles.ts` — hidden tabs, the bound account, the default tab and the IP location;
- * `lib/format.ts` owns the birthday shape), the badge readers (`lib/userBadges.ts` — both wire
- * spellings, expiry, the worn set)
+ * `lib/format.ts` owns the birthday shape), the badge readers (`lib/userBadges.ts` — the backend's
+ * spelling, expiry, the worn set)
  * and the adapters the profile reads through (`lib/api/picpony.ts` — public folders, the badge
  * dictionary, the owner's badges, the equip write, the shared-faves de-duplication, a profile id
  * that cannot exist).
@@ -53,53 +53,64 @@ beforeEach(() => {
 
 // --- lib/profiles.ts -------------------------------------------------------------------------
 
-test('a tab the owner hides is hidden from visitors only', () => {
-  const profile = { id: 1, username: 'a', settings: { showUploads: false, showFaves: true } };
-  assert.equal(profiles.hiddenFromVisitors(profile, 'uploads'), true);
-  assert.equal(profiles.hiddenFromVisitors(profile, 'faves'), false);
-  assert.equal(profiles.hiddenFromVisitors(profile, 'posts'), false, 'an absent setting shows the tab');
-  assert.equal(profiles.tabVisible(profile, 'uploads', false), false);
-  assert.equal(profiles.tabVisible(profile, 'uploads', true), true, 'the owner always sees their own');
-  assert.equal(profiles.hiddenFromVisitors({ id: 1, username: 'a', settings: null }, 'uploads'), false);
+/** A public profile as `GET /users/{id}` sends it (`profiles::public`), through the one mapping. */
+const wire = (over = {}) => ({
+  id: 1, username: 'a', avatar: null, banner: null, role: 'user', bio: '', gender: '保密', race: '',
+  experience: 0, level: 1, created_on: '2026-01-01', last_online: null, ip_location: '',
+  visibility: { showUploads: true, showFaves: true, showPosts: true, showComments: true },
+  badges: [], equipped_badges: [], upstream_identity: null, ...over,
+});
+const P = (over) => profiles.profileFromWire(wire(over));
+
+test('the wire profile maps once: identity, day joined, visibility as the owner’s tab settings', () => {
+  const profile = P({ upstream_identity: { id: 583672, name: 'Nocturne' }, created_on: '2025-05-01' });
+  assert.equal(profile.derpi_user_id, 583672);
+  assert.equal(profile.derpi_username, 'Nocturne');
+  assert.equal(profile.has_api_key, true);
+  assert.equal(profile.created_at, '2025-05-01');
+  assert.deepEqual(profile.settings, { showUploads: true, showFaves: true, showPosts: true, showComments: true });
+  const unbound = P();
+  assert.equal(unbound.derpi_user_id, null);
+  assert.equal(unbound.has_api_key, false);
 });
 
-test('uploads are the bound account’s: by id, else by an escaped name, never without a key', () => {
-  assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '583672', has_api_key: true }), 'uploader_id:583672');
-  assert.equal(
-    profiles.uploaderTerm({ id: 1, username: 'a', derpi_username: 'A (B):C', has_api_key: true }),
-    'uploader:A\\ \\(B\\)\\:C',
-  );
-  assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_user_id: '5', has_api_key: false }), null,
-    'a name typed without a key to prove it lists nothing');
-  assert.equal(profiles.uploaderTerm({ id: 1, username: 'a', derpi_username: '  ', has_api_key: true }), null);
-  assert.equal(profiles.hasBoundAccount({ id: 3, username: 'c', derpi_username: '', has_api_key: true }), false);
+test('a tab the owner hides is hidden from visitors only', () => {
+  const profile = P({ visibility: { showUploads: false, showFaves: true, showPosts: true, showComments: true } });
+  assert.equal(profiles.hiddenFromVisitors(profile, 'uploads'), true);
+  assert.equal(profiles.hiddenFromVisitors(profile, 'faves'), false);
+  assert.equal(profiles.tabVisible(profile, 'uploads', false), false);
+  assert.equal(profiles.tabVisible(profile, 'uploads', true), true, 'the owner always sees their own');
+  assert.equal(profiles.hiddenFromVisitors(profiles.withSettings(profile, { showUploads: true }), 'uploads'), false,
+    'the owner’s device choices lay over the record');
+});
+
+test('uploads are the verified account’s, by id, and nobody’s without one', () => {
+  assert.equal(profiles.uploaderTerm(P({ upstream_identity: { id: 583672, name: 'x' } })), 'uploader_id:583672');
+  assert.equal(profiles.uploaderTerm(P()), null);
+  assert.equal(profiles.hasBoundAccount(P()), false);
 });
 
 test('the default tab is chosen from public data: uploads when a visitor can see some, else the first shown', () => {
-  const bound = { id: 1, username: 'a', derpi_user_id: 7, has_api_key: true };
-  assert.equal(profiles.defaultProfileTab(bound), 'uploads');
-  assert.equal(profiles.defaultProfileTab({ id: 2, username: 'b', has_api_key: false }), 'faves', 'unbound');
-  assert.equal(profiles.defaultProfileTab({ ...bound, settings: { showUploads: false } }), 'faves');
-  assert.equal(profiles.defaultProfileTab({ ...bound, settings: { showUploads: false, showFaves: false } }), 'posts');
+  const shown = { showUploads: true, showFaves: true, showPosts: true, showComments: true };
+  const bound = (visibility = {}) => P({ upstream_identity: { id: 7, name: 'x' }, visibility: { ...shown, ...visibility } });
+  assert.equal(profiles.defaultProfileTab(bound()), 'uploads');
+  assert.equal(profiles.defaultProfileTab(P()), 'faves', 'unbound');
+  assert.equal(profiles.defaultProfileTab(bound({ showUploads: false })), 'faves');
+  assert.equal(profiles.defaultProfileTab(bound({ showUploads: false, showFaves: false })), 'posts');
   assert.equal(
-    profiles.defaultProfileTab({ ...bound, settings: { showUploads: false, showFaves: false, showPosts: false, showComments: false } }),
+    profiles.defaultProfileTab(bound({ showUploads: false, showFaves: false, showPosts: false, showComments: false })),
     'uploads',
     'hiding everything opens on uploads, whose hidden state says so',
   );
 });
 
 test('the IP location shows unless it is missing or 未知; hidden by its owner, it reads 已隐藏', () => {
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: ' 中国 江苏 ' }), '中国 江苏');
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: '未知' }), null);
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: '' }), null);
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a' }), null);
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: '中国 广东', settings: { hideIpLocation: true } }), '已隐藏',
-    'the setting wins even over a location the backend still sent');
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: '该用户已隐藏' }), '已隐藏', "the backend's own answer");
-  assert.equal(profiles.ipLocationOf({ id: 1, username: 'a', ip_location: '中国 广东', settings: '{"hideIpLocation":true}' }), '已隐藏',
-    'settings stored as JSON text are read too');
-  assert.equal(profiles.hiddenFromVisitors({ id: 1, username: 'a', settings: '{"showPosts":false}' }, 'posts'), true);
-  assert.equal(profiles.hiddenFromVisitors({ id: 1, username: 'a', settings: 'not json' }, 'posts'), false);
+  assert.equal(profiles.ipLocationOf(P({ ip_location: ' 中国 江苏 ' })), '中国 江苏');
+  assert.equal(profiles.ipLocationOf(P({ ip_location: '未知' })), null);
+  assert.equal(profiles.ipLocationOf(P({ ip_location: '' })), null);
+  assert.equal(profiles.ipLocationOf(P({ ip_location: '该用户已隐藏' })), '已隐藏', "the backend's own answer");
+  assert.equal(profiles.ipLocationOf(profiles.withSettings(P({ ip_location: '中国 广东' }), { hideIpLocation: true })), '已隐藏',
+    'the owner’s own setting wins even over a location the backend still sent');
 });
 
 test('a birthday prints its month and day, never its year', () => {
@@ -110,45 +121,42 @@ test('a birthday prints its month and day, never its year', () => {
   assert.equal(format.birthdayLabel(null), null);
 });
 
-test('the Derpibooru card links in the app, by id or by name', () => {
-  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: '583672' }), '/derpi/user/583672');
-  /* Review P5-O4: a name-only binding leads to the search for its uploads, not a page that cannot open. */
-  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_username: 'Nocturne Rain' }), `/search?q=${encodeURIComponent('uploader:Nocturne\\ Rain')}`);
-  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a' }), null);
+test('the Derpibooru card links in the app, by id', () => {
+  assert.equal(profiles.derpiProfileHref(P({ upstream_identity: { id: 583672, name: 'x' } })), '/derpi/user/583672');
+  assert.equal(profiles.derpiProfileHref(P()), null);
 });
 
 test('a bio is trimmed, and an id that cannot be one is not asked about', () => {
-  assert.equal(profiles.bioOf({ id: 1, username: 'a', bio: '  你好\n世界 \n' }), '你好\n世界');
-  assert.equal(profiles.bioOf({ id: 1, username: 'a', bio: null }), '');
+  assert.equal(profiles.bioOf(P({ bio: '  你好\n世界 \n' })), '你好\n世界');
+  assert.equal(profiles.bioOf(P()), '');
   for (const id of ['1', '583672']) assert.equal(profiles.isProfileId(id), true, id);
   for (const id of ['0', '-1', 'abc', '1.5', '', '01', '12345678901234567']) assert.equal(profiles.isProfileId(id), false, id);
 });
 
 // --- lib/userBadges.ts -----------------------------------------------------------------------
 
-test('held badges read both wire spellings, one per name, and drop junk rows', () => {
+test('held badges read the backend’s one spelling, ids kept', () => {
   assert.deepEqual(
     badges.parseHeldBadges([
-      { name: '公测先锋', color: '#ff9600', expires_at: null },
-      { badge_name: '站务', badge_color: '#f1c40f', expires_at: '2026-10-01 00:00:00' },
-      { name: '公测先锋', color: '#000000' },
-      null, 'x', { color: '#fff' },
+      { id: 3, name: '公测先锋', color: '#ff9600', expires_at: null, expired: false },
+      { id: 2, name: '站务', color: '#f1c40f', expires_at: '2026-10-01T00:00:00+08:00' },
     ]),
     [
-      { name: '公测先锋', color: '#ff9600', expiresAt: null },
-      { name: '站务', color: '#f1c40f', expiresAt: '2026-10-01 00:00:00' },
+      { id: 3, name: '公测先锋', color: '#ff9600', expiresAt: null },
+      { id: 2, name: '站务', color: '#f1c40f', expiresAt: '2026-10-01T00:00:00+08:00' },
     ],
   );
-  assert.deepEqual(badges.parseHeldBadges(undefined), []);
+  assert.deepEqual(badges.parseHeldBadges(undefined), [], 'a source without badges has none');
 });
 
-test('the equipped set reads an array or its JSON string', () => {
-  const raw = '[{"badge_name":"2026CSBC","badge_color":"#99ccff"},{"badge_name":"\\u4f2a\\u5929\\u89d2","badge_color":"#22c55e"}]';
-  assert.deepEqual(badges.parseEquippedBadges(raw), [
-    { badge_name: '2026CSBC', badge_color: '#99ccff' },
-    { badge_name: '伪天角', badge_color: '#22c55e' },
+test('the equipped set keeps its order and each badge’s id', () => {
+  assert.deepEqual(badges.parseEquippedBadges([
+    { id: 9, name: '2026CSBC', color: '#99ccff', position: 0 },
+    { id: 4, name: '伪天角', color: '#22c55e', position: 1 },
+  ]), [
+    { id: 9, badge_name: '2026CSBC', badge_color: '#99ccff' },
+    { id: 4, badge_name: '伪天角', badge_color: '#22c55e' },
   ]);
-  assert.deepEqual(badges.parseEquippedBadges('not json'), []);
   assert.deepEqual(badges.parseEquippedBadges(null), []);
 });
 
@@ -176,83 +184,98 @@ test('a lapsed badge is never worn, and at most three are', () => {
 
 // --- lib/api/picpony.ts ------------------------------------------------------------------------
 
-test('public folders: normalised, one per id, a refusal is not retryable', async () => {
+test('public folders: the owner’s by id, mapped from the backend’s rows; an unknown owner is not found', async () => {
   let asked;
   globalThis.fetch = async (url) => {
     asked = new URL(String(url), 'https://app.invalid');
     return json({
-      success: true,
+      owner_id: 12,
       folders: [
-        { id: 1, name: '主收藏夹', is_main: 1, item_count: 1139, latest_image_id: 3898880 },
-        { id: '8', name: ' 测试合并 ', is_main: 0, item_count: '10', latest_image_id: null },
-        { id: 8, name: 'dup' }, { id: 'x' }, null,
+        { id: 1, name: '主收藏夹', is_main: true, created_at: '2026-01-01T00:00:00Z', image_count: 1139, latest_image_id: 3898880 },
+        { id: 8, name: '测试合并', is_main: false, created_at: '2026-01-02T00:00:00Z', image_count: 10, latest_image_id: null },
       ],
     });
   };
-  assert.deepEqual(await favorites.getProfileFaveFolders('黄昏夜雨'), [
+  assert.deepEqual(await favorites.getProfileFaveFolders(12), [
     { id: 1, name: '主收藏夹', isMain: true, itemCount: 1139, latestImageId: 3898880 },
     { id: 8, name: '测试合并', isMain: false, itemCount: 10, latestImageId: null },
   ]);
-  assert.equal(asked.searchParams.get('action'), 'get_profile_fave_folders');
-  assert.equal(asked.searchParams.get('username'), '黄昏夜雨');
+  assert.equal(asked.pathname, '/api/v1/users/12/favorite-folders');
 
-  globalThis.fetch = async () => json({ success: false, message: '该用户未公开收藏夹' });
-  const refusal = await favorites.getProfileFaveFolders('x').catch((error) => error);
-  assert.ok(refusal instanceof ApiError);
-  assert.equal(refusal.message, '该用户未公开收藏夹');
-  assert.equal(isRetryable(refusal), false, 'the owner’s answer, not a fault');
-
-  globalThis.fetch = async () => new Response('<html>404</html>', { status: 404, headers: { 'content-type': 'text/html' } });
-  assert.equal(isNotFound(await favorites.getProfileFaveFolders('nobody').catch((error) => error)), true);
+  globalThis.fetch = async () => json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
+  const missing = await favorites.getProfileFaveFolders(99).catch((error) => error);
+  assert.ok(missing instanceof ApiError);
+  assert.equal(isNotFound(missing), true);
+  assert.equal(isRetryable(missing), false);
 });
 
-test('the badge dictionary is a name → description map; a success without its list is a failure', async () => {
-  globalThis.fetch = async () =>
-    json({ success: true, dicts: [{ badge_name: '公测先锋', description: ' 参与公测 ' }, { badge_name: '空', description: '' }, { x: 1 }] });
+test('the badge dictionary is a name → description map; a failure throws', async () => {
+  let asked;
+  globalThis.fetch = async (url) => {
+    asked = String(url);
+    return json({ dictionary: [{ name: '公测先锋', description: ' 参与公测 ' }, { name: '空', description: '' }] });
+  };
   assert.deepEqual(await picpony.getBadgeDictionary(), { 公测先锋: '参与公测' });
-  globalThis.fetch = async () => json({ success: true });
+  assert.equal(asked, '/api/v1/badges/dictionary');
+  globalThis.fetch = async () => json({ error: { code: 'INTERNAL', message: '服务暂不可用' } }, { status: 503 });
   await assert.rejects(picpony.getBadgeDictionary(), ApiError);
 });
 
-test('the owner’s badges take their expiry from the row or from badge_expires', async () => {
+test('the owner’s badges: held rows with their expiry, the worn set with ids', async () => {
   globalThis.fetch = async (url, init) => {
+    assert.equal(String(url), '/api/v1/me/badges');
     assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer t');
     return json({
-      success: true,
-      badges: [{ badge_name: 'a', badge_color: '#111111' }, { badge_name: 'b', badge_color: '#222222', expires_at: '2027-01-01 00:00:00' }],
-      equipped_badges: [{ badge_name: 'a', badge_color: '#111111' }],
-      badge_expires: { a: '2026-12-01 00:00:00' },
+      badges: [
+        { id: 1, user_id: 5, name: 'a', color: '#111111', expires_at: null, expired: false },
+        { id: 2, user_id: 5, name: 'b', color: '#222222', expires_at: '2027-01-01T00:00:00Z', expired: false },
+      ],
+      equipped: [{ id: 1, name: 'a', color: '#111111', expires_at: null, position: 0 }],
     });
   };
   assert.deepEqual(await picpony.getMyBadges('t'), {
     badges: [
-      { name: 'a', color: '#111111', expiresAt: '2026-12-01 00:00:00' },
-      { name: 'b', color: '#222222', expiresAt: '2027-01-01 00:00:00' },
+      { id: 1, name: 'a', color: '#111111', expiresAt: null },
+      { id: 2, name: 'b', color: '#222222', expiresAt: '2027-01-01T00:00:00Z' },
     ],
-    equipped: [{ badge_name: 'a', badge_color: '#111111' }],
+    equipped: [{ id: 1, badge_name: 'a', badge_color: '#111111' }],
   });
 });
 
-test('equipping sends the whole worn set, and a refusal throws its sentence', async () => {
+test('equipping sends the worn set as ids, in order, and a refusal throws its sentence', async () => {
   let sent;
   globalThis.fetch = async (url, init) => {
-    sent = { action: new URL(String(url), 'https://app.invalid').searchParams.get('action'), body: JSON.parse(init.body) };
-    return json({ success: true });
+    sent = { url: String(url), method: init.method, body: JSON.parse(init.body) };
+    return json({ badge_ids: sent.body.badge_ids });
   };
-  await picpony.equipBadges('t', [{ badge_name: 'a', badge_color: '#111111', extra: 1 }]);
-  assert.deepEqual(sent, { action: 'equip_badge', body: { equipped_badges: [{ badge_name: 'a', badge_color: '#111111' }] } });
+  await picpony.equipBadges('t', [{ id: 4, badge_name: 'a', badge_color: '#111111' }, { id: 2, badge_name: 'b', badge_color: '#222222' }]);
+  assert.deepEqual(sent, { url: '/api/v1/me/badges/equipment', method: 'PUT', body: { badge_ids: [4, 2] } });
   await picpony.equipBadges('t', []);
-  assert.deepEqual(sent.body, { equipped_badges: [] }, 'an empty list takes every badge off');
+  assert.deepEqual(sent.body, { badge_ids: [] }, 'an empty list takes every badge off');
+  await assert.rejects(picpony.equipBadges('t', [{ badge_name: 'x', badge_color: '#000000' }]), ApiError,
+    'a badge without its id cannot be named');
 
-  globalThis.fetch = async () => json({ success: false, error: '最多只能佩戴3个徽章' });
+  globalThis.fetch = async () => json({ error: { code: 'BADGE_NOT_OWNED', message: '只能佩戴本人拥有且未过期的徽章' } }, { status: 403 });
   const refusal = await picpony.equipBadges('t', []).catch((error) => error);
   assert.ok(refusal instanceof ApiError);
-  assert.equal(refusal.message, '最多只能佩戴3个徽章');
+  assert.equal(refusal.code, 'BADGE_NOT_OWNED');
+  assert.equal(refusal.message, '只能佩戴本人拥有且未过期的徽章');
 });
 
-test('shared faves are one entry per picture, first position kept (R7-002 / R7-036)', async () => {
-  globalThis.fetch = async () => json({ success: true, username: 'a', faves: [3, 1, 3, '2', 1, -1, 'x'] });
-  assert.deepEqual((await favorites.getSharedFaves('a')).faves, [3, 1, 2]);
+test('shared faves are one entry per picture, first position kept, every page read (R7-002 / R7-036)', async () => {
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    const target = new URL(String(url), 'https://app.invalid');
+    asked.push([target.pathname, target.searchParams.get('page'), target.searchParams.get('folder_id')]);
+    const page = Number(target.searchParams.get('page'));
+    /* A favourite saved between the two reads shifts picture 100 onto the second page. */
+    const ids = page === 1 ? Array.from({ length: 100 }, (_, i) => i + 1) : [100, 101];
+    return json({ owner_id: 12, image_ids: ids, items: [], total: 101, page, limit: 100 });
+  };
+  const ids = await favorites.getSharedFaves(12, 3);
+  assert.equal(ids.length, 101);
+  assert.deepEqual(ids.slice(-2), [100, 101]);
+  assert.deepEqual(asked, [['/api/v1/users/12/favorites', '1', '3'], ['/api/v1/users/12/favorites', '2', '3']]);
 });
 
 test('a profile id that cannot exist is not found without a request (R7-009)', async () => {
@@ -266,15 +289,16 @@ test('a profile id that cannot exist is not found without a request (R7-009)', a
 test('the profile seed: the record, not-found for the backend’s 404 or an impossible id, null for a fault', async () => {
   const asked = [];
   globalThis.fetch = async (url) => {
-    const id = new URL(String(url)).searchParams.get('user_id');
+    const id = new URL(String(url)).pathname.split('/').pop();
     asked.push(id);
-    if (id === '404') return new Response('<html>404</html>', { status: 404, headers: { 'content-type': 'text/html' } });
+    if (id === '404') return json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
     if (id === '500') return new Response('', { status: 500 });
-    return json({ success: true, user: { id: Number(id), username: `u${id}` } });
+    return json({ user: wire({ id: Number(id), username: `u${id}` }) });
   };
   const seed = await readUserProfile('7');
   assert.equal(seed.key, '7');
   assert.equal(seed.data.username, 'u7');
+  assert.equal(seed.data.has_api_key, false, 'the seed is the mapped domain profile');
   assert.equal(await readUserProfile('404'), PROFILE_MISSING);
   assert.equal(await readUserProfile('500'), null, 'a fault is left to the client read, and not retained');
   assert.equal(await readUserProfile('7&x=1'), PROFILE_MISSING);
@@ -285,7 +309,7 @@ test('the profile seed: the record, not-found for the backend’s 404 or an impo
 
 test('the profile reads forward their AbortSignal through their real adapters', async () => {
   const cases = [
-    [catalogue.profileFaveFolders, { username: 'pony' }],
+    [catalogue.profileFaveFolders, { ownerId: 7 }],
     [catalogue.folderCovers, { ids: [1, 2], fp: 'safe|-|d|-|' }],
     [catalogue.badgeDictionary, {}],
     [catalogue.myBadges, { token: 'fake' }],

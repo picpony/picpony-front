@@ -23,9 +23,16 @@ import Skeleton from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { saveApikey, uploadAvatar, uploadBanner } from '@/lib/api/picpony';
-import { readEnvelope } from '@/lib/api/http';
-import { apiErrorMessage } from '@/lib/api/errors';
+import {
+  clearUpstreamCredential,
+  getUpstreamCredential,
+  isRefusal,
+  uploadAvatar,
+  uploadBanner,
+  verifyUpstreamCredential,
+  type UpstreamCredential,
+} from '@/lib/api/picpony';
+import { apiErrorMessage, isAborted } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { changeSyncedSetting, useSyncedSetting } from '@/lib/settingsSync';
@@ -35,12 +42,27 @@ import EmailDialog, { type EmailStep } from './EmailDialog';
 import PasswordDialog from './PasswordDialog';
 import ProfileDialog, { profileOf } from './ProfileDialog';
 import UsernameDialog from './UsernameDialog';
-import { detectDerpiIdentity, isRealIdentity } from './identity';
 import { RowButton, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
-import { emailVerified, saveAccountFields, text, useAccount, type Account } from './useAccount';
+import { emailVerified, pendingEmailChange, saveAccountFields, text, useAccount, type Account } from './useAccount';
 import AssistantSettings from '@/components/assistant/AssistantSettings';
 
 type DialogKind = 'username' | 'password' | 'email' | 'profile' | 'apikey';
+
+/**
+ * The account's Derpibooru identity as the session keeps it, from the backend's credential record:
+ * a verified binding names its owner, anything else names nobody. `api_key` is the device's own
+ * copy, which the backend never sends back — it is set when this device binds a key and cleared
+ * when the binding ends.
+ */
+function credentialFields(credential: UpstreamCredential): Record<string, unknown> {
+  const { identity } = credential;
+  const verified = identity.status === 'verified' && identity.id !== null;
+  return {
+    derpi_user_id: verified ? String(identity.id) : '',
+    derpi_username: verified ? identity.name ?? '' : '',
+    ...(credential.has_key ? {} : { api_key: '' }),
+  };
+}
 
 /** `abcd••••••••wxyz` — the key's ends, enough to recognise it, never the whole. */
 function maskKey(key: string): string {
@@ -68,9 +90,38 @@ function AccountSections({ account }: { account: Account }) {
   const banner = text(record.banner);
   const email = text(record.email);
   const verified = emailVerified(record);
+  const emailChange = pendingEmailChange(record);
   const apiKey = text(record.api_key);
-  const derpiName = text(record.derpi_username);
-  const identified = isRealIdentity(record.derpi_user_id, record.derpi_username);
+
+  /* The key's binding is the backend's (`GET /me/upstream-credential`): whether a key is stored, its
+     hint, and whose account it was verified to be. The stored session only knows the key itself if
+     this device bound it. */
+  const [credential, setCredential] = useState<UpstreamCredential | null>(null);
+  const [credentialError, setCredentialError] = useState<unknown>(null);
+  const [credentialReads, setCredentialReads] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    getUpstreamCredential(token, controller.signal)
+      .then((value) => {
+        if (readToken() !== token) return;
+        setCredential(value);
+        setCredentialError(null);
+        saveAccountFields(token, credentialFields(value));
+      })
+      .catch((error) => {
+        if (!isAborted(error) && readToken() === token) setCredentialError(error);
+      });
+    return () => controller.abort();
+  }, [token, credentialReads]);
+  const rereadCredential = () => setCredentialReads((n) => n + 1);
+  const adoptCredential = (value: UpstreamCredential) => {
+    setCredential(value);
+    saveAccountFields(token, credentialFields(value));
+  };
+  const bound = credential ? credential.has_key : apiKey !== '';
+  const identified = credential?.identity.status === 'verified';
+  const derpiName = credential?.identity.name ?? '';
+  const keyLabel = apiKey ? maskKey(apiKey) : credential?.key_hint ?? '';
   const profile = profileOf(record);
   /* A field the stored session does not hold is unknown until the read answers — shown as a
      placeholder while it loads and as unreadable if it failed, never as "not set". */
@@ -78,7 +129,8 @@ function AccountSections({ account }: { account: Account }) {
   const unknown = (field: string) => !has(field) && status !== 'ready';
   /* A placeholder on screen marks the pane as loading: the tab switch then slides it as one
      plane rather than leaning rows whose values are about to land, and the footer waits. */
-  const reading = status === 'loading' && ['username', 'bio', 'email', 'api_key'].some((field) => !has(field));
+  const reading = (status === 'loading' && ['username', 'bio', 'email'].some((field) => !has(field))) ||
+    (credential === null && credentialError === null);
 
   /* Each dialog mounts on its first opening and remounts on every later one — the remount is its
      reset — and stays mounted through its exit animation. */
@@ -141,12 +193,9 @@ function AccountSections({ account }: { account: Account }) {
     setUploading(kind);
     const file = new File([blob], `${kind}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type });
     try {
-      const data = await readEnvelope<{ avatar_url?: unknown; banner_url?: unknown }>(
-        await (kind === 'avatar' ? uploadAvatar(token, file) : uploadBanner(token, file)),
-      );
+      const data = await (kind === 'avatar' ? uploadAvatar(token, file) : uploadBanner(token, file));
       if (readToken() !== token) return;
-      const url = text(kind === 'avatar' ? data.avatar_url : data.banner_url);
-      if (url) saveAccountFields(token, { [kind]: url });
+      saveAccountFields(token, { [kind]: data.url });
       if (kind === 'avatar') setAvatarPick(null);
       else setBannerPick(null);
       showToast(kind === 'avatar' ? '已更换头像' : '已更换横幅', 'success');
@@ -159,34 +208,33 @@ function AccountSections({ account }: { account: Account }) {
     }
   };
 
-  /** 核验: ask the key whose it is again, and save what it says — including "nobody". */
+  /** A write that names a stale credential revision: read the record again, and say so. */
+  const credentialFailed = (error: unknown, fallback: string) => {
+    if (readToken() !== token) return;
+    if (isRefusal(error, 'CREDENTIAL_CONFLICT')) rereadCredential();
+    showToast(apiErrorMessage(error, fallback), 'error');
+  };
+
+  /** 核验: the backend asks Derpibooru whose the stored key is, and records what it says — including "nobody". */
   const verifyIdentity = async () => {
-    if (keyBusy || !apiKey) return;
+    if (keyBusy || !credential) return;
     setKeyBusy('verify');
     try {
-      const identity = await detectDerpiIdentity(apiKey);
+      const next = await verifyUpstreamCredential(token, credential.revision);
       if (readToken() !== token) return;
-      if (identity.status === 'invalid') {
-        showToast('该 API Key 已失效或没有访问权限，请重新绑定', 'error');
-        return;
-      }
-      const derpi = identity.status === 'verified'
-        ? { derpi_user_id: identity.id, derpi_username: identity.name }
-        : { derpi_user_id: '', derpi_username: '' };
-      await readEnvelope(await saveApikey(token, { api_key: apiKey, ...derpi }));
-      if (readToken() !== token) return;
-      saveAccountFields(token, derpi);
-      if (identity.status === 'verified') showToast(`已核验，Derpibooru 账号为 ${identity.name}`, 'success');
-      else showToast('该账号暂无上传或评论，无法确认 Derpibooru 用户名', 'info');
+      adoptCredential(next);
+      if (next.identity.status === 'verified') showToast(`已核验，Derpibooru 账号为 ${next.identity.name}`, 'success');
+      else if (next.identity.status === 'no_activity') showToast('该账号暂无上传或评论，无法确认 Derpibooru 用户名', 'info');
+      else showToast('该 API Key 已失效或没有访问权限，请重新绑定', 'error');
     } catch (error) {
-      if (readToken() === token) showToast(apiErrorMessage(error, '核验失败'), 'error');
+      credentialFailed(error, '核验失败');
     } finally {
       setKeyBusy(null);
     }
   };
 
   const unbind = async () => {
-    if (keyBusy) return;
+    if (keyBusy || !credential) return;
     const confirmed = await confirm({
       title: '确认解除绑定',
       message: '确定要解除该 Derpibooru API Key 的绑定吗？解除后将不再同步 Derpibooru 的黑名单过滤等设置。',
@@ -196,13 +244,12 @@ function AccountSections({ account }: { account: Account }) {
     setKeyBusy('unbind');
     handoff.current = { from: unbindAction.current, to: keyAction, dialog: false };
     try {
-      await readEnvelope(await saveApikey(token, { api_key: '', derpi_user_id: '', derpi_username: '' }));
+      adoptCredential(await clearUpstreamCredential(token, credential.revision));
       if (readToken() !== token) return;
-      saveAccountFields(token, { api_key: '', derpi_user_id: '', derpi_username: '' });
       showToast('已解除绑定', 'success');
     } catch (error) {
       handoff.current = null;
-      if (readToken() === token) showToast(apiErrorMessage(error, '解除绑定失败'), 'error');
+      credentialFailed(error, '解除绑定失败');
     } finally {
       setKeyBusy(null);
     }
@@ -334,12 +381,18 @@ function AccountSections({ account }: { account: Account }) {
               </Badge>
             ) : undefined
           }
-          supporting={unknown('email') ? placeholder : email || (has('email') ? '未绑定' : unreadable)}
+          supporting={
+            unknown('email')
+              ? placeholder
+              : emailChange
+                ? `${email}（更换为 ${emailChange.email} 待验证）`
+                : email || (has('email') ? '未绑定' : unreadable)
+          }
           action={
             <>
-              {email && !verified && (
+              {emailChange && (
                 <RowButton
-                  label="验证邮箱"
+                  label="验证新邮箱"
                   icon={<MdMarkEmailRead />}
                   onClick={() => {
                     setEmailStep('verify');
@@ -358,7 +411,7 @@ function AccountSections({ account }: { account: Account }) {
                   show('email');
                 }}
                 disabled={!email && !has('email')}
-                collapse={Boolean(email && !verified)}
+                collapse={Boolean(emailChange)}
               >
                 {email ? '更换' : '绑定'}
               </RowButton>
@@ -371,26 +424,28 @@ function AccountSections({ account }: { account: Account }) {
         <SettingsRow
           label="API Key"
           badge={
-            apiKey ? (
+            bound ? (
               <Badge tone={identified ? 'success' : 'warning'} size="sm">
                 {identified ? '已核验' : '未核验'}
               </Badge>
             ) : undefined
           }
           supporting={
-            unknown('api_key')
+            credential === null && credentialError === null
               ? placeholder
-              : apiKey
-                ? identified
-                  ? `Derpibooru 账号：${derpiName}`
-                  : `${maskKey(apiKey)}，尚未确认所属账号`
-                : '绑定后可同步 Derpibooru 的黑名单过滤等设置'
+              : credential === null && !apiKey
+                ? unreadable
+                : bound
+                  ? identified
+                    ? `Derpibooru 账号：${derpiName}`
+                    : `${keyLabel}，尚未确认所属账号`
+                  : '绑定后可同步 Derpibooru 的黑名单过滤等设置'
           }
           action={
             /* Keyed: without keys the unbound row's 绑定 would be reused as the bound row's 核验,
                and a focus handed back to "the button that opened the dialog" would land on a
                different action. */
-            apiKey ? (
+            bound ? (
               <>
                 <RowButton
                   key="verify"
@@ -398,7 +453,7 @@ function AccountSections({ account }: { account: Account }) {
                   icon={<MdVerifiedUser />}
                   onClick={verifyIdentity}
                   loading={keyBusy === 'verify'}
-                  disabled={keyBusy === 'unbind'}
+                  disabled={keyBusy === 'unbind' || !credential}
                 >
                   核验
                 </RowButton>
@@ -410,7 +465,7 @@ function AccountSections({ account }: { account: Account }) {
                   icon={<MdLinkOff />}
                   onClick={unbind}
                   loading={keyBusy === 'unbind'}
-                  disabled={keyBusy === 'verify'}
+                  disabled={keyBusy === 'verify' || !credential}
                 >
                   解除绑定
                 </RowButton>
@@ -420,7 +475,7 @@ function AccountSections({ account }: { account: Account }) {
                   label="更换 API Key"
                   icon={<MdEdit />}
                   onClick={() => show('apikey')}
-                  disabled={keyBusy !== null}
+                  disabled={keyBusy !== null || !credential}
                 >
                   更换
                 </RowButton>
@@ -432,7 +487,7 @@ function AccountSections({ account }: { account: Account }) {
                 label="绑定 API Key"
                 icon={<MdLink />}
                 onClick={() => show('apikey')}
-                disabled={!has('api_key') && status !== 'ready'}
+                disabled={!credential}
                 collapse={false}
               >
                 绑定
@@ -509,7 +564,17 @@ function AccountSections({ account }: { account: Account }) {
         <ProfileDialog key={opens.profile} open={open === 'profile'} token={token} saved={profile} onClose={closeDialog} />
       )}
       {opens.apikey > 0 && (
-        <ApiKeyDialog key={opens.apikey} open={open === 'apikey'} token={token} current={apiKey} onClose={closeDialog} />
+        <ApiKeyDialog
+          key={opens.apikey}
+          open={open === 'apikey'}
+          token={token}
+          current={apiKey}
+          bound={bound}
+          revision={credential?.revision ?? 0}
+          onSaved={adoptCredential}
+          onConflict={rereadCredential}
+          onClose={closeDialog}
+        />
       )}
       {confirmDialog}
     </div>

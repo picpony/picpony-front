@@ -61,8 +61,9 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
   const admin = canAccess('admin', role);
   const reports = useAdminQuery(reportsQuery, admin ? token : '');
   const status = useAdminQuery(siteStatusQuery, admin ? token : '');
-  /* The glossary feedback queue's own first page — the same key the feedback dialog opens on. */
-  const feedback = useResource(tagFeedback, token ? { token, status: 'pending', page: 1, keyword: '' } : SKIP);
+  /* The glossary feedback queue's own first page — the same key the feedback dialog opens on. The
+     backend counts nothing, so a full first page with a next one reads 「40+」. */
+  const feedback = useResource(tagFeedback, token ? { token, status: 'pending', keyword: '' } : SKIP);
   /* A one-row page: the statistics ride on any dictionary read. */
   const dictionary = useResource(
     dictionaryPage,
@@ -95,7 +96,7 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
           <Tile
             tab="glossary"
             label="待处理的词库反馈"
-            value={feedback.error && !feedback.data ? failed : feedback.data ? formatCount(feedback.data.summary.pending) : undefined}
+            value={feedback.error && !feedback.data ? failed : feedback.data ? `${formatCount(feedback.data.rows.length)}${feedback.data.next === null ? '' : '+'}` : undefined}
             caption="前往词库编辑"
             openTab={openTab}
           />

@@ -8,8 +8,7 @@ import type { CartLine } from './cartStore';
  * bought, is the shop's current answer:
  * - **ok** — on sale; the quantity is clamped to the stock the shop reports, and `adjusted` says
  *   the stored one was more (somebody else bought some meanwhile). The clamped number is what
- *   the checkout sends. A stock the shop did not state (`null`) clamps nothing: the backend's
- *   answer to the checkout says what there was.
+ *   the checkout sends.
  * - **sold-out** — on sale with no stock left; it stays in the cart, out of the total.
  * - **gone** — no longer offered (removed, or switched off); shown by the name it was added
  *   under, out of the total, until the user removes it.
@@ -27,7 +26,7 @@ export interface CartSummary {
   shown: number;
   /** Their price, in coins. */
   total: number;
-  /** What `checkout_cart` is sent. */
+  /** What the checkout is sent. */
   purchasable: CheckoutLine[];
 }
 
@@ -45,12 +44,12 @@ export function resolveCart(lines: readonly CartLine[], items: readonly ShopItem
       shown += line.quantity;
       continue;
     }
-    if (item.stock !== null && item.stock <= 0) {
+    if (item.stock <= 0) {
       entries.push({ kind: 'sold-out', line, item });
       shown += line.quantity;
       continue;
     }
-    const quantity = item.stock === null ? line.quantity : Math.min(line.quantity, item.stock);
+    const quantity = Math.min(line.quantity, item.stock);
     entries.push({ kind: 'ok', line, item, quantity, adjusted: quantity < line.quantity });
     purchasable.push({ item, quantity });
     pieces += quantity;

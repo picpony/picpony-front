@@ -94,19 +94,18 @@ export function hasMoreDerpiComments(pages: readonly (readonly Comment[])[], tot
 }
 
 /**
- * What a reply tells the backend about the comment it answers (`post_comment`'s
- * `reply_to_user_id` / `reply_to_comment_id`). Both are PicPony's own ids (P3-F4): a Derpibooru
- * comment's id names nothing here — sent as `reply_to_comment_id` it named whichever PicPony
- * comment happens to share the number, and that comment's author could be told they were
- * answered. A Derpibooru author has no account here either, so a reply to one sends neither; the
- * quote in the body still says what it answers.
+ * What a reply tells the backend about the comment it answers (`POST /images/{id}/comments`'s
+ * `reply_to_user_id`, which the backend notifies). It is PicPony's own user id (P3-F4): a
+ * Derpibooru author has no account here, so a reply to one names nobody (`null`); the quote in
+ * the body still says what it answers. The backend takes no comment id, so `commentId` is the
+ * composer's own record of the answered row.
  */
 export function replyReference(replyTo: { id: number; source: 'picpony' | 'trixiebooru'; userId: number | null } | null): {
-  userId: number;
+  userId: number | null;
   commentId: number | null;
 } {
-  if (!replyTo || replyTo.source !== 'picpony') return { userId: 0, commentId: null };
-  return { userId: replyTo.userId ?? 0, commentId: replyTo.id };
+  if (!replyTo || replyTo.source !== 'picpony') return { userId: null, commentId: null };
+  return { userId: replyTo.userId, commentId: replyTo.id };
 }
 
 export function useImageComments(imageId: number, enabled: boolean): ImageComments {

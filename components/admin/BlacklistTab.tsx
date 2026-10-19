@@ -14,21 +14,19 @@ import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminForm } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { adminList, defineAdminQuery, tableError, useAdminQuery } from './queries';
+import { defineAdminQuery, tableError, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 
-interface BlacklistItem {
-  image_id: number;
-  reason: string;
-  created_at: string;
-}
+type BlacklistItem = adminApi.AdminBlock;
 
 const EMPTY: BlacklistItem[] = [];
-const blacklistQuery = defineAdminQuery<BlacklistItem[]>('blacklist', async (token, signal) => {
-  const data = await adminApi.adminGetBlacklist(token, signal);
-  return adminList<BlacklistItem>(data, 'blacklist', '屏蔽库');
-});
+/* The list and the policy revision every add or removal names (`expected_revision`). */
+const blacklistQuery = defineAdminQuery<adminApi.AdminBlocklist>('blacklist', (token, signal) => adminApi.adminGetBlacklist(token, signal));
+
+/** The revision a write answered, for the next write from the same cache. */
+const nextRevision = (data: Record<string, unknown>, fallback: number) =>
+  typeof data.current_revision === 'number' ? data.current_revision : fallback;
 
 /**
  * 图片屏蔽库 — pictures hidden from every feed, search and profile on the site.
@@ -40,7 +38,8 @@ const blacklistQuery = defineAdminQuery<BlacklistItem[]>('blacklist', async (tok
  */
 export default function BlacklistTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(blacklistQuery, token);
-  const items = read.data ?? EMPTY;
+  const items = read.data?.items ?? EMPTY;
+  const revision = read.data?.revision;
   const addMutation = useAdminMutation(token);
   const removeMutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
@@ -57,7 +56,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
   const paged = usePagedRows(filtered, search.trim());
 
   const add = () => {
-    if (addMutation.isPending()) return;
+    if (addMutation.isPending() || revision === undefined) return;
     const text = imageId.trim();
     const id = Number(text);
     if (!/^\d+$/.test(text) || !Number.isSafeInteger(id) || id < 1) {
@@ -73,14 +72,19 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       `确定要屏蔽图片 #${id} 吗？屏蔽后全站的图库、搜索和个人主页都不会再显示这张图片。`,
       () =>
         void addMutation.run(
-          () => adminApi.adminAddBlacklist(token, id, reason.trim()),
+          () => adminApi.adminAddBlacklist(token, blacklistQuery.peek(token).data?.revision ?? revision, id, reason.trim()),
           () => {
             showToast(`已屏蔽图片 #${id}`, 'success');
             setImageId('');
             setReason('');
           },
           '屏蔽失败',
-          { onCommitted: read.refresh },
+          {
+            onCommitted: (data) => {
+              blacklistQuery.write(token, (previous) => ({ revision: nextRevision(data, previous?.revision ?? revision), items: previous?.items ?? [] }));
+              read.refresh();
+            },
+          },
         ),
     );
   };
@@ -88,13 +92,20 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
   const remove = (id: number) =>
     confirmThen('确认解除屏蔽', `确定要解除对图片 #${id} 的屏蔽吗？`, () =>
       void removeMutation.run(
-        () => adminApi.adminRemoveBlacklist(token, id),
+        async () => {
+          /* The revision as it is when the confirmation is answered, not when it opened. */
+          const current = blacklistQuery.peek(token).data?.revision;
+          return current === undefined ? null : adminApi.adminRemoveBlacklist(token, current, id);
+        },
         () => showToast(`已解除对图片 #${id} 的屏蔽`, 'success'),
         '解除失败',
         {
           key: id,
-          onCommitted: () => {
-            blacklistQuery.write(token, (previous) => previous?.filter((item) => item.image_id !== id) ?? []);
+          onCommitted: (data) => {
+            blacklistQuery.write(token, (previous) => ({
+              revision: nextRevision(data, previous?.revision ?? 0),
+              items: previous?.items.filter((item) => item.image_id !== id) ?? [],
+            }));
             read.refresh();
           },
         },

@@ -2,14 +2,14 @@
  * The wealth dialog's rules as plain functions (`scripts/testAdminConsole.mjs`).
  */
 
-import { figureOf } from './figures';
+import type { WealthAdjustment } from '@/lib/api/admin';
 
-/** A row of `admin_get_users`, as this panel reads it: the two figures arrive as numbers or strings, or not at all. */
+/** A row of the account list, as this panel reads it. */
 export interface WealthUser {
   id: number;
   username: string;
-  experience?: number | string | null;
-  coins?: number | string | null;
+  experience: number;
+  coins: number;
 }
 
 export type CoinsOp = 'add' | 'sub' | 'set';
@@ -29,18 +29,18 @@ export function coinsAfter(current: number, op: CoinsOp, value: number): number 
 }
 
 /**
- * The `admin_update_wealth` body, as the original console builds it: experience only when it
- * changed, with its own reason; coins only when a value was entered — an operator, a whole
- * number and a reason. `{ coins_op: 'set', coins_value: '' }` once went out from an empty field
- * (R9-026), which depending on the backend's cast set the user's coins to nothing.
+ * The wealth adjustment's body: experience only when it changed, with its own reason; coins only
+ * when a value was entered — an operator, a whole number and a reason. Both carry the balance the
+ * dialog showed (`expected_*`): the backend refuses the adjustment if it moved in the meantime
+ * (`WEALTH_CONFLICT`), so a stale preview cannot be applied. `null` when nothing would change.
  */
 export function wealthPayload(
   user: WealthUser,
   form: { experience: string; experienceReason: string; coinsOp: CoinsOp; coinsValue: string; coinsReason: string },
-): Record<string, unknown> | null {
-  const payload: Record<string, unknown> = { target_id: user.id };
+): WealthAdjustment | null {
+  const payload: WealthAdjustment = { expected_coins: user.coins, expected_experience: user.experience };
   const experience = wholeNumber(form.experience);
-  if (experience !== null && experience !== figureOf(user.experience)) {
+  if (experience !== null && experience !== user.experience) {
     payload.experience = experience;
     payload.experience_reason = form.experienceReason.trim();
   }
@@ -48,9 +48,8 @@ export function wealthPayload(
   /* Adding or deducting nothing is not a change (review P6-F8): it would only write an empty line
      into the user's bill. Setting the balance to 0 is one. */
   if (coins !== null && (coins > 0 || form.coinsOp === 'set')) {
-    payload.coins_op = form.coinsOp;
-    payload.coins_value = coins;
-    payload.reason = form.coinsReason.trim();
+    payload.coins = { operation: form.coinsOp === 'sub' ? 'subtract' : form.coinsOp, amount: coins };
+    payload.coins_reason = form.coinsReason.trim();
   }
-  return Object.keys(payload).length > 1 ? payload : null;
+  return payload.experience !== undefined || payload.coins !== undefined ? payload : null;
 }

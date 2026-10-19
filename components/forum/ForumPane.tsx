@@ -14,7 +14,8 @@ import ForumPostList, { ForumListSkeleton } from '@/components/ForumPostList';
 import { CategoryIcon } from '@/components/forum/ForumBadges';
 import { useAuthModal } from '@/components/AuthModal';
 import { SKIP, useResource } from '@/lib/resource';
-import { forumPosts } from '@/lib/resources';
+import { forumPosts, unreadCounts } from '@/lib/resources';
+import { markForumRead } from '@/lib/api/forum';
 import { useScreenState } from '@/lib/screenState';
 import { useSession } from '@/lib/hooks';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -58,7 +59,7 @@ const SEARCH_DEBOUNCE_MS = 450;
  * server can render into a cold `/?tab=forum` (`seed`). A link to a filtered list is not a thing
  * the original front end had either.
  */
-export default function ForumPane({ seed }: { seed?: ForumSeed | null }) {
+export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | null; active?: boolean }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { token, ready } = useSession();
@@ -87,6 +88,33 @@ export default function ForumPane({ seed }: { seed?: ForumSeed | null }) {
   useEffect(() => {
     rememberForumList({ page, category, sort, search, token });
   }, [page, category, sort, search, token]);
+
+  /* **The forum's read receipt.** 论坛's badge counts posts created since the last receipt
+     (`forum` in `GET /me/unread-counts`). The signed-in reader looking at the first page of the
+     whole list has seen the newest posts: the mark moves up to the newest one on screen — not to
+     "now", which would swallow a post created after this read — and the badge clears at once,
+     then the server's own count has the last word. Only while the pane is on screen (it stays
+     mounted, hidden, behind the gallery) and only when something is counted. */
+  const newest = data && data.signedIn && !read.isPrevious && page === 1 && category === 'all' && search === ''
+    ? data.posts.reduce<string | null>((max, post) => (max === null || post.created_at > max ? post.created_at : max), null)
+    : null;
+  const receiptRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !token || !newest || receiptRef.current === `${token}\n${newest}`) return;
+    const counts = unreadCounts.peek({ token }).data;
+    if (counts && counts.forum === 0) return;
+    receiptRef.current = `${token}\n${newest}`;
+    markForumRead(token, newest).then(
+      () => {
+        const previous = unreadCounts.peek({ token }).data;
+        if (previous) unreadCounts.write({ token }, { ...previous, forum: 0 });
+        void unreadCounts.read({ token }, { force: true }).catch(() => {});
+      },
+      () => {
+        receiptRef.current = null;
+      },
+    );
+  }, [active, token, newest]);
 
   /* The view the rows on screen answer, so a read that only adds the session does not dim them. */
   const viewKey = `${page}|${category}|${sort}|${search}`;
@@ -262,7 +290,6 @@ export default function ForumPane({ seed }: { seed?: ForumSeed | null }) {
           totalPages={data.totalPages}
           onPageChange={changePage}
           onPrefetchPage={(next) => forumPosts.prefetch({ ...query, page: next })}
-          signedIn={data.signedIn}
           token={token}
           busy={busy}
         />

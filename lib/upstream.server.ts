@@ -12,14 +12,14 @@
  * deployment would otherwise send that deployment's sessions to the live backend without a
  * trace. Accepted: an `http:` / `https:` origin with no credentials, path, query or fragment (a
  * trailing `/` is tolerated). The answer is the canonical origin, with no trailing slash, so call
- * sites can append `/api.php` directly.
+ * sites can append `/api/v1/...` directly.
  *
  * Server-only by convention (the repo does not depend on `server-only`): nothing on the client
  * may read it — the browser goes through this server's own routes.
  */
 
 /** The production backend; the default when the override is unset or empty. */
-export const DEFAULT_UPSTREAM_ORIGIN = 'https://picpony.top';
+export const DEFAULT_UPSTREAM_ORIGIN = 'https://api.picpony.top';
 
 export function parseUpstreamOrigin(raw: string | undefined | null): string {
   const value = (raw ?? '').trim();

@@ -23,6 +23,7 @@ import {
   MdStorage,
   MdStore,
   MdToll,
+  MdTranslate,
   MdTune,
 } from 'react-icons/md';
 
@@ -49,7 +50,7 @@ export const ADMIN_SECTIONS = {
   shop: { label: '商店管理', glyph: MdStore },
   mascots: { label: '吉祥物管理', glyph: MdPets },
   ponies: { label: '桌面小马', glyph: MdAnimation },
-  'data-import': { label: '数据导入', glyph: MdStorage },
+  'data-import': { label: '数据维护', glyph: MdStorage },
   reports: { label: '举报处理', glyph: MdReport },
   blacklist: { label: '图片屏蔽库', glyph: MdBlock },
   wealth: { label: '经验与金币', glyph: MdToll },
@@ -57,6 +58,7 @@ export const ADMIN_SECTIONS = {
   routes: { label: '全站线路', glyph: MdAltRoute },
   statistics: { label: '访问统计', glyph: MdAnalytics },
   semantic: { label: '智能搜索', glyph: MdManageSearch },
+  'text-translation': { label: '文本翻译', glyph: MdTranslate },
   relay: { label: '中转服务', glyph: MdRouter },
   'rate-management': { label: '频率与临时封禁', glyph: MdSpeed },
   'ai-assistant': { label: '彩彩 AI', glyph: MdAutoAwesome },

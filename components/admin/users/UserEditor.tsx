@@ -19,31 +19,19 @@ import { copyText } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
 import { validateApiKey, validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
 import { AdminForm, FormActions, FormGrid } from '../AdminForm';
+import Checkbox from '@/components/Checkbox';
+import type { AdminUserChanges, AdminUserDetail, AdminUserRow } from '@/lib/api/admin';
 import {
   initialUserForm,
   randomPassword,
   roleChoice,
   userUpdatePayload,
   type AdminUserBadge,
-  type EditableUser,
   type UserFormValues,
 } from './rules';
 
-export interface AdminUser extends EditableUser {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  api_key: string | null;
-  derpi_user_id?: string | number | null;
-  derpi_username?: string | null;
-  is_banned: number;
-  created_at?: string | null;
-  last_online?: string | null;
-  last_ip?: string | null;
-  ip_location?: string | null;
-  badges?: unknown;
-}
+/** A row of the account list. */
+export type AdminUser = AdminUserRow;
 
 type FieldName = 'username' | 'email' | 'password' | 'apiKey';
 
@@ -76,13 +64,13 @@ export default function UserEditor({
   onEditBadge,
   onDeleteBadge,
 }: {
-  user: AdminUser;
+  user: AdminUserDetail;
   viewer: { id: number; role: Role };
   closing: boolean;
   saving: boolean;
   badges: AdminUserBadge[];
   badgeBusy: (badgeId: number) => boolean;
-  onSave: (payload: Record<string, unknown> | null) => void;
+  onSave: (changes: AdminUserChanges | null) => void;
   onCancel: () => void;
   onExitComplete: () => void;
   onDirtyChange: (dirty: boolean) => void;
@@ -137,9 +125,11 @@ export default function UserEditor({
     user.created_at ? `注册于 ${formatDateTime(user.created_at)}` : null,
     user.last_online ? `最近在线 ${formatDateTime(user.last_online)}` : null,
     user.ip_location ? `IP 属地 ${user.ip_location}` : null,
-    user.last_ip ? `最近 IP ${user.last_ip}` : null,
-    user.derpi_username ? `Derpibooru：${user.derpi_username}` : null,
+    user.upstream_credential.upstream_name ? `Derpibooru：${user.upstream_credential.upstream_name}` : null,
+    user.active_sessions > 0 ? `${user.active_sessions} 个登录会话` : null,
   ].filter(Boolean);
+  const credential = user.upstream_credential;
+  const keyState = credential.has_key ? `当前已绑定${credential.key_hint ? `（${credential.key_hint}）` : ''}` : '当前未绑定';
 
   return (
     <InlineEditorPanel
@@ -204,17 +194,25 @@ export default function UserEditor({
             />
             <Input
               id={id('api-key')}
-              label="Derpibooru API Key"
+              label="新的 Derpibooru API Key"
               name="admin-edit-api-key"
               autoComplete="off"
               spellCheck={false}
               className="font-mono"
               value={form.apiKey}
-              readOnly={saving}
+              readOnly={saving || form.clearKey}
               error={errors.apiKey}
-              helper="清空后保存会解除该用户的 API Key 绑定"
+              helper={`${keyState}；留空则不修改。`}
               onChange={(event) => set('apiKey', event.target.value)}
             />
+            {credential.has_key && (
+              <Checkbox
+                label="解除该用户的 API Key 绑定"
+                checked={form.clearKey}
+                disabled={saving}
+                onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+              />
+            )}
             <Field helper={choice.locked ?? choice.note ?? undefined}>
               <Select
                 label="角色"

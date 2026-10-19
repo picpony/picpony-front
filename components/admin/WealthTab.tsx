@@ -12,6 +12,7 @@ import Select from '@/components/Select';
 import { showToast } from '@/components/Toast';
 import { ICON } from '@/lib/icons';
 import * as adminApi from '@/lib/api/admin';
+import type { WealthAdjustment } from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminForm, FormGrid } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
@@ -131,7 +132,7 @@ export default function WealthTab({ token }: AdminPanelProps) {
           onClose={close}
           onSubmit={(payload) =>
             void mutation.run(
-              () => adminApi.adminUpdateWealth(token, payload),
+              () => adminApi.adminUpdateWealth(token, editing.user.id, payload),
               () => {
                 showToast(`已更新「${editing.user.username}」的资产`, 'success');
                 setEditing((current) => (current ? { ...current, open: false } : current));
@@ -156,7 +157,7 @@ function WealthDialog({
   open: boolean;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (payload: Record<string, unknown>) => void;
+  onSubmit: (payload: WealthAdjustment) => void;
 }) {
   const currentExp = figureOf(user.experience);
   const currentCoins = figureOf(user.coins);

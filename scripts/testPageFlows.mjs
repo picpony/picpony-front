@@ -460,7 +460,7 @@ function syncFixture({ importTags } = {}) {
     '@/lib/api/admin': {
       batchImportDictionaryTags: (token, tasks) => {
         imports.push(tasks);
-        return importTags ? importTags(tasks) : Promise.resolve(Response.json({ success: true, created: tasks.length, skipped: 0, failed: 0 }));
+        return importTags ? importTags(tasks) : Promise.resolve({ created: tasks.length, skipped: 0, failed: 0 });
       },
     },
     './model': glossaryModel,
@@ -487,7 +487,8 @@ tree = invalidSync.render();
 assert.equal(invalidSync.derpiReads.length + invalidSync.imports.length, 0, 'a bad range sends nothing');
 assert.equal(syncField(tree, '起始页').props.error, '起始页须为正整数', 'and is said on its own field');
 
-const rejectedSync = syncFixture({ importTags: async () => Response.json({ success: false, error: '权限不足' }, { status: 403 }) });
+/* The adapter answers counts, or throws the backend's refusal (`403 {error:{code,message}}`). */
+const rejectedSync = syncFixture({ importTags: async () => { throw new syncErrors.ApiError('http', { status: 403, code: 'FORBIDDEN', serverMessage: '权限不足' }); } });
 tree = rejectedSync.render();
 await rejectedSync.hooks.effects();
 syncField(tree, '结束页').props.onChange({ target: { value: '1' } });
@@ -513,7 +514,7 @@ for (let i = 0; i < 4; i++) await flush();
 assert.equal(stoppedSync.imports.length, 1);
 tree = stoppedSync.render();
 find(tree, (node) => node.type === '@/components/Button:default' && node.props.children === '停止同步').props.onClick();
-writing.resolve(Response.json({ success: true, created: 2, skipped: 0, failed: 0 }));
+writing.resolve({ created: 2, skipped: 0, failed: 0 });
 for (let i = 0; i < 10; i++) await flush();
 assert.equal(stoppedSync.imports.length, 1, 'Stop lets the write in flight settle and sends no next page');
 assert.equal(stoppedSync.derpiReads.length, 1);

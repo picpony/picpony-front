@@ -12,7 +12,7 @@ import { apiErrorMessage, isAborted } from '@/lib/api/errors';
  * redrawn, because a canvas keeps only its first frame.
  */
 
-/** The largest file `upload_forum_image` accepts. */
+/** The largest file `POST /me/uploads/forum-images` accepts. */
 export const FORUM_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 /** The largest original the browser is asked to shrink. */
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
@@ -121,8 +121,8 @@ export async function prepareForumImage(file: File): Promise<File> {
 export type ForumUploadOutcome = { ok: true; path: string } | { ok: false; message: string; aborted: boolean };
 
 /**
- * Prepares and uploads one picture; resolves with the path the backend stored it at (what a post
- * lists in `draft_images`) or with the sentence to show. Never throws — callers are components,
+ * Prepares and uploads one picture; resolves with its address (`/api/v1/media/<asset>`, what the
+ * body or the cover references) or with the sentence to show. Never throws — callers are components,
  * and a component with a `try`/`finally` is one the React Compiler leaves alone.
  */
 export async function uploadForumPicture(
@@ -141,9 +141,9 @@ export async function uploadForumPicture(
 }
 
 /**
- * A PicPony asset URL as the backend stores it — `/uploads/…` rather than the absolute address the
- * editor shows. A post's cover is read that way by the original front end too (one of its screens
- * prefixes the origin), so a first-picture cover taken from the body goes back to the stored form.
+ * A PicPony asset URL as the backend stores it — `/api/v1/media/…` rather than the absolute address
+ * the editor shows — so a first-picture cover taken from the body goes back to the stored form
+ * (the backend accepts a relative cover only in that form).
  */
 export function storedAssetPath(url: string): string {
   const origin = `${PICPONY_API_ORIGIN}/`;

@@ -16,7 +16,8 @@ const virtual = {
   './ColorPicker': `module.exports=()=>null;`,
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
   '@/lib/motion': `exports.spring=()=>({});exports.gsap={to:()=>({kill(){}})};`,
-  '@/lib/api/picpony': `exports.captchaGet=()=>window.captchaGet();exports.captchaVerify=(x,track)=>window.captchaVerify(x,track);`,
+  /* `POST /auth/challenges` → the challenge; `POST /auth/challenges/{id}/verification {x, trace}` → `{proof}`. */
+  '@/lib/api/picpony': `exports.captchaGet=()=>window.captchaGet();exports.captchaVerify=(id,x,trace)=>window.captchaVerify(id,x,trace);`,
   'react-icons/md': `const React=require('react');module.exports=new Proxy({}, {get:()=>props=>React.createElement('svg',props)});`,
   './IconButton': `const React=require('react');module.exports=({icon,dismiss,variant,tooltip,...props})=>React.createElement('button',{type:'button',...props},icon);`,
   './Button': `const React=require('react');module.exports=({children,variant,icon,...props})=>React.createElement('button',{type:'button',...props},children);`,
@@ -44,12 +45,14 @@ window.calls=[]; window.getCalls=0; window.failGet=true; window.verifySuccess=tr
 window.captchaGet=async()=>{
   window.getCalls++;
   if(window.failGet) throw new Error('offline');
-  return {success:true,bg:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="310" height="155"/>',piece:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"/>',y:30};
+  return {id:'fixture-challenge-'+window.getCalls,kind:'slider',background:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="310" height="155"/>',piece:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"/>',y:30,width:310,height:155,piece_width:50,piece_height:50,expires_in:300};
 };
-window.captchaVerify=async(x,track)=>{
-  window.calls.push({x,track});
+window.captchaVerify=async(id,x,trace)=>{
+  window.calls.push({id,x,trace});
   if(window.pendingVerify) await new Promise(resolve=>window.resolveVerify=resolve);
-  return window.verifySuccess?{success:true,token:'fixture-token'}:{success:false,error:'校验未通过'};
+  /* A miss is a 403 CAPTCHA_MISMATCH: the adapter throws, carrying the backend's sentence. */
+  if(!window.verifySuccess) throw Object.assign(new Error('校验未通过'),{status:403,code:'CAPTCHA_MISMATCH'});
+  return {proof:'fixture-token',expires_in:120};
 };
 function App(){
  const [outer,setOuter]=useState(false),[inner,setInner]=useState(false),[menu,setMenu]=useState(false);
@@ -270,8 +273,8 @@ with sync_playwright() as p:
     drag_captcha()
     page.wait_for_function('window.verified === "fixture-token"')
     calls=page.evaluate('window.calls')
-    assert len(calls)==1 and calls[0]['x']>0
-    track=json.loads(bytes(b^90 for b in base64.b64decode(calls[0]['track'])))
+    assert len(calls)==1 and calls[0]['x']>0 and calls[0]['id'].startswith('fixture-challenge-')
+    track=[[point['x'],point['y'],point['t']] for point in calls[0]['trace']]
     assert track[0]==[0,0,0] and track[-1][0]==round(calls[0]['x']) and len(track)<=150
     assert track[-1][1]==3
     assert all(a[2]<=b[2] for a,b in zip(track,track[1:]))
@@ -317,7 +320,7 @@ with sync_playwright() as p:
     }''')
     page.wait_for_function('window.verified === "fixture-token"')
     pointer=page.evaluate('window.calls.at(-1)')
-    pointer_track=json.loads(bytes(b^90 for b in base64.b64decode(pointer['track'])))
+    pointer_track=[[point['x'],point['y'],point['t']] for point in pointer['trace']]
     assert pointer_track[0]==[0,0,0] and pointer_track[-1][0]==round(pointer['x'])
     assert pointer_track[-1][1]==3 and len(pointer_track)>2
     assert not errors, errors

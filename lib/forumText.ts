@@ -1,5 +1,4 @@
 import { bbcodeToPlainText, IMAGE_MARKER } from '@/lib/bbcode';
-import { parseCommission, parseSharedGroups } from '@/lib/api/forum';
 import type { ForumPost } from '@/lib/types/forum';
 
 /**
@@ -8,28 +7,26 @@ import type { ForumPost } from '@/lib/types/forum';
  * a commission's description, a tag-group share's description and what it shares — as the
  * original front end derived them.
  */
-export function forumTeaser(post: Pick<ForumPost, 'excerpt' | 'content' | 'category' | 'title'>, maxLength = 120): string {
+export function forumTeaser(
+  post: Pick<ForumPost, 'excerpt' | 'content' | 'category' | 'title' | 'commission_link' | 'shared_groups'>,
+  maxLength = 120,
+): string {
   const excerpt = post.excerpt.trim();
   if (excerpt) return bbcodeToPlainText(excerpt, { maxLength });
   if (post.category === 'taggroups') {
-    const shared = parseSharedGroups(post.content);
-    if (shared) {
-      const parts = [
-        shared.tagGroups.length > 0 ? `${shared.tagGroups.length} 个标签组` : '',
-        shared.blockGroups.length > 0 ? `${shared.blockGroups.length} 个屏蔽组` : '',
-      ].filter(Boolean);
-      const lead = shared.description.trim().replace(/\s+/g, ' ');
-      const summary = parts.length > 0 ? `分享了 ${parts.join('、')}` : '';
-      return [lead, summary].filter(Boolean).join(' · ') || post.title;
-    }
+    const shared = post.shared_groups;
+    const parts = [
+      shared && shared.tagGroups.length > 0 ? `${shared.tagGroups.length} 个标签组` : '',
+      shared && shared.blockGroups.length > 0 ? `${shared.blockGroups.length} 个屏蔽组` : '',
+    ].filter(Boolean);
+    const lead = post.content.trim().replace(/\s+/g, ' ');
+    const summary = parts.length > 0 ? `分享了 ${parts.join('、')}` : '';
+    return [lead, summary].filter(Boolean).join(' · ') || post.title;
   }
   if (post.category === 'commission') {
-    const commission = parseCommission(post.content);
-    if (commission) {
-      const words = bbcodeToPlainText(commission.description, { maxLength, images: 'drop' });
-      if (words) return words;
-      return commission.link ? '附有约稿链接' : bbcodeToPlainText(commission.description, { maxLength });
-    }
+    const words = bbcodeToPlainText(post.content, { maxLength, images: 'drop' });
+    if (words) return words;
+    return post.commission_link ? '附有约稿链接' : bbcodeToPlainText(post.content, { maxLength });
   }
   /* Pictures are left out of a teaser — unless they are all it has. */
   return bbcodeToPlainText(post.content, { maxLength, images: 'drop' }) || bbcodeToPlainText(post.content, { maxLength });

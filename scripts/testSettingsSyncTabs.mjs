@@ -42,11 +42,13 @@ globalThis.document = {
 const writes = [];
 let failWrites = false;
 globalThis.fetch = async (url, init = {}) => {
-  const action = new URL(String(url), 'https://app.invalid').searchParams.get('action');
-  if (action !== 'update_settings') throw new Error(`unexpected request: ${action}`);
+  const path = new URL(String(url), 'https://app.invalid').pathname;
+  if (path !== '/api/v1/me/preferences' || init.method !== 'PUT') throw new Error(`unexpected request: ${init.method} ${path}`);
   if (failWrites) return new Response('upstream down', { status: 503 });
-  writes.push(JSON.parse(init.body).settings);
-  return new Response(JSON.stringify({ success: true }), { status: 200 });
+  const body = JSON.parse(init.body);
+  writes.push(body.settings);
+  /* `PUT /me/preferences` answers with what it stored and the next revision. */
+  return Response.json({ settings: body.settings, revision: body.expected_revision + 1, adjustments: [] });
 };
 
 const sync = await import('../lib/settingsSync.ts');

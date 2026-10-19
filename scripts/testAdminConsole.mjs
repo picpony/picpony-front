@@ -31,8 +31,9 @@ test('R9-026 blank coins are omitted, explicit zero is retained, and unsafe numb
   const user = { id: 5, experience: 10, coins: 100 };
   const form = { experience: '10', experienceReason: '', coinsOp: 'set', coinsValue: '', coinsReason: '' };
   assert.equal(wealthPayload(user, form), null);
-  assert.deepEqual(plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })), { target_id: 5, experience: 12, experience_reason: '活动' });
-  assert.deepEqual(plain(wealthPayload(user, { ...form, coinsValue: '0', coinsReason: '调整' })), { target_id: 5, coins_op: 'set', coins_value: 0, reason: '调整' });
+  /* `PATCH /admin/users/{id}/wealth` names the balances it was made against (409 when they moved). */
+  assert.deepEqual(plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })), { expected_coins: 100, expected_experience: 10, experience: 12, experience_reason: '活动' });
+  assert.deepEqual(plain(wealthPayload(user, { ...form, coinsValue: '0', coinsReason: '调整' })), { expected_coins: 100, expected_experience: 10, coins: { operation: 'set', amount: 0 }, coins_reason: '调整' });
 });
 
 test('badge audiences reject a bad ID instead of silently granting to a shorter list', () => {
@@ -40,7 +41,8 @@ test('badge audiences reject a bad ID instead of silently granting to a shorter 
   assert.deepEqual(plain(parseUserIds('2，3、2 4')), [2, 3, 4]);
   for (const text of ['2,0', '2,-3', '2,three', '2,1.5', '2,9007199254740992']) assert.equal(parseUserIds(text), null);
   const form = { name: ' 活动 ', color: '#abcdef', target: 'dates', userIds: '2,3', startDate: '2026-09-01', endDate: '2026-09-30', permanent: false, expiresAt: '2026-12-31' };
-  assert.deepEqual(plain(grantPayload(form)), { badge_name: '活动', badge_color: '#abcdef', target_user_ids: '', start_date: '2026-09-01', end_date: '2026-09-30', expires_at: '2026-12-31' });
+  assert.deepEqual(plain(grantPayload(form)), { name: '活动', color: '#abcdef', registered_from: '2026-09-01', registered_through: '2026-09-30', expires_on: '2026-12-31' });
+  assert.deepEqual(plain(grantPayload({ ...form, target: 'users', permanent: true })), { name: '活动', color: '#abcdef', user_ids: [2, 3] });
 });
 
 test('R9-023 a malformed price or stock never becomes a free or unavailable item', () => {
@@ -97,22 +99,20 @@ test('G4-018 the three UTC columns and every other stamp are read by one parser 
 test('G4-018 a late-night view lands on its Beijing day, and a day boundary splits where Beijing does', () => {
   const format = load('lib/format.ts');
   const errors = load('lib/api/errors.ts');
-  const http = { listOf: (rows) => rows, pageCount: () => 1, picponyPostJson: () => null, picponyRequest: () => null, readEnvelope: () => null };
-  const history = load('lib/api/history.ts', { './http': http, './errors': errors });
+  const http = { api: async () => null, seg: String };
+  const history = load('lib/api/history.ts', { './http': http, './errors': errors, '@/lib/utils': { randomId: () => 'k' } });
   /* The shape testPersonalScreens pins: ISO with Z, whole seconds kept whole. */
   assert.equal(history.utcStamp('2026-10-01 12:00:00'), '2026-10-01T12:00:00Z');
   assert.equal(history.utcStamp('2026-10-01T20:00:00+08:00'), '2026-10-01T12:00:00Z');
   assert.equal(history.utcStamp('garbage'), null);
-  const at = (stamp) => history.historyEntryOf({ id: 7, last_view_time: stamp }).viewedAt;
+  /* The backend's row: `viewed_at` is UTC. */
+  const at = (stamp) => history.historyEntryOf({ image_id: 7, preview_url: '', uploader: '', viewed_at: stamp, previous_viewed_at: null }).viewedAt;
   /* 17:30 UTC on 31 August is 01:30 on 1 September in Beijing: that day's group, at that clock. */
   assert.equal(format.beijingDateKey(at('2026-08-31 17:30:00')), '2026-09-01');
   assert.equal(format.formatClock(at('2026-08-31 17:30:00')), '01:30');
   /* The Beijing midnight is 16:00 UTC: 15:59 is still the 31st, 16:00 is the 1st. */
   assert.equal(format.beijingDateKey(at('2026-08-31 15:59:00')), '2026-08-31');
   assert.equal(format.beijingDateKey(at('2026-08-31 16:00:00')), '2026-09-01');
-  /* The older column stands in for a missing recent one, read the same way. */
-  assert.equal(history.historyEntryOf({ id: 8, view_time: '2026-08-30 23:10:00' }).viewedAt, '2026-08-30T23:10:00Z');
-  assert.equal(history.historyEntryOf({ id: 9 }).viewedAt, null);
 });
 
 /* G4-015: a figure that did not arrive is never a zero in the console that sets it. */
@@ -129,23 +129,24 @@ test('G4-015 admin figures read absent as absent: tables print a dash, forms ope
   assert.equal(figures.figureText('30'), '30');
   assert.equal(figures.figureField(0), '0');
 
+  /* `GET /admin/shop/items` always answers integer prices and stock (`shop_items` NOT NULL), so the
+     form reads them as they are; a field the operator clears is still refused. */
   const { shopForm, shopPayload } = load('components/admin/shop.ts');
-  const missing = shopForm({ id: 3, name: '无价商品', price: null, stock: '' });
-  assert.deepEqual([missing.price, missing.stock], ['', '']);
-  assert.ok(shopPayload(missing, { id: 3 }).errors.price, 'a save cannot write a price nobody typed');
-  const present = shopForm({ id: 4, name: 'x', price: 0, stock: '7' });
+  const present = shopForm({ id: 4, name: 'x', description: '', image_url: null, price: 0, stock: 7, active: true });
   assert.deepEqual([present.price, present.stock], ['0', '7']);
+  assert.ok(shopPayload({ ...present, price: '' }, { id: 4 }).errors.price, 'a save cannot write a price nobody typed');
 
   const { teamForm } = load('components/admin/team.ts', { '@/lib/roles': { roleInfo: () => ({ label: '' }) } });
-  assert.equal(teamForm({ id: 1, name: '成员', order_num: null }).order, '');
+  /* `order_num` is a NOT NULL integer on `GET /team-members`. */
+  assert.equal(teamForm({ id: 1, name: '成员', order_num: 0 }).order, '0');
   assert.equal(teamForm({ id: 1, name: '成员', order_num: -2 }).order, '-2');
 
+  /* The wealth form always knows the balances (`GET /admin/users` answers both), so a blank field is
+     simply "unchanged". */
   const { wealthPayload } = load('components/admin/wealth.ts');
   const form = { experience: '', experienceReason: '', coinsOp: 'set', coinsValue: '5', coinsReason: '补发' };
-  assert.deepEqual(plain(wealthPayload({ id: 9, username: 'u' }, form)), { target_id: 9, coins_op: 'set', coins_value: 5, reason: '补发' },
-    'an unknown experience left blank is not sent');
-  assert.deepEqual(plain(wealthPayload({ id: 9, username: 'u' }, { ...form, experience: '0', experienceReason: '清零', coinsValue: '' })),
-    { target_id: 9, experience: 0, experience_reason: '清零' }, 'a typed 0 against an unknown balance is a change');
+  assert.deepEqual(plain(wealthPayload({ id: 9, username: 'u', coins: 1, experience: 2 }, form)), { expected_coins: 1, expected_experience: 2, coins: { operation: 'set', amount: 5 }, coins_reason: '补发' },
+    'an experience left blank is not sent');
 });
 
 /* G4-011: one rule for a failure's two lines, table or not. */
@@ -159,36 +160,36 @@ test('G4-011 a failure prints its title once and the own sentence of the error o
   assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', undefined)), { title: '屏蔽库加载失败' });
   assert.deepEqual(plain(queries.tableError('屏蔽库加载失败', '屏蔽库加载失败')), { error: '屏蔽库加载失败' });
   assert.deepEqual(plain(queries.tableError('屏蔽库加载失败', undefined)), {});
-  /* The blacklist's malformed list names the panel's own noun, so its table prints one line. */
-  assert.throws(() => queries.adminList({ success: true, blacklist: {} }, 'blacklist', '屏蔽库'), /屏蔽库加载失败/);
 });
 
-test('R9-043 admin reads forward cancellation and malformed tag names cannot throw a TypeError', async () => {
+test('R9-043 admin reads forward cancellation and the feedback queue reads by cursor', async () => {
   const requests = [];
   const controller = new AbortController();
+  const errors = load('lib/api/errors.ts');
   const api = load('lib/api/admin.ts', {
     '@/lib/constants': { DERPIBOORU_API_BASE: 'https://fixture.invalid' },
     './client': {},
+    './errors': errors,
+    '@/lib/adminMutations': { adminWrite: async () => ({}), requestUuid: () => 'uuid' },
     './http': {
-      picponyRequest: async (action, options) => {
-        requests.push({ action, options });
-        return Response.json(action === 'get_dictionary' ? { success: true, tags: [null, { en: null }, { en: 'PONY' }] }
-          : action === 'admin_get_tag_feedback' ? { success: true, feedbacks: [] } : { success: true });
+      api: async (method, apiPath, options) => {
+        requests.push({ method, path: apiPath, options });
+        if (apiPath === '/dictionary/tags') return { tags: [{ en: 'PONY' }] };
+        if (apiPath === '/editor/dictionary/feedback') return { feedback: [], next_cursor: null };
+        if (apiPath === '/admin/notifications') return { notifications: [], total: 0, total_pages: 1 };
+        if (apiPath === '/team-members' || apiPath === '/admin/team-members') return { revision: 1, members: [] };
+        return {};
       },
-      readJson: (res) => res.json(),
+      seg: (value) => encodeURIComponent(String(value)),
     },
   });
-  await api.getTagFeedback('fixture', { status: 'pending', page: 2 }, controller.signal);
-  await api.adminGetNotifications('fixture', { filter: 'all', page: 2, perPage: 50, keyword: '活动' }, controller.signal);
-  await api.adminGetTeamMembers('fixture', controller.signal);
+  await api.getTagFeedback('fixture', { status: 'pending', before: 41 }, controller.signal);
   assert.equal(await api.checkTagExists('fixture', 'pony', controller.signal), true);
   assert.equal(await api.checkTagExists('fixture', 'missing', controller.signal), false);
   assert.ok(requests.every(({ options }) => options.signal === controller.signal));
-  const notification = requests.find(({ action }) => action === 'admin_get_notifications').options.query;
-  assert.equal(notification.page, 2);
-  assert.equal(notification.per_page, 50);
-  assert.equal(notification.keyword, '活动');
-  assert.equal(requests.find(({ action }) => action === 'get_team_members').options.query.include_all, 1);
+  const feedback = requests.find(({ path: p }) => p === '/editor/dictionary/feedback').options.query;
+  assert.equal(feedback.status, 'pending');
+  assert.equal(feedback.before, 41);
 });
 
 /* M1-031: DataTable's row presence. The DOM half (FLIP, collapse, fades) is measured in a browser;

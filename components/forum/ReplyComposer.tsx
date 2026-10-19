@@ -119,7 +119,6 @@ export default function ReplyComposer({
       postId,
       content: (target ? replyQuote(target.username, target.content) : '') + sent.trim(),
       replyToUserId: target?.userId,
-      replyToCommentId: target?.commentId,
     });
     setSending(false);
     if (readToken() !== session) return;

@@ -1,13 +1,13 @@
+import type { BadgeGrant } from '@/lib/api/admin';
+
 /**
  * The badge grant's pure half — what the form sends — kept out of the client component so the
- * Node suite can hold it to the original console's contract (`oldfe/admin.html`, `grantBadge`):
+ * Node suite can hold it to the backend's contract (`POST /admin/badges/awards`):
  *
- *   admin_grant_badge { badge_name, badge_color, target_user_ids, start_date, end_date, expires_at }
+ *   { name, color, expires_on?, user_ids? | registered_from + registered_through }
  *
- * `target_user_ids` is the comma-separated string the old form sent as typed — **not** an array
- * under `user_ids`, which is what this console used to send and which the backend does not read.
- * Either the ids or a whole registration window names the audience; `expires_at` is `''` for a
- * permanent badge.
+ * Either the ids or a whole registration window (Beijing dates, inclusive) names the audience;
+ * `expires_on` absent is a permanent badge.
  */
 
 export type GrantTarget = 'users' | 'dates';
@@ -41,16 +41,15 @@ export function parseUserIds(text: string): number[] | null {
 }
 
 /** The request body for a validated form. */
-export function grantPayload(form: GrantForm): Record<string, string> {
-  const byUsers = form.target === 'users';
-  return {
-    badge_name: form.name.trim(),
-    badge_color: form.color,
-    target_user_ids: byUsers ? (parseUserIds(form.userIds) ?? []).join(',') : '',
-    start_date: byUsers ? '' : form.startDate,
-    end_date: byUsers ? '' : form.endDate,
-    expires_at: form.permanent ? '' : form.expiresAt,
-  };
+export function grantPayload(form: GrantForm): BadgeGrant {
+  const body: BadgeGrant = { name: form.name.trim(), color: form.color };
+  if (form.target === 'users') body.user_ids = parseUserIds(form.userIds) ?? [];
+  else {
+    body.registered_from = form.startDate;
+    body.registered_through = form.endDate;
+  }
+  if (!form.permanent && form.expiresAt) body.expires_on = form.expiresAt;
+  return body;
 }
 
 /** Today's date in Beijing, `YYYY-MM-DD` — the zone the backend stamps and compares dates in. */

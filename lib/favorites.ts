@@ -45,9 +45,39 @@ export function faveFolderHref(folderId: number, page = 1): string {
   return page > 1 ? `/favorites/folder/${folderId}?page=${page}` : `/favorites/folder/${folderId}`;
 }
 
-/** Somebody's public folder (0: their main one) — what a profile's 收藏夹 tab and a share card open. */
-export function sharedFolderHref(username: string, folderId: number): string {
-  return `/favorites/shared/${encodeURIComponent(username)}/${folderId}`;
+/**
+ * Whose public favourites: by id — what the backend takes (`/users/{owner}/…`) — or by username,
+ * for a link that names the owner that way (a folder share card carries the username; it is
+ * resolved by the public lookup, `resolveUsername` in `lib/api/favorites.ts`).
+ */
+export type FaveOwner = { ownerId: number } | { username: string };
+
+/**
+ * The shared-folder route's first segment for an owner. An id is written `~<id>`: `~` cannot occur
+ * in a username (letters, digits, `_`, `-` and CJK only), so an all-digit username stays a username.
+ */
+export function faveOwnerSegment(owner: FaveOwner | number | string): string {
+  if (typeof owner === 'number') return `~${owner}`;
+  if (typeof owner === 'string') return encodeURIComponent(owner);
+  return 'ownerId' in owner ? `~${owner.ownerId}` : encodeURIComponent(owner.username);
+}
+
+/** A decoded route segment (or a username handed over) as an owner: `~<id>` is an id. */
+export function faveOwnerOf(owner: FaveOwner | string): FaveOwner {
+  if (typeof owner !== 'string') {
+    return 'username' in owner ? faveOwnerOf(owner.username) : owner;
+  }
+  const id = /^~(\d{1,15})$/.exec(owner);
+  if (id && Number(id[1]) > 0) return { ownerId: Number(id[1]) };
+  return { username: owner };
+}
+
+/**
+ * Somebody's public folder (0: every public folder of theirs) — what a profile's 收藏夹 tab and a
+ * share card open. Pass the owner's id where it is known (a number); a string is a username.
+ */
+export function sharedFolderHref(owner: FaveOwner | number | string, folderId: number): string {
+  return `/favorites/shared/${faveOwnerSegment(owner)}/${folderId}`;
 }
 
 /** Somebody's privacy space, behind its password — what a privacy share card opens. */

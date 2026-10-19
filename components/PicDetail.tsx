@@ -62,7 +62,6 @@ import DetailVotes from '@/components/detail/DetailVotes';
 import ImageTranslationStatus from '@/components/detail/ImageTranslationStatus';
 import ReportDialog from '@/components/detail/ReportDialog';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
-import { readJson } from '@/lib/api/http';
 import { shareThumbUrl } from '@/lib/api/messages';
 import { addBrowsingHistory, reportImage } from '@/lib/api/picpony';
 import { addPrivacyFave } from '@/lib/api/favorites';
@@ -72,7 +71,7 @@ import { favouriteImage, favouritesChanged, restoreFavourite, unfavouriteImage }
 import { addPrivacyPictures, isInPrivacySpace, removeFromPrivacy, restoreToPrivacy, usePrivacyFaved } from '@/lib/favoritesPrivacy';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import FolderPicker from '@/components/favorites/FolderPicker';
-import { createShareLink, trackShare } from '@/lib/api/share';
+import { createShareLink } from '@/lib/api/share';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { LS_KEYS } from '@/lib/constants';
 import { plainTextOf } from '@/lib/derpiMarkup';
@@ -232,10 +231,9 @@ async function imageShareLink(image: ImagePreview, token: string | null): Promis
   return link.url;
 }
 
-async function copyLink(url: string, token: string | null): Promise<boolean> {
+async function copyLink(url: string): Promise<boolean> {
   if (!(await copyText(url))) return false;
   showToast('已复制分享链接', 'success');
-  trackShare(token);
   return true;
 }
 
@@ -246,12 +244,12 @@ async function copyLink(url: string, token: string | null): Promise<boolean> {
  */
 async function copyImageLink(image: ImagePreview, token: string | null): Promise<void> {
   const url = await imageShareLink(image, token);
-  if (await copyLink(url, token)) return;
+  if (await copyLink(url)) return;
   showToast('分享链接已生成', 'info', {
     action: {
       label: '复制',
       onClick: () => {
-        void copyLink(url, token).then((copied) => {
+        void copyLink(url).then((copied) => {
           if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
         });
       },
@@ -265,7 +263,7 @@ async function shareImageNatively(image: ImagePreview, token: string | null): Pr
   const data: ShareData = { title: shareTitle(image.id), text: shareDescription(image.description), url };
   const open = () =>
     navigator.share(data).then(
-      () => trackShare(token),
+      () => {},
       (error: unknown) => {
         const name = error instanceof DOMException ? error.name : '';
         /* The reader closed the sheet: nothing to say. */
@@ -346,11 +344,8 @@ async function sendFavePress(
 
 async function sendReport(token: string, imageId: number, reason: string): Promise<Outcome> {
   try {
-    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(
-      await reportImage(token, imageId, reason),
-    );
-    if (data.success === true) return { ok: true };
-    return { ok: false, message: data.error || data.message || '举报提交失败' };
+    await reportImage(token, imageId, reason);
+    return { ok: true };
   } catch (error) {
     return { ok: false, message: apiErrorMessage(error, '举报提交失败') };
   }

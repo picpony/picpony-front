@@ -14,7 +14,6 @@ import { useAuthModal } from '@/components/AuthModal';
 import FollowHeight from '@/components/FollowHeight';
 import SubscribeButton from '@/components/subscriptions/SubscribeButton';
 import { submitTagFeedback } from '@/lib/api/picpony';
-import { readJson } from '@/lib/api/http';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { MEDIA } from '@/lib/constants';
 import { readToken, useMediaQuery, useSession } from '@/lib/hooks';
@@ -28,11 +27,8 @@ type SendOutcome = { ok: true } | { ok: false; message: string };
 
 async function sendFeedback(token: string, tagName: string, reason: string, translation: string): Promise<SendOutcome> {
   try {
-    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(
-      await submitTagFeedback(token, { tagName, reason, translation }),
-    );
-    if (data.success === true) return { ok: true };
-    return { ok: false, message: data.error || data.message || '反馈提交失败' };
+    await submitTagFeedback(token, { tagName, reason, translation });
+    return { ok: true };
   } catch (error) {
     return { ok: false, message: apiErrorMessage(error, '反馈提交失败') };
   }

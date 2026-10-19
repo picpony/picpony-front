@@ -23,32 +23,18 @@ import SectionHeader from './SectionHeader';
 import ColorField, { isHexColor } from './ColorField';
 import { AdminForm, AdminNote, FormActions, FormGrid } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { defineAdminQuery, useAdminQuery, adminList, tableError } from './queries';
+import { defineAdminQuery, useAdminQuery, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 import { badgeDateProblems, grantPayload, parseUserIds, type GrantForm } from './badges';
 import BadgeDictionaryPane from './catalogTools/BadgeDictionaryPane';
 import DeleteBadgeLinkAction from './catalogTools/DeleteBadgeLinkAction';
-import { flag } from '@/lib/flag';
 
-interface BadgeLink {
-  id: number;
-  token: string;
-  badge_name: string;
-  badge_color: string;
-  is_active: number;
-  badge_expires_at: string | null;
-  link_expires_at: string | null;
-  required_location?: string | null;
-  location_error_msg?: string | null;
-}
+type BadgeLink = adminApi.AdminBadgeLink;
 
 type SubTab = 'grant' | 'links' | 'badge-dictionary';
 
-const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', async (token, signal) => {
-  const data = await adminApi.adminGetBadgeLinks(token, signal);
-  return adminList<BadgeLink>(data, ['data.links', 'links'], '领取链接');
-});
+const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', (token, signal) => adminApi.adminGetBadgeLinks(token, signal));
 
 const SUB_TABS: { value: SubTab; label: string }[] = [
   { value: 'grant', label: '授予徽章' },
@@ -279,6 +265,7 @@ function LinksPane({
 }) {
   const createMutation = useAdminMutation(token);
   const toggleMutation = useAdminMutation(token);
+  const rotateMutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const { prompt, promptDialog } = usePrompt();
   const [form, setForm] = useState<LinkForm>(EMPTY_LINK);
@@ -302,48 +289,62 @@ function LinksPane({
     if (next.name || next.color || next.badgeExpiresAt || next.linkExpiresAt) return;
     void createMutation.run(
       () => adminApi.adminCreateBadgeLink(token, {
-        badge_name: form.name.trim(),
-        badge_color: form.color,
-        badge_expires_at: form.badgeExpiresAt,
-        link_expires_at: form.linkExpiresAt,
-        required_location: form.location.trim(),
-        location_error_msg: form.locationMessage.trim(),
+        name: form.name.trim(),
+        color: form.color,
+        badge_expires_on: form.badgeExpiresAt || undefined,
+        link_expires_on: form.linkExpiresAt || undefined,
+        required_location: form.location.trim() || undefined,
+        location_error_message: form.locationMessage.trim() || undefined,
       }),
-      () => {
-        showToast('已生成领取链接，可在下方列表中复制', 'success');
+      (data) => {
         setForm((previous) => ({ ...EMPTY_LINK, color: previous.color }));
+        void reveal(String(data.token), '已生成领取链接');
       },
       '生成失败',
       { onCommitted: links.refresh },
     );
   };
 
+  /* The backend keeps only a hash of a claim token: the link is readable once, when it is minted
+     (created or rotated), so it is copied — or shown for copying — right then. */
+  const reveal = async (claimToken: string, done: string) => {
+    const url = claimUrl(claimToken);
+    if (await copyText(url)) {
+      showToast(`${done}并已复制，链接只显示这一次`, 'success');
+      return;
+    }
+    void prompt({ title: done, label: '领取链接', defaultValue: url, message: '链接只显示这一次，请立即复制保存。', confirmLabel: '完成', allowEmpty: true });
+  };
+
+  const rotate = (link: BadgeLink) =>
+    confirmThen(
+      '确认重新生成链接',
+      `徽章「${link.name}」的领取链接只在生成时可见。确定要重新生成吗？之前发出的链接会立即失效。`,
+      () => void rotateMutation.run(
+        () => adminApi.adminRotateBadgeLink(token, link.id),
+        (data) => void reveal(String(data.token), '已重新生成领取链接'),
+        '重新生成失败',
+        { key: link.id },
+      ),
+    );
+
   const toggle = (link: BadgeLink) => {
-    const enabling = !flag(link.is_active);
+    const enabling = !link.active;
     const run = () => void toggleMutation.run(
-      () => adminApi.adminToggleBadgeLink(token, link.id, enabling ? 1 : 0),
+      () => adminApi.adminToggleBadgeLink(token, link.id, enabling),
       () => showToast(enabling ? '已启用领取链接' : '已停用领取链接', 'success'),
       enabling ? '启用失败' : '停用失败',
       {
         key: link.id,
         onCommitted: () => {
           linksQuery.write(token, (previous) =>
-            previous?.map((row) => (row.id === link.id ? { ...row, is_active: enabling ? 1 : 0 } : row)) ?? []);
+            previous?.map((row) => (row.id === link.id ? { ...row, active: enabling } : row)) ?? []);
           links.refresh();
         },
       },
     );
     if (enabling) run();
-    else confirmThen('确认停用链接', `确定要停用徽章「${link.badge_name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run);
-  };
-
-  const copy = async (link: BadgeLink) => {
-    const url = claimUrl(link.token);
-    if (await copyText(url)) {
-      showToast('已复制领取链接', 'success');
-      return;
-    }
-    void prompt({ title: '复制领取链接', label: '领取链接', defaultValue: url, message: '无法自动复制，请手动复制下面的链接。', confirmLabel: '完成', allowEmpty: true });
+    else confirmThen('确认停用链接', `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run);
   };
 
   const expiry = (link: BadgeLink) =>
@@ -354,15 +355,15 @@ function LinksPane({
       key: 'badge',
       header: '徽章',
       primary: true,
-      render: (link) => <UserBadge name={link.badge_name} color={link.badge_color} size="md" />,
+      render: (link) => <UserBadge name={link.name} color={link.color} size="md" />,
     },
     {
       key: 'state',
       header: '状态',
       width: 'auto',
       render: (link) => (
-        <Badge tone={flag(link.is_active) ? 'success' : 'neutral'} size="md">
-          {flag(link.is_active) ? '生效中' : '已停用'}
+        <Badge tone={link.active ? 'success' : 'neutral'} size="md">
+          {link.active ? '生效中' : '已停用'}
         </Badge>
       ),
     },
@@ -383,18 +384,19 @@ function LinksPane({
           <IconButton
             size="sm"
             icon={<MdContentCopy />}
-            aria-label={`复制徽章「${link.badge_name}」的领取链接`}
-            onClick={() => void copy(link)}
+            aria-label={`重新生成并复制徽章「${link.name}」的领取链接`}
+            loading={rotateMutation.pendingKeys.has(link.id)}
+            onClick={() => rotate(link)}
           />
           <Button
             size="xs"
-            variant={flag(link.is_active) ? 'danger-text' : 'text'}
+            variant={link.active ? 'danger-text' : 'text'}
             loading={toggleMutation.pendingKeys.has(link.id)}
             onClick={() => toggle(link)}
           >
-            {flag(link.is_active) ? '停用' : '启用'}
+            {link.active ? '停用' : '启用'}
           </Button>
-          <DeleteBadgeLinkAction token={token} id={link.id} name={link.badge_name} disabled={toggleMutation.busy} onDeleted={links.refresh} />
+          <DeleteBadgeLinkAction token={token} id={link.id} name={link.name} disabled={toggleMutation.busy} onDeleted={links.refresh} />
         </>
       ),
     },
@@ -402,7 +404,7 @@ function LinksPane({
 
   return (
     <div className="space-y-6">
-      <AdminNote>生成一个领取链接，用户打开并登录后即可领取指定的徽章。链接可以随时停用。</AdminNote>
+      <AdminNote>生成一个领取链接，用户打开并登录后即可领取指定的徽章。链接只在生成时显示一次（生成后自动复制）；遗失后可重新生成，旧链接随即失效。链接可以随时停用。</AdminNote>
       <AdminForm onSubmit={create} aria-label="生成领取链接">
         <FormGrid>
           <Input

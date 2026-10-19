@@ -1,7 +1,6 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { DEFAULT_FORUM_LIST, forumListKey } from '@/lib/forumKeys';
-import { num, postOf, records } from '@/lib/forumModel';
+import { forumListParams, forumPostsOf, sortOf, type WirePostPage } from '@/lib/forumModel';
 import type { ForumPostsResponse } from '@/lib/types/forum';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
@@ -17,11 +16,11 @@ import { upstreamOrigin } from '@/lib/upstream.server';
  * its first read is the client's (AGENTS "the forum pane is already `api: 0` on tap").
  *
  * The `lib/route.server.ts` rules: bounded, `null` rather than a throw (no seed is a state the pane
- * already handles), direct to the origin (the browser's relative base goes through the api.php
- * route handler, which a server read has no cookie for), no `proxyFetch`.
+ * already handles), direct to the backend's `/api/v1` (the browser's relative base goes through
+ * this app's proxy, which a server read has no cookie for), no `proxyFetch`.
  *
- * **Never the thread.** A thread read counts a view on the server (measured: every
- * `get_forum_post_detail` adds one), so a server read for a thread's title or its first paint
+ * **Never the thread.** A thread read counts a view on the server (every `GET /forum/posts/{id}`
+ * adds one), so a server read for a thread's title or its first paint
  * would count every visit twice. The list read counts nothing.
  */
 
@@ -49,28 +48,26 @@ export const readForumFirstPage = createServerMemo({
   keyOf: () => 'default',
   load: async (): Promise<ForumListSeed | null> => {
     try {
-      const query = new URLSearchParams({
-        action: 'get_forum_posts',
-        page: String(DEFAULT_FORUM_LIST.page),
-        category: DEFAULT_FORUM_LIST.category,
-        sort: DEFAULT_FORUM_LIST.sort,
+      const params = forumListParams({
+        page: DEFAULT_FORUM_LIST.page,
+        category: 'all',
+        sort: sortOf(DEFAULT_FORUM_LIST.sort),
       });
-      const res = await fetch(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?${query}`, {
+      const query = new URLSearchParams();
+      for (const [name, value] of Object.entries(params)) if (value !== undefined) query.set(name, String(value));
+      const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/forum/posts?${query}`, {
         next: { revalidate: cacheSeconds(REVALIDATE_S) },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (!res.ok) return null;
-      const data = (await res.json()) as { success?: unknown; posts?: unknown; total?: unknown; total_pages?: unknown };
-      if (data?.success !== true || !Array.isArray(data.posts)) return null;
-      const posts = records(data.posts).map(postOf);
-      const totalPages = Math.max(1, Math.floor(num(data.total_pages)));
+      const data = (await res.json()) as WirePostPage;
       return {
         key: forumListKey(DEFAULT_FORUM_LIST),
-        data: { posts, total: Math.max(num(data.total), posts.length), totalPages, signedIn: false },
+        data: forumPostsOf(data, false),
         generatedAt: Date.now(),
       };
     } catch {
-      /* A timeout, an offline upstream, an HTML error page — all mean "no seed", which the pane
+      /* A timeout, an offline upstream, an unreadable body — all mean "no seed", which the pane
          handles by reading it itself. */
       return null;
     }

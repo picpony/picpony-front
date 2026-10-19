@@ -25,9 +25,10 @@
  *   flash `COOKIE_KEYS` exists to prevent. Because the document always comes from the network it
  *   always names the current build's chunk URLs, which is also what makes the update story below
  *   work.
- * - **`/api.php`.** It carries the PHP session, and `app/api.php/[[...path]]/route.ts` exists
- *   solely to rewrite `Set-Cookie` so that session survives plain HTTP. A cached body plus a
- *   cached `Set-Cookie` on a shared device hands one user's session to the next.
+ * - **`/api/v1`.** The Rust backend's proxy (`app/api/v1/[...path]/route.ts`): every answer is an
+ *   account's data, and the login answer carries the `auth_bind` session cookie the handler
+ *   rewrites so it survives plain HTTP. A cached body plus a cached `Set-Cookie` on a shared
+ *   device hands one user's session to the next.
  * - **`/relay`.** It validates protocol, host, port, credentials **and path**, and AGENTS.md
  *   states that the path check *is* the security of the endpoint. A cache would serve an old
  *   validated response for a URL the current policy may no longer allow, and it echoes the
@@ -158,13 +159,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   /* Lower-cased, because Next's route matching is case-insensitive by default
-     (`caseSensitiveRoutes` is false) while `startsWith` is not - so `/API.php?action=get_user`
-     reaches the PHP session proxy and `/RELAY?url=` reaches the relay while missing both guards.
+     (`caseSensitiveRoutes` is false) while `startsWith` is not - so `/API/V1/me` reaches the
+     backend proxy and `/RELAY?url=` reaches the relay while missing both guards.
      Nothing downstream caches today, so this is a guard against the next branch someone adds
      rather than a live hole, and these two lines are the ones documented as the security
      boundary of those endpoints. */
   const path = url.pathname.toLowerCase();
-  if (path.startsWith('/api.php') || path === '/relay') return;
+  if (path === '/api/v1' || path.startsWith('/api/v1/') || path === '/relay') return;
   if (path.startsWith('/search-api/')) return;
 
   if (path.startsWith('/_next/static/')) {

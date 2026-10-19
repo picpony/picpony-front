@@ -6,6 +6,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Pagination from '@/components/Pagination';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
+import { markNotificationsRead } from '@/lib/api/messages';
 import { formatDateTime, formatRelativeTime, parseBackendTime } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -41,8 +42,9 @@ type NotificationsPaneProps = {
  * somebody (decision 22), so its props take no missing token — it used to show a sign-in pane,
  * and before that 「消息加载失败 / 请先登录 / 重试」, a retry that could never succeed.
  *
- * **Reading page 1 marks the list read** on the server, so the tab's count and the app bar's
- * badge are corrected the moment it is shown (`markRead`) instead of a minute later.
+ * **Page 1 on screen marks its unread notices read** on the server (the backend's read receipt
+ * takes the ids; a read marks nothing by itself), and the tab's count and the app bar's badge are
+ * corrected the moment it is shown (`markRead`) instead of a minute later.
  *
  * Page turns keep the rows on screen (`keepPrevious`) and say so when one fails; the page is
  * remembered for the session. A sign-in keeps them too: the screen survives it, and 系统's rows
@@ -62,15 +64,20 @@ export default function NotificationsPane({ token, type, active, unread }: Notif
     void notificationPage.read({ token, type, page }).catch(() => {});
   }, [active, token, type, page]);
 
-  /* Page 1 on screen is page 1 read. Once per answer, or a server that does not mark would
-     be asked again on every re-read. */
+  /* Page 1 on screen is page 1 read. Once per answer, so a re-read does not send the same
+     receipt again. */
   const markedFor = useRef<unknown>(null);
   const data = read.data;
   useEffect(() => {
     if (!token || !active || page !== 1 || !data || read.isPrevious || unread <= 0) return;
     if (markedFor.current === data) return;
     markedFor.current = data;
-    markRead(token, type === 'system' ? 'notification' : 'interaction');
+    const ids = data.notifications.filter((item) => item.is_read === 0).map((item) => item.id);
+    if (ids.length === 0) return;
+    const tab = type === 'system' ? 'notification' : 'interaction';
+    /* The badge follows the receipt rather than racing it: `markRead` re-reads the count, and a
+       re-read that overtook the receipt would put the old number back. */
+    void markNotificationsRead(token, ids).then(() => markRead(token, tab, ids.length), () => {});
   }, [token, active, page, data, read.isPrevious, unread, type]);
 
   const lastPage = data && !read.isPrevious ? Math.max(1, data.totalPages) : null;

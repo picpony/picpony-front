@@ -54,8 +54,8 @@ function watchConfirmedVisibility() {
   window.addEventListener('user_info_updated', () => {
     const user = readUserInfo();
     const next = visibilityOf(user);
-    if (user?.token === seenToken && next !== seenPublic && typeof user.username === 'string') {
-      profileFaveFolders.expire({ username: user.username });
+    if (user?.token === seenToken && next !== seenPublic) {
+      profileFaveFolders.expire();
       sharedFaveIds.expire();
       if (user.id != null) userProfile.expire({ id: String(user.id) });
     }

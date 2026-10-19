@@ -1,6 +1,6 @@
 /* Does the service worker do what it claims? Registers `sw.js` by hand (the app's own
    registration opts out under `navigator.webdriver`, which is exactly what CDP sets), then checks
-   four things: static chunks served from the worker on a reload, `/api.php` and `/relay` never
+   four things: static chunks served from the worker on a reload, `/api/v1` and `/relay` never
    cached, an offline hard-navigation landing on `/offline`, and the cache key set. Scratch probe. */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,9 +16,9 @@ const upstream = createServer((req, res) => {
   const asUpstream = req.url?.startsWith('/api/v1/json')
     ? `https://trixiebooru.org${req.url}`
     : `http://127.0.0.1:${UP}${req.url}`;
-  const stub = stubFor(asUpstream);
+  const stub = stubFor(asUpstream, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));
@@ -107,7 +107,7 @@ const cached = await evalIn(`(async () => {
   return {
     names,
     counts: Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v.length])),
-    hasApiPhp: all.some((p) => p.indexOf('/api.php') === 0),
+    hasApiV1: all.some((p) => p === '/api/v1' || p.indexOf('/api/v1/') === 0),
     hasRelay: all.some((p) => p === '/relay'),
     hasSearchApi: all.some((p) => p.indexOf('/search-api/') === 0),
     hasDocument: all.some((p) => p === '/policy' || p === '/'),

@@ -10,26 +10,28 @@ import { formatDateTime } from '@/lib/format';
 import { readToken } from '@/lib/hooks';
 import { defineResource, SKIP, useResource } from '@/lib/resource';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import type { AuditMessage } from '@/lib/types/message';
 import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminNote } from './AdminForm';
-import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { adminList, tableError } from './queries';
+import { AdminListAnchor, AdminPager, useCursorPages, useShownListKey } from './paging';
+import { tableError } from './queries';
 import type { AdminPanelProps } from './registry';
-import { flag } from '@/lib/flag';
 
+type AuditMessage = adminApi.AuditMessageRow;
 type AuditQuery = { token: string; userId?: number };
 
-const messagesQuery = defineResource<AuditQuery, AuditMessage[]>({
+const PAGE_SIZE = 50;
+
+/** One page of the audit, newest first, read by cursor; every read is itself audited by the backend. */
+const messagesQuery = defineResource<AuditQuery & { before?: number }, { rows: AuditMessage[]; next: number | null }>({
   name: 'admin-message-audit',
-  key: ({ token, userId }) => `${token}:${userId ?? 'all'}`,
+  key: ({ token, userId, before }) => `${token}:${userId ?? 'all'}:${before ?? ''}`,
   ttl: 60_000,
   maxEntries: 8,
-  fetch: async ({ token, userId }, signal) => {
+  fetch: async ({ token, userId, before }, signal) => {
     if (readToken() !== token) throw new Error('登录状态已失效，请重新登录');
-    const data = await adminApi.adminGetAllMessages(token, userId, signal);
-    return adminList(data as unknown as Record<string, unknown>, 'messages', '私信记录');
+    const data = await adminApi.adminGetAllMessages(token, { userId, before, limit: PAGE_SIZE }, signal);
+    return { rows: data.messages, next: data.next };
   },
 });
 
@@ -58,7 +60,7 @@ const COLUMNS: Column<AuditMessage>[] = [
     header: '状态',
     width: 'auto',
     render: (message) => (
-      <Badge tone={flag(message.is_read) ? 'neutral' : 'primary'} size="md">{flag(message.is_read) ? '已读' : '未读'}</Badge>
+      <Badge tone={message.read_at ? 'neutral' : 'primary'} size="md">{message.read_at ? '已读' : '未读'}</Badge>
     ),
   },
   {
@@ -79,9 +81,12 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [query, setQuery] = useState<AuditQuery | null>(null);
   const activeQuery = query?.token === token ? query : null;
-  const read = useResource(messagesQuery, activeQuery ?? SKIP);
-  const rows = read.data ?? [];
-  const paged = usePagedRows(rows, activeQuery ? `${activeQuery.userId ?? 'all'}` : '');
+  const pageScope = activeQuery ? `${activeQuery.userId ?? 'all'}` : '';
+  const pages = useCursorPages(pageScope);
+  const read = useResource(messagesQuery, activeQuery ? { ...activeQuery, before: pages.cursor } : SKIP, { keepPrevious: `${token}:${pageScope}` });
+  const rows = read.data?.rows ?? [];
+  if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
+  const listKey = useShownListKey(`${pageScope}\n${pages.page}`, read.isPrevious);
 
   const ask = (userId?: number) => {
     if (readToken() !== token) return;
@@ -154,12 +159,12 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
       </form>
       <AdminListAnchor>
         {scope && read.data !== undefined && (
-          <p className="text-body-m text-on-surface-variant">{`${scope}：共 ${rows.length} 条`}</p>
+          <p className="text-body-m text-on-surface-variant">{`${scope}：第 ${pages.page} 页`}</p>
         )}
         <DataTable<AuditMessage>
           columns={COLUMNS}
-          rows={paged.rows}
-          listKey={paged.listKey}
+          rows={rows}
+          listKey={listKey}
           rowKey={(message) => message.id}
           loading={activeQuery !== null && read.data === undefined && !read.error}
           skeletonRows={6}
@@ -167,7 +172,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
           onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
           empty={activeQuery ? '没有找到相关的私信记录' : '输入用户 ID 检索，或查看全站私信'}
         />
-        <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
+        <AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading} />
       </AdminListAnchor>
     </div>
   );

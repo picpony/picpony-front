@@ -49,8 +49,8 @@ function importSentence(
  * it withheld. A missing key is its own state, pointing at the binding in 账户.
  *
  * 导入本页到云端 is the original front end's import: the page's pictures that are not PicPony
- * favourites yet, after a confirm with the count, into the default folder or a chosen one, one at
- * a time and spaced as it spaced them, with progress and 停止 (`importFavourites`).
+ * favourites yet, after a confirm with the count, into the default folder or a chosen one, in
+ * batches, with progress and 停止 (`importFavourites`).
  */
 export default function DerpiPane({ token, active }: { token: string; active: boolean }) {
   const router = useRouter();

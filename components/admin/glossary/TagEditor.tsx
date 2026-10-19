@@ -7,7 +7,7 @@ import InlineEditorPanel from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
 import { AdminForm, FormActions } from '../AdminForm';
 import TagFields, { WorkOrderNote } from './TagFields';
-import { tagFormOf, tagSavePayload, withSuggestion, type GlossaryTag, type TagForm } from './model';
+import { tagFormOf, tagSavePayload, withSuggestion, type GlossaryTag, type TagForm, type TagSave } from './model';
 import type { Feedback } from './resources';
 
 export function tagEditorId(tagId: number) {
@@ -16,7 +16,7 @@ export function tagEditorId(tagId: number) {
 
 /**
  * One entry's editor, under its row. A save sends the original editor's body
- * (`tagSavePayload`), flags carried through; 查看编辑历史 opens the entry's history.
+ * (`tagSavePayload`), `restricted` and the row's revision carried through; 查看编辑历史 opens the entry's history.
  */
 export default function TagEditor({
   tag,
@@ -33,7 +33,7 @@ export default function TagEditor({
   closing: boolean;
   saving: boolean;
   workOrder: Feedback | null;
-  onSave: (payload: Record<string, unknown>) => void;
+  onSave: (payload: TagSave) => void;
   onCancel: () => void;
   onExitComplete: () => void;
   onDirtyChange: (dirty: boolean) => void;
@@ -41,7 +41,8 @@ export default function TagEditor({
 }) {
   const [form, setForm] = useState<TagForm>(() => tagFormOf(tag));
   const initial = tagFormOf(tag);
-  const dirty = (Object.keys(initial) as (keyof TagForm)[]).some((key) => initial[key] !== form[key]);
+  const dirty = (Object.keys(initial) as (keyof TagForm)[]).some((key) =>
+    key === 'flags' ? initial.flags?.restricted !== form.flags?.restricted : initial[key] !== form[key]);
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);

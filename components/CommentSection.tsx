@@ -19,7 +19,6 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import { useAuthModal } from '@/components/AuthModal';
 import { deleteComment } from '@/lib/api/picpony';
-import { readJson } from '@/lib/api/http';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { derpiCommentTarget, derpiMarkdown, plainTextOf } from '@/lib/derpiMarkup';
 import { formatCompactDateTime, formatCount, formatDate, formatDateTime } from '@/lib/format';
@@ -58,11 +57,8 @@ type DeleteOutcome = { ok: true } | { ok: false; message: string };
 /** The deletion itself, at module scope (the React Compiler lowers no value block inside a `try`). */
 async function removeComment(token: string, commentId: number): Promise<DeleteOutcome> {
   try {
-    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(
-      await deleteComment(token, commentId),
-    );
-    if (data.success === true) return { ok: true };
-    return { ok: false, message: data.error || data.message || '删除失败' };
+    await deleteComment(token, commentId);
+    return { ok: true };
   } catch (error) {
     return { ok: false, message: apiErrorMessage(error, '删除失败') };
   }

@@ -25,6 +25,8 @@ function load(file, dependencies = {}, expose = '') {
     exports, Error, Response, AbortController, URL, URLSearchParams, setTimeout, clearTimeout, queueMicrotask,
     /* A form moves focus to its first invalid field by id; there is no DOM here to move it in. */
     document: { getElementById: () => null },
+    /* A claim link is spelled on the page's own origin. */
+    window: { location: { origin: 'https://picpony.test' } },
     require: (name) => dependencies[name] ?? new Proxy({}, {
       get: (_, key) => key === '__esModule' ? true : `${name}:${String(key)}`,
     }),
@@ -122,6 +124,15 @@ function expandTree(tree, names) {
 
 /** `usersQuery`'s value: one `admin_get_users` answer, its rows and the `stats` beside them (G2-019). */
 const usersOf = (rows) => ({ rows, stats: null });
+/** `GET /admin/users/{id}`: the editor's account, with the revisions its writes name. */
+const detailOf = (user) => ({
+  bio: '', gender: '', race: '', birthday: null, active_sessions: 0, api_accel_banned: false, badges: [],
+  account_revision: 3, upstream_credential: { revision: 2, has_key: false, key_hint: null, state: 'unbound' },
+  ...user,
+});
+/** What `adminUpdateUser` answers: the parts it saved. */
+const updated = (applied = ['资料']) => ({ applied, login_required: false });
+const plainOf = (value) => JSON.parse(JSON.stringify(value));
 function fixture(file, api = {}, initialData = {}, { expose = '', expand = [], modules = {} } = {}) {
   const hooks = harness();
   const session = { token: 'account-A' };
@@ -168,8 +179,7 @@ function fixture(file, api = {}, initialData = {}, { expose = '', expand = [], m
     '@/lib/adminMutations': mutationResponses,
     '@/lib/api/admin': api,
     '@/lib/api/picpony': {
-      getTeamMembers: async () => ({ success: true, members: [] }),
-      getDictionary: async () => ({ success: true, tags: data.dictionary ?? [], total_matches: data.dictionary?.length ?? 0 }),
+      getDictionary: async () => ({ tags: data.dictionary ?? [], total_matches: data.dictionary?.length ?? 0, stats: null }),
       ...api,
     },
     '@/lib/api/derpi': { searchDerpiTags: async () => ({ tags: [] }), ...api },
@@ -261,19 +271,21 @@ const adminForm = (tree, label) => find(tree, (node) =>
     || (node.props['aria-labelledby'] && find(node, (child) => child.props?.id === node.props['aria-labelledby'] && child.props.children === label))));
 const iconButton = (tree, label) => find(tree, (node) => node.type === '@/components/IconButton:default' && node.props['aria-label'] === label);
 
-test('admin reads and writes reject failed or malformed envelopes with the same message priority', async () => {
-  const { requireAdminSuccess } = mutationResponses;
+test('admin reads and writes surface the backend sentence; there is no envelope left to check', async () => {
   const fx = fixture();
-  for (const body of [null, [], 'ok', 1, { success: 'true' }, { success: false }]) {
-    await assert.rejects(requireAdminSuccess(Response.json(body), '保存失败'), /保存失败/);
-  }
-  await assert.rejects(requireAdminSuccess(Response.json({ success: true }, { status: 503 })), /HTTP 503/);
-  await assert.rejects(requireAdminSuccess(new Response('<html>error</html>'), '保存失败'), /保存失败/);
-  await assert.rejects(requireAdminSuccess(Response.json({ error: '首选错误', message: '备用错误' })), /首选错误/);
-  await assert.rejects(requireAdminSuccess(Response.json({ error: {}, message: '有效错误' })), /有效错误/);
-  assert.throws(() => fx.queries.adminData({ success: 'false' }, []), /加载失败/);
-  assert.throws(() => fx.queries.adminData({ error: {}, message: '查询失败' }, []), /查询失败/);
-  assert.deepEqual(await requireAdminSuccess(Response.json({ success: true, id: 7 })), { success: true, id: 7 });
+  assert.equal(mutationResponses.requireAdminSuccess, undefined, 'the PHP `success` check is gone');
+  assert.equal(fx.queries.adminData, undefined);
+  assert.equal(fx.queries.adminList, undefined);
+  const { ApiError } = fx.errors;
+  /* A refusal reads as the backend's own words, under the panel's title only when it adds something. */
+  const refusal = new ApiError('http', { status: 409, code: 'REVISION_CONFLICT', serverMessage: '内容已被修改，请刷新后重试' });
+  assert.equal(refusal.message, '内容已被修改，请刷新后重试');
+  assert.equal(refusal.retryable, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.retryError('用户列表加载失败', refusal.message))), { title: '用户列表加载失败', message: '内容已被修改，请刷新后重试' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', '用户列表加载失败'))), { error: '用户列表加载失败' });
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', undefined))), {});
+  /* A forbidden read is not offered 重试. */
+  assert.equal(new ApiError('http', { status: 403, serverMessage: '需要管理员权限' }).retryable, false);
 });
 
 test('mutation locks immediately, recovers after failure and ignores account/unmount continuations', async () => {
@@ -290,7 +302,7 @@ test('mutation locks immediately, recovers after failure and ignores account/unm
   await mutation.run(request, () => { successes++; });
   assert.equal(requests, 1, 'two presses before render issue one write');
   assert.equal(render().busy, true);
-  first.resolve(Response.json({ success: false, error: '暂时失败' }));
+  first.reject(new fx.errors.ApiError('http', { status: 409, serverMessage: '暂时失败' }));
   await pending;
   assert.equal(render().busy, false);
   assert.equal(successes, 0);
@@ -310,20 +322,20 @@ test('mutation locks immediately, recovers after failure and ignores account/unm
   assert.equal(mutation.busy, false, 'A → B → A must not revive a pending flag');
   const current = deferred();
   const latest = mutation.run(() => current.promise, () => { successes++; });
-  oldA.resolve(Response.json({ success: true }));
+  oldA.resolve({});
   oldB.reject(new Error('obsolete failure'));
   await Promise.all([pendingA, pendingB]);
   assert.equal(render().busy, true, 'old completions cannot unlock a newer operation');
   assert.equal(successes, 0);
   assert.equal(fx.toasts.length, 1);
-  current.resolve(Response.json({ success: true }));
+  current.resolve(undefined);
   await latest;
   assert.equal(successes, 1);
 
   const afterUnmount = deferred();
   const abandoned = render().run(() => afterUnmount.promise, () => { successes++; });
   fx.hooks.dispose();
-  afterUnmount.resolve(Response.json({ success: true }));
+  afterUnmount.resolve({});
   await abandoned;
   assert.equal(successes, 1);
   assert.equal(fx.toasts.length, 1);
@@ -342,7 +354,7 @@ test('a committed write outlives its view while cache and UI continuations remai
     });
     fx.hooks.dispose();
     if (changeAccount) fx.session.token = 'account-B';
-    response.resolve(Response.json({ success: true, id: 7 }));
+    response.resolve({ id: 7 });
     await pending;
     assert.equal(committed.length, changeAccount ? 0 : 1);
     assert.equal(uiUpdates, 0);
@@ -354,7 +366,7 @@ test('wealth changes submit once and preserve the form when the backend rejects 
   const user = { id: 5, username: '测试用户', experience: 50, coins: 20 };
   const requests = [];
   const fx = fixture('WealthTab', {
-    adminUpdateWealth: (_, payload) => { const result = deferred(); requests.push({ payload, ...result }); return result.promise; },
+    adminUpdateWealth: (_, userId, payload) => { const result = deferred(); requests.push({ userId, payload, ...result }); return result.promise; },
   }, { 'admin-users': usersOf([user]) }, { expand: ['WealthDialog'] });
   let tree = fx.render();
   fx.hooks.effects();
@@ -371,18 +383,19 @@ test('wealth changes submit once and preserve the form when the backend rejects 
   submit();
   submit();
   assert.equal(requests.length, 1, 'two submits before the busy render send one write');
+  assert.equal(requests[0].userId, 5, 'the account is the path id');
   assert.deepEqual(JSON.parse(JSON.stringify(requests[0].payload)), {
-    target_id: 5, coins_op: 'add', coins_value: 25, reason: '活动奖励',
-  }, 'the original console\'s body: coins only, a whole number, no experience when it did not change');
+    expected_coins: 20, expected_experience: 50, coins: { operation: 'add', amount: 25 }, coins_reason: '活动奖励',
+  }, 'coins only, a whole number, no experience when it did not change, guarded by the balances shown');
   assert.equal(input(dialog(), 'label', '增加金币的原因').props.readOnly, true);
-  requests[0].resolve(Response.json({ success: false, error: '拒绝修改' }));
+  requests[0].reject(new fx.errors.ApiError('http', { status: 400, serverMessage: '拒绝修改' }));
   await settle();
   assert.equal(dialog().props.isOpen, true);
   assert.equal(input(dialog(), 'label', '增加金币的原因').props.value, '活动奖励');
   assert.equal(fx.toasts.at(-1)[0], '拒绝修改');
 
   adminForm(dialog(), '修改 测试用户 的资产').props.onSubmit();
-  requests[1].resolve(Response.json({ success: true }));
+  requests[1].resolve({ user_id: 5, coins: 45, experience: 50 });
   await settle();
   assert.equal(dialog().props.isOpen, false);
   assert.deepEqual(fx.refreshes, ['admin-users']);
@@ -394,7 +407,7 @@ test('the wealth dialog refuses an empty change and a deduction below zero witho
   const user = { id: 5, username: '测试用户', experience: 50, coins: 20 };
   const requests = [];
   const fx = fixture('WealthTab', {
-    adminUpdateWealth: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
+    adminUpdateWealth: (_, _userId, payload) => { requests.push(payload); return new Promise(() => {}); },
   }, { 'admin-users': usersOf([user]) }, { expand: ['WealthDialog'] });
   fx.render();
   fx.hooks.effects();
@@ -418,17 +431,17 @@ test('the wealth dialog refuses an empty change and a deduction below zero witho
   assert.equal(input(dialog(), 'label', '经验值变动的原因').props.error, '请填写经验值变动的原因');
   change(input(dialog(), 'label', '经验值变动的原因'), '补发');
   adminForm(dialog()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ target_id: 5, experience: 60, experience_reason: '补发' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ expected_coins: 20, expected_experience: 50, experience: 60, experience_reason: '补发' }]);
   fx.hooks.dispose();
 });
 
 test('renaming a filtered user keeps the closing editor mounted until exit completes', async () => {
-  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: 0 };
+  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: false };
   const otherUser = { ...user, id: 8, username: 'Carol', email: 'c@example.test' };
   const requests = [];
   const fx = fixture('UsersTab', {
-    adminUpdateUser: (_, payload) => { const result = deferred(); requests.push({ payload, ...result }); return result.promise; },
-  }, { 'admin-users': usersOf([user, otherUser]) });
+    adminUpdateUser: (_, account, changes) => { const result = deferred(); requests.push({ account, payload: changes, ...result }); return result.promise; },
+  }, { 'admin-users': usersOf([user, otherUser]), 'admin-user-detail': detailOf(user) });
   let tree = fx.render();
   fx.hooks.effects();
   const search = () => find(fx.render(), (node) => node.type === '@/components/SearchInput:default');
@@ -443,11 +456,13 @@ test('renaming a filtered user keeps the closing editor mounted until exit compl
     'the password field is a new password, so a manager does not fill the admin\'s own');
   change(input(editor(), 'id', 'users-inline-7-username'), 'Bob');
   adminForm(editor()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(requests[0].payload)), { target_id: 7, username: 'Bob' },
+  assert.deepEqual(plainOf(requests[0].payload), { username: 'Bob' },
     'a save sends what changed, never the untouched fields');
-  requests[0].resolve(Response.json({ success: true }));
+  assert.equal(requests[0].account.account_revision, 3, 'the write names the revision the editor read');
+  requests[0].resolve(updated());
   await settle();
-  assert.deepEqual(fx.refreshes, ['admin-users'], 'the committed write refreshes before the editor closes');
+  assert.deepEqual(fx.refreshes.filter((name) => name === 'admin-users'), ['admin-users'], 'the committed write refreshes before the editor closes');
+  assert.ok(fx.refreshes.includes('admin-user-detail'), 'and the account read is dropped, so a reopen reads the new revision');
 
   // The refreshed full list arrives before the closing animation finishes.
   const renamedUser = { ...user, username: 'Bob' };
@@ -465,16 +480,16 @@ test('renaming a filtered user keeps the closing editor mounted until exit compl
   tree = fx.render();
   assert.equal(byType(tree, 'DataTable').props.rows.length, 2);
   assert.equal(byType(tree, 'DataTable').props.expandedRow(renamedUser), null, 'clearing the filter cannot resurrect the closed editor');
-  assert.deepEqual(fx.refreshes, ['admin-users'], 'closing does not send a duplicate refresh');
+  assert.deepEqual(fx.refreshes.filter((name) => name === 'admin-users'), ['admin-users'], 'closing does not send a duplicate refresh');
   fx.hooks.dispose();
 });
 
 test('the user editor validates what changed and sends nothing for an untouched form', async () => {
-  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: 0, gender: 'male' };
+  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: false };
   const requests = [];
   const fx = fixture('UsersTab', {
-    adminUpdateUser: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
-  }, { 'admin-users': usersOf([user]) });
+    adminUpdateUser: (_, _account, changes) => { requests.push(changes); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]), 'admin-user-detail': detailOf({ ...user, gender: 'male' }) });
   fx.render();
   fx.hooks.effects();
   await iconButton(actionCell(fx.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
@@ -500,17 +515,18 @@ test('the user editor validates what changed and sends nothing for an untouched 
 });
 
 test('ban and delete confirm by name, are not offered on the viewer\'s own row, and spin only the pressed button', async () => {
-  const self = { id: 1, username: 'Root', email: 'r@example.test', role: 'super_admin', is_banned: 0 };
-  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: 0 };
+  const self = { id: 1, username: 'Root', email: 'r@example.test', role: 'super_admin', is_banned: false };
+  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: false };
   const requests = [];
   const fx = fixture('UsersTab', {
-    adminUpdateUser: (_, payload) => { const result = deferred(); requests.push({ payload, ...result }); return result.promise; },
+    /* A ban reads the account's revision first (`GET /admin/users/7`), then patches `is_banned`. */
+    adminSetBanned: (_, userId, banned) => { const result = deferred(); requests.push({ payload: { userId, banned }, ...result }); return result.promise; },
   }, { 'admin-users': usersOf([self, user]) });
   fx.render();
   fx.hooks.effects();
   const own = actionCell(fx.render(), self);
   assert.equal(iconButton(own, '封禁用户 Root'), undefined);
-  assert.equal(iconButton(own, '删除用户 Root'), undefined);
+  assert.equal(iconButton(own, '抹除用户 Root'), undefined);
   assert.ok(iconButton(own, '编辑用户 Root'));
 
   iconButton(actionCell(fx.render(), user), '封禁用户 Alice').props.onClick();
@@ -519,14 +535,14 @@ test('ban and delete confirm by name, are not offered on the viewer\'s own row, 
     message: '确定要封禁用户「Alice」（#7）吗？封禁后该用户将在所有设备上退出登录。',
     tone: 'danger',
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(requests[0].payload)), { target_id: 7, is_banned: 1 });
+  assert.deepEqual(plainOf(requests[0].payload), { userId: 7, banned: true });
   const row = actionCell(fx.render(), user);
   assert.equal(iconButton(row, '封禁用户 Alice').props.loading, true);
-  assert.equal(iconButton(row, '删除用户 Alice').props.loading, false, 'a second action does not wear the first one\'s spinner');
-  assert.equal(iconButton(row, '删除用户 Alice').props.disabled, true);
-  requests[0].resolve(Response.json({ success: true }));
+  assert.equal(iconButton(row, '抹除用户 Alice').props.loading, false, 'a second action does not wear the first one\'s spinner');
+  assert.equal(iconButton(row, '抹除用户 Alice').props.disabled, true);
+  requests[0].resolve({ applied_revision: 4 });
   await settle();
-  assert.deepEqual(fx.data['admin-users'].rows.map((row) => row.is_banned), [0, 1]);
+  assert.deepEqual(fx.data['admin-users'].rows.map((row) => row.is_banned), [false, true]);
   assert.deepEqual(fx.toasts.at(-1), ['已封禁「Alice」（#7）', 'success']);
   fx.hooks.dispose();
 });
@@ -535,7 +551,7 @@ test('notification failure retains the broadcast draft and HTTP errors cannot an
   const requests = [];
   const fx = fixture('NotificationsTab', {
     adminSendNotification: (_, payload) => { const result = deferred(); requests.push({ payload, ...result }); return result.promise; },
-  }, { 'admin-notifications': { rows: [], totalPages: 1, total: 0 } });
+  }, { 'admin-notifications': { rows: [], next: null } });
   let tree = fx.render();
   fx.hooks.effects();
   const audience = (value) => find(fx.render(), (node) => node.type === '@/components/Radio:default' && node.props.value === value);
@@ -553,8 +569,8 @@ test('notification failure retains the broadcast draft and HTTP errors cannot an
   submit();
   assert.equal(requests.length, 1);
   assert.deepEqual(fx.asked.at(-1), { title: '确认全站广播', message: '确定要向全站所有用户发送此通知吗？', tone: 'danger' });
-  assert.deepEqual(JSON.parse(JSON.stringify(requests[0].payload)), { user_id: 0, title: '标题', content: '正文', is_important: false });
-  requests[0].resolve(Response.json({ success: true }, { status: 503 }));
+  assert.deepEqual(plainOf(requests[0].payload), { recipient_id: null, title: '标题', content: '正文', important: false });
+  requests[0].reject(new fx.errors.ApiError('http', { status: 503 }));
   await settle();
   tree = fx.render();
   assert.equal(input(tree, 'label', '通知标题').props.value, ' 标题 ');
@@ -563,7 +579,7 @@ test('notification failure retains the broadcast draft and HTTP errors cannot an
   assert.equal(fx.refreshes.length, 0);
   submit();
   fx.hooks.dispose();
-  requests[1].resolve(Response.json({ success: true }));
+  requests[1].resolve({ id: 9, recipients: 120 });
   await settle();
   assert.deepEqual(fx.refreshes, ['admin-notifications'], 'leaving the tab does not lose committed notification invalidation');
   assert.equal(fx.toasts.length, 1, 'the only toast belongs to the earlier visible failure');
@@ -572,8 +588,8 @@ test('notification failure retains the broadcast draft and HTTP errors cannot an
 test('a notification to one user names the recipient in its confirm and sends that id', async () => {
   const requests = [];
   const fx = fixture('NotificationsTab', {
-    adminSendNotification: (_, payload) => { requests.push(payload); return Promise.resolve(Response.json({ success: true })); },
-  }, { 'admin-notifications': { rows: [], totalPages: 1, total: 0 }, 'user-profile': { username: '小马' } });
+    adminSendNotification: (_, payload) => { requests.push(payload); return Promise.resolve({ id: 10 }); },
+  }, { 'admin-notifications': { rows: [], next: null }, 'user-profile': { username: '小马' } });
   fx.render();
   fx.hooks.effects();
   find(fx.render(), (node) => node.type === '@/components/Radio:default' && node.props.value === 'user').props.onChange();
@@ -594,24 +610,25 @@ test('a notification to one user names the recipient in its confirm and sends th
     message: '确定要向用户「小马」（#42）发送此通知吗？\n通知还会以邮件发给该用户。',
     tone: 'filled',
   });
-  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ user_id: 42, title: '审核通过', content: '您的稿件已通过', is_important: true }]);
+  assert.deepEqual(plainOf(requests), [{ recipient_id: 42, title: '审核通过', content: '您的稿件已通过', important: true }]);
   await settle();
   assert.deepEqual(fx.toasts.at(-1), ['已发送通知', 'success']);
   assert.equal(input(fx.render(), 'label', '通知标题').props.value, '', 'a sent form starts over');
   fx.hooks.dispose();
 });
 
-test('a badge grant sends the original console body, and the link list is read only once its pane is opened', async () => {
+test('a badge grant sends the award body, and the link list is read only once its pane is opened', async () => {
   const grants = [];
   const links = [];
   const toggles = [];
   const fx = fixture('BadgesTab', {
-    adminGrantBadge: (_, payload) => { grants.push(payload); return Promise.resolve(Response.json({ success: true, message: '成功为 3 位用户授予徽章' })); },
-    adminCreateBadgeLink: (_, payload) => { links.push(payload); return Promise.resolve(Response.json({ success: true })); },
-    adminToggleBadgeLink: (...args) => { toggles.push(args.slice(1)); return Promise.resolve(Response.json({ success: true })); },
+    adminGrantBadge: (_, payload) => { grants.push(payload); return Promise.resolve({ granted: 3, user_ids: [1, 2, 5] }); },
+    adminCreateBadgeLink: (_, payload) => { links.push(payload); return Promise.resolve({ id: 5, token: 'minted-once' }); },
+    adminToggleBadgeLink: (...args) => { toggles.push(args.slice(1)); return Promise.resolve({}); },
   }, {
-    'admin-badge-links': [{ id: 4, token: 't0k', badge_name: '元老', badge_color: '#f1c40f', is_active: 1, badge_expires_at: '2026-12-31', link_expires_at: null }],
-  }, { expand: ['GrantPane', 'LinksPane'] });
+    /* `GET /admin/badges/campaigns`: the token is never listed (it is readable once, when minted). */
+    'admin-badge-links': [{ id: 4, name: '元老', color: '#f1c40f', active: true, badge_expires_at: '2026-12-31', link_expires_at: null, required_location: null, location_error_message: null, created_at: '2026-01-01T00:00:00Z' }],
+  }, { expand: ['GrantPane', 'LinksPane'], modules: { '@/lib/utils': { copyText: async () => true } } });
   fx.render();
   fx.hooks.effects();
   const linkReads = () => fx.reads.filter((read) => read.name === 'admin-badge-links');
@@ -630,9 +647,7 @@ test('a badge grant sends the original console body, and the link list is read o
   change(input(grant(), 'label', '用户 ID'), '1, 2，5 2');
   grant().props.onSubmit();
   assert.deepEqual(fx.asked.at(-1), { title: '确认授予徽章', message: '确定要向 3 位用户授予徽章「元老」吗？', tone: 'filled' });
-  assert.deepEqual(JSON.parse(JSON.stringify(grants)), [{
-    badge_name: '元老', badge_color: '#f1c40f', target_user_ids: '1,2,5', start_date: '', end_date: '', expires_at: '',
-  }]);
+  assert.deepEqual(plainOf(grants), [{ name: '元老', color: '#f1c40f', user_ids: [1, 2, 5] }], 'permanent: no expires_on');
   await settle();
   assert.deepEqual(fx.toasts.at(-1), ['已授予徽章「元老」', 'success']);
 
@@ -644,8 +659,8 @@ test('a badge grant sends the original console body, and the link list is read o
   change(input(grant(), 'label', '到期日期'), '2026-12-31');
   grant().props.onSubmit();
   assert.equal(fx.asked.at(-1).tone, 'danger', 'a grant to everyone registered in a window is a wide action');
-  assert.deepEqual(JSON.parse(JSON.stringify(grants.at(-1))), {
-    badge_name: '周年', badge_color: '#f1c40f', target_user_ids: '', start_date: '2025-01-01', end_date: '2025-06-30', expires_at: '2026-12-31',
+  assert.deepEqual(plainOf(grants.at(-1)), {
+    name: '周年', color: '#f1c40f', registered_from: '2025-01-01', registered_through: '2025-06-30', expires_on: '2026-12-31',
   });
   await settle();
 
@@ -661,18 +676,16 @@ test('a badge grant sends the original console body, and the link list is read o
 
   button(actionCell(fx.render(), row), '停用').props.onClick();
   assert.equal(fx.asked.at(-1).title, '确认停用链接');
-  assert.deepEqual(toggles, [[4, 0]]);
+  assert.deepEqual(toggles, [[4, false]]);
   await settle();
-  assert.equal(fx.data['admin-badge-links'][0].is_active, 0);
+  assert.equal(fx.data['admin-badge-links'][0].active, false);
 
   const refreshesBefore = fx.refreshes.length;
   const create = () => adminForm(fx.render(), '生成领取链接');
   change(input(create(), 'label', '徽章名称'), '活动');
   change(input(create(), 'label', '领取地区限制'), ' 江苏 ');
   create().props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(links)), [{
-    badge_name: '活动', badge_color: '#e74c3c', badge_expires_at: '', link_expires_at: '', required_location: '江苏', location_error_msg: '',
-  }]);
+  assert.deepEqual(plainOf(links), [{ name: '活动', color: '#e74c3c', required_location: '江苏' }], 'unset dates and messages are left out');
   await settle();
   assert.deepEqual(fx.refreshes.slice(refreshesBefore), ['admin-badge-links'], 'a new link is read back into the list');
   fx.hooks.dispose();
@@ -681,7 +694,7 @@ test('a badge grant sends the original console body, and the link list is read o
 test('message audit waits for an explicit query, isolates accounts and forwards cancellation', async () => {
   const calls = [];
   const fx = fixture('MessagesAuditTab', {
-    adminGetAllMessages: async (...args) => { calls.push(args); return { success: true, messages: [] }; },
+    adminGetAllMessages: async (...args) => { calls.push(args); return { messages: [], next: null }; },
   });
   let tree = fx.render();
   assert.equal(fx.reads.at(-1).args, SKIP);
@@ -699,7 +712,7 @@ test('message audit waits for an explicit query, isolates accounts and forwards 
   const resource = fx.resources.get('admin-message-audit');
   const controller = new AbortController();
   await resource.fetch(fx.reads.at(-1).args, controller.signal);
-  assert.equal(calls[0][1], 8);
+  assert.deepEqual(plainOf(calls[0][1]), { userId: 8, limit: 50 }, 'the first page: no cursor');
   assert.equal(calls[0][2], controller.signal);
   searchForm().props.onSubmit({ preventDefault() {} });
   assert.equal(fx.refreshes.length, 1, 'repeating the submitted query refreshes it');
@@ -714,10 +727,11 @@ test('message audit waits for an explicit query, isolates accounts and forwards 
 });
 
 test('report locks survive filtering a pending row out and back in, while other rows remain independent', async () => {
-  const reports = [1, 2].map((id) => ({ id, status: 'pending', username: '测试', image_id: id, reason: 'test' }));
+  const reports = [1, 2].map((id) => ({ id, status: 'pending', image_id: id, reason: 'test', revision: 1, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', reporter: { id: 3, username: '测试' } }));
   const requests = [];
   const fx = fixture('ReportsTab', {
-    adminHandleReport: (_, id, status) => { const result = deferred(); requests.push({ id, status, ...result }); return result.promise; },
+    /* The write names the report's revision (`PATCH /admin/image-reports/{id}`). */
+    adminHandleReport: (_, report, status) => { const result = deferred(); requests.push({ id: report.id, revision: report.revision, status, ...result }); return result.promise; },
   }, { 'admin-reports': reports });
   let tree = fx.render();
   fx.hooks.effects();
@@ -732,10 +746,10 @@ test('report locks survive filtering a pending row out and back in, while other 
   assert.equal(button(restored, '驳回').props.disabled, true);
   await button(restored, '驳回').props.onClick();
   const second = button(actionCell(tree, reports[1]), '驳回').props.onClick();
-  assert.deepEqual(requests.map(({ id, status }) => [id, status]), [[1, 'processed'], [2, 'rejected']]);
-  requests.forEach((request) => request.resolve(Response.json({ success: true })));
+  assert.deepEqual(requests.map(({ id, revision, status }) => [id, revision, status]), [[1, 1, 'processed'], [2, 1, 'rejected']]);
+  requests.forEach((request) => request.resolve({ applied_revision: 2 }));
   await Promise.all([first, second]);
-  assert.deepEqual(fx.data['admin-reports'].map((report) => report.status), ['processed', 'rejected']);
+  assert.deepEqual(fx.data['admin-reports'].map((report) => [report.status, report.revision]), [['processed', 2], ['rejected', 2]]);
   assert.equal(fx.refreshes.length, 2);
   fx.hooks.dispose();
 });
@@ -744,7 +758,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
   const profileReads = [];
   const fx = fixture('TeamTab', {
     userProfileRead: (args) => { const result = deferred(); profileReads.push({ args, ...result }); return result.promise; },
-  }, { 'admin-team': [] }, { expand: ['TeamMemberForm'] });
+  }, { 'admin-team': { revision: 1, members: [] } }, { expand: ['TeamMemberForm'] });
   fx.render();
   fx.hooks.effects();
   const form = () => adminForm(fx.render(), '添加团队成员');
@@ -766,8 +780,13 @@ test('team import fills the form from the account, and an obsolete answer cannot
   assert.equal(input(form(), 'label', '成员姓名').props.value, '小明');
   assert.equal(input(form(), 'label', '头衔').props.value, '管理员');
   assert.equal(find(form(), (node) => node.type === '@/components/Select:default' && node.props.label === '栏目').props.value, 'manager');
-  assert.equal(input(form(), 'label', '备用头像链接').props.value, 'uploads/a.png');
+  assert.equal(input(form(), 'label', '备用头像链接').props.value, '', 'a site-relative avatar is not an HTTPS address the column takes');
   assert.deepEqual(fx.toasts.at(-1), ['已导入「小明」的资料', 'success']);
+  button(form(), '导入资料').props.onClick();
+  profileReads[2].resolve({ id: 5, username: '小明', avatar: 'https://cdn.picpony.test/a.png', role: 'admin' });
+  await settle();
+  assert.equal(input(form(), 'label', '备用头像链接').props.value, 'https://cdn.picpony.test/a.png');
+  profileReads.splice(2, 1);
 
   change(input(form(), 'label', '关联站内用户 ID'), '99');
   button(form(), '导入资料').props.onClick();
@@ -779,7 +798,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
   fx.hooks.dispose();
   profileReads[3].reject(new Error('late failure'));
   await settle();
-  assert.equal(fx.toasts.length, 1, 'a form that has gone says nothing');
+  assert.equal(fx.toasts.length, 2, 'a form that has gone says nothing (the two toasts are the two imports)');
 });
 
 test('a team save refreshes the public roster after leaving its editor but cannot affect another account', async () => {
@@ -787,18 +806,18 @@ test('a team save refreshes the public roster after leaving its editor but canno
     const response = deferred();
     const payloads = [];
     const fx = fixture('TeamTab', {
-      addTeamMember: (_, payload) => { payloads.push(payload); return response.promise; },
-    }, { 'admin-team': [] }, { expand: ['TeamMemberForm'] });
+      addTeamMember: (_, revision, payload) => { payloads.push({ revision, payload }); return response.promise; },
+    }, { 'admin-team': { revision: 4, members: [] } }, { expand: ['TeamMemberForm'] });
     fx.render();
     fx.hooks.effects();
     change(input(adminForm(fx.render(), '添加团队成员'), 'label', '成员姓名'), ' 新成员 ');
     adminForm(fx.render(), '添加团队成员').props.onSubmit();
-    assert.deepEqual(JSON.parse(JSON.stringify(payloads)), [{
-      name: '新成员', role: '', category: 'developer', user_id: 0, avatar_url: '', link_url: '', order_num: 0,
-    }], 'the original console body: user_id 0 and empty strings for what is not set');
+    assert.deepEqual(plainOf(payloads), [{ revision: 4, payload: {
+      name: '新成员', role: '', category: 'developer', user_id: null, avatar_url: '', link_url: '', order_num: 0,
+    } }], 'the roster revision read, no account as null and empty strings for what is not set');
     fx.hooks.dispose();
     if (changeAccount) fx.session.token = 'account-B';
-    response.resolve(Response.json({ success: true }));
+    response.resolve({ id: 11, applied_revision: 5 });
     await settle();
     assert.equal(fx.refreshes.includes('team-members'), !changeAccount);
     assert.equal(fx.refreshes.includes('admin-team'), !changeAccount);
@@ -807,11 +826,12 @@ test('a team save refreshes the public roster after leaving its editor but canno
 });
 
 test('a member is edited under its row; binding an account links the card, an external link survives otherwise', async () => {
-  const member = { id: 3, name: '老成员', role: '画师', category: 'special', user_id: 0, avatar_url: '', link_url: 'https://example.test/me', order_num: 2 };
+  const member = { id: 3, name: '老成员', role: '画师', category: 'special', user_id: null, avatar_url: '', link_url: 'https://example.test/me', order_num: 2, account_avatar: null };
   const payloads = [];
+  const ids = [];
   const fx = fixture('TeamTab', {
-    updateTeamMember: (_, payload) => { payloads.push(payload); return Promise.resolve(Response.json({ success: true })); },
-  }, { 'admin-team': [member] });
+    updateTeamMember: (_, _revision, id, payload) => { ids.push(id); payloads.push(payload); return Promise.resolve({ id }); },
+  }, { 'admin-team': { revision: 2, members: [member] } });
   fx.render();
   fx.hooks.effects();
   await iconButton(actionCell(fx.render(), member), '编辑成员 老成员').props.onClick({ currentTarget: {} });
@@ -820,7 +840,7 @@ test('a member is edited under its row; binding an account links the card, an ex
   change(input(editor(), 'label', '排序号'), '1.5');
   adminForm(editor()).props.onSubmit();
   assert.equal(payloads.length, 0);
-  assert.equal(input(editor(), 'label', '排序号').props.error, '排序号须为整数');
+  assert.equal(input(editor(), 'label', '排序号').props.error, '排序号须为 -2147483648～2147483647 的整数');
   change(input(editor(), 'label', '排序号'), '-1');
   adminForm(editor()).props.onSubmit();
   assert.equal(payloads.at(-1).link_url, 'https://example.test/me', 'no account bound: the stored link is kept');
@@ -830,20 +850,22 @@ test('a member is edited under its row; binding an account links the card, an ex
   await iconButton(actionCell(fx.render(), member), '编辑成员 老成员').props.onClick({ currentTarget: {} });
   change(input(editor(), 'label', '关联站内用户 ID'), '9');
   adminForm(editor()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(payloads.at(-1))), {
-    name: '老成员', role: '画师', category: 'special', user_id: 9, avatar_url: '', link_url: 'user:9', order_num: -1, id: 3,
-  });
+  assert.deepEqual(plainOf(payloads.at(-1)), {
+    name: '老成员', role: '画师', category: 'special', user_id: 9, avatar_url: '', link_url: '', order_num: -1,
+  }, 'a bound account links the card itself: the stored external link is dropped');
+  assert.deepEqual(ids, [3, 3], 'the member is the path id');
   await settle();
   assert.deepEqual(fx.toasts.at(-1), ['已保存成员「老成员」', 'success']);
   assert.ok(fx.refreshes.includes('team-members'), '/about reads the roster again');
   fx.hooks.dispose();
 });
 
-test('a shop item is refused on its own fields, saved with the original console body, and edited under its row', async () => {
-  const item = { id: 6, name: '改名卡', description: '', image_url: 'uploads/shop/a.png', price: 30, stock: 4, active: 1 };
+test('a shop item is refused on its own fields, saved with the item body, and edited under its row', async () => {
+  const item = { id: 6, name: '改名卡', description: '', image_url: 'uploads/shop/a.png', price: 30, stock: 4, active: true, revision: 3, created_at: '2026-10-01T00:00:00Z' };
   const payloads = [];
+  const targets = [];
   const fx = fixture('ShopTab', {
-    adminSaveShopItem: (_, payload) => { payloads.push(payload); return Promise.resolve(Response.json({ success: true })); },
+    adminSaveShopItem: (_, payload, target) => { payloads.push(payload); targets.push(target); return Promise.resolve({ id: target?.id ?? 7, revision: 1 }); },
   }, { 'admin-shop': [item] }, { expand: ['ShopItemForm'] });
   fx.render();
   fx.hooks.effects();
@@ -859,9 +881,10 @@ test('a shop item is refused on its own fields, saved with the original console 
   change(input(form(), 'label', '价格（金币）'), '12');
   change(input(form(), 'label', '库存'), '0');
   form().props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(payloads)), [{
-    id: 0, name: '头像框', description: '', image_url: '', price: 12, stock: 0, active: 1,
-  }]);
+  assert.deepEqual(plainOf(payloads), [{
+    name: '头像框', description: '', image_url: null, price: 12, stock: 0, active: true,
+  }], 'no picture is null; a new item names no id');
+  assert.equal(targets[0], undefined);
   await settle();
   assert.deepEqual(fx.toasts.at(-1), ['已添加商品「头像框」', 'success']);
   assert.deepEqual(fx.refreshes, ['admin-shop', 'shop-items'], 'the shop page reads its list again too');
@@ -872,9 +895,10 @@ test('a shop item is refused on its own fields, saved with the original console 
   const editor = () => expandTree(byType(fx.render(), 'DataTable').props.expandedRow(item), ['ShopItemForm']);
   find(editor(), (node) => node.type === '@/components/Checkbox:default').props.onChange(false);
   adminForm(editor()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(payloads.at(-1))), {
-    id: 6, name: '改名卡', description: '', image_url: 'uploads/shop/a.png', price: 30, stock: 4, active: 0,
+  assert.deepEqual(plainOf(payloads.at(-1)), {
+    name: '改名卡', description: '', image_url: 'uploads/shop/a.png', price: 30, stock: 4, active: false,
   });
+  assert.deepEqual(plainOf(targets.at(-1)), { id: 6, revision: 3 }, 'an edit names the item and the revision the list carried');
   fx.hooks.dispose();
 });
 
@@ -885,8 +909,10 @@ async function openGlossary(fx) {
   return fx.render();
 }
 const glossaryTags = [1, 2].map((id) => ({
-  id, en: `tag-${id}`, cn: id === 1 ? '标签' : '', cat: 'general', count: 0, description: '', aliases: [], is_restricted: 1,
+  id, en: `tag-${id}`, cn: id === 1 ? '标签' : '未翻译', cat: 'general', count: 0, description: '', aliases: [], restricted: true, revision: 1,
 }));
+/* `GET /editor/dictionary/feedback` rows. */
+const feedbackRow = (id, tag, content) => ({ id, user_id: 3, username: '访客', tag, content, status: 'pending', handled_by: null, handler_username: null, handled_at: null, created_at: '2026-10-01T00:00:00Z' });
 const glossaryData = (tags = glossaryTags) => ({ 'admin-dictionary': { tags, total: tags.length, stats: { total: 10, translated: 4, leaderboard: [] } } });
 const dialog = (tree, name) => find(tree, (node) => node.type === `./${name}:default`);
 
@@ -910,17 +936,16 @@ test('a new tag is checked against the dictionary, and a confirmed save clears t
   exists = false;
   dialog(fx.render(), 'CreateTagDialog').props.onSave(form);
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(saves[0].payload)), {
-    en: 'missing-tag', cn: '缺失', aliases: ['别名'], cat: 'general', count: 3, description: '',
-    is_restricted: 0, is_original_translation: 0, is_sensitive: 0,
-  });
-  saves[0].resolve(Response.json({ success: false, error: '保存被拒绝' }));
+  assert.deepEqual(plainOf(saves[0].payload), {
+    en: 'missing-tag', cn: '缺失', aliases: ['别名'], cat: 'general', count: 3, description: '', restricted: false,
+  }, 'a new tag names no id and no revision');
+  saves[0].reject(new fx.errors.ApiError('http', { status: 400, serverMessage: '保存被拒绝' }));
   await settle();
   assert.equal(fx.dictionaryCache.size, 1, 'a rejected save leaves the lookups alone');
   assert.equal(dialog(fx.render(), 'CreateTagDialog').props.open, true);
   dialog(fx.render(), 'CreateTagDialog').props.onSave(form);
   await settle();
-  saves[1].resolve(Response.json({ success: true }));
+  saves[1].resolve({ id: 3, revision: 1 });
   await settle();
   assert.equal(fx.dictionaryCache.size, 0, 'cached misses are stale once the tag exists');
   assert.equal(fx.refreshes.filter((name) => name === 'dictionary-tag').length, 1);
@@ -932,36 +957,36 @@ test('a new tag is checked against the dictionary, and a confirmed save clears t
 test('an edit carries the row flags through, writes an untranslated name as empty, and reads the list again after closing', async () => {
   const saves = [];
   const fx = fixture('glossary/GlossaryTab', {
-    saveDictionaryTag: (_, payload) => { saves.push(payload); return Promise.resolve(Response.json({ success: true })); },
+    saveDictionaryTag: (_, payload) => { saves.push(payload); return Promise.resolve({ id: payload.id, revision: 2 }); },
   }, glossaryData());
   let tree = await openGlossary(fx);
   await iconButton(actionCell(tree, glossaryTags[0]), '编辑标签 tag-1').props.onClick({ currentTarget: {} });
   const editor = () => byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[0]);
   assert.equal(editor().type.name, 'TagEditor');
   editor().props.onSave({
-    id: 1, en: 'tag-1', cn: '', aliases: [], cat: 'general', count: 0, description: '',
-    is_restricted: 1, is_original_translation: 0, is_sensitive: 0,
+    id: 1, revision: 1, en: 'tag-1', cn: '未翻译', aliases: [], cat: 'general', count: 0, description: '', restricted: true,
   });
   await settle();
   assert.equal(saves.length, 1);
+  assert.equal(saves[0].revision, 1, 'an edit names the revision the row was read at');
   assert.equal(editor().props.closing, true);
-  assert.equal(fx.data['admin-dictionary'].tags[0].cn, '', 'the row shows what was saved at once');
+  assert.equal(fx.data['admin-dictionary'].tags[0].cn, '未翻译', 'the row shows what was saved at once');
+  assert.equal(fx.data['admin-dictionary'].tags[0].revision, 2, 'with the revision the save answered');
   const before = fx.refreshes.filter((name) => name === 'admin-dictionary').length;
   editor().props.onExitComplete();
   assert.equal(fx.refreshes.filter((name) => name === 'admin-dictionary').length, before + 1, 'and is read again once the editor has gone');
   fx.hooks.dispose();
 });
 
-test('the editor sends the original body: flags kept, no translation is empty', () => {
+test('the editor sends the tag body: the restricted mark kept, no translation is 未翻译', () => {
   const model = load('components/admin/glossary/model.ts', plainModules);
-  const tag = { id: 7, en: 'pony', cn: '未翻译', aliases: [], cat: 'species', count: 5, description: '', is_restricted: 1, is_sensitive: '1' };
+  const tag = { id: 7, en: 'pony', cn: '未翻译', aliases: [], cat: 'species', count: 5, description: '', restricted: true, revision: 4 };
   const form = model.tagFormOf(tag);
   assert.equal(form.translations, '', '未翻译 is no translation, not a name');
-  assert.deepEqual(JSON.parse(JSON.stringify(model.tagSavePayload({ ...form, translations: '小马，马 , 小马' }, tag))), {
-    en: 'pony', cn: '小马', aliases: ['马'], cat: 'species', count: 5, description: '',
-    is_restricted: 1, is_original_translation: 0, is_sensitive: 1, id: 7,
+  assert.deepEqual(plainOf(model.tagSavePayload({ ...form, translations: '小马，马 , 小马' }, tag)), {
+    en: 'pony', cn: '小马', aliases: ['马'], cat: 'species', count: 5, description: '', restricted: true, id: 7, revision: 4,
   });
-  assert.equal(model.tagSavePayload(form, tag).cn, '');
+  assert.equal(model.tagSavePayload(form, tag).cn, '未翻译', 'the backend refuses an empty cn');
   assert.equal(model.exportText([tag, { ...tag, en: 'zebra', cn: '斑马', aliases: ['马'] }]), '# pony =\nzebra = 斑马, 马');
   assert.deepEqual(
     JSON.parse(JSON.stringify(model.parseImport(model.exportText([{ ...tag, cn: '小马', aliases: ['马'] }])).tasks)),
@@ -976,7 +1001,7 @@ test('the editor sends the original body: flags kept, no translation is empty', 
 for (const operation of ['import', 'delete', 'sync']) {
   test(`glossary bulk ${operation} is one write and invalidates tag lookups once`, async () => {
     const writes = [];
-    const answer = (body) => (...args) => { writes.push(args.slice(1)); return Promise.resolve(Response.json({ success: true, ...body })); };
+    const answer = (body) => (...args) => { writes.push(args.slice(1)); return Promise.resolve(body); };
     const fx = fixture('glossary/GlossaryTab', {
       batchImportDictionaryTags: answer({ created: 2, skipped: 0, failed: 0 }),
       batchDeleteDictionaryTags: answer({ deleted_count: 2 }),
@@ -1018,7 +1043,7 @@ test('a bulk write confirmed after leaving the glossary still invalidates lookup
   await flush();
   fx.hooks.dispose();
   fx.dictionaryCache.set('new-tag', null);
-  response.resolve(Response.json({ success: true, created: 1, skipped: 0, failed: 0 }));
+  response.resolve({ created: 1, skipped: 0, failed: 0 });
   await settle();
   assert.equal(fx.dictionaryCache.has('new-tag'), false);
   assert.equal(fx.toasts.length, 0, 'an unmounted editor does not show a completion toast');
@@ -1027,11 +1052,11 @@ test('a bulk write confirmed after leaving the glossary still invalidates lookup
 test('handling a feedback opens its tag under its row, and saving the tag closes the feedback', async () => {
   const handled = [];
   const fx = fixture('glossary/GlossaryTab', {
-    saveDictionaryTag: () => Promise.resolve(Response.json({ success: true })),
-    handleTagFeedback: (...args) => { handled.push(args.slice(1)); return Promise.resolve(Response.json({ success: true })); },
+    saveDictionaryTag: (_, payload) => Promise.resolve({ id: payload.id, revision: 2 }),
+    handleTagFeedback: (...args) => { handled.push(args.slice(1)); return Promise.resolve({ id: args[1], status: args[2] }); },
   }, glossaryData());
   await openGlossary(fx);
-  const feedback = { id: 31, tag_name: 'TAG-2', content: '缺少翻译\n建议的正确翻译：标签二', username: '访客', status: 'pending', created_at: '2026-10-01 08:00:00' };
+  const feedback = feedbackRow(31, 'TAG-2', '缺少翻译\n建议的正确翻译：标签二');
   dialog(fx.render(), 'FeedbackDialog').props.onHandle(feedback);
   assert.equal(find(fx.render(), (node) => node.type === '@/components/SearchInput:default').props.value, 'TAG-2');
   fx.hooks.effects();
@@ -1039,34 +1064,39 @@ test('handling a feedback opens its tag under its row, and saving the tag closes
   const editor = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1]);
   assert.equal(editor?.type.name, 'TagEditor', 'the filtered list opens the tag the feedback names');
   assert.equal(editor.props.workOrder.id, 31);
-  editor.props.onSave({ id: 2, en: 'tag-2', cn: '标签二', aliases: [], cat: 'general', count: 0, description: '' });
+  editor.props.onSave({ id: 2, revision: 1, en: 'tag-2', cn: '标签二', aliases: [], cat: 'general', count: 0, description: '', restricted: true });
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(handled)), [[31, 'processed', '已采纳并写入词库', 'pending']]);
+  assert.deepEqual(plainOf(handled), [[31, 'processed']], 'the status alone: the backend keeps no handling note');
   assert.ok(fx.refreshes.includes('admin-tag-feedback'), 'the queue reads again');
   fx.hooks.dispose();
 });
 
 test('a malformed admin list fails its own tab with a named message, never the whole console', () => {
   const fx = fixture();
-  assert.throws(() => fx.queries.adminList({ success: true, users: {} }, 'users', '用户列表'), /用户列表加载失败/);
-  assert.throws(() => fx.queries.adminList({ success: true, reports: 'x' }, 'reports', '举报'), /举报加载失败/);
-  assert.throws(() => fx.queries.adminList({ success: false, error: '无权限' }, 'users', '用户列表'), /无权限/);
-  assert.throws(() => fx.queries.adminList({ success: false }, 'users', '用户列表'), /用户列表加载失败/);
-  assert.deepEqual(fx.queries.adminList({ success: true, users: [{ id: 1 }, null, 3] }, 'users', '用户列表'), [{ id: 1 }]);
-  assert.deepEqual(
-    fx.queries.adminList({ success: true, data: { links: [{ id: 2 }] } }, ['data.links', 'links'], '徽章链接'),
-    [{ id: 2 }],
-  );
-  assert.deepEqual(fx.queries.adminList({ success: true, links: [{ id: 3 }] }, ['data.links', 'links'], '徽章链接'), [{ id: 3 }]);
+  const { ApiError } = fx.errors;
+  /* One shared read, two panels' views of it: a view that cannot read its field fails that panel alone. */
+  const resource = fx.queries.defineAdminQuery('users', async () => ({ rows: [] }));
+  fx.data['admin-users'] = { rows: [{ id: 1, username: 'a' }], stats: 'broken' };
+  const strict = (source) => { if (!Array.isArray(source.stats)) throw new ApiError('invalid', { message: '统计加载失败' }); return source.stats; };
+  const names = fx.queries.derived((source) => source.rows.map((row) => row.username));
+  const broken = fx.hooks.render(() => fx.queries.useAdminSelect(resource, fx.session.token, strict));
+  assert.equal(broken.data, undefined);
+  assert.equal(broken.error, '统计加载失败');
+  assert.equal(broken.loading, false, 'a failed view is not a skeleton forever');
+  const fine = fx.hooks.render(() => fx.queries.useAdminSelect(resource, fx.session.token, names));
+  assert.deepEqual(plainOf(fine.data), ['a']);
+  assert.equal(fine.error, undefined, 'the other panel on the same read is unaffected');
+  /* Signed out: nothing is read and nothing is loading. */
+  const out = fx.hooks.render(() => fx.queries.useAdminSelect(resource, '', names));
+  assert.equal(out.data, undefined); assert.equal(out.loading, false);
 });
-
 
 test('leaving during a new tag existence read never sends the following save', async () => {
   const checked = deferred();
   let writes = 0;
   const fx = fixture('glossary/GlossaryTab', {
     checkTagExists: () => checked.promise,
-    saveDictionaryTag: async () => { writes++; return Response.json({ success: true }); },
+    saveDictionaryTag: async () => { writes++; return { id: 9, revision: 1 }; },
   }, glossaryData());
   await openGlossary(fx);
   dialog(fx.render(), 'CreateTagDialog').props.onSave({ en: 'pony', translations: '', cat: 'general', count: 0, description: '' });
@@ -1105,20 +1135,23 @@ test('a long unpaged response renders one page and resets pagination when its fi
   fx.hooks.dispose();
 });
 
-test('glossary bulk toasts say only the counts that arrived — never an invented 0', async () => {
+test('glossary bulk toasts say each count that is not zero, and a partial import keeps its dialog', async () => {
   const imports = [];
   const fx = fixture('glossary/GlossaryTab', {
-    batchImportDictionaryTags: async () => { imports.push(1); return Response.json(imports.length === 1 ? { success: true } : { success: true, created: 2, skipped: 1 }); },
+    batchImportDictionaryTags: async () => { imports.push(1); return imports.length === 1 ? { created: 2, skipped: 1, failed: 1 } : { created: 1, skipped: 0, failed: 0 }; },
   }, glossaryData());
   const tree = await openGlossary(fx);
   const task = { en: 'new-tag', cn: '新词', aliases: [], cat: 'general', count: 0, description: '' };
-  dialog(tree, 'BatchImportDialog').props.onImport([task]);
-  await settle();
-  assert.equal(fx.toasts.at(-1)[0], '已完成导入', 'no counts: the import is known, its size is not');
-  assert.equal(fx.toasts.at(-1)[1], 'success', 'an absent `failed` is none reported');
+  find(tree, (node) => node.type === '@/components/Menu:default' && node.props['aria-label'] === '词库工具').props.onSelect('import');
+  assert.equal(dialog(fx.render(), 'BatchImportDialog').props.open, true);
   dialog(fx.render(), 'BatchImportDialog').props.onImport([task]);
   await settle();
-  assert.equal(fx.toasts.at(-1)[0], '已导入 2 个标签，跳过 1 个已有的标签');
+  assert.deepEqual(fx.toasts.at(-1), ['已导入 2 个标签，跳过 1 个已有的标签，1 个导入失败', 'warning']);
+  assert.equal(dialog(fx.render(), 'BatchImportDialog').props.open, true, 'what failed is still in the dialog to retry');
+  dialog(fx.render(), 'BatchImportDialog').props.onImport([task]);
+  await settle();
+  assert.deepEqual(fx.toasts.at(-1), ['已导入 1 个标签', 'success']);
+  assert.equal(dialog(fx.render(), 'BatchImportDialog').props.open, false);
   fx.hooks.dispose();
 });
 
@@ -1130,12 +1163,12 @@ test('glossary bulk toasts say only the counts that arrived — never an invente
 test('review P6-F2: a feedback closes only when its own tag is saved, never on a neighbour or an unrelated add', async () => {
   const handled = [];
   const fx = fixture('glossary/GlossaryTab', {
-    saveDictionaryTag: () => Promise.resolve(Response.json({ success: true })),
+    saveDictionaryTag: (_, payload) => Promise.resolve({ id: payload.id ?? 9, revision: 2 }),
     checkTagExists: async () => false,
-    handleTagFeedback: (...args) => { handled.push(args.slice(1)); return Promise.resolve(Response.json({ success: true })); },
+    handleTagFeedback: (...args) => { handled.push(args.slice(1)); return Promise.resolve({ id: args[1], status: args[2] }); },
   }, glossaryData());
   await openGlossary(fx);
-  const feedback = { id: 31, tag_name: 'TAG-2', content: '建议的正确翻译：标签二', username: '访客', status: 'pending', created_at: '2026-10-01 08:00:00' };
+  const feedback = feedbackRow(31, 'TAG-2', '建议的正确翻译：标签二');
   dialog(fx.render(), 'FeedbackDialog').props.onHandle(feedback);
   fx.hooks.effects();
   await new Promise((resolve) => setTimeout(resolve, 450));
@@ -1143,7 +1176,7 @@ test('review P6-F2: a feedback closes only when its own tag is saved, never on a
   await iconButton(actionCell(fx.render(), glossaryTags[0]), '编辑标签 tag-1').props.onClick({ currentTarget: {} });
   const neighbour = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[0]);
   assert.equal(neighbour.props.workOrder, null, 'the neighbour does not offer the feedback');
-  neighbour.props.onSave({ id: 1, en: 'tag-1', cn: '标签', aliases: [], cat: 'general', count: 0, description: '改了简介' });
+  neighbour.props.onSave({ id: 1, revision: 1, en: 'tag-1', cn: '标签', aliases: [], cat: 'general', count: 0, description: '改了简介', restricted: true });
   await settle();
   assert.deepEqual(handled, [], 'saving another tag leaves the feedback pending');
 
@@ -1157,18 +1190,20 @@ test('review P6-F2: a feedback closes only when its own tag is saved, never on a
   /* Saving the tag it names closes it. */
   const own = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1])
     ?? (await iconButton(actionCell(fx.render(), glossaryTags[1]), '编辑标签 tag-2').props.onClick({ currentTarget: {} }), byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1]));
-  own.props.onSave({ id: 2, en: 'tag-2', cn: '标签二', aliases: [], cat: 'general', count: 0, description: '' });
+  own.props.onSave({ id: 2, revision: 1, en: 'tag-2', cn: '标签二', aliases: [], cat: 'general', count: 0, description: '', restricted: true });
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(handled)), [[31, 'processed', '已采纳并写入词库', 'pending']]);
+  assert.deepEqual(plainOf(handled), [[31, 'processed']]);
   fx.hooks.dispose();
 });
 
 test('review P6-F4: the user editor holds a changed API key to the shared 20-character rule, and lets an unbind through', async () => {
-  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: 0, api_key: 'legacy key with spaces' };
+  /* The stored key is never readable: the account says only that one is bound, and its hint. */
+  const user = { id: 7, username: 'Alice', email: 'a@example.test', role: 'user', is_banned: false };
+  const detail = detailOf({ ...user, upstream_credential: { revision: 2, has_key: true, key_hint: 'legacy…', state: 'verified' } });
   const requests = [];
   const fx = fixture('UsersTab', {
-    adminUpdateUser: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
-  }, { 'admin-users': usersOf([user]) });
+    adminUpdateUser: (_, _account, changes) => { requests.push(changes); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]), 'admin-user-detail': detail });
   fx.render();
   fx.hooks.effects();
   await iconButton(actionCell(fx.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
@@ -1179,13 +1214,13 @@ test('review P6-F4: the user editor holds a changed API key to the shared 20-cha
   /* An untouched legacy key is not re-validated: the account stays editable. */
   change(input(editor(), 'id', 'users-inline-7-username'), 'Alicia');
   adminForm(editor()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(requests.at(-1))), { target_id: 7, username: 'Alicia' });
+  assert.deepEqual(plainOf(requests.at(-1)), { username: 'Alicia' });
   requests.length = 0;
   fx.hooks.dispose();
 
   const fx2 = fixture('UsersTab', {
-    adminUpdateUser: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
-  }, { 'admin-users': usersOf([user]) });
+    adminUpdateUser: (_, _account, changes) => { requests.push(changes); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]), 'admin-user-detail': detail });
   fx2.render();
   fx2.hooks.effects();
   await iconButton(actionCell(fx2.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
@@ -1198,47 +1233,65 @@ test('review P6-F4: the user editor holds a changed API key to the shared 20-cha
   }
   change(input(editor2(), 'id', 'users-inline-7-api-key'), 'aB3_-aB3_-aB3_-aB3_-');
   adminForm(editor2()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(requests.at(-1))), { target_id: 7, api_key: 'aB3_-aB3_-aB3_-aB3_-' });
+  assert.deepEqual(plainOf(requests.at(-1)), { apiKey: 'aB3_-aB3_-aB3_-aB3_-' });
   fx2.hooks.dispose();
+
+  /* Unbinding sends `apiKey: null` (`DELETE …/upstream-credential`), whatever the field held. */
+  requests.length = 0;
+  const fx3 = fixture('UsersTab', {
+    adminUpdateUser: (_, _account, changes) => { requests.push(changes); return new Promise(() => {}); },
+  }, { 'admin-users': usersOf([user]), 'admin-user-detail': detail });
+  fx3.render();
+  fx3.hooks.effects();
+  await iconButton(actionCell(fx3.render(), user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
+  const editor3 = () => expandTree(byType(fx3.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
+  find(editor3(), (node) => node.type === '@/components/Checkbox:default' && node.props.label === '解除该用户的 API Key 绑定').props.onChange(true);
+  adminForm(editor3()).props.onSubmit();
+  assert.deepEqual(plainOf(requests), [{ apiKey: null }]);
+  fx3.hooks.dispose();
 });
 
 test('review P6-F5: a server-paged list moves off a page it no longer has', async () => {
-  const fx = fixture('NotificationsTab', {}, { 'admin-notifications': { rows: [{ id: 1, user_id: 0, title: 't', content: 'c', created_at: '2026-10-01 08:00:00' }], totalPages: 2, total: 21 } });
+  /* Cursor lists: page 1 says where page 2 starts (`next_cursor`), and page 2 is read `before` it. */
+  const fx = fixture('NotificationsTab', {}, { 'admin-notifications': { rows: [{ id: 21, recipient_id: null, username: null, kind: 'system', title: 't', content: 'c', important: false, created_at: '2026-10-01T00:00:00Z' }], next: 21 } });
+  const reads = () => fx.reads.filter((read) => read.name === 'admin-notifications' && read.args !== SKIP);
   fx.render();
   fx.hooks.effects();
   const pager = () => find(fx.render(), (node) => node.type?.name === 'AdminPager');
+  assert.equal(pager().props.totalPages, 2, 'a next cursor offers the next page');
   pager().props.onPageChange(2);
   fx.render();
-  assert.equal(fx.reads.filter((read) => read.name === 'admin-notifications').at(-1).args.page, 2);
-  /* The last notice on page 2 is deleted: the re-read says there is one page now. */
-  fx.data['admin-notifications'] = { rows: [], totalPages: 1, total: 20 };
+  assert.equal(reads().at(-1).args.before, 21);
+  /* The last notice on page 2 is deleted: the re-read answers an empty page. */
+  fx.data['admin-notifications'] = { rows: [], next: null };
   fx.render();
-  assert.equal(fx.reads.filter((read) => read.name === 'admin-notifications').at(-1).args.page, 1);
+  assert.equal(reads().at(-1).args.before, undefined);
   assert.equal(pager().props.page, 1);
   fx.hooks.dispose();
 
+  const row = { id: 9, user_id: 3, username: 'u', tag: 'a', content: 'x', status: 'pending', handled_by: null, handler_username: null, handled_at: null, created_at: '2026-10-01T00:00:00Z' };
   const feedback = fixture('glossary/FeedbackDialog', {}, {
-    'admin-tag-feedback': { rows: [{ id: 9, tag_name: 'a', content: 'x', username: 'u', status: 'pending', created_at: '2026-10-01 08:00:00' }], summary: { pending: 41, processed: 0, rejected: 0 }, totalPages: 2 },
+    'admin-tag-feedback': { rows: [row], next: 9 },
   }, { expose: 'FeedbackDialog' });
+  const feedbackReads = () => feedback.reads.filter((read) => read.name === 'admin-tag-feedback' && read.args !== SKIP);
   const render = () => feedback.hooks.render(() => feedback.subject({ open: true, token: feedback.session.token, onClose() {}, onHandle() {} }));
   render();
   feedback.hooks.effects();
   find(render(), (node) => node.type === '@/components/Pagination:default').props.onPageChange(2);
   render();
-  assert.equal(feedback.reads.filter((read) => read.name === 'admin-tag-feedback').at(-1).args.page, 2);
-  /* The page's last feedback is handled: the queue now has one page, and the dialog must not sit on
-     an empty page 2 with its pager gone. */
-  feedback.data['admin-tag-feedback'] = { rows: [], summary: { pending: 40, processed: 1, rejected: 0 }, totalPages: 1 };
+  assert.equal(feedbackReads().at(-1).args.before, 9);
+  /* The page's last feedback is handled: the dialog must not sit on an empty page 2 with its pager gone. */
+  feedback.data['admin-tag-feedback'] = { rows: [], next: null };
   render();
-  assert.equal(feedback.reads.filter((read) => read.name === 'admin-tag-feedback').at(-1).args.page, 1);
+  assert.equal(feedbackReads().at(-1).args.before, undefined);
   feedback.hooks.dispose();
 });
 
 test('review P6-F7: 屏蔽标签 refuses a comma, which every visitor\'s search would read as AND', async () => {
   const adds = [];
   const fx = fixture('BlockTagsTab', {
-    getBlockTags: async () => ({ success: true }),
-    adminAddBlockTag: (_, payload) => { adds.push(payload); return Promise.resolve(Response.json({ success: true })); },
+    getBlockTags: async () => ({ tags: [], filters: {} }),
+    adminAddBlockTag: (_, payload) => { adds.push(payload); return Promise.resolve({ id: 1 }); },
   }, { 'admin-block-tags': { safe: [] } }, {
     modules: { '@/lib/blockFilters': { BLOCK_FILTER_KEYS: ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'], installBlockFilters() {}, parseBlockFilters: () => ({}) } },
   });
@@ -1263,7 +1316,7 @@ test('review P6-F8: adding or deducting zero coins is refused; setting zero is a
   const user = { id: 5, username: '测试用户', experience: 50, coins: 20 };
   const requests = [];
   const fx = fixture('WealthTab', {
-    adminUpdateWealth: (_, payload) => { requests.push(payload); return new Promise(() => {}); },
+    adminUpdateWealth: (_, _userId, payload) => { requests.push(payload); return new Promise(() => {}); },
   }, { 'admin-users': usersOf([user]) }, { expand: ['WealthDialog'] });
   fx.render();
   fx.hooks.effects();
@@ -1282,7 +1335,7 @@ test('review P6-F8: adding or deducting zero coins is refused; setting zero is a
   change(input(dialog(), 'label', '数值'), '0');
   change(input(dialog(), 'label', '金币变动的原因'), '清零');
   adminForm(dialog()).props.onSubmit();
-  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ target_id: 5, coins_op: 'set', coins_value: 0, reason: '清零' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [{ expected_coins: 20, expected_experience: 50, coins: { operation: 'set', amount: 0 }, coins_reason: '清零' }]);
   fx.hooks.dispose();
 });
 
@@ -1291,7 +1344,7 @@ test('review P6-F6: renaming a 角色 corrects the read, never mints an unsaved 
   const fx = fixture('catalogTools/PoniesTab', {}, { 'admin-catalog-ponies': { enabled: true, ponies, skipped: 0 } }, {
     modules: (deps) => {
       const errors = load('lib/api/errors.ts');
-      const catalog = { CatalogOutcomeUnknown: class extends errors.ApiError {}, savePonyName: async () => ({ success: true, new_name: 'Twilight Sparkle' }) };
+      const catalog = { CatalogOutcomeUnknown: class extends errors.ApiError {}, savePonyName: async () => ({ path: 'twilight', new_name: 'Twilight Sparkle', applied_revision: 2 }) };
       return {
         '@/lib/api/adminCatalogTools': catalog,
         '@/lib/desktopPonies/queries': { ponyCatalog: { expire() {} }, myPonies: { expire() {} }, ponyConfigs: { expire() {} } },

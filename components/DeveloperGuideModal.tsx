@@ -8,7 +8,7 @@ import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { disableDeveloperMode, enableDeveloperMode, getDeveloperStatus } from '@/lib/api/picpony';
-import { FAILURE_MESSAGES, apiErrorMessage } from '@/lib/api/errors';
+import { apiErrorMessage } from '@/lib/api/errors';
 import { MdCheckCircle, MdCancel, MdConstruction } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
 import { readToken, useSession } from '@/lib/hooks';
@@ -85,14 +85,12 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       getDeveloperStatus(token, controller.signal)
         .then((data) => {
           if (!isCurrent()) return;
-          // The title already says what failed; the line under it says why.
-          if (!data?.success) throw new Error(FAILURE_MESSAGES.invalid);
-          if (data?.is_developer_banned) {
+          if (data.is_developer_banned) {
             setStatus('banned');
             return;
           }
-          setIsDeveloper(!!data?.is_developer);
-          setPrerequisites(data?.prerequisites || {});
+          setIsDeveloper(data.is_developer);
+          setPrerequisites(data.prerequisites);
           setStatus('ready');
         })
         .catch((failure) => {
@@ -118,12 +116,12 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
     setSubmitting(true);
     setError('');
     try {
-      const res = await (enabled ? enableDeveloperMode(token, password) : disableDeveloperMode(token));
-      const data = await res.json().catch(() => null);
+      /* Throws `ApiError` with the backend's sentence (a wrong code, a cooldown, the prerequisites). */
+      const state = await (enabled ? enableDeveloperMode(token, password) : disableDeveloperMode(token));
       if (readToken() !== token) return;
-      if (!res.ok || data?.success !== true) {
-        throw new Error(data?.error || data?.message || (enabled ? '开启失败' : '关闭失败'));
-      }
+      /* The stored flag can be on while access is not (an expired maintenance grant): the answer's
+         `active` is what the device mirrors. */
+      enabled = state.active;
       try {
         if (enabled) localStorage.setItem(LS_KEYS.developer, 'true');
         else localStorage.removeItem(LS_KEYS.developer);

@@ -79,7 +79,12 @@ export function useStoredBoolean(key: string, fallback = false): boolean {
  * window guard for free). A function rather than a hook because many call
  * sites read credentials at event time; rendering uses `useSession` below.
  */
-export type StoredUserInfo = { token: string; [key: string]: unknown };
+export type StoredUserInfo = {
+  token: string;
+  /** The session's CSRF token (`csrf_token` from sign-in), sent as `X-CSRF-Token` on every write. */
+  csrfToken?: string;
+  [key: string]: unknown;
+};
 
 function readSessionText(): string | null {
   if (typeof window === 'undefined') return null;
@@ -197,11 +202,33 @@ export function updateUserInfo(token: string, patch: Record<string, unknown>): b
  */
 let clearedToken: string | null = null;
 
+/**
+ * End the backend's session too (`DELETE /auth/session`), fire-and-forget: the device is signed out
+ * whatever the answer, and a session that has already ended (a 401 that brought us here, a password
+ * change) answers 401 harmlessly. A raw `fetch`, not `lib/api/http`'s `apiRequest`, which imports
+ * this module and would treat that 401 as a second expiry. `keepalive` lets it outlive a navigation.
+ */
+function revokeSession(user: StoredUserInfo) {
+  if (typeof fetch !== 'function') return;
+  const headers: Record<string, string> = { Authorization: `Bearer ${user.token}` };
+  if (typeof user.csrfToken === 'string') headers['X-CSRF-Token'] = user.csrfToken;
+  try {
+    void fetch('/api/v1/auth/session', { method: 'DELETE', headers, credentials: 'same-origin', keepalive: true })
+      .then((response) => response.body?.cancel())
+      .catch(() => {});
+  } catch {
+    /* No network to tell: the device is signed out regardless. */
+  }
+}
+
 /** The expected token protects a new login from an older request's 401. Storage that
- * refuses the removal cannot hold a session either, so the event still goes out — once. */
-export function clearUserInfo(expectedToken: string): boolean {
-  if (clearedToken === expectedToken || readToken() !== expectedToken) return false;
+ * refuses the removal cannot hold a session either, so the event still goes out — once.
+ * `revoke: false` for a session the backend has already ended (a password change). */
+export function clearUserInfo(expectedToken: string, { revoke = true }: { revoke?: boolean } = {}): boolean {
+  const current = readUserInfo();
+  if (clearedToken === expectedToken || current?.token !== expectedToken) return false;
   clearedToken = expectedToken;
+  if (revoke) revokeSession(current);
   try {
     localStorage.removeItem(LS_KEYS.userInfo);
     localStorage.removeItem(LS_KEYS.derpiApiKey);

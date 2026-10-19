@@ -277,8 +277,9 @@ export async function startUpload({ owner, apiKey, username, tagInput, navigate 
   unconfirmedFile = outcome.kind === 'unconfirmed' ? file : null;
   if (outcome.kind === 'uploaded') {
     staged = null;
-    /* Counts toward the weekly task — fire-and-forget, only for an upload Derpibooru confirmed. */
-    void recordWeeklyUpload(owner).then(() => tasks.expire({ token: owner }), () => {});
+    /* Counts toward the weekly task — fire-and-forget, only for an upload Derpibooru confirmed,
+       naming the id it gave (the backend counts each image once). */
+    void recordWeeklyUpload(owner, outcome.imageId).then(() => tasks.expire({ token: owner }), () => {});
     emit({ owner, draft: EMPTY_DRAFT, job: { phase: 'settled', progress: 1, outcome } });
     if (screens === 0) {
       showToast(`已发布作品，图片 ID：${outcome.imageId}`, 'success', {

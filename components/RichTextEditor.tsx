@@ -5,6 +5,7 @@ import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { readToken } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
 import { clamp, cn, getAssetUrl } from '@/lib/utils';
+import { mediaPreview, mediaWithoutPreview, previewMediaText, rememberMediaPreview, storedMediaText } from '@/lib/mediaPreview';
 import { ICON } from '@/lib/icons';
 import { useTooltip } from '@/components/Tooltip';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero/runtime';
@@ -242,13 +243,40 @@ function writeEditorValue(
     // later in the editor's asynchronous DOM-selection synchronization.
     editor.deselect();
     editor.blur();
-    editor.setHtml(bbcodeToHtml(next));
+    /* A staged upload is drawn from its Blob URL preview (`lib/mediaPreview.ts`): the media
+       endpoint shows an unpublished picture only to a request carrying the token. */
+    editor.setHtml(previewMediaText(bbcodeToHtml(next)));
     if (focused) queueMicrotask(() => {
       if (current() === editor && !editor.isDestroyed) editor.focus(true);
     });
   } finally {
     updating.current = false;
   }
+}
+
+/** The editor's content as BBCode, each picture's Blob URL preview back to its stored path. */
+function editorValue(editor: IDomEditor): string {
+  return htmlToBBCode(storedMediaText(editor.getHtml()));
+}
+
+/**
+ * Read the previews of the stored pictures `value` names that have none yet (a draft restored, a
+ * post being edited), and redraw once they are in — unless the text changed meanwhile or the
+ * writer is in it, whose caret a redraw would move; such a picture keeps its path, which shows
+ * once it is published.
+ */
+function warmPreviews(
+  editor: IDomEditor,
+  value: string,
+  token: string | null,
+  redraw: () => void,
+) {
+  const missing = token ? mediaWithoutPreview(value) : [];
+  if (!token || missing.length === 0) return;
+  void Promise.all(missing.map((path) => mediaPreview(token, path))).then((previews) => {
+    if (!previews.some(Boolean) || editor.isDestroyed || editor.isFocused()) return;
+    if (editorValue(editor) === value) redraw();
+  });
 }
 
 /**
@@ -314,10 +342,13 @@ export default function RichTextEditor({
     },
   }), []);
 
-  const writeValue = useCallback(
-    (editor: IDomEditor, next: string) => writeEditorValue(editor, next, isUpdatingRef, () => editorRef.current),
-    [],
-  );
+  const writeValue = useCallback((editor: IDomEditor, next: string) => {
+    const current = () => editorRef.current;
+    writeEditorValue(editor, next, isUpdatingRef, current);
+    warmPreviews(editor, next, (latest.current.getToken ?? readToken)(), () => {
+      if (current() === editor) writeEditorValue(editor, next, isUpdatingRef, current);
+    });
+  }, []);
 
   useEffect(() => {
     const generation = ++generationRef.current;
@@ -353,7 +384,7 @@ export default function RichTextEditor({
         MENU_CONF: {},
         onChange(editor: IDomEditor) {
           if (!isCurrent() || isUpdatingRef.current) return;
-          latest.current.onChange(htmlToBBCode(editor.getHtml()));
+          latest.current.onChange(editorValue(editor));
         },
       };
       if (config.enableImageUpload) {
@@ -379,7 +410,11 @@ export default function RichTextEditor({
               if (!outcome.aborted) showToast(outcome.message, 'error');
               return;
             }
-            insertFn(getAssetUrl(outcome.path), '', '');
+            /* What the editor draws is the picture read back with the token (else the file
+               itself); what it writes is the stored path (`editorValue`). */
+            const preview = await mediaPreview(token, outcome.path) ?? rememberMediaPreview(outcome.path, file);
+            if (!isCurrent() || editorRef.current !== owner || latest.current.disabled) return;
+            insertFn(preview ?? getAssetUrl(outcome.path), '', '');
             latest.current.onUploaded?.(outcome.path);
           },
           /* The package's own size check would stop a large photo before it could be shrunk;
@@ -554,7 +589,7 @@ export default function RichTextEditor({
     // A controlled reset to '' is still a value. Compare the serialized value
     // rather than normalized HTML so ordinary typing keeps its selection.
     safely('更新编辑器内容失败:', () => {
-      if (htmlToBBCode(editor.getHtml()) !== value) writeValue(editor, value);
+      if (editorValue(editor) !== value) writeValue(editor, value);
     });
   }, [value, writeValue]);
 

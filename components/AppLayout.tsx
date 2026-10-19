@@ -673,6 +673,8 @@ export default function AppLayout({
   /* `/messages` marking a tab read moves this badge with no event and no second request: it
      force-reads the same resource entry, and this component is subscribed to it. */
   const totalUnread = token ? (unread.data?.total ?? 0) : 0;
+  /* 论坛's own badge: posts created since the last forum read receipt (`ForumPane` sends it). */
+  const forumUnread = token ? (unread.data?.forum ?? 0) : 0;
 
   /* Fold the server's answer back into storage. Separate from the read because it is a
      *write*: the merge keeps the four fields the server does not return (token + three
@@ -1141,6 +1143,7 @@ export default function AppLayout({
                 user={userInfo}
                 backgroundPathname={backgroundPathname}
                 unread={totalUnread}
+                forumUnread={forumUnread}
                 onNavigate={handleMobileNavigation}
                 onLogout={() => void handleLogoutClick()}
                 onReselect={isImageDetailOpen ? reselectCovered : undefined}

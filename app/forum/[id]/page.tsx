@@ -172,7 +172,7 @@ export default function ForumThreadPage() {
     const cancelToss = liked ? tossLikeIcon() : undefined;
     likeBusy.current = true;
     setLikeLocal({ liked: !liked, count: Math.max(0, likeCount + (liked ? -1 : 1)) });
-    void sendLike(session, post.id).then((outcome) => {
+    void sendLike(session, post.id, !before.liked).then((outcome) => {
       likeBusy.current = false;
       if (readToken() !== session || !outcome.ok || outcome.liked) cancelToss?.();
       if (readToken() !== session) return;

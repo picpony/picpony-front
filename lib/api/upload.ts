@@ -1,13 +1,14 @@
-import { PICPONY_API_BASE, PICPONY_API_ORIGIN } from '@/lib/constants';
+import { readUserInfo, updateUserInfo } from '@/lib/hooks';
 import { ApiError, FAILURE_MESSAGES, statusMessage, toApiError } from './errors';
-import { envelopeMessage, noteUnauthorized } from './http';
+import { API_V1, apiErrorBody, apiRequest } from './http';
 
 /**
  * 发布图片 — a picture goes to Derpibooru in two steps, the original front end's contract:
  *
- * 1. **Staging** (`upload_temp_upload`): the file goes to PicPony, which answers with a public
- *    `url`. PicPony is reachable where Derpibooru often is not, and the progress of the one
- *    large transfer can be shown.
+ * 1. **Staging** (`POST /api/v1/me/uploads/works`): the file goes to PicPony, which answers with
+ *    an absolute `url` carrying a 24-hour capability for Derpibooru to fetch it by. PicPony is
+ *    reachable where Derpibooru often is not, and the progress of the one large transfer can be
+ *    shown.
  * 2. **Submission**: Derpibooru's API takes a picture *by URL* — `POST /api/v1/json/images?key=`
  *    with JSON `{image: {tag_input, source_url, description}, url}`, and nothing else; it has no
  *    multipart form (derpibooru.org/pages/api). The request goes through the relay, as the
@@ -37,19 +38,62 @@ export const MIN_UPLOAD_TAGS = 3;
 /** This app's hop to the relay. */
 export const UPLOAD_SUBMIT_PATH = '/upload/submit';
 
-/**
- * Stage the file on PicPony; resolves with the absolute URL Derpibooru will fetch it from.
- *
- * Over XMLHttpRequest, the one transport that reports upload progress — this is a file of up to
- * 50MB, and a bar that moves is the difference between waiting and wondering. Every failure is an
- * `ApiError`; the caller's abort stays an `AbortError`.
- */
-export function stageUpload(
+// ---------------------------------------------------------------------------
+// A multipart write with upload progress
+// ---------------------------------------------------------------------------
+
+/** What every PicPony upload answers with (src/pg/media.rs `upload`, HTTP 201). */
+export interface UploadedMedia {
+  /** 64 hex characters: the file's identity, which content references as `/api/v1/media/<asset>`. */
+  asset: string;
+  /** `/api/v1/media/<asset>` — absolute, with a capability, for a work upload. */
+  url: string;
+  mime: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  /** When an unreferenced upload is discarded. */
+  expires_at: string | null;
+  max_bytes: number;
+}
+
+function csrfOf(token: string): string | null {
+  const user = readUserInfo();
+  return user && user.token === token && typeof user.csrfToken === 'string' ? user.csrfToken : null;
+}
+
+/** A fresh CSRF token for the session, stored beside it; `null` when none could be had. */
+async function freshCsrf(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_V1}/auth/csrf`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { csrf_token?: unknown };
+    if (typeof data.csrf_token !== 'string') return null;
+    updateUserInfo(token, { csrfToken: data.csrf_token });
+    return data.csrf_token;
+  } catch {
+    return null;
+  }
+}
+
+interface XhrAnswer {
+  status: number;
+  body: unknown;
+}
+
+function sendOnce(
+  path: string,
   token: string,
-  file: File,
-  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (fraction: number) => void } = {},
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+  form: FormData,
+  csrf: string | null,
+  signal: AbortSignal | undefined,
+  onProgress: ((fraction: number) => void) | undefined,
+): Promise<XhrAnswer> {
+  return new Promise<XhrAnswer>((resolve, reject) => {
     if (signal?.aborted) {
       reject(new DOMException('上传已取消', 'AbortError'));
       return;
@@ -58,64 +102,29 @@ export function stageUpload(
     const onAbort = () => xhr.abort();
     signal?.addEventListener('abort', onAbort, { once: true });
     const done = () => signal?.removeEventListener('abort', onAbort);
-    xhr.open('POST', `${PICPONY_API_BASE}?action=upload_temp_upload`);
+    xhr.open('POST', `${API_V1}${path}`);
+    xhr.withCredentials = true;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
     xhr.responseType = 'text';
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) onProgress?.(Math.min(1, event.loaded / event.total));
     };
     xhr.onload = () => {
       done();
-      let data: Record<string, unknown> | null = null;
+      let body: unknown = null;
       try {
-        const parsed: unknown = JSON.parse(xhr.responseText || 'null');
-        data = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+        body = JSON.parse(xhr.responseText || 'null');
       } catch {
-        data = null;
+        body = undefined;
       }
-      const serverMessage = envelopeMessage(data);
-      /* A bare XHR bypasses `picponyRequest`, so its 401 must report itself (review P1-F10):
-         otherwise a dead session failed the upload and left the app signed in. */
-      if (xhr.status === 401) noteUnauthorized(token);
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new ApiError('http', {
-          status: xhr.status,
-          serverMessage,
-          message: xhr.status === 413 ? '文件太大，服务器拒绝了这次上传'
-            /* Our hop's answer for a body that stopped arriving (review P4-O2): the visitor's
-               network, not an outage. Nothing was staged, so trying again is safe. */
-            : xhr.status === 408 ? '上传中断，请检查网络后重试' : undefined,
-        }));
-        return;
-      }
-      if (!data) {
-        reject(new ApiError('invalid', { status: xhr.status }));
-        return;
-      }
-      if (data.success !== true) {
-        reject(new ApiError('envelope', { status: xhr.status, serverMessage, message: serverMessage ?? '作品暂存失败' }));
-        return;
-      }
-      const raw = typeof data.url === 'string' ? data.url.trim() : '';
-      let url: URL | null = null;
-      try {
-        url = raw ? new URL(raw, `${PICPONY_API_ORIGIN}/`) : null;
-      } catch {
-        url = null;
-      }
-      if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) {
-        reject(new ApiError('invalid', { status: xhr.status }));
-        return;
-      }
-      onProgress?.(1);
-      resolve(url.href);
+      resolve({ status: xhr.status, body });
     };
     xhr.onerror = () => {
       done();
       reject(toApiError(new TypeError('Failed to fetch')));
     };
-    /* No `xhr.timeout`: a 50MB file on a slow line legitimately takes minutes, and the server
-       hop bounds a stalled body by its pace instead (`app/api.php/…/route.ts`). Kept for a
+    /* No `xhr.timeout`: a 50MB file on a slow line legitimately takes minutes. Kept for a
        platform that imposes its own. */
     xhr.ontimeout = () => {
       done();
@@ -125,10 +134,73 @@ export function stageUpload(
       done();
       reject(new DOMException('上传已取消', 'AbortError'));
     };
-    const form = new FormData();
-    form.append('file', file, file.name || 'upload');
     xhr.send(form);
   });
+}
+
+/**
+ * One multipart upload to the new backend, over XMLHttpRequest — the one transport that reports
+ * upload progress. The session's `X-CSRF-Token` goes with it like any write's; a `CSRF_MISMATCH`
+ * refusal (made before the body is read, so nothing was stored) refreshes it and sends once more.
+ * Every failure is an `ApiError` carrying the backend's `error.code` / `error.message`; the
+ * caller's abort stays an `AbortError`.
+ */
+export async function uploadMedia(
+  path: string,
+  token: string,
+  form: FormData,
+  { signal, onProgress, tooLarge }: { signal?: AbortSignal; onProgress?: (fraction: number) => void; tooLarge: string },
+): Promise<UploadedMedia> {
+  let answer = await sendOnce(path, token, form, csrfOf(token), signal, onProgress);
+  if (answer.status === 403 && apiErrorBody(answer.body).code === 'CSRF_MISMATCH') {
+    const fresh = await freshCsrf(token);
+    if (fresh) answer = await sendOnce(path, token, form, fresh, signal, onProgress);
+  }
+  /* A bare XHR is not `apiRequest`, so its 401 confirms the session the same way: one `GET /me`,
+     whose own 401 ends it. */
+  if (answer.status === 401) void apiRequest('GET', '/me', { token }).catch(() => {});
+  if (answer.status < 200 || answer.status >= 300) {
+    const { code, message } = apiErrorBody(answer.body);
+    throw new ApiError('http', {
+      status: answer.status,
+      code,
+      serverMessage: message,
+      message: answer.status === 413 ? tooLarge : undefined,
+    });
+  }
+  const media = answer.body as UploadedMedia | null | undefined;
+  if (!media || typeof media.url !== 'string' || typeof media.asset !== 'string') {
+    throw new ApiError('invalid', { status: answer.status });
+  }
+  onProgress?.(1);
+  return media;
+}
+
+/**
+ * Stage the file on PicPony; resolves with the absolute URL Derpibooru will fetch it from (it
+ * carries a 24-hour capability — the backend's, never the session's).
+ */
+export async function stageUpload(
+  token: string,
+  file: File,
+  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (fraction: number) => void } = {},
+): Promise<string> {
+  const form = new FormData();
+  form.append('file', file, file.name || 'upload');
+  const media = await uploadMedia('/me/uploads/works', token, form, {
+    signal,
+    onProgress,
+    tooLarge: '文件太大，服务器拒绝了这次上传',
+  });
+  /* Derpibooru fetches it by this address, so it must be one it can reach. */
+  let url: URL | null = null;
+  try {
+    url = new URL(media.url);
+  } catch {
+    url = null;
+  }
+  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) throw new ApiError('invalid');
+  return url.href;
 }
 
 /** Which form field a Derpibooru complaint belongs to. */
@@ -204,6 +276,11 @@ export function uploadErrorsOf(body: unknown): Partial<Record<UploadField, strin
   return out;
 }
 
+function hopMessage(body: unknown): string | undefined {
+  const message = body && typeof body === 'object' ? (body as { message?: unknown }).message : undefined;
+  return typeof message === 'string' && message.trim() ? message.trim() : undefined;
+}
+
 /**
  * Submit a staged picture. Resolves with the outcome — uploaded, refused (with what to fix) or
  * unconfirmed (the answer was lost, so it may have landed) — and never throws for an answer;
@@ -261,6 +338,7 @@ export async function submitDerpiImage(input: DerpiUploadInput, signal?: AbortSi
   return {
     kind: 'rejected',
     fields: {},
-    message: envelopeMessage(body) ?? statusMessage(response.status),
+    /* `/upload/submit`'s own refusal: `{message}` (it is this app's route, not PicPony's). */
+    message: hopMessage(body) ?? statusMessage(response.status),
   };
 }

@@ -1,6 +1,11 @@
-import { obj, positiveId, str, type AssistantAction } from './protocol';
+import { obj, str, uuid, type AssistantAction } from './protocol';
 
-export interface TaskApproval { taskId: number; decision: 'confirm' | 'reject'; calls: { id: string; signature: string }[] }
+/**
+ * The human's decision on one turn's pending action, persisted before it is sent: `calls[].id` is
+ * the pending action's UUID, which is also the confirmation's idempotency key, so a reload can
+ * re-send the same decision and get the stored outcome back.
+ */
+export interface TaskApproval { taskId: string; decision: 'confirm' | 'reject'; calls: { id: string; signature: string }[] }
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical((value as Record<string, unknown>)[key])]));
@@ -9,13 +14,13 @@ function canonical(value: unknown): unknown {
 export function actionSignature(action: AssistantAction): string {
   return JSON.stringify([action.name, canonical(action.arguments)]);
 }
-export function approvedAction(records: readonly TaskApproval[], taskId: number, action: AssistantAction): boolean {
+export function approvedAction(records: readonly TaskApproval[], taskId: string, action: AssistantAction): boolean {
   return records.some(record => record.taskId === taskId && record.decision === 'confirm' && record.calls.some(call => call.id === action.call_id && call.signature === actionSignature(action)));
 }
-export function taskRejected(records: readonly TaskApproval[], taskId: number): boolean {
+export function taskRejected(records: readonly TaskApproval[], taskId: string): boolean {
   return records.some(record => record.taskId === taskId && record.decision === 'reject');
 }
-export function approvalFor(taskId: number, actions: readonly AssistantAction[], decision: 'confirm' | 'reject' = 'confirm'): TaskApproval {
+export function approvalFor(taskId: string, actions: readonly AssistantAction[], decision: 'confirm' | 'reject' = 'confirm'): TaskApproval {
   return { taskId, decision, calls: actions.map(action => ({ id: action.call_id, signature: actionSignature(action) })) };
 }
 export function parseApprovals(text: string | null): TaskApproval[] {
@@ -23,7 +28,7 @@ export function parseApprovals(text: string | null): TaskApproval[] {
     const raw: unknown = JSON.parse(text || '[]');
     if (!Array.isArray(raw)) return [];
     return raw.slice(-64).flatMap(value => {
-      const record = obj(value), taskId = positiveId(record.taskId);
+      const record = obj(value), taskId = uuid(record.taskId);
       if (!taskId || !Array.isArray(record.calls)) return [];
       const calls = record.calls.slice(0, 24).flatMap(value => {
         const call = obj(value);

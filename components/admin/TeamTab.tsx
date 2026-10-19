@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MdDeleteOutline, MdEdit } from 'react-icons/md';
 import Avatar from '@/components/Avatar';
-import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
@@ -19,7 +18,7 @@ import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminForm, AdminNote, FormActions, FormGrid } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { defineAdminQuery, useAdminQuery, adminList, tableError } from './queries';
+import { defineAdminQuery, useAdminQuery, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 import {
@@ -33,15 +32,14 @@ import {
   type TeamFormValues,
   type TeamMemberRow,
 } from './team';
-import { figureOf, figureText } from './figures';
+import { figureText } from './figures';
 
 const EMPTY: TeamMemberRow[] = [];
-/* `include_all=1` — the roster as the original console edits it, bound accounts and the editors'
-   automatic ranking included. /about's public read (`teamMembers`) is refreshed beside it. */
-const membersQuery = defineAdminQuery<TeamMemberRow[]>('team', async (token, signal) => {
-  const data = await adminApi.adminGetTeamMembers(token, signal);
-  return adminList<TeamMemberRow>(data, 'members', '团队成员');
-});
+/* The roster with its bound accounts, and the revision every roster write names. /about's public
+   read (`teamMembers`) is refreshed beside it. */
+const membersQuery = defineAdminQuery('team', (token: string, signal: AbortSignal) => adminApi.adminGetTeamMembers(token, signal));
+/** The roster revision as it is when a write is sent (confirmations can sit open across a refresh). */
+const rosterRevision = (token: string) => membersQuery.peek(token).data?.revision ?? 0;
 
 const categoryLabel = (value: unknown) =>
   TEAM_CATEGORIES.find((option) => option.value === value)?.label ?? String(value ?? '');
@@ -60,7 +58,7 @@ function teamEditorId(memberId: number) {
  */
 export default function TeamTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(membersQuery, token);
-  const members = read.data ?? EMPTY;
+  const members = read.data?.members ?? EMPTY;
   const paged = usePagedRows(members, token);
   const addMutation = useAdminMutation(token);
   const saveMutation = useAdminMutation(token);
@@ -79,9 +77,9 @@ export default function TeamTab({ token }: AdminPanelProps) {
     teamMembers.invalidate();
   };
 
-  const add = (payload: Record<string, unknown>) =>
+  const add = (payload: adminApi.TeamMemberBody) =>
     void addMutation.run(
-      () => adminApi.addTeamMember(token, payload),
+      () => adminApi.addTeamMember(token, rosterRevision(token), payload),
       () => {
         showToast(`已添加成员「${String(payload.name)}」`, 'success');
         setAddSession((session) => session + 1);
@@ -90,9 +88,9 @@ export default function TeamTab({ token }: AdminPanelProps) {
       { onCommitted: committed },
     );
 
-  const save = (member: TeamMemberRow, payload: Record<string, unknown>) =>
+  const save = (member: TeamMemberRow, payload: adminApi.TeamMemberBody) =>
     void saveMutation.run(
-      () => adminApi.updateTeamMember(token, payload),
+      () => adminApi.updateTeamMember(token, rosterRevision(token), member.id, payload),
       () => {
         showToast(`已保存成员「${String(payload.name)}」`, 'success');
         setEditing((current) => (current?.id === member.id ? { id: member.id, closing: true } : current));
@@ -106,14 +104,14 @@ export default function TeamTab({ token }: AdminPanelProps) {
       '确认删除成员',
       `确定要删除团队成员「${member.name}」吗？删除后关于页将不再显示该成员。`,
       () => void deleteMutation.run(
-        () => adminApi.deleteTeamMember(token, member.id),
+        () => adminApi.deleteTeamMember(token, rosterRevision(token), member.id),
         () => showToast(`已删除成员「${member.name}」`, 'success'),
         '删除失败',
         {
           key: member.id,
           onCommitted: () => {
             setEditing((current) => (current?.id === member.id ? null : current));
-            membersQuery.write(token, (previous) => previous?.filter((row) => row.id !== member.id) ?? []);
+            membersQuery.write(token, (previous) => ({ revision: previous?.revision ?? 0, members: previous?.members.filter((row) => row.id !== member.id) ?? [] }));
             committed();
           },
         },
@@ -164,22 +162,6 @@ export default function TeamTab({ token }: AdminPanelProps) {
         const uid = boundUser(member.user_id);
         return uid ? `#${uid}` : <span className="text-on-surface-variant">未关联</span>;
       },
-    },
-    {
-      key: 'rank',
-      header: '贡献榜',
-      width: 'auto',
-      render: (member) =>
-        Number(member.auto_editor_rank) > 0 ? (
-          <Badge tone="primary" size="md">
-            {/* A contribution count that did not arrive is left out, not printed as 0 条 (G4-015). */}
-            {[`第 ${Number(member.auto_editor_rank)} 名`, figureOf(member.auto_editor_count) !== null ? `${figureText(member.auto_editor_count)} 条` : null]
-              .filter(Boolean)
-              .join(' · ')}
-          </Badge>
-        ) : (
-          <span className="text-on-surface-variant">手动添加</span>
-        ),
     },
     {
       key: 'order',
@@ -304,7 +286,7 @@ function TeamMemberForm({
   heading: string;
   submitLabel: string;
   busy: boolean;
-  onSubmit: (payload: Record<string, unknown>) => void;
+  onSubmit: (payload: adminApi.TeamMemberBody) => void;
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
@@ -367,7 +349,9 @@ function TeamMemberForm({
       ...previous,
       userId: String(uid),
       name: profile.username,
-      avatarUrl: profile.avatar ?? '',
+      /* The bound account's own avatar is what /about shows; `avatar_url` takes only an HTTPS
+         address, so a site-relative avatar path is not copied into it. */
+      avatarUrl: /^https:\/\//.test(profile.avatar ?? '') ? profile.avatar ?? '' : previous.avatarUrl,
       /* A title already typed is the admin's; the role's suggestion only fills a blank one. */
       title: previous.title.trim() ? previous.title : suggested.title,
       category: previous.title.trim() ? previous.category : suggested.category,

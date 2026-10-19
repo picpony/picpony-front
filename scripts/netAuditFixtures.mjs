@@ -6,13 +6,16 @@
  * turning one logical read into one *or three* depending on the day) makes the count itself
  * non-deterministic, so every data request is fulfilled here and only documents, chunks and fonts
  * reach the local `next start`. Cost given up: a stub cannot catch a payload-shape regression or
- * see the retry ladder — run `--live` for that. Every envelope below is the *success* shape;
- * failure paths would want their own fixture set.
+ * see the retry ladder — run `--live` for that. Every PicPony answer below is the Rust backend's
+ * (`/api/v1`) *success* shape, chosen by operation (`scripts/rustRoutes.mjs`); failure paths
+ * would want their own fixture set.
  */
+
+import { opOf } from './rustRoutes.mjs';
 
 const ORIGIN = 'https://derpicdn.net/img/2024/1/1';
 
-/** Public get_block_tags wire shape verified 2026-09-12: flat rows plus grouped rows.
+/** Public `get_block_tags` (`GET /api/v1/filters/block-tags`) wire shape: flat rows plus grouped rows.
  * Keep this fixture independent of the implementation so reading `tags` as a dictionary fails. */
 export function blockFiltersEnvelope() {
   const rules = {
@@ -22,12 +25,16 @@ export function blockFiltersEnvelope() {
     banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
     onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
   };
+  /* The Rust backend's `GET /api/v1/filters/block-tags`: every row, and the five groups as names. */
   let id = 0;
-  const tags = Object.entries(rules).flatMap(([filter_key, names]) => names.map((tag_name) => ({
-    id: ++id, filter_key, tag_name, created_at: '2026-09-12 00:00:00',
-  })));
-  const grouped = Object.fromEntries(Object.keys(rules).map((key) => [key, tags.filter((tag) => tag.filter_key === key)]));
-  return { success: true, tags, grouped };
+  const tags = Object.entries(rules).flatMap(([filter, names]) => names.map((tag) => ({ id: ++id, filter, tag })));
+  const filters = Object.fromEntries(Object.entries(rules).map(([key, names]) => [key, [...names]]));
+  return { tags, filters };
+}
+
+/** One page of the Rust backend's public blacklist (`GET /api/v1/image-blocklist`). */
+export function publicBlacklistPage(ids = []) {
+  return { revision: 1, blocks: [...ids].sort((a, b) => a - b), page: 1, limit: 1000, total_count: ids.length, total_pages: ids.length ? 1 : 0, has_more: false };
 }
 
 /** One plausible Derpibooru image. Wide by default, so the masonry grid lays out as it would. */
@@ -76,36 +83,47 @@ function imagePage(count, seed = 1000) {
   };
 }
 
+const STAMP = '2024-01-01T00:00:00Z';
+
+const author = (id = 1) => ({ id, username: 'fixture', avatar: null, role: 'user', experience: 1350, equipped_badges: [] });
+
+/** A forum post as `GET /forum/posts` and `GET /forum/posts/{id}` answer it (`WirePost`). */
 const forumPost = (id) => ({
   id,
-  title: `帖子 ${id}`,
-  content: '正文',
-  username: 'fixture',
   user_id: 1,
-  avatar: null,
-  created_at: '2024-01-01T00:00:00Z',
-  comment_count: 2,
-  view_count: 10,
-  is_pinned: 0,
+  title: `帖子 ${id}`,
+  excerpt: '正文',
+  content: { type: 'discussion', html: '<p>正文</p>' },
   cover_image: null,
+  category: 'discussion',
+  is_pinned: false,
+  views: 10,
+  revision: 1,
+  created_at: STAMP,
+  updated_at: STAMP,
+  author: author(),
+  reply_count: 2,
+  like_count: 0,
+  is_liked: false,
 });
 
-const user = (id) => ({
-  id: Number(id) || 1,
+/** `GET /me`'s `user` (`auth::me`, `MeUser`). */
+const me = () => ({
+  id: 1,
   username: 'fixture',
-  avatar: '',
-  banner: '',
+  email: null,
+  email_verified: false,
   role: 'user',
+  coins: 100,
+  experience: 1350,
+  avatar: null,
+  banner: null,
   bio: '',
   gender: '',
-  birthday: '',
-  created_at: '2024-01-01T00:00:00Z',
-  derpi_username: '',
-  derpi_user_id: '',
-  experience: 1350,
-  equipped_badges: [],
-  last_online: '2024-01-01T00:00:00Z',
-  has_api_key: false,
+  race: '',
+  birthday: null,
+  created_at: STAMP,
+  profile_revision: 1,
   settings: {
     videoPreview: true,
     showTagCounts: true,
@@ -115,167 +133,197 @@ const user = (id) => ({
     contentFilter: 'safe',
     theme: 'default',
   },
+  settings_revision: 1,
+  upstream_identity: null,
+  developer_access: {
+    user_id: 1, revision: 1, enabled: false, active: false, banned: false, source: null,
+    maintenance_generation: 0, maintenance_expires_at: null, inactive_reason: null, attempts: 0,
+  },
 });
 
 /**
- * `action` → envelope, for PicPony's single endpoint. A missing action falls through to
- * `{ success: false }` rather than a 404: the app branches on `success` everywhere, and a
- * non-error shape keeps a new screen's request visible in the ledger.
+ * A public profile (`GET /users/{id}`, `WireProfile`) with a bound Derpibooru account: a
+ * profile's uploads tab is that account's Derpibooru uploads (`userUploads` in lib/resources.ts).
+ * PicPony has no uploads resource.
+ */
+const profile = (id) => ({
+  id: Number(id) || 1,
+  username: 'fixture',
+  avatar: null,
+  banner: null,
+  role: 'user',
+  bio: '',
+  gender: '',
+  race: '',
+  experience: 1350,
+  level: 14,
+  created_on: STAMP,
+  last_online: STAMP,
+  ip_location: '',
+  visibility: { showUploads: true, showFaves: true, showPosts: true, showComments: true },
+  badges: [],
+  equipped_badges: [],
+  upstream_identity: { id: 1, name: 'fixture' },
+});
+
+const folder = (id, name, isMain, count, latest) => ({ id, name, is_main: isMain, created_at: STAMP, image_count: count, latest_image_id: latest });
+
+/** The last path segment as a number — the `{id}` of a resource path. */
+const lastId = (url) => Number(url.pathname.split('/').filter(Boolean).at(-1)) || 1;
+
+const task = (name, period, progress, required, coins) => ({
+  task: name, period, progress, required, claimed: false, reward: { coins, experience: 10 },
+});
+
+/**
+ * Operation id (`scripts/rustRoutes.mjs`, the old action names) → the Rust backend's 200 body,
+ * as each adapter in `lib/api/` reads it: a bare DTO, no `success`. An operation with no fixture
+ * answers 404 `{"error":{"code":"NO_FIXTURE"}}` — the transport's typed failure — so a new
+ * screen's request is still visible in the ledger.
  */
 const PICPONY = {
   get_block_tags: blockFiltersEnvelope,
   /* The live shape; empty, so no journey's feed query changes. */
-  get_public_blacklist: () => ({ success: true, blacklist: [] }),
+  get_public_blacklist: () => publicBlacklistPage([]),
   /* `auto` on both axes — what an administrator who has pinned nothing leaves. */
-  get_maintenance_status: () => ({
-    success: true,
-    maintenance_mode: false,
-    maintenance_message: '',
-    translate_enabled: true,
-    global_api_route_policy: 'auto',
-    global_image_route_policy: 'auto',
-    global_api_third_party_url: '',
-    global_api_third_party_pass_api_key: false,
+  get_website_routing_policy: () => ({
+    policy: { api_policy: 'auto', media_policy: 'auto', third_party_url: null, third_party_pass_api_key: false },
+    revision: 1,
   }),
+  get_public_maintenance_status: () => ({ maintenance_mode: false, maintenance_message: '' }),
+  get_maintenance_status: () => ({ maintenance_mode: false, maintenance_message: '' }),
+  get_translation_settings: () => ({ translate_enabled: true }),
+  get_semantic_search_settings: () => ({
+    semantic_search_enabled: false,
+    semantic_search_mode: 'off',
+    semantic_cloud_enabled: false,
+    semantic_cloud_has_key: false,
+    semantic_cloud_configured: false,
+    semantic_cloud_timeout_ms: 8000,
+    semantic_search_estimate_ms: null,
+  }),
+  get_tag_translations: () => ({ translations: {}, categories: {} }),
   /* No announcement, so the modal stays shut and does not add a paint to every journey. */
-  get_announcement: () => ({ success: false }),
-  get_announcement_history: () => ({ success: true, announcements: [] }),
+  get_announcement: () => ({ announcement: null }),
+  get_announcement_history: () => ({ announcements: [], next_cursor: null }),
   /* The empty /search screen's own first read, and what a `<Link>` to it warms (`prefetchRoute`).
      With no fixture here the warm failed, and a failure is not a cached answer — the screen read
      again and the step cost two requests, which the ledger read as speculation adding one. */
-  get_quick_tags: () => ({ success: true, tags: {
-    rating: [{ en: 'safe', cn: '安全' }, { en: 'suggestive', cn: '性暗示' }],
-    species: [{ en: 'pony', cn: '小马' }, { en: 'human', cn: '人类' }],
-    character: [{ en: 'twilight sparkle', cn: '暮光闪闪' }, { en: 'rainbow dash', cn: '云宝黛西' }],
-    general: [{ en: 'solo', cn: '单人' }, { en: 'cute', cn: '可爱' }],
+  get_quick_tags: () => ({ tags: {
+    rating: [{ en: 'safe', cn: '安全', category: 'rating' }, { en: 'suggestive', cn: '性暗示', category: 'rating' }],
+    species: [{ en: 'pony', cn: '小马', category: 'species' }, { en: 'human', cn: '人类', category: 'species' }],
+    character: [{ en: 'twilight sparkle', cn: '暮光闪闪', category: 'character' }, { en: 'rainbow dash', cn: '云宝黛西', category: 'character' }],
+    general: [{ en: 'solo', cn: '单人', category: 'general' }, { en: 'cute', cn: '可爱', category: 'general' }],
   } }),
   /* The shared journeys have no decorative companion or selected pony. Successful empty
      reads keep a disabled feature cached; the dedicated runtime probes exercise real media. */
-  get_mascot_config: () => ({ success: true, enabled: false, id: '', name: '', mascot_image: '', tips: [], mascots: [] }),
-  get_available_ponies: () => ({ success: true, enabled: true, ponies: [] }),
-  get_my_ponies: () => ({ success: true, ponies: [] }),
-  get_pony_configs: () => ({ success: true, configs: [] }),
-  assistant_quota: () => ({ success: true, quota: { enabled: true, user_enabled: true, remaining: 50,
-    daily_remaining: 50, purchased_remaining: 0, reserved: 0, daily_points: 50, points_per_coin: 2, coins: 100 } }),
-  assistant_permission: () => ({ success: true, permission: { mode: 'default' } }),
-  get_user: () => ({ success: true, user: user(1) }),
-  /* A bound Derpibooru account: a profile's uploads tab is that account's Derpibooru uploads
-     (`userUploads` in lib/resources.ts). PicPony has no uploads action. */
-  get_user_profile: (params) => ({
-    success: true,
-    user: { ...user(params.get('user_id')), derpi_user_id: 1, derpi_username: 'fixture', has_api_key: true },
-  }),
-  get_unread_counts: () => ({ success: true, total_unread: 0, counts: {} }),
+  get_mascots_list: () => ({ enabled: false, revision: 1, tips: [], mascots: [] }),
+  get_available_ponies: () => ({ enabled: true, ponies: [] }),
+  get_my_ponies: () => ({ ponies: [] }),
+  get_pony_configs: () => ({ configs: [] }),
+  assistant_config: () => ({ model_configured: true, quota: assistantQuota() }),
+  assistant_quota: () => assistantQuota(),
+  assistant_permission: () => ({ mode: 'default', revision: 1 }),
+  get_user: () => ({ user: me() }),
+  get_user_profile: (url) => ({ user: profile(lastId(url)) }),
+  get_unread_counts: () => ({ messages: 0, notifications: 0, interactions: 0, forum: 0 }),
   /* PicPony's own comment counts for one grid page (decision 15) — a read that travels as a POST,
      its ids in the body, which the stub does not read. No picture has on-site comments, the live
-     answer for most. Without it the envelope failed, and a failed read is not kept, so every
-     grid remount re-asked: the ledger charged a Back with a request the app does not make. */
-  get_batch_comment_counts: () => ({ success: true, counts: {} }),
+     answer for most. Without it the read failed, and a failed read is not kept, so every grid
+     remount re-asked: the ledger charged a Back with a request the app does not make. */
+  get_batch_comment_counts: () => ({ counts: {} }),
   get_forum_posts: () => ({
-    success: true,
     posts: Array.from({ length: 15 }, (_, i) => forumPost(i + 1)),
+    total: 60,
+    page: 1,
     total_pages: 4,
   }),
-  get_forum_post_detail: (params) => ({
-    success: true,
-    post: forumPost(Number(params.get('id') ?? params.get('post_id')) || 1),
-    comments: [],
-    total_pages: 1,
-  }),
-  get_shared_faves: () => ({
-    success: true,
-    username: 'fixture',
-    folder_name: '主收藏夹',
-    faves: Array.from({ length: 30 }, (_, i) => 2000 + i),
-  }),
+  get_forum_post_detail: (url) => ({ post: forumPost(lastId(url)) }),
+  get_forum_post_comments: () => ({ comments: [], total: 0, total_pages: 1 }),
+  get_shared_faves: () => ({ image_ids: Array.from({ length: 30 }, (_, i) => 2000 + i), total: 30 }),
   get_user_posts: () => ({
-    success: true,
-    posts: Array.from({ length: 12 }, (_, i) => forumPost(100 + i)),
+    posts: Array.from({ length: 12 }, (_, i) => ({
+      id: 100 + i, title: `帖子 ${100 + i}`, cover_image: null, created_at: STAMP, reply_count: 2, like_count: 0,
+    })),
     total_pages: 2,
   }),
   get_user_comments: () => ({
-    success: true,
     comments: Array.from({ length: 12 }, (_, i) => ({
-      id: i + 1,
-      body: '评论',
-      created_at: '2024-01-01T00:00:00Z',
-      type: 'image',
-      target_id: 1000 + i,
-      target_title: '图片',
+      id: i + 1, target_id: 1000 + i, content: '评论', created_at: STAMP, kind: 'image',
     })),
     total_pages: 2,
   }),
   /* Two real rows rather than an empty list: the roster is server-rendered, and an empty fixture
      would make the one journey that proves it indistinguishable from a broken one. */
   get_team_members: () => ({
-    success: true,
+    revision: 1,
     members: [
-      { id: 1, name: 'FixtureDev', role: '开发', category: 'developer', avatar_url: null, account_avatar: null, link_url: null, order_num: 1 },
-      { id: 2, name: 'FixtureEditor', role: '编辑', category: 'editor', avatar_url: null, account_avatar: null, link_url: null, order_num: 2 },
+      { id: 1, name: 'FixtureDev', role: '开发', category: 'developer', avatar_url: '', account_avatar: null, link_url: '', order_num: 1, user_id: null },
+      { id: 2, name: 'FixtureEditor', role: '编辑', category: 'editor', avatar_url: '', account_avatar: null, link_url: '', order_num: 2, user_id: null },
     ],
+    total_pages: 1,
   }),
-  get_faves: () => ({ success: true, faves: Array.from({ length: 30 }, (_, i) => 2000 + i) }),
+  get_faves: () => ({
+    items: Array.from({ length: 30 }, (_, i) => ({ image_id: 2000 + i, created_at: STAMP, folder_ids: [1] })),
+    total: 30,
+  }),
   get_fave_folders: () => ({
-    success: true,
-    folders: [
-      { id: 1, name: '主收藏夹', is_main: 1, item_count: 30, latest_image_id: 2029 },
-      { id: 2, name: '收藏夹', is_main: 0, item_count: 8, latest_image_id: 2014 },
-    ],
+    folders: [folder(1, '主收藏夹', true, 30, 2029), folder(2, '收藏夹', false, 8, 2014)],
+    privacy_space: {
+      owner_id: 1, has_password: false, unlock_seconds: 0, active: false, unlocked: false, expires_at: null,
+      visible: false, image_count: null,
+    },
   }),
-  get_profile_fave_folders: () => ({
-    success: true,
-    folders: [{ id: 1, name: '主收藏夹', is_main: 1, item_count: 30, latest_image_id: 2029 }],
-  }),
+  get_profile_fave_folders: () => ({ folders: [folder(1, '主收藏夹', true, 30, 2029)] }),
   get_browsing_history: () => ({
-    success: true,
-    history: Array.from({ length: 12 }, (_, i) => ({
+    revision: 1,
+    entries: Array.from({ length: 12 }, (_, i) => ({
       image_id: 4000 + i,
-      view_time: '2024-01-01 00:00:00',
       preview_url: image(4000 + i).representations.thumb,
-      ...image(4000 + i),
+      uploader: 'fixture',
+      viewed_at: STAMP,
+      previous_viewed_at: null,
     })),
     total_pages: 3,
   }),
   get_tasks: () => ({
-    success: true,
-    level: 5,
-    experience: 1350,
     coins: 100,
-    equipped_badges: [],
-    novice_tasks: {
-      bind_api: { progress: 1, claimed: 0 },
-      verify_api: { progress: 1, claimed: 0 },
-      set_bg: { progress: 0, claimed: 0 },
-    },
-    tasks: {
-      login_progress: 1, login_claimed: 0,
-      fav_progress: 2, fav_claimed: 0,
-      share_progress: 1, share_claimed: 0,
-      comment_progress: 0, comment_claimed: 0,
-    },
-    weekly_tasks: { upload_progress: 2, upload_claimed: 0 },
+    experience: 1350,
+    level: 14,
+    tasks: [
+      task('novice_bind_api', 'once', 1, 1, 50),
+      task('novice_verify_api', 'once', 1, 1, 50),
+      task('novice_set_bg', 'once', 0, 1, 50),
+      task('login', 'daily', 1, 1, 5),
+      task('fav', 'daily', 2, 3, 5),
+      task('share', 'daily', 1, 1, 5),
+      task('comment', 'daily', 0, 1, 5),
+      task('weekly_upload', 'weekly', 2, 5, 30),
+    ],
   }),
-  get_block_groups: () => ({ success: true, groups: [] }),
-  get_tag_groups: () => ({ success: true, groups: [] }),
-  get_tag_subscriptions: () => ({ success: true, subscriptions: [] }),
+  get_block_groups: () => ({ groups: [] }),
+  get_tag_groups: () => ({ groups: [] }),
+  get_tag_subscriptions: () => ({ subscriptions: [] }),
   get_shop_items: () => ({
-    success: true,
-    items: [{ id: 4, name: '钥匙扣', description: '现场领取', image_url: '', price: 8, stock: 3, active: 1 }],
+    items: [{ id: 4, name: '钥匙扣', description: '现场领取', image_url: null, price: 8, stock: 3, active: true, revision: 1, created_at: STAMP }],
+    next_cursor: null,
   }),
   get_coin_transactions: () => ({
-    success: true,
-    transactions: [{ amount: 10, reason: '每日登录', created_at: '2024-01-01 08:00:00' }],
+    transactions: [{ id: 1, amount: 10, balance_after: 100, reason: '每日登录', source_type: 'task', source_id: 'login', created_at: STAMP }],
+    next_cursor: null,
   }),
-  get_recent_contacts: () => ({ success: true, contacts: [] }),
-  get_notifications: () => ({ success: true, notifications: [] }),
-  get_interaction_notifications: () => ({
-    success: true,
-    notifications: [],
-    total_pages: 1,
-  }),
-  get_dictionary: () => ({ success: true, items: [] }),
-  get_comments: () => ({ success: true, comments: [] }),
+  get_recent_contacts: () => ({ contacts: [], next_cursor: null }),
+  get_notifications: () => ({ notifications: [], next_cursor: null }),
+  get_dictionary: () => ({ tags: [], total_matches: 0, stats: { total: 0, translated: 0, leaderboard: [] } }),
+  get_comments: () => ({ comments: [], total: 0, total_pages: 1 }),
 };
+
+function assistantQuota() {
+  return {
+    enabled: true, user_enabled: true, revision: 1, config_revision: 1, daily_points: 50, points_per_coin: 2,
+    daily_remaining: 50, purchased_remaining: 0, remaining: 50, reserved: 0, coins: 100,
+  };
+}
 
 /** Derpibooru path → envelope. Matched on the path with the `/api/v1/json` prefix removed. */
 const DERPI = [
@@ -318,24 +366,24 @@ export function unwrapLine(url) {
 }
 
 /**
- * A stub for one request, or `null` to let it through to the local server. Returns
- * `{ body, contentType }`, never a status: every fixture here is a 200.
+ * PicPony's Rust backend: `/api/v1/…` on any host (this app's proxy in the browser, the fixture
+ * port on the server). Derpibooru's API is `/api/v1/json/…` too, and is never this.
  */
-export function stubFor(rawUrl) {
+export function isPicponyApi(url) {
+  return /^\/api\/v1(\/|$)/.test(url.pathname) && !/^\/api\/v1\/json(\/|$)/.test(url.pathname);
+}
+
+/**
+ * A stub for one request, or `null` to let it through to the local server. Returns
+ * `{ body, contentType }`, plus `status` for the one non-200 answer (a PicPony operation with no
+ * fixture, 404). `method` is the request's; callers that only have the URL may leave it out.
+ */
+export function stubFor(rawUrl, method) {
   let url;
   try {
     url = new URL(rawUrl);
   } catch {
     return null;
-  }
-
-  if (url.pathname === '/api.php' || url.pathname.startsWith('/api.php/')) {
-    const action = url.searchParams.get('action') ?? '';
-    const build = PICPONY[action];
-    return {
-      body: JSON.stringify(build ? build(url.searchParams) : { success: false, message: `no fixture for ${action}` }),
-      contentType: 'application/json',
-    };
   }
 
   const target = unwrapLine(url);
@@ -349,18 +397,33 @@ export function stubFor(rawUrl) {
     return { body: JSON.stringify({ images: [], total: 0 }), contentType: 'application/json' };
   }
 
+  if (isPicponyApi(url)) {
+    /* Without a method (a caller that only has the URL), a read is assumed; the two reads that
+       travel as a POST (`get_batch_comment_counts`, `get_pony_configs`) are found either way. */
+    const op = method ? opOf(method, url.href) : (opOf('GET', url.href) ?? opOf('POST', url.href));
+    const build = op ? PICPONY[op] : undefined;
+    if (!build) {
+      return {
+        status: 404,
+        body: JSON.stringify({ error: { code: 'NO_FIXTURE', message: `no fixture for ${op ?? url.pathname}` } }),
+        contentType: 'application/json',
+      };
+    }
+    return { body: JSON.stringify(build(url)), contentType: 'application/json' };
+  }
+
   if (
     /(^|\.)derpicdn\.net$/.test(target.hostname) ||
     target.hostname === 'wsrv.nl' ||
     target.hostname === '147052.xyz' ||
     url.pathname === '/_next/image' ||
-    (/(^|\.)picpony\.top$/.test(url.hostname) && url.pathname !== '/api.php')
+    (/(^|\.)picpony\.top$/.test(url.hostname) && !isPicponyApi(url))
   ) {
     return { body: PIXEL_PNG_BASE64, contentType: 'image/png', binary: true };
   }
 
   if (url.pathname === '/search-api/api/upload-search') {
-    return { body: JSON.stringify({ success: true, results: [] }), contentType: 'application/json' };
+    return { body: JSON.stringify({ results: [] }), contentType: 'application/json' };
   }
 
   return null;

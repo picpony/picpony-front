@@ -46,11 +46,12 @@ export default function SemanticFeedback({
     setCaptchaOpen(true);
   };
 
-  const send = async (cfToken: string) => {
+  /* The captcha's answer is the backend's one-use proof (`captcha_proof`). */
+  const send = async (captchaProof: string) => {
     setCaptchaOpen(false);
     setSending(true);
     try {
-      await submitSemanticFeedback({ query, tags, engines, cfToken }, readToken());
+      await submitSemanticFeedback({ query, tags, engines, captchaProof }, readToken());
       reported.add(query);
       setSentFor(query);
       showToast('已提交反馈，感谢帮助改进中文搜索', 'success');

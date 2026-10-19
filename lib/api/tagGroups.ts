@@ -1,65 +1,62 @@
-import { ApiError } from './errors';
-import { picponyPostJson, picponyRequest, readEnvelope } from './http';
-import { tagList } from './blockGroups';
+import { api, seg } from './http';
 
 /**
  * 标签组 — a named set of tags kept on the account, searched as one (搜索这组标签) and shared as a
- * link (the original front end's 自定义标签收藏组, `tag_groupsPageContainer`). The forum's
- * 标签组分享 imports other people's into the same list (`import_shared_tag_group`).
+ * link (the original front end's 自定义标签收藏组). The forum's 标签组分享 imports other people's
+ * into the same list (`import_shared_tag_group`). Rust: `src/pg/tag_groups.rs`.
  *
  * Strict at both ends, like every account list: a refusal is an `ApiError`, never an empty list
- * or a save that seemed to land.
+ * or a save that seemed to land. An edit carries the group's `revision`; a group changed
+ * elsewhere meanwhile is refused (409 `GROUP_VERSION_CONFLICT`).
  */
 
 export interface TagGroup {
   id: number;
   name: string;
   tags: string[];
+  /** The backend's version of the group, sent back with an edit. */
+  revision: number;
 }
 
-/** The original front end's limits: 50 groups of up to 50 tags. */
+/** The original front end's limits: 50 groups of up to 50 tags (the backend's too). */
 export const MAX_TAG_GROUPS = 50;
 export const MAX_TAGS_PER_TAG_GROUP = 50;
 export const MAX_TAG_GROUP_NAME = 30;
 
-export function tagGroupOf(row: unknown): TagGroup | null {
-  if (!row || typeof row !== 'object') return null;
-  const group = row as Record<string, unknown>;
-  const id = Number(group.id);
-  if (!Number.isSafeInteger(id) || id <= 0) return null;
-  return { id, name: typeof group.name === 'string' ? group.name.trim() : '', tags: tagList(group.tags) };
+interface TagGroupRow {
+  id: number;
+  name: string;
+  tags: string[];
+  revision: number;
+  created_at: string;
 }
 
+/** `GET /me/tag-groups` — oldest first. */
 export async function getTagGroups(token: string, signal?: AbortSignal): Promise<TagGroup[]> {
-  const data = await readEnvelope<{ groups?: unknown }>(
-    await picponyRequest('get_tag_groups', { token, query: { _t: Date.now() }, signal }),
-  );
-  if (!Array.isArray(data.groups)) throw new ApiError('invalid');
-  return data.groups.map(tagGroupOf).filter((group): group is TagGroup => group !== null);
+  const data = await api<{ groups: TagGroupRow[] }>('GET', '/me/tag-groups', { token, signal, cache: 'no-store' });
+  return data.groups.map(({ id, name, tags, revision }) => ({ id, name, tags, revision }));
 }
 
 /**
- * `POST save_tag_group {id|0, name, tags, type:'collection'}` — the original front end's body.
- * Resolves with the saved group's id when the backend names it.
+ * `POST /me/tag-groups {name, tags}` for a new group, `PUT /me/tag-groups/{id} {name, tags,
+ * expected_revision}` for an edit. Resolves with the group's id and its new revision.
  */
 export async function saveTagGroup(
   token: string,
-  input: { id?: number | null; name: string; tags: readonly string[] },
-): Promise<{ id: number | null }> {
-  const data = await readEnvelope<{ id?: unknown; group_id?: unknown }>(
-    await picponyPostJson('save_tag_group', {
-      id: input.id ?? 0,
-      name: input.name,
-      tags: [...input.tags],
-      type: 'collection',
-    }, { token }),
-  );
-  const id = Number(data.id ?? data.group_id);
-  return { id: Number.isSafeInteger(id) && id > 0 ? id : (input.id ?? null) };
+  input: { id?: number | null; revision?: number; name: string; tags: readonly string[] },
+): Promise<{ id: number; revision: number }> {
+  const body = { name: input.name, tags: [...input.tags] };
+  return input.id
+    ? api<{ id: number; revision: number }>('PUT', `/me/tag-groups/${seg(input.id)}`, {
+      token,
+      json: { ...body, expected_revision: input.revision },
+    })
+    : api<{ id: number; revision: number }>('POST', '/me/tag-groups', { token, json: body });
 }
 
+/** `DELETE /me/tag-groups/{id}`. */
 export async function deleteTagGroup(token: string, id: number): Promise<void> {
-  await readEnvelope(await picponyPostJson('delete_tag_group', { id }, { token }));
+  await api('DELETE', `/me/tag-groups/${seg(id)}`, { token });
 }
 
 /**

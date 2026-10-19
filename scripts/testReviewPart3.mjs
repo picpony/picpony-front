@@ -30,15 +30,25 @@ globalThis.document = {
   addEventListener() {}, removeEventListener() {},
 };
 
-/* `get_user` answers are held until a test releases them, one by one, in order. */
+/* `GET /me` answers are held until a test releases them, one by one, in order. The session read
+   asks `GET /me/badges` beside it (the worn set the level card reads): answered at once. */
 const heldUsers = [];
 globalThis.fetch = async (url) => {
-  const action = new URL(String(url), 'https://app.invalid').searchParams.get('action');
-  if (action !== 'get_user') throw new Error(`Unexpected network request: ${url}`);
+  const path = new URL(String(url), 'https://app.invalid').pathname;
+  if (path === '/api/v1/me/badges') {
+    return new Response(JSON.stringify({ badges: [], equipped: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  if (path !== '/api/v1/me') throw new Error(`Unexpected network request: ${url}`);
   return new Promise((resolve) => heldUsers.push(resolve));
 };
+/** A `GET /me` answer (`auth::me`), as the Rust backend spells it. */
+const meUser = (settings) => ({
+  id: 7, username: 'pony', email: null, email_verified: false, role: 'user', coins: 0, experience: 0,
+  avatar: null, banner: null, bio: '', gender: '', race: '', birthday: null, created_at: '2026-01-01T00:00:00Z',
+  profile_revision: 1, settings, settings_revision: 1, upstream_identity: null, developer_access: { active: false },
+});
 const answerUser = (settings) =>
-  heldUsers.shift()(new Response(JSON.stringify({ success: true, user: { id: 7, username: 'pony', settings } }), {
+  heldUsers.shift()(new Response(JSON.stringify({ user: meUser(settings) }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   }));
@@ -173,11 +183,11 @@ test('P3-F3: a step past an end skips pages that add nothing and stops at the re
 });
 
 test('P3-F4: a reply names only PicPony comments and accounts', () => {
-  assert.deepEqual(comments.replyReference(null), { userId: 0, commentId: null });
+  assert.deepEqual(comments.replyReference(null), { userId: null, commentId: null });
   assert.deepEqual(comments.replyReference({ id: 42, source: 'picpony', userId: 9 }), { userId: 9, commentId: 42 });
   assert.deepEqual(
     comments.replyReference({ id: 42, source: 'trixiebooru', userId: null }),
-    { userId: 0, commentId: null },
+    { userId: null, commentId: null },
     'a Derpibooru comment id used to be sent as reply_to_comment_id',
   );
   const composer = readFileSync(new URL('../components/CommentComposer.tsx', import.meta.url), 'utf8');

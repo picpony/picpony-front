@@ -1,16 +1,14 @@
 /**
  * A user's badges, read off the wire — one parser for every screen that shows them.
  *
- * The backend spells a badge two ways. A profile's **wall** (`get_user_profile`'s `badges`) is
- * `{ name, color, expires_at }`; the **equipped** set (`equipped_badges`, on a profile, a forum
- * post, a contact, `get_tasks`) and the owner's own list (`get_my_badges`) are
- * `{ badge_name, badge_color }` — the equipped set sometimes as a JSON *string* of that array.
- * Every reader used to re-parse it with its own `try { JSON.parse } catch {}`.
+ * The Rust backend spells every badge one way, `{ id, name, color, expires_at }` (a profile's wall
+ * and worn set, `GET /me/badges`, a forum author's `equipped_badges`), with `position` on a worn
+ * one. The worn set keeps this app's `{ badge_name, badge_color }` shape, with the badge's `id`,
+ * which is what `PUT /me/badges/equipment` takes back.
  *
  * **An expired badge is still held, and never worn.** The original front end hid an expired badge
  * from the equipped set (`getValidEquippedBadges`) and made it unselectable in the equip list;
- * the wall still lists it, marked 已过期. The expiry is a Beijing wall-clock stamp like every
- * other backend time (`parseBackendTime`).
+ * the wall still lists it, marked 已过期. The backend drops expired badges from a worn set itself.
  *
  * Plain module: the profile header renders on the server, and `scripts/testProfiles.mjs` tests it.
  */
@@ -19,72 +17,47 @@ import { formatDate, parseBackendTime } from '@/lib/format';
 
 /** A badge a user holds, with its author-chosen colour and, if it lapses, when. */
 export interface HeldBadge {
+  id: number;
   name: string;
   /** Hex from the admin console's badge dictionary; arbitrary, so not a token. */
   color: string;
   expiresAt: string | null;
 }
 
-/** A badge as the equipped set carries it — the wire shape `equip_badge` takes back. */
+/** A badge as the equipped set carries it. `id` is the held badge's, when the source names it. */
 export interface EquippedBadge {
+  id?: number;
   badge_name: string;
   badge_color: string;
 }
 
-/** The original front end's limit (「最多只能佩戴3个徽章」); the backend holds no other. */
+/** The original front end's limit (「最多只能佩戴3个徽章」); the backend allows five. */
 export const MAX_EQUIPPED_BADGES = 3;
 
-function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+interface WireBadge {
+  id: number;
+  name: string;
+  color: string;
+  expires_at?: string | null;
 }
 
-/** An array, or a JSON string of one — anything else is an empty list. */
-function listOf(value: unknown): unknown[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value !== 'string' || !value.trim()) return [];
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function rows(value: unknown): WireBadge[] {
+  return Array.isArray(value) ? (value as WireBadge[]) : [];
 }
 
-/**
- * The badges a user holds, in the backend's order, one per name. Reads both spellings, so the
- * profile's wall and `get_my_badges` go through the same function.
- */
+/** The badges a user holds, in the backend's order (newest first). */
 export function parseHeldBadges(value: unknown): HeldBadge[] {
-  const seen = new Set<string>();
-  const badges: HeldBadge[] = [];
-  for (const row of listOf(value)) {
-    if (!row || typeof row !== 'object') continue;
-    const record = row as Record<string, unknown>;
-    const name = text(record.name) || text(record.badge_name);
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    badges.push({
-      name,
-      color: text(record.color) || text(record.badge_color),
-      expiresAt: text(record.expires_at) || null,
-    });
-  }
-  return badges;
+  return rows(value).map((badge) => ({
+    id: badge.id,
+    name: badge.name,
+    color: badge.color,
+    expiresAt: badge.expires_at ?? null,
+  }));
 }
 
-/** The equipped set, from an array or its JSON string; one entry per name. */
+/** The equipped set, in its order. A list that is not one (a source without badges) is empty. */
 export function parseEquippedBadges(value: unknown): EquippedBadge[] {
-  const seen = new Set<string>();
-  const equipped: EquippedBadge[] = [];
-  for (const row of listOf(value)) {
-    if (!row || typeof row !== 'object') continue;
-    const record = row as Record<string, unknown>;
-    const name = text(record.badge_name) || text(record.name);
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    equipped.push({ badge_name: name, badge_color: text(record.badge_color) || text(record.color) });
-  }
-  return equipped;
+  return rows(value).map((badge) => ({ id: badge.id, badge_name: badge.name, badge_color: badge.color }));
 }
 
 /** Whether a badge's expiry has passed at `now`. A badge with no expiry never lapses. */

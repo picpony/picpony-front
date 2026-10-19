@@ -122,9 +122,9 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
     if (!exchange && amount > quota.data.coins) return;
     if (!current()) return;
     await mutate(async () => {
-      const pending = exchange ?? { coins: amount, requestId: newRequestId(), pointsPerCoin: quota.data!.points_per_coin };
+      const pending = exchange ?? { coins: amount, requestId: newRequestId(), revision: quota.data!.revision, configRevision: quota.data!.config_revision, pointsPerCoin: quota.data!.points_per_coin };
       writeJournalText(accountId, 'exchange', JSON.stringify(pending));
-      const outcome = await settle(exchangeAssistantQuota(token, pending.coins, pending.requestId));
+      const outcome = await settle(exchangeAssistantQuota(token, pending));
       if (!outcome.ok) {
         /* A refusal is the server's answer, so nothing is left to check; anything else keeps the
            journal for 核对兑换. Thrown on, for `mutate` to show. */

@@ -1,19 +1,19 @@
 /**
  * The team form's rules as plain functions — what a save sends, and how a member's card links —
- * held to the original console's contract (`oldfe/admin.html`, `saveTeamMember`):
+ * held to the backend's contract (`POST /admin/team-members`, `PUT /admin/team-members/{id}`,
+ * both with the roster's `expected_revision`):
  *
- *   add_team_member / update_team_member { [id], name, role, category, user_id, avatar_url, link_url, order_num }
+ *   member { name, role, category, avatar_url, link_url, order_num (32-bit), user_id | null }
  *
- * **A member is linked by binding an account** (R9-022). /about makes a card a link only for
- * `link_url = user:<id>`, so the form no longer invites a GitHub address that would be saved and
- * then silently not be a link. Binding 关联站内用户 ID sets `user_id` (so /about shows the account's
- * current avatar) and `link_url = user:<id>`, as the original console's 快捷导入 did. A stored
- * external link is kept as it is while no account is bound — it was somebody's data — and is
- * replaced only by binding one.
+ * **A member is linked by binding an account** (R9-022): 关联站内用户 ID sets `user_id`, which is the
+ * binding (/about shows the account's current avatar and links its profile from it). The backend
+ * accepts only an http(s) address in `link_url` — the old `user:<id>` pseudo-link is refused — so a
+ * bound member saves an empty `link_url`. A stored external link is kept as it is while no account
+ * is bound — it was somebody's data — and is dropped only by binding one.
  */
 
 import { roleInfo, type Role } from '@/lib/roles';
-import { figureField } from './figures';
+import type { AdminTeamMember, TeamMemberBody } from '@/lib/api/admin';
 
 export type TeamCategory = 'developer' | 'manager' | 'editor' | 'special';
 
@@ -24,20 +24,7 @@ export const TEAM_CATEGORIES: { value: TeamCategory; label: string }[] = [
   { value: 'special', label: '特别鸣谢' },
 ];
 
-export interface TeamMemberRow {
-  id: number;
-  name: string;
-  role?: string | null;
-  category?: string | null;
-  user_id?: number | string | null;
-  account_avatar?: string | null;
-  avatar_url?: string | null;
-  link_url?: string | null;
-  order_num?: number | string | null;
-  /** The editors' automatic ranking by glossary contributions (the backend keeps the top 16). */
-  auto_editor_rank?: number | string | null;
-  auto_editor_count?: number | string | null;
-}
+export type TeamMemberRow = AdminTeamMember;
 
 export interface TeamFormValues {
   name: string;
@@ -69,9 +56,7 @@ export function teamForm(member?: TeamMemberRow | null): TeamFormValues {
     category: category(member.category),
     userId: uid ? String(uid) : '',
     avatarUrl: member.avatar_url ?? '',
-    /* A sort order the row did not carry opens empty — which a save sends as 0, the form's own
-       reading of a blank — rather than as a 0 that was never stored (G4-015). */
-    order: figureField(member.order_num),
+    order: String(member.order_num),
   };
 }
 
@@ -81,17 +66,20 @@ export function externalLink(link: string | null | undefined): string | null {
   return value && !value.startsWith('user:') ? value : null;
 }
 
-/** The card's link for a member bound to `userId` (0 for none), given what was stored. */
+/** The card's stored link for a member bound to `userId` (0 for none): a binding needs none. */
 export function linkFor(userId: number, stored: string | null | undefined): string {
-  if (userId) return `user:${userId}`;
+  if (userId) return '';
   return externalLink(stored) ?? '';
 }
+
+const INT32_MIN = -2147483648;
+const INT32_MAX = 2147483647;
 
 /** The save's body, or the fields' errors. */
 export function teamPayload(
   values: TeamFormValues,
   member?: TeamMemberRow | null,
-): { payload: Record<string, unknown>; errors?: undefined } | { payload?: undefined; errors: TeamFormErrors } {
+): { payload: TeamMemberBody; errors?: undefined } | { payload?: undefined; errors: TeamFormErrors } {
   const errors: TeamFormErrors = {};
   const name = values.name.trim();
   if (!name) errors.name = '请填写成员姓名';
@@ -99,19 +87,18 @@ export function teamPayload(
   const userId = boundUser(uidText);
   if (uidText && (!/^\d+$/.test(uidText) || !userId)) errors.userId = '站内用户 ID 须为正整数';
   const orderText = values.order.trim();
-  /* And a safe one (review P6-O10): past 2^53 the number sent is not the number typed. */
-  if (orderText && (!/^-?\d+$/.test(orderText) || !Number.isSafeInteger(Number(orderText)))) errors.order = '排序号须为整数';
+  /* And one the column holds (review P6-O10): the backend stores a 32-bit integer. */
+  if (orderText && (!/^-?\d+$/.test(orderText) || Number(orderText) < INT32_MIN || Number(orderText) > INT32_MAX)) errors.order = '排序号须为 -2147483648～2147483647 的整数';
   if (Object.keys(errors).length > 0) return { errors };
-  const payload: Record<string, unknown> = {
+  const payload: TeamMemberBody = {
     name,
     role: values.title.trim(),
     category: values.category,
-    user_id: userId,
+    user_id: userId || null,
     avatar_url: values.avatarUrl.trim(),
     link_url: linkFor(userId, member?.link_url),
     order_num: orderText ? Number(orderText) : 0,
   };
-  if (member) payload.id = member.id;
   return { payload };
 }
 

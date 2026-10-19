@@ -1,25 +1,31 @@
 /**
- * Share links: PicPony's own short links (`share.php`), and the share counter.
+ * Share links: PicPony's own short links, made by the Rust backend's share-link resource.
  *
- * `share.php` is a separate backend endpoint from `api.php`, reached through this app's
- * `app/share.php/route.ts` so a short link resolves on this origin. `?action=create` stores a
- * target URL with the title, description and picture a chat app's link preview shows;
- * `?id=<share_id>` is the page that preview is read from, which sends a person on to the target.
+ * `POST /api/v1/share-links {target_url, title, description, image_id?}` → `201 {share_id, url,
+ * target_url, preview_status, expires_at, share_task_counted}`. The short link is
+ * `share.php?id=<share_id>` on this origin; `app/share.php/route.ts` sends a visit on to the
+ * backend's preview page (`/api/v1/share-links/{id}/page`), which carries the title, description
+ * and picture a chat app shows and then leads to the target.
  *
- * **A short link is an improvement, never a requirement**: the original front end fell back to
- * the long link on any failure, and so does this — the caller always gets a URL to hand over.
+ * - **A short link is an improvement, never a requirement**: the original front end fell back to
+ *   the long link on any failure, and so does this — the caller always gets a URL to hand over.
+ *   The backend only accepts targets on the site's own origins (no open redirect), so a target
+ *   it refuses (a dev origin, say) also gets the long link.
+ * - **The share task counts here, on the server.** A signed-in creation is the daily share task's
+ *   only source of progress (one per distinct target a day, capped at the task's target); there
+ *   is no client-reported counter (`track_share` is gone on purpose).
+ * - A picture's preview words and thumbnail are the backend's own (it checks the picture against
+ *   the block list and upstream rating first): `imageUrl` is not sent.
  */
 
 import { readToken } from '@/lib/hooks';
-import { deadlineSignal, picponyRequest, readEnvelope } from './http';
-
-/** The endpoint, on this origin (the route handler forwards it). */
-const SHARE_ENDPOINT = '/share.php';
+import { api, deadlineSignal } from './http';
 
 /**
  * How long the person pressing 分享 waits for a short link before getting the long one. A write,
  * so abandoning it does not stop the server storing it — which costs one unused share row; a
- * button spinning for as long as the backend's worst case costs the share.
+ * button spinning for as long as the backend's worst case costs the share. The backend's own
+ * picture lookup is bounded below this (8 s metadata + thumbnail).
  */
 const CREATE_DEADLINE_MS = 8_000;
 
@@ -32,7 +38,7 @@ export interface ShareLinkInput {
   /** The link preview's title and description, as a chat app shows them. */
   title: string;
   desc: string;
-  /** The preview's picture: an absolute URL, or the backend's own `Derp.png`. */
+  /** The preview's picture. Not sent: the backend picks a picture's thumbnail itself. */
   imageUrl?: string;
   /** A picture's Derpibooru id, when the share is of one picture. */
   imageId?: number;
@@ -44,47 +50,35 @@ export interface ShareLink {
   short: boolean;
 }
 
+interface CreatedShareLink {
+  share_id: string;
+}
+
 /**
- * `POST share.php?action=create {image_id?, target_url, title, desc, image_url}` → `{success,
- * share_id}`; the short link is `share.php?id=<share_id>` on this origin. The body is the
- * original front end's, field for field. The token is optional — sent when signed in, so the
- * backend can attribute the share.
+ * The link to hand over for a share: the short one, or the long one on any failure. The token is
+ * optional — sent when signed in, so the share counts toward the account's share task.
  */
 export async function createShareLink(
-  { targetUrl, title, desc, imageUrl = DEFAULT_SHARE_IMAGE, imageId }: ShareLinkInput,
+  { targetUrl, title, desc, imageId }: ShareLinkInput,
   { token, signal }: { token?: string | null; signal?: AbortSignal } = {},
 ): Promise<ShareLink> {
   const fallback: ShareLink = { url: targetUrl, short: false };
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
   const deadline = deadlineSignal(signal, CREATE_DEADLINE_MS);
   try {
-    const response = await fetch(`${SHARE_ENDPOINT}?action=create`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        ...(imageId !== undefined ? { image_id: imageId } : {}),
+    const created = await api<CreatedShareLink>('POST', '/share-links', {
+      token: token || undefined,
+      json: {
         target_url: targetUrl,
         title,
-        desc,
-        image_url: imageUrl,
-      }),
-      cache: 'no-store',
+        description: desc,
+        ...(imageId !== undefined ? { image_id: imageId } : {}),
+      },
       signal: deadline.signal,
+      timeoutMs: false,
     });
-    /* The backend's error pages are HTML; only a JSON answer can carry an id. */
-    if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) {
-      void response.body?.cancel().catch(() => {});
-      return fallback;
-    }
-    const data: unknown = await response.json().catch(() => null);
-    const id = data && typeof data === 'object' ? (data as { success?: unknown; share_id?: unknown }) : null;
-    const shareId = id?.success === true && (typeof id.share_id === 'string' || typeof id.share_id === 'number')
-      ? String(id.share_id).trim()
-      : '';
-    if (!shareId) return fallback;
-    const url = new URL(SHARE_ENDPOINT, window.location.origin);
-    url.searchParams.set('id', shareId);
+    const url = new URL('/share.php', window.location.origin);
+    url.searchParams.set('id', created.share_id);
+    if (token) void expireTasks(token);
     return { url: url.href, short: true };
   } catch (error) {
     /* The caller's own abort is not a failure to fall back from. */
@@ -96,19 +90,15 @@ export async function createShareLink(
 }
 
 /**
- * `POST api.php?action=track_share` — counts a share toward the signed-in account's share tasks.
- * Fire and forget, as the original front end did: a failure costs a count, never the share.
+ * The account may return to a still-cached task screen right after sharing. Lazy lookup keeps the
+ * transport module outside the resource catalogue's import cycle.
  */
-export function trackShare(token: string | null | undefined): void {
-  if (!token) return;
-  void picponyRequest('track_share', { token, method: 'POST' })
-    .then((response) => readEnvelope(response))
-    .then(async () => {
-      if (readToken() !== token) return;
-      /* The account may return to a still-cached task screen immediately after sharing.
-         Lazy lookup keeps the transport module outside the resource catalogue's cycle. */
-      const { tasks } = await import('@/lib/resources');
-      if (readToken() === token) tasks.expire({ token });
-    })
-    .catch(() => {});
+async function expireTasks(token: string): Promise<void> {
+  if (readToken() !== token) return;
+  try {
+    const { tasks } = await import('@/lib/resources');
+    if (readToken() === token) tasks.expire({ token });
+  } catch {
+    /* A stale task screen re-reads on its own next visit. */
+  }
 }

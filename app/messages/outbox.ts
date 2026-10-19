@@ -6,6 +6,7 @@ import { apiErrorMessage } from '@/lib/api/errors';
 import { conversationPage, recentContacts } from '@/lib/resources';
 import { readToken } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
+import { randomId } from '@/lib/utils';
 
 /*
  * Messages on their way out — shown in the thread the moment they are sent, the way every
@@ -34,6 +35,9 @@ export interface OutboxItem {
   afterId: number;
   /** A backend-style stamp (Beijing wall-clock), so the thread groups it into today. */
   createdAt: string;
+  /** This message's `Idempotency-Key`: a 重试 sends the same one, so a send whose answer was
+   *  lost is not written twice. */
+  sendKey: string;
 }
 
 const EMPTY: readonly OutboxItem[] = Object.freeze([]);
@@ -83,7 +87,7 @@ function transmit(token: string, key: string, item: OutboxItem) {
     /* A session that changed while this waited in line is not the one that wrote it. */
     if (readToken() !== token || !(items.get(key) ?? EMPTY).some((entry) => entry.localId === item.localId)) return;
     try {
-      await sendMessage(token, item.contactId, item.content);
+      await sendMessage(token, item.contactId, item.content, item.sendKey);
       update(key, item.localId, { status: 'sent' });
       /* The server's copy replaces this one on the next read; the contact list re-sorts. */
       conversationPage.invalidate({ token, withUserId: item.contactId, page: 1 });
@@ -134,6 +138,7 @@ export function queueMessage(token: string, contactId: number, content: string, 
     status: 'sending',
     afterId,
     createdAt: backendStamp(now),
+    sendKey: randomId(),
   };
   publish(key, [...(items.get(key) ?? EMPTY), item]);
   transmit(token, key, item);

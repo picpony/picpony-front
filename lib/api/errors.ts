@@ -14,6 +14,11 @@
  * decide two things from it and nothing else: whether to offer 重试 (`isRetryable`) and whether
  * to show a not-found state instead of an error (`isNotFound`).
  *
+ * For the Rust backend (`/api/v1`) an `http` error also carries the backend's machine `code`
+ * (`error.code`, e.g. `CSRF_MISMATCH`, `ALREADY_EXISTS`) and its sentence (`error.message`) as
+ * `serverMessage`: a failure there is always a non-2xx with `{"error":{"code","message"}}`, so a
+ * 2xx is never a refusal. `readApi` in `lib/api/http.ts` is the one place that decodes it.
+ *
  * No imports and no `'use client'`: the server reads, the route handlers and the tests all reach
  * this module.
  */
@@ -23,8 +28,10 @@
  *
  * - `network`: no answer at all (offline, DNS, refused, a CORS rejection, a dropped socket).
  * - `timeout`: our own deadline fired first (see `lib/api/http.ts`).
- * - `http`: an answer with a non-2xx status.
- * - `envelope`: a 2xx whose PicPony envelope said `success: false`.
+ * - `http`: an answer with a non-2xx status (for `/api/v1`, with the backend's `code`).
+ * - `envelope`: a refusal that arrived as words rather than a status — a third-party service's
+ *   `success: false` on a 2xx (the semantic search service), or a refusal an adapter states
+ *   itself (the assistant's). The `/api/v1` backend never produces one.
  * - `invalid`: a 2xx whose body is not the shape the adapter needs (an HTML error page served
  *   as 200, a list field that is not a list).
  * - `syntax`: the upstream rejected the *query itself* — Derpibooru's 400 on a search. Retrying
@@ -36,7 +43,9 @@ export type ApiErrorKind = 'network' | 'timeout' | 'http' | 'envelope' | 'invali
 
 export interface ApiErrorInit {
   status?: number;
-  /** The backend's own words, when it sent any. PicPony's are Chinese already. */
+  /** The new backend's machine code (`error.code`), e.g. `CSRF_MISMATCH`, `ALREADY_EXISTS`. */
+  code?: string;
+  /** The backend's own words (`error.message`), when it sent any. PicPony's are Chinese already. */
   serverMessage?: string;
   /** Overrides the derived sentence — for an adapter that knows better (a named list). */
   message?: string;
@@ -51,6 +60,7 @@ export class ApiError extends Error {
   override readonly name = 'ApiError';
   readonly kind: ApiErrorKind;
   readonly status?: number;
+  readonly code?: string;
   readonly serverMessage?: string;
   /** The thing asked for does not exist — a screen shows a not-found state, never 重试. */
   readonly notFound: boolean;
@@ -64,6 +74,7 @@ export class ApiError extends Error {
     super(init.message ?? describeFailure(kind, status, serverMessage, notFound), { cause: init.cause });
     this.kind = kind;
     this.status = status;
+    this.code = init.code;
     this.serverMessage = serverMessage;
     this.notFound = notFound;
     this.retryable = init.retryable ?? defaultRetryable(kind, status, notFound);
@@ -107,7 +118,7 @@ export const FAILURE_MESSAGES = {
   aborted: '请求已取消',
 } as const;
 
-/** Words for an HTTP status alone — also what `readJson` synthesises for a body it cannot read. */
+/** Words for an HTTP status alone — for an answer whose body carries no usable sentence. */
 export function statusMessage(status: number | undefined): string {
   if (status === undefined) return FAILURE_MESSAGES.generic;
   if (status === 429) return FAILURE_MESSAGES.rateLimited;

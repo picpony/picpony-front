@@ -25,7 +25,8 @@ import { createServer as createHttpServer } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { stubFor } from './netAuditFixtures.mjs';
+import { isPicponyApi, stubFor } from './netAuditFixtures.mjs';
+import { opOf } from './rustRoutes.mjs';
 import { createStepActivity } from './netAuditActivity.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -71,15 +72,16 @@ const VIEWPORT = { width: 1440, height: 900 };
 /**
  * The app's data surfaces, and nothing else. Documents, chunks, fonts and stylesheets are cached
  * by the browser and paid once per session; counting them drowns the signal. The list is the four
- * API lines from `lib/route.ts` plus PicPony's own two endpoints — anything the app can send a
- * *read* to.
+ * API lines from `lib/route.ts` plus PicPony's own endpoints — the Rust backend's `/api/v1`
+ * (through this app's proxy) and the image search — anything the app can send a *read* to.
+ * Derpibooru's own API is also `/api/v1/json/…`, so the hosts are tested before PicPony's path.
  */
 const API_PATTERNS = [
-  { label: 'picpony', test: (u) => u.pathname === '/api.php' || u.pathname.startsWith('/api.php/') },
-  { label: 'relay', test: (u) => u.pathname === '/relay' },
-  { label: 'searchapi', test: (u) => u.pathname.startsWith('/search-api/') },
   { label: 'derpi', test: (u) => /(^|\.)(derpibooru\.org|trixiebooru\.org)$/.test(u.hostname) },
   { label: 'accel', test: (u) => u.hostname === 'picponyapi.147052.xyz' },
+  { label: 'picpony', test: isPicponyApi },
+  { label: 'relay', test: (u) => u.pathname === '/relay' },
+  { label: 'searchapi', test: (u) => u.pathname.startsWith('/search-api/') },
 ];
 
 const MEDIA_PATTERNS = [
@@ -102,10 +104,13 @@ function classify(rawUrl) {
   return null;
 }
 
-/** The PicPony action, or the Derpibooru path — what a row in the ledger is called. */
-function requestName(entry) {
+/**
+ * The PicPony operation (the backend's operation id — the old action names, `scripts/rustRoutes.mjs`),
+ * or the Derpibooru path — what a row in the ledger is called.
+ */
+function requestName(entry, method = 'GET') {
   const { url, label } = entry;
-  if (label === 'picpony') return url.searchParams.get('action') ?? 'api.php';
+  if (label === 'picpony') return opOf(method, url.href) ?? `${method} ${url.pathname}`;
   if (label === 'relay' || label === 'accel') {
     const inner = url.searchParams.get('url');
     if (inner) {
@@ -378,7 +383,7 @@ class Cdp {
  * it on every signed-in document for its count of new pictures, beside the screen's own reads.
  *
  * **The companion runtime is the same kind of read, and its chunk makes it the worst racer.**
- * `get_mascot_config` and `get_my_ponies` mount with the shell on every signed-in document
+ * The mascot list (`get_mascots_list`, `get_mascot_config` before it) and `get_my_ponies` mount with the shell on every signed-in document
  * (`CompanionHost`, both `dynamic`), so whether they start before or after the page's own chunk
  * has run is timing alone. Left in the chain, a runner slow enough for the mascot read to *finish*
  * first moved `/history`'s and `/tasks`' own read from r1 to r2 and failed the baseline on a commit
@@ -386,7 +391,7 @@ class Cdp {
  */
 const CHROME_READS = new Set([
   'get_user', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions',
-  'get_mascot_config', 'get_my_ponies',
+  'get_mascot_config', 'get_mascots_list', 'get_my_ponies',
 ]);
 
 /**
@@ -397,6 +402,11 @@ const CHROME_READS = new Set([
  * down in this headless browser; this keeps the ledger honest if it ever does not.
  */
 const UNCOUNTED = new Set(['track_visitor']);
+
+/** What the server reads for every document, whatever the route (see the fixture server below). */
+const SERVER_EVERY_ROUTE = new Set([
+  'get_maintenance_status', 'get_public_maintenance_status', 'get_website_routing_policy', 'get_public_blacklist',
+]);
 
 /**
  * The critical path, in rounds: a request is in round `n + 1` if any request in round `n` had
@@ -441,14 +451,14 @@ async function runStep(cdp, step, origin, serverReads) {
     if (message.method === 'Network.requestWillBeSent') {
       const { requestId, request, timestamp, type } = message.params;
       const hit = classify(request.url);
-      const counted = Boolean(hit && !UNCOUNTED.has(requestName(hit)));
+      const counted = Boolean(hit && !UNCOUNTED.has(requestName(hit, request.method)));
       activity.start(requestId, request, type, counted);
       if (!counted) return;
       const entry = {
         ...hit,
         id: requestId,
         method: request.method,
-        name: requestName(hit),
+        name: requestName(hit, request.method),
         start: timestamp,
         at: performance.now() - t0,
       };
@@ -590,7 +600,7 @@ async function installStubs(cdp) {
   cdp.on(async (message) => {
     if (message.method !== 'Fetch.requestPaused') return;
     const { requestId, request } = message.params;
-    const stub = stubFor(request.url);
+    const stub = stubFor(request.url, request.method);
     try {
       if (!stub) {
         await cdp.send('Fetch.continueRequest', { requestId });
@@ -599,7 +609,7 @@ async function installStubs(cdp) {
       await sleep(STUB_LATENCY_MS);
       await cdp.send('Fetch.fulfillRequest', {
         requestId,
-        responseCode: 200,
+        responseCode: stub.status ?? 200,
         responseHeaders: [
           { name: 'content-type', value: stub.contentType },
           /* The app's reads are `no-store`, but a stub with no cache header at all lets the browser
@@ -631,7 +641,7 @@ async function resetSession(cdp, origin, { auth = false } = {}) {
   await sleep(600);
   /* The token is a fixture on purpose: what an auth'd journey measures is which requests a
      signed-in screen decides to send, not whether a real session would be accepted. The stubbed
-     `get_user` answers success, so the shell stays signed in — against the live upstream it
+     `GET /me` (`get_user`) answers a user, so the shell stays signed in — against the live upstream it
      would 401 and clear the session, which is why these journeys are stub-only. */
   const session = JSON.stringify({
     token: 'netaudit-fixture-token',
@@ -693,29 +703,30 @@ const origin = `http://127.0.0.1:${appPort}`;
  */
 const serverReads = [];
 const upstream = createHttpServer((req, res) => {
-  /* Two kinds of server-side read reach this one fixture: PicPony's own actions as
-     `/api.php?action=…` (matched on the path) and a Derpibooru read as `/api/v1/json/…`
-     (`PICPONY_DERPI_ORIGIN` points here; matched on hostname, so re-addressed to the real one). */
+  /* Two kinds of server-side read reach this one fixture: PicPony's own resources as
+     `/api/v1/…` (matched on the path, named by operation) and a Derpibooru read as
+     `/api/v1/json/…` (`PICPONY_DERPI_ORIGIN` points here; matched on hostname, so re-addressed to
+     the real one). */
   const asUpstream = req.url?.startsWith('/api/v1/json')
     ? `https://trixiebooru.org${req.url}`
     : `http://127.0.0.1:${upstreamPort}${req.url}`;
-  const stub = stubFor(asUpstream);
+  const stub = stubFor(asUpstream, req.method);
   if (!stub) {
     res.writeHead(404).end();
     return;
   }
   /* Recorded before the response, so a read still in flight when a step ends is still counted. */
-  const action = /[?&]action=([^&]+)/.exec(req.url ?? '')?.[1] ?? req.url ?? '';
-  /* `get_maintenance_status` excluded for the same reason `CHROME_READS` excludes `get_user`:
-     the server does it on every route, so counting it would make `serverApi` a function of how
-     many navigations a journey contains rather than of what moved to the server.
-     `get_public_blacklist` is read beside it for the same inline policy and is excluded too, so
-     adding it did not move a baseline that already counts `get_block_tags` once per document.
-     `UNCOUNTED` is excluded here as everywhere. */
-  if (action !== 'get_maintenance_status' && action !== 'get_public_blacklist' && !UNCOUNTED.has(action)) {
+  const action = req.url?.startsWith('/api/v1/json') ? req.url : (opOf(req.method, asUpstream) ?? req.url ?? '');
+  /* The maintenance state and the route policy are excluded for the same reason `CHROME_READS`
+     excludes `get_user`: the server reads them on every route, so counting them would make
+     `serverApi` a function of how many navigations a journey contains rather than of what moved
+     to the server. `get_public_blacklist` is read beside them for the same inline policy and is
+     excluded too, so adding it did not move a baseline that already counts `get_block_tags` once
+     per document. `UNCOUNTED` is excluded here as everywhere. */
+  if (!SERVER_EVERY_ROUTE.has(action) && !UNCOUNTED.has(action)) {
     serverReads.push(action);
   }
-  res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 if (!LIVE) await new Promise((resolve) => upstream.listen(upstreamPort, '127.0.0.1', resolve));

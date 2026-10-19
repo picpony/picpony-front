@@ -1,6 +1,9 @@
 import { actionIsWrite, validateSiteSpec } from './actions';
-import { obj, positiveId, receiptData, str, type AssistantAction, type AssistantReceipt, type JsonObject, type PermissionMode } from './protocol';
+import { obj, receiptData, str, uuid, type AssistantAction, type AssistantReceipt, type JsonObject, type PermissionMode } from './protocol';
 import type { createReceiptJournal } from './journal';
+
+/** Tools the server dispatches to the client (`assistant_runner::CLIENT_TOOLS`). */
+export const CLIENT_CALLS: readonly string[] = ['call_site_api', 'get_page_controls', 'interact_page'];
 
 export class UncertainAction extends Error {
   constructor(message = '操作结果尚未确认，已停止重复提交。请先核对站内结果，再核对任务回执。') { super(message); }
@@ -8,7 +11,7 @@ export class UncertainAction extends Error {
 export interface ActionDependencies {
   assertCurrent(): void;
   permission(): Promise<PermissionMode>;
-  claim(taskId: number, callId: string): Promise<JsonObject>;
+  claim(taskId: string, callId: string): Promise<JsonObject>;
   save(receipt: AssistantReceipt): Promise<JsonObject>;
   dispatch(action: AssistantAction, claim: JsonObject): Promise<Partial<AssistantReceipt>>;
   journal: ReturnType<typeof createReceiptJournal>;
@@ -19,15 +22,18 @@ export interface ActionDependencies {
 /** One task/call promise per document; durable intents and server claims survive reload. */
 export function createActionRunner(deps: ActionDependencies) {
   const running = new Map<string, Promise<AssistantReceipt>>();
-  function receipt(action: AssistantAction, taskId: number, fields: Partial<AssistantReceipt>): AssistantReceipt {
+  function receipt(action: AssistantAction, taskId: string, fields: Partial<AssistantReceipt>): AssistantReceipt {
     return { task_id: taskId, call_id: action.call_id, name: action.name, action: action.name, ok: false, summary: '', data: {}, ...fields };
   }
-  async function settle(action: AssistantAction, taskId: number, approved: boolean): Promise<AssistantReceipt> {
+  async function settle(action: AssistantAction, taskId: string, approved: boolean): Promise<AssistantReceipt> {
     deps.assertCurrent();
-    if (!positiveId(taskId) || !/^[A-Za-z0-9._:-]{1,160}$/.test(action.call_id)) {
+    if (!uuid(taskId) || !/^[A-Za-z0-9._:-]{1,160}$/.test(action.call_id)) {
       return receipt(action, taskId, { summary: '任务缺少可核对的操作标识，未执行', error: 'missing_identity' });
     }
-    const claimed = action.name === 'call_site_api' || action.name === 'interact_page';
+    /* Every call the server dispatches to the browser (`assistant_runner::CLIENT_TOOLS`) is an issued
+       `assistant_client_calls` row: it is claimed before it runs and answered with a receipt, which is
+       what resumes the model. */
+    const claimed = CLIENT_CALLS.includes(action.name);
     const previous = deps.journal.get(taskId, action.call_id);
     if (previous?.state === 'receipt' && previous.receipt) {
       if (claimed) await save(previous.receipt);
@@ -44,15 +50,17 @@ export function createActionRunner(deps: ActionDependencies) {
     if (claimed) {
       claim = await deps.claim(taskId, action.call_id); deps.assertCurrent();
       if (claim.cached === true) {
-        const cached = obj(claim.result);
-        if (positiveId(cached.task_id) !== taskId || cached.call_id !== action.call_id || typeof cached.ok !== 'boolean') throw new UncertainAction('服务器回执与此操作不一致，未重复执行');
-        const result = receipt(action, taskId, { ok: cached.ok, summary: str(cached.summary, 1000), data: receiptData(cached.data), ...(typeof cached.error === 'string' ? { error: str(cached.error, 100) } : {}) });
+        /* `{cached, result:{name, call_id (the model's), ok, summary, data, source}}`, where `data`
+           is the receipt this client sent — its own task and call ids identify it. */
+        const cached = obj(claim.result), sent = obj(cached.data);
+        if (sent.task_id !== taskId || sent.call_id !== action.call_id || typeof cached.ok !== 'boolean') throw new UncertainAction('服务器回执与此操作不一致，未重复执行');
+        const result = receipt(action, taskId, { ok: cached.ok, summary: str(cached.summary, 1000), data: receiptData(sent.data), ...(typeof sent.error === 'string' ? { error: str(sent.error, 100) } : {}) });
         deps.journal.save(result); return result;
       }
       /* Review P5-F6: a recorded start is uncertainty only for a write. A read left `started` (the
          page went away while it was out) is asked again — it changes nothing — where it used to
          throw on every 核对任务, so the task could never finish. */
-      if (claim.pending === true || (write && previous?.state === 'started')) throw new UncertainAction();
+      if (write && previous?.state === 'started') throw new UncertainAction();
       if (action.name === 'call_site_api') {
         try { validateSiteSpec(action, claim.request); }
         catch (e) {
@@ -84,7 +92,7 @@ export function createActionRunner(deps: ActionDependencies) {
     deps.journal.acknowledge(value.task_id, value.call_id);
   }
   return {
-    run(action: AssistantAction, taskId: number, approved = false) {
+    run(action: AssistantAction, taskId: string, approved = false) {
       const key = `${taskId}:${action.call_id}`;
       const active = running.get(key);
       if (active) return active;

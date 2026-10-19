@@ -1,24 +1,22 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
-import { clearUserInfo } from '@/lib/hooks';
+/**
+ * The transport to PicPony's Rust backend (`/api/v1` on api.picpony.top), reached from the browser
+ * through this app's own `app/api/v1/[...path]` proxy so the session's `auth_bind` cookie stays
+ * first-party.
+ *
+ * The protocol: resource paths only (no `?action=`); a 2xx answers with the bare JSON DTO (or 204
+ * and no body); a failure is a non-2xx with `{"error":{"code","message"}}`. A session is a Bearer
+ * token plus the `auth_bind` cookie, and every write also carries `X-CSRF-Token`.
+ *
+ * `api()` is what adapters call; `apiRequest()` + `readApi()` when the `Response` itself is needed
+ * (a stream, a header). `readObject`, `listOf` and `deadlineSignal` also serve the Derpibooru
+ * reads (`lib/api/derpi.ts`, `proxyFetch`), which are a third-party API and keep its shapes.
+ */
+import { clearUserInfo, readUserInfo, updateUserInfo } from '@/lib/hooks';
 import { showToast } from '@/lib/toast';
-import { ApiError, FAILURE_MESSAGES, statusMessage, toApiError } from './errors';
-
-type QueryValue = string | number | boolean | undefined;
-
-export interface PicponyRequestOptions extends RequestInit {
-  token?: string;
-  query?: Record<string, QueryValue> & { action?: never };
-  /**
-   * How long this request may take, headers and body together, in ms — or `false` for no limit.
-   * Reads (GET/HEAD) default to `READ_DEADLINE_MS`; writes default to none, because aborting a
-   * POST does not stop the server acting on it, and reporting a failure the server then turns
-   * into a success is worse than waiting.
-   */
-  timeoutMs?: number | false;
-}
+import { ApiError, toApiError } from './errors';
 
 /**
- * A read's ceiling. The only bounds used to be server-side (the api.php handler's 30s), so a
+ * A read's ceiling. The only bounds used to be server-side (the proxy handler's 30s), so a
  * wedged upstream held a skeleton — and a scheduler slot — for half a minute before anything
  * could be shown. Generous on purpose: the backend's observed latency under load is ~9s, and
  * turning a slow answer into a failure would only make the retry pay it again.
@@ -71,106 +69,6 @@ function expireSession(token: string) {
   showToast('登录已过期，请重新登录', 'warning');
 }
 
-/**
- * A 401 on a request that carried the session token.
- *
- * Only `get_user` is taken at its word. Any other action's 401 is confirmed against `get_user`
- * first: an action may one day answer 401 for a wrong *password* while the session itself is
- * fine, and signing somebody out over a typo would be the worse bug. The confirmation is a raw
- * `fetch`, so it cannot recurse into this handler.
- */
-/**
- * For a request that does not go through `picponyRequest` — the import proxy's own route, which is
- * a bare `fetch` to `/admin/import-tools/*`, and the upload's staging XHR (`lib/api/upload.ts`). Without it that one surface let a dead session die
- * silently: AGENTS' rule is that a 401 ends a session **once, here, not per screen**.
- */
-export function noteUnauthorized(token: string) {
-  onUnauthorized('import_tools', token);
-}
-
-function onUnauthorized(action: string, token: string) {
-  if (typeof window === 'undefined' || !token) return;
-  if (action === 'get_user') {
-    expireSession(token);
-    return;
-  }
-  if (sessionChecks.has(token)) return;
-  /* Bounded like any read (review P1-F9): a confirmation that never settles would keep this
-     token's slot taken, and every later 401 for it would be ignored — a half-signed-in UI. */
-  const deadline = deadlineSignal(undefined, READ_DEADLINE_MS);
-  const check = fetch(`${PICPONY_API_BASE}?action=get_user&_t=${Date.now()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-    signal: deadline.signal,
-  })
-    .then((response) => {
-      void response.body?.cancel().catch(() => {});
-      if (response.status === 401) expireSession(token);
-    })
-    .catch(() => {})
-    .finally(() => {
-      deadline.dispose();
-      sessionChecks.delete(token);
-    });
-  sessionChecks.set(token, check);
-}
-
-/**
- * PicPony's browser endpoint, with one URL/authorization policy. Cache options and
- * cancellation belong to the caller; this boundary never retries a mutation. Keep the relative
- * URL so captcha cookies use our proxy.
- *
- * Three things every call gets: a transport failure arrives as an `ApiError` (`network` or
- * `timeout`; a caller's own abort stays its `AbortError`), a read is bounded by
- * `READ_DEADLINE_MS`, and a 401 on a request that carried the token ends the session once, with
- * one notice — before this only `get_user` noticed, so an expired token left a half-signed-in
- * UI whose every retry failed.
- */
-export async function picponyRequest(
-  action: string,
-  { token, query, timeoutMs, ...options }: PicponyRequestOptions = {},
-): Promise<Response> {
-  const params = new URLSearchParams({ action });
-  for (const [name, value] of Object.entries(query ?? {})) {
-    if (value !== undefined) params.set(name, String(value));
-  }
-  const headers = new Headers(options.headers);
-  if (token !== undefined) headers.set('Authorization', `Bearer ${token}`);
-  const method = (options.method ?? 'GET').toUpperCase();
-  const limit = timeoutMs ?? (method === 'GET' || method === 'HEAD' ? READ_DEADLINE_MS : false);
-  const deadline = limit === false ? null : deadlineSignal(options.signal, limit);
-
-  let response: Response;
-  try {
-    response = await fetch(`${PICPONY_API_BASE}?${params}`, {
-      ...options,
-      headers,
-      ...(deadline ? { signal: deadline.signal } : {}),
-    });
-  } catch (error) {
-    deadline?.dispose();
-    throw toApiError(error, deadline?.timedOut() ?? false);
-  }
-  if (response.status === 401 && token) onUnauthorized(action, token);
-  return response;
-}
-
-/** JSON posts opt into their content type; FormData and bodyless posts use picponyRequest. */
-export function picponyPostJson(
-  action: string,
-  body: Record<string, unknown>,
-  options: Omit<PicponyRequestOptions, 'method' | 'body'> = {},
-): Promise<Response> {
-  const headers = new Headers(options.headers);
-  headers.set('Content-Type', 'application/json');
-  return picponyRequest(action, {
-    ...options,
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Decoding
 // ---------------------------------------------------------------------------
@@ -197,65 +95,10 @@ function parseObject(text: string): Record<string, unknown> | null {
   }
 }
 
-/** The backend's own sentence: PicPony uses `error` and `message` interchangeably. */
-export function envelopeMessage(data: unknown): string | undefined {
-  if (!data || typeof data !== 'object') return undefined;
-  const { error, message } = data as { error?: unknown; message?: unknown };
-  for (const value of [error, message]) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return undefined;
-}
-
 /**
- * Decode the API's object envelope, for callers that branch on `success` themselves (every
- * mutation). Empty bodies, PHP error pages and non-object JSON become `{ success: false,
- * status, message }` with a Chinese message for the status; a transport/body-read failure
- * still rejects, so a cancelled request cannot be published as a successful read.
- */
-/* The legacy untyped endpoints retain Response.json()'s default. Typed adapters
-   supply T; this checks the envelope, not each endpoint's payload shape. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function readJson<T = any>(res: Response): Promise<T> {
-  const text = await readBody(res);
-  const data = parseObject(text);
-  if (data) return data as T;
-  return {
-    success: false,
-    status: res.status,
-    message: res.ok ? FAILURE_MESSAGES.invalid : statusMessage(res.status),
-  } as T;
-}
-
-/**
- * Decode a read that must succeed. A non-2xx status, an unreadable body and `success: false`
- * all throw `ApiError` — the typed adapters' decoder, so a failure can never be flattened into
- * an empty list by a caller that forgot to look.
- *
- * `notFoundStatuses` lets an adapter say what "does not exist" looks like for its action — a
- * forum thread answers an unknown id with 404 but a malformed one with 400.
- */
-export async function readEnvelope<T extends object>(
-  res: Response,
-  options: { notFoundStatuses?: readonly number[] } = {},
-): Promise<T & { success: true }> {
-  const data = parseObject(await readBody(res));
-  const serverMessage = envelopeMessage(data);
-  if (!res.ok) {
-    throw new ApiError('http', {
-      status: res.status,
-      serverMessage,
-      notFound: options.notFoundStatuses?.includes(res.status) || undefined,
-    });
-  }
-  if (!data) throw new ApiError('invalid', { status: res.status });
-  if (data.success !== true) throw new ApiError('envelope', { status: res.status, serverMessage });
-  return data as T & { success: true };
-}
-
-/**
- * Read a JSON object from a non-envelope API (Derpibooru), throwing `invalid` for anything
- * else. The status has already been checked by `proxyFetch`.
+ * Read a JSON object from a third-party API (Derpibooru, the image-search service), throwing
+ * `invalid` for anything else. The status has already been checked by the caller (`proxyFetch`).
+ * Not for `/api/v1`: that is `readApi`.
  */
 export async function readObject<T extends object>(res: Response): Promise<T> {
   const data = parseObject(await readBody(res));
@@ -272,8 +115,193 @@ export function listOf<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-/** A page count, normalised: at least 1, an integer, whatever the wire sent. */
-export function pageCount(value: unknown): number {
-  const n = Math.floor(Number(value));
-  return Number.isFinite(n) && n > 1 ? n : 1;
+// ===========================================================================
+// /api/v1 — the Rust backend (api.picpony.top), reached through this app's own
+// `app/api/v1/[...path]` proxy so the session's `auth_bind` cookie stays first-party.
+// ===========================================================================
+
+/** The browser-relative prefix every new-backend call goes through. */
+export const API_V1 = '/api/v1';
+
+type ApiQueryValue = string | number | boolean | undefined | null;
+
+export interface ApiOptions extends Omit<RequestInit, 'method' | 'body'> {
+  /** The session token; `undefined` sends no Authorization header. */
+  token?: string | null;
+  query?: Record<string, ApiQueryValue | readonly ApiQueryValue[]>;
+  /** A JSON body (sets the content type). */
+  json?: unknown;
+  /** Any other body (FormData, Blob). Mutually exclusive with `json`. */
+  body?: BodyInit;
+  timeoutMs?: number | false;
+  /** For writes the UI may retry (posts, replies, messages): the backend dedupes on it. */
+  idempotencyKey?: string;
+  /** Statuses that mean "does not exist" for this resource (404 always does). */
+  notFoundStatuses?: readonly number[];
 }
+
+/** The backend's error body: `{"error":{"code","message"}}`. */
+export function apiErrorBody(data: unknown): { code?: string; message?: string } {
+  const error = (data as { error?: unknown } | null)?.error;
+  if (!error || typeof error !== 'object') return {};
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return {
+    code: typeof code === 'string' ? code : undefined,
+    message: typeof message === 'string' && message.trim() ? message.trim() : undefined,
+  };
+}
+
+/** The CSRF token issued with the session (`csrf_token` on login), kept beside the token. */
+function storedCsrf(token: string): string | null {
+  const user = readUserInfo();
+  return user && user.token === token && typeof user.csrfToken === 'string' ? user.csrfToken : null;
+}
+
+/** One refresh per token in flight. */
+const csrfRefreshes = new Map<string, Promise<string | null>>();
+
+function refreshCsrf(token: string): Promise<string | null> {
+  let pending = csrfRefreshes.get(token);
+  if (!pending) {
+    pending = fetch(`${API_V1}/auth/csrf`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+      credentials: 'same-origin',
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as { csrf_token?: unknown };
+        const csrf = typeof data.csrf_token === 'string' ? data.csrf_token : null;
+        if (csrf) updateUserInfo(token, { csrfToken: csrf });
+        return csrf;
+      })
+      .catch(() => null)
+      .finally(() => csrfRefreshes.delete(token));
+    csrfRefreshes.set(token, pending);
+  }
+  return pending;
+}
+
+function apiUrl(path: string, query: ApiOptions['query']): string {
+  const params = new URLSearchParams();
+  for (const [name, value] of Object.entries(query ?? {})) {
+    const values = Array.isArray(value) ? value : [value];
+    for (const v of values) if (v !== undefined && v !== null) params.append(name, String(v));
+  }
+  const search = params.toString();
+  return `${API_V1}${path}${search ? `?${search}` : ''}`;
+}
+
+/**
+ * A 401 on a request that carried the token ends the session once, with one notice.
+ *
+ * Only `GET /me` is taken at its word. Any other 401 is confirmed against `GET /me` first: a
+ * resource may answer 401 for a wrong *password* while the session itself is fine, and signing
+ * somebody out over a typo would be the worse bug. The confirmation is a raw `fetch`, so it cannot
+ * recurse into this handler, and it is bounded like any read (review P1-F9) — one that never
+ * settled would keep this token's slot taken and every later 401 for it would be ignored.
+ */
+function onApiUnauthorized(path: string, token: string) {
+  if (typeof window === 'undefined' || !token) return;
+  if (path === '/me') {
+    expireSession(token);
+    return;
+  }
+  if (sessionChecks.has(token)) return;
+  const deadline = deadlineSignal(undefined, READ_DEADLINE_MS);
+  const check = fetch(`${API_V1}/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: deadline.signal,
+  })
+    .then((response) => {
+      void response.body?.cancel().catch(() => {});
+      if (response.status === 401) expireSession(token);
+    })
+    .catch(() => {})
+    .finally(() => {
+      deadline.dispose();
+      sessionChecks.delete(token);
+    });
+  sessionChecks.set(token, check);
+}
+
+/**
+ * One new-backend request. Writes carry `X-CSRF-Token`; a `CSRF_MISMATCH` refusal (the backend
+ * rejects it before the handler runs, so nothing happened) refreshes the token and is sent once
+ * more. Reads are bounded by `READ_DEADLINE_MS`; writes are not, and are never retried otherwise.
+ */
+export async function apiRequest(method: string, path: string, options: ApiOptions = {}): Promise<Response> {
+  const { token, query, json, body, timeoutMs, idempotencyKey, notFoundStatuses: _nf, ...init } = options;
+  void _nf;
+  const verb = method.toUpperCase();
+  const write = verb !== 'GET' && verb !== 'HEAD';
+  const url = apiUrl(path, query);
+  const send = async (csrf: string | null): Promise<Response> => {
+    const headers = new Headers(init.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (write && token && csrf) headers.set('X-CSRF-Token', csrf);
+    if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
+    if (json !== undefined) headers.set('Content-Type', 'application/json');
+    const limit = timeoutMs ?? (write ? false : READ_DEADLINE_MS);
+    const deadline = limit === false ? null : deadlineSignal(init.signal, limit);
+    try {
+      return await fetch(url, {
+        ...init,
+        method: verb,
+        headers,
+        credentials: 'same-origin',
+        body: json !== undefined ? JSON.stringify(json) : body,
+        ...(deadline ? { signal: deadline.signal } : {}),
+      });
+    } catch (error) {
+      deadline?.dispose();
+      throw toApiError(error, deadline?.timedOut() ?? false);
+    }
+  };
+  let response = await send(token ? storedCsrf(token) : null);
+  if (write && token && response.status === 403) {
+    const { code } = apiErrorBody(await response.clone().json().catch(() => null));
+    if (code === 'CSRF_MISMATCH') {
+      const fresh = await refreshCsrf(token);
+      if (fresh) response = await send(fresh);
+    }
+  }
+  if (response.status === 401 && token) onApiUnauthorized(path, token);
+  return response;
+}
+
+/**
+ * Decode a new-backend answer. 2xx → the JSON body (`undefined` for 204 / an empty body);
+ * anything else → `ApiError` carrying the backend's `error.code` and `error.message`.
+ */
+export async function readApi<T>(res: Response, options: { notFoundStatuses?: readonly number[] } = {}): Promise<T> {
+  const text = await readBody(res);
+  let data: unknown = undefined;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (res.ok) throw new ApiError('invalid', { status: res.status });
+    }
+  }
+  if (!res.ok) {
+    const { code, message } = apiErrorBody(data);
+    throw new ApiError('http', {
+      status: res.status,
+      code,
+      serverMessage: message,
+      notFound: res.status === 404 || options.notFoundStatuses?.includes(res.status) || undefined,
+    });
+  }
+  return data as T;
+}
+
+/** `apiRequest` + `readApi`. */
+export async function api<T>(method: string, path: string, options: ApiOptions = {}): Promise<T> {
+  return readApi<T>(await apiRequest(method, path, options), { notFoundStatuses: options.notFoundStatuses });
+}
+
+/** A path segment, encoded. */
+export const seg = (value: string | number) => encodeURIComponent(String(value));

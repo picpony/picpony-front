@@ -1,4 +1,3 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
 import type { TeamMember } from '@/lib/resources';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { upstreamOrigin } from '@/lib/upstream.server';
@@ -15,9 +14,8 @@ import { upstreamOrigin } from '@/lib/upstream.server';
  *
  * - **It may not slow the document down.** Bounded by a timeout, and `null` rather than a throw:
  *   no data is a state the island already handles by fetching it itself.
- * - **It goes direct to the origin.** `PICPONY_API_BASE` is relative so the *browser* routes
- *   through the API route handler, which rewrites the backend's `Secure` session cookie; Node's
- *   `fetch` rejects a relative URL, and there is no cookie to rewrite on an anonymous read.
+ * - **It goes direct to the origin.** `GET {upstream}/api/v1/team-members` (`team::list`), public;
+ *   the browser's `/api/v1` proxy exists for the session cookie, which an anonymous read lacks.
  *
  * It also does **not** go through `proxyFetch`: that awaits the client-side `ensureRoutePolicy()`
  * and then runs a retry ladder across line switches — a document that can hang for a minute on a
@@ -41,6 +39,8 @@ const TIMEOUT_MS = 2500;
 const REVALIDATE_S = 30 * 60;
 
 const UPSTREAM_ORIGIN = upstreamOrigin();
+/** A roster is a few dozen people; this only bounds a runaway page count. */
+const MAX_PAGES = 10;
 
 export interface TeamSeed {
   key: string;
@@ -62,22 +62,25 @@ export const readTeamMembers = createServerMemo({
   keyOf: () => 'all',
   load: async (): Promise<TeamSeed | null> => {
     try {
-      /* No `&_t=${Date.now()}` cache-buster, unlike the client's `getTeamMembers`: that parameter
-         defeats the *browser's* HTTP cache; here it would defeat Next's Data Cache, which is the
-         entire point of this function. */
-      const res = await fetch(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_team_members`, {
-        next: { revalidate: cacheSeconds(REVALIDATE_S) },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      if (!res.ok) return null;
-      const data = (await res.json()) as { success?: boolean; members?: TeamMember[] };
-      if (!data?.success || !Array.isArray(data.members)) return null;
+      /* No cache-buster: here it would defeat Next's Data Cache, which is the entire point of
+         this function. The roster is paged (at most 100 a page); the pages are read in order. */
+      const members: TeamMember[] = [];
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/team-members?page=${page}&limit=100`, {
+          next: { revalidate: cacheSeconds(REVALIDATE_S) },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { members: TeamMember[]; total_pages: number };
+        members.push(...data.members);
+        if (page >= data.total_pages) break;
+      }
       /* `'all'` is `teamMembers.keyOf({})`, spelled rather than imported: importing
          `lib/resources` would pull the whole client catalogue — and every `lib/api` module it
          reaches — into the server bundle for one constant string. If the key changes, this stops
          matching and the page falls back to a client fetch: a silent loss of the optimisation,
          not a wrong answer. */
-      return { key: 'all', data: data.members, generatedAt: Date.now() };
+      return { key: 'all', data: members, generatedAt: Date.now() };
     } catch {
       /* A timeout, an offline upstream, an HTML error page — all mean "no seed", which the island
          already handles by reading it itself. Swallowed rather than logged: it would log on every

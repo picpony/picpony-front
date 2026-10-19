@@ -27,7 +27,7 @@ let respond;
 let calls;
 beforeEach(() => {
   calls = [];
-  respond = () => Response.json({ success: true });
+  respond = () => Response.json({});
   globalThis.fetch = async (url, init = {}) => {
     const request = { url: new URL(String(url), 'https://app.invalid'), init };
     calls.push(request);
@@ -95,6 +95,18 @@ test('a contact row’s preview is one line: cards by their summary, emoji by th
   assert.equal(text.messagePreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fa.png]'), '[图片]');
   assert.equal(text.messagePreview(`看$emoji_${PONY_EMOJI[0].name}$\n第二行`), `看[${PONY_EMOJI[0].label}] 第二行`);
   assert.equal(text.messagePreview('[p]旧消息[/p]'), '旧消息');
+});
+
+test('a cut contact preview (/me/contacts sends 120 characters) never shows half a card, marker or entity', () => {
+  assert.equal(text.contactPreview('你好 &amp; 再见'), '你好 & 再见', 'an uncut preview is the usual line, entities decoded');
+  assert.equal(text.contactPreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026', true), '[图片]');
+  assert.equal(text.contactPreview('[fave_folder_share:alice:3:%E6%94%B6', true), '[收藏夹]');
+  assert.equal(text.contactPreview('[privacy_space_share:7:ali', true), '[隐私空间]');
+  assert.equal(text.contactPreview('猫 &am', true), '猫…');
+  assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name.slice(0, 2)}`, true), '看…');
+  assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name}$然后`, true), `看[${PONY_EMOJI[0].label}]然后…`);
+  assert.equal(text.contactPreview('[p]看图[img]https://derpicdn.net/img/2026/1/1', true), '看图[图片]…');
+  assert.equal(text.contactPreview('说到 [url=https://exa', true), '说到…');
 });
 
 test('notification link markers become links, the tag-subscription marker its subscription', () => {
@@ -271,42 +283,78 @@ test('a contact row prints the clock today and a day label otherwise', () => {
   assert.equal(model.contactTime('2026-09-24 12:00:00', null), '2026/09/24');
 });
 
-test('inbox reads are strict: a success without its list is a failure, rows are normalised', async () => {
-  respond = () => Response.json({ success: true });
-  await assert.rejects(messaging.readConversation('t', 2, 1), (error) => error instanceof ApiError && error.kind === 'invalid');
-  await assert.rejects(messaging.readNotifications('t', 'system', 1), (error) => error instanceof ApiError && error.kind === 'invalid');
+test('inbox reads speak /api/v1: keyset pages read by number, rows mapped field for field', async () => {
+  const message = (id, sender, read) => ({
+    id, sender_id: sender, receiver_id: sender === 2 ? 1 : 2, content: `m${id}`, read_at: read ? '2026-10-01T00:00:00Z' : null,
+    created_at: '2026-10-01T00:00:00Z', sender: { id: sender, username: `u${sender}`, avatar: null },
+  });
+  respond = ({ url, init }) => {
+    if (init.method === 'POST') return Response.json({ marked: 1 });
+    return url.searchParams.get('before') === '7'
+      ? Response.json({ messages: [message(5, 2, true), message(6, 1, false)], next_cursor: null })
+      : Response.json({ messages: [message(7, 2, false), message(8, 1, false)], next_cursor: 7 });
+  };
+  const first = await messaging.readConversation('t', 2, 1);
+  assert.deepEqual(first.messages.map((m) => m.id), [7, 8], 'the backend’s order, oldest first');
+  assert.equal(first.hasMore, true);
+  assert.equal(first.messages[0].sender_name, 'u2');
+  assert.equal(first.messages[0].is_read, 0);
+  const read = calls.find((call) => call.init.method === 'GET');
+  assert.equal(read.url.pathname, '/api/v1/me/conversations/2/messages');
+  assert.equal(read.init.cache, 'no-store', 'a poll must never be answered from a cache');
+  const receipt = calls.find((call) => call.init.method === 'POST');
+  assert.equal(receipt.url.pathname, '/api/v1/me/conversations/2/read-receipts');
+  assert.deepEqual(JSON.parse(receipt.init.body), { up_to: 7 }, 'page 1 marks their newest unread message read');
+
+  calls.length = 0;
+  const second = await messaging.readConversation('t', 2, 2);
+  assert.equal(calls[0].url.searchParams.get('before'), '7', 'page 2 starts where page 1 ended');
+  assert.deepEqual(second.messages.map((m) => m.id), [5, 6]);
+  assert.equal(second.hasMore, false);
+  assert.equal(calls.some((call) => call.init.method === 'POST'), false, 'only page 1 sends a receipt');
+
+  respond = () => Response.json({ users: [{ id: 7, username: '七', avatar: null, experience: 3 }], next_cursor: null });
+  assert.deepEqual(await messaging.searchUsers('t', '七'), [{ id: 7, username: '七', avatar: null }]);
+  assert.equal(calls.at(-1).url.pathname, '/api/v1/users');
+  assert.equal(calls.at(-1).url.searchParams.get('keyword'), '七');
 
   respond = () => Response.json({
-    success: true, has_more: '1', page: 2,
-    messages: [{ id: 5, sender_id: '2', content: 'b', is_read: '1' }, null, { id: 3, sender_id: 1, content: 'a' }, { id: 'x' }],
+    notifications: [
+      { id: 3, kind: 'announcement', title: 'a', content: 'c', important: true, broadcast: true, created_at: 'x', read: false },
+      { id: 1, kind: 'system', title: 't', content: 'c', important: false, broadcast: true, created_at: 'x', read: true },
+    ],
+    next_cursor: null,
   });
-  const page = await messaging.readConversation('t', 2, 2);
-  assert.deepEqual(page.messages.map((m) => m.id), [3, 5], 'oldest first, broken rows dropped');
-  assert.equal(page.messages[1].is_read, 1);
-  assert.equal(page.hasMore, true);
-  assert.equal(page.page, 2);
-  const url = calls.at(-1).url;
-  assert.equal(url.searchParams.get('action'), 'get_messages');
-  assert.equal(url.searchParams.get('with_user_id'), '2');
-  assert.equal(calls.at(-1).init.cache, 'no-store', 'a poll must never be answered from a cache');
-
-  respond = () => Response.json({ success: true, results: [{ id: 7, username: '七' }, { id: 7, username: '重复' }, { username: '无 id' }] });
-  assert.deepEqual(await messaging.searchUsers('t', '七'), [{ id: 7, username: '七', avatar: null }]);
-  assert.equal(calls.at(-1).url.searchParams.get('kw'), '七');
-
-  respond = () => Response.json({ success: true, notifications: [{ id: 1, title: 't', content: 'c', is_read: 0, created_at: 'x' }], total_pages: '0' });
   const guest = await messaging.readNotifications(null, 'system', 1);
+  assert.deepEqual(guest.notifications.map((n) => n.id), [3, 1], 'the backend leaves the interactions out; every row it sends is shown');
+  assert.equal(guest.notifications[1].is_read, 1);
   assert.equal(guest.totalPages, 1);
+  assert.equal(calls.at(-1).url.searchParams.has('kind'), false);
+  assert.equal(calls.at(-1).url.searchParams.get('exclude_kind'), 'interaction', '系统 is asked for as `exclude_kind=interaction`');
   assert.equal(new Headers(calls.at(-1).init.headers).has('Authorization'), false, 'the public list is read without a token');
+  await messaging.readNotifications('t', 'interaction', 1);
+  assert.equal(calls.at(-1).url.searchParams.get('kind'), 'interaction');
+  assert.equal(calls.at(-1).url.searchParams.has('exclude_kind'), false);
+
+  respond = () => Response.json({ contacts: [{
+    id: 90, user_id: 3, username: '三', avatar: null, experience: 0, last_message_at: 'y', unread_count: 2,
+    last_message: { id: 90, sender_id: 3, preview: '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png', truncated: true, created_at: 'y' },
+  }], next_cursor: null });
+  assert.deepEqual(await messaging.readRecentContacts('t'), [{
+    id: 3, username: '三', avatar: null, last_msg_time: 'y', unread_count: 2,
+    last_message: '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png', last_message_truncated: true,
+  }]);
 });
 
-test('sending is one JSON write whose refusal is its own sentence', async () => {
-  await messaging.sendMessage('t', 2, '你好');
+test('sending is one JSON write with an Idempotency-Key, whose refusal is its own sentence', async () => {
+  respond = () => Response.json({ id: 1, content: '你好', notification_queued: false }, { status: 201 });
+  await messaging.sendMessage('t', 2, '你好', 'key-1');
   const { url, init } = calls.at(-1);
-  assert.equal(url.searchParams.get('action'), 'send_message');
+  assert.equal(url.pathname, '/api/v1/me/conversations/2/messages');
   assert.equal(init.method, 'POST');
-  assert.deepEqual(JSON.parse(init.body), { receiver_id: 2, content: '你好' });
-  respond = () => Response.json({ success: false, error: '对方已将你屏蔽' });
+  assert.deepEqual(JSON.parse(init.body), { content: '你好' });
+  assert.equal(new Headers(init.headers).get('Idempotency-Key'), 'key-1');
+  respond = () => Response.json({ error: { code: 'BLOCKED', message: '对方已将你屏蔽' } }, { status: 403 });
   await assert.rejects(messaging.sendMessage('t', 2, '你好'), (error) => error instanceof ApiError && error.message === '对方已将你屏蔽');
 });
 

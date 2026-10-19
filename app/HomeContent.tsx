@@ -809,7 +809,7 @@ function HomeContent({
             of an expensive pane is allowed; gating it on `active` is not. */}
         {(forumMounted || tab === 'forum') && (
           <TabPane value="forum">
-            <ForumPane seed={forumSeed} />
+            <ForumPane seed={forumSeed} active={tab === 'forum'} />
           </TabPane>
         )}
       </TabPanes>

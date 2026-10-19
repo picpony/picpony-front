@@ -78,6 +78,7 @@ export const ADMIN_TABS = [
   entry('routes', 'admin', () => import('./siteTools/RoutesTab')),
   entry('statistics', 'admin', () => import('./siteTools/StatisticsTab')),
   entry('semantic', 'admin', () => import('./siteTools/SemanticTab')),
+  entry('text-translation', 'admin', () => import('./siteTools/TextTranslationTab')),
   entry('relay', 'admin', () => import('./siteTools/RelayTab')),
   entry('rate-management', 'admin', () => import('./siteTools/RateLimitsTab')),
   entry('ai-assistant', 'admin', () => import('./siteTools/AssistantTab')),

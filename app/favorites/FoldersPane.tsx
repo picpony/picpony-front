@@ -107,7 +107,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     if (chosen.length === 0 || busy) return;
     const ok = await confirm({
       title: '确认删除收藏夹',
-      message: `确定要删除选中的 ${chosen.length} 个收藏夹及其中的收藏记录吗？此操作不可撤销。`,
+      message: `确定要删除选中的 ${chosen.length} 个收藏夹吗？其中的图片会移入主收藏夹。`,
     });
     if (!ok || readToken() !== token) return;
     setBusy(true);

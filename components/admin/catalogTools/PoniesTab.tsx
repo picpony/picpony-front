@@ -25,10 +25,13 @@ import MutationResult from './MutationResult';
 
 const query = defineAdminQuery('catalog-ponies', api.getPonies);
 const committed = (token: string) => { query.expire(token); ponyCatalog.expire(); myPonies.expire({ token }); ponyConfigs.expire(); };
-const speechQuery = defineResource<{ token: string; name: string; path: string }, Speech[]>({ name: 'admin-pony-speeches', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 8, fetch: (p, signal) => { if (readToken() !== p.token) throw new Error('登录状态已失效'); return api.getPonySpeeches(p.token, p.name, p.path, signal); } });
+const speechQuery = defineResource<{ token: string; name: string; path: string }, Speech[]>({ name: 'admin-pony-speeches', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 8, fetch: (p, signal) => { if (readToken() !== p.token) throw new Error('登录状态已失效'); return api.getPonySpeeches(p.token, p.path, signal); } });
 export default function PoniesTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(query, token);
   const [draft, setDraft] = useState<{ enabled: boolean; ponies: Pony[] } | null>(null);
+  /* Every roster, name and speech write names the revision of the last read (`expected_revision`):
+     a draft is edited on top of whatever read is current, and a stale one answers 409. */
+  const revision = read.data?.revision ?? 0;
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<Pony | null>(null);
   /* The editor stays mounted once opened so closing plays `Modal`'s own exit instead of
@@ -56,16 +59,15 @@ export default function PoniesTab({ token }: AdminPanelProps) {
   return <div className="space-y-6">
     <SectionHeader section="ponies" onRefresh={() => { if (!draft) read.refresh(); else confirmThen('确认重新读取', '确定要放弃尚未保存的展示设置并重新读取吗？', () => { setDraft(null); read.refresh(); }); }} isLoading={read.refreshing} />
     <AdminNote>扫描资源库后选择可展示的角色，再保存全站设置。名称和台词分别保存。</AdminNote>
-    {config && <AdminForm aria-label="桌面小马设置" onSubmit={() => confirmThen('确认保存展示设置', `确定要${config.enabled ? '开启' : '关闭'}桌面小马并保存 ${config.ponies.length} 个角色的设置吗？其中 ${config.ponies.filter((row) => row.enabled).length} 个角色已勾选。`, () => void mutation.run(() => api.savePonies(token, config.enabled, config.ponies), () => { setDraft(null); showToast('已保存桌面小马设置', 'success'); }, () => { query.write(token, { ...config, skipped: read.data?.skipped ?? 0 }); committed(token); }), { tone: 'filled' })}>
+    {config && <AdminForm aria-label="桌面小马设置" onSubmit={() => confirmThen('确认保存展示设置', `确定要${config.enabled ? '开启' : '关闭'}桌面小马并保存 ${config.ponies.length} 个角色的设置吗？其中 ${config.ponies.filter((row) => row.enabled).length} 个角色已勾选。`, () => void mutation.run(() => api.savePonies(token, revision, config.enabled, config.ponies), () => { setDraft(null); showToast('已保存桌面小马设置', 'success'); }, () => { query.write(token, { enabled: config.enabled, ponies: config.ponies, revision }); committed(token); }), { tone: 'filled' })}>
       <ToggleSwitch layout="row" checked={config.enabled} label="全局展示桌面小马" disabled={busy} onChange={(enabled) => setDraft({ ...config, enabled })} />
       <FormActions><Button type="button" variant="text" loading={discovery.busy} disabled={mutation.busy || discovery.uncertain} onClick={scan}>扫描资源库</Button><Button type="submit" loading={mutation.busy} disabled={discovery.busy || mutation.uncertain}>保存展示设置</Button></FormActions>
     </AdminForm>}
     <MutationResult mutation={mutation} /><MutationResult mutation={discovery} />
     <SearchInput value={filter} onChange={setFilter} placeholder="筛选角色…" />
-    {!!read.data?.skipped && <AdminNote tone="warning">有 {read.data.skipped} 个角色记录无法读取，已跳过。其余角色可以正常管理。</AdminNote>}
     {config && <div className="flex flex-wrap gap-2">{[true, false].map((enabled) => <Button key={String(enabled)} variant="text" size="xs" disabled={busy} onClick={() => confirmThen('确认批量选择', `确定要将全部 ${config.ponies.length} 个角色${enabled ? '勾选' : '取消勾选'}吗？保存后生效。`, () => setDraft({ ...config, ponies: config.ponies.map((row) => ({ ...row, enabled })) }), { tone: 'filled' })}>{enabled ? '全选角色' : '取消全选'}</Button>)}</div>}
     <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.path} loading={read.loading} {...tableError('角色加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无角色，可扫描资源库" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
-    {shownRow && <PonyEditor key={shownRow.path} isOpen={selected !== null} token={token} pony={shownRow} onClose={() => setSelected(null)} onRenamed={(name) => {
+    {shownRow && <PonyEditor key={shownRow.path} isOpen={selected !== null} token={token} revision={revision} pony={shownRow} onClose={() => setSelected(null)} onRenamed={(name) => {
       /* A rename is saved on its own. It corrects an unsaved draft when there is one; without one it
          corrects the read itself — minting a draft from it made the panel claim unsaved settings
          (刷新 asked to discard them) and pinned every row to this snapshot, hiding the re-read
@@ -78,7 +80,7 @@ export default function PoniesTab({ token }: AdminPanelProps) {
     {confirmDialog}
   </div>;
 }
-function PonyEditor({ isOpen, token, pony, onClose, onRenamed }: { isOpen: boolean; token: string; pony: Pony; onClose: () => void; onRenamed: (name: string) => void }) {
+function PonyEditor({ isOpen, token, revision, pony, onClose, onRenamed }: { isOpen: boolean; token: string; revision: number; pony: Pony; onClose: () => void; onRenamed: (name: string) => void }) {
   const [name, setName] = useState(pony.name);
   const [editing, setEditing] = useState<Speech | null>(null);
   const read = useResource(speechQuery, token ? { token, name: pony.name, path: pony.path } : SKIP);
@@ -93,9 +95,9 @@ function PonyEditor({ isOpen, token, pony, onClose, onRenamed }: { isOpen: boole
   ];
   return <Modal isOpen={isOpen} title={`角色 · ${pony.name}`} onClose={() => { if (!busy) onClose(); }} closeOnEscape={!busy} footer={<Button variant="text" disabled={busy} onClick={onClose}>完成</Button>}>
     <div className="space-y-6">
-      <AdminForm aria-label="修改角色名称" onSubmit={() => void rename.run(() => api.savePonyName(token, pony.path, pony.name, name), (data) => { const saved = typeof data.new_name === 'string' && data.new_name.trim() ? data.new_name : name.trim(); onRenamed(saved); setName(saved); showToast('已保存角色名称', 'success'); }, () => committed(token))}><Input label="角色名称" value={name} maxLength={200} readOnly={busy} onChange={(event) => setName(event.target.value)} /><FormActions><Button type="submit" variant="tonal" loading={rename.busy} disabled={save.busy || rename.uncertain}>保存名称</Button></FormActions><MutationResult mutation={rename} /></AdminForm>
+      <AdminForm aria-label="修改角色名称" onSubmit={() => void rename.run(() => api.savePonyName(token, revision, pony.path, pony.name, name), (data) => { const saved = data.new_name; onRenamed(saved); setName(saved); showToast('已保存角色名称', 'success'); }, () => committed(token))}><Input label="角色名称" value={name} maxLength={200} readOnly={busy} onChange={(event) => setName(event.target.value)} /><FormActions><Button type="submit" variant="tonal" loading={rename.busy} disabled={save.busy || rename.uncertain}>保存名称</Button></FormActions><MutationResult mutation={rename} /></AdminForm>
       <DataTable columns={columns} rows={read.data ?? []} rowKey={(row) => row.name} loading={read.data === undefined && !read.error} {...tableError('台词加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty="暂无台词" />
-      {editing && <AdminForm aria-label={`编辑台词 ${editing.name}`} onSubmit={() => void save.run(() => api.savePonySpeech(token, pony.path, editing.name, editing.text), () => { setEditing(null); showToast('已保存台词', 'success'); }, () => { speechQuery.expire({ token, name: pony.name, path: pony.path }); ponyConfigs.expire(); })}><Textarea label={`台词内容 · ${editing.name}`} rows={4} maxLength={10000} value={editing.text} readOnly={busy} onChange={(event) => setEditing({ ...editing, text: event.target.value })} /><FormActions><Button type="button" variant="text" disabled={busy} onClick={() => setEditing(null)}>取消编辑</Button><Button type="submit" loading={save.busy} disabled={rename.busy || save.uncertain}>保存台词</Button></FormActions></AdminForm>}
+      {editing && <AdminForm aria-label={`编辑台词 ${editing.name}`} onSubmit={() => void save.run(() => api.savePonySpeech(token, revision, pony.path, editing.name, editing.text), () => { setEditing(null); showToast('已保存台词', 'success'); }, () => { speechQuery.expire({ token, name: pony.name, path: pony.path }); ponyConfigs.expire(); query.expire(token); })}><Textarea label={`台词内容 · ${editing.name}`} rows={4} maxLength={2000} value={editing.text} readOnly={busy} onChange={(event) => setEditing({ ...editing, text: event.target.value })} /><FormActions><Button type="button" variant="text" disabled={busy} onClick={() => setEditing(null)}>取消编辑</Button><Button type="submit" loading={save.busy} disabled={rename.busy || save.uncertain}>保存台词</Button></FormActions></AdminForm>}
       <MutationResult mutation={save} />
     </div>
   </Modal>;

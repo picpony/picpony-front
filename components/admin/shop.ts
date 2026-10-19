@@ -1,27 +1,18 @@
 /**
- * The shop form's rules as plain functions, held to the original console's contract
- * (`oldfe/admin.html`, `saveShopItem`):
+ * The shop form's rules as plain functions, held to the backend's contract
+ * (`POST /admin/shop/items`, `PUT /admin/shop/items/{id}` with the row's `expected_revision`):
  *
- *   admin_save_shop_item { id (0 for a new item), name, description, image_url, price, stock, active }
+ *   { name, description, image_url (null for none), price, stock, active }
  *
  * Price and stock are whole numbers of at least 0, refused on their own fields — an empty or
  * malformed field used to become 0 silently (`parseInt || 0`), so a typo put an item on sale for
- * nothing. A figure the row did not carry opens empty rather than as 0 (G4-015), so a save cannot
- * write a price nobody typed.
+ * nothing.
  */
 
-import { figureField } from './figures';
 import { assetUrl } from '@/lib/adminCatalogTools/model';
+import type { AdminShopItem, ShopItemBody } from '@/lib/api/admin';
 
-export interface ShopItemRow {
-  id: number;
-  name: string;
-  description?: string | null;
-  image_url?: string | null;
-  price?: number | string | null;
-  stock?: number | string | null;
-  active?: number | string | boolean | null;
-}
+export type ShopItemRow = AdminShopItem;
 
 export interface ShopFormValues {
   name: string;
@@ -34,19 +25,15 @@ export interface ShopFormValues {
 
 export type ShopFormErrors = Partial<Record<'name' | 'imageUrl' | 'price' | 'stock', string>>;
 
-export function isActive(value: unknown): boolean {
-  return value === true || Number(value) === 1;
-}
-
 export function shopForm(item?: ShopItemRow | null): ShopFormValues {
   if (!item) return { name: '', description: '', imageUrl: '', price: '10', stock: '100', active: true };
   return {
     name: item.name ?? '',
     description: item.description ?? '',
     imageUrl: item.image_url ?? '',
-    price: figureField(item.price),
-    stock: figureField(item.stock),
-    active: isActive(item.active),
+    price: String(item.price),
+    stock: String(item.stock),
+    active: item.active,
   };
 }
 
@@ -59,8 +46,7 @@ function count(text: string): number | null {
 
 export function shopPayload(
   values: ShopFormValues,
-  item?: ShopItemRow | null,
-): { payload: Record<string, unknown>; errors?: undefined } | { payload?: undefined; errors: ShopFormErrors } {
+): { payload: ShopItemBody; errors?: undefined } | { payload?: undefined; errors: ShopFormErrors } {
   const errors: ShopFormErrors = {};
   const name = values.name.trim();
   if (!name) errors.name = '请填写商品名称';
@@ -78,13 +64,12 @@ export function shopPayload(
   if (Object.keys(errors).length > 0) return { errors };
   return {
     payload: {
-      id: item?.id ?? 0,
       name,
       description: values.description.trim(),
-      image_url: imageUrl,
-      price,
-      stock,
-      active: values.active ? 1 : 0,
+      image_url: imageUrl || null,
+      price: price as number,
+      stock: stock as number,
+      active: values.active,
     },
   };
 }

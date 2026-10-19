@@ -51,27 +51,31 @@ export function saveAccountFields(token: string, fields: Record<string, unknown>
 
 export const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-/**
- * **A signed-in account's bound address is verified.** The original front end showed it that way:
- * its settings badge read 已验证 whenever the session had an address, and it read no flag at all.
- * The backend agrees:
- * - registration verifies the address before it issues a token;
- * - an account older than verification is verified as far as it is concerned, and
- *   `resend_verify_code` answers it 已验证.
- *
- * The `email_verified` column proves nothing either way. It is 0 on 40 of 44 older accounts
- * (C3's probe of public profiles), which showed as 未验证 and offered a code that the backend
- * then refused.
- *
- * The one unverified state is one this app saw begin: a change whose answer said a code was sent.
- * It is held as `EMAIL_PENDING`, the address the code went to, until the code is accepted.
- */
-export const EMAIL_PENDING = 'email_pending';
-
-export function emailVerified(record: StoredUserInfo): boolean {
-  const email = text(record.email);
-  return email !== '' && record[EMAIL_PENDING] !== email;
+/** The account's profile version (`profile_revision` from `GET /me`), which a profile or name change names. */
+export function profileRevision(record: StoredUserInfo | null): number {
+  return typeof record?.profile_revision === 'number' ? record.profile_revision : 0;
 }
 
-/** The backend's answer that there is nothing to verify: taken as the verification it reports. */
-export const saysAlreadyVerified = (message: string): boolean => /已验证|已经验证|无需(?:再次|重复)?验证/.test(message);
+/**
+ * **A signed-in account's bound address is verified.** The backend signs nobody in whose address is
+ * not (`auth::authenticate` requires `email_verified`), and an address change replaces the bound one
+ * only once its code is confirmed — until then the old address stays bound and verified.
+ *
+ * The one pending state is a change this app began: `POST /me/email-changes` answered with a
+ * `verification`, and the code went to the new address. It is held as `EMAIL_PENDING` (the new
+ * address) and `EMAIL_PENDING_VERIFICATION` (the request's id) until the code is accepted, and only
+ * the session that asked can confirm it.
+ */
+export const EMAIL_PENDING = 'email_pending';
+export const EMAIL_PENDING_VERIFICATION = 'email_pending_verification';
+
+export function emailVerified(record: StoredUserInfo): boolean {
+  return text(record.email) !== '';
+}
+
+/** The address change awaiting its code, if this session began one. */
+export function pendingEmailChange(record: StoredUserInfo): { email: string; verification: string } | null {
+  const email = text(record[EMAIL_PENDING]);
+  const verification = text(record[EMAIL_PENDING_VERIFICATION]);
+  return email && verification ? { email, verification } : null;
+}

@@ -39,9 +39,9 @@ const upstreamPort = await freePort();
 const profileDir = mkdtempSync(path.join(tmpdir(), 'picpony-shot-'));
 
 const upstream = createHttpServer((req, res) => {
-  const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`);
+  const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`, req.method);
   if (!stub) return res.writeHead(404).end();
-  res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(upstreamPort, '127.0.0.1', r));
@@ -134,11 +134,11 @@ socket.addEventListener('message', async (e) => {
   const m = JSON.parse(e.data);
   if (m.method !== 'Fetch.requestPaused') return;
   const { requestId, request } = m.params;
-  const stub = stubFor(request.url);
+  const stub = stubFor(request.url, request.method);
   if (!stub) return void send('Fetch.continueRequest', { requestId });
   await send('Fetch.fulfillRequest', {
     requestId,
-    responseCode: 200,
+    responseCode: stub.status ?? 200,
     responseHeaders: [
       { name: 'content-type', value: stub.contentType },
       { name: 'cache-control', value: 'no-store' },

@@ -28,9 +28,9 @@ def check(browser, scenario, touch=False):
         url = route.request.url
         if not url.startswith(BASE + '/'):
             route.fulfill(status=204, body='')
-        elif 'action=get_announcement' in url:
+        elif urlparse(url).path == '/api/v1/announcements/latest':
             route.fulfill(status=200, content_type='application/json',
-                          body=json.dumps({'success': True, 'announcement': None}))
+                          body=json.dumps({'announcement': None}))
         elif urlparse(url).path in AUTH_PATHS:
             loaded.append(url)
             if released:

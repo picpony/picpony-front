@@ -45,7 +45,7 @@ function BlockGroupRow({
   /** The list's presence handle (`PresenceList`), on the row's own root. */
   'data-presence-key'?: string;
 }) {
-  const active = group.is_active === 1;
+  const active = group.active;
   const name = group.name || '未命名屏蔽组';
   const empty = group.hidden_tags.length === 0 && group.spoilered_tags.length === 0;
   return (

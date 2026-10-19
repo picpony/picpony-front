@@ -1,122 +1,225 @@
 import { readToken } from '@/lib/hooks';
+import { randomId } from '@/lib/utils';
 import { ApiError } from './errors';
-import { envelopeMessage, picponyPostJson, picponyRequest, readObject } from './http';
+import { api, seg, type ApiOptions } from './http';
+import { parseSemanticQuery } from './semantic';
 import {
-  obj, parseState, parseTurn, positiveId, str,
-  type AssistantQuota, type AssistantReceipt, type AssistantTurn, type JsonObject, type PermissionMode,
+  parseState, uuid,
+  type AssistantClientCall, type AssistantPending, type AssistantQuota, type AssistantReceipt, type AssistantTaskPoll, type JsonObject, type PermissionMode,
 } from '@/lib/assistant/protocol';
 import { READ_ENDPOINTS } from '@/lib/assistant/actions';
+
+export type { AssistantClientCall };
+
+/*
+ * 彩彩 on the Rust backend. Two families of resources, both under `/api/v1/me/assistant`:
+ *
+ * - the legacy bridge (`pg::assistant_legacy`): `chat`, `state`, `run-task`, `api-claims`,
+ *   `receipts` — task-style envelopes that still carry `success`, which is the backend's real
+ *   answer on these routes (`chat` answers HTTP 200 `{success:false,error:'assistant_not_ready'}`);
+ * - native resources: runtime, quota, preferences, permissions, conversations, and the per-action
+ *   confirmation (`action-requests/{id}/confirmations`).
+ *
+ * A turn runs on the server. `chat` only queues it (`status:'queued'`, empty reply); the client
+ * polls `state` with the task id until it is terminal or waiting for a confirmation.
+ */
 
 export function assertAssistantAccount(token: string) {
   if (!token || readToken() !== token) throw new ApiError('envelope', { serverMessage: '账号已切换，请重新打开彩彩 AI' });
 }
-export async function assistantRead(action: 'assistant_config' | 'assistant_state' | 'assistant_quota' | 'assistant_permission', token: string, query?: Record<string, string>, signal?: AbortSignal): Promise<JsonObject> {
+
+/** One request on behalf of `token`, refused before and after if another account took the screen. */
+async function call<T>(method: string, path: string, token: string, options: Omit<ApiOptions, 'token'> = {}): Promise<T> {
   assertAssistantAccount(token);
-  const response = await picponyRequest(action, { token, query, signal });
-  const data = await readObject<JsonObject>(response);
+  const data = await api<T>(method, path, { ...options, token });
   assertAssistantAccount(token);
-  if (!response.ok) throw new ApiError('http', { status: response.status, serverMessage: envelopeMessage(data) });
-  if (data.success !== true) throw new ApiError('envelope', { serverMessage: envelopeMessage(data) });
   return data;
 }
-type AssistantWrite = 'assistant_chat' | 'assistant_confirm' | 'assistant_action_result' | 'assistant_api_claim' | 'assistant_api_receipt' | 'assistant_delete_message' | 'assistant_clear_history' | 'assistant_permission' | 'assistant_quota_enabled' | 'assistant_quota_exchange';
-export async function assistantWrite(action: AssistantWrite, token: string, body: JsonObject): Promise<JsonObject> {
-  assertAssistantAccount(token);
-  const response = await picponyPostJson(action, body, { token });
-  const data = await readObject<JsonObject>(response);
-  assertAssistantAccount(token);
-  if (!response.ok || data.success !== true) {
-    if (response.status === 400 && data.success === false) throw new AssistantRefusal(envelopeMessage(data));
-    if (data.success === false) throw new ApiError('envelope', { serverMessage: envelopeMessage(data) });
-    throw new ApiError(response.ok ? 'invalid' : 'http', { status: response.status });
-  }
-  return data;
-}
+
+/**
+ * A definitive refusal: the backend answered and nothing happened (a 4xx other than an expired
+ * session or a rate limit), or `chat` reported the model not ready. Callers drop their retry
+ * journal on it; anything else may have reached the backend.
+ */
 export class AssistantRefusal extends ApiError {
-  constructor(message?: string) { super('envelope', { serverMessage: message }); }
+  constructor(message?: string, init: { status?: number; code?: string } = {}) { super('envelope', { serverMessage: message, ...init }); }
 }
-export function parseQuota(value: unknown): AssistantQuota {
-  const raw = obj(value);
-  if (typeof raw.enabled !== 'boolean' || typeof raw.user_enabled !== 'boolean') throw new ApiError('invalid');
-  const number = (key: string) => {
-    const value = raw[key];
-    if (value === null || value === '' || typeof value !== 'number' && typeof value !== 'string') throw new ApiError('invalid');
-    const n = Number(value);
-    if (!Number.isSafeInteger(n) || n < 0 || key === 'points_per_coin' && (n < 1 || n > 10000)) throw new ApiError('invalid');
-    return n;
+function refusal(error: unknown): never {
+  if (error instanceof ApiError && error.kind === 'http' && error.status && error.status >= 400 && error.status < 500 && ![401, 408, 429].includes(error.status)) {
+    throw new AssistantRefusal(error.serverMessage, { status: error.status, code: error.code });
+  }
+  throw error;
+}
+
+/** `assistant_quota::snapshot` — every count is a bigint the backend computes; `revision`s guard writes. */
+interface QuotaWire {
+  enabled: boolean; user_enabled: boolean; revision: number; config_revision: number;
+  daily_points: number; points_per_coin: number; daily_remaining: number; purchased_remaining: number;
+  remaining: number; reserved: number; coins: number;
+}
+export function parseQuota(raw: QuotaWire): AssistantQuota {
+  return {
+    enabled: raw.enabled, user_enabled: raw.user_enabled, revision: raw.revision, config_revision: raw.config_revision,
+    remaining: raw.remaining, daily_remaining: raw.daily_remaining, purchased_remaining: raw.purchased_remaining,
+    reserved: raw.reserved, daily_points: raw.daily_points, points_per_coin: raw.points_per_coin, coins: raw.coins,
   };
-  return { enabled: raw.enabled, user_enabled: raw.user_enabled,
-    remaining: number('remaining'), daily_remaining: number('daily_remaining'), purchased_remaining: number('purchased_remaining'),
-    reserved: number('reserved'), daily_points: number('daily_points'), points_per_coin: number('points_per_coin'), coins: number('coins') };
 }
+
+/** `GET /me/assistant/runtime` — whether a model is configured, and the site switch in `quota.enabled`. */
 export async function getAssistantConfig(token: string, signal?: AbortSignal) {
-  const raw = await assistantRead('assistant_config', token, undefined, signal);
-  if (typeof raw.enabled !== 'boolean') throw new ApiError('invalid');
-  return { enabled: raw.enabled, message: str(raw.error, 300) };
+  const raw = await call<{ model_configured: boolean; quota: QuotaWire }>('GET', '/me/assistant/runtime', token, { signal });
+  const enabled = raw.model_configured && raw.quota.enabled;
+  return { enabled, message: !raw.quota.enabled ? '彩彩 AI 已暂停' : raw.model_configured ? '' : '彩彩 AI 暂未开放' };
 }
-export async function getAssistantState(token: string, sessionKey: string, signal?: AbortSignal) {
-  return parseState(await assistantRead('assistant_state', token, { session_key: sessionKey }, signal));
+
+/** `POST /me/assistant/state {}` — the account's one cloud conversation: last 30 messages, active tasks and their issued `client_calls`. */
+export async function getAssistantState(token: string, signal?: AbortSignal) {
+  return parseState(await call<JsonObject>('POST', '/me/assistant/state', token, { json: {}, signal, timeoutMs: 15_000 }));
 }
+
+/**
+ * `POST /me/assistant/state {task_id}` — one turn: its state, its final visible reply and the calls
+ * the server issued to this client that still wait for a receipt (`task.client_calls`).
+ */
+export async function pollAssistantTask(token: string, taskId: string, signal?: AbortSignal): Promise<AssistantTaskPoll> {
+  const data = await call<{ task: { id: string; status: string; result: { reply: string; ok: boolean }; client_calls: AssistantClientCall[] } }>(
+    'POST', '/me/assistant/state', token, { json: { task_id: taskId }, signal, timeoutMs: 15_000 });
+  const { task } = data;
+  return { id: task.id, status: task.status, reply: task.result.reply, ok: task.result.ok, client_calls: task.client_calls };
+}
+
+/** `POST /me/assistant/run-task {task_id}` — the turn's state and its pending confirmation, if any. */
+export async function getAssistantPending(token: string, taskId: string, signal?: AbortSignal): Promise<{ status: string; pending: AssistantPending | null }> {
+  const data = await call<{ status: string; pending_confirmation: AssistantPending | null }>(
+    'POST', '/me/assistant/run-task', token, { json: { task_id: taskId }, signal, timeoutMs: 15_000 });
+  return { status: data.status, pending: data.pending_confirmation };
+}
+
 export async function getAssistantQuota(token: string, signal?: AbortSignal) {
-  return parseQuota((await assistantRead('assistant_quota', token, undefined, signal)).quota);
+  return parseQuota(await call<QuotaWire>('GET', '/me/assistant/quota', token, { signal }));
+}
+
+async function readPermission(token: string, signal?: AbortSignal) {
+  return call<{ mode: PermissionMode; revision: number }>('GET', '/me/assistant/permissions', token, { signal });
 }
 export async function getAssistantPermission(token: string, signal?: AbortSignal): Promise<PermissionMode> {
-  const mode = obj((await assistantRead('assistant_permission', token, undefined, signal)).permission).mode;
-  if (mode !== 'default' && mode !== 'full') throw new ApiError('invalid');
-  return mode;
+  return (await readPermission(token, signal)).mode;
 }
+/** `PUT /me/assistant/permissions` — CAS on the grant's revision, read just before. */
 export async function setAssistantPermission(token: string, mode: PermissionMode): Promise<PermissionMode> {
-  const data = await assistantWrite('assistant_permission', token, { mode, ...(mode === 'full' ? { acknowledgement: 'full-account-v1' } : {}) });
-  const saved = obj(data.permission).mode;
-  if (saved !== mode) throw new ApiError('invalid');
-  return mode;
+  const { revision } = await readPermission(token);
+  const saved = await call<{ mode: PermissionMode }>('PUT', '/me/assistant/permissions', token, {
+    json: { expected_revision: revision, mode, ...(mode === 'full' ? { acknowledgement: 'full-account-v1' } : {}) },
+    idempotencyKey: randomId(),
+  }).catch(refusal);
+  return saved.mode;
 }
+/** `PATCH /me/assistant/preferences {expected_revision, enabled}` — answers the new quota snapshot. */
 export async function setAssistantEnabled(token: string, enabled: boolean) {
-  return parseQuota((await assistantWrite('assistant_quota_enabled', token, { enabled })).quota);
+  const { revision } = await call<QuotaWire>('GET', '/me/assistant/quota', token);
+  return parseQuota(await call<QuotaWire>('PATCH', '/me/assistant/preferences', token, {
+    json: { expected_revision: revision, enabled }, idempotencyKey: randomId(),
+  }).catch(refusal));
 }
-export async function exchangeAssistantQuota(token: string, coins: number, requestId: string) {
+/**
+ * `POST /me/assistant/quota-exchanges` — the revisions are the ones the user saw, kept in the
+ * retry journal with the request id: a replay with the same key and body answers the stored
+ * receipt instead of exchanging twice.
+ */
+export async function exchangeAssistantQuota(token: string, pending: { coins: number; requestId: string; revision: number; configRevision: number }) {
+  const { coins, requestId, revision, configRevision } = pending;
   if (!Number.isSafeInteger(coins) || coins < 1 || coins > 100000 || !requestId) throw new ApiError('invalid');
-  return parseQuota((await assistantWrite('assistant_quota_exchange', token, { coins, request_id: requestId })).quota);
+  const data = await call<{ quota: QuotaWire }>('POST', '/me/assistant/quota-exchanges', token, {
+    json: { expected_revision: revision, expected_config_revision: configRevision, coins }, idempotencyKey: requestId,
+  }).catch(refusal);
+  return parseQuota(data.quota);
 }
-export async function assistantChat(token: string, body: { message: string; request_id: string; session_key: string; page_context: JsonObject }): Promise<AssistantTurn> {
-  const data = await assistantWrite('assistant_chat', token, body);
-  if (!str(data.reply).trim() && !positiveId(data.task_id)) throw new ApiError('invalid');
-  return parseTurn(data);
-}
-export async function confirmAssistantTask(token: string, taskId: number, confirmation: string, decision: 'confirm' | 'reject'): Promise<AssistantTurn> {
-  const data = await assistantWrite('assistant_confirm', token, { task_id: taskId, confirmation_token: confirmation, decision });
-  return parseTurn({ ...data, task_id: positiveId(data.task_id) || taskId, actions: data.client_actions ?? data.actions });
-}
-export async function reportAssistantActions(token: string, taskId: number, results: AssistantReceipt[], context: JsonObject): Promise<AssistantTurn> {
-  const data = await assistantWrite('assistant_action_result', token, { task_id: taskId, results, status: results.every(r => r.ok) ? 'completed' : 'failed', page_context: context });
-  return parseTurn({ ...data, task_id: positiveId(data.task_id) || taskId });
-}
-export const claimAssistantAction = (token: string, taskId: number, callId: string) => assistantWrite('assistant_api_claim', token, { task_id: taskId, call_id: callId });
-export const saveAssistantReceipt = (token: string, receipt: AssistantReceipt) => assistantWrite('assistant_api_receipt', token, { task_id: receipt.task_id, call_id: receipt.call_id, result: receipt });
-export const deleteAssistantMessage = (token: string, sessionKey: string, messageId: number) => assistantWrite('assistant_delete_message', token, { session_key: sessionKey, message_id: messageId });
-export const clearAssistantHistory = (token: string, sessionKey: string) => assistantWrite('assistant_clear_history', token, { session_key: sessionKey });
 
+/**
+ * `POST /me/assistant/chat` — queues one turn. `request_id` must be a UUID and stays the same on a
+ * retry (the backend's quota hold is idempotent on it). `message` is at most 2000 characters.
+ */
+export async function assistantChat(token: string, body: { message: string; request_id: string; session_key: string; page_context: JsonObject }): Promise<{ task_id: string }> {
+  const data = await call<{ success: boolean; task_id?: string; error?: string }>('POST', '/me/assistant/chat', token, { json: body }).catch(refusal);
+  if (data.success === false) throw new AssistantRefusal(data.error === 'assistant_not_ready' ? '彩彩 AI 暂未就绪，请稍后再试' : '彩彩暂时无法回复');
+  const taskId = uuid(data.task_id);
+  if (!taskId) throw new ApiError('invalid');
+  return { task_id: taskId };
+}
+
+/**
+ * `POST /me/assistant/action-requests/{id}/confirmations {decision}` — the per-action decision.
+ * The idempotency key is the pending id and the decision, so re-sending after a lost answer
+ * replays the stored outcome (for a site call: its `call_id` and `request`) instead of failing.
+ */
+export async function decideAssistantAction(token: string, pendingId: string, decision: 'confirm' | 'reject'): Promise<JsonObject> {
+  return call<JsonObject>('POST', `/me/assistant/action-requests/${seg(pendingId)}/confirmations`, token, {
+    json: { decision }, idempotencyKey: `${pendingId}-${decision}`,
+  }).catch(refusal);
+}
+
+/** `POST /me/assistant/api-claims {task_id, call_id}` — `{request}` while issued, `{cached, result}` once answered. */
+export const claimAssistantAction = (token: string, taskId: string, callId: string) =>
+  call<JsonObject>('POST', '/me/assistant/api-claims', token, { json: { task_id: taskId, call_id: callId } });
+/**
+ * `POST /me/assistant/receipts {task_id, call_id, result}` — the client's real outcome for one
+ * issued call; `result.ok` is required. When it is the turn's last open call the model resumes.
+ * A receipt settles no quota (client-reported success is never charged as a task): the turn
+ * settles once, when the resumed run finishes, so the panel refreshes its quota after the turn.
+ */
+export const saveAssistantReceipt = (token: string, receipt: AssistantReceipt) =>
+  call<JsonObject>('POST', '/me/assistant/receipts', token, { json: { task_id: receipt.task_id, call_id: receipt.call_id, result: receipt } });
+
+/** The legacy bridge keeps every session in one conversation per account, under this client key. */
+const LEGACY_CONVERSATION = 'account-cloud-v1';
+async function legacyConversation(token: string): Promise<{ id: string; revision: number } | null> {
+  const data = await call<{ conversations: { id: string; client_key: string; revision: number }[] }>('GET', '/me/assistant/conversations', token);
+  const found = data.conversations.find(row => row.client_key === LEGACY_CONVERSATION);
+  return found ? { id: found.id, revision: found.revision } : null;
+}
+/** `DELETE /me/assistant/conversations/{id}/messages/{message}` — CAS on the conversation revision. */
+export async function deleteAssistantMessage(token: string, messageId: string) {
+  const conversation = await legacyConversation(token);
+  if (!conversation) return;
+  await call('DELETE', `/me/assistant/conversations/${seg(conversation.id)}/messages/${seg(messageId)}`, token, {
+    json: { expected_revision: conversation.revision }, idempotencyKey: randomId(),
+  });
+}
+/** `DELETE /me/assistant/conversations/{id}/messages` — clears the history and cancels an active turn. */
+export async function clearAssistantHistory(token: string) {
+  const conversation = await legacyConversation(token);
+  if (!conversation) return;
+  await call('DELETE', `/me/assistant/conversations/${seg(conversation.id)}/messages`, token, {
+    json: { expected_revision: conversation.revision }, idempotencyKey: randomId(),
+  });
+}
+
+/**
+ * The read-only catalogue endpoints the client executes for `call_site_api` (`READ_ENDPOINTS`,
+ * mirroring `mode:"read"` rows of the backend's frozen catalogue), each mapped to its `/api/v1`
+ * resource. Only the catalogue's whitelisted query parameters arrive here.
+ */
+const SITE_READS: Record<string, (token: string, query: Record<string, number>) => Promise<unknown>> = {
+  get_faves: (token, query) => call('GET', '/me/favorites', token, { query: query.folder_id ? { folder_id: query.folder_id } : {} }),
+  get_recent_contacts: token => call('GET', '/me/contacts', token),
+  get_tag_subscriptions: token => call('GET', '/me/tag-subscriptions', token),
+  get_my_ponies: token => call('GET', '/me/ponies', token),
+};
 /** Named read-only capability; neither a URL nor an arbitrary model endpoint can enter. */
-export async function readAssistantSiteInfo(token: string, endpoint: string, query: Record<string, string | number> = {}) {
-  if (!READ_ENDPOINTS.has(endpoint)) throw new ApiError('envelope', { serverMessage: '此读取操作不受支持' });
-  assertAssistantAccount(token);
-  const response = await picponyRequest(endpoint, { token, query });
-  const data = await readObject<JsonObject>(response);
-  assertAssistantAccount(token);
-  if (!response.ok || data.success === false) throw new ApiError('envelope', { serverMessage: envelopeMessage(data) });
-  if (data.success !== true) throw new ApiError('invalid');
-  return data;
+export async function readAssistantSiteInfo(token: string, endpoint: string, query: Record<string, number> = {}): Promise<unknown> {
+  const read = SITE_READS[endpoint];
+  if (!READ_ENDPOINTS.has(endpoint) || !read) throw new ApiError('envelope', { serverMessage: '此读取操作不受支持' });
+  return read(token, query);
 }
 
-/** The original assistant's verified semantic receipt, separate from the ordinary search parser. */
-export async function resolveAssistantSearch(query: string, mode: 'new' | 'refine', current: string) {
-  const response = await picponyPostJson('semantic_search', { query, ai_context: { query_mode: mode, query_source: 'model_query', current_query: mode === 'refine' ? current.slice(0, 300) : '' } }, { timeoutMs: 45000 });
-  const data = await readObject<JsonObject>(response);
-  const receipt = obj(data.ai_receipt);
-  if (!response.ok || data.success !== true) throw new ApiError('envelope', { serverMessage: envelopeMessage(data) });
-  const tags = Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === 'string' && t.length <= 300) : [];
-  if (!tags.length || tags.length > 24 || receipt.query_mode !== mode || receipt.query_source !== 'model_query' || receipt.semantic_input !== query || JSON.stringify(receipt.semantic_output) !== JSON.stringify(data.tags) || !Array.isArray(data.tags) || tags.length !== data.tags.length) {
-    throw new ApiError('envelope', { serverMessage: '搜索接口未返回一致的查询回执，未执行搜索' });
-  }
-  return { tags, receipt };
+/**
+ * The words of an assistant search turned into tags by the site's semantic parse
+ * (`lib/api/semantic.ts`, owned by the search migration). The PHP-era `ai_context` /
+ * `ai_receipt` cross-check has no counterpart on the Rust backend and is gone.
+ */
+export async function resolveAssistantSearch(query: string): Promise<{ tags: string[] }> {
+  const parsed = await parseSemanticQuery(query, { timeoutMs: 45_000 });
+  const tags = parsed.tags.filter(tag => tag.length <= 300).slice(0, 24);
+  if (!parsed.enabled || !tags.length) throw new ApiError('envelope', { serverMessage: '未能把这条查询转换为标签，未执行搜索' });
+  return { tags };
 }

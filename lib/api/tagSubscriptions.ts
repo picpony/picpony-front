@@ -1,25 +1,30 @@
 /**
- * 标签订阅 (decision 15): the original front end's six actions and the Derpibooru count lookup
- * its subscribe step depends on.
+ * 标签订阅 (decision 15): the backend's subscription resources (`src/pg/subscriptions.rs`) and the
+ * Derpibooru count lookup the subscribe step depends on.
  *
  * A subscription is a tag and the picture count recorded for it. The backend learns about new
  * pictures only from the front end: a **sync** reads the live counts from Derpibooru, reports them
- * (`sync_tag_subscriptions`, in batches under one `sync_token`), then **finalises** — the backend
- * compares, raises each subscription's `unread_new_count`, and writes a system notification per
- * updated tag (`[tag_subscription|tag]`). Opening a subscription marks it **seen**.
- * `components/subscriptions/sync.ts` owns when that runs; this module only speaks the wire.
+ * (`sync_tag_subscriptions`, in batches of at most 50 under one `sync_id`, a UUID), then
+ * **finalises** — the backend has compared each count as it arrived, raised each subscription's
+ * `unread_count`, and now writes one system notification for the tags that gained pictures.
+ * Opening a subscription marks it **seen**. `components/subscriptions/sync.ts` owns when that
+ * runs; this module only speaks the wire.
+ *
+ * The backend addresses a subscription by its id; the screens by its tag. The id of each tag is
+ * remembered per token from every list read and subscribe, and a tag not yet known is looked up.
  */
 
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import { escapeTag } from '@/lib/searchQuery';
-import { randomId } from '@/lib/utils';
 import type { ApiResponse } from '@/lib/types/image';
 import { proxyFetch } from './client';
 import { searchDerpiImages } from './derpi';
 import { ApiError } from './errors';
-import { listOf, picponyPostJson, picponyRequest, readEnvelope, readObject } from './http';
+import { api, readObject, seg } from './http';
 
 export interface TagSubscription {
+  /** The backend's id for the subscription. */
+  id: number;
   /** The tag as the backend stores it — the name the sync reports under. */
   tagName: string;
   /** The count recorded at the last sync (or at subscribing). */
@@ -29,9 +34,9 @@ export interface TagSubscription {
 }
 
 /**
- * A whole, non-negative number off the wire, or `null` for anything else — `lib/api/shop.ts`'s
- * rule. A missing, blank, boolean or non-numeric count is *unknown*, never 0: an explicit `0` is a
- * real tag with no pictures and has to stay distinguishable from a count nobody could read.
+ * A whole, non-negative number off a Derpibooru answer, or `null` for anything else. A missing,
+ * blank, boolean or non-numeric count is *unknown*, never 0: an explicit `0` is a real tag with no
+ * pictures and has to stay distinguishable from a count nobody could read.
  */
 function wholeNumber(value: unknown): number | null {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
@@ -44,85 +49,104 @@ export function normaliseTagName(tag: string): string {
   return tag.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-/** `GET get_tag_subscriptions` → the list, in the backend's order. A refusal throws. */
+interface SubscriptionRow {
+  id: number;
+  tag: string;
+  image_count: number;
+  unread_count: number;
+  checked_at: string;
+  created_at: string;
+}
+
+/** Token → (normalised tag → subscription id). */
+const knownIds = new Map<string, Map<string, number>>();
+
+function remember(token: string, tag: string, id: number) {
+  let ids = knownIds.get(token);
+  if (!ids) knownIds.set(token, (ids = new Map()));
+  ids.set(normaliseTagName(tag), id);
+}
+
+/** `GET /me/tag-subscriptions` → the list, in the backend's order (most unread first). A refusal throws. */
 export async function getTagSubscriptions(token: string, signal?: AbortSignal): Promise<TagSubscription[]> {
-  const data = await readEnvelope<{ subscriptions?: unknown }>(
-    await picponyRequest('get_tag_subscriptions', { token, query: { _t: Date.now() }, signal }),
-  );
-  if (!Array.isArray(data.subscriptions)) throw new ApiError('invalid');
-  const seen = new Set<string>();
-  const list: TagSubscription[] = [];
-  for (const row of listOf<Record<string, unknown>>(data.subscriptions)) {
-    if (!row || typeof row !== 'object') continue;
-    /* `tag` is the spelling the original front end's sync also accepted. */
-    const raw = typeof row.tag_name === 'string' ? row.tag_name : typeof row.tag === 'string' ? row.tag : '';
-    const tagName = raw.trim();
-    const key = normaliseTagName(tagName);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    /* The list's numbers are the backend's own record, shown and never sent back (a sync reports
-       Derpibooru's live counts, a subscription the looked-up one), so an unreadable one reads as
-       none rather than failing the list. */
-    list.push({
-      tagName,
-      imageCount: wholeNumber(row.image_count) ?? 0,
-      newCount: wholeNumber(row.unread_new_count) ?? 0,
-    });
-  }
-  return list;
+  const data = await api<{ subscriptions: SubscriptionRow[] }>('GET', '/me/tag-subscriptions', { token, signal, cache: 'no-store' });
+  const ids = new Map<string, number>();
+  knownIds.set(token, ids);
+  return data.subscriptions.map((row) => {
+    ids.set(normaliseTagName(row.tag), row.id);
+    return { id: row.id, tagName: row.tag, imageCount: row.image_count, newCount: row.unread_count };
+  });
 }
 
-/** The backend's answer to a second subscription of the same tag says 已订阅. */
+/** A tag's subscription id: remembered, or the list read again. Not subscribed: a `notFound` `ApiError`. */
+async function subscriptionId(token: string, tagName: string): Promise<number> {
+  const key = normaliseTagName(tagName);
+  const known = knownIds.get(token)?.get(key);
+  if (known !== undefined) return known;
+  const list = await getTagSubscriptions(token);
+  const hit = list.find((entry) => normaliseTagName(entry.tagName) === key);
+  if (!hit) throw new ApiError('http', { status: 404, notFound: true, code: 'SUBSCRIPTION_NOT_FOUND', message: '订阅不存在' });
+  return hit.id;
+}
+
+/** A second subscription of the same tag (one per tag, case-insensitively) is 409 `ALREADY_EXISTS`. */
 export function isAlreadySubscribed(error: unknown): boolean {
-  return error instanceof ApiError && /已订阅/.test(error.serverMessage ?? '');
+  return error instanceof ApiError && error.code === 'ALREADY_EXISTS';
 }
 
-/** `POST add_tag_subscription {tag_name, image_count}` — the count is the live one, looked up first. */
-export async function addTagSubscription(token: string, tagName: string, imageCount: number): Promise<void> {
-  await readEnvelope(
-    await picponyPostJson('add_tag_subscription', { tag_name: tagName, image_count: imageCount }, { token }),
-  );
+/** `POST /me/tag-subscriptions {tag, image_count}` → the new subscription's id. The count is the live one, looked up first. */
+export async function addTagSubscription(token: string, tagName: string, imageCount: number): Promise<{ id: number }> {
+  const data = await api<{ id: number }>('POST', '/me/tag-subscriptions', { token, json: { tag: tagName, image_count: imageCount } });
+  remember(token, tagName, data.id);
+  return { id: data.id };
 }
 
-/** `POST remove_tag_subscription {tag_name}`. */
+/** `DELETE /me/tag-subscriptions/{id}`, by tag. */
 export async function removeTagSubscription(token: string, tagName: string): Promise<void> {
-  await readEnvelope(await picponyPostJson('remove_tag_subscription', { tag_name: tagName }, { token }));
+  await api('DELETE', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}`, { token });
+  knownIds.get(token)?.delete(normaliseTagName(tagName));
 }
 
-/** `POST mark_tag_subscription_seen {tag_name}` — its new pictures have been looked at. */
+/** `POST /me/tag-subscriptions/{id}/read-receipts`, by tag — its new pictures have been looked at. */
 export async function markTagSubscriptionSeen(token: string, tagName: string): Promise<void> {
-  await readEnvelope(await picponyPostJson('mark_tag_subscription_seen', { tag_name: tagName }, { token }));
+  await api('POST', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}/read-receipts`, { token });
 }
 
 export interface TagCountUpdate {
-  tag_name: string;
+  subscription_id: number;
   image_count: number;
 }
 
+/** The most updates one sync request may carry. */
+export const SYNC_BATCH_LIMIT = 50;
+
 /**
- * `POST sync_tag_subscriptions {sync_token, updates}` — one batch of live counts. The original
- * front end never read this answer; a refusal still throws here, so the caller can count it.
+ * `POST /me/tag-subscription-syncs {sync_id, updates}` — one batch (≤ 50) of live counts. A
+ * refusal throws, so the caller can count it.
  */
 export async function syncTagSubscriptions(
   token: string,
-  syncToken: string,
+  syncId: string,
   updates: readonly TagCountUpdate[],
 ): Promise<void> {
-  await readEnvelope(await picponyPostJson('sync_tag_subscriptions', { sync_token: syncToken, updates }, { token }));
+  await api('POST', '/me/tag-subscription-syncs', { token, json: { sync_id: syncId, updates } });
 }
 
-/** `POST finalize_tag_subscription_sync {sync_token}` → how many subscriptions gained pictures. */
-export async function finalizeTagSubscriptionSync(token: string, syncToken: string): Promise<{ updatedTags: number }> {
-  const data = await readEnvelope<{ updated_tags?: unknown }>(
-    await picponyPostJson('finalize_tag_subscription_sync', { sync_token: syncToken }, { token }),
-  );
-  /* An answer that names no count announced nothing. */
-  return { updatedTags: wholeNumber(data.updated_tags) ?? 0 };
+/** `POST /me/tag-subscription-syncs/{sync_id}/completion` → how many subscriptions gained pictures. */
+export async function finalizeTagSubscriptionSync(token: string, syncId: string): Promise<{ updatedTags: number }> {
+  const data = await api<{ updated_tags: number }>('POST', `/me/tag-subscription-syncs/${seg(syncId)}/completion`, { token });
+  return { updatedTags: data.updated_tags };
 }
 
-/** A fresh `sync_token`, in the original front end's alphabet. */
+/** A fresh `sync_id`: a version-4 UUID, as the backend requires. */
 export function newSyncToken(): string {
-  return randomId().replace(/[^A-Za-z0-9_-]/g, '');
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') crypto.getRandomValues(bytes);
+  else for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,13 +164,13 @@ interface DerpiTagRow {
 }
 
 function tagRows(data: { tags?: unknown }): DerpiTagRow[] {
-  return listOf<Record<string, unknown>>(data.tags)
+  return (Array.isArray(data.tags) ? (data.tags as Record<string, unknown>[]) : [])
     .filter((row) => row && typeof row === 'object' && typeof row.name === 'string')
     .map((row) => ({
       name: String(row.name),
       slug: typeof row.slug === 'string' ? row.slug : '',
       images: wholeNumber(row.images),
-      aliases: listOf<unknown>(row.aliases).filter((alias): alias is string => typeof alias === 'string'),
+      aliases: (Array.isArray(row.aliases) ? (row.aliases as unknown[]) : []).filter((alias): alias is string => typeof alias === 'string'),
       aliasedTag: typeof row.aliased_tag === 'string' && row.aliased_tag ? row.aliased_tag : null,
     }));
 }

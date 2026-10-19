@@ -8,7 +8,7 @@
  * place is written at once (`faveIds`: the "is it favourited" list the detail's 收藏 reads), and
  * the rest is expired, so every mounted screen re-reads underneath what it shows — the folder list
  * and its counts (`faveFolders`), a folder's own ids, the profile's public folders and the shared
- * routes for your own username (`profileFaveFolders`, `sharedFaveIds`).
+ * routes (`profileFaveFolders`, `sharedFaveIds`).
  *
  * An answer that lands after the account changed corrects nothing: a different account's caches
  * are not its to write.
@@ -17,7 +17,7 @@
 import * as api from '@/lib/api/favorites';
 import type { FaveIndex, TransferMode, TransferResult } from '@/lib/api/favorites';
 import { ApiError, apiErrorMessage } from '@/lib/api/errors';
-import { readToken, readUserInfo } from '@/lib/hooks';
+import { readToken } from '@/lib/hooks';
 import { faveFolders, faveIds, favePictures, profileFaveFolders, sharedFaveIds, tasks } from '@/lib/resources';
 import { changeSyncedSetting } from '@/lib/settingsSync';
 import { readFavouriteSetting } from '@/lib/favoritesSettings';
@@ -28,22 +28,15 @@ function requireSession(token: string) {
   if (readToken() !== token) throw new DOMException('session changed', 'AbortError');
 }
 
-function ownUsername(): string | null {
-  const name = readUserInfo()?.username;
-  return typeof name === 'string' && name ? name : null;
-}
-
 /** Re-read everything a change may have moved, underneath what is on screen. */
 export function favouritesChanged(token: string, { folders = true, acknowledged = true }: { folders?: boolean; acknowledged?: boolean } = {}) {
   if (readToken() !== token) return;
   if (acknowledged) tasks.expire({ token });
   faveIds.expire();
   if (folders) faveFolders.expire({ token });
-  const username = ownUsername();
-  if (username) {
-    profileFaveFolders.expire({ username });
-    sharedFaveIds.expire();
-  }
+  /* The public answers of your own account; keyed on the owner, so all of them (two small caches). */
+  profileFaveFolders.expire();
+  sharedFaveIds.expire();
 }
 
 /**
@@ -146,11 +139,6 @@ function shiftPicturePages(before: readonly number[], after: readonly number[]) 
   }
 }
 
-/** The main folder's id, when the folder list is at hand — where a favourite with no folder named lands. */
-function mainFolderId(token: string): number | null {
-  return faveFolders.peek({ token }).data?.folders.find((folder) => folder.isMain)?.id ?? null;
-}
-
 /** The all-folders index, read fresh: a change about membership must start from the server's word. */
 export async function freshIndex(token: string): Promise<FaveIndex> {
   requireSession(token);
@@ -162,40 +150,31 @@ export async function freshIndex(token: string): Promise<FaveIndex> {
 // ---------------------------------------------------------------------------
 
 /**
- * Favourite a picture into `folderId` (0: the backend's default, the main folder). `toggle_fave`
- * is a toggle on the server, so it is sent only for a picture the index on screen says is not
- * favourited — the one the user just looked at; one that already is resolves without a request.
- * If the server says it toggled the picture *off* (another tab or device had favourited it), it is
- * sent once more: the user asked for favourited.
+ * Favourite a picture into `folderId` (0: the main folder). One that the index on screen already
+ * holds resolves without a request; otherwise `toggle_fave {saved: true}` — idempotent on the
+ * server — and the folders it answers are written through.
  */
 export async function favouriteImage(token: string, imageId: number, folderId: number): Promise<{ folders: number[] }> {
   requireSession(token);
   const index = await faveIds.read({ token });
   requireSession(token);
   if (index.ids.includes(imageId)) return { folders: index.folders[imageId] ?? [] };
-  const answer = await api.toggleFave(token, imageId, { folderId });
-  if (answer.faved === false) {
-    requireSession(token);
-    const restored = await api.toggleFave(token, imageId, { folderId });
-    if (restored.faved === false) throw new ApiError('envelope', { serverMessage: '收藏状态未能更新，请刷新后再试' });
-  }
-  const landed = folderId > 0 ? folderId : mainFolderId(token);
-  const folders = landed ? [landed] : [];
+  const { folders } = await api.setFaved(token, imageId, true, { folderId });
   writeMembership(token, imageId, folders, index);
   favouritesChanged(token);
   return { folders };
 }
 
 /**
- * Take a picture out of favourites altogether — every folder (`toggle_fave {fave: false}`, which
- * cannot add). Resolves with the folders it was in, for 撤销.
+ * Take a picture out of favourites altogether — every folder (`toggle_fave {saved: false}`).
+ * Resolves with the folders it was in, for 撤销.
  */
 export async function unfavouriteImage(token: string, imageId: number): Promise<{ previous: number[] }> {
   requireSession(token);
   const index = faveIds.peek({ token }).data ?? (await freshIndex(token));
   requireSession(token);
   const previous = index.folders[imageId] ?? [];
-  await api.toggleFave(token, imageId, { remove: true });
+  await api.setFaved(token, imageId, false);
   writeMembership(token, imageId, null, index);
   favouritesChanged(token);
   return { previous };
@@ -253,9 +232,10 @@ export async function removeFromFolder(
   const outcome: BatchOutcome = { succeeded: [], failed: [], previous: new Map() };
   for (const id of imageIds) {
     if (signal?.aborted || readToken() !== token) break;
-    const before = index.folders[id]?.length ? index.folders[id] : folderId === mainFolderId(token) ? [folderId] : null;
+    const before = index.folders[id];
     try {
-      if (!before) throw new ApiError('invalid', { serverMessage: '收藏夹归属信息缺失，请刷新后再试' });
+      /* Not in the fresh index: it left favourites since the screen was drawn. */
+      if (!before) throw new ApiError('invalid', { message: '该图片已不在收藏中，请刷新后再试', retryable: false });
       const after = await api.setImageFaveFolders(token, id, before.filter((folder) => folder !== folderId));
       writeMembership(token, id, after.length > 0 ? after : null, index);
       outcome.previous.set(id, before);
@@ -269,13 +249,18 @@ export async function removeFromFolder(
   return outcome;
 }
 
+/** The account's folder names, from the list on screen — a transfer's answer names folders by id. */
+function folderNames(token: string): Map<number, string> {
+  return new Map((faveFolders.peek({ token }).data?.folders ?? []).map((folder) => [folder.id, folder.name]));
+}
+
 /** Move or copy pictures of one folder into others (`batch_transfer_faves`). */
 export async function transferPictures(
   token: string,
   request: { imageIds: readonly number[]; sourceFolderId: number; targetFolderIds: readonly number[]; mode: TransferMode },
 ): Promise<TransferResult> {
   requireSession(token);
-  const result = await api.batchTransferFaves(token, request);
+  const result = await api.batchTransferFaves(token, { ...request, folderNames: folderNames(token) });
   favouritesChanged(token);
   return result;
 }
@@ -286,7 +271,7 @@ export async function transferFromPrivacy(
   request: { imageIds: readonly number[]; targetFolderIds: readonly number[]; mode: TransferMode },
 ): Promise<TransferResult> {
   requireSession(token);
-  const result = await api.batchTransferPrivacyFaves(token, request);
+  const result = await api.batchTransferPrivacyFaves(token, { ...request, folderNames: folderNames(token) });
   favouritesChanged(token);
   return result;
 }
@@ -302,7 +287,7 @@ export class NoPrivacyPasswordError extends Error {
 /**
  * Move pictures into the privacy space — the original front end's `moveToPrivacyFaves`: the space
  * must have a password, then for each picture `add_privacy_fave` with its record and, once that
- * landed, `toggle_fave {fave: false}`. In order; the caller may stop between pictures.
+ * landed, `toggle_fave {saved: false}`. In order; the caller may stop between pictures.
  */
 export async function moveToPrivacy(
   token: string,
@@ -320,13 +305,13 @@ export async function moveToPrivacy(
       await api.addPrivacyFave(token, image);
       outcome.added.push(image.id);
       requireSession(token);
-      await api.toggleFave(token, image.id, { remove: true });
+      await api.setFaved(token, image.id, false);
       outcome.previous.set(image.id, index.folders[image.id] ?? []);
       writeMembership(token, image.id, null, index);
       outcome.succeeded.push(image.id);
     } catch (error) {
       outcome.failed.push({ id: image.id, error: outcome.added.includes(image.id)
-        ? new ApiError('envelope', { serverMessage: `已存入隐私空间，原收藏未能移除：${apiErrorMessage(error)}` })
+        ? new ApiError('invalid', { message: `已存入隐私空间，原收藏未能移除：${apiErrorMessage(error)}`, retryable: false, cause: error })
         : error });
     }
     onProgress?.(outcome.succeeded.length + outcome.failed.length, images.length);
@@ -335,21 +320,14 @@ export async function moveToPrivacy(
   return outcome;
 }
 
-/** The original front end's spacing between two favourites of an import. */
-export const IMPORT_SPACING_MS = 100;
-
-const wait = (ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    if (signal?.aborted) { resolve(); return; }
-    const finish = () => { clearTimeout(timer); signal?.removeEventListener('abort', finish); resolve(); };
-    const timer = setTimeout(finish, ms);
-    signal?.addEventListener('abort', finish, { once: true });
-  });
+/** How many pictures one import request carries (`batch_add_faves` takes up to 1,000; smaller keeps progress moving). */
+export const IMPORT_BATCH = 100;
 
 /**
- * Import pictures into `folderId` (0: the default) — 导入本页到云端. One `toggle_fave` a picture,
- * in order, `IMPORT_SPACING_MS` apart, skipping any the fresh index already holds (the action is
- * a toggle: sending it for a favourited picture would remove it). `onProgress` hears each step.
+ * Import pictures into `folderId` (0: the main folder) — 导入本页到云端. The fresh index's
+ * pictures are skipped; the rest go in `IMPORT_BATCH`-sized `batch_add_faves` requests, in order,
+ * and `onProgress` hears each batch. A refused batch fails every picture in it; a dead session
+ * stops the run.
  */
 export async function importFavourites(
   token: string,
@@ -362,28 +340,18 @@ export async function importFavourites(
   const unique = [...new Set(imageIds)];
   const wanted = unique.filter((id) => !known.has(id));
   const result = { imported: [] as number[], skipped: unique.filter((id) => known.has(id)), failed: [] as { id: number; error: unknown }[] };
-  for (let i = 0; i < wanted.length; i += 1) {
+  for (let start = 0; start < wanted.length; start += IMPORT_BATCH) {
     if (signal?.aborted || readToken() !== token) break;
-    const id = wanted[i];
+    const batch = wanted.slice(start, start + IMPORT_BATCH);
     try {
-      const answer = await api.toggleFave(token, id, { folderId });
-      if (answer.faved === false) {
-        requireSession(token);
-        const restored = await api.toggleFave(token, id, { folderId });
-        if (restored.faved === false) throw new ApiError('envelope', { serverMessage: '收藏状态未能更新，请刷新后再试' });
-      }
-      const landed = folderId > 0 ? folderId : mainFolderId(token);
-      writeMembership(token, id, landed ? [landed] : [], index);
-      result.imported.push(id);
+      const answer = await api.batchAddFaves(token, batch, folderId);
+      for (const id of batch) writeMembership(token, id, [answer.folderId], index);
+      result.imported.push(...batch);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        result.failed.push({ id, error });
-        break;
-      }
-      result.failed.push({ id, error });
+      result.failed.push(...batch.map((id) => ({ id, error })));
+      if (error instanceof ApiError && error.status === 401) break;
     }
-    onProgress?.(i + 1, wanted.length);
-    if (i < wanted.length - 1) await wait(IMPORT_SPACING_MS, signal);
+    onProgress?.(Math.min(start + batch.length, wanted.length), wanted.length);
   }
   favouritesChanged(token, { acknowledged: result.imported.length > 0 });
   return result;
@@ -393,10 +361,7 @@ export async function importFavourites(
 // Folders
 // ---------------------------------------------------------------------------
 
-/**
- * Create a folder and resolve with it. The answer names the new id on some backends; otherwise
- * the list is read again and the newest folder of that name is the one.
- */
+/** Create a folder and resolve with it, as the re-read list has it. */
 export async function createFolder(token: string, name: string): Promise<api.FaveFolder | null> {
   requireSession(token);
   const { id } = await api.createFaveFolder(token, name);
@@ -405,8 +370,7 @@ export async function createFolder(token: string, name: string): Promise<api.Fav
   requireSession(token);
   favouritesChanged(token, { folders: false });
   if (!list) return null;
-  const named = list.folders.filter((folder) => (id !== null ? folder.id === id : folder.name === name));
-  return named.reduce<api.FaveFolder | null>((newest, folder) => (!newest || folder.id > newest.id ? folder : newest), null);
+  return list.folders.find((folder) => folder.id === id) ?? null;
 }
 
 /**

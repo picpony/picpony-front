@@ -6,13 +6,11 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import { showToast } from '@/components/Toast';
-import { saveApikey } from '@/lib/api/picpony';
-import { readEnvelope } from '@/lib/api/http';
+import { isRefusal, saveApikey, type UpstreamCredential } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
 import { useFieldErrors } from '@/lib/useFieldErrors';
 import { ICON } from '@/lib/icons';
-import { detectDerpiIdentity } from './identity';
 import { validateApiKey } from '@/lib/validation';
 import { saveAccountFields } from './useAccount';
 
@@ -24,10 +22,12 @@ const INTRO =
   '保存时会先核验该 Key 属于哪个 Derpibooru 账号。';
 
 /**
- * 绑定 API Key, the original front end's order: check the key against Derpibooru first, then save
- * it with whatever identity the check found. A key Derpibooru refuses is not saved (the field
- * says why); a working key whose owner has neither uploads nor comments is saved with **no**
- * identity, and says so, rather than inventing one.
+ * 绑定 API Key (`PUT /me/upstream-credential`). The backend checks the key against Derpibooru
+ * itself before storing it, and answers with whose it is: a key Derpibooru refuses is not saved
+ * (`INVALID_API_KEY`, said under the field); a working key whose owner has neither uploads nor
+ * comments is saved with **no** identity (`no_activity`), and says so, rather than inventing one.
+ * The key is also kept on this device, which reads Derpibooru with it — the backend never sends it
+ * back.
  *
  * The field is a code, not prose: no capitalisation, correction or spell-check on a phone's
  * keyboard, no autofill, and a monospace face so a stray character can be seen. An empty field
@@ -37,11 +37,23 @@ export default function ApiKeyDialog({
   open,
   token,
   current,
+  bound,
+  revision,
+  onSaved,
+  onConflict,
   onClose,
 }: {
   open: boolean;
   token: string;
+  /** The key this device holds, or '' (another device may have bound one). */
   current: string;
+  /** Whether the account has a key bound at all. */
+  bound: boolean;
+  /** The credential record's revision, which the write names. */
+  revision: number;
+  onSaved: (credential: UpstreamCredential) => void;
+  /** The record changed meanwhile: the opener reads it again. */
+  onConflict: () => void;
   onClose: () => void;
 }) {
   const [key, setKey] = useState(current);
@@ -61,27 +73,26 @@ export default function ApiKeyDialog({
     if (busy || !form.check()) return;
     setBusy(true);
     try {
-      const identity = await detectDerpiIdentity(trimmed);
+      const credential = await saveApikey(token, { api_key: trimmed, expected_revision: revision });
       if (readToken() !== token) return;
-      if (identity.status === 'invalid') {
-        form.set('key', '该 API Key 无效，或没有访问 Derpibooru 的权限');
-        return;
-      }
-      const derpi = identity.status === 'verified'
-        ? { derpi_user_id: identity.id, derpi_username: identity.name }
-        : { derpi_user_id: '', derpi_username: '' };
-      await readEnvelope(await saveApikey(token, { api_key: trimmed, ...derpi }));
-      if (readToken() !== token) return;
-      saveAccountFields(token, { api_key: trimmed, ...derpi });
+      onSaved(credential);
+      saveAccountFields(token, { api_key: trimmed });
+      const verified = credential.identity.status === 'verified';
       showToast(
-        identity.status === 'verified'
-          ? `已绑定，Derpibooru 账号为 ${identity.name}`
+        verified
+          ? `已绑定，Derpibooru 账号为 ${credential.identity.name}`
           : '已绑定，该账号暂无上传或评论，无法确认 Derpibooru 用户名',
-        identity.status === 'verified' ? 'success' : 'info',
+        verified ? 'success' : 'info',
       );
       onClose();
     } catch (error) {
-      if (readToken() === token) showToast(apiErrorMessage(error, '绑定失败'), 'error');
+      if (readToken() !== token) return;
+      if (isRefusal(error, 'INVALID_API_KEY', 'INVALID_API_KEY_FORMAT')) {
+        form.set('key', '该 API Key 无效，或没有访问 Derpibooru 的权限');
+      } else {
+        if (isRefusal(error, 'CREDENTIAL_CONFLICT')) onConflict();
+        showToast(apiErrorMessage(error, '绑定失败'), 'error');
+      }
     } finally {
       setBusy(false);
     }
@@ -91,7 +102,7 @@ export default function ApiKeyDialog({
     <Modal
       isOpen={open}
       onClose={close}
-      title={current ? '更换 API Key' : '绑定 API Key'}
+      title={bound ? '更换 API Key' : '绑定 API Key'}
       closeOnEscape={!busy}
       footer={
         <>

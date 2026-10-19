@@ -157,56 +157,48 @@ test('a shared search names its sharer, and the original front end’s links sti
   assert.equal(state.legacySharedSearchHref(''), null);
 });
 
-test('a share link is short when share.php answers, and the long link on any failure', async () => {
+test('a share link is the backend’s short link, made once, and the long one on any refusal', async () => {
   const share = await import('../lib/api/share.ts');
-  globalThis.window.location = { origin: 'https://picpony.test' };
   const calls = [];
-  const answer = (body, init = {}) => new Response(typeof body === 'string' ? body : JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'content-type': init.type ?? 'application/json; charset=utf-8' },
-  });
-  let next = () => answer({ success: true, share_id: 'Ab3x' });
-  globalThis.fetch = async (url, init) => {
-    calls.push({ url: String(url), init });
-    return next();
-  };
+  let answer = () => Response.json({ share_id: 'AbCdEfGhIjKlMnOpQrStUvWx', url: 'x', preview_status: 'generic' }, { status: 201 });
+  globalThis.window.location = { origin: 'https://picpony.test' };
+  globalThis.fetch = async (url, init) => { calls.push({ url: String(url), init }); return answer(); };
   const input = { targetUrl: 'https://picpony.test/search?q=pony&from=R', title: '分享搜索结果：pony', desc: 'R 向您分享了ta的搜索结果，快来看看吧~' };
-  const short = await share.createShareLink(input, { token: 'tok' });
-  assert.deepEqual(short, { url: 'https://picpony.test/share.php?id=Ab3x', short: true });
-  assert.equal(calls[0].url, '/share.php?action=create');
+  assert.deepEqual(await share.createShareLink(input), { url: 'https://picpony.test/share.php?id=AbCdEfGhIjKlMnOpQrStUvWx', short: true });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/v1/share-links');
   assert.equal(calls[0].init.method, 'POST');
-  assert.equal(calls[0].init.headers.Authorization, 'Bearer tok');
-  assert.deepEqual(JSON.parse(calls[0].init.body), {
-    target_url: input.targetUrl, title: input.title, desc: input.desc, image_url: 'Derp.png',
-  }, 'the original front end’s body, field for field');
-  const withImage = await share.createShareLink({ ...input, imageId: 42, imageUrl: 'https://derpicdn.net/t.png' });
-  assert.equal(JSON.parse(calls[1].init.body).image_id, 42);
-  assert.equal(calls[1].init.headers.Authorization, undefined, 'no token, no header');
-  assert.equal(withImage.short, true);
-
-  for (const failure of [
-    () => answer({ success: false, error: 'x' }),
-    () => answer({ success: true }),
-    () => answer('<html>404</html>', { status: 404, type: 'text/html' }),
-    () => answer({ success: true, share_id: 'x' }, { status: 500 }),
-    () => { throw new TypeError('Failed to fetch'); },
-  ]) {
-    next = failure;
-    assert.deepEqual(await share.createShareLink(input), { url: input.targetUrl, short: false });
-  }
+  assert.deepEqual(JSON.parse(calls[0].init.body), { target_url: input.targetUrl, title: input.title, description: input.desc });
+  assert.equal(new Headers(calls[0].init.headers).get('authorization'), null, 'no session, no attribution');
+  /* A picture names its id; its preview picture is the backend’s own, so no URL is sent. */
+  await share.createShareLink({ ...input, imageId: 42, imageUrl: 'https://derpicdn.net/t.png' }, { token: 'tok' });
+  assert.deepEqual(JSON.parse(calls[1].init.body), { target_url: input.targetUrl, title: input.title, description: input.desc, image_id: 42 });
+  assert.equal(new Headers(calls[1].init.headers).get('authorization'), 'Bearer tok');
+  /* A refused target (not this site) or a failure hands over the long link. */
+  answer = () => Response.json({ error: { code: 'SHARE_TARGET_NOT_ALLOWED', message: '分享目标只能是本站页面' } }, { status: 400 });
+  assert.deepEqual(await share.createShareLink(input), { url: input.targetUrl, short: false });
+  answer = () => { throw new TypeError('offline'); };
+  assert.deepEqual(await share.createShareLink(input), { url: input.targetUrl, short: false });
+  /* The caller’s own abort is not a failure to fall back from. */
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(share.createShareLink(input, { signal: controller.signal }));
+  delete globalThis.window.location;
 });
 
 test('the semantic estimate and timeout follow the backend’s own numbers', () => {
+  /* `GET /semantic-searches/settings` fields: availability is `semantic_search_mode` alone. */
   const live = semanticConfigFrom({
-    success: true, semantic_search_mode: 'qwen', semantic_cloud_enabled: true, semantic_cloud_has_key: true,
+    semantic_search_mode: 'qwen', semantic_cloud_enabled: true, semantic_cloud_has_key: true,
     semantic_cloud_timeout_ms: 8000, semantic_search_estimate_ms: 851,
   });
   assert.deepEqual(live, { availability: 'on', estimateMs: 851, timeoutMs: 10_000 });
-  const local = semanticConfigFrom({ success: true, semantic_search_mode: 'legacy', semantic_search_estimate_ms: 0 });
+  const local = semanticConfigFrom({ semantic_search_mode: 'legacy', semantic_search_estimate_ms: null });
   assert.equal(local.estimateMs, 7000, 'a local model with no measurement: 6–8 s');
   assert.equal(local.timeoutMs, 16_000, 'never less than twice the expected time');
-  assert.equal(semanticConfigFrom({ success: true, semantic_search_enabled: true }).availability, 'on');
-  assert.equal(semanticConfigFrom({ success: true, semantic_search_mode: 'off', semantic_search_enabled: true }).availability, 'off');
+  assert.equal(semanticConfigFrom({ semantic_search_mode: 'qwen' }).availability, 'on');
+  assert.equal(semanticConfigFrom({ semantic_search_mode: 'off' }).availability, 'off');
+  assert.equal(semanticConfigFrom({}).availability, 'off', 'a caller without the mode (an admin cloud save) does not switch it on');
 });
 
 function stubFetch(handler) {
@@ -222,53 +214,92 @@ function stubFetch(handler) {
 }
 
 test('the semantic parse posts the words and maps every answer', async () => {
-  const calls = stubFetch(() => [200, {
-    success: true, enabled: true, mode: 'qwen', tags: ['fluttershy', 'simple background', 'Fluttershy', 3],
-    model_used: true, model_engines: ['cloud'],
-  }]);
+  const answer = {
+    query: '小蝶 简单背景', mode: 'qwen', tags: ['fluttershy', 'simple background'], details: [],
+    model_used: true, model_engines: ['cloud'], cached: false, ai_receipt: null,
+  };
+  const calls = stubFetch(() => [200, answer]);
   const parse = await semantic.parseSemanticQuery('小蝶 简单背景', { timeoutMs: 5000 });
   assert.deepEqual(parse, { enabled: true, tags: ['fluttershy', 'simple background'], modelUsed: true, engines: ['cloud'], mode: 'qwen' });
-  assert.match(calls[0].url, /action=semantic_search/);
+  assert.equal(calls[0].url, '/api/v1/semantic-searches');
   assert.equal(calls[0].init.method, 'POST');
   assert.deepEqual(JSON.parse(calls[0].init.body), { query: '小蝶 简单背景' });
 
-  stubFetch(() => [200, { success: false, enabled: false }]);
-  assert.equal((await semantic.parseSemanticQuery('小蝶')).enabled, false, 'switched off is an answer, not a failure');
+  for (const code of ['SEMANTIC_SEARCH_DISABLED', 'SEMANTIC_CLOUD_NOT_CONFIGURED']) {
+    stubFetch(() => [503, { error: { code, message: '智能中文搜索未开启' } }]);
+    assert.equal((await semantic.parseSemanticQuery('小蝶')).enabled, false, `${code} is an answer, not a failure`);
+  }
 
-  stubFetch(() => [400, { error: '搜索内容为空或过长' }]);
+  stubFetch(() => [400, { error: { code: 'INVALID_INPUT', message: '搜索内容不能为空' } }]);
   await assert.rejects(semantic.parseSemanticQuery('x'), (error) =>
-    error instanceof ApiError && error.message === '搜索内容为空或过长' && !error.retryable);
+    error instanceof ApiError && error.message === '搜索内容不能为空' && !error.retryable);
+
+  stubFetch(() => [503, { error: { code: 'SEMANTIC_SEARCH_UNAVAILABLE', message: '智能解析暂时不可用，请按原文搜索' } }]);
+  await assert.rejects(semantic.parseSemanticQuery('x'), (error) =>
+    error instanceof ApiError && error.code === 'SEMANTIC_SEARCH_UNAVAILABLE' && error.retryable);
 
   stubFetch(() => [502, '<html>bad gateway</html>']);
   await assert.rejects(semantic.parseSemanticQuery('x'), (error) => error instanceof ApiError && error.retryable);
 });
 
-test('feedback sends the original front end’s body; quick tags and suggestions normalise their rows', async () => {
-  const calls = stubFetch((url) => {
-    if (url.includes('submit_semantic_feedback')) return [200, { success: true, message: '感谢反馈！' }];
-    if (url.includes('get_quick_tags')) {
-      return [200, { success: true, tags: { rating: [{ en: 'safe', cn: '安全' }, { en: 'safe', cn: 'x' }], character: [{ en: 'fluttershy', cn: '未翻' }] } }];
-    }
-    return [200, { success: true, tags: [
-      { id: 1, en: 'fluttershy', cn: '小蝶，柔柔', aliases: ['柔柔'], cat: 'character', count: '290613', is_restricted: 0 },
-      { id: 2, en: 'secret', cn: '秘密', cat: 'general', count: 5, is_sensitive: 1 },
-    ] }];
+test('semanticSearch carries the assistant context and returns the receipt as sent', async () => {
+  const receipt = { query_mode: 'refine', query_source: 'model_query', semantic_input: '小蝶, -human', semantic_output: ['fluttershy', '-human'] };
+  const calls = stubFetch(() => [200, {
+    query: '小蝶, -human', mode: 'qwen', tags: ['fluttershy', '-human'],
+    details: [{ tag: 'fluttershy', en: 'fluttershy', cn: '小蝶', category: 'character', negative: false, source: 'dictionary' }],
+    model_used: false, model_engines: [], cached: true, ai_receipt: receipt,
+  }]);
+  const result = await semantic.semanticSearch('小蝶, -human', {
+    aiContext: { queryMode: 'refine', querySource: 'model_query', currentQuery: 'fluttershy' },
   });
-  await semantic.submitSemanticFeedback({ query: '小蝶', tags: ['fluttershy', 'rain'], engines: ['a', 'b'], cfToken: 'tok' }, 'user-token');
-  assert.deepEqual(JSON.parse(calls[0].init.body), { query: '小蝶', result: 'fluttershy, rain', engine: 'a/b', mode: '', cf_token: 'tok' });
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    query: '小蝶, -human',
+    ai_context: { query_mode: 'refine', query_source: 'model_query', current_query: 'fluttershy' },
+  });
+  assert.deepEqual(result.aiReceipt, receipt);
+  assert.deepEqual(result.tags, ['fluttershy', '-human']);
+  assert.equal(result.cached, true);
+
+  stubFetch(() => [422, { error: { code: 'QUERY_UNVERIFIED', message: '标签「foo」不在词库中，未执行搜索' } }]);
+  await assert.rejects(semantic.semanticSearch('foo', { aiContext: { queryMode: 'new', querySource: 'model_query' } }), (error) =>
+    error instanceof ApiError && error.code === 'QUERY_UNVERIFIED');
+});
+
+test('feedback posts the proof; quick tags and suggestions read the backend rows', async () => {
+  const calls = stubFetch((url) => {
+    if (url.startsWith('/api/v1/search/feedback')) return [201, { success: true, message: '感谢反馈！' }];
+    if (url.startsWith('/api/v1/dictionary/quick-tags')) {
+      return [200, { tags: {
+        rating: [{ en: 'safe', cn: '安全', category: 'rating' }, { en: 'safe', cn: 'x', category: 'rating' }],
+        species: [],
+        character: [{ en: 'fluttershy', cn: '未翻译', category: 'character' }],
+        general: [],
+      } }];
+    }
+    const row = { aliases: [], description: '', restricted: false, sensitive: false };
+    return [200, { tags: [
+      { ...row, id: 1, en: 'fluttershy', cn: '小蝶，柔柔', aliases: ['柔柔'], category: 'character', search_count: 290613 },
+      { ...row, id: 2, en: 'secret', cn: '秘密', category: 'general', search_count: 5, sensitive: true },
+    ], total_matches: null, stats: null, dictionary_revision: 3 }];
+  });
+  await semantic.submitSemanticFeedback({ query: '小蝶', tags: ['fluttershy', 'rain'], engines: ['a', 'b'], captchaProof: 'proof' }, 'user-token');
+  assert.equal(calls[0].url, '/api/v1/search/feedback');
+  assert.deepEqual(JSON.parse(calls[0].init.body), { captcha_proof: 'proof', query: '小蝶', result: 'fluttershy, rain', engine: 'a/b' });
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer user-token');
 
   const groups = await semantic.getQuickTags();
   assert.deepEqual(groups.rating, [{ en: 'safe', cn: '安全' }], 'one row per tag');
-  assert.deepEqual(groups.character, [{ en: 'fluttershy', cn: '' }], '未翻 is no name');
+  assert.deepEqual(groups.character, [{ en: 'fluttershy', cn: '' }], '未翻译 is no name');
   assert.deepEqual(groups.species, []);
 
   const rows = await semantic.suggestTags('柔');
   assert.equal(rows.length, 1, 'a sensitive tag is not offered');
   assert.equal(rows[0].cn, '柔柔', 'the Chinese name that matches what was typed');
   assert.equal(rows[0].count, 290613);
-  const suggestCall = calls.at(-1).url;
-  assert.match(suggestCall, /mode=suggest/);
-  assert.match(suggestCall, /filter_artist=0/);
+  assert.equal(rows[0].category, 'character');
+  const suggestCall = new URL(calls.at(-1).url, 'http://x');
+  assert.equal(suggestCall.pathname, '/api/v1/dictionary/tags');
+  assert.equal(suggestCall.searchParams.get('suggest'), 'true');
+  assert.equal(suggestCall.searchParams.get('limit'), '15');
   assert.equal(new Headers(calls.at(-1).init.headers).get('Authorization'), null, 'the dictionary is public');
 });

@@ -113,9 +113,9 @@ const nextConfig: NextConfig = {
     '192.168.31.36',
     '223.109.140.237'
   ],
-  // /api.php is proxied by app/api.php/[[...path]]/route.ts rather than a
-  // rewrite: the backend's session cookie is marked Secure, and only a route
-  // handler can rewrite that header when the page is served over plain HTTP.
+  // /api/v1 (the Rust backend) is proxied by app/api/v1/[...path]/route.ts rather
+  // than a rewrite: the backend's `auth_bind` session cookie is marked Secure, and
+  // only a route handler can rewrite that header when the page is served over plain HTTP.
   async redirects() {
     return [
       {
@@ -126,7 +126,7 @@ const nextConfig: NextConfig = {
     ];
   },
   // 以图搜图 API 走服务端代理，避免 dev.picpony.top → picpony.top 的跨域 CORS。
-  // search-api 无状态、不涉及 cookie，rewrites 足矣（区别于 /api.php 的 route handler）。
+  // search-api 无状态、不涉及 cookie，rewrites 足矣（区别于 /api/v1 的 route handler）。
   /**
    * The service worker must never be cached. The two failures look identical from outside: the
    * browser satisfying its own update check from the HTTP cache (covered by
@@ -137,13 +137,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        /* Everything except the four route handlers that answer with a stricter policy of their
-           own (`sandbox; default-src 'none'; frame-ancestors 'none'`): the three proxies and
-           `/upload/submit`. A policy set here does not add to a handler's own, it replaces it
+        /* Everything except the route handlers that answer with a stricter policy of their
+           own (`sandbox; default-src 'none'; frame-ancestors 'none'`): the backend proxy
+           (`/api/v1`), `/relay`, `/share.php` and `/upload/submit`. A policy set here does not add to a handler's own, it replaces it
            (measured on `share.php`: only this block's `frame-ancestors 'self'` survived), so a
            handler left inside it loses its sandbox. Each name is matched as a whole first segment
            (`(?:/|$)`), so `/relayX` or `/share.php.bak` still get the headers (review P1-F2). */
-        source: '/:path((?!(?:api\\.php|relay|share\\.php|upload/submit)(?:/|$)).*)',
+        source: '/:path((?!(?:api/v1|relay|share\\.php|upload/submit)(?:/|$)).*)',
         headers: SECURITY_HEADERS,
       },
       {
@@ -160,7 +160,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/search-api/:path*',
-        /* The same server-controlled upstream as the api.php handler (review P1-F7). */
+        /* The same server-controlled upstream as the /api/v1 handler (review P1-F7). */
         destination: `${upstreamOrigin()}/search-api/:path*`,
       },
     ];

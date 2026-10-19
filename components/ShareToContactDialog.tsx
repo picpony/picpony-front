@@ -16,7 +16,6 @@ import { showToast } from './Toast';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { encodeShare, type ShareTarget } from '@/lib/api/messages';
 import { sendInLine } from '@/app/messages/outbox';
-import { trackShare } from '@/lib/api/share';
 import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { SKIP, useResource } from '@/lib/resource';
@@ -124,7 +123,6 @@ function ShareToContactDialog({
       await sendInLine(token, person.id, encodeShare(target));
       /* Another account by now (review P4-O8): its dialog is not this send's to report on. */
       if (readToken() !== token) return;
-      trackShare(token);
       setRows((previous) => new Map(previous).set(person.id, 'sent'));
       showToast('已发送');
       /* An open conversation with them shows the card on its next read; the list re-sorts. */

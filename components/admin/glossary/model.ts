@@ -2,29 +2,18 @@
  * The glossary editor's rules as plain functions — no React, no browser — so the Node suite can
  * hold them to the original glossary editor's contract (`https://picpony.top/ciku.html`):
  *
- * - **Untranslated is `cn === ''` or `cn === '未翻译'`**, and a save writes `''` for "no
- *   translation". The first translation is the main one, the rest are aliases.
- * - **A save carries the row's flags through** (`is_restricted`, `is_original_translation`,
- *   `is_sensitive`): the original editor sends them on every save, so a save that left them out
- *   could clear a 限制级 mark nobody touched.
- * - **Batch import is one request**, `batch_import_dictionary_tags {mode:'create_only', tasks}`,
- *   which skips what the dictionary already holds — not an existence read and a save per line.
+ * - **Untranslated is `cn === ''` or `cn === '未翻译'`**, and a save writes `未翻译` for "no
+ *   translation" (the backend refuses an empty `cn`). The first translation is the main one, the rest are aliases.
+ * - **A save writes the row whole** (`dictionary::Tag`): `restricted` is carried through, and an
+ *   edit names the row's `revision` (`expected_revision`), so a save made on a stale row answers 409
+ *   instead of overwriting someone else's edit. The backend keeps no 原创翻译 / 敏感 marks.
+ * - **Batch import is create-only**: a tag the dictionary already holds answers 409 and is skipped.
  * - **History times are UTC**: the original editor appends `Z` before converting
  *   (`formatHistoryTime`) — one of the three UTC columns `lib/format.ts` reads with
  *   `parseBackendUtcTime`. Every other timestamp the backend writes is Beijing time.
  */
 
 import { formatDateTime, parseBackendUtcTime } from '@/lib/format';
-
-/**
- * A count a batch answer reports (`created`, `skipped`, `failed`, `deleted_count`): a whole number of
- * zero or more, or `null` when it did not arrive or is not one — never a 0 the backend did not send
- * (G4-015's rule, for the bulk toasts and the sync's tally).
- */
-export function reportedCount(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
-  return Number.isSafeInteger(n) && n >= 0 ? n : null;
-}
 
 export interface GlossaryTag {
   id: number;
@@ -34,9 +23,8 @@ export interface GlossaryTag {
   count: number;
   description: string;
   aliases: string[];
-  is_restricted?: number | boolean | null;
-  is_original_translation?: number | boolean | null;
-  is_sensitive?: number | boolean | null;
+  restricted: boolean;
+  revision: number;
   [key: string]: unknown;
 }
 
@@ -53,17 +41,14 @@ export interface TagForm {
   count: number;
   description: string;
   /**
-   * The three marks the original editor let an operator set (review P6-O6): 限制级, 原创译名,
-   * 敏感. Absent means "as the row has them" — a form built before this field existed, or by a
-   * caller that does not show them, still carries the row's own flags through.
+   * 限制级 (review P6-O6) — the one mark the backend keeps. Absent means "as the row has it": a
+   * caller that does not show it still carries the row's own value through.
    */
   flags?: TagFlags;
 }
 
 export interface TagFlags {
   restricted: boolean;
-  originalTranslation: boolean;
-  sensitive: boolean;
 }
 
 export const TAG_CATEGORIES: { value: string; label: string }[] = [
@@ -111,6 +96,9 @@ export function sameTag(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/** How a row with no translation is stored: the backend refuses an empty `cn`. */
+export const UNTRANSLATED = '未翻译';
+
 export function isUntranslated(cn: string | null | undefined): boolean {
   const value = (cn ?? '').trim();
   return value === '' || value === '未翻译';
@@ -139,8 +127,6 @@ export function parseTranslations(text: string): { cn: string; aliases: string[]
   return { cn: unique[0] ?? '', aliases: unique.slice(1) };
 }
 
-const flag = (value: unknown) => (value === true || Number(value) === 1 ? 1 : 0);
-
 export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
   return {
     en: prefill?.name ?? '',
@@ -148,7 +134,7 @@ export function emptyTagForm(prefill?: Partial<DerpiTagRow>): TagForm {
     cat: prefill?.category || 'general',
     count: Number(prefill?.images) || 0,
     description: '',
-    flags: { restricted: false, originalTranslation: false, sensitive: false },
+    flags: { restricted: false },
   };
 }
 
@@ -157,55 +143,64 @@ export function tagFormOf(tag: GlossaryTag): TagForm {
     en: tag.en,
     translations: translationsText(tag),
     cat: tag.cat || 'general',
-    count: Number(tag.count) || 0,
-    description: tag.description ?? '',
-    flags: {
-      restricted: flag(tag.is_restricted) === 1,
-      originalTranslation: flag(tag.is_original_translation) === 1,
-      sensitive: flag(tag.is_sensitive) === 1,
-    },
+    count: tag.count,
+    description: tag.description,
+    flags: { restricted: tag.restricted },
   };
 }
 
+/** The save `lib/api/picpony.ts` `saveDictionaryTag` takes: an edit names the row's id and revision. */
+export interface TagSave {
+  id?: number;
+  revision?: number;
+  en: string;
+  cn: string;
+  aliases: string[];
+  cat: string;
+  count: number;
+  description: string;
+  restricted: boolean;
+}
+
 /**
- * The `save_dictionary_tag` body: the original editor's, flags carried through on an edit.
+ * The save body, the row's `restricted` carried through on an edit.
  *
  * **An untouched translations field sends the stored names as they are** (review P6-F3). The
  * original editor gives each name its own input, so a stored name may contain a comma; this one
  * joins them into one comma-separated field, and re-parsing that on every save split such a name in
  * two — on a save that only changed the description. Only a field the operator edited is parsed.
  */
-export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): Record<string, unknown> {
+export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): TagSave {
   const untouched = tag && !isUntranslated(tag.cn) && form.translations === translationsText(tag);
-  const { cn, aliases } = untouched
-    ? { cn: tag.cn, aliases: Array.isArray(tag.aliases) ? [...tag.aliases] : [] }
-    : parseTranslations(form.translations);
-  const payload: Record<string, unknown> = {
+  const { cn, aliases } = untouched ? { cn: tag.cn, aliases: [...tag.aliases] } : parseTranslations(form.translations);
+  const payload: TagSave = {
     en: tag ? tag.en : form.en.trim().toLowerCase(),
-    cn,
+    /* The backend refuses an empty `cn` (`bounded_text(.., false)`) and reads `未翻译` as "no
+       translation" in every filter and count, so that is what "no translation" is written as. */
+    cn: cn || UNTRANSLATED,
     aliases,
     cat: form.cat || 'general',
     count: Number(form.count) || 0,
     description: form.description.trim(),
-    is_restricted: form.flags ? Number(form.flags.restricted) : flag(tag?.is_restricted),
-    is_original_translation: form.flags ? Number(form.flags.originalTranslation) : flag(tag?.is_original_translation),
-    is_sensitive: form.flags ? Number(form.flags.sensitive) : flag(tag?.is_sensitive),
+    restricted: form.flags ? form.flags.restricted : tag?.restricted ?? false,
   };
-  if (tag) payload.id = tag.id;
+  if (tag) {
+    payload.id = tag.id;
+    payload.revision = tag.revision;
+  }
   return payload;
 }
 
 /** The row as it reads after a save, for correcting the page in place before it is read again. */
-export function savedTag(tag: GlossaryTag, payload: Record<string, unknown>): GlossaryTag {
+export function savedTag(tag: GlossaryTag, payload: TagSave, revision?: number): GlossaryTag {
   return {
     ...tag,
-    cn: String(payload.cn ?? ''),
-    aliases: Array.isArray(payload.aliases) ? (payload.aliases as string[]) : [],
-    cat: String(payload.cat ?? tag.cat),
-    description: String(payload.description ?? ''),
-    is_restricted: Number(payload.is_restricted ?? tag.is_restricted),
-    is_original_translation: Number(payload.is_original_translation ?? tag.is_original_translation),
-    is_sensitive: Number(payload.is_sensitive ?? tag.is_sensitive),
+    cn: payload.cn,
+    aliases: payload.aliases,
+    cat: payload.cat,
+    description: payload.description,
+    restricted: payload.restricted,
+    revision: revision ?? tag.revision,
   };
 }
 
@@ -267,7 +262,7 @@ export function syncTasks(tags: readonly DerpiTagRow[]): ImportTask[] {
     .filter((tag) => tag.name)
     .map((tag) => ({
       en: tag.name.toLowerCase(),
-      cn: '未翻译',
+      cn: UNTRANSLATED,
       aliases: [],
       cat: tag.category || 'general',
       count: Number(tag.images) || 0,

@@ -19,7 +19,7 @@ export function activeBlockTags(groups: readonly BlockGroup[]): { hidden: string
   const hidden = new Set<string>();
   const spoilered = new Set<string>();
   for (const group of groups) {
-    if (!group.is_active) continue;
+    if (!group.active) continue;
     for (const tag of group.hidden_tags) if (tag.trim()) hidden.add(tag.trim().toLowerCase());
     for (const tag of group.spoilered_tags) if (tag.trim()) spoilered.add(tag.trim().toLowerCase());
   }

@@ -1,6 +1,8 @@
 /**
- * Transport failure contracts: one typed error, one message table, bounded reads, a dead session
- * noticed once, and user query text that cannot escape the device filters. No live service.
+ * Transport failure contracts for `/api/v1` (`api()` / `apiRequest()`): one typed error carrying
+ * the backend's `error.code`, one message table, bounded reads, writes never retried except the
+ * one CSRF refresh, a dead session noticed once, and user query text that cannot escape the
+ * device filters. No live service.
  */
 import assert from 'node:assert/strict';
 import { after, beforeEach, mock, test } from 'node:test';
@@ -97,60 +99,136 @@ test('a read has a deadline, a write has none, and the caller’s abort is not a
     seen = init;
     return new Promise((_, reject) => init.signal?.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
   };
-  await assert.rejects(http.picponyRequest('get_tasks', { token: 't', timeoutMs: 20 }), (error) =>
+  await assert.rejects(http.api('GET', '/me/tasks', { token: 't', timeoutMs: 20 }), (error) =>
     error instanceof ApiError && error.kind === 'timeout');
   const controller = new AbortController();
-  const pending = http.picponyRequest('get_tasks', { token: 't', signal: controller.signal });
+  const pending = http.apiRequest('GET', '/me/tasks', { token: 't', signal: controller.signal });
   await flush();
   controller.abort(new DOMException('left the page', 'AbortError'));
   await assert.rejects(pending, (error) => error.name === 'AbortError' && !(error instanceof ApiError));
   const write = new AbortController();
-  const posting = http.picponyPostJson('save_block_group', { name: 'x' }, { token: 't', signal: write.signal });
+  const posting = http.apiRequest('POST', '/me/block-groups', { token: 't', json: { name: 'x' }, signal: write.signal });
   await flush();
   assert.equal(seen.signal, write.signal, 'a write takes exactly the caller’s signal, no deadline');
   write.abort();
   await assert.rejects(posting);
 });
 
-test('a 401 on get_user ends that session once; other actions confirm before signing anyone out', async (t) => {
+test('the request speaks /api/v1: path, query, Bearer, CSRF on writes only, and the error body', async () => {
+  values.set(LS_KEYS.userInfo, JSON.stringify({ token: 't', csrfToken: 'csrf-1', username: 'pony' }));
+  const sent = [];
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url: String(url), init, headers: new Headers(init.headers) });
+    return init.method === 'GET'
+      ? Response.json({ folders: [] })
+      : Response.json({ error: { code: 'ALREADY_EXISTS', message: '名称已存在' } }, { status: 409 });
+  };
+  assert.deepEqual(await http.api('GET', '/me/favorite-folders', { token: 't', query: { page: 2, q: undefined, tag: ['a', 'b'] } }), { folders: [] });
+  assert.equal(sent[0].url, '/api/v1/me/favorite-folders?page=2&tag=a&tag=b');
+  assert.equal(sent[0].url.includes('action='), false);
+  assert.equal(sent[0].headers.get('Authorization'), 'Bearer t');
+  assert.equal(sent[0].headers.has('X-CSRF-Token'), false, 'a read carries no CSRF token');
+  assert.equal(sent[0].init.body, undefined, 'a GET has no body');
+  await assert.rejects(http.api('POST', `/me/favorite-folders`, { token: 't', json: { name: 'x' }, idempotencyKey: 'k1' }), (error) =>
+    error instanceof ApiError && error.kind === 'http' && error.status === 409 && error.code === 'ALREADY_EXISTS' && error.message === '名称已存在');
+  assert.equal(sent[1].headers.get('X-CSRF-Token'), 'csrf-1');
+  assert.equal(sent[1].headers.get('Content-Type'), 'application/json');
+  assert.equal(sent[1].headers.get('Idempotency-Key'), 'k1');
+  assert.equal(sent[1].init.body, JSON.stringify({ name: 'x' }));
+  assert.equal(sent.length, 2, 'a refused write is never sent again');
+  assert.equal(http.seg('a/b c'), 'a%2Fb%20c');
+});
+
+test('a CSRF_MISMATCH write refreshes the token and is sent once more; nothing else is retried', async () => {
+  values.set(LS_KEYS.userInfo, JSON.stringify({ token: 't', csrfToken: 'stale', username: 'pony' }));
+  const sent = [];
+  let mismatches = 1;
+  globalThis.fetch = async (url, init) => {
+    const path = String(url);
+    const headers = new Headers(init?.headers);
+    sent.push({ path, method: init?.method ?? 'GET', csrf: headers.get('X-CSRF-Token') });
+    if (path === '/api/v1/auth/csrf') return Response.json({ csrf_token: 'fresh' });
+    if (mismatches > 0) {
+      mismatches -= 1;
+      return Response.json({ error: { code: 'CSRF_MISMATCH', message: 'csrf' } }, { status: 403 });
+    }
+    return new Response(null, { status: 204 });
+  };
+  assert.equal(await http.api('DELETE', '/me/favorite-folders/3', { token: 't' }), undefined, 'a 204 is undefined');
+  assert.deepEqual(sent.map(({ path, method, csrf }) => `${method} ${path} ${csrf}`), [
+    'DELETE /api/v1/me/favorite-folders/3 stale',
+    'GET /api/v1/auth/csrf null',
+    'DELETE /api/v1/me/favorite-folders/3 fresh',
+  ]);
+  assert.equal(JSON.parse(values.get(LS_KEYS.userInfo)).csrfToken, 'fresh', 'the refreshed token is kept beside the session');
+
+  /* A second mismatch after the refresh is the answer: one resend, never a loop. */
+  sent.length = 0;
+  mismatches = 2;
+  await assert.rejects(http.api('PATCH', '/me/favorite-folders/3', { token: 't', json: { name: 'y' } }), (error) =>
+    error instanceof ApiError && error.status === 403 && error.code === 'CSRF_MISMATCH');
+  assert.equal(sent.filter(({ path }) => path === '/api/v1/me/favorite-folders/3').length, 2);
+
+  /* Any other 403 is a refusal, not a stale token: no refresh, no resend. */
+  sent.length = 0;
+  globalThis.fetch = async (url, init) => {
+    sent.push({ path: String(url), method: init?.method });
+    return Response.json({ error: { code: 'FORBIDDEN', message: '没有权限' } }, { status: 403 });
+  };
+  await assert.rejects(http.api('POST', '/me/forum/threads', { token: 't', json: {} }), (error) => error.code === 'FORBIDDEN');
+  assert.equal(sent.length, 1);
+  /* A 5xx or a network failure on a write is never retried either — it may have been acted on. */
+  sent.length = 0;
+  globalThis.fetch = async (url, init) => { sent.push({ path: String(url), method: init?.method }); return new Response('', { status: 502 }); };
+  await assert.rejects(http.api('POST', '/me/forum/threads', { token: 't', json: {} }), (error) => error.status === 502);
+  globalThis.fetch = async (url, init) => { sent.push({ path: String(url), method: init?.method }); throw new TypeError('fetch failed'); };
+  await assert.rejects(http.api('POST', '/me/forum/threads', { token: 't', json: {} }), (error) => error instanceof ApiError && error.kind === 'network');
+  assert.equal(sent.length, 2);
+});
+
+test('a 401 on GET /me ends that session once; other resources confirm before signing anyone out', async (t) => {
   const notices = [];
   const stop = subscribeToasts((notice) => notices.push(notice));
   t.after(stop);
   values.set(LS_KEYS.userInfo, JSON.stringify({ token: 'dead', username: 'pony' }));
-  globalThis.fetch = async () => new Response(JSON.stringify({ error: null }), { status: 401 });
-  await http.picponyRequest('get_user', { token: 'dead' });
+  const unauthorized = () => Response.json({ error: { code: 'UNAUTHORIZED', message: '未登录' } }, { status: 401 });
+  globalThis.fetch = async () => unauthorized();
+  await http.apiRequest('GET', '/me', { token: 'dead' });
   await flush();
   assert.equal(values.has(LS_KEYS.userInfo), false);
   assert.deepEqual(events, ['user_info_updated']);
   assert.deepEqual(notices.map(({ message }) => message), ['登录已过期，请重新登录']);
-  await http.picponyRequest('get_user', { token: 'dead' });
+  await http.apiRequest('GET', '/me', { token: 'dead' });
   assert.equal(notices.length, 1, 'concurrent or repeated failures announce one expiry');
 
   /* A newer login is never signed out by an older request's 401. */
   values.set(LS_KEYS.userInfo, JSON.stringify({ token: 'fresh', username: 'pony' }));
   events.length = 0;
-  await http.picponyRequest('get_user', { token: 'dead' });
+  await http.apiRequest('GET', '/me', { token: 'dead' });
   await flush();
   assert.equal(JSON.parse(values.get(LS_KEYS.userInfo)).token, 'fresh');
   assert.deepEqual(events, []);
   assert.equal(notices.length, 1, 'an old response cannot announce that a newer login expired');
 
-  /* Another action's 401 is checked against get_user: a live session survives it. */
+  /* Another resource's 401 is checked against GET /me: a live session survives it. */
   const asked = [];
   globalThis.fetch = async (url) => {
-    const action = new URL(String(url), 'https://app.invalid').searchParams.get('action');
-    asked.push(action);
-    return action === 'get_user' ? Response.json({ success: true, user: { id: 1 } }) : new Response('{}', { status: 401 });
+    const path = new URL(String(url), 'https://app.invalid').pathname;
+    asked.push(path);
+    return path === '/api/v1/me' ? Response.json({ user: { id: 1 } }) : unauthorized();
   };
-  await http.picponyRequest('verify_password', { token: 'fresh', method: 'POST' });
-  await http.picponyRequest('get_faves', { token: 'fresh' });
+  await Promise.all([
+    http.apiRequest('POST', '/me/password/verify', { token: 'fresh', json: { password: 'x' } }),
+    http.apiRequest('GET', '/me/favorites', { token: 'fresh' }),
+  ]);
   await flush();
   await flush();
-  assert.equal(asked.filter((action) => action === 'get_user').length, 1, 'one confirmation per token in flight');
+  assert.equal(asked.filter((path) => path === '/api/v1/me').length, 1, 'one confirmation per token in flight');
+  assert.equal(asked.filter((path) => path === '/api/v1/me/password/verify').length, 1, 'the 401 write is not resent');
   assert.equal(JSON.parse(values.get(LS_KEYS.userInfo)).token, 'fresh');
 
-  globalThis.fetch = async () => new Response('{}', { status: 401 });
-  await http.picponyRequest('get_faves', { token: 'fresh' });
+  globalThis.fetch = async () => unauthorized();
+  await http.apiRequest('GET', '/me/favorites', { token: 'fresh' });
   await flush();
   await flush();
   assert.equal(values.has(LS_KEYS.userInfo), false, 'a confirmed dead session ends');

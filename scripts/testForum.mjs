@@ -45,7 +45,7 @@ beforeEach(() => {
   storage.clear();
   storage.refuse = false;
   calls = [];
-  respond = () => Response.json({ success: true });
+  respond = () => Response.json({});
   globalThis.fetch = async (url, init = {}) => {
     const request = { url: new URL(String(url), 'https://app.invalid'), init };
     calls.push(request);
@@ -58,51 +58,50 @@ after(() => {
 
 /* ----- the model ---------------------------------------------------------------------------- */
 
-test('rows are normalised at the boundary: flags, counts, badges, an unknown category', () => {
-  const post = model.postOf({
-    id: '7', user_id: '3', title: 'T', content: 'c', excerpt: '  简介  ', category: 'weird',
-    views: '12', reply_count: null, like_count: '2', is_pinned: '1', is_liked: 1, is_unread: 0,
-    created_at: '2026-01-01 10:00:00', updated_at: '', cover_image: '  ', username: 'u', avatar: '',
-    role: 'admin', experience: '250', equipped_badges: '[{"badge_name":"A","badge_color":"#fff"},{"badge_name":""}]',
-  });
-  assert.equal(post.id, 7);
-  assert.equal(post.category, 'discussion', 'an unknown kind is a discussion, as the original front end read it');
-  assert.equal(post.excerpt, '简介');
-  assert.deepEqual([post.views, post.reply_count, post.like_count], [12, 0, 2]);
-  assert.deepEqual([post.is_pinned, post.is_liked, post.is_unread], [true, true, false]);
-  assert.equal(post.updated_at, '2026-01-01 10:00:00', 'no update time is the creation time');
-  assert.equal(post.cover_image, null);
-  assert.equal(post.avatar, null);
-  assert.equal(post.experience, 250);
-  assert.deepEqual(post.badges, [{ badge_name: 'A', badge_color: '#fff' }]);
-  assert.equal(model.sortOf('created_at'), 'updated_at', 'the backend ignores created_at; it is not offered');
-  assert.equal(model.sortOf('views'), 'views');
+const author = { id: 3, username: 'u', avatar: null, role: 'admin', experience: 250, equipped_badges: [{ id: 1, name: 'A', color: '#fff' }] };
+const wirePost = (overrides = {}) => ({
+  id: 7, user_id: 3, title: 'T', excerpt: '  简介  ', content: { type: 'discussion', html: 'c' }, cover_image: '  ',
+  category: 'discussion', is_pinned: true, views: 12, revision: 4, created_at: '2026-01-01T02:00:00Z',
+  updated_at: '2026-01-02T02:00:00Z', author, reply_count: 0, like_count: 2, is_liked: true, ...overrides,
 });
 
-test('a commission and a tag-group share read back what they were written as', () => {
-  assert.equal(model.encodeCommission('desc', ''), 'desc', 'no link: the description as it is');
-  const encoded = model.encodeCommission('[b]desc[/b]', ' https://example.test/a ');
-  assert.deepEqual(model.parseCommission(encoded), { description: '[b]desc[/b]', link: 'https://example.test/a' });
-  assert.equal(model.parseCommission('plain text'), null);
-  assert.equal(model.parseCommission(JSON.stringify({ type: 'commission', description: 'd', commission_link: 'javascript:alert(1)' })).link, '',
-    'a link that is not http(s) is dropped');
+test('rows are read at the boundary: the author, the badges, the body by kind', () => {
+  const post = model.postOf(wirePost());
+  assert.equal(post.id, 7);
+  assert.equal(post.content, 'c');
+  assert.equal(post.excerpt, '简介');
+  assert.deepEqual([post.views, post.reply_count, post.like_count, post.revision], [12, 0, 2, 4]);
+  assert.deepEqual([post.is_pinned, post.is_liked], [true, true]);
+  assert.equal(post.cover_image, null, 'a blank cover is none');
+  assert.deepEqual([post.username, post.role, post.experience], ['u', 'admin', 250]);
+  assert.deepEqual(post.badges, [{ badge_name: 'A', badge_color: '#fff' }]);
+  assert.equal(model.sortOf('views'), 'views');
+
+  const commission = model.postOf(wirePost({ category: 'commission', content: { type: 'commission', description: '[b]d[/b]', commission_link: 'https://x.test' } }));
+  assert.deepEqual([commission.content, commission.commission_link, commission.shared_groups], ['[b]d[/b]', 'https://x.test', null]);
+  const share = model.postOf(wirePost({
+    category: 'taggroups',
+    content: { type: 'taggroups', description: '说明', tag_groups: [{ name: '小马', tags: ['pony'] }], block_groups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }] },
+  }));
+  assert.equal(share.content, '说明');
+  assert.deepEqual(share.shared_groups, {
+    tagGroups: [{ name: '小马', tags: ['pony'] }],
+    blockGroups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }],
+  }, 'a shared block group carries its hidden and its 打码 tags');
+});
+
+test('a post is written as the backend’s typed document, by kind', () => {
+  assert.deepEqual(model.contentWire('discussion', 'c', '', null), { type: 'discussion', html: 'c' });
+  assert.deepEqual(model.contentWire('commission', 'd', ' https://x.test ', null), { type: 'commission', description: 'd', commission_link: 'https://x.test' });
+  assert.deepEqual(
+    model.contentWire('taggroups', '说明', '', {
+      tag_groups: [{ name: 'g', tags: ['a'] }],
+      block_groups: [{ name: 'b', hidden_tags: ['x'], spoilered_tags: ['y'] }],
+    }),
+    { type: 'taggroups', description: '说明', tag_groups: [{ name: 'g', tags: ['a'] }], block_groups: [{ name: 'b', hidden_tags: ['x'], spoilered_tags: ['y'] }] },
+  );
   assert.equal(model.isCommissionLink('http://x.test'), true);
   assert.equal(model.isCommissionLink('ftp://x.test'), false);
-
-  const groups = {
-    tag_groups: [{ name: '小马', tags: ['pony', 'cute'] }],
-    block_groups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }],
-  };
-  const content = model.sharedGroupsContent('说明', groups);
-  assert.deepEqual(model.parseSharedGroups(content), {
-    description: '说明',
-    tagGroups: groups.tag_groups,
-    blockGroups: groups.block_groups,
-  });
-  const messy = model.parseSharedGroups(JSON.stringify({
-    type: 'taggroups', shared_tag_groups: [{ name: ' ', tags: ['a', 3, ''] }, null], shared_block_groups: 'x',
-  }));
-  assert.deepEqual(messy, { description: '', tagGroups: [{ name: '未命名标签组', tags: ['a'] }], blockGroups: [] });
 });
 
 test('the list key normalises its defaults, so the server seed and the first read agree', () => {
@@ -114,70 +113,98 @@ test('the list key normalises its defaults, so the server seed and the first rea
 /* ----- the transport ------------------------------------------------------------------------- */
 
 test('the list read sends the category, the order and a trimmed search, and names the session', async () => {
-  respond = () => Response.json({ success: true, posts: [{ id: 1, title: 'a' }, { title: 'no id' }], total: '1', total_pages: '0' });
+  respond = () => Response.json({ posts: [wirePost({ id: 1 })], total: 1, page: 2, total_pages: 0 });
   const list = await forum.getForumPosts({ page: 2, category: 'commission', sort: 'views', search: '  pony ', token: 'T' });
+  assert.equal(calls[0].url.pathname, '/api/v1/forum/posts');
   const query = calls[0].url.searchParams;
-  assert.equal(query.get('action'), 'get_forum_posts');
   assert.deepEqual([query.get('page'), query.get('category'), query.get('sort'), query.get('search')], ['2', 'commission', 'views', 'pony']);
-  assert.equal(calls[0].init.headers?.Authorization ?? new Headers(calls[0].init.headers).get('Authorization'), 'Bearer T');
-  assert.deepEqual(list.posts.map((post) => post.id), [1], 'a row without an id is dropped');
+  assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer T');
+  assert.deepEqual(list.posts.map((post) => post.id), [1]);
   assert.deepEqual([list.total, list.totalPages, list.signedIn], [1, 1, true]);
 
-  await forum.getForumPosts({ page: 1, search: '   ' });
+  await forum.getForumPosts({ page: 1, category: 'all', search: '   ' });
   assert.equal(calls[1].url.searchParams.has('search'), false, 'an empty search is not sent');
+  assert.equal(calls[1].url.searchParams.has('category'), false, '「all」 is no category');
 });
 
-test('a thread past its last page is that page, and a missing thread is not found', async () => {
-  respond = () => Response.json({ success: true, post: { id: 5, title: 't' }, comments: [{ id: 1 }], total_comments: 21, total_pages: 2 });
+test('a thread is its post and a page of replies; past its last page it is that page; a missing thread is not found', async () => {
+  respond = ({ url }) => url.pathname.endsWith('/comments')
+    ? Response.json({
+      comments: url.searchParams.get('page') === '2'
+        ? [{ id: 21, post_id: 5, user_id: 3, content: 'r', created_at: 'x', author }]
+        : [],
+      total: 21, total_pages: 2,
+    })
+    : Response.json({ post: wirePost({ id: 5 }) });
   const detail = await forum.getForumPostDetail('5', 9999, undefined, 'T');
   assert.equal(detail.page, 2);
   assert.equal(detail.total_comments, 21);
-  respond = () => new Response('<html>404</html>', { status: 404, headers: { 'Content-Type': 'text/html' } });
+  assert.deepEqual(detail.comments.map((row) => [row.id, row.username]), [[21, 'u']]);
+  assert.equal(calls.filter((call) => call.url.pathname === '/api/v1/forum/posts/5').length, 1, 'the post is read once');
+  respond = () => Response.json({ error: { code: 'POST_NOT_FOUND', message: '帖子不存在' } }, { status: 404 });
   await assert.rejects(forum.getForumPostDetail('404'), (error) => error instanceof ApiError && error.notFound && !error.retryable);
-  respond = () => Response.json({ success: true, post: null });
-  await assert.rejects(forum.getForumPostDetail('5'), (error) => error instanceof ApiError && error.kind === 'invalid');
+  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '无效' } }, { status: 400 });
+  await assert.rejects(forum.getForumPostDetail('x'), (error) => error instanceof ApiError && error.notFound, 'a malformed id is not found too');
 });
 
-test('writes send the original front end’s bodies and fail as sentences', async () => {
-  respond = () => Response.json({ success: true, post_id: '42' });
+test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences', async () => {
+  respond = () => Response.json({ id: 42, revision: 0 }, { status: 201 });
   const body = {
-    title: '标题标题标题', excerpt: '', content: 'c', category: 'discussion', cover_image: null,
-    shared_groups: null, draft_images: ['/uploads/forum/a.png'],
+    title: '标题标题标题', excerpt: '', content: 'c', commission_link: '', category: 'discussion', cover_image: null,
+    shared_groups: null,
   };
-  assert.equal(await forum.createForumPost('T', body), 42);
-  assert.equal(calls[0].url.searchParams.get('action'), 'create_forum_post');
-  assert.deepEqual(JSON.parse(calls[0].init.body), body);
+  assert.equal(await forum.createForumPost('T', body, 'k1'), 42);
+  assert.equal(calls[0].url.pathname, '/api/v1/forum/posts');
+  assert.equal(new Headers(calls[0].init.headers).get('Idempotency-Key'), 'k1');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    title: '标题标题标题', excerpt: '', content: { type: 'discussion', html: 'c' }, cover_image: null,
+  });
 
-  respond = () => Response.json({ success: true });
-  await assert.rejects(forum.createForumPost('T', body), (error) => error instanceof ApiError && /论坛列表/.test(error.message),
-    'published without an id: said, not a broken link');
+  respond = () => Response.json({ id: 42, revision: 5 });
+  assert.equal(await forum.updateForumPost('T', 42, body, 4, 'k2'), 5);
+  assert.equal(calls.at(-1).init.method, 'PUT');
+  assert.equal(calls.at(-1).url.pathname, '/api/v1/forum/posts/42');
+  assert.equal(JSON.parse(calls.at(-1).init.body).expected_revision, 4);
 
-  await forum.updateForumPost('T', 42, body);
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { ...body, id: 42 });
+  respond = () => new Response(null, { status: 204 });
   await forum.deleteForumPost('T', 42);
-  assert.deepEqual([calls.at(-1).url.searchParams.get('action'), JSON.parse(calls.at(-1).init.body)], ['delete_forum_post', { id: 42 }]);
+  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/posts/42']);
   await forum.deleteForumComment('T', 9);
-  assert.deepEqual([calls.at(-1).url.searchParams.get('action'), JSON.parse(calls.at(-1).init.body)], ['delete_forum_comment', { id: 9 }]);
-  await forum.createForumComment('T', { postId: 42, content: 'hi', replyToUserId: 3, replyToCommentId: 9 });
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { post_id: 42, content: 'hi', reply_to_user_id: 3, reply_to_comment_id: 9 });
-  await forum.createForumComment('T', { postId: 42, content: 'top' });
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { post_id: 42, content: 'top' }, 'a top-level reply names nobody');
+  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/comments/9']);
 
-  respond = () => Response.json({ success: true, is_liked: 1, like_count: '8' });
-  assert.deepEqual(await forum.toggleForumPostLike('T', 42), { liked: true, count: 8 });
+  respond = () => Response.json({ id: 1, content: 'hi' }, { status: 201 });
+  await forum.createForumComment('T', { postId: 42, content: 'hi', replyToUserId: 3 }, 'k3');
+  assert.equal(calls.at(-1).url.pathname, '/api/v1/forum/posts/42/comments');
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'hi', reply_to_user_id: 3 });
+  await forum.createForumComment('T', { postId: 42, content: 'top' }, 'k4');
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'top' }, 'a top-level reply names nobody');
 
-  respond = () => Response.json({ success: false, error: '标题至少需要 5 个字符' });
-  await assert.rejects(forum.updateForumPost('T', 42, body), (error) => error instanceof ApiError && error.message === '标题至少需要 5 个字符');
+  respond = () => Response.json({ liked: true, like_count: 8 });
+  assert.deepEqual(await forum.setForumPostLike('T', 42, true), { liked: true, count: 8 });
+  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
+    ['PUT', '/api/v1/me/forum/posts/42/like', { liked: true }]);
 
-  await forum.importSharedTagGroup('T', { name: 'g', tags: ['a'] }).catch(() => {});
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { name: 'g', tags: ['a'] });
-  await forum.importSharedBlockGroup('T', { name: 'b', hidden_tags: ['x'], spoilered_tags: [] }).catch(() => {});
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { name: 'b', hidden_tags: ['x'], spoilered_tags: [] });
+  respond = () => Response.json({ error: { code: 'POST_VERSION_CONFLICT', message: '帖子已更新，请刷新后重试' } }, { status: 409 });
+  await assert.rejects(forum.updateForumPost('T', 42, body, 4, 'k5'), (error) => error instanceof ApiError && error.message === '帖子已更新，请刷新后重试');
 
-  respond = () => Response.json({ success: true, tag_groups: [{ id: 1, name: '', tags: ['a'] }], block_groups: [{ id: '2', name: 'b', hidden_tags: null }] });
+  respond = () => Response.json({ id: 9, revision: 0 }, { status: 201 });
+  await forum.createForumPost('T', {
+    ...body, category: 'taggroups', shared_groups: { tag_groups: [], block_groups: [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }] },
+  }, 'k6');
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).content.block_groups, [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }],
+    'a block group\'s 打码 tags travel in a share');
+
+  respond = () => Response.json({ id: 1, revision: 0 }, { status: 201 });
+  await forum.importSharedTagGroup('T', { name: 'g', tags: ['a'] });
+  assert.deepEqual([calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)], ['/api/v1/me/tag-group-imports', { name: 'g', tags: ['a'] }]);
+  await forum.importSharedBlockGroup('T', { name: 'b', hidden_tags: ['x'], spoilered_tags: [] });
+  assert.deepEqual([calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
+    ['/api/v1/me/block-group-imports', { name: 'b', hidden_tags: ['x'], spoilered_tags: [], active: false }]);
+
+  respond = () => Response.json({ tag_groups: [{ id: 1, name: 'g', tags: ['a'], revision: 0 }], block_groups: [{ id: 2, name: 'b', hidden_tags: ['h'], spoilered_tags: [], revision: 1 }] });
   assert.deepEqual(await forum.getMyShareableGroups('T'), {
-    tagGroups: [{ id: 1, name: '未命名标签组', tags: ['a'] }],
-    blockGroups: [{ id: 2, name: 'b', hidden_tags: [], spoilered_tags: [] }],
+    tagGroups: [{ id: 1, name: 'g', tags: ['a'] }],
+    blockGroups: [{ id: 2, name: 'b', hidden_tags: ['h'], spoilered_tags: [] }],
   });
 });
 
@@ -201,31 +228,33 @@ class FakeXHR {
   }
 }
 
-test('a picture uploads over XHR with progress, and every failure is a sentence', async () => {
+test('a picture uploads over XHR with progress and the session’s CSRF token, and every failure is a sentence', async () => {
   globalThis.XMLHttpRequest = FakeXHR;
   globalThis.FormData = class { constructor() { this.parts = []; } append(...args) { this.parts.push(args); } };
+  const asset = 'a'.repeat(64);
   const progress = [];
   let pending = forum.uploadForumImage('T', new Blob(['x']), { onProgress: (fraction) => progress.push(fraction) });
   const xhr = FakeXHR.last;
   assert.equal(xhr.method, 'POST');
-  assert.match(xhr.url, /action=upload_forum_image$/);
+  assert.equal(xhr.url, '/api/v1/me/uploads/forum-images');
   assert.equal(xhr.headers.Authorization, 'Bearer T');
+  assert.equal(xhr.body.parts[0][0], 'image');
   xhr.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
-  xhr.respond(200, { success: true, url: '/uploads/forum/a.png' });
-  assert.equal(await pending, '/uploads/forum/a.png');
+  xhr.respond(201, { asset, url: `/api/v1/media/${asset}`, mime: 'image/png', size_bytes: 1, width: 1, height: 1, expires_at: 'x', max_bytes: 5 });
+  assert.equal(await pending, `/api/v1/media/${asset}`);
   assert.deepEqual(progress, [0.5, 1]);
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
-  FakeXHR.last.respond(200, { success: true, image_url: '/uploads/forum/b.png' });
-  assert.equal(await pending, '/uploads/forum/b.png', 'the older field is accepted too');
-
-  pending = forum.uploadForumImage('T', new Blob(['x']));
-  FakeXHR.last.respond(413, '<html>Too Large</html>');
+  FakeXHR.last.respond(413, { error: { code: 'FILE_TOO_LARGE', message: '文件超过该用途的上传限制' } });
   await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片太大，服务器拒绝了这次上传');
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
-  FakeXHR.last.respond(200, { success: false, error: '图片格式不支持' });
+  FakeXHR.last.respond(400, { error: { code: 'BAD_REQUEST', message: '图片格式不支持' } });
   await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片格式不支持');
+
+  pending = forum.uploadForumImage('T', new Blob(['x']));
+  FakeXHR.last.respond(201, '<html></html>');
+  await assert.rejects(pending, (error) => error instanceof ApiError && error.kind === 'invalid');
 
   const controller = new AbortController();
   pending = forum.uploadForumImage('T', new Blob(['x']), { signal: controller.signal });
@@ -242,7 +271,7 @@ test('a picture is checked before it is sent: kind, size, and a GIF is never red
   assert.equal(await images.prepareForumImage(small), small, 'a small picture goes as it is');
   globalThis.createImageBitmap = async () => { throw new Error('cannot decode'); };
   await assert.rejects(images.prepareForumImage(file('image/heic', 6 * 1024 * 1024)), /无法在浏览器中压缩/);
-  assert.equal(images.storedAssetPath('https://picpony.top/uploads/forum/a.png'), '/uploads/forum/a.png');
+  assert.equal(images.storedAssetPath(`https://picpony.top/api/v1/media/${'a'.repeat(64)}`), `/api/v1/media/${'a'.repeat(64)}`);
   assert.equal(images.storedAssetPath('https://derpicdn.net/a.png'), 'https://derpicdn.net/a.png');
 });
 
@@ -265,9 +294,9 @@ test('a teaser prefers the 简介, then the body’s own words', () => {
   const base = { title: '标题', excerpt: '', category: 'discussion' };
   assert.equal(text.forumTeaser({ ...base, excerpt: '简介', content: '正文' }), '简介');
   assert.equal(text.forumTeaser({ ...base, content: '[img]/a.png[/img]正文[b]粗[/b]' }), '正文粗');
-  assert.equal(text.forumTeaser({ ...base, category: 'commission', content: model.encodeCommission('', 'https://x.test') }), '附有约稿链接');
-  const share = model.sharedGroupsContent('', { tag_groups: [{ name: 'a', tags: [] }], block_groups: [] });
-  assert.equal(text.forumTeaser({ ...base, category: 'taggroups', content: share }), '分享了 1 个标签组');
+  assert.equal(text.forumTeaser({ ...base, category: 'commission', content: '', commission_link: 'https://x.test' }), '附有约稿链接');
+  const shared_groups = { tagGroups: [{ name: 'a', tags: [] }], blockGroups: [] };
+  assert.equal(text.forumTeaser({ ...base, category: 'taggroups', content: '', shared_groups }), '分享了 1 个标签组');
   assert.equal(text.isBlankRichText('[p][br][/p]'), true);
   assert.equal(text.isBlankRichText('[img]/a.png[/img]'), false, 'a picture is something to send');
 });
@@ -302,7 +331,7 @@ test('the original front end’s draft is adopted once, by the first account to 
   assert.equal(adopted.title, '旧草稿');
   assert.equal(adopted.category, 'commission');
   assert.equal(adopted.commissionLink, 'https://x.test');
-  assert.deepEqual(adopted.images, ['/uploads/forum/a.png']);
+  assert.deepEqual(adopted.images, [], 'its pictures were staged on the old backend, which the new one refuses');
   assert.equal(storage.getItem('forum_post_draft'), null, 'removed once it is this account’s');
   assert.equal(drafts.readDraft('2', null), null, 'and nobody else adopts it');
   assert.equal(drafts.readDraft('1', null).title, '旧草稿');
@@ -399,10 +428,11 @@ test('the post form checks every field, blocks on an upload, sends once and keep
     '@/components/forum/SharedGroupsPicker': { default: 'SharedGroupsPicker', sharedGroupsOf: () => ({ tag_groups: [], block_groups: [] }) },
     '@/lib/api/forum': {
       ...model,
-      createForumPost: async (token, body) => { created.push({ token, body }); return createReply(); },
+      createForumPost: async (token, body, key) => { created.push({ token, body, key }); return createReply(); },
       updateForumPost: async () => {},
     },
     '@/lib/api/errors': { apiErrorMessage: (error, fallback) => error?.message || fallback },
+    '@/lib/api/idempotency': await import('../lib/api/idempotency.ts'),
     '@/lib/bbcode': { firstImageOf: (value) => /\[img\](.*?)\[\/img\]/.exec(value)?.[1] ?? null },
     '@/lib/forumDraft': {
       EMPTY_DRAFT: drafts.EMPTY_DRAFT,
@@ -438,8 +468,8 @@ test('the post form checks every field, blocks on an upload, sends once and keep
 
   byLabel(tree, '标题').props.onChange({ target: { value: '一个足够长的标题' } });
   tree = hooks.render(() => PostComposer(props));
-  byType(tree, 'DynamicComponent').props.onChange('[img]https://picpony.top/uploads/forum/p.png[/img]正文');
-  byType(tree, 'DynamicComponent').props.onUploaded('/uploads/forum/p.png');
+  byType(tree, 'DynamicComponent').props.onChange(`[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`);
+  byType(tree, 'DynamicComponent').props.onUploaded(`/api/v1/media/${'c'.repeat(64)}`);
   byType(tree, '@/components/forum/CoverField:default').props.onBusyChange(true);
   tree = hooks.render(() => PostComposer(props));
   assert.equal(byLabel(tree, '标题').props.error, undefined, 'typing clears the field’s message');
@@ -455,8 +485,8 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   /* Through JSON: the component runs in its own realm, whose objects have their own prototype. */
   assert.deepEqual(JSON.parse(JSON.stringify(created[0].body)), {
     title: '一个足够长的标题', excerpt: '', category: 'discussion',
-    content: '[img]https://picpony.top/uploads/forum/p.png[/img]正文',
-    cover_image: '/uploads/forum/p.png', shared_groups: null, draft_images: ['/uploads/forum/p.png'],
+    content: `[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`, commission_link: '',
+    cover_image: `/api/v1/media/${'c'.repeat(64)}`, shared_groups: null,
   }, 'the first picture stands in for the cover, in its stored form');
   assert.equal(done.length, 0);
   assert.equal(cleared.length, 0, 'a failed publish keeps the draft');
@@ -467,6 +497,7 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   createReply = async () => 88;
   await submit();
   assert.equal(created.length, 2, 'retried by the writer');
+  assert.equal(created[1].key, created[0].key, 'a retry after a lost answer is the same post (one Idempotency-Key)');
   assert.deepEqual(done.map(([id]) => id), [88]);
   assert.deepEqual(JSON.parse(JSON.stringify(cleared.at(-1))), ['1', null], 'published: the draft goes');
   assert.deepEqual(toasts, ['已发布']);

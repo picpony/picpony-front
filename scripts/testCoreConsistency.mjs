@@ -573,6 +573,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
   let open = true;
   let statusSignal;
   const jsx = (type, props) => ({ type, props });
+  const errorsModule = load('lib/api/errors.ts', {}, { Error, TypeError });
   const { default: DeveloperGuide } = load('components/DeveloperGuideModal.tsx', {
     react: harness.react,
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
@@ -583,7 +584,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/components/ErrorRetry': { default: 'ErrorRetry' },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
     // One realm for both modules, so `instanceof Error` holds across them as in the browser.
-    '@/lib/api/errors': load('lib/api/errors.ts', {}, { Error, TypeError }),
+    '@/lib/api/errors': errorsModule,
     '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
     '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
     '@/lib/settingsSync': { enforceContentGate: () => {} },
@@ -592,11 +593,13 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/lib/api/picpony': {
       getDeveloperStatus: async (_token, signal) => {
         statusSignal = signal;
-        return { success: true, is_developer: false,
+        return { is_developer: false, is_developer_banned: false,
           prerequisites: { logged_in: true, api_bound: true, level_gt_3: true } };
       },
-      enableDeveloperMode: (credential) => new Promise((resolve) => requests.push({ credential, resolve })),
-      disableDeveloperMode: async () => Response.json({ success: true }),
+      /* The Rust adapter resolves with the access state (`DeveloperState`) or throws `ApiError`. */
+      enableDeveloperMode: (account, credential) =>
+        new Promise((resolve, reject) => requests.push({ account, credential, resolve, reject })),
+      disableDeveloperMode: async () => ({ active: false }),
     },
   }, {
     AbortController, Event, queueMicrotask, Error,
@@ -623,7 +626,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
   render();
   await harness.effects();
   assert.equal(statusSignal.aborted, true);
-  requests[0].resolve(Response.json({ success: true }));
+  requests[0].resolve({ active: true });
   await first;
   assert.equal(stored.get('developer'), 'true', 'the same account keeps its accepted setting after closing');
   assert.equal(notices.length, 0, 'closed forms cannot publish a success notice');
@@ -633,9 +636,9 @@ test('developer-mode writes preserve accepted settings after closing without upd
   open = true;
   button = await fillPassword();
   const failed = button.props.onClick();
-  requests[1].resolve(Response.json({ success: true }, { status: 500 }));
+  requests[1].reject(new errorsModule.ApiError('http', { status: 403, code: 'DEVELOPER_PASSWORD_INVALID', serverMessage: '开启失败' }));
   await failed;
-  assert.equal(stored.size, 0, 'a failed HTTP status cannot enable the local mode');
+  assert.equal(stored.size, 0, 'a refused grant cannot enable the local mode');
   assert.equal(find(render(), 'Input').props.error, '开启失败');
 
   button = find(render().props.footer, 'Button');

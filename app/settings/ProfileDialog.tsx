@@ -6,14 +6,17 @@ import Button from '@/components/Button';
 import Select from '@/components/Select';
 import { Input, Textarea } from '@/components/Input';
 import { showToast } from '@/components/Toast';
-import { saveProfile } from '@/lib/api/picpony';
-import { envelopeMessage, readEnvelope } from '@/lib/api/http';
+import { isRefusal, saveProfile } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { GENDER_OPTIONS, RACE_OPTIONS, normalizeGender, normalizeRace, optionsWith } from '@/lib/profileFields';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { enforceContentGate, todayOnBeijingCalendar } from '@/lib/settingsSync';
 import { useFieldErrors } from '@/lib/useFieldErrors';
-import { saveAccountFields, text } from './useAccount';
+import { sessionUser } from '@/lib/resources';
+import { profileRevision, saveAccountFields, text } from './useAccount';
+
+/** The races whose badge the backend awards when one is chosen (`profiles::RACES`). */
+const RACE_BADGES = new Set(RACE_OPTIONS.map((option) => option.value).filter((value) => value && value !== '其他'));
 
 const BIO_MAX = 500;
 /* By character, as PHP's `mb_strlen` counts (review P5-O8): `.length` counted an emoji as two.
@@ -38,7 +41,7 @@ export function profileOf(record: Record<string, unknown>): ProfileValues {
 
 /**
  * 编辑个人资料 — a **draft**, seeded from the saved values each time the dialog opens and committed
- * only when `save_profile` succeeds. 取消 discards it. The editor used to edit the saved values in
+ * only when `PUT /me/profile` succeeds. 取消 discards it. The editor used to edit the saved values in
  * place, so a cancelled birthday stayed on screen, reopened as if saved and — since the 16+ gate
  * read the same state — unlocked 中等限制 without the server ever hearing of it. The gate reads the
  * saved record only (`enforceContentGate` after a save).
@@ -88,17 +91,26 @@ export default function ProfileDialog({
     }
     setBusy(true);
     try {
-      const data = await readEnvelope(await saveProfile(token, draft));
+      const data = await saveProfile(token, { ...draft, expected_revision: profileRevision(readUserInfo()) });
       if (readToken() !== token) return;
-      saveAccountFields(token, { ...draft });
-      /* A birthday that no longer allows 中等限制 takes it away now, not on the next load. */
+      saveAccountFields(token, {
+        ...data.profile,
+        birthday: data.profile.birthday ?? '',
+        profile_revision: data.revision,
+      });
+      /* A birthday that no longer allows 中等限制 takes it away now, not on the next load; the
+         backend has already done the same to the stored settings (`adjustments`), so read them. */
       enforceContentGate(readUserInfo());
-      /* Setting a race can award its badge; the backend says so in its answer, in its own register. */
-      const awarded = /徽章/.test(envelopeMessage(data) ?? '');
+      if (data.adjustments.length) void sessionUser.read({ token }, { force: true }).catch(() => {});
+      /* Choosing one of the named races awards its badge (and takes the previous one back). */
+      const awarded = draft.race !== saved.race && RACE_BADGES.has(draft.race);
       showToast(awarded ? '已保存个人资料，种族徽章已放入我的徽章' : '已保存个人资料', 'success');
       onClose();
     } catch (error) {
-      if (readToken() === token) showToast(apiErrorMessage(error, '个人资料保存失败'), 'error');
+      if (readToken() !== token) return;
+      /* Another device saved the profile meanwhile: read it, so the next save names its version. */
+      if (isRefusal(error, 'PROFILE_CONFLICT')) void sessionUser.read({ token }, { force: true }).catch(() => {});
+      showToast(apiErrorMessage(error, '个人资料保存失败'), 'error');
     } finally {
       setBusy(false);
     }

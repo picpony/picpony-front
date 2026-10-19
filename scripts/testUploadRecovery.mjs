@@ -18,12 +18,11 @@ function deferred() {
 
 function storeFixture() {
   let token = 'account-a';
-  const stages = [], submissions = [], counted = [], guards = new Set();
+  const stages = [], submissions = [], counted = [], reported = [], guards = new Set();
   const dependencies = {
     react: { useSyncExternalStore: (_subscribe, get) => get() },
     '@/components/Toast': { showToast() {} },
     '@/lib/api/errors': { apiErrorMessage: (error) => error.message, isAborted: (error) => error.name === 'AbortError' },
-    '@/lib/api/tasks': { recordWeeklyUpload: async (owner) => { counted.push(owner); } },
     '@/lib/api/upload': {
       DUPLICATE_COMPLAINT: upload.DUPLICATE_COMPLAINT,
       stageUpload(owner, file, options) {
@@ -38,6 +37,8 @@ function storeFixture() {
       },
     },
     '@/lib/hooks': { readToken: () => token },
+    /* A confirmed upload reports itself, with the id Derpibooru gave, toward the weekly task. */
+    '@/lib/api/tasks': { recordWeeklyUpload: async (owner, imageId) => { counted.push(owner); reported.push(imageId); } },
     '@/lib/resources': { tasks: { expire() {} } },
   };
   const code = ts.transpileModule(readFileSync(new URL('../app/upload/uploadStore.ts', import.meta.url), 'utf8'), {
@@ -53,7 +54,7 @@ function storeFixture() {
     },
   }, { filename: 'app/upload/uploadStore.ts' });
   return {
-    store: exports, stages, submissions, counted, guards,
+    store: exports, stages, submissions, counted, reported, guards,
     account: (value) => { token = value; },
     start: (owner = token) => exports.startUpload({ owner, apiKey: 'fixtureKey123', tagInput: 'safe, pony, cute', navigate() {} }),
     read: (owner = token) => exports.useUpload(owner),
@@ -108,6 +109,7 @@ test('re-entry sends one upload; a field refusal reuses staging; only confirmed 
   assert.equal(f.stages.length, 1);
   f.submissions[1].resolve({ kind: 'uploaded', imageId: 13 }); await second;
   assert.deepEqual(f.counted, ['account-a']);
+  assert.deepEqual(f.reported, [13]);
   assert.equal(f.read().draft.file, null);
   assert.equal(f.read().job.outcome.imageId, 13);
   assert.equal(f.guards.has('beforeunload'), false);
@@ -166,12 +168,18 @@ test('staging sends one multipart file with Bearer and preserves cancellation an
     const first = upload.stageUpload('fixture', file, { onProgress: (v) => progress.push(v) });
     const xhr = requests[0];
     assert.equal(xhr.method, 'POST');
-    assert.match(xhr.url, /action=upload_temp_upload$/);
+    assert.equal(xhr.url, '/api/v1/me/uploads/works');
     assert.equal(xhr.headers.Authorization, 'Bearer fixture');
     assert.equal(xhr.body.get('file').name, 'image.png');
     xhr.upload.onprogress({ lengthComputable: true, loaded: 5, total: 10 });
-    xhr.status = 200; xhr.responseText = JSON.stringify({ success: true, url: '/uploads/fixture.png' }); xhr.onload();
-    assert.equal(await first, 'https://picpony.top/uploads/fixture.png');
+    const asset = 'a'.repeat(64);
+    xhr.status = 201;
+    xhr.responseText = JSON.stringify({
+      asset, url: `https://api.picpony.top/api/v1/media/${asset}?cap=${'b'.repeat(64)}`, mime: 'image/png',
+      size_bytes: 7, width: 1, height: 1, expires_at: '2026-10-19T00:00:00Z', max_bytes: 52428800,
+    });
+    xhr.onload();
+    assert.equal(await first, `https://api.picpony.top/api/v1/media/${asset}?cap=${'b'.repeat(64)}`, 'the address Derpibooru fetches it by');
     assert.deepEqual(progress, [0.5, 1]);
     const aborted = new AbortController();
     const second = upload.stageUpload('fixture', file, { signal: aborted.signal });

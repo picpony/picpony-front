@@ -6,9 +6,8 @@ import Button from '@/components/Button';
 import { Input } from '@/components/Input';
 import { showToast } from '@/components/Toast';
 import { useAuthModal } from '@/components/AuthModal';
-import { changePassword } from '@/lib/api/picpony';
-import { readEnvelope } from '@/lib/api/http';
-import { apiErrorMessage, isApiError } from '@/lib/api/errors';
+import { changePassword, isRefusal } from '@/lib/api/picpony';
+import { apiErrorMessage } from '@/lib/api/errors';
 import {
   PASSWORD_HINT,
   validateNewPassword,
@@ -61,15 +60,17 @@ export default function PasswordDialog({
     if (busy || !form.check()) return;
     setBusy(true);
     try {
-      await readEnvelope(await changePassword(token, { old_password: current, new_password: next }));
+      await changePassword(token, { old_password: current, new_password: next });
       if (readToken() !== token) return;
       showToast('密码已修改，请重新登录', 'success');
       onClose();
-      if (clearUserInfo(token)) openAuth('login');
+      /* The backend has ended every session of the account, this one included. */
+      if (clearUserInfo(token, { revoke: false })) openAuth('login');
     } catch (error) {
       if (readToken() !== token) return;
       /* The backend's refusal here is about the current password. */
-      if (isApiError(error) && error.kind === 'envelope') form.set('current', apiErrorMessage(error));
+      if (isRefusal(error, 'PASSWORD_MISMATCH')) form.set('current', apiErrorMessage(error));
+      else if (isRefusal(error)) form.set('next', apiErrorMessage(error));
       else showToast(apiErrorMessage(error), 'error');
     } finally {
       setBusy(false);

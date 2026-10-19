@@ -13,10 +13,10 @@ import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import * as adminApi from '@/lib/api/admin';
-import { BLOCK_FILTER_KEYS, installBlockFilters, parseBlockFilters, type BlockFilterKey } from '@/lib/blockFilters';
+import { BLOCK_FILTER_KEYS, installBlockFilters, type BlockFilterKey, type BlockFilters } from '@/lib/blockFilters';
 import SectionHeader from './SectionHeader';
 import { AdminNote } from './AdminForm';
-import { adminData, defineAdminQuery, retryError, useAdminQuery } from './queries';
+import { defineAdminQuery, retryError, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 
@@ -37,20 +37,21 @@ const RULES: Record<BlockFilterKey, { name: string; role: string }> = {
   onlyPony: { name: '只看小马', role: '允许的物种（任一即可）' },
 };
 
-const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (token, signal) => {
-  const data = await adminApi.getBlockTags(token, signal);
-  adminData(data, undefined, '屏蔽标签');
-  const filters = parseBlockFilters(data);
-  if (!filters) throw new Error('屏蔽标签加载失败');
-  installBlockFilters(filters);
+const isRule = (value: string): value is BlockFilterKey => (BLOCK_FILTER_KEYS as readonly string[]).includes(value);
+
+/* The rules every visitor's searches carry: the rows (with the ids a removal names), and the same
+   tags installed as this tab's live filters, so the console's own searches follow an edit at once. */
+const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (_token, signal) => {
+  const data = await adminApi.getBlockTags(signal);
   const grouped: BlockTagsGroup = {};
-  if (Array.isArray(data.tags)) {
-    for (const tag of data.tags as BlockTag[]) {
-      if (tag.filter_key && BLOCK_FILTER_KEYS.includes(tag.filter_key)) (grouped[tag.filter_key] ??= []).push(tag);
-    }
-  } else if (data.grouped && typeof data.grouped === 'object') {
-    for (const key of BLOCK_FILTER_KEYS) grouped[key] = Array.isArray(data.grouped[key]) ? data.grouped[key] : [];
+  const filters = Object.fromEntries(BLOCK_FILTER_KEYS.map((key) => [key, [] as string[]])) as BlockFilters;
+  for (const row of data.tags) {
+    if (!isRule(row.filter)) continue;
+    (grouped[row.filter] ??= []).push({ id: row.id, tag_name: row.tag, filter_key: row.filter });
+    const tag = row.tag.trim().toLowerCase();
+    if (tag && !filters[row.filter].includes(tag)) filters[row.filter].push(tag);
   }
+  installBlockFilters(filters);
   return grouped;
 });
 
@@ -95,7 +96,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
       return;
     }
     void addMutation.run(
-      () => adminApi.adminAddBlockTag(token, { filter_key: key, tag_name: name }),
+      () => adminApi.adminAddBlockTag(token, { filter: key, tag: name }),
       () => {
         showToast(`已将 ${name} 加入「${RULES[key].name}」`, 'success');
         setDraft('');

@@ -1,6 +1,6 @@
 /**
- * 金币商店 without a browser: what `get_shop_items` is read as (what is on sale and what is not), the
- * checkout's wire (the original front end's line shape, field for field), the cart (one per
+ * 金币商店 without a browser: what `GET /shop/items` is read as (what is on sale and what is not), the
+ * checkout's wire (`{items: [{item_id, quantity}]}` with its Idempotency-Key), the cart (one per
  * account, bounded by stock and by storage, never carried from one account to another), the
  * cart against the shop's live answer (sold out, withdrawn, clamped), and a checkout end to end —
  * the balance it leaves, the lines it removes, and what a refusal and a lost answer keep.
@@ -40,7 +40,7 @@ beforeEach(() => {
   events.length = 0;
   storageRefuses = false;
   calls = [];
-  respond = () => Response.json({ success: true });
+  respond = () => Response.json({});
   globalThis.fetch = async (url, init = {}) => {
     const request = { url: new URL(String(url), 'https://app.invalid'), init };
     calls.push(request);
@@ -55,103 +55,83 @@ const cart = await import('../components/shop/cartStore.ts');
 const model = await import('../components/shop/cartModel.ts');
 const checkout = await import('../components/shop/checkout.ts');
 
+const row = (id, name, overrides = {}) => ({
+  id, name, description: '', image_url: null, price: 1, stock: 1, active: true, revision: 0, created_at: '2026-07-10T08:53:58Z', ...overrides,
+});
 const ROWS = [
-  { id: 4, name: '绘云彩彩钥匙扣', description: '现场领取', image_url: 'https://picpony.top/uploads/643.jpg', price: 8, stock: 3, active: 1, created_at: '2026-07-10 16:53:58' },
-  { id: 5, name: '  没有图片的商品  ', description: '', image_url: '', price: 30, stock: 10, active: 1 },
-  { id: 6, name: '已售罄的徽章', price: 5, stock: 0, active: 1 },
-  { id: 7, name: '下架商品', price: 1, stock: 9, active: 0 },
-  { id: 0, name: '没有编号', price: 1, stock: 1 },
-  { id: 8, name: '', price: 1, stock: 1 },
-  { id: 9, name: '没有价格', price: 'free', stock: 1 },
-  { id: 10, name: '库存缺失', price: 2 },
-  'not a row',
+  row(4, '绘云彩彩钥匙扣', { description: ' 现场领取 ', image_url: 'https://picpony.top/uploads/643.jpg', price: 8, stock: 3 }),
+  row(5, '没有图片的商品', { price: 30, stock: 10 }),
+  row(6, '已售罄的徽章', { price: 5, stock: 0 }),
+  row(7, '下架商品', { stock: 9, active: false }),
 ];
 
 async function items() {
-  respond = () => Response.json({ success: true, items: ROWS });
+  respond = () => Response.json({ items: ROWS, next_cursor: null });
   const list = await shop.getShopItems(null);
   calls.length = 0;
   return list;
 }
 
-// --- get_shop_items ---------------------------------------------------------------------------
+// --- GET /shop/items --------------------------------------------------------------------------
 
-test('the items on sale: a row without an id, a name or a price is dropped, and so is a withdrawn one', async () => {
-  respond = () => Response.json({ success: true, items: ROWS });
+test('the items on sale: a switched-off one (what an administrator’s read also returns) is not on sale', async () => {
+  respond = () => Response.json({ items: ROWS, next_cursor: null });
   const list = await shop.getShopItems(null);
-  assert.deepEqual(list.map((item) => item.id), [4, 5, 6, 10]);
-  const [first, second, soldOut, noStock] = list;
-  assert.deepEqual(
-    { name: first.name, price: first.price, stock: first.stock, imageUrl: first.imageUrl },
-    { name: '绘云彩彩钥匙扣', price: 8, stock: 3, imageUrl: 'https://picpony.top/uploads/643.jpg' },
-  );
-  assert.equal(second.name, '没有图片的商品', 'trimmed');
-  assert.equal(second.imageUrl, '');
+  assert.deepEqual(list.map((item) => item.id), [4, 5, 6]);
+  const [first, second, soldOut] = list;
+  assert.deepEqual(first, {
+    id: 4, name: '绘云彩彩钥匙扣', description: '现场领取', imageUrl: 'https://picpony.top/uploads/643.jpg', price: 8, stock: 3,
+  });
+  assert.equal(second.imageUrl, '', 'no picture');
   assert.equal(soldOut.stock, 0, 'sold out is still on sale — the card says so');
-  assert.equal(noStock.stock, null, 'a missing stock is unknown, not none (G2-023)');
-  assert.deepEqual(first.wire, ROWS[0], 'the row is kept as sent: the checkout sends it back');
 });
 
 test('browsing is public: no token when signed out, the token when there is one, never cached', async () => {
-  respond = () => Response.json({ success: true, items: [] });
+  respond = () => Response.json({ items: [], next_cursor: null });
   await shop.getShopItems(null);
   await shop.getShopItems('tok');
   const [anonymous, signedIn] = calls;
-  assert.equal(anonymous.url.searchParams.get('action'), 'get_shop_items');
-  assert.ok(anonymous.url.searchParams.get('_t'), 'the original’s cache-buster');
+  assert.equal(anonymous.url.pathname, '/api/v1/shop/items');
+  assert.equal(anonymous.url.searchParams.get('limit'), '1000', 'the whole catalogue, one read');
+  assert.equal(anonymous.init.cache, 'no-store');
   assert.equal(new Headers(anonymous.init.headers).get('authorization'), null);
   assert.equal(new Headers(signedIn.init.headers).get('authorization'), 'Bearer tok');
 });
 
-test('a refusal is an error with the backend’s words, and a body without a list is not an empty shop', async () => {
-  respond = () => Response.json({ success: false, error: '商店维护中' });
+test('a refusal is an error with the backend’s words, and an empty shop is an answer', async () => {
+  respond = () => Response.json({ error: { code: 'MAINTENANCE', message: '商店维护中' } }, { status: 403 });
   await assert.rejects(shop.getShopItems(null), (error) => error instanceof ApiError && error.message === '商店维护中');
-  respond = () => Response.json({ success: true });
-  await assert.rejects(shop.getShopItems(null), (error) => error instanceof ApiError && error.kind === 'invalid');
-  respond = () => Response.json({ success: true, items: [] });
+  respond = () => Response.json({ items: [], next_cursor: null });
   assert.deepEqual(await shop.getShopItems(null), [], 'an empty shop is an answer');
 });
 
-// --- checkout_cart ----------------------------------------------------------------------------
+// --- POST /me/shop/checkouts ------------------------------------------------------------------
 
-test('checkout_cart sends the original’s lines: each item as read, plus its quantity', async () => {
+test('a checkout sends each line as its item id and quantity, under an Idempotency-Key', async () => {
   const [keyring, plain] = await items();
-  respond = () => Response.json({ success: true, message: '购买成功！', spent: 46 });
-  const result = await shop.checkoutCart('tok', [{ item: keyring, quantity: 2 }, { item: plain, quantity: 1 }]);
-  assert.deepEqual(result, { message: '购买成功！', spent: 46 });
+  respond = () => Response.json({ checkout_id: 'c', purchases: [], spent: 46, balance: 54 }, { status: 201 });
+  const result = await shop.checkoutCart('tok', [{ item: keyring, quantity: 2 }, { item: plain, quantity: 1 }], 'key-1');
+  assert.deepEqual(result, { spent: 46, balance: 54 });
   const [{ url, init }] = calls;
-  assert.equal(url.searchParams.get('action'), 'checkout_cart');
+  assert.equal(url.pathname, '/api/v1/me/shop/checkouts');
   assert.equal(init.method, 'POST');
   assert.equal(new Headers(init.headers).get('authorization'), 'Bearer tok');
   assert.equal(new Headers(init.headers).get('content-type'), 'application/json');
-  assert.deepEqual(JSON.parse(init.body), {
-    cart: [{ ...ROWS[0], quantity: 2 }, { ...ROWS[1], quantity: 1 }],
-  });
+  assert.equal(new Headers(init.headers).get('idempotency-key'), 'key-1');
+  assert.deepEqual(JSON.parse(init.body), { items: [{ item_id: 4, quantity: 2 }, { item_id: 5, quantity: 1 }] });
   assert.equal(init.signal, undefined, 'a write has no deadline: aborting it does not stop the charge');
 });
 
-test('a checkout answer without a sentence or a number says so, and a refusal carries its words', async () => {
+test('a checkout answer without its figures is not a purchase, and a refusal carries its words', async () => {
   const [keyring] = await items();
-  respond = () => Response.json({ success: true, message: '  ', spent: 'x' });
-  assert.deepEqual(await shop.checkoutCart('tok', [{ item: keyring, quantity: 1 }]), { message: null, spent: null });
-  respond = () => Response.json({ success: false, error: '金币不足' });
+  respond = () => Response.json({ spent: 'x', balance: 1 }, { status: 201 });
+  await assert.rejects(shop.checkoutCart('tok', [{ item: keyring, quantity: 1 }], 'k'), (error) => error instanceof ApiError && error.kind === 'invalid');
+  respond = () => Response.json({ error: { code: 'INSUFFICIENT_COINS', message: '金币不足' } }, { status: 409 });
   await assert.rejects(
-    shop.checkoutCart('tok', [{ item: keyring, quantity: 1 }]),
+    shop.checkoutCart('tok', [{ item: keyring, quantity: 1 }], 'k'),
     (error) => error instanceof ApiError && error.message === '金币不足',
   );
-});
-
-test('missing numeric values are unknown, not a free price or a zero-coin charge', async () => {
-  const invalid = [null, '', '   ', false, true, [], {}];
-  for (const value of invalid) {
-    respond = () => Response.json({ success: true, items: [{ ...ROWS[0], price: value }] });
-    assert.deepEqual(await shop.getShopItems(null), [], `invalid price: ${JSON.stringify(value)}`);
-    respond = () => Response.json({ success: true, spent: value });
-    assert.equal((await shop.checkoutCart('tok', [])).spent, null);
-    assert.equal(checkout.balanceOf({ coins: value }), null);
-  }
-  respond = () => Response.json({ success: true, items: [{ ...ROWS[0], price: '0' }] });
-  assert.equal((await shop.getShopItems(null))[0].price, 0, 'a genuine zero remains valid');
+  for (const value of [null, '', true, [], {}]) assert.equal(checkout.balanceOf({ coins: value }), null);
 });
 
 // --- the cart ---------------------------------------------------------------------------------
@@ -263,23 +243,6 @@ test('a cart is read against the shop’s live answer: clamped, sold out, withdr
   assert.equal(summary.entries[3].line.name, '已经下架的', 'a withdrawn line is shown by the name it was added under');
 });
 
-test('an item whose stock the shop did not state is on sale: bought, never clamped, never sold out (G2-023)', async () => {
-  const list = await items();
-  const unknown = list.find((item) => item.id === 10);
-  assert.equal(unknown.stock, null);
-  const summary = model.resolveCart([{ id: 10, quantity: 7, name: '库存缺失' }, { id: 6, quantity: 1, name: '徽章' }], list);
-  assert.deepEqual(summary.entries.map((entry) => entry.kind), ['ok', 'sold-out'], 'unknown is buyable; a stated 0 is still sold out');
-  assert.equal(summary.entries[0].quantity, 7, 'nothing to clamp to');
-  assert.equal(summary.entries[0].adjusted, false);
-  assert.deepEqual(summary.purchasable.map(({ item, quantity }) => [item.id, quantity]), [[10, 7]]);
-  assert.equal(summary.total, 14);
-  /* The screen's limit for it is the cart's own ceiling. */
-  const item = { id: 10, name: '库存缺失' };
-  assert.equal(cart.addToCart('id:1', item, unknown.stock ?? cart.MAX_LINE_QUANTITY), 1);
-  cart.setCartQuantity('id:1', 10, cart.MAX_LINE_QUANTITY + 5, unknown.stock ?? cart.MAX_LINE_QUANTITY);
-  assert.equal(cart.readCart('id:1')[0].quantity, cart.MAX_LINE_QUANTITY);
-});
-
 test('a shortfall is stated before the checkout, and an unknown balance leaves it to the backend', () => {
   assert.equal(model.shortfall(106, 100), 6);
   assert.equal(model.shortfall(80, 100), 0);
@@ -299,22 +262,13 @@ test('a purchase removes its lines, lowers the balance by what was spent, and ke
   cart.addToCart('id:1', { id: 4, name: keyring.name }, 3);
   cart.addToCart('id:1', { id: 4, name: keyring.name }, 3);
   cart.addToCart('id:1', { id: 6, name: '售罄' }, 9);
-  respond = () => Response.json({ success: true, message: '购买成功！共花费 16 金币', spent: 16 });
+  respond = () => Response.json({ checkout_id: 'c', purchases: [], spent: 16, balance: 84 }, { status: 201 });
   const outcome = await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 2 }]);
-  assert.deepEqual(outcome, { kind: 'done', message: '购买成功！共花费 16 金币' });
+  assert.deepEqual(outcome, { kind: 'done', message: '已购买，花费 16 金币' });
   assert.deepEqual(cart.readCart('id:1').map((line) => line.id), [6], 'the line that was not bought stays');
-  assert.equal(JSON.parse(values.get('user_info')).coins, 84, 'the balance the original front end computed');
+  assert.equal(JSON.parse(values.get('user_info')).coins, 84, 'the balance the backend reports');
   assert.equal(calls.length, 1, 'refreshing the reads sends nothing for screens that are not mounted');
   void plain;
-});
-
-test('without a number in the answer the total is what was spent, and a balance never goes below zero', async () => {
-  const [keyring] = await items();
-  signIn(10);
-  respond = () => Response.json({ success: true });
-  const outcome = await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 2 }]);
-  assert.deepEqual(outcome, { kind: 'done', message: '已购买' });
-  assert.equal(JSON.parse(values.get('user_info')).coins, 0);
 });
 
 test('a purchase answered after a sign-out changes nobody’s balance', async () => {
@@ -322,7 +276,7 @@ test('a purchase answered after a sign-out changes nobody’s balance', async ()
   signIn(100);
   respond = () => {
     values.set('user_info', JSON.stringify({ id: 2, username: 'b', token: 'other', coins: 50 }));
-    return Response.json({ success: true, spent: 8 });
+    return Response.json({ spent: 8, balance: 92 }, { status: 201 });
   };
   await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 1 }]);
   assert.equal(JSON.parse(values.get('user_info')).coins, 50);
@@ -352,9 +306,8 @@ test('a rate-limited checkout is not a verdict: the cart is kept and the sentenc
   assert.equal(JSON.parse(values.get('user_info')).coins, 100, 'no balance is assumed either way');
 });
 
-test('only the backend saying no is a refusal: an envelope or a 4xx, never 408 or 429 or a transport failure', () => {
+test('only the backend saying no is a refusal: a 4xx, never 408 or 429 or a transport failure', () => {
   const verdicts = [
-    [new ApiError('envelope', { serverMessage: '金币不足' }), true],
     [new ApiError('http', { status: 400 }), true],
     [new ApiError('http', { status: 401 }), true],
     [new ApiError('http', { status: 403 }), true],
@@ -399,7 +352,7 @@ test('a refusal keeps the cart and says the backend’s words', async () => {
   const [keyring] = await items();
   signIn(5);
   cart.addToCart('id:1', { id: 4, name: keyring.name }, 3);
-  respond = () => Response.json({ success: false, error: '金币不足' });
+  respond = () => Response.json({ error: { code: 'INSUFFICIENT_COINS', message: '金币不足' } }, { status: 409 });
   assert.deepEqual(await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 1 }]), { kind: 'refused', message: '金币不足' });
   assert.equal(cart.readCart('id:1').length, 1);
   assert.equal(JSON.parse(values.get('user_info')).coins, 5);
@@ -409,12 +362,28 @@ test('a lost answer is not a refusal: the cart is kept and the sentence says to 
   const [keyring] = await items();
   signIn(100);
   cart.addToCart('id:1', { id: 4, name: keyring.name }, 3);
-  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  let lostKey = null;
+  globalThis.fetch = async (url, init = {}) => {
+    lostKey = new Headers(init.headers).get('idempotency-key');
+    throw new TypeError('Failed to fetch');
+  };
   const outcome = await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 1 }]);
   assert.equal(outcome.kind, 'unknown');
   assert.match(outcome.message, /金币明细/);
   assert.equal(cart.readCart('id:1').length, 1, 'it may not have been charged — nothing is assumed');
   assert.equal(JSON.parse(values.get('user_info')).coins, 100);
+
+  /* Pressed again on the same cart: the same purchase, so the backend can answer it with the
+     first result rather than charging twice. A different cart is a new purchase. */
+  const keys = [];
+  globalThis.fetch = async (url, init = {}) => {
+    keys.push(new Headers(init.headers).get('idempotency-key'));
+    return Response.json({ spent: 8, balance: 92 }, { status: 201 });
+  };
+  await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 1 }]);
+  await checkout.runCheckout('tok', 'id:1', [{ item: keyring, quantity: 1 }]);
+  assert.equal(keys[0], lostKey, 'the retry of the lost purchase is that purchase');
+  assert.notEqual(keys[1], keys[0], 'after a definite answer the next press is a new purchase');
 });
 
 test('the balance is read from the session only when it carries one', () => {
@@ -438,7 +407,7 @@ test('a repeated checkout joins the pending purchase and preserves later cart ad
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(calls.length, 1, 'one non-idempotent POST');
   cart.addToCart('id:1', item, 10);
-  release(Response.json({ success: true, spent: 8 }));
+  release(Response.json({ spent: 8, balance: 92 }, { status: 201 }));
   assert.equal((await first).kind, 'done');
   assert.equal((await second).kind, 'done');
   assert.equal(cart.readCart('id:1')[0].quantity, 1, 'only the submitted quantity is consumed');

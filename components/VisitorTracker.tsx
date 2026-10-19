@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { trackVisitor } from '@/lib/api/tracking';
+import { trackVisitor, VISITOR_TRACKING_AVAILABLE } from '@/lib/api/tracking';
 import { LS_KEYS } from '@/lib/constants';
 import { readToken } from '@/lib/hooks';
 import { runWhenIdle } from '@/lib/utils';
@@ -13,9 +13,13 @@ import { createVisitorTracker, trackingAllowed, VISIT_INTERVAL_MS } from '@/lib/
  * `lib/visitor.ts`: production builds only, never under automation or headless, never a
  * signed-in visitor, the pathname alone. Never on the critical path: the first count waits for an idle moment, and
  * nothing waits on any of them.
+ *
+ * The request is `POST /api/v1/site-visits` (`lib/api/tracking.ts`); `VISITOR_TRACKING_AVAILABLE`
+ * is the switch that keeps it off should the backend withdraw the route again.
  */
 export default function VisitorTracker() {
   useEffect(() => {
+    if (!VISITOR_TRACKING_AVAILABLE) return;
     if (!trackingAllowed(process.env.NODE_ENV, typeof navigator === 'undefined' ? undefined : navigator)) return;
     const tracker = createVisitorTracker({
       now: Date.now,

@@ -13,9 +13,9 @@ const upstream = createServer((req, res) => {
   const asUpstream = req.url?.startsWith('/api/v1/json')
     ? `https://trixiebooru.org${req.url}`
     : `http://127.0.0.1:${UP}${req.url}`;
-  const stub = stubFor(asUpstream);
+  const stub = stubFor(asUpstream, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));
@@ -82,7 +82,7 @@ onEvent.push(async (msg) => {
   } catch {
     /* Not a parseable URL; fall through with the raw one. */
   }
-  const stub = stubFor(target);
+  const stub = stubFor(target, request.method);
   try {
     if (!stub) {
       await send('Fetch.continueRequest', { requestId });
@@ -90,7 +90,7 @@ onEvent.push(async (msg) => {
     }
     await send('Fetch.fulfillRequest', {
       requestId,
-      responseCode: 200,
+      responseCode: stub.status ?? 200,
       responseHeaders: [
         { name: 'content-type', value: stub.contentType },
         { name: 'cache-control', value: 'no-store' },

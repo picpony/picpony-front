@@ -13,10 +13,10 @@ const { GET } = await import('../app/mascot-shape/route.ts');
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
-/* The route also reads the public mascot configuration (review P1-F8). Those reads are answered
-   here, never by the network and never by a test's image stub: `mascotConfig` is the backend's
-   answer per `selected_id` ('' for the default), and `null` is an unreachable backend. Every
-   assignment to `globalThis.fetch` below sets the image stub behind this. */
+/* The route also reads the public mascot list, `GET /api/v1/mascots` (review P1-F8). Those reads
+   are answered here, never by the network and never by a test's image stub: `mascotConfig` is the
+   backend's answer, and `null` is an unreachable backend. Every assignment to `globalThis.fetch`
+   below sets the image stub behind this. */
 let mascotConfig = null;
 const configReads = [];
 let imageFetch = originalFetch;
@@ -24,11 +24,9 @@ Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   get: () => async (url, init) => {
     const address = new URL(String(url));
-    if (address.searchParams.get('action') === 'get_mascot_config') {
-      const selected = address.searchParams.get('selected_id') ?? '';
-      configReads.push(selected);
-      const answer = mascotConfig?.[selected];
-      return answer ? Response.json(answer) : new Response('down', { status: 503 });
+    if (address.pathname === '/api/v1/mascots') {
+      configReads.push(address.pathname);
+      return mascotConfig ? Response.json(mascotConfig) : new Response('down', { status: 503 });
     }
     return imageFetch(url, init);
   },
@@ -290,9 +288,13 @@ test('P1-F8: with the configuration readable, only a configured mascot is read',
   const bytes = await png(MASCOT_SHAPE_GRID, MASCOT_SHAPE_GRID, () => true);
   configReads.length = 0;
   mascotConfig = {
-    '': { success: true, id: 2, mascot_image: 'uploads/two.png', mascots: [{ id: 1 }, { id: 2 }, { id: 3 }] },
-    1: { success: true, id: 1, mascot_image: '/uploads/one.png' },
-    3: { success: true, id: 3, mascot_image: 'https://picpony.top/uploads/three.png' },
+    enabled: true, revision: 1, tips: [],
+    mascots: [
+      { id: 1, name: 'one', image_url: '/uploads/one.png', tips: '' },
+      { id: 2, name: 'two', image_url: 'uploads/two.png', tips: '' },
+      { id: 3, name: 'three', image_url: 'https://picpony.top/uploads/three.png', tips: '' },
+      { id: 4, name: 'upload', image_url: `/api/v1/mascots/images/${'a'.repeat(64)}`, tips: '' },
+    ],
   };
   const reads = [];
   globalThis.fetch = async (url) => {
@@ -302,7 +304,10 @@ test('P1-F8: with the configuration readable, only a configured mascot is read',
   for (const name of ['one', 'two', 'three']) {
     assert.equal((await call(`https://picpony.top/uploads/${name}.png`)).status, 200, name);
   }
-  assert.deepEqual(configReads.sort(), ['', '1', '3'], 'the list, then each other mascot by id, read once');
+  /* A backend upload has no extension and is read from the backend at the same path. */
+  assert.equal((await call(`https://picpony.top/api/v1/mascots/images/${'a'.repeat(64)}`)).status, 200, 'upload');
+  assert.match(reads.at(-1), new RegExp(`/api/v1/mascots/images/${'a'.repeat(64)}$`));
+  assert.deepEqual(configReads, ['/api/v1/mascots'], 'the list, read once');
   /* Any other picture on the asset host is refused before a byte is fetched — and a miss re-reads
      the configuration at most once a minute. */
   configReads.length = 0;
@@ -310,5 +315,5 @@ test('P1-F8: with the configuration readable, only a configured mascot is read',
   assert.equal((await call('https://picpony.top/uploads/someone-else.png')).status, 400);
   assert.equal((await call('https://picpony.top/uploads/another.png')).status, 400);
   assert.equal(reads.length, before);
-  assert.deepEqual(configReads.sort(), ['', '1', '3'], 'one forced re-read for the two misses');
+  assert.deepEqual(configReads, ['/api/v1/mascots'], 'one forced re-read for the two misses');
 });

@@ -469,10 +469,12 @@ test('the static offline fallback uses the default palette in both schemes', () 
 test('配色方案 and the 副色相 travel with the palette to the account', async () => {
   const writes = [];
   globalThis.fetch = async (url, init = {}) => {
-    const action = new URL(String(url), 'https://app.invalid').searchParams.get('action');
-    if (action !== 'update_settings') throw new Error(`unexpected request: ${action}`);
-    writes.push(JSON.parse(init.body).settings);
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    const target = new URL(String(url), 'https://app.invalid');
+    if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT') throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
+    const body = JSON.parse(init.body);
+    writes.push(body.settings);
+    /* `PUT /me/preferences` answers with what it stored and the next revision. */
+    return Response.json({ settings: body.settings, revision: body.expected_revision + 1, adjustments: [] });
   };
   const sync = await import('../lib/settingsSync.ts');
   sync.setSettingsSyncNotifier(() => {});

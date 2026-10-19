@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { registerHooks } from 'node:module';
-import { blockFiltersEnvelope } from './netAuditFixtures.mjs';
+import { blockFiltersEnvelope, publicBlacklistPage } from './netAuditFixtures.mjs';
 import { requireTypeStripping } from './tsResolve.mjs';
 
 requireTypeStripping('testDataBoundaries');
@@ -56,8 +56,10 @@ const { defineResource, clearAllResources, expireAllResources } = await import('
 const { COOKIE_KEYS, LS_KEYS, IMAGE_WORKER_BASE } = await import('../lib/constants.ts');
 const { ApiError } = await import('../lib/api/errors.ts');
 const relay = await import('../app/relay/route.ts');
-const php = await import('../app/api.php/[[...path]]/route.ts');
+const v1 = await import('../app/api/v1/[...path]/route.ts');
+const { readApi } = await import('../lib/api/http.ts');
 const { createServerMemo } = await import('../lib/serverMemo.ts');
+const { upstreamOrigin } = await import('../lib/upstream.server.ts');
 const { readHomeFeed } = await import('../lib/feed.server.ts');
 const { readUserProfile } = await import('../lib/profile.server.ts');
 const { readTeamMembers } = await import('../lib/team.server.ts');
@@ -145,26 +147,32 @@ test('forced direct image routing unwraps an already proxied response', () => {
   assert.equal(mapped.view_url, raw);
 });
 
-test('non-envelope JSON is reported as API failure instead of crashing callers', async () => {
-  for (const body of ['', '<html>error</html>', 'null', '[]', 'true', '12', '"text"']) {
-    assert.equal((await client.readJson(new Response(body))).success, false, body);
-  }
-  assert.deepEqual(await client.readJson(json({ success: true, value: 1 })), { success: true, value: 1 });
+test('an unreadable /api/v1 answer is an ApiError, never a value a caller could publish', async () => {
+  /* A 2xx is the bare DTO, an empty body (204) is `undefined`, an HTML page served as 200 is
+     `invalid`; a non-2xx is an `http` error carrying the backend's code and sentence. */
+  assert.deepEqual(await readApi(json({ value: 1 })), { value: 1 });
+  assert.equal(await readApi(new Response(null, { status: 204 })), undefined);
+  await assert.rejects(readApi(new Response('<html>error</html>')), (error) => error instanceof ApiError && error.kind === 'invalid');
+  await assert.rejects(readApi(new Response('<html>bad gateway</html>', { status: 502 })), (error) =>
+    error instanceof ApiError && error.kind === 'http' && error.status === 502 && error.code === undefined);
+  await assert.rejects(readApi(json({ error: { code: 'FORBIDDEN', message: '没有权限' } }, { status: 403 })), (error) =>
+    error instanceof ApiError && error.code === 'FORBIDDEN' && error.message === '没有权限' && !error.retryable);
 });
 
 test('each comment source fails on its own terms, as an error rather than an empty thread', async () => {
   /* PicPony's thread and Derpibooru's are two reads now (the detail joins them); a bad answer from
      either is that source's ApiError, never an empty list, and neither read touches the other. */
+  const isLocal = (url) => new URL(String(url), 'https://app.invalid').pathname === '/api/v1/images/123/comments';
   for (const failed of ['picpony', 'derpi']) {
     globalThis.fetch = async (url) => {
-      const local = String(url).includes('get_comments');
+      const local = isLocal(url);
       if (local ? failed === 'picpony' : failed === 'derpi') {
         return new Response('<html>bad gateway</html>', { status: 200 });
       }
       return local
-        ? json({ success: true, comments: [{ id: 1, body: 'kept', created_at: '2026-01-01 00:00:00',
-          user_id: 1, username: 'local', avatar: null, experience: 150, equipped_badges: '[]' }] })
-        : json({ total: 1, comments: [{ id: 2, body: 'kept', created_at: '2026-01-01T00:00:00Z',
+        ? json({ comments: [{ id: 1, image_id: 123, user_id: 1, content: 'kept &amp; &lt;b&gt;', created_at: '2026-01-01T00:00:00Z',
+          author: { id: 1, username: 'local', avatar: null, role: 'user', experience: 150, equipped_badges: [] } }], total: 1, total_pages: 1 })
+        : json({ total: 1, comments: [{ id: 2, body: 'kept', created_at: 'Thu 2026-01-01 8:00 AM CST (UTC+08:00)',
           user_id: 9, author: 'external', avatar: 'data:image/svg+xml;base64,AAAA' }] });
     };
     if (failed === 'picpony') {
@@ -177,10 +185,11 @@ test('each comment source fails on its own terms, as an error rather than an emp
       await assert.rejects(derpi.getImageComments(123, 1), (error) => error instanceof ApiError);
       const own = await picpony.getSiteComments(123);
       assert.deepEqual(own.map((row) => [row.id, row.username, row.source, row.experience]), [[1, 'local', 'picpony', 150]]);
+      assert.equal(own[0].body, 'kept & <b>', 'the sanitizer\'s entities are decoded once at the boundary');
     }
   }
-  globalThis.fetch = async (url) => (String(url).includes('get_comments')
-    ? json({ success: true, comments: [] })
+  globalThis.fetch = async (url) => (isLocal(url)
+    ? json({ comments: [], total: 0, total_pages: 0 })
     : json({ total: 0, comments: [] }));
   assert.deepEqual(await picpony.getSiteComments(123), []);
   assert.deepEqual(await derpi.getImageComments(123, 1), { comments: [], total: 0 });
@@ -191,8 +200,11 @@ test('user ids, featured keys and explicit search sorts cannot append URL parame
   globalThis.fetch = async (url) => {
     const target = new URL(String(url), 'https://app.invalid');
     urls.push(target);
-    if (target.searchParams.get('action') === 'get_user_profile') {
-      return json({ success: true, user: { id: 1, username: 'public' } });
+    if (target.pathname.startsWith('/api/v1/users/')) {
+      return json({ user: { id: 583672, username: 'public', avatar: null, banner: null, role: 'user', bio: '', gender: '',
+        race: '', experience: 0, level: 1, created_on: '2026-01-01T00:00:00Z', last_online: null, ip_location: '',
+        visibility: { showUploads: true, showFaves: true, showPosts: true, showComments: true },
+        badges: [], equipped_badges: [], upstream_identity: null } });
     }
     if (target.pathname.endsWith('/images/featured')) return json({ image: null });
     return json({ images: [], total: 0 });
@@ -203,8 +215,8 @@ test('user ids, featured keys and explicit search sorts cannot append URL parame
   await assert.rejects(picpony.getUserProfile(crafted), (error) => error.notFound === true);
   assert.equal(urls.length, 0, 'a crafted profile id sends nothing');
   await picpony.getUserProfile('583672');
-  assert.equal(urls.at(-1).searchParams.get('action'), 'get_user_profile');
-  assert.equal(urls.at(-1).searchParams.get('user_id'), '583672');
+  assert.equal(urls.at(-1).pathname, '/api/v1/users/583672');
+  assert.equal(urls.at(-1).search, '');
   const key = 'secret&filter_id=0#fragment';
   await derpi.getFeatured(key);
   assert.equal(urls.at(-1).searchParams.get('key'), key);
@@ -243,11 +255,15 @@ test('request cancellation interrupts a retry delay without another fetch', asyn
 
 test('featured resources partition two account API keys and forum errors never become empty lists', async () => {
   assert.notEqual(catalogue.featuredImage.keyOf({ apiKey: 'key-a' }), catalogue.featuredImage.keyOf({ apiKey: 'key-b' }));
-  globalThis.fetch = async () => json({ success: false, message: 'upstream failure' });
+  /* The Rust backend's failure: a non-2xx `{"error":{code,message}}` — a typed ApiError, never rows. */
+  globalThis.fetch = async () => json({ error: { code: 'UPSTREAM_FAILURE', message: 'upstream failure' } }, { status: 502 });
   await assert.rejects(catalogue.forumPosts.read({ page: 1 }), (error) =>
-    error instanceof ApiError && error.kind === 'envelope' && error.message === 'upstream failure');
+    error instanceof ApiError && error.kind === 'http' && error.status === 502 && error.serverMessage === 'upstream failure');
+  await assert.rejects(admin.checkTagExists('fake-token', 'pony'), (error) =>
+    error instanceof ApiError && error.code === 'UPSTREAM_FAILURE');
+  /* Derpibooru answering 200 without its list is a malformed answer, not an empty one. */
+  globalThis.fetch = async () => json({ error: 'upstream failure' });
   await assert.rejects(derpi.getImages(), (error) => error instanceof ApiError && error.kind === 'invalid');
-  await assert.rejects(admin.checkTagExists('fake-token', 'pony'), /upstream failure/);
 });
 
 test('Derpi profile uploads never reuse developer results after returning to safe mode', async () => {
@@ -285,9 +301,9 @@ test('Derpi upload requests retain their filter snapshot while the shared route 
   const imageUrls = [];
   globalThis.fetch = (url) => {
     const target = new URL(String(url), 'https://app.invalid');
-    if (target.searchParams.get('action') === 'get_maintenance_status') return policyResponse.promise;
-    if (target.searchParams.get('action') === 'get_block_tags') return Promise.resolve(json(blockFiltersEnvelope()));
-    if (target.searchParams.get('action') === 'get_public_blacklist') return Promise.resolve(json({ success: true, blacklist: [] }));
+    if (target.pathname === '/api/v1/routing-policy') return policyResponse.promise;
+    if (target.pathname === '/api/v1/filters/block-tags') return Promise.resolve(json(blockFiltersEnvelope()));
+    if (target.pathname === '/api/v1/image-blocklist') return Promise.resolve(json({ revision: 1, blocks: [], has_more: false }));
     assert.ok(target.pathname.endsWith('/search/images'));
     imageUrls.push(target);
     return Promise.resolve(derpiUploadsResponse(target));
@@ -302,7 +318,7 @@ test('Derpi upload requests retain their filter snapshot while the shared route 
   const requestsBeforePolicy = imageUrls.length;
   values.set(LS_KEYS.contentFilter, 'developer');
   const developerRead = catalogue.derpiUserUploads.read(developer);
-  policyResponse.resolve(json({ success: true, global_api_route_policy: 'direct', global_image_route_policy: 'direct' }));
+  policyResponse.resolve(json({ policy: { api_policy: 'direct', media_policy: 'direct', third_party_url: null }, revision: 1 }));
   await policy;
   const [safeResult, developerResult] = await Promise.all([safeRead, developerRead]);
 
@@ -323,12 +339,12 @@ test('every catalogue read forwards its AbortSignal through its real API adapter
     [catalogue.featuredImage, { apiKey: 'fake-key' }],
     [catalogue.favePictures, { ids: [1] }], [catalogue.derpiFaves, { apiKey: 'fake-key', page: 1 }],
     [catalogue.forumPosts, { page: 1 }], [catalogue.forumThread, { id: '1', page: 1 }],
-    [catalogue.userProfile, { id: '1' }], [catalogue.sharedFaveIds, { username: 'pony' }],
+    [catalogue.userProfile, { id: '1' }], [catalogue.sharedFaveIds, { ownerId: 7 }],
     [catalogue.derpiUserProfile, { id: '1' }],
     [catalogue.derpiUserUploads, { id: 1, page: 1, perPage: 24, contentFilter: 'safe' }],
     [catalogue.siteComments, { imageId: 1 }], [catalogue.derpiComments, { imageId: 1, page: 1 }],
     [catalogue.translateSwitch, {}],
-    [catalogue.userPosts, { id: '1', page: 1 }], [catalogue.userComments, { id: '1', page: 1 }],
+    [catalogue.userPosts, { id: '1', page: 1, token: null }], [catalogue.userComments, { id: '1', page: 1, token: null }],
     [catalogue.userUploads, { id: '1', page: 1, perPage: 1, token: 'fake' }],
     [catalogue.sessionUser, { token: 'fake' }], [catalogue.unreadCounts, { token: 'fake' }],
     [catalogue.faveIds, { token: 'fake' }], [catalogue.faveFolders, { token: 'fake' }],
@@ -339,7 +355,7 @@ test('every catalogue read forwards its AbortSignal through its real API adapter
   for (const [resource, args] of cases) {
     /* The uploads grid reads the profile first; in the app that is the header's (seeded) read. */
     if (resource === catalogue.userUploads) {
-      catalogue.userProfile.seed({ id: '1' }, { id: 1, username: 'pony', derpi_user_id: 7 }, Date.now());
+      catalogue.userProfile.seed({ id: '1' }, { id: 1, username: 'pony', derpi_user_id: 7, settings: {} }, Date.now());
     }
     let signal;
     globalThis.fetch = async (_, init) => {
@@ -479,36 +495,40 @@ test('relay strips session/framing headers, prohibits caches and follows request
   assert.equal(init.signal.aborted, true);
 });
 
-test('PHP proxy streams request bodies, preserves captcha cookie policy and rejects path escapes', async () => {
+test('the /api/v1 proxy streams request bodies, keeps the session cookie over HTTP and rejects path escapes', async () => {
   let fetched;
   let calls = 0;
   globalThis.fetch = async (url, init) => {
     calls += 1;
     fetched = { url: String(url), init };
-    return json({ success: true }, { headers: { 'Set-Cookie': 'PHPSESSID=fake; Secure; HttpOnly; SameSite=None',
+    return json({ token: 't', csrf_token: 'c', expires_in: 60 }, { headers: {
+      'Set-Cookie': 'auth_bind=fake; Path=/; HttpOnly; SameSite=None; Secure',
       'Cache-Control': 'public, max-age=600' } });
   };
   for (const path of [['..'], ['../admin'], ['%2e%2e'], ['test\\admin']]) {
-    const result = await php.GET(request('https://app.invalid/api.php/anything'), context(path));
+    const result = await v1.GET(request('https://app.invalid/api/v1/anything'), context(path));
     assert.equal(result.status, 400);
+    assert.equal((await result.json()).error.code, 'INVALID_PATH');
   }
   assert.equal(calls, 0);
   const controller = new AbortController();
-  const incoming = request('http://app.invalid/api.php?action=captcha_verify', { method: 'POST', body: 'payload',
+  const incoming = request('http://app.invalid/api/v1/auth/login?x=1', { method: 'POST', body: 'payload',
     signal: controller.signal, headers: { Connection: 'x-request-hop', 'x-request-hop': 'remove' } });
   incoming.arrayBuffer = () => { throw new Error('request must not be buffered'); };
-  const response = await php.POST(incoming, context());
+  const response = await v1.POST(incoming, context(['auth', 'login']));
   /* Re-streamed (not buffered) so the body's pace can be watched — review P1-F1. */
   assert.ok(fetched.init.body instanceof ReadableStream, 'the body is still a stream');
   assert.equal(fetched.init.duplex, 'half');
   assert.equal(await new Request(fetched.url, fetched.init).text(), 'payload');
   assert.equal(fetched.init.headers.has('x-request-hop'), false);
-  assert.equal(fetched.url, 'https://picpony.top/api.php?action=captcha_verify');
+  /* The backend origin the server reads use (`lib/upstream.server.ts`, api.picpony.top by default). */
+  assert.equal(fetched.url, `${upstreamOrigin()}/api/v1/auth/login?x=1`);
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
-  assert.equal(response.headers.get('Set-Cookie'), 'PHPSESSID=fake; HttpOnly; SameSite=Lax');
+  /* Over plain HTTP the `Secure` flag would make the browser drop the session binding. */
+  assert.equal(response.headers.get('Set-Cookie'), 'auth_bind=fake; Path=/; HttpOnly; SameSite=Lax');
   controller.abort();
   assert.equal(fetched.init.signal.aborted, true);
-  const secure = await php.GET(request('https://app.invalid/api.php'), context());
+  const secure = await v1.GET(request('https://app.invalid/api/v1/me'), context(['me']));
   assert.match(secure.headers.get('Set-Cookie'), /Secure/);
 });
 
@@ -559,9 +579,13 @@ test('SSR reads have bounded anonymous requests and keys partition public profil
   globalThis.fetch = async (url, init) => {
     const parsed = new URL(String(url));
     observed.push({ parsed, init });
-    if (parsed.searchParams.get('action') === 'get_team_members') return json({ success: true, members: [] });
-    if (parsed.searchParams.get('action') === 'get_user_profile') {
-      return json({ success: true, user: { id: parsed.searchParams.get('user_id'), username: 'public' } });
+    if (parsed.pathname === '/api/v1/team-members') return json({ members: [], total: 0, total_pages: 0 });
+    const profile = /^\/api\/v1\/users\/([^/]+)$/.exec(parsed.pathname);
+    if (profile) {
+      return json({ user: { id: Number(profile[1]), username: 'public', avatar: null, banner: null, role: 'user', bio: '',
+        gender: '', race: '', experience: 0, level: 1, created_on: '2026-01-01T00:00:00Z', last_online: null,
+        ip_location: '', visibility: { showUploads: true, showFaves: true, showPosts: true, showComments: true },
+        badges: [], equipped_badges: [], upstream_identity: null } });
     }
     return json({ total: 0, images: [] });
   };
@@ -571,10 +595,10 @@ test('SSR reads have bounded anonymous requests and keys partition public profil
   ]);
   /* An id that cannot be a profile's is the route's not-found state, and is never sent. */
   assert.equal(crafted, 'missing');
-  assert.equal(observed.some(({ parsed }) => parsed.searchParams.get('user_id')?.includes('&')), false);
+  assert.equal(observed.some(({ parsed }) => parsed.pathname.includes('&') || parsed.pathname.includes('%26')), false);
   assert.notEqual(a.key, b.key);
-  assert.equal(a.data.id, '12');
-  assert.equal(b.data.id, '13');
+  assert.equal(a.data.id, 12);
+  assert.equal(b.data.id, 13);
   assert.deepEqual(team.data, []);
   assert.deepEqual(feed.data.images, []);
   for (const { init } of observed) {
@@ -596,8 +620,8 @@ test('home SSR seeds bypass stale persistent responses while retaining bounded r
   let pending = deferred();
   globalThis.fetch = async (url, init) => {
     const parsed = new URL(String(url));
-    if (parsed.searchParams.get('action') === 'get_block_tags') return json(blockFiltersEnvelope());
-    if (parsed.searchParams.get('action') === 'get_public_blacklist') return json({ success: true, blacklist: [] });
+    if (parsed.pathname === '/api/v1/filters/block-tags') return json(blockFiltersEnvelope());
+    if (parsed.pathname === '/api/v1/image-blocklist') return json(publicBlacklistPage([]));
     reads.push({ parsed, init });
     // Next's stale-while-revalidate path returns an old payload immediately.
     // Only an uncached network read can truthfully receive a fresh seed timestamp.
@@ -657,25 +681,28 @@ test('resource SSR seeding is isolated and inline route policy escapes script te
 });
 
 test('third-party key forwarding honors policy and an older policy refresh cannot win', async () => {
-  for (const pass of [false, true]) {
-    globalThis.fetch = async () => json({ success: true, global_api_route_policy: 'third_party',
-      global_api_third_party_url: 'https://third-party.invalid', global_api_third_party_pass_api_key: pass });
-    await route.refreshRoutePolicy();
-    const target = new URL(route.buildApiLineUrl('https://derpibooru.org/api/v1/json/images?key=fake&key=duplicate', 'third_party'));
-    assert.equal(target.origin, 'https://third-party.invalid');
-    assert.equal(target.searchParams.has('key'), pass);
-  }
+  /* `GET /api/v1/routing-policy` carries no pass-the-key flag: from the public read the user's key
+     is always stripped. An administrator's acknowledged save can still turn it on locally. */
+  globalThis.fetch = async (url) => String(url).includes('/routing-policy')
+    ? json({ policy: { api_policy: 'third_party', media_policy: 'direct', third_party_url: 'https://third-party.invalid' }, revision: 1 })
+    : new Response('', { status: 503 });
+  await route.refreshRoutePolicy();
+  let target = new URL(route.buildApiLineUrl('https://derpibooru.org/api/v1/json/images?key=fake&key=duplicate', 'third_party'));
+  assert.equal(target.origin, 'https://third-party.invalid');
+  assert.equal(target.searchParams.has('key'), false);
+  route.applySavedRoutePolicy({ global_api_third_party_pass_api_key: true });
+  target = new URL(route.buildApiLineUrl('https://derpibooru.org/api/v1/json/images?key=fake&key=duplicate', 'third_party'));
+  assert.equal(target.searchParams.has('key'), true);
   const first = deferred();
   const second = deferred();
   let calls = 0;
-  globalThis.fetch = (url) => String(url).includes('get_block_tags') ? Promise.resolve(json(blockFiltersEnvelope())) :
-    String(url).includes('get_public_blacklist') ? Promise.resolve(json({ success: true, blacklist: [] })) :
+  globalThis.fetch = (url) => !String(url).includes('/routing-policy') ? Promise.resolve(new Response('', { status: 503 })) :
     ++calls === 1 ? first.promise : second.promise;
   const old = route.refreshRoutePolicy();
   const latest = route.refreshRoutePolicy();
-  second.resolve(json({ success: true, global_api_route_policy: 'direct', global_image_route_policy: 'direct' }));
+  second.resolve(json({ policy: { api_policy: 'direct', media_policy: 'direct', third_party_url: null }, revision: 3 }));
   await latest;
-  first.resolve(json({ success: true, global_api_route_policy: 'api_accel' }));
+  first.resolve(json({ policy: { api_policy: 'api_accel', media_policy: 'direct', third_party_url: null }, revision: 2 }));
   await old;
   assert.equal(route.apiPolicy(), 'direct');
 });
@@ -685,8 +712,8 @@ test('a cancelled caller stops waiting for the shared policy without cancelling 
   let fetches = 0;
   globalThis.fetch = (url) => {
     fetches += 1;
-    if (String(url).includes('get_public_blacklist')) return Promise.resolve(json({ success: true, blacklist: [] }));
-    return String(url).includes('get_block_tags') ? Promise.resolve(json(blockFiltersEnvelope())) : incoming.promise;
+    if (String(url).includes('/image-blocklist')) return Promise.resolve(json(publicBlacklistPage([])));
+    return String(url).includes('/filters/block-tags') ? Promise.resolve(json(blockFiltersEnvelope())) : incoming.promise;
   };
   const policy = route.refreshRoutePolicy();
   const controller = new AbortController();
@@ -698,12 +725,12 @@ test('a cancelled caller stops waiting for the shared policy without cancelling 
   await policy;
 });
 
-test('public block definitions use the real flat/grouped envelope and affect every enabled filter', () => {
+test('public block definitions read the backend’s five groups and affect every enabled filter', () => {
   const fixture = blockFiltersEnvelope();
   const flat = blockFilters.parseBlockFilters(fixture);
-  const grouped = blockFilters.parseBlockFilters({ success: true, grouped: fixture.grouped });
-  assert.deepEqual(flat, grouped);
   assert.deepEqual(flat, blockFilters.DEFAULT_BLOCK_FILTERS);
+  assert.deepEqual(blockFilters.parseBlockFilters({ ...fixture, filters: { ...fixture.filters, onlyPony: [] } }).onlyPony, [],
+    'an empty group is an empty group');
   const settings = { contentFilter: 'safe', banAnthro: true, banDiscomfort: true, onlyPony: true, hiddenTags: [] };
   const built = decodeURIComponent(query.buildSearchQueryFrom(settings, 'pony OR zebra', flat));
   assert.ok(built.startsWith('(pony OR zebra), '));
@@ -713,7 +740,8 @@ test('public block definitions use the real flat/grouped envelope and affect eve
   const disabled = decodeURIComponent(query.buildSearchQueryFrom({ ...settings, contentFilter: 'developer',
     banAnthro: false, banDiscomfort: false, onlyPony: false }, undefined, flat));
   assert.equal(disabled, '*');
-  assert.equal(blockFilters.parseBlockFilters({ success: false, tags: [] }), null);
+  assert.equal(blockFilters.parseBlockFilters({ error: { code: 'DATABASE_UNAVAILABLE', message: 'x' } }), null);
+  assert.equal(blockFilters.parseBlockFilters({ filters: { safe: [] } }), null, 'a group missing is not an answer');
 });
 
 test('rule installation changes resource keys and publishes settings once per semantic change', () => {
@@ -739,16 +767,17 @@ test('SSR waits for public rules before querying pictures and produces the same 
   clearPublicBlacklistMemo();
   const rules = deferred();
   const fixture = blockFiltersEnvelope();
-  fixture.tags.push({ id: 999, filter_key: 'safe', tag_name: 'freshly blocked' });
+  fixture.tags.push({ id: 999, filter: 'safe', tag: 'freshly blocked' });
+  fixture.filters.safe.push('freshly blocked');
   let ruleCalls = 0;
   let imageCalls = 0;
   globalThis.fetch = async (url, init) => {
-    if (String(url).includes('get_block_tags')) {
+    if (String(url).includes('/filters/block-tags')) {
       ruleCalls += 1;
       assert.deepEqual(init.next.tags, [BLOCK_FILTERS_CACHE_TAG]);
       return rules.promise;
     }
-    if (String(url).includes('get_public_blacklist')) return json({ success: true, blacklist: [3898802, 193324] });
+    if (String(url).includes('/image-blocklist')) return json(publicBlacklistPage([3898802, 193324]));
     imageCalls += 1;
     const target = new URL(String(url));
     assert.match(decodeURIComponent(target.searchParams.get('q') ?? ''), /-freshly\\ blocked/);
@@ -776,9 +805,10 @@ test('failed public rules preserve the known safe fallback and a failed maintena
   clearBlockFiltersMemo();
   globalThis.fetch = async () => new Response('<html>offline</html>', { status: 503 });
   assert.equal(await readBlockFilters(), blockFilters.DEFAULT_BLOCK_FILTERS);
-  const fixture = blockFiltersEnvelope();
-  fixture.tags.push({ id: 999, filter_key: 'safe', tag_name: 'still loaded' });
-  globalThis.fetch = async (url) => String(url).includes('get_block_tags') ? json(fixture) : new Response('<html>broken policy</html>');
+  /* The browser's read of the same definitions. */
+  const { filters } = blockFiltersEnvelope();
+  filters.safe.push('still loaded');
+  globalThis.fetch = async (url) => String(url).includes('/filters/block-tags') ? json({ tags: [], filters }) : new Response('<html>broken policy</html>');
   await route.refreshRoutePolicy();
   assert.ok(blockFilters.currentBlockFilters().safe.includes('still loaded'));
 });
@@ -786,11 +816,11 @@ test('failed public rules preserve the known safe fallback and a failed maintena
 test('only accepted block-tag mutations expire both Next tags and the process memo', async () => {
   let invalidations = 0;
   let memoClears = 0;
-  const source = readFileSync(new URL('../app/api.php/[[...path]]/route.ts', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../app/api/v1/[...path]/route.ts', import.meta.url), 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  let envelope = { success: true };
+  let body = { tag: 'pony' };
   let status = 200;
   const exports = {};
   let blacklistInvalidations = 0;
@@ -805,44 +835,45 @@ test('only accepted block-tag mutations expire both Next tags and the process me
       BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG: 'picpony-public-blacklist',
       clearBlockFiltersMemo: () => { memoClears += 1; }, clearPublicBlacklistMemo: () => {},
     },
-    '@/lib/constants': { COOKIE_KEYS },
+    '@/lib/constants': { COOKIE_KEYS, SITE_STATUS_CACHE_TAG: 'site-status' },
     '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
     '@/lib/proxyHeaders': await import('../lib/proxyHeaders.ts'),
   };
   vm.runInNewContext(transpiled, { exports, require: (name) => {
     assert.ok(name in dependencies, name);
     return dependencies[name];
-  }, process: { env: {} }, Response, Headers, URL, AbortSignal, fetch: async () => json(envelope, { status }) });
-  for (const [method, action, success, httpStatus, expected] of [
-    ['POST', 'admin_add_block_tag', false, 200, 0],
-    ['POST', 'admin_add_block_tag', true, 403, 0],
-    ['GET', 'admin_add_block_tag', true, 200, 0],
-    ['POST', 'admin_update_user', true, 200, 0],
-    ['POST', 'admin_add_block_tag', true, 200, 1],
-    ['POST', 'admin_remove_block_tag', true, 200, 2],
+  }, process: { env: {} }, Response, Headers, URL, AbortSignal, fetch: async () => json(body, { status }) });
+  const refused = { error: { code: 'FORBIDDEN', message: 'no' } };
+  for (const [method, path, answer, httpStatus, expected] of [
+    ['POST', ['admin', 'filters', 'block-tags'], refused, 403, 0],
+    ['POST', ['admin', 'filters', 'block-tags'], refused, 400, 0],
+    ['GET', ['admin', 'filters', 'block-tags'], { tags: [] }, 200, 0],
+    ['PATCH', ['admin', 'users', '5'], { user: {} }, 200, 0],
+    ['POST', ['admin', 'filters', 'block-tags'], { tag: 'pony' }, 200, 1],
+    ['DELETE', ['admin', 'filters', 'block-tags', '12'], null, 200, 2],
   ]) {
-    envelope = { success };
+    body = answer;
     status = httpStatus;
-    const response = await exports[method](request(`https://app.invalid/api.php?action=${action}`, { method }), context());
-    assert.equal((await response.json()).success, success, 'the original response body remains available');
+    const response = await exports[method](request(`https://app.invalid/api/v1/${path.join('/')}`, { method }), context(path));
+    assert.deepEqual(await response.json(), answer, 'the original response body remains available');
     assert.equal(invalidations, expected);
     assert.equal(memoClears, expected);
   }
-  envelope = { success: true };
+  body = null;
   status = 200;
-  await exports.POST(request('https://app.invalid/api.php?action=admin_add_blacklist', { method: 'POST' }), context());
-  await exports.POST(request('https://app.invalid/api.php?action=admin_remove_blacklist', { method: 'POST' }), context());
+  await exports.PUT(request('https://app.invalid/api/v1/admin/image-blocklist/9', { method: 'PUT' }), context(['admin', 'image-blocklist', '9']));
+  await exports.DELETE(request('https://app.invalid/api/v1/admin/image-blocklist/9', { method: 'DELETE' }), context(['admin', 'image-blocklist', '9']));
   assert.equal(blacklistInvalidations, 2, 'an accepted blacklist edit expires the public blacklist');
   assert.equal(invalidations, 2, 'and leaves the filter definitions alone');
 });
 
-test('PHP proxy forwards only the cookies the backend reads', async () => {
+test('the /api/v1 proxy forwards only the cookies the backend reads', async () => {
   let forwarded;
-  globalThis.fetch = async (_, init) => { forwarded = init.headers.get('cookie'); return json({ success: true }); };
-  const cookie = `${COOKIE_KEYS.browsing}=safe%7C-%7Cd%7C-%7Csolo; PHPSESSID=abc; ${COOKIE_KEYS.darkMode}=true; other=1`;
-  await php.GET(request('https://app.invalid/api.php?action=get_user', { headers: { Cookie: cookie } }), context());
-  assert.equal(forwarded, 'PHPSESSID=abc; other=1');
-  await php.GET(request('https://app.invalid/api.php?action=get_user', { headers: { Cookie: `${COOKIE_KEYS.palette}=luna` } }), context());
+  globalThis.fetch = async (_, init) => { forwarded = init.headers.get('cookie'); return json({ user: {} }); };
+  const cookie = `${COOKIE_KEYS.browsing}=safe%7C-%7Cd%7C-%7Csolo; auth_bind=abc; ${COOKIE_KEYS.darkMode}=true; other=1`;
+  await v1.GET(request('https://app.invalid/api/v1/me', { headers: { Cookie: cookie } }), context(['me']));
+  assert.equal(forwarded, 'auth_bind=abc; other=1');
+  await v1.GET(request('https://app.invalid/api/v1/me', { headers: { Cookie: `${COOKIE_KEYS.palette}=luna` } }), context(['me']));
   assert.equal(forwarded, null, 'nothing is sent when only app cookies were present');
 });
 
@@ -850,7 +881,7 @@ test('clearing server filters during an in-flight read cannot restore the old ru
   clearBlockFiltersMemo();
   const old = deferred();
   const fresh = blockFiltersEnvelope();
-  fresh.tags.push({ id: 888, filter_key: 'safe', tag_name: 'after write' });
+  fresh.filters.safe.push('after write');
   let calls = 0;
   globalThis.fetch = async () => ++calls === 1 ? old.promise : json(fresh);
   const pending = readBlockFilters();
@@ -862,7 +893,8 @@ test('clearing server filters during an in-flight read cannot restore the old ru
 
 test('OtherTab refreshes real statistics and saves text without changing maintenance mode', async () => {
   let state;
-  let statusValue = { maintenanceMode: true, maintenanceMessage: 'old text', translateEnabled: true };
+  let statusValue = { maintenanceMode: true, maintenanceMessage: 'old text' };
+  let translationValue = { translate_enabled: true, image_translation_provider: 'extension', queue: { pending: 1, translating: 0, completed: 5, failed: 2 } };
   let statusError;
   let statsError = 'statistics unavailable';
   const maintenanceWrites = [];
@@ -891,19 +923,23 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
     'react-icons/md': {},
     '@/components/ConfirmDialog': { useConfirm: () => ({ confirmThen: (_a, _b, run) => run(), confirmDialog: null }) },
     '@/lib/api/admin': {
-      adminToggleMaintenance: async (_token, values) => { maintenanceWrites.push(values); return json({ success: true }); },
-      adminToggleTranslate: async () => json(acceptTranslation ? { success: true } : { success: false, error: '拒绝' }),
+      /* The `/api/v1` adapters answer the backend's DTO and throw on a refusal. */
+      adminToggleMaintenance: async (_token, values) => { maintenanceWrites.push(values); return {}; },
+      adminToggleTranslate: async () => { if (!acceptTranslation) throw new Error('拒绝'); return { already_applied: false }; },
     },
     './SectionHeader': componentStub('SectionHeader'),
     './RefreshButton': componentStub('RefreshButton'),
     './sharedQueries': {
       siteStatusQuery: { name: 'site-status', write: (_token, value) => { patched = typeof value === 'function' ? value(statusValue) : value; statusValue = patched; } },
+      translationQuery: { name: 'translation', peek: () => ({ data: translationValue }), write: (_token, value) => { translationValue = typeof value === 'function' ? value(translationValue) : value; } },
     },
     './queries': {
       defineAdminQuery: (name) => ({ name, write: () => {} }),
       adminData: (_, value) => value,
       retryError: (title, message) => ({ title, message: message && message !== title ? message : undefined }),
-      useAdminQuery: (resource) => resource.name === 'site-status' ? {
+      useAdminQuery: (resource) => resource.name === 'translation' ? {
+        data: translationValue, error: translationValue ? undefined : 'not loaded', loading: false, refreshing: false, retryable: true, refresh: () => {},
+      } : resource.name === 'site-status' ? {
         data: statusValue, error: statusError, loading: false, refreshing: false, retryable: true, refresh: () => {
           assert.ok(patched, 'the accepted write must be patched before refresh');
           statusRefreshes += 1;
@@ -911,12 +947,10 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
       } : { data: undefined, error: statsError, loading: false, refreshing: false, retryable: true, refresh: () => { statsRefreshes += 1; } },
     },
     './useAdminMutation': { useAdminMutation: () => ({ busy: false, run: async (request, success, _failure, options) => {
-      const response = await request(() => true);
-      const data = await response.json();
-      if (response.ok && data.success) {
-        options?.onCommitted?.(data);
-        success(data);
-      }
+      let data;
+      try { data = (await request(() => true)) ?? {}; } catch { return; }
+      options?.onCommitted?.(data);
+      success(data);
     } }) },
   };
   const exports = {};
@@ -937,6 +971,7 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
   const switches = find(tree, (node) => node.type === 'ToggleSwitch');
   assert.equal(switches.length, 2);
   assert.ok(switches.every((node) => node.props.disabled === false), 'statistics failure cannot disable loaded status controls');
+  assert.ok(JSON.stringify(tree).includes('翻译队列：排队 1 · 翻译中 0 · 已完成 5 · 失败 2'), 'the queue is shown from GET /admin/translation');
   const textarea = find(tree, (node) => node.type === 'Textarea')[0];
   textarea.props.onChange({ target: { value: 'saved independently' } });
   tree = exports.default({ token: 'fake' });
@@ -963,7 +998,10 @@ test('OtherTab refreshes real statistics and saves text without changing mainten
   find(tree, (node) => node.type === 'ToggleSwitch')[1].props.onChange(false);
   for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(translateWrites, [false], 'an acknowledged change reaches mounted image details at once');
+  assert.equal(translationValue.translate_enabled, false, 'and the console\'s own read is corrected in place');
+  assert.equal(translationValue.queue.failed, 2);
   statusValue = undefined;
+  translationValue = undefined;
   statusError = 'not loaded';
   tree = exports.default({ token: 'fake' });
   assert.equal(find(tree, (node) => node.type === 'ToggleSwitch').length, 0,
@@ -978,12 +1016,13 @@ test('tag search escapes query syntax, tag counts batch past 50, and an exact en
   globalThis.fetch = async (input) => {
     const url = String(input instanceof Request ? input.url : input);
     seen.push(url);
-    if (url.includes('get_dictionary')) {
-      const page = Number(new URL(url, 'https://app.invalid').searchParams.get('page'));
+    if (url.includes('/api/v1/dictionary/tags')) {
+      const params = new URL(url, 'https://app.invalid').searchParams;
+      const page = Number(params.get('page'));
       const tags = page === 1
-        ? Array.from({ length: 50 }, (_, i) => ({ en: `pony ${i}` }))
+        ? Array.from({ length: Number(params.get('limit')) }, (_, i) => ({ en: `pony ${i}` }))
         : [{ en: 'Pony' }];
-      return json({ success: true, tags });
+      return json({ tags, total: tags.length });
     }
     if (url.includes('search/tags')) {
       const inner = url.includes('url=') ? new URL(url, 'https://app.invalid').searchParams.get('url') : url;
@@ -1006,8 +1045,8 @@ test('tag search escapes query syntax, tag counts batch past 50, and an exact en
 
   seen.length = 0;
   assert.equal(await admin.checkTagExists('fixture', 'pony'), true, 'the exact entry on page 2 is found');
-  assert.equal(seen.filter((url) => url.includes('get_dictionary')).length, 2);
+  assert.equal(seen.filter((url) => url.includes('/api/v1/dictionary/tags')).length, 2);
   seen.length = 0;
   assert.equal(await admin.checkTagExists('fixture', 'absent'), false);
-  assert.equal(seen.filter((url) => url.includes('get_dictionary')).length, 2, 'a short page ends the search');
+  assert.equal(seen.filter((url) => url.includes('/api/v1/dictionary/tags')).length, 2, 'a short page ends the search');
 });

@@ -13,7 +13,7 @@ import SignInRequired from '@/components/SignInRequired';
 import { showToast } from '@/components/Toast';
 import PresenceBlock from '@/components/PresenceBlock';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import { createShareLink, trackShare } from '@/lib/api/share';
+import { createShareLink } from '@/lib/api/share';
 import { deleteTagGroup, MAX_TAG_GROUPS, saveTagGroup, type TagGroup } from '@/lib/api/tagGroups';
 import { readToken, readUserInfo, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -73,12 +73,15 @@ export default function TagGroupsPage() {
   const save = async (input: TagGroupInput) => {
     if (!token || saving || readToken() !== token) return;
     setSaving(true);
-    const saved = await settle(saveTagGroup(token, input));
+    /* An edit carries the version the list holds; a group changed elsewhere since is refused. */
+    const revision = input.id ? tagGroups.peek({ token }).data?.find((group) => group.id === input.id)?.revision : undefined;
+    const saved = await settle(saveTagGroup(token, { ...input, revision }));
     if (!saved.ok) {
       if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
     } else if (readToken() === token) {
       if (input.id) {
-        writeGroups(token, (list) => list.map((group) => (group.id === input.id ? { ...group, name: input.name, tags: [...input.tags] } : group)));
+        const { revision: next } = saved.value;
+        writeGroups(token, (list) => list.map((group) => (group.id === input.id ? { ...group, name: input.name, tags: [...input.tags], revision: next } : group)));
         tagGroups.expire({ token });
       } else {
         /* A new group waits for the list, so the card arrives as the dialog leaves. */
@@ -121,8 +124,8 @@ export default function TagGroupsPage() {
   }, [token, confirm, deleting]);
 
   /**
-   * 分享 — the original's contract: a short link (falling back to the long one) to the group's
-   * search, naming who shared it, copied. A copy the browser refuses once the link has been made
+   * 分享 — the original's contract: a link to the group's search (`createShareLink`), naming who
+   * shared it, copied. A copy the browser refuses once the link has been made
    * (the gesture can be spent by then) is offered again as the toast's 复制.
    */
   const share = useCallback(async (group: TagGroup) => {
@@ -153,15 +156,9 @@ export default function TagGroupsPage() {
       return;
     }
     const url = link.value.url;
-    // The fallback action can be pressed again while its toast leaves. The link counts once.
-    let counted = false;
     const copyLink = async () => {
       if (!current() || !(await copyText(url)) || !current()) return false;
       showToast('已复制分享链接', 'success');
-      if (!counted) {
-        counted = true;
-        trackShare(token);
-      }
       return true;
     };
     if (await copyLink() || !current()) return;

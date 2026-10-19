@@ -1,11 +1,8 @@
-/** PicPony 自有 API 基础路径 (Next.js rewrite to /api.php) */
-export const PICPONY_API_BASE = '/api.php';
-
 /**
- * The same endpoint, absolute, for server code: Node's `fetch` rejects a relative
- * URL outright (the relative form is for the browser, which goes through the route
- * handler that rewrites the backend's `Secure` session cookie). Must stay in step
- * with `UPSTREAM_ORIGIN` in that route handler.
+ * The site's own public origin: where uploaded assets and avatars are addressed
+ * (`getAssetUrl`), and the `Origin` the relay allowlists. Not the backend's
+ * address — server code reaches the Rust backend through `upstreamOrigin()`
+ * (`lib/upstream.server.ts`).
  */
 export const PICPONY_API_ORIGIN = 'https://picpony.top';
 

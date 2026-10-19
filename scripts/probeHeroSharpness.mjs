@@ -58,9 +58,9 @@ const upstream = createServer((req, res) => {
   if (url.pathname.endsWith('/search/images')) return json(live);
   const one = /\/images\/(\d+)$/.exec(url.pathname);
   if (one) return json({ image: byId.get(Number(one[1])) ?? live.images[0] });
-  const stub = stubFor(`http://127.0.0.1:${UP}${req.url}`);
+  const stub = stubFor(`http://127.0.0.1:${UP}${req.url}`, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));

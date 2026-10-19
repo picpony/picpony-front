@@ -2,9 +2,17 @@ export type JsonObject = Record<string, unknown>;
 export type PermissionMode = 'default' | 'full';
 export interface AssistantQuota {
   enabled: boolean; user_enabled: boolean;
+  /** The wallet's and the quota configuration's revisions: the CAS a preference or exchange sends. */
+  revision: number; config_revision: number;
   remaining: number; daily_remaining: number; purchased_remaining: number; reserved: number;
   daily_points: number; points_per_coin: number; coins: number;
 }
+/**
+ * One action the client carries out for a turn. On the Rust backend that is a site call the user
+ * confirmed (`call_site_api`, `call_id` = the server's issued call UUID), a server-side write
+ * awaiting confirmation (`claim_task_reward`, `call_id` = the pending action's UUID), or a page
+ * action (`get_page_controls` / `interact_page`).
+ */
 export interface AssistantAction {
   name: string;
   arguments: JsonObject;
@@ -13,72 +21,81 @@ export interface AssistantAction {
   approval_granted: boolean;
 }
 export interface AssistantReceipt {
-  task_id: number; call_id: string; name: string; action: string;
+  task_id: string; call_id: string; name: string; action: string;
   ok: boolean; summary: string; data: JsonObject;
   error?: string; page_effect?: JsonObject; defer_navigation?: string;
 }
-export interface AssistantMessage { id: number; role: 'user' | 'assistant'; content: string }
-export interface AssistantTurn {
-  reply: string; task_id: number; confirmation_token: string | null;
-  actions: AssistantAction[]; agent_pending: boolean;
-  user_message_id: number; assistant_message_id: number;
-  quota?: AssistantQuota;
+/** `id` is the backend's message UUID; `''` for a bubble only this page has seen. */
+export interface AssistantMessage { id: string; role: 'user' | 'assistant'; content: string }
+/** `assistant_pending_actions` as `run-task` returns it: one write waiting for the user's decision. */
+export interface AssistantPending { id: string; operation: string; arguments: JsonObject; expires_at: string }
+/**
+ * One call the server issued for this client and that still waits for its receipt
+ * (`assistant_actions::issued_calls`): listed by `state` (in `task.client_calls` with a task id,
+ * top-level `client_calls` without) and by the native turn projection. `arguments` are the model's
+ * already server-validated arguments; `request` is the envelope `api-claims` answers too.
+ */
+export interface AssistantClientCall {
+  id: string; task_id: string; operation: string; arguments: JsonObject; request: JsonObject;
+  risk: string; created_at: string;
 }
+/** One turn, as `state {task_id}` reports it. */
+export interface AssistantTaskPoll { id: string; status: string; reply: string; ok: boolean; client_calls: AssistantClientCall[] }
+/** The turn the panel is following. `pending_id` names the confirmation the card decides. */
 export interface AssistantTask {
-  id: number; status: string; confirmation_token: string | null;
-  actions: AssistantAction[]; confirmed: boolean; user_message: string;
+  id: string; status: string; pending_id: string | null;
+  actions: AssistantAction[]; confirmed: boolean;
 }
-export interface AssistantState { messages: AssistantMessage[]; tasks: AssistantTask[] }
+export interface AssistantState { messages: AssistantMessage[]; tasks: { id: string; status: string }[]; client_calls: AssistantClientCall[] }
 
-export const MAX_MESSAGE = 4000;
+/** The legacy chat bridge's limit (`assistant_legacy::chat`). */
+export const MAX_MESSAGE = 2000;
 export const MAX_REPLY = 12000;
 export const MAX_HISTORY = 40;
-export const MAX_ROUNDS = 4;
+/** Turn states that are still moving on the server. */
+export const ACTIVE_STATES: readonly string[] = ['queued', 'running', 'waiting_confirmation'];
 export const obj = (value: unknown): JsonObject => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
 export const str = (value: unknown, max = MAX_REPLY): string => typeof value === 'string' ? value.slice(0, max) : '';
+/** A business id the model or the user supplied (folder, image, user) — still checked. */
 export const positiveId = (value: unknown): number => {
   const n = typeof value === 'number' || typeof value === 'string' && value.trim() ? Number(value) : NaN;
   return Number.isSafeInteger(n) && n > 0 ? n : 0;
 };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A backend task / call / message id, or `''`. */
+export const uuid = (value: unknown): string => typeof value === 'string' && UUID.test(value) ? value.toLowerCase() : '';
 
-export function parseActions(value: unknown): AssistantAction[] {
-  if (!Array.isArray(value)) return [];
-  if (value.length > 24) throw new Error('操作数量超出限制');
-  return value.map(raw => {
-    const a = obj(raw);
-    if (JSON.stringify(a.arguments ?? {}).length > 32000) throw new Error('操作内容超出限制，未执行');
-    return {
-      name: str(a.name, 80), arguments: obj(a.arguments), call_id: str(a.call_id, 160),
-      risk: str(a.risk, 40), approval_granted: a.approval_granted === true,
-    };
-  });
+/**
+ * The action a pending confirmation stands for. `call_site_api` keeps the catalogue
+ * `{endpoint, parameters}` the server validated; anything else (`claim_task_reward {task}`) is a
+ * server-side write the confirmation itself executes.
+ */
+export function pendingAction(pending: AssistantPending): AssistantAction {
+  return { name: pending.operation, arguments: pending.arguments, call_id: pending.id, risk: 'write_confirm', approval_granted: false };
 }
-export function parseTurn(raw: JsonObject): AssistantTurn {
-  return {
-    reply: str(raw.reply), task_id: positiveId(raw.task_id), confirmation_token: str(raw.confirmation_token, 512) || null,
-    actions: parseActions(raw.actions ?? raw.client_actions), agent_pending: raw.agent_pending === true,
-    user_message_id: positiveId(raw.user_message_id), assistant_message_id: positiveId(raw.assistant_message_id),
-  };
+
+/**
+ * The action an issued client call stands for. The server issues a `write_confirm` call only after
+ * the user confirmed it or under a current full grant (`client_dispatch` / `decide_pending`), so
+ * such a call carries `approval_granted`; the runner still claims it before executing.
+ */
+export function clientCallAction(call: AssistantClientCall): AssistantAction {
+  return { name: call.operation, arguments: obj(call.arguments), call_id: call.id, risk: call.risk, approval_granted: call.risk === 'write_confirm' };
 }
+
+/** `state {}`: `{messages:[{id,role,content,created_at}], tasks:[{id,status}], client_calls}` — ordered by the backend. */
 export function parseState(raw: JsonObject): AssistantState {
-  const messages = Array.isArray(raw.messages) ? raw.messages.slice(-MAX_HISTORY).flatMap(value => {
-    const m = obj(value);
-    return m.role === 'user' || m.role === 'assistant' ? [{ id: positiveId(m.id), role: m.role, content: str(m.content) } satisfies AssistantMessage] : [];
-  }) : [];
-  const tasks = Array.isArray(raw.tasks) ? raw.tasks.slice(-12).flatMap(value => {
-    const t = obj(value);
-    if (!positiveId(t.id)) return [];
-    let payload: JsonObject = {};
-    try { if (typeof t.payload_json === 'string' && t.payload_json.length <= 128000) payload = obj(JSON.parse(t.payload_json)); } catch { /* An invalid task remains visibly unsupported. */ }
-    return [{
-      id: positiveId(t.id), status: str(t.status, 50), confirmation_token: str(t.confirmation_token, 512) || null,
-      actions: parseActions(payload.actions), confirmed: payload.client_confirmed === true, user_message: str(payload.user_message, MAX_MESSAGE),
-    }];
-  }) : [];
-  return { messages, tasks };
+  const messages = (raw.messages as { id: string; role: string; content: string }[]).slice(-MAX_HISTORY).flatMap(m =>
+    m.role === 'user' || m.role === 'assistant' ? [{ id: m.id, role: m.role, content: m.content } satisfies AssistantMessage] : []);
+  const tasks = (raw.tasks as { id: string; status: string }[]).map(t => ({ id: t.id, status: t.status }));
+  return { messages, tasks, client_calls: raw.client_calls as AssistantClientCall[] };
 }
 
-/** Never send credentials, personal contact details or file bodies back to the model. */
+/**
+ * Never send credentials, personal contact details or file bodies back to the model, and keep a
+ * receipt small enough for the device's journal (`journal.ts`) and the backend's 64000-byte
+ * receipt limit. The backend redacts again (`assistant_site_api::redact`) before the model reads it.
+ */
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 4) return '[内容已截短]';
   if (Array.isArray(value)) return value.slice(0, 30).map(v => redact(v, depth + 1));

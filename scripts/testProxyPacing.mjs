@@ -1,7 +1,7 @@
 /**
  * Review part 1 regressions for the server hops (P1-F1, P1-F2):
  *
- * - `app/api.php/…/route.ts` bounds a request **body** by its pace, not by the 30s answer budget —
+ * - `app/api/v1/[...path]/route.ts` bounds a request **body** by its pace, not by the 30s answer budget —
  *   a 50MB upload on a slow line used to be cut off and reported as an outage;
  * - `next.config.ts` keeps its security headers off exactly the handlers that set a stricter policy
  *   of their own, matched as whole path segments.
@@ -32,7 +32,7 @@ function loadPure(relative) {
 const proxyHeaders = loadPure('lib/proxyHeaders.ts');
 
 function loadProxy(fetchImpl) {
-  const source = readFileSync(path.join(root, 'app/api.php/[[...path]]/route.ts'), 'utf8');
+  const source = readFileSync(path.join(root, 'app/api/v1/[...path]/route.ts'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -71,11 +71,11 @@ function request(url, init) {
   Object.defineProperty(value, 'nextUrl', { value: new URL(url) });
   return value;
 }
-const context = () => ({ params: Promise.resolve({}) });
+const context = (...path) => ({ params: Promise.resolve({ path }) });
 
 test('P1-F1: a bodyless request keeps the 30s budget', async () => {
-  const proxy = loadProxy(async () => Response.json({ success: true }));
-  await proxy.exports.GET(request('https://app.invalid/api.php?action=get_user'), context());
+  const proxy = loadProxy(async () => Response.json({ user: { id: 1 } }));
+  await proxy.exports.GET(request('https://app.invalid/api/v1/me'), context('me'));
   assert.deepEqual(proxy.budgets, [30_000]);
   assert.equal(proxy.timers.length, 0);
 });
@@ -96,9 +96,9 @@ test('P1-F1: a body is bounded by its pace, then the answer by 30s, never by one
     }
     return new Promise((resolve) => { answer = resolve; });
   });
-  const pending = proxy.exports.POST(request('https://app.invalid/api.php?action=upload_temp_upload', {
+  const pending = proxy.exports.POST(request('https://app.invalid/api/v1/me/uploads/works', {
     method: 'POST', body, duplex: 'half',
-  }), context());
+  }), context('me', 'uploads', 'works'));
   const tick = () => new Promise((resolve) => setImmediate(resolve));
   await tick();
   assert.deepEqual(proxy.budgets, [15 * 60_000], 'only the overall cap is a fixed budget');
@@ -112,7 +112,7 @@ test('P1-F1: a body is bounded by its pace, then the answer by 30s, never by one
   push.close();
   await tick(); await tick();
   assert.deepEqual(proxy.live().map((timer) => timer.ms), [30_000], 'the answer gets its own 30s once the body is sent');
-  answer(Response.json({ success: true, url: 'https://picpony.top/tmp/x.png' }));
+  answer(Response.json({ url: 'https://picpony.top/tmp/x.png' }));
   const response = await pending;
   assert.equal(response.status, 200);
   assert.equal(proxy.live().length, 0, 'no timer outlives the answer');
@@ -124,23 +124,25 @@ test('P1-F1 / P4-O2: a stalled body aborts the upstream call and answers 408, no
   const proxy = loadProxy((_url, init) => new Promise((_, reject) => {
     init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
   }));
-  const pending = proxy.exports.POST(request('https://app.invalid/api.php?action=upload_temp_upload', {
+  const pending = proxy.exports.POST(request('https://app.invalid/api/v1/me/uploads/works', {
     method: 'POST', body, duplex: 'half',
-  }), context());
+  }), context('me', 'uploads', 'works'));
   await new Promise((resolve) => setImmediate(resolve));
   const [idle] = proxy.live();
   assert.equal(idle.ms, 30_000);
   idle.fn();
   const response = await pending;
   assert.equal(response.status, 408);
-  assert.match((await response.json()).message, /上传中断/);
+  const failure = await response.json();
+  assert.equal(failure.error.code, 'BODY_STALLED');
+  assert.match(failure.error.message, /上传中断/);
 });
 
 test('P4-O2: an upstream that fails on its own is still a 502', async () => {
   const proxy = loadProxy(async () => { throw new TypeError('fetch failed'); });
-  const response = await proxy.exports.POST(request('https://app.invalid/api.php?action=upload_temp_upload', {
+  const response = await proxy.exports.POST(request('https://app.invalid/api/v1/me/uploads/works', {
     method: 'POST', body: 'x', duplex: 'half',
-  }), context());
+  }), context('me', 'uploads', 'works'));
   assert.equal(response.status, 502);
 });
 
@@ -151,10 +153,10 @@ test('P1-F2: security headers skip exactly the handlers with their own sandbox p
   const source = vm.runInNewContext(literal);
   const { pathToRegexp } = require('next/dist/compiled/path-to-regexp');
   const re = pathToRegexp(source, [], { strict: true, sensitive: false, delimiter: '/' });
-  for (const own of ['/api.php', '/api.php/x', '/relay', '/share.php', '/upload/submit']) {
+  for (const own of ['/api/v1', '/api/v1/me', '/relay', '/share.php', '/upload/submit']) {
     assert.equal(re.test(own), false, `${own} keeps its own policy`);
   }
-  for (const app of ['/', '/forum/1', '/relayX', '/api.phpfoo', '/share.php.bak', '/upload', '/upload/submitx', '/mascot-shape', '/admin/import-tools/images']) {
+  for (const app of ['/', '/forum/1', '/relayX', '/api', '/api/v1x', '/api.php', '/share.php.bak', '/upload', '/upload/submitx', '/mascot-shape']) {
     assert.equal(re.test(app), true, `${app} gets the app's headers`);
   }
 });

@@ -12,13 +12,13 @@ import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
 import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
-import { usePrompt } from '@/components/ConfirmDialog';
 import { SKIP, useResource } from '@/lib/resource';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatDateTime } from '@/lib/format';
 import * as adminApi from '@/lib/api/admin';
 import { retryError } from '../queries';
 import { useAdminMutation } from '../useAdminMutation';
+import { useCursorPages } from '../paging';
 import { useSettled } from '../useSettled';
 import { tagFeedback, type Feedback, type FeedbackStatus } from './resources';
 
@@ -55,46 +55,40 @@ export default function FeedbackDialog({
   const [status, setStatus] = useState<FeedbackStatus | 'all'>('pending');
   const [search, setSearch] = useState('');
   const keyword = useSettled(search.trim(), search.trim() ? 400 : 0);
-  const [page, setPage] = useState({ page: 1, scope: '' });
-  const scope = `${status}\n${keyword}`;
-  const current = page.scope === scope ? page.page : 1;
+  const scope = `${token}\n${status}\n${keyword}`;
+  /* A cursor list: the pager offers the pages reached so far and the next one when there is one. */
+  const pages = useCursorPages(scope);
+  const current = pages.page;
   const [live, setLive] = useState(open);
   if (open && !live) setLive(true);
   const read = useResource(
     tagFeedback,
-    live && token ? { token, status, page: current, keyword } : SKIP,
-    { keepPrevious: `${token}\n${scope}` },
+    live && token ? { token, status, before: pages.cursor, keyword } : SKIP,
+    { keepPrevious: scope },
   );
+  if (read.data && !read.isPrevious && !read.error) {
+    /* A page emptied by handling its last feedback steps back to the one before it, rather than
+       sitting on an empty page with its pager gone (review P6-F5). */
+    if (read.data.rows.length === 0 && current > 1 && !read.isLoading) pages.setPage(current - 1);
+    else pages.learn(current, read.data.next);
+  }
   const mutation = useAdminMutation(token);
-  const { prompt, promptDialog } = usePrompt();
 
-  const setState = (feedback: Feedback, next: FeedbackStatus, note?: string) =>
+  /* `PUT /editor/dictionary/feedback/{id}` takes the status alone: the backend keeps no handling
+     note, so 忽略 asks nothing more. */
+  const setState = (feedback: Feedback, next: FeedbackStatus) =>
     void mutation.run(
-      () => adminApi.handleTagFeedback(token, feedback.id, next, note || undefined, feedback.status),
+      () => adminApi.handleTagFeedback(token, feedback.id, next),
       () => showToast(next === 'rejected' ? '已忽略该反馈' : '已标记为待处理', 'success'),
       '操作失败',
       { key: feedback.id, onCommitted: () => tagFeedback.invalidate() },
     );
 
-  const reject = async (feedback: Feedback) => {
-    const note = await prompt({
-      title: '忽略反馈',
-      label: '忽略原因',
-      message: '可以留空。填写的内容会显示在处理记录里。',
-      placeholder: '例如：该标签已在其他条目中修正',
-      confirmLabel: '忽略',
-      allowEmpty: true,
-    });
-    if (note !== null) setState(feedback, 'rejected', note);
-  };
-
-  const summary = read.data?.summary;
   const rows = read.data?.rows ?? [];
-  /* Handling the last feedback on the last page leaves a page the queue no longer has: it showed
-     暂无反馈 with the pager gone (it renders only beside rows), so the rest of the queue was out of
-     reach until the filter changed. Move to the last page there is (review P6-F5). */
-  if (read.data && !read.isPrevious && !read.isLoading && !read.error && current > read.data.totalPages) {
-    setPage({ page: read.data.totalPages, scope });
+  /* Handling the last feedback on a later page leaves a page the queue no longer has: move back one
+     rather than show 暂无反馈 with the pager gone (review P6-F5). */
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && !rows.length && current > 1) {
+    pages.setPage(current - 1);
   }
 
   return (
@@ -105,9 +99,7 @@ export default function FeedbackDialog({
         <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
           {FILTERS.map((value) => (
             <Chip key={value} variant="filter" selected={status === value} onClick={() => setStatus(value)}>
-              {value === 'all'
-                ? '全部'
-                : `${STATUS_LABEL[value]}${summary ? `（${summary[value]}）` : ''}`}
+              {value === 'all' ? '全部' : STATUS_LABEL[value]}
             </Chip>
           ))}
         </div>
@@ -140,13 +132,13 @@ export default function FeedbackDialog({
                   <Card variant="filled" className="space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">{feedback.tag_name}</p>
+                        <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">{feedback.tag}</p>
                         <p className="text-body-s text-on-surface-variant">
                           {`来自：${feedback.username || '游客'} · ${formatDateTime(feedback.created_at)}`}
                         </p>
                       </div>
-                      <Badge tone={STATUS_TONE[feedback.status] ?? 'neutral'} size="md">
-                        {STATUS_LABEL[feedback.status] ?? feedback.status}
+                      <Badge tone={STATUS_TONE[feedback.status]} size="md">
+                        {STATUS_LABEL[feedback.status]}
                       </Badge>
                     </div>
                     {/* The user's report, quoted in the app's one quote treatment (the brand rule, a
@@ -159,9 +151,8 @@ export default function FeedbackDialog({
                     {feedback.status !== 'pending' && (
                       <p className="text-body-s text-on-surface-variant">
                         {[
-                          `由 ${feedback.handled_by_name || '管理员'} 处理`,
+                          `由 ${feedback.handler_username || '管理员'} 处理`,
                           feedback.handled_at ? formatDateTime(feedback.handled_at) : null,
-                          feedback.handling_note ? `备注：${feedback.handling_note}` : null,
                         ].filter(Boolean).join(' · ')}
                       </p>
                     )}
@@ -173,7 +164,7 @@ export default function FeedbackDialog({
                             variant="text"
                             size="xs"
                             loading={mutation.pendingKeys.has(feedback.id)}
-                            onClick={() => void reject(feedback)}
+                            onClick={() => setState(feedback, 'rejected')}
                           >
                             忽略
                           </Button>
@@ -203,11 +194,11 @@ export default function FeedbackDialog({
                 </li>
               ))}
             </ul>
-            {(read.data.totalPages ?? 1) > 1 && (
+            {pages.totalPages > 1 && (
               <Pagination
                 currentPage={current}
-                totalPages={read.data.totalPages}
-                onPageChange={(next) => setPage({ page: next, scope })}
+                totalPages={pages.totalPages}
+                onPageChange={pages.setPage}
                 siblings={1}
                 className="mt-0 w-full"
               />
@@ -216,7 +207,6 @@ export default function FeedbackDialog({
         )}
       </div>
     </Modal>
-    {promptDialog}
     </>
   );
 }

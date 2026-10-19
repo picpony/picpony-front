@@ -12,8 +12,8 @@ import Skeleton from '@/components/Skeleton';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
-import { apiErrorMessage, isApiError } from '@/lib/api/errors';
-import type { FaveFolder } from '@/lib/api/favorites';
+import { apiErrorMessage } from '@/lib/api/errors';
+import { isRefusal, type FaveFolder } from '@/lib/api/favorites';
 import { createFolder } from '@/lib/favoritesActions';
 import { folderLabel, settled } from '@/lib/favorites';
 import { formatCount } from '@/lib/format';
@@ -187,7 +187,7 @@ export function NewFolderRow({
       setError(null);
       if (outcome.value) onCreated(outcome.value);
       showToast(outcome.value ? `已创建「${value}」` : `已创建「${value}」，收藏夹列表更新失败`, outcome.value ? 'success' : 'warning');
-    } else if (isApiError(outcome.error) && outcome.error.kind === 'envelope') {
+    } else if (isRefusal(outcome.error)) {
       setError(apiErrorMessage(outcome.error, '创建失败'));
     } else {
       showToast(apiErrorMessage(outcome.error, '创建失败'), 'error');

@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { after, beforeEach, test } from 'node:test';
-import { blockFiltersEnvelope } from './netAuditFixtures.mjs';
+import { blockFiltersEnvelope, publicBlacklistPage } from './netAuditFixtures.mjs';
 import { requireTypeStripping } from './tsResolve.mjs';
 
 requireTypeStripping('testDataLayer');
@@ -80,13 +80,13 @@ test('a request waits at most 2s for a policy the document did not carry', async
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const asked = [];
   globalThis.fetch = (url) => {
-    asked.push(new URL(String(url), 'https://app.invalid').searchParams.get('action'));
+    asked.push(new URL(String(url), 'https://app.invalid').pathname);
     return new Promise(() => {});
   };
   let settled = false;
   void route.ensureRoutePolicy().then(() => { settled = true; });
   await flush();
-  assert.deepEqual(asked.sort(), ['get_block_tags', 'get_maintenance_status', 'get_public_blacklist']);
+  assert.deepEqual(asked.sort(), ['/api/v1/filters/block-tags', '/api/v1/image-blocklist', '/api/v1/routing-policy']);
   t.mock.timers.tick(1_999);
   await flush();
   assert.equal(settled, false, 'the policy read is still allowed to land');
@@ -156,8 +156,8 @@ test('the SSR feed seeds nothing it must not share and backs off the upstream af
   globalThis.fetch = async (url) => {
     const parsed = new URL(String(url));
     const action = parsed.searchParams.get('action');
-    if (action === 'get_block_tags') return json(blockFiltersEnvelope());
-    if (action === 'get_public_blacklist') return json({ success: true, blacklist: [] });
+    if (String(url).includes('/api/v1/filters/block-tags')) return json(blockFiltersEnvelope());
+    if (String(url).includes('/api/v1/image-blocklist')) return json(publicBlacklistPage([]));
     reads.push(parsed);
     return answer();
   };
@@ -202,8 +202,8 @@ test('a failed policy read still inlines the public rules and leaves the rest to
   clearPublicBlacklistMemo();
   globalThis.fetch = async (url) => {
     const action = new URL(String(url)).searchParams.get('action');
-    if (action === 'get_block_tags') return json(blockFiltersEnvelope());
-    if (action === 'get_public_blacklist') return json({ success: true, blacklist: [5, 3, 5] });
+    if (String(url).includes('/api/v1/filters/block-tags')) return json(blockFiltersEnvelope());
+    if (String(url).includes('/api/v1/image-blocklist')) return json(publicBlacklistPage([5, 3]));
     return new Response('<html>down</html>', { status: 502 });
   };
   const inline = await readRoutePolicy();

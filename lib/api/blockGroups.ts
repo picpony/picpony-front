@@ -1,35 +1,37 @@
 import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import { proxyFetch } from './client';
 import { ApiError } from './errors';
-import { listOf, picponyPostJson, picponyRequest, readEnvelope, readObject } from './http';
+import { api, readObject, seg } from './http';
 
 /**
  * 屏蔽组 — the account's named tag lists, each either hiding its pictures outright or covering
  * them (遮挡), switched on and off one group at a time — and the one way to make a group from
  * somewhere else: a Derpibooru filter (从 Derpibooru 导入, the original front end's import).
+ * Rust: `src/pg/tag_groups.rs` (`block_*`).
  *
- * The reads are strict: a refusal (`{success:false, error:'登录已过期'}`) once flowed into an empty
- * list and rendered 还没有任何屏蔽组 with a create button — inviting the user to recreate groups
- * they already had. The writes are strict too, so a refused save cannot read as saved.
+ * The reads are strict: a refusal is an `ApiError`, never an empty list (an empty one once
+ * rendered 还没有任何屏蔽组 and invited the user to recreate groups they already had). Every edit
+ * and every switch carries the group's `revision`; a group changed elsewhere meanwhile is refused
+ * (409 `GROUP_VERSION_CONFLICT`).
  */
 
 export interface BlockGroup {
   id: number;
   name: string;
-  /** Every tag in the group, both lists — the backend's own union column. */
-  tags: string[];
   hidden_tags: string[];
   spoilered_tags: string[];
-  is_active: number;
+  active: boolean;
+  /** The backend's version of the group, sent back with an edit or a switch. */
+  revision: number;
 }
 
-/** The original front end's limits: 50 groups, 50 tags in each list. */
+/** The original front end's limits: 50 groups, 50 tags in each list (the backend allows 1,000 in all). */
 export const MAX_BLOCK_GROUPS = 50;
 export const MAX_TAGS_PER_LIST = 50;
 /** `屏蔽组名称`'s `maxlength` in the original form. */
 export const MAX_GROUP_NAME = 30;
 
-/** A tag list from an array or the comma string the backend has sent before; lower-cased, unique. */
+/** A tag list — lower-cased, unique — from what a Derpibooru filter holds (an array or a comma string). */
 export function tagList(value: unknown): string[] {
   const raw = Array.isArray(value)
     ? value.filter((tag): tag is string => typeof tag === 'string')
@@ -47,75 +49,67 @@ export function tagList(value: unknown): string[] {
   return out;
 }
 
-/**
- * A group with its three tag lists normalised. A group that predates the split stored its tags
- * in `tags` alone, and those are hidden tags — the original front end read them that way.
- */
-export function blockGroupOf(row: unknown): BlockGroup | null {
-  if (!row || typeof row !== 'object') return null;
-  const group = row as Record<string, unknown>;
-  const id = Number(group.id);
-  if (!Number.isSafeInteger(id) || id <= 0) return null;
-  const all = tagList(group.tags);
-  const hidden = tagList(group.hidden_tags);
-  const spoilered = tagList(group.spoilered_tags);
-  const legacy = hidden.length === 0 && spoilered.length === 0;
-  return {
-    id,
-    name: typeof group.name === 'string' ? group.name.trim() : '',
-    tags: all,
-    hidden_tags: legacy ? all : hidden,
-    spoilered_tags: spoilered,
-    is_active: Number(group.is_active) ? 1 : 0,
-  };
+interface BlockGroupRow {
+  id: number;
+  name: string;
+  hidden_tags: string[];
+  spoilered_tags: string[];
+  active: boolean;
+  revision: number;
+  created_at: string;
 }
 
-export async function getBlockGroups(token: string, signal?: AbortSignal): Promise<{ success: true; groups: BlockGroup[] }> {
-  const data = await readEnvelope<{ groups?: unknown }>(
-    await picponyRequest('get_block_groups', { token, query: { _t: Date.now() }, signal }),
-  );
-  if (!Array.isArray(data.groups)) throw new ApiError('invalid');
-  return {
-    success: true,
-    groups: data.groups.map(blockGroupOf).filter((group): group is BlockGroup => group !== null),
-  };
+/** `GET /me/block-groups` — oldest first. */
+export async function getBlockGroups(token: string, signal?: AbortSignal): Promise<BlockGroup[]> {
+  const data = await api<{ groups: BlockGroupRow[] }>('GET', '/me/block-groups', { token, signal, cache: 'no-store' });
+  return data.groups.map(({ id, name, hidden_tags, spoilered_tags, active, revision }) => ({
+    id, name, hidden_tags, spoilered_tags, active, revision,
+  }));
 }
 
 export interface BlockGroupInput {
   /** Absent for a new group. */
   id?: number | null;
+  /** An edit's: the version the screen holds, and the switch's state, which the edit keeps. */
+  revision?: number;
+  active?: boolean;
   name: string;
   hidden: readonly string[];
   spoilered: readonly string[];
 }
 
 /**
- * `POST save_block_group {id|0, name, tags, hidden_tags, spoilered_tags}` — the original front
- * end's body, field for field (`tags` is the union). Resolves with the saved group's id when the
- * backend names it.
+ * `POST /me/block-groups` for a new group (switched on), `PUT /me/block-groups/{id}` for an edit —
+ * `{name, hidden_tags, spoilered_tags, active, expected_revision}`. **An edit must send `active`**:
+ * the backend writes it, and its default is on. Resolves with the group's id and new revision.
  */
-export async function saveBlockGroup(token: string, input: BlockGroupInput): Promise<{ id: number | null }> {
-  const hidden = [...input.hidden];
-  const spoilered = [...input.spoilered];
-  const data = await readEnvelope<{ id?: unknown; group_id?: unknown }>(
-    await picponyPostJson('save_block_group', {
-      id: input.id ?? 0,
-      name: input.name,
-      tags: [...new Set([...hidden, ...spoilered])],
-      hidden_tags: hidden,
-      spoilered_tags: spoilered,
-    }, { token }),
-  );
-  const id = Number(data.id ?? data.group_id);
-  return { id: Number.isSafeInteger(id) && id > 0 ? id : (input.id ?? null) };
+export async function saveBlockGroup(token: string, input: BlockGroupInput): Promise<{ id: number; revision: number }> {
+  const body = {
+    name: input.name,
+    hidden_tags: [...input.hidden],
+    spoilered_tags: [...input.spoilered],
+    active: input.active ?? true,
+  };
+  return input.id
+    ? api<{ id: number; revision: number }>('PUT', `/me/block-groups/${seg(input.id)}`, {
+      token,
+      json: { ...body, expected_revision: input.revision },
+    })
+    : api<{ id: number; revision: number }>('POST', '/me/block-groups', { token, json: body });
 }
 
+/** `DELETE /me/block-groups/{id}`. */
 export async function deleteBlockGroup(token: string, id: number): Promise<void> {
-  await readEnvelope(await picponyPostJson('delete_block_group', { id }, { token }));
+  await api('DELETE', `/me/block-groups/${seg(id)}`, { token });
 }
 
-export async function toggleBlockGroup(token: string, id: number, active: boolean): Promise<void> {
-  await readEnvelope(await picponyPostJson('toggle_block_group', { id, is_active: active ? 1 : 0 }, { token }));
+/** `PUT /me/block-groups/{id}/activation {active, expected_revision}` → the group's new revision. */
+export async function toggleBlockGroup(token: string, id: number, active: boolean, revision: number): Promise<{ revision: number }> {
+  const data = await api<{ active: boolean; revision: number }>('PUT', `/me/block-groups/${seg(id)}/activation`, {
+    token,
+    json: { active, expected_revision: revision },
+  });
+  return { revision: data.revision };
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +128,7 @@ export async function getDerpiUserFilters(apiKey: string, signal?: AbortSignal):
     await proxyFetch(`${DERPIBOORU_API_BASE}/filters/user?key=${encodeURIComponent(apiKey)}`, { signal }),
   );
   if (!Array.isArray(data.filters)) throw new ApiError('invalid');
-  return listOf<Record<string, unknown>>(data.filters)
+  return (data.filters as Record<string, unknown>[])
     .filter((row) => row && typeof row === 'object' && Number.isSafeInteger(Number(row.id)))
     .map((row) => ({
       id: Number(row.id),
@@ -166,7 +160,7 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
     const data = await readObject<{ tags?: unknown }>(
       await proxyFetch(`${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=50`, { signal }),
     );
-    for (const tag of listOf<Record<string, unknown>>(data.tags)) {
+    for (const tag of Array.isArray(data.tags) ? (data.tags as Record<string, unknown>[]) : []) {
       if (tag && typeof tag.name === 'string') names.push(tag.name);
     }
   }
@@ -174,7 +168,7 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
 }
 
 function ids(value: unknown): number[] {
-  return listOf<unknown>(value).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+  return (Array.isArray(value) ? value : []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
 }
 
 export interface ImportedFilter {

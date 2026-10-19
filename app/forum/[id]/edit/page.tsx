@@ -14,7 +14,6 @@ import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
-import { sharedGroupsContent } from '@/lib/forumModel';
 import { readForumPreview, rememberForumPreview } from '@/lib/forumTransition';
 import { useEscapeBack, useSession } from '@/lib/hooks';
 import { useResource, SKIP } from '@/lib/resource';
@@ -72,26 +71,28 @@ export default function EditForumPostPage() {
         token={token}
         post={post}
         onDone={(postId, sent) => {
+          /* The body as the thread will read it back. A shared block group travels as its hidden
+             tags (`contentWire`), which is all the re-read will show. */
           const patch = {
             title: sent.title,
             excerpt: sent.excerpt,
             category: sent.category,
             cover_image: sent.cover_image,
+            content: sent.content,
+            commission_link: sent.commission_link,
+            shared_groups: sent.shared_groups
+              ? { tagGroups: sent.shared_groups.tag_groups, blockGroups: sent.shared_groups.block_groups }
+              : null,
+            revision: post.revision + 1,
           };
-          /* The body as the thread will read it — for a tag-group share, the document the server
-             writes from the note and the groups. */
-          const content =
-            sent.category === 'taggroups' && sent.shared_groups
-              ? sharedGroupsContent(sent.content, sent.shared_groups)
-              : sent.content;
-          patchListedPost(postId, { ...patch, content });
-          rememberForumPreview({ ...post, ...patch, content });
+          patchListedPost(postId, patch);
+          rememberForumPreview({ ...post, ...patch });
           /* Corrected before the re-read: this page holds the thread's first page mounted, so
              invalidating keeps that answer on screen while it re-reads — and the thread, going
              back to it, showed the old title until the re-read landed. */
           patchThreadPage({ id, page: 1, token }, (previous) => ({
             ...previous,
-            post: { ...previous.post, ...patch, content },
+            post: { ...previous.post, ...patch },
           }));
           forumThread.invalidate();
           back();

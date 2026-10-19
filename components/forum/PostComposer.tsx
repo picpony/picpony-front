@@ -15,15 +15,13 @@ import { CategoryIcon } from '@/components/forum/ForumBadges';
 import SharedGroupsPicker, { sharedGroupsOf, type KeptGroups } from '@/components/forum/SharedGroupsPicker';
 import {
   createForumPost,
-  encodeCommission,
   FORUM_CATEGORIES,
   isCommissionLink,
-  parseCommission,
-  parseSharedGroups,
   updateForumPost,
   type ForumPostInput,
 } from '@/lib/api/forum';
 import { apiErrorMessage } from '@/lib/api/errors';
+import { createRetryKeys } from '@/lib/api/idempotency';
 import { firstImageOf } from '@/lib/bbcode';
 import { clearDraft, EMPTY_DRAFT, readDraft, writeDraft, type ForumDraft } from '@/lib/forumDraft';
 import { storedAssetPath } from '@/lib/forumImages';
@@ -65,22 +63,18 @@ function draftOf(post: ForumPost): { draft: ForumDraft; kept: KeptGroups | null 
     cover: post.cover_image,
   };
   if (post.category === 'commission') {
-    const commission = parseCommission(post.content);
-    if (commission) return { draft: { ...base, content: commission.description, commissionLink: commission.link }, kept: null };
+    return { draft: { ...base, commissionLink: post.commission_link }, kept: null };
   }
   if (post.category === 'taggroups') {
-    const groups = parseSharedGroups(post.content);
-    if (groups) {
-      const keys = [
-        ...groups.tagGroups.map((_, index) => `kept-tag:${index}`),
-        ...groups.blockGroups.map((_, index) => `kept-block:${index}`),
-      ];
-      return {
-        draft: { ...base, content: '', groupsDescription: groups.description, groups: keys },
-        kept: { tagGroups: groups.tagGroups, blockGroups: groups.blockGroups },
-      };
-    }
-    return { draft: { ...base, content: '', groupsDescription: post.content }, kept: null };
+    const groups = post.shared_groups ?? { tagGroups: [], blockGroups: [] };
+    const keys = [
+      ...groups.tagGroups.map((_, index) => `kept-tag:${index}`),
+      ...groups.blockGroups.map((_, index) => `kept-block:${index}`),
+    ];
+    return {
+      draft: { ...base, content: '', groupsDescription: post.content, groups: keys },
+      kept: { tagGroups: groups.tagGroups, blockGroups: groups.blockGroups },
+    };
   }
   return { draft: base, kept: null };
 }
@@ -89,13 +83,24 @@ const sameDraft = (a: ForumDraft, b: ForumDraft) => JSON.stringify(a) === JSON.s
 
 type Outcome = { ok: true; id: number } | { ok: false; message: string };
 
+/* A post re-sent after a lost answer keeps its key, so it cannot be published twice. */
+const postKeys = createRetryKeys();
+
 /* Module scope: the React Compiler does not lower a `try` with a `finally` in a component. */
-async function send(token: string, editing: number | null, body: ForumPostInput): Promise<Outcome> {
+async function send(
+  token: string,
+  editing: { id: number; revision: number } | null,
+  body: ForumPostInput,
+): Promise<Outcome> {
+  const attempt = postKeys.key(`${token}:${editing ? `${editing.id}@${editing.revision}` : 'new'}`, body);
   try {
-    if (editing === null) return { ok: true, id: await createForumPost(token, body) };
-    await updateForumPost(token, editing, body);
-    return { ok: true, id: editing };
+    const id = editing === null
+      ? await createForumPost(token, body, attempt.key)
+      : (await updateForumPost(token, editing.id, body, editing.revision, attempt.key), editing.id);
+    attempt.settle();
+    return { ok: true, id };
   } catch (error) {
+    attempt.settle(error);
     return { ok: false, message: apiErrorMessage(error, editing === null ? '发布失败' : '保存失败') };
   }
 }
@@ -248,16 +253,11 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       title: draft.title.trim(),
       excerpt: draft.excerpt.trim(),
       category,
-      content:
-        category === 'commission'
-          ? encodeCommission(content, draft.commissionLink)
-          : category === 'taggroups'
-            ? draft.groupsDescription.trim()
-            : content,
+      content: category === 'taggroups' ? draft.groupsDescription.trim() : content,
+      commission_link: category === 'commission' ? draft.commissionLink.trim() : '',
       cover_image: cover,
       shared_groups:
         category === 'taggroups' ? sharedGroupsOf(draft.groups, shareableGroups.peek({ token }).data, kept) : null,
-      draft_images: draft.images,
     };
   };
 
@@ -280,7 +280,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
     const body = bodyOf();
     setFailure(null);
     setSending(true);
-    const outcome = await send(session, editing, body);
+    const outcome = await send(session, post ? { id: post.id, revision: post.revision } : null, body);
     setSending(false);
     if (readToken() !== session) return;
     if (!outcome.ok) {

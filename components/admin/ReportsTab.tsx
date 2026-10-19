@@ -70,7 +70,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       (!keyword ||
         String(report.id) === keyword ||
         String(report.image_id) === keyword ||
-        report.username?.toLowerCase().includes(keyword)));
+        report.reporter.username.toLowerCase().includes(keyword)));
     /* Pending first, then the order the backend gave. */
     return filter === 'all'
       ? rows.map((report, index) => ({ report, index }))
@@ -89,13 +89,14 @@ export default function ReportsTab({ token }: AdminPanelProps) {
     setRunning((current) => ({ ...current, [report.id]: status }));
     return mutation
       .run(
-        () => adminApi.adminHandleReport(token, report.id, status),
+        () => adminApi.adminHandleReport(token, report, status),
         () => showToast(status === 'processed' ? `已处理举报 #${report.id}` : `已驳回举报 #${report.id}`, 'success'),
         '处理失败',
         {
           key: report.id,
-          onCommitted: () => {
-            reportsQuery.write(token, (previous) => previous?.map((row) => (row.id === report.id ? { ...row, status } : row)) ?? []);
+          onCommitted: (data) => {
+            const revision = typeof data.applied_revision === 'number' ? data.applied_revision : report.revision;
+            reportsQuery.write(token, (previous) => previous?.map((row) => (row.id === report.id ? { ...row, status, revision } : row)) ?? []);
             read.refresh();
           },
         },
@@ -144,7 +145,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       header: '举报人',
       render: (report) => (
         <span>
-          {report.username || '游客'}
+          {report.reporter.username}
           <span className="block text-body-s text-on-surface-variant">{`#${report.id} · ${formatDateTime(report.created_at)}`}</span>
         </span>
       ),

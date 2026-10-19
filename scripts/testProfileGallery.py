@@ -171,7 +171,7 @@ class Fixtures:
             route.fulfill(status=200, content_type='image/png', body=self.png(image_id),
                           headers={'access-control-allow-origin': '*'})
             return
-        if request.url.startswith(BASE) and not parsed.path.startswith(('/api.php', '/relay', '/search-api', '/_next/image')):
+        if request.url.startswith(BASE) and not parsed.path.startswith(('/api/v1', '/relay', '/search-api', '/_next/image')):
             route.continue_()
             return
         pairs = [(key, value) for key, value in urllib.parse.parse_qsl(parsed.query) if key != '_t']

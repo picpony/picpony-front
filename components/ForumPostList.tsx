@@ -41,8 +41,6 @@ interface ForumPostListProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   onPrefetchPage?: (page: number) => void;
-  /** The rows belong to a viewer's own read: the unread marks mean something only then. */
-  signedIn: boolean;
   /** The session a thread opened from here reads with — the key its warm read must match. */
   token: string | null;
   /** A read is in flight under these rows (a page turn, a new search): dim them. */
@@ -50,7 +48,7 @@ interface ForumPostListProps {
   className?: string;
 }
 
-function ForumRow({ post, signedIn, token, now }: { post: ForumPost; signedIn: boolean; token: string | null; now: number | null }) {
+function ForumRow({ post, token, now }: { post: ForumPost; token: string | null; now: number | null }) {
   /* **Warmed on the press, never on a hover** — a thread read counts a view on the server, so
      warming a thread the pointer merely crossed would inflate the count. A press is followed by
      its click ~100ms later (a finger's after the tap timeout, and not at all if it becomes a
@@ -62,7 +60,6 @@ function ForumRow({ post, signedIn, token, now }: { post: ForumPost; signedIn: b
      (`lib/routePayload.ts`). */
   const href = `/forum/${post.id}`;
   const page = useIntentPrefetch(() => prefetchRoutePayload(href));
-  const unread = signedIn && post.is_unread;
   const teaser = forumTeaser(post);
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     /* A modified click — a new tab, a new window — is the browser's; only a plain one flies. */
@@ -103,22 +100,9 @@ function ForumRow({ post, signedIn, token, now }: { post: ForumPost; signedIn: b
         <Avatar src={post.avatar} name={post.username} size={40} />
       </span>
       <span className="col-start-2 flex min-w-0 items-center gap-1.5">
-        {unread && (
-          /* A mark rather than a container: a first visit has every thread unread, and a list
-             of tinted rows says nothing. The weight carries it too. */
-          <span className="size-2 shrink-0 rounded-full bg-primary-ink forced-mark" aria-hidden="true" />
-        )}
         {post.is_pinned && <PinnedBadge />}
         {post.category !== 'discussion' && <CategoryBadge category={post.category} />}
-        <span
-          className={cn(
-            'min-w-0 truncate text-on-surface',
-            unread ? 'text-title-m-emphasized' : 'text-title-m',
-          )}
-        >
-          {unread && <span className="sr-only">有新动态：</span>}
-          {post.title}
-        </span>
+        <span className="min-w-0 truncate text-title-m text-on-surface">{post.title}</span>
       </span>
       {post.cover_image && (
         <span className="col-start-3 row-span-2 row-start-1">
@@ -181,7 +165,6 @@ export default function ForumPostList({
   totalPages,
   onPageChange,
   onPrefetchPage,
-  signedIn,
   token,
   busy = false,
   className = '',
@@ -214,7 +197,7 @@ export default function ForumPostList({
         )}
       >
         {posts.map((post) => (
-          <MemoRow key={post.id} post={post} signedIn={signedIn} token={token} now={now} />
+          <MemoRow key={post.id} post={post} token={token} now={now} />
         ))}
       </div>
       {totalPages > 1 && (

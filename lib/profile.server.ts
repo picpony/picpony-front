@@ -1,6 +1,5 @@
-import { PICPONY_API_BASE } from '@/lib/constants';
 import type { ProfileUser } from '@/lib/resources';
-import { isProfileId } from '@/lib/profiles';
+import { isProfileId, profileFromWire, type WireProfile } from '@/lib/profiles';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
@@ -9,7 +8,7 @@ import { upstreamOrigin } from '@/lib/upstream.server';
  * `userProfile` via `resource.seed()`. One read serves two callers per request — the layout's
  * `<title>` metadata and the page's profile header.
  *
- * Anonymous: `get_user_profile` takes a `user_id` and no token and returns what any visitor sees,
+ * Anonymous: `GET /api/v1/users/{id}` takes no token and returns what any visitor sees,
  * so it is shareable and the cache needs no partitioning beyond the id. Only the *header* moves —
  * the tabs underneath are client reads, keyed on what differs for the owner (see `userUploads`).
  *
@@ -56,24 +55,23 @@ export const readUserProfile = createServerMemo({
     if (!isProfileId(id)) return PROFILE_MISSING;
     try {
       const res = await fetch(
-        `${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_user_profile&user_id=${encodeURIComponent(id)}`,
+        `${UPSTREAM_ORIGIN}/api/v1/users/${encodeURIComponent(id)}`,
         { next: { revalidate: cacheSeconds(REVALIDATE_S) }, signal: AbortSignal.timeout(TIMEOUT_MS) },
       );
-      /* The backend answers an unknown id with its HTML 404 page; that is its answer, not a
+      /* The backend answers an unknown id with 404 `USER_NOT_FOUND`; that is its answer, not a
          fault. */
       if (res.status === 404) {
         void res.body?.cancel().catch(() => {});
         return PROFILE_MISSING;
       }
       if (!res.ok) return null;
-      const data = (await res.json()) as { success?: boolean; user?: ProfileUser };
-      if (!data?.success || !data.user) return null;
+      const data = (await res.json()) as { user: WireProfile };
 
       /* The key is `userProfile.keyOf({ id })`, the bare id, spelled rather than imported:
          importing `lib/resources` would pull the whole client catalogue into the server bundle
          for one expression. If the key ever changes, this stops matching and the page falls back
          to a client read — the right direction to fail in. */
-      return { key: id, data: data.user, generatedAt: Date.now() };
+      return { key: id, data: profileFromWire(data.user), generatedAt: Date.now() };
     } catch {
       return null;
     }

@@ -35,6 +35,7 @@ import {
   userUploads,
 } from '@/lib/resources';
 import { SUBSCRIPTION_PER_PAGE, tagFromSegment } from '@/lib/subscriptionHref';
+import { faveOwnerOf } from '@/lib/favorites';
 
 /** The profile grid's page size, which the screen also declares. Kept in step by being small. */
 const PROFILE_PER_PAGE = 12;
@@ -138,15 +139,18 @@ export function prefetchRoute(href: string) {
      other than the main one — the owner's public list the screen checks it against. */
   const shared = /^\/favorites\/shared\/([^/]+)\/(\d{1,10})$/.exec(path);
   if (shared) {
-    let username = shared[1];
+    let segment = shared[1];
     try {
-      username = decodeURIComponent(username);
+      segment = decodeURIComponent(segment);
     } catch {
       /* Warmed as it came; the screen decodes the same way. */
     }
+    /* The same owner the route hands its screen (`faveOwnerOf`): `~<id>` by id, else an old
+       username link, looked up first. */
+    const owner = faveOwnerOf(segment.trim());
     const folderId = Number(shared[2]);
-    sharedFaveIds.prefetch({ username, folderId });
-    if (folderId > 0) profileFaveFolders.prefetch({ username });
+    sharedFaveIds.prefetch({ ...owner, folderId });
+    if (folderId > 0) profileFaveFolders.prefetch(owner);
     return;
   }
 

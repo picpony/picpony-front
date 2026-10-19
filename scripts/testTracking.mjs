@@ -2,9 +2,9 @@
  * Visitor and share tracking, with no browser and no live service: who is counted and when
  * (`lib/visitor.ts` — production only, never automated or headless, never signed in, never twice
  * in a minute, never while hidden or in flight), what a count says (the pathname alone, a private
- * segment replaced by its route's name), the anonymous id, and the two requests (`track_visitor`
- * in `lib/api/tracking.ts`, `track_share` in `lib/api/share.ts`) — their bodies, their headers,
- * and that neither can throw into its caller.
+ * segment replaced by its route's name), the anonymous id, and the request (`track_visitor` in
+ * `lib/api/tracking.ts`) — its body, its headers, and that it cannot throw into its caller; and
+ * that `track_share` is gone.
  */
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
@@ -42,7 +42,6 @@ beforeEach(() => {
 
 const visitor = await import('../lib/visitor.ts');
 const { trackVisitor } = await import('../lib/api/tracking.ts');
-const { trackShare } = await import('../lib/api/share.ts');
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
@@ -71,6 +70,8 @@ test('a stored id is kept when it has the original front end’s shape, and repl
   assert.equal(visitor.isVisitorId('A_b-' + 'x'.repeat(12)), true);
   assert.equal(visitor.isVisitorId('short'), false);
   assert.equal(visitor.isVisitorId('x'.repeat(97)), false);
+  assert.equal(visitor.isVisitorId('x'.repeat(65)), false, 'the backend takes at most 64');
+  assert.equal(visitor.isVisitorId('x'.repeat(64)), true);
   assert.equal(visitor.isVisitorId('has space in it here'), false);
   assert.equal(visitor.isVisitorId('含有中文的访客编号很长很长很长'), false);
   assert.equal(visitor.isVisitorId(null), false);
@@ -109,12 +110,16 @@ test('a segment that is somebody’s words or a share’s identity becomes its r
   assert.equal(visitor.visitorPath('/user/1'), '/user/1', 'a public profile id is not private');
 });
 
-test('a path is capped at the original’s 255 characters, by character rather than by UTF-16 unit', () => {
+test('a path is capped at the original’s 255 characters and the backend’s 512 bytes, never inside a character', () => {
+  const ascii = `/forum/${'a'.repeat(400)}`;
+  assert.equal(visitor.visitorPath(ascii).length, 255);
   const long = `/forum/${'帖'.repeat(400)}`;
   const capped = visitor.visitorPath(long);
-  assert.equal(Array.from(capped).length, 255);
-  const astral = `/${'😀'.repeat(300)}`;
-  assert.equal(Array.from(visitor.visitorPath(astral)).length, 255, 'a surrogate pair is never split');
+  assert.ok(new TextEncoder().encode(capped).length <= 512, 'site::visit_path counts bytes');
+  assert.equal(capped, `/forum/${'帖'.repeat(168)}`);
+  const astral = visitor.visitorPath(`/${'😀'.repeat(300)}`);
+  assert.ok(new TextEncoder().encode(astral).length <= 512);
+  assert.ok(Array.from(astral).slice(1).every((c) => c === '😀'), 'a surrogate pair is never split');
 });
 
 // --- when -----------------------------------------------------------------------------------
@@ -194,20 +199,20 @@ test('the interval is the original’s ten minutes', () => {
 
 // --- the requests -----------------------------------------------------------------------------
 
-test('track_visitor: a keepalive JSON POST of {visitor_id, path}, with no token', async () => {
+test('track_visitor: POST /api/v1/site-visits {visitor_id, path}, no token, kept alive', async () => {
+  const { VISITOR_TRACKING_AVAILABLE } = await import('../lib/api/tracking.ts');
+  assert.equal(VISITOR_TRACKING_AVAILABLE, true);
+  respond = () => new Response(null, { status: 204 });
   await trackVisitor('vabc-12345678-12345678', '/search');
   assert.equal(calls.length, 1);
   const [{ url, init }] = calls;
-  assert.equal(url.pathname, '/api.php');
-  assert.equal(url.searchParams.get('action'), 'track_visitor');
+  assert.equal(url.pathname, '/api/v1/site-visits');
   assert.equal(init.method, 'POST');
-  assert.equal(init.keepalive, true, 'a count sent as the tab goes away still leaves');
-  assert.equal(init.cache, 'no-store');
   assert.deepEqual(JSON.parse(init.body), { visitor_id: 'vabc-12345678-12345678', path: '/search' });
+  assert.equal(init.keepalive, true);
   const headers = new Headers(init.headers);
-  assert.equal(headers.get('content-type'), 'application/json');
-  assert.equal(headers.get('authorization'), null, 'a visit is anonymous');
-  assert.ok(init.signal, 'bounded: the original aborted at ten seconds');
+  assert.equal(headers.get('Authorization'), null, 'a signed-in request is not counted by the backend');
+  assert.equal(headers.get('X-CSRF-Token'), null, 'the route takes no session');
 });
 
 test('track_visitor never rejects — a dead line, a 500 and a refusal all resolve', async () => {
@@ -215,74 +220,22 @@ test('track_visitor never rejects — a dead line, a 500 and a refusal all resol
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
   globalThis.fetch = async () => new Response('oops', { status: 500 });
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
-  globalThis.fetch = async () => Response.json({ success: false, error: 'no' });
+  globalThis.fetch = async () => Response.json({ error: { code: 'RATE_LIMITED', message: '请求过于频繁' } }, { status: 429 });
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
 });
 
-test('track_share: only signed in, a bodiless POST with the token, and never throws', async () => {
-  trackShare(null);
-  trackShare(undefined);
-  trackShare('');
-  await tick();
-  assert.equal(calls.length, 0, 'a visitor’s share is not counted: the share tasks are an account’s');
-  trackShare('tok');
-  await tick();
-  assert.equal(calls.length, 1);
-  const [{ url, init }] = calls;
-  assert.equal(url.searchParams.get('action'), 'track_share');
-  assert.equal(init.method, 'POST');
-  assert.equal(init.body, undefined);
-  assert.equal(new Headers(init.headers).get('authorization'), 'Bearer tok');
-  let unhandled = null;
-  const onUnhandled = (reason) => { unhandled = reason; };
-  process.on('unhandledRejection', onUnhandled);
-  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
-  trackShare('tok');
-  await tick();
-  await tick();
-  process.off('unhandledRejection', onUnhandled);
-  assert.equal(unhandled, null, 'a failed count costs a count, never the share');
-});
-
-test('an acknowledged share expires only its current account’s task progress', async () => {
-  const { tasks } = await import('../lib/resources.ts');
-  const token = 'share-task-current';
-  const other = 'share-task-other';
-  const seed = { level: 1, experience: 0, coins: 0, equippedBadges: [], progress: { novice: null, daily: null, weekly: null } };
-  const signIn = (value) => values.set('user_info', JSON.stringify({ id: 1, token: value }));
-  const fresh = () => {
-    tasks.invalidate({ token });
-    tasks.invalidate({ token: other });
-    tasks.seed({ token }, seed, Date.now());
-    tasks.seed({ token: other }, seed, Date.now());
+test('track_share is gone: the share module exports no counter; a share is one link creation, counted by the server', async () => {
+  /* The backend dropped the client-reported share count (anyone could raise their own task); share
+     progress comes from the real link creation (`POST /api/v1/share-links`), on the server. */
+  const share = await import('../lib/api/share.ts');
+  assert.equal('trackShare' in share, false);
+  const sent = [];
+  globalThis.fetch = async (url, init = {}) => {
+    sent.push({ url: String(url), method: init.method });
+    return Response.json({ share_id: 'TrackingShareId000000001', preview_status: 'generic' }, { status: 201 });
   };
-  const settleShare = async () => {
-    for (let i = 0; i < 10; i += 1) await tick();
-  };
-
-  fresh();
-  signIn(token);
-  trackShare(token);
-  for (let i = 0; i < 50 && !tasks.peek({ token }).isStale; i += 1) await tick();
-  assert.equal(tasks.peek({ token }).isStale, true, 'Back must re-read a task completed by the share');
-  assert.equal(tasks.peek({ token: other }).isStale, false);
-  assert.equal(calls.length, 1, 'expiring an unmounted task screen sends no speculative read');
-
-  fresh();
-  respond = () => Response.json({ success: false, error: '分享未计入' });
-  trackShare(token);
-  await settleShare();
-  assert.equal(tasks.peek({ token }).isStale, false, 'a refused count does not change task progress');
-
-  fresh();
-  respond = () => {
-    signIn(other);
-    return Response.json({ success: true });
-  };
-  trackShare(token);
-  await settleShare();
-  assert.equal(tasks.peek({ token }).isStale, false, 'a stale response cannot refresh an old session');
-  assert.equal(tasks.peek({ token: other }).isStale, false);
-  tasks.invalidate({ token });
-  tasks.invalidate({ token: other });
+  const link = await share.createShareLink({ targetUrl: 'https://app.invalid/pic/1', title: 't', desc: 'd' }, { token: 'tok' });
+  assert.equal(link.short, true);
+  assert.match(link.url, /\/share\.php\?id=TrackingShareId000000001$/);
+  assert.deepEqual(sent.map((r) => `${r.method} ${r.url}`), ['POST /api/v1/share-links']);
 });

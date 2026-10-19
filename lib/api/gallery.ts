@@ -3,13 +3,13 @@
  * PicPony's own comment counts for a page of pictures. Both are public — no token, the original
  * front end sent none — and both throw `ApiError` on any failure, like every typed adapter.
  */
-import { picponyPostJson, picponyRequest, readEnvelope, listOf, pageCount } from './http';
+import { api } from './http';
 
 /** One discussed picture: its Derpibooru id and PicPony's own comment count on it. */
 export interface DiscussedImage {
   imageId: number;
   comments: number;
-  lastCommentedAt: string | null;
+  lastCommentedAt: string;
 }
 
 export interface DiscussedPage {
@@ -18,44 +18,37 @@ export interface DiscussedPage {
   totalPages: number;
 }
 
-/** The backend caps a page at 50 (asking for 100 returned 50 with `total_pages` to match). */
+/** A page of 本站讨论 (the backend allows up to 100). */
 export const DISCUSSED_PAGE_SIZE = 50;
 
 /**
- * `get_discussed_images&limit=&page=` → `{ success, images: [{ image_id, comment_count,
+ * `GET /images/discussed?page=&limit=` → `{ images: [{ image_id, comment_count,
  * last_commented_at }], total, total_pages }`, most recently discussed first.
  */
 export async function getDiscussedImages(page: number, signal?: AbortSignal): Promise<DiscussedPage> {
-  const res = await picponyRequest('get_discussed_images', {
+  const data = await api<{
+    images: { image_id: number; comment_count: number; last_commented_at: string }[];
+    total: number;
+    total_pages: number;
+  }>('GET', '/images/discussed', {
     query: { limit: DISCUSSED_PAGE_SIZE, page },
     cache: 'no-store',
     signal,
   });
-  const data = await readEnvelope<{ images?: unknown; total?: unknown; total_pages?: unknown }>(res);
-  const images: DiscussedImage[] = [];
-  const seen = new Set<number>();
-  for (const row of listOf<Record<string, unknown>>(data.images)) {
-    const imageId = Number(row?.image_id);
-    if (!Number.isSafeInteger(imageId) || imageId <= 0 || seen.has(imageId)) continue;
-    seen.add(imageId);
-    const comments = Number(row.comment_count);
-    images.push({
-      imageId,
-      comments: Number.isFinite(comments) && comments > 0 ? Math.floor(comments) : 0,
-      lastCommentedAt: typeof row.last_commented_at === 'string' ? row.last_commented_at : null,
-    });
-  }
-  const total = Number(data.total);
   return {
-    images,
-    total: Number.isFinite(total) && total >= 0 ? total : images.length,
-    totalPages: pageCount(data.total_pages),
+    images: data.images.map((row) => ({
+      imageId: row.image_id,
+      comments: row.comment_count,
+      lastCommentedAt: row.last_commented_at,
+    })),
+    total: data.total,
+    totalPages: Math.max(1, data.total_pages),
   };
 }
 
 /**
- * `POST get_batch_comment_counts { image_ids }` → `{ success, counts: { id: n } }`. An id the
- * backend leaves out has no PicPony comments.
+ * `POST /images/comment-counts { image_ids }` → `{ counts: { id: n } }` (at most 1000 ids). An
+ * id the backend leaves out has no PicPony comments.
  */
 export async function getBatchCommentCounts(
   ids: readonly number[],
@@ -64,15 +57,12 @@ export async function getBatchCommentCounts(
   if (ids.length === 0) return {};
   /* A read that travels as a POST: bounded like a read, since a count that arrives late is
      worth nothing and aborting it changes nothing on the server. */
-  const res = await picponyPostJson('get_batch_comment_counts', { image_ids: ids }, { signal, timeoutMs: 15_000 });
-  const data = await readEnvelope<{ counts?: unknown }>(res);
+  const data = await api<{ counts: Record<string, number> }>('POST', '/images/comment-counts', {
+    json: { image_ids: ids },
+    signal,
+    timeoutMs: 15_000,
+  });
   const counts: Record<number, number> = {};
-  if (data.counts && typeof data.counts === 'object' && !Array.isArray(data.counts)) {
-    for (const [key, value] of Object.entries(data.counts as Record<string, unknown>)) {
-      const id = Number(key);
-      const n = Number(value);
-      if (Number.isSafeInteger(id) && Number.isFinite(n) && n > 0) counts[id] = Math.floor(n);
-    }
-  }
+  for (const [key, value] of Object.entries(data.counts)) counts[Number(key)] = value;
   return counts;
 }

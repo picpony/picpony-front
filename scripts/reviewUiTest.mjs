@@ -29,8 +29,12 @@ const virtual = {
   './Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@/components/Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
   '@wangeditor/editor': `module.exports=window.wangEditor;`,
-  /* Named API imports for authentication and image search share the same fixture dispatcher. */
-  '@/lib/api/picpony': `for(const name of ['login','register','verifyEmailById','resendVerifyCodeById','resetPasswordRequest','resetPassword','searchImage']) exports[name]=(...args)=>window.fixtureRequest(name,args);`,
+  /* Named API imports for authentication and image search share the same fixture dispatcher. The
+     adapters resolve with the decoded `/api/v1` answer (a `SessionGrant`, a `PendingVerification`),
+     never a Response; `isRefusal` reads the `ApiError` code as `lib/api/picpony.ts` does. */
+  '@/lib/api/picpony': `for(const name of ['login','register','confirmRegistration','resendRegistrationCode','resetPasswordRequest','resetPassword','searchImage']) exports[name]=(...args)=>window.fixtureRequest(name,args);
+exports.CAPTCHA_RETRY_CODES=['CAPTCHA_REQUIRED','CAPTCHA_SESSION_REQUIRED','CAPTCHA_EXPIRED'];
+exports.isRefusal=(error,...codes)=>!!error&&error.kind==='http'&&(codes.length?codes.includes(error.code):error.status>=400&&error.status<500&&![401,408,429].includes(error.status));`,
   '@/lib/api/semantic': `exports.searchImageByUrl=(...args)=>window.fixtureRequest('searchImageByUrl',args);`,
   'empty': '',
 };
@@ -57,7 +61,7 @@ import {writeUserInfo,clearUserInfo,readToken} from '@/lib/hooks';
 window.requests=[];window.toasts=[];window.editorChanges=[];window.navigations=[];
 window.authConsumerRenders=0;window.authArtworkMounts=0;
 window.fixtureRequest=(name,args)=>new Promise(resolve=>window.requests.push({name,args,resolve}));
-window.respond=(index,data,status=200)=>window.requests[index].resolve(Response.json(data,{status}));
+window.respond=(index,data)=>window.requests[index].resolve(data);
 window.fixtureUser=async()=>({kind:'ok',user:{username:'Fixture'}});
 window.changeSession=(token)=>token?writeUserInfo({token,username:token}):clearUserInfo(readToken());
 function Controls(){const auth=useAuthModal();window.authConsumerRenders+=1;window.auth=auth;window.openAuthNow=()=>flushSync(()=>auth.openAuth('login'));return null;}
@@ -177,7 +181,7 @@ with sync_playwright() as p:
    page.get_by_role('button',name='Pass captcha').click()
    return dialog
   def response(index,token):
-   page.evaluate('([i,t])=>window.respond(i,{success:true,token:t,username:t})',[index,token])
+   page.evaluate('([i,t])=>window.respond(i,{token:t,csrf_token:"csrf-"+t,expires_in:3600})',[index,token])
 
   # A phone's CSS-hidden illustration must not mount, load or build its player. Crossing the
   # actual layout breakpoint while the form is open shows it without replacing the form.
@@ -265,7 +269,7 @@ with sync_playwright() as p:
   dialog.get_by_role('button',name='注册',exact=True).click()
   page.get_by_role('button',name='Pass captcha').click()
   page.wait_for_function('window.requests.length===6')
-  page.evaluate('window.respond(5,{success:true,user_id:7,username:"NewMember"})')
+  page.evaluate('window.respond(5,{verification:"fixture-verification",expires_in:600,retry_after:60})')
   code=page.get_by_role('group',name='邮箱验证码').locator('input')
   for i,char in enumerate('123456'):code.nth(i).fill(char)
   # The sixth digit submits the verification step by itself (the 验证并登录 button sends the

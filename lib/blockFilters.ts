@@ -1,4 +1,4 @@
-/** Public search rules from api.php?action=get_block_tags. No account data lives here. */
+/** Public search rules from `GET /api/v1/filters/block-tags`. No account data lives here. */
 export const BLOCK_FILTER_KEYS = ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'] as const;
 export type BlockFilterKey = typeof BLOCK_FILTER_KEYS[number];
 export type BlockFilters = Record<BlockFilterKey, string[]>;
@@ -18,31 +18,23 @@ function emptyFilters(): BlockFilters {
   return { safe: [], spoilers: [], banAnthro: [], banDiscomfort: [], onlyPony: [] };
 }
 
-/** The API returns both a flat `tags` array and a `grouped` object. Accept either shape. */
+/**
+ * The backend's answer — `{tags: [{id, filter, tag}], filters: {<key>: [tag, …]}}`, every one of
+ * the five keys present (an empty group is an empty list) — as the five groups, lower-cased. `null`
+ * for a body that is not that answer (an error body, an old backend), so the caller keeps the
+ * defaults rather than switching every filter off.
+ */
 export function parseBlockFilters(raw: unknown): BlockFilters | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const payload = raw as Record<string, unknown>;
-  if (payload.success !== true) return null;
+  const filters = (raw as { filters?: unknown } | null)?.filters;
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return null;
   const result = emptyFilters();
-  const add = (key: BlockFilterKey, value: unknown) => {
-    if (typeof value !== 'string' || !value.trim()) return;
-    const tag = value.trim().toLowerCase();
-    if (!result[key].includes(tag)) result[key].push(tag);
-  };
-  if (Array.isArray(payload.tags)) {
-    for (const row of payload.tags) {
-      if (!row || typeof row !== 'object' || !BLOCK_FILTER_KEYS.includes(row.filter_key)) continue;
-      add(row.filter_key, row.tag_name);
-    }
-    return result;
-  }
-  if (!payload.grouped || typeof payload.grouped !== 'object' || Array.isArray(payload.grouped)) return null;
-  const grouped = payload.grouped as Record<string, unknown>;
   for (const key of BLOCK_FILTER_KEYS) {
-    const rows = grouped[key];
-    if (rows === undefined) continue;
-    if (!Array.isArray(rows)) return null;
-    for (const row of rows) add(key, typeof row === 'string' ? row : row?.tag_name);
+    const tags = (filters as Record<string, unknown>)[key];
+    if (!Array.isArray(tags)) return null;
+    for (const tag of tags as string[]) {
+      const name = tag.trim().toLowerCase();
+      if (name && !result[key].includes(name)) result[key].push(name);
+    }
   }
   return result;
 }
@@ -87,7 +79,7 @@ export function withBlockFiltersFingerprint(
 // ---------------------------------------------------------------------------
 
 /**
- * The site's public image blacklist (`api.php?action=get_public_blacklist`): picture ids an
+ * The site's public image blacklist (`GET /api/v1/image-blocklist`): picture ids an
  * administrator has pulled from every list. Public and anonymous like the filter definitions,
  * so it travels the same way — read on the server, inlined into the document, excluded in the
  * query (`-id:N`) rather than filtered from results, which would leave pages short and break
@@ -95,15 +87,43 @@ export function withBlockFiltersFingerprint(
  */
 export type PublicBlacklist = readonly number[];
 
-/** Sorted, de-duplicated positive ids; anything else in the payload is dropped. */
+/** One page of the public blacklist as the backend sends it (anonymous: the ids alone). */
+export interface PublicBlacklistPage {
+  revision: number;
+  blocks: number[];
+  page: number;
+  limit: number;
+  total_count: number;
+  has_more: boolean;
+}
+
+/** The most ids one page of the public blacklist carries (the backend's cap). */
+export const PUBLIC_BLACKLIST_PAGE_LIMIT = 1000;
+
+/**
+ * The ids of a page, or `null` for a body that is not one. The backend sends them sorted and
+ * unique; the pages of one read are joined by the reader, which sorts the whole.
+ */
 export function parsePublicBlacklist(raw: unknown): number[] | null {
-  if (!raw || typeof raw !== 'object' || (raw as { success?: unknown }).success !== true) return null;
-  const list = (raw as { blacklist?: unknown }).blacklist;
-  if (!Array.isArray(list)) return null;
+  const blocks = (raw as { blocks?: unknown } | null)?.blocks;
+  return Array.isArray(blocks) ? (blocks as number[]) : null;
+}
+
+/**
+ * Every page of the public blacklist, read with `fetchPage` (one request per page of
+ * `PUBLIC_BLACKLIST_PAGE_LIMIT`), sorted. `null` when any page could not be read: a partial list
+ * would un-hide pictures that are pulled.
+ */
+export async function readWholeBlacklist(
+  fetchPage: (page: number) => Promise<unknown>,
+): Promise<number[] | null> {
   const ids = new Set<number>();
-  for (const value of list) {
-    const id = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-    if (Number.isSafeInteger(id) && id > 0) ids.add(id);
+  for (let page = 1; ; page += 1) {
+    const body = await fetchPage(page);
+    const blocks = parsePublicBlacklist(body);
+    if (!blocks) return null;
+    for (const id of blocks) ids.add(id);
+    if (!(body as PublicBlacklistPage).has_more) break;
   }
   return [...ids].sort((a, b) => a - b);
 }

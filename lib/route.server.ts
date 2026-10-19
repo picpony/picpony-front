@@ -1,5 +1,5 @@
-import { PICPONY_API_BASE, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
-import type { SiteStatusResponse } from '@/lib/types/site';
+import { SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import type { WebsiteRoutingPolicy } from '@/lib/types/site';
 import { cacheSeconds } from '@/lib/serverMemo';
 import { readBlockFilters, readPublicBlacklist } from '@/lib/blockFilters.server';
 import type { BlockFilters } from '@/lib/blockFilters';
@@ -72,9 +72,10 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy> {
     blacklist: [...await blacklist],
   });
   try {
-    /* The absolute origin, not `PICPONY_API_BASE` alone: that constant is relative (for the
-       browser's request path) and Node's `fetch` rejects a relative URL outright. */
-    const res = await fetch(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_maintenance_status`, {
+    /* `GET /api/v1/routing-policy` (`app_config::website_get`): public, already sanitised by the
+       backend — `auto` is a real value and the pass-the-API-key flag is its own field. Same
+       mapping as `routePolicyFromWire` in `lib/route.ts`. */
+    const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/routing-policy`, {
       /* Through `cacheSeconds`, like the other server reads, so the memo TTL env knob reaches
          this one too — without it the Data Cache can warm behind an audit's back and every
          measured document reads a warm path while the harness reports cold reads. */
@@ -82,18 +83,17 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy> {
       signal: AbortSignal.timeout(SERVER_POLICY_TIMEOUT_MS),
     });
     if (!res.ok) return fallback();
-    const data = (await res.json()) as SiteStatusResponse;
-    if (!data?.success) return fallback();
+    const { policy } = (await res.json()) as WebsiteRoutingPolicy;
     return {
-      api: data.global_api_route_policy ?? 'auto',
-      image: data.global_image_route_policy ?? 'auto',
-      thirdPartyUrl: data.global_api_third_party_url ?? '',
-      thirdPartyPassApiKey: data.global_api_third_party_pass_api_key === true,
+      api: policy.api_policy,
+      image: policy.media_policy,
+      thirdPartyUrl: policy.third_party_url ?? '',
+      thirdPartyPassApiKey: policy.third_party_pass_api_key,
       blockFilters: await filters,
       blacklist: [...await blacklist],
     };
   } catch {
-    /* A timeout, an offline upstream, an HTML error page — all mean "no policy", which the
+    /* A timeout, an offline upstream, an unreadable body — all mean "no policy", which the
        client already treats as "fetch it yourself". Swallowed rather than logged: this runs on
        every cold load of a site whose backend is briefly unhappy. */
     return fallback();

@@ -4,7 +4,8 @@
  *
  * The original front end's contract (`main-D7X40lKR.js` ≈538700), kept:
  * - an anonymous random id in `LS_KEYS.visitorId` (its own key, so an id it stored is kept),
- *   valid when it matches `/^[A-Za-z0-9_-]{16,96}$/` and replaced when it does not;
+ *   valid when it matches `/^[A-Za-z0-9_-]{16,64}$/` (the backend's `site::visitor_id` rule; the
+ *   original allowed up to 96) and replaced when it does not;
  * - `{visitor_id, path}` once at load, then every ten minutes while the tab is in view and on
  *   returning to it — never while hidden, never with one already in flight, never within a
  *   minute of the last;
@@ -24,10 +25,12 @@
  *   name, for the same reason the query is dropped.
  */
 
-/** The original front end's validity rule for a stored id. */
-const VISITOR_ID = /^[A-Za-z0-9_-]{16,96}$/;
-/** The original's cap on a path. */
+/** The backend's validity rule for a visitor id (`site::visitor_id`): 16–64 URL-safe characters. */
+const VISITOR_ID = /^[A-Za-z0-9_-]{16,64}$/;
+/** The original's cap on a path, in characters. */
 const MAX_PATH = 255;
+/** The backend's cap on a path, in UTF-8 bytes (`site::visit_path`). */
+const MAX_PATH_BYTES = 512;
 /** Between two counts while the tab is in view. */
 export const VISIT_INTERVAL_MS = 10 * 60 * 1000;
 /** The least time between two counts. */
@@ -65,7 +68,8 @@ const PRIVATE_SEGMENTS: readonly [RegExp, string][] = [
   [/^\/favorites\/privacy\/[^/]+\/?$/, '/favorites/privacy/[ownerId]'],
 ];
 
-/** What `track_visitor` is told about where the visitor is: see the module note. */
+/** What `track_visitor` is told about where the visitor is: see the module note. Control
+ *  characters (which the backend refuses) cannot occur in a `location.pathname`. */
 export function visitorPath(pathname: string): string {
   let path = pathname.split(/[?#]/)[0] || '/';
   if (!path.startsWith('/')) path = `/${path}`;
@@ -75,7 +79,12 @@ export function visitorPath(pathname: string): string {
       break;
     }
   }
-  return Array.from(path).slice(0, MAX_PATH).join('');
+  const chars = Array.from(path).slice(0, MAX_PATH);
+  /* A pathname is normally percent-encoded ASCII, but one that is not must still fit the
+     backend's byte cap, or the count is refused; cut by character, never inside one. */
+  const encoder = new TextEncoder();
+  while (encoder.encode(chars.join('')).length > MAX_PATH_BYTES) chars.pop();
+  return chars.join('');
 }
 
 /**

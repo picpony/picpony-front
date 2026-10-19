@@ -1,5 +1,4 @@
 import { ApiError } from '@/lib/api/errors';
-import type { SiteStatusResponse } from '@/lib/types/site';
 
 export type Row = Record<string, unknown>;
 export type Values = Record<string, string | boolean | string[]>;
@@ -47,15 +46,6 @@ export function optionalCount(value: unknown): number | null {
   return value == null ? null : count(value);
 }
 /**
- * A duration the response is allowed not to send — the same rule as `optionalCount`, for the
- * timings. A benchmark may answer `ok: true` with no `latency_ms`, and a model that works is not a
- * reason to fail the panel it is listed in (G2-003); a test request that succeeded without
- * reporting its duration is not a failed test either. `null`, never a fabricated 0.
- */
-export function optionalMeasurement(value: unknown): number | null {
-  return value == null ? null : measurement(value);
-}
-/**
  * A PHP timestamp, returned in milliseconds — the unit `lib/format.ts` prints.
  *
  * **The unit is read from the magnitude**, because this backend sends both: `admin_get_relay_stats`
@@ -76,25 +66,10 @@ export function epochStamp(value: unknown): number | string | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
   return scale(value);
 }
-/**
- * A server-sent `YYYY-MM-DD`, or `''` when it is not one. The non-throwing twin of `dateValue`,
- * which is the **form**'s validator: running a form validator over a server field turned one
- * unexpected format into 请输入有效的日期 on a screen with no date input, with no retry.
- */
-export function isoDate(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
-  const d = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value ? value : '';
-}
 export function id(value: unknown): number {
   const n = count(value);
   if (n < 1) throw new ApiError('invalid');
   return n;
-}
-export function flag(value: unknown): boolean {
-  if (value === true || value === 1 || value === '1') return true;
-  if (value === false || value === 0 || value === '0') return false;
-  throw new ApiError('invalid');
 }
 export function strings(value: unknown): string[] {
   if (!Array.isArray(value) || value.some((x) => typeof x !== 'string')) throw new ApiError('invalid');
@@ -168,8 +143,8 @@ export const modeFields: FieldSpec[] = [{ key: 'semantic_search_mode', label: '�
 ] }];
 export const cloudFields: FieldSpec[] = [
   { key: 'semantic_cloud_enabled', label: '启用云端模型', kind: 'boolean' },
-  { key: 'semantic_cloud_base_url', label: '云端服务地址', kind: 'url' },
-  { key: 'semantic_cloud_model', label: '模型名称', max: 200 },
+  { key: 'semantic_cloud_base_url', label: '云端服务地址', kind: 'url', max: 300, helper: '须以 https:// 开头' },
+  { key: 'semantic_cloud_model', label: '模型名称', max: 120 },
   { key: 'semantic_cloud_timeout_ms', label: '请求超时（毫秒）', kind: 'number', min: 500, max: 30000 },
   { key: 'semantic_cloud_api_key', label: '模型密钥', kind: 'password', optional: true, helper: '留空保留已保存的密钥' },
   { key: 'semantic_cloud_clear_key', label: '清除已保存的模型密钥', kind: 'boolean' },
@@ -199,50 +174,105 @@ export const quotaFields: FieldSpec[] = [
   { key: 'daily_points', label: '每日赠送点数', kind: 'number', min: 0, max: 100000 },
   { key: 'points_per_coin', label: '每金币兑换点数', kind: 'number', min: 1, max: 10000 },
 ];
-export const assistantFields: FieldSpec[] = [
+/** 文本翻译 (Azure Translator), `text_translation::Save`. The key is write-only: the read shows its mask. */
+export const textTranslationFields: FieldSpec[] = [
+  { key: 'enabled', label: '启用文本翻译', kind: 'boolean', helper: '启用前须已保存密钥' },
+  { key: 'endpoint', label: '翻译服务地址', kind: 'url', max: 300, helper: '例如 https://api.cognitive.microsofttranslator.com' },
+  { key: 'region', label: '资源区域', optional: true, max: 64, helper: '例如 eastasia；全局资源留空' },
+  { key: 'target_language', label: '目标语言', max: 16, helper: '例如 zh-Hans' },
+  { key: 'timeout_ms', label: '超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
+  { key: 'api_key', label: '翻译服务密钥', kind: 'password', optional: true, max: 400, helper: '留空保留已保存的密钥' },
+  { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
+];
+/** The host rule `text_translation::validate_endpoint` applies, so a wrong address is refused on its field. */
+export function azureEndpoint(value: string): boolean {
+  if (!webUrl(value)) return false;
+  const u = new URL(value);
+  if (u.protocol !== 'https:' || u.port || u.search) return false;
+  const host = u.hostname.toLowerCase();
+  return host === 'api.cognitive.microsofttranslator.com' || /^api-[a-z]+\.cognitive\.microsofttranslator\.com$/.test(host) || /^[a-z0-9-]+\.cognitiveservices\.azure\.com$/.test(host);
+}
+export function textTranslationPayload(values: Values): Row {
+  const body = fieldsPayload(textTranslationFields, values);
+  const problems: Record<string, string> = {};
+  if (!azureEndpoint(text(body.endpoint))) problems.endpoint = '请填写 Azure Translator 的 HTTPS 地址';
+  const region = text(body.region).toLowerCase();
+  if (!/^[a-z0-9]*$/.test(region)) problems.region = '区域只能包含小写字母和数字';
+  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(text(body.target_language))) problems.target_language = '目标语言代码无效（例如 zh-Hans）';
+  const key = text(body.api_key);
+  if (key && !/^[\x21-\x7e]+$/.test(key)) problems.api_key = '密钥包含无效字符';
+  if (body.clear_key && key) problems.api_key = '清除密钥时请先清空新密钥';
+  if (Object.keys(problems).length) throw new FormProblem(problems);
+  return { enabled: body.enabled, endpoint: text(body.endpoint), region, target_language: text(body.target_language), timeout_ms: body.timeout_ms, api_key: key, clear_key: body.clear_key };
+}
+
+/** The provider list as `readAssistantConfig` answers it. */
+export interface AssistantConfig<P> { revision: number; defaultPrompt: string; providers: P[] }
+/** One provider's form (`assistant_providers::Fields`), and the key as a replacement or a clear. */
+export interface ProviderDraft {
+  name: string;
+  base_url: string;
+  models_url: string;
+  model: string;
+  model_selection: 'auto' | 'manual';
+  model_candidates: string[];
+  timeout_ms: number;
+  max_tokens: number;
+  temperature: number;
+  thinking: 'off' | 'low';
+  system_prompt: string;
+  enabled: boolean;
+  is_primary: boolean;
+  fallback_rank: number;
+  api_key: string;
+  clear_key: boolean;
+}
+export const providerFields: FieldSpec[] = [
   { key: 'name', label: '配置名称', max: 80 },
-  { key: 'base_url', label: '模型服务地址', kind: 'url' },
+  { key: 'base_url', label: '模型服务地址', kind: 'url', helper: '须为 HTTPS 地址' },
   { key: 'models_url', label: '模型列表地址', kind: 'url', optional: true, helper: '留空时由服务推导列表地址' },
-  { key: 'model', label: '当前模型', optional: true, max: 200, helper: '可先填写，也可通过测速选择' },
-  { key: 'api_key', label: '助手模型密钥', kind: 'password', optional: true, helper: '留空保留已保存的密钥' },
+  { key: 'model_selection', label: '模型选择', options: [{ value: 'auto', label: '自动（候选中延迟最低）' }, { value: 'manual', label: '固定模型' }] },
+  { key: 'model', label: '固定模型', optional: true, max: 160, helper: '「固定模型」时必填' },
+  { key: 'api_key', label: '助手模型密钥', kind: 'password', optional: true, max: 400, helper: '留空保留已保存的密钥' },
   { key: 'timeout_ms', label: '超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
   { key: 'max_tokens', label: '最大输出长度（词元）', kind: 'number', min: 64, max: 4096 },
   { key: 'temperature', label: '随机程度', kind: 'number', min: 0, max: 2, decimal: true },
-  { key: 'system_prompt', label: '补充提示词', kind: 'textarea', optional: true, max: 12000, helper: '补充角色语气与表达偏好，不会覆盖工具权限、确认流程或隐私规则' },
-  { key: 'enabled', label: '启用彩彩 AI 助手', kind: 'boolean' },
-  { key: 'clear_key', label: '清除已保存的助手密钥', kind: 'boolean' },
+  { key: 'thinking', label: '思考模式', options: [{ value: 'off', label: '关闭' }, { value: 'low', label: '轻度' }] },
+  { key: 'fallback_rank', label: '备用顺序', kind: 'number', min: 0, max: 100, helper: '数字越小越优先' },
+  { key: 'system_prompt', label: '角色提示词', kind: 'textarea', optional: true, max: 12000, helper: '留空使用默认角色词；不会覆盖工具权限、确认流程或隐私规则' },
+  { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '启用前须已保存密钥' },
+  { key: 'is_primary', label: '设为主模型', kind: 'boolean', helper: '已有主模型时，原主模型改为备用' },
+  { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
 ];
 export const GATEWAY = 'https://ai.picpony.top:10443/v1';
-
-/**
- * A saved configuration as the form holds it.
- *
- * **`optional` is honoured for every kind, not just text.** It used to read `f.optional` only in
- * the last branch, so a field declared optional still threw on an absent value: `whitelisted_ips`
- * and `allowed_origins` are `optional: true` and `strings(null)` throws, which made 中转服务 → 设置
- * unreachable in exactly its default state — an empty IP whitelist, on the line every visitor uses
- * by default, i.e. the control an admin opens during an incident. 彩彩 AI's `has_key` did the same
- * to a never-configured assistant.
- *
- * A **required** field still throws on an absent value, because a response that will not say what
- * the saved concurrency or policy is cannot be edited safely.
- */
-export function configValues(fields: FieldSpec[], source: Row): Values {
-  return Object.fromEntries(fields.map((f) => {
-    const v = source[f.key];
-    const missing = v == null;
-    if (f.kind === 'password') return [f.key, ''];
-    if (f.key.endsWith('clear_key')) return [f.key, false];
-    if (f.kind === 'boolean') return [f.key, f.optional && missing ? false : flag(v)];
-    if (f.kind === 'ips' || f.kind === 'origins') return [f.key, (f.optional && missing ? [] : strings(v)).join('\n')];
-    if (f.kind === 'number') {
-      if (f.optional && missing) return [f.key, String(f.min ?? 0)];
-      if (typeof v !== 'number' && typeof v !== 'string') throw new ApiError('invalid');
-      return [f.key, String(v)];
-    }
-    if (typeof v !== 'string' && !f.optional) throw new ApiError('invalid');
-    return [f.key, text(v)];
-  }));
+/** The form's values for a provider (or a new one), the candidates kept beside them. */
+export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_key'> | null): Values {
+  const p = source ?? { name: '', base_url: '', models_url: '', model: '', model_selection: 'auto', model_candidates: [], timeout_ms: 15000, max_tokens: 800, temperature: 0.7, thinking: 'off', system_prompt: '', enabled: false, is_primary: false, fallback_rank: 0 };
+  return {
+    name: p.name, base_url: p.base_url, models_url: p.models_url, model: p.model, model_selection: p.model_selection,
+    model_candidates: [...p.model_candidates], timeout_ms: String(p.timeout_ms), max_tokens: String(p.max_tokens),
+    temperature: String(p.temperature), thinking: p.thinking, system_prompt: p.system_prompt, enabled: p.enabled,
+    is_primary: p.is_primary, fallback_rank: String(p.fallback_rank), api_key: '', clear_key: false,
+  };
+}
+export function providerPayload(values: Values): ProviderDraft {
+  const body = fieldsPayload(providerFields, values);
+  const candidates = [...new Set(strings(values.model_candidates ?? []))];
+  const problems: Record<string, string> = {};
+  if (candidates.some((m) => !m.trim() || m.length > 160)) problems.model = '候选模型名称无效';
+  if (body.model_selection === 'manual' && !text(body.model)) problems.model = '固定模型时请填写模型名称';
+  if (text(body.base_url) && !text(body.base_url).startsWith('https://')) problems.base_url = '请填写 HTTPS 地址';
+  if (text(body.models_url) && !text(body.models_url).startsWith('https://')) problems.models_url = '请填写 HTTPS 地址';
+  if (body.clear_key && body.api_key) problems.api_key = '清除密钥时请先清空新密钥';
+  if (Object.keys(problems).length) throw new FormProblem(problems);
+  return {
+    name: text(body.name), base_url: text(body.base_url), models_url: text(body.models_url), model: text(body.model),
+    model_selection: body.model_selection === 'manual' ? 'manual' : 'auto', model_candidates: candidates,
+    timeout_ms: Number(body.timeout_ms), max_tokens: Number(body.max_tokens), temperature: Number(body.temperature),
+    thinking: body.thinking === 'low' ? 'low' : 'off', system_prompt: text(body.system_prompt),
+    enabled: body.enabled === true, is_primary: body.is_primary === true, fallback_rank: Number(body.fallback_rank),
+    api_key: text(body.api_key), clear_key: body.clear_key === true,
+  };
 }
 
 export function routePayload(values: Values): Row {
@@ -253,32 +283,10 @@ export function routePayload(values: Values): Row {
   return body;
 }
 
-/** Only acknowledged, public fields may cross into the runtime policy store. */
-export function savedRoutePatch(axis: 'api' | 'image', values: Values, response: Row): Partial<SiteStatusResponse> {
-  if (axis === 'image') {
-    const submitted = fieldsPayload(imageRouteFields, values);
-    const reported = text(response.global_image_route_policy);
-    return { global_image_route_policy: imageRouteFields[0].options!.some((x) => x.value === reported) ? reported : text(submitted.policy) };
-  }
-  const submitted = routePayload(values);
-  const reported = text(response.global_api_route_policy);
-  const reportedUrl = text(response.global_api_third_party_url);
-  return {
-    global_api_route_policy: apiRouteFields[0].options!.some((x) => x.value === reported) ? reported : text(submitted.policy),
-    global_api_third_party_url: reportedUrl.startsWith('https://') && webUrl(reportedUrl, true) ? reportedUrl : text(submitted.third_party_urls).split('\n')[0] || '',
-    global_api_third_party_pass_api_key: typeof response.global_api_third_party_pass_api_key === 'boolean' ? response.global_api_third_party_pass_api_key : submitted.third_party_pass_api_key === true,
-  };
-}
-export function assistantPayload(values: Values): Row {
-  const body = fieldsPayload(assistantFields, values);
-  body.model_candidates = [...new Set(strings(values.model_candidates ?? []))];
-  if ((body.model_candidates as string[]).some((m) => !m.trim() || m.length > 200)) throw new FormProblem({ model: '候选模型名称无效' });
-  if (body.clear_key && body.api_key) throw new FormProblem({ api_key: '清除密钥时请先清空新密钥' });
-  return body;
-}
 export function cloudPayload(values: Values): Row {
   const body = fieldsPayload(cloudFields, values);
   if (body.semantic_cloud_clear_key && body.semantic_cloud_api_key) throw new FormProblem({ semantic_cloud_api_key: '清除密钥时请先清空新密钥' });
+  if (!text(body.semantic_cloud_base_url).toLowerCase().startsWith('https://')) throw new FormProblem({ semantic_cloud_base_url: '云端服务地址须以 https:// 开头' });
   return body;
 }
 export function announcementPayload(values: Values): { version: string; title: string; content: string } {

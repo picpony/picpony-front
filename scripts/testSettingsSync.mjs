@@ -1,7 +1,7 @@
 /**
  * Settings cloud sync (`lib/settingsSync.ts`), with no live service: what a sign-in restores, which
  * copy wins when a local change and a cloud read cross, what a write sends (the whole object, since
- * `update_settings` replaces it), one notice per run of failures, the content filter's gate, the
+ * `PUT /me/preferences` replaces it), one notice per run of failures, the content filter's gate, the
  * palette's `theme` key, and signing out.
  */
 import assert from 'node:assert/strict';
@@ -43,14 +43,15 @@ const writes = [];
 let failNext = 0;
 globalThis.fetch = async (url, init = {}) => {
   const target = new URL(String(url), 'https://app.invalid');
-  const action = target.searchParams.get('action');
-  if (action !== 'update_settings') throw new Error(`unexpected request: ${action}`);
+  if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT') throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
   if (failNext > 0) {
     failNext -= 1;
     throw new TypeError('Failed to fetch');
   }
-  writes.push(JSON.parse(init.body).settings);
-  return new Response(JSON.stringify({ success: true }), { status: 200 });
+  const body = JSON.parse(init.body);
+  writes.push(body.settings);
+  /* `PUT /me/preferences` answers with what it stored and the next revision. */
+  return Response.json({ settings: body.settings, revision: body.expected_revision + 1, adjustments: [] });
 };
 
 const sync = await import('../lib/settingsSync.ts');
@@ -88,7 +89,7 @@ function signOut() {
 }
 
 const ACCOUNT = {
-  id: 7, token: 'token-a', username: 'pony', birthday: '2000-01-01', email_notif_message: 0, email_notif_reply: 1,
+  id: 7, token: 'token-a', username: 'pony', birthday: '2000-01-01', settings_revision: 0,
 };
 const CLOUD = {
   contentFilter: 'spoilers', banAnthro: true, onlyPony: true, useCdn: true, theme: 'rarity',
@@ -99,7 +100,7 @@ test('signing in restores the account: device values replaced, account values fr
   values.set(LS_KEYS.banAnthro, 'false');
   values.set(LS_KEYS.showUploads, 'false'); // a previous account's choice left on the device
   signIn({ id: 7, token: 'token-a', username: 'pony' });
-  serverUser = { ...ACCOUNT, settings: JSON.stringify(CLOUD) };
+  serverUser = { ...ACCOUNT, settings: structuredClone(CLOUD) };
   sync.adoptCloudSettings('token-a', structuredClone(serverUser), Date.now());
   assert.equal(values.get(LS_KEYS.contentFilter), 'spoilers', 'a 26-year-old account keeps 中等限制');
   assert.equal(values.get(LS_KEYS.banAnthro), 'true');
@@ -107,7 +108,7 @@ test('signing in restores the account: device values replaced, account values fr
   assert.equal(values.get(LS_KEYS.showFaves), 'false');
   assert.equal(values.get(LS_KEYS.hideIpLocation), 'true');
   assert.equal(values.has(LS_KEYS.showUploads), false, 'an account key the copy lacks is the backend default');
-  assert.equal(values.get(LS_KEYS.emailNotifMessage), 'false', 'the email column stands in for a missing key');
+  assert.equal(values.has(LS_KEYS.emailNotifMessage), false, 'a missing key is the backend default (on)');
   assert.equal(values.get(LS_KEYS.palette), 'rarity', 'the theme is the palette');
   assert.equal(writes.length, 0, 'adopting writes nothing back');
 });
@@ -279,7 +280,7 @@ test('a finishing old-account write releases the new account pending settings', 
     const token = new Headers(init.headers).get('authorization');
     sent.push(token);
     if (token === 'Bearer token-a') return new Promise((resolve) => { release = resolve; });
-    return Response.json({ success: true });
+    return Response.json({ settings: {}, revision: 1, adjustments: [] });
   };
   try {
     signIn(ACCOUNT);
@@ -292,9 +293,37 @@ test('a finishing old-account write releases the new account pending settings', 
     signIn(next); serverUser = next;
     sync.adoptCloudSettings(next.token, next, Date.now() + 1);
     sync.changeSyncedSetting('showFaves', false);
-    release(Response.json({ success: true }));
+    release(Response.json({ settings: {}, revision: 1, adjustments: [] }));
     await settle();
     assert.deepEqual(sent, ['Bearer token-a', 'Bearer flush-next']);
     assert.equal(values.has(LS_KEYS.settingsSyncPending), false, 'new-account changes were acknowledged');
+  } finally { signOut(); globalThis.fetch = fetchBefore; }
+});
+
+test('a stale revision is read again and the change laid over the newer copy, once', async () => {
+  signOut();
+  const fetchBefore = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    sent.push(body);
+    if (body.expected_revision !== 5) {
+      return Response.json({ error: { code: 'PREFERENCES_CONFLICT', message: '设置已在其他设备更新' } }, { status: 409 });
+    }
+    return Response.json({ settings: body.settings, revision: 6, adjustments: [] });
+  };
+  try {
+    const account = { ...ACCOUNT, id: 91, token: 'token-conflict', settings_revision: 4, settings: { mascotId: '1' } };
+    signIn(account);
+    serverUser = account;
+    sync.adoptCloudSettings(account.token, structuredClone(account), Date.now() + 1);
+    /* Another device writes meanwhile: the next read answers with its copy. */
+    serverUser = { ...account, settings_revision: 5, settings: { mascotId: '2' } };
+    sync.changeSyncedSetting('showFaves', false);
+    await settle();
+    assert.deepEqual(sent.map((body) => body.expected_revision), [4, 5]);
+    assert.equal(sent[1].settings.mascotId, '2', 'the other device’s copy is the base of the second send');
+    assert.equal(sent[1].settings.showFaves, false);
+    assert.deepEqual(sync.settingsSyncSnapshot().pending, {});
   } finally { signOut(); globalThis.fetch = fetchBefore; }
 });

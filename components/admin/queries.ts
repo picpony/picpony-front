@@ -2,7 +2,7 @@
 
 import { defineResource, SKIP, useResource, type Resource } from '@/lib/resource';
 import { readToken } from '@/lib/hooks';
-import { ApiError, apiErrorMessage, isRetryable } from '@/lib/api/errors';
+import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 
 /** Admin reads use the same cancellation, account isolation and refresh rules as public
  * resources. This factory stays in the lazy admin chunks, never the public catalogue. */
@@ -17,52 +17,6 @@ export function defineAdminQuery<T>(name: string, fetcher: (token: string, signa
       return fetcher(token, signal);
     },
   });
-}
-
-/**
- * A failed envelope is never an empty collection. The backend's own sentence wins; without one
- * the message names what failed (`用户列表加载失败`), per the Copy table.
- *
- * `name: null` leaves the noun out, for a read several panels print under titles of their own —
- * the message is then the failure's own sentence (`lib/api/errors.ts`), so no panel shows a second
- * noun under its title (G4-011's 屏蔽库加载失败 / 黑名单加载失败).
- */
-export function adminData<T>(
-  envelope: { success?: unknown; error?: unknown; message?: unknown; status?: unknown },
-  value: T,
-  name: string | null = '数据',
-): T {
-  if (envelope?.success !== true) {
-    const message = [envelope?.error, envelope?.message].find((value) => typeof value === 'string' && value);
-    /* A failed HTTP status rides on the envelope (`lib/api/admin.ts`): a 403 is a refusal, which a
-       retry cannot change, so the panel offers no 重试 for it. */
-    const status = typeof envelope?.status === 'number' && envelope.status >= 400 ? envelope.status : undefined;
-    throw new ApiError(status ? 'http' : 'envelope', {
-      status,
-      serverMessage: typeof message === 'string' ? message : undefined,
-      message: typeof message === 'string' ? message : name === null ? undefined : `${name}加载失败`,
-    });
-  }
-  return value;
-}
-
-/**
- * The list an admin read exists to deliver. The envelope must have succeeded **and** the field
- * must be an array — `{ success: true, users: {} }` once reached `DataTable` as `rows.map is not a
- * function` and the route boundary replaced every tab with 出了点问题. Now it fails its
- * own tab as `{name}加载失败`. `path` may name candidates (`['data.links', 'links']`); the first
- * array wins. Rows that are not objects are dropped.
- */
-export function adminList<T>(envelope: Record<string, unknown>, path: string | readonly string[], name: string): T[] {
-  adminData(envelope, undefined, name);
-  for (const candidate of typeof path === 'string' ? [path] : path) {
-    const value = candidate.split('.').reduce<unknown>(
-      (node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined),
-      envelope,
-    );
-    if (Array.isArray(value)) return value.filter((row) => row !== null && typeof row === 'object') as T[];
-  }
-  throw new ApiError('invalid', { message: `${name}加载失败` });
 }
 
 /**

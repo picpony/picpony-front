@@ -125,7 +125,7 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
     for (const entry of batch) {
       const count = counts[normaliseTagName(entry.tagName)];
       if (typeof count !== 'number') continue;
-      updates.push({ tag_name: entry.tagName, image_count: count });
+      updates.push({ subscription_id: entry.id, image_count: count });
       if (count !== entry.imageCount) moved = true;
     }
     if (updates.length === 0) continue;

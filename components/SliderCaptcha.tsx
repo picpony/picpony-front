@@ -4,8 +4,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react
 import { MdArrowForward } from 'react-icons/md';
 import { captchaGet, captchaVerify } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { envelopeMessage } from '@/lib/api/http';
-import { encodeTrack, clamp, clamp01, cn } from '@/lib/utils';
+import { clamp, clamp01, cn } from '@/lib/utils';
 import { gsap, spring } from '@/lib/motion';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
@@ -14,26 +13,31 @@ import Skeleton from './Skeleton';
 import ErrorRetry from './ErrorRetry';
 
 interface SliderCaptchaProps {
-  onVerify: (token: string) => void;
+  /** Called with the single-use proof the protected request carries as `captcha_proof`. */
+  onVerify: (proof: string) => void;
   /** A closing Modal keeps its contents mounted for the exit animation. */
   active: boolean;
 }
 
 /**
- * Drag / track logic mirrors the production Vue captcha on picpony.top
- * (assets/main-*.js → startDrag / onDrag / stopDrag), which is known to
- * pass backend checks on both desktop and mobile:
+ * The backend's native challenge (`POST /auth/challenges`, then
+ * `POST /auth/challenges/{id}/verification`, `src/pg/challenge.rs`):
  *
- *   start:  track = [[0, 0, 0]]
+ *   start:  trace = [{ x: 0, y: 0, t: 0 }]
  *   move:   visual knob position is normalized to logical x in [0, 260]
- *           relY = clientY - startY
- *           track.push([round(x), round(relY), elapsed])  // max 150 pts
- *   submit: { x: sliderX, track: xor90_btoa(JSON(track)) }
+ *           y = clientY - startY
+ *           trace.push({ x: round(x), y: round(y), t: elapsed })  // max 150 pts
+ *   submit: { x: sliderX, trace }
+ *
+ * The server checks the trace's shape — 3 to 300 points, `t` never decreasing, the first point at
+ * the start (x ≤ 10, t ≤ 1s), the last within 10 units of `x` and 0.1–15 s into the drag — and `x`
+ * against the piece's real place, within 10 units. It answers with a proof that one protected
+ * request consumes. Both the challenge and the proof are bound to the `picpony_challenge` cookie.
  *
  * The backend always receives the 310px logical coordinate space. The visual
  * track can be narrower on mobile, so pointer movement is converted back to
  * that space before samples and the final x are submitted. The event model
- * remains the production-compatible document-level mouse/touch path.
+ * remains the document-level mouse/touch path.
  *
  * **One box for every state.** The widget has its own width (the puzzle's 310
  * logical pixels, capped by the dialog), so the dialog it sits in — which is as
@@ -80,6 +84,8 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const refetchTimerRef = useRef(0);
   const fetchedRef = useRef(false);
   const trackRef = useRef<[number, number, number][]>([]);
+  /** The challenge on screen — its id names the verification request. */
+  const challengeIdRef = useRef('');
   const startXRef = useRef(0);
   const startYRef = useRef(0);
   const startTimeRef = useRef(0);
@@ -274,17 +280,13 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     setBgImage('');
     setPieceImage('');
     try {
-      const data = await captchaGet();
+      const challenge = await captchaGet();
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
-      if (data.success && data.bg && data.piece && Number.isFinite(data.y)) {
-        setChallengeReady(true);
-        setBgImage(data.bg);
-        setPieceImage(data.piece);
-        setPieceY(data.y);
-      } else {
-        setLoadFailed(true);
-        setErrorMsg(envelopeMessage(data) ?? '请稍后再试');
-      }
+      challengeIdRef.current = challenge.id;
+      setChallengeReady(true);
+      setBgImage(challenge.background);
+      setPieceImage(challenge.piece);
+      setPieceY(challenge.y);
     } catch (err) {
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
       setLoadFailed(true);
@@ -332,7 +334,8 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const submitTrack = useCallback(async () => {
     if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || !trackRef.current.length) return;
     const finalX = sliderXRef.current;
-    if (finalX < 5) {
+    /* A tap, or a jump with no movement in between: no trace the server would accept. */
+    if (finalX < 5 || trackRef.current.length < 3) {
       snapBack();
       trackRef.current = [];
       return;
@@ -342,13 +345,10 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     verifyingRef.current = true;
     setChallengeReady(false);
     try {
-      const data = await captchaVerify(finalX, encodeTrack(trackRef.current));
+      const trace = trackRef.current.map(([x, y, t]) => ({ x, y, t }));
+      const { proof } = await captchaVerify(challengeIdRef.current, finalX, trace);
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
-      if (data.success && data.token) {
-        onVerifyRef.current(data.token);
-      } else {
-        rejectAttempt(envelopeMessage(data) ?? '验证失败，请重试');
-      }
+      onVerifyRef.current(proof);
     } catch (err) {
       if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
       rejectAttempt(apiErrorMessage(err));
@@ -382,7 +382,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       startXRef.current = clientX;
       startYRef.current = clientY;
       startTimeRef.current = Date.now();
-      // Production always seeds with [0, 0, 0] (relative coordinates).
+      // The trace starts where the drag does (the server requires its first point at the origin).
       trackRef.current = [[0, 0, 0]];
 
       const onDrag = (moveEvent: MouseEvent | TouchEvent) => {

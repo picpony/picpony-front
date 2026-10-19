@@ -90,25 +90,20 @@ function genderIcon(value: unknown) {
  * The bound Derpibooru account, as a link into the app's own Derpibooru profile — its uploads,
  * awards and the way out to the original site are there (R7-019). No avatar: the one this card
  * built never existed on the CDN (R7-018), and the account's real one is a read this page does
- * not need to make. An account named without an API key to prove it says so as a mark; its owner
- * is told where to prove it, and the card takes them there.
+ * not need to make. The backend names an account only once the owner's API key has proved it.
  */
 function DerpiAccountCard({ profile, own }: { profile: ProfileUser; own: boolean }) {
   const router = useRouter();
   const derpiHref = derpiProfileHref(profile);
   if (!derpiHref) return null;
-  const verified = profile.has_api_key === true;
-  const href = own && !verified ? settingsHref('account') : derpiHref;
+  /* A named account is one the backend verified with the owner's key (`upstream_identity`). */
+  const href = derpiHref;
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     router.push(href, { scroll: false });
   };
-  const supporting = verified
-    ? 'Derpibooru 账户'
-    : own
-      ? '在设置中绑定 API Key 以核验身份'
-      : 'Derpibooru 账户，尚未核验';
+  const supporting = own ? 'Derpibooru 账户（已核验）' : 'Derpibooru 账户';
   return (
     <Card as="a" href={href} onClick={navigate} variant="outlined" padding="sm" interactive>
       <span className="flex items-center gap-3">
@@ -121,7 +116,6 @@ function DerpiAccountCard({ profile, own }: { profile: ProfileUser; own: boolean
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate text-title-s text-on-surface">{profile.derpi_username}</span>
-            {!verified && <Badge tone="warning">未核验</Badge>}
           </span>
           <span className="truncate text-body-s text-on-surface-variant">{supporting}</span>
         </span>
@@ -163,6 +157,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
 
   const gender = profile ? genderLabel(profile.gender) : null;
   const race = profile ? raceLabel(profile.race) : null;
+  /* A public profile carries no birthday on the Rust backend; the line shows only if one arrives. */
   const birthday = profile ? birthdayLabel(profile.birthday) : null;
   const joined = profile?.created_at ? formatDate(profile.created_at) : '';
   const seen = profile?.last_online && now !== null ? lastOnlineStatus(profile.last_online, now) : null;
@@ -212,7 +207,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
               {/* Ordinary users carry no role mark (R7-015): "this person is a person" is not an
                   annotation. */}
               <RoleBadge role={profile.role} size="md" />
-              {profile.has_api_key === true && profile.derpi_username && (
+              {profile.derpi_username && (
                 <Badge tone="success" size="md" icon={<MdVerified />}>
                   已核验
                 </Badge>

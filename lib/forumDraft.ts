@@ -32,7 +32,7 @@ export interface ForumDraft {
   cover: string | null;
   /** Without a cover, the post's first picture stands in (the original front end's switch). */
   firstImageAsCover: boolean;
-  /** Every picture uploaded while writing — the post's `draft_images`. */
+  /** Every picture uploaded while writing — candidates for the first-picture cover. */
   images: string[];
 }
 
@@ -129,7 +129,9 @@ function legacyDraft(): SavedDraft | null {
     content,
     commissionLink: text(data.commissionLink),
     groupsDescription: text(data.taggroupsDescription),
-    images: strings(data.draftImages),
+    /* Its pictures were staged on the old backend (`uploads/forum_tmp`), which the new one
+       refuses to bind: they are not carried over. */
+    images: [],
     savedAt: Date.now(),
   };
   return isEmptyDraft(draft) ? null : draft;

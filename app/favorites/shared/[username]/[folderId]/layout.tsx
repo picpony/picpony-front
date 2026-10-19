@@ -14,7 +14,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   } catch {
     /* An undecodable segment is shown as it came. */
   }
-  return { title: `${name} 的收藏夹` };
+  /* An owner named by id (`~<id>`) has no name to show until the screen's read lands. */
+  return { title: name.startsWith('~') ? '收藏夹' : `${name} 的收藏夹` };
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {

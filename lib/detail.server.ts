@@ -1,4 +1,4 @@
-import { DERPIBOORU_API_BASE, PICPONY_API_BASE } from '@/lib/constants';
+import { DERPIBOORU_API_BASE } from '@/lib/constants';
 import type { DetailSeed, PonyImage } from '@/lib/types/image';
 import type { ImageLine } from '@/lib/route';
 import { buildImageUrl, getRawImageUrl } from '@/lib/imageLoader';
@@ -68,7 +68,7 @@ function backoffFrom(response: Response): number {
 }
 
 const DERPI_UPSTREAM = process.env.PICPONY_DERPI_ORIGIN || DERPIBOORU_API_BASE;
-/** The absolute origin: `PICPONY_API_BASE` is relative, and Node's `fetch` rejects that. */
+/** The absolute origin of PicPony's backend (`/api/v1`): Node's `fetch` rejects a relative URL. */
 const PICPONY_UPSTREAM = upstreamOrigin();
 
 /**
@@ -96,7 +96,7 @@ async function readTranslations(tags: string[], deadline: number): Promise<Recor
   const budget = Math.min(TRANSLATION_BUDGET_MS, deadline - Date.now());
   if (budget <= 50) return null;
   try {
-    const res = await fetch(`${PICPONY_UPSTREAM}${PICPONY_API_BASE}?action=get_tag_translations`, {
+    const res = await fetch(`${PICPONY_UPSTREAM}/api/v1/dictionary/translations`, {
       method: 'POST',
       cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
@@ -107,12 +107,9 @@ async function readTranslations(tags: string[], deadline: number): Promise<Recor
       void res.body?.cancel().catch(() => {});
       return null;
     }
-    const data = (await res.json()) as { success?: unknown; translations?: unknown };
-    if (data?.success !== true || !data.translations || typeof data.translations !== 'object') return null;
-    const table = data.translations as Record<string, unknown>;
-    return Object.fromEntries(
-      keys.map((key) => [key, typeof table[key] === 'string' && table[key] ? (table[key] as string) : null]),
-    );
+    /* An untranslated tag is absent from `translations` (`dictionary::translations`). */
+    const { translations } = (await res.json()) as { translations: Record<string, string> };
+    return Object.fromEntries(keys.map((key) => [key, translations[key] || null]));
   } catch {
     return null;
   }

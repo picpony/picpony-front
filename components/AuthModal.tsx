@@ -41,7 +41,8 @@ export function useAuthModal() {
  * is accepted or the user explicitly starts over. No password is kept.
  */
 export interface PendingRegistration {
-  userId: number;
+  /** The backend's id for the code request (`verification`); a resend replaces it. */
+  verification: string;
   username: string;
   email: string;
 }
@@ -55,11 +56,11 @@ function readPendingRegistration(): PendingRegistration | null {
     const value = JSON.parse(raw) as Partial<PendingRegistration> | null;
     if (
       value &&
-      typeof value.userId === 'number' &&
+      typeof value.verification === 'string' &&
       typeof value.username === 'string' &&
       typeof value.email === 'string'
     ) {
-      return { userId: value.userId, username: value.username, email: value.email };
+      return { verification: value.verification, username: value.username, email: value.email };
     }
   } catch {
     // Storage can be disabled; the step then lasts as long as the page.

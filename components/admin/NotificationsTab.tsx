@@ -19,29 +19,20 @@ import { readToken } from '@/lib/hooks';
 import { defineResource, SKIP, useResource } from '@/lib/resource';
 import { userProfile } from '@/lib/resources';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
-import { pageCount } from '@/lib/api/http';
 import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminForm, AdminNote, FormActions } from './AdminForm';
-import { AdminListAnchor, AdminPager, useShownListKey } from './paging';
-import { adminList, tableError } from './queries';
+import { AdminListAnchor, AdminPager, useCursorPages, useShownListKey } from './paging';
+import { tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import { useSettled } from './useSettled';
 import type { AdminPanelProps } from './registry';
 
-interface NotificationItem {
-  id: number;
-  user_id: number;
-  receiver_name?: string | null;
-  title: string;
-  content: string;
-  created_at: string;
-}
+type NotificationItem = adminApi.AdminNotification;
 
 interface NotificationPage {
   rows: NotificationItem[];
-  totalPages: number;
-  total: number;
+  next: number | null;
 }
 
 type Filter = 'all' | 'broadcast' | 'personal';
@@ -50,17 +41,16 @@ type Audience = 'user' | 'all';
 /** The original console's page size for this history. */
 const PAGE_SIZE = 20;
 
-/** Paged on the server, as the original console reads it (`page`, `per_page`, `keyword`). */
-const notificationsQuery = defineResource<{ token: string; filter: Filter; page: number; keyword: string }, NotificationPage>({
+/** Paged on the server by cursor (`before` → `next_cursor`), newest first. */
+const notificationsQuery = defineResource<{ token: string; filter: Filter; before?: number; keyword: string }, NotificationPage>({
   name: 'admin-notifications',
-  key: ({ token, filter, page, keyword }) => `${token}:${filter}:${page}:${keyword}`,
+  key: ({ token, filter, before, keyword }) => `${token}:${filter}:${before ?? ''}:${keyword}`,
   ttl: 60_000,
   maxEntries: 12,
-  fetch: async ({ token, filter, page, keyword }, signal) => {
+  fetch: async ({ token, filter, before, keyword }, signal) => {
     if (readToken() !== token) throw new Error('登录状态已失效，请重新登录');
-    const data = await adminApi.adminGetNotifications(token, { filter, page, perPage: PAGE_SIZE, keyword }, signal);
-    const rows = adminList<NotificationItem>(data, 'notifications', '通知记录');
-    return { rows, totalPages: pageCount(data.total_pages), total: Number(data.total) || rows.length };
+    const data = await adminApi.adminGetNotifications(token, { scope: filter, before, limit: PAGE_SIZE, keyword }, signal);
+    return { rows: data.notifications, next: data.next };
   },
 });
 
@@ -139,10 +129,10 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
       `确定要向${who}发送此通知吗？${mail}`,
       () => void sendMutation.run(
         () => adminApi.adminSendNotification(token, {
-          user_id: broadcast ? 0 : (typedId as number),
+          recipient_id: broadcast ? null : (typedId as number),
           title: title.trim(),
           content: content.trim(),
-          is_important: important,
+          important,
         }),
         () => {
           showToast(broadcast ? '已发送全站广播' : '已发送通知', 'success');
@@ -163,21 +153,21 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const keyword = useSettled(search.trim(), search.trim() ? 400 : 0);
-  const [page, setPage] = useState({ page: 1, scope: '' });
   const scope = `${filter}:${keyword}`;
-  const currentPage = page.scope === scope ? page.page : 1;
+  const pages = useCursorPages(scope);
+  const currentPage = pages.page;
   const history = useResource(
     notificationsQuery,
-    token ? { token, filter, page: currentPage, keyword } : SKIP,
+    token ? { token, filter, before: pages.cursor, keyword } : SKIP,
     { keepPrevious: `${token}:${scope}` },
   );
   const rows = history.data?.rows ?? [];
-  const totalPages = history.data?.totalPages ?? 1;
-  /* A page the list no longer has — its last notice deleted — moves to the last page there is, as
-     the console's other server-paged lists do (公告, 中转统计, 搜索反馈); it used to show 暂无通知记录
-     on page N of N−1 (review P6-F5). */
-  if (history.data && !history.isPrevious && !history.isLoading && !history.error && currentPage > totalPages) {
-    setPage({ page: totalPages, scope });
+  const totalPages = pages.totalPages;
+  if (history.data && !history.isPrevious && !history.error) {
+    /* A page emptied by deletions (its last notice removed) steps back to the one before it, as it
+       used to on page N of N−1 (review P6-F5). */
+    if (rows.length === 0 && currentPage > 1 && !history.isLoading) pages.setPage(currentPage - 1);
+    else pages.learn(currentPage, history.data.next);
   }
   const listKey = useShownListKey(`${scope}
 ${currentPage}`, history.isPrevious);
@@ -214,12 +204,12 @@ ${currentPage}`, history.isPrevious);
       header: '接收者',
       width: 'auto',
       render: (item) =>
-        Number(item.user_id) === 0 ? (
-          <Badge tone="primary" size="md">全站广播</Badge>
+        item.recipient_id === null ? (
+          <Badge tone="primary" size="md">{item.kind === 'announcement' ? '公告推送' : '全站广播'}</Badge>
         ) : (
           <span>
-            {item.receiver_name || '用户'}
-            <span className="text-on-surface-variant">（#{item.user_id}）</span>
+            {item.username || '用户'}
+            <span className="text-on-surface-variant">（#{item.recipient_id}）</span>
           </span>
         ),
     },
@@ -362,8 +352,7 @@ ${currentPage}`, history.isPrevious);
           <AdminPager
             page={currentPage}
             totalPages={totalPages}
-            onPageChange={(next) => setPage({ page: next, scope })}
-            summary={history.data ? `共 ${history.data.total} 条` : undefined}
+            onPageChange={pages.setPage}
           />
         </AdminListAnchor>
       </section>

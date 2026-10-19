@@ -11,7 +11,7 @@ test('route completion includes documents and RSC prefetches, without treating c
   assert.equal(isRouteRequest(request('/user/1', { RSC: '1' }), 'Fetch', origin), true);
   assert.equal(isRouteRequest(request('/user/1', { rsc: '1' }), 'Fetch', origin), true);
   assert.equal(isRouteRequest(request('/_next/static/chunk.js'), 'Script', origin), false);
-  assert.equal(isRouteRequest(request('/api.php?action=get_faves'), 'Fetch', origin), false);
+  assert.equal(isRouteRequest(request('/api/v1/me/favorites?page=1'), 'Fetch', origin), false);
   assert.equal(isRouteRequest({ url: 'https://elsewhere.test/?_rsc=x' }, 'Fetch', origin), false);
   assert.equal(isRouteRequest({ url: 'bad-url' }, 'Document', origin), false);
 });
@@ -19,7 +19,7 @@ test('route completion includes documents and RSC prefetches, without treating c
 test('a late profile prefetch stays in the favorites step after its browser APIs have finished', () => {
   let now = 0;
   const activity = createStepActivity(origin, 900, () => now);
-  activity.start('faves', request('/api.php?action=get_faves'), 'Fetch', true);
+  activity.start('faves', request('/api/v1/me/favorites?page=1'), 'Fetch', true);
   activity.start('profile', request('/user/1?_rsc=fixture'), 'Fetch', false);
   now = 200;
   activity.finish('faves');

@@ -13,7 +13,7 @@ import { useNow } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import type { ChatUser, Contact } from '@/lib/types/message';
-import { messagePreview } from './messageText';
+import { contactPreview } from './messageText';
 import { ContactRowsSkeleton } from './Skeletons';
 import { contactTime } from './threadModel';
 import UserSearchField from './UserSearchField';
@@ -198,7 +198,7 @@ function ContactRow({
   const name = unread > 0 ? `${contact.username}，${unread} 条未读` : contact.username;
   /* Collapsed, the row is its portrait: the name comes back as the plain tooltip. */
   const { anchorRef, anchorProps, tooltip } = useTooltip(collapsed ? contact.username : undefined);
-  const preview = contact.last_message ? messagePreview(contact.last_message) : '';
+  const preview = contact.last_message ? contactPreview(contact.last_message, contact.last_message_truncated) : '';
   /* The open row's supporting lines take its container's ink: under forced colors the row wears
      the system's selection pair, and a line keeping its own ink read dim on it. */
   const supporting = active ? undefined : 'text-on-surface-variant';

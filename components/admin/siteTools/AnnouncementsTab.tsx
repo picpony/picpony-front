@@ -41,7 +41,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
     let payload: ReturnType<typeof announcementPayload>;
     try { payload = announcementPayload(draft); } catch (error) { setErrors(fieldErrors(error)); return; }
     setErrors({});
-    confirmThen('确认发布公告', `确定要向全站用户发布「${payload.title}」（${payload.version}）吗？相同版本会覆盖原公告，并提醒所有用户。`, () => void publish.run(
+    confirmThen('确认发布公告', `确定要向全站用户发布「${payload.title}」（${payload.version}）吗？发布后会提醒所有用户。`, () => void publish.run(
       () => adminApi.saveAnnouncement(token, payload), () => { setDraft({ ...draft, content: '' }); showToast('已发布公告', 'success'); }, '公告发布失败', { onCommitted: refresh },
     ));
   };

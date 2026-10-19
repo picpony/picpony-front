@@ -15,46 +15,30 @@ import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import { formatDateTime, parseBackendUtcTime } from '@/lib/format';
 import { copyText } from '@/lib/utils';
 import * as adminApi from '@/lib/api/admin';
-import * as siteApi from '@/lib/api/adminSiteTools';
 import DeveloperSiteTools from './siteTools/DeveloperSiteTools';
 import SectionHeader from './SectionHeader';
 import { AdminForm, AdminNote } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { adminData, adminList, defineAdminQuery, retryError, tableError, useAdminQuery } from './queries';
+import { defineAdminQuery, retryError, tableError, useAdminQuery } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 
-interface DeveloperUser {
-  id: number;
-  username: string;
-  email?: string | null;
-  api_key?: string | null;
-  derpi_username?: string | null;
-  created_at?: string | null;
-  is_developer?: number | boolean | null;
-  is_developer_banned?: number | boolean | null;
-  role?: string;
-}
+type DeveloperUser = adminApi.DeveloperUser;
 
-const on = (value: unknown) => value === true || Number(value) === 1;
-
-const passwordQuery = defineAdminQuery<{ password: string; updatedAt: string }>('developer-password', async (token, signal) => {
+/* Revealing the password is a POST the backend audits; this panel is where an administrator asks
+   for it, so opening the panel is the request. */
+const passwordQuery = defineAdminQuery<{ password: string; updatedAt: string; expiresAt: string; generation: number }>('developer-password', async (token, signal) => {
   const data = await adminApi.adminGetDeveloperPassword(token, signal);
-  adminData(data, undefined, '维护密码');
-  if (typeof data.password !== 'string') throw new Error('维护密码加载失败');
-  return { password: data.password, updatedAt: typeof data.updated_at === 'string' ? data.updated_at : '' };
+  return { password: data.password, updatedAt: data.updated_at ?? '', expiresAt: data.expires_at ?? '', generation: data.generation };
 });
 
-const usersQuery = defineAdminQuery<DeveloperUser[]>('developer-users', async (token, signal) => {
-  const data = await adminApi.adminGetDeveloperUsers(token, signal);
-  return adminList<DeveloperUser>(data, 'users', '开发者列表');
-});
+const usersQuery = defineAdminQuery<DeveloperUser[]>('developer-users', (token, signal) => adminApi.adminGetDeveloperUsers(token, signal));
 
-/**
- * The password's `updated_at` is written in UTC — the original console appends `Z` before
- * converting (`loadDeveloperSettings`) — unlike the Beijing time the backend writes elsewhere: one
- * of the three UTC columns `lib/format.ts` reads with `parseBackendUtcTime`.
- */
+/** The developer-access revision a change to a listed account names (the list's own row). */
+const accessRevision = (token: string, userId: number) =>
+  usersQuery.peek(token).data?.find((row) => row.id === userId)?.developer_access.revision ?? 0;
+
+/** A stamp with its offset, printed in Beijing time. */
 function utcTime(value: string): string {
   const text = value.trim();
   if (!text) return '';
@@ -100,15 +84,16 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       '确定要立即更新维护密码吗？当前密码会马上失效，已告知他人的旧密码将无法再开启开发者模式。',
       () =>
         void rotateMutation.run(
-          () => adminApi.adminRefreshDeveloperPassword(token),
+          async () => {
+            const generation = passwordQuery.peek(token).data?.generation;
+            return generation === undefined ? null : adminApi.adminRefreshDeveloperPassword(token, generation);
+          },
           () => showToast('已更新维护密码', 'success'),
           '更新失败',
           {
             onCommitted: (data) => {
-              if (typeof data.password === 'string') {
-                passwordQuery.write(token, { password: data.password, updatedAt: new Date().toISOString() });
-              }
-              password.refresh();
+              const next = data as unknown as adminApi.MaintenancePassword;
+              passwordQuery.write(token, { password: next.password, updatedAt: next.updated_at ?? '', expiresAt: next.expires_at ?? '', generation: next.generation });
             },
           },
         ),
@@ -123,10 +108,14 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       return;
     }
     void enableMutation.run(
-      () => adminApi.adminEnableDeveloper(token, id),
-      (data) => {
-        const message = typeof data.message === 'string' && /[一-鿿]/.test(data.message) ? data.message : `已为 #${id} 开启开发者模式`;
-        showToast(message, 'success');
+      /* The account is usually not in the list (it has no grant yet), and one that had a grant
+         before is not at revision 0: its own state is read first, so the grant names its revision. */
+      async () => {
+        const account = await adminApi.adminGetDeveloperAccess(token, id);
+        return adminApi.adminEnableDeveloper(token, id, account.developer_access.revision);
+      },
+      () => {
+        showToast(`已为 #${id} 开启开发者模式`, 'success');
         setTarget('');
       },
       '开启失败',
@@ -137,13 +126,14 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
   const revoke = (user: DeveloperUser) =>
     confirmThen('确认关闭开发者模式', `确定要关闭用户${named(user)}的开发者模式吗？`, () =>
       void revokeMutation.run(
-        () => adminApi.adminRevokeDeveloper(token, user.id),
+        () => adminApi.adminRevokeDeveloper(token, user.id, accessRevision(token, user.id)),
         () => showToast(`已关闭${named(user)}的开发者模式`, 'success'),
         '关闭开发者模式失败',
         {
           key: user.id,
-          onCommitted: () => {
-            usersQuery.write(token, (previous) => previous?.map((row) => (row.id === user.id ? { ...row, is_developer: 0 } : row)) ?? []);
+          onCommitted: (data) => {
+            const access = data as unknown as adminApi.DeveloperAccess;
+            usersQuery.write(token, (previous) => previous?.map((row) => (row.id === user.id ? { ...row, developer_access: { ...row.developer_access, ...access } } : row)) ?? []);
             users.refresh();
           },
         },
@@ -168,7 +158,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       header: 'Derpibooru 身份',
       render: (user) => (
         <span className="text-on-surface-variant">
-          {[user.derpi_username || '未核验', user.api_key ? 'API Key 已绑定' : 'API Key 未绑定'].join(' · ')}
+          {[user.upstream_identity?.name || '未核验', user.key_hint ? `API Key 已绑定（${user.key_hint}）` : 'API Key 未绑定'].join(' · ')}
         </span>
       ),
     },
@@ -183,10 +173,12 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       header: '状态',
       width: 'auto',
       render: (user) =>
-        on(user.is_developer_banned) ? (
+        user.developer_access.banned ? (
           <Badge tone="error" size="md">已封禁</Badge>
-        ) : on(user.is_developer) ? (
+        ) : user.developer_access.active ? (
           <Badge tone="success" size="md">已开启</Badge>
+        ) : user.developer_access.enabled ? (
+          <Badge tone="warning" size="md">已开启（未生效）</Badge>
         ) : (
           <Badge size="md">未开启</Badge>
         ),
@@ -197,7 +189,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       actions: true,
       render: (user) =>
         <>
-        {on(user.is_developer) && !on(user.is_developer_banned) && (
+        {user.developer_access.enabled && !user.developer_access.banned && (
           <IconButton
             size="sm"
             variant="danger-text"
@@ -208,15 +200,15 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
             onClick={() => revoke(user)}
           />
         )}
-        <IconButton size="sm" variant={on(user.is_developer_banned) ? 'standard' : 'danger-text'}
-          icon={on(user.is_developer_banned) ? <MdLockOpen /> : <MdBlock />}
-          aria-label={`${on(user.is_developer_banned) ? '解封' : '封禁'} ${user.username} 的开发者权限`}
+        <IconButton size="sm" variant={user.developer_access.banned ? 'standard' : 'danger-text'}
+          icon={user.developer_access.banned ? <MdLockOpen /> : <MdBlock />}
+          aria-label={`${user.developer_access.banned ? '解封' : '封禁'} ${user.username} 的开发者权限`}
           disabled={user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin') || revokeMutation.pendingKeys.has(user.id)} loading={banMutation.pendingKeys.has(user.id)}
           onClick={() => {
             if (user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin')) return;
-            const banned = on(user.is_developer_banned);
+            const banned = user.developer_access.banned;
             confirmThen(banned ? '确认解封开发者权限' : '确认封禁开发者权限', `确定要${banned ? '解封' : '封禁'}用户${named(user)}的开发者权限吗？${banned ? '' : '封禁后，该用户将无法自主开启开发者模式。'}`, () => void banMutation.run(
-              () => banned ? siteApi.unbanDeveloper(token, user.id) : siteApi.banDeveloper(token, user.id),
+              () => banned ? adminApi.adminUnbanDeveloper(token, user.id, accessRevision(token, user.id)) : adminApi.adminBanDeveloper(token, user.id, accessRevision(token, user.id)),
               () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
               banned ? '开发者权限解封失败' : '开发者权限封禁失败', { key: user.id, onCommitted: () => usersQuery.invalidate() },
             ));
@@ -275,7 +267,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         )}
         {password.data && (
           <p className="text-body-s text-on-surface-variant">
-            {password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成'}
+            {[password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成', password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null].filter(Boolean).join(' · ')}
           </p>
         )}
       </section>

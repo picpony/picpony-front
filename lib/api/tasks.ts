@@ -1,129 +1,115 @@
-import { parseEquippedBadges, type EquippedBadge } from '@/lib/userBadges';
-import { ApiError } from './errors';
-import { listOf, pageCount, picponyPostJson, picponyRequest, readEnvelope } from './http';
+import { api, seg } from './http';
+import { createCursorPager } from './cursorPages';
+import { randomId } from '@/lib/utils';
 
 /**
- * 等级与任务 and the coin ledger (金币明细): the account's level, its task progress and every
- * coin it earned or spent.
+ * 等级与任务 and the coin ledger (金币明细), over the Rust backend: `GET /me/tasks`,
+ * `POST /me/tasks/{task}/claims`, `GET /me/coins/transactions` (src/pg/tasks.rs).
  *
- * **Nothing is invented at this boundary.** A document without a figure reports `null` for it,
- * and a task category the answer did not carry is `null` rather than a set of zeros — a card
- * that read 「Lv.1 · 金币：0」 over an answer that carried neither was a claim nobody made.
+ * The weekly upload count is the server's own (`verified_uploads`): there is no "record an
+ * upload" call any more — a client-reported count was a way to farm the task.
  */
 
 /** One task's state, as the document reports it. */
 export interface TaskProgress {
   progress: number;
+  /** The progress at which it can be claimed — the server's threshold. */
+  required: number;
   claimed: boolean;
 }
 
 export type TaskCategory = 'novice' | 'daily' | 'weekly';
 
 export interface TaskDocument {
-  level: number | null;
-  experience: number | null;
-  coins: number | null;
-  equippedBadges: EquippedBadge[];
-  /** Progress by task id within each category; `null` when the answer carried no such block. */
+  level: number;
+  experience: number;
+  coins: number;
+  /** Progress by the screen's task key within each category; `null` for a category the answer
+   *  carried none of. */
   progress: Record<TaskCategory, Record<string, TaskProgress> | null>;
 }
 
-/** The document's task ids, per category, and where each keeps its two fields. */
-const DAILY_IDS = ['login', 'fav', 'share', 'comment'] as const;
-const WEEKLY_IDS = ['upload'] as const;
-
-function finite(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+/** One row of `tasks` (`period` is the server's `YYYY-MM-DD`, ISO week or `lifetime`). */
+interface WireTask {
+  task: string;
+  period: string;
+  progress: number;
+  required: number;
+  claimed: boolean;
+  reward: { coins: number; experience: number };
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+interface WireTasks {
+  tasks: WireTask[];
+  coins: number;
+  experience: number;
+  level: number;
 }
 
-/** `{progress, claimed}` from a pair of fields, or `null` when the progress is not a number. */
-function progressOf(progress: unknown, claimed: unknown): TaskProgress | null {
-  const value = finite(progress);
-  if (value === null) return null;
-  return { progress: Math.max(0, value), claimed: Boolean(finite(claimed)) };
-}
+/** The server's task names, by the screen's category and key (`app/tasks/page.tsx`'s `claimId`). */
+const TASK_KEYS: Record<string, { category: TaskCategory; key: string }> = {
+  login: { category: 'daily', key: 'login' },
+  fav: { category: 'daily', key: 'fav' },
+  share: { category: 'daily', key: 'share' },
+  comment: { category: 'daily', key: 'comment' },
+  weekly_upload: { category: 'weekly', key: 'upload' },
+  novice_bind_api: { category: 'novice', key: 'bind_api' },
+  novice_verify_api: { category: 'novice', key: 'verify_api' },
+  novice_set_bg: { category: 'novice', key: 'set_bg' },
+};
 
-/** A category whose every task reports a number, or `null` — a partial block is not a block. */
-function flatCategory(block: unknown, ids: readonly string[]): Record<string, TaskProgress> | null {
-  const source = record(block);
-  if (!source) return null;
-  const out: Record<string, TaskProgress> = {};
-  for (const id of ids) {
-    const entry = progressOf(source[`${id}_progress`], source[`${id}_claimed`]);
-    if (!entry) return null;
-    out[id] = entry;
+/** The wire document, by category. Exported for the tests. */
+export function taskDocumentOf(data: WireTasks): TaskDocument {
+  const progress: TaskDocument['progress'] = { novice: null, daily: null, weekly: null };
+  for (const row of data.tasks) {
+    const place = TASK_KEYS[row.task];
+    if (!place) continue;
+    (progress[place.category] ??= {})[place.key] = {
+      progress: row.progress,
+      required: row.required,
+      claimed: row.claimed,
+    };
   }
-  return out;
+  return { level: data.level, experience: data.experience, coins: data.coins, progress };
 }
 
-/** The novice block nests per task: `{bind_api: {progress, claimed}, …}`. */
-function nestedCategory(block: unknown): Record<string, TaskProgress> | null {
-  const source = record(block);
-  if (!source) return null;
-  const out: Record<string, TaskProgress> = {};
-  for (const [id, value] of Object.entries(source)) {
-    const entry = record(value);
-    const parsed = entry ? progressOf(entry.progress, entry.claimed) : null;
-    if (parsed) out[id] = parsed;
-  }
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-/** The wire document, normalised. Exported for the tests. */
-export function taskDocumentOf(data: Record<string, unknown>): TaskDocument {
-  const level = finite(data.level);
-  const experience = finite(data.experience);
-  const coins = finite(data.coins);
-  return {
-    level: level !== null && level >= 1 ? Math.floor(level) : null,
-    experience: experience !== null ? Math.max(0, Math.floor(experience)) : null,
-    coins: coins !== null ? Math.max(0, Math.floor(coins)) : null,
-    equippedBadges: parseEquippedBadges(data.equipped_badges),
-    progress: {
-      novice: nestedCategory(data.novice_tasks),
-      daily: flatCategory(data.tasks, DAILY_IDS),
-      weekly: flatCategory(data.weekly_tasks, WEEKLY_IDS),
-    },
-  };
-}
-
-/** `GET get_tasks` — the level card and every category's progress. */
+/** The level card and every category's progress. */
 export async function getTasks(token: string, signal?: AbortSignal): Promise<TaskDocument> {
-  const data = await readEnvelope<Record<string, unknown>>(
-    await picponyRequest('get_tasks', { token, query: { _t: Date.now() }, signal }),
-  );
-  return taskDocumentOf(data);
+  return taskDocumentOf(await api<WireTasks>('GET', '/me/tasks', { token, cache: 'no-store', signal }));
 }
 
-/** What a claim paid out, as the server reported it — `null` for a figure it did not send. */
+/** What a claim paid out, as the server reported it. */
 export interface ClaimReceipt {
-  experience: number | null;
-  coins: number | null;
+  experience: number;
+  coins: number;
+  /** The coin balance after the payout. */
+  balance: number;
 }
 
 /**
- * `POST claim_task {task_type}`. A write, never retried; a refusal (already claimed, not yet
- * complete) throws `ApiError` with the backend's own sentence.
+ * Claim one task's reward (`taskType` is the server's task name). A write; a refusal (already
+ * claimed, not yet complete) throws `ApiError` with the backend's own sentence. The key makes a
+ * lost answer safe to press again within this call only — every press is its own claim, and the
+ * server refuses a second claim for the period anyway.
  */
 export async function claimTask(token: string, taskType: string): Promise<ClaimReceipt> {
-  const data = await readEnvelope<{ experience?: unknown; coins?: unknown }>(
-    await picponyPostJson('claim_task', { task_type: taskType }, { token }),
+  const data = await api<{ reward: { coins: number; experience: number }; balance: number }>(
+    'POST',
+    `/me/tasks/${seg(taskType)}/claims`,
+    { token, idempotencyKey: randomId() },
   );
-  return { experience: finite(data.experience), coins: finite(data.coins) };
+  return { experience: data.reward.experience, coins: data.reward.coins, balance: data.balance };
 }
 
 /**
- * `POST record_weekly_upload` — counts one upload toward the weekly task, after Derpibooru
- * acknowledged it. Fire-and-forget at the call site: the upload itself already succeeded.
+ * `POST /me/weekly-upload-reports {image_id}` — counts one upload toward the weekly task, after
+ * Derpibooru acknowledged it with that id. Fire-and-forget at the call site: the upload itself
+ * already succeeded. The submission goes from the browser straight to Derpibooru, so the backend
+ * has nothing of its own to count; it takes this report instead, once per image, never past the
+ * task's target, and rate-limited per account.
  */
-export async function recordWeeklyUpload(token: string): Promise<void> {
-  await readEnvelope(await picponyRequest('record_weekly_upload', { token, method: 'POST' }));
+export async function recordWeeklyUpload(token: string, imageId: number): Promise<void> {
+  await api('POST', '/me/weekly-upload-reports', { token, json: { image_id: imageId } });
 }
 
 // ---------------------------------------------------------------------------
@@ -131,51 +117,63 @@ export async function recordWeeklyUpload(token: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export interface CoinTransaction {
-  /** The row's own id, or a synthetic one for a row that carries none (stable within a page). */
+  /** The row's own id. */
   key: string;
   /** Signed: positive earned, negative spent. */
   amount: number;
+  /** The balance after this row. */
+  balanceAfter: number;
   reason: string;
-  /** The backend's stamp as written (Beijing wall-clock), for `lib/format.ts`. */
-  createdAt: string | null;
+  /** The backend's stamp (UTC, with its offset), for `lib/format.ts`. */
+  createdAt: string;
 }
 
 export interface CoinLedgerPage {
   transactions: CoinTransaction[];
-  /**
-   * The server's page count when it pages, else `null`: the original front end sent no page
-   * and drew the whole answer, so an answer without `total_pages` is the whole ledger.
-   */
-  totalPages: number | null;
+  /** The pages known to exist: this one, plus one while the backend says there are more. */
+  totalPages: number;
 }
 
-/** A ledger row, or `null` for one without a readable amount. Exported for the tests. */
-export function coinTransactionOf(row: unknown, index: number): CoinTransaction | null {
-  const source = record(row);
-  if (!source) return null;
-  const amount = finite(source.amount);
-  if (amount === null) return null;
-  const id = finite(source.id);
-  const reason = typeof source.reason === 'string' ? source.reason.trim() : '';
-  const createdAt = typeof source.created_at === 'string' && source.created_at.trim() ? source.created_at.trim() : null;
-  return { key: id !== null ? String(id) : `row-${index}`, amount, reason, createdAt };
+interface WireLedgerRow {
+  id: number;
+  amount: number;
+  balance_after: number;
+  reason: string;
+  source_type: string;
+  source_id: string;
+  created_at: string;
 }
 
-/** `GET get_coin_transactions&page=` — `{transactions: [{amount, reason, created_at}]}`. */
+/** Thirty to a page, the screen's page. */
+export const COIN_LEDGER_PAGE = 30;
+
+const ledgerPager = createCursorPager();
+
+/** A ledger row. Exported for the tests. */
+export function coinTransactionOf(row: WireLedgerRow): CoinTransaction {
+  return {
+    key: String(row.id),
+    amount: row.amount,
+    balanceAfter: row.balance_after,
+    reason: row.reason.trim(),
+    createdAt: row.created_at,
+  };
+}
+
+/** One page of the ledger, newest first (keyset-paged by the backend; see `cursorPages.ts`). */
 export async function getCoinTransactions(
   token: string,
   page: number = 1,
   signal?: AbortSignal,
 ): Promise<CoinLedgerPage> {
-  const data = await readEnvelope<{ transactions?: unknown; total_pages?: unknown }>(
-    await picponyRequest('get_coin_transactions', { token, query: { page, _t: Date.now() }, signal }),
-  );
-  if (data.transactions !== undefined && !Array.isArray(data.transactions)) throw new ApiError('invalid');
-  const transactions = listOf<unknown>(data.transactions)
-    .map(coinTransactionOf)
-    .filter((row): row is CoinTransaction => row !== null);
-  return {
-    transactions,
-    totalPages: data.total_pages === undefined || data.total_pages === null ? null : pageCount(data.total_pages),
-  };
+  const result = await ledgerPager.read(`coins:${token}`, page, async (before, s) => {
+    const data = await api<{ transactions: WireLedgerRow[]; next_cursor: number | null }>('GET', '/me/coins/transactions', {
+      token,
+      query: { before, limit: COIN_LEDGER_PAGE },
+      cache: 'no-store',
+      signal: s,
+    });
+    return { rows: data.transactions, next: data.next_cursor };
+  }, signal);
+  return { transactions: result.rows.map(coinTransactionOf), totalPages: result.totalPages };
 }

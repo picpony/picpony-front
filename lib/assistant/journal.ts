@@ -1,10 +1,12 @@
-import { obj, positiveId, str, type AssistantReceipt } from './protocol';
+import { MAX_MESSAGE, obj, positiveId, str, type AssistantReceipt } from './protocol';
 import { LS_KEYS } from '@/lib/constants';
 import { randomId } from '@/lib/utils';
 
 export interface JournalStorage { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void }
 export interface PendingChat { requestId: string; message: string }
-export interface PendingExchange { requestId: string; coins: number; pointsPerCoin?: number }
+/** An exchange in flight: the revisions it was sent against travel with the request id, since a
+ *  replay must repeat the same body to be recognised (`assistant_quota::exchange`). */
+export interface PendingExchange { requestId: string; coins: number; revision: number; configRevision: number; pointsPerCoin?: number }
 export interface JournalEntry { state: 'started' | 'receipt'; receipt?: AssistantReceipt; acknowledged?: boolean }
 export const JOURNAL_EVENT = 'picpony-assistant-storage';
 export const journalKey = (accountId: string, suffix: string) => `${LS_KEYS.assistantStoragePrefix}:${accountId}:${suffix}`;
@@ -31,13 +33,15 @@ export function parseExchange(text: string | null): PendingExchange | null {
     const value = obj(JSON.parse(text || 'null'));
     const coins = positiveId(value.coins);
     const rate = positiveId(value.pointsPerCoin);
-    return coins && coins <= 100000 && str(value.requestId, 100) ? { requestId: str(value.requestId, 100), coins, ...(rate && rate <= 10000 ? { pointsPerCoin: rate } : {}) } : null;
+    const revision = value.revision, configRevision = value.configRevision;
+    if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(configRevision)) return null;
+    return coins && coins <= 100000 && str(value.requestId, 100) ? { requestId: str(value.requestId, 100), coins, revision: revision as number, configRevision: configRevision as number, ...(rate && rate <= 10000 ? { pointsPerCoin: rate } : {}) } : null;
   } catch { return null; }
 }
 export function parsePendingChat(text: string | null): PendingChat | null {
   try {
     const value = obj(JSON.parse(text || 'null'));
-    return typeof value.message === 'string' && value.message.length <= 4000 && str(value.requestId, 100) ? { message: value.message, requestId: str(value.requestId, 100) } : null;
+    return typeof value.message === 'string' && value.message.length <= MAX_MESSAGE && str(value.requestId, 100) ? { message: value.message, requestId: str(value.requestId, 100) } : null;
   } catch { return null; }
 }
 
@@ -63,10 +67,10 @@ export function createReceiptJournal(storage: JournalStorage, accountId: string)
     storage.setItem(key, JSON.stringify(entries));
   }
   return {
-    get: (taskId: number, callId: string) => read()[`${taskId}:${callId}`],
-    start: (taskId: number, callId: string) => put(`${taskId}:${callId}`, { state: 'started' }),
+    get: (taskId: string, callId: string) => read()[`${taskId}:${callId}`],
+    start: (taskId: string, callId: string) => put(`${taskId}:${callId}`, { state: 'started' }),
     save: (receipt: AssistantReceipt) => put(`${receipt.task_id}:${receipt.call_id}`, { state: 'receipt', receipt }),
-    acknowledge: (taskId: number, callId: string) => {
+    acknowledge: (taskId: string, callId: string) => {
       const id = `${taskId}:${callId}`, entry = read()[id];
       if (entry?.state === 'receipt') put(id, { ...entry, acknowledged: true });
     },

@@ -7,12 +7,11 @@ import Modal from '@/components/Modal';
 import ProgressBar from '@/components/ProgressBar';
 import { showToast } from '@/components/Toast';
 import { readToken } from '@/lib/hooks';
-import { requireAdminSuccess } from '@/lib/adminMutations';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { getDerpiPopularTags } from '@/lib/api/derpi';
 import * as adminApi from '@/lib/api/admin';
 import { AdminForm, AdminNote, FormGrid } from '../AdminForm';
-import { reportedCount, syncRange, syncTasks } from './model';
+import { syncRange, syncTasks } from './model';
 
 const FORM_ID = 'glossary-sync-form';
 /** Between two pages, so a long run does not hammer Derpibooru (the relay shares one IP). */
@@ -24,9 +23,6 @@ export interface SyncResult {
   failedTags: number;
   failedPages: number;
   stopped: boolean;
-  /** A page was written whose answer did not say how many it created or skipped: the two sums are
-   *  then a floor, and the tally says 至少 rather than presenting them as exact (G4-015's rule). */
-  uncounted: boolean;
 }
 
 /**
@@ -46,13 +42,11 @@ async function syncPages(range: { from: number; to: number }, token: string, cur
       if (!current()) break;
       const tasks = syncTasks(data.tags);
       if (tasks.length === 0) break;
-      const answer = await requireAdminSuccess(await adminApi.batchImportDictionaryTags(token, tasks), '同步失败');
-      const created = reportedCount(answer.created), skipped = reportedCount(answer.skipped);
-      if (created === null || skipped === null) result.uncounted = true;
-      result.created += created ?? 0;
-      result.skipped += skipped ?? 0;
-      /* An absent `failed` is "none reported", as `importStatus` reads `failed_count`. */
-      result.failedTags += reportedCount(answer.failed) ?? 0;
+      /* Each tag is its own create (there is no batch endpoint), so every count is known. */
+      const answer = await adminApi.batchImportDictionaryTags(token, tasks);
+      result.created += answer.created;
+      result.skipped += answer.skipped;
+      result.failedTags += answer.failed;
     } catch (error) {
       if (!current()) break;
       result.failedPages += 1;
@@ -121,7 +115,7 @@ export default function SyncDialog({
     const ticket = ++run.current;
     const current = () => run.current === ticket && readToken() === token;
     const total = range.to - range.from + 1;
-    const result: SyncResult = { created: 0, skipped: 0, failedTags: 0, failedPages: 0, stopped: false, uncounted: false };
+    const result: SyncResult = { created: 0, skipped: 0, failedTags: 0, failedPages: 0, stopped: false };
     setStopping(false);
     setProgress({ done: 0, total, page: range.from });
     onRunningChange(true);

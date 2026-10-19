@@ -16,9 +16,6 @@ import {
   stepApiFailover,
 } from '@/lib/route';
 
-// Compatibility for existing callers; the decoder itself has no route-policy dependencies.
-export { readJson } from './http';
-
 /**
  * What the user asked to *see*. The four line preferences are not here — `lib/route.ts`
  * owns those; which host answers is a different question from what the answer contains.

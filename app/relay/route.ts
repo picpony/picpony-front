@@ -29,7 +29,7 @@ const ALLOWED_HOSTS = new Set(['derpibooru.org', 'trixiebooru.org']);
 /** And only its API. */
 const ALLOWED_PATH = '/api/';
 /* Long enough for a slow upstream on a bad link, short enough that a wedged one cannot
-   hold a Node connection indefinitely. Matches the api.php handler. */
+   hold a Node connection indefinitely. Matches the /api/v1 proxy. */
 const RELAY_TIMEOUT_MS = 30_000;
 /** `xp_user` is the relay's per-user accounting label. Bounded, because it is unauthenticated. */
 const XP_USER_MAX = 64;
@@ -95,7 +95,7 @@ async function relay(request: NextRequest): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(upstream, {
-      /* Bounded — and this route needs it more than the api.php handler: `picpony_api`
+      /* Bounded — and this route needs it more than the /api/v1 proxy: `picpony_api`
          is the *default* line, a forced or defaulted policy has no failover, and
          `proxyFetch` retries it three times in place, so a wedged upstream holds three
          Node connections per client request for the platform's socket lifetime. */

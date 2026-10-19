@@ -1,9 +1,8 @@
 /**
  * One contact row of 私信 — a person you have a conversation with.
  *
- * `last_message` is optional because `get_recent_contacts` has not always carried it; the adapter
- * (`lib/api/messages.ts`) reads it under the names the backend has used, and a row without it
- * shows its day label alone.
+ * `id` is the other person's user id. `last_message` is optional: the Rust contact row
+ * (`GET /me/contacts`) does not carry the preview, and a row without it shows its day label alone.
  */
 export interface Contact {
   id: number;
@@ -11,7 +10,10 @@ export interface Contact {
   avatar: string | null;
   last_msg_time: string;
   unread_count: number;
+  /** The start of the newest message, as stored (`/me/contacts` `last_message.preview`). */
   last_message?: string;
+  /** Whether `last_message` was cut (the backend sends at most 120 characters). */
+  last_message_truncated?: boolean;
 }
 
 export interface Message {
@@ -43,13 +45,6 @@ export interface AuditMessage {
   created_at: string;
 }
 
-export interface AuditMessagesResponse {
-  success: boolean;
-  messages?: AuditMessage[];
-  error?: string;
-  message?: string;
-}
-
 export interface Notification {
   id: number;
   title: string;
@@ -58,12 +53,13 @@ export interface Notification {
   created_at: string;
 }
 
+/** `GET /api/v1/me/unread-counts` (`notices::unread`). */
 export interface UnreadCountsResponse {
-  success: boolean;
-  unread_messages: number;
-  unread_notifications: number;
-  unread_interactions: number;
-  total_unread: number;
+  messages: number;
+  notifications: number;
+  interactions: number;
+  /** Forum posts created since the viewer's last forum read receipt. */
+  forum: number;
 }
 
 /** A site announcement; one declaration on purpose — a shape declared twice will disagree.
@@ -78,8 +74,8 @@ export interface Announcement {
 
 /*
  * The inbox reads, as the strict adapters in `lib/api/messages.ts` resolve them: a page of rows
- * or an `ApiError` — never a failure dressed as an empty list. A success envelope without its
- * list once took every tab of /messages down; it is an `invalid` error now.
+ * or an `ApiError` — never a failure dressed as an empty list. The backend pages these lists by
+ * cursor and reports no totals: `totalPages` is the pages known to exist (`lib/api/cursorPages.ts`).
  */
 
 export interface AnnouncementPage {

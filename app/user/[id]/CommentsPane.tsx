@@ -34,11 +34,11 @@ function target(comment: UserComment): { href: string; label: string; icon: Reac
  * is a sibling laid under the row's content — the `DropZone` arrangement: the content lets the
  * pointer through to it, except on a link of the comment's own.
  */
-export default function CommentsPane({ profile, id, own, ready, active, now }: ProfilePaneProps) {
+export default function CommentsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:comments', id, 1);
   const visible = tabVisible(profile, 'comments', own);
-  const read = useResource(userComments, ready && visited && visible ? { id, page } : SKIP, { keepPrevious: id });
+  const read = useResource(userComments, ready && visited && visible ? { id, page, token } : SKIP, { keepPrevious: id });
 
   if (!ready) return <ListRowsSkeleton badge />;
   if (!visible) return <PaneHidden />;
@@ -120,7 +120,7 @@ export default function CommentsPane({ profile, id, own, ready, active, now }: P
           currentPage={page}
           totalPages={data.totalPages}
           onPageChange={setPage}
-          onPrefetchPage={(next) => userComments.prefetch({ id, page: next })}
+          onPrefetchPage={(next) => userComments.prefetch({ id, page: next, token })}
           disabled={read.isLoading}
           className="mt-8 mb-4"
         />

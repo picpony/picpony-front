@@ -7,7 +7,8 @@ import FadeInImage from '@/components/FadeInImage';
 import IconButton from '@/components/IconButton';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadForumPicture } from '@/lib/forumImages';
-import { readToken } from '@/lib/hooks';
+import { readToken, useSession } from '@/lib/hooks';
+import { useMediaPreview } from '@/lib/mediaPreview';
 import { ICON } from '@/lib/icons';
 import { getAssetUrl } from '@/lib/utils';
 
@@ -35,6 +36,11 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
   const [upload, setUpload] = useState<Upload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const current = useRef<Upload | null>(null);
+  const { token } = useSession();
+  /* The stored cover is a backend media path, which shows an unpublished upload only to a request
+     carrying the token: drawn from a Blob URL read with it (`undefined` while it is read). Any
+     other value (an old site path) is drawn as it is. */
+  const preview = useMediaPreview(value, token);
 
   /* Leaving mid-upload abandons it and frees the local preview. */
   useEffect(
@@ -109,7 +115,13 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
       ) : value ? (
         <div className="relative w-full max-w-80 overflow-hidden rounded-md bg-surface-container-high">
           <div className="relative aspect-[2/1] w-full">
-            <FadeInImage src={getAssetUrl(value)} alt="封面" fill sizes="320px" className="object-cover" />
+            {preview ? (
+              /* A blob URL: nothing to optimise. */
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={preview} alt="封面" className="absolute inset-0 size-full object-cover" />
+            ) : preview === null ? (
+              <FadeInImage src={getAssetUrl(value)} alt="封面" fill sizes="320px" className="object-cover" />
+            ) : null}
           </div>
           <IconButton
             variant="media"

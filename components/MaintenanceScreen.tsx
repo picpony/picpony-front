@@ -8,8 +8,8 @@ import StatusView from './StatusView';
 import { useAuthModal } from './AuthModal';
 import { COOKIE_KEYS } from '@/lib/constants';
 import { clearUserInfo, useSession } from '@/lib/hooks';
-import { picponyRequest, readJson } from '@/lib/api/http';
-import type { SiteStatusResponse } from '@/lib/types/site';
+import { api } from '@/lib/api/http';
+import type { MaintenanceStatus } from '@/lib/types/site';
 import { ICON } from '@/lib/icons';
 
 /**
@@ -20,8 +20,9 @@ import { ICON } from '@/lib/icons';
  * and nothing behind it starts a request the backend would refuse. **Staff keep the app**, with
  * `MaintenanceNotice` in its chrome saying why nobody else can see it.
  *
- * Who is staff is the backend's answer, not a role this device remembers: the status document
- * read *with the session's token* carries `is_admin`. The server cannot send that token, so it
+ * Who is staff is the backend's answer, not a role this device remembers: the session's own
+ * `GET /me` role (`admin` / `super_admin`, the roles the backend's admin routes accept), read
+ * beside the public `GET /maintenance-status`. The server cannot send that token, so it
  * goes by `COOKIE_KEYS.maintenanceStaff`, a hint this module writes from that answer and keeps
  * honest from both sides — the screen promotes a session the backend calls staff, the notice
  * demotes one it does not.
@@ -37,18 +38,21 @@ interface SiteAccess {
   staff: boolean;
 }
 
-/** The status document as this session sees it. `null` when it could not be read. */
+const STAFF_ROLES = new Set(['admin', 'super_admin']);
+
+/**
+ * The status as this device sees it, `null` when it could not be read. The status itself is
+ * public (`GET /maintenance-status`, `site::public_maintenance`), so a visitor's screen can notice
+ * that maintenance is over; whether the session is staff is its own `GET /me` role, asked only
+ * when there is a session.
+ */
 async function readSiteAccess(token: string | null, signal: AbortSignal): Promise<SiteAccess | null> {
   try {
-    const res = await picponyRequest('get_maintenance_status', {
-      token: token ?? undefined,
-      query: { _t: Date.now() },
-      signal,
-    });
-    if (!res.ok) return null;
-    const body = await readJson<SiteStatusResponse>(res);
-    if (body?.success !== true) return null;
-    return { maintenance: body.maintenance_mode === true, staff: body.is_admin === true };
+    const [status, me] = await Promise.all([
+      api<MaintenanceStatus>('GET', '/maintenance-status', { signal, cache: 'no-store' }),
+      token ? api<{ user: { role: string } }>('GET', '/me', { token, signal, cache: 'no-store' }) : null,
+    ]);
+    return { maintenance: status.maintenance_mode, staff: me !== null && STAFF_ROLES.has(me.user.role) };
   } catch {
     return null;
   }

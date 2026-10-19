@@ -161,7 +161,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   special: '特别鸣谢',
 };
 
-// 头像选择：account_avatar 优先，为 null 时降级 avatar_url；相对路径拼接 picpony.top
+// 头像选择：account_avatar 优先，为 null 时降级 avatar_url（getAssetUrl：/api/v1/ 媒体走同源代理）
 function resolveMemberAvatar(
   m: Pick<TeamMember, 'account_avatar' | 'avatar_url'>,
 ): string | null {
@@ -170,11 +170,14 @@ function resolveMemberAvatar(
   return getAssetUrl(url);
 }
 
-// user:N → /user/N；无链接返回 null
-function resolveMemberLink(linkUrl: string | null | undefined): string | null {
-  if (!linkUrl) return null;
-  if (linkUrl.startsWith('user:')) return `/user/${linkUrl.slice(5)}`;
-  return null;
+/**
+ * Where a member's cell leads: the bound account's profile (`user_id`) first, else the admin's
+ * `link_url` — which the backend only accepts as an http(s) page address (`team::link`), opened
+ * in a new tab. `null`: no link.
+ */
+function resolveMemberLink(m: Pick<TeamMember, 'user_id' | 'link_url'>): { href: string; external: boolean } | null {
+  if (m.user_id !== null && m.user_id > 0) return { href: `/user/${m.user_id}`, external: false };
+  return /^https?:\/\//i.test(m.link_url) ? { href: m.link_url, external: true } : null;
 }
 
 /** 运营团队板块：按分类分组展示成员 */
@@ -224,7 +227,7 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
               <h3 className="mb-3 text-label-l text-on-surface-variant">{group.label}</h3>
               <div className={ROSTER_GRID}>
                 {group.items.map((m) => {
-                  const href = resolveMemberLink(m.link_url);
+                  const link = resolveMemberLink(m);
                   const avatar = resolveMemberAvatar(m);
                   const inner = (
                     <>
@@ -243,17 +246,15 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                       </div>
                     </>
                   );
-                  return href ? (
-                    <Link
-                      scroll={false}
-                      key={m.id}
-                      href={href}
-                      data-ripple
-                      /* Focus ring and ripple, like every other interactive row in the
-                         app — without them a keyboard user could reach this link and see
-                         no indication they had. */
-                      className="flex min-w-0 items-center gap-3 rounded-md p-2 transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
-                    >
+                  /* Focus ring and ripple, like every other interactive row in the app — without
+                     them a keyboard user could reach this link and see no indication they had. */
+                  const rowLink = 'flex min-w-0 items-center gap-3 rounded-md p-2 transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring';
+                  return link?.external ? (
+                    <a key={m.id} href={link.href} target="_blank" rel="noopener noreferrer" data-ripple className={rowLink}>
+                      {inner}
+                    </a>
+                  ) : link ? (
+                    <Link scroll={false} key={m.id} href={link.href} data-ripple className={rowLink}>
                       {inner}
                     </Link>
                   ) : (

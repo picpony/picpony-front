@@ -13,10 +13,8 @@ import { showToast } from '@/components/Toast';
 import {
   importSharedBlockGroup,
   importSharedTagGroup,
-  parseCommission,
-  parseSharedGroups,
   type SharedBlockGroup,
-  type SharedGroupsBody,
+  type SharedGroups as SharedGroupsBody,
   type SharedTagGroup,
 } from '@/lib/api/forum';
 import { apiErrorMessage } from '@/lib/api/errors';
@@ -252,34 +250,31 @@ function SharedGroups({ groups }: { groups: SharedGroupsBody }) {
 
 /**
  * A post's body, by kind: a discussion is its BBCode; a commission is its description and the
- * way to the artist's page; a tag-group share is its note and the groups it shares. A body that
- * does not parse as its kind says (an older post, a hand-written one) is shown as text.
+ * way to the artist's page; a tag-group share is its note and the groups it shares.
  *
  * Render it inside a container that names the type role — the rich-text rhythm is in `em`.
  */
-export default function ForumPostBody({ post }: { post: Pick<ForumPost, 'category' | 'content'> }) {
+export default function ForumPostBody({
+  post,
+}: {
+  post: Pick<ForumPost, 'category' | 'content' | 'commission_link' | 'shared_groups'>;
+}) {
   if (post.category === 'commission') {
-    const commission = parseCommission(post.content);
-    if (commission) {
-      return (
-        <>
-          {commission.description.trim() && <RichTextRenderer content={commission.description} format="bbcode" />}
-          {commission.link && <CommissionLink href={commission.link} />}
-        </>
-      );
-    }
+    return (
+      <>
+        {post.content.trim() && <RichTextRenderer content={post.content} format="bbcode" />}
+        {post.commission_link && <CommissionLink href={post.commission_link} />}
+      </>
+    );
   }
   if (post.category === 'taggroups') {
-    const groups = parseSharedGroups(post.content);
-    if (groups) {
-      return (
-        <>
-          {/* Plain text: the original front end took it from a text box, not the editor. */}
-          {groups.description.trim() && <p className="whitespace-pre-line">{groups.description.trim()}</p>}
-          <SharedGroups groups={groups} />
-        </>
-      );
-    }
+    return (
+      <>
+        {/* Plain text: the original front end took it from a text box, not the editor. */}
+        {post.content.trim() && <p className="whitespace-pre-line">{post.content.trim()}</p>}
+        {post.shared_groups && <SharedGroups groups={post.shared_groups} />}
+      </>
+    );
   }
   return <RichTextRenderer content={post.content} format="bbcode" />;
 }

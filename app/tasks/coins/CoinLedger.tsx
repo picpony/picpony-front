@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { MdReceiptLong } from 'react-icons/md';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -20,9 +20,6 @@ import { SKIP, useResource } from '@/lib/resource';
 import { coinTransactions } from '@/lib/resources';
 import { useScreenState } from '@/lib/screenState';
 import { cn } from '@/lib/utils';
-
-/** Rows per page when the backend sends the whole ledger at once, as the original's did. */
-const LOCAL_PAGE = 30;
 
 /**
  * One page's rows under their Beijing calendar days, in the order each day first appears. Keyed
@@ -69,9 +66,8 @@ function LedgerSkeleton() {
  * it is a page here, reached from the coin figure on /tasks (and the shop), because a ledger is a
  * list that wants the whole column and a pager.
  *
- * **Paged the way the backend pages.** An answer with `total_pages` is a server page; one without
- * is the whole ledger, the original's only shape — then it is paged here, thirty to a page, and
- * only page 1 is ever asked for.
+ * **Paged by the backend**, thirty to a page, newest first. The backend pages by cursor and
+ * reports no total, so the pager offers the pages known to exist (`getCoinTransactions`).
  */
 export default function CoinLedger() {
   const { user, token, ready } = useSession();
@@ -80,25 +76,10 @@ export default function CoinLedger() {
   const now = useNow();
 
   const [page, setPage] = useScreenState('coins:page', 1);
-  /* Learned from the first answer: whether the backend pages the ledger at all. Until it is
-     known only page 1 is asked for, whatever page is remembered (G4-027): on the original's
-     backend that answer is the whole ledger, which the remembered page then slices — asking for
-     that page first cost a second read of the same rows once the answer said so. */
-  const [unpaged, setUnpaged] = useScreenState<boolean | null>('coins:unpaged', null);
-  const requested = unpaged === false ? page : 1;
-  const read = useResource(coinTransactions, token ? { token, page: requested } : SKIP, { keepPrevious: token ?? false });
+  const read = useResource(coinTransactions, token ? { token, page } : SKIP, { keepPrevious: token ?? false });
   const data = read.data;
-
-  useEffect(() => {
-    if (data && !read.isPrevious) setUnpaged(data.totalPages === null);
-  }, [data, read.isPrevious, setUnpaged]);
-
-  const local = data?.totalPages === null;
-  const totalPages = data ? (data.totalPages ?? Math.max(1, Math.ceil(data.transactions.length / LOCAL_PAGE))) : 1;
-  const rows = useMemo(() => {
-    if (!data) return [];
-    return local ? data.transactions.slice((page - 1) * LOCAL_PAGE, page * LOCAL_PAGE) : data.transactions;
-  }, [data, local, page]);
+  const totalPages = data ? data.totalPages : 1;
+  const rows = data?.transactions ?? [];
 
   /* A page past the end — the ledger shrank, or a remembered page from another account's — steps
      back to the last one. */
@@ -164,13 +145,9 @@ export default function CoinLedger() {
                     <div className="min-w-0 flex-1">
                       <p className="text-label-l text-on-surface wrap-anywhere">{row.reason || '金币变动'}</p>
                       <p className="mt-0.5 text-body-s tabular-nums text-on-surface-variant">
-                        {row.createdAt ? (
-                          <time dateTime={row.createdAt} title={formatDateTime(row.createdAt)}>
-                            {formatClock(row.createdAt)}
-                          </time>
-                        ) : (
-                          '时间未知'
-                        )}
+                        <time dateTime={row.createdAt} title={formatDateTime(row.createdAt)}>
+                          {formatClock(row.createdAt)}
+                        </time>
                       </p>
                     </div>
                     <span
@@ -193,7 +170,7 @@ export default function CoinLedger() {
             currentPage={Math.min(page, totalPages)}
             totalPages={totalPages}
             onPageChange={setPage}
-            onPrefetchPage={(next) => token && !local && coinTransactions.prefetch({ token, page: next })}
+            onPrefetchPage={(next) => token && coinTransactions.prefetch({ token, page: next })}
             className="mt-8"
           />
         )}

@@ -135,9 +135,9 @@ function EntryRow({
             <Stepper
               name={name}
               quantity={entry.quantity}
-              limit={entry.item.stock ?? MAX_LINE_QUANTITY}
+              limit={Math.min(entry.item.stock, MAX_LINE_QUANTITY)}
               locked={locked}
-              onChange={(next) => onQuantity(entry.item.id, next, entry.item.stock ?? MAX_LINE_QUANTITY)}
+              onChange={(next) => onQuantity(entry.item.id, next, Math.min(entry.item.stock, MAX_LINE_QUANTITY))}
             />
             <span className="ml-auto text-label-l-emphasized whitespace-nowrap text-on-surface tabular-nums">
               {formatExactCount(entry.item.price * entry.quantity)} 金币

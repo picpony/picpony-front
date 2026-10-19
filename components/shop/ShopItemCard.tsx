@@ -97,7 +97,7 @@ export default function ShopItemCard({
   inCart: number;
   action: ItemAction;
 }) {
-  const soldOut = item.stock !== null && item.stock <= 0;
+  const soldOut = item.stock <= 0;
   return (
     <Card variant="filled" padding="none" className="flex flex-col overflow-hidden">
       <div className="relative aspect-square w-full bg-surface-container-high">
@@ -122,7 +122,7 @@ export default function ShopItemCard({
             <span className={cn('text-body-s text-on-surface-variant', NARROW_UNSEEN)}>金币</span>
           </p>
           <p className="mt-1 min-h-4 text-label-m text-on-surface-variant tabular-nums">
-            {item.stock === null || soldOut ? '' : `库存 ${formatCount(item.stock)}`}
+            {soldOut ? '' : `库存 ${formatCount(item.stock)}`}
           </p>
           {/* Not a live region: 加入购物车's own toast already says what happened, once. */}
           <p className="min-h-4 text-label-m text-on-surface-variant tabular-nums">

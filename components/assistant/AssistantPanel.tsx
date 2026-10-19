@@ -61,7 +61,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   /* The folder names a confirmation card shows instead of bare ids (review P5-O2), read only while
      a card is waiting for an answer. */
-  const folderList = useResource(faveFolders, state.task?.confirmation_token ? { token } : SKIP);
+  const folderList = useResource(faveFolders, state.task?.pending_id ? { token } : SKIP);
   const folderName = (id: number) => folderList.data?.folders.find((folder) => folder.id === id)?.name;
   const quota = useResource(assistantQuota, state.available ? { token } : SKIP);
   const desktop = useMediaQuery(MEDIA.sm, true);
@@ -114,7 +114,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   }, [isOpen]);
   const current = () => readToken() === token;
   const messages = history ? state.messages : state.messages.slice(-6);
-  const canSend = state.available && !state.loading && !state.busy && !state.task?.confirmation_token && quota.data?.user_enabled !== false && (state.pending !== null || quota.data?.remaining !== 0);
+  const canSend = state.available && !state.loading && !state.busy && !state.task?.pending_id && quota.data?.user_enabled !== false && (state.pending !== null || quota.data?.remaining !== 0);
   const text = state.pending?.message ?? state.draft;
   const thread = state.loading && !state.messages.length ? (
     <div role="status" aria-label="正在加载对话" className="flex flex-col gap-3">
@@ -136,9 +136,9 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         const startOfRun = index === 0 || messages[index - 1].role !== message.role;
         const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
         return (
-          <li key={message.id > 0 ? message.id : `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
+          <li key={message.id || `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
             <ChatBubble own={own} startOfRun={startOfRun} endOfRun={endOfRun}>{message.content.replaceAll('||', '\n\n')}</ChatBubble>
-            {history && message.id > 0 && (
+            {history && message.id && (
               <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>
                 <IconButton size="sm" aria-label={`删除第 ${index + 1} 条消息`} disabled={state.busy} icon={<MdDeleteOutline />} onClick={async () => {
                   if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？' }) && current()) void session.removeMessage(message.id);
@@ -175,13 +175,13 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
             if (await confirm({ title: '确认保留草稿', message: '之前的请求可能已经受理。确定要解除待确认状态并保留文字草稿吗？此操作不会重复发送。' }) && current()) session.discardPending();
           }}>保留草稿</Button></div>}
         </Card>}
-        {state.task?.confirmation_token && <Card padding="sm">
+        {state.task?.pending_id && <Card padding="sm">
           <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
           <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>
           <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>取消</Button><Button variant="filled" loading={state.busy} disabled={state.task.actions.some(action => !actionSupported(action))} onClick={() => void session.decide('confirm')}>确认执行</Button></div>
         </Card>}
         {state.receipts.length > 0 && <ul className="space-y-2 text-body-s text-on-surface-variant" aria-label="操作结果">{state.receipts.slice(-8).map((receipt, index) => <li key={`${receipt.task_id}:${receipt.call_id}:${index}`}>{receipt.summary}</li>)}</ul>}
-        {state.task && !state.task.confirmation_token && !state.busy && state.task.status !== 'completed' && <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>核对任务</Button>}
+        {state.task && !state.task.pending_id && !state.busy && <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>核对任务</Button>}
         {state.error && <ErrorRetry size="inline" title="彩彩 AI 操作未完成" message={state.error} onRetry={!state.available && !state.busy ? () => void session.restore() : undefined} />}
       </div>
     </div>

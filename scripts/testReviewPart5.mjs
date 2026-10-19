@@ -31,7 +31,8 @@ globalThis.window = {
 };
 globalThis.document = { visibilityState: 'visible', hidden: false, cookie: '', addEventListener() {}, removeEventListener() {} };
 
-const { API_KEY_PATTERN } = await import('../app/settings/identity.ts');
+/* The rule lives in `lib/validation.ts` since `app/settings/identity.ts` (the Derpibooru-side owner check) was retired: the backend verifies a key itself (`PUT /me/upstream-credential`). */
+const { API_KEY_PATTERN } = await import('../lib/validation.ts');
 const { settingsHref } = await import('../app/settings/tabs.ts');
 const { uploaderTerm } = await import('../lib/profiles.ts');
 const { buildSearchQueryFrom } = await import('../lib/searchQuery.ts');
@@ -184,6 +185,8 @@ test('P5-F5: the Derpibooru profile link is the slug the site keys it by', () =>
   assert.doesNotMatch(page, /derpibooru\.org\/profiles\/\$\{encodeURIComponent/);
 });
 
+/** Task ids are the backend's turn UUIDs. */
+const TASK = '00000000-0000-4000-8000-000000000010';
 function runnerFixture() {
   const stored = new Map();
   const storage = { getItem: (k) => stored.get(k) ?? null, setItem: (k, v) => stored.set(k, v), removeItem: (k) => stored.delete(k) };
@@ -192,7 +195,7 @@ function runnerFixture() {
   const deps = {
     assertCurrent() {},
     permission: async () => 'default',
-    claim: async () => ({ success: true, request: { endpoint: 'get_tasks', method: 'GET', query: {} } }),
+    claim: async () => ({ success: true, request: { endpoint: 'get_my_ponies', method: 'GET', query: {} } }),
     save: async (receipt) => ({ success: true, result: receipt }),
     dispatch: async () => { counts.dispatch += 1; return { ok: true, summary: '已读取', data: {} }; },
     journal, failure: (error) => error.message, definitive: () => false,
@@ -203,26 +206,23 @@ function runnerFixture() {
 test('P5-F6: a read left started by a lost page is asked again; a write left started is not', async () => {
   const f = runnerFixture();
   const read = { name: 'open_image', arguments: { image_id: 5 }, call_id: 'read-1', risk: 'read', approval_granted: false };
-  f.journal.start(10, 'read-1');
-  const result = await createActionRunner(f.deps).run(read, 10);
+  f.journal.start(TASK, 'read-1');
+  const result = await createActionRunner(f.deps).run(read, TASK);
   assert.equal(result.ok, true);
   assert.equal(f.counts.dispatch, 1);
   /* A claimed read (a site read through the server's claim) likewise. */
-  const siteRead = { name: 'call_site_api', arguments: { endpoint: 'get_tasks' }, call_id: 'read-2', risk: 'read', approval_granted: false };
-  f.journal.start(10, 'read-2');
-  assert.equal((await createActionRunner(f.deps).run(siteRead, 10)).ok, true);
+  const siteRead = { name: 'call_site_api', arguments: { endpoint: 'get_my_ponies' }, call_id: 'read-2', risk: 'read', approval_granted: false };
+  f.journal.start(TASK, 'read-2');
+  assert.equal((await createActionRunner(f.deps).run(siteRead, TASK)).ok, true);
   assert.equal(f.counts.dispatch, 2);
-  /* The server's own word that a claim is still pending stands for a read too. */
-  f.deps.claim = async () => ({ success: true, pending: true });
-  await assert.rejects(createActionRunner(f.deps).run({ ...siteRead, call_id: 'read-3' }, 10), UncertainAction);
   /* A write keeps its guard: a recorded start is never permission to send it again. */
   const write = { name: 'call_site_api', arguments: { endpoint: 'claim_task', parameters: { task_type: 'login' } }, call_id: 'write-1', risk: 'write', approval_granted: false };
   f.deps.claim = async () => ({ success: true, request: { endpoint: 'claim_task', method: 'POST', body: { task_type: 'login' } } });
-  f.journal.start(10, 'write-1');
-  await assert.rejects(createActionRunner(f.deps).run(write, 10, true), UncertainAction);
+  f.journal.start(TASK, 'write-1');
+  await assert.rejects(createActionRunner(f.deps).run(write, TASK, true), UncertainAction);
   const nav = { name: 'toggle_unknown_write', arguments: {}, call_id: 'write-2', risk: 'write', approval_granted: false };
-  f.journal.start(10, 'write-2');
-  await assert.rejects(createActionRunner(f.deps).run(nav, 10, true), UncertainAction);
+  f.journal.start(TASK, 'write-2');
+  await assert.rejects(createActionRunner(f.deps).run(nav, TASK, true), UncertainAction);
   assert.equal(f.counts.dispatch, 2);
 });
 

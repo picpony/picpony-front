@@ -6,11 +6,12 @@ import {
   deleteForumComment,
   deleteForumPost,
   getForumPostDetail,
-  toggleForumPostLike,
+  setForumPostLike,
   type ReplyBody,
 } from '@/lib/api/forum';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { createShareLink, trackShare } from '@/lib/api/share';
+import { createRetryKeys } from '@/lib/api/idempotency';
+import { createShareLink } from '@/lib/api/share';
 import { firstImageOf } from '@/lib/bbcode';
 import { forumTeaser } from '@/lib/forumText';
 import type { ForumPost, ForumPostDetailResponse } from '@/lib/types/forum';
@@ -24,12 +25,14 @@ import { copyText, getAssetUrl } from '@/lib/utils';
 
 export type Outcome = { ok: true } | { ok: false; message: string };
 
+/** Sets the viewer's like to `liked`. */
 export async function sendLike(
   token: string,
   postId: number,
+  want: boolean,
 ): Promise<{ ok: true; liked: boolean; count: number } | { ok: false; message: string }> {
   try {
-    const { liked, count } = await toggleForumPostLike(token, postId);
+    const { liked, count } = await setForumPostLike(token, postId, want);
     return { ok: true, liked, count };
   } catch (error) {
     return { ok: false, message: apiErrorMessage(error, '点赞失败') };
@@ -54,8 +57,11 @@ export async function removeComment(token: string, commentId: number): Promise<O
   }
 }
 
-/** A page past any thread's end, which the backend answers with the last page (measured). */
+/** A page past any thread's end, which `getForumPostDetail` answers with the last page. */
 const LAST_PAGE = 9999;
+
+/* A reply re-sent after a lost answer keeps its key, so it cannot post twice. */
+const replyKeys = createRetryKeys();
 
 /**
  * Sends a reply, then reads the thread's last page — the backend answers a page past the end with
@@ -67,9 +73,12 @@ export async function sendReply(
   threadId: string,
   body: ReplyBody,
 ): Promise<{ ok: true; last: ForumPostDetailResponse | null } | { ok: false; message: string }> {
+  const attempt = replyKeys.key(`${token}:${threadId}`, body);
   try {
-    await createForumComment(token, body);
+    await createForumComment(token, body, attempt.key);
+    attempt.settle();
   } catch (error) {
+    attempt.settle(error);
     return { ok: false, message: apiErrorMessage(error, '回复发送失败') };
   }
   try {
@@ -110,10 +119,9 @@ async function postShareLink(post: ForumPost, token: string | null): Promise<str
   return link.url;
 }
 
-async function copyLink(url: string, token: string | null): Promise<boolean> {
+async function copyLink(url: string): Promise<boolean> {
   if (!(await copyText(url))) return false;
   showToast('已复制分享链接', 'success');
-  trackShare(token);
   return true;
 }
 
@@ -124,12 +132,12 @@ async function copyLink(url: string, token: string | null): Promise<boolean> {
  */
 export async function copyPostLink(post: ForumPost, token: string | null): Promise<void> {
   const url = await postShareLink(post, token);
-  if (await copyLink(url, token)) return;
+  if (await copyLink(url)) return;
   showToast('分享链接已生成', 'info', {
     action: {
       label: '复制',
       onClick: () => {
-        void copyLink(url, token).then((copied) => {
+        void copyLink(url).then((copied) => {
           if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
         });
       },
@@ -143,7 +151,7 @@ export async function sharePostNatively(post: ForumPost, token: string | null): 
   const data: ShareData = { title: post.title, text: shareTextOf(post), url };
   const open = () =>
     navigator.share(data).then(
-      () => trackShare(token),
+      () => {},
       (error: unknown) => {
         const name = error instanceof DOMException ? error.name : '';
         /* The reader closed the sheet: nothing to say. */

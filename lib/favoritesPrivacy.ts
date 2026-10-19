@@ -11,7 +11,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import * as api from '@/lib/api/favorites';
-import { isAborted, isApiError } from '@/lib/api/errors';
+import { isAborted } from '@/lib/api/errors';
 import { LS_KEYS } from '@/lib/constants';
 import { readToken } from '@/lib/hooks';
 import { DEFAULT_PRIVACY_UNLOCK_SECONDS, parseUnlockSeconds } from '@/lib/favorites';
@@ -181,7 +181,7 @@ async function loadList(token: string) {
     publish({ status: 'open', images, refreshing: false, error: null, autoLocked: false });
   } catch (error) {
     if (!current() || isAborted(error)) return;
-    if (isApiError(error) && (error.status === 403 || /锁定|未解锁|请.*解锁|需要.*密码|密码.*过期/.test(error.serverMessage ?? ''))) {
+    if (api.isPrivacyLocked(error)) {
       lockPrivacy(token);
       return;
     }

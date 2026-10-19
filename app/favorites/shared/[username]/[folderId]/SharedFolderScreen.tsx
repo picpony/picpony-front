@@ -5,7 +5,7 @@ import { MdFolderOff, MdPersonOff, MdPhotoLibrary } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { profileFaveFolders, sharedFaveIds } from '@/lib/resources';
 import { apiErrorMessage, isApiError, isNotFound, isRetryable } from '@/lib/api/errors';
-import { FAVE_PAGE_SIZE, faveFolderHref, favoritesHref, folderLabel, MAIN_FOLDER_NAME, sharedFolderHref } from '@/lib/favorites';
+import { FAVE_PAGE_SIZE, faveFolderHref, favoritesHref, folderLabel, sharedFolderHref, type FaveOwner } from '@/lib/favorites';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useFolderPage } from '@/lib/folderTransit';
 import { useEscapeBack, useSession } from '@/lib/hooks';
@@ -36,14 +36,15 @@ function SharedSkeleton() {
 
 /**
  * Somebody's public favourite folder — what a profile's 收藏夹 tab, a folder share card and the
- * original front end's `#mode=shared_faves` links open. Anonymous: the ids come from
- * `get_shared_faves`, and the pictures a page of fifty at a time (`favePictures`), through the
- * viewer's own content settings (C11).
+ * original front end's `#mode=shared_faves` links open. Anonymous when the owner is named by id:
+ * the ids come from `get_shared_faves`, and the pictures a page of fifty at a time
+ * (`favePictures`), through the viewer's own content settings (C11). A link naming the owner by
+ * username is resolved first (`GET /users/by-username/{username}`, public).
  *
- * A folder its owner keeps private, an owner who does not exist, a folder that is not (or no
- * longer) there and a read that failed are four different answers, and each says which. The last
- * is cross-checked against the owner's public list, because `get_shared_faves` answers a folder id
- * that does not exist with an empty main folder.
+ * An owner who does not exist (404 `USER_NOT_FOUND`), a folder that is not there or not public
+ * (404 `FOLDER_NOT_FOUND`, or absent from the owner's public list — an owner who hides favourites
+ * answers an empty one) and a read that failed are different answers, and each says which. The
+ * folder's name comes from that public list (the folder read names none).
  *
  * Opened from a profile's card, the page grows out of it and Back shrinks it into it again
  * (`lib/folderTransit.ts`). The card was drawn from that same public list, which is in the cache
@@ -51,34 +52,38 @@ function SharedSkeleton() {
  * mounts, rather than from a placeholder that changed shape under the landing when the folder's
  * read came in. The count is then the read's own (the list counts a repeated id twice).
  */
-export default function SharedFolderScreen({ username, folderId }: { username: string; folderId: number }) {
+export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwner; folderId: number }) {
   const router = useRouter();
   const back = useBackOrParent('/');
   useEscapeBack(back);
   const { user } = useSession();
-  const own = typeof user?.username === 'string' && user.username === username;
-  const read = useResource(sharedFaveIds, { username, folderId });
-  const publicList = useResource(profileFaveFolders, folderId > 0 ? { username } : SKIP);
-  const route = sharedFolderHref(username, folderId);
+  const read = useResource(sharedFaveIds, { ...owner, folderId });
+  const publicList = useResource(profileFaveFolders, folderId > 0 ? owner : SKIP);
+  const username = read.data?.username ?? ('username' in owner ? owner.username : null);
+  const ownerKey = 'ownerId' in owner ? `~${owner.ownerId}` : owner.username;
+  const own = read.data
+    ? Number(user?.id) === read.data.ownerId
+    : typeof user?.username === 'string' && user.username === username;
+  const route = sharedFolderHref(owner, folderId);
   const [page, setPage] = useAddressPage(route, false);
-  const verified = folderId === 0 || publicList.data?.some((folder) => folder.id === folderId);
-  const ids = verified ? read.data?.ids : undefined;
-  const state = useFavePage({ ids, page, setPage, listKey: `fave-shared:${username}:${folderId}` });
+  const listed = folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
+  const ids = listed ? read.data?.ids : undefined;
+  const state = useFavePage({ ids, page, setPage, listKey: `fave-shared:${ownerKey}:${folderId}` });
   if (ids && page > state.totalPages) setPage(state.totalPages);
 
-  const listed = folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
   /* The folder as the public list has it — the card's own name, so the header and the card that
      opened it agree, and what the header is drawn from while the folder's read is on its way. */
   const entry = folderId > 0 ? publicList.data?.find((folder) => folder.id === folderId) : undefined;
   const seeded = read.data === undefined && !read.error && entry !== undefined;
-  const name = entry ? folderLabel(entry) : read.data?.folderName || (folderId === 0 ? MAIN_FOLDER_NAME : null);
+  const name = entry ? folderLabel(entry) : folderId === 0 ? '公开收藏' : null;
   const pageRef = useFolderPage(route);
-  useDocumentTitle(read.data && listed ? `${name ?? '收藏夹'} - ${username} 的收藏 - PicPony` : null);
+  useDocumentTitle(read.data && listed ? `${name ?? '收藏夹'} - ${username ?? '用户'} 的收藏 - PicPony` : null);
+  const folderMissing = isApiError(read.error) && read.error.code === 'FOLDER_NOT_FOUND';
 
   const pageBack = <PageBack onClick={back} />;
   const column = 'mx-auto flex w-full max-w-7xl flex-1 flex-col page-back-room-7xl';
 
-  if (read.data === undefined && !seeded) {
+  if (read.data === undefined && !seeded && !folderMissing) {
     if (!read.error) {
       return (
         <>
@@ -93,10 +98,7 @@ export default function SharedFolderScreen({ username, folderId }: { username: s
         {pageBack}
         <div className={column}>
           {isNotFound(error) ? (
-            <EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" description={`没有名为「${username}」的用户`} />
-          ) : isApiError(error) && error.kind === 'envelope' && !isRetryable(error) ? (
-            /* The owner's choice, in the backend's own words. */
-            <EmptyState fill icon={<MdFolderOff size={ICON.display} />} title="无法查看该收藏夹" description={apiErrorMessage(error)} />
+            <EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" description={username ? `没有名为「${username}」的用户` : '该用户不存在或已注销'} />
           ) : (
             <ErrorRetry
               fill
@@ -117,7 +119,7 @@ export default function SharedFolderScreen({ username, folderId }: { username: s
     ) : <SharedSkeleton />}</>;
   }
 
-  if (!listed) {
+  if (!listed || folderMissing) {
     return (
       <>
         {pageBack}
@@ -126,7 +128,7 @@ export default function SharedFolderScreen({ username, folderId }: { username: s
             fill
             icon={<MdFolderOff size={ICON.display} />}
             title="收藏夹不存在或未公开"
-            description={`${username} 没有公开该收藏夹`}
+            description={username ? `${username} 没有公开该收藏夹` : '该收藏夹不存在或未公开'}
             action={
               own ? (
                 <Button variant="tonal" onClick={() => router.push(favoritesHref(), { scroll: false })}>
@@ -148,7 +150,7 @@ export default function SharedFolderScreen({ username, folderId }: { username: s
           title={name ?? '收藏夹'}
           subtitle={
             <span className="tabular-nums">
-              {read.data?.username ?? username} 的收藏夹 · 共 {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
+              {username ?? '用户'} 的收藏夹 · 共 {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
             </span>
           }
           actions={
@@ -167,7 +169,7 @@ export default function SharedFolderScreen({ username, folderId }: { username: s
             state={state}
             page={page}
             setPage={setPage}
-            listKey={`fave-shared:${username}:${folderId}`}
+            listKey={`fave-shared:${ownerKey}:${folderId}`}
             failureTitle="收藏加载失败"
             empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="此收藏夹还没有图片" />}
           />

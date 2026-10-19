@@ -8,8 +8,7 @@ import IconButton from '@/components/IconButton';
 import { EditorPlaceholder } from '@/components/RichTextEditorShell';
 import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
-import { postComment } from '@/lib/api/picpony';
-import { readJson } from '@/lib/api/http';
+import { postComment, requestId } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { plainTextOf } from '@/lib/derpiMarkup';
 import { readCommentDraft, replyReference, writeCommentDraft } from '@/lib/imageComments';
@@ -67,13 +66,22 @@ function replyBody(text: string, replyTo: ReplyTarget | null): string {
 
 type SendOutcome = { ok: true } | { ok: false; message: string };
 
+/**
+ * The `Idempotency-Key` of a send, kept per picture and body until it lands: pressing 发送 again
+ * after a send whose answer was lost repeats *that* send, and the backend posts it once.
+ */
+const sendKeys = new Map<string, string>();
+
 /** The post itself, at module scope (the React Compiler cannot lower a `finally` in a component). */
 async function send(token: string, imageId: number, text: string, replyTo: ReplyTarget | null): Promise<SendOutcome> {
+  const body = replyBody(text, replyTo);
+  const attempt = `${imageId}\n${body}`;
+  const key = sendKeys.get(attempt) ?? requestId();
+  sendKeys.set(attempt, key);
   try {
-    const response = await postComment(token, imageId, replyBody(text, replyTo), replyReference(replyTo));
-    const data = await readJson<{ success?: unknown; message?: string; error?: string }>(response);
-    if (data.success === true) return { ok: true };
-    return { ok: false, message: data.error || data.message || '评论发送失败' };
+    await postComment(token, imageId, body, replyReference(replyTo), key);
+    sendKeys.delete(attempt);
+    return { ok: true };
   } catch (error) {
     return { ok: false, message: apiErrorMessage(error, '评论发送失败') };
   }

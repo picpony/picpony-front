@@ -24,7 +24,9 @@ import { MASCOT_SHAPE_GRID, shapeRows, type MascotShape } from '@/lib/mascot/sha
 
 const ASSET_HOST = new URL(PICPONY_API_ORIGIN).hostname;
 const IMAGE_PATH = /^\/[\w\-./%]+\.(?:png|webp|gif|jpe?g|avif)$/i;
-/* An upload is a few megabytes at most (the current artwork is 2.1MB); this bounds a stray one. */
+/** The backend's own mascot uploads: `/api/v1/mascots/images/{64 hex}` (`mascot::read_image`), no extension. */
+const UPLOAD_PATH = /^\/api\/v1\/mascots\/images\/[0-9a-f]{64}$/;
+/* An upload is a few megabytes at most (the backend caps it at 5MiB); this bounds a stray one. */
 const MAX_BYTES = 12 * 1024 * 1024;
 const MAX_PIXELS = 40_000_000;
 const TIMEOUT_MS = 15_000;
@@ -33,13 +35,22 @@ function target(raw: string | null): URL | null {
   if (!raw || raw.length > 512) return null;
   let url: URL;
   try {
-    url = new URL(raw);
+    /* A backend upload arrives as the same-origin path the page shows (`getAssetUrl`); it is
+       pinned to the asset host here and read from the backend itself (`source`). */
+    url = new URL(raw, PICPONY_API_ORIGIN);
   } catch {
     return null;
   }
   if (url.protocol !== 'https:' || url.hostname !== ASSET_HOST || url.port !== '' || url.username || url.password) return null;
-  if (url.search || url.hash || !IMAGE_PATH.test(url.pathname)) return null;
+  if (url.search || url.hash || !(IMAGE_PATH.test(url.pathname) || UPLOAD_PATH.test(url.pathname))) return null;
   return url;
+}
+
+/** Where the bytes are read from: an upload straight from the backend (the browser reaches the
+ *  same path through this app's `/api/v1` proxy), anything else from the asset host as named. */
+function source(href: string): string {
+  const url = new URL(href);
+  return UPLOAD_PATH.test(url.pathname) ? `${upstreamOrigin()}${url.pathname}` : href;
 }
 
 async function readImage(url: string): Promise<Uint8Array | null> {
@@ -111,7 +122,7 @@ const shapeOf = createServerMemo<[string], MascotShape>({
     if (reading >= MAX_CONCURRENT_READS) return null;
     reading += 1;
     try {
-      const bytes = await readImage(src);
+      const bytes = await readImage(source(src));
       return bytes ? await silhouette(bytes) : null;
     } catch {
       return null;
@@ -122,38 +133,23 @@ const shapeOf = createServerMemo<[string], MascotShape>({
 });
 
 /**
- * The artworks the site is configured with (review P1-F8): the public `get_mascot_config` names
- * every mascot, and each one's image comes from asking for it by id. Only those addresses are read,
- * so the endpoint stops being a decoder for any picture on the asset host.
+ * The artworks the site is configured with (review P1-F8): the public `GET /api/v1/mascots` lists
+ * every active mascot with its `image_url`. Only those addresses are read, so the endpoint stops
+ * being a decoder for any picture on the asset host.
  *
- * `null` when the configuration cannot be read — the route then falls back to the host-pinned rule
- * above rather than taking the figure's shape away with the backend. A configured mascot that is
- * newer than the memo (an administrator just uploaded it) is found by one forced re-read, at most
- * once a minute, so a spray of misses cannot turn into a spray of configuration reads.
+ * `null` when the list cannot be read — the route then falls back to the host-pinned rule above
+ * rather than taking the figure's shape away with the backend. A configured mascot that is newer
+ * than the memo (an administrator just uploaded it) is found by one forced re-read, at most once
+ * a minute, so a spray of misses cannot turn into a spray of list reads.
  */
-const MASCOT_LIST_MAX = 20;
 const CONFIG_TIMEOUT_MS = 8_000;
 
-function assetHref(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.trim()) return null;
+function assetHref(value: string): string | null {
   const raw = value.trim();
+  if (!raw) return null;
   try {
     const url = /^https?:\/\//.test(raw) ? new URL(raw) : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
     return url.href;
-  } catch {
-    return null;
-  }
-}
-
-async function readMascotConfig(selected?: string): Promise<Record<string, unknown> | null> {
-  const address = new URL('/api.php', upstreamOrigin());
-  address.searchParams.set('action', 'get_mascot_config');
-  if (selected) address.searchParams.set('selected_id', selected);
-  try {
-    const response = await fetch(address, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS) });
-    if (!response.ok) return null;
-    const data: unknown = await response.json();
-    return data && typeof data === 'object' && (data as { success?: unknown }).success === true ? data as Record<string, unknown> : null;
   } catch {
     return null;
   }
@@ -163,21 +159,19 @@ const configuredImages = createServerMemo<[], Set<string>>({
   ttlMs: 10 * 60 * 1000,
   keyOf: () => 'all',
   load: async () => {
-    const first = await readMascotConfig();
-    if (!first) return null;
-    const images = new Set<string>();
-    const own = assetHref(first.mascot_image);
-    if (own) images.add(own);
-    const ids = (Array.isArray(first.mascots) ? first.mascots : [])
-      .map((row) => (row && typeof row === 'object' ? Number((row as { id?: unknown }).id) : NaN))
-      .filter((id) => Number.isSafeInteger(id) && id > 0 && String(id) !== String(first.id))
-      .slice(0, MASCOT_LIST_MAX);
-    const others = await Promise.all(ids.map((id) => readMascotConfig(String(id))));
-    for (const other of others) {
-      const href = other && assetHref(other.mascot_image);
-      if (href) images.add(href);
+    try {
+      const response = await fetch(`${upstreamOrigin()}/api/v1/mascots`, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS) });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { mascots: { image_url: string }[] };
+      const images = new Set<string>();
+      for (const row of data.mascots) {
+        const href = assetHref(row.image_url);
+        if (href) images.add(href);
+      }
+      return images;
+    } catch {
+      return null;
     }
-    return images;
   },
 });
 

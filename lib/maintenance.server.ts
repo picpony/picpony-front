@@ -1,21 +1,20 @@
 import { cache } from 'react';
 import { cookies } from 'next/headers';
-import { PICPONY_API_BASE, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
+import { SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import { cacheSeconds } from '@/lib/serverMemo';
-import type { SiteStatusResponse } from '@/lib/types/site';
+import type { MaintenanceStatus } from '@/lib/types/site';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * Whether the site is in maintenance, read on the server so a visitor's first byte is the
  * maintenance screen rather than an app that then fails every request (`app/layout.tsx`).
  *
- * **The same document, the same request.** It is the status document `lib/route.server.ts`
- * reads for the route policy, at the same URL and with the same request options, so the two
- * reads share one Data Cache entry: Next keys that cache on the URL and the request options,
- * not on the `next` or `signal` fields, and serialises concurrent misses on one key. With
- * caching switched off (the audits' TTL override) they are two requests.
+ * **What it reads.** The public `GET /api/v1/maintenance-status` (`site::public_maintenance`),
+ * which answers guests and this session-less read alike with `{maintenance_mode,
+ * maintenance_message}` — the message is `''` whenever maintenance is off. The route policy is a
+ * separate document (`lib/route.server.ts`); the two do not share a cache entry.
  *
- * **Fails open.** A timeout, an HTML error page or a missing field all mean "not in
+ * **Fails open.** A refusal, a timeout or an unreadable body all mean "not in
  * maintenance": a status read that is slow or broken must never lock every visitor out. The
  * bound, reuse window and invalidation tag are the route policy's own. An accepted local
  * admin write expires that tag before the next document reads it.
@@ -31,7 +30,7 @@ const OPEN: MaintenanceState = { active: false, message: '' };
 
 const SERVER_STATUS_TIMEOUT_MS = 1500;
 const SERVER_STATUS_REVALIDATE_S = 30;
-/** The message is typed into an admin field; a runaway one is cut rather than trusted. */
+/** Bounds the development preview cookie's message (the backend's own cap is the same). */
 const MAX_MESSAGE_LENGTH = 500;
 
 const UPSTREAM_ORIGIN = upstreamOrigin();
@@ -57,15 +56,15 @@ export const readMaintenance = cache(async (): Promise<MaintenanceState> => {
     }
   }
   try {
-    const res = await fetch(`${UPSTREAM_ORIGIN}${PICPONY_API_BASE}?action=get_maintenance_status`, {
+    const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/maintenance-status`, {
       next: { revalidate: cacheSeconds(SERVER_STATUS_REVALIDATE_S), tags: [SITE_STATUS_CACHE_TAG] },
       signal: AbortSignal.timeout(SERVER_STATUS_TIMEOUT_MS),
     });
     if (!res.ok) return OPEN;
-    const data = (await res.json()) as SiteStatusResponse;
-    if (data?.success !== true || data.maintenance_mode !== true) return OPEN;
-    const message = typeof data.maintenance_message === 'string' ? data.maintenance_message.trim() : '';
-    return { active: true, message: message.slice(0, MAX_MESSAGE_LENGTH) };
+    const data = (await res.json()) as MaintenanceStatus;
+    if (!data.maintenance_mode) return OPEN;
+    /* The backend caps the message at 500 characters and rejects control characters. */
+    return { active: true, message: data.maintenance_message.trim() };
   } catch {
     return OPEN;
   }

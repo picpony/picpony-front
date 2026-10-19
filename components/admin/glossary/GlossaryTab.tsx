@@ -36,7 +36,6 @@ import { SKIP, useResource } from '@/lib/resource';
 import { tagEntry } from '@/lib/resources';
 import { readToken } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
-import { requireAdminSuccess } from '@/lib/adminMutations';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { deleteDictionaryTag, saveDictionaryTag, type DictionaryStats } from '@/lib/api/picpony';
 import { formatCount } from '@/lib/format';
@@ -57,10 +56,10 @@ import {
   exportText,
   isUntranslated,
   pageSizeOf,
-  reportedCount,
   sameTag,
   savedTag,
   tagSavePayload,
+  type TagSave,
   translatedShare,
   type DerpiTagRow,
   type GlossaryTag,
@@ -77,7 +76,6 @@ import FeedbackDialog from './FeedbackDialog';
 import HistoryDialog from './HistoryDialog';
 
 const EMPTY: GlossaryTag[] = [];
-type SaveBody = Parameters<typeof saveDictionaryTag>[1];
 
 const PAGE_SIZE_OPTIONS = PAGE_SIZES.map((size) => ({ value: String(size), label: `每页 ${size} 条` }));
 
@@ -198,13 +196,11 @@ ${duplicatePage.listKey}` : pageKey;
    */
   const completeWorkOrder = (en: string) => {
     const order = workOrder;
-    if (!order || !sameTag(order.tag_name, en)) return;
+    if (!order || !sameTag(order.tag, en)) return;
     setWorkOrder(null);
     void (async () => {
       try {
-        await requireAdminSuccess(
-          await adminApi.handleTagFeedback(token, order.id, 'processed', '已采纳并写入词库', order.status),
-        );
+        await adminApi.handleTagFeedback(token, order.id, 'processed');
         if (readToken() === token) tagFeedback.invalidate();
       } catch {
         if (readToken() === token) showToast('标签已保存，但该反馈仍是待处理', 'warning');
@@ -213,11 +209,11 @@ ${duplicatePage.listKey}` : pageKey;
   };
 
   // ---- Writes ----
-  const saveEdit = (tag: GlossaryTag, payload: Record<string, unknown>) => {
+  const saveEdit = (tag: GlossaryTag, payload: TagSave) => {
     const listArgs = args;
     const inDuplicates = duplicates;
     void saveMutation.run(
-      () => saveDictionaryTag(token, payload as SaveBody),
+      () => saveDictionaryTag(token, payload),
       () => {
         showToast(`已保存标签「${tag.en}」`, 'success');
         completeWorkOrder(tag.en);
@@ -226,18 +222,19 @@ ${duplicatePage.listKey}` : pageKey;
       '保存失败',
       {
         key: tag.id,
-        onCommitted: () => {
+        onCommitted: (saved) => {
+          const revision = typeof saved.revision === 'number' ? saved.revision : undefined;
           tagEntry.invalidate();
           /* The row shows what was saved at once; the list is read again once the editor has
              closed, so a row that no longer matches the filter does not vanish from under it. */
           if (inDuplicates) {
             if (duplicateTags.peek(token).data) {
-              duplicateTags.write(token, (previous) => (previous ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload) : row)));
+              duplicateTags.write(token, (previous) => (previous ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)));
             }
           } else if (dictionaryPage.peek(listArgs).data) {
             dictionaryPage.write(listArgs, (previous) => ({
               ...(previous as NonNullable<typeof previous>),
-              tags: (previous?.tags ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload) : row)),
+              tags: (previous?.tags ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)),
             }));
           }
           refreshAfterClose.current = true;
@@ -258,7 +255,7 @@ ${duplicatePage.listKey}` : pageKey;
           return null;
         }
         if (!isCurrent()) return null;
-        return saveDictionaryTag(token, payload as SaveBody);
+        return saveDictionaryTag(token, payload);
       },
       () => {
         showToast(`已添加标签「${en}」`, 'success');
@@ -306,12 +303,7 @@ ${duplicatePage.listKey}` : pageKey;
     confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？${listed}。${note}此操作无法恢复。`, () =>
       void bulkMutation.run(
         () => adminApi.batchDeleteDictionaryTags(token, ids),
-        /* A count the backend did not send is not 0 (G4-015's rule, in a toast): the deletion is
-           known, its size is not, so the sentence says only what is known. */
-        (data) => {
-          const deleted = reportedCount(data.deleted_count);
-          showToast(deleted === null ? '已删除所选标签' : `已删除 ${deleted} 个标签`, 'success');
-        },
+        (data) => showToast(`已删除 ${data.deleted_count} 个标签`, 'success'),
         '批量删除失败',
         {
           key: 'delete',
@@ -332,13 +324,9 @@ ${duplicatePage.listKey}` : pageKey;
         void bulkMutation.run(
           () => adminApi.batchImportDictionaryTags(token, tasks),
           (data) => {
-            /* Each count is said only when it arrived — never as an invented 0. An absent `failed` is
-               "none reported", the reading `importStatus` gives `failed_count`, so the dialog still
-               closes on a success that reported no failures. */
-            const created = reportedCount(data.created);
-            const skipped = reportedCount(data.skipped);
-            const failed = reportedCount(data.failed);
-            const parts = [created === null ? '已完成导入' : `已导入 ${created} 个标签`, skipped ? `跳过 ${skipped} 个已有的标签` : null, failed ? `${failed} 个导入失败` : null];
+            /* Each tag is its own create, so all three counts are known. */
+            const { created, skipped, failed } = data;
+            const parts = [`已导入 ${created} 个标签`, skipped ? `跳过 ${skipped} 个已有的标签` : null, failed ? `${failed} 个导入失败` : null];
             showToast(parts.filter(Boolean).join('，'), failed ? 'warning' : 'success');
             if (!failed) setImportDialog((current) => ({ ...current, open: false }));
           },
@@ -346,8 +334,7 @@ ${duplicatePage.listKey}` : pageKey;
           {
             key: 'import',
             onCommitted: (data) => {
-              /* Unless the backend said none were created: an unknown count may include some. */
-              if (reportedCount(data.created) !== 0) tagEntry.invalidate();
+              if (data.created !== 0) tagEntry.invalidate();
               refreshLists();
             },
           },
@@ -356,11 +343,10 @@ ${duplicatePage.listKey}` : pageKey;
     );
 
   const syncFinished = (result: SyncResult, visible = true) => {
-    if (result.created > 0 || result.uncounted) tagEntry.invalidate();
+    if (result.created > 0) tagEntry.invalidate();
     refreshLists();
     if (!visible) return;
-    /* 新增 3 个, or 新增至少 3 个 when a page did not report its counts — no space between two Han runs. */
-    const amount = (n: number) => (result.uncounted ? `至少 ${n} 个` : ` ${n} 个`);
+    const amount = (n: number) => ` ${n} 个`;
     const tally = [
       `新增${amount(result.created)}`,
       `跳过${amount(result.skipped)}`,
@@ -396,7 +382,7 @@ ${duplicatePage.listKey}` : pageKey;
   };
 
   const handleFeedback = (feedback: Feedback) => {
-    const tag = feedback.tag_name.trim();
+    const tag = feedback.tag.trim();
     setFeedbackOpen(false);
     setWorkOrder(feedback);
     setDuplicates(false);
@@ -444,7 +430,7 @@ ${duplicatePage.listKey}` : pageKey;
         tag={current}
         closing={editing.closing}
         saving={saveMutation.pendingKeys.has(tag.id)}
-        workOrder={workOrder && sameTag(workOrder.tag_name, current.en) ? workOrder : null}
+        workOrder={workOrder && sameTag(workOrder.tag, current.en) ? workOrder : null}
         onSave={(payload) => saveEdit(current, payload)}
         onCancel={closeEditor}
         onExitComplete={() => finishClose(tag.id)}
@@ -769,7 +755,7 @@ ${duplicatePage.listKey}` : pageKey;
         open={create.open}
         prefill={create.prefill}
         saving={saveMutation.pendingKeys.has('create')}
-        workOrder={workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag_name, create.prefill.name) ? workOrder : null}
+        workOrder={workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag, create.prefill.name) ? workOrder : null}
         duplicate={duplicate}
         onClose={() => {
           if (saveMutation.isPending('create')) return;

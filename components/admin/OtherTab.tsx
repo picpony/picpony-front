@@ -19,18 +19,12 @@ import * as adminApi from '@/lib/api/admin';
 import { collectSiteStats } from '@/lib/api/adminSiteTools';
 import SectionHeader from './SectionHeader';
 import RefreshButton from './RefreshButton';
-import { adminData, defineAdminQuery, retryError, useAdminQuery } from './queries';
-import { siteStatusQuery as statusQuery } from './sharedQueries';
+import { defineAdminQuery, retryError, useAdminQuery } from './queries';
+import { siteStatusQuery as statusQuery, translationQuery } from './sharedQueries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 
-/** The statistics as the wire carries them: each figure a number, a numeric string, or absent. */
-interface SiteStats {
-  images?: number | string | null;
-  tags?: number | string | null;
-  comments?: number | string | null;
-  updated_at?: string | null;
-}
+type SiteStats = adminApi.SiteStats;
 
 const STAT_FIELDS = [
   { key: 'images', label: '图片总数' },
@@ -38,21 +32,7 @@ const STAT_FIELDS = [
   { key: 'comments', label: '评论总数' },
 ] as const;
 
-const statsQuery = defineAdminQuery<SiteStats>('site-stats', async (_token, signal) => {
-  const data = await adminApi.getSiteStats(signal);
-  adminData(data, undefined, '全站统计');
-  if (!data.stats || typeof data.stats !== 'object') throw new Error('全站统计加载失败');
-  return data.stats as SiteStats;
-});
-
-/**
- * A statistic as the card prints it, or `—` when the document did not carry it — never a 0
- * (G4-015, the rule `figureOf` in ./figures states for the console's tables).
- */
-function statText(value: unknown): string {
-  const figure = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
-  return Number.isFinite(figure) ? formatCount(figure) : '—';
-}
+const statsQuery = defineAdminQuery<SiteStats>('site-stats', (_token, signal) => adminApi.getSiteStats(signal));
 
 /** The longest notice the maintenance screen shows; the server cuts anything past it. */
 const MESSAGE_MAX = 500;
@@ -96,6 +76,11 @@ export default function OtherTab({ token }: AdminPanelProps) {
   const statistics = useAdminQuery(statsQuery, token);
   const maintenanceMutation = useAdminMutation(token);
   const translateMutation = useAdminMutation(token);
+  /* The switch and the queue come from the console's `GET /admin/translation`; an accepted save
+     corrects both it and the public switch the picture detail reads (`translateSwitch`). */
+  const translation = useAdminQuery(translationQuery, token);
+  const translateEnabled = translation.data?.translate_enabled ?? null;
+  const queue = translation.data?.queue;
   const syncMutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState<string | null>(null);
@@ -140,16 +125,14 @@ export default function OtherTab({ token }: AdminPanelProps) {
   };
 
   const toggleTranslate = (enabled: boolean) => {
-    if (!current) return;
     void translateMutation.run(
       () => adminApi.adminToggleTranslate(token, { translate_enabled: enabled }),
       () => showToast(enabled ? '已开启图片翻译' : '已关闭图片翻译', 'success'),
       '图片翻译设置保存失败',
       {
         onCommitted: () => {
+          if (translationQuery.peek(token).data) translationQuery.write(token, (previous) => ({ ...previous!, translate_enabled: enabled }));
           translateSwitch.write({}, enabled);
-          statusQuery.write(token, (previous) => ({ ...(previous ?? current), translateEnabled: enabled }));
-          status.refresh();
         },
       },
     );
@@ -213,10 +196,10 @@ export default function OtherTab({ token }: AdminPanelProps) {
           )}
         </Card>
         <Card variant="filled">
-          {current ? (
+          {translateEnabled !== null ? (
             <ToggleSwitch
               layout="row"
-              checked={current.translateEnabled}
+              checked={translateEnabled}
               onChange={toggleTranslate}
               disabled={translateMutation.busy}
               label={
@@ -226,8 +209,15 @@ export default function OtherTab({ token }: AdminPanelProps) {
               }
               description={TRANSLATE_COPY}
             />
+          ) : translation.error ? (
+            <ErrorRetry size="inline" {...retryError('图片翻译状态加载失败', translation.error)} onRetry={translation.retryable ? translation.refresh : undefined} />
           ) : (
             <RowSkeleton label="图片翻译" description={TRANSLATE_COPY} />
+          )}
+          {queue && (
+            <p className="mt-3 text-body-s text-on-surface-variant tabular-nums">
+              {`翻译队列：排队 ${formatCount(queue.pending)} · 翻译中 ${formatCount(queue.translating)} · 已完成 ${formatCount(queue.completed)} · 失败 ${formatCount(queue.failed)}`}
+            </p>
           )}
         </Card>
       </section>
@@ -250,7 +240,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
                 <Card key={key} variant="filled" padding="sm" className="space-y-1">
                   <dt className="text-body-s text-on-surface-variant">{label}</dt>
                   <dd className="text-title-l tabular-nums text-on-surface">
-                    {stats ? statText(stats[key]) : <Skeleton className="h-8 w-24" />}
+                    {stats ? formatCount(stats[key]) : <Skeleton className="h-8 w-24" />}
                   </dd>
                 </Card>
               ))}

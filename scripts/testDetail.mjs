@@ -82,41 +82,54 @@ test('a translation is the backend\'s words, and a failure is its sentence rathe
   const sent = [];
   globalThis.fetch = async (url, init) => {
     sent.push([String(url), init?.method, String(init?.body ?? '')]);
-    return Response.json({ success: true, translation: '  译文  ' });
+    return Response.json({ translation: '译文', detected_language: 'en', target_language: 'zh-Hans', provider: 'azure' });
   };
-  assert.equal(await translate.translateText('Some words'), '译文');
-  assert.match(sent[0][0], /action=translate/);
+  assert.equal(await translate.translateText('  Some words '), '译文');
+  assert.equal(sent[0][0], '/api/v1/translations');
   assert.equal(sent[0][1], 'POST');
-  assert.equal(sent[0][2], 'text=Some+words');
-  globalThis.fetch = async () => Response.json({ success: false, translation: '翻译服务繁忙' });
-  await assert.rejects(translate.translateText('Some words'), (error) => error.message.includes('翻译服务繁忙'));
-  globalThis.fetch = async () => Response.json({ success: true, translation: '' });
-  await assert.rejects(translate.translateText('Some words'), /没有返回译文/);
+  assert.deepEqual(JSON.parse(sent[0][2]), { text: 'Some words' });
+  globalThis.fetch = async () =>
+    Response.json({ error: { code: 'TRANSLATION_NOT_CONFIGURED', message: '文本翻译服务未开启或尚未配置' } }, { status: 503 });
+  await assert.rejects(translate.translateText('Some words'), (error) =>
+    error.code === 'TRANSLATION_NOT_CONFIGURED' && error.message.includes('文本翻译服务未开启'));
   await assert.rejects(translate.translateText('   '), /没有可以翻译的内容/);
   globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
 });
 
 test('the image translation job reads the queue, the finished picture and the service\'s own failure', async () => {
   const answers = [
-    { success: true, status: 'pending', queue_ahead: 3 },
-    { success: true, status: 'translating' },
-    { success: true, status: 'completed', translated_url: '/translated/abc.png' },
-    { success: true, status: 'failed', error_message: '图片过大' },
+    { status: 'pending', translated_url: null, error_message: null, queue_ahead: 3, task_id: 9 },
+    { status: 'translating', translated_url: null, error_message: null, queue_ahead: 0 },
+    { status: 'completed', translated_url: '/api/v1/translation/files/abc.png', error_message: null, queue_ahead: 0 },
+    { status: 'failed', translated_url: null, error_message: '图片过大', queue_ahead: 0 },
+    { status: 'not_found' },
   ];
-  const urls = [];
-  globalThis.fetch = async (url) => {
-    urls.push(String(url));
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push([String(url), init?.method, init?.body]);
     return Response.json(answers.shift());
   };
   const source = 'https://derpicdn.net/img/view/2026/1/1/1.png';
-  assert.deepEqual(await translate.requestImageTranslation(source), { state: 'pending', translatedUrl: null, queueAhead: 3, message: undefined });
+  assert.deepEqual(await translate.requestImageTranslation(source), { state: 'pending', translatedUrl: null, queueAhead: 3 });
   assert.equal((await translate.pollImageTranslation(source)).state, 'translating');
   const done = await translate.pollImageTranslation(source);
   assert.equal(done.state, 'completed');
-  assert.match(done.translatedUrl, /^https?:\/\/.+\/translated\/abc\.png$/);
+  assert.equal(done.translatedUrl, '/api/v1/translation/files/abc.png', 'served through the same-origin proxy');
   assert.deepEqual(await translate.pollImageTranslation(source), { state: 'failed', translatedUrl: null, queueAhead: 0, message: '图片过大' });
-  /* The raw URL is the service's cache key: sent as is, on every line. */
-  assert.ok(urls.every((url) => new URL(url, 'http://localhost').searchParams.get('image') === source));
+  assert.equal((await translate.pollImageTranslation(source)).state, 'failed', 'a forgotten job asks to be requested again');
+  /* The raw URL is the service's cache key: sent as is, on every call. */
+  assert.equal(calls[0][1], 'POST');
+  assert.deepEqual(JSON.parse(calls[0][2]), { image: source });
+  assert.ok(calls.slice(1).every(([url]) => new URL(url, 'http://localhost').searchParams.get('image') === source));
+
+  globalThis.fetch = async () => Response.json({ error: { code: 'IMAGE_TRANSLATION_DISABLED', message: '图片翻译功能已关闭' } }, { status: 503 });
+  await assert.rejects(translate.requestImageTranslation(source), (error) =>
+    error.code === 'IMAGE_TRANSLATION_DISABLED' && error.message.includes('图片翻译功能已关闭') && error.retryable === false);
+  globalThis.fetch = async () => Response.json({ error: { code: 'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE', message: 'Lens 图片翻译线路尚未迁移' } }, { status: 503 });
+  await assert.rejects(translate.requestImageTranslation(source), (error) =>
+    error.code === 'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE' && error.retryable === false);
+  globalThis.fetch = async () => Response.json({ text_translation_available: false, text_target_language: 'zh-Hans', translate_enabled: false, image_translation_provider: null });
+  assert.equal(await translate.readTranslateEnabled(), false);
   globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
 });
 

@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { MdAdd, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Checkbox from '@/components/Checkbox';
 import DataTable from '@/components/DataTable';
+import IconButton from '@/components/IconButton';
 import SectionHeading from '@/components/SectionHeading';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
-import { assistantFields, assistantPayload, fieldsPayload, quotaFields, GATEWAY, type Values } from '@/lib/adminSiteTools/model';
+import { formatDateTime } from '@/lib/format';
+import { fieldsPayload, providerFields, providerPayload, providerValues, quotaFields, GATEWAY, type Values } from '@/lib/adminSiteTools/model';
 import * as api from '@/lib/api/adminSiteTools';
 import { assistantQuota } from '@/lib/assistant/queries';
 import { AdminForm, AdminNote, FormActions } from '../AdminForm';
@@ -20,110 +23,124 @@ import type { AdminPanelProps } from '../registry';
 import { ConfigEditor, ReadState, protectedPanel, SettingsFields, fieldErrors } from './common';
 import { assistantQuery, quotaQuery } from './queries';
 
-function Provider({ token }: { token: string }) {
-  const read = useAdminQuery(assistantQuery, token);
-  /* `savedFrom` is `ConfigEditor`'s rule (review P6-O4): a draft just saved stays on screen while
-     the read is still the one from before the save — clearing it showed the old model until the
-     re-read landed — and gives way as soon as a new read arrives. */
-  const [draft, setDraftState] = useState<{ values: Values; savedFrom?: Values } | null>(null);
-  const setDraft = (next: Values | null) => setDraftState(next ? { values: next } : null);
+type Config = Awaited<ReturnType<typeof api.readAssistantConfig>>;
+
+/**
+ * One provider's form. Saving sends the whole configuration under the list's revision; the answer
+ * is the whole list again, which replaces the read. Models are discovered and benchmarked against
+ * the **saved** address and key only — the backend takes no URL or key on a probe.
+ */
+function ProviderEditor({ token, config, provider, onDone }: { token: string; config: Config; provider: api.Provider | null; onDone: () => void }) {
+  const [values, setValues] = useState<Values>(() => providerValues(provider));
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [models, setModels] = useState<api.ModelList | null>(null);
   const [notice, setNotice] = useState('');
-  const save = useAdminMutation(token), list = useAdminMutation(token), discover = useAdminMutation(token), test = useAdminMutation(token);
+  const save = useAdminMutation(token), probe = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
-  const values = draft && (!draft.savedFrom || !read.data || draft.savedFrom === read.data.values) ? draft.values : read.data?.values;
-  const catalog = models ?? read.data;
-  const candidates = Array.isArray(values?.model_candidates) ? values.model_candidates : [];
-  const sameProvider = Boolean(values && read.data && String(values.base_url).replace(/\/+$/, '') === String(read.data.values.base_url).replace(/\/+$/, '') && String(values.models_url).replace(/\/+$/, '') === String(read.data.values.models_url).replace(/\/+$/, ''));
-  const busy = save.busy || list.busy || discover.busy || test.busy;
-  const modelRows = usePagedRows((catalog?.catalog ?? []).map((name) => ({ name, result: catalog?.benchmarks[name] })), catalog, 20);
-  const validate = () => {
-    if (!values) return false;
-    try { assistantPayload(values); setErrors({}); return true; }
-    catch (error) { setErrors(fieldErrors(error)); return false; }
-  };
-  const change = (next: Values) => {
-    if (!values) return;
-    if (next.base_url !== values.base_url || next.models_url !== values.models_url) {
-      setModels({ catalog: [], candidates: [], benchmarks: {}, model: '' });
-      next = { ...next, model_candidates: [] };
-    }
-    setDraft(next); setErrors({}); setNotice('');
-  };
-  const saveConfig = () => {
-    if (busy || !values || !validate()) return;
-    const snapshot = { ...values };
-    confirmThen('确认保存助手配置', `确定要保存彩彩 AI 的模型配置吗？${values.clear_key ? '已保存的助手密钥将被清除。' : '之后的对话将使用新配置。'}`, () => void save.run(
-      () => api.saveAssistantConfig(token, snapshot), () => { setDraftState({ values: { ...snapshot, api_key: '', clear_key: false }, savedFrom: read.data?.values }); setModels(null); setNotice(''); showToast('已保存助手配置', 'success'); }, '助手配置保存失败', { onCommitted: () => { assistantQuery.invalidate(); assistantQuota.invalidate({ token }); } },
+  const busy = save.busy || probe.busy;
+  const candidates = Array.isArray(values.model_candidates) ? values.model_candidates : [];
+  /* The saved row's catalogue and results (the list is re-read after every probe). */
+  const catalog = provider ? provider.model_catalog : [];
+  const modelRows = usePagedRows(catalog.map((name) => ({ name, result: provider?.benchmarks[name] })), provider?.id ?? 'new', 20);
+  const unsaved = !provider || values.base_url !== provider.base_url || values.models_url !== provider.models_url || Boolean(values.api_key) || values.clear_key === true;
+  const change = (next: Values) => { setValues(next); setErrors({}); setNotice(''); };
+  const submit = () => {
+    if (busy) return;
+    let draft: ReturnType<typeof providerPayload>;
+    try { draft = providerPayload(values); setErrors({}); } catch (error) { setErrors(fieldErrors(error)); return; }
+    confirmThen('确认保存模型配置', `确定要保存「${draft.name}」吗？${draft.clear_key ? '已保存的密钥将被清除。' : draft.is_primary ? '它将成为主模型，原主模型改为备用。' : ''}`, () => void save.run(
+      () => api.saveAssistantProvider(token, config.revision, draft, provider?.id),
+      () => { showToast('已保存模型配置', 'success'); onDone(); },
+      '模型配置保存失败',
+      { onCommitted: (d) => { assistantQuery.write(token, d.config); assistantQuota.invalidate({ token }); } },
     ));
   };
-  const fetchModels = () => {
-    if (busy || !sameProvider || !read.data?.hasKey || values?.api_key || values?.clear_key) return;
-    void list.run(() => api.listAssistantModels(token), (d) => {
-      const next = api.modelList(d); setModels(next);
-      setDraft({ ...values!, model_candidates: next.candidates }); setNotice(`已获取 ${next.catalog.length} 个模型`);
-    }, '模型列表获取失败');
+  const run = (kind: 'discover' | 'benchmark', model?: string) => {
+    if (busy || !provider) return;
+    void probe.run(
+      () => api.probeProvider(token, provider.id, config.revision, kind, model),
+      (d) => setNotice(d.ok
+        ? kind === 'discover' ? `已获取 ${d.result.models?.length ?? 0} 个模型` : `${model} 可用，耗时 ${d.result.latency_ms} 毫秒`
+        : `${kind === 'discover' ? '获取模型列表' : `测速 ${model}`}失败：${d.failure}`),
+      kind === 'discover' ? '模型列表获取失败' : '模型测速失败',
+      /* Every finished probe changes the global revision; the next one names the new list's. */
+      { key: model ?? kind, onCommitted: () => assistantQuery.invalidate(token) },
+    );
   };
-  const benchmark = () => {
-    if (busy || !values || !validate()) return;
-    const snapshot = { ...values, clear_key: false };
-    confirmThen('确认获取模型并测速', '确定要按当前填写的配置获取模型并逐个测速吗？该操作可能保存配置、发送多次模型请求并消耗服务额度。', () => void discover.run(
-      () => api.discoverAssistantModels(token, snapshot), (d) => {
-        const next = api.modelList(d); setModels(next);
-        setDraft({ ...snapshot, model: next.model, model_candidates: next.candidates, api_key: '' });
-        setNotice(`已获取 ${next.catalog.length} 个模型，其中 ${Object.values(next.benchmarks).filter((r) => r.ok).length} 个可用`);
-      }, '模型测速失败', { onCommitted: () => { assistantQuery.invalidate(); assistantQuota.invalidate({ token }); } },
-    ));
-  };
-  const preset = () => {
-    if (!values || busy) return;
-    const same = values.base_url === GATEWAY && values.models_url === '';
-    change({ ...values, name: '绘云彩彩中转站', base_url: GATEWAY, models_url: '', ...(same ? {} : { model: '', model_candidates: [] }) });
-    setNotice('已填入中转站地址，请使用 picpony- 开头的客户端密钥，保存后再获取模型列表');
-  };
-  return <ReadState title="助手模型加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
-    {values && <AdminForm aria-label="助手模型配置" onSubmit={saveConfig}>
-      <SectionHeading as="h3">助手模型</SectionHeading>
-      <AdminNote>{read.data?.hasKey ? '已保存助手密钥，留空即可保留。' : '尚未保存助手密钥。'}测试连接和只获取模型列表使用已保存的配置。</AdminNote>
-      <Button type="button" variant="tonal" onClick={preset} disabled={busy}>使用绘云彩彩中转站</Button>
-      <SettingsFields fields={assistantFields} values={values} onChange={change} busy={busy} errors={errors} />
+  const preset = () => change({ ...values, name: values.name || '绘云彩彩中转站', base_url: GATEWAY, models_url: '' });
+  return <AdminForm aria-label={provider ? `编辑模型配置 ${provider.name}` : '添加模型配置'} onSubmit={submit}>
+    <SectionHeading as="h3">{provider ? `编辑 · ${provider.name}` : '添加模型配置'}</SectionHeading>
+    <AdminNote>{provider?.has_key ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}` : '尚未保存密钥。'}</AdminNote>
+    <Button type="button" variant="tonal" onClick={preset} disabled={busy}>使用绘云彩彩中转站</Button>
+    <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
+    {provider && <>
       <SectionHeading as="h3">候选模型</SectionHeading>
-      <AdminNote>选择后，只在所选模型中使用延迟较低的模型；清空选择会在全部可用模型中自动选择。修改候选后请保存配置。</AdminNote>
+      <AdminNote>自动选择时，只在勾选的候选中使用测速延迟最低的模型；不勾选则在全部测速成功的模型中选择。修改后请保存配置。获取与测速使用已保存的地址和密钥。</AdminNote>
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="tonal" loading={list.busy} disabled={!sameProvider || !read.data?.hasKey || Boolean(values.api_key) || values.clear_key === true || save.busy || discover.busy || test.busy} onClick={fetchModels}>只获取模型列表</Button>
-        <Button type="button" variant="tonal" loading={discover.busy} disabled={save.busy || list.busy || test.busy || values.clear_key === true} onClick={benchmark}>获取列表并测速</Button>
+        <Button type="button" variant="tonal" loading={probe.pendingKeys.has('discover')} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认获取模型列表', '确定要使用已保存的地址与密钥获取模型列表吗？', () => run('discover'))}>获取模型列表</Button>
         <Button type="button" variant="text" disabled={busy || !candidates.length} onClick={() => change({ ...values, model_candidates: [] })}>清空选择</Button>
       </div>
-      {(!sameProvider || values.api_key || values.clear_key) && <p className="text-body-s text-on-surface-variant">请先保存当前地址与密钥，再只获取模型列表。</p>}
+      {unsaved && <p className="text-body-s text-on-surface-variant">请先保存当前地址与密钥，再获取模型或测速。</p>}
       <AdminListAnchor>
         <DataTable rows={modelRows.rows} listKey={modelRows.listKey} rowKey={(r) => r.name} empty="尚未获取模型列表" columns={[
           { key: 'select', header: '选择', leading: true, render: (r) => <Checkbox aria-label={`选择模型 ${r.name}`} checked={candidates.includes(r.name)} disabled={busy} onChange={(checked) => change({ ...values, model_candidates: checked ? [...candidates, r.name] : candidates.filter((x) => x !== r.name) })} /> },
-          { key: 'name', header: '模型', primary: true, className: 'wrap-anywhere', render: (r) => r.name },
-          /* Three states, not two: no benchmark at all is 未测速, a benchmark that reported a duration
-             prints it, and one that said `ok` without a duration is 可用 — the model was tested and
-             works, so 未测速 would be untrue and a 0 would be invented (G2-003). */
-          { key: 'latency', header: '测试结果', render: (r) => r.result ? <Badge tone={r.result.ok ? 'success' : 'error'}>{r.result.ok ? (r.result.latency === null ? '可用' : `${r.result.latency} 毫秒`) : '不可用'}</Badge> : '未测速' },
+          { key: 'name', header: '模型', primary: true, className: 'wrap-anywhere', render: (r) => <>{r.name}{provider.selected_model === r.name && <> <Badge tone="success">使用中</Badge></>}</> },
+          /* Three states: untested, a duration, and 可用 for a success that reported none (G2-003). */
+          { key: 'latency', header: '测试结果', render: (r) => r.result ? <Badge tone={r.result.ok ? 'success' : 'error'}>{r.result.ok ? (r.result.latency === null ? '可用' : `${r.result.latency} 毫秒`) : (r.result.failure ?? '不可用')}</Badge> : '未测速' },
+          { key: 'actions', header: '操作', actions: true, render: (r) => <Button type="button" size="xs" variant="text" loading={probe.pendingKeys.has(r.name)} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认测速', `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`, () => run('benchmark', r.name))}>测速</Button> },
         ]} />
         <AdminPager page={modelRows.page} totalPages={modelRows.totalPages} onPageChange={modelRows.setPage} />
       </AdminListAnchor>
-      {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
-      {notice && <p role="status" className="text-body-m">{notice}</p>}
-      <FormActions>
-        <Button type="button" variant="tonal" loading={test.busy} disabled={!read.data?.hasKey || save.busy || list.busy || discover.busy} onClick={() => confirmThen('确认测试助手连接', '确定要使用已保存的助手配置发送一次模型测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testAssistant(token), (d) => setNotice(d.latency_ms == null ? '连接成功' : `连接成功，耗时 ${d.latency_ms} 毫秒`), '助手连接测试失败'))}>测试助手连接</Button>
-        <Button type="submit" loading={save.busy} disabled={list.busy || discover.busy || test.busy}>保存助手配置</Button>
-      </FormActions>
-    </AdminForm>}
+    </>}
+    {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
+    {notice && <p role="status" className="text-body-m">{notice}</p>}
+    <FormActions>
+      <Button type="button" variant="text" disabled={busy} onClick={onDone}>收起</Button>
+      <Button type="submit" loading={save.busy} disabled={probe.busy}>保存模型配置</Button>
+    </FormActions>
+    {confirmDialog}
+  </AdminForm>;
+}
+
+function Providers({ token }: { token: string }) {
+  const read = useAdminQuery(assistantQuery, token);
+  const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const remove = useAdminMutation(token);
+  const { confirmThen, confirmDialog } = useConfirm();
+  const config = read.data;
+  const editingProvider = config && editing && editing !== 'new' ? config.providers.find((p) => p.id === editing) ?? null : null;
+  return <ReadState title="助手模型加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
+    {config && <section className="space-y-4" aria-labelledby="admin-assistant-providers-heading">
+      <SectionHeading as="h3" id="admin-assistant-providers-heading">助手模型</SectionHeading>
+      <AdminNote>{`主模型不可用时按备用顺序依次尝试。最多 ${api.PROVIDER_LIMIT} 个配置；启用的配置须已保存密钥。`}</AdminNote>
+      <DataTable rows={config.providers} rowKey={(p) => p.id} empty="尚未添加模型配置" columns={[
+        { key: 'name', header: '配置', primary: true, className: 'wrap-anywhere', render: (p) => <>{p.name}<br /><span className="text-body-s text-on-surface-variant">{p.selected_model || '未选择模型'}</span></> },
+        { key: 'role', header: '角色', render: (p) => p.is_primary ? <Badge tone="success">主模型</Badge> : `备用 #${p.fallback_rank}` },
+        { key: 'state', header: '状态', render: (p) => <Badge tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}>{p.enabled ? (p.key_available ? '已启用' : '密钥不可用') : '未启用'}</Badge> },
+        { key: 'updated', header: '更新时间', render: (p) => formatDateTime(p.updated_at) },
+        { key: 'actions', header: '操作', actions: true, render: (p) => <>
+          <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑 ${p.name}`} disabled={remove.busy} onClick={() => setEditing(p.id)} />
+          <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除 ${p.name}`} loading={remove.pendingKeys.has(p.id)} onClick={() => confirmThen('确认删除模型配置', `确定要删除「${p.name}」吗？其密钥会一并清除，此操作不可撤销。`, () => void remove.run(
+            () => api.removeAssistantProvider(token, config.revision, p.id),
+            () => { showToast('已删除模型配置', 'success'); if (editing === p.id) setEditing(null); },
+            '模型配置删除失败',
+            { key: p.id, onCommitted: (d) => { assistantQuery.write(token, d); assistantQuota.invalidate({ token }); } },
+          ))} />
+        </> },
+      ]} />
+      {!editing && <Button variant="tonal" icon={<MdAdd />} disabled={config.providers.length >= api.PROVIDER_LIMIT} onClick={() => setEditing('new')}>添加模型配置</Button>}
+      {editing && (editing === 'new' || editingProvider) && <ProviderEditor key={editing} token={token} config={config} provider={editingProvider} onDone={() => setEditing(null)} />}
+    </section>}
     {confirmDialog}
   </ReadState>;
 }
+
 function AssistantTab({ token }: AdminPanelProps) {
   const quota = useAdminQuery(quotaQuery, token);
   return <div className="space-y-6">
     <SectionHeader section="ai-assistant" onRefresh={() => { assistantQuery.invalidate(); quota.refresh(); }} isLoading={quota.refreshing} />
-    <Provider token={token} />
+    <Providers token={token} />
     <ReadState title="额度规则加载失败" loading={quota.loading} error={quota.error} retry={quota.retryable ? quota.refresh : undefined}>
-      {quota.data && <ConfigEditor title="额度规则" token={token} initial={quota.data} fields={quotaFields} validate={(v) => fieldsPayload(quotaFields, v)} save={(v) => api.saveAiQuota(token, v)} refresh={() => { quotaQuery.invalidate(); assistantQuota.invalidate({ token }); }} confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}>
+      {quota.data && <ConfigEditor title="额度规则" token={token} initial={quota.data.values} fields={quotaFields} validate={(v) => fieldsPayload(quotaFields, v)} save={(v) => api.saveAiQuota(token, quota.data!.revision, v)} refresh={() => { quotaQuery.invalidate(); assistantQuota.invalidate({ token }); }} confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}>
         <AdminNote>仅登录用户可使用。成功回复扣 1 点，成功任务共扣 2 点。每日赠送在北京时间零点清零，兑换余额保留。</AdminNote>
       </ConfigEditor>}
     </ReadState>

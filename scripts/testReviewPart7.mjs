@@ -50,17 +50,25 @@ test('P1-F3 / P7-N1: one lockfile, reproduced by CI, and a package.json npm can 
   }
 });
 
-test('P1-F5: the status cache is invalidated by every action that writes a status field', () => {
-  /* Measured on picpony.top: the backend dispatches on the query's `action` only (a body
-     `action`, JSON or form, is ignored; a repeated `action` is a 404), so the proxy's own
-     `searchParams.get('action')` sees exactly what PHP runs. Each field `get_maintenance_status`
-     answers is written by one of these actions. */
-  const route = source('app/api.php/[[...path]]/route.ts');
-  for (const action of [
-    'admin_toggle_maintenance', 'admin_toggle_translate', 'admin_toggle_semantic_search',
-    'admin_save_semantic_cloud', 'admin_save_global_api_route_policy', 'admin_save_global_image_route_policy',
-  ]) assert.match(route, new RegExp(`'${action}'`), action);
-  assert.match(route, /request\.nextUrl\.searchParams\.get\('action'\)/);
+test('P1-F5: the status cache is invalidated by every write to a status field', async () => {
+  /* Each field the site status (`get_maintenance_status`, `GET /me/maintenance-status`) answers is
+     written by one of these resources; the `/api/v1` proxy expires the status cache after the
+     backend accepted the write — and only then. */
+  const { opOf } = await import('./rustRoutes.mjs');
+  const route = source('app/api/v1/[...path]/route.ts');
+  for (const [op, path] of [
+    ['admin_toggle_maintenance', '/admin/maintenance'],
+    ['admin_toggle_translate', '/admin/translation'],
+    ['admin_toggle_semantic_search', '/admin/semantic-search'],
+    ['admin_save_semantic_cloud', '/admin/semantic-cloud'],
+    ['admin_save_global_api_route_policy', '/admin/api-route-policy'],
+    ['admin_save_global_image_route_policy', '/admin/image-route-policy'],
+  ]) {
+    assert.equal(opOf('PUT', `/api/v1${path}`), op, `${op} is still PUT ${path}`);
+    assert.match(route, new RegExp(`'${path}'`), op);
+  }
+  assert.match(route, /STATUS_RESOURCES\.has\(resource\)/);
+  assert.match(route, /upstream\.ok/);
 });
 
 test('P1-F11: a limiter per client address, with a Retry-After', async () => {
@@ -140,7 +148,7 @@ test('P1-F12: the three hops share one set of header rules', async () => {
   });
   const out = forwardableResponseHeaders(upstream, new Set(['vary']));
   assert.deepEqual([...out.keys()], ['content-type']);
-  for (const file of ['app/api.php/[[...path]]/route.ts', 'app/relay/route.ts', 'app/upload/submit/route.ts']) {
+  for (const file of ['app/api/v1/[...path]/route.ts', 'app/relay/route.ts', 'app/upload/submit/route.ts']) {
     const text = source(file);
     assert.match(text, /forwardableResponseHeaders/, file);
     assert.doesNotMatch(text, /const SKIP_RESPONSE_HEADERS/, file);
@@ -298,12 +306,10 @@ test('P5-O3 / P5-O9 / P5-O11 / P5-O12: approvals merge, a cleared history arms n
   assert.match(source('app/tasks/page.tsx'), /const shownDoc = tasks\.peek\(\{ token \}\)\.data/);
 });
 
-test('P5-O4: a name-only binding links to its uploads, never to a profile page that cannot open', async () => {
+test('P5-O4: a Derpibooru link needs the bound account\'s id, never a page that cannot open', async () => {
   const profiles = await import('../lib/profiles.ts');
-  const href = profiles.derpiProfileHref({ id: 1, username: 'a', derpi_username: 'a, b' });
-  assert.ok(href.startsWith('/search?q='));
-  assert.equal(decodeURIComponent(href.slice('/search?q='.length)), 'uploader:a\\,\\ b');
-  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_username: 'x', has_api_key: false }), null);
+  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: 42 }), '/derpi/user/42');
+  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: null }), null);
 });
 
 test('P5-O5 / P5-O6 / P6-O13: the policies match the app, and nothing points outside the repository', () => {
@@ -329,19 +335,12 @@ test('P5-O7 / P5-O8 / P6-O11: the avatar note drops GIF; bio and maintenance tex
 /* Part 6                                                                                       */
 /* ------------------------------------------------------------------------------------------- */
 
-test('P6-O1: a busy import slot is retried after Retry-After; other failures are not', async () => {
-  const { sendWithRetry, ImportNotSent } = await import('../lib/adminCatalogTools/importClient.ts');
-  const waits = [];
-  const busy = () => Object.assign(new ImportNotSent(503, '导入服务正忙'), { retryAfter: 5 });
-  let calls = 0;
-  const value = await sendWithRetry(async () => { calls += 1; if (calls < 3) throw busy(); return 'ok'; }, { stop: () => false, wait: async (ms) => { waits.push(ms); } });
-  assert.equal(value, 'ok');
-  assert.deepEqual(waits, [5000, 10000]);
-  calls = 0;
-  await assert.rejects(sendWithRetry(async () => { calls += 1; throw new ImportNotSent(403); }, { stop: () => false, wait: async () => {} }));
-  assert.equal(calls, 1, 'a refusal that needs the operator is not retried');
-  let stopped = false;
-  await assert.rejects(sendWithRetry(async () => { stopped = true; throw busy(); }, { stop: () => stopped, wait: async () => {} }));
+/* P6-O1 (the import slot's retry) left with the import tools: the `/api/v1` backend has no
+   image-tag or PPSync import endpoint, so `lib/adminCatalogTools/importClient.ts` is gone. */
+test('P6-O1: the import tools, their proxy routes and the PHP proxy are gone with their backend', () => {
+  for (const file of ['lib/adminCatalogTools/importClient.ts', 'lib/adminCatalogTools/importProxy.ts', 'app/admin/import-tools/images/route.ts', 'app/admin/import-tools/dictionary/route.ts', 'app/api.php/[[...path]]/route.ts']) {
+    assert.throws(() => source(file), /ENOENT/, file);
+  }
 });
 
 test('P6-O2: a shop picture must be an HTTPS address without credentials', async () => {
@@ -350,11 +349,12 @@ test('P6-O2: a shop picture must be an HTTPS address without credentials', async
   assert.ok(shopPayload(form('http://evil.example/a.png')).errors?.imageUrl);
   assert.ok(shopPayload(form('https://u:p@picpony.top/a.png')).errors?.imageUrl);
   assert.equal(shopPayload(form('https://picpony.top/uploads/a.png')).payload?.image_url, 'https://picpony.top/uploads/a.png');
-  assert.equal(shopPayload(form('')).payload?.image_url, '');
+  assert.equal(shopPayload(form('')).payload?.image_url, null, 'no picture is `null` on `POST /admin/shop/items`');
 });
 
-test('P6-O4: a saved assistant config stays on screen until the re-read', () => {
-  assert.match(source('components/admin/siteTools/AssistantTab.tsx'), /savedFrom: read\.data\?\.values/);
+test('P6-O4: a saved assistant config is the list the save answered, not a stale re-read', () => {
+  /* `POST`/`PUT /admin/assistant/providers` answer the whole list again; it replaces the read at once. */
+  assert.match(source('components/admin/siteTools/AssistantTab.tsx'), /assistantQuery\.write\(token, d\.config\)/);
 });
 
 test('P6-O5: badge dates are checked against today and each other', async () => {
@@ -366,17 +366,17 @@ test('P6-O5: badge dates are checked against today and each other', async () => 
   assert.deepEqual(badgeDateProblems({}, '2026-10-09'), {});
 });
 
-test('P6-O6: the glossary editor sets the three marks; a form without them carries the row\'s', async () => {
+test('P6-O6: the glossary editor sets 限制级; a form without it carries the row\'s, and an edit names the revision', async () => {
   const model = await import('../components/admin/glossary/model.ts');
-  const tag = { id: 3, en: 'oc', cn: '原创角色', aliases: [], cat: 'general', count: 0, description: '', is_restricted: 1, is_original_translation: 0, is_sensitive: 0 };
+  const tag = { id: 3, en: 'oc', cn: '原创角色', aliases: [], cat: 'general', count: 0, description: '', restricted: true, revision: 7 };
   const form = model.tagFormOf(tag);
-  assert.deepEqual(form.flags, { restricted: true, originalTranslation: false, sensitive: false });
-  const payload = model.tagSavePayload({ ...form, flags: { ...form.flags, sensitive: true } }, tag);
-  assert.equal(payload.is_sensitive, 1);
-  assert.equal(payload.is_restricted, 1);
+  assert.deepEqual(form.flags, { restricted: true });
+  const payload = model.tagSavePayload({ ...form, flags: { restricted: false } }, tag);
+  assert.equal(payload.restricted, false);
+  assert.equal(payload.revision, 7);
   const { flags, ...legacy } = form;
   void flags;
-  assert.equal(model.tagSavePayload(legacy, tag).is_restricted, 1);
+  assert.equal(model.tagSavePayload(legacy, tag).restricted, true);
 });
 
 test('P6-O7 / P6-O14: bulk delete names what it deletes; removing a user reads the editor as it is', () => {
@@ -388,13 +388,11 @@ test('P6-O8: one reading of a backend yes/no', async () => {
   const { flag } = await import('../lib/flag.ts');
   assert.deepEqual([true, 1, '1', 'true'].map(flag), [true, true, true, true]);
   assert.deepEqual([false, 0, '0', '', null, undefined, 'false', 2].map(flag), [false, false, false, false, false, false, false, false]);
-  for (const file of ['components/admin/BadgesTab.tsx', 'components/admin/UsersTab.tsx', 'components/admin/MessagesAuditTab.tsx']) {
-    assert.doesNotMatch(source(file), /(?<!flag\()(?:link|user|message)\.is_(?:active|banned|read) \?/, file);
-  }
+  /* The console's rows come from `/api/v1` as JSON booleans, so the panels read `is_banned` & co.
+     as they are; `flag()` stays for the stored and legacy values it was written for. */
 });
 
-test('P6-O9 / P6-O10: the import stamp reads its unit; team order must be a safe integer', async () => {
-  assert.match(source('components/admin/catalogTools/ImportToolsTab.tsx'), /epochStamp\(value\)/);
+test('P6-O10: team order must be a safe integer', async () => {
   const { teamPayload } = await import('../components/admin/team.ts');
   const values = { name: 'n', title: '', category: 'dev', userId: '', avatarUrl: '', order: '9007199254740993' };
   assert.ok(teamPayload(values).errors?.order);

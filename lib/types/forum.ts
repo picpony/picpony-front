@@ -12,13 +12,40 @@ export interface EquippedBadge {
   badge_color: string;
 }
 
+/** A tag group as a 标签组分享 post carries it. */
+export interface SharedTagGroup {
+  name: string;
+  tags: string[];
+}
+
+/** A block group as a 标签组分享 post carries it. */
+export interface SharedBlockGroup {
+  name: string;
+  hidden_tags: string[];
+  spoilered_tags: string[];
+}
+
+export interface SharedGroups {
+  tagGroups: SharedTagGroup[];
+  blockGroups: SharedBlockGroup[];
+}
+
 /** One row of the forum list — which carries the whole body, so a thread can open on it. */
 export interface ForumPost {
   id: number;
   user_id: number;
   title: string;
-  /** BBCode — or, for a commission or a tag-group share, the JSON body `lib/api/forum.ts` reads. */
+  /**
+   * The body's text, by kind (the backend stores a typed document): a discussion's BBCode, a
+   * commission's description (BBCode), a tag-group share's plain-text note.
+   */
   content: string;
+  /** A commission's http(s) link to the artist's page; `''` for none and for the other kinds. */
+  commission_link: string;
+  /** A tag-group share's groups; `null` for the other kinds. */
+  shared_groups: SharedGroups | null;
+  /** The post's edit revision — an edit sends it back as `expected_revision`. */
+  revision: number;
   /** The optional 简介; empty when the author wrote none. */
   excerpt: string;
   category: ForumCategory;
@@ -28,8 +55,6 @@ export interface ForumPost {
   is_pinned: boolean;
   /** The viewer's own like — only meaningful on a read that carried their session. */
   is_liked: boolean;
-  /** New activity since the viewer last opened it — only meaningful on a read with a session. */
-  is_unread: boolean;
   created_at: string;
   /** Bumped by an edit *and* by every reply: the last activity, not the last edit. */
   updated_at: string;
@@ -41,9 +66,7 @@ export interface ForumPost {
   badges: EquippedBadge[];
 }
 
-export interface ForumPostDetail extends ForumPost {
-  user_created_at?: string;
-}
+export type ForumPostDetail = ForumPost;
 
 export interface ForumComment {
   id: number;
@@ -62,7 +85,7 @@ export interface ForumPostsResponse {
   posts: ForumPost[];
   total: number;
   totalPages: number;
-  /** The read carried a session: `is_unread` and `is_liked` are this viewer's. */
+  /** The read carried a session: `is_liked` is this viewer's. */
   signedIn: boolean;
 }
 

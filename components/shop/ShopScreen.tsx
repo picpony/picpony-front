@@ -158,11 +158,11 @@ export default function ShopScreen() {
       : sheetView;
 
   const actionFor = (item: ShopItem): ItemAction => {
-    if (item.stock !== null && item.stock <= 0) return { kind: 'sold-out' };
+    if (item.stock <= 0) return { kind: 'sold-out' };
     if (!token || !account) return { kind: 'sign-in', onSignIn: () => openAuth('login') };
     /* A stock the shop did not state is no limit but the cart's own (G2-023): the checkout's
        answer is the backend's to give. */
-    const limit = item.stock ?? MAX_LINE_QUANTITY;
+    const limit = Math.min(item.stock, MAX_LINE_QUANTITY);
     const inCart = lines.find((line) => line.id === item.id)?.quantity ?? 0;
     if (inCart >= limit) return { kind: 'full' };
     return {

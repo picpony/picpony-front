@@ -86,7 +86,10 @@ export default function BlockGroupsPage() {
   const save = async (input: BlockGroupInput) => {
     if (!token || saving || readToken() !== token) return;
     setSaving(true);
-    const saved = await settle(saveBlockGroup(token, input));
+    /* An edit carries the version the list holds and keeps the switch where it is (the backend
+       writes `active` with every save). */
+    const held = input.id ? blockGroups.peek({ token }).data?.find((group) => group.id === input.id) : undefined;
+    const saved = await settle(saveBlockGroup(token, held ? { ...input, revision: held.revision, active: held.active } : input));
     if (!saved.ok) {
       if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
     } else if (readToken() === token) {
@@ -95,8 +98,9 @@ export default function BlockGroupsPage() {
            state is the server's to say), so the card arrives as the dialog leaves. */
         const hidden = [...input.hidden];
         const spoilered = [...input.spoilered];
+        const { revision } = saved.value;
         writeGroups(token, (list) => list.map((group) => (group.id === input.id
-          ? { ...group, name: input.name, hidden_tags: hidden, spoilered_tags: spoilered, tags: [...new Set([...hidden, ...spoilered])] }
+          ? { ...group, name: input.name, hidden_tags: hidden, spoilered_tags: spoilered, revision }
           : group)));
         blockGroups.expire({ token });
       } else {
@@ -118,9 +122,11 @@ export default function BlockGroupsPage() {
   const toggle = useCallback((group: BlockGroup, active: boolean) => {
     if (!token || readToken() !== token) return;
     const flip = (value: boolean) =>
-      writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, is_active: value ? 1 : 0 } : item)));
+      writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, active: value } : item)));
+    /* Each switch carries the group's version; every accepted one moves it on. */
+    const heldRevision = () => blockGroups.peek({ token }).data?.find((item) => item.id === group.id)?.revision ?? group.revision;
     const current = toggles.current.get(group.id);
-    const state = current ?? { confirmed: group.is_active === 1, wanted: active };
+    const state = current ?? { confirmed: group.active, wanted: active };
     state.wanted = active;
     flip(active);
     if (current) return;
@@ -129,7 +135,7 @@ export default function BlockGroupsPage() {
       let sentAny = false;
       while (readToken() === token && state.confirmed !== state.wanted) {
         const sending = state.wanted;
-        const sent = await settle(toggleBlockGroup(token, group.id, sending));
+        const sent = await settle(toggleBlockGroup(token, group.id, sending, heldRevision()));
         if (!sent.ok) {
           state.wanted = state.confirmed;
           if (readToken() === token) {
@@ -140,6 +146,10 @@ export default function BlockGroupsPage() {
         }
         state.confirmed = sending;
         sentAny = true;
+        const { revision } = sent.value;
+        if (readToken() === token) {
+          writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, revision } : item)));
+        }
       }
       toggles.current.delete(group.id);
       /* A list read that was already out when the switch flipped answers with the old state and

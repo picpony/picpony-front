@@ -24,11 +24,20 @@ export function clamp01(value: number): number {
   return clamp(value, 0, 1);
 }
 
-/** A PicPony-hosted path, made absolute, normalising the leading slash — one function because call sites hand-joined the host with several conflicting join semantics, and the URL shape must have a single answer. */
+/**
+ * A PicPony-hosted path as a URL, normalising the leading slash — one function because call sites
+ * hand-joined the host with several conflicting join semantics, and the URL shape must have a
+ * single answer. The Rust backend's media (`/api/v1/media/<asset>`, what every upload answers)
+ * stays a same-origin path: the browser reaches it through this app's `/api/v1` proxy
+ * (`app/api/v1/[...path]/route.ts`), never through picpony.top. Any other bare path is an old
+ * site asset and resolves against picpony.top.
+ */
 export function getAssetUrl(path: string): string {
   if (!path) return '';
   if (/^https?:\/\//.test(path)) return path;
-  return `${PICPONY_API_ORIGIN}/${path.replace(/^\/+/, '')}`;
+  const bare = path.replace(/^\/+/, '');
+  if (bare.startsWith('api/v1/')) return `/${bare}`;
+  return `${PICPONY_API_ORIGIN}/${bare}`;
 }
 
 /** The avatar case of getAssetUrl, which tolerates a missing value. */
@@ -140,27 +149,6 @@ export function distributeToMasonryColumns<T extends { height?: number; width?: 
   });
 
   return columnData;
-}
-
-/**
- * Encrypt track data using XOR with key 0x5A (90), then base64 encode.
- * Matches backend validation in api.php captcha_verify / production Vue captcha.
- * Track format: array of [x, relativeY, elapsedMs] points — x: slider offset in the
- * 310-wide puzzle (0..260); relativeY: clientY - startY (NOT absolute clientY);
- * elapsedMs: ms since drag start. First point is always [0, 0, 0].
- */
-export function encodeTrack(track: [number, number, number][]): string {
-  const jsonStr = JSON.stringify(track);
-  const key = 0x5a;
-  const bytes = new Uint8Array(jsonStr.length);
-  for (let i = 0; i < jsonStr.length; i++) {
-    bytes[i] = jsonStr.charCodeAt(i) ^ key;
-  }
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 /**

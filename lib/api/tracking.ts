@@ -1,22 +1,31 @@
-import { picponyPostJson } from './http';
-
-/** The original front end's abort, for a request nobody waits on. */
-const VISIT_DEADLINE_MS = 10_000;
+import { apiRequest } from './http';
 
 /**
- * `POST api.php?action=track_visitor {visitor_id, path}` — no token (a visit is anonymous),
- * `keepalive` so a count sent as the tab goes away still leaves, bounded at ten seconds. Fire and
- * forget: it resolves whatever happened, never rejects, and nothing reads its answer.
+ * Anonymous visit counting (`track_visitor`, decision 15): `POST /api/v1/site-visits
+ * {visitor_id, path?}` → 204 (`site::track_visit`). The backend keeps only a hash of the id per
+ * Asia/Shanghai day and when it was last seen, validates `path` (≤ 512 bytes, starting with `/`,
+ * no control characters) without storing it, rate-limits per visitor and per peer, and does not
+ * count a request that carries `Authorization` — so the beacon is sent with no token
+ * (`components/VisitorTracker.tsx` already skips a signed-in visitor, `lib/visitor.ts`). The
+ * route takes no session and therefore no CSRF token.
  */
+export const VISITOR_TRACKING_AVAILABLE = true;
+
+/** A count is statistics, never worth holding a page for: bounded, and allowed to outlive it. */
+const TRACK_TIMEOUT_MS = 5000;
+
+/** Fire and forget: resolves once the request settled, and never rejects. */
 export async function trackVisitor(visitorId: string, path: string): Promise<void> {
   try {
-    const response = await picponyPostJson(
-      'track_visitor',
-      { visitor_id: visitorId, path },
-      { keepalive: true, cache: 'no-store', timeoutMs: VISIT_DEADLINE_MS },
-    );
-    void response.body?.cancel().catch(() => {});
+    const response = await apiRequest('POST', '/site-visits', {
+      json: { visitor_id: visitorId, path },
+      keepalive: true,
+      cache: 'no-store',
+      timeoutMs: TRACK_TIMEOUT_MS,
+    });
+    /* Nothing to read (204, or a refusal nobody is shown); drained so the connection is freed. */
+    await response.body?.cancel().catch(() => {});
   } catch {
-    /* A count that did not arrive is a count, not an event. */
+    /* A dead line or a timeout: this count is simply lost. */
   }
 }

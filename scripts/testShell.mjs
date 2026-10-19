@@ -529,7 +529,7 @@ function loadMaintenance({ respond, env = {}, cookie } = {}) {
   const module = load('lib/maintenance.server.ts', {
     react: { cache: (fn) => fn },
     'next/headers': { cookies: async () => ({ get: (name) => (name === 'devMaintenancePreview' && cookie !== undefined ? { value: cookie } : undefined) }) },
-    '@/lib/constants': { PICPONY_API_BASE: '/api.php', PICPONY_API_ORIGIN: 'https://picpony.top' },
+    '@/lib/constants': { SITE_STATUS_CACHE_TAG: 'site-status' },
     '@/lib/serverMemo': { cacheSeconds: (s) => s },
     '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
   }, { fetch, AbortSignal, process: { env: { NODE_ENV: 'production', ...env } } });
@@ -540,19 +540,18 @@ const json = (body, ok = true) => ({ ok, json: async () => body });
 
 test('the maintenance read reports the switch and the trimmed message', async () => {
   const { readMaintenance, requests } = loadMaintenance({
-    respond: () => json({ success: true, maintenance_mode: true, maintenance_message: '  正在维护……  ' }),
+    respond: () => json({ maintenance_mode: true, maintenance_message: '  正在维护……  ' }),
   });
   assert.deepEqual({ ...(await readMaintenance()) }, { active: true, message: '正在维护……' });
-  assert.equal(requests[0].url, 'https://picpony.top/api.php?action=get_maintenance_status');
+  assert.equal(requests[0].url, 'https://picpony.top/api/v1/maintenance-status', 'the public status (`site::public_maintenance`): the server has no session');
   assert.equal(requests[0].revalidate, 30);
   assert.ok(requests[0].hasSignal, 'bounded by a timeout');
 });
 
 test('the maintenance read fails open', async () => {
   const cases = [
-    () => json({ success: true, maintenance_mode: false, maintenance_message: 'x' }),
-    () => json({ success: false, maintenance_mode: true }),
-    () => json({ success: true, maintenance_mode: 'true' }),
+    () => json({ maintenance_mode: false, maintenance_message: '' }),
+    () => json({ error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } }, false),
     () => json({}, false),
     () => { throw new Error('offline'); },
     () => ({ ok: true, json: async () => { throw new SyntaxError('html'); } }),
@@ -561,8 +560,6 @@ test('the maintenance read fails open', async () => {
     const { readMaintenance } = loadMaintenance({ respond });
     assert.deepEqual({ ...(await readMaintenance()) }, { active: false, message: '' });
   }
-  const long = loadMaintenance({ respond: () => json({ success: true, maintenance_mode: true, maintenance_message: '维'.repeat(900) }) });
-  assert.equal((await long.readMaintenance()).message.length, 500);
 });
 
 test('the development preview cookie is honoured in development only', async () => {
@@ -571,6 +568,6 @@ test('the development preview cookie is honoured in development only', async () 
   assert.equal(dev.requests.length, 0);
   const malformed = loadMaintenance({ env: { NODE_ENV: 'development' }, cookie: '%E4%', respond: () => json({}) });
   assert.equal((await malformed.readMaintenance()).message, '%E4%');
-  const prod = loadMaintenance({ cookie: '1', respond: () => json({ success: true, maintenance_mode: false }) });
+  const prod = loadMaintenance({ cookie: '1', respond: () => json({ maintenance_mode: false, maintenance_message: '' }) });
   assert.equal((await prod.readMaintenance()).active, false);
 });

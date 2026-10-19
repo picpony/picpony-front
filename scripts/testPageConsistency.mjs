@@ -177,19 +177,22 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
   let claims = 0;
   let refreshes = 0;
   const notices = [];
+  const sessionWrites = [];
   const data = {
-    level: 1, experience: 0, coins: 0, equippedBadges: [],
-    progress: { novice: Object.fromEntries(['bind_api', 'verify_api', 'set_bg'].map(id => [id, { progress: 1, claimed: false }])), daily: null, weekly: null },
+    level: 1, experience: 0, coins: 0,
+    progress: { novice: Object.fromEntries(['bind_api', 'verify_api', 'set_bg'].map(id => [id, { progress: 1, required: 1, claimed: false }])), daily: null, weekly: null },
   };
   const { default: Tasks } = load('app/tasks/page.tsx', {
     ...hooks.dependencies,
     '@/lib/hooks': {
-      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A', updateUserInfo: () => {}, useNow: () => null,
+      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A',
+      updateUserInfo: (_token, patch) => { sessionWrites.push(patch); }, useNow: () => null,
     },
     '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
     '@/lib/resource': { SKIP: 'skip', useResource: () => ({ data, refresh: () => {} }) },
     '@/lib/resources': { tasks: { expire: () => { refreshes++; }, peek: () => ({ data }) }, coinTransactions: { invalidate: () => {} } },
     '@/lib/settle': settleModule,
+    '@/lib/userBadges': { parseEquippedBadges: () => [], wornBadges: () => [] },
     '@/app/settings/tabs': { settingsHref: (tab) => `/settings?tab=${tab}` },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
     '@/lib/api/tasks': { claimTask: () => { claims++; return reply.promise; } },
@@ -201,40 +204,15 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
   await flush();
   assert.equal(claims, 1, 'a second press while the claim is out sends nothing');
   assert.equal(row(hooks.render(Tasks)).props.claiming, true);
-  reply.resolve({ experience: 100, coins: 5 });
+  reply.resolve({ experience: 100, coins: 5, balance: 5 });
   await flush();
   const after = row(hooks.render(Tasks));
   assert.equal(after.props.claimed, true, 'the receipt shows before the re-read lands');
   assert.equal(after.props.claiming, false);
   assert.equal(refreshes, 1);
   assert.deepEqual(notices, [['已领取，经验 +100，金币 +5', 'success']]);
+  assert.ok(sessionWrites.some((patch) => patch.coins === 5), 'the balance after the claim goes into the session');
 });
-
-test('a claim receipt without figures reports none', async () => {
-  const hooks = harness();
-  const notices = [];
-  const data = {
-    level: null, experience: null, coins: null, equippedBadges: [],
-    progress: { novice: null, daily: Object.fromEntries(['login', 'fav', 'share', 'comment'].map(id => [id, { progress: 1, claimed: false }])), weekly: null },
-  };
-  const { default: Tasks } = load('app/tasks/page.tsx', {
-    ...hooks.dependencies,
-    '@/lib/hooks': {
-      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A', updateUserInfo: () => {}, useNow: () => null,
-    },
-    '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
-    '@/lib/resource': { SKIP: 'skip', useResource: () => ({ data, refresh: () => {} }) },
-    '@/lib/resources': { tasks: { expire: () => {}, peek: () => ({ data }) }, coinTransactions: { invalidate: () => {} } },
-    '@/lib/settle': settleModule,
-    '@/app/settings/tabs': { settingsHref: (tab) => `/settings?tab=${tab}` },
-    '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    '@/lib/api/tasks': { claimTask: async () => ({ experience: null, coins: null }) },
-  });
-  find(hooks.render(Tasks), (node) => node.props.task?.claimId === 'login').props.onClaim();
-  await flush();
-  assert.deepEqual(notices, [['已领取奖励', 'success']]);
-});
-
 
 test('Undo during a navigation-triggered history delete waits for the verdict and restores it', async () => {
   const hooks = harness();

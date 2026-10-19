@@ -92,6 +92,7 @@ import * as tagGroupApi from '@/lib/api/tagGroups';
 import { mirrorBlockGroups } from '@/lib/blockGroupMirror';
 import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 import { readUserInfo } from '@/lib/hooks';
+import { faveOwnerOf, type FaveOwner } from '@/lib/favorites';
 import {
   currentBlockFilters,
   currentPublicBlacklist,
@@ -242,12 +243,19 @@ export type SessionResult =
  */
 async function readSession(token: string, signal: AbortSignal): Promise<SessionResult> {
   const startedAt = Date.now();
-  const res = await picpony.getUser(token, signal);
+  /* `GET /me` has no worn badges, which the level card reads off the session
+     (`equipped_badges`): they come from `GET /me/badges`, read beside it. A failed badge read
+     leaves the stored set as it was (the shell's merge keeps a field the answer lacks). */
+  const [res, equipped] = await Promise.all([
+    picpony.getUser(token, signal),
+    picpony.getMyEquippedBadges(token, signal).catch(() => null),
+  ]);
   if (res.status === 401) {
     void res.body?.cancel().catch(() => {});
     return { kind: 'unauthorized' };
   }
-  const data = await picpony.readSessionUser(res);
+  const me = await picpony.readSessionUser(res);
+  const data = me && equipped ? { ...me, equipped_badges: equipped } : me;
   if (data && !signal.aborted) {
     adoptCloudSettings(token, data, startedAt);
   }
@@ -291,14 +299,17 @@ export const settingsSyncBridge: SettingsSyncBridge = {
 };
 
 export interface UnreadBreakdown {
+  /** The bell's badge: messages, notifications and interactions — not the forum. */
   total: number;
   messages: number;
   notifications: number;
   interactions: number;
+  /** New forum posts since the last forum read receipt — 论坛's own badge. */
+  forum: number;
 }
 
 /**
- * The unread badge, and the three numbers behind it.
+ * The unread badge, the three numbers behind it, and the forum's new-post count.
  *
  * One minute, because somebody else puts messages there — and a TTL alone never moves a badge
  * that stays mounted, so the shell reads it with `refetchInterval` (see `useResource`). The
@@ -314,12 +325,7 @@ export const unreadCounts = /* @__PURE__ */ defineResource<{ token: string }, Un
   maxEntries: 2,
   fetch: async ({ token }, signal) => {
     const data = await picpony.getUnreadCounts(token, signal);
-    return {
-      total: data.total_unread,
-      messages: data.unread_messages,
-      notifications: data.unread_notifications,
-      interactions: data.unread_interactions,
-    };
+    return { ...data, total: data.messages + data.notifications + data.interactions };
   },
 });
 
@@ -704,60 +710,85 @@ export const userProfile = /* @__PURE__ */ defineResource<{ id: string }, Profil
   fetch: async ({ id }, signal) => (await picpony.getUserProfile(id, signal)).user,
 });
 
-/** A folder of somebody's favourites: whose, the folder's name as the backend gave it, its ids. */
+/** A folder of somebody's favourites: whose (by id; the username when it is known), and its ids. */
 export interface SharedFolder {
-  username: string;
-  folderName: string | null;
+  ownerId: number;
+  username: string | null;
   ids: number[];
 }
 
+/** An owner as a cache key: an id and a username naming the same person are two keys (rare). */
+function faveOwnerKey(owner: FaveOwner): string {
+  const normal = faveOwnerOf(owner);
+  return 'ownerId' in normal ? `#${normal.ownerId}` : `@${normal.username}`;
+}
+
 /**
- * A folder of somebody's favourites, by username — the *ids*, which are then looked up as pictures
- * a page at a time (`favePictures`). `folderId` 0, or none, is their main folder: the original
- * front end's `#mode=shared_faves` link without a folder. The route `/favorites/shared/…` reads
- * it, and so does every change to your own favourites (expired, for your own username).
- *
- * Keyed on the username because that is what the endpoint takes. A refusal carries the server's
- * sentence and is not retryable (an owner's privacy choice); an unknown username is not found. A
- * folder id that does not exist answers like an empty main folder, so the route checks the folder
- * against the owner's public list (`profileFaveFolders`).
+ * An owner's id — the backend's only handle on somebody's favourites. A username is the signed-in
+ * user's own, or looked up (`resolveUsername`, the public `GET /users/by-username/{username}`).
  */
-export const sharedFaveIds = /* @__PURE__ */ defineResource<{ username: string; folderId?: number }, SharedFolder>({
+async function faveOwnerId(owner: FaveOwner, signal: AbortSignal): Promise<{ ownerId: number; username: string | null }> {
+  const normal = faveOwnerOf(owner);
+  if ('ownerId' in normal) return { ownerId: normal.ownerId, username: null };
+  const me = readUserInfo();
+  if (me && me.username === normal.username && Number(me.id) > 0) return { ownerId: Number(me.id), username: normal.username };
+  return { ownerId: await favorites.resolveUsername(normal.username, signal), username: normal.username };
+}
+
+/**
+ * A folder of somebody's favourites — the *ids*, which are then looked up as pictures a page at a
+ * time (`favePictures`). `folderId` 0, or none, is every public folder of theirs. The route
+ * `/favorites/shared/…` reads it, and every change to your own favourites expires it.
+ *
+ * An unknown owner is 404 `USER_NOT_FOUND`, a folder that does not exist or is not public 404
+ * `FOLDER_NOT_FOUND`; an owner who hides favourites answers an empty list.
+ */
+export const sharedFaveIds = /* @__PURE__ */ defineResource<FaveOwner & { folderId?: number }, SharedFolder>({
   name: 'shared-fave-ids',
-  key: ({ username, folderId }) => `${username}
-${folderId ?? 0}`,
+  key: (args) => `${faveOwnerKey(args)}\n${args.folderId ?? 0}`,
   ttl: 2 * MINUTES,
   maxEntries: 8,
-  fetch: async ({ username, folderId }, signal) => {
-    const data = await favorites.getSharedFaves(username, folderId ?? 0, signal);
-    return { username: data.username, folderName: data.folder_name?.trim() || null, ids: data.faves };
+  fetch: async (args, signal) => {
+    const { ownerId, username } = await faveOwnerId(args, signal);
+    const ids = await favorites.getSharedFaves(ownerId, args.folderId ?? 0, signal);
+    let name = username;
+    if (name === null) {
+      /* The answer names nobody; the header does. A profile that cannot be read leaves the name out. */
+      const id = String(ownerId);
+      const profile = userProfile.peek({ id }).data ?? await untilAborted(userProfile.read({ id }), signal).catch(() => null);
+      name = profile?.username ?? null;
+    }
+    return { ownerId, username: name, ids };
   },
 });
 
+/* A profile's 帖子 and 历史评论 tabs. The token rides along and keys the entry: the owner (and
+   staff) still read a tab the owner hid from visitors, which the backend decides from the
+   session (`forum::user_posts` / `user_comments`, `visible`). */
 export const userPosts = /* @__PURE__ */ defineResource<
-  { id: string; page: number },
+  { id: string; page: number; token: string | null },
   { posts: UserPost[]; totalPages: number }
 >({
   name: 'user-posts',
-  key: ({ id, page }) => `${id}:${page}`,
+  key: ({ id, page, token }) => `${id}:${page}\n${token ?? ''}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id, page }, signal) => {
-    const res = await picpony.getUserPosts(id, page, signal);
+  fetch: async ({ id, page, token }, signal) => {
+    const res = await picpony.getUserPosts(id, page, signal, token);
     return { posts: res.posts, totalPages: res.total_pages };
   },
 });
 
 export const userComments = /* @__PURE__ */ defineResource<
-  { id: string; page: number },
+  { id: string; page: number; token: string | null },
   { comments: UserComment[]; totalPages: number }
 >({
   name: 'user-comments',
-  key: ({ id, page }) => `${id}:${page}`,
+  key: ({ id, page, token }) => `${id}:${page}\n${token ?? ''}`,
   ttl: 2 * MINUTES,
   maxEntries: 12,
-  fetch: async ({ id, page }, signal) => {
-    const res = await picpony.getUserComments(id, page, signal);
+  fetch: async ({ id, page, token }, signal) => {
+    const res = await picpony.getUserComments(id, page, signal, token);
     return { comments: res.comments, totalPages: res.total_pages };
   },
 });
@@ -824,16 +855,16 @@ export const userUploads = /* @__PURE__ */ defineResource<
 });
 
 /**
- * A profile's public favourite folders — the 收藏夹 tab (decision 15). Keyed on the username
- * because that is what the endpoint takes; not sent until the tab is opened. Each folder opens
- * its own page (`/favorites/shared/<username>/<folderId>`), which reads the folder's pictures.
+ * A profile's public favourite folders — the 收藏夹 tab (decision 15). Keyed on the owner (pass
+ * `{ ownerId }`; a username is looked up first); not sent until the tab is
+ * opened. Each folder opens its own page (`sharedFolderHref`), which reads the folder's pictures.
  */
-export const profileFaveFolders = /* @__PURE__ */ defineResource<{ username: string }, ProfileFaveFolder[]>({
+export const profileFaveFolders = /* @__PURE__ */ defineResource<FaveOwner, ProfileFaveFolder[]>({
   name: 'profile-fave-folders',
-  key: ({ username }) => username,
+  key: faveOwnerKey,
   ttl: 2 * MINUTES,
   maxEntries: 8,
-  fetch: ({ username }, signal) => favorites.getProfileFaveFolders(username, signal),
+  fetch: async (owner, signal) => favorites.getProfileFaveFolders((await faveOwnerId(owner, signal)).ownerId, signal),
 });
 
 /**
@@ -913,7 +944,7 @@ ${folderId ?? 0}`,
   fetch: ({ token, folderId }, signal) => favorites.getFaves(token, folderId ?? 0, signal),
 });
 
-/** The account's favourite folders (`get_fave_folders`), and the privacy space's card when the list has one. */
+/** The account's favourite folders (`get_fave_folders`), and the privacy space's state. */
 export const faveFolders = /* @__PURE__ */ defineResource<{ token: string }, favorites.FaveFolderList>({
   name: 'fave-folders',
   key: ({ token }) => token,
@@ -956,8 +987,8 @@ ${page}`,
 });
 
 /**
- * Somebody's privacy space (`get_shared_privacy_faves`): open with its pictures, behind its
- * password, or without one. Signed in only; in memory only, like every resource (signing out
+ * Somebody's privacy space (`get_shared_privacy_faves`): open with its pictures, or behind its
+ * password. Signed in only; in memory only, like every resource (signing out
  * clears them all). After the password is accepted the screen reads it again with `force`.
  */
 export const sharedPrivacyFaves = /* @__PURE__ */ defineResource<{ token: string; ownerId: number }, favorites.SharedPrivacyAnswer>({
@@ -1025,7 +1056,7 @@ export const blockGroups = /* @__PURE__ */ defineResource<{ token: string }, Blo
   ttl: 5 * MINUTES,
   maxEntries: 2,
   fetch: async ({ token }, signal) => {
-    const { groups } = await blockGroupApi.getBlockGroups(token, signal);
+    const groups = await blockGroupApi.getBlockGroups(token, signal);
     if (!signal.aborted && readUserInfo()?.token === token && mirrorBlockGroups(groups)) syncBrowsingCookie();
     return groups;
   },

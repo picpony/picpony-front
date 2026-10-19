@@ -79,7 +79,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
   const held = source?.badges ?? [];
   const chosenList: EquippedBadge[] = held
     .filter((badge) => draft.chosen.has(badge.name))
-    .map((badge) => ({ badge_name: badge.name, badge_color: badge.color }));
+    .map((badge) => ({ id: badge.id, badge_name: badge.name, badge_color: badge.color }));
   const initialList = (source?.equipped ?? []).filter((badge) =>
     held.some((h) => h.name === badge.badge_name && !badgeValidity(h.expiresAt, now).expired),
   );
@@ -123,10 +123,12 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
     myBadges.write({ token }, (previous) => ({ badges: previous?.badges ?? held, equipped: list }));
     /* Only a profile record already held is corrected; a write on an empty key would *create*
        one, and `null` there means "no such user". */
+    /* Both records hold the backend's spelling (`parseEquippedBadges` reads it). */
+    const wire = list.map((badge) => ({ id: badge.id, name: badge.badge_name, color: badge.badge_color }));
     const shown = userProfile.peek({ id: profileId }).data;
-    if (shown) userProfile.write({ id: profileId }, { ...shown, equipped_badges: list });
+    if (shown) userProfile.write({ id: profileId }, { ...shown, equipped_badges: wire });
     tasks.expire({ token });
-    updateUserInfo(token, { equipped_badges: list });
+    updateUserInfo(token, { equipped_badges: wire });
     showToast(list.length > 0 ? '已更新佩戴的徽章' : '已取下全部徽章', 'success');
     onClose();
   };

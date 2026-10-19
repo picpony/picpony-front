@@ -5,7 +5,7 @@ import { MdClose, MdShare } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { showToast } from '@/components/Toast';
-import { createShareLink, trackShare } from '@/lib/api/share';
+import { createShareLink } from '@/lib/api/share';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { SHARED_BY_PARAM } from '@/lib/searchState';
@@ -14,17 +14,15 @@ import { copyText } from '@/lib/utils';
 /** What the link preview and the recipient's notice call a visitor who is not signed in. */
 const ANONYMOUS = '匿名用户';
 
-async function copyShareLink(url: string, token: string | null): Promise<boolean> {
+async function copyShareLink(url: string): Promise<boolean> {
   if (!(await copyText(url))) return false;
   showToast('已复制分享链接', 'success');
-  trackShare(token);
   return true;
 }
 
 /**
- * 分享搜索结果 — the original front end's feature and contract: a short link from `share.php`
- * (falling back to the long link on any failure), copied, with the share counted toward the
- * account's tasks. The link is this search's own URL, page left out, with `from=<username>` so
+ * 分享搜索结果 — the original front end's feature: the link (`createShareLink` — the long one
+ * until the backend has short links again), copied. The link is this search's own URL, page left out, with `from=<username>` so
  * the recipient's screen can say who sent it.
  *
  * **A copy that fails is offered again, as a tap.** The link is made over the network first,
@@ -54,12 +52,12 @@ export function ShareSearchButton({ href, query }: { href: string; query: string
         },
         { token },
       );
-      if (await copyShareLink(link.url, token)) return;
+      if (await copyShareLink(link.url)) return;
       showToast('分享链接已生成', 'info', {
         action: {
           label: '复制',
           onClick: () => {
-            void copyShareLink(link.url, token).then((copied) => {
+            void copyShareLink(link.url).then((copied) => {
               if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
             });
           },

@@ -111,8 +111,9 @@ export async function subscribeToTag(
   }
   if (readToken() !== token) return { kind: 'stale-session' };
   const naming = awaitName ? warmTagName(found.name) : null;
+  let id: number;
   try {
-    await addTagSubscription(token, found.name, found.count);
+    ({ id } = await addTagSubscription(token, found.name, found.count));
   } catch (error) {
     if (isAlreadySubscribed(error)) return { kind: 'exists', tagName: found.name };
     return { kind: 'failed', message: apiErrorMessage(error, '订阅失败') };
@@ -121,7 +122,7 @@ export async function subscribeToTag(
   writeList(token, (list) =>
     findSubscription(list, found.name)
       ? list
-      : [...list, { tagName: found.name, imageCount: found.count, newCount: 0 }],
+      : [...list, { id, tagName: found.name, imageCount: found.count, newCount: 0 }],
   );
   return { kind: 'done', tagName: found.name, count: found.count, aliasOf: found.aliasOf };
 }

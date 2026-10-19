@@ -115,7 +115,7 @@ export function useFolderCommands({
         if (folder.isMain) return;
         const ok = await confirm({
           title: '确认删除收藏夹',
-          message: `确定要删除收藏夹「${name}」及其中的收藏记录吗？此操作不可撤销。`,
+          message: `确定要删除收藏夹「${name}」吗？其中的图片会移入主收藏夹。`,
         });
         if (!ok || readToken() !== token) return;
         /* The settings it rewrites are read as it rewrites them, not from this render (G3-007). */

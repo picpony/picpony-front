@@ -43,6 +43,8 @@ interface SidebarNavProps {
   /** Pathname of the page *behind* any image-detail overlay. */
   backgroundPathname: string;
   unread: number;
+  /** New forum posts since the last forum read receipt (`forum` in the unread counts). */
+  forumUnread?: number;
   onNavigate: () => void;
   onLogout: () => void;
   /**
@@ -209,6 +211,7 @@ export default function SidebarNav({
   user,
   backgroundPathname,
   unread,
+  forumUnread = 0,
   onNavigate,
   onLogout,
   onReselect,
@@ -244,6 +247,8 @@ export default function SidebarNav({
           active={(onHome && forumTab) || inThread}
           current={onHome && forumTab}
           homeTab="forum"
+          badge={forumUnread}
+          badgeLabel={`${forumUnread} 个新帖`}
           onClick={onNavigate}
           onReselect={onReselect}
         />

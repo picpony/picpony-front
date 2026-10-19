@@ -22,11 +22,11 @@ import { ListRowsSkeleton, OwnerHiddenNote, PaneFailure, PaneHidden, useVisited,
  * press hands the row's rectangle to the thread's container transform (`rememberForumOrigin`),
  * so a post opened from a profile grows out of its row as it does from the forum.
  */
-export default function PostsPane({ profile, id, own, ready, active, now }: ProfilePaneProps) {
+export default function PostsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:posts', id, 1);
   const visible = tabVisible(profile, 'posts', own);
-  const read = useResource(userPosts, ready && visited && visible ? { id, page } : SKIP, { keepPrevious: id });
+  const read = useResource(userPosts, ready && visited && visible ? { id, page, token } : SKIP, { keepPrevious: id });
 
   if (!ready) return <ListRowsSkeleton />;
   if (!visible) return <PaneHidden />;
@@ -103,7 +103,7 @@ export default function PostsPane({ profile, id, own, ready, active, now }: Prof
           currentPage={page}
           totalPages={data.totalPages}
           onPageChange={setPage}
-          onPrefetchPage={(next) => userPosts.prefetch({ id, page: next })}
+          onPrefetchPage={(next) => userPosts.prefetch({ id, page: next, token })}
           disabled={read.isLoading}
           className="mt-8 mb-4"
         />

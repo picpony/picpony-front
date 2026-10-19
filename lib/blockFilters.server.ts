@@ -1,10 +1,10 @@
 import { cache } from 'react';
-import { PICPONY_API_BASE } from '@/lib/constants';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import {
   parseBlockFilters,
-  parsePublicBlacklist,
+  readWholeBlacklist,
   DEFAULT_BLOCK_FILTERS,
+  PUBLIC_BLACKLIST_PAGE_LIMIT,
   type BlockFilters,
   type PublicBlacklist,
 } from '@/lib/blockFilters';
@@ -14,7 +14,7 @@ const REVALIDATE_SECONDS = 30 * 60;
 /**
  * The public blacklist's lifetime. Shorter than the filter definitions': pulling a picture from
  * the site is an administrator reacting to something, and an accepted edit expires both caches
- * at once anyway (the api.php route handler), so this only bounds edits made elsewhere.
+ * at once anyway (the `/api/v1` route handler), so this only bounds edits made elsewhere.
  */
 const BLACKLIST_REVALIDATE_SECONDS = 5 * 60;
 const UPSTREAM = upstreamOrigin();
@@ -30,7 +30,7 @@ const read = createServerMemo({
   keyOf: () => 'public-filters',
   load: async (): Promise<BlockFilters | null> => {
     try {
-      const response = await fetch(`${UPSTREAM}${PICPONY_API_BASE}?action=get_block_tags`, {
+      const response = await fetch(`${UPSTREAM}/api/v1/filters/block-tags`, {
         signal: AbortSignal.timeout(1500),
         next: { revalidate: cacheSeconds(REVALIDATE_SECONDS), tags: [BLOCK_FILTERS_CACHE_TAG] },
       });
@@ -67,22 +67,24 @@ export function clearBlockFiltersMemo(): void {
 }
 
 /**
- * The site's public image blacklist (`get_public_blacklist`), read like the filter definitions:
- * anonymous, shared by every visitor, inlined into the document so the first client key matches
- * the server's seed. A failed read is an empty list — the feed must still render — and is not
- * retained (`createServerMemo` never keeps `null`).
+ * The site's public image blacklist (`GET /api/v1/image-blocklist`, every page), read like the
+ * filter definitions: anonymous, shared by every visitor, inlined into the document so the first
+ * client key matches the server's seed. A failed read is an empty list — the feed must still
+ * render — and is not retained (`createServerMemo` never keeps `null`).
  */
 const readBlacklist = createServerMemo({
   ttlMs: BLACKLIST_REVALIDATE_SECONDS * 1000,
   keyOf: () => 'public-blacklist',
   load: async (): Promise<number[] | null> => {
     try {
-      const response = await fetch(`${UPSTREAM}${PICPONY_API_BASE}?action=get_public_blacklist`, {
-        signal: AbortSignal.timeout(1500),
-        next: { revalidate: cacheSeconds(BLACKLIST_REVALIDATE_SECONDS), tags: [PUBLIC_BLACKLIST_CACHE_TAG] },
+      const signal = AbortSignal.timeout(1500);
+      return await readWholeBlacklist(async (page) => {
+        const response = await fetch(`${UPSTREAM}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`, {
+          signal,
+          next: { revalidate: cacheSeconds(BLACKLIST_REVALIDATE_SECONDS), tags: [PUBLIC_BLACKLIST_CACHE_TAG] },
+        });
+        return response.ok ? response.json() : null;
       });
-      if (!response.ok) return null;
-      return parsePublicBlacklist(await response.json());
     } catch {
       return null;
     }

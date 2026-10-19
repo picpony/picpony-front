@@ -30,8 +30,8 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
   const visited = useVisited(active);
   const fp = useBrowsingFingerprint();
   const visible = tabVisible(profile, 'faves', own);
-  const username = profile.username;
-  const read = useResource(profileFaveFolders, ready && visited && visible ? { username } : SKIP);
+  const ownerId = Number(profile.id);
+  const read = useResource(profileFaveFolders, ready && visited && visible ? { ownerId } : SKIP);
   const folders = read.data;
   const coverIds = folders
     ? [...new Set(folders.map((folder) => folder.latestImageId).filter((cover): cover is number => cover !== null))]
@@ -71,7 +71,7 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
           <li key={folder.id} className="min-w-0">
             <FolderCard
               folder={folder}
-              href={sharedFolderHref(username, folder.id)}
+              href={sharedFolderHref(ownerId, folder.id)}
               cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
               coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
             />

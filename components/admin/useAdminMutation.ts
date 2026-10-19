@@ -2,18 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { readToken } from '@/lib/hooks';
-import { requireAdminSuccess } from '@/lib/adminMutations';
+import type { AdminRow } from '@/lib/adminMutations';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { showToast } from '@/components/Toast';
 
 type MutationKey = string | number;
 const EMPTY_PENDING: ReadonlySet<MutationKey> = new Set();
 
-interface MutationOptions {
+interface MutationOptions<T> {
   /** Independent records can run together while repeated presses on one record cannot. */
   key?: MutationKey;
   /** Cache maintenance outlives the view, but never the account that made the request. */
-  onCommitted?: (data: Record<string, unknown>) => void;
+  onCommitted?: (data: T) => void;
 }
 
 /** A write has an account lifetime; its form and toast have a view lifetime.
@@ -36,11 +36,13 @@ export function useAdminMutation(token: string) {
     };
   }, [token]);
 
-  async function run(
-    request: (isCurrent: () => boolean) => Promise<Response | null>,
-    onSuccess: (data: Record<string, unknown>) => void,
+  async function run<T extends object = AdminRow>(
+    /* An adapter's answer (the `/api/v1` adapters resolve with the backend's DTO, or nothing for a
+       204, and throw on a refusal), or `null` for a request the caller decided not to send. */
+    request: (isCurrent: () => boolean) => Promise<T | null | void>,
+    onSuccess: (data: T) => void,
     failure = '操作失败',
-    { key = 'default', onCommitted }: MutationOptions = {},
+    { key = 'default', onCommitted }: MutationOptions<T> = {},
   ) {
     if (!token || locked.current.has(key) || !active.current || readToken() !== token) return;
     locked.current.add(key);
@@ -48,10 +50,10 @@ export function useAdminMutation(token: string) {
     const started = generation.current;
     const isCurrent = () => active.current && generation.current === started && readToken() === token;
     try {
-      const response = await request(isCurrent);
-      if (!response || readToken() !== token) return;
-      const data = await requireAdminSuccess(response, failure);
-      if (readToken() !== token) return;
+      const answer = await request(isCurrent);
+      if (answer === null || readToken() !== token) return;
+      /* A 204 (or an adapter that answers nothing) is a write that happened. */
+      const data = (answer ?? {}) as T;
       onCommitted?.(data);
       if (!isCurrent()) return;
       onSuccess(data);

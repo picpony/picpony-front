@@ -98,17 +98,21 @@ try {
   const calls = [];
   globalThis.fetch = async (url, init) => {
     calls.push({ url, init });
-    return Response.json({ success: true, badge_name: 'Test badge' });
+    return Response.json({ id: 7, name: 'Test badge' });
   };
-  assert.deepEqual(await claimBadge('session-token', 'link-token&value'), { success: true, badge_name: 'Test badge', error: undefined });
+  /* `POST /me/badges/claims/{token}`: the link token is a path segment, encoded; no body. */
+  assert.deepEqual(await claimBadge('session-token', 'link-token&value'), { success: true, badge_name: 'Test badge' });
   assert.equal(calls.length, 1);
-  assert.match(calls[0].url, /action=user_claim_badge$/);
+  assert.equal(calls[0].url, '/api/v1/me/badges/claims/link-token%26value');
   assert.equal(calls[0].init.method, 'POST');
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer session-token');
-  assert.deepEqual(JSON.parse(calls[0].init.body), { token: 'link-token&value' });
-  globalThis.fetch = async () => Response.json({ success: true }, { status: 403 });
-  assert.equal((await claimBadge('session-token', 'expired')).success, false);
+  assert.equal(calls[0].init.body, undefined);
+  globalThis.fetch = async () => Response.json({ error: { code: 'CLAIM_EXPIRED', message: '领取链接已失效' } }, { status: 410 });
+  assert.deepEqual(await claimBadge('session-token', 'expired'), { success: false, error: '领取链接已失效' });
   globalThis.fetch = async () => new Response('<html>502 Bad Gateway</html>', { status: 502 });
+  await assert.rejects(claimBadge('session-token', 'link-token'), (error) => error?.name === 'ApiError' && error.kind === 'http' && error.status === 502,
+    'an outage is unknown, never a refusal');
+  globalThis.fetch = async () => new Response('<html>ok</html>', { status: 200 });
   await assert.rejects(claimBadge('session-token', 'link-token'), (error) => error?.name === 'ApiError' && error.kind === 'invalid',
     'an unreadable claim response is unknown, never a refusal');
   const failure = new TypeError('Failed to fetch');

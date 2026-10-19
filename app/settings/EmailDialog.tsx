@@ -6,39 +6,29 @@ import Button from '@/components/Button';
 import CodeInput from '@/components/CodeInput';
 import { Field, Input } from '@/components/Input';
 import { showToast } from '@/components/Toast';
-import { resendVerifyCode, updateEmail, verifyEmail } from '@/lib/api/picpony';
-import { envelopeMessage, readEnvelope } from '@/lib/api/http';
-import { apiErrorMessage, isApiError } from '@/lib/api/errors';
+import { confirmEmailChange, isRefusal, updateEmail } from '@/lib/api/picpony';
+import { apiErrorMessage } from '@/lib/api/errors';
 import { CODE_LENGTH, validateCode, validateEmail, validateRequired } from '@/lib/validation';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { useFieldErrors } from '@/lib/useFieldErrors';
 import { sessionUser } from '@/lib/resources';
 import { cn } from '@/lib/utils';
-import { EMAIL_PENDING, saveAccountFields, saysAlreadyVerified } from './useAccount';
+import { EMAIL_PENDING, EMAIL_PENDING_VERIFICATION, pendingEmailChange, saveAccountFields } from './useAccount';
 
 export type EmailStep = 'change' | 'verify';
 
 /**
- * 邮箱 — changing the address, and verifying it. Two steps of one dialog, each a real form
- * (Enter submits), and the second one reachable on its own: the row offers 验证 for as long as the
- * address is unverified, so closing the dialog no longer loses the step, and the resend countdown
- * is kept per address outside the dialog (`useCooldown`), so reopening it resumes rather than
- * offering a send the server would refuse.
+ * 邮箱 — changing the address, in two steps of one dialog, each a real form (Enter submits).
  *
- * The change asks for the current password: the original front end changed an address with
- * `{ current_password, new_email }`, so both of its names are sent, beside this app's `email`.
- *
- * **A change is final unless the backend says it sent a code.** That is how the original front
- * end treated it: 邮箱修改成功, and the badge read 已验证. The owner confirmed the backend's rules
- * (2026-09-27, decision 26):
- * - registration requires a code, so a registered account's address is verified;
- * - a change needs no verification at all. That is a known gap in the backend, kept for now.
- *
- * The verify step therefore never shows today. It waits for the day a change answers with a
- * message naming 验证码. That answer sets `EMAIL_PENDING`, and the row offers 验证 until the code is
- * accepted. An answer that the address is already verified is taken as the verification it
- * reports, never as a failure (`saysAlreadyVerified`).
+ * The backend's contract (`POST /me/email-changes`, `docs/auth-api.md`): the change asks for the
+ * current password and sends a code to the **new** address; the old one stays bound until the code
+ * is confirmed (`POST /me/email-changes/{verification}/confirmation`), from the same session. So
+ * the code step is reachable on its own: the row offers 验证 for as long as this session's change
+ * is pending (`EMAIL_PENDING`), closing the dialog no longer loses it, and the resend countdown is
+ * kept per address outside the dialog (`useCooldown`). Another code needs the password again —
+ * a resend is the change asked once more — so 重新发送 returns to the first step with the address
+ * filled in.
  */
 export default function EmailDialog({
   open,
@@ -54,17 +44,21 @@ export default function EmailDialog({
   initialStep: EmailStep;
   onClose: () => void;
 }) {
-  const [step, setStep] = useState<EmailStep>(initialStep);
+  const [pending] = useState(() => {
+    const user = readUserInfo();
+    return user?.token === token ? pendingEmailChange(user) : null;
+  });
+  const [step, setStep] = useState<EmailStep>(initialStep === 'verify' && pending ? 'verify' : 'change');
   /* A step reached inside the open dialog swaps in like a view (AuthModal's sign-up steps); the
      step a dialog opens on is simply there. The dialog is keyed per open, so this starts false. */
   const [stepChanged, setStepChanged] = useState(false);
-  const [target, setTarget] = useState(email);
-  const [address, setAddress] = useState(initialStep === 'change' ? '' : email);
+  const [target, setTarget] = useState(pending?.email ?? '');
+  const [verification, setVerification] = useState(pending?.verification ?? '');
+  const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [busy, setBusy] = useState<'change' | 'send' | 'verify' | null>(null);
+  const [busy, setBusy] = useState<'change' | 'verify' | null>(null);
   const cooldown = useCooldown(target ? `email-code:${target}` : null);
-  const [codeSent, setCodeSent] = useState(cooldown.active);
   const introId = useId();
 
   const change = useFieldErrors<'address' | 'password'>(() => [
@@ -82,15 +76,13 @@ export default function EmailDialog({
     setCodeError(message);
     focusCode();
   };
-  /* Focus follows the step: to the boxes once a code is on its way — the send button goes
-     disabled for the countdown, which would drop the focus of the key that pressed it — and to
-     the send button when the step opens with nothing sent yet. */
-  const sendButton = useRef<HTMLButtonElement>(null);
-  const focusSend = useRef(false);
+  /* Back on the first step for another code: the password field takes the focus. */
+  const passwordField = useRef<HTMLInputElement>(null);
+  const focusPassword = useRef(false);
   useEffect(() => {
-    if (step !== 'verify' || !focusSend.current) return;
-    focusSend.current = false;
-    sendButton.current?.focus({ preventScroll: true });
+    if (step !== 'change' || !focusPassword.current) return;
+    focusPassword.current = false;
+    passwordField.current?.focus({ preventScroll: true });
   }, [step]);
 
   const close = () => {
@@ -99,12 +91,6 @@ export default function EmailDialog({
   };
 
   const current = () => readToken() === token;
-  /* The account's id, read when it is used: both code actions read `user_id` (`resendVerifyCode`). */
-  const accountId = () => {
-    const user = readUserInfo();
-    const id = user?.token === token ? Number(user.id) : NaN;
-    return Number.isInteger(id) && id > 0 ? id : null;
-  };
 
   const submitChange = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -112,69 +98,36 @@ export default function EmailDialog({
     const next = address.trim();
     setBusy('change');
     try {
-      const data = await readEnvelope<{ email?: unknown }>(
-        await updateEmail(token, { email: next, new_email: next, current_password: password }),
-      );
+      const data = await updateEmail(token, { new_email: next, current_password: password });
       if (!current()) return;
-      const saved = typeof data.email === 'string' && data.email ? data.email : next;
-      const sent = /验证码/.test(envelopeMessage(data) ?? '');
-      saveAccountFields(token, { email: saved, [EMAIL_PENDING]: sent ? saved : '' });
-      void sessionUser.read({ token }, { force: true }).catch(() => {});
-      if (!sent) {
-        showToast('已更换邮箱', 'success');
-        onClose();
-        return;
-      }
-      setTarget(saved);
-      setCodeSent(true);
+      saveAccountFields(token, { [EMAIL_PENDING]: next, [EMAIL_PENDING_VERIFICATION]: data.verification });
+      setTarget(next);
+      setVerification(data.verification);
       setPassword('');
-      /* Sent: the boxes take the focus as they mount. */
-      focusSend.current = false;
+      setCode('');
       setStepChanged(true);
       setStep('verify');
-      cooldownFor(saved);
+      startCooldown(`email-code:${next}`);
     } catch (error) {
       if (!current()) return;
-      if (isApiError(error) && error.kind === 'envelope') change.set('password', apiErrorMessage(error));
+      if (isRefusal(error, 'PASSWORD_MISMATCH')) change.set('password', apiErrorMessage(error));
+      else if (isRefusal(error, 'EMAIL_TAKEN', 'INVALID_INPUT')) change.set('address', apiErrorMessage(error));
       else showToast(apiErrorMessage(error), 'error');
     } finally {
       setBusy(null);
     }
   };
 
-  /* Verified, by the code or by the backend's word that it already was. */
-  const finishVerified = () => {
-    saveAccountFields(token, { [EMAIL_PENDING]: '' });
-    cooldown.reset();
-    showToast('邮箱已验证', 'success');
-    onClose();
-  };
-
-  /* The countdown is keyed on the address; right after a change the hook's key has not caught up. */
-  const cooldownFor = (to: string) => startCooldown(`email-code:${to}`);
-
-  const sendCode = async () => {
+  /* Another code is the change asked again, which needs the password. */
+  const askAgain = () => {
     if (busy || cooldown.active) return;
-    const userId = accountId();
-    if (userId === null) {
-      showToast('登录信息不完整，请重新登录', 'error');
-      return;
-    }
-    setBusy('send');
-    try {
-      await readEnvelope(await resendVerifyCode(token, userId));
-      if (!current()) return;
-      setCodeSent(true);
-      cooldown.start();
-      focusCode();
-    } catch (error) {
-      if (!current()) return;
-      if (saysAlreadyVerified(apiErrorMessage(error))) finishVerified();
-      else showToast(apiErrorMessage(error), 'error');
-    } finally {
-      setBusy(null);
-    }
+    setAddress(target);
+    focusPassword.current = true;
+    setStepChanged(true);
+    setStep('change');
   };
+
+  const clearPending = () => saveAccountFields(token, { [EMAIL_PENDING]: '', [EMAIL_PENDING_VERIFICATION]: '' });
 
   /* `value` because the last box's `onComplete` fires before the state it just set is readable. */
   const submitCode = async (value: string = code) => {
@@ -184,31 +137,30 @@ export default function EmailDialog({
       failCode(invalid);
       return;
     }
-    const userId = accountId();
-    if (userId === null) {
-      showToast('登录信息不完整，请重新登录', 'error');
-      return;
-    }
     setBusy('verify');
     try {
-      await readEnvelope(await verifyEmail(token, userId, value.trim()));
+      const data = await confirmEmailChange(token, verification, value.trim());
       if (!current()) return;
-      finishVerified();
+      saveAccountFields(token, { email: data.email, [EMAIL_PENDING]: '', [EMAIL_PENDING_VERIFICATION]: '' });
+      void sessionUser.read({ token }, { force: true }).catch(() => {});
+      cooldown.reset();
+      showToast('已更换邮箱', 'success');
+      onClose();
     } catch (error) {
       if (!current()) return;
-      if (saysAlreadyVerified(apiErrorMessage(error))) finishVerified();
-      else if (isApiError(error) && error.kind === 'envelope') failCode(apiErrorMessage(error));
-      else showToast(apiErrorMessage(error), 'error');
+      if (isRefusal(error, 'EMAIL_CODE_MISMATCH')) failCode(apiErrorMessage(error));
+      else if (isRefusal(error, 'EMAIL_PROOF_INVALID')) {
+        /* The request is spent (expired, five misses, or another change replaced it). */
+        clearPending();
+        failCode(apiErrorMessage(error));
+      } else showToast(apiErrorMessage(error), 'error');
     } finally {
       setBusy(null);
     }
   };
 
-  const sendLabel = cooldown.active
-    ? `重新发送（${cooldown.remaining} 秒）`
-    : codeSent
-      ? '重新发送'
-      : '发送验证码';
+  const sendLabel = cooldown.active ? `重新发送（${cooldown.remaining} 秒）` : '重新发送';
+  const passwordProps = change.field('password');
 
   return (
     <Modal
@@ -221,18 +173,15 @@ export default function EmailDialog({
         step === 'verify' ? (
           <>
             <Button
-              ref={sendButton}
               variant="text"
               type="button"
-              onClick={sendCode}
-              loading={busy === 'send'}
-              disabled={cooldown.active}
-              data-autofocus={codeSent ? undefined : ''}
+              onClick={askAgain}
+              disabled={cooldown.active || busy !== null}
               className="mr-auto tabular-nums"
             >
               {sendLabel}
             </Button>
-            <Button variant="text" type="button" onClick={close} disabled={busy !== null && busy !== 'send'}>
+            <Button variant="text" type="button" onClick={close} disabled={busy !== null}>
               稍后
             </Button>
             <Button variant="filled" type="submit" form="email-verify-form" loading={busy === 'verify'}>
@@ -273,13 +222,17 @@ export default function EmailDialog({
               readOnly={busy !== null}
             />
             <Input
-              {...change.field('password')}
+              {...passwordProps}
+              ref={(element) => {
+                passwordField.current = element;
+                passwordProps.ref(element);
+              }}
               label="当前密码"
               type="password"
               name="current-password"
               autoComplete="current-password"
               value={password}
-              helper="为了你的账户安全，更换邮箱需要验证密码"
+              helper="为了你的账户安全，更换邮箱需要验证密码；验证码将发送至新邮箱"
               onChange={(event) => {
                 setPassword(event.target.value);
                 change.clear('password');
@@ -298,9 +251,7 @@ export default function EmailDialog({
             className="space-y-4"
           >
             <p id={introId} className="text-body-m text-on-surface-variant wrap-anywhere">
-              {codeSent
-                ? `验证码已发送至 ${target}，请在下方输入 ${CODE_LENGTH} 位数字。`
-                : `向 ${target} 发送一个 ${CODE_LENGTH} 位验证码，收到后在下方输入。`}
+              {`验证码已发送至 ${target}，请在下方输入 ${CODE_LENGTH} 位数字。验证后它将替换当前绑定的邮箱。`}
             </p>
             <Field error={codeError}>
               <div ref={codeBox}>
@@ -311,7 +262,7 @@ export default function EmailDialog({
                     setCodeError(null);
                   }}
                   onComplete={(value) => void submitCode(value)}
-                  autoFocus={codeSent}
+                  autoFocus
                   /* Never disabled while the code is checked: that would drop the focus of the box
                      the last digit was typed into. A second completion is ignored while busy. */
                 />

@@ -3,8 +3,7 @@
 import { defineResource } from '@/lib/resource';
 import { readToken } from '@/lib/hooks';
 import { ApiError } from '@/lib/api/errors';
-import { pageCount } from '@/lib/api/http';
-import { getDictionary, getDictionaryDuplicates, getDictionaryTagHistory, type DictionaryStats } from '@/lib/api/picpony';
+import { getDictionary, getDictionaryDuplicates, getDictionaryTagHistory, type DictionaryHistoryRow, type DictionaryStats } from '@/lib/api/picpony';
 import { searchDerpiTags } from '@/lib/api/derpi';
 import * as adminApi from '@/lib/api/admin';
 import type { DerpiTagRow, GlossaryTag } from './model';
@@ -17,11 +16,6 @@ import type { DerpiTagRow, GlossaryTag } from './model';
 
 function signedIn(token: string) {
   if (readToken() !== token) throw new ApiError('http', { status: 401, message: '登录状态已失效，请重新登录' });
-}
-
-function failed(data: { error?: string; message?: string }, fallback: string): never {
-  const sentence = data.error || data.message;
-  throw new ApiError('envelope', { serverMessage: sentence, message: sentence || fallback });
 }
 
 export interface DictionaryArgs {
@@ -55,9 +49,10 @@ export const dictionaryPage = defineResource<DictionaryArgs, DictionaryPage>({
       category: args.category,
       untranslated: args.untranslated ? 1 : 0,
     }, signal);
-    if (!data.success) failed(data, '词库加载失败');
     return {
       tags: data.tags as GlossaryTag[],
+      /* `total_matches` is the backend's count of the filtered list (`null` only when it did not
+         count it); the page's own rows are then all that is known. */
       total: data.total_matches ?? data.tags.length,
       stats: data.stats ?? null,
     };
@@ -71,22 +66,11 @@ export const duplicateTags = defineResource<string, GlossaryTag[]>({
   maxEntries: 2,
   fetch: async (token, signal) => {
     signedIn(token);
-    const data = await getDictionaryDuplicates(token, signal);
-    if (!data.success) failed(data, '查重结果加载失败');
-    return data.tags as GlossaryTag[];
+    return (await getDictionaryDuplicates(token, signal)).tags as GlossaryTag[];
   },
 });
 
-export interface TagHistoryRow {
-  editor_username?: string;
-  created_at?: string;
-  en_name?: string;
-  cn_name?: string;
-  aliases?: unknown;
-  category?: string;
-  search_count?: number | null;
-  description?: string;
-}
+export type TagHistoryRow = DictionaryHistoryRow;
 
 export const tagHistory = defineResource<{ token: string; tagId: number }, TagHistoryRow[]>({
   name: 'admin-dictionary-history',
@@ -95,63 +79,44 @@ export const tagHistory = defineResource<{ token: string; tagId: number }, TagHi
   maxEntries: 6,
   fetch: async ({ token, tagId }, signal) => {
     signedIn(token);
-    const data = await getDictionaryTagHistory(token, tagId, signal);
-    if (!data.success) failed(data, '编辑历史加载失败');
-    return data.history as TagHistoryRow[];
+    return (await getDictionaryTagHistory(token, tagId, signal)).history;
   },
 });
 
 export type FeedbackStatus = 'pending' | 'processed' | 'rejected';
 
-export interface Feedback {
-  id: number;
-  user_id?: number;
-  tag_name: string;
-  content: string;
-  username: string;
-  status: FeedbackStatus;
-  created_at: string;
-  handled_by?: number | null;
-  handled_by_name?: string | null;
-  handled_at?: string | null;
-  handling_note?: string;
-}
+/** A row of `GET /editor/dictionary/feedback` (`tag_feedback` plus the two user names). */
+export type Feedback = adminApi.TagFeedbackRow;
 
 export interface FeedbackPage {
   rows: Feedback[];
-  summary: Record<FeedbackStatus, number>;
-  totalPages: number;
+  /** The cursor of the next page (`next_cursor`), `null` on the last one. */
+  next: number | null;
 }
 
 export const FEEDBACK_PAGE_SIZE = 40;
 
+/**
+ * One cursor page of the feedback queue: the backend answers `before` → `next_cursor` and never
+ * how many pages or rows there are, so neither the pager nor the filter chips can show a total.
+ */
 export const tagFeedback = defineResource<
-  { token: string; status: FeedbackStatus | 'all'; page: number; keyword: string },
+  { token: string; status: FeedbackStatus | 'all'; before?: number; keyword: string },
   FeedbackPage
 >({
   name: 'admin-tag-feedback',
-  key: ({ token, status, page, keyword }) => `${token}\n${status}\n${page}\n${keyword}`,
+  key: ({ token, status, before, keyword }) => `${token}\n${status}\n${before ?? ''}\n${keyword}`,
   ttl: 30_000,
   maxEntries: 8,
-  fetch: async ({ token, status, page, keyword }, signal) => {
+  fetch: async ({ token, status, before, keyword }, signal) => {
     signedIn(token);
     const data = await adminApi.getTagFeedback(token, {
       status: status === 'all' ? undefined : status,
       keyword: keyword || undefined,
-      page,
+      before,
       limit: FEEDBACK_PAGE_SIZE,
     }, signal);
-    if (data?.success !== true) failed(data ?? {}, '反馈加载失败');
-    const summary = (data.summary ?? {}) as Partial<Record<FeedbackStatus, unknown>>;
-    return {
-      rows: data.feedbacks as Feedback[],
-      summary: {
-        pending: Number(summary.pending) || 0,
-        processed: Number(summary.processed) || 0,
-        rejected: Number(summary.rejected) || 0,
-      },
-      totalPages: pageCount(data.pagination?.pages),
-    };
+    return { rows: data.feedback, next: data.next };
   },
 });
 

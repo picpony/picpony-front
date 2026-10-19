@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdDownload, MdLock, MdLockOpen, MdNoEncryption, MdPersonOff } from 'react-icons/md';
+import { MdDownload, MdLock, MdLockOpen, MdPersonOff } from 'react-icons/md';
 import { useResource } from '@/lib/resource';
 import { sharedPrivacyFaves, userProfile } from '@/lib/resources';
-import { verifySharedPrivacyPassword, type SharedPrivacyAnswer } from '@/lib/api/favorites';
-import { apiErrorMessage, isAborted, isApiError, isNotFound, isRetryable } from '@/lib/api/errors';
+import { isPasswordMismatch, verifySharedPrivacyPassword, type SharedPrivacyAnswer } from '@/lib/api/favorites';
+import { apiErrorMessage, isAborted, isNotFound, isRetryable } from '@/lib/api/errors';
 import { clearImageSequence } from '@/lib/imageSequence';
 import { favoritesHref, settled } from '@/lib/favorites';
 import { useBackOrParent } from '@/lib/backNavigation';
@@ -64,8 +64,9 @@ function GateSkeleton() {
  * signed-out visitor before asking). It reads `get_shared_privacy_faves`; behind the owner's
  * password, it asks for it (`verify_shared_privacy_password`) and reads again.
  *
- * An owner who does not exist, an owner with no password set, a wrong password and a read that
- * failed are four different answers. The password is the owner's, not yours: the field asks no
+ * An owner who does not exist, a wrong password and a read that failed are three different
+ * answers. (Whether the owner has set a password at all the backend does not disclose: a space
+ * without one answers a password as wrong.) The password is the owner's, not yours: the field asks no
  * password manager to fill or keep it, and it is emptied once sent. The pictures are held in
  * memory only, like every read (signing out drops them all).
  */
@@ -211,22 +212,6 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
     );
   }
 
-  if (answer.state === 'no-password') {
-    return (
-      <>
-        {pageBack}
-        <div className={COLUMN}>
-          <EmptyState
-            fill
-            icon={<MdNoEncryption size={ICON.display} />}
-            title="对方还没有设置隐私空间"
-            description={answer.message ?? '对方设置隐私密码后，才能查看其中的图片'}
-          />
-        </div>
-      </>
-    );
-  }
-
   if (answer.state === 'locked') {
     return (
       <>
@@ -304,7 +289,7 @@ function SharedUnlockForm({
     if (readToken() !== token) return;
     if (outcome.ok) {
       if (outcome.value.state !== 'open') form.set('password', outcome.value.message ?? '密码错误');
-    } else if (isApiError(outcome.error) && outcome.error.kind === 'envelope') {
+    } else if (isPasswordMismatch(outcome.error)) {
       form.set('password', apiErrorMessage(outcome.error, '密码错误'));
     } else if (!isAborted(outcome.error)) {
       showToast(apiErrorMessage(outcome.error, '解锁失败'), 'error');

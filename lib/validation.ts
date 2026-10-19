@@ -6,7 +6,9 @@
  * symbol while the reset form accepted any six, so a reset could create a password sign-up
  * would refuse — or be refused by the server with a message the form never prepared anyone
  * for. The rule is the backend's own, as the original front end checked it
- * (`/^(?=.*[A-Za-z])(?=.*[^A-Za-z]).{8,20}$/`), and it governs every new password.
+ * (`/^(?=.*[A-Za-z])(?=.*[^A-Za-z]).{8,20}$/`), which the Rust backend keeps (`auth::password`: 8–20
+ * bytes, an ASCII letter and a non-letter), and it governs every new password. A password reset
+ * names the account by its email address alone (`POST /auth/password-resets {email}`).
  *
  * Every validator returns `null` for a valid value and otherwise the message, so a form can
  * write it straight into the field's `error`. A **login** password is not validated against
@@ -20,7 +22,8 @@
  */
 
 export const USERNAME_MAX = 20;
-export const EMAIL_MAX = 50;
+/** The backend's limit (`account::email`: at most 254 bytes, a valid address). */
+export const EMAIL_MAX = 254;
 export const PASSWORD_MIN = 8;
 export const PASSWORD_MAX = 20;
 /** Every one-time code this app sends is six digits. */
@@ -44,19 +47,9 @@ export function validateUsername(value: string): string | null {
 export function validateEmail(value: string): string | null {
   const email = value.trim();
   if (!email) return '请输入邮箱';
-  if (email.length > EMAIL_MAX) return `邮箱最多 ${EMAIL_MAX} 个字符`;
+  if (passwordLength(email) > EMAIL_MAX) return `邮箱最多 ${EMAIL_MAX} 个字节`;
   if (!EMAIL_SHAPE.test(email)) return '请输入有效的邮箱地址';
   return null;
-}
-
-/**
- * The account a password reset is for: a username or the account's email address, told apart
- * by the `@` — an address is checked as one, anything else against the username rule.
- */
-export function validateAccount(value: string): string | null {
-  const account = value.trim();
-  if (!account) return '请输入用户名或邮箱';
-  return account.includes('@') ? validateEmail(account) : validateUsername(account);
 }
 
 /**

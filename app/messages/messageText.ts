@@ -2,6 +2,7 @@ import { PONY_EMOJI, type PonyEmoji } from '@/lib/generated/emoji';
 import { parseShare, shareSummary } from '@/lib/api/messages';
 import { subscriptionHref } from '@/lib/subscriptionHref';
 import { getRawImageUrl } from '@/lib/imageLoader';
+import { decodeSanitizedText } from '@/lib/sanitizedText';
 
 /*
  * What a message's text *is*, as tokens — pure, so it can be tested without a DOM.
@@ -242,7 +243,10 @@ function stripInline(text: string): string {
 /** A message's body, as the bubble draws it. (A share card is recognised before this.) */
 export function messageTokens(content: string, origin?: string): MessageToken[] {
   if (!content) return [];
-  return isLegacyRichText(content) ? legacyTokens(content, origin) : plainTokens(content, origin);
+  /* The backend stores a message through its HTML sanitizer, `&`/`<`/`>` as entities: decoded
+     once, before the text is read as words or the original editor's BBCode. */
+  const text = decodeSanitizedText(content);
+  return isLegacyRichText(text) ? legacyTokens(text, origin) : plainTokens(text, origin);
 }
 
 /** A message as one line — a contact row's preview: cards as their summary, pictures by name. */
@@ -266,6 +270,34 @@ export function messagePreview(content: string): string {
     .join('')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Share cards by their opening, for a preview cut before the card's closing bracket. */
+const SHARE_OPENINGS: readonly [string, string][] = [
+  ['[image_share:', '[图片]'],
+  ['[fave_folder_share:', '[收藏夹]'],
+  ['[privacy_space_share:', '[隐私空间]'],
+];
+
+/**
+ * A contact row's line from the start of the newest message (`/me/contacts` sends at most 120
+ * characters, `truncated` when it cut). A cut text can end inside what the full one spells out:
+ * a share card (whose thumbnail address alone is longer than the cut), an `[img]` picture, an
+ * emoji (`$emoji_…$`) or a `[…]` marker, or a sanitizer entity (`&am`). Those tails are named or dropped
+ * before the usual preview, and a cut line ends in an ellipsis.
+ */
+export function contactPreview(preview: string, truncated = false): string {
+  if (!truncated) return messagePreview(preview);
+  const start = preview.trimStart();
+  const card = SHARE_OPENINGS.find(([opening]) => start.startsWith(opening));
+  if (card) return card[1];
+  const text = preview
+    .replace(/&[#A-Za-z0-9]{0,6}$/, '')
+    .replace(/\$emoji_[^$\s]*$/, '')
+    .replace(/\[img\](?![\s\S]*\[\/img\])[\s\S]*$/i, '[图片]')
+    .replace(/\[[^\]]*$/, '');
+  const line = messagePreview(text);
+  return line ? `${line}…` : '';
 }
 
 /**

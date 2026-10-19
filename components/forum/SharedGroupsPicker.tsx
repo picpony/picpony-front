@@ -69,7 +69,8 @@ export function optionsOf(
 
 /**
  * The groups a selection shares, as the copies `create_forum_post` / `update_forum_post` take in
- * `shared_groups` (the original front end's shape: a name and its tags).
+ * `shared_groups`: a tag group's name and tags, a block group's name, hidden and 打码 tags
+ * (`forum::BlockGroup`).
  */
 export function sharedGroupsOf(
   selected: readonly string[],
@@ -107,7 +108,7 @@ interface SharedGroupsPickerProps {
 }
 
 /**
- * 选择要分享的组: the writer's own tag groups and block groups (`get_my_shareable_groups`), each a
+ * 选择要分享的组: the writer's own tag groups and block groups (`GET /me/shareable-groups`), each a
  * checkbox row naming its first few tags — and, when editing, the groups the post already shares.
  * A group is shared as a copy, so a later change to it does not reach the post.
  */

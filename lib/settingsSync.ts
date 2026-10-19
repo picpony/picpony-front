@@ -8,14 +8,15 @@ import { showToast } from '@/lib/toast';
  *
  * ## The contract, as the backend has it
  *
- * `get_user` (and the public `get_user_profile`) carry the account's settings as one object,
- * `user.settings` (a JSON string on some rows), and `update_settings { settings }` **replaces**
- * the stored object whole; it does not merge. Measured on the live backend: no account holds both
- * a key only old versions of the original front end wrote (`videoPreview`) and one only its current
- * version writes (`hideIpLocation`), and the accounts this app's earlier one-key writes reached were
- * left holding that one key. The backend reads some keys itself: `hideIpLocation` makes the profile's
- * `ip_location` answer 该用户已隐藏 to everybody, the four `show*` close profile tabs to visitors, the
- * two `emailNotif*` drive the account's email columns (`email_notif_message` / `email_notif_reply`).
+ * `GET /me` carries the account's settings as one object, `user.settings`, with its version,
+ * `user.settings_revision`. `PUT /me/preferences { expected_revision, settings }` **replaces** the
+ * stored object whole, and only if the version is still the one named (a stale one is a 409
+ * `PREFERENCES_CONFLICT`: read again, lay the changes over the new copy, send once more). The
+ * answer is what was stored — the backend can adjust a value it does not allow (a content filter
+ * the account's age or developer access does not permit becomes `safe`). The backend reads some keys
+ * itself: `hideIpLocation` makes the profile's `ip_location` answer 该用户已隐藏 to everybody, the
+ * four `show*` close profile tabs to visitors, the two `emailNotif*` drive the account's email
+ * notifications.
  *
  * So a write is always the whole object: the last cloud copy — keys this app does not manage (the
  * original front end's mascot settings, until that feature lands here) ride through untouched —
@@ -70,8 +71,7 @@ import { COOKIE_KEYS, LS_KEYS } from './constants';
 import { mascotSettings } from './mascot/settings';
 import { readToken, readUserInfo, type StoredUserInfo } from './hooks';
 import { updateSettings } from './api/picpony';
-import { readEnvelope } from './api/http';
-import { isAborted } from './api/errors';
+import { isAborted, isApiError } from './api/errors';
 import { syncLinePrefs } from './route';
 import { parseSortField } from './searchQuery';
 import { defaultSearchSort } from './searchState';
@@ -181,11 +181,9 @@ function same<T>(a: T, b: T): boolean {
   return a === b;
 }
 
-interface StoredOptions<T> {
+interface StoredOptions {
   scope?: 'device' | 'account';
   effects?: readonly SettingEffect[];
-  /** Where an account whose settings object lacks the key keeps the value instead (a column). */
-  column?: (account: AccountRecord) => T | undefined;
   /**
    * A `COOKIE_KEYS` name the value is mirrored into on every install — a change, the account's copy
    * adopted, the reset on signing out — and once when the sync starts, for a device that stored it
@@ -199,7 +197,7 @@ export function storedBoolean(
   id: string,
   storageKey: string,
   fallback: boolean,
-  { scope = 'device', effects, column, cookie }: StoredOptions<boolean> = {},
+  { scope = 'device', effects, cookie }: StoredOptions = {},
 ): SyncedSetting<boolean> {
   return {
     id,
@@ -216,11 +214,9 @@ export function storedBoolean(
       writeStored(storageKey, scope === 'account' && value === fallback ? null : String(value));
       if (cookie) mirrorCookie(cookie, value === fallback ? null : String(value));
     },
-    fromCloud: (settings, account) => {
+    fromCloud: (settings) => {
       const value = cloudBoolean(settings[id]);
       if (value !== undefined) return value;
-      const fromColumn = column?.(account);
-      if (fromColumn !== undefined) return fromColumn;
       /* An account setting the account has never stored is the backend's default, not whatever
          this device last held — which may be another account's. */
       return scope === 'account' ? fallback : undefined;
@@ -236,7 +232,7 @@ export function storedChoice(
   storageKey: string,
   fallback: string,
   parse: (raw: unknown) => string | undefined,
-  { scope = 'device', effects }: Omit<StoredOptions<string>, 'column'> = {},
+  { scope = 'device', effects }: StoredOptions = {},
 ): SyncedSetting<string> {
   return {
     id,
@@ -437,9 +433,6 @@ const contentFilterSetting: SyncedSetting<string> = {
   },
 };
 
-/** The account's email columns, for a settings object written before it carried the two keys. */
-const emailColumn = (name: string) => (account: AccountRecord) => cloudBoolean(account[name]);
-
 /* Favourites. Every one is the account's: the folders are the account's, and so is the privacy
    space — a device must not carry one account's default folder or privacy switches into the next
    account's writes. Folder ids and names as the original front end wrote them. */
@@ -535,10 +528,9 @@ export const SYNCED_SETTINGS: readonly SyncedSetting<unknown>[] = [
   storedBoolean('showPosts', LS_KEYS.showPosts, true, { scope: 'account' }),
   storedBoolean('showComments', LS_KEYS.showComments, true, { scope: 'account' }),
   storedBoolean('hideIpLocation', LS_KEYS.hideIpLocation, false, { scope: 'account' }),
-  storedBoolean('emailNotifMessage', LS_KEYS.emailNotifMessage, true,
-    { scope: 'account', column: emailColumn('email_notif_message') }),
-  storedBoolean('emailNotifReply', LS_KEYS.emailNotifReply, true,
-    { scope: 'account', column: emailColumn('email_notif_reply') }),
+  /* The backend reads these two itself (both default to on, `preferences::save`). */
+  storedBoolean('emailNotifMessage', LS_KEYS.emailNotifMessage, true, { scope: 'account' }),
+  storedBoolean('emailNotifReply', LS_KEYS.emailNotifReply, true, { scope: 'account' }),
   storedBoolean('defaultFaveToMain', LS_KEYS.defaultFaveToMain, true, { scope: 'account' }),
   defaultFaveFolderSetting,
   publicFaveFoldersSetting,
@@ -610,7 +602,7 @@ let bridge: SettingsSyncBridge | null = null;
 /** The session the state below belongs to. */
 let session: { token: string; account: string } | null = null;
 /** The account's latest cloud copy: its settings, and when the read that produced it started. */
-let base: { token: string; settings: CloudObject; startedAt: number; at: number } | null = null;
+let base: { token: string; settings: CloudObject; revision: number; startedAt: number; at: number } | null = null;
 /** A copy from a read sent before this moment predates another tab's change: never fresh. */
 let baseStaleBefore = 0;
 /** When each setting last changed on this device, confirmed or not. */
@@ -834,16 +826,9 @@ function mirrorDeveloperState(value: unknown): boolean {
   return true;
 }
 
+/** The backend guarantees an object (`users.settings` is JSONB, `{}` for an account that never stored any). */
 function parseSettingsObject(value: unknown): CloudObject {
-  let parsed = value;
-  if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value);
-    } catch {
-      return {};
-    }
-  }
-  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...(parsed as CloudObject) } : {};
+  return { ...(value as CloudObject) };
 }
 
 // ---------------------------------------------------------------------------
@@ -914,7 +899,8 @@ export function adoptCloudSettings(token: string, user: AccountRecord, startedAt
      app does not manage, so without a copy there is no base, and a write waits for one. */
   if (!('settings' in user)) return;
   const settings = parseSettingsObject(user.settings);
-  base = { token, settings, startedAt, at: startedAt < baseStaleBefore ? 0 : Date.now() };
+  const revision = typeof user.settings_revision === 'number' ? user.settings_revision : 0;
+  base = { token, settings, revision, startedAt, at: startedAt < baseStaleBefore ? 0 : Date.now() };
   paletteVersion += 1;
   const effects = new Set<SettingEffect>();
   let changed = mirrorDeveloperState(user.is_developer);
@@ -1004,15 +990,31 @@ async function flush() {
     /* Another tab's unconfirmed changes ride along: their values are this tab's stored values,
        and leaving them out would send the cloud's older copy over them. */
     const sent = allPending();
-    const payload = composePayload(current.settings, new Set(sent.keys()));
-    await queueSettingsUpdate(token, async () => {
-      await readEnvelope(await updateSettings(token, { settings: payload }));
-    });
+    let copy = current;
+    const send = (on: NonNullable<typeof base>) =>
+      queueSettingsUpdate(token, () =>
+        updateSettings(token, {
+          settings: composePayload(on.settings, new Set(sent.keys())),
+          expected_revision: on.revision,
+        }),
+      );
+    let stored;
+    try {
+      stored = await send(copy);
+    } catch (error) {
+      /* Another device wrote meanwhile: read its copy, lay the changes over it, and send once more. */
+      if (!isApiError(error) || error.code !== 'PREFERENCES_CONFLICT') throw error;
+      await bridge?.refreshSession(token);
+      if (readToken() !== token) return;
+      if (!base || base.token !== token || base.revision === copy.revision) throw error;
+      copy = base;
+      stored = await send(copy);
+    }
     if (readToken() !== token) return;
     for (const [id, at] of sent) if ((pending.get(id) ?? Number.POSITIVE_INFINITY) <= at) pending.delete(id);
     persistPending(sent);
-    base = { ...current, settings: payload, at: Date.now() };
-    bridge?.writeSession(token, payload);
+    base = { ...copy, settings: stored.settings, revision: stored.revision, at: Date.now() };
+    bridge?.writeSession(token, stored.settings);
     failures = 0;
     setState(pending.size ? 'saving' : 'idle');
     if (pending.size) flushAgain = true;

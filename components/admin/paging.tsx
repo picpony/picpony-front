@@ -50,6 +50,33 @@ export function useShownListKey(key: string, isPrevious: boolean): string {
 }
 
 /**
+ * Page numbers over a **cursor** list (`before` → `next_cursor`): the backend says only whether
+ * there is a page after the one read, never how many there are, so the pager offers the pages
+ * already reached plus the next one. `cursors[n - 1]` is the cursor page `n` is read with
+ * (`undefined` for the first); `learn(page, next)` records what a page's answer said about the page
+ * after it. `scope` is whatever narrows the list: a new one starts again at page 1.
+ */
+export function useCursorPages(scope: string) {
+  const [state, setState] = useState<{ scope: string; page: number; cursors: (number | undefined)[] }>({ scope, page: 1, cursors: [undefined] });
+  const current = state.scope === scope ? state : { scope, page: 1, cursors: [undefined] };
+  if (state.scope !== scope) setState(current);
+  return {
+    page: current.page,
+    cursor: current.cursors[current.page - 1],
+    /** Pages reachable now: every page read so far, and the next one when the last said there is one. */
+    totalPages: current.cursors.length,
+    setPage: (page: number) => setState({ ...current, page: Math.max(1, Math.min(page, current.cursors.length)) }),
+    /** Call during render with the shown page's answer; it extends (or trims) the known pages. */
+    learn: (page: number, next: number | null) => {
+      if (next != null ? current.cursors[page] === next : current.cursors.length === page) return;
+      const known = current.cursors.slice(0, page);
+      if (next != null) known.push(next);
+      setState({ ...current, cursors: known });
+    },
+  };
+}
+
+/**
  * The anchor a console list and its pager share. `Pagination` finds the list to scroll to with
  * `closest()`, so the marker has to be an *ancestor* of the pager — a marker on the table with the
  * pager beside it is one the pager cannot see.

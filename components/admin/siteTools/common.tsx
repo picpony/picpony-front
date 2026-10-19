@@ -63,9 +63,11 @@ export function SettingsFields({ fields, values, onChange, errors = {}, busy = f
   })}</FormGrid>;
 }
 
-export function ConfigEditor({ title, token, initial, fields, validate, save, refresh, confirmation, children, saved = '已保存设置' }: {
+export function ConfigEditor({ title, token, initial, fields, validate, save, refresh, confirmation, children, saved = '已保存设置', readOnly = false }: {
   title: string; token: string; initial: Values; fields: FieldSpec[]; validate: (v: Values) => unknown;
-  save: (v: Values) => Promise<Response>; refresh: (data: Record<string, unknown>, values: Values) => void; confirmation?: (v: Values) => string; children?: ReactNode; saved?: string;
+  save: (v: Values) => Promise<object>; refresh: (data: Record<string, unknown>, values: Values) => void; confirmation?: (v: Values) => string; children?: ReactNode; saved?: string;
+  /** Shown but not editable (a setting this role may read and not write). */
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState<{ values: Values; savedFrom?: Values } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,11 +77,11 @@ export function ConfigEditor({ title, token, initial, fields, validate, save, re
   /* The form is named by its heading, not by an `aria-label` restating it (G4-031). */
   const heading = useId();
   const submit = () => {
-    if (mutation.isPending()) return;
+    if (mutation.isPending() || readOnly) return;
     try { validate(values); } catch (error) { setErrors(fieldErrors(error)); return; }
     setErrors({});
     const snapshot = { ...values };
-    const commit = () => void mutation.run(() => save(snapshot), () => {
+    const commit = () => void mutation.run(async () => (await save(snapshot)) as Record<string, unknown>, () => {
       const clean = { ...snapshot };
       for (const field of fields) {
         if (field.kind === 'password') clean[field.key] = '';
@@ -94,9 +96,9 @@ export function ConfigEditor({ title, token, initial, fields, validate, save, re
     <AdminForm onSubmit={submit} aria-labelledby={heading}>
       <SectionHeading as="h3" id={heading}>{title}</SectionHeading>
       {children}
-      <SettingsFields fields={fields} values={values} busy={mutation.busy} errors={errors} onChange={(v) => { setDraft({ values: v }); setErrors({}); }} />
+      <SettingsFields fields={fields} values={values} busy={mutation.busy || readOnly} errors={errors} onChange={(v) => { setDraft({ values: v }); setErrors({}); }} />
       {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
-      <FormActions><Button type="submit" loading={mutation.busy}>{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button></FormActions>
+      {!readOnly && <FormActions><Button type="submit" loading={mutation.busy}>{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button></FormActions>}
     </AdminForm>
     {confirmDialog}
   </>;

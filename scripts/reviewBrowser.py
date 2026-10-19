@@ -229,7 +229,7 @@ def intercepted(route):
     request = route.request
     parsed = urllib.parse.urlparse(request.url)
     # Local code/documents pass through; every business endpoint and external asset is mocked.
-    if request.url.startswith(BASE) and not (parsed.path.startswith(('/api.php', '/relay', '/search-api', '/_next/image'))):
+    if request.url.startswith(BASE) and not (parsed.path.startswith(('/api/v1', '/relay', '/search-api', '/_next/image'))):
         route.continue_()
         return
     # Timestamp cache-busters are irrelevant to a deterministic fixture.

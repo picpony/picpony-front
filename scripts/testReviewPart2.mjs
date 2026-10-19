@@ -139,8 +139,9 @@ test('P2-F7: one parser for the upstream origin, failing loudly on a malformed o
   }
   /* No reader keeps a private copy of the override, or of its default. */
   const readers = [
-    'app/api.php/[[...path]]/route.ts', 'app/share.php/route.ts', 'app/search/semantic.server.ts',
-    'lib/adminCatalogTools/importProxy.ts', 'lib/blockFilters.server.ts', 'lib/detail.server.ts',
+    /* `app/share.php/route.ts` redirects a short link to the backend's preview page on its origin. */
+    'app/api/v1/[...path]/route.ts', 'app/share.php/route.ts', 'app/mascot-shape/route.ts', 'app/search/semantic.server.ts',
+    'lib/blockFilters.server.ts', 'lib/detail.server.ts',
     'lib/forum.server.ts', 'lib/maintenance.server.ts', 'lib/profile.server.ts', 'lib/route.server.ts',
     'lib/team.server.ts', 'next.config.ts',
   ];

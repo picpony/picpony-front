@@ -1,6 +1,6 @@
 'use client';
 import * as favorites from '@/lib/api/favorites';
-import { createFolder, deleteFolders, favouriteImage, mergeFolders, setImageFolders, transferPictures, unfavouriteImage } from '@/lib/favoritesActions';
+import { createFolder, deleteFolders, favouriteImage, mergeFolders, setImageFolders, transferPictures } from '@/lib/favoritesActions';
 import { getTasks, claimTask } from '@/lib/api/tasks';
 import { sendMessage } from '@/lib/api/messages';
 import { addTagSubscription, lookupDerpiTag, removeTagSubscription } from '@/lib/api/tagSubscriptions';
@@ -22,9 +22,9 @@ function folderSettings() {
     publicIds: SYNCED_SETTINGS.find(s => s.id === 'publicFaveFolderIds')!.read() as number[] | null,
   };
 }
+/** The catalogue's whitelisted query for a read (`get_faves {folder_id}`; the others take none). */
 function readQuery(endpoint: string, values: JsonObject): Record<string, number> {
-  if (endpoint === 'get_faves') return { folder_id: values.folder_id === undefined ? 0 : requireId(values.folder_id) };
-  if (endpoint === 'get_private_messages') return { with_user_id: requireId(values.with_user_id), page: positiveId(values.page) || 1 };
+  if (endpoint === 'get_faves' && values.folder_id !== undefined) return { folder_id: requireId(values.folder_id) };
   return {};
 }
 const done = (summary: string, data: unknown = {}): Partial<AssistantReceipt> => ({ ok: true, summary, data: receiptData(data) });
@@ -74,8 +74,8 @@ async function writeSite(token: string, endpoint: string, values: JsonObject): P
       return done('已调整图片收藏夹', { image_id: id, folder_ids: ids });
     }
     case 'toggle_fave': {
+      /* The catalogue's `toggle_fave` takes `image_id` and `folder_id` only: it saves, never removes. */
       const id = requireId(values.image_id);
-      if (values.fave === false) { await unfavouriteImage(token, id); stillCurrent(); return done('已取消收藏', { image_id: id }); }
       let folder = positiveId(values.folder_id) || folderSettings().defaultFolder.id;
       if (!folder) {
         const list = await favorites.getFaveFolders(token); stillCurrent();
@@ -136,12 +136,13 @@ export async function dispatchAssistantAction(token: string, pageInstance: strin
   }
   if (action.name === 'get_page_controls') return done('已读取当前可用的页面入口', { page_instance: pageInstance, controls: PAGE_CONTROLS });
   if (action.name === 'interact_page') {
-    const control = obj(claim.control);
+    /* `client_dispatch` issues `interact_page` with `request:{control: <the model's arguments>}`. */
+    const control = obj(obj(claim.request).control);
     const href = controlHref(control.control_id);
     if (control.page_instance !== pageInstance || control.control_id !== args.control_id || control.action !== 'click' || !href) return { ok: false, summary: '该控件已失效或需要手动操作，未执行', error: 'manual_control', data: {} };
     return navigate(href);
   }
-  if (action.name === 'get_capabilities') return done('可查找图片、打开页面、读取账户摘要与私信、管理收藏和订阅、领取奖励、发送私信。账户安全、隐私解锁和未支持的操作需在页面手动处理。', { controls: PAGE_CONTROLS });
+  if (action.name === 'get_capabilities') return done('可查找图片、打开页面、读取收藏与订阅、管理收藏和订阅、领取奖励、发送私信。账户安全、隐私解锁和未支持的操作需在页面手动处理。', { controls: PAGE_CONTROLS });
   if (action.name === 'navigate') {
     const href = assistantHref(args.path);
     return href ? navigate(href) : { ok: false, summary: '此地址不是支持的站内页面，未打开', error: 'unsupported_destination', data: {} };
@@ -165,8 +166,7 @@ export async function dispatchAssistantAction(token: string, pageInstance: strin
     const current = readSearchLocation(new URLSearchParams(window.location.search));
     const hasQuery = Object.hasOwn(args, 'query');
     const query = hasQuery ? requireText(args.query, 300) : current.query || '*';
-    const mode = args.query_mode === 'refine' || action.name === 'set_search_filters' ? 'refine' : 'new';
-    const resolution = hasQuery ? await resolveAssistantSearch(query, mode, current.query || '*') : { tags: current.tags ?? [query], receipt: {} };
+    const resolution = hasQuery ? await resolveAssistantSearch(query) : { tags: current.tags ?? [query] };
     assertAssistantAccount(token);
     const rating = str(args.rating, 30), contentFilter = getBrowsingSettings().contentFilter;
     if (rating === 'suggestive' && contentFilter === 'safe' || ['questionable', 'explicit'].includes(rating) && contentFilter !== 'developer') throw new Error('当前内容过滤器不允许此分级，请在设置中手动调整');
@@ -175,9 +175,7 @@ export async function dispatchAssistantAction(token: string, pageInstance: strin
     const sort = str(args.sort, 40) || current.sort || 'created_at';
     if (!(SEARCH_SORT_FIELDS as readonly string[]).includes(sort)) throw new Error('此排序方式暂不支持，请在搜索页面选择');
     const href = searchHref(query, sort, args.direction === 'asc' ? 'asc' : args.direction === 'desc' ? 'desc' : current.direction, 1, { tags });
-    return { ...navigate(href), data: { ...resolution.receipt, query, final_query: tags.join(', '), sort }, summary: '搜索条件已确认，将打开结果页面；图片数量尚未确认' };
+    return { ...navigate(href), data: { query, final_query: tags.join(', '), sort }, summary: '搜索条件已确认，将打开结果页面；图片数量尚未确认' };
   }
-  const reads: Record<string, string> = { get_account_info: 'assistant_account_info', get_favorite_folders: 'get_fave_folders', get_favorite_contents: 'get_faves', get_tasks: 'get_tasks', get_recent_contacts: 'get_recent_contacts', get_private_messages: 'get_private_messages' };
-  if (reads[action.name]) return done('已读取站内信息', await readAssistantSiteInfo(token, reads[action.name], readQuery(reads[action.name], args)));
   return { ok: false, summary: '此操作需要到对应页面手动完成', error: 'unsupported_action', data: {} };
 }

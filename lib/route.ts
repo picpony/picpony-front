@@ -19,19 +19,19 @@ import {
   IMAGE_PROBE_URL,
   IMAGE_WORKER_BASE,
   LS_KEYS,
-  PICPONY_API_BASE,
   PICPONY_RELAY_PATH,
   PROXY_API_BASE,
 } from '@/lib/constants';
-import type { SiteStatusResponse } from '@/lib/types/site';
-import { publishObservedSiteStatus, savedSiteStatusRevision } from '@/lib/siteStatus';
+import type { SiteStatusResponse, WebsiteRoutingPolicy } from '@/lib/types/site';
 import {
   installBlockFilters,
   installPublicBlacklist,
   parseBlockFilters,
-  parsePublicBlacklist,
+  readWholeBlacklist,
+  PUBLIC_BLACKLIST_PAGE_LIMIT,
   type BlockFilters,
 } from '@/lib/blockFilters';
+
 
 // --- The catalogue ----------------------------------------------------------
 
@@ -297,7 +297,6 @@ function adoptInlinePolicy(): Promise<void> | null {
   if (Array.isArray(inline.blacklist)) installPublicBlacklist(inline.blacklist);
   if (!inline.api) return null;
   applyRoutePolicy({
-    success: true,
     global_api_route_policy: inline.api,
     global_image_route_policy: inline.image,
     global_api_third_party_url: inline.thirdPartyUrl,
@@ -323,7 +322,6 @@ export function applySavedRoutePolicy(patch: Partial<SiteStatusResponse>): void 
   delete window.__picponyRoutePolicy;
   policyReadGeneration += 1;
   const merged: SiteStatusResponse = {
-    success: true,
     global_api_route_policy: policy.api,
     global_image_route_policy: policy.image,
     global_api_third_party_url: policy.thirdPartyUrl,
@@ -347,38 +345,56 @@ function timeout(ms: number): AbortSignal | undefined {
     : undefined;
 }
 
+/**
+ * `GET /api/v1/routing-policy` → the internal policy record. The backend has already sanitised
+ * it (`Website::safe`): `auto` is a real value (the client picks the line, as it does without a
+ * policy), and the visitor's API key travels to a third-party line only when
+ * `third_party_pass_api_key` says so.
+ */
+export function routePolicyFromWire(data: WebsiteRoutingPolicy): SiteStatusResponse {
+  return {
+    global_api_route_policy: data.policy.api_policy,
+    global_image_route_policy: data.policy.media_policy,
+    global_api_third_party_url: data.policy.third_party_url ?? '',
+    global_api_third_party_pass_api_key: data.policy.third_party_pass_api_key,
+  };
+}
+
+/** The browser's path to the backend (`app/api/v1/[...path]`); spelled here rather than imported
+ *  from `lib/api/http`, which would pull the session layer into the request-line module. */
+const API_V1 = '/api/v1';
+
 async function loadRoutePolicy(): Promise<void> {
   if (typeof window === 'undefined') return;
   const generation = ++policyReadGeneration;
-  const featureRevision = savedSiteStatusRevision();
   try {
-    /* No `Authorization` header: the four route fields are served to anyone, and sending one
-       would mean reaching into `lib/hooks.ts` — a `'use client'` module — from the request layer. */
+    /* No `Authorization` header: all three resources are public. The filter and blacklist
+       bodies are read by `lib/blockFilters.ts`, as on the server. */
     const inlineFilters = window.__picponyRoutePolicy?.blockFilters;
     const inlineBlacklist = window.__picponyRoutePolicy?.blacklist;
     /* Each read settles on its own — started inside a promise, so even a transport that throws
        synchronously cannot abort its siblings and settle the policy before its own read lands. */
-    const read = <T,>(action: string, parse: (body: unknown) => T | null): Promise<T | null> =>
-      Promise.resolve()
-        .then(() => fetch(`${PICPONY_API_BASE}?action=${action}&_t=${Date.now()}`, {
-          cache: 'no-store', signal: timeout(10_000),
-        }))
-        .then(async (response) => response.ok ? parse(await response.json()) : null)
-        .catch(() => null);
+    const settle = <T,>(read: () => Promise<T | null>): Promise<T | null> =>
+      Promise.resolve().then(read).catch(() => null);
+    const json = async <T,>(path: string): Promise<T | null> => {
+      const response = await fetch(`${API_V1}${path}`, { cache: 'no-store', signal: timeout(10_000) });
+      return response.ok ? ((await response.json()) as T) : null;
+    };
     const [data, filters, blacklist] = await Promise.all([
-      read('get_maintenance_status', (body) => body as SiteStatusResponse),
-      inlineFilters ? Promise.resolve(inlineFilters) : read('get_block_tags', parseBlockFilters),
-      Array.isArray(inlineBlacklist) ? Promise.resolve(inlineBlacklist) : read('get_public_blacklist', parsePublicBlacklist),
+      settle(() => json<WebsiteRoutingPolicy>('/routing-policy')),
+      inlineFilters
+        ? Promise.resolve(inlineFilters)
+        : settle(async () => parseBlockFilters(await json<unknown>('/filters/block-tags'))),
+      Array.isArray(inlineBlacklist)
+        ? Promise.resolve(inlineBlacklist)
+        : settle(() => readWholeBlacklist((page) => json<unknown>(`/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`))),
     ]);
     if (filters && generation === policyReadGeneration) installBlockFilters(filters);
     if (blacklist && generation === policyReadGeneration) installPublicBlacklist(blacklist);
-    if (data?.success && generation === policyReadGeneration) {
-      applyRoutePolicy(data);
-      publishObservedSiteStatus(data, featureRevision);
-    }
+    if (data && generation === policyReadGeneration) applyRoutePolicy(routePolicyFromWire(data));
   } catch {
-    /* Offline, an HTML error page, a renamed action — all mean "no policy", which is what the
-       defaults already say. Swallowed rather than logged loudly; this runs on every cold load. */
+    /* Offline or an unreadable body — all mean "no policy", which is what the defaults already
+       say. Swallowed rather than logged loudly; this runs on every cold load. */
   }
   /* Unconditional, so the failure path still brings the runtime line into step with what the
      device has stored; the emit also wakes /settings. */

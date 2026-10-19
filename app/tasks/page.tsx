@@ -25,7 +25,7 @@ import { ICON } from '@/lib/icons';
 import { SKIP, useResource } from '@/lib/resource';
 import { coinTransactions, tasks } from '@/lib/resources';
 import { useScreenState } from '@/lib/screenState';
-import { wornBadges } from '@/lib/userBadges';
+import { parseEquippedBadges, wornBadges, type EquippedBadge } from '@/lib/userBadges';
 import { settle } from '@/lib/settle';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
@@ -94,18 +94,19 @@ function LevelCard({
   loading,
 }: {
   document: TaskDocument | undefined;
-  session: { level: number | null; experience: number | null; coins: number | null };
+  session: { level: number | null; experience: number | null; coins: number | null; equippedBadges: EquippedBadge[] };
   loading: boolean;
 }) {
   const now = useNow();
-  /* The document's figures, then the session's (the same account, read by `get_user`) — never
+  /* The document's figures, then the session's (the same account, read by `GET /me`) — never
      a figure made up for an answer that carried none (R5-031). The level follows from the
      experience by the site's own rule where only that is known. */
   const experience = document?.experience ?? session.experience;
   const level = document?.level ?? session.level ?? (experience !== null ? Math.floor(experience / 100) + 1 : null);
   const coins = document?.coins ?? session.coins;
   const progress = experience !== null ? experience % 100 : null;
-  const worn = document && now !== null ? wornBadges(document.equippedBadges, [], now) : [];
+  /* The tasks document carries no badges; the session's own equipped set is the account's. */
+  const worn = now !== null ? wornBadges(session.equippedBadges, [], now) : [];
 
   return (
     /* `Card`, not a hand-rolled container (R5-034), and the level meter is 多色's accent moment:
@@ -224,14 +225,16 @@ function TaskRow({
   onClaim,
 }: {
   task: TaskDefinition;
-  state: { progress: number; claimed: boolean } | undefined;
+  state: { progress: number; required: number; claimed: boolean } | undefined;
   loading: boolean;
   claimed: boolean;
   claiming: boolean;
   onClaim: () => void;
 }) {
-  const progress = Math.min(state?.progress ?? 0, task.target);
-  const done = progress >= task.target;
+  /* The server's threshold once it is known; the definition's until then (they agree). */
+  const target = state?.required ?? task.target;
+  const progress = Math.min(state?.progress ?? 0, target);
+  const done = progress >= target;
   const isClaimed = Boolean(state?.claimed) || claimed;
   const canClaim = done && !isClaimed;
   /* Whether the row was already claimed when it was first shown: only a claim this screen saw
@@ -255,10 +258,10 @@ function TaskRow({
             /* One tone in every state (D1-004): the trailing control already says claimable or
                claimed, and the severity fills read as a warning when something good was ready —
                and on the dark track they all but vanished (1.9:1). */
-            <ProgressBar value={(progress / task.target) * 100} label={`${task.name} 进度`} className="w-auto flex-1" />
+            <ProgressBar value={(progress / target) * 100} label={`${task.name} 进度`} className="w-auto flex-1" />
           )}
           <span className="w-10 shrink-0 text-right text-body-s tabular-nums text-on-surface-variant">
-            {loading ? <Skeleton className="ml-auto h-3 w-8" /> : `${progress}/${task.target}`}
+            {loading ? <Skeleton className="ml-auto h-3 w-8" /> : `${progress}/${target}`}
           </span>
         </div>
       </div>
@@ -307,17 +310,14 @@ export default function TasksPage() {
     level: sessionFigure(user?.level),
     experience: sessionFigure(user?.experience),
     coins: sessionFigure(user?.coins),
-  }), [user?.level, user?.experience, user?.coins]);
+    equippedBadges: parseEquippedBadges(user?.equipped_badges),
+  }), [user?.level, user?.experience, user?.coins, user?.equipped_badges]);
 
   /* The document is the newest word on the account's level and coins: the drawer reads them from
      the session, so a claim shows there too. */
   useEffect(() => {
     if (!doc || !token) return;
-    const patch: Record<string, unknown> = {};
-    if (doc.level !== null) patch.level = doc.level;
-    if (doc.experience !== null) patch.experience = doc.experience;
-    if (doc.coins !== null) patch.coins = doc.coins;
-    if (Object.keys(patch).length > 0) updateUserInfo(token, patch);
+    updateUserInfo(token, { level: doc.level, experience: doc.experience, coins: doc.coins });
   }, [doc, token]);
 
   const handleClaim = async (task: TaskDefinition) => {
@@ -336,11 +336,8 @@ export default function TasksPage() {
           document: shownDoc,
           ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(task.claimId),
         }));
-        const parts = [
-          paid.experience !== null ? `经验 +${paid.experience}` : null,
-          paid.coins !== null ? `金币 +${paid.coins}` : null,
-        ].filter(Boolean);
-        showToast(parts.length > 0 ? `已领取，${parts.join('，')}` : '已领取奖励', 'success');
+        updateUserInfo(token, { coins: paid.balance });
+        showToast(`已领取，经验 +${paid.experience}，金币 +${paid.coins}`, 'success');
         /* Re-read underneath the receipt; the ledger has a new row. */
         tasks.expire({ token });
         coinTransactions.invalidate();

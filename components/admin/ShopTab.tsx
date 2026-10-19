@@ -20,21 +20,17 @@ import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
 import { AdminForm, FormActions, FormGrid } from './AdminForm';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { defineAdminQuery, useAdminQuery, adminList, tableError } from './queries';
+import { defineAdminQuery, useAdminQuery, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
-import { isActive, shopForm, shopPayload, type ShopFormErrors, type ShopFormValues, type ShopItemRow } from './shop';
+import { shopForm, shopPayload, type ShopFormErrors, type ShopFormValues, type ShopItemRow } from './shop';
 import { figureText } from './figures';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import PurchasesPane from './catalogTools/PurchasesPane';
-import CatalogImageInput from './catalogTools/CatalogImageInput';
 
 const EMPTY: ShopItemRow[] = [];
-const itemsQuery = defineAdminQuery<ShopItemRow[]>('shop', async (token, signal) => {
-  const data = await adminApi.adminGetShopItems(token, signal);
-  return adminList<ShopItemRow>(data, 'items', '商品');
-});
+const itemsQuery = defineAdminQuery<ShopItemRow[]>('shop', (token, signal) => adminApi.adminGetShopItems(token, signal));
 
 function shopEditorId(itemId: number) {
   return `shop-inline-${itemId}-editor`;
@@ -96,7 +92,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
     shopItems.invalidate();
   };
 
-  const add = (payload: Record<string, unknown>) =>
+  const add = (payload: adminApi.ShopItemBody) =>
     void addMutation.run(
       () => adminApi.adminSaveShopItem(token, payload),
       () => {
@@ -107,9 +103,9 @@ export default function ShopTab({ token }: AdminPanelProps) {
       { onCommitted: committed },
     );
 
-  const save = (item: ShopItemRow, payload: Record<string, unknown>) =>
+  const save = (item: ShopItemRow, payload: adminApi.ShopItemBody) =>
     void saveMutation.run(
-      () => adminApi.adminSaveShopItem(token, payload),
+      () => adminApi.adminSaveShopItem(token, payload, { id: item.id, revision: item.revision }),
       () => {
         showToast(`已保存商品「${String(payload.name)}」`, 'success');
         setEditing((current) => (current?.id === item.id ? { id: item.id, closing: true } : current));
@@ -194,8 +190,8 @@ export default function ShopTab({ token }: AdminPanelProps) {
       header: '状态',
       width: 'auto',
       render: (item) => (
-        <Badge tone={isActive(item.active) ? 'success' : 'neutral'} size="md">
-          {isActive(item.active) ? '上架中' : '已下架'}
+        <Badge tone={item.active ? 'success' : 'neutral'} size="md">
+          {item.active ? '上架中' : '已下架'}
         </Badge>
       ),
     },
@@ -315,7 +311,6 @@ export default function ShopTab({ token }: AdminPanelProps) {
 
 /** One item's fields: the add form above the list and the editor under a row are this one form. */
 function ShopItemForm({
-  token,
   onUploadBusy,
   item,
   heading,
@@ -331,12 +326,13 @@ function ShopItemForm({
   heading: string;
   submitLabel: string;
   busy: boolean;
-  onSubmit: (payload: Record<string, unknown>) => void;
+  onSubmit: (payload: adminApi.ShopItemBody) => void;
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [uploading, setUploading] = useState(false);
-  const busy = submitting || uploading;
+  /* No picture upload here: the backend has no shop-image endpoint, so an item's picture is a link. */
+  void onUploadBusy;
+  const busy = submitting;
   const [values, setValues] = useState<ShopFormValues>(() => shopForm(item));
   const [errors, setErrors] = useState<ShopFormErrors>({});
   const prefix = item ? `shop-${item.id}` : 'shop-new';
@@ -354,7 +350,7 @@ function ShopItemForm({
 
   const submit = () => {
     if (busy) return;
-    const result = shopPayload(values, item);
+    const result = shopPayload(values);
     if (result.errors) {
       setErrors(result.errors);
       return;
@@ -411,7 +407,6 @@ function ShopItemForm({
           onChange={(event) => set('stock', event.target.value)}
         />
       </FormGrid>
-      <CatalogImageInput token={token} kind="shop" disabled={submitting} onUploaded={(url) => set('imageUrl', url)} onBusy={(value) => { setUploading(value); onUploadBusy?.(value); }} />
       <Textarea
         id={`${prefix}-description`}
         label="商品简介"

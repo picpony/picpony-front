@@ -24,11 +24,20 @@ import Button from './Button';
 import { Field, Input } from './Input';
 import { showToast } from './Toast';
 import { cn } from '@/lib/utils';
-import { login, register, verifyEmailById, resendVerifyCodeById, resetPasswordRequest, resetPassword } from '@/lib/api/picpony';
+import {
+  CAPTCHA_RETRY_CODES,
+  confirmRegistration,
+  isRefusal,
+  login,
+  register,
+  resendRegistrationCode,
+  resetPassword,
+  resetPasswordRequest,
+  type SessionGrant,
+} from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { envelopeMessage, readJson } from '@/lib/api/http';
 import { sessionUser } from '@/lib/resources';
-import { readToken, resolveDerpiCredentials, updateUserInfo, writeUserInfo } from '@/lib/hooks';
+import { readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, writeUserInfo } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
 import { focusField, useFieldErrors } from '@/lib/useFieldErrors';
@@ -36,7 +45,6 @@ import {
   CODE_LENGTH,
   PASSWORD_HINT,
   USERNAME_HINT,
-  validateAccount,
   validateCode,
   validateEmail,
   validateNewPassword,
@@ -54,7 +62,10 @@ import type { AuthView, PendingRegistration, ViewSwitch, AuthFormProps as ViewPr
  * it was. It ends when the password is reset or the user changes the account. No password is kept.
  */
 interface PendingReset {
+  /** The address the code was asked for (a reset names the account by its email). */
   account: string;
+  /** The backend's id for this reset request (`verification`); a resend replaces it. */
+  verification: string;
   sentAt: number;
 }
 
@@ -66,16 +77,21 @@ const RESEND_SECONDS = 60;
 
 /** The cooldown key for an account — one countdown per account, however it was typed. */
 const resetCooldownKey = (account: string) => `reset:${account.trim().toLowerCase()}`;
+/** A registration's resend countdown, per address: a resend replaces the request's id. */
+const registrationCooldownKey = (email: string) => `register:${email.trim().toLowerCase()}`;
 
 function readPendingReset(): PendingReset | null {
   try {
     const raw = sessionStorage.getItem(PENDING_RESET_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<PendingReset> | null;
-    if (value && typeof value.account === 'string' && typeof value.sentAt === 'number') {
+    if (
+      value && typeof value.account === 'string' && typeof value.verification === 'string' &&
+      typeof value.sentAt === 'number'
+    ) {
       const age = Date.now() - value.sentAt;
       if (value.account.trim() && age >= 0 && age < RESET_CODE_TTL_MS) {
-        return { account: value.account, sentAt: value.sentAt };
+        return { account: value.account, verification: value.verification, sentAt: value.sentAt };
       }
     }
   } catch {
@@ -236,52 +252,38 @@ function useFocusOnMount(
   return viewRef;
 }
 
-/** A failed request's sentence: the server's own words, or the one wording for its status. */
-function failureOf(data: unknown, fallback: string) {
-  return envelopeMessage(data) ?? fallback;
+/** A failed request's sentence: the server's own words (`error.message`), or the fallback. */
+function failureOf(error: unknown, fallback: string) {
+  return apiErrorMessage(error, fallback);
 }
 
-/** The fields every sign-in response carries, as the session stores them. */
-function sessionFrom(data: Record<string, unknown>) {
-  return {
-    token: data.token as string,
-    username: data.username as string,
-    avatar: data.avatar as string | undefined,
-    role: data.role as string | undefined,
-    api_key: data.api_key as string | undefined,
-    derpi_user_id: data.derpi_user_id as number | undefined,
-    derpi_username: data.derpi_username as string | undefined,
-  };
-}
+/** A refusal that means "solve another challenge" — and only those (`docs/auth-api.md`). */
+const needsNewProof = (error: unknown) => isRefusal(error, ...CAPTCHA_RETRY_CODES);
 
 /**
- * Store a new session and fill it out from `get_user` through the shared resource, so the
- * shell does not immediately ask the same question again. Returns false if the operation was
- * superseded meanwhile. `writeUserInfo` throws when the browser refuses storage; that reaches
- * the caller's catch, whose message says so.
+ * Store a new session — the bearer and its CSRF token, which is all a sign-in answers — and fill
+ * it out from `GET /me` through the shared resource, so the shell does not immediately ask the
+ * same question again. Returns false if the operation was superseded meanwhile. `writeUserInfo`
+ * throws when the browser refuses storage; that reaches the caller's catch, whose message says so.
  */
 async function establishSession(
-  data: Record<string, unknown>,
+  grant: SessionGrant,
   pending: AuthOperation,
   isCurrent: (pending: AuthOperation) => boolean,
 ): Promise<boolean> {
-  const base = sessionFrom(data);
+  const base = { token: grant.token, csrfToken: grant.csrf_token };
   pending.expectedToken = base.token;
   writeUserInfo(base);
   try {
     const result = await sessionUser.read({ token: base.token });
     if (!isCurrent(pending)) return false;
     if (result.kind === 'ok') {
-      /* The sign-in response's Derpibooru binding is the newer word — but only where it says
-         something: a response without `api_key` used to overwrite the account read's key with
-         `undefined`, and `writeUserInfo` then deleted the stored key until the shell's next
-         read put it back (review P2-F9). `resolveDerpiCredentials` is that rule, shared with the
-         shell's own merge. */
+      /* The account read carries no API key (the backend never returns it), so the device's own
+         stays — on a fresh sign-in there is none, and `resolveDerpiCredentials` answers ''. */
       updateUserInfo(base.token, {
-        ...base,
         ...result.user,
-        token: base.token,
-        ...resolveDerpiCredentials(base as unknown as Record<string, unknown>, result.user as unknown as Record<string, unknown>),
+        ...base,
+        ...resolveDerpiCredentials(result.user as unknown as Record<string, unknown>, readUserInfo()),
       });
     }
   } catch {
@@ -307,7 +309,7 @@ function LoginForm({
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const form = useFieldErrors<'username' | 'password'>(() => [
-    ['username', validateRequired(username, '请输入用户名')],
+    ['username', validateRequired(username, '请输入用户名或邮箱')],
     ['password', password ? null : '请输入密码'],
   ]);
   const usernameField = form.field('username');
@@ -333,24 +335,22 @@ function LoginForm({
     setCaptcha(true);
   };
 
-  const onCaptchaVerify = async (token: string) => {
+  const onCaptchaVerify = async (proof: string) => {
     const pending = operation.begin();
     if (!pending) return;
     setCaptcha(false);
     setIsLoading(true);
     try {
-      const res = await login({ username: username.trim(), password, cf_token: token });
-      const data = await readJson(res);
+      const grant = await login({ account: username.trim(), password, captchaProof: proof });
       if (!operation.current(pending)) return;
-      if (res.ok && data.success && typeof data.token === 'string') {
-        if (!(await establishSession(data, pending, operation.current))) return;
-        showToast('已登录', 'success');
-        onSuccess();
-      } else {
-        showToast(failureOf(data, '登录失败，请检查用户名和密码'), 'error');
-      }
+      if (!(await establishSession(grant, pending, operation.current))) return;
+      showToast('已登录', 'success');
+      onSuccess();
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      showToast(failureOf(err, '登录失败，请检查用户名和密码'), 'error');
+      /* The proof was spent or lapsed before the request: the challenge again, nothing else. */
+      if (needsNewProof(err)) setCaptcha(true);
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
     }
@@ -369,7 +369,7 @@ function LoginForm({
           id="auth-login-f1"
           name="username"
           type="text"
-          label="用户名"
+          label="用户名或邮箱"
           autoComplete="username"
           autoCapitalize="none"
           autoCorrect="off"
@@ -397,13 +397,13 @@ function LoginForm({
           }}
         />
         {/* 忘记密码 belongs to the password it recovers, so it sits under that field.
-            The account typed above travels to the reset form, which takes either kind. */}
+            An address typed above travels to the reset form, which takes the email alone. */}
         <div className="-mt-2 flex justify-end">
           <Button
             type="button"
             variant="text"
             className="-mr-4"
-            onClick={() => onSwitch({ view: 'reset', account: username.trim() || undefined })}
+            onClick={() => onSwitch({ view: 'reset', account: username.includes('@') ? username.trim() : undefined })}
           >
             忘记密码？
           </Button>
@@ -453,7 +453,6 @@ function RegisterDetails({
   headingId,
   onSwitch,
   onCaptchaChange,
-  onSuccess,
   isCurrentFlow,
   onDirtyChange,
   focusOnMount,
@@ -494,7 +493,7 @@ function RegisterDetails({
     setCaptcha(true);
   };
 
-  const onCaptchaVerify = async (token: string) => {
+  const onCaptchaVerify = async (proof: string) => {
     setCaptcha(false);
     const pending = operation.begin();
     if (!pending) return;
@@ -502,27 +501,17 @@ function RegisterDetails({
     const name = username.trim();
     const address = email.trim();
     try {
-      const res = await register({ username: name, email: address, password, cf_token: token });
-      const data = await readJson(res);
+      /* The account exists once this answers, unverified; it signs in with the e-mail's code. A
+         repeat of the same three fields resumes that registration (`mail.status: existing`). */
+      const data = await register({ username: name, email: address, password, captchaProof: proof });
       if (!operation.current(pending)) return;
-      if (res.ok && data.success && typeof data.token === 'string') {
-        // A server that needs no e-mail check signs the new account in at once.
-        if (!(await establishSession(data, pending, operation.current))) return;
-        showToast('已注册，欢迎加入', 'success');
-        onSuccess();
-      } else if (res.ok && data.success && typeof data.user_id === 'number') {
-        startCooldown(`register:${data.user_id}`);
-        onPendingChange({
-          userId: data.user_id,
-          username: typeof data.username === 'string' ? data.username : name,
-          email: address,
-        });
-        showToast('验证码已发送至邮箱', 'success');
-      } else {
-        showToast(failureOf(data, '注册失败，请检查填写的内容'), 'error');
-      }
+      if (data.mail?.status !== 'existing') startCooldown(registrationCooldownKey(address));
+      onPendingChange({ verification: data.verification, username: name, email: address });
+      showToast(data.message ?? '验证码已发送至邮箱', 'success');
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      showToast(failureOf(err, '注册失败，请检查填写的内容'), 'error');
+      if (needsNewProof(err)) setCaptcha(true);
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
     }
@@ -626,6 +615,7 @@ function ResendButton({
 function VerifyEmail({
   headingId,
   onSwitch,
+  onCaptchaChange,
   onSuccess,
   isCurrentFlow,
   onDirtyChange,
@@ -639,7 +629,15 @@ function VerifyEmail({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const codeRef = useRef<HTMLDivElement | null>(null);
-  const cooldown = useCooldown(`register:${registration.userId}`);
+  const cooldown = useCooldown(registrationCooldownKey(registration.email));
+  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  /* One-way, as in the other forms: a resend asks for a fresh challenge. */
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+  const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
+    setShowCaptchaModal(open);
+    onCaptchaChange(open);
+  };
   const form = useFieldErrors<'code'>(() => [['code', validateCode(code)]]);
   const codeField = form.field('code');
 
@@ -656,44 +654,39 @@ function VerifyEmail({
     if (!pending) return;
     setIsVerifying(true);
     try {
-      const res = await verifyEmailById(registration.userId, value);
-      const data = await readJson(res);
+      const grant = await confirmRegistration(registration.verification, value);
       if (!operation.current(pending)) return;
-      if (res.ok && data.success && typeof data.token === 'string') {
-        onPendingChange(null);
-        cooldown.reset();
-        if (!(await establishSession(data, pending, operation.current))) return;
-        showToast('邮箱已验证，欢迎加入', 'success');
-        onSuccess();
-      } else if (res.ok) {
-        // The server read the code and refused it: the answer goes under the code.
-        form.set('code', failureOf(data, '验证码错误，请重新输入'));
-      } else {
-        showToast(failureOf(data, '邮箱验证失败，请稍后再试'), 'error');
-      }
+      onPendingChange(null);
+      cooldown.reset();
+      if (!(await establishSession(grant, pending, operation.current))) return;
+      showToast('邮箱已验证，欢迎加入', 'success');
+      onSuccess();
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      /* The server read the code and refused it (or the request lapsed): the answer goes under it. */
+      if (isRefusal(err, 'EMAIL_CODE_MISMATCH', 'EMAIL_PROOF_INVALID')) form.set('code', failureOf(err, '验证码错误，请重新输入'));
+      else showToast(failureOf(err, '邮箱验证失败，请稍后再试'), 'error');
     } finally {
       if (operation.finish(pending)) setIsVerifying(false);
     }
   };
 
-  const resend = async () => {
+  /** A resend replaces the request: the new `verification` is the one the code belongs to. */
+  const resend = async (proof: string) => {
+    setCaptcha(false);
     const pending = operation.begin();
     if (!pending) return;
     setIsResending(true);
     try {
-      const res = await resendVerifyCodeById(registration.userId);
-      const data = await readJson(res);
+      const data = await resendRegistrationCode(registration.verification, proof);
       if (!operation.current(pending)) return;
-      if (res.ok && data.success) {
-        cooldown.start();
-        showToast('验证码已重新发送', 'success');
-      } else {
-        showToast(failureOf(data, '验证码发送失败，请稍后再试'), 'error');
-      }
+      onPendingChange({ ...registration, verification: data.verification });
+      cooldown.start();
+      showToast('验证码已重新发送', 'success');
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      showToast(failureOf(err, '验证码发送失败，请稍后再试'), 'error');
+      if (needsNewProof(err)) setCaptcha(true);
     } finally {
       if (operation.finish(pending)) setIsResending(false);
     }
@@ -748,8 +741,17 @@ function VerifyEmail({
         >
           重新注册
         </Button>
-        <ResendButton seconds={cooldown.remaining} busy={isResending} onResend={() => void resend()} />
+        <ResendButton
+          seconds={cooldown.remaining}
+          busy={isResending}
+          onResend={() => {
+            if (isCurrentFlow() && !operation.busy()) setCaptcha(true);
+          }}
+        />
       </div>
+      {captchaMounted && (
+        <CaptchaModal isOpen={showCaptchaModal} onClose={() => setCaptcha(false)} onVerify={(proof) => void resend(proof)} />
+      )}
     </div>
   );
 }
@@ -757,6 +759,7 @@ function VerifyEmail({
 function ResetForm({
   headingId,
   onSwitch,
+  onCaptchaChange,
   isCurrentFlow,
   onDirtyChange,
   focusOnMount,
@@ -778,6 +781,21 @@ function ResetForm({
   /** Whether the step on screen replaced another one while the dialog was open. */
   const [stepChanged, setStepChanged] = useState(false);
   const [accountInput, setAccountInput] = useState(restored?.account ?? prefillAccount ?? '');
+  /** The reset request the code belongs to; a resend replaces it. */
+  const [verification, setVerification] = useState(restored?.verification ?? '');
+  /** Whether the open challenge is for a resend (stay on the code step) or the first send. */
+  const [captchaFor, setCaptchaFor] = useState<'send' | 'resend'>('send');
+  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  const [captchaMounted, setCaptchaMounted] = useState(false);
+  const setCaptcha = (open: boolean) => {
+    if (open) setCaptchaMounted(true);
+    setShowCaptchaModal(open);
+    onCaptchaChange(open);
+  };
+  const askProof = (purpose: 'send' | 'resend') => {
+    setCaptchaFor(purpose);
+    setCaptcha(true);
+  };
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -786,7 +804,6 @@ function ResetForm({
   const accountRef = useRef<HTMLInputElement | null>(null);
   const codeRef = useRef<HTMLDivElement | null>(null);
   const account = accountInput.trim();
-  const isAddress = account.includes('@');
   const cooldown = useCooldown(account ? resetCooldownKey(account) : null);
 
   // After a reload the in-memory countdown is gone; the stored send time still knows it.
@@ -796,7 +813,7 @@ function ResetForm({
     if (left > 0) startCooldown(resetCooldownKey(restored.account), left);
   }, [restored]);
 
-  const requestForm = useFieldErrors<'account'>(() => [['account', validateAccount(accountInput)]]);
+  const requestForm = useFieldErrors<'account'>(() => [['account', validateEmail(accountInput)]]);
   const accountField = requestForm.field('account');
   const resetForm = useFieldErrors<'code' | 'password' | 'confirm'>(() => [
     ['code', validateCode(code)],
@@ -820,27 +837,30 @@ function ResetForm({
     });
   };
 
-  /** Ask for a code. `resend` stays on the second step and restarts its countdown. */
-  const sendCode = async (resend: boolean) => {
+  /**
+   * Ask for a code, with a solved challenge's proof. `resend` stays on the second step and restarts
+   * its countdown. The backend answers every address alike (「如果该邮箱已注册……」) and hands back a
+   * fresh `verification` either way, so nothing here can tell whether the address has an account.
+   */
+  const sendCode = async (resend: boolean, proof: string) => {
+    setCaptcha(false);
     if (!isCurrentFlow() || operation.busy()) return;
     const pending = operation.begin();
     if (!pending) return;
     if (resend) setIsResending(true);
     else setIsLoading(true);
     try {
-      const res = await resetPasswordRequest(account);
-      const data = await readJson(res);
+      const data = await resetPasswordRequest(account, proof);
       if (!operation.current(pending)) return;
-      if (res.ok && data.success) {
-        cooldown.start();
-        writePendingReset({ account, sentAt: Date.now() });
-        showToast(resend ? '验证码已重新发送' : '验证码已发送至注册邮箱', 'success');
-        if (!resend) goTo('reset');
-      } else {
-        showToast(failureOf(data, '验证码发送失败，请稍后再试'), 'error');
-      }
+      cooldown.start();
+      setVerification(data.verification);
+      writePendingReset({ account, verification: data.verification, sentAt: Date.now() });
+      showToast(data.message ?? (resend ? '验证码已重新发送' : '验证码已发送至注册邮箱'), 'success');
+      if (!resend) goTo('reset');
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      showToast(failureOf(err, '验证码发送失败，请稍后再试'), 'error');
+      if (needsNewProof(err)) askProof(resend ? 'resend' : 'send');
     } finally {
       if (operation.finish(pending)) {
         setIsLoading(false);
@@ -853,9 +873,9 @@ function ResetForm({
     e.preventDefault();
     if (!isCurrentFlow() || operation.busy()) return;
     if (!requestForm.check()) return;
-    // A code sent to this account a moment ago is still on its way; enter it, do not ask again.
-    if (cooldown.active) goTo('reset');
-    else void sendCode(false);
+    // A code sent to this address a moment ago is still on its way; enter it, do not ask again.
+    if (cooldown.active && verification && readPendingReset()?.account === account) goTo('reset');
+    else askProof('send');
   };
 
   const handleResetPassword = async (e: FormEvent) => {
@@ -867,23 +887,17 @@ function ResetForm({
     if (!pending) return;
     setIsLoading(true);
     try {
-      const res = await resetPassword({
-        account,
-        code: code.trim(),
-        new_password: newPassword,
-      });
-      const data = await readJson(res);
+      await resetPassword(verification, { code: code.trim(), new_password: newPassword });
       if (!operation.current(pending)) return;
-      if (res.ok && data.success) {
-        cooldown.reset();
-        writePendingReset(null);
-        showToast('密码已重置，请重新登录', 'success');
-        onSwitch({ view: 'login' });
-      } else {
-        showToast(failureOf(data, '密码重置失败，请检查验证码'), 'error');
-      }
+      cooldown.reset();
+      writePendingReset(null);
+      showToast('密码已重置，请重新登录', 'success');
+      onSwitch({ view: 'login', account });
     } catch (err) {
-      if (operation.current(pending)) showToast(apiErrorMessage(err), 'error');
+      if (!operation.current(pending)) return;
+      /* One answer for a wrong code, a lapsed request and an unknown address, on purpose. */
+      if (isRefusal(err, 'PASSWORD_RESET_INVALID')) resetForm.set('code', failureOf(err, '验证码错误或已失效'));
+      else showToast(failureOf(err, '密码重置失败，请检查验证码'), 'error');
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
     }
@@ -899,7 +913,7 @@ function ResetForm({
         {step === 'request' ? (
           <>
             <p className="text-body-m text-on-surface-variant mb-8">
-              输入用户名或注册邮箱，验证码将发送至该账号的注册邮箱。
+              输入账号的注册邮箱，验证码将发送至该邮箱。
             </p>
             <form onSubmit={handleRequestCode} className="space-y-4" noValidate>
               <Input
@@ -908,10 +922,11 @@ function ResetForm({
                   accountRef.current = element;
                   accountField.ref(element);
                 }}
-                name="username"
-                type="text"
-                label="用户名或邮箱"
-                autoComplete="username"
+                name="email"
+                type="email"
+                inputMode="email"
+                label="注册邮箱"
+                autoComplete="email"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
@@ -930,18 +945,9 @@ function ResetForm({
           </>
         ) : (
           <>
-            {/* A username is named as the account, never printed as if it were the address. */}
+            {/* 「如果」: the backend does not say whether the address has an account, by design. */}
             <p className="text-body-m text-on-surface-variant mb-6">
-              {isAddress ? (
-                <>
-                  验证码已发送至 <span className="text-on-surface wrap-anywhere">{account}</span>，10 分钟内有效。
-                </>
-              ) : (
-                <>
-                  验证码已发送至账号 <span className="text-on-surface wrap-anywhere">{account}</span>{' '}
-                  的注册邮箱，10 分钟内有效。
-                </>
-              )}
+              如果 <span className="text-on-surface wrap-anywhere">{account}</span> 已注册，验证码已发送至该邮箱，10 分钟内有效。
             </p>
             <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               {/* Tells a password manager whose password the new one is. */}
@@ -999,16 +1005,30 @@ function ResetForm({
                 onClick={() => {
                   // Another account starts over; this one's countdown stays under its own key.
                   writePendingReset(null);
+                  setVerification('');
                   goTo('request');
                 }}
               >
-                更换账号
+                更换邮箱
               </Button>
-              <ResendButton seconds={cooldown.remaining} busy={isResending} onResend={() => void sendCode(true)} />
+              <ResendButton
+                seconds={cooldown.remaining}
+                busy={isResending}
+                onResend={() => {
+                  if (isCurrentFlow() && !operation.busy()) askProof('resend');
+                }}
+              />
             </div>
           </>
         )}
       </div>
+      {captchaMounted && (
+        <CaptchaModal
+          isOpen={showCaptchaModal}
+          onClose={() => setCaptcha(false)}
+          onVerify={(proof) => void sendCode(captchaFor === 'resend', proof)}
+        />
+      )}
     </div>
   );
 }

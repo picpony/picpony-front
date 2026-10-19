@@ -68,13 +68,6 @@ export interface ApiResponse {
   images: PonyImage[];
 }
 
-export interface SharedFavesResponse {
-  success: boolean;
-  username: string;
-  folder_name?: string;
-  faves: number[];
-}
-
 export interface Comment {
   id: number;
   body: string;

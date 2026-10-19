@@ -9,7 +9,8 @@ import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { Input } from '@/components/Input';
 import { showToast } from '@/components/Toast';
-import { apiErrorMessage, isApiError } from '@/lib/api/errors';
+import { apiErrorMessage } from '@/lib/api/errors';
+import { isRefusal } from '@/lib/api/favorites';
 import { PRIVACY_UNLOCK_SECONDS, parseUnlockSeconds, settled, unlockLabel } from '@/lib/favorites';
 import { changePrivacyPassword, createPrivacyPassword, resetPrivacy, unlockPrivacy } from '@/lib/favoritesPrivacy';
 import { ICON } from '@/lib/icons';
@@ -87,7 +88,7 @@ export function PrivacyCreateForm({ token, username }: { token: string; username
       setPassword('');
       setConfirm('');
       showToast('已创建隐私空间');
-    } else if (isApiError(outcome.error) && outcome.error.kind === 'envelope') {
+    } else if (isRefusal(outcome.error)) {
       form.set('password', apiErrorMessage(outcome.error, '创建失败'));
     } else {
       showToast(apiErrorMessage(outcome.error, '创建失败'), 'error');
@@ -162,7 +163,7 @@ export function PrivacyUnlockForm({
     setBusy(false);
     setPassword('');
     if (outcome.ok || readToken() !== token) return;
-    if (isApiError(outcome.error) && outcome.error.kind === 'envelope') form.set('password', apiErrorMessage(outcome.error, '密码错误'));
+    if (isRefusal(outcome.error)) form.set('password', apiErrorMessage(outcome.error, '密码错误'));
     else showToast(apiErrorMessage(outcome.error, '解锁失败'), 'error');
   };
 
@@ -245,7 +246,7 @@ export function PrivacyResetDialog({
       return;
     }
     const verifying = (outcome.error as { step?: string }).step === 'verify';
-    if (isApiError(outcome.error) && outcome.error.kind === 'envelope') {
+    if (isRefusal(outcome.error)) {
       form.set('password', apiErrorMessage(outcome.error, verifying ? '账号密码错误' : '重置失败'));
     } else {
       showToast(apiErrorMessage(outcome.error, '重置失败'), 'error');
@@ -342,7 +343,7 @@ export function PrivacyPasswordDialog({
     if (outcome.ok) {
       showToast('已修改隐私密码');
       onClose();
-    } else if (isApiError(outcome.error) && outcome.error.kind === 'envelope') {
+    } else if (isRefusal(outcome.error)) {
       /* The backend's refusal here is about the current password (原密码错误). */
       form.set('current', apiErrorMessage(outcome.error, '原密码错误'));
     } else {
