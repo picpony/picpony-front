@@ -5,7 +5,7 @@
  * Each implementation owns its state and lifecycle; they never import this facade.
  * Token-only consumers use motionTokens, springTiming or appScroller directly.
  */
-export { DURATION, EASE, eases, SPRING, spring, Flip, gsap, useGSAP, Observer } from './motion/engine';
+export { DURATION, EASE, eases, SPRING, spring, surfaceEnter, Flip, gsap, useGSAP, Observer } from './motion/engine';
 export { circularReveal, changeScheme, changePalette, changeCustomPalette, changePaletteHues } from './motion/theme';
 export { useDrawerSwipe, DrawerSwipeHost, type DrawerSwipeOptions } from './motion/drawer';
 export { useStaggerGridOn, StaggerGridHost } from './motion/grid';

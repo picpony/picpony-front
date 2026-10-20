@@ -1,6 +1,19 @@
 import { motionTier, scaledMs } from '@/lib/appearance';
 import type { MotionCategory } from '@/lib/motionPreferences';
+import { DURATION, EASE } from '@/lib/motionTokens';
 import { SPRINGS, SPRING_MS, springToLinear, type SpringName } from '@/lib/spring';
+
+/**
+ * A large surface arriving — the dialog, the bottom sheet, the side panel, the picture viewer's
+ * slide: M3's "enters the screen" row, 400ms on the emphasized decelerate, as one WAAPI
+ * `{ duration, easing }` pair (already scaled, like `springTiming`). The curve is spelled out
+ * (`EASE.decelerate`), not a `var()`, for the WAAPI reason above. Leaving is not this: every
+ * dismissal leaves on an effects spring (`springTiming('defaultEffects', …)`), which moves on
+ * the frame after the press. GSAP's twin is `surfaceEnter` in `lib/motion.ts`.
+ */
+export function surfaceEnterTiming(category: MotionCategory = 'overlay'): { duration: number; easing: string } {
+  return { duration: scaledMs(DURATION.long * 1000, category), easing: EASE.decelerate };
+}
 
 /**
  * A spring as a Web Animations `{ duration, easing }` pair — the twin of `spring()` in

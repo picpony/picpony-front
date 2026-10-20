@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
+import { Observer, gsap, spring, surfaceEnter, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
@@ -178,8 +178,8 @@ export default function Sheet({
         return;
       }
 
-      /* The reduced tier rises like the standard one. `defaultEffects` is
-         critically damped (no overshoot to remove), and a panel that appears in
+      /* The reduced tier rises like the standard one. Neither leg can overshoot (the
+         emphasized decelerate is a Bézier, `defaultEffects` is critically damped), and a panel that appears in
          the middle of the screen without arriving from anywhere reads as a
          dialog — the travel *is* what says which edge it belongs to.
 
@@ -190,10 +190,12 @@ export default function Sheet({
          first frame the browser can produce, a stall only delays the travel. */
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        gsap.to(panel, { y: isOpen ? 0 : '100%', ...spring('defaultEffects', 'overlay'), overwrite: true });
+        /* Arriving on the dialog's clock (400ms emphasized decelerate), leaving on DefaultEffects. */
+        const timing = isOpen ? surfaceEnter('overlay') : spring('defaultEffects', 'overlay');
+        gsap.to(panel, { y: isOpen ? 0 : '100%', ...timing, overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
         if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects', 'overlay'), overwrite: true });
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...timing, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();

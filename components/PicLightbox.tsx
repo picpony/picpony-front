@@ -136,9 +136,10 @@ export default function PicLightbox({
          tracks. A CSS-only fade left slow exits cut off at 250ms and kept an
          invisible portal blocking input under the off tier. */
       animation={{
-        /* The container fade is DefaultEffects both ways, as every large surface's (the dialog,
-           the sheet): a close answers the press on the next frame instead of lingering 300ms on
-           `standard`, and the open shares the slide's own entrance clock (globals.css). */
+        /* The container fade is DefaultEffects both ways — the clock every large surface leaves
+           on: YARL takes one fade for both directions, and a close must answer the press on the
+           next frame instead of lingering 300ms on `standard`. The slide's own entrance is the
+           large surfaces' arrival, 400ms emphasized decelerate (globals.css). */
         fade: SPRING_MS.defaultEffects * scale,
         swipe: DURATION.emphasized * 1000 * scale,
         zoom: DURATION.emphasized * 1000 * scale,

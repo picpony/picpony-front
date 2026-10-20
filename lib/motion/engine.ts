@@ -76,6 +76,16 @@ export function spring(name: SpringName, category: MotionCategory = 'feedback'):
 }
 
 
+/**
+ * A large surface arriving (the bottom sheet, the side panel) as a ready-made `{ duration, ease }`
+ * pair: 400ms on the emphasized decelerate, M3's "enters the screen" row — the twin of
+ * `surfaceEnterTiming` in `lib/springTiming.ts`, so the dialog and the sheets arrive on one clock.
+ * Leaving stays `spring('defaultEffects', …)`.
+ */
+export function surfaceEnter(category: MotionCategory = 'overlay'): { duration: number; ease: string } {
+  return { duration: DURATION.long * motionRatio(category), ease: 'decelerate' };
+}
+
 /* Never let a stalled frame be charged to an animation: GSAP advances tweens by
  * real elapsed time, so blocking work is paid out of the animation. `lagSmoothing`
  * pretends the frame took the adjusted lag; 100ms is above a dropped frame and

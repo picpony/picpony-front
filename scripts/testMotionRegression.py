@@ -31,7 +31,7 @@ USER = {'id': 1, 'username': 'Review Admin', 'role': 'super_admin', 'token': 're
         'api_key': 'review-fixture-key', 'email': 'review@example.test', 'email_verified': True,
         'avatar': '', 'experience': 1350, 'coins': 100}
 # Base durations (ms) at scale 1 — app/globals.css `--motion-base-spring-*` and the state layer.
-FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER, REACTION = 108, 137, 166, 150, 221
+FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER, REACTION, SURFACE_ENTER = 108, 137, 166, 150, 221, 400
 TIERS = [('standard', 'default', 1.0), ('standard', 'fast', 0.7), ('standard', 'slow', 1.4),
          ('reduced', 'default', 1.0), ('off', 'default', 0.0)]
 TOLERANCE_MS = 2
@@ -135,7 +135,7 @@ def durations(items, predicate):
 
 def run_tier(browser, motion, speed, scale):
     tier = f'{motion}/{speed}'
-    fe, fs, de, st = (round(v * scale) for v in (FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER))
+    fe, fs, de, st, en = (round(v * scale) for v in (FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER, SURFACE_ENTER))
     context = new_context(browser, motion, speed)
     page = context.new_page()
     errors = []
@@ -186,8 +186,8 @@ def run_tier(browser, motion, speed, scale):
     else:
         items = capture(page, lambda: report.click(), 700)
     got = durations(items, lambda a: a['type'] == 'Animation' and 'ripple' not in a['cls'])
-    check(tier, 'modal enters on DefaultEffects', got == ([de] if scale else []), got)
-    page.wait_for_timeout(400)
+    check(tier, 'modal enters on the emphasized decelerate, 400ms', got == ([en] if scale else []), got)
+    page.wait_for_timeout(700)
     items = capture(page, lambda: page.keyboard.press('Escape'), 700)
     got = durations(items, lambda a: a['type'] == 'Animation' and 'ripple' not in a['cls'])
     check(tier, 'modal exits on DefaultEffects', got == ([de] if scale else []), got)
@@ -195,8 +195,8 @@ def run_tier(browser, motion, speed, scale):
 
     items = capture(page, lambda: page.locator('main img[alt="图片 #1000"]').first.click(), 1200)
     got = durations(items, lambda a: 'yarl__root' in a['cls'] or a['name'] == 'm3-lightbox-in')
-    check(tier, 'lightbox fade and slide on DefaultEffects', got == ([de] if scale else []), got)
-    page.wait_for_timeout(400)
+    check(tier, 'lightbox fades on DefaultEffects, slide enters over 400ms', got == (sorted({de, en}) if scale else []), got)
+    page.wait_for_timeout(700)
     items = capture(page, lambda: page.keyboard.press('Escape'), 1200)
     got = durations(items, lambda a: 'yarl__root' in a['cls'])
     check(tier, 'lightbox exits on DefaultEffects', got == ([de] if scale else []), got)

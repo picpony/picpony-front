@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose } from 'react-icons/md';
-import { gsap, spring, useGSAP } from '@/lib/motion';
+import { gsap, spring, surfaceEnter, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
@@ -141,9 +141,11 @@ export default function SidePanel({
 
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        gsap.to(panel, { x: isOpen ? 0 : '100%', ...spring('defaultEffects', 'overlay'), overwrite: true });
+        /* Arriving on the dialog's clock (400ms emphasized decelerate), leaving on DefaultEffects. */
+        const timing = isOpen ? surfaceEnter('overlay') : spring('defaultEffects', 'overlay');
+        gsap.to(panel, { x: isOpen ? 0 : '100%', ...timing, overwrite: true });
         if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...spring('defaultEffects', 'overlay'), overwrite: true });
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...timing, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();

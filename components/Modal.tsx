@@ -15,7 +15,7 @@ import {
 import { ICON } from '@/lib/icons';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
-import { springTiming } from '@/lib/springTiming';
+import { springTiming, surfaceEnterTiming } from '@/lib/springTiming';
 
 interface ModalProps {
   isOpen: boolean;
@@ -68,12 +68,13 @@ interface ModalProps {
   onExited?: () => void;
 }
 
-/** A dialog arrives and leaves on DefaultEffects, as the bottom sheet and the side panel do: one
- *  critically damped spring both ways, so the three large surfaces open and close on one clock
- *  and a reversal mid-way keeps its shape. Leaving, it answers a press on the frame after it (it
- *  left on the emphasized accelerate over 200ms, which held still for its first 80ms). Arriving,
- *  it ran 400ms on the emphasized decelerate beside the sheet's 166ms spring — two dialogs-worth
- *  of surface on two clocks; the spring is 95% there by 118ms, where that curve was by 160. */
+/** A dialog arrives over 400ms on the emphasized decelerate (`surfaceEnterTiming`) and leaves on
+ *  DefaultEffects, as the bottom sheet and the side panel do, so the large surfaces open and
+ *  close on one pair of clocks. Arriving, DefaultEffects both ways was tried (2026-10) and read
+ *  abrupt: 166ms is a state change, not a surface entering the screen, and the emphasized
+ *  decelerate's long soft landing is what M3 gives a dialog. Leaving, it answers a press on the
+ *  frame after it (it left on the emphasized accelerate over 200ms, which held still for its
+ *  first 80ms). A reversal mid-way starts from the committed pose, so the two clocks still join. */
 const CLOSE_ANIM_DURATION = SPRING_MS.defaultEffects;
 
 /**
@@ -239,7 +240,7 @@ export default function Modal({
       return;
     }
 
-    const timing = { ...springTiming('defaultEffects', 'overlay'), fill: 'both' as const };
+    const timing = { ...(isOpen ? surfaceEnterTiming('overlay') : springTiming('defaultEffects', 'overlay')), fill: 'both' as const };
     const running = [
       scrim.animate([{ opacity: fromScrim }, { opacity }], timing),
       panel.animate([{ opacity: fromOpacity, transform: fromTransform }, { opacity, transform }], timing),
