@@ -1058,7 +1058,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
        privacy space, which a press takes it out of whatever that setting says. */
     const privacyOnly = privacyFaved && !(favesRead.data?.ids.includes(targetId) ?? false);
     const cancelToss = isFaved && (oneTapFave || privacyOnly) ? tossFaveIcon() : undefined;
-    if (!isFaved) setFaveFillFor(targetId);
+    /* Cleared on an un-fave, so a failed one putting the star back is not a press. */
+    setFaveFillFor(isFaved ? null : targetId);
     setFavePending({ imageId: targetId, token });
     void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
       setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));

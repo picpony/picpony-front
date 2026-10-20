@@ -106,7 +106,8 @@ try {
     : args.includes('--hero-performance') ? 'probeHeroPerformance.py'
     : args.includes('--hero') ? 'testHeroInteractions.py'
     : args.includes('--auth-loading') ? 'testAuthLoading.py'
-    : args.includes('--profile-gallery') ? 'testProfileGallery.py' : 'reviewBrowser.py';
+    : args.includes('--profile-gallery') ? 'testProfileGallery.py'
+    : args.includes('--motion') ? 'testMotionRegression.py' : 'reviewBrowser.py';
   python = spawn('python', [path.join(root, 'scripts', browserScript), base, fixtureUrl,
     ...args.filter((arg) => arg !== '--hero-visuals')], {
     cwd: root, windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },

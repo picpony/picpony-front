@@ -24,6 +24,7 @@
     "test:auth-loading": "node scripts/reviewBrowser.mjs --auth-loading",
     "test:sanitize": "node scripts/testSanitizeHtml.mjs",
     "test:browser": "node scripts/reviewBrowser.mjs",
+    "test:motion": "node scripts/reviewBrowser.mjs --motion",
     "test:hero": "node scripts/reviewBrowser.mjs --hero",
     "test:profile-gallery": "node scripts/reviewBrowser.mjs --profile-gallery",
     "test:overlays": "node scripts/repairOverlayTest.mjs",

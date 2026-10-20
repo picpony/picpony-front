@@ -3556,26 +3556,30 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
      page number or a link changed colour and drew its focus ring at nearly twice the time of the
      tab, chip or button beside it. The hover itself is the state layer's (150ms), as everywhere.
      The eight ink properties lead the list in the off tier's order, so that tier's property
-     override keeps every index on the effects clock. */
+     override keeps every index on the effects clock. The filters come **last**, and that is
+     load-bearing: the build adds `-webkit-backdrop-filter` beside `backdrop-filter`, and a
+     prefixed entry in the middle shifted every later index by one, putting `rotate` back on the
+     effects clock (caught in the browser, not in the source). Anything past the end wraps onto
+     the first entries, which are effects too. */
   transition-property:
     color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, opacity,
-    outline-color, filter, backdrop-filter, transform, translate, scale, rotate;
+    outline-color, transform, translate, scale, rotate, filter, backdrop-filter;
   transition-timing-function:
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
-    var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-standard-spatial),
     var(--ease-spring-standard-spatial), var(--ease-spring-standard-spatial),
-    var(--ease-spring-standard-spatial);
+    var(--ease-spring-standard-spatial), var(--ease-spring-standard-spatial),
+    var(--ease-spring-effects), var(--ease-spring-effects);
   transition-duration:
-    var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-spatial),
     var(--duration-spring-fast-spatial), var(--duration-spring-fast-spatial),
-    var(--duration-spring-fast-spatial);
+    var(--duration-spring-fast-spatial), var(--duration-spring-fast-effects),
+    var(--duration-spring-fast-effects);
 }
 
 /* Icon-button selection changes both material and shape. Effects stop without overshoot;
@@ -3630,17 +3634,18 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 /* The docked navigation drawer's open and close, and so the content area's change of width.
  * The arrangement is Vuetify's `v-navigation-drawer` / `v-main` — one clock and one shape, the
  * same both ways, never overshooting (an overshoot here would push the whole page past its width
- * and back) — but the shape is the app's own: SlowEffects (ζ1.0, 235ms), the softest critically
- * damped spring the scheme has. It used to spell out Material 2's cubic-bezier(0.4, 0, 0.2, 1),
- * the one raw curve outside the documented exceptions, which also held still for its first frame
- * (1.7% of the way after 16ms against 8.2% here) beside a phone drawer and a /messages rail that
- * answer on the next frame. FastEffects (108ms) stays wrong for this: six frames of a page
- * re-laying out read as a jump. The duration rides the same scale as the springs, so the aside's
+ * and back) — but the shape is the app's own: DefaultEffects (ζ1.0, 166ms), the large-surface
+ * effects tier Modal, Sheet and the lightbox run. It used to spell out Material 2's
+ * cubic-bezier(0.4, 0, 0.2, 1) at 200ms, which held still for its first frame; SlowEffects
+ * (235ms) fixed the start but its tail read slow beside the old curve (95% at 168ms against
+ * 146ms). DefaultEffects is ahead of the old curve at every point (50% at 42ms, 90% at 98ms,
+ * 95% at 119ms). FastEffects (108ms) stays wrong: six frames of a page re-laying out read as a
+ * jump. The duration rides the same scale as the springs, so the aside's
  * `data-motion-spring='overlay'` puts it on the overlay tier and `off` snaps it. */
 @utility drawer-dock {
   --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
-  transition-duration: calc(var(--motion-base-spring-slow-effects) * var(--motion-spring-scale));
+  transition-duration: calc(var(--motion-base-spring-default-effects) * var(--motion-spring-scale));
 }
 @utility spring-fast-effects {
   --motion-spring-scale: var(--motion-scale);

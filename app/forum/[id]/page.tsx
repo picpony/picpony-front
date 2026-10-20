@@ -174,7 +174,8 @@ export default function ForumThreadPage() {
     const before = { liked, count: likeCount };
     const cancelToss = liked ? tossLikeIcon() : undefined;
     likeBusy.current = true;
-    if (!liked) setLikeFillFor(id);
+    /* Cleared on an unlike, so a failed unlike putting the filled thumb back is not a press. */
+    setLikeFillFor(liked ? null : id);
     setLikeLocal({ liked: !liked, count: Math.max(0, likeCount + (liked ? -1 : 1)) });
     void sendLike(session, post.id, !before.liked).then((outcome) => {
       likeBusy.current = false;

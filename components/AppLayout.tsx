@@ -1053,8 +1053,8 @@ export default function AppLayout({
                overshoot back into view. **Docked: Vuetify's arrangement instead** (`drawer-dock`):
                docked, the motion is not the panel but the page beside it re-laying out wider or
                narrower, and 108ms is six frames of that — it read as a jump. One clock, the same
-               both ways, as `v-navigation-drawer` and `v-main` do, on the app's own SlowEffects
-               spring (235ms, critically damped) rather than Vuetify's Material 2 curve.
+               both ways, as `v-navigation-drawer` and `v-main` do, on the app's own DefaultEffects
+               spring (166ms, critically damped) rather than Vuetify's Material 2 curve.
                Applied per branch and per breakpoint, because a transition is governed by the
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */
