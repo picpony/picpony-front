@@ -10,7 +10,7 @@ import { unsealDetailCopy, type DetailExitSnapshot } from '@/lib/detailTransit';
 /**
  * The picture detail's container transform from a list row, and back (`lib/detailTransit.ts` says
  * when). The forum's construction, engine and clock (`lib/containerTransformPlay.ts`) — the
- * gallery flight's curve, over the container's 260ms — on a layer beside the overlay rather than
+ * gallery flight's curve, over the container's 250ms — on a layer beside the overlay rather than
  * above a route cross-fade: the list stays mounted under the overlay, so the row is live on both
  * legs. Timed by the picture's own motion preference (`image`), as the flight is.
  *

@@ -5,7 +5,7 @@
 import { useRef, type RefObject } from 'react';
 import { motionRatio, useEntranceMotion, useMotionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { DURATION } from '@/lib/motionTokens';
+import { DURATION, STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
 import { routeTransitActive } from '@/lib/pageTransit';
 import { replacedSkeleton } from '@/lib/masonry';
 import { gsap, useGSAP } from './engine';
@@ -23,8 +23,9 @@ import { gsap, useGSAP } from './engine';
  * ------------------------------------------------------------------------ */
 
 /** Distance an entering element travels, px, on the 4dp grid. Small on purpose: a long
- *  throw reads as decoration, a short one reads as the content settling. */
-const REVEAL_SHIFT = 16;
+ *  throw reads as decoration, a short one reads as the content settling. The shared
+ *  entrance travel, as `Reveal` takes it. */
+const REVEAL_SHIFT = TRAVEL_PX.standard;
 
 /**
  * Cascade for grid/masonry children, played on mount rather than on scroll — a
@@ -61,7 +62,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
   const entrances = useEntranceMotion();
   /**
    * Once per mounted grid, not once per page of results. The cascade parks every
-   * card at `autoAlpha: 0` and reveals them over up to 0.9s of stagger — right for a
+   * card at `autoAlpha: 0` and reveals them over up to 0.25s of stagger — right for a
    * grid *arriving*, wrong for a page turn, twice over: `Pagination` glides the
    * scroller to the top, so the viewport starts at the **bottom** of the grid where
    * cards are *last* in cascade order (looked-at content held invisible for the full
@@ -96,7 +97,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
 
       /* Only what can be seen, plus the next row. Cards below the fold are revealed long
          before anyone scrolls to them, so tweening them was pure cost — 45 of 50 on a phone
-         — and it held them at zero opacity for up to 0.9s of stagger for nothing. The rest
+         — and it held them at zero opacity through the stagger for nothing. The rest
          are left exactly as they are, which is visible. */
       const scroller = getAppScroller();
       const view = scroller?.getBoundingClientRect();
@@ -113,28 +114,25 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
         .map((m) => m.el);
       if (ordered.length === 0) return;
 
-      /* Reduced halves the rise and drops the cascade and the scale: the cascade is
-       * a tween per card on a device that cannot afford 100 of them, the scale is
-       * the flourish, the rise says "arriving". `scale` must be absent from *both*
-       * ends rather than 1 at both — a card mid-tween would otherwise carry an
-       * identity transform, exactly what the hero flight measures on press. */
+      /* Reduced halves the rise and drops the cascade: the cascade is a tween per
+       * card on a device that cannot afford 100 of them, the rise says "arriving".
+       * No scale at either tier — the same fade-and-rise `Reveal` plays, so the app
+       * has one entrance cascade; the 0.985 it carried was a flourish no one could
+       * see, and a card mid-tween carried a transform the hero flight measures. */
       const reduced = tier === 'reduced';
       const tween = gsap.fromTo(
         ordered,
-        reduced
-          ? { autoAlpha: 0, y: REVEAL_SHIFT / 2 }
-          : { autoAlpha: 0, y: REVEAL_SHIFT, scale: 0.985 },
+        { autoAlpha: 0, y: reduced ? TRAVEL_PX.small : REVEAL_SHIFT },
         {
           autoAlpha: 1,
           y: 0,
-          ...(reduced ? {} : { scale: 1 }),
           duration: DURATION.long,
           ease: 'decelerate',
-          // Capped: with 100 cards a linear stagger would still be arriving
-          // several seconds after the images finished decoding.
+          // Capped (`STAGGER`): the last card lands by 650ms however many are on
+          // screen — the old 0.9s cap left a full desktop screen settling for 1.3s.
           stagger: reduced
             ? 0
-            : { each: 0.035, from: 'start', amount: Math.min(ordered.length * 0.035, 0.9) },
+            : { each: STAGGER.step, from: 'start', amount: Math.min((ordered.length - 1) * STAGGER.step, STAGGER.max) },
           clearProps: 'opacity,visibility,transform',
         },
       ).timeScale(1 / motionRatio('entrance'));

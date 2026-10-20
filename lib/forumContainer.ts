@@ -13,14 +13,15 @@
  * container's own surface, which is there from the first frame to the last.
  *
  * **Its curve is the hero flight's, over a little longer** — `HERO_FLIGHT_CURVE`, read from
- * `lib/hero/constants.ts` rather than copied, over 260ms where the flight takes 220
- * (`HERO_DURATIONS`). A gallery card opening into its picture, a row into its post or its picture
+ * `lib/hero/constants.ts` rather than copied, over 250ms (`DURATION.container`, M3 `medium1`)
+ * where the flight takes 200 (`HERO_DURATIONS`). A gallery card opening into its picture, a row into its post or its picture
  * and a card into its folder are one gesture, so they share one shape of motion; but a container
  * hands one content over to another inside it, where the flight carries one picture end to end,
- * and on the flight's 220ms that hand-over read a touch fast (owner, 2026-10-14). The shape is
- * kept and every stage comes 18% later. Per 60 Hz frame, as a share of the way: 6.9, 10.5, 15.0,
- * 17.0, 14.2, 10.3, 7.5, 5.5, 4.1, 3.0, 2.3, 1.6, 1.1, 0.7, 0.3, 0.1 — halfway at 68ms, 90% at
- * 146ms and at rest by 237ms, the crest (2.7× its mean speed) in the air, never past its end.
+ * and on the flight's clock that hand-over read a touch fast (owner, 2026-10-14). The shape is
+ * kept and every stage comes 25% later (it was 260 against 220 until both moved onto M3's
+ * scale, 2026-10-20). Per 60 Hz frame, as a share of the way: 7.3, 11.1, 16.0, 17.5, 14.0, 10.0,
+ * 7.1, 5.2, 3.8, 2.8, 2.1, 1.4, 0.9, 0.5, 0.2 — halfway at 65ms, 90% at 140ms and at rest by
+ * 227ms, the crest (2.7× its mean speed) in the air, never past its end.
  * Until 2026-10 it was the tab strip's launched response over the route cross-fade's 400ms,
  * chosen beside the flight's old `fastOutSlowIn` that hung back for 45ms: it left at its top speed
  * (13.7% in the first frame) and slowed from there, 90% of the way at 194ms and the last tenth
@@ -57,6 +58,7 @@ import {
   HERO_REVERSE_TRAVEL_RATIO,
 } from '@/lib/hero/constants';
 import { curveProgress } from '@/lib/hero/progress';
+import { DURATION } from '@/lib/motionTokens';
 
 /** A rectangle, in the overlay's coordinates (px). */
 export interface Box {
@@ -71,11 +73,11 @@ export type Radii = readonly [number, number, number, number];
 
 /**
  * The container transform's duration at the default speed, both ways: the flight's curve over
- * 260ms, where the flight takes 220 (`HERO_DURATIONS`) — see the module's note for why the two
- * differ. Its own number rather than the flight's plus something: a change to either is a
- * judgement about that motion, not the other.
+ * 250ms (`DURATION.container`), where the flight takes 200 (`HERO_DURATIONS`) — see the module's
+ * note for why the two differ. Its own step rather than the flight's plus something: a change to
+ * either is a judgement about that motion, not the other.
  */
-export const FORUM_TRANSFORM_MS = 260;
+export const FORUM_TRANSFORM_MS = DURATION.container * 1000;
 
 /** Its shape: the flight's curve, as a Web Animations easing for the legs' keyframes. */
 export const FORUM_TRANSFORM_EASING = HERO_FLIGHT_CURVE.css;

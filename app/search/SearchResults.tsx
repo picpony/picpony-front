@@ -237,7 +237,7 @@ export default function SearchResults({
         ref={gridRef}
         aria-busy={turning || undefined}
         className={cn(
-          'transition-opacity duration-standard ease-[var(--ease-standard)]',
+          'transition-opacity spring-default-effects',
           turning ? 'pointer-events-none opacity-50' : 'opacity-100',
         )}
       >

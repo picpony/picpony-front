@@ -13,7 +13,7 @@ import {
   type LoadAttempt,
 } from '@/lib/imageLoader';
 import Skeleton from '@/components/Skeleton';
-import { DURATION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { useSsrImageLine } from '@/components/ImageLineProvider';
 import { useMounted } from '@/lib/overlay';
@@ -293,8 +293,8 @@ function FadeInImageInner({
     if (!isLoaded) return;
     const timer = window.setTimeout(
       () => startTransition(() => setPlaceholderGone(true)),
-      /* DURATION.short is the 200ms step the duration-standard utility emits. */
-      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+      /* DefaultEffects, the clock the image's `spring-default-effects` fade runs on. */
+      SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
     );
     return () => window.clearTimeout(timer);
   }, [isLoaded]);
@@ -354,7 +354,7 @@ function FadeInImageInner({
              main thread instead — a style pass per frame for every placeholder of a page still
              loading, forty-odd on a phone (R12-010); and once the picture is in, the sweep
              under it is stopped rather than left running through the fade. */
-          className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
+          className={`absolute inset-0 block rounded-none transition-opacity spring-default-effects ${
             isLoaded ? 'opacity-0 after:animate-none' : armed ? 'opacity-100' : 'opacity-100 after:[animation-play-state:paused]'
           }`}
         />
@@ -366,7 +366,7 @@ function FadeInImageInner({
         unoptimized={unoptimized || !shown.optimized}
         alt={props.alt || ''}
         ref={imgRef}
-        className={`${className || ''} ${isLoaded || paintAsServed ? 'opacity-100' : 'opacity-0'} relative transition-opacity duration-standard ease-[var(--ease-standard)]`}
+        className={`${className || ''} ${isLoaded || paintAsServed ? 'opacity-100' : 'opacity-0'} relative transition-opacity spring-default-effects`}
         onLoad={handleLoad}
         onError={fail}
         loading={props.loading ?? (eager ? 'eager' : 'lazy')}

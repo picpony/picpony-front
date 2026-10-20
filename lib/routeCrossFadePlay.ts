@@ -1,8 +1,9 @@
 'use client';
 
-import { gsap, playSharedAxis, supportsEdgeMask } from '@/lib/motion';
-import { DURATION, EASE, PAGE_FADE_TIMING } from '@/lib/motionTokens';
-import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
+import { gsap, playSharedAxis, SPRING, supportsEdgeMask } from '@/lib/motion';
+import { DURATION, EASE, PAGE_FADE_TIMING, TRAVEL_PX } from '@/lib/motionTokens';
+import { motionRatio, motionScale, motionTier, scaledMs } from '@/lib/appearance';
+import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
 import { getAppScroller } from '@/lib/appScroller';
 import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
@@ -174,8 +175,8 @@ export function playRouteCrossFade(
        `handle.finish` is idempotent and the node is discarded at the next navigation. */
     page.addEventListener('pointerdown', () => handle.finish(), { capture: true });
     backLeaves?.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: DURATION.press * 1000 * motionScale('page'),
-      easing: EASE.accelerate,
+      duration: SPRING_MS.fastEffects * motionScale('page'),
+      easing: LEAVE_EASING,
       fill: 'forwards',
     });
     backArrives?.animate([{ opacity: 0 }, { opacity: 1 }], {
@@ -195,17 +196,24 @@ export function playRouteCrossFade(
 
   /* Paused until the first frame after the commit (below). */
   const timeline = gsap.timeline({ paused: true, onComplete: () => cancelRouteCrossFade() });
-  /* Reduced halves the outgoing leg's rise rather than removing it — 12px was never the
+  /* On the page tier's own speed. GSAP's global clock carries only feedback's, so without this
+     a custom page speed reached the WAAPI legs of this fade (the back affordance, the container
+     path) and not the page itself — the two halves of one navigation on two clocks. */
+  const pageRatio = motionRatio('page');
+  if (pageRatio > 0) timeline.timeScale(1 / pageRatio);
+  /* Reduced halves the outgoing leg's rise rather than removing it — the travel was never the
      performative part (the clone is), and a screen that leaves without moving at all reads as
-     a cut with a fade on it. */
-  const rise = motionTier('page') === 'reduced' ? -8 : -12;
+     a cut with a fade on it. The shared entrance travel, mirrored: 16px, 8px reduced. */
+  const rise = -(motionTier('page') === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard);
   timeline
     .set(snapshot.node, { willChange: 'transform, opacity' })
     /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the full duration
        while its opacity is spent early, so the incoming page takes over inside the overlap.
-       `DURATION.press` (`short2`) is the shortest M3 step above a micro-interaction. The back
-       affordance's copy fades with it and does not rise: chrome is where it is. */
-    .to(backLeaves ? [snapshot.node, backLeaves] : snapshot.node, { opacity: 0, duration: DURATION.press, ease: 'accelerate' }, 0)
+       The fade is FastEffects, as every exit is: by the 80ms the incoming page waits it is 4%
+       opaque. On 100ms of the emphasized accelerate it was still 52% opaque then, and the two
+       pages showed through each other. The back affordance's copy fades with it and does not
+       rise: chrome is where it is. */
+    .to(backLeaves ? [snapshot.node, backLeaves] : snapshot.node, { opacity: 0, duration: SPRING.fastEffects, ease: 'spring-fastEffects' }, 0)
     .to(snapshot.node, { y: rise, duration: DURATION.long, ease: 'standard' }, 0);
   if (backArrives) {
     timeline.fromTo(
@@ -256,16 +264,19 @@ export function playRouteCrossFade(
   });
 }
 
+/** The leaving half of every page fade: the FastEffects shape, as a WAAPI easing. */
+const LEAVE_EASING = springToLinear(SPRINGS.fastEffects);
+
 /**
  * **The fade a container transform rides, on the container's clock** — a forum post or a folder
  * opening from its list and closing back into it (`takeRouteContainerExpectation`).
  *
  * The page fade's own clock is 400ms — 80ms of overlap and 320ms of `emphasized-decelerate` — and
- * the container's is 260ms on the flight's curve (`lib/forumContainer.ts`): played side by side,
+ * the container's is 250ms on the flight's curve (`lib/forumContainer.ts`): played side by side,
  * a post's card had landed in its row while the list it was landing in was still on its way, and
  * the thread it came from still on screen around it; a second motion after the first. So under a
- * container the fade keeps its own shape — the leaving page out over the first quarter on the
- * emphasized accelerate, the arriving one in from a fifth of the way on the emphasized decelerate,
+ * container the fade keeps its own shape — the leaving page out over the first 27% on the
+ * FastEffects shape, the arriving one in from a fifth of the way on the emphasized decelerate,
  * the same shares of the same curves — over the container's length, and the two land together.
  *
  * **On the compositor**, as the container is: on the main thread the fade stood still through the
@@ -320,7 +331,7 @@ function playUnderContainer(
         animations.push(
           el.animate([{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }], {
             duration: full * FADE_SHARE.leave,
-            easing: EASE.accelerate,
+            easing: LEAVE_EASING,
             fill: 'forwards',
           }),
         );
@@ -363,9 +374,9 @@ function playUnderContainer(
 }
 
 /** The page fade's shares of its own 400ms (`PAGE_FADE_TIMING`, and the leaving page's
-    `DURATION.press`), for the same fade on another clock. */
+    FastEffects), for the same fade on another clock. */
 const FADE_SHARE = {
-  leave: DURATION.press / DURATION.long,
+  leave: SPRING_MS.fastEffects / (DURATION.long * 1000),
   arriveDelay: PAGE_FADE_TIMING.delay / DURATION.long,
 } as const;
 

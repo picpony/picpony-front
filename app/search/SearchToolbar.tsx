@@ -246,8 +246,8 @@ export default function SearchToolbar({
         role="region"
         aria-label="高级筛选条件"
         inert={!showAdvanced}
-        /* The drawer's springs, per direction — `DefaultSpatial` opening, `FastEffects`
-           closing, per `NavigationDrawer.kt`. `grid-template-rows` stays as the mechanism: the
+        /* The collapsible-panel pair, per direction — `DefaultSpatial` opening, `FastEffects`
+           closing (globals.css, the spring utilities). `grid-template-rows` stays as the mechanism: the
            inner track carries the whole subtree with its overflow clipped, so the contents
            are clipped rather than left behind by a resizing box. */
         className={`grid transition-[grid-template-rows,opacity] ${

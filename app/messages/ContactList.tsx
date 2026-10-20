@@ -18,7 +18,7 @@ import { ContactRowsSkeleton } from './Skeletons';
 import { contactTime } from './threadModel';
 import UserSearchField from './UserSearchField';
 
-/** The drawer's springs, per direction — see the note on the rail below. */
+/** The collapsible-panel pair (globals.css, the spring utilities), per direction — see the note on the rail below. */
 const railSpring = (collapsed: boolean) => (collapsed ? 'spring-fast-effects' : 'spring-default-spatial');
 
 interface ContactListProps {
@@ -46,8 +46,8 @@ interface ContactListProps {
  * with the last message (when the backend sends one) and a day label rather than the raw
  * 19-character stamp it printed.
  *
- * **The rail.** In the two-pane frame the column collapses to its portraits, on the drawer's
- * springs per direction (`default-spatial` open, `fast-effects` closed), with every clock of the
+ * **The rail.** In the two-pane frame the column collapses to its portraits, on the collapsible-
+ * panel pair per direction (`default-spatial` open, `fast-effects` closed), with every clock of the
  * gesture — width, the header's gap, the search box's width and grow, the labels' fade — on the
  * same one, because they are one movement. Nothing about a row's own layout changes: it keeps
  * its 64dp box and the rail narrows over it, clipping the text. The collapsed width is derived,

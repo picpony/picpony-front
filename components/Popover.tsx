@@ -137,7 +137,7 @@ export function suggestionRow({
  * the standard decelerate, with the user's speed scale. The arrangement is borrowed; the literal
  * durations are not. The **search view** is a collapsible panel rather than an anchored menu, so
  * it arrives on DefaultSpatial with its height (see the height effect below). Both leave as every
- * small surface does, on FastEffects — the drawer closing, the tooltip: a dismissal answers a
+ * small surface does, on FastEffects — the toast, the tooltip: a dismissal answers a
  * press, and starts on the frame after it (the 150ms standard accelerate it left on was 3% of the
  * way after a frame).
  *
@@ -386,7 +386,7 @@ export default function Popover({
     /* One clock per direction, shared with the search view's height below, because a gesture's
        parts must agree. An anchored menu *grows out of its trigger* and keeps the measured
        transform's own 200ms step. The search view is something else: a **collapsible panel**,
-       both ends of its travel on screen, which this app answers with the drawer's own pair of
+       both ends of its travel on screen, which this app answers with the collapsible-panel pair of
        springs rather than a one-sided curve — `default-spatial` open, `fast-effects` closed. It
        arrived on FastEffects with no travel at all: 108ms of opacity for a panel that comes
        to 462px at eight rows, which is the whole of what read as a pop. */

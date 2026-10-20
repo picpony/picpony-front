@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { scaledMs } from '@/lib/appearance';
-import { MENU_TRANSITION, PAGE_FADE_TIMING } from '@/lib/motionTokens';
+import { MENU_TRANSITION, PAGE_FADE_TIMING, TRAVEL_PX } from '@/lib/motionTokens';
 import { springTiming } from '@/lib/springTiming';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 export type SwapSide = 'bottom' | 'left';
 
 /** How far the two travel by default, in px — the 8 an entrance takes under the reduced tier. */
-const DEFAULT_DISTANCE = 8;
+const DEFAULT_DISTANCE = TRAVEL_PX.small;
 
 /** The pair of offsets the change animates between, for one side and one distance. */
 function offsets(side: SwapSide, distance: number) {

@@ -1,7 +1,7 @@
 'use client';
 
-import { SPRING_MS } from '@/lib/spring';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
+import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
 import type { HeroProgressModel, ProgressCurve } from './progress';
 import type { SpringResponse } from './spring';
 import type { HeroDirection } from './types';
@@ -70,10 +70,10 @@ export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
  * Grace after the final media decodes before a still-silent preview is declared failed. The
  * preview is the visual authority while `heroActive`, so a decoded final image cannot stand
  * in for it — and a request that neither loads nor errors has no other terminal answer. One
- * step on M3's duration scale, and longer than the 250ms leg plus a frame, so it can never
- * fire while the flight is the thing being waited on.
+ * step on M3's duration scale (`DURATION.medium`), and longer than the 200ms leg plus a frame, so
+ * it can never fire while the flight is the thing being waited on.
  */
-export const HERO_PREVIEW_FALLBACK_MS = 320;
+export const HERO_PREVIEW_FALLBACK_MS = DURATION.medium * 1000;
 
 // ---------------------------------------------------------------------------
 // Media box geometry — the Stage landing target and the routed detail media
@@ -119,14 +119,18 @@ export const HERO_MEDIA_MAX_WIDTH_PX = 944;
 // ---------------------------------------------------------------------------
 
 /**
- * **220ms, mirrored — and the flight is over before the next thing you do.**
+ * **200ms (`DURATION.short`, M3 `short4`), mirrored — and the flight is over before the next
+ * thing you do.**
  *
  * Keeping up with the hand — the flight is over before the next thing the user does — is what sets
- * the length: 90% of the way by 124ms and landed by 200. The curve decides how it gets there.
+ * the length: 90% of the way by 112ms and landed by 182. The curve decides how it gets there.
  * 250ms on the curve before read slow; 350ms on the tab strip's response, which crept on until
- * 325ms, slower still; and 200ms on a flatter curve, quick enough, lost its life. Earlier, 194ms
- * on a spring read snatched, 296ms slack and 500ms too slow. An interrupted leg becomes a ζ0.9 spatial
- * spring settling in the time it has left (`HERO_FLIGHT_RESPONSE`).
+ * 325ms, slower still; and 200ms on a flatter curve, quick enough, lost its life — the life is
+ * the curve's, which this one keeps. It ran 220ms until 2026-10-20, the one navigation clock off
+ * M3's scale; the container transform (`FORUM_TRANSFORM_MS`) moved to 250 with it, so it still
+ * trails the flight. Earlier, 194ms on a spring read snatched, 296ms slack and 500ms too slow. An
+ * interrupted leg becomes a ζ0.9 spatial spring settling in the time it has left
+ * (`HERO_FLIGHT_RESPONSE`).
  *
  * The duration and the shape mirror; the *path* does not — `createHeroPointArc` mirrors the
  * arc rather than retracing it — and the rest of the direction asymmetry lives in the
@@ -135,25 +139,25 @@ export const HERO_MEDIA_MAX_WIDTH_PX = 944;
  * When a transition reads wrong, check what it is doing before changing how long it takes —
  * a duration is the cheapest knob and the least likely to be the fault.
  *
- * Couplings: 48 samples → 47 segments, 4.68ms on average; the gallery card's FastEffects fade
+ * Couplings: 48 samples → 47 segments, 4.26ms on average; the gallery card's FastEffects fade
  * (108ms) must finish inside the leg; the reveal windows are progress fractions, so they cannot
  * outlive it. The swipe-down dismiss is deliberately not here — see `PULL_RELEASE_DURATION_MS`.
  */
 export const HERO_DURATIONS: Record<HeroDirection, number> = {
-  forward: 220,
-  back: 220,
+  forward: DURATION.short * 1000,
+  back: DURATION.short * 1000,
 };
 
 /**
  * **The flight answers the press on the next frame, swoops through a crest in the air and lands
- * at rest.** Per 60Hz frame of its 220ms, as a share of the way: 8.5, 13.8, 19.4, 18.4, 13.0,
- * 8.8, 6.1, 4.3, 3.1, 2.1, 1.4, 0.8, 0.3 — halfway at 57ms, 90% at 124ms, within 0.3% of its
- * landing at 200ms, and still there (`y'(1) = 0`). It cannot overshoot, so every edge of the box
+ * at rest.** Per 60Hz frame of its 200ms, as a share of the way: 9.6, 16.2, 21.9, 18.2, 12.0,
+ * 7.9, 5.4, 3.7, 2.5, 1.5, 0.8, 0.3 — halfway at 52ms, 90% at 112ms, within 0.3% of its
+ * landing at 182ms, and still there (`y'(1) = 0`). It cannot overshoot, so every edge of the box
  * travels one way.
  *
  * What makes it read alive is contrast: it leaves at under a third of its crest (`y1 / x1` = 7/8
  * of its mean speed) and builds over two frames to a crest of 2.70× its mean speed 22% of the way
- * in, the two fastest frames in the air, then lets go over a soft 76ms settle. Four shapes shipped
+ * in, the two fastest frames in the air, then lets go over a soft 69ms settle. Four shapes shipped
  * before it, each right in one way (`npm run hero:path` tables the first two beside it):
  * - Flutter's `Curves.fastOutSlowIn` (0.4, 0, 0.2, 1) over 250ms, until 2026-10: the same crest,
  *   2.73× at 75ms — the whoosh — after a hang-back of 1.1% in the first frame, which read as the
@@ -252,7 +256,7 @@ export const HERO_CONTAINER_SHAPE: Record<HeroDirection, { start: number; end: n
  * where a tall card's window is narrowest, so the samples are spaced on travel and bend as well
  * as time (`sampleOffsets`): 0.332% on the real geometry matrix, against 0.499% evenly spaced
  * (`fastOutSlowIn`, which left from rest, held 0.441% at 48; a flatter curve leaving at 7/6 of its
- * mean speed needed 64). 220/47 is 4.68ms per segment on average, inside a frame at 144Hz.
+ * mean speed needed 64). 200/47 is 4.26ms per segment on average, inside a frame at 144Hz.
  */
 export const HERO_PROGRESS_SAMPLES = 48;
 
@@ -305,8 +309,8 @@ export const HERO_TARGET_RADIUS_PX = 16;
 
 /**
  * Reverse duration scales with how much of the trip is left to undo. The 90ms floor is for a
- * reversal with almost nothing left to undo: at 220ms the ratio bottoms out at 0.35 (77ms), so a
- * reverse with under 0.8% of its way left clamps to 90 — scaled with the leg, so at every speed.
+ * reversal with almost nothing left to undo: at 200ms the ratio bottoms out at 0.35 (70ms), so a
+ * reverse with under 2.4% of its way left clamps to 90 — scaled with the leg, so at every speed.
  */
 export const HERO_REVERSE_MIN_DURATION_MS = 90;
 export const HERO_REVERSE_BASE_RATIO = 0.35;
@@ -397,8 +401,11 @@ export const REVEAL_DISTANCE_PX = {
 } as const;
 /* Resolved shared motion tokens for WAAPI. Keep the source of truth in `lib/motionTokens.ts`. */
 export const REVEAL_EASING = EASE.standardDecelerate;
-export const HIDE_EASING = EASE.accelerate;
-export const HIDE_DISTANCE_PX = 8;
+/* Leaving on the FastEffects shape, as every exit in the app does, over whatever leg the caller
+   gives it: it answers on the next frame. The emphasized accelerate it used held still for the
+   first fifth of the leg, so a hiding layer lingered over the picture arriving through it. */
+export const HIDE_EASING = springToLinear(SPRINGS.fastEffects);
+export const HIDE_DISTANCE_PX = TRAVEL_PX.small;
 
 // ---------------------------------------------------------------------------
 // Pull-to-dismiss gesture

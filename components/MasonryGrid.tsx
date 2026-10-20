@@ -29,6 +29,7 @@ import {
 import { getAppScroller } from '@/lib/appScroller';
 import { motionTier } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
+import { ENTER_SCALE } from '@/lib/motionTokens';
 import { StaggerGrid } from '@/lib/motionLazy';
 import { SKIP, useResource } from '@/lib/resource';
 import { useMounted } from '@/lib/overlay';
@@ -370,7 +371,7 @@ function playEdit({
       const at = shift ? `translate(${shift.x}px, ${shift.y}px)` : '';
       moves.get(el)?.cancel();
       const fade = el.animate(
-        [{ opacity: 1, transform: at || 'none' }, { opacity: 0, transform: `${at} scale(0.92)` }],
+        [{ opacity: 1, transform: at || 'none' }, { opacity: 0, transform: `${at} scale(${ENTER_SCALE.item})` }],
         { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
       fade.finished.then(() => onLeft(id), () => {});
@@ -387,7 +388,7 @@ function playEdit({
     if (at === undefined) continue;
     if (!was || returning) {
       el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list'));
-      track(el, el.animate([{ transform: 'scale(0.92)' }, { transform: 'none' }], move));
+      track(el, el.animate([{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }], move));
       continue;
     }
     const from = slotBox(was, geometry);

@@ -280,7 +280,7 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
      over a navigation bar. Written on the root like its twin; removed when the pill goes, so the
      floating element settles back down with the page that had the pill. `data-bottom-chrome`
      beside it says which way the band went, so the floating element can take the pill's own leg
-     — the arriving page's 80ms + 320ms decelerate, or the leaving page's 100ms accelerate. */
+     — the arriving page's 80ms + 320ms decelerate, or the leaving page's FastEffects. */
   const band = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const node = band.current;
@@ -304,7 +304,7 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
 
   return (
     /* **It leaves and arrives with its page, on the page's own clock** — the route cross-fade's:
-       the page being left is gone in 100ms on `accelerate`, the page arriving fades in over
+       the page being left is gone on FastEffects (108ms), the page arriving fades in over
        320ms on `decelerate` behind an 80ms overlap (`PAGE_FADE_TIMING`), and the pill takes
        those two legs. It had its own 400ms/200ms pair and so showed up over a thread still on
        screen and lingered over a thread already arriving. The same legs serve the image detail
@@ -321,8 +321,8 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
       inert={!shown || undefined}
       className={`pointer-events-none absolute inset-x-0 bottom-0 z-page-chrome flex select-none items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] ${
         shown
-          ? 'translate-y-0 opacity-100 delay-[calc(80ms*var(--motion-scale-page))] duration-[calc(320ms*var(--motion-scale-page))] ease-[var(--ease-decelerate)]'
-          : 'translate-y-2 opacity-0 duration-press ease-[var(--ease-accelerate)]'
+          ? 'translate-y-0 opacity-100 delay-[calc(var(--motion-base-page-delay)*var(--motion-scale-page))] duration-[calc(var(--motion-base-page-fade)*var(--motion-scale-page))] ease-[var(--ease-decelerate)]'
+          : 'translate-y-2 opacity-0 duration-[calc(var(--motion-base-spring-fast-effects)*var(--motion-scale-page))] ease-[var(--ease-spring-effects)]'
       }`}
     >
       {/* `Tabs variant="pill"`, not a hand-rolled segmented control — the primitive owns the
@@ -1015,8 +1015,8 @@ export default function AppLayout({
           className={cn(
             'fixed inset-0 z-drawer-scrim bg-scrim-veil transition-opacity md:hidden',
             modalOpen
-              ? 'spring-default-spatial opacity-100'
-              : 'spring-fast-effects pointer-events-none opacity-0',
+              ? 'surface-enter opacity-100'
+              : 'spring-default-effects pointer-events-none opacity-0',
           )}
           onClick={closeModalDrawer}
           aria-hidden="true"
@@ -1047,10 +1047,12 @@ export default function AppLayout({
                a negative margin closes the layout behind it: the content travels because it is
                *inside* the thing that moves, the panel never resizes, `translate` composites.
 
-               **Modal (phone): a spring, a different one per direction — M3's
-               `NavigationDrawer.kt`:** open = `DefaultSpatial` (ζ0.9, 194ms), close =
-               `FastEffects` (ζ1.0, 108ms), critically damped because a panel leaving must not
-               overshoot back into view. **Docked: Vuetify's arrangement instead** (`drawer-dock`):
+               **Modal (phone): the large-surface pair `Sheet` and `SidePanel` run** — open =
+               `surface-enter` (400ms emphasized decelerate: a press opens it across the screen, so
+               it leaves at speed), close = `DefaultEffects` (ζ1.0, 166ms, critically damped, so a
+               panel leaving never overshoots back into view). It used to open on DefaultSpatial
+               and close on FastEffects, twice as quick as the side panel beside it: two panels
+               from the same edge on two clocks. **Docked: Vuetify's arrangement instead** (`drawer-dock`):
                docked, the motion is not the panel but the page beside it re-laying out wider or
                narrower, and 108ms is six frames of that — it read as a jump. One clock, the same
                both ways, as `v-navigation-drawer` and `v-main` do, on the app's own DefaultEffects
@@ -1063,8 +1065,8 @@ export default function AppLayout({
               'fixed inset-y-0 left-0 z-drawer w-[min(18rem,calc(100vw-3.5rem))] rounded-r-lg shadow-e1',
               'md:relative md:inset-auto md:z-auto md:h-full md:w-72 md:shrink-0 md:rounded-none md:shadow-none',
               modalOpen
-                ? 'spring-default-spatial translate-x-0'
-                : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
+                ? 'surface-enter translate-x-0'
+                : 'spring-default-effects -translate-x-[calc(100%+0.5rem)]',
               /* Docked, one curve both ways (`drawer-dock`): the margin is the content area's
                  width, and a page that widens on one curve and narrows on another reads as two
                  different motions. */

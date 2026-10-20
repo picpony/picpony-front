@@ -9,14 +9,17 @@ import {
   useEntranceMode,
   useMotionTier,
 } from '@/lib/appearance';
+import { SPRING_MS } from '@/lib/spring';
 
 /** How long the finished mark holds before the splash leaves. */
 const HOLD_MS = 200;
 /**
- * The splash leaves on the exit step (`duration-exit`, 200ms). The unmount waits for it at the
- * slowest speed: the number bounds an animation, so it is the longest that animation can take.
+ * The splash leaves on DefaultEffects (166ms), as every large surface does — a full-screen
+ * layer fading on the emphasized accelerate held at 15% gone halfway through, and read as a
+ * stall and then a cut. The unmount waits for it at the slowest speed: the number bounds an
+ * animation, so it is the longest that animation can take.
  */
-const EXIT_HOLD_MS = Math.round(200 * MOTION_SPEED_SCALE.slow);
+const EXIT_HOLD_MS = Math.round(SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow);
 /**
  * Past this, a splash that mounts still opaque is not the cold load's — the stylesheet's own
  * deadline would have lifted that one long before — but one mounting into a session under way (a

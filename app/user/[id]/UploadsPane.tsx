@@ -184,7 +184,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       )}
       <div
         ref={setRows}
-        className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
+        className={`transition-opacity spring-default-effects ${
           read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
         }`}
       >

@@ -23,7 +23,7 @@ from playwright.sync_api import expect, sync_playwright
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TIMES_MS = (0, 60, 100, 160, 220, 250)
+TIMES_MS = (0, 50, 100, 150, 200, 250)  # through the 200ms flight, and 50ms past it
 PROFILES = ((1440, 900), (1920, 1080), (390, 844))
 
 # Installed only in this test context. Wrapping animate lets us pause before a

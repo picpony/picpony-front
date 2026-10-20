@@ -1341,14 +1341,27 @@ body {
   --transition-duration-state: calc(var(--motion-base-state) * var(--motion-scale));
   --motion-base-standard: 200ms;
   --transition-duration-standard: calc(var(--motion-base-standard) * var(--motion-scale));
-  --motion-base-exit: 200ms;
-  --transition-duration-exit: calc(var(--motion-base-exit) * var(--motion-scale));
   --motion-base-composite: 300ms;
   --transition-duration-composite: calc(var(--motion-base-composite) * var(--motion-scale));
   --motion-base-enter: 400ms;
   --transition-duration-enter: calc(var(--motion-base-enter) * var(--motion-scale));
   --motion-base-emphasized: 500ms;
   --transition-duration-emphasized: calc(var(--motion-base-emphasized) * var(--motion-scale));
+
+  /* The page fade's two halves (`PAGE_FADE_TIMING` in lib/motionTokens.ts): the incoming page
+     waits 80ms and fades over 320ms, 400ms door to door. One copy, read by the page-transition
+     token, the home navigation pill and the mascot's lift, which ride the same leg. */
+  --motion-base-page-delay: 80ms;
+  --motion-base-page-fade: 320ms;
+
+  /* Travel and arrival scale (`TRAVEL_PX` / `ENTER_SCALE` in lib/motionTokens.ts). */
+  --motion-travel: 16px;
+  --motion-travel-small: 8px;
+  --motion-enter-scale: 0.95;
+
+  /* The skeleton and semantic-line sweeps: one cycle, one curve (see the skeleton rule). */
+  --motion-base-sweep: 1.6s;
+  --ease-sweep: cubic-bezier(0, 0, 0.58, 1);
 
   /* The menu arrives on the shared short step and leaves on FastEffects, as every small surface
      does. The arrow follows its panel; the anchored expansion pattern is independent of these
@@ -1411,8 +1424,8 @@ body {
      blank page for 80ms. Does **not** go through the entrance preference: this keyframe
      serves a cold mount's own fade, the route cross-fade's incoming half and a pane swap, so
      no per-token answer is right for all three — the switch is read at the call sites. */
-  --animate-page-transition: pageIn calc(0.32s * var(--motion-scale-page)) var(--ease-decelerate)
-    calc(0.08s * var(--motion-scale-page)) both;
+  --animate-page-transition: pageIn calc(var(--motion-base-page-fade) * var(--motion-scale-page)) var(--ease-decelerate)
+    calc(var(--motion-base-page-delay) * var(--motion-scale-page)) both;
   /* ── Micro-interactions, as named animations ────────────────────────────
    *
    * Named here so the duration and the curve travel with the animation (hand-assembled
@@ -1473,7 +1486,7 @@ body {
   @keyframes detailArrive {
     from {
       opacity: 0;
-      translate: 0 8px;
+      translate: 0 var(--motion-travel-small);
     }
     to {
       opacity: 1;
@@ -1721,7 +1734,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   margin-top: -0.2314%;
   opacity: 0;
   pointer-events: none;
-  transition: opacity calc(var(--motion-base-exit) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-accelerate);
+  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-spring-effects);
 }
 
 .logo-trace[data-shown] {
@@ -1786,7 +1799,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 
 .logo-intro[data-settled] .logo-mask {
   opacity: 0;
-  transition: opacity calc(var(--motion-base-standard) * var(--motion-scale-entrance)) var(--ease-standard);
+  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects);
 }
 
 /* --- The splash: 入场动画's 阻塞 and 不阻塞 ------------------------------------
@@ -1813,7 +1826,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 
 :where(html:not([data-entrance='off']):is([data-motion='standard'], [data-motion='custom'][data-motion-entrance='standard'])) .app-splash {
   display: flex;
-  animation: app-splash-lift calc(var(--motion-base-exit) * var(--motion-scale-entrance)) var(--ease-emphasized-accelerate)
+  animation: app-splash-lift calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects)
     var(--app-splash-deadline, 2500ms) forwards;
 }
 
@@ -1822,7 +1835,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 }
 
 .app-splash[data-leaving] {
-  animation: app-splash-leave calc(var(--motion-base-exit) * var(--motion-scale-entrance)) var(--ease-emphasized-accelerate)
+  animation: app-splash-leave calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects)
     forwards;
 }
 
@@ -2014,7 +2027,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
        pass, and easing out of it reads as light going past rather than a conveyor belt.
        Not `--ease-decelerate`: that one spends 62% of its travel in the first tenth, which
        over a 1.6s pass is a flash and then a stall. */
-    animation: shimmer calc(1.6s * var(--motion-scale)) ease-out infinite;
+    animation: shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep) infinite;
     /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
        inline delay on the skeleton element stagger the sweep. */
     animation-delay: inherit;
@@ -2060,7 +2073,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: text-shimmer calc(1.6s * var(--motion-scale)) ease-out infinite;
+    animation: text-shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep) infinite;
   }
 }
 
@@ -2557,7 +2570,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 @keyframes m3-lightbox-in {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(var(--motion-enter-scale));
   }
   to {
     opacity: 1;
@@ -3610,7 +3623,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
  * transition-property utility (the arbitrary-property form), which decides *what* moves and
  * is what the reduced-motion rule matches on. Pick by what is changing, then by how far:
  * spatial (moves/resizes → may overshoot) vs effects (fades/recolours → never overshoots);
- * fast/default/slow by travel. Not for anything a press opens across a distance — a spring
+ * fast/default/slow by travel. **In-place collapsible panels** (the messages rail, the search
+ * filters, the search view, the inline editor) take one pair: DefaultSpatial opening, FastEffects
+ * closing. Not for anything a press opens across a distance — a spring
  * starts from rest, and a press is the impulse, so that motion has to begin at speed
  * (easing + duration table instead). */
 @utility spring-fast-spatial {
@@ -3630,6 +3645,18 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
   transition-timing-function: var(--motion-local-standard-spatial);
   transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
+}
+/* A large surface arriving across the screen — the phone's modal navigation drawer, as `Sheet`,
+ * `SidePanel` and `Modal` do through `surfaceEnter` / `surfaceEnterTiming`: 400ms on the
+ * emphasized decelerate, M3's "enters the screen" row. A transition curve and not a spring
+ * because a press opens it across a distance (see the springs' note above): it has to leave at
+ * speed, and this curve covers 62% of the way in its first tenth. It leaves on
+ * `spring-default-effects`, as every large surface does. Rides the surface's own scale, so
+ * `data-motion-spring='overlay'` puts it on the overlay tier. */
+@utility surface-enter {
+  --motion-spring-scale: var(--motion-scale);
+  transition-timing-function: var(--ease-decelerate);
+  transition-duration: calc(var(--motion-base-enter) * var(--motion-spring-scale));
 }
 /* The docked navigation drawer's open and close, and so the content area's change of width.
  * The arrangement is Vuetify's `v-navigation-drawer` / `v-main` — one clock and one shape, the

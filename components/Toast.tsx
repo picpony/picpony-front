@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { MENU_TRANSITION, TRAVEL_PX } from '@/lib/motionTokens';
 import { motionTier, scaledMs } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
 import { ICON } from '@/lib/icons';
@@ -151,6 +151,11 @@ export function ToastContainer() {
   );
 }
 
+/** The stack closes up this long into the card's FastEffects fade (ms at the default speed), with
+ *  the card about two thirds gone, so the gap closes behind it rather than under it. A lag
+ *  between two parts of one gesture, not a duration, so it is not a step on the scale. */
+const COLLAPSE_LAG_MS = 40;
+
 function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const running = useRef<Animation[]>([]);
@@ -166,14 +171,17 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const card = wrapRef.current?.firstElementChild as HTMLElement | null;
     const tier = motionTier('overlay');
     if (!card || tier === 'off') return;
-    /* A short drop from under the app bar, with the shared 8px travel under reduced
-       motion. Only the arrival owns these frames. */
+    /* A short drop from under the app bar, with the shared small travel under reduced
+       motion. Only the arrival owns these frames. A toast is a small surface, so it arrives as
+       the menu and an in-place swap do (`MENU_TRANSITION.enter`, 200ms standard decelerate) —
+       on the large surfaces' 400ms it took twice as long to arrive as the menu beside it, and
+       leaving on FastEffects it was the only small surface with a 4:1 enter/leave ratio. */
     const enter = card.animate(
       [
-        { transform: `translateY(${tier === 'reduced' ? -8 : -16}px)`, opacity: 0 },
+        { transform: `translateY(${-(tier === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard)}px)`, opacity: 0 },
         { transform: 'none', opacity: 1 },
       ],
-      { duration: scaledMs(DURATION.long * 1000, 'overlay'), easing: EASE.decelerate, fill: 'backwards' },
+      { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing, fill: 'backwards' },
     );
     running.current.push(enter);
     // The ordinary styles are the resting pose; no layer stays promoted while it is read.
@@ -198,12 +206,12 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const wrapHeight = wrap.offsetHeight;
     const pose = getComputedStyle(card);
     const from = { transform: pose.transform, opacity: pose.opacity };
-    /* FastEffects, as every small surface leaves (the menu, the tooltip, the drawer closing): it
+    /* FastEffects, as every small surface leaves (the menu, the tooltip, an in-place swap): it
        starts on the frame after the dismissal. The emphasized accelerate it left on held still for
        its first 80ms. */
     const leaveTiming = springTiming('fastEffects', 'overlay');
     running.current.forEach((animation) => animation.cancel());
-    const exit = card.animate([from, { transform: 'translateY(-8px)', opacity: 0 }], {
+    const exit = card.animate([from, { transform: `translateY(${-TRAVEL_PX.small}px)`, opacity: 0 }], {
       ...leaveTiming,
       fill: 'forwards',
     });
@@ -211,7 +219,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
        with the card two thirds gone, so the stack closes up behind it rather than under it. */
     const collapse = wrap.animate([{ height: `${wrapHeight}px` }, { height: '0px' }], {
       ...leaveTiming,
-      delay: scaledMs(40, 'overlay'),
+      delay: scaledMs(COLLAPSE_LAG_MS, 'overlay'),
       fill: 'forwards',
     });
     running.current = [exit, collapse];
@@ -227,7 +235,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       return;
     }
     if (held) return;
-    const timer = setTimeout(leave, scaledMs(DURATION.long * 1000, 'overlay') + toast.duration);
+    const timer = setTimeout(leave, scaledMs(MENU_TRANSITION.enter.duration, 'overlay') + toast.duration);
     return () => clearTimeout(timer);
   }, [held, leave, toast.duration, toast.leaving, toast.version]);
 

@@ -131,7 +131,7 @@ export default function CoinLedger() {
         )}
         <div
           className={cn(
-            'space-y-6 transition-opacity duration-standard ease-[var(--ease-standard)]',
+            'space-y-6 transition-opacity spring-default-effects',
             read.isPrevious && read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100',
           )}
           aria-busy={read.isLoading || undefined}

@@ -235,16 +235,20 @@ def run_tier(browser, motion, speed, scale):
     check(tier, 'no page errors', not errors, errors[:3])
     context.close()
 
-    # Phone: the modal drawer and its scrim share one clock (DefaultSpatial, 194ms at scale 1).
+    # Phone: the modal drawer and its scrim share one clock, the large-surface pair Sheet and
+    # SidePanel run: 400ms emphasized decelerate opening, DefaultEffects closing.
     context = new_context(browser, motion, speed, width=390)
     page = context.new_page()
     page.goto(BASE + '/')
     page.wait_for_timeout(2500)
     items = capture(page, lambda: page.locator('header button').first.click(), 900)
     got = durations(items, lambda a: a['id'] == 'app-sidebar' or 'z-drawer-scrim' in a['cls'])
-    check(tier, 'phone drawer and scrim share one clock', got == ([round(194 * scale)] if scale else []), got)
+    check(tier, 'phone drawer and scrim open on the surface enter', got == ([en] if scale else []), got)
     page.wait_for_timeout(500)
     page.screenshot(path=str(OUTPUT / f'phone-drawer-{motion}-{speed}.png'))
+    items = capture(page, lambda: page.keyboard.press('Escape'), 900)
+    got = durations(items, lambda a: a['id'] == 'app-sidebar' or 'z-drawer-scrim' in a['cls'])
+    check(tier, 'phone drawer and scrim close on DefaultEffects', got == ([de] if scale else []), got)
     context.close()
 
 

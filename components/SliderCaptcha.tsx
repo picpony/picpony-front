@@ -564,9 +564,10 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
         <div
           ref={sliderBtnRef}
-          /* `duration-press` + `standard`, the motion table's press row:
-             grabbing the handle is a press, and the fill must keep up with the
-             handle under the finger.
+          /* FastEffects, the ink clock every control's press and selection run on
+             (Button, Chip, the switch's colours): grabbing the handle is a press,
+             and the fill must keep up with the handle under the finger. It was
+             the one control left on a 100ms standard curve.
 
              No scale on grab, no elevation at all — a slider handle is level 0
              (the primitive gives its handle no shadow either), and the state
@@ -574,7 +575,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
              solve (loading, checking, or failed) the track wears the disabled
              treatment once, rather than blinking between attempts. */
           className={cn(
-            'state-layer absolute -top-px left-0 z-10 flex h-10 items-center justify-center rounded-full border touch-none select-none transition-[color,background-color,border-color] duration-press ease-[var(--ease-standard)]',
+            'state-layer absolute -top-px left-0 z-10 flex h-10 items-center justify-center rounded-full border touch-none select-none transition-[color,background-color,border-color] spring-fast-effects',
             isDragging
               ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
               : 'cursor-grab bg-surface-raised text-on-surface-variant border-outline',

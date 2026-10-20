@@ -26,22 +26,25 @@
    publishes its band's height as `--app-bottom-chrome`; the figure rises by whatever of it its
    own inset does not already clear. A transform, so the move between routes is composited.
 
-   **On the pill's own legs**, so the two move as one: down on the pill's leaving leg (100ms,
-   accelerate) as the page that had it goes, up on its arriving leg (80ms behind the page, 320ms,
+   **On the pill's own legs**, so the two move as one: down on the pill's leaving leg (FastEffects)
+   as the page that had it goes, up on its arriving leg (80ms behind the page, 320ms,
    decelerate) as `/` fades in — `data-bottom-chrome` says which way the band went. On a spring of
    its own the figure rose on a different clock from the pill it was making room for. */
 .lift {
+  /* The pill's clock (the page tier's speed), gated by the ambient switch that owns the figure. */
+  --motion-pill-scale: calc(var(--motion-scale-page) * var(--motion-enabled-ambient));
   position: absolute;
   right: max(16px, env(safe-area-inset-right));
   bottom: 0;
   transform: translateY(
     calc(-1 * max(0px, var(--app-bottom-chrome, 0px) + 4px - max(16px, env(safe-area-inset-bottom))))
   );
-  transition: transform calc(var(--motion-base-press) * var(--motion-scale-ambient)) var(--ease-accelerate);
+  transition: transform calc(var(--motion-base-spring-fast-effects) * var(--motion-pill-scale)) var(--ease-spring-effects);
 }
 
 :global(html[data-bottom-chrome]) .lift {
-  transition: transform calc(320ms * var(--motion-scale-ambient)) var(--ease-decelerate) calc(80ms * var(--motion-scale-ambient));
+  transition: transform calc(var(--motion-base-page-fade) * var(--motion-pill-scale)) var(--ease-decelerate)
+    calc(var(--motion-base-page-delay) * var(--motion-pill-scale));
 }
 
 .stage {
@@ -299,7 +302,9 @@
 
 /* Under a mouse it is revealed with the figure's hover (`hover-reveal`), and the way to it crosses
    the artwork's empty corner — no longer the character's — so it stays a beat after the pointer
-   leaves the figure, the grace a tooltip gives (WCAG 1.4.13). Revealed at once. */
+   leaves the figure (WCAG 1.4.13). Twice the tooltip's 120ms leave grace, because that path
+   crosses a gap the pointer takes longer over than a tooltip's own edge. A wait for the hand,
+   not a duration, so it is not a step on the motion scale. Revealed at once. */
 @media (hover: hover) and (pointer: fine) {
   .tools {
     transition-delay: calc(240ms * var(--motion-scale-ambient));

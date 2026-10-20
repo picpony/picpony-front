@@ -22,16 +22,13 @@
 
 import { motionTier, scaledMs, MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getImageHeroRuntime, isImageHeroTransitionRunning } from '@/lib/hero/runtime';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 import { captureVisualClone, restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 
 /** How long a press on a row stays the reason for the next open: the navigation, with room. */
 const ORIGIN_TTL_MS = 3000;
-/** Standard travel and the weak form's (AGENTS: "8px is the weak form's travel"). */
-const TRAVEL_PX = { standard: 16, reduced: 8 } as const;
-
 let origin: { id: string; at: number } | null = null;
 
 /**
@@ -113,7 +110,7 @@ export function findDetailOriginLink(id: number | string): HTMLElement | null {
 }
 
 function travel(): number {
-  return motionTier('image') === 'reduced' ? TRAVEL_PX.reduced : TRAVEL_PX.standard;
+  return motionTier('image') === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard;
 }
 
 function adopt(section: HTMLElement, entry: { stop: () => void; timer: number }): () => void {

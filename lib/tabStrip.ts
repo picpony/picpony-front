@@ -32,14 +32,15 @@
  *
  * `p` is the strip's position: 0 rests on the pane being left, 1 on the one arriving.
  */
+import { DURATION } from '@/lib/motionTokens';
 import { SPRINGS, SPRING_DURATION } from '@/lib/spring';
 import { clamp01 } from '@/lib/utils';
 
 /** ω in a leg's own normalised time — the effects family's, 6.65 at every stiffness. */
 export const STRIP_RATE = Math.sqrt(SPRINGS.defaultEffects.stiffness) * SPRING_DURATION.defaultEffects;
-/** A full switch at the default speed, ms (M3's `medium3`). Scaled by the motion speed like every
- *  duration. */
-export const STRIP_DURATION_MS = 350;
+/** A full switch at the default speed, ms (M3's `medium3`, `DURATION.axis`). Scaled by the motion
+ *  speed like every duration. */
+export const STRIP_DURATION_MS = DURATION.axis * 1000;
 /** The tap's launch, in a full switch's normalised units: progress per unit of its duration. Half
  *  of `STRIP_RATE`, where the response leaves at its top speed with no jerk. */
 export const STRIP_LAUNCH = STRIP_RATE / 2;

@@ -1,6 +1,7 @@
 'use client';
 
 import { motionTier } from '@/lib/appearance';
+import { TRAVEL_PX } from '@/lib/motionTokens';
 import { springTiming } from '@/lib/springTiming';
 import { RELEASE_SAMPLE_WINDOW_MS, TOUCH_AXIS_LOCK_PX } from './constants';
 import { noteHeroInteraction } from './input';
@@ -34,9 +35,10 @@ export type StepMotion = {
   cancel(): void;
 };
 
-/** `MaterialSharedAxis`' slide distance, 30dp. The reduced tier's weak form is 8px. */
+/** `MaterialSharedAxis`' slide distance, 30dp — M3's own number for this pattern, so not a step
+ *  of `TRAVEL_PX`. The reduced tier's weak form is the shared small travel, as the tab strip's. */
 const STEP_TRAVEL_PX = 30;
-const REDUCED_STEP_TRAVEL_PX = 8;
+const REDUCED_STEP_TRAVEL_PX = TRAVEL_PX.small;
 
 /* The two response families in normalised time, the same pair `PULL_RELEASE_RESPONSE` and the
    flight use: ζ0.9 for a release that travels (spatial), ζ1.0 for one that must not overshoot. */

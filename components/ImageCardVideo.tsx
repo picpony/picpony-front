@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Skeleton from '@/components/Skeleton';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
-import { DURATION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { LOAD_TIMEOUT_MS } from '@/lib/imageLoader';
 import { startCardVideoPreview } from '@/lib/cardVideoPreview';
 
@@ -81,7 +81,7 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
     /* The wall-clock rule: the slow tier's scale, so the placeholder outlives its own fade. */
     const timer = window.setTimeout(
       () => startTransition(() => setPlaceholderGone(true)),
-      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+      SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
     );
     return () => window.clearTimeout(timer);
   }, [frameReady]);
@@ -107,7 +107,7 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
            corner. Cross-fades with the frame rather than unmounting on it, so the first
            frames of an arriving still are never a blank card. */
         <Skeleton
-          className={`absolute inset-0 block rounded-none transition-opacity duration-standard ease-[var(--ease-standard)] ${
+          className={`absolute inset-0 block rounded-none transition-opacity spring-default-effects ${
             frameReady ? 'opacity-0 after:animate-none' : near ? 'opacity-100' : 'opacity-100 after:[animation-play-state:paused]'
           }`}
         />
@@ -127,7 +127,7 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
         onError={onGiveUp}
         onPointerEnter={startPreview}
         onPointerLeave={stopPreview}
-        className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity duration-standard ease-[var(--ease-standard)] ${
+        className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity spring-default-effects ${
           frameReady ? 'opacity-100' : 'opacity-0'
         }`}
       />

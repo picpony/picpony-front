@@ -187,12 +187,13 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        /* The panel's own springs, the same ones the tap-driven transition uses:
-         * `DefaultSpatial` open, `FastEffects` shut, as `NavigationDrawer.kt`
-         * assigns them — a gesture and a tap must not land differently. No velocity
-         * scaling: a duration scaled by distance double-counts; a spring already
-         * covers a shorter remaining distance in less time. */
-        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        /* A release is already moving, so it lands on springs rather than the tap's
+         * 400ms curve — the same pair `Sheet` releases on: `DefaultSpatial` to settle
+         * open, `DefaultEffects` shut, which is also the clock the tap closes on, so a
+         * gesture and a tap leave alike. No velocity scaling: a duration scaled by
+         * distance double-counts; a spring already covers a shorter remaining distance
+         * in less time. */
+        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('defaultEffects', 'overlay');
 
         settling = toOpen;
         if (s)
@@ -212,7 +213,7 @@ export function useDrawerSwipe({
       /* **Opened or closed from elsewhere while the gesture owns the panel** — Back (on a
          phone the edge Back gesture arrives as this very drag before the system takes it),
          Esc, a row, a route change; or the menu button during a release. React's state
-         stands: the panel goes from where it is to that state on the drawer's own spring for
+         stands: the panel goes from where it is to that state on the release's spring for
          the direction, and the drag's release, when the finger lifts, finds nothing to do. A
          release already springing the other way is turned round. React already has the state,
          so nothing is told; the class takes over at the end. A release's own state change
@@ -232,7 +233,7 @@ export function useDrawerSwipe({
           return;
         }
         settling = openNow;
-        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('defaultEffects', 'overlay');
         if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spec, overwrite: true });
         gsap.to(d, {
           x: openNow ? 0 : -width,

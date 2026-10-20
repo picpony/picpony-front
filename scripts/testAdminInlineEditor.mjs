@@ -103,6 +103,7 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
     '@/lib/appScroller': { getAppScroller: () => scroller },
     '@/lib/scrollTo': { scrollAppToElement: () => assert.fail('a visible editor must not start a second scroll') },
     '@/lib/springTiming': { springTiming: (name) => ({ duration: name === 'fastEffects' ? 108 : 194, easing: `linear(${name})` }) },
+    '@/lib/motionTokens': { TRAVEL_PX: { standard: 16, small: 8 } },
     '@/components/admin/tableMotion': {
       followersOf: () => motion.followers,
       precedersOf: () => motion.above,

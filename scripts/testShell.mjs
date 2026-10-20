@@ -292,6 +292,7 @@ test('home tab URLs keep every other parameter', () => {
 function loadStrip() {
   const spring = load('lib/spring.ts');
   return load('lib/tabStrip.ts', {
+    '@/lib/motionTokens': load('lib/motionTokens.ts'),
     '@/lib/spring': spring,
     '@/lib/utils': { clamp01: (v) => Math.min(1, Math.max(0, v)) },
   });

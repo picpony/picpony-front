@@ -463,7 +463,7 @@ export default function HistoryPage() {
               <div
                 ref={ref}
                 className={cn(
-                  'flex flex-col gap-6 transition-opacity duration-standard ease-[var(--ease-standard)]',
+                  'flex flex-col gap-6 transition-opacity spring-default-effects',
                   /* The paging dim over a list whose next page is on its way: one value, everywhere. */
                   read.isPrevious && read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100',
                 )}

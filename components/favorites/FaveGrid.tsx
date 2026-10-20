@@ -351,7 +351,7 @@ export function FaveGridView({
           ref={setRows}
           /* The paging dim, for a turn only (M1-001): dimmed on every read, a removal blinked
              the whole grid while it re-read the page underneath the rows it already showed. */
-          className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
+          className={`transition-opacity spring-default-effects ${
             turning ? 'pointer-events-none opacity-50' : 'opacity-100'
           }`}
         >

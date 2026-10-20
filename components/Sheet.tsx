@@ -255,7 +255,7 @@ export default function Sheet({
            its clock as well double-counts. `default-effects` on a dismiss (a
            panel that overshoots on the way out bounces back into view) and
            `default-spatial` on a settle-back, the split `NavigationDrawer.kt`
-           makes for a drag release. */
+           makes for a drag release — and the phone drawer's release takes the same pair. */
         const release = spring(dismiss ? 'defaultEffects' : 'defaultSpatial', 'overlay');
 
         if (scrim)

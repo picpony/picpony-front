@@ -1,16 +1,16 @@
 'use client';
 
 import { type ReactNode, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { DURATION, EASE, STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
 import { entranceMotion, motionTier, scaledMs } from '@/lib/appearance';
 import { routeTransitActive } from '@/lib/pageTransit';
 
 interface RevealProps {
   children: ReactNode;
   className?: string;
-  /** Seconds between each direct child (default 0.06). */
+  /** Seconds between each direct child (default `STAGGER.step`, the gallery cascade's). */
   stagger?: number;
-  /** Initial vertical offset in px (default 16). */
+  /** Initial vertical offset in px (default `TRAVEL_PX.standard`). */
   distance?: number;
   /** Delay in seconds before the sequence starts. */
   delay?: number;
@@ -46,8 +46,8 @@ const onServer = () => false;
 export default function Reveal({
   children,
   className,
-  stagger = 0.06,
-  distance = 16,
+  stagger = STAGGER.step,
+  distance = TRAVEL_PX.standard,
   delay = 0,
 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -70,7 +70,8 @@ export default function Reveal({
     if (tier === 'off') return;
 
     /* Reduced tier: half the rise (the same 8px the other entrances take), no
-       stagger — the cascade is the performance. */
+       stagger — the cascade is the performance. The spread is capped as the gallery's is
+       (`STAGGER.max`), so a long block never trails in. */
     const reduced = tier === 'reduced';
     const rise = reduced ? distance / 2 : distance;
     const step = reduced ? 0 : stagger;
@@ -85,7 +86,7 @@ export default function Reveal({
         ],
         {
           duration,
-          delay: scaledMs((delay + index * step) * 1000, 'entrance'),
+          delay: scaledMs((delay + Math.min(index * step, STAGGER.max)) * 1000, 'entrance'),
           easing: EASE.decelerate,
           /* `backwards`, so the start state holds through the delay — without
              it a staggered child sits at rest until its turn, then jumps. */

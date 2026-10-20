@@ -192,7 +192,7 @@ export default function ForumPostList({
       <div
         ref={rowsRef}
         className={cn(
-          'mb-8 transition-opacity duration-standard ease-[var(--ease-standard)]',
+          'mb-8 transition-opacity spring-default-effects',
           busy ? 'pointer-events-none opacity-50' : 'opacity-100',
         )}
       >

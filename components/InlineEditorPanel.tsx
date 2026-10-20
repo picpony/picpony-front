@@ -6,6 +6,7 @@ import { motionTier, scaledMs, type MotionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { springTiming } from '@/lib/springTiming';
+import { TRAVEL_PX } from '@/lib/motionTokens';
 import { dropMove, drawnOffsetY, followersOf, precedersOf, startMove } from '@/components/admin/tableMotion';
 
 interface InlineEditorPanelProps {
@@ -25,7 +26,7 @@ const REVEAL_MARGIN = 96;
 /** The content's entrance trails the panel's own by this much (ms at the default speed). */
 const CONTENT_LAG_MS = 40;
 /** How far the content rises into place as it fades in, and sinks as it leaves. */
-const CONTENT_TRAVEL = 8;
+const CONTENT_TRAVEL = TRAVEL_PX.small;
 /** A press's capture is for the open it starts; one older than this belongs to nothing. */
 const CAPTURE_TTL_MS = 1000;
 

@@ -4,6 +4,7 @@ import { Component, type ReactNode } from 'react';
 import { motionTier } from '@/lib/appearance';
 import { focusLanding } from '@/lib/focusLanding';
 import { springTiming } from '@/lib/springTiming';
+import { ENTER_SCALE } from '@/lib/motionTokens';
 import { insideConcealedPane } from '@/lib/tabPaneVisibility';
 
 export interface PresenceEntry<T> {
@@ -384,7 +385,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
         /* Arriving (an entry that was not there before; followers always have a snapshot). */
         if (key !== undefined && !before.has(key)) {
           this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')));
-          if (grid) this.track(el.animate([{ transform: 'scale(0.92)' }, { transform: 'none' }], springTiming('defaultSpatial', 'list')));
+          if (grid) this.track(el.animate([{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }], springTiming('defaultSpatial', 'list')));
         }
         continue;
       }
@@ -398,7 +399,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     for (const el of leavers) {
       const key = el.dataset.presenceKey ?? '';
       const fade = el.animate(
-        grid ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(0.92)' }] : [{ opacity: 1 }, { opacity: 0 }],
+        grid ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `scale(${ENTER_SCALE.item})` }] : [{ opacity: 1 }, { opacity: 0 }],
         { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
       this.track(fade);

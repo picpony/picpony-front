@@ -16,6 +16,7 @@ import { ICON } from '@/lib/icons';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming, surfaceEnterTiming } from '@/lib/springTiming';
+import { ENTER_SCALE, TRAVEL_PX } from '@/lib/motionTokens';
 
 interface ModalProps {
   isOpen: boolean;
@@ -221,9 +222,9 @@ export default function Modal({
     const tier = motionTier('overlay');
     const reduced = tier === 'reduced';
     const entryTransform = reduced
-      ? 'translateY(8px) scale(0.98)'
-      : 'translateY(16px) scale(0.95)';
-    const exitTransform = 'translateY(8px) scale(0.98)';
+      ? `translateY(${TRAVEL_PX.small}px) scale(${ENTER_SCALE.surfaceReduced})`
+      : `translateY(${TRAVEL_PX.standard}px) scale(${ENTER_SCALE.surface})`;
+    const exitTransform = `translateY(${TRAVEL_PX.small}px) scale(${ENTER_SCALE.surfaceReduced})`;
     const arriving = firstPlacement && isOpen;
     const handedOver = arriving ? takeOverLeavingScrims(overlay, depth) : 0;
     const fromScrim = arriving ? String(handedOver) : getComputedStyle(scrim).opacity;

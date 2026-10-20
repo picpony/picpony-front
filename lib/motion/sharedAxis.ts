@@ -2,7 +2,8 @@
 
 import { motionScale, motionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
+import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
 import {
   freshStripLeg, lagSampler, stripProgress, turnStrip, STRIP_DURATION_MS,
   type StripLeg, type StripSegment,
@@ -73,13 +74,14 @@ import type { LeanPlan, PaneClip } from './tabGeometry';
  */
 export const AXIS_GAP = 96;
 /**
- * How far the reduced tier shifts each side, instead of a whole window's width.
- * Enough to carry the *direction* of the move, short enough not to read as a slide
- * — the 24dp M3's own shared axis uses for its small-container form, the same order
- * as the 8px an entrance travels here. A cross-fade cannot say which way you went,
- * and on a tab bar that is half the information.
+ * How far the reduced tier shifts each side, instead of a whole window's width: the
+ * reduced tier's one weak travel (`TRAVEL_PX.small`), the same 8px the picture detail's
+ * 上一张 / 下一张 shift takes under it — the two shared axes in the app used to weaken
+ * to 24 and 8. Enough to carry the *direction* of the move, with the tab indicator's
+ * slide (which reduced keeps) saying the rest; a cross-fade alone cannot say which way
+ * you went, and on a tab bar that is half the information.
  */
-const REDUCED_AXIS_SHIFT_PX = 24;
+const REDUCED_AXIS_SHIFT_PX = TRAVEL_PX.small;
 
 /* The strip's motion — a critically damped spring the tap launches, and the leg a second tap
  * turns it onto — is `lib/tabStrip.ts`, where its numbers are argued and tested. */
@@ -386,7 +388,7 @@ export function playSharedAxis(opts: {
 
   /* Reduced: the panes cross-fade with a short shift instead of sliding a window's
    * width. Dropped: the *distance* (a full-window slide is the performance). Survives:
-   * direction — 24px reads "the next one came from the right", which a bare cross-fade
+   * direction — a short shift reads "the next one came from the right", which a bare cross-fade
    * cannot say. `leavingOffsetY` still applies, held rather than travelled: not travel, but
    * holding the outgoing pane over the pixels the eye was on after the scroller moved to the
    * destination's remembered offset. */
@@ -396,9 +398,11 @@ export function playSharedAxis(opts: {
       { transform: place(0, leavingOffsetY), opacity: 1 },
       { transform: place(-shift, leavingOffsetY), opacity: 0 },
     ];
+    /* The leaving pane fades on FastEffects, as every exit does: on the emphasized accelerate
+       it was still most of the way opaque while the arriving pane faded in over it. */
     run(leaving, leavingKeyframes(), {
-      duration: DURATION.press * 1000 * scale,
-      easing: EASE.accelerate,
+      duration: SPRING_MS.fastEffects * scale,
+      easing: springToLinear(SPRINGS.fastEffects),
       fill: 'both',
     });
     run(

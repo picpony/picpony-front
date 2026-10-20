@@ -389,7 +389,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 )}
                 <div
                   ref={setRows}
-                  className={`transition-opacity duration-standard ease-[var(--ease-standard)] ${
+                  className={`transition-opacity spring-default-effects ${
                     uploadsRead.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
                   }`}
                 >

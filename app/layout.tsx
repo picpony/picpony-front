@@ -16,6 +16,7 @@ import TagSubscriptionSync from '@/components/subscriptions/TagSubscriptionSync'
 import VisitorTracker from '@/components/VisitorTracker';
 import LegacySharedSearch from '@/app/search/LegacySharedSearch';
 import { COOKIE_KEYS } from '@/lib/constants';
+import { DURATION, EASE } from '@/lib/motionTokens';
 import {
   MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
   formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
@@ -372,13 +373,13 @@ export default async function RootLayout({
           showSpinner={false}
           /* M3's indicator has no glow. */
           shadow={false}
-          /* `--ease-standard` spelled out: `easing` lands in a Web Animations easing
-             string, where a failed `var()` silently falls back to `ease` rather than
-             erroring — same reason the hero flight and `Popover` spell theirs out. The
-             value IS the token's; keep them in step. (`color` can take a `var()`
-             because it lands in a style declaration, not an animation string.) */
-          easing="cubic-bezier(0.2, 0, 0, 1)"
-          speed={200}
+          /* The `standard` curve and the short step, from the token module rather than
+             spelled out: `easing` lands in a Web Animations easing string, where a failed
+             `var()` silently falls back to `ease` rather than erroring — the reason every
+             WAAPI call site takes `EASE`. (`color` can take a `var()` because it lands in a
+             style declaration, not an animation string.) */
+          easing={EASE.standard}
+          speed={DURATION.short * 1000}
         />
         <ImageLineProvider value={imageLine}>
           <SpoilerTagsProvider value={spoilerTags}>

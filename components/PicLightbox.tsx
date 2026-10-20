@@ -141,8 +141,12 @@ export default function PicLightbox({
            next frame instead of lingering 300ms on `standard`. The slide's own entrance is the
            large surfaces' arrival, 400ms emphasized decelerate (globals.css). */
         fade: SPRING_MS.defaultEffects * scale,
-        swipe: DURATION.emphasized * 1000 * scale,
-        zoom: DURATION.emphasized * 1000 * scale,
+        /* A slide or a zoom step is a move *within* the viewer, both ends on screen: M3's
+           300ms `medium2` on `standard`, 90% of the way by 162ms. On the 500ms step it ran
+           until about 420ms — the slowest spatial motion in the app, inside a viewer the
+           hero flight opens in 200. */
+        swipe: DURATION.medium * 1000 * scale,
+        zoom: DURATION.medium * 1000 * scale,
         easing: {
           fade: springToLinear(SPRINGS.defaultEffects),
           swipe: EASE.standard,
