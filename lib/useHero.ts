@@ -31,6 +31,23 @@ const HOVER_INTENT_DELAY_MS = 70;
 const FOCUS_INTENT_DELAY_MS = 120;
 const SNAPSHOT_REUSE_MS = 1500;
 
+/**
+ * The detail's code, fetched once the first gallery has gone idle rather than at the first press.
+ * Cold, the first open's flyer landed and then waited 130–330ms (a 4× CPU phone, measured on a
+ * production build) for the detail route to commit, a good part of it the `PicDetail` chunk that
+ * the press had only just asked for. Once per document, in an idle slice, so it never competes
+ * with the list's own first render.
+ */
+let detailCodeWarmScheduled = false;
+function scheduleDetailCodeWarm() {
+  if (detailCodeWarmScheduled || typeof window === 'undefined') return;
+  detailCodeWarmScheduled = true;
+  const warm = () => void warmImageHero();
+  const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] }).requestIdleCallback;
+  if (idle) idle.call(window, warm, { timeout: 4000 });
+  else setTimeout(warm, 1500);
+}
+
 /* Before the shell has handed its router over (it does in its first effect, long before a press):
    the document's own navigation, as the controller's own fallback does. */
 const LOCATION_NAVIGATION: HeroNavigation = {
@@ -184,6 +201,10 @@ export function useHeroLink<T extends HTMLElement>({
     },
     [cancelIntent, clearPrepared],
   );
+
+  useEffect(() => {
+    if (image) scheduleDetailCodeWarm();
+  }, [image]);
 
   return {
     href,

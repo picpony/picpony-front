@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Activity,
   startTransition,
   useCallback,
   useEffect,
@@ -543,6 +544,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   /* Offline, a record still on its way is not "loading" — nothing will arrive until the network
      does, so its placeholders give way to saying so, and the read runs again on reconnect. */
   const offline = useOffline();
+  /* The flight's record is in but the body is still held for the landing: render it ahead,
+     hidden (see the `Activity` around the body). Only for the picture a flight is carrying in. */
+  const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && record !== null && !offline;
   const recordPending = record === null && recordError === null && !offline;
 
   const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
@@ -1466,8 +1470,14 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         >
           <div className="mx-auto w-full max-w-5xl space-y-6">
             <DetailVotes image={record} pending={recordPending} />
-            {deferredBodyReady &&
-              (record === null && offline ? (
+            {(deferredBodyReady || bodyPrerender) && (
+              /* Hidden, the body is rendered ahead in the flight's idle time (an offscreen-priority
+                 render React yields from, with no effects and `display: none`), so the publish
+                 after the landing is a visibility switch rather than the largest render on the
+                 page: on a phone at 4× CPU the body arrived ~100–220ms after the detail settled,
+                 the "it lands, then you still wait" the open read as. */
+              <Activity mode={deferredBodyReady ? 'visible' : 'hidden'}>
+              {record === null && offline ? (
                 <ErrorRetry size="inline" title="网络不可用" message="恢复后自动加载图片信息" />
               ) : bodyError !== null ? (
                 <ErrorRetry
@@ -1577,7 +1587,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                     scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
                   />
                 </>
-              ))}
+              )}
+              </Activity>
+            )}
           </div>
         </div>
       </div>

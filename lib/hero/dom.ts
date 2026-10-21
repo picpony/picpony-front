@@ -203,6 +203,56 @@ export function getMediaSize(media: VisualMedia) {
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
+/**
+ * The pixels the element actually decoded, which is what a capture should be sized from.
+ *
+ * `naturalWidth` is not that for a `srcset` image: the spec makes it the *density-corrected*
+ * width, `pixels / (w-descriptor / sizes)`. A production card is `next/image` with a `w`-descriptor
+ * srcset, so a 244px card on a 2× screen that downloaded the 640px file reports `naturalWidth`
+ * 244, and a capture sized from it threw away 60% of the card's own pixels — the flyer took off
+ * blurrier than the card it left. Dev serves the card unoptimized (a bare `src`, density 1), which
+ * is why only production showed it.
+ *
+ * Same URL, bare `src`: the document's list of available images answers it synchronously with
+ * the bitmap already decoded, density 1. Where it does not (an engine without that path), the
+ * chosen candidate's `w` descriptor is the file's width, at most a few percent over when the
+ * optimizer would not upscale — and `drawImage` maps the whole bitmap either way.
+ */
+export function getMediaPixelSize(media: VisualMedia) {
+  const size = getMediaSize(media);
+  if (!size || !(media instanceof HTMLImageElement) || !media.srcset || !media.currentSrc)
+    return size;
+  const probe = new Image();
+  probe.src = media.currentSrc;
+  if (probe.complete && probe.naturalWidth > 0 && probe.naturalHeight > 0) {
+    if (probe.naturalWidth >= size.width)
+      return { width: probe.naturalWidth, height: probe.naturalHeight };
+    return size;
+  }
+  probe.removeAttribute('src');
+  const descriptor = getSrcsetWidth(media.srcset, media.currentSrc);
+  if (descriptor <= size.width) return size;
+  return {
+    width: descriptor,
+    height: Math.max(1, Math.round((size.height * descriptor) / size.width)),
+  };
+}
+
+function getSrcsetWidth(srcset: string, currentSrc: string) {
+  for (const candidate of srcset.split(/,\s+/)) {
+    const [url, descriptor] = candidate.trim().split(/\s+/);
+    if (!url || !descriptor?.endsWith('w')) continue;
+    let resolved = url;
+    try {
+      resolved = new URL(url, document.baseURI).href;
+    } catch {
+      continue;
+    }
+    if (resolved === currentSrc) return Number.parseInt(descriptor, 10) || 0;
+  }
+  return 0;
+}
+
 function isPaintableVisualMedia(media: VisualMedia) {
   if (!getVisualMediaSrc(media) || !getMediaSize(media)) return false;
   if (media instanceof HTMLImageElement) return true;

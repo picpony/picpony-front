@@ -7,7 +7,7 @@ import {
   HERO_MAX_HEIGHT_DVH,
 } from './constants';
 import {
-  getMediaSize,
+  getMediaPixelSize,
   getVisualMedia,
   getVisualMediaSrc,
   isVolatileVisualMedia,
@@ -55,7 +55,7 @@ function getHeroFrameDimension(width: number, height: number) {
 }
 
 function getHeroFrameCapture(media: VisualMedia): HeroFrameCapture | null {
-  const size = getMediaSize(media);
+  const size = getMediaPixelSize(media);
   if (!size) return null;
   const { width: sourceWidth, height: sourceHeight } = size;
   const maxDimension = getHeroFrameDimension(sourceWidth, sourceHeight);

@@ -3,6 +3,8 @@
 import {
   HERO_BACKGROUND_SELECTOR,
   HERO_DETAIL_ROUTE_TIMEOUT_MS,
+  HERO_HANDOFF_SCROLL_DEFER_MAX_MS,
+  HERO_HANDOFF_SCROLL_QUIET_MS,
   HERO_INPUT_TRANSFER_MAX_MS,
   HERO_INPUT_TRANSFER_QUIET_MS,
   HERO_ROUTE_TIMEOUT_MS,
@@ -1103,6 +1105,26 @@ export class HeroController {
 
     session.scrollBridge?.addTarget(route.scroller, route.content);
     session.scrollBridge?.sync();
+
+    /* **A scroll the reader is in the middle of stays on the surface it started on.**
+       A touch stream (and its fling) and a latched wheel stream keep delivering to the Stage's
+       scroller for as long as they last, whatever is revealed over it. Revealed at once, the
+       route was what the reader saw, while its position was written from the hidden Stage's
+       scroll events on the main thread — the busiest it gets, with the route committing and the
+       body publishing — so the picture they were scrolling moved at the event rate, in steps:
+       the "scrolling is choppy until the detail has loaded" of an open. The Stage scrolls on the
+       compositor, and the route follows it invisibly through the bridge, so holding the swap
+       until the stream has gone briefly quiet keeps the scroll smooth and makes the swap a
+       no-op. Bounded, so a long fling cannot hold the detail back. */
+    if (!isHeroInteractionQuiet()) {
+      await waitForHeroInteractionQuiet(
+        session.abort.signal,
+        HERO_HANDOFF_SCROLL_QUIET_MS,
+        HERO_HANDOFF_SCROLL_DEFER_MAX_MS,
+      );
+      if (!this.owns(session) || !session.motion) return;
+      session.scrollBridge?.sync();
+    }
 
     let routeRevealed = false;
     await runScheduledFrame(session.abort.signal, {
@@ -2844,7 +2866,101 @@ export class HeroController {
       root.dataset.imageHeroState = phase;
     }
     this.syncLeaving();
+    if (phase === 'detail-idle' && !session) this.settleDetailSurface();
+    else if (phase === 'recovering' && !session) this.scheduleIdleRecovery();
     this.events.notify();
+  }
+
+  /**
+   * **A settled detail is a visible, interactive detail — whoever got it there.**
+   *
+   * Every path that ends in `detail-idle` revealed "its" route: the one its session recorded, with
+   * its session's seal owner. Under repeated open / Back that route is often not the live one: a
+   * close that had already collapsed the ladder and is then turned around (a re-tap of the card
+   * flying home) walks history forward again, the router mounts the overlay afresh, and the new
+   * registration — arriving while the phase is `reversing` — is sealed by the idle owner. The
+   * session then revealed its own, disconnected registration, the live one stayed
+   * `visibility: hidden; inert`, and the shell, seeing `detail-idle`, made the gallery inert and
+   * stopped its scrolling: the reported dead screen — the list on screen, `/pic/<id>` in the
+   * address bar, nothing responding. A leaked freeze lease (`routes.freeze`) on the live route
+   * did the same with the overlay visible.
+   *
+   * So the phase itself enforces it: with no session running, the live route of the picture the
+   * runtime names is revealed and released from any interaction lease, and every other route is
+   * sealed. Owner checks exist so that two *running* sessions cannot steal surfaces from each
+   * other; with none running there is nobody to steal from.
+   */
+  private settleDetailSurface() {
+    if (this.foreground || this.detailStep || this.stepSwap) return;
+    const imageId = this.runtime.imageId;
+    if (imageId === null) return;
+    const href = normalizeHeroHref(window.location.href);
+    if (!DETAIL_PATHNAME.test(window.location.pathname)) return;
+    const route = this.routes.findByImage(imageId, href);
+    if (!route) return; // Not mounted yet: `registerRoute` leaves it unsealed in `detail-idle`.
+    this.routes.reveal(route, null);
+    this.routes.sealAllExcept(route);
+  }
+
+  /**
+   * `recovering` with no session is a state nothing leaves on its own: `reconcileIdleLocation`
+   * enters it when the location is a detail whose ladder is present but not on its guard (a
+   * traversal that landed on the base or the provisional rung in the middle of a burst of Back
+   * and re-taps). Every route is sealed there, a tap on a card only queues behind it, and the
+   * screen is dead until the next navigation. Once history is quiet, settle it from the ladder:
+   * put the guard back and show the detail, or failing that collapse to the list.
+   */
+  private idleRecovery: Promise<void> | null = null;
+
+  private scheduleIdleRecovery() {
+    if (this.idleRecovery) return;
+    const run = (async () => {
+      const stable = await imageHeroHistory.waitForStable();
+      /* A frame for the router: the traversal that put us here may still be committing. */
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!stable || this.foreground || this.detailStep || this.runtime.phase !== 'recovering') return;
+      const match = window.location.pathname.match(DETAIL_PATHNAME);
+      const record = match ? this.currentDetailRecord(Number(match[1])) : null;
+      if (!record) {
+        this.reconcileIdleLocation();
+        return;
+      }
+      const role = imageHeroHistory.currentRole();
+      if (role === 'provisional') {
+        /* Under the detail: the list is where the user was heading. */
+        if (await imageHeroHistory.ensureBackground(record)) {
+          if (!this.foreground && this.runtime.phase === 'recovering') this.reconcileIdleLocation();
+          return;
+        }
+      } else if (await this.restoreGuardStrict(record)) {
+        if (this.foreground || this.runtime.phase !== 'recovering') return;
+        this.detailRecord = record;
+        this.currentSnapshot = record.snapshot;
+        this.setPhase('detail-idle', null, record.background, record.imageId);
+        this.rememberBackgroundScroll();
+        return;
+      }
+      if (this.foreground || this.runtime.phase !== 'recovering') return;
+      /* The ladder could not be repaired: present what the location shows, as a plain detail. */
+      const activeId = Number(match![1]);
+      this.detailRecord = null;
+      this.currentSnapshot = null;
+      this.setPhase('detail-idle', null, record.background, activeId);
+    })();
+    this.idleRecovery = run;
+    void run.finally(() => {
+      if (this.idleRecovery === run) this.idleRecovery = null;
+      this.drainPendingOpen();
+    });
+  }
+
+  /** A tap queued while the screen was unsettled, once nothing is running any more. */
+  private drainPendingOpen() {
+    const pending = this.pendingOpen;
+    if (!pending || this.foreground || this.detailStep) return;
+    if (this.runtime.phase !== 'gallery-idle') return;
+    this.pendingOpen = null;
+    if (pending.source.isConnected) this.startOpening(pending);
   }
 
   /**

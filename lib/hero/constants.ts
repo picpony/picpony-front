@@ -74,6 +74,17 @@ export const HERO_INPUT_TRANSFER_QUIET_MS = 320;
 export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
 
 /**
+ * The opening's handoff holds the Stage on screen while a scroll the reader started on it is
+ * still running (`handoffOpening`): the Stage scrolls on the compositor, while a route revealed
+ * over a stream still latched to the Stage could only follow it from the main thread, in steps.
+ * Quiet for this long counts as the stream having ended (a fling's last events are ~16ms apart,
+ * a wheel stream's ~8–16ms; a pause of 120ms is a hand at rest), and the hold never exceeds the
+ * ceiling, so a long fling costs at most that much of the detail's arrival.
+ */
+export const HERO_HANDOFF_SCROLL_QUIET_MS = 120;
+export const HERO_HANDOFF_SCROLL_DEFER_MAX_MS = 600;
+
+/**
  * Grace after the final media decodes before a still-silent preview is declared failed. The
  * preview is the visual authority while `heroActive`, so a decoded final image cannot stand
  * in for it — and a request that neither loads nor errors has no other terminal answer. The

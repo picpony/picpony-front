@@ -7,12 +7,17 @@ separate stale-receiver case deliberately dispatches to the outgoing node to cov
 latching consistently across Chromium versions. All business/media requests use fixtures.
 """
 import json
+import os
 import pathlib
 import random
 import re
 import sys
 from playwright.sync_api import sync_playwright, expect
 import urllib.parse
+
+# `HERO_BROWSER_CHANNEL=chromium` runs on Playwright's bundled Chromium (CI / Linux sandboxes).
+_channel = os.environ.get('HERO_BROWSER_CHANNEL', 'msedge')
+BROWSER_CHANNEL = {} if _channel == 'chromium' else {'channel': _channel}
 from testProfileGallery import BASE, Fixtures, USER, THUMB, image_record, unwrap
 
 OUTPUT = pathlib.Path(__file__).resolve().parent.parent / '.workbuddy' / 'hero-interactions'
@@ -1402,7 +1407,7 @@ def run(browser, name, width, only=None):
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(channel='msedge',headless=True)
+    browser = playwright.chromium.launch(**BROWSER_CHANNEL, headless=True)
     for profile in [('desktop',1440),('mobile',390)]:
         run(browser,*profile)
     # The wide desktop: four columns and a centred well, where both legs have the longest reach.
