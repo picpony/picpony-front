@@ -14,8 +14,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
 import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
 import { useMotionScale } from '@/lib/appearance';
-import { DURATION, EASE } from '@/lib/motionTokens';
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
+import { SPRING_MS, springLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
 /**
@@ -138,19 +137,17 @@ export default function PicLightbox({
       animation={{
         /* The container fade is DefaultEffects both ways — the clock every large surface leaves
            on: YARL takes one fade for both directions, and a close must answer the press on the
-           next frame instead of lingering 300ms on `standard`. The slide's own entrance is the
-           large surfaces' arrival, 400ms emphasized decelerate (globals.css). */
+           next frame. The slide's own entrance is every surface's arrival (globals.css). */
         fade: SPRING_MS.defaultEffects * scale,
-        /* A slide or a zoom step is a move *within* the viewer, both ends on screen: M3's
-           300ms `medium2` on `standard`, 90% of the way by 162ms. On the 500ms step it ran
-           until about 420ms — the slowest spatial motion in the app, inside a viewer the
-           hero flight opens in 200. */
-        swipe: DURATION.medium * 1000 * scale,
-        zoom: DURATION.medium * 1000 * scale,
+        /* A slide is a pager turning and a zoom step docks to its new scale: both are the layout
+           spring — Compose's own for `HorizontalPager`'s snap — critically damped, so a picture
+           never swings past its slot and back. */
+        swipe: SPRING_MS.layout * scale,
+        zoom: SPRING_MS.layout * scale,
         easing: {
-          fade: springToLinear(SPRINGS.defaultEffects),
-          swipe: EASE.standard,
-          navigation: EASE.standard,
+          fade: springLinear('defaultEffects'),
+          swipe: springLinear('layout'),
+          navigation: springLinear('layout'),
         },
       }}
       zoom={{

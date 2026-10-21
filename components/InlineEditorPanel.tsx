@@ -303,7 +303,7 @@ function layoutWithout(panel: HTMLElement, targets: HTMLElement[]): { tops: numb
 }
 
 /**
- * Opens a panel that was not on screen. 标准: the clip grows down on DefaultSpatial while what
+ * Opens a panel that was not on screen. 标准: the clip grows down on the layout spring while what
  * follows glides down on the same spring from where it was drawn, and the content rises in behind
  * it, 40ms late — offset rather than shortened, so it reads as arriving *behind* the panel (its
  * opacity on the effects twin, which cannot overshoot). 减弱 fades the panel in and moves nothing —
@@ -320,7 +320,7 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
     return run;
   }
   const { height, distance } = footprint(panel);
-  const spatial = springTiming('defaultSpatial', 'list');
+  const spatial = springTiming('layout', 'list');
   const effects = springTiming('defaultEffects', 'list');
   const lag = scaledMs(CONTENT_LAG_MS, 'list');
 
@@ -361,8 +361,8 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
  * panel, or a close turned back. Every part leaves from its current pose: the content with no lag,
  * since a reversal resumes the visible pose rather than putting a delay in its way.
  *
- * Closing (标准): the content sinks out and the clip closes upward on FastEffects while what follows
- * glides up to where it will be on the same clock — one gesture, one clock, or the gap outlives the
+ * Closing (标准): the content fades on FastEffects and sinks out as the clip closes upward on the
+ * layout spring while what follows glides up to where it will be on the same clock — one gesture, one clock, or the gap outlives the
  * panel — and, at the end of a scrolled page, what precedes it (the clip with it) glides down by the
  * clamp the removal will cause; the tracks hold their end (`fill: forwards`) until the panel goes.
  * Re-opening: the same parts back to rest on the opening's spring. 减弱 fades the panel alone; 关闭
@@ -409,8 +409,8 @@ function turn(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, previo
     }
     return run;
   }
-  const timing: KeyframeAnimationOptions = closing ? { ...springTiming('fastEffects', 'list'), fill: 'forwards' } : springTiming('defaultSpatial', 'list');
-  const fade: KeyframeAnimationOptions = closing ? timing : springTiming('defaultEffects', 'list');
+  const timing: KeyframeAnimationOptions = closing ? { ...springTiming('layout', 'list'), fill: 'forwards' } : springTiming('layout', 'list');
+  const fade: KeyframeAnimationOptions = closing ? { ...springTiming('fastEffects', 'list'), fill: 'forwards' } : springTiming('defaultEffects', 'list');
   run.own.push(
     panel.animate([{ translate: panelPose.translate, opacity: panelPose.opacity }, { translate: closing ? `0 ${shift - height}px` : 'none', opacity: 1 }], timing),
     surface.animate([{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }], timing),

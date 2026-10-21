@@ -339,6 +339,10 @@ export function iconButtonClasses({
         shape === 'round' && selected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
         shape === 'round' && !selected && SHAPES.round,
         shape === 'square' && SHAPES.square,
+        /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
+           the container draws its corners in, on the same fast spatial spring as the selected
+           corner (`transition-icon-button`). `data-pressed` comes from `RippleLayer`. */
+        size === 'lg' ? 'data-pressed:rounded-md' : 'data-pressed:rounded-sm',
       ),
     SIZES[size],
     ICON_SIZES[size],

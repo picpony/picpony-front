@@ -78,7 +78,8 @@ import {
   useSchemeSetting,
   type ColorScheme,
 } from '@/lib/appearance';
-import { PAGE_FADE_TIMING } from '@/lib/motionTokens';
+import { HANDOFF_MS } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { heroOwnsScreen } from '@/lib/appScroller';
 import { clearAllTabScroll } from '@/lib/tabScroll';
 import { holdFooterWhileLoading } from '@/lib/pageLoadingHold';
@@ -196,10 +197,10 @@ function persistDockedCollapsed(collapsed: boolean) {
 /** How long a route change's landing waits for the incoming page to be focusable: the whole
  *  route entrance at the slowest speed. The page is hidden only for the fade's opening overlap,
  *  so this bound is generous rather than tight. */
-const LANDING_WAIT_MS = (PAGE_FADE_TIMING.delay + PAGE_FADE_TIMING.duration) * 1000 * MOTION_SPEED_SCALE.slow;
+const LANDING_WAIT_MS = (HANDOFF_MS + SPRING_MS.slowEffects) * MOTION_SPEED_SCALE.slow;
 
 /** How long the landing waits for a list's return target that the route still covers — a forum
- *  row or a folder card the container transform hides for its run: that run is the route's 400ms
+ *  row or a folder card the container transform hides for its run: that run is the layout spring
  *  at the slowest speed too, but its leg starts pending, a frame or more after the commit (on a
  *  busy main thread, a development build has spent 280ms there), so twice the landing's bound. */
 const RETURN_WAIT_MS = LANDING_WAIT_MS * 2;
@@ -304,9 +305,9 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
 
   return (
     /* **It leaves and arrives with its page, on the page's own clock** — the route cross-fade's:
-       the page being left is gone on FastEffects (108ms), the page arriving fades in over
-       320ms on `decelerate` behind an 80ms overlap (`PAGE_FADE_TIMING`), and the pill takes
-       those two legs. It had its own 400ms/200ms pair and so showed up over a thread still on
+       the page being left is gone on FastEffects, the page arriving fades in on SlowEffects
+       after the hand-off (`HANDOFF_MS`), and the pill takes those two legs — its 8px rise on
+       the default spatial spring beside the fade. It had its own 400ms/200ms pair and so showed up over a thread still on
        screen and lingered over a thread already arriving. The same legs serve the image detail
        and the hero's return, whose page is the gallery. `z-page-chrome` keeps it under the
        drawer scrim: the host `<section>` is positioned but not a stacking context, so the pill's
@@ -321,7 +322,7 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
       inert={!shown || undefined}
       className={`pointer-events-none absolute inset-x-0 bottom-0 z-page-chrome flex select-none items-center justify-center py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] ${
         shown
-          ? 'translate-y-0 opacity-100 delay-[calc(var(--motion-base-page-delay)*var(--motion-scale-page))] duration-[calc(var(--motion-base-page-fade)*var(--motion-scale-page))] ease-[var(--ease-decelerate)]'
+          ? 'translate-y-0 opacity-100 [transition:opacity_calc(var(--motion-base-spring-slow-effects)*var(--motion-scale-page))_var(--ease-spring-effects)_calc(var(--motion-base-handoff)*var(--motion-scale-page)),translate_calc(var(--motion-base-spring-default-spatial)*var(--motion-scale-page))_var(--ease-spring-default-spatial)_calc(var(--motion-base-handoff)*var(--motion-scale-page))]'
           : 'translate-y-2 opacity-0 duration-[calc(var(--motion-base-spring-fast-effects)*var(--motion-scale-page))] ease-[var(--ease-spring-effects)]'
       }`}
     >
@@ -1014,8 +1015,10 @@ export default function AppLayout({
           data-motion-spring="overlay"
           className={cn(
             'fixed inset-0 z-drawer-scrim bg-scrim-veil transition-opacity md:hidden',
+            /* A scrim only fades, so it takes the panel's *effects* spring both ways: on the
+               panel's spatial clock its opacity would be clipped at 1 through the overshoot. */
             modalOpen
-              ? 'surface-enter opacity-100'
+              ? 'spring-default-effects opacity-100'
               : 'spring-default-effects pointer-events-none opacity-0',
           )}
           onClick={closeModalDrawer}
@@ -1047,16 +1050,12 @@ export default function AppLayout({
                a negative margin closes the layout behind it: the content travels because it is
                *inside* the thing that moves, the panel never resizes, `translate` composites.
 
-               **Modal (phone): the large-surface pair `Sheet` and `SidePanel` run** — open =
-               `surface-enter` (400ms emphasized decelerate: a press opens it across the screen, so
-               it leaves at speed), close = `DefaultEffects` (ζ1.0, 166ms, critically damped, so a
-               panel leaving never overshoots back into view). It used to open on DefaultSpatial
-               and close on FastEffects, twice as quick as the side panel beside it: two panels
-               from the same edge on two clocks. **Docked: Vuetify's arrangement instead** (`drawer-dock`):
-               docked, the motion is not the panel but the page beside it re-laying out wider or
-               narrower, and 108ms is six frames of that — it read as a jump. One clock, the same
-               both ways, as `v-navigation-drawer` and `v-main` do, on the app's own DefaultEffects
-               spring (166ms, critically damped) rather than Vuetify's Material 2 curve.
+               **Modal (phone): the surface pair `Sheet` and `SidePanel` run** — open =
+               `surface-enter` (the layout spring: it docks against the edge), close =
+               `DefaultEffects` (critically damped, so a panel leaving never overshoots back into
+               view). **Docked: the layout spring** (`drawer-dock`): docked, the motion is not the
+               panel but the page beside it re-laying out wider or narrower — bounds following a
+               layout change, one clock the same both ways, never overshooting.
                Applied per branch and per breakpoint, because a transition is governed by the
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */

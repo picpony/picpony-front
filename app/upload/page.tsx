@@ -277,7 +277,14 @@ function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
     <div
       inert={!open}
       aria-hidden={open ? undefined : true}
-      className={cn('grid spring-default-effects transition-[grid-template-rows,opacity]', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr] opacity-0')}
+      /* Collapsible: height on the layout spring both ways; the contents fade in on DefaultEffects and
+         out on FastEffects (rules 2, 4, 5). */
+      className={cn(
+        'grid',
+        open
+          ? 'grid-rows-[1fr] [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-default-effects)_var(--ease-spring-effects)]'
+          : 'grid-rows-[0fr] opacity-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]',
+      )}
     >
       <div className="min-h-0 overflow-clip [overflow-clip-margin:4px]">{children}</div>
     </div>
@@ -815,7 +822,7 @@ export default function UploadPage() {
        box closes: it rises from the bottom of the screen to its floor on the slow effects
        response, rather than crossing into view in a frame. */
     body = (
-      <SizeSwap contentKey={showResult ? 'result' : 'form'} shrink="slowEffects" endsPage>
+      <SizeSwap contentKey={showResult ? 'result' : 'form'} endsPage>
         {content}
       </SizeSwap>
     );

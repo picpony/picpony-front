@@ -2,8 +2,8 @@
 
 import { motionScale, motionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
+import { TRAVEL_PX } from '@/lib/motionTokens';
+import { SPRING_MS, springLinear } from '@/lib/spring';
 import {
   freshStripLeg, lagSampler, stripProgress, turnStrip, STRIP_DURATION_MS,
   type StripLeg, type StripSegment,
@@ -112,11 +112,11 @@ function supportsLinearEasing(): boolean {
 
 /**
  * A response as a Web Animations easing, sampled where it bends until straight segments stay
- * within 0.15% of it. An engine without `linear()` gets the emphasized decelerate — the one
- * cubic that also leaves at speed.
+ * within 0.15% of it. An engine without `linear()` (none this app supports) gets the browser's
+ * `ease-out`, which also leaves at speed.
  */
 function linearEasingOf(ease: (t: number) => number, tolerance = 0.0015): string {
-  if (!supportsLinearEasing()) return EASE.decelerate;
+  if (!supportsLinearEasing()) return 'ease-out';
   const stops: string[] = [`${+ease(0).toFixed(4)} 0%`];
   const split = (t0: number, v0: number, t1: number, v1: number, depth: number) => {
     const mid = (t0 + t1) / 2;
@@ -402,7 +402,7 @@ export function playSharedAxis(opts: {
        it was still most of the way opaque while the arriving pane faded in over it. */
     run(leaving, leavingKeyframes(), {
       duration: SPRING_MS.fastEffects * scale,
-      easing: springToLinear(SPRINGS.fastEffects),
+      easing: springLinear('fastEffects'),
       fill: 'both',
     });
     run(
@@ -411,7 +411,9 @@ export function playSharedAxis(opts: {
         { transform: place(shift), opacity: 0 },
         { transform: place(0), opacity: 1 },
       ],
-      { duration: DURATION.short * 1000 * scale, easing: EASE.decelerate, fill: 'both' },
+      /* Arriving: the default effects spring, opacity and the short shift together — the reduced
+         tier keeps no overshoot, so the shift needs no spatial clock of its own. */
+      { duration: SPRING_MS.defaultEffects * scale, easing: springLinear('defaultEffects'), fill: 'both' },
     );
     return handle;
   }

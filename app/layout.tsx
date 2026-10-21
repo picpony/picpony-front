@@ -16,7 +16,7 @@ import TagSubscriptionSync from '@/components/subscriptions/TagSubscriptionSync'
 import VisitorTracker from '@/components/VisitorTracker';
 import LegacySharedSearch from '@/app/search/LegacySharedSearch';
 import { COOKIE_KEYS } from '@/lib/constants';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { SPRING_MS, springLinear } from '@/lib/spring';
 import {
   MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
   formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
@@ -373,13 +373,12 @@ export default async function RootLayout({
           showSpinner={false}
           /* M3's indicator has no glow. */
           shadow={false}
-          /* The `standard` curve and the short step, from the token module rather than
-             spelled out: `easing` lands in a Web Animations easing string, where a failed
-             `var()` silently falls back to `ease` rather than erroring — the reason every
-             WAAPI call site takes `EASE`. (`color` can take a `var()` because it lands in a
-             style declaration, not an animation string.) */
-          easing={EASE.standard}
-          speed={DURATION.short * 1000}
+          /* The bar's width follows the load's progress — bounds following a change — so the
+             layout spring, as a `linear()` string from the spring module: `easing` lands in an
+             animation string, where a failed `var()` silently falls back to `ease`. (`color`
+             can take a `var()` because it lands in a style declaration.) */
+          easing={springLinear('layout')}
+          speed={SPRING_MS.layout}
         />
         <ImageLineProvider value={imageLine}>
           <SpoilerTagsProvider value={spoilerTags}>

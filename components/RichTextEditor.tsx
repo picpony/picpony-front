@@ -841,7 +841,7 @@ export default function RichTextEditor({
           transition:
             background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
             color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-            border-radius var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
+            border-radius var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial);
         }
 
         .rich-text-editor [data-toolbar-toggle] {

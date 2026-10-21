@@ -271,10 +271,10 @@ function Lineup({ names, ponies }: { names: readonly string[]; ponies: readonly 
       if (!slot) return;
       const was = before.indexOf(name);
       if (was === -1) {
-        slot.animate([{ transform: 'scale(0.6)' }, { transform: 'none' }], springTiming('expressiveFastSpatial'));
+        slot.animate([{ transform: 'scale(0.6)' }, { transform: 'none' }], springTiming('fastSpatial'));
         slot.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('fastEffects'));
       } else if (was !== index && step) {
-        slot.animate([{ transform: `translateX(${(was - index) * step}px)` }, { transform: 'none' }], springTiming('fastSpatial'));
+        slot.animate([{ transform: `translateX(${(was - index) * step}px)` }, { transform: 'none' }], springTiming('layout'));
       }
     });
   }, [names]);

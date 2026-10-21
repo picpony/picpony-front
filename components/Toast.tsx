@@ -10,9 +10,10 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
-import { MENU_TRANSITION, TRAVEL_PX } from '@/lib/motionTokens';
+import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { motionTier, scaledMs } from '@/lib/appearance';
-import { springTiming } from '@/lib/springTiming';
+import { springTiming, surfaceArrival } from '@/lib/springTiming';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 
@@ -154,7 +155,7 @@ export function ToastContainer() {
 /** The stack closes up this long into the card's FastEffects fade (ms at the default speed), with
  *  the card about two thirds gone, so the gap closes behind it rather than under it. A lag
  *  between two parts of one gesture, not a duration, so it is not a step on the scale. */
-const COLLAPSE_LAG_MS = 40;
+const COLLAPSE_LAG_MS = HANDOFF_MS;
 
 function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -171,18 +172,20 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const card = wrapRef.current?.firstElementChild as HTMLElement | null;
     const tier = motionTier('overlay');
     if (!card || tier === 'off') return;
-    /* A short drop from under the app bar, with the shared small travel under reduced
-       motion. Only the arrival owns these frames. A toast is a small surface, so it arrives as
-       the menu and an in-place swap do (`MENU_TRANSITION.enter`, 200ms standard decelerate) —
-       on the large surfaces' 400ms it took twice as long to arrive as the menu beside it, and
-       leaving on FastEffects it was the only small surface with a 4:1 enter/leave ratio. */
-    const enter = card.animate(
-      [
-        { transform: `translateY(${-(tier === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard)}px)`, opacity: 0 },
-        { transform: 'none', opacity: 1 },
-      ],
-      { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing, fill: 'backwards' },
-    );
+    /* A short drop from under the app bar, with the shared small travel under reduced motion.
+       Only the arrival owns these frames. A toast is a small surface, so it arrives as the menu
+       does (`surfaceArrival('fast')`): the drop on the fast spatial spring, with its give, the
+       fade on fast effects — two animations, since an opacity on an under-damped spring is
+       clipped above 1. */
+    const arrival = surfaceArrival('fast', 'overlay');
+    const travel = tier === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard;
+    const enter = card.animate([{ transform: `translateY(${-travel}px)` }, { transform: 'none' }], {
+      ...arrival.spatial,
+      fill: 'backwards',
+    });
+    const fadeIn = card.animate([{ opacity: 0 }, { opacity: 1 }], { ...arrival.effects, fill: 'backwards' });
+    running.current.push(fadeIn);
+    fadeIn.finished.then(() => fadeIn.cancel(), () => {});
     running.current.push(enter);
     // The ordinary styles are the resting pose; no layer stays promoted while it is read.
     enter.finished.then(() => enter.cancel(), () => {});
@@ -215,10 +218,11 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       ...leaveTiming,
       fill: 'forwards',
     });
-    /* Closing the gap is the same response as the departing card. It begins 40ms into the fade,
-       with the card two thirds gone, so the stack closes up behind it rather than under it. */
+    /* Closing the gap is the toasts below re-placing, so it is the layout spring — they dock into
+       the departed card's slot. It begins a moment into the fade, with the card mostly gone, so
+       the stack closes up behind it rather than under it. */
     const collapse = wrap.animate([{ height: `${wrapHeight}px` }, { height: '0px' }], {
-      ...leaveTiming,
+      ...springTiming('layout', 'overlay'),
       delay: scaledMs(COLLAPSE_LAG_MS, 'overlay'),
       fill: 'forwards',
     });
@@ -235,7 +239,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       return;
     }
     if (held) return;
-    const timer = setTimeout(leave, scaledMs(MENU_TRANSITION.enter.duration, 'overlay') + toast.duration);
+    const timer = setTimeout(leave, scaledMs(SPRING_MS.fastSpatial, 'overlay') + toast.duration);
     return () => clearTimeout(timer);
   }, [held, leave, toast.duration, toast.leaving, toast.version]);
 

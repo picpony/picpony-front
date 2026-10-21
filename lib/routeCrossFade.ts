@@ -3,7 +3,7 @@
 import { setHeroBusyCheck } from '@/lib/appScroller';
 import { setRouteTransit, setThemeWipeGuard } from '@/lib/pageTransit';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
-import { DURATION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 
 import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero/runtime';
 import { captureVisualClone, type RouteSnapshot } from '@/lib/pageSnapshot';
@@ -24,13 +24,13 @@ import { captureVisualClone, type RouteSnapshot } from '@/lib/pageSnapshot';
 
 /**
  * Watchdog: nothing may outlive the fade by more than this, counted from the animation's first
- * frame. The longest leg is a mapped route's strip — the tab strip's 400ms, on Web Animations —
- * which at the slowest speed (the wall-clock rule: 1.4x) is 560ms. The bound is deliberately
- * slack, `DURATION.emphasized` at that speed plus 400ms (1100ms): a watchdog that is too tight
+ * frame. The longest leg is a full-screen move — the slowest spring the app has, slow spatial —
+ * taken at the slowest speed (the wall-clock rule: 1.4x). The bound is deliberately slack, that
+ * plus 400ms: a watchdog that is too tight
  * truncates a slide whose first frame came late, and one that is too loose costs nothing. A fixed
  * 900ms armed before the first frame once truncated the slide at 缓慢 in exactly that way.
  */
-const MAX_LIFETIME_MS = Math.round(DURATION.emphasized * 1000 * MOTION_SPEED_SCALE.slow) + 400;
+const MAX_LIFETIME_MS = Math.round(SPRING_MS.slowSpatial * MOTION_SPEED_SCALE.slow) + 400;
 
 /**
  * Where each screen sits on the app's notional plane, so moves between listed screens read as

@@ -19,28 +19,27 @@
  * the time before the first frame, which the press now pays for (`primeTabTransition`), so the
  * curve need not lunge to keep up with the finger.
  *
- * **Launched at half the family's rate, which is the one launch with no jerk:** a critically
+ * **Caught by Compose's pager spring.** The strip *is* a pager — two adjacent panes, one window —
+ * so it settles on the spring Compose gives `HorizontalPager`'s snap: the layout spring
+ * (`PAGER_SPRING`, ζ1 k400 — Compose's own pager snap, kept off `layout`'s k700 because a launched spring's first frame scales with its stiffness; `lib/spring.ts`). Critically damped because the two sides are
+ * adjacent and an overshoot would open a sliver of bare panel past the strip's end.
+ *
+ * **Launched at half the spring's rate, which is the one launch with no jerk:** a critically
  * damped response launched below it gains speed after it leaves (the glide), above it starts
  * shedding speed at once (the throw), and at it holds its launch speed for the first instant and
- * only then slows — the smoothest start a launched spring has. Over M3's `medium3` it is halfway
- * in 60ms, 90% in 170ms and settled by 312ms, each frame carrying a little less than the one
- * before. Critically damped — the effects family, whose normalised rate is the same at every
- * stiffness — because the two sides are adjacent and an overshoot would open a sliver of bare
- * panel past the strip's end: the case the family rule gives to the effects springs. Below a
- * launch of `rate` a critically damped response cannot overshoot, and every launch here stays
- * under it.
+ * only then slows — the smoothest start a launched spring has. Below a launch of `rate` a
+ * critically damped response cannot overshoot, and every launch here stays under it.
  *
  * `p` is the strip's position: 0 rests on the pane being left, 1 on the one arriving.
  */
-import { DURATION } from '@/lib/motionTokens';
-import { SPRINGS, SPRING_DURATION } from '@/lib/spring';
+import { PAGER_SPRING, springDurationMs, springRate } from '@/lib/spring';
 import { clamp01 } from '@/lib/utils';
 
-/** ω in a leg's own normalised time — the effects family's, 6.65 at every stiffness. */
-export const STRIP_RATE = Math.sqrt(SPRINGS.defaultEffects.stiffness) * SPRING_DURATION.defaultEffects;
-/** A full switch at the default speed, ms (M3's `medium3`, `DURATION.axis`). Scaled by the motion
+/** ω in a leg's own normalised time — the layout spring's. */
+export const STRIP_RATE = springRate(PAGER_SPRING);
+/** A full switch at the default speed, ms: the layout spring's settle time. Scaled by the motion
  *  speed like every duration. */
-export const STRIP_DURATION_MS = DURATION.axis * 1000;
+export const STRIP_DURATION_MS = springDurationMs(PAGER_SPRING);
 /** The tap's launch, in a full switch's normalised units: progress per unit of its duration. Half
  *  of `STRIP_RATE`, where the response leaves at its top speed with no jerk. */
 export const STRIP_LAUNCH = STRIP_RATE / 2;
@@ -104,7 +103,12 @@ export function stripPose(leg: StripLeg, elapsed: number): { p: number; speed: n
  * a velocity-continuous turn does): the reader has just sent the strip the other way. `launch` is
  * a fresh tap's, for a caller on a clock of its own (the forum's container transform).
  */
-export function turnStrip(leg: StripLeg, elapsed: number, full: number, launch: number = STRIP_LAUNCH): StripLeg {
+export function turnStrip(
+  leg: StripLeg,
+  elapsed: number,
+  full: number,
+  launch: number = STRIP_LAUNCH,
+): StripLeg {
   const { p, speed } = stripPose(leg, elapsed);
   const to = leg.to === 1 ? 0 : 1;
   const remaining = Math.abs(to - p);
@@ -251,7 +255,9 @@ export function lagSampler(
       position = next - behind + (position - here + behind) * decay;
     }
     lags[n - 1] = 0;
-    return simplify(lags, n, tolerance).map((i) => [from + i * LEAN_STEP_MS, lags[i]] as [number, number]);
+    return simplify(lags, n, tolerance).map(
+      (i) => [from + i * LEAN_STEP_MS, lags[i]] as [number, number],
+    );
   };
 }
 

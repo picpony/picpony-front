@@ -36,7 +36,7 @@ export default function RefreshButton({
           /* No `size`: `Button` sizes its own icon slot (20dp at this step).
              Passing the 18dp chip/metadata size here was one glyph, two
              opinions. */
-          className="transition-[rotate] spring-default-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
+          className="transition-[rotate] spring-fast-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
         />
       }
     >

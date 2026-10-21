@@ -15,7 +15,7 @@ import Skeleton from './Skeleton';
 import ErrorRetry from './ErrorRetry';
 import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
-import { DURATION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
 
@@ -147,7 +147,7 @@ export default function DetailVideo({
     if (!isPainted) return;
     const timer = window.setTimeout(
       () => startTransition(() => setPlaceholderGone(finalSrc)),
-      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+      SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
     );
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);

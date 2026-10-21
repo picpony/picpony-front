@@ -504,7 +504,10 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
   for (let step = 0; step <= 100; step += 1) speeds.push(evaluateLeg(leg, 1000 + (HERO_DURATIONS.forward * step) / 100).speed);
   const crest = Math.max(...speeds);
   const crestAt = speeds.indexOf(crest);
-  assert.ok(launch >= 0.25 * crest, `a fresh flight leaves moving (${launch.toFixed(2)} against a crest of ${crest.toFixed(2)})`);
+  /* A spring from rest: no speed at the instant of release but its greatest acceleration, so it is
+     visibly on its way in the first frame (Compose's shared-element spring). */
+  const firstFrame = heroRectCenterDistance(from, evaluateLeg(leg, 1000 + 1000 / 60).rect) / distance;
+  assert.ok(launch >= 0 && firstFrame > 0.02, `a fresh flight leaves at once (${(firstFrame * 100).toFixed(1)}% in the first frame, crest ${crest.toFixed(2)})`);
   assert.ok(crestAt > 0 && crestAt <= 25, `and crests in the air, early (${crestAt}% in)`);
   for (let step = 1; step <= 100; step += 1) {
     const rising = step <= crestAt;

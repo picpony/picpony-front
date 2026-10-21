@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Observer, gsap, spring, surfaceEnter, useGSAP } from '@/lib/motion';
+import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
@@ -58,10 +58,10 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  *
  * - **Shape.** `rounded-t-2xl` (28dp) on the two visible corners, none on the two
  *   flush with the screen edge — the shape scale's dialog/sheet step.
- * - **Motion.** `default-effects` (the spring `ModalBottomSheet.kt` assigns) in both
- *   directions and on the scrim too — a sheet moving on a position is component
- *   motion, and *effects* rather than spatial because a panel that overshoots on
- *   the way out bounces back into view. GSAP owns the transform for the whole
+ * - **Motion.** It docks against the bottom edge, so it arrives on the **layout**
+ *   spring (critically damped: a sheet that overshoots lifts off the edge) and
+ *   leaves on `default-effects`, as every large surface does; the scrim fades on
+ *   the same clocks. GSAP owns the transform for the whole
  *   lifetime rather than CSS keyframes, because the drag below writes the same
  *   property — two owners meant a released drag snapped back to zero before the
  *   exit keyframe could take it down.
@@ -178,8 +178,8 @@ export default function Sheet({
         return;
       }
 
-      /* The reduced tier rises like the standard one. Neither leg can overshoot (the
-         emphasized decelerate is a Bézier, `defaultEffects` is critically damped), and a panel that appears in
+      /* The reduced tier rises like the standard one. Neither leg can overshoot (both
+         springs are critically damped), and a panel that appears in
          the middle of the screen without arriving from anywhere reads as a
          dialog — the travel *is* what says which edge it belongs to.
 
@@ -190,8 +190,9 @@ export default function Sheet({
          first frame the browser can produce, a stall only delays the travel. */
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        /* Arriving on the dialog's clock (400ms emphasized decelerate), leaving on DefaultEffects. */
-        const timing = isOpen ? surfaceEnter('overlay') : spring('defaultEffects', 'overlay');
+        /* Arriving on the layout spring — it docks against the screen edge, and an overshoot would
+           lift it off that edge and show the page through the gap — leaving on DefaultEffects. */
+        const timing = isOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
         gsap.to(panel, { y: isOpen ? 0 : '100%', ...timing, overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
         if (scrim)
@@ -252,11 +253,10 @@ export default function Sheet({
 
         /* One spring per direction, and **no distance-scaled duration** — a spring
            already covers a shorter remaining distance in less time, so scaling
-           its clock as well double-counts. `default-effects` on a dismiss (a
-           panel that overshoots on the way out bounces back into view) and
-           `default-spatial` on a settle-back, the split `NavigationDrawer.kt`
-           makes for a drag release — and the phone drawer's release takes the same pair. */
-        const release = spring(dismiss ? 'defaultEffects' : 'defaultSpatial', 'overlay');
+           its clock as well double-counts. `default-effects` on a dismiss, as every
+           departure, and on a settle-back the spring it arrived on, `layout` — it
+           docks against the edge again. The phone drawer's release takes the same pair. */
+        const release = spring(dismiss ? 'defaultEffects' : 'layout', 'overlay');
 
         if (scrim)
           gsap.to(scrim, {

@@ -520,7 +520,7 @@ test('a reply’s floor number does not assume the page size (R6-038)', () => {
 
 const container = await import('../lib/forumContainer.ts');
 const heroConstants = await import('../lib/hero/constants.ts');
-const { curveProgress } = await import('../lib/hero/progress.ts');
+const spring = await import('../lib/spring.ts');
 
 test('the container transform’s clip is the container at every sample, in both of its forms', () => {
   const card = { left: 416, top: 96, width: 896, height: 724 };
@@ -547,31 +547,28 @@ test('the container transform’s clip is the container at every sample, in both
   }
 });
 
-test('the container flies the picture flight’s curve, a little longer: moves on its first frame, crests in the air, lands at rest', () => {
+test('the container flies the picture flight’s spring: Compose’s shared-element spring, moving from its first frame, never past its rectangle', () => {
   const p = container.forumTransformProgress;
-  /* One gesture, one shape of motion: a gallery card opening's curve, over a little more than its
-     220ms — a container hands one content over to another inside it, which that length hurried —
-     and still over before the next thing anybody does. */
-  assert.equal(container.FORUM_TRANSFORM_EASING, heroConstants.HERO_FLIGHT_CURVE.css);
-  assert.ok(container.FORUM_TRANSFORM_MS > heroConstants.HERO_DURATIONS.forward, 'a little longer than the flight');
-  assert.ok(container.FORUM_TRANSFORM_MS <= 300, `${container.FORUM_TRANSFORM_MS}ms`);
-  for (let t = 0; t <= 1; t += 0.05) assert.equal(p(t), curveProgress(heroConstants.HERO_FLIGHT_CURVE, t));
+  /* One gesture, one motion: the flight's clock and the flight spring's shape (`FLIGHT_SPRING`). */
+  assert.equal(container.FORUM_TRANSFORM_MS, heroConstants.HERO_DURATIONS.forward);
+  assert.equal(container.FORUM_TRANSFORM_MS, spring.springDurationMs(spring.FLIGHT_SPRING));
+  assert.equal(container.FORUM_TRANSFORM_EASING, spring.springToLinear(spring.FLIGHT_SPRING));
   assert.equal(p(0), 0);
   assert.equal(p(1), 1);
   const frame = 1000 / 60 / container.FORUM_TRANSFORM_MS;
   const steps = [];
   for (let t = frame; t < 1 + frame; t += frame) steps.push(p(Math.min(1, t)) - p(t - frame));
-  /* It answers the press on the next frame, and its fastest frame is in the air, not the first. */
-  assert.ok(steps[0] > 0.05 && steps[0] < 0.12, `first frame ${steps[0]}`);
+  /* It answers the press on the next frame and only gains speed for a frame or two. */
+  assert.ok(steps[0] > 0.02, `first frame ${steps[0]}`);
   const fastest = steps.indexOf(Math.max(...steps));
   assert.ok(fastest >= 1 && fastest <= 4, `fastest frame ${fastest}`);
-  /* Half the way inside 75ms, nine tenths inside 160ms, and at rest by the end: no creep. */
   const at = (q) => {
     for (let ms = 0; ms <= container.FORUM_TRANSFORM_MS; ms += 0.5) if (p(ms / container.FORUM_TRANSFORM_MS) >= q) return ms;
     return Infinity;
   };
-  assert.ok(at(0.5) < 75, `half at ${at(0.5)}`);
-  assert.ok(at(0.9) < 160, `nine tenths at ${at(0.9)}`);
+  /* Unhurried but not slow: half by ~53ms, nine tenths by ~123ms, then a soft settle. */
+  assert.ok(at(0.5) < 100, `half at ${at(0.5)}`);
+  assert.ok(at(0.9) < 220, `nine tenths at ${at(0.9)}`);
   assert.ok(steps.at(-1) < 0.003, `last frame ${steps.at(-1)}`);
   for (let t = 0; t < 1; t += 0.01) assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
 });

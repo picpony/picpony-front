@@ -187,13 +187,12 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        /* A release is already moving, so it lands on springs rather than the tap's
-         * 400ms curve — the same pair `Sheet` releases on: `DefaultSpatial` to settle
-         * open, `DefaultEffects` shut, which is also the clock the tap closes on, so a
-         * gesture and a tap leave alike. No velocity scaling: a duration scaled by
+        /* The same pair `Sheet` releases on and the tap runs: `layout` to settle open
+         * (it docks against the edge), `DefaultEffects` shut, so a gesture and a tap
+         * arrive and leave alike. No velocity scaling: a duration scaled by
          * distance double-counts; a spring already covers a shorter remaining distance
          * in less time. */
-        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('defaultEffects', 'overlay');
+        const spec = toOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
 
         settling = toOpen;
         if (s)
@@ -233,7 +232,7 @@ export function useDrawerSwipe({
           return;
         }
         settling = openNow;
-        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('defaultEffects', 'overlay');
+        const spec = openNow ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
         if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spec, overwrite: true });
         gsap.to(d, {
           x: openNow ? 0 : -width,

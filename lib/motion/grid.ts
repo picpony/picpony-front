@@ -5,10 +5,10 @@
 import { useRef, type RefObject } from 'react';
 import { motionRatio, useEntranceMotion, useMotionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { DURATION, STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
+import { STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
 import { routeTransitActive } from '@/lib/pageTransit';
 import { replacedSkeleton } from '@/lib/masonry';
-import { gsap, useGSAP } from './engine';
+import { gsap, surfaceArrival, useGSAP } from './engine';
 
 /* ---------------------------------------------------------------------------
  * Entrance / list motion
@@ -120,22 +120,20 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
        * has one entrance cascade; the 0.985 it carried was a flourish no one could
        * see, and a card mid-tween carried a transform the hero flight measures. */
       const reduced = tier === 'reduced';
-      const tween = gsap.fromTo(
-        ordered,
-        { autoAlpha: 0, y: reduced ? TRAVEL_PX.small : REVEAL_SHIFT },
-        {
-          autoAlpha: 1,
-          y: 0,
-          duration: DURATION.long,
-          ease: 'decelerate',
-          // Capped (`STAGGER`): the last card lands by 650ms however many are on
-          // screen — the old 0.9s cap left a full desktop screen settling for 1.3s.
-          stagger: reduced
-            ? 0
-            : { each: STAGGER.step, from: 'start', amount: Math.min((ordered.length - 1) * STAGGER.step, STAGGER.max) },
-          clearProps: 'opacity,visibility,transform',
-        },
-      ).timeScale(1 / motionRatio('entrance'));
+      /* Each card arrives as a surface does (`surfaceArrival`): the rise on the default spatial
+         spring, the fade on the default effects one, so a card is visible before its crest and
+         lands with the scheme's soft settle rather than the emphasized decelerate's hard stop.
+         `spring()` already carries the entrance category's speed; the stagger is scaled to match. */
+      const ratio = motionRatio('entrance');
+      const { spatial, effects } = surfaceArrival('default', 'entrance');
+      // Capped (`STAGGER`): however many cards are on screen, the spread never passes 250ms.
+      const stagger = reduced
+        ? 0
+        : { each: STAGGER.step * ratio, from: 'start' as const, amount: Math.min((ordered.length - 1) * STAGGER.step, STAGGER.max) * ratio };
+      const tween = gsap
+        .timeline({ onComplete: () => gsap.set(ordered, { clearProps: 'opacity,visibility,transform' }) })
+        .fromTo(ordered, { autoAlpha: 0 }, { autoAlpha: 1, ...effects, stagger }, 0)
+        .fromTo(ordered, { y: reduced ? TRAVEL_PX.small : REVEAL_SHIFT }, { y: 0, ...spatial, stagger }, 0);
 
       // A transform on an ancestor shifts `getBoundingClientRect` for everything
       // under it, and the hero flight reads exactly that off a card the moment you

@@ -1063,402 +1063,136 @@ body {
   --shadow-e4: var(--md-sys-elevation-4);
   --shadow-e5: var(--md-sys-elevation-5);
 
-  /* ── Material 3 motion curves ───────────────────────────────────────────
+  /* ── Motion: Material 3 Expressive springs ──────────────────────────────
    *
-   * M3 ships **two** easing sets, not interchangeable:
-   *   emphasized  a large container transform or anything crossing the screen.
-   *   standard    a small, utilitarian change — a hover, a chip selecting.
+   * Every motion in the app is one of seven springs (`lib/spring.ts` is the source of truth and
+   * explains the choice): six MotionScheme roles from the **expressive** scheme plus Compose's
+   * layout spring.
    *
-   * The canonical names are spelled out below; the bare decelerate/accelerate pair is an
-   * alias of the emphasized one, which is what the existing call sites already meant.
-   * Mirrored in lib/motion.ts for GSAP; change one and change the other. */
-  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-standard-decelerate: cubic-bezier(0, 0, 0, 1);
-  --ease-standard-accelerate: cubic-bezier(0.3, 0, 1, 1);
-  /* M3's emphasized curve is two cubic segments, so it has no single cubic-bezier form —
-     this is the spec path sampled at 24 points. It hangs back, snaps through
-     the middle at 2.5x the standard ease's peak speed, then takes a long tail into rest.
-     Mirrored in lib/motion.ts, where GSAP takes the path directly. */
-  --ease-emphasized: linear(
-    0 0%,
-    0.0141 4.167%,
-    0.0616 8.333%,
-    0.1622 12.5%,
-    0.4 16.67%,
-    0.6686 20.83%,
-    0.7728 25%,
-    0.8315 29.17%,
-    0.8706 33.33%,
-    0.8989 37.5%,
-    0.9204 41.67%,
-    0.9372 45.83%,
-    0.9506 50%,
-    0.9614 54.17%,
-    0.9701 58.33%,
-    0.9773 62.5%,
-    0.983 66.67%,
-    0.9877 70.83%,
-    0.9914 75%,
-    0.9943 79.17%,
-    0.9965 83.33%,
-    0.9981 87.5%,
-    0.9992 91.67%,
-    0.9998 95.83%,
-    1 100%
+   *   role             ζ     k      use
+   *   fast-spatial     0.6   800    a control moving: handle, dot, icon turn, press morph, menu
+   *   default-spatial  0.8   380    a partial-screen surface moving: dialog, sheet, drawer, popover
+   *   slow-spatial     0.8   200    a full-screen move: page, pane, theme reveal
+   *   fast-effects     1     3800   hover, focus, state layer; a small surface leaving
+   *   default-effects  1     1600   a surface's fade; a large surface leaving
+   *   slow-effects     1     800    a full-screen fade
+   *   layout           1     400    bounds following layout: shared element, list placement,
+   *                                 content size, the tab pager
+   *
+   * Each is a pair — `--duration-spring-<role>` and its ease — and always used as a pair, or
+   * through the `spring-<role>` utilities that carry both. Spatial roles each have their own
+   * ease (`--ease-spring-<role>`); the effects roles and layout are all critically damped and
+   * share `--ease-spring-effects`. The tables are `linear()` samples of the closed form, which is
+   * the one CSS easing that can carry the overshoot above 1. The generated block below is
+   * written by `npm run motion:write` and checked by `npm run motion`; never edit it by hand. */
+  /* @motion-generated:start */
+  /* ζ1, critically damped: the effects roles and layout */
+  --motion-shape-effects: linear(
+    0, 0.0046 1.17%, 0.0196 2.5%, 0.0445 3.92%, 0.0826 5.58%, 0.1612 8.42%,
+    0.3619 14.92%, 0.4571 18.17%, 0.5499 21.67%, 0.6292 25.08%, 0.6956 28.42%, 0.7546 31.92%,
+    0.8055 35.58%, 0.8486 39.42%, 0.8887 44%, 0.9217 49.08%, 0.9474 54.67%, 0.9669 60.92%,
+    0.9807 67.92%, 0.9904 76.25%, 0.9965 86.5%, 1
   );
-  /* These two the spec does give as single cubics. */
-  --ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
-  /* Aliases: every existing use means "something is entering/leaving the screen", which is
-     the emphasized pairing. Reach for the fully-qualified name in new code. */
-  --ease-decelerate: var(--ease-emphasized-decelerate);
-  --ease-accelerate: var(--ease-emphasized-accelerate);
-  /* **Symmetric: eases in as well as out.** M3 ships nothing like this, and that
-     is a gap in what its *curve* vocabulary models rather than an oversight — both
-     M3 easing sets spend their travel at one end, on purpose. Percentage of travel
-     covered in each tenth of the duration:
-
-       emphasized-decelerate   62 16  8  5  3  2  1  1  0  0   half-travel by 7%
-       standard                16 34 19 11  8  5  3  2  1  0   half-travel by 20%
-       emphasized-accelerate    1  2  3  4  6  8 11 14 20 32   half-travel by 82%
-       symmetric                2  7 11 14 16 16 14 11  7  2   half-travel by 50%
-
-     **One role, and it is the loop.** A repeating animation has no arrival, so a one-sided
-     curve is velocity-discontinuous once per cycle. The loop call sites reach it through the
-     loop alias — the role name, which is what to write. Nothing else uses it: a panel
-     travelling in place is also neither arrival nor leave, but its answer is a spring, not a
-     bezier (M3 stopped using beziers for component motion; see the progress-bar component). */
-  --ease-symmetric: cubic-bezier(0.4, 0, 0.6, 1);
-  /* The role name at the call sites. */
-  --ease-loop: var(--ease-symmetric);
-
-  /* ── M3 Expressive motion: springs ──────────────────────────────────────
-   *
-   * The curves above are M3's *transition* system. Its *component* motion is a different
-   * system, and since May 2025 the spec's answer there is spring physics rather than a curve:
-   * a damping ratio and a stiffness, per the motion scheme. A bezier is a shape someone drew; a
-   * spring is a mass being pulled to a target, and the eye can tell.
-   *
-   * The nine values are M3's own, from the generated standard and expressive motion token
-   * sets:
-   *
-   *              damping   stiffness            damping   stiffness
-   *   standard                          expressive
-   *     spatial  fast  0.9   1400         spatial  fast  0.6    800
-   *              def   0.9    700                  def   0.8    380
-   *              slow  0.9    300                  slow  0.8    200
-   *     effects  fast  1.0   3800         effects  identical to standard
-   *              def   1.0   1600
-   *              slow  1.0    800
-   *
-   * **spatial** moves or resizes; damping < 1, so it may overshoot — that is what reads as
-   * mass. **effects** fades or recolours; damping exactly 1, critically damped, never
-   * overshoots (an overshooting colour is a flash; an overshooting opacity is clipped).
-   *
-   * Nine springs but only **four shapes**: normalised to settle time, the curve depends only
-   * on the damping ratio (verified across every stiffness sharing one; max deviation 7e-5).
-   * Sampled as a linear easing at 32 points from the closed form (damping < 1: under-damped;
-   * = 1: critically damped), with ω = √k, normalised so the last stop is exactly 1.
-   * Linear easing is the one CSS easing that can carry values above 1, which is what makes
-   * the overshoot expressible at all.
-   *
-   * Settle time = within 1% of target (the Compose displacement threshold).
-   *
-   * `lib/spring.ts` holds the same maths for GSAP, registered directly rather than sampled.
-   * Change one and change the other. */
-
-  /* Critically damped, ζ=1. Never overshoots. Fades, colours, state layers. */
-  --ease-spring-effects: linear(
-    0 0%,
-    0.0201 3.23%,
-    0.07 6.45%,
-    0.1375 9.68%,
-    0.2139 12.9%,
-    0.2933 16.13%,
-    0.3716 19.35%,
-    0.4464 22.58%,
-    0.5161 25.81%,
-    0.5799 29.03%,
-    0.6374 32.26%,
-    0.6888 35.48%,
-    0.7342 38.71%,
-    0.774 41.94%,
-    0.8087 45.16%,
-    0.8389 48.39%,
-    0.8648 51.61%,
-    0.8872 54.84%,
-    0.9063 58.06%,
-    0.9226 61.29%,
-    0.9365 64.52%,
-    0.9483 67.74%,
-    0.9582 70.97%,
-    0.9667 74.19%,
-    0.9738 77.42%,
-    0.9798 80.65%,
-    0.9848 83.87%,
-    0.989 87.1%,
-    0.9925 90.32%,
-    0.9955 93.55%,
-    0.9979 96.77%,
-    1 100%
+  /* ζ0.8: default- and slow-spatial */
+  --motion-shape-spatial: linear(
+    0, 0.0061 1.42%, 0.0242 2.92%, 0.0556 4.58%, 0.1006 6.42%, 0.1434 7.92%,
+    0.198 9.67%, 0.4275 16.5%, 0.5312 19.75%, 0.6277 23.08%, 0.7101 26.33%, 0.7787 29.5%,
+    0.8359 32.67%, 0.8848 36%, 0.924 39.42%, 0.9568 43.25%, 0.9816 47.42%, 0.9987 52%,
+    1.009 57.25%, 1.0129 67.67%, 1
   );
-  /* ζ=0.9. Its first peak falls outside the 1% settle window, so within the window it is
-     monotonic — the standard scheme reads as purposeful rather than playful. */
-  --ease-spring-standard-spatial: var(--motion-base-standard-spatial);
-  --motion-base-standard-spatial: linear(
-    0 0%,
-    0.0125 3.23%,
-    0.0454 6.45%,
-    0.0925 9.68%,
-    0.1492 12.9%,
-    0.2116 16.13%,
-    0.2768 19.35%,
-    0.3425 22.58%,
-    0.4071 25.81%,
-    0.4692 29.03%,
-    0.5282 32.26%,
-    0.5833 35.48%,
-    0.6343 38.71%,
-    0.681 41.94%,
-    0.7235 45.16%,
-    0.7618 48.39%,
-    0.7961 51.61%,
-    0.8267 54.84%,
-    0.8536 58.06%,
-    0.8774 61.29%,
-    0.8981 64.52%,
-    0.9162 67.74%,
-    0.9318 70.97%,
-    0.9453 74.19%,
-    0.9568 77.42%,
-    0.9666 80.65%,
-    0.9749 83.87%,
-    0.9819 87.1%,
-    0.9878 90.32%,
-    0.9927 93.55%,
-    0.9967 96.77%,
-    1 100%
+  /* ζ0.6: fast-spatial */
+  --motion-shape-spatial-fast: linear(
+    0, 0.0082 1.33%, 0.0311 2.67%, 0.0712 4.17%, 0.1266 5.75%, 0.181 7.08%,
+    0.2484 8.58%, 0.5275 14.33%, 0.6467 16.92%, 0.7575 19.58%, 0.85 22.17%, 0.9243 24.67%,
+    0.9837 27.17%, 1.0301 29.75%, 1.0636 32.42%, 1.0797 34.33%, 1.0907 36.42%, 1.0961 38.58%,
+    1.0964 40.92%, 1.0828 46.17%, 1.0213 60.5%, 1.0007 68.67%, 0.9949 73.67%, 0.993 79.42%,
+    1
   );
-  /* ζ=0.8. Overshoots 0.51% at 82% of the run — a settle you feel rather than see. */
-  --ease-spring-expressive-spatial: var(--motion-base-expressive-spatial);
-  --motion-base-expressive-spatial: linear(
-    0 0%,
-    0.0186 3.23%,
-    0.0667 6.45%,
-    0.1343 9.68%,
-    0.2136 12.9%,
-    0.2984 16.13%,
-    0.3842 19.35%,
-    0.4676 22.58%,
-    0.5464 25.81%,
-    0.6189 29.03%,
-    0.6845 32.26%,
-    0.7426 35.48%,
-    0.7933 38.71%,
-    0.8368 41.94%,
-    0.8737 45.16%,
-    0.9044 48.39%,
-    0.9295 51.61%,
-    0.9498 54.84%,
-    0.9659 58.06%,
-    0.9783 61.29%,
-    0.9877 64.52%,
-    0.9946 67.74%,
-    0.9993 70.97%,
-    1.0024 74.19%,
-    1.0042 77.42%,
-    1.005 80.65%,
-    1.0051 83.87%,
-    1.0045 87.1%,
-    1.0037 90.32%,
-    1.0026 93.55%,
-    1.0013 96.77%,
-    1 100%
-  );
-  /* ζ=0.6, the expressive scheme's *fast* spatial spring and the only visibly bouncy curve
-     in the system (8.4% overshoot, peaking at 63% of the run). Reserved for a small mark
-     arriving in place — anything large wearing this reads as a wobble. */
-  --ease-spring-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
-  --motion-base-expressive-spatial-fast: linear(
-    0 0%,
-    0.0186 3.23%,
-    0.0682 6.45%,
-    0.1405 9.68%,
-    0.2278 12.9%,
-    0.3238 16.13%,
-    0.4233 19.35%,
-    0.5218 22.58%,
-    0.616 25.81%,
-    0.7034 29.03%,
-    0.7823 32.26%,
-    0.8518 35.48%,
-    0.9113 38.71%,
-    0.9609 41.94%,
-    1.0008 45.16%,
-    1.0318 48.39%,
-    1.0546 51.61%,
-    1.0701 54.84%,
-    1.0795 58.06%,
-    1.0836 61.29%,
-    1.0834 64.52%,
-    1.0799 67.74%,
-    1.0739 70.97%,
-    1.0662 74.19%,
-    1.0574 77.42%,
-    1.0481 80.65%,
-    1.0387 83.87%,
-    1.0295 87.1%,
-    1.0209 90.32%,
-    1.0131 93.55%,
-    1.0061 96.77%,
-    1 100%
-  );
+  --motion-base-spring-fast-spatial: 348ms; /* ζ0.6 k800 */
+  --motion-base-spring-default-spatial: 412ms; /* ζ0.8 k380 */
+  --motion-base-spring-slow-spatial: 569ms; /* ζ0.8 k200 */
+  --motion-base-spring-fast-effects: 138ms; /* ζ1 k3800 */
+  --motion-base-spring-default-effects: 212ms; /* ζ1 k1600 */
+  --motion-base-spring-slow-effects: 300ms; /* ζ1 k800 */
+  --motion-base-spring-layout: 321ms; /* ζ1 k700 */
+  --motion-base-spring-flight: 268ms; /* ζ1 k1000 */
+  --motion-base-spring-pager: 424ms; /* ζ1 k400 */
+  --motion-base-spring-progress: 1200ms; /* ζ1 k50 */
+  --motion-base-handoff: 69ms; /* half a fast-effects fade: a follower starts as its leader is ~90% there */
+  /* @motion-generated:end */
 
-  /* ---------------------------------------------------------------------
-   * Durations, and the one variable all of them go through
-   *
-   * The motion scale is the *speed* preference: 0.7 / 1 / 1.4 for the three speed tiers and
-   * **0** for off (collapsing every duration to zero). The reduced tier deliberately does not
-   * touch it — it decides what kind of motion plays, not how long it takes. Durations are
-   * calc-multiplied rather than literals so a new animation obeys the preference by
-   * construction (greppable invariant: every duration in the app goes through the scale).
-   *
-   * The four exceptions are the indeterminate progress indicators further down — a frozen
-   * spinner is a graphic claiming the opposite of what it means. Third-party stylesheets are
-   * also outside the invariant; everything reachable in them is re-declared through the
-   * tokens below, so a literal left in the built CSS should be traceable to one of those
-   * packages or to the four exceptions.
-   *
-   * Names are semantic — a raw duration cannot say whether it means "settling in place" or
-   * "leaving"; the numeric aliases are kept for compatibility and should not grow. Every
-   * base value is a step on M3's own duration scale — that is what the default speed
-   * declares, and fast/slow scale the whole system equally, keeping the ratios inside one
-   * gesture intact.
-   * ------------------------------------------------------------------- */
-  --motion-base-press: 100ms;
-  --transition-duration-press: calc(var(--motion-base-press) * var(--motion-scale));
-  --motion-base-state: 150ms;
-  --transition-duration-state: calc(var(--motion-base-state) * var(--motion-scale));
-  --motion-base-standard: 200ms;
-  --transition-duration-standard: calc(var(--motion-base-standard) * var(--motion-scale));
-  --motion-base-composite: 300ms;
-  --transition-duration-composite: calc(var(--motion-base-composite) * var(--motion-scale));
-  --motion-base-enter: 400ms;
-  --transition-duration-enter: calc(var(--motion-base-enter) * var(--motion-scale));
-  --motion-base-emphasized: 500ms;
-  --transition-duration-emphasized: calc(var(--motion-base-emphasized) * var(--motion-scale));
+  --ease-spring-fast-spatial: var(--motion-shape-spatial-fast);
+  --ease-spring-default-spatial: var(--motion-shape-spatial);
+  --ease-spring-slow-spatial: var(--motion-shape-spatial);
+  --ease-spring-effects: var(--motion-shape-effects);
 
-  /* The page fade's two halves (`PAGE_FADE_TIMING` in lib/motionTokens.ts): the incoming page
-     waits 80ms and fades over 320ms, 400ms door to door. One copy, read by the page-transition
-     token, the home navigation pill and the mascot's lift, which ride the same leg. */
-  --motion-base-page-delay: 80ms;
-  --motion-base-page-fade: 320ms;
+  /* The settle times through the speed preference. The motion scale is the *speed*: 0.7 / 1 /
+     1.4 for the three speed tiers and **0** for off, collapsing every duration; the reduced tier
+     does not touch it — it decides what kind of motion plays (no overshoot), not how long it
+     takes. Scaling a spring's clock uniformly is the same spring at another speed. */
+  --duration-spring-fast-spatial: calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale));
+  --duration-spring-default-spatial: calc(var(--motion-base-spring-default-spatial) * var(--motion-scale));
+  --duration-spring-slow-spatial: calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale));
+  --duration-spring-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale));
+  --duration-spring-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale));
+  --duration-spring-slow-effects: calc(var(--motion-base-spring-slow-effects) * var(--motion-scale));
+  --duration-spring-layout: calc(var(--motion-base-spring-layout) * var(--motion-scale));
+
+  /* **Not motion to a target, so not springs** — the only two curves left. An indeterminate
+     loop has no arrival: a one-sided curve is velocity-discontinuous once per cycle, so it eases
+     at both ends. The skeleton sweep is a drift with a soft end. (`LOOP_EASE` in
+     lib/motionTokens.ts.) */
+  --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
+  --motion-base-sweep: 1.6s;
+  --ease-sweep: cubic-bezier(0, 0, 0.58, 1);
 
   /* Travel and arrival scale (`TRAVEL_PX` / `ENTER_SCALE` in lib/motionTokens.ts). */
   --motion-travel: 16px;
   --motion-travel-small: 8px;
   --motion-enter-scale: 0.95;
+  --motion-menu-scale: 0.8;
 
-  /* The skeleton and semantic-line sweeps: one cycle, one curve (see the skeleton rule). */
-  --motion-base-sweep: 1.6s;
-  --ease-sweep: cubic-bezier(0, 0, 0.58, 1);
+  /* What a bare transition utility gets when the call site names no motion: the default effects
+     spring. Tailwind's own default is Material 2's cubic-bezier(0.4, 0, 0.2, 1) at 150ms; a
+     forgotten ease now degrades to a spring that can never overshoot. */
+  --default-transition-timing-function: var(--ease-spring-effects);
+  --default-transition-duration: var(--duration-spring-default-effects);
 
-  /* The menu arrives on the shared short step and leaves on FastEffects, as every small surface
-     does. The arrow follows its panel; the anchored expansion pattern is independent of these
-     global rates. */
-  --transition-duration-menu-enter: calc(var(--motion-base-standard) * var(--motion-scale-overlay));
-  --transition-duration-menu-exit: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay));
-  --ease-menu-enter: var(--ease-standard-decelerate);
-  --ease-menu-exit: var(--ease-spring-effects);
-
-  --transition-duration-100: var(--transition-duration-press);
-  --transition-duration-150: var(--transition-duration-state);
-  --transition-duration-200: var(--transition-duration-standard);
-  --transition-duration-300: var(--transition-duration-composite);
-  --transition-duration-400: var(--transition-duration-enter);
-  --transition-duration-500: var(--transition-duration-emphasized);
-
-  /* Settle times. Not a scale to pick by eye — each is the solution of its own spring. Pair
-     with the shape sharing its damping ratio; the spring utilities below do that pairing.
-     Scaling these is legitimate: normalised by settle time, a uniform clock scale is the same
-     spring at a different speed. */
-  --motion-base-spring-fast-spatial: 137ms;
-  --duration-spring-fast-spatial: calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale)); /* ζ0.9 k1400 */
-  --motion-base-spring-default-spatial: 194ms;
-  --duration-spring-default-spatial: calc(var(--motion-base-spring-default-spatial) * var(--motion-scale)); /* ζ0.9 k700  */
-  --motion-base-spring-slow-spatial: 296ms;
-  --duration-spring-slow-spatial: calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale)); /* ζ0.9 k300  */
-  --motion-base-spring-fast-effects: 108ms;
-  --duration-spring-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale)); /* ζ1.0 k3800 */
-  --motion-base-spring-default-effects: 166ms;
-  --duration-spring-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale)); /* ζ1.0 k1600 */
-  --motion-base-spring-slow-effects: 235ms;
-  --duration-spring-slow-effects: calc(var(--motion-base-spring-slow-effects) * var(--motion-scale)); /* ζ1.0 k800  */
-  --motion-base-spring-expressive-fast-spatial: 221ms;
-  --duration-spring-expressive-fast-spatial: calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-scale)); /* ζ0.6 k800  */
-  --motion-base-spring-expressive-default-spatial: 326ms;
-  --duration-spring-expressive-default-spatial: calc(var(--motion-base-spring-expressive-default-spatial) * var(--motion-scale)); /* ζ0.8 k380  */
-  --motion-base-spring-expressive-slow-spatial: 449ms;
-  --duration-spring-expressive-slow-spatial: calc(var(--motion-base-spring-expressive-slow-spatial) * var(--motion-scale)); /* ζ0.8 k200  */
-
-
-  /* What a bare transition utility gets when the call site names no curve. Tailwind's own
-     default is Material 2's cubic-bezier(0.4, 0, 0.2, 1) at 150ms; re-pointing the default
-     means a forgotten ease degrades to the right curve. */
-  --default-transition-timing-function: var(--ease-standard);
-  --default-transition-duration: var(--transition-duration-standard);
-
-  /* 400ms, the "enters the screen" step, paired with the decelerate it already had. */
-  --animate-fade-in: fadeIn var(--transition-duration-enter) var(--ease-decelerate) forwards;
-  /* The image detail's entrance for the two tiers that do not fly: a fade plus 8px, the same
-     weak form the reveal component and the grid stagger take under the reduced tier.
-     Deliberately not gated on the entrance preference — opening a picture is a gesture the
-     user asked for, and suppressing it turned the tap into a hard cut. */
-  --animate-detail-arrive: detailArrive calc(var(--motion-base-enter) * var(--motion-scale-image)) var(--ease-decelerate)
-    forwards;
-  /* The 80ms backwards-filled hold is what makes a cold mount read like the
-     scripted path (the cross-fade drives its own entrance and offsets it by the same 80ms;
-     total is 400ms door to door). Both halves go through the motion scale — the delay is not
-     optional, since a backwards fill holds the element at the keyframe's *from* state for the
-     length of the delay, and collapsing only the duration left every route change showing a
-     blank page for 80ms. Does **not** go through the entrance preference: this keyframe
-     serves a cold mount's own fade, the route cross-fade's incoming half and a pane swap, so
-     no per-token answer is right for all three — the switch is read at the call sites. */
-  --animate-page-transition: pageIn calc(var(--motion-base-page-fade) * var(--motion-scale-page)) var(--ease-decelerate)
-    calc(var(--motion-base-page-delay) * var(--motion-scale-page)) both;
+  /* A block fading in where it stands (a skeleton, a success state): a surface's fade. */
+  --animate-fade-in: fadeIn var(--duration-spring-default-effects) var(--ease-spring-effects) both;
+  /* The image detail's entrance for the two tiers that do not fly: a fade plus an 8px rise, the
+     rise on the default spatial spring and the fade on the default effects one (two animations,
+     because one shorthand carries one clock). Deliberately not gated on the entrance preference —
+     opening a picture is a gesture the user asked for. */
+  --animate-detail-arrive:
+    fadeIn calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects) both,
+    detailRise calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-image)) var(--ease-spring-default-spatial) both;
+  /* A page, or a pane's content, arriving: Material's *fade through* — it waits for the leaving
+     page's fast-effects fade to be mostly gone (`--motion-base-handoff`, generated as half of
+     that spring) and fades in on the full-screen effects spring. Opacity only: see `pageIn`.
+     Both halves go through the motion scale — a backwards fill holds the element at the *from*
+     state for the delay, so collapsing only the duration showed a blank page. Not gated on the
+     entrance preference; the switch is read at the call sites. */
+  --animate-page-transition: pageIn calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-page)) var(--ease-spring-effects)
+    calc(var(--motion-base-handoff) * var(--motion-scale-page)) both;
   /* ── Micro-interactions, as named animations ────────────────────────────
    *
-   * Named here so the duration and the curve travel with the animation (hand-assembled
-   * arbitrary values drifted). The ones that are a control or mark *arriving in place* take
-   * the expressive fast spatial spring — what "it popped in" means, the reaction fill
-   * included; the dot bounce keeps the loop easing because it repeats and has no arrival.
-   *
-   * All four go through the motion scale, which is what makes them obey the animation
-   * preference without being named anywhere else. */
-  --animate-control-pop: control-pop var(--duration-spring-expressive-fast-spatial)
-    var(--ease-spring-expressive-spatial-fast) both;
-  /* Two animations on one class: the glyph's *geometry* and its *fade* belong to two spring
-     families, and one animation shorthand carries one clock. Opacity on ζ0.6 was the bug —
-     that linear table is above 1 from 45% to 97% of the run, and an opacity above 1 is
-     clipped, so the glyph sat at full opacity waiting for its rotation to finish. */
+   * A control or mark *arriving in place* (a tick, a badge, a reaction) takes the fast spatial
+   * spring — what "it popped in" means — so its overshoot is the spring's own and the reduced
+   * tier's shape substitution removes it like every other. The dot bounce keeps the loop curve
+   * because it repeats and has no arrival. All go through the motion scale. */
+  --animate-control-pop: control-pop var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial) both;
+  /* Two animations on one class: the glyph's *geometry* and its *fade* are two springs, and one
+     shorthand carries one clock (an opacity on ζ0.6 is clipped above 1). */
   --animate-icon-swap:
-    icon-swap-turn var(--duration-spring-expressive-fast-spatial)
-      var(--ease-spring-expressive-spatial-fast) both,
+    icon-swap-turn var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial) both,
     icon-swap-fade var(--duration-spring-fast-effects) var(--ease-spring-effects) both;
-  /* A reaction filling in (收藏's star, 点赞's thumb): the same expressive fast spring as
-     control-pop, so its overshoot is the spring's own 8.4% — removed by the reduced tier's shape
-     substitution like every other — rather than a 1.28 scale written into keyframes, which no
-     tier could take out. It played on emphasized-decelerate over 400ms, and a timing function
-     applies per keyframe segment, so the 55% stop got two separate decelerates: the star
-     reached its 1.28 peak in about 30ms and then crawled back for 180. Transform only — the
-     glyph's colour belongs to the icon button's own FastEffects. */
-  --animate-reaction-fill: reaction-fill var(--duration-spring-expressive-fast-spatial)
-    var(--ease-spring-expressive-spatial-fast) both;
-  /* **Unscaled**, the fourth documented exception: the "加载更多" dots are an indeterminate
-     progress indicator — at scale 0 they would freeze into three static dots claiming the
-     fetch had stopped. Slowed under the off tier instead, in the rule beside the other
-     progress keyframes. The per-dot phase offset at the call site is unscaled for the same
-     reason (a fraction of the cycle; scaling one without the other bunches the dots). */
+  /* A reaction filling in (收藏's star, 点赞's thumb): the fast spatial spring's own overshoot,
+     not a scale written into keyframes, which no tier could take out. Transform only. */
+  --animate-reaction-fill: reaction-fill var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial) both;
+  /* **Unscaled**, a documented exception: the "加载更多" dots are an indeterminate progress
+     indicator — at scale 0 they would freeze into three static dots claiming the fetch had
+     stopped. Slowed under the off tier instead, beside the other progress keyframes. */
   --animate-dot-bounce: dot-bounce 1s var(--ease-loop) infinite;
   @keyframes fadeIn {
     from {
@@ -1483,13 +1217,11 @@ body {
     }
   }
 
-  @keyframes detailArrive {
+  @keyframes detailRise {
     from {
-      opacity: 0;
       translate: 0 var(--motion-travel-small);
     }
     to {
-      opacity: 1;
       translate: none;
     }
   }
@@ -1623,17 +1355,15 @@ html[data-motion='off'] {
   inherits: false;
   initial-value: 1;
 }
-@property --motion-local-standard-spatial {
+/* A spring utility resolves its spatial shape into one of these on its own element (non-
+   inheriting), so a surface's category can swap the shape for itself without reaching the
+   controls inside it. */
+@property --motion-local-spatial {
   syntax: '*';
   inherits: false;
   initial-value: linear;
 }
-@property --motion-local-expressive-spatial {
-  syntax: '*';
-  inherits: false;
-  initial-value: linear;
-}
-@property --motion-local-expressive-spatial-fast {
+@property --motion-local-spatial-fast {
   syntax: '*';
   inherits: false;
   initial-value: linear;
@@ -1668,32 +1398,30 @@ html[data-motion='off'] {
  * declaration regardless of source order. The GSAP side does the same substitution in the
  * spring helper (`lib/motion.ts`); the rest of the tier is per-component at the call sites. */
 html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced']) {
-  --ease-spring-standard-spatial: var(--ease-spring-effects);
-  --ease-spring-expressive-spatial: var(--ease-spring-effects);
-  --ease-spring-expressive-spatial-fast: var(--ease-spring-effects);
+  --ease-spring-fast-spatial: var(--motion-shape-effects);
+  --ease-spring-default-spatial: var(--motion-shape-effects);
+  --ease-spring-slow-spatial: var(--motion-shape-effects);
 }
 
 
 html[data-motion='custom'] [data-motion-category='ambient'] {
-  --ease-spring-standard-spatial: var(--motion-base-standard-spatial);
-  --ease-spring-expressive-spatial: var(--motion-base-expressive-spatial);
-  --ease-spring-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
+  --ease-spring-fast-spatial: var(--motion-shape-spatial-fast);
+  --ease-spring-default-spatial: var(--motion-shape-spatial);
+  --ease-spring-slow-spatial: var(--motion-shape-spatial);
 }
 html[data-motion='custom'][data-motion-ambient='reduced'] [data-motion-category='ambient'] {
-  --ease-spring-standard-spatial: var(--ease-spring-effects);
-  --ease-spring-expressive-spatial: var(--ease-spring-effects);
-  --ease-spring-expressive-spatial-fast: var(--ease-spring-effects);
+  --ease-spring-fast-spatial: var(--motion-shape-effects);
+  --ease-spring-default-spatial: var(--motion-shape-effects);
+  --ease-spring-slow-spatial: var(--motion-shape-effects);
 }
 
 html[data-motion='custom'] [data-motion-spring='overlay'] {
-  --motion-local-standard-spatial: var(--motion-base-standard-spatial);
-  --motion-local-expressive-spatial: var(--motion-base-expressive-spatial);
-  --motion-local-expressive-spatial-fast: var(--motion-base-expressive-spatial-fast);
+  --motion-local-spatial: var(--motion-shape-spatial);
+  --motion-local-spatial-fast: var(--motion-shape-spatial-fast);
 }
 html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='overlay'] {
-  --motion-local-standard-spatial: var(--ease-spring-effects);
-  --motion-local-expressive-spatial: var(--ease-spring-effects);
-  --motion-local-expressive-spatial-fast: var(--ease-spring-effects);
+  --motion-local-spatial: var(--motion-shape-effects);
+  --motion-local-spatial-fast: var(--motion-shape-effects);
 }
 
 /* --- Motion primitives --------------------------------------------------- */
@@ -1739,7 +1467,8 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 
 .logo-trace[data-shown] {
   opacity: 1;
-  transition: opacity calc(var(--motion-base-enter) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-decelerate);
+  /* A mark drawing itself on: the full-screen fade's spring, the slowest effects role. */
+  transition: opacity calc(var(--motion-base-spring-slow-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-spring-effects);
 }
 
 /* The hairline keeping the colour mark legible where its hues sit close to what is behind
@@ -2025,7 +1754,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
        at *both* ends of the cycle (`translateX(∓100%)`), so the wrap is drawn nowhere and the
        velocity step `--ease-loop` exists to hide is not on screen. What is on screen is the
        pass, and easing out of it reads as light going past rather than a conveyor belt.
-       Not `--ease-decelerate`: that one spends 62% of its travel in the first tenth, which
+       Not a decelerating curve: one that spends most of its travel in the first tenth, which
        over a 1.6s pass is a flash and then a stall. */
     animation: shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep) infinite;
     /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
@@ -2220,11 +1949,10 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
     transparent
   );
   background-color: transparent;
-  /* The state layer's own clock (150ms, standard): the veil is the whole of a tile's hover —
+  /* The state layer's own clock (fast effects): the veil is the whole of a tile's hover —
      the tile no longer scales and has no caption to fade (R4-051) — which makes it a photograph's
-     state layer, and every other hover in the app settles on `state-layer`'s timing. At 200ms a
-     tile's hover lagged the row or button beside it. */
-  transition: background-color var(--transition-duration-state) var(--ease-standard);
+     state layer, and every other hover in the app settles on `state-layer`'s timing. */
+  transition: background-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 .group:is(:focus-visible, :has(:focus-visible)) .media-hover-scrim {
@@ -2474,8 +2202,8 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   /* Through the token, so the lightbox's fades answer the animation preference with
      everything else. The library's two *loading* keyframes stay unscaled — they are an
      indeterminate progress indicator, which is the documented exception. */
-  --yarl__fade_animation_duration: calc(var(--motion-base-composite) * var(--motion-scale-image));
-  --yarl__fade_animation_timing_function: var(--ease-standard);
+  --yarl__fade_animation_duration: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image));
+  --yarl__fade_animation_timing_function: var(--ease-spring-effects);
   --yarl__slide_icon_loading_color: var(--md-sys-color-on-media);
   --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
 }
@@ -2556,24 +2284,31 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
  * exists to avoid, caused by the rule itself. With no delay, a backwards fill gives a
  * byte-identical first frame and releases the element the instant it ends.
  *
- * The timing is every large surface's arrival (the dialog, the bottom sheet, the side panel):
- * 400ms on the emphasized decelerate, M3's "enters the screen" row. The viewer's container fade
- * (`PicLightbox`) is DefaultEffects both ways because YARL takes one fade for both directions;
- * a DefaultEffects slide was tried and read abrupt beside it. It rides the motion scale: 0s under
- * the off tier, unchanged under reduced (a picture arriving from the side *is* the basic form). */
+ * The timing is every surface's arrival (`surfaceArrival`, as the dialog, the bottom sheet and
+ * the side panel): the scale on the default spatial spring, the fade on the default effects one
+ * — two animations, because one shorthand carries one clock and an opacity on an under-damped
+ * spring is clipped above 1. It rides the motion scale: 0s under the off tier, no overshoot
+ * under reduced (a picture arriving *is* the basic form). */
 .yarl__slide {
   transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
-  animation: m3-lightbox-in calc(var(--motion-base-enter) * var(--motion-scale-image)) var(--ease-decelerate)
-    backwards;
+  animation:
+    m3-lightbox-fade calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects)
+      backwards,
+    m3-lightbox-grow calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-image)) var(--ease-spring-default-spatial)
+      backwards;
 }
 
-@keyframes m3-lightbox-in {
+@keyframes m3-lightbox-fade {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes m3-lightbox-grow {
+  from {
     transform: scale(var(--motion-enter-scale));
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
@@ -3581,8 +3316,8 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
-    var(--ease-spring-standard-spatial), var(--ease-spring-standard-spatial),
-    var(--ease-spring-standard-spatial), var(--ease-spring-standard-spatial),
+    var(--ease-spring-fast-spatial), var(--ease-spring-fast-spatial),
+    var(--ease-spring-fast-spatial), var(--ease-spring-fast-spatial),
     var(--ease-spring-effects), var(--ease-spring-effects);
   transition-duration:
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
@@ -3605,8 +3340,8 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    rotate var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
-    border-radius var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial);
+    rotate var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial),
+    border-radius var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial);
 }
 
 /* A newly portalled tooltip has no previous style for a transition to start from.
@@ -3618,61 +3353,50 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   }
 }
 
-/* The nine M3 motion-scheme springs, each as one class carrying its shape and its settle
- * time together — handing a call site two knobs is how they come apart. Pair with a
- * transition-property utility (the arbitrary-property form), which decides *what* moves and
- * is what the reduced-motion rule matches on. Pick by what is changing, then by how far:
- * spatial (moves/resizes → may overshoot) vs effects (fades/recolours → never overshoots);
- * fast/default/slow by travel. **In-place collapsible panels** (the messages rail, the search
- * filters, the search view, the inline editor) take one pair: DefaultSpatial opening, FastEffects
- * closing. Not for anything a press opens across a distance — a spring
- * starts from rest, and a press is the impulse, so that motion has to begin at speed
- * (easing + duration table instead). */
+/* The seven springs, each as one class carrying its shape and its settle time together — handing
+ * a call site two knobs is how they come apart. Pair with a transition-property utility, which
+ * decides *what* moves and is what the reduced-motion rule matches on. Choose by the rules in
+ * `lib/spring.ts`: spatial (moves/resizes) or effects (fades/recolours); layout when the bounds
+ * follow a layout change; then fast/default/slow by the size of the thing. Leaving is always an
+ * effects spring. **In-place collapsible panels** (the messages rail, the search filters, the
+ * inline editor) therefore take one pair: `spring-default-spatial` opening, `spring-fast-effects`
+ * closing. */
 @utility spring-fast-spatial {
   --motion-spring-scale: var(--motion-scale);
-  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
-  transition-timing-function: var(--motion-local-standard-spatial);
+  --motion-local-spatial-fast: var(--ease-spring-fast-spatial);
+  transition-timing-function: var(--motion-local-spatial-fast);
   transition-duration: calc(var(--motion-base-spring-fast-spatial) * var(--motion-spring-scale));
 }
 @utility spring-default-spatial {
   --motion-spring-scale: var(--motion-scale);
-  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
-  transition-timing-function: var(--motion-local-standard-spatial);
+  --motion-local-spatial: var(--ease-spring-default-spatial);
+  transition-timing-function: var(--motion-local-spatial);
   transition-duration: calc(var(--motion-base-spring-default-spatial) * var(--motion-spring-scale));
 }
 @utility spring-slow-spatial {
   --motion-spring-scale: var(--motion-scale);
-  --motion-local-standard-spatial: var(--ease-spring-standard-spatial);
-  transition-timing-function: var(--motion-local-standard-spatial);
+  --motion-local-spatial: var(--ease-spring-slow-spatial);
+  transition-timing-function: var(--motion-local-spatial);
   transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
 }
-/* A large surface arriving across the screen — the phone's modal navigation drawer, as `Sheet`,
- * `SidePanel` and `Modal` do through `surfaceEnter` / `surfaceEnterTiming`: 400ms on the
- * emphasized decelerate, M3's "enters the screen" row. A transition curve and not a spring
- * because a press opens it across a distance (see the springs' note above): it has to leave at
- * speed, and this curve covers 62% of the way in its first tenth. It leaves on
- * `spring-default-effects`, as every large surface does. Rides the surface's own scale, so
- * `data-motion-spring='overlay'` puts it on the overlay tier. */
+/* A surface docked to a screen edge arriving — the phone's modal navigation drawer — on the
+ * layout spring, as `Sheet` and `SidePanel` arrive: it docks, and an overshoot would lift it off
+ * the edge. It leaves on `spring-default-effects`, as every large surface does. Rides the
+ * surface's own scale, so `data-motion-spring='overlay'` puts it on the overlay tier. */
 @utility surface-enter {
   --motion-spring-scale: var(--motion-scale);
-  transition-timing-function: var(--ease-decelerate);
-  transition-duration: calc(var(--motion-base-enter) * var(--motion-spring-scale));
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: calc(var(--motion-base-spring-layout) * var(--motion-spring-scale));
 }
-/* The docked navigation drawer's open and close, and so the content area's change of width.
- * The arrangement is Vuetify's `v-navigation-drawer` / `v-main` — one clock and one shape, the
- * same both ways, never overshooting (an overshoot here would push the whole page past its width
- * and back) — but the shape is the app's own: DefaultEffects (ζ1.0, 166ms), the large-surface
- * effects tier Modal, Sheet and the lightbox run. It used to spell out Material 2's
- * cubic-bezier(0.4, 0, 0.2, 1) at 200ms, which held still for its first frame; SlowEffects
- * (235ms) fixed the start but its tail read slow beside the old curve (95% at 168ms against
- * 146ms). DefaultEffects is ahead of the old curve at every point (50% at 42ms, 90% at 98ms,
- * 95% at 119ms). FastEffects (108ms) stays wrong: six frames of a page re-laying out read as a
- * jump. The duration rides the same scale as the springs, so the aside's
- * `data-motion-spring='overlay'` puts it on the overlay tier and `off` snaps it. */
+/* The docked navigation drawer's open and close, and so the content area's change of width:
+ * one clock and one shape both ways, never overshooting (an overshoot would push the whole page
+ * past its width and back). The page re-lays out to follow the drawer, so it is the **layout**
+ * spring — Compose's own for anything whose bounds follow a layout change. Rides the aside's
+ * `data-motion-spring='overlay'` scale; `off` snaps it. */
 @utility drawer-dock {
   --motion-spring-scale: var(--motion-scale);
   transition-timing-function: var(--ease-spring-effects);
-  transition-duration: calc(var(--motion-base-spring-default-effects) * var(--motion-spring-scale));
+  transition-duration: calc(var(--motion-base-spring-layout) * var(--motion-spring-scale));
 }
 @utility spring-fast-effects {
   --motion-spring-scale: var(--motion-scale);
@@ -3689,23 +3413,17 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition-timing-function: var(--ease-spring-effects);
   transition-duration: calc(var(--motion-base-spring-slow-effects) * var(--motion-spring-scale));
 }
-@utility spring-expressive-fast-spatial {
+/* A determinate meter's value: Compose's `ProgressAnimationSpec` (`PROGRESS_SPRING`). */
+@utility spring-progress {
   --motion-spring-scale: var(--motion-scale);
-  --motion-local-expressive-spatial-fast: var(--ease-spring-expressive-spatial-fast);
-  transition-timing-function: var(--motion-local-expressive-spatial-fast);
-  transition-duration: calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-spring-scale));
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: calc(var(--motion-base-spring-progress) * var(--motion-spring-scale));
 }
-@utility spring-expressive-default-spatial {
+/* Bounds following layout: a box re-placing in a list, following its content's size. */
+@utility spring-layout {
   --motion-spring-scale: var(--motion-scale);
-  --motion-local-expressive-spatial: var(--ease-spring-expressive-spatial);
-  transition-timing-function: var(--motion-local-expressive-spatial);
-  transition-duration: calc(var(--motion-base-spring-expressive-default-spatial) * var(--motion-spring-scale));
-}
-@utility spring-expressive-slow-spatial {
-  --motion-spring-scale: var(--motion-scale);
-  --motion-local-expressive-spatial: var(--ease-spring-expressive-spatial);
-  transition-timing-function: var(--motion-local-expressive-spatial);
-  transition-duration: calc(var(--motion-base-spring-expressive-slow-spatial) * var(--motion-spring-scale));
+  transition-timing-function: var(--ease-spring-effects);
+  transition-duration: calc(var(--motion-base-spring-layout) * var(--motion-spring-scale));
 }
 
 /* ---------------------------------------------------------------------------
@@ -4059,10 +3777,12 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   color: var(--md-sys-color-on-surface-variant);
   transform: translateY(calc(var(--field-rest-y) - 50%));
   transform-origin: left center;
-  /* The label travels like a selection handle; its ink settles like every other
-     control. Separate the two families so recolouring can never overshoot. */
+  /* The label docks into the outline's notch, and the notch (the legend below) opens on the same
+     clock to meet it: two bounds that must coincide, so the **layout** spring — an overshoot here
+     would carry the label through the outline stroke. Its ink settles like every other control;
+     separate families so recolouring can never overshoot. */
   transition:
-    transform var(--duration-spring-fast-spatial) var(--ease-spring-standard-spatial),
+    transform var(--duration-spring-layout) var(--ease-spring-effects),
     color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
@@ -4130,7 +3850,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   background-color: var(--md-sys-color-surface-container-highest);
   /* The fill's hover is a state layer mixed in (below), so it takes the state layer's clock. */
   transition:
-    background-color var(--transition-duration-state) var(--ease-standard),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
@@ -4166,14 +3886,18 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   }
 }
 
+/* An anchored menu, and what turns with it (a dropdown's chevron): it unfolds on the fast
+   spatial spring — Compose's `DropdownMenu` — and folds away on fast effects, as every small
+   surface leaves. The overlay tier's own scale. */
 @utility menu-enter {
-  transition-duration: var(--transition-duration-menu-enter);
-  transition-timing-function: var(--ease-menu-enter);
+  --motion-local-spatial-fast: var(--ease-spring-fast-spatial);
+  transition-duration: calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-overlay));
+  transition-timing-function: var(--motion-local-spatial-fast);
 }
 
 @utility menu-exit {
-  transition-duration: var(--transition-duration-menu-exit);
-  transition-timing-function: var(--ease-menu-exit);
+  transition-duration: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay));
+  transition-timing-function: var(--ease-spring-effects);
 }
 
 .m3-field:not([data-labelled])[data-invalid] > fieldset {
@@ -4326,8 +4050,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   /* Hidden but still measured: the legend exists to have a width. */
   visibility: hidden;
   transition-property: max-width;
-  transition-duration: var(--duration-spring-fast-spatial);
-  transition-timing-function: var(--ease-spring-standard-spatial);
+  /* The label's clock (see `.m3-field > label`). */
+  transition-duration: var(--duration-spring-layout);
+  transition-timing-function: var(--ease-spring-effects);
 }
 
 /* 0.25rem each side, matching the fieldset's own inline padding reduction — together they
@@ -4678,7 +4403,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     background: currentColor;
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--transition-duration-state) var(--ease-standard);
+    transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
     z-index: -1;
   }
 

@@ -43,8 +43,10 @@
 }
 
 :global(html[data-bottom-chrome]) .lift {
-  transition: transform calc(var(--motion-base-page-fade) * var(--motion-pill-scale)) var(--ease-decelerate)
-    calc(var(--motion-base-page-delay) * var(--motion-pill-scale));
+  /* Clearing the page's bottom chrome as it arrives: its bounds follow a layout change, so the
+     layout spring, after the page's hand-off. */
+  transition: transform calc(var(--motion-base-spring-layout) * var(--motion-pill-scale)) var(--ease-spring-effects)
+    calc(var(--motion-base-handoff) * var(--motion-pill-scale));
 }
 
 .stage {
@@ -56,7 +58,7 @@
   -webkit-touch-callout: none;
   transition:
     opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial),
     visibility 0s;
 }
 
@@ -145,7 +147,7 @@
   transform-origin: 100% 100%;
   /* Opening: DefaultSpatial (the drawer's opening spring). */
   transition:
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial),
     opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
@@ -184,7 +186,7 @@
   border-radius: inherit;
   background: currentColor;
   opacity: 0;
-  transition: opacity calc(var(--motion-base-state) * var(--motion-scale-ambient)) var(--ease-standard);
+  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 .collapsed .plate {
@@ -192,7 +194,7 @@
   transform: none;
   transition:
     opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial);
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial);
 }
 
 @media (hover: hover) {
@@ -228,7 +230,7 @@
 .pose {
   filter: drop-shadow(var(--md-sys-elevation-drop-2));
   transition:
-    transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-fast-spatial),
     filter calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
@@ -261,18 +263,17 @@
 
 /* The press: the character squashed against the ground — wider and lower about its feet, the
    original's squash given a body rather than a uniform shrink, which read as the figure getting
-   smaller and left its shadow as the only sign of the press. Down on FastSpatial, back on the
-   expressive fast spring, whose small overshoot is the spring in the release (the reduced tier's
-   substitution takes it out). Driven by pointer events rather than `:active`, which a touch screen
+   smaller and left its shadow as the only sign of the press. Down and back on FastSpatial, whose
+   overshoot is the spring in the release (the reduced tier's substitution takes it out). Driven by pointer events rather than `:active`, which a touch screen
    delays and holds (`ToggleSwitch`'s reasoning); a finger's press waits for the tap timeout, and a
    tap too quick for it still squashes for its minimum (`MIN_PRESS_MS`). */
 .squash {
-  transition: transform calc(var(--motion-base-spring-expressive-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-expressive-spatial-fast);
+  transition: transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-fast-spatial);
 }
 
 .expanded[data-pressed] .squash {
   transform: scale(1.05, 0.93);
-  transition: transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial);
+  transition: transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-fast-spatial);
 }
 
 .art {
@@ -296,7 +297,7 @@
   pointer-events: auto;
   transition:
     opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial),
     visibility 0s;
 }
 
@@ -355,7 +356,7 @@
   transform-origin: calc(100% - var(--bubble-tail, 64px)) calc(100% + 8px);
   transition:
     opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-standard-spatial),
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial),
     visibility 0s;
 }
 

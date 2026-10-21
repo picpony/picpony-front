@@ -84,10 +84,9 @@ export default function DetailDescription({ description }: { description?: strin
               id={bodyId}
               ref={bodyRef}
               /* Clipped in both states: the fold travels as `max-height`, and unclipped content
-                 would paint past the moving edge. `spring-slow-effects` at the far end of the
-                 travel table's range — a description is hundreds of pixels, not a banner strip —
-                 and critically damped, so the fold never overshoots its own content. */
-              className="text-body-m text-on-surface wrap-anywhere overflow-hidden transition-[max-height,mask-image] spring-slow-effects"
+                 would paint past the moving edge. The layout spring (`animateContentSize`): a
+                 box following its content, critically damped, so the fold never overshoots. */
+              className="text-body-m text-on-surface wrap-anywhere overflow-hidden transition-[max-height,mask-image] spring-layout"
               style={bodyStyle}
             >
               <RichTextRenderer content={derpiMarkdown(text)} />

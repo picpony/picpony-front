@@ -1,26 +1,36 @@
 'use client';
 
 import { motionTier, scaledMs } from '@/lib/appearance';
-import { EASE } from '@/lib/motionTokens';
 
 /**
- * The Material press wave, on the Web Animations API — here rather than in the GSAP-backed
- * motion module so the root layout's chunk does not pull the animation engine onto every
- * route for the app's most trivial effect. The curve is `EASE.standard`, the shared WAAPI
- * copy of the token (a var() in a WAAPI easing string does not resolve).
+ * The Material press wave, on the Web Animations API — here rather than in the GSAP-backed motion
+ * module so the root layout's chunk does not pull the animation engine onto every route.
+ *
+ * **It is Compose's `RippleAnimation`, verbatim**, and it is the one press feedback that is not on
+ * the motion scheme's springs — as in Compose itself, where the ripple keeps its own tweens:
+ *
+ *   - the wave fades in over 75ms (linear) as it spreads, so contact is answered on the next frame
+ *     without a disc stamping onto the control;
+ *   - its radius grows from 30% of the control's longer side to the control's half-diagonal plus
+ *     10dp over 225ms on `FastOutSlowInEasing`, while its centre drifts from the point of contact
+ *     to the control's centre over the same 225ms, linear — the wave *fills* the control rather
+ *     than spreading lopsidedly from an edge;
+ *   - **it holds for as long as the press does**, at the pressed state-layer opacity, and fades
+ *     out over 150ms (linear) only once the press is released *and* the spread has finished.
+ *
+ * The old wave grew over 450ms from a fifth of its size and faded out on its own clock whether or
+ * not the finger was still down, so a long press lost its feedback under the finger and a quick
+ * tap's wave lingered after the tap: the two reasons press feedback read as having no texture.
  */
-
-/**
- * How long the wave takes to cover its host, ms. Deliberately not a step on the duration scale —
- * a press wave is neither entering nor leaving the screen, and 450 is what the gesture was tuned to.
- */
-const GROW_MS = 450;
-
-/** The trailing fade, ms — the state-layer duration step. */
-const FADE_MS = 150;
-
-/** The wave opens at a fifth of its final size, not zero — contact already made, not a dot appearing. */
-const START_SCALE = 0.2;
+const FADE_IN_MS = 75;
+const SPREAD_MS = 225;
+const FADE_OUT_MS = 150;
+/** Compose's `FastOutSlowInEasing`. A WAAPI string, so spelled out (a `var()` would not resolve). */
+const FAST_OUT_SLOW_IN = 'cubic-bezier(0.4, 0, 0.2, 1)';
+/** `getRippleStartRadius`: 30% of the longer side. */
+const START_RADIUS_SHARE = 0.3;
+/** `getRippleEndRadius` for a bounded ripple: the half-diagonal plus 10dp. */
+const END_RADIUS_PAD_PX = 10;
 
 /**
  * How long a finger has to stay put before its touch counts as a press rather than the start of
@@ -32,8 +42,12 @@ export const TOUCH_PRESS_DELAY_MS = 100;
 /** How far a finger may drift and still be pressing, px — Android's touch slop is 8dp. */
 export const TOUCH_SLOP_PX = 10;
 
-/** A spawned wave. `cancel` lets it go at once (a press that turned into a scroll). */
+/**
+ * A spawned wave. `release` lets it go the way a press ends — once its spread is done, it fades
+ * out; `cancel` lets it go now (a press that turned into a scroll).
+ */
 export interface RippleHandle {
+  release(): void;
   cancel(): void;
 }
 
@@ -47,70 +61,73 @@ export function rippleHostOf(control: HTMLElement): HTMLElement {
 }
 
 /**
- * Paints one Material press wave inside `host`, centred on (`x`, `y`) in host coordinates; the
- * span cleans itself up. Exported for the one case `<RippleLayer />` delegation cannot reach: a
- * control whose ripple target is not an ancestor of what the pointer hits.
+ * Paints one Material press wave inside `host`, from (`x`, `y`) in host coordinates; the span
+ * cleans itself up once released and faded. Exported for the one case `<RippleLayer />`
+ * delegation cannot reach: a control whose ripple target is not an ancestor of what the pointer
+ * hits.
  *
- * The ripple is the state layer spreading from the point of contact: it holds ONE opacity for its
- * whole life — the pressed token from CSS — and spawnRipple drives only scale and fade-out. The
- * reduced tier gets the same wave (one composited scale on a self-removing span); under off there
- * is no wave at all and the active-state tint is the whole of the press.
+ * The wave's opacity is the pressed state-layer token, set on `.ripple` in globals.css — it has one
+ * owner; this only fades towards and away from it. The reduced tier gets the same wave (composited
+ * scale and translate on a self-removing span); under off there is no wave at all and the
+ * active-state tint is the whole of the press.
  */
 export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHandle | null {
   if (motionTier() === 'off') return null;
-  // Radius reaching the farthest corner keeps the wave circular.
   const { width, height } = host.getBoundingClientRect();
-  const radius = Math.hypot(Math.max(x, width - x), Math.max(y, height - y));
+  const end = Math.hypot(width, height) / 2 + END_RADIUS_PAD_PX;
+  const start = Math.max(width, height) * START_RADIUS_SHARE;
 
+  /* Centred on the host from the start; the drift from the contact point is a `translate`
+     animated to nothing, so the centre ends where Compose's does. */
   const ripple = document.createElement('span');
   ripple.className = 'ripple';
-  const size = radius * 2;
-  ripple.style.width = `${size}px`;
-  ripple.style.height = `${size}px`;
-  ripple.style.left = `${x - radius}px`;
-  ripple.style.top = `${y - radius}px`;
+  ripple.style.width = `${end * 2}px`;
+  ripple.style.height = `${end * 2}px`;
+  ripple.style.left = `${width / 2 - end}px`;
+  ripple.style.top = `${height / 2 - end}px`;
   host.appendChild(ripple);
 
-  const grow = scaledMs(GROW_MS);
-  const fade = scaledMs(FADE_MS);
+  const fadeIn = scaledMs(FADE_IN_MS);
+  const spread = scaledMs(SPREAD_MS);
+  const fadeOut = scaledMs(FADE_OUT_MS);
+  const animations: Animation[] = [
+    /* One keyframe at offset 0: the end value is the underlying one — the token — so the opacity
+       keeps its single owner in globals.css. */
+    ripple.animate([{ opacity: 0, offset: 0 }], { duration: fadeIn, easing: 'linear' }),
+    ripple.animate([{ scale: `${start / end}` }, { scale: '1' }], { duration: spread, easing: FAST_OUT_SLOW_IN, fill: 'forwards' }),
+    ripple.animate([{ translate: `${x - width / 2}px ${y - height / 2}px` }, { translate: '0 0' }], {
+      duration: spread,
+      easing: 'linear',
+      fill: 'forwards',
+    }),
+  ];
+  const spawnedAt = performance.now();
 
-  /* Only the scale is animated: the wave's opacity is the pressed state-layer token set
-     on the .ripple element in globals.css, so the value has one owner rather than being
-     restated here. */
-  ripple.animate(
-    [{ transform: `scale(${START_SCALE})` }, { transform: 'scale(1)' }],
-    { duration: grow, easing: EASE.standard, fill: 'forwards' },
-  );
-
-  /* The fade ends *with* the grow rather than after it, so the wave is still spreading as it
-     goes instead of leaving a static disc sitting on the control. */
-  /* The fade is ONE keyframe at offset 1: a WAAPI keyframe list is absolute, so listing opacity
-     1 then 0 would flash to full strength when the animation becomes in-effect — the .ripple CSS
-     sets a non-default opacity and this fade has a delay with no backwards fill, the only such
-     element in the app. One keyframe takes the implicit start from the underlying value (the
-     token), so the opacity keeps its single owner in globals.css. */
-  const out = ripple.animate([{ opacity: 0 }], {
-    duration: fade,
-    delay: Math.max(0, grow - fade),
-    easing: 'linear',
-    fill: 'forwards',
-  });
-
-  /* `finished` rejects when the animation is cancelled (e.g. the control unmounts under the
-     pointer); removing an already-removed span is harmless, so both paths do the same thing. */
-  const done = () => ripple.remove();
-  out.finished.then(done, done);
+  let gone = false;
+  const remove = () => {
+    if (gone) return;
+    gone = true;
+    for (const animation of animations) animation.cancel();
+    ripple.remove();
+  };
+  /* Fades out after `delay` and removes the span. ONE keyframe, at offset 1: its start is the
+     underlying value — the token, or wherever a fade-in still running has it — so nothing flashes
+     and the opacity keeps its owner. A cancelled fade (the control unmounting under the pointer)
+     removes the span too. */
+  let out: Animation | null = null;
+  const leave = (delay: number) => {
+    if (out || gone) return;
+    out = ripple.animate([{ opacity: 0 }], { duration: fadeOut, delay, easing: 'linear', fill: 'forwards' });
+    out.finished.then(remove, remove);
+  };
 
   return {
-    /* Let go now: pull the scheduled fade forward to this instant rather than cancelling
-       anything. Cancelling would snap the opacity back to the token for a frame; moving the
-       delay keeps the one-keyframe fade (and its implicit start from the token) intact, and
-       the wave keeps spreading while it goes. A fade already under way is left alone. */
+    /* Compose fades out only once the spread is complete: a quick tap still shows the whole wave. */
+    release() {
+      leave(Math.max(0, spread - (performance.now() - spawnedAt)));
+    },
     cancel() {
-      const effect = out.effect;
-      const now = Number(out.currentTime ?? 0);
-      if (!effect || now >= Number(effect.getTiming().delay ?? 0)) return;
-      effect.updateTiming({ delay: now });
+      leave(0);
     },
   };
 }

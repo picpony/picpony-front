@@ -219,7 +219,7 @@ export const FolderCard = memo(function FolderCard({
                   strokeDasharray: '10.5',
                   strokeDashoffset: ticked ? 0 : 10.5,
                   className: 'spring-fast-effects transition-[stroke-dashoffset]',
-                  style: { transitionDelay: ticked ? 'var(--transition-duration-press)' : '0ms' },
+                  style: { transitionDelay: ticked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
                 }}
               />
             )}

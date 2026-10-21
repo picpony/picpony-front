@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose } from 'react-icons/md';
-import { gsap, spring, surfaceEnter, useGSAP } from '@/lib/motion';
+import { gsap, spring, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
@@ -49,9 +49,9 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  *
  * - **Shape.** `rounded-l-2xl` (28dp) on the two corners facing the page, none on the
  *   two flush with the screen edge.
- * - **Motion.** `default-effects` both directions and on the scrim — a panel travelling
- *   on a position is component motion, and *effects* rather than spatial because one
- *   that overshoots on the way out bounces back into view. The travel is the whole
+ * - **Motion.** It docks against the right edge, so it arrives on the **layout**
+ *   spring (an overshoot would lift it off the edge) and leaves on `default-effects`;
+ *   the scrim fades on the same clocks. The travel is the whole
  *   statement of which edge it belongs to, so even the reduced tier keeps it, exactly
  *   as the bottom sheet keeps its rise. GSAP owns the transform for the whole lifetime,
  *   as the sheet's does.
@@ -141,8 +141,9 @@ export default function SidePanel({
 
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        /* Arriving on the dialog's clock (400ms emphasized decelerate), leaving on DefaultEffects. */
-        const timing = isOpen ? surfaceEnter('overlay') : spring('defaultEffects', 'overlay');
+        /* Arriving on the layout spring — it docks against the screen edge, and an overshoot would
+           lift it off that edge and show the page through the gap — leaving on DefaultEffects. */
+        const timing = isOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
         gsap.to(panel, { x: isOpen ? 0 : '100%', ...timing, overwrite: true });
         if (scrim)
           gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...timing, overwrite: true });

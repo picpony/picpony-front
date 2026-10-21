@@ -2,16 +2,14 @@
 
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { CustomEase } from 'gsap/CustomEase';
 import { Flip } from 'gsap/Flip';
 import { Observer } from 'gsap/Observer';
-import { motionRatio, motionTier, setMotionScaleListener } from '@/lib/appearance';
+import { motionRatio, setMotionScaleListener } from '@/lib/appearance';
 import type { MotionCategory } from '@/lib/motionPreferences';
-import { DURATION, EASE } from '@/lib/motionTokens';
-import { SPRINGS, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
-import { SPRING_EFFECTS_FOR } from '@/lib/springTiming';
+import { SHAPE_SPEC, SPRING_DURATION, springEase, type SpringName } from '@/lib/spring';
+import { shapeFor } from '@/lib/springTiming';
 
-gsap.registerPlugin(useGSAP, CustomEase, Flip, Observer);
+gsap.registerPlugin(useGSAP, Flip, Observer);
 
 /* The global clock carries feedback's speed, independently of its effect gate.
  * Category springs/timelines compensate with motionRatio; an off category skips
@@ -22,68 +20,41 @@ setMotionScaleListener((scale) => {
 
 
 /**
- * Motion tokens for GSAP-driven animation; the same curves live in globals.css
- * (`--ease-*`), keep the two in sync. These are M3's **transition** curves; component
- * motion is spring physics below. The short `decelerate` / `accelerate` names are
- * the *emphasized* pair, not standard.
+ * The motion system's GSAP face (`lib/spring.ts`). There are no bezier curves here any more: every
+ * motion is one of the seven springs, registered as GSAP eases by **shape** — `spring-effects`,
+ * `spring-spatial`, `spring-spatialFast` — and always paired with its own settle time through
+ * `spring()`, so shape and clock cannot be split at a call site.
  */
-export const eases = {
-  standard: CustomEase.create('standard', '0.2, 0, 0, 1'),
-  standardDecelerate: CustomEase.create('standard-decelerate', '0, 0, 0, 1'),
-  standardAccelerate: CustomEase.create('standard-accelerate', '0.3, 0, 1, 1'),
-  decelerate: CustomEase.create('decelerate', '0.05, 0.7, 0.1, 1'),
-  accelerate: CustomEase.create('accelerate', '0.3, 0, 0.8, 0.15'),
-  /**
-   * M3's emphasized curve — two cubic segments, no cubic-bezier form exists;
-   * CustomEase takes the spec path as-is.
-   */
-  emphasized: CustomEase.create(
-    'emphasized',
-    'M0,0 C0.05,0 0.133333,0.06 0.166666,0.4 C0.208333,0.82 0.25,1 1,1',
-  ),
-  /**
-   * Symmetric — eases in as well as out. Every curve above is one-sided, leaving
-   * two motions with no token: a repeating one (velocity discontinuous per cycle)
-   * and a panel travelling in place. The CSS twin is `--ease-symmetric`.
-   */
-  symmetric: CustomEase.create('symmetric', '0.4, 0, 0.6, 1'),
-  /** Alias of `symmetric`, kept because "loop" is the role at its call sites. */
-  loop: CustomEase.create('loop', '0.4, 0, 0.6, 1'),
-} as const;
-
-/**
- * The nine M3 Expressive component springs, registered as GSAP eases named
- * `spring-<name>`, as closed-form functions (no interpolation error). Always pair
- * with `SPRING.<name>`: shape and settle time are one spring — splitting them at a
- * call site puts the curve on the wrong clock.
- */
-for (const [name, spec] of Object.entries(SPRINGS)) {
-  gsap.registerEase(`spring-${name}`, springEase(spec));
+for (const [shape, spec] of Object.entries(SHAPE_SPEC)) {
+  gsap.registerEase(`spring-${shape}`, springEase(spec));
 }
 
-/** Settle times in seconds, keyed the same way. */
+/** Settle times in seconds, keyed by spring name. */
 export const SPRING = SPRING_DURATION;
 
 /**
- * A spring as a ready-made `{ duration, ease }` pair, so the two cannot drift apart.
- * Under the reduced tier it substitutes shapes (`SPRING_EFFECTS_FOR`: under-damped →
- * critically damped, mirroring the CSS rule); the table lives in `lib/springTiming.ts`
- * so both renderers share it.
+ * A spring as a ready-made `{ duration, ease }` pair. Under the reduced tier a spatial spring keeps
+ * its duration and takes the critically damped shape (`shapeFor`), mirroring the CSS rule.
+ * The duration compensates for the global clock with `motionRatio`, as every category spring does.
  */
 export function spring(name: SpringName, category: MotionCategory = 'feedback'): { duration: number; ease: string } {
-  const shape = motionTier(category) === 'reduced' ? (SPRING_EFFECTS_FOR[name] ?? name) : name;
-  return { duration: SPRING_DURATION[name] * motionRatio(category), ease: `spring-${shape}` };
+  return { duration: SPRING_DURATION[name] * motionRatio(category), ease: `spring-${shapeFor(name, category)}` };
 }
 
-
 /**
- * A large surface arriving (the bottom sheet, the side panel) as a ready-made `{ duration, ease }`
- * pair: 400ms on the emphasized decelerate, M3's "enters the screen" row — the twin of
- * `surfaceEnterTiming` in `lib/springTiming.ts`, so the dialog and the sheets arrive on one clock.
- * Leaving stays `spring('defaultEffects', …)`.
+ * A surface arriving, as two GSAP vars: transform on the spatial role for its size, opacity on the
+ * effects spring of the same size — the twin of `surfaceArrival` in `lib/springTiming.ts`.
  */
-export function surfaceEnter(category: MotionCategory = 'overlay'): { duration: number; ease: string } {
-  return { duration: DURATION.long * motionRatio(category), ease: 'decelerate' };
+export function surfaceArrival(
+  size: 'fast' | 'default' | 'slow' = 'default',
+  category: MotionCategory = 'overlay',
+): { spatial: { duration: number; ease: string }; effects: { duration: number; ease: string } } {
+  return { spatial: spring(`${size}Spatial`, category), effects: spring(`${size}Effects`, category) };
+}
+
+/** A surface leaving: everything on one effects spring (rule 4 in `lib/spring.ts`). */
+export function surfaceDeparture(size: 'fast' | 'default' = 'default', category: MotionCategory = 'overlay') {
+  return spring(`${size}Effects`, category);
 }
 
 /* Never let a stalled frame be charged to an animation: GSAP advances tweens by
@@ -92,16 +63,9 @@ export function surfaceEnter(category: MotionCategory = 'overlay'): { duration: 
  * below this app's stalls. */
 gsap.ticker.lagSmoothing(100, 33);
 
-/**
- * Re-export so GSAP call sites keep one import. Deliberately NOT consolidated here:
- * this module registers GSAP at module scope, so a token-only import through it
- * would pull the whole engine into any importer's chunk (root layout included).
- */
-export { DURATION, EASE };
-
-/* Matches the CSS safety net. No `motionScale()` here: `gsap.globalTimeline.timeScale`
-   above already scales every tween; scaling the default as well would apply it twice. */
-gsap.defaults({ ease: eases.standard, duration: DURATION.short, overwrite: 'auto' });
+/* Matches the CSS safety net: a tween that names no motion is a default-effects spring. No
+   `motionScale()` here: `gsap.globalTimeline.timeScale` above already scales every tween. */
+gsap.defaults({ ease: 'spring-effects', duration: SPRING_DURATION.defaultEffects, overwrite: 'auto' });
 
 /** One registration shared by every motion consumer. */
 export { Flip, gsap, useGSAP, Observer };

@@ -33,18 +33,13 @@ interface ToggleSwitchProps {
    bracket shapes are matched now, so the handle stops resizing under the
    preference while its colours keep changing. */
 
-/** Handle geometry: `FastSpatial`, per `Switch.kt`. Colour is not geometry, so it
- *  keeps its own short clock. */
+/** Handle geometry: `FastSpatial`, per `Switch.kt` — the travel, the press swell and the
+ *  release all on this one spring, as Compose animates the thumb's size on one spec, so they
+ *  always land together. Colour is not geometry, so it keeps its own short clock. */
 const HANDLE_TRANSITION =
-  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-standard-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
-/** Press is contact, so it is the scale's shortest step and linear — a curve on a
- *  100ms squash is a shape nobody can see. Applied only while the press is held; the
- *  release falls back to the base spring above, which is the same `FastSpatial` the
- *  travel runs on, so the two land together. */
-const PRESSED_HANDLE_TRANSITION =
-  '[transition:width_var(--transition-duration-press)_linear,height_var(--transition-duration-press)_linear,background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
+  '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** The check crosses while the handle is still travelling, so it takes the fastest
- *  *effects* spring (ζ1.0 k3800, 108ms) rather than a hand-counted 33ms. */
+ *  *effects* spring (ζ1 k3800) rather than a hand-counted 33ms. */
 const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Track and outline recolour together with the handle, on the same short step. */
 const TRACK_TRANSITION =
@@ -118,7 +113,13 @@ export default function ToggleSwitch({
    */
   const [pressed, setPressed] = useState(false);
   const isPressed = pressed && !disabled;
-  const release = () => setPressed(false);
+  /* The handle's wave holds while the press does, as every ripple (`spawnRipple`). */
+  const wave = useRef<RippleHandle | null>(null);
+  const release = () => {
+    setPressed(false);
+    wave.current?.release();
+    wave.current = null;
+  };
 
   return (
     <label
@@ -169,23 +170,24 @@ export default function ToggleSwitch({
             // Match the native state, as the delegated RippleLayer does.
             if (e.currentTarget.matches(':disabled') || e.button !== 0) return;
             const host = stateLayerRef.current;
-            let wave: RippleHandle | null = null;
             // Always from the middle of the circle: the wave reads as the handle
             // pulsing, wherever along the track you pressed.
             const pulse = () => {
-              if (!host?.isConnected) return;
+              if (!host?.isConnected) return null;
               const rect = host.getBoundingClientRect();
-              wave = spawnRipple(host, rect.width / 2, rect.height / 2);
+              return spawnRipple(host, rect.width / 2, rect.height / 2);
             };
             trackPress(e, {
               press: () => {
                 setPressed(true);
-                pulse();
+                wave.current = pulse();
               },
-              tap: pulse,
+              // Too quick to have pressed: the whole wave plays, then fades.
+              tap: () => pulse()?.release(),
               cancel: () => {
                 setPressed(false);
-                wave?.cancel();
+                wave.current?.cancel();
+                wave.current = null;
               },
             });
           }}
@@ -228,7 +230,7 @@ export default function ToggleSwitch({
                   itself on `:disabled` by hand, or a disabled switch keeps
                   lighting its hover layer. */}
               <span
-                className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)] ${
+                className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
                   disabled
                     ? ''
                     : 'group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]'
@@ -244,7 +246,7 @@ export default function ToggleSwitch({
               <span
                 className={cn(
                   'relative z-10 grid place-items-center rounded-full',
-                  isPressed ? PRESSED_HANDLE_TRANSITION : HANDLE_TRANSITION,
+                  HANDLE_TRANSITION,
                   isPressed
                     ? 'size-7'
                     : checked

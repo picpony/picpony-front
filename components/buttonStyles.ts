@@ -92,12 +92,22 @@ const ICON_ONLY: Record<ButtonSize, string> = {
 /* A long label must stay inside its enclosure; an explicit cap still wins. */
 const HAS_MAX_WIDTH = /(?:^|\s)max-w-\S+/;
 
-/* **No pressed shape morph**, deliberately: M3 Expressive does specify one
-   (8dp/12dp per size), but on a pill the corner has nowhere to travel *to* that
-   reads as feedback — a 40dp pill flattening to 8dp for 137ms reads as the button
-   snapping into a different component. Press feedback here is the state layer and
-   the ripple. `border-radius` is also off the transition list below: a property
-   that never changes still costs a style recalculation to watch. */
+/* **The M3 Expressive press morph.** Under the finger a button's corners draw in —
+   `PressedContainerShape`: 8dp at the extra-small step, 12dp at the small (40dp) one, 16dp
+   at the medium (56dp) one — on the fast spatial spring, Compose's own for the morph, so
+   it gives a little as it lands and springs back round on release. It used to be left out
+   when the springs were the standard scheme's 137ms, which made the morph read as a snap
+   into another component; on the expressive spring it reads as something pressed. The
+   pill is spelled as its exact half-height rather than `rounded-full`, because a radius
+   interpolating from an infinite value spends the whole run clamped to the pill and then
+   jumps. The press itself is `data-pressed`, written by `RippleLayer`. A call site that
+   names its own corner keeps it, and gets no morph. */
+const SHAPES: Record<ButtonSize, string> = {
+  xs: 'rounded-[1rem] data-pressed:rounded-sm',
+  md: 'rounded-[1.25rem] data-pressed:rounded-md',
+  lg: 'rounded-[1.75rem] data-pressed:rounded-lg',
+};
+const HAS_RADIUS = /(?:^|\s)(?:\S+:)?rounded(?:-\S+)?/;
 
 export interface ButtonClassOptions {
   variant?: ButtonVariant;
@@ -126,7 +136,7 @@ export function buttonClasses({
 }: ButtonClassOptions = {}): string {
   const isDisabled = disabled || loading;
   return cn(
-    // M3 Expressive shape: buttons are pills. It stays a pill even inside another
+    // M3 Expressive shape: buttons are pills (at rest; see `SHAPES`). It stays a pill even inside another
     // rounded box — concentric corners want inner = outer − gap, and inside the
     // search field's pill (gap 8px) a 40dp pill is already the concentric answer.
     // No bare weight utility: SIZES carries `text-label-*`/`text-title-*` roles
@@ -136,7 +146,8 @@ export function buttonClasses({
     // out shrink-to-fit rather than as a `shrink-0` flex item, a label beside an
     // inline svg breaks between the two and renders the glyph above its text.
     // M3 button labels do not wrap; the button grows or the label truncates.
-    'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full [&>svg]:shrink-0',
+    'inline-flex shrink-0 items-center justify-center whitespace-nowrap [&>svg]:shrink-0',
+    !HAS_RADIUS.test(className) && SHAPES[size],
     /* The outline goes only while the ring stands in for it, and comes back under forced
        colors, where a ring (a box shadow) is not painted at all. */
     'focus-visible:outline-hidden',
@@ -151,12 +162,13 @@ export function buttonClasses({
     'select-none touch-manipulation',
     !HAS_MAX_WIDTH.test(className) && 'max-w-full',
     loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-    /* Material changes share FastEffects with the icon button and text field.
-       Geometry stays still; only the ink, container and focus indicator respond. */
-    'spring-fast-effects transition-[color,background-color,box-shadow] focus-visible:ring-2',
-    /* Hover/focus/press are the shared M3 state layer. No press scale and no
-       press corner: a transforming button is one more thing the hero flight's
-       rect read can catch mid-change. */
+    /* Material changes share FastEffects with the icon button and text field; the corner is
+       geometry, so it takes the fast spatial spring — two clocks, one per family, so a colour
+       can never inherit the corner's overshoot. */
+    '[transition:color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-radius_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial)] focus-visible:ring-2',
+    /* Hover/focus/press are the shared M3 state layer. No press scale: a transforming
+       button is one more thing the hero flight's rect read can catch mid-change (a corner
+       is not — it moves nothing's box). */
     !isDisabled && 'state-layer',
     disabled && !loading && 'disabled-content',
     VARIANTS[variant],

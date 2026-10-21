@@ -203,7 +203,7 @@ export default function SearchToolbar({
             aria-controls={advancedId}
             trailingIcon={
               <MdExpandMore
-                className={`transition-transform ${showAdvanced ? 'spring-default-spatial rotate-180' : 'spring-fast-effects rotate-0'}`}
+                className={`transition-transform spring-fast-spatial ${showAdvanced ? 'rotate-180' : 'rotate-0'}`}
               />
             }
           >
@@ -246,14 +246,14 @@ export default function SearchToolbar({
         role="region"
         aria-label="高级筛选条件"
         inert={!showAdvanced}
-        /* The collapsible-panel pair, per direction — `DefaultSpatial` opening, `FastEffects`
-           closing (globals.css, the spring utilities). `grid-template-rows` stays as the mechanism: the
+        /* A collapsible panel: the layout spring both ways, since everything under it re-places to
+           follow its edge (globals.css, the spring utilities). `grid-template-rows` stays as the mechanism: the
            inner track carries the whole subtree with its overflow clipped, so the contents
            are clipped rather than left behind by a resizing box. */
-        className={`grid transition-[grid-template-rows,opacity] ${
+        className={`grid ${
           showAdvanced
-            ? 'spring-default-spatial grid-rows-[1fr] opacity-100'
-            : 'spring-fast-effects grid-rows-[0fr] opacity-0'
+            ? 'grid-rows-[1fr] opacity-100 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-default-effects)_var(--ease-spring-effects)]'
+            : 'grid-rows-[0fr] opacity-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]'
         }`}
       >
         <div className="min-h-0 overflow-hidden">

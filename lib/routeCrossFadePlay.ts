@@ -1,15 +1,14 @@
 'use client';
 
 import { gsap, playSharedAxis, SPRING, supportsEdgeMask } from '@/lib/motion';
-import { DURATION, EASE, PAGE_FADE_TIMING, TRAVEL_PX } from '@/lib/motionTokens';
-import { motionRatio, motionScale, motionTier, scaledMs } from '@/lib/appearance';
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
+import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
+import { motionRatio, motionScale, motionTier } from '@/lib/appearance';
+import { SPRING_MS, springLinear } from '@/lib/spring';
 import { getAppScroller } from '@/lib/appScroller';
 import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
 import { restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 import { columnWindow } from '@/lib/tabStrip';
-import { FORUM_TRANSFORM_MS } from '@/lib/forumContainer';
 
 /**
  * **On a wide screen a route move slides past the pages' columns and a faded margin**, as a tab
@@ -180,9 +179,9 @@ export function playRouteCrossFade(
       fill: 'forwards',
     });
     backArrives?.animate([{ opacity: 0 }, { opacity: 1 }], {
-      delay: PAGE_FADE_TIMING.delay * 1000 * motionScale('page'),
-      duration: PAGE_FADE_TIMING.duration * 1000 * motionScale('page'),
-      easing: EASE.decelerate,
+      delay: HANDOFF_MS * motionScale('page'),
+      duration: SPRING_MS.slowEffects * motionScale('page'),
+      easing: ARRIVE_EASING,
       fill: 'backwards',
     });
     arm(layer, handle.finish);
@@ -207,20 +206,19 @@ export function playRouteCrossFade(
   const rise = -(motionTier('page') === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard);
   timeline
     .set(snapshot.node, { willChange: 'transform, opacity' })
-    /* The outgoing leg is the mirror of `pageIn`: it leaves upward over the full duration
-       while its opacity is spent early, so the incoming page takes over inside the overlap.
-       The fade is FastEffects, as every exit is: by the 80ms the incoming page waits it is 4%
-       opaque. On 100ms of the emphasized accelerate it was still 52% opaque then, and the two
-       pages showed through each other. The back affordance's copy fades with it and does not
-       rise: chrome is where it is. */
-    .to(backLeaves ? [snapshot.node, backLeaves] : snapshot.node, { opacity: 0, duration: SPRING.fastEffects, ease: 'spring-fastEffects' }, 0)
-    .to(snapshot.node, { y: rise, duration: DURATION.long, ease: 'standard' }, 0);
+    /* The outgoing leg is the mirror of `pageIn`, and a departure: everything on effects springs
+       (rule 4, `lib/spring.ts`). Its fade is FastEffects, so by the hand-off the incoming page
+       waits it is ~90% gone and the two pages never show through each other; its rise runs on
+       DefaultEffects, carrying on under the incoming page. The back affordance's copy fades with
+       it and does not rise: chrome is where it is. */
+    .to(backLeaves ? [snapshot.node, backLeaves] : snapshot.node, { opacity: 0, duration: SPRING.fastEffects, ease: 'spring-effects' }, 0)
+    .to(snapshot.node, { y: rise, duration: SPRING.defaultEffects, ease: 'spring-effects' }, 0);
   if (backArrives) {
     timeline.fromTo(
       backArrives,
       { autoAlpha: 0 },
-      { autoAlpha: 1, duration: PAGE_FADE_TIMING.duration, ease: 'decelerate', clearProps: 'opacity,visibility' },
-      PAGE_FADE_TIMING.delay,
+      { autoAlpha: 1, duration: SPRING.slowEffects, ease: 'spring-effects', clearProps: 'opacity,visibility' },
+      HANDOFF_MS / 1000,
     );
   }
 
@@ -238,11 +236,12 @@ export function playRouteCrossFade(
       { autoAlpha: 0 },
       {
         autoAlpha: 1,
-        duration: PAGE_FADE_TIMING.duration,
-        ease: 'decelerate',
+        /* A full-screen fade: SlowEffects, after the hand-off — Material's fade through. */
+        duration: SPRING.slowEffects,
+        ease: 'spring-effects',
         clearProps: 'opacity,visibility',
       },
-      PAGE_FADE_TIMING.delay,
+      HANDOFF_MS / 1000,
     );
   }
 
@@ -265,7 +264,8 @@ export function playRouteCrossFade(
 }
 
 /** The leaving half of every page fade: the FastEffects shape, as a WAAPI easing. */
-const LEAVE_EASING = springToLinear(SPRINGS.fastEffects);
+const LEAVE_EASING = springLinear('fastEffects');
+const ARRIVE_EASING = springLinear('slowEffects');
 
 /**
  * **The fade a container transform rides, on the container's clock** — a forum post or a folder
@@ -296,7 +296,6 @@ function playUnderContainer(
   chrome: HTMLElement | null,
   slot: HTMLElement | null,
 ) {
-  const full = scaledMs(FORUM_TRANSFORM_MS, 'page');
   if (page) {
     page.style.animation = 'none';
     settleEntryAnimations(page);
@@ -327,10 +326,13 @@ function playUnderContainer(
         el.style.visibility = '';
         if (!arriving.includes(el)) el.style.opacity = '';
       }
+      /* The same fade through as every route change, on the page's springs: the container lands
+         on the layout spring a moment after the page has arrived around it. */
+      const scale = motionScale('page');
       for (const el of leaving) {
         animations.push(
           el.animate([{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }], {
-            duration: full * FADE_SHARE.leave,
+            duration: SPRING_MS.fastEffects * scale,
             easing: LEAVE_EASING,
             fill: 'forwards',
           }),
@@ -339,9 +341,9 @@ function playUnderContainer(
       for (const el of arriving) {
         animations.push(
           el.animate([{ opacity: 0 }, { opacity: 1 }], {
-            delay: full * FADE_SHARE.arriveDelay,
-            duration: full * (1 - FADE_SHARE.arriveDelay),
-            easing: EASE.decelerate,
+            delay: HANDOFF_MS * scale,
+            duration: SPRING_MS.slowEffects * scale,
+            easing: ARRIVE_EASING,
             /* Held at its end too, until the stop below clears the inline 0 it was hidden with:
                otherwise the frame between its end and that stop shows the page hidden again. */
             fill: 'both',
@@ -372,11 +374,3 @@ function playUnderContainer(
     held ? CONTAINER_HOLD_MS : 0,
   );
 }
-
-/** The page fade's shares of its own 400ms (`PAGE_FADE_TIMING`, and the leaving page's
-    FastEffects), for the same fade on another clock. */
-const FADE_SHARE = {
-  leave: SPRING_MS.fastEffects / (DURATION.long * 1000),
-  arriveDelay: PAGE_FADE_TIMING.delay / DURATION.long,
-} as const;
-

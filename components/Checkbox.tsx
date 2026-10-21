@@ -93,7 +93,7 @@ export default function Checkbox({
           a list row all respond by the same amount. */}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity duration-state ease-[var(--ease-standard)] ${
+        className={`pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
           checked ? 'text-primary-ink' : 'text-on-surface'
         } ${
           disabled
@@ -136,7 +136,7 @@ export default function Checkbox({
              container's expressive settle. Reading the token also keeps this
              delay in step with the user's motion speed and off preference. */
           className: 'spring-fast-effects transition-[stroke-dashoffset]',
-          style: { transitionDelay: checked ? 'var(--transition-duration-press)' : '0ms' },
+          style: { transitionDelay: checked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
         }}
       />
       </span>

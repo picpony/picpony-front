@@ -47,16 +47,17 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
             100%-stacked two-segment ratio with a both-zero state, which `value`/`max` cannot
             express. Two full-width bars anchored at opposite edges and scaled, not two flex
             items with an animated width — this runs live while the viewer pages, when layout
-            work is least affordable. `spring-slow-effects`, `ProgressBar`'s spring: critically
-            damped, since an overshoot would push one segment over the other. */}
+            work is least affordable. `spring-progress`, `ProgressBar`'s spring (Compose's
+            `ProgressAnimationSpec`): critically damped, since an overshoot would push one segment
+            over the other. */}
         {total > 0 && (
           <>
             <div
-              className="absolute inset-y-0 left-0 w-full origin-left bg-success-fill transition-transform spring-slow-effects"
+              className="absolute inset-y-0 left-0 w-full origin-left bg-success-fill transition-transform spring-progress"
               style={{ transform: `scaleX(${upvotes / total})` }}
             />
             <div
-              className="absolute inset-y-0 left-0 w-full origin-right bg-error-fill transition-transform spring-slow-effects"
+              className="absolute inset-y-0 left-0 w-full origin-right bg-error-fill transition-transform spring-progress"
               style={{ transform: `scaleX(${downvotes / total})` }}
             />
           </>

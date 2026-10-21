@@ -9,10 +9,10 @@ interface FollowHeightProps {
   children: ReactNode;
   className?: string;
   /**
-   * The response a change of height takes, one for both directions. `defaultEffects` by default:
-   * the response `PresenceList` gives a list's rows and what follows them, so a box around such a
-   * list keeps its edge on the content it holds; and critically damped, so a box that two
-   * regions resize together (a dialog's body and its action row) never overshoots in one.
+   * The response a change of height takes, one for both directions. The layout spring by default —
+   * Compose's `animateContentSize` — the response `PresenceList` gives a list's rows and what
+   * follows them, so a box around such a list keeps its edge on the content it holds; critically
+   * damped, so a box that two regions resize together never overshoots in one.
    */
   spring?: SpringName;
   /**
@@ -220,7 +220,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
 
   private animate(node: HTMLDivElement, from: number, to: number) {
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-    const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'defaultEffects', 'list'));
+    const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'layout', 'list'));
     const release = () => {
       if (this.run !== run) return;
       this.run = null;

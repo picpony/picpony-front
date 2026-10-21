@@ -1,8 +1,15 @@
 'use client';
 
-import { SPRINGS, SPRING_MS, springToLinear } from '@/lib/spring';
-import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
-import type { HeroProgressModel, ProgressCurve } from './progress';
+import {
+  FLIGHT_SPRING,
+  SPRINGS,
+  SPRING_MS,
+  springDurationMs,
+  springLinear,
+  springRate,
+} from '@/lib/spring';
+import { TRAVEL_PX } from '@/lib/motionTokens';
+import type { HeroProgressModel } from './progress';
 import type { SpringResponse } from './spring';
 import type { HeroDirection } from './types';
 
@@ -69,11 +76,10 @@ export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
 /**
  * Grace after the final media decodes before a still-silent preview is declared failed. The
  * preview is the visual authority while `heroActive`, so a decoded final image cannot stand
- * in for it — and a request that neither loads nor errors has no other terminal answer. One
- * step on M3's duration scale (`DURATION.medium`), and longer than the 200ms leg plus a frame, so
- * it can never fire while the flight is the thing being waited on.
+ * in for it — and a request that neither loads nor errors has no other terminal answer. The
+ * flight plus a fade, so it can never fire while the flight is the thing being waited on.
  */
-export const HERO_PREVIEW_FALLBACK_MS = DURATION.medium * 1000;
+export const HERO_PREVIEW_FALLBACK_MS = springDurationMs(FLIGHT_SPRING) + SPRING_MS.fastEffects;
 
 // ---------------------------------------------------------------------------
 // Media box geometry — the Stage landing target and the routed detail media
@@ -113,97 +119,60 @@ export const HERO_MEDIA_DESKTOP_HORIZONTAL_PADDING_PX = 80;
  */
 export const HERO_MEDIA_MAX_WIDTH_PX = 944;
 
-
 // ---------------------------------------------------------------------------
 // Flight motion
 // ---------------------------------------------------------------------------
 
 /**
- * **200ms (`DURATION.short`, M3 `short4`), mirrored — and the flight is over before the next
- * thing you do.**
+ * **The flight is Compose's shared-element spring: the layout spring, mirrored.**
  *
- * Keeping up with the hand — the flight is over before the next thing the user does — is what sets
- * the length: 90% of the way by 112ms and landed by 182. The curve decides how it gets there.
- * 250ms on the curve before read slow; 350ms on the tab strip's response, which crept on until
- * 325ms, slower still; and 200ms on a flatter curve, quick enough, lost its life — the life is
- * the curve's, which this one keeps. It ran 220ms until 2026-10-20, the one navigation clock off
- * M3's scale; the container transform (`FORUM_TRANSFORM_MS`) moved to 250 with it, so it still
- * trails the flight. Earlier, 194ms on a spring read snatched, 296ms slack and 500ms too slow. An
- * interrupted leg becomes a ζ0.9 spatial spring settling in the time it has left
- * (`HERO_FLIGHT_RESPONSE`).
+ * A gallery card opening into its picture is a shared element changing bounds, and Compose's
+ * `SharedTransitionLayout` animates exactly that on `DefaultBoundsTransform` —
+ * a critically damped spring; ours is `FLIGHT_SPRING` (ζ1 k1000,
+ * `lib/spring.ts`) — a critically damped tail crawled on a full-screen flight. So the flight's clock is that spring's settle time and its shape is that
+ * spring, from rest, both ways: it answers the press on the next frame (a spring's acceleration
+ * is greatest at release), is halfway at ~53ms and 90% of the way by ~123ms, then takes the long,
+ * soft settle the old 200ms curve cut off — which is what read as the flight slamming into place.
+ * Critically damped, so every edge of the box travels one way and the picture never swings past
+ * its slot.
  *
- * The duration and the shape mirror; the *path* does not — `createHeroPointArc` mirrors the
- * arc rather than retracing it — and the rest of the direction asymmetry lives in the
- * thresholds (`HERO_CONTAINER_FADE` / `HERO_CONTAINER_SHAPE`), where Material keeps it.
+ * Every leg is a spring now — from rest and interrupted alike — so a reversal, a rebuild or a drag
+ * release continues the same physics at the speed it was travelling (`relaunch`, `progress.ts`).
  *
- * When a transition reads wrong, check what it is doing before changing how long it takes —
- * a duration is the cheapest knob and the least likely to be the fault.
+ * The duration and the shape mirror; the *path* does not — `createHeroPointArc` mirrors the arc
+ * rather than retracing it — and the rest of the direction asymmetry lives in the thresholds
+ * (`HERO_CONTAINER_FADE` / `HERO_CONTAINER_SHAPE`), where Material keeps it.
  *
- * Couplings: 48 samples → 47 segments, 4.26ms on average; the gallery card's FastEffects fade
- * (108ms) must finish inside the leg; the reveal windows are progress fractions, so they cannot
- * outlive it. The swipe-down dismiss is deliberately not here — see `PULL_RELEASE_DURATION_MS`.
+ * Couplings: the reveal windows are progress fractions, so they cannot outlive the leg; the
+ * gallery card's FastEffects fade must finish inside it.
  */
 export const HERO_DURATIONS: Record<HeroDirection, number> = {
-  forward: DURATION.short * 1000,
-  back: DURATION.short * 1000,
+  forward: springDurationMs(FLIGHT_SPRING),
+  back: springDurationMs(FLIGHT_SPRING),
 };
 
-/**
- * **The flight answers the press on the next frame, swoops through a crest in the air and lands
- * at rest.** Per 60Hz frame of its 200ms, as a share of the way: 9.6, 16.2, 21.9, 18.2, 12.0,
- * 7.9, 5.4, 3.7, 2.5, 1.5, 0.8, 0.3 — halfway at 52ms, 90% at 112ms, within 0.3% of its
- * landing at 182ms, and still there (`y'(1) = 0`). It cannot overshoot, so every edge of the box
- * travels one way.
- *
- * What makes it read alive is contrast: it leaves at under a third of its crest (`y1 / x1` = 7/8
- * of its mean speed) and builds over two frames to a crest of 2.70× its mean speed 22% of the way
- * in, the two fastest frames in the air, then lets go over a soft 69ms settle. Four shapes shipped
- * before it, each right in one way (`npm run hero:path` tables the first two beside it):
- * - Flutter's `Curves.fastOutSlowIn` (0.4, 0, 0.2, 1) over 250ms, until 2026-10: the same crest,
- *   2.73× at 75ms — the whoosh — after a hang-back of 1.1% in the first frame, which read as the
- *   one press in the app that did not answer at once.
- * - The tab strip's launched response over 350ms: it went on the press (15.7% in the first frame),
- *   but its fastest frame was its first, spent while the box was card-sized, and its last tenth
- *   crept on for 160ms — it went on the press, but read slower and with less life in it, for
- *   all that it read more elegant.
- * - `cubic-bezier(0.2, 0.15, 0.25, 1)` over 250ms: moving at once (8.1%), cresting at 2.31×, landing
- *   at 231ms — still read slow.
- * - `cubic-bezier(0.3, 0.35, 0.4, 1)` over 200ms: landed at 186ms, but a crest of only 1.83× left
- *   its first five frames all at 11–15% — an even slide, with little life in it.
- * Spelled as an object with a `css` twin rather than only a string: sampled tracks need the
- * coefficients, two-keyframe tracks need the string, and deriving one from the other is what stops
- * them drifting.
- */
-export const HERO_FLIGHT_CURVE: ProgressCurve = {
-  x1: 0.32,
-  y1: 0.28,
-  x2: 0.16,
-  y2: 1,
-  css: 'cubic-bezier(0.32, 0.28, 0.16, 1)',
+/** The flight spring as a hero response (normalised rate, from rest). */
+const LAYOUT_RESPONSE: SpringResponse = {
+  rate: springRate(FLIGHT_SPRING),
+  velocity: 0,
+  damping: FLIGHT_SPRING.damping,
 };
 
 /** The shape a leg gets when it leaves from rest, which is every leg the user starts. */
 export const HERO_FLIGHT_PROGRESS: Record<HeroDirection, HeroProgressModel> = {
-  forward: { kind: 'curve', curve: HERO_FLIGHT_CURVE },
-  back: { kind: 'curve', curve: HERO_FLIGHT_CURVE },
+  forward: { kind: 'spring', response: LAYOUT_RESPONSE },
+  back: { kind: 'spring', response: LAYOUT_RESPONSE },
 };
 
 /**
- * The interruption spring, and only that: every leg that has to leave at a speed something is
- * *already* travelling at (a reversal, a mid-flight rebuild, a drag release) gets this
- * instead of the curve — a Bézier's launch slope is fixed by its own shape, while
- * `solveSpringVelocity` is exact in both damping regimes. ζ0.9 because a container transform
- * moves *and* resizes → the spatial family by the app's own rule.
- *
- * `rate` is ω in *normalised* time, so the shape is independent of the leg's length and a
- * reversal can pick its own duration without picking a different curve. `velocity: 0` is only
- * the from-rest default; `relaunch()` in `progress.ts` — the single place a launch velocity is
- * solved — overwrites it on every interrupted leg, which may then overshoot: a reversal dips
- * before it recovers.
+ * The interruption response: every leg that has to leave at a speed something is *already*
+ * travelling at (a reversal, a mid-flight rebuild, a drag release) — the same layout spring,
+ * relaunched. `velocity: 0` is only the from-rest default; `relaunch()` in `progress.ts` — the
+ * single place a launch velocity is solved — overwrites it on every interrupted leg.
  */
 export const HERO_FLIGHT_RESPONSE: Record<HeroDirection, SpringResponse> = {
-  forward: { rate: 5.13, velocity: 0, damping: 0.9 },
-  back: { rate: 5.13, velocity: 0, damping: 0.9 },
+  forward: LAYOUT_RESPONSE,
+  back: LAYOUT_RESPONSE,
 };
 
 /**
@@ -309,8 +278,7 @@ export const HERO_TARGET_RADIUS_PX = 16;
 
 /**
  * Reverse duration scales with how much of the trip is left to undo. The 90ms floor is for a
- * reversal with almost nothing left to undo: at 200ms the ratio bottoms out at 0.35 (70ms), so a
- * reverse with under 2.4% of its way left clamps to 90 — scaled with the leg, so at every speed.
+ * reversal with almost nothing left to undo — scaled with the leg, so at every speed.
  */
 export const HERO_REVERSE_MIN_DURATION_MS = 90;
 export const HERO_REVERSE_BASE_RATIO = 0.35;
@@ -331,10 +299,7 @@ export const HERO_BACKGROUND_SINK_SCALE = 0.95;
  * gallery is *revealed* rather than covered, so the cue must run late or it arrives before
  * there is anything to see it in.
  */
-export const HERO_BACKGROUND_SINK_WINDOW: Record<
-  HeroDirection,
-  { start: number; end: number }
-> = {
+export const HERO_BACKGROUND_SINK_WINDOW: Record<HeroDirection, { start: number; end: number }> = {
   forward: { start: 0, end: 0.6 },
   back: { start: 0.4, end: 1 },
 };
@@ -366,20 +331,17 @@ export const HERO_REVEAL_WINDOW: Record<
 
 /**
  * The one entrance still measured in milliseconds, and the one that should be: `floatingBack`
- * renders *outside* the overlay, so the container's parameters make no claim on it. 200ms on
- * `standard-decelerate` — the motion table's "small thing entering" row.
- *
- * The duration follows the shared motion token; the WAAPI curve below is likewise resolved
- * to a literal because `easing: var(...)` silently falls back to `ease`.
+ * renders *outside* the overlay, so the container's parameters make no claim on it. A small
+ * control fading in with an 8px rise, opacity and travel together on the default effects spring
+ * (one keyframe list, so one critically damped clock: an opacity cannot ride an overshoot).
  */
-export const REVEAL_CONTENT_DURATION_MS = DURATION.short * 1000;
+export const REVEAL_CONTENT_DURATION_MS = SPRING_MS.defaultEffects;
 
 /**
- * How long a superseded flyer takes to fade out: a leave, not a transition — the motion
- * table's "leaves the screen" row, 200ms. A base value: `lib/hero/motion.ts` applies
- * `motionScale()` at the point of use, so it still honours the speed tiers.
+ * How long a superseded flyer takes to fade out: a leave, so the fast effects spring. A base
+ * value: `lib/hero/motion.ts` applies `motionScale()` at the point of use.
  */
-export const FLIGHT_RETIRE_MS = DURATION.short * 1000;
+export const FLIGHT_RETIRE_MS = SPRING_MS.fastEffects;
 
 /**
  * Floor on the leg a mid-flight rebuild produces: a viewport change in the last few frames
@@ -399,12 +361,11 @@ export const REVEAL_DISTANCE_PX = {
   body: 40,
   default: 24,
 } as const;
-/* Resolved shared motion tokens for WAAPI. Keep the source of truth in `lib/motionTokens.ts`. */
-export const REVEAL_EASING = EASE.standardDecelerate;
-/* Leaving on the FastEffects shape, as every exit in the app does, over whatever leg the caller
-   gives it: it answers on the next frame. The emphasized accelerate it used held still for the
-   first fifth of the leg, so a hiding layer lingered over the picture arriving through it. */
-export const HIDE_EASING = springToLinear(SPRINGS.fastEffects);
+/* `linear()` strings from the spring module, for WAAPI. Arriving on the default effects shape;
+   leaving on the effects shape, as every exit in the app does, over whatever leg the caller gives
+   it: it answers on the next frame. */
+export const REVEAL_EASING = springLinear('defaultEffects');
+export const HIDE_EASING = springLinear('fastEffects');
 export const HIDE_DISTANCE_PX = TRAVEL_PX.small;
 
 // ---------------------------------------------------------------------------
@@ -422,25 +383,21 @@ export const SURFACE_FADE_DISTANCE_PX = 140;
 export const RELEASE_SAMPLE_WINDOW_MS = 120;
 
 /**
- * The swipe-down dismiss: no motion shape of its own. Both exits are the same container
- * transform running backwards, so both are ζ0.9 spatial (`HERO_FLIGHT_RESPONSE`); what
- * separates them is the clock and the launch velocity — a tap-close runs `HERO_DURATIONS.back`
- * from rest, while a release slides down the spatial ladder with the travel left
- * (`slowSpatial` at a full drag, floored at `fastSpatial` for a flick from near the top) and
- * starts at the speed the finger left.
- *
- * A spring settle time is the right unit here, unlike the flight's own clock: a release
- * genuinely *is* a spring — it continues a speed the hand put on the surface. Because `rate`
- * is normalised, the shape is identical at every duration in that band. `velocity: 0` is only
- * the from-rest default; `pull.ts` overwrites it with the measured fling speed on every
- * release, which is why a fast flick snaps home and a slow one sinks.
+ * The swipe-down dismiss: no motion shape of its own. Both exits are the same shared-element
+ * spring running backwards (`HERO_FLIGHT_RESPONSE`); what separates them is the clock and the
+ * launch velocity — a tap-close runs `HERO_DURATIONS.back` from rest, while a release takes a
+ * share of the layout spring's settle time by the travel left (the full time at a full drag,
+ * floored at a fast fade's for a flick from near the top) and starts at the speed the finger
+ * left. Because `rate` is normalised, the shape is identical at every duration in that band;
+ * `pull.ts` overwrites `velocity` with the measured fling speed on every release, which is why
+ * a fast flick snaps home and a slow one sinks.
  */
-export const PULL_RELEASE_DURATION_MS = SPRING_MS.slowSpatial;
-export const PULL_RELEASE_MIN_DURATION_MS = SPRING_MS.fastSpatial;
+export const PULL_RELEASE_DURATION_MS = SPRING_MS.layout;
+export const PULL_RELEASE_MIN_DURATION_MS = SPRING_MS.fastEffects;
 export const PULL_RELEASE_RESPONSE: SpringResponse = {
-  rate: 5.13,
+  rate: springRate(SPRINGS.layout),
   velocity: 0,
-  damping: 0.9,
+  damping: 1,
 };
 
 // ---------------------------------------------------------------------------

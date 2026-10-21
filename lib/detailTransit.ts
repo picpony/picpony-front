@@ -20,11 +20,11 @@
  * runtime store says whether one is running, and the shell reaches this module.
  */
 
-import { motionTier, scaledMs, MOTION_SPEED_SCALE } from '@/lib/appearance';
+import { motionTier, MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getImageHeroRuntime, isImageHeroTransitionRunning } from '@/lib/hero/runtime';
-import { DURATION, EASE, TRAVEL_PX } from '@/lib/motionTokens';
+import { TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
-import { springTiming } from '@/lib/springTiming';
+import { springTiming, surfaceArrival } from '@/lib/springTiming';
 import { captureVisualClone, restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 
 /** How long a press on a row stays the reason for the next open: the navigation, with room. */
@@ -144,14 +144,15 @@ export function playDetailEntrance(section: HTMLElement): () => void {
   const row = pressed ? findDetailOriginRow(imageId) : null;
   let stop: (() => void) | null = row && play ? play.playDetailOpen(section, row) : null;
   if (!stop) {
-    const arrival = section.animate(
-      [
-        { opacity: 0, transform: `translateY(${TRAVEL_PX.standard}px)` },
-        { opacity: 1, transform: 'none' },
-      ],
-      { duration: scaledMs(DURATION.long * 1000, 'image'), easing: EASE.decelerate },
-    );
-    stop = () => arrival.cancel();
+    /* No card to fly from: the detail arrives as a full-screen surface (`surfaceArrival('slow')`),
+       its rise on the slow spatial spring and its fade on the slow effects one. */
+    const { spatial, effects } = surfaceArrival('slow', 'image');
+    const fade = section.animate([{ opacity: 0 }, { opacity: 1 }], effects);
+    const rise = section.animate([{ transform: `translateY(${TRAVEL_PX.standard}px)` }, { transform: 'none' }], spatial);
+    stop = () => {
+      fade.cancel();
+      rise.cancel();
+    };
   }
   const entry = { stop, timer: 0 };
   entrances.set(section, entry);

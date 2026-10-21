@@ -66,7 +66,7 @@ export default function ErrorRetry({
             className="group"
             icon={
               <MdRefresh
-                className="transition-[rotate] spring-default-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
+                className="transition-[rotate] spring-fast-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
               />
             }
           >

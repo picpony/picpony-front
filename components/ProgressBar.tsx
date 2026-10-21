@@ -67,10 +67,10 @@ const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
  * flight is landing.
  *
  * **Motion is a spring, not the loop curve.** The spec's
- * `ProgressAnimationSpec` is a critically damped spring — this app's *effects*
- * family, the one that cannot overshoot (an overshooting progress bar reads as
- * more than 100%). `spring-slow-effects` is the softest effects tier; what is
- * borrowed is the family, not the literal stiffness.
+ * `ProgressAnimationSpec` — `DampingRatioNoBouncy`, `StiffnessVeryLow` — is used
+ * verbatim (`PROGRESS_SPRING`, `spring-progress`): critically damped, since an
+ * overshooting progress bar reads as more than 100%, and soft, since a bar fed a
+ * stream of values should glide between them rather than step.
  *
  * The fill is a full-width rounded bar *translated* in from the left, not an animated
  * width (which puts every frame through layout and paint) and no longer a `scaleX`:
@@ -124,7 +124,7 @@ export default function ProgressBar({
         className={cn(
           'h-full w-full origin-left rounded-full forced-mark',
           fill,
-          determinate ? 'spring-slow-effects transition-[transform,background-color]' : 'm3-linear-bar',
+          determinate ? 'spring-progress transition-[transform,background-color]' : 'm3-linear-bar',
         )}
         style={determinate ? { transform: `translateX(${pct - 100}%)` } : undefined}
       />

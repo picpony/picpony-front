@@ -20,7 +20,7 @@ const geometry = await import('../lib/hero/geometry.ts');
 const { createHeroRectArc, lerpHeroRectArc, getHeroMediaRenderedWidth } = geometry;
 const { progressAt, sampleProgress, velocityAt } = await import('../lib/hero/progress.ts');
 const constants = await import('../lib/hero/constants.ts');
-const { HERO_FLIGHT_CURVE, HERO_FLIGHT_PROGRESS, HERO_PROGRESS_SAMPLES } = constants;
+const { HERO_FLIGHT_PROGRESS, HERO_PROGRESS_SAMPLES } = constants;
 const {
   formatHeroContainerCompensator,
   formatHeroContainerCounter,
@@ -166,7 +166,7 @@ const BUDGET = constants.HERO_ARC_CROP_BUDGET;
 const CEILING = BUDGET + constants.HERO_ARC_CROP_TOLERANCE;
 
 console.log(
-  `\nhero path — ${HERO_FLIGHT_CURVE.css}, ${HERO_PROGRESS_SAMPLES} samples, ` +
+  `\nhero path — layout spring (ζ1 k700), ${HERO_PROGRESS_SAMPLES} samples, ` +
     `crop budget ${(BUDGET * 100).toFixed(1)}% (ceiling ${(CEILING * 100).toFixed(1)}% at ` +
     `${AUDIT_SAMPLES} audit points against the solver's ${constants.HERO_ARC_SOLVE_SAMPLES})`,
 );
@@ -215,12 +215,12 @@ for (const [name, from, image, viewport] of CASES) {
 
 const TABLE_TOLERANCE = 0.004;
 const MODELS = [
-  ['HERO_FLIGHT_CURVE', HERO_FLIGHT_PROGRESS.forward],
+  ['HERO_FLIGHT_PROGRESS', HERO_FLIGHT_PROGRESS.forward],
   /* Down to the reversal floor: a caught flyer leaves at the speed it was travelling, −1…−2.5
      on real legs, and its table has to hold the dip as faithfully as a from-rest curve. Up to the
      ceiling: a rebuild of a leg carries the flyer's speed over the time it has left, up to 3.7 on
      the shipped curve (3.3 on `fastOutSlowIn`). */
-  ...[-3, -2, -0.5, 0, 1, 2, 2.5, 4].map((velocity) => [
+  ...[-3, -2, -0.5, 0, 1, 2, 2.5, 4, 6, 7.5].map((velocity) => [
     `spring v=${velocity}`,
     { kind: 'spring', response: { ...constants.HERO_FLIGHT_RESPONSE.forward, velocity } },
   ]),
@@ -554,13 +554,18 @@ if (worstAnisotropy > ANISOTROPY_TOLERANCE) {
       `crests at ${crest.toFixed(2)} ${(crestAt * 100).toFixed(0)}% in, ` +
       `${oneCrest ? 'one crest' : 'SEVERAL CRESTS'}, arrives at ${arrival.toFixed(3)}`,
   );
-  if (!(launch >= 0.25 * crest)) {
-    fail('d/model', `the flight leaves at ${launch.toFixed(3)}, under a quarter of its crest: a hang-back`);
+  /* A spring from rest has no speed at the instant of release but its greatest acceleration: what
+     must hold is that it is visibly on its way in the first 60Hz frame. */
+  const firstFrame = progressAt(flight, 1000 / 60 / constants.HERO_DURATIONS.forward);
+  if (!(launch >= 0 && firstFrame > 0.02)) {
+    fail('d/model', `the flight covers ${(firstFrame * 100).toFixed(1)}% in its first frame: a hang-back`);
   }
   if (!(crestAt > 0)) fail('d/model', 'the flight crests at the press, before anyone can see it move');
   if (!(crestAt <= 0.25)) fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
   if (!oneCrest) fail('d/model', 'the flight changes speed more than once');
-  if (!(Math.abs(arrival) < 1e-6)) fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
+  /* At rest within the settle threshold (1/512 of the travel, `lib/spring.ts`): what speed is
+     left is a sub-pixel creep the leg's last sample hands to the static pose. */
+  if (!(Math.abs(arrival) < 0.02)) fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
 }
 
 // ---------------------------------------------------------------------------

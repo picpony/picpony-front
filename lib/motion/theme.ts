@@ -1,13 +1,27 @@
 'use client';
 
 import {
-  commitCustomPalette, commitPalette, commitPaletteHues, commitScheme,
-  currentCustomAccent, currentCustomSeed, currentPalette, currentPaletteHues,
-  currentScheme, motionScale, motionTier, resolveScheme, CUSTOM_PALETTE,
-  type CustomPaletteInstall, type PaletteHues, type PaletteId, type SchemeSetting,
+  commitCustomPalette,
+  commitPalette,
+  commitPaletteHues,
+  commitScheme,
+  currentCustomAccent,
+  currentCustomSeed,
+  currentPalette,
+  currentPaletteHues,
+  currentScheme,
+  motionTier,
+  resolveScheme,
+  scaledMs,
+  CUSTOM_PALETTE,
+  type CustomPaletteInstall,
+  type PaletteHues,
+  type PaletteId,
+  type SchemeSetting,
 } from '@/lib/appearance';
 import { heroOwnsScreen } from '@/lib/appScroller';
-import { DURATION, EASE } from '@/lib/motionTokens';
+import { SPRINGS, springDurationMs, springEase } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
 import { notifyThemeWipeStart } from '@/lib/pageTransit';
 import { finishTabTransition } from './tabs';
 
@@ -185,15 +199,35 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
   // `html:root[…]` outweighs the `html[data-theme-vt]` base rule in globals.css
   // regardless of stylesheet order — matching on specificity alone left this one
   // stylesheet re-injection away from losing to `animation: none`.
-  /* The one curve deliberately not an M3 token: M3 easings are one-sided, but the
-   * animated *radius* sweeps area growing as its square — squaring the front-loading
-   * (at 150ms of 550: this curve 3% flipped, `emphasized` 65%, `decelerate` 87%).
-   * The radius wants a curve slow at BOTH ends: `--ease-loop`'s value, spelled out
-   * through EASE because the rule lands in the view-transition pseudo tree, where an
-   * unresolved `var()` would silently fall back to `ease`. 550ms goes through
-   * `motionScale()`; the reduced tier cross-fades
-   * instead and never uses this curve — no radius, so one-sided decelerate fits. */
-  const wipeMs = Math.round(550 * motionScale('theme'));
+  /* **The radius rides the expressive spatial damping (ζ0.8) at k100, cut where it covers the
+   * screen.** Driven on the radius, not the area: on the area a spring turned 90% of the screen by
+   * ~145ms (measured from a top-right control on 1600×900), which read as a flash. Stiffness:
+   * `StiffnessLow` (k200) read as fast, `StiffnessVeryLow` (k50) as slow, k100 between. Damping:
+   * critically damped, the edge crept into the last corner — 99% turned at ~445ms, all of it only
+   * at ~725ms — and that tail read as slow. At ζ0.8 the edge is still moving when it reaches the
+   * corner and sweeps out of view: 50% turned at ~150ms, 90% at ~260ms, 99% at ~330ms, all of it
+   * at ~410ms. The overshoot past the corner is off screen, so the animation ends at the first
+   * crossing — holding the transition for an invisible swing would keep the page frozen under its
+   * snapshot. Emitted as keyframes because the view-transition pseudo tree takes no `var()`. The
+   * reduced tier cross-fades on the slow effects spring instead — no radius. */
+  const wipeSpec = { damping: SPRINGS.slowSpatial.damping, stiffness: 100 } as const;
+  const radiusAt = springEase(wipeSpec);
+  let cross = 1;
+  for (let k = 1; k <= 2000; k += 1) {
+    if (radiusAt(k / 2000) >= 1) {
+      cross = k / 2000;
+      break;
+    }
+  }
+  const wipeMs = scaledMs(springDurationMs(wipeSpec) * cross, 'theme');
+  const stops = 32;
+  const frames = Array.from({ length: stops + 1 }, (_, i) => {
+    const t = i / stops;
+    const r = radiusPercent * (i === stops ? 1 : Math.min(1, Math.max(0, radiusAt(t * cross))));
+    return `${(t * 100).toFixed(2)}% { clip-path: circle(${r.toFixed(3)}% ${at}); }`;
+  }).join('\n      ');
+
+  const fade = springTiming('slowEffects', 'theme');
   style.textContent =
     tier === 'reduced'
       ? `
@@ -202,16 +236,15 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
       to { opacity: 1; }
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} ${Math.round(DURATION.long * 1000 * motionScale('theme'))}ms ${EASE.decelerate} both;
+      animation: ${animationName} ${Math.round(fade.duration)}ms ${fade.easing} both;
     }
   `
       : `
     @keyframes ${animationName} {
-      from { clip-path: circle(0% ${at}); }
-      to { clip-path: circle(${radiusPercent.toFixed(3)}% ${at}); }
+      ${frames}
     }
     html:root[data-theme-vt="${id}"]::view-transition-new(root) {
-      animation: ${animationName} ${wipeMs}ms ${EASE.loop} both;
+      animation: ${animationName} ${Math.round(wipeMs)}ms linear both;
     }
   `;
 

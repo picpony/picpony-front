@@ -3,8 +3,7 @@
 import { Component, type ReactNode } from 'react';
 import { getAppScroller } from '@/lib/appScroller';
 import { motionTier, scaledMs } from '@/lib/appearance';
-import { EASE, PAGE_FADE_TIMING } from '@/lib/motionTokens';
-import type { SpringName } from '@/lib/spring';
+import { HANDOFF_MS } from '@/lib/motionTokens';
 import { springTiming } from '@/lib/springTiming';
 import { clamp } from '@/lib/utils';
 
@@ -13,14 +12,6 @@ interface SizeSwapProps {
   contentKey: string;
   /** One element: the one that fades in. */
   children: ReactNode;
-  /**
-   * The responses per direction — by default the drawer's pair, a panel opening and closing in
-   * place. A box whose change is a whole screen's takes a slower one for the shrink: still an
-   * effects spring, since overshoot would bounce everything under it, but what it brings into view
-   * (the page's own end) should arrive, not appear.
-   */
-  grow?: SpringName;
-  shrink?: SpringName;
   /**
    * The box is the last thing on its page. A page shorter than the view keeps its end — the
    * footer — at the bottom of the screen, so a shrink under the height where the two meet moves
@@ -39,13 +30,13 @@ interface SizeSwapProps {
  * height is read (`getSnapshotBeforeUpdate`, the one lifecycle that sees the old DOM — so a
  * class, as `PresenceList`); after it the box springs from that height to its new one — across
  * the part of the change on screen (`visibleTravel`) — and everything after it on the page moves
- * with its edge because it is in the flow. By default it
- * grows on `DefaultSpatial` and shrinks on `FastEffects`, the drawer's pair per direction (a panel
- * opening and closing in place). The new content is laid out at its final size from the first
+ * with its edge because it is in the flow. Both ways on the layout spring — the spring Compose's
+ * own `SizeTransform` defaults to — because a box settling onto its content must never overshoot
+ * it (everything under it would bounce). The new content is laid out at its final size from the first
  * frame and revealed by the moving bottom edge, which is the only edge clipped — a remove control
- * hanging off a preview's corner stays whole. It fades in on the page fade's split (a pane swap's,
- * as `AuthModal` swaps its steps), so the old content is gone at once and the new arrives as the
- * box opens.
+ * hanging off a preview's corner stays whole. It fades in after the hand-off on the default
+ * effects spring (`AnimatedContent`'s own delayed fade-in), so the old content is gone at once and
+ * the new arrives as the box opens.
  *
  * Interruptible: the height read before a commit includes a running move, so a second swap starts
  * from where the box is on screen. Under 关闭 the swap is a cut; under 减弱 the springs lose their
@@ -73,8 +64,7 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     const [start, end] = this.visibleTravel(node, from, to);
     if (Math.abs(end - start) >= 1) {
       node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-      const { grow = 'defaultSpatial', shrink = 'fastEffects' } = this.props;
-      const resize = node.animate([{ height: `${start}px` }, { height: `${end}px` }], springTiming(to > from ? grow : shrink, 'list'));
+      const resize = node.animate([{ height: `${start}px` }, { height: `${end}px` }], springTiming('layout', 'list'));
       const release = () => {
         if (this.resize !== resize) return;
         this.resize = null;
@@ -86,9 +76,8 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     const content = node.firstElementChild;
     if (content instanceof HTMLElement) {
       this.fade = content.animate([{ opacity: 0 }, { opacity: 1 }], {
-        delay: scaledMs(PAGE_FADE_TIMING.delay * 1000, 'list'),
-        duration: scaledMs(PAGE_FADE_TIMING.duration * 1000, 'list'),
-        easing: EASE.decelerate,
+        ...springTiming('defaultEffects', 'list'),
+        delay: scaledMs(HANDOFF_MS, 'list'),
         fill: 'backwards',
       });
     }

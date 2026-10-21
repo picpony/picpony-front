@@ -2,6 +2,7 @@
 
 import { motionTier } from '@/lib/appearance';
 import { TRAVEL_PX } from '@/lib/motionTokens';
+import { SPRINGS, springRate } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 import { RELEASE_SAMPLE_WINDOW_MS, TOUCH_AXIS_LOCK_PX } from './constants';
 import { noteHeroInteraction } from './input';
@@ -40,10 +41,11 @@ export type StepMotion = {
 const STEP_TRAVEL_PX = 30;
 const REDUCED_STEP_TRAVEL_PX = TRAVEL_PX.small;
 
-/* The two response families in normalised time, the same pair `PULL_RELEASE_RESPONSE` and the
-   flight use: ζ0.9 for a release that travels (spatial), ζ1.0 for one that must not overshoot. */
-const SPATIAL_RESPONSE: SpringResponse = { rate: 5.13, velocity: 0, damping: 0.9 };
-const EFFECTS_RESPONSE: SpringResponse = { rate: 6.65, velocity: 0, damping: 1 };
+/* The springs a released leg flies, in normalised time (`springRate`, `lib/spring.ts`): a picture
+   leaving on the fast effects spring, and one docking back into its slot on the layout spring —
+   the flight's and the pull's, since a picture returning to where it belongs never overshoots. */
+const EFFECTS_RESPONSE: SpringResponse = { rate: springRate(SPRINGS.fastEffects), velocity: 0, damping: 1 };
+const LAYOUT_RESPONSE: SpringResponse = { rate: springRate(SPRINGS.layout), velocity: 0, damping: 1 };
 /** Keyframes per released leg — the table size `sampleProgress` is tuned for. */
 const RELEASE_SAMPLES = 24;
 
@@ -185,9 +187,9 @@ export function playStepEnter(element: HTMLElement, direction: StepDirection): S
 }
 
 /**
- * A swipe that did not page: the content returns to rest from wherever the finger left it, at
- * the speed it left — FastSpatial, as the switch handle and every other small travel home. The
- * reduced tier takes the critically damped shape, so it stops where it arrives. A finger that took
+ * A swipe that did not page: the content docks back into its slot from wherever the finger left
+ * it, at the speed it left, on the layout spring — the one Compose's pager snaps with — so it
+ * stops where it arrives at every tier. A finger that took
  * over a picture still fading in (`takeOverStepMotion`) may lift before the fade ends; the rest of
  * it runs from where it is, on DefaultEffects, rather than snapping to full.
  */
@@ -197,8 +199,8 @@ export function playStepReturn(element: HTMLElement, speed = 0): StepMotion {
   if (motionTier('image') === 'off') return DONE;
   const animations: Animation[] = [];
   if (Math.abs(pose.x) >= 0.5) {
-    const { duration } = springTiming('fastSpatial', 'image');
-    const base = motionTier('image') === 'reduced' ? EFFECTS_RESPONSE : SPATIAL_RESPONSE;
+    const { duration } = springTiming('layout', 'image');
+    const base = LAYOUT_RESPONSE;
     const along = pose.x > 0 ? -speed : speed;
     animations.push(
       element.animate(releasedKeyframes(pose.x, 0, along, duration, base), {

@@ -85,7 +85,7 @@ export default function CartBar({
     const height = spacer.getBoundingClientRect().height;
     /* No box at all in the docked layout. */
     if (height === 0) return;
-    spacer.animate([{ height: '0px' }, { height: `${height}px` }], springTiming('defaultEffects', 'list'));
+    spacer.animate([{ height: '0px' }, { height: `${height}px` }], springTiming('layout', 'list'));
   }, [room]);
 
   useLayoutEffect(() => {
@@ -130,8 +130,11 @@ export default function CartBar({
           <div
             inert={!active}
             className={cn(
-              'w-full max-w-sm transition-opacity spring-fast-effects',
-              active ? 'pointer-events-auto opacity-100' : 'opacity-0',
+              'w-full max-w-sm transition-opacity',
+              /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
+              active
+                ? 'pointer-events-auto opacity-100 spring-default-effects'
+                : 'opacity-0 spring-fast-effects',
             )}
           >
             {/* The travel: up into place on the spatial spring, back down on the effects one. */}

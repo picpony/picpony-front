@@ -12,25 +12,15 @@
  * tall. Each content is on screen over a window of the travel (`FORUM_FADE`), over the
  * container's own surface, which is there from the first frame to the last.
  *
- * **Its curve is the hero flight's, over a little longer** — `HERO_FLIGHT_CURVE`, read from
- * `lib/hero/constants.ts` rather than copied, over 250ms (`DURATION.container`, M3 `medium1`)
- * where the flight takes 200 (`HERO_DURATIONS`). A gallery card opening into its picture, a row into its post or its picture
- * and a card into its folder are one gesture, so they share one shape of motion; but a container
- * hands one content over to another inside it, where the flight carries one picture end to end,
- * and on the flight's clock that hand-over read a touch fast (owner, 2026-10-14). The shape is
- * kept and every stage comes 25% later (it was 260 against 220 until both moved onto M3's
- * scale, 2026-10-20). Per 60 Hz frame, as a share of the way: 7.3, 11.1, 16.0, 17.5, 14.0, 10.0,
- * 7.1, 5.2, 3.8, 2.8, 2.1, 1.4, 0.9, 0.5, 0.2 — halfway at 65ms, 90% at 140ms and at rest by
- * 227ms, the crest (2.7× its mean speed) in the air, never past its end.
- * Until 2026-10 it was the tab strip's launched response over the route cross-fade's 400ms,
- * chosen beside the flight's old `fastOutSlowIn` that hung back for 45ms: it left at its top speed
- * (13.7% in the first frame) and slowed from there, 90% of the way at 194ms and the last tenth
- * taking another 206ms. That tail is what read as not smooth — on a thread the card was still
- * sliding up to its place under a page that had already arrived around it — and beside the
- * flight, which the owner had moved off that response for the same creep, it was a second,
- * slower kind of motion. Riding a route change, the route's fade runs on this clock too
- * (`playUnderContainer`, `lib/routeCrossFadePlay.ts`), so the page around the container arrives
- * as it lands, and the handoff to the live element waits for that fade to end (`holdHandoff`).
+ * **Its motion is the hero flight's: Compose's shared-element spring.** A gallery card opening
+ * into its picture, a row into its post or its picture and a card into its folder are one gesture
+ * — a shared container changing bounds — so all of them fly `SharedTransitionLayout`'s
+ * `DefaultBoundsTransform`; ours is the flight spring (`FLIGHT_SPRING`, `lib/spring.ts`), over its own
+ * settle time: on the move from the next frame, halfway at ~85ms, 90% of the way by ~195ms, then
+ * a soft settle onto the card, never past it. Riding a route change, the route's fade runs on this
+ * clock too (`playUnderContainer`, `lib/routeCrossFadePlay.ts`), so the page around the container
+ * arrives as it lands, and the handoff to the live element waits for that fade to end
+ * (`holdHandoff`).
  *
  * **Its clip is made of translations only.** A rounded rectangle whose size changes cannot be a
  * scaled box (the corners stretch into ellipses and anything inside scales with it), and an
@@ -44,7 +34,7 @@
  * **A leg turns from where it is.** When the page a container is flying into goes away mid-leg —
  * Back pressed while a post or a folder is still opening, Forward while it is closing — the
  * container is not dropped and flown again from its far end: it goes back from the pose on
- * screen, on the same curve, over the flight's reversal rule for what is left of the way
+ * screen, on the same spring, over the flight's reversal rule for what is left of the way
  * (`HERO_REVERSE_*`), and each content retraces its own window (`fadeTrack`). It does not coast
  * on the old way first — the reader has just sent it back, as with the tab strip's turn — and
  * it does not lunge either: a Back is a press, and every leg a press starts is the flight's.
@@ -52,13 +42,11 @@
 import {
   HERO_CONTAINER_FADE,
   HERO_CONTENT_FADE,
-  HERO_FLIGHT_CURVE,
   HERO_REVERSE_BASE_RATIO,
   HERO_REVERSE_MIN_DURATION_MS,
   HERO_REVERSE_TRAVEL_RATIO,
 } from '@/lib/hero/constants';
-import { curveProgress } from '@/lib/hero/progress';
-import { DURATION } from '@/lib/motionTokens';
+import { FLIGHT_SPRING, springDurationMs, springEase, springToLinear } from '@/lib/spring';
 
 /** A rectangle, in the overlay's coordinates (px). */
 export interface Box {
@@ -71,19 +59,15 @@ export interface Box {
 /** Corner radii, clockwise from the top left: top-left, top-right, bottom-right, bottom-left. */
 export type Radii = readonly [number, number, number, number];
 
-/**
- * The container transform's duration at the default speed, both ways: the flight's curve over
- * 250ms (`DURATION.container`), where the flight takes 200 (`HERO_DURATIONS`) — see the module's
- * note for why the two differ. Its own step rather than the flight's plus something: a change to
- * either is a judgement about that motion, not the other.
- */
-export const FORUM_TRANSFORM_MS = DURATION.container * 1000;
+/** The container transform's duration at the default speed, both ways: the layout spring's
+ *  settle time, the flight's own (`HERO_DURATIONS`). */
+export const FORUM_TRANSFORM_MS = springDurationMs(FLIGHT_SPRING);
 
-/** Its shape: the flight's curve, as a Web Animations easing for the legs' keyframes. */
-export const FORUM_TRANSFORM_EASING = HERO_FLIGHT_CURVE.css;
+/** Its shape: the layout spring, as a Web Animations easing for the legs' keyframes. */
+export const FORUM_TRANSFORM_EASING = springToLinear(FLIGHT_SPRING);
 
-/** Progress over a leg's own time, `t ∈ [0, 1]` → `[0, 1]`. */
-export const forumTransformProgress = (t: number) => curveProgress(HERO_FLIGHT_CURVE, t);
+/** Progress over a leg's own time, `t ∈ [0, 1]` → `[0, 1]`: the closed form the easing samples. */
+export const forumTransformProgress = springEase(FLIGHT_SPRING);
 
 /**
  * One leg: travel from `from` to `to` over `duration` ms (already scaled by the motion speed).
@@ -143,7 +127,10 @@ export type FadeWindow = { readonly start: number; readonly end: number };
  * the fade.
  */
 export const FORUM_FADE = {
-  open: { outgoing: { start: 0, end: HERO_CONTENT_FADE.forward.start }, incoming: HERO_CONTENT_FADE.forward },
+  open: {
+    outgoing: { start: 0, end: HERO_CONTENT_FADE.forward.start },
+    incoming: HERO_CONTENT_FADE.forward,
+  },
   back: { outgoing: HERO_CONTENT_FADE.back, incoming: HERO_CONTAINER_FADE.back },
 } as const satisfies Record<'open' | 'back', { outgoing: FadeWindow; incoming: FadeWindow }>;
 
@@ -162,12 +149,20 @@ export function boxAt(from: Box, to: Box, p: number): Box {
 }
 
 export function radiiAt(from: Radii, to: Radii, p: number): Radii {
-  return [lerp(from[0], to[0], p), lerp(from[1], to[1], p), lerp(from[2], to[2], p), lerp(from[3], to[3], p)];
+  return [
+    lerp(from[0], to[0], p),
+    lerp(from[1], to[1], p),
+    lerp(from[2], to[2], p),
+    lerp(from[3], to[3], p),
+  ];
 }
 
 const channels = (colour: string): number[] | null => {
   const match = /^rgba?\(([^)]*)\)$/.exec(colour.trim());
-  const parts = match?.[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+  const parts = match?.[1]
+    .split(/[\s,/]+/)
+    .filter(Boolean)
+    .map(Number);
   if (!parts || parts.length < 3 || parts.some((part) => !Number.isFinite(part))) return null;
   return [parts[0], parts[1], parts[2], parts[3] ?? 1];
 };
@@ -198,7 +193,11 @@ export function containerPose(
   elapsed: number,
 ): { box: Box; radii: Radii; colour: string } {
   const { progress: p } = legAt(leg, elapsed);
-  return { box: boxAt(a.box, b.box, p), radii: radiiAt(a.radii, b.radii, p), colour: colourAt(a.colour, b.colour, p) };
+  return {
+    box: boxAt(a.box, b.box, p),
+    radii: radiiAt(a.radii, b.radii, p),
+    colour: colourAt(a.colour, b.colour, p),
+  };
 }
 
 /** The part of `rect` inside `view`, or null when nothing of it is. */
@@ -239,8 +238,22 @@ export function shutterLevels(column: { left: number; width: number } | null): S
   const S = SHUTTER_SPAN;
   if (column) {
     return [
-      { left: column.left, top: 0, width: column.width, height: S, corners: [0, 1], translate: (b) => [0, b.top] },
-      { left: 0, top: -S, width: column.width, height: S, corners: [2, 3], translate: (b) => [0, b.height] },
+      {
+        left: column.left,
+        top: 0,
+        width: column.width,
+        height: S,
+        corners: [0, 1],
+        translate: (b) => [0, b.top],
+      },
+      {
+        left: 0,
+        top: -S,
+        width: column.width,
+        height: S,
+        corners: [2, 3],
+        translate: (b) => [0, b.height],
+      },
       { left: 0, top: S, width: 0, height: 0, corners: [], translate: (b) => [0, -b.height] },
     ];
   }
@@ -257,7 +270,10 @@ export function shutterLevels(column: { left: number; width: number } | null): S
  * What the chain clips to and where the content frame's origin lands, for a container box — the
  * check that the construction is the container (the tests run it at every sample).
  */
-export function resolveShutter(levels: readonly ShutterLevel[], box: Box): { clip: Box; origin: [number, number] } {
+export function resolveShutter(
+  levels: readonly ShutterLevel[],
+  box: Box,
+): { clip: Box; origin: [number, number] } {
   let ox = 0;
   let oy = 0;
   let clip = { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity };
@@ -274,14 +290,20 @@ export function resolveShutter(levels: readonly ShutterLevel[], box: Box): { cli
     };
   });
   return {
-    clip: { left: clip.left, top: clip.top, width: clip.right - clip.left, height: clip.bottom - clip.top },
+    clip: {
+      left: clip.left,
+      top: clip.top,
+      width: clip.right - clip.left,
+      height: clip.bottom - clip.top,
+    },
     origin: [ox, oy],
   };
 }
 
 /** A content's opacity at travel `p` for a fade window: coming in across it, or going out. */
 export function fadeAt(window: FadeWindow, p: number, out = false): number {
-  const shown = p <= window.start ? 0 : p >= window.end ? 1 : (p - window.start) / (window.end - window.start);
+  const shown =
+    p <= window.start ? 0 : p >= window.end ? 1 : (p - window.start) / (window.end - window.start);
   return out ? 1 - shown : shown;
 }
 
@@ -293,7 +315,12 @@ export function fadeAt(window: FadeWindow, p: number, out = false): number {
  * went out over 0–15% comes back over it. Piecewise linear in the leg's progress (travel is linear
  * in it), so its corners are the only keyframes it needs.
  */
-export function fadeTrack(window: FadeWindow, from: number, to: number, out = false): { offset: number; opacity: number }[] {
+export function fadeTrack(
+  window: FadeWindow,
+  from: number,
+  to: number,
+  out = false,
+): { offset: number; opacity: number }[] {
   const at = (u: number) => fadeAt(window, from + (to - from) * u, out);
   const offsets = new Set([0, 1]);
   if (Math.abs(to - from) > 1e-9) {

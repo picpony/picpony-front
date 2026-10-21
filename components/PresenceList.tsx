@@ -18,10 +18,10 @@ interface Props<T> {
   items: readonly T[];
   getKey: (item: T) => string | number;
   /**
-   * `list`: rows in one column — the rows after a change slide to their new place on an effects
-   * spring, which cannot overshoot into the row beside them. `grid`: cards that change cells,
-   * on the spatial spring (they move, and a cell is room enough for its 1–2% of overshoot);
-   * a card arriving or leaving also scales a little, which a full-width row does not.
+   * `list`: rows in one column; `grid`: cards that change cells. Either way the entries after a
+   * change slide to their new place on the layout spring — Compose's `animateItem` placement —
+   * which cannot overshoot into the entry beside them. A card arriving or leaving also scales a
+   * little, which a full-width row does not.
    */
   variant?: 'list' | 'grid';
   /**
@@ -376,7 +376,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     const now = new Map(movers.map((el) => [el, el.getBoundingClientRect()] as const));
 
     /* Writes: every move, every arrival, every departure. */
-    const move = springTiming(grid ? 'defaultSpatial' : 'defaultEffects', 'list');
+    const move = springTiming('layout', 'list');
     for (const el of movers) {
       const was = rects.get(el);
       const is = now.get(el)!;
@@ -529,7 +529,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
    * The leaver goes once its fade has ended, in a commit that measures and moves nothing: it is out
    * of the flow (and out of the grouped list's run, globals.css), so removing it changes no box.
    * Committed as a change of shape, it read every row mid-glide and restarted each glide from rest
-   * — the fade (FastEffects) ends before the glides (DefaultSpatial / DefaultEffects) do, so every
+   * — the fade (FastEffects) ends before the glides (the layout spring) do, so every
    * delete stalled for two frames ~23px short of its cell.
    */
   private drop(key: string) {

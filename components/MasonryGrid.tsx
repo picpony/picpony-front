@@ -351,7 +351,7 @@ function playEdit({
   setHold(floor && scroller ? watchFloor(grid, scroller, floor, placement) : null);
   if (!geometry || !motion) return;
 
-  const move = springTiming('defaultSpatial', 'list');
+  const move = springTiming('layout', 'list');
   const track = (el: HTMLElement, animation: Animation) => {
     moves.get(el)?.cancel();
     moves.set(el, animation);
@@ -919,7 +919,11 @@ const CardSelection = memo(function CardSelection({
         aria-hidden="true"
         className={cn(
           'absolute top-2 left-2 flex size-6 items-center justify-center rounded-full border-2',
-          'transition-[background-color,border-color,scale] spring-fast-effects',
+          /* Arriving (selection mode on), the box grows on FastSpatial like `Radio`'s dot; its
+             colours, and everything leaving, on FastEffects (rules 1 and 4). */
+          active
+            ? '[transition:scale_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]'
+            : 'transition-[background-color,border-color,scale] spring-fast-effects',
           ticked
             ? 'border-primary bg-primary text-on-primary forced-selected forced-colors:border-[color:Highlight]'
             : 'border-on-media bg-media-plate forced-boundary',
@@ -935,7 +939,7 @@ const CardSelection = memo(function CardSelection({
             /* An effects spring: a dash offset that overshoots draws past the end of the path and
                retracts. The press step lets the disc settle before the stroke starts. */
             className: 'spring-fast-effects transition-[stroke-dashoffset]',
-            style: { transitionDelay: ticked ? 'var(--transition-duration-press)' : '0ms' },
+            style: { transitionDelay: ticked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
           }}
         />
       </span>

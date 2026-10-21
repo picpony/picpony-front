@@ -25,7 +25,7 @@ import {
   type LoadAttempt,
 } from '@/lib/imageLoader';
 import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
-import { DURATION } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { warmImageHeroFrame } from '@/lib/hero';
 import { cn } from '@/lib/utils';
@@ -258,7 +258,7 @@ export default function DetailImage({
     if (!isPainted) return;
     const timer = window.setTimeout(
       () => startTransition(() => setPlaceholderGone(finalSrc)),
-      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+      SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
     );
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);
@@ -278,7 +278,7 @@ export default function DetailImage({
     if (!translationVisible || !translationSrc) return;
     const timer = window.setTimeout(
       () => setCoveredBy(translationSrc),
-      DURATION.short * 1000 * MOTION_SPEED_SCALE.slow,
+      SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
     );
     return () => window.clearTimeout(timer);
   }, [translationSrc, translationVisible]);

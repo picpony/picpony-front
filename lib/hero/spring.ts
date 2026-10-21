@@ -21,9 +21,8 @@ import { clamp, clamp01 } from '@/lib/utils';
  *
  * **Why a spring at all, given a from-rest leg flies a curve:** a spring is the only model
  * that can be *solved* for a launch slope, so every leg leaving at a speed something is
- * already travelling at (reversal, mid-flight rebuild, drag release) is one. ζ0.9 overshoots
- * ≈ 0.15% — on a 600px flight, under a pixel: a settle rather than a stop, not a miss. That
- * is the whole reason the spatial tier is ζ0.9 and not ζ0.8.
+ * already travelling at (reversal, mid-flight rebuild, drag release) is one. The flight runs
+ * critically damped (the layout spring, `lib/hero/constants.ts`), so it cannot pass its target.
  */
 
 export type SpringResponse = {
@@ -45,13 +44,12 @@ export type SpringResponse = {
  *
  * The ceiling is a rebuild's: a leg rebuilt mid-flight (the address bar moving) carries the
  * flyer's speed over the time the old leg had left, which around the flight's crest takes up to
- * 3.7 in these units (3.3 on the `fastOutSlowIn` it flew before). At 2.5 such a rebuild braked the
- * flyer by up to a third in the frame the viewport changed. The ζ0.9 spring still lands without
- * passing its target at 4 (at 4.5 it passes by 0.03%, at 5 by 0.2%), so that is where the ceiling
- * sits.
+ * ~5 in these units on the layout spring. A critically damped response cannot pass its target
+ * below a launch of its own `rate` (≈8.5 for the layout spring, `springRate`), so the ceiling sits
+ * a unit under that: every rebuild keeps its speed and none overshoots.
  */
 const MIN_VELOCITY = -3;
-const MAX_VELOCITY = 4;
+const MAX_VELOCITY = 7.5;
 
 export function clampSpringVelocity(velocity: number) {
   if (!Number.isFinite(velocity)) return 0;

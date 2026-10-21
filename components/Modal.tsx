@@ -15,7 +15,7 @@ import {
 import { ICON } from '@/lib/icons';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
-import { springTiming, surfaceEnterTiming } from '@/lib/springTiming';
+import { surfaceArrival, surfaceDeparture } from '@/lib/springTiming';
 import { ENTER_SCALE, TRAVEL_PX } from '@/lib/motionTokens';
 
 interface ModalProps {
@@ -69,13 +69,12 @@ interface ModalProps {
   onExited?: () => void;
 }
 
-/** A dialog arrives over 400ms on the emphasized decelerate (`surfaceEnterTiming`) and leaves on
- *  DefaultEffects, as the bottom sheet and the side panel do, so the large surfaces open and
- *  close on one pair of clocks. Arriving, DefaultEffects both ways was tried (2026-10) and read
- *  abrupt: 166ms is a state change, not a surface entering the screen, and the emphasized
- *  decelerate's long soft landing is what M3 gives a dialog. Leaving, it answers a press on the
- *  frame after it (it left on the emphasized accelerate over 200ms, which held still for its
- *  first 80ms). A reversal mid-way starts from the committed pose, so the two clocks still join. */
+/** A dialog arrives as every partial-screen surface does (`surfaceArrival`): its rise and scale
+ *  on the default spatial spring — the expressive scheme's soft landing, with a hair of give —
+ *  and its fade (and its scrim's) on the default effects spring, so it is opaque well before the
+ *  crest. It leaves on DefaultEffects (`surfaceDeparture`), everything on that one critically
+ *  damped clock, answering the press on the frame after it. A reversal mid-way starts from the
+ *  committed pose. */
 const CLOSE_ANIM_DURATION = SPRING_MS.defaultEffects;
 
 /**
@@ -241,10 +240,16 @@ export default function Modal({
       return;
     }
 
-    const timing = { ...(isOpen ? surfaceEnterTiming('overlay') : springTiming('defaultEffects', 'overlay')), fill: 'both' as const };
+    const arrival = isOpen ? surfaceArrival('default', 'overlay') : null;
+    const leave = surfaceDeparture('default', 'overlay');
+    const fade = { ...(arrival ? arrival.effects : leave), fill: 'both' as const };
+    const travel = { ...(arrival ? arrival.spatial : leave), fill: 'both' as const };
+    /* The panel's opacity and its transform are two animations on two clocks: an opacity on the
+       under-damped spatial spring would be clipped above 1 through the overshoot. */
     const running = [
-      scrim.animate([{ opacity: fromScrim }, { opacity }], timing),
-      panel.animate([{ opacity: fromOpacity, transform: fromTransform }, { opacity, transform }], timing),
+      scrim.animate([{ opacity: fromScrim }, { opacity }], fade),
+      panel.animate([{ opacity: fromOpacity }, { opacity }], fade),
+      panel.animate([{ transform: fromTransform }, { transform }], travel),
     ];
     for (const animation of running) {
       animation.finished.then(() => animation.cancel(), () => {});

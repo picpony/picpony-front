@@ -1,7 +1,8 @@
 'use client';
 
 import { type ReactNode, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
-import { DURATION, EASE, STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
+import { STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
+import { surfaceArrival } from '@/lib/springTiming';
 import { entranceMotion, motionTier, scaledMs } from '@/lib/appearance';
 import { routeTransitActive } from '@/lib/pageTransit';
 
@@ -75,25 +76,21 @@ export default function Reveal({
     const reduced = tier === 'reduced';
     const rise = reduced ? distance / 2 : distance;
     const step = reduced ? 0 : stagger;
-    /* `long`, the enters-the-screen duration. */
-    const duration = scaledMs(DURATION.long * 1000, 'entrance');
+    /* Each child arrives as a surface does (`surfaceArrival`): the rise on the default spatial
+       spring, the fade on the default effects one — two animations, since an opacity on an
+       under-damped spring is clipped above 1. Both start together, after the child's turn. */
+    const { spatial, effects } = surfaceArrival('default', 'entrance');
 
-    const running = [...root.children].map((child, index) =>
-      (child as HTMLElement).animate(
-        [
-          { opacity: 0, visibility: 'hidden', transform: `translateY(${rise}px)` },
-          { opacity: 1, visibility: 'visible', transform: 'none' },
-        ],
-        {
-          duration,
-          delay: scaledMs((delay + Math.min(index * step, STAGGER.max)) * 1000, 'entrance'),
-          easing: EASE.decelerate,
-          /* `backwards`, so the start state holds through the delay — without
-             it a staggered child sits at rest until its turn, then jumps. */
-          fill: 'backwards',
-        },
-      ),
-    );
+    const running = [...root.children].flatMap((child, index) => {
+      const el = child as HTMLElement;
+      /* `backwards`, so the start state holds through the delay — without it a staggered child
+         sits at rest until its turn, then jumps. */
+      const at = { delay: scaledMs((delay + Math.min(index * step, STAGGER.max)) * 1000, 'entrance'), fill: 'backwards' as const };
+      return [
+        el.animate([{ opacity: 0, visibility: 'hidden' }, { opacity: 1, visibility: 'visible' }], { ...effects, ...at }),
+        el.animate([{ transform: `translateY(${rise}px)` }, { transform: 'none' }], { ...spatial, ...at }),
+      ];
+    });
 
     return () => {
       for (const animation of running) animation.cancel();

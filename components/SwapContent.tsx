@@ -2,8 +2,8 @@
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { scaledMs } from '@/lib/appearance';
-import { MENU_TRANSITION, PAGE_FADE_TIMING, TRAVEL_PX } from '@/lib/motionTokens';
-import { springTiming } from '@/lib/springTiming';
+import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
+import { springTiming, surfaceArrival } from '@/lib/springTiming';
 import { cn } from '@/lib/utils';
 
 /** The side the arriving content comes in from. The departing one leaves towards the opposite. */
@@ -57,10 +57,9 @@ interface SwapContentProps {
  * content is centred each one drags everything on screen with it. `FollowHeight` is the component
  * for a box whose height should travel instead; a 40dp row, whose height is its own, needs neither.
  *
- * The arrival is `MENU_TRANSITION.enter`, held back by `PAGE_FADE_TIMING`'s own delay; the departure
- * is FastEffects, as every small surface leaves, so the two are never half-transparent through each
- * other: by the 80ms the arrival waits the departing copy is 4% opaque. It used to leave on a 150ms
- * standard-accelerate, which was still 59% opaque when the new content started to arrive.
+ * The arrival is a small surface's (`surfaceArrival('fast')`), held back by the hand-off; the
+ * departure is FastEffects, as every small surface leaves, so the two are never half-transparent
+ * through each other: by the time the arrival starts the departing copy is ~90% gone.
  * Nothing plays on mount: a box that arrives on screen is not a box that changed what it shows —
  * which is also what keeps a development mount's double-invoked layout effect from playing an
  * entrance this component never had. Under 关闭 the change is a cut (`scaledMs` reaches 0).
@@ -89,23 +88,14 @@ export default function SwapContent({
 
   useLayoutEffect(() => {
     if (!leaving) return;
-    const { enter } = MENU_TRANSITION;
+    const { spatial, effects } = surfaceArrival('fast', 'feedback');
     const exit = springTiming('fastEffects');
     const { arrive, depart } = offsets(side, distance);
-    enteringRef.current?.animate(
-      [
-        { opacity: 0, transform: arrive },
-        { opacity: 1, transform: 'none' },
-      ],
-      {
-        duration: scaledMs(enter.duration),
-        delay: scaledMs(PAGE_FADE_TIMING.delay * 1000),
-        easing: enter.easing,
-        /* `backwards`, so the arriving content holds its start state through the delay rather than
-           appearing at rest and dropping back. */
-        fill: 'backwards',
-      },
-    );
+    /* `backwards`, so the arriving content holds its start state through the delay rather than
+       appearing at rest and dropping back. Opacity and travel on their own springs. */
+    const at = { delay: scaledMs(HANDOFF_MS), fill: 'backwards' as const };
+    enteringRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, ...at });
+    enteringRef.current?.animate([{ transform: arrive }, { transform: 'none' }], { ...spatial, ...at });
     const run = leavingRef.current?.animate(
       [
         { opacity: 1, transform: 'none' },

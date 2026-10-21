@@ -73,7 +73,9 @@ export default function OfflineBanner({ inert }: { inert?: boolean }) {
         aria-hidden="true"
         inert={inert || !isOffline || undefined}
         className={cn(
-          'grid shrink-0 transition-[grid-template-rows] spring-default-effects',
+          /* A collapsible strip: its height re-places everything under it, so the layout spring
+             (`expandVertically`), never an effects one. */
+          'grid shrink-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects)]',
           isOffline ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >

@@ -120,7 +120,7 @@ function ResultCaption({
             onClick={() => setOpenFor(open ? null : singleTag)}
             trailingIcon={
               <MdExpandMore
-                className={`transition-transform ${open ? 'spring-default-spatial rotate-180' : 'spring-fast-effects rotate-0'}`}
+                className={`transition-transform spring-fast-spatial ${open ? 'rotate-180' : 'rotate-0'}`}
               />
             }
           >

@@ -183,8 +183,9 @@ export default function SelectionBar({
           aria-label={label}
           inert={!active}
           className={cn(
-            'max-w-full transition-opacity spring-fast-effects',
-            active ? 'pointer-events-auto opacity-100' : 'opacity-0',
+            'max-w-full transition-opacity',
+            /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
+            active ? 'pointer-events-auto opacity-100 spring-default-effects' : 'opacity-0 spring-fast-effects',
           )}
         >
           {/* The travel: up into place on the spatial spring, back down on the effects one. */}

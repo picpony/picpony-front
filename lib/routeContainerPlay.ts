@@ -2,7 +2,8 @@
 
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
-import { PAGE_FADE_TIMING } from '@/lib/motionTokens';
+import { HANDOFF_MS } from '@/lib/motionTokens';
+import { SPRING_MS } from '@/lib/spring';
 import { routeTransitActive } from '@/lib/pageTransit';
 import { FORUM_TRANSFORM_MS } from '@/lib/forumContainer';
 import {
@@ -60,7 +61,7 @@ export function routePlayable(el: HTMLElement): boolean {
 }
 
 /** By the wall-clock rule: the slowest speed, the transform or the page fade, whichever ends later. */
-const BOUND_MS = Math.max(FORUM_TRANSFORM_MS, (PAGE_FADE_TIMING.delay + PAGE_FADE_TIMING.duration) * 1000) * MOTION_SPEED_SCALE.slow;
+const BOUND_MS = Math.max(FORUM_TRANSFORM_MS, HANDOFF_MS + SPRING_MS.slowEffects) * MOTION_SPEED_SCALE.slow;
 
 /** Which way a flight goes along its pair: into the larger thing, or back into the list. */
 export type Leg = 'open' | 'back';

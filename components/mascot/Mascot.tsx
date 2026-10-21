@@ -284,8 +284,8 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     else reveal();
   }
 
-  /* The hop when it speaks: up on the fast spatial spring, then down on the expressive one, whose
-     small overshoot is the landing. Its own box (`.react`), because the pose's CSS transition would
+  /* The hop when it speaks: up and down on the fast spatial spring, whose overshoot is the spring
+     in the jump and the give of the landing. Its own box (`.react`), because the pose's CSS transition would
      outrank a WAAPI animation on the same element. After a tap it waits for the squash to let go,
      so the release springs into the hop. The reduced tier's spring substitution removes the
      overshoot and keeps a 6px rise; the off tier keeps the figure still. */
@@ -294,7 +294,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     if (!node || motionTier('ambient') === 'off') return;
     for (const running of node.getAnimations()) running.cancel();
     const up = springTiming('fastSpatial', 'ambient');
-    const down = springTiming('expressiveFastSpatial', 'ambient');
+    const down = springTiming('fastSpatial', 'ambient');
     const lift = node.animate([{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }], { duration: up.duration, easing: up.easing, fill: 'forwards' });
     lift.finished
       .then(() => {

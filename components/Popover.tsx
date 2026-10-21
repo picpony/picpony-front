@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
 import { MEDIA } from '@/lib/constants';
 import { motionTier, scaledMs } from '@/lib/appearance';
-import { MENU_TRANSITION } from '@/lib/motionTokens';
+import { HANDOFF_MS } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 import { observeAnchorReflow } from '@/lib/anchorReflow';
@@ -384,30 +384,27 @@ export default function Popover({
 
     if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
     /* One clock per direction, shared with the search view's height below, because a gesture's
-       parts must agree. An anchored menu *grows out of its trigger* and keeps the measured
-       transform's own 200ms step. The search view is something else: a **collapsible panel**,
-       both ends of its travel on screen, which this app answers with the collapsible-panel pair of
-       springs rather than a one-sided curve — `default-spatial` open, `fast-effects` closed. It
-       arrived on FastEffects with no travel at all: 108ms of opacity for a panel that comes
-       to 462px at eight rows, which is the whole of what read as a pop. */
+       parts must agree. An anchored menu *unfolds out of its trigger* as Compose's `DropdownMenu`
+       does: its scale on the fast spatial spring, its fade on fast effects. The search view is a
+       box growing to its content under the field, so it **docks** — the layout spring, which
+       cannot overshoot the rows it opens onto. Leaving, everything on fast effects, as every
+       small surface leaves. Opacity always rides an effects spring of its own: on an under-damped
+       spring it would be clipped above 1. */
     const timing = !open
       ? springTiming('fastEffects', 'overlay')
-      : variant === 'search'
-        ? springTiming('defaultSpatial', 'overlay')
-        : { duration: scaledMs(MENU_TRANSITION.enter.duration, 'overlay'), easing: MENU_TRANSITION.enter.easing };
-    const from: Keyframe = { opacity: fromOpacity };
-    const to: Keyframe = { opacity };
+      : springTiming(variant === 'search' ? 'layout' : 'fastSpatial', 'overlay');
+    const fade = open ? springTiming(variant === 'search' ? 'defaultEffects' : 'fastEffects', 'overlay') : timing;
+    const running = [panel.animate([{ opacity: fromOpacity }, { opacity }], { ...fade, fill: 'both' })];
     if (fromTransform !== transform) {
-      from.transform = fromTransform;
-      to.transform = transform;
+      running.push(panel.animate([{ transform: fromTransform }, { transform }], { ...timing, fill: 'both' }));
     }
-    const running = [panel.animate([from, to], { ...timing, fill: 'both' })];
     if (morph) {
       const effects = springTiming('fastEffects', 'overlay');
-      // Only hidden content waits for the surface to expand. A reversal with
-      // visible text picks up its opacity immediately from the current frame.
+      // Only hidden content waits for the surface to expand — the hand-off, by which the
+      // unfolding spring is most of the way there. A reversal with visible text picks up its
+      // opacity immediately from the current frame.
       const delay = open && Number(fromContentOpacity) < 0.05
-        ? Math.max(0, timing.duration - effects.duration)
+        ? scaledMs(HANDOFF_MS, 'overlay')
         : 0;
       running.push(content.animate(
         [{ opacity: fromContentOpacity }, { opacity: content.style.opacity }],
@@ -500,9 +497,9 @@ export default function Popover({
     box.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
     /* The first placement of an opening panel is the arrival and takes the clock above;
        anything after it — a list replaced underneath, or a re-aim once the measured space
-       below arrives — takes `FollowHeight`'s response, critically damped, because a box
+       below arrives — takes `FollowHeight`'s response. Both are the layout spring: a box
        settling onto its content must not overshoot it. A leaving panel takes the dismissal. */
-    const timing = springTiming(open ? (first ? 'defaultSpatial' : 'defaultEffects') : 'fastEffects', 'overlay');
+    const timing = springTiming(open ? 'layout' : 'fastEffects', 'overlay');
     const animation = box.animate([{ height: `${from}px` }, { height: `${to}px` }], { ...timing, fill: 'both' });
     heightRun.current = { animation, to };
     const release = () => {

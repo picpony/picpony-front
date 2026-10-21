@@ -406,7 +406,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
     const held = new Map(frozen.map(({ el }) => [el, el.getBoundingClientRect()] as const));
 
     /* Writes: every glide, every arrival, every departure. */
-    const glide = springTiming('defaultEffects', 'list');
+    const glide = springTiming('layout', 'list');
     const fadeIn = springTiming('defaultEffects', 'list');
     const arrived = new Set(this.state.entries.filter((entry) => !entry.leaving && !before.has(entry.key)).flatMap((entry) => groups.get(entry.key) ?? []));
     for (const el of movers) {

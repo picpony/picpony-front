@@ -193,7 +193,7 @@ test('M1-032 opening: a two-box translate clip, the content behind it, what foll
 
   const [clip] = h.panel.animations;
   assert.deepEqual(plain(clip.keyframes), [{ translate: '0 -587px' }, { translate: 'none' }]);
-  assert.equal(clip.timing.easing, 'linear(defaultSpatial)');
+  assert.equal(clip.timing.easing, 'linear(layout)');
   const [counter] = h.surface.animations;
   assert.deepEqual(plain(counter.keyframes), [{ translate: '0 587px' }, { translate: 'none' }], 'the surface stands still while the clip grows over it');
   const [rise, fadeIn] = h.content.animations;
@@ -204,7 +204,7 @@ test('M1-032 opening: a two-box translate clip, the content behind it, what foll
   /* An open nothing pressed derives the push: everything after moved down by the footprint. */
   assert.equal(h.motion.started.length, 1);
   assert.deepEqual(plain(h.motion.started[0].keyframes), [{ transform: 'translateY(-589px)' }, { transform: 'none' }]);
-  assert.equal(h.motion.started[0].timing.easing, 'linear(defaultSpatial)', 'what follows moves on the clip\'s own spring');
+  assert.equal(h.motion.started[0].timing.easing, 'linear(layout)', 'what follows moves on the clip\'s own spring');
 });
 
 test('M1-032 a follower the press saw higher glides from there, counted against its layout box', () => {
@@ -247,7 +247,7 @@ test('M1-030 a StrictMode remount adopts the running opening instead of landing 
   assert.deepEqual(h.motion.dropped.map(([el, animation]) => [el.name, animation]), [['next', h.motion.started[0]]]);
 });
 
-test('M1-032 closing: from the drawn pose, on FastEffects held to the end; moves land before the panel goes', async () => {
+test('M1-032 closing: from the drawn pose, on the layout spring held to the end; moves land before the panel goes', async () => {
   const h = harness();
   const next = new h.Element('next', 2530);
   const footer = new h.Element('footer', 3360);
@@ -272,7 +272,7 @@ test('M1-032 closing: from the drawn pose, on FastEffects held to the end; moves
   const clip = h.panel.animations.at(-1);
   assert.deepEqual(plain(clip.keyframes), [{ translate: '0px -200px', opacity: '1' }, { translate: '0 -587px', opacity: 1 }]);
   assert.equal(clip.timing.fill, 'forwards');
-  assert.equal(clip.timing.easing, 'linear(fastEffects)');
+  assert.equal(clip.timing.easing, 'linear(layout)');
   assert.deepEqual(plain(h.content.animations.at(-1).keyframes), [{ opacity: '0.4' }, { opacity: 0 }], 'the content leaves from where it is');
   assert.equal(h.content.animations.at(-2).timing.delay, undefined, 'a reversal has no lag');
   assert.ok(h.panel.animations.slice(0, -1).every((animation) => animation.cancelled), 'the opening was cancelled once read');
@@ -308,7 +308,7 @@ test('a close turned back re-opens every part from its pose on the opening sprin
   reopening.commit();
   const clip = h.panel.animations.at(-1);
   assert.deepEqual(plain(clip.keyframes), [{ translate: '0px -300px', opacity: '1' }, { translate: 'none', opacity: 1 }]);
-  assert.equal(clip.timing.easing, 'linear(defaultSpatial)');
+  assert.equal(clip.timing.easing, 'linear(layout)');
   assert.equal(clip.timing.fill, undefined);
   assert.deepEqual(plain(h.motion.started.at(-1).keyframes), [{ transform: 'translateY(-300px)' }, { transform: 'none' }]);
 });
@@ -368,7 +368,7 @@ test('under the last row, the row\'s bottom corners move with the panel instead 
     { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
     { borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px' },
   ], 'the corners leave the run\'s end as the panel starts to grow under them');
-  assert.equal(squaring.timing.easing, 'linear(defaultSpatial)', 'on the clip\'s own spring');
+  assert.equal(squaring.timing.easing, 'linear(layout)', 'on the clip\'s own spring');
 
   /* Closed half-way: the corners leave from where they are drawn, on the close's clock, held to the end. */
   row.computed = { ...row.computed, borderBottomLeftRadius: '9px' };
@@ -382,7 +382,7 @@ test('under the last row, the row\'s bottom corners move with the panel instead 
     { borderBottomLeftRadius: '9px', borderBottomRightRadius: '9px' },
     { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
   ]);
-  assert.equal(rounding.timing.easing, 'linear(fastEffects)');
+  assert.equal(rounding.timing.easing, 'linear(layout)');
   assert.equal(rounding.timing.fill, 'forwards', 'held at the run\'s end until the removal gives the row those corners');
   h.panel.animations.at(-1).finish();
   await h.panel.animations.at(-1).finished;
