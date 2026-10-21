@@ -33,16 +33,13 @@ interface ToggleSwitchProps {
    bracket shapes are matched now, so the handle stops resizing under the
    preference while its colours keep changing. */
 
-/** Handle geometry: `FastSpatial`, per `Switch.kt` — the release and the toggle land on this one
- *  spring with the travel. **The press swell does not animate**: `Switch.kt` animates the thumb's
- *  size with `if (isPressed) SnapSpec else animationSpec`, so the handle snaps to its pressed size
- *  under the finger and only springs back on release (`HANDLE_PRESSED_TRANSITION`). Colour is not
+/** Handle geometry: `FastSpatial` — the travel, the press swell and the release all on this one
+ *  spring, so they always land together. **A deliberate divergence on the press**: `Switch.kt`
+ *  snaps the thumb to its pressed size (`if (isPressed) SnapSpec else animationSpec`), and on a
+ *  mouse press that read as abrupt (owner, 2026-10-21), so the swell springs too. Colour is not
  *  geometry, so it keeps its own short clock. */
 const HANDLE_TRANSITION =
   '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
-/** While pressed: the size snaps (Compose's `SnapSpec`), the colour still fades. */
-const HANDLE_PRESSED_TRANSITION =
-  '[transition:background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** The check crosses while the handle is still travelling, so it takes the fastest
  *  *effects* spring (ζ1 k3800) rather than a hand-counted 33ms. */
 const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
@@ -75,8 +72,8 @@ const TRACK_TRANSITION =
  * centred in a flex track the two are equivalent, and translate does not relayout).
  *
  * Travel and release use the same FastSpatial spring, so the handle reaches
- * its resting size as it reaches its position; the press swell itself snaps, as
- * `Switch.kt` does. Reduced motion substitutes the
+ * its resting size as it reaches its position; the press swell springs on it too (a
+ * deliberate divergence from `Switch.kt`'s snap — see `HANDLE_TRANSITION`). Reduced motion substitutes the
  * critically damped response through the shared spring tokens.
  *
  * And two palette notes. The spec paints the selected icon `on-primary-container`,
@@ -252,7 +249,7 @@ export default function ToggleSwitch({
               <span
                 className={cn(
                   'relative z-10 grid place-items-center rounded-full',
-                  isPressed ? HANDLE_PRESSED_TRANSITION : HANDLE_TRANSITION,
+                  HANDLE_TRANSITION,
                   isPressed
                     ? 'size-7'
                     : checked

@@ -665,7 +665,7 @@ The confirm register is the instructive one, because the copy split was the *arc
 
 | Role | ζ | k | Settle | Use |
 | --- | --- | --- | --- | --- |
-| `fastSpatial` | 0.6 | 800 | 348ms | a control moving: switch handle (travel and release; the press swell snaps), radio dot, slider handle, an icon turning; a menu, tooltip or toast scaling in **and out** |
+| `fastSpatial` | 0.6 | 800 | 348ms | a control moving: switch handle (travel, press swell and release — Compose snaps the swell, ours springs by owner decision), radio dot, slider handle, an icon turning; a menu, tooltip or toast scaling in **and out** |
 | `defaultSpatial` | 0.8 | 380 | 412ms | a surface moving: tab indicator, a checkbox's mark drawing, a sheet / side panel / modal drawer arriving and settling after a drag (its overshoot lands on an edge skirt), the search view collapsing, a picture stepping in |
 | `slowSpatial` | 0.8 | 200 | 569ms | the search view expanding; a detail arriving with no card to fly from |
 | `fastEffects` | 1 | 3800 | 138ms | hover, focus, state layers; a colour going out; any small surface's opacity; a sheet / side panel / modal drawer leaving |

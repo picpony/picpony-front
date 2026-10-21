@@ -8,7 +8,7 @@ Source of truth: `lib/spring.ts`. This page is the per-component assignment; the
 | Hover, focus, state layer, ink | `fastEffects` | `fastEffects` | state layers |
 | Press feedback | ripple (Compose `RippleAnimation`), held while pressed | 150ms fade after release + spread | `ripple()` |
 | Button / icon button press morph (and the icon button's selected corner) | `defaultEffects` on `border-radius` via `data-pressed` — no bounce in a shape | `defaultEffects` | `Button.kt` / `IconButton.kt` `shapeByInteraction` |
-| Switch handle | travel and release `fastSpatial`; **the press swell snaps** (`SnapSpec` while pressed); colours `fastEffects` | `fastSpatial` | `Switch.kt` `ThumbNode` |
+| Switch handle | travel, press swell and release `fastSpatial` (Compose snaps the press swell; springing it is an owner decision — the snap read as abrupt); colours `fastEffects` | `fastSpatial` | `Switch.kt` `ThumbNode` |
 | Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial` (+ `fastEffects` on any opacity); the radio ring's colour `defaultEffects` | — | `RadioButton.kt` |
 | Grid selection mark (gallery select mode) | box scale `fastSpatial`, colours `fastEffects` | `fastEffects` | — |
 | Floating selection / cart bar | travel `defaultSpatial`, opacity `defaultEffects` (`surfaceArrival('default')`) | `fastEffects` | — |
