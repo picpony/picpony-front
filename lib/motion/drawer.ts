@@ -187,18 +187,19 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        /* The same pair `Sheet` releases on and the tap runs: `layout` to settle open
-         * (it docks against the edge), `DefaultEffects` shut, so a gesture and a tap
-         * arrive and leave alike. No velocity scaling: a duration scaled by
-         * distance double-counts; a spring already covers a shorter remaining distance
-         * in less time. */
-        const spec = toOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
+        /* `ModalNavigationDrawer`'s release (`anchoredDraggableMotion`): DefaultSpatial both
+         * ways — settling open, its overshoot lands on the left edge skirt; shutting, it
+         * overshoots off screen. The scrim fades on DefaultEffects. No velocity scaling: a
+         * duration scaled by distance double-counts; a spring already covers a shorter
+         * remaining distance in less time. */
+        const spec = spring('defaultSpatial', 'overlay');
+        const scrimSpec = spring('defaultEffects', 'overlay');
 
         settling = toOpen;
         if (s)
           gsap.to(s, {
             opacity: toOpen ? 1 : 0,
-            ...spec,
+            ...scrimSpec,
             overwrite: true,
           });
         gsap.to(d, {
@@ -232,8 +233,10 @@ export function useDrawerSwipe({
           return;
         }
         settling = openNow;
-        const spec = openNow ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
-        if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spec, overwrite: true });
+        /* Opened or closed from elsewhere: the tap's pair — DefaultSpatial open (`openMotion`),
+           FastEffects shut (`closeMotion`); the scrim on DefaultEffects. */
+        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spring('defaultEffects', 'overlay'), overwrite: true });
         gsap.to(d, {
           x: openNow ? 0 : -width,
           ...spec,

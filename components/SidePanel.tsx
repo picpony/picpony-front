@@ -39,7 +39,8 @@ interface SidePanelProps {
   onExited?: () => void;
 }
 
-/** Must match the exit tween below — the panel stays mounted this long. */
+/** The longest exit clock — the scrim's DefaultEffects fade (the panel leaves sooner, on
+ * FastEffects) — so the panel stays mounted until both have gone. */
 const EXIT_MS = SPRING_MS.defaultEffects;
 
 /**
@@ -49,9 +50,9 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  *
  * - **Shape.** `rounded-l-2xl` (28dp) on the two corners facing the page, none on the
  *   two flush with the screen edge.
- * - **Motion.** It docks against the right edge, so it arrives on the **layout**
- *   spring (an overshoot would lift it off the edge) and leaves on `default-effects`;
- *   the scrim fades on the same clocks. The travel is the whole
+ * - **Motion.** The bottom sheet's Compose pair: it arrives on **DefaultSpatial** (its
+ *   overshoot past the right edge lands on `edge-skirt-r`) and leaves on **FastEffects**;
+ *   the scrim fades on DefaultEffects. The travel is the whole
  *   statement of which edge it belongs to, so even the reduced tier keeps it, exactly
  *   as the bottom sheet keeps its rise. GSAP owns the transform for the whole lifetime,
  *   as the sheet's does.
@@ -141,12 +142,15 @@ export default function SidePanel({
 
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        /* Arriving on the layout spring — it docks against the screen edge, and an overshoot would
-           lift it off that edge and show the page through the gap — leaving on DefaultEffects. */
-        const timing = isOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
+        /* Compose's pair (`BottomSheet.kt` / the side sheet): the panel arrives on DefaultSpatial
+           (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
+           on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
+           `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
+        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { x: isOpen ? 0 : '100%', ...timing, overwrite: true });
         if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...timing, overwrite: true });
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();
@@ -184,7 +188,7 @@ export default function SidePanel({
         tabIndex={-1}
         className={cn(
           'relative ml-auto flex h-dvh w-full max-w-md flex-col overflow-hidden focus-visible:outline-hidden',
-          'bg-surface-container-low text-on-surface rounded-l-2xl shadow-e1',
+          'bg-surface-container-low text-on-surface rounded-l-2xl edge-skirt-r',
           className,
         )}
       >

@@ -1050,10 +1050,10 @@ export default function AppLayout({
                a negative margin closes the layout behind it: the content travels because it is
                *inside* the thing that moves, the panel never resizes, `translate` composites.
 
-               **Modal (phone): the surface pair `Sheet` and `SidePanel` run** — open =
-               `surface-enter` (the layout spring: it docks against the edge), close =
-               `DefaultEffects` (critically damped, so a panel leaving never overshoots back into
-               view). **Docked: the layout spring** (`drawer-dock`): docked, the motion is not the
+               **Modal (phone): `ModalNavigationDrawer`'s pair, as `Sheet` and `SidePanel` run** —
+               open = `surface-enter` (DefaultSpatial, `openMotion`; its overshoot lands on the
+               left edge skirt), close = FastEffects (`closeMotion`, critically damped, so a
+               panel leaving never overshoots back into view). **Docked: the layout spring** (`drawer-dock`): docked, the motion is not the
                panel but the page beside it re-laying out wider or narrower — bounds following a
                layout change, one clock the same both ways, never overshooting.
                Applied per branch and per breakpoint, because a transition is governed by the
@@ -1061,11 +1061,11 @@ export default function AppLayout({
                runs, and the phone's state and the docked state move independently. */
             className={cn(
               'flex flex-col overflow-hidden bg-surface-container-low transition-[margin-right,translate]',
-              'fixed inset-y-0 left-0 z-drawer w-[min(18rem,calc(100vw-3.5rem))] rounded-r-lg shadow-e1',
+              'fixed inset-y-0 left-0 z-drawer w-[min(18rem,calc(100vw-3.5rem))] rounded-r-lg edge-skirt-l',
               'md:relative md:inset-auto md:z-auto md:h-full md:w-72 md:shrink-0 md:rounded-none md:shadow-none',
               modalOpen
                 ? 'surface-enter translate-x-0'
-                : 'spring-default-effects -translate-x-[calc(100%+0.5rem)]',
+                : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
               /* Docked, one curve both ways (`drawer-dock`): the margin is the content area's
                  width, and a page that widens on one curve and narrows on another reads as two
                  different motions. */

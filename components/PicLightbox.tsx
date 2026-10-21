@@ -14,7 +14,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
 import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
 import { useMotionScale } from '@/lib/appearance';
-import { SPRING_MS, springLinear } from '@/lib/spring';
+import { COMPONENT_SPRING_MS, PAGER_SPRING, SPRING_MS, springLinear, springToLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
 /**
@@ -139,15 +139,16 @@ export default function PicLightbox({
            on: YARL takes one fade for both directions, and a close must answer the press on the
            next frame. The slide's own entrance is every surface's arrival (globals.css). */
         fade: SPRING_MS.defaultEffects * scale,
-        /* A slide is a pager turning and a zoom step docks to its new scale: both are the layout
-           spring — Compose's own for `HorizontalPager`'s snap — critically damped, so a picture
-           never swings past its slot and back. */
-        swipe: SPRING_MS.layout * scale,
+        /* A slide is a pager turning: `PAGER_SPRING`, Compose's `HorizontalPager` snap (ζ1 k400) —
+           the same spring the tab strip pages on, so the app's two pagers turn alike. A zoom step
+           docks to its new scale on the layout spring. Both critically damped, so a picture never
+           swings past its slot and back. */
+        swipe: COMPONENT_SPRING_MS.pager * scale,
         zoom: SPRING_MS.layout * scale,
         easing: {
           fade: springLinear('defaultEffects'),
-          swipe: springLinear('layout'),
-          navigation: springLinear('layout'),
+          swipe: springToLinear(PAGER_SPRING),
+          navigation: springToLinear(PAGER_SPRING),
         },
       }}
       zoom={{

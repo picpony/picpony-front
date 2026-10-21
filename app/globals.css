@@ -1065,19 +1065,18 @@ body {
 
   /* ── Motion: Material 3 Expressive springs ──────────────────────────────
    *
-   * Every motion in the app is one of seven springs (`lib/spring.ts` is the source of truth and
-   * explains the choice): six MotionScheme roles from the **expressive** scheme plus Compose's
-   * layout spring.
+   * Every motion in the app is a spring (`lib/spring.ts` is the source of truth and explains the
+   * choice): six MotionScheme roles from the **expressive** scheme, a layout spring, and three
+   * component springs (flight, pager, progress).
    *
-   *   role             ζ     k      use
-   *   fast-spatial     0.6   800    a control moving: handle, dot, icon turn, press morph, menu
-   *   default-spatial  0.8   380    a partial-screen surface moving: dialog, sheet, drawer, popover
-   *   slow-spatial     0.8   200    a full-screen move: page, pane, theme reveal
-   *   fast-effects     1     3800   hover, focus, state layer; a small surface leaving
-   *   default-effects  1     1600   a surface's fade; a large surface leaving
+   *   role             ζ     k      use (as the Compose component's source assigns it)
+   *   fast-spatial     0.6   800    a control moving; a menu / tooltip / toast scaling in and out
+   *   default-spatial  0.8   380    tab indicator, checkbox mark, sheet / drawer arriving
+   *   slow-spatial     0.8   200    the search view expanding
+   *   fast-effects     1     3800   hover, focus, state layer; a colour out; a sheet / drawer leaving
+   *   default-effects  1     1600   a colour in, a scrim, a dialog fade, a shape morph
    *   slow-effects     1     800    a full-screen fade
-   *   layout           1     400    bounds following layout: shared element, list placement,
-   *                                 content size, the tab pager
+   *   layout           1     700    bounds following layout: list placement, content size
    *
    * Each is a pair — `--duration-spring-<role>` and its ease — and always used as a pair, or
    * through the `spring-<role>` utilities that carry both. Spatial roles each have their own
@@ -3330,9 +3329,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     var(--duration-spring-fast-effects);
 }
 
-/* Icon-button selection changes both material and shape. Effects stop without overshoot;
-   the selected corner and dismiss rotation use FastSpatial, like a switch handle. Keeping
-   the clocks with their properties prevents a colour fade from inheriting spatial easing. */
+/* Icon-button selection changes both material and shape. Effects stop without overshoot; the
+   dismiss rotation uses FastSpatial. **The corner — selected and pressed — is on DefaultEffects**,
+   as `IconButton.kt`'s `shapeForInteraction` does ("DefaultEffects is intentional here to prevent
+   any bounce in this component"): a shape morph never overshoots. Keeping the clocks with their
+   properties prevents a colour fade from inheriting spatial easing. */
 @utility transition-icon-button {
   transition:
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
@@ -3341,26 +3342,27 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
     rotate var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial),
-    border-radius var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial);
+    border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 /* A newly portalled tooltip has no previous style for a transition to start from.
-   Supply only that first frame; subsequent open/close changes reverse the same FastEffects
-   transition from its current opacity, including when a pointer returns during dismissal. */
+   Supply only that first frame — `Tooltip.kt`'s closed pose, 0.8 scale at zero opacity;
+   subsequent open/close changes reverse the same transitions from the current pose, including
+   when a pointer returns during dismissal. */
 @starting-style {
   .m3-tooltip[data-open='true'] {
     opacity: 0;
+    scale: 0.8;
   }
 }
 
-/* The seven springs, each as one class carrying its shape and its settle time together — handing
+/* The springs, each as one class carrying its shape and its settle time together — handing
  * a call site two knobs is how they come apart. Pair with a transition-property utility, which
  * decides *what* moves and is what the reduced-motion rule matches on. Choose by the rules in
- * `lib/spring.ts`: spatial (moves/resizes) or effects (fades/recolours); layout when the bounds
- * follow a layout change; then fast/default/slow by the size of the thing. Leaving is always an
- * effects spring. **In-place collapsible panels** (the messages rail, the search filters, the
- * inline editor) therefore take one pair: `spring-default-spatial` opening, `spring-fast-effects`
- * closing. */
+ * `lib/spring.ts`: the role the Compose component passes, if there is one; otherwise spatial
+ * (moves/resizes) or effects (fades/recolours/shape morphs); layout when the bounds follow a
+ * layout change; then fast/default/slow by the size of the thing. An opacity always leaves on an
+ * effects spring. The per-component table is `docs/motion.md`. */
 @utility spring-fast-spatial {
   --motion-spring-scale: var(--motion-scale);
   --motion-local-spatial-fast: var(--ease-spring-fast-spatial);
@@ -3379,14 +3381,31 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition-timing-function: var(--motion-local-spatial);
   transition-duration: calc(var(--motion-base-spring-slow-spatial) * var(--motion-spring-scale));
 }
-/* A surface docked to a screen edge arriving — the phone's modal navigation drawer — on the
- * layout spring, as `Sheet` and `SidePanel` arrive: it docks, and an overshoot would lift it off
- * the edge. It leaves on `spring-default-effects`, as every large surface does. Rides the
- * surface's own scale, so `data-motion-spring='overlay'` puts it on the overlay tier. */
+/* **Edge skirts.** A surface docked to a screen edge arrives on `defaultSpatial` (ζ0.8), as
+ * `ModalBottomSheet` / `ModalNavigationDrawer` / the side sheet do in Compose, so it overshoots
+ * past its dock by ~1.5% of its travel. A hard, unblurred copy of the surface's own colour
+ * offset 1.5rem *behind the docked edge* keeps that overshoot from opening a gap onto the page:
+ * an outer box-shadow paints only outside the border box, and the copy's rounded leading corners
+ * fall inside the panel, so at rest the skirt is entirely off screen. Each carries the panel's
+ * level-1 elevation, which it replaces. */
+@utility edge-skirt-b {
+  box-shadow: 0 1.5rem 0 0 var(--color-surface-container-low), var(--shadow-e1);
+}
+@utility edge-skirt-l {
+  box-shadow: -1.5rem 0 0 0 var(--color-surface-container-low), var(--shadow-e1);
+}
+@utility edge-skirt-r {
+  box-shadow: 1.5rem 0 0 0 var(--color-surface-container-low), var(--shadow-e1);
+}
+/* A surface docked to a screen edge arriving — the phone's modal navigation drawer — on
+ * **defaultSpatial**, as `ModalNavigationDrawer`'s `openMotion` (and `Sheet` / `SidePanel`) do;
+ * its overshoot lands on an edge skirt. It leaves on `spring-fast-effects` (`closeMotion`). Rides
+ * the surface's own scale, so `data-motion-spring='overlay'` puts it on the overlay tier. */
 @utility surface-enter {
   --motion-spring-scale: var(--motion-scale);
-  transition-timing-function: var(--ease-spring-effects);
-  transition-duration: calc(var(--motion-base-spring-layout) * var(--motion-spring-scale));
+  --motion-local-spatial: var(--ease-spring-default-spatial);
+  transition-timing-function: var(--motion-local-spatial);
+  transition-duration: calc(var(--motion-base-spring-default-spatial) * var(--motion-spring-scale));
 }
 /* The docked navigation drawer's open and close, and so the content area's change of width:
  * one clock and one shape both ways, never overshooting (an overshoot would push the whole page

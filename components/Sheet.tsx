@@ -48,7 +48,8 @@ interface SheetProps {
 const COMMIT_RATIO = 0.35;
 /** px/s past which a flick dismisses regardless of distance travelled. */
 const FLICK_VELOCITY = 500;
-/** Must match the exit tween below — the panel stays mounted this long. */
+/** The longest exit clock — the scrim's DefaultEffects fade (the panel leaves sooner, on
+ * FastEffects) — so the sheet stays mounted until both have gone. */
 const EXIT_MS = SPRING_MS.defaultEffects;
 
 /**
@@ -58,10 +59,10 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  *
  * - **Shape.** `rounded-t-2xl` (28dp) on the two visible corners, none on the two
  *   flush with the screen edge — the shape scale's dialog/sheet step.
- * - **Motion.** It docks against the bottom edge, so it arrives on the **layout**
- *   spring (critically damped: a sheet that overshoots lifts off the edge) and
- *   leaves on `default-effects`, as every large surface does; the scrim fades on
- *   the same clocks. GSAP owns the transform for the whole
+ * - **Motion.** Compose's `ModalBottomSheet` pair: it arrives on **DefaultSpatial**
+ *   (its overshoot past the bottom edge lands on `edge-skirt-b`, so no gap opens),
+ *   leaves on **FastEffects**, and a drag release settles on DefaultSpatial
+ *   (`anchoredDraggableMotion`); the scrim fades on DefaultEffects. GSAP owns the transform for the whole
  *   lifetime rather than CSS keyframes, because the drag below writes the same
  *   property — two owners meant a released drag snapped back to zero before the
  *   exit keyframe could take it down.
@@ -142,8 +143,7 @@ export default function Sheet({
     if (changed) interrupt.current?.();
   });
 
-  /* Enter and exit, on `default-effects` both ways — the spring
-   * `ModalBottomSheet.kt` assigns.
+  /* Enter on DefaultSpatial, exit on FastEffects — the pair `BottomSheet.kt` assigns.
    *
    * `overwrite: true` rather than `revertOnUpdate`: reverting would restore the
    * panel to its unanimated position — which for the enter tween is off-screen —
@@ -178,8 +178,8 @@ export default function Sheet({
         return;
       }
 
-      /* The reduced tier rises like the standard one. Neither leg can overshoot (both
-         springs are critically damped), and a panel that appears in
+      /* The reduced tier rises like the standard one (its spatial spring loses the overshoot,
+         `spring()`), and a panel that appears in
          the middle of the screen without arriving from anywhere reads as a
          dialog — the travel *is* what says which edge it belongs to.
 
@@ -190,13 +190,16 @@ export default function Sheet({
          first frame the browser can produce, a stall only delays the travel. */
       const start = contextSafe!(() => {
         enterFrame.current = 0;
-        /* Arriving on the layout spring — it docks against the screen edge, and an overshoot would
-           lift it off that edge and show the page through the gap — leaving on DefaultEffects. */
-        const timing = isOpen ? spring('layout', 'overlay') : spring('defaultEffects', 'overlay');
+        /* Compose's pair (`BottomSheet.kt` / the side sheet): the panel arrives on DefaultSpatial
+           (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
+           on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
+           `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
+        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { y: isOpen ? 0 : '100%', ...timing, overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
         if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...timing, overwrite: true });
+          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();
@@ -251,17 +254,18 @@ export default function Sheet({
           return;
         }
 
-        /* One spring per direction, and **no distance-scaled duration** — a spring
-           already covers a shorter remaining distance in less time, so scaling
-           its clock as well double-counts. `default-effects` on a dismiss, as every
-           departure, and on a settle-back the spring it arrived on, `layout` — it
-           docks against the edge again. The phone drawer's release takes the same pair. */
-        const release = spring(dismiss ? 'defaultEffects' : 'layout', 'overlay');
+        /* **No distance-scaled duration** — a spring already covers a shorter remaining
+           distance in less time, so scaling its clock as well double-counts. Both ways on
+           DefaultSpatial, as Compose settles a released sheet (`anchoredDraggableMotion`): a
+           dismiss overshoots off screen, a settle-back onto the edge skirt. The scrim fades on
+           DefaultEffects. The phone drawer's release takes the same springs. */
+        const release = spring('defaultSpatial', 'overlay');
+        const scrimRelease = spring('defaultEffects', 'overlay');
 
         if (scrim)
           gsap.to(scrim, {
             opacity: dismiss ? 0 : 1,
-            ...release,
+            ...scrimRelease,
             overwrite: true,
           });
 
@@ -379,7 +383,7 @@ export default function Sheet({
           /* `shadow-e1`, not `e3`: M3 puts the modal bottom sheet at elevation
              level 1. Level 3 is the dialog/FAB/search step — a heavier shadow
              than the thing a sheet is a quieter alternative to. */
-          'bg-surface-container-low text-on-surface rounded-t-2xl shadow-e1',
+          'bg-surface-container-low text-on-surface rounded-t-2xl edge-skirt-b',
           // A sheet on a tablet or a desktop window should not run the whole
           // width of a 1600px screen; it stays a phone-width dock, centred.
           'mx-auto sm:max-w-lg',

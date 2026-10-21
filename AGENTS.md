@@ -661,28 +661,29 @@ The confirm register is the instructive one, because the copy split was the *arc
 
 **There is one motion system and it is Material 3 Expressive's: every motion is a spring.** No call site picks a duration or a curve. The source of truth is `lib/spring.ts` (read its header before touching anything that moves); CSS gets generated `linear()` tables and settle times (`npm run motion:write`, verified by `npm run motion` inside `npm run check`), WAAPI gets `springTiming` / `surfaceArrival` / `surfaceDeparture` (`lib/springTiming.ts`), GSAP gets `spring` / `surfaceArrival` / `surfaceDeparture` (`lib/motion.ts`). The full standard, with the per-component table, is `docs/motion.md`; the pre-2026-10-20 notes it replaced are archived in `docs/motion-history.md` and are **not** instructions.
 
-### The seven springs
+### The springs
 
 | Role | ζ | k | Settle | Use |
 | --- | --- | --- | --- | --- |
-| `fastSpatial` | 0.6 | 800 | 348ms | a control moving: switch handle, radio dot, slider handle, an icon turning, the press morph, a menu unfolding, a badge popping in |
-| `defaultSpatial` | 0.8 | 380 | 412ms | a free-standing surface moving: dialog, popover, toast, tab indicator, a bar rising, a picture stepping in |
-| `slowSpatial` | 0.8 | 200 | 569ms | a full-screen move: a detail arriving with no card to fly from |
-| `fastEffects` | 1 | 3800 | 138ms | hover, focus, state layers; a control or small surface leaving |
-| `defaultEffects` | 1 | 1600 | 212ms | a surface's fade; a dialog / sheet / drawer leaving |
+| `fastSpatial` | 0.6 | 800 | 348ms | a control moving: switch handle (travel and release; the press swell snaps), radio dot, slider handle, an icon turning; a menu, tooltip or toast scaling in **and out** |
+| `defaultSpatial` | 0.8 | 380 | 412ms | a surface moving: tab indicator, a checkbox's mark drawing, a sheet / side panel / modal drawer arriving and settling after a drag (its overshoot lands on an edge skirt), the search view collapsing, a picture stepping in |
+| `slowSpatial` | 0.8 | 200 | 569ms | the search view expanding; a detail arriving with no card to fly from |
+| `fastEffects` | 1 | 3800 | 138ms | hover, focus, state layers; a colour going out; any small surface's opacity; a sheet / side panel / modal drawer leaving |
+| `defaultEffects` | 1 | 1600 | 212ms | a colour coming in (tab, radio, checkbox box); a scrim; a dialog's fade; the button / icon button **press morph** (Compose: no bounce in a shape) |
 | `slowEffects` | 1 | 800 | 300ms | a full-screen fade: a page arriving |
-| `layout` | 1 | 700 | 321ms | anything that **docks**: list placement, a box following its content, the tab pager and the lightbox pager, sheets / side panel / drawer against their edge, the field label into its notch |
+| `layout` | 1 | 700 | 321ms | bounds following a layout change: list placement, a box following its content, collapsibles, the docked drawer's width, the field label into its notch, a lightbox zoom step |
 
-The six roles are Compose's `MotionScheme.expressive()` (`MaterialExpressiveTheme`'s default); `layout` is critically damped like `spring(DampingRatioNoBouncy, StiffnessMediumLow)`, which Compose itself uses for `SharedTransitionLayout`'s bounds, `animateItem`, `animateContentSize`, `SizeTransform` and the pager snap — but at k700 (the standard scheme's `defaultSpatial` stiffness), not k400. Named component springs: the shared-element flight and container transforms ride `FLIGHT_SPRING` (ζ1 k1000, ~268ms: critically damped, arriving on standard `defaultSpatial`'s clock, whose own 0.15% overshoot would cross the container's rectangle) because a critically damped tail read as slow there; the tab strip rides `PAGER_SPRING` (ζ1 k400) because it is launched; a determinate meter rides `PROGRESS_SPRING` (ζ1 k50, Compose's `ProgressAnimationSpec`). All three live in `COMPONENT_SPRINGS` and get generated CSS tokens. The theme wipe drives its radius on ζ0.8 k100, ending where it first covers the screen. Every spring settles at **1/512** of its travel (half an 8-bit step, ~0.5px on a typical move); the old 1% cut the soft end off every motion.
+The six roles are Compose's `MotionScheme.expressive()` (`MaterialExpressiveTheme`'s default), verbatim; **where Compose has the component, the role is the one its source passes**, per property and per direction (`docs/motion.md` cites each). `layout` is critically damped like `spring(DampingRatioNoBouncy, StiffnessMediumLow)`, which Compose itself uses for `animateItem`, `animateContentSize` and `SizeTransform` — but at k700, not k400 (owner-tuned). Named component springs: the shared-element flight and container transforms ride `FLIGHT_SPRING` (ζ1 k1000, ~268ms, owner-tuned); **both pagers** — the tab strip and the lightbox — ride `PAGER_SPRING` (ζ1 k400, Compose's `HorizontalPager` snap); a determinate meter rides `PROGRESS_SPRING` (ζ1 k50, Compose's `ProgressAnimationSpec`, ~1.2s — a timer waiting for a meter to fill reads `COMPONENT_SPRING_MS.progress`). All three live in `COMPONENT_SPRINGS` and get generated CSS tokens. The theme wipe drives its radius on ζ0.8 k100, ending where it first covers the screen. Every spring settles at **1/512** of its travel (half an 8-bit step, ~0.5px on a typical move); the old 1% cut the soft end off every motion.
 
 ### How to choose
 
-1. Moves or resizes → **spatial**; only fades or recolours → **effects** (never an opacity on an under-damped spring: it is clipped above 1).
-2. Docks into a slot, an edge, a notch or another element's bounds → **`layout`**, never a spatial role.
+0. **Compose has the component?** Take the role its source passes (`MotionSchemeKeyTokens` in `androidx.compose.material3`), per property and per direction.
+1. Moves or resizes → **spatial**; only fades or recolours → **effects** (never an opacity on an under-damped spring: it is clipped above 1). A shape morph (corner radius) is effects.
+2. Bounds following a layout change (a slot, content height, another element's bounds) → **`layout`**, never a spatial role. A surface docked to a screen edge is *not* this: it takes its spatial role and an `edge-skirt-*` under the overshoot.
 3. Otherwise by the size of the thing: control → fast, partial-screen surface → default, whole screen → slow.
-4. **Leaving** never overshoots: everything on one effects spring — fast for a control or small surface, default for anything larger — starting on the frame after the press.
+4. **Leaving**: an opacity always on an effects spring. A transform that scales back into its anchor (menu, tooltip, toast) keeps its arrival's spatial spring; a surface leaving the screen (sheet, side panel, modal drawer) leaves on `fastEffects`. A colour fades in on `defaultEffects`, out on `fastEffects`. Everything starts on the frame after the press.
 5. **Arriving**: transform on the spatial role, opacity on the effects spring of the same size (`surfaceArrival`), as two animations.
-6. A follower that must wait for a leader (the arriving page, a check mark) waits `HANDOFF_MS` (`--motion-base-handoff`, half a fast-effects fade), never a number of its own.
+6. A follower that must wait for a leader (the arriving page) waits `HANDOFF_MS` (`--motion-base-handoff`, half a fast-effects fade), never a number of its own.
 
 Under the **reduced** tier every spatial spring keeps its duration and takes the critically damped shape; the speed preference scales every settle time.
 

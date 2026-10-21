@@ -124,7 +124,11 @@ export default function ProgressBar({
         className={cn(
           'h-full w-full origin-left rounded-full forced-mark',
           fill,
-          determinate ? 'spring-progress transition-[transform,background-color]' : 'm3-linear-bar',
+          /* The value on `PROGRESS_SPRING`; a tone change is a colour, so it fades on FastEffects
+             rather than crawling on the meter's ~1.2s spring. */
+          determinate
+            ? '[transition:transform_calc(var(--motion-base-spring-progress)*var(--motion-scale))_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]'
+            : 'm3-linear-bar',
         )}
         style={determinate ? { transform: `translateX(${pct - 100}%)` } : undefined}
       />

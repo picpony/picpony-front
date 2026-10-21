@@ -27,7 +27,7 @@ import { coinTransactions, tasks } from '@/lib/resources';
 import { useScreenState } from '@/lib/screenState';
 import { parseEquippedBadges, wornBadges, type EquippedBadge } from '@/lib/userBadges';
 import { settle } from '@/lib/settle';
-import { SPRING_MS } from '@/lib/spring';
+import { COMPONENT_SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 
 interface TaskDefinition {
@@ -200,13 +200,15 @@ function LevelMeter({ level, progress }: { level: number | null; progress: numbe
   useEffect(() => {
     if (!shown.rolling) return;
     let frame = 0;
-    /* The fill's own spring, at the current speed: the reset waits for the bar to be full. */
+    /* The fill's own spring — `PROGRESS_SPRING`, the meter's (ζ1 k50, ~1.2s) — at the current
+       speed: the reset waits for the bar to be full. It waited a slow-effects fade (300ms), which
+       emptied the bar at ~62% of its fill, so a level-up never showed a full bar. */
     const timer = window.setTimeout(() => {
       setShown((current) => ({ ...current, progress: 0, epoch: current.epoch + 1 }));
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() => setShown((current) => ({ ...latest.current, epoch: current.epoch, rolling: false })));
       });
-    }, scaledMs(SPRING_MS.slowEffects));
+    }, scaledMs(COMPONENT_SPRING_MS.progress));
     return () => {
       window.clearTimeout(timer);
       cancelAnimationFrame(frame);

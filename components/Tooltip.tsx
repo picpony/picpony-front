@@ -47,8 +47,9 @@ const LONG_PRESS_MS = 500;
 const TOUCH_HOLD_MS = 1500;
 /**
  * How long the bubble stays mounted after `open` goes false. Read from the spring
- * itself rather than hand-typed beside it: the fade runs on `fast-effects`, and a
- * literal here is a second copy of that number waiting to drift.
+ * itself rather than hand-typed beside it: the fade runs on `fast-effects` (the scale's longer
+ * FastSpatial tail is invisible once the fade is done), and a literal here is a second copy of
+ * that number waiting to drift.
  */
 const EXIT_MS = SPRING_MS.fastEffects;
 
@@ -175,15 +176,16 @@ export function Tooltip({
            without it vanishing. Never while leaving, so a closing bubble cannot catch
            a press meant for what is under it. */
         open ? 'pointer-events-auto' : 'pointer-events-none',
-        /* `FastEffects` in **both** directions, which is what `Tooltip.kt` does.
-           One spring both ways means the bubble cannot arrive and leave on two
-           different clocks.
-
-           Only opacity moves. AOSP's tooltip also scales, which is why it reaches
-           for `FastSpatial` too; this one does not, so there is nothing for the
-           spatial spring to drive and adding a scale would be a new behaviour
-           rather than an alignment. */
-        'spring-fast-effects transition-opacity',
+        /* `Tooltip.kt`, both directions: the scale between 0.8 and 1 on FastSpatial, the
+           opacity on FastEffects — two clocks, so the fade never inherits the scale's give.
+           It grows out of the edge facing its anchor. */
+        /* On the overlay's own clock (`--motion-spring-scale`, set by `data-motion-spring`), as
+           the spring utilities are; the spatial shape through the local variable, so a custom
+           overlay tier can take the overshoot out for this element alone. */
+        '[--motion-local-spatial-fast:var(--ease-spring-fast-spatial)]',
+        '[transition:opacity_calc(var(--motion-base-spring-fast-effects)*var(--motion-spring-scale))_var(--ease-spring-effects),scale_calc(var(--motion-base-spring-fast-spatial)*var(--motion-spring-scale))_var(--motion-local-spatial-fast)]',
+        place.above ? 'origin-bottom' : 'origin-top',
+        open ? 'scale-100' : 'scale-80',
         open ? 'opacity-100' : 'opacity-0',
       )}
       data-motion-spring="overlay"

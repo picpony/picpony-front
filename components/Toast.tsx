@@ -209,13 +209,19 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const wrapHeight = wrap.offsetHeight;
     const pose = getComputedStyle(card);
     const from = { transform: pose.transform, opacity: pose.opacity };
-    /* FastEffects, as every small surface leaves (the menu, the tooltip, an in-place swap): it
-       starts on the frame after the dismissal. The emphasized accelerate it left on held still for
-       its first 80ms. */
-    const leaveTiming = springTiming('fastEffects', 'overlay');
+    /* `SnackbarHost`'s `FadeInFadeOutWithScale`: the transform keeps its arrival spring
+       (FastSpatial) on the way out and only the opacity rides FastEffects — one spec per
+       property in both directions. Two animations, since an opacity on an under-damped spring is
+       clipped above 1. Both start on the frame after the dismissal. */
+    const leaveSpatial = springTiming('fastSpatial', 'overlay');
+    const leaveFade = springTiming('fastEffects', 'overlay');
     running.current.forEach((animation) => animation.cancel());
-    const exit = card.animate([from, { transform: `translateY(${-TRAVEL_PX.small}px)`, opacity: 0 }], {
-      ...leaveTiming,
+    const exit = card.animate([{ transform: from.transform }, { transform: `translateY(${-TRAVEL_PX.small}px)` }], {
+      ...leaveSpatial,
+      fill: 'forwards',
+    });
+    const fadeOut = card.animate([{ opacity: from.opacity }, { opacity: 0 }], {
+      ...leaveFade,
       fill: 'forwards',
     });
     /* Closing the gap is the toasts below re-placing, so it is the layout spring — they dock into
@@ -226,7 +232,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       delay: scaledMs(COLLAPSE_LAG_MS, 'overlay'),
       fill: 'forwards',
     });
-    running.current = [exit, collapse];
+    running.current = [exit, fadeOut, collapse];
     collapse.finished.then(() => onGone(toast.id), () => {});
   }, [onGone, toast.id]);
 

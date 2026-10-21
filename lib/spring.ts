@@ -8,54 +8,67 @@
  * (`npm run motion:write`, checked by `npm run motion`), WAAPI gets the same strings through
  * `springTiming`, GSAP gets the closed form registered as an ease.
  *
- * ## The seven springs
+ * ## The springs
  *
- * Six **roles** from `MotionScheme` — what Compose's own components ask for — plus Compose's
- * **layout** spring:
+ * Six **roles** from `MotionScheme` — what Compose's own components ask for — plus a **layout**
+ * spring and three named **component springs** (`COMPONENT_SPRINGS`):
  *
- *                       damping  stiffness   settle   use
+ *                       damping  stiffness   settle   use (the Compose component that asks for it)
  *   fastSpatial            0.6       800     ~350ms   a small component moving: switch handle, radio
- *                                                     dot, slider handle, an icon turning, a press
- *                                                     morph, a menu opening (`DropdownMenu`)
- *   defaultSpatial         0.8       380     ~410ms   a free-standing surface moving: dialog,
- *                                                     popover, toast, tab indicator, a bar rising
- *   slowSpatial            0.8       200     ~570ms   a full-screen move: a page, a tab pane, the
- *                                                     theme reveal
- *   fastEffects            1.0      3800     ~140ms   a small colour/opacity change: hover, focus,
- *                                                     a state layer, a small surface leaving
- *   defaultEffects         1.0      1600     ~210ms   a surface fading: dialog / sheet opacity, a
- *                                                     large surface leaving, a scrim
+ *                                                     dot, an icon turning, a menu / tooltip / toast
+ *                                                     scaling in *and out* (`DropdownMenu`,
+ *                                                     `Tooltip`, `SnackbarHost`)
+ *   defaultSpatial         0.8       380     ~410ms   a surface moving: tab indicator, a checkbox's
+ *                                                     mark drawing, a sheet / side sheet / modal
+ *                                                     drawer arriving and settling after a drag
+ *                                                     (`BottomSheet`, `ModalNavigationDrawer`), the
+ *                                                     search view collapsing
+ *   slowSpatial            0.8       200     ~570ms   a large move: the search view expanding
+ *                                                     (`rememberSearchBarState`)
+ *   fastEffects            1.0      3800     ~140ms   a small colour/opacity change: hover, focus, a
+ *                                                     state layer, a colour going *out* (tab, checkbox
+ *                                                     box), a sheet or drawer leaving (`hideMotion`,
+ *                                                     `closeMotion`)
+ *   defaultEffects         1.0      1600     ~210ms   a colour coming *in* (tab, radio, checkbox box),
+ *                                                     a scrim, a dialog fading, **a shape morph**
+ *                                                     (button / icon button pressed shape — Compose
+ *                                                     uses it "to prevent any bounce")
  *   slowEffects            1.0       800     ~300ms   a full-screen fade: a page arriving
- *   layout                 1.0       700     ~320ms   anything that *docks* — whose bounds must meet
- *                                                     other bounds: a shared element / container
- *                                                     transform (the image hero, forum, folders),
- *                                                     list items re-placing, a box following its
- *                                                     content's size, the tab pager, a surface
- *                                                     docked to a screen edge (sheet, side panel,
- *                                                     drawer), a label into its notch
+ *   layout                 1.0       700     ~320ms   bounds following a layout change: list items
+ *                                                     re-placing, a box following its content's size,
+ *                                                     a collapsible, the docked drawer's width, a
+ *                                                     lightbox zoom step
+ *
+ *   FLIGHT_SPRING          1.0      1000     ~268ms   the image hero and the forum / folder
+ *                                                     container transform
+ *   PAGER_SPRING           1.0       400     ~424ms   a pager turning: the tab strip, the lightbox
+ *   PROGRESS_SPRING        1.0        50    ~1200ms   a determinate meter's value
  *
  * The six roles are the **expressive** scheme — `MaterialExpressiveTheme`'s default motion scheme —
- * not the standard one (ζ0.9 k1400/700/300) this app used to run, whose 137–296ms springs are what
- * read as rushed. Both schemes are kept in `MOTION_SCHEMES` for reference; `ACTIVE_SCHEME` picks.
- * `layout` is `DampingRatioNoBouncy` — the damping Compose itself gives
- * `SharedTransitionLayout`'s `DefaultBoundsTransform`, `Modifier.animateItem`'s placement and
- * `animateContentSize` — three APIs, one spring, because a box that is *re-laid-out* must never
- * overshoot its slot.
+ * verbatim. `layout` is Compose's `DampingRatioNoBouncy` docking spring at k700 rather than its
+ * k400, and `FLIGHT_SPRING` stiffer again: owner-tuned, because Compose's k400 tail read as slow on
+ * a full-screen move (see each constant). Both schemes are kept in `MOTION_SCHEMES` for reference;
+ * `ACTIVE_SCHEME` picks.
  *
  * ## How to choose
  *
+ * **First, if Compose has the component, take the role its source passes** (`MotionSchemeKeyTokens`
+ * in `androidx.compose.material3`) — per property and per direction, as it does. Otherwise:
+ *
  * 1. Does it move or change size? **spatial**. Only fade or recolour? **effects** — an overshooting
- *    colour is a flash, an overshooting opacity is clipped at 1.
- * 2. Does it dock — into a slot, a shared element's other bounds, its content's height, a screen
- *    edge, a notch? **layout**, never a spatial role: an overshoot there opens a gap (a sheet
- *    lifting off the bottom edge, a label crossing the outline, a row through its neighbour).
+ *    colour is a flash, an overshooting opacity is clipped at 1. A *shape* morph (a corner radius)
+ *    is effects too: Compose keeps bounce out of shapes.
+ * 2. Are its bounds following a layout change — a slot, its content's height, a shared element's
+ *    other bounds? **layout** (or the flight spring), never a spatial role: an overshoot there
+ *    crosses a neighbour. A surface docked to a *screen edge* is not this: it takes its spatial
+ *    role, and its overshoot lands on an edge skirt (`edge-skirt-*` in globals.css).
  * 3. Otherwise by size: a control → fast, a partial-screen surface → default, the whole screen →
  *    slow.
- * 4. Leaving has no landing, so it never overshoots: **everything** that leaves — opacity and
- *    transform together — rides one effects spring, `fastEffects` for a control or a small surface
- *    (menu, tooltip, toast), `defaultEffects` for a partial- or full-screen one (dialog, sheet,
- *    drawer, page). It starts on the frame after the press. A drag released short of dismissing
- *    settles back on the spring the surface arrived on.
+ * 4. Leaving: an **opacity** always leaves on an effects spring. A **transform** keeps the spatial
+ *    spring it arrived on when the component scales back into its anchor (menu, tooltip, toast —
+ *    the fade ends it long before the scale's tail); a large surface that *leaves the screen*
+ *    (sheet, side sheet, modal drawer) leaves on `fastEffects`, as `hideMotion` / `closeMotion`.
+ *    A colour usually fades in on `defaultEffects` and out on `fastEffects`.
  * 5. Arriving, a surface's transform takes its spatial role and its opacity the effects spring of
  *    the same size (`surfaceArrival`), so the fade is done well before the crest of the travel.
  *
@@ -69,10 +82,10 @@
  * on a typical move. The old 1% cut the last, softest part of every spring off and renormalised the
  * rest, so everything stopped *abruptly* ~40% early — the other half of "too rushed, no texture".
  *
- * Nine springs used to mean four shapes; seven springs now mean **three shapes**, by damping
- * alone: normalise the timeline by the settle time and the curve depends only on ζ (stiffness
- * decides the duration). `effects` (ζ1: the three effects roles and layout), `spatial` (ζ0.8:
- * default and slow spatial) and `spatialFast` (ζ0.6).
+ * Every spring here is one of **three shapes**, by damping alone: normalise the timeline by the
+ * settle time and the curve depends only on ζ (stiffness decides the duration). `effects` (ζ1:
+ * the three effects roles, layout and the component springs), `spatial` (ζ0.8: default and slow
+ * spatial, the theme wipe) and `spatialFast` (ζ0.6).
  *
  * `lib/hero/spring.ts` is the same physics solved for a launch velocity (interruptible, gesture-
  * driven legs). It takes its parameters from here (`springRate`).
@@ -159,7 +172,7 @@ export const FLIGHT_SPRING = { damping: 1, stiffness: 1000 } as const satisfies 
  */
 export const PROGRESS_SPRING = { damping: 1, stiffness: 50 } as const satisfies SpringSpec;
 
-/** The named component springs, each a Compose constant or a documented docking spring. CSS
+/** The named component springs, each a Compose constant or an owner-tuned docking spring. CSS
  * tokens `--motion-base-spring-<name>` are generated from these (`scripts/motionTokens.mjs`). */
 export const COMPONENT_SPRINGS = {
   flight: FLIGHT_SPRING,
@@ -167,7 +180,7 @@ export const COMPONENT_SPRINGS = {
   progress: PROGRESS_SPRING,
 } as const satisfies Record<string, SpringSpec>;
 
-/** The seven springs. The only motion this app has. */
+/** The six scheme roles and the layout spring, by name. The component springs are `COMPONENT_SPRINGS`. */
 export const SPRINGS = {
   ...MOTION_SCHEMES[ACTIVE_SCHEME],
   layout: LAYOUT_SPRING,
@@ -290,6 +303,12 @@ export function springRate(spec: SpringSpec): number {
 export const SPRING_MS = Object.fromEntries(
   Object.entries(SPRINGS).map(([name, spec]) => [name, springDurationMs(spec)]),
 ) as Record<SpringName, number>;
+
+/** Milliseconds for each component spring (`--motion-base-spring-flight` / `-pager` / `-progress`). A
+ * wall-clock wait for a meter to fill reads `COMPONENT_SPRING_MS.progress`, never a role's number. */
+export const COMPONENT_SPRING_MS = Object.fromEntries(
+  Object.entries(COMPONENT_SPRINGS).map(([name, spec]) => [name, springDurationMs(spec)]),
+) as Record<keyof typeof COMPONENT_SPRINGS, number>;
 
 /** Seconds for each named spring, for GSAP's `duration`. */
 export const SPRING_DURATION = Object.fromEntries(

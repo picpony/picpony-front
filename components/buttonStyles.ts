@@ -94,10 +94,10 @@ const HAS_MAX_WIDTH = /(?:^|\s)max-w-\S+/;
 
 /* **The M3 Expressive press morph.** Under the finger a button's corners draw in —
    `PressedContainerShape`: 8dp at the extra-small step, 12dp at the small (40dp) one, 16dp
-   at the medium (56dp) one — on the fast spatial spring, Compose's own for the morph, so
-   it gives a little as it lands and springs back round on release. It used to be left out
-   when the springs were the standard scheme's 137ms, which made the morph read as a snap
-   into another component; on the expressive spring it reads as something pressed. The
+   at the medium (56dp) one — on the default effects spring (ζ1 k1600, ~212ms), which is what
+   `Button.kt` gives `shapeByInteraction`: "DefaultEffects is intentional here to prevent any
+   bounce in this component". A corner that overshoots reads as the button wobbling, not as
+   something pressed. The
    pill is spelled as its exact half-height rather than `rounded-full`, because a radius
    interpolating from an infinite value spends the whole run clamped to the pill and then
    jumps. The press itself is `data-pressed`, written by `RippleLayer`. A call site that
@@ -162,10 +162,9 @@ export function buttonClasses({
     'select-none touch-manipulation',
     !HAS_MAX_WIDTH.test(className) && 'max-w-full',
     loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-    /* Material changes share FastEffects with the icon button and text field; the corner is
-       geometry, so it takes the fast spatial spring — two clocks, one per family, so a colour
-       can never inherit the corner's overshoot. */
-    '[transition:color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-radius_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial)] focus-visible:ring-2',
+    /* Material changes share FastEffects with the icon button and text field; the corner morph
+       is on DefaultEffects, as `Button.kt` (no bounce in a shape morph). */
+    '[transition:color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-radius_var(--duration-spring-default-effects)_var(--ease-spring-effects)] focus-visible:ring-2',
     /* Hover/focus/press are the shared M3 state layer. No press scale: a transforming
        button is one more thing the hero flight's rect read can catch mid-change (a corner
        is not — it moves nothing's box). */

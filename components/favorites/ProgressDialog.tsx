@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import ProgressBar from '@/components/ProgressBar';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
-import { SPRING_MS } from '@/lib/spring';
+import { COMPONENT_SPRING_MS } from '@/lib/spring';
 import type { ProgressState } from './progressState';
 
 export { completeProgress, runSummary, type ProgressState } from './progressState';
@@ -16,13 +16,14 @@ export { completeProgress, runSummary, type ProgressState } from './progressStat
  * a run whose steps were all skipped never moved at all (M1-007). The caller fills the meter
  * (`completeProgress`), waits this long, and only then closes.
  *
- * The meter's fill runs on the slow effects spring; a wall-clock wait for it takes the slowest
+ * The meter's fill runs on `PROGRESS_SPRING` (ζ1 k50, ~1.2s — Compose's `ProgressAnimationSpec`);
+ * waiting a slow-effects fade instead closed the dialog with the bar at ~60–80%. A wall-clock wait for it takes the slowest
  * speed (AGENTS: a timer that bounds an animation reads `MOTION_SPEED_SCALE.slow`, never the
  * animation's own number). Under 关闭 there is nothing to wait for.
  */
 export function progressLanding(): Promise<void> {
   if (motionTier('overlay') === 'off') return Promise.resolve();
-  return new Promise((resolve) => window.setTimeout(resolve, SPRING_MS.slowEffects * MOTION_SPEED_SCALE.slow));
+  return new Promise((resolve) => window.setTimeout(resolve, COMPONENT_SPRING_MS.progress * MOTION_SPEED_SCALE.slow));
 }
 
 /**

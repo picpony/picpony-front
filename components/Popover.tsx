@@ -133,13 +133,11 @@ export function suggestionRow({
   return { className: `${ROW_BASE} min-h-10 pointer-coarse:min-h-12 rounded-sm px-2`, height: undefined };
 }
 
-/* A **menu** opens out of its trigger, like Vuetify's VMenu, on the shared short step: 200ms on
- * the standard decelerate, with the user's speed scale. The arrangement is borrowed; the literal
- * durations are not. The **search view** is a collapsible panel rather than an anchored menu, so
- * it arrives on DefaultSpatial with its height (see the height effect below). Both leave as every
- * small surface does, on FastEffects — the toast, the tooltip: a dismissal answers a
- * press, and starts on the frame after it (the 150ms standard accelerate it left on was 3% of the
- * way after a frame).
+/* A **menu** unfolds out of its trigger and folds back into it as Compose's `DropdownMenu`
+ * does: scale on FastSpatial both ways, fade on FastEffects — the fade is what ends it, so the
+ * panel is held for that fade. The **search view** is `rememberSearchBarState`'s panel: it expands
+ * on SlowSpatial and collapses on DefaultSpatial with a DefaultEffects fade (see the height effect
+ * below), held for that fade.
  *
  * Reduced motion removes the travel. The exit hold uses the unscaled duration because
  * useExitAnimation applies the maximum speed itself. */
@@ -225,7 +223,7 @@ export default function Popover({
   /* Kept in the tree past `open` so the exit has something to play on. The
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
-  const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.fastEffects : EXIT_MS);
+  const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.defaultEffects : EXIT_MS);
   const placedPanel = useRef<HTMLDivElement | null>(null);
   /* The content box the search view's height runs on, the height it last had on screen (a
      layout effect can only read the new one), and the run itself with where it is heading. */
@@ -383,17 +381,15 @@ export default function Popover({
     if (tier === 'off') return;
 
     if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
-    /* One clock per direction, shared with the search view's height below, because a gesture's
-       parts must agree. An anchored menu *unfolds out of its trigger* as Compose's `DropdownMenu`
-       does: its scale on the fast spatial spring, its fade on fast effects. The search view is a
-       box growing to its content under the field, so it **docks** — the layout spring, which
-       cannot overshoot the rows it opens onto. Leaving, everything on fast effects, as every
-       small surface leaves. Opacity always rides an effects spring of its own: on an under-damped
-       spring it would be clipped above 1. */
-    const timing = !open
-      ? springTiming('fastEffects', 'overlay')
-      : springTiming(variant === 'search' ? 'layout' : 'fastSpatial', 'overlay');
-    const fade = open ? springTiming(variant === 'search' ? 'defaultEffects' : 'fastEffects', 'overlay') : timing;
+    /* An anchored menu *unfolds out of its trigger* and folds back into it as Compose's
+       `DropdownMenu` does: its scale on FastSpatial **both ways**, its fade on FastEffects —
+       `Menu.kt` runs one `transitionSpec` per property for open and close alike. The search view
+       is `rememberSearchBarState`'s: it expands on SlowSpatial and collapses on DefaultSpatial
+       (its height, below), its fade on DefaultEffects both ways so the collapse stays visible.
+       Opacity always rides an effects spring of its own: on an under-damped spring it would be
+       clipped above 1. */
+    const timing = springTiming('fastSpatial', 'overlay');
+    const fade = springTiming(variant === 'search' ? 'defaultEffects' : 'fastEffects', 'overlay');
     const running = [panel.animate([{ opacity: fromOpacity }, { opacity }], { ...fade, fill: 'both' })];
     if (fromTransform !== transform) {
       running.push(panel.animate([{ transform: fromTransform }, { transform }], { ...timing, fill: 'both' }));
@@ -495,11 +491,12 @@ export default function Popover({
 
     // Only the bottom edge, so a row's ring or its wave stays whole on the other three.
     box.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-    /* The first placement of an opening panel is the arrival and takes the clock above;
-       anything after it — a list replaced underneath, or a re-aim once the measured space
-       below arrives — takes `FollowHeight`'s response. Both are the layout spring: a box
-       settling onto its content must not overshoot it. A leaving panel takes the dismissal. */
-    const timing = springTiming(open ? 'layout' : 'fastEffects', 'overlay');
+    /* `rememberSearchBarState`: the first placement of an opening panel expands on SlowSpatial,
+       and a leaving one collapses on DefaultSpatial (a collapse that overshoots past zero is
+       simply clamped at zero height). Anything in between — a list replaced underneath, or a
+       re-aim once the measured space below arrives — is a box following its content, so it
+       takes `FollowHeight`'s layout spring, which never overshoots the rows. */
+    const timing = springTiming(!open ? 'defaultSpatial' : first ? 'slowSpatial' : 'layout', 'overlay');
     const animation = box.animate([{ height: `${from}px` }, { height: `${to}px` }], { ...timing, fill: 'both' });
     heightRun.current = { animation, to };
     const release = () => {

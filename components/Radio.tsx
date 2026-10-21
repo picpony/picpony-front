@@ -88,7 +88,8 @@ export default function Radio({
         <span
           aria-hidden="true"
           className={cn(
-            'relative h-5 w-5 rounded-full border-2 spring-fast-effects transition-[border-color] pointer-events-none',
+            /* The ring's colour on DefaultEffects, as `RadioButton.kt`'s `animateColorAsState`. */
+            'relative h-5 w-5 rounded-full border-2 spring-default-effects transition-[border-color] pointer-events-none',
             /* The outline half comes back under forced colors, where the ring is not painted. */
             'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden',
             checked ? 'border-primary-ink forced-colors:border-[color:Highlight]' : 'border-on-surface-variant',

@@ -348,7 +348,11 @@ export default function Tabs<T extends string = string>({
           if (list) revealTab(list, event.currentTarget, motionTier('tabs') !== 'off');
         }}
         className={cn(
-          'relative flex shrink-0 cursor-pointer items-center gap-2 spring-fast-effects transition-[color,background-color,box-shadow]',
+          'relative flex shrink-0 cursor-pointer items-center gap-2 transition-[color,background-color,box-shadow]',
+          /* `Tab.kt`'s `TabTransition`: the content colour fades **in** on DefaultEffects and
+             **out** on FastEffects. A CSS transition runs on the destination state's clock, so the
+             tab becoming selected carries the default spring and the one leaving the fast one. */
+          selected ? 'spring-default-effects' : 'spring-fast-effects',
           /* Chrome, not content: no long-press selection of the label, no double-tap
              zoom, and a 48px target under a finger. */
           'touch-target select-none touch-manipulation focus-visible:outline-hidden',

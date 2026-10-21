@@ -51,6 +51,13 @@ export const ENTER_SCALE = {
 export const HANDOFF_MS = Math.round(SPRING_MS.fastEffects / 2);
 
 /**
+ * A checkbox's mark, unchecking, disappears in one step after this delay while the box empties —
+ * `Checkbox.kt`'s `snap(delayMillis = SnapAnimationDelay)`, 100ms, verbatim. A hold, not a motion,
+ * so it is not a spring; it scales with the user's speed like every delay.
+ */
+export const CHECK_SNAP_DELAY_MS = 100;
+
+/**
  * Curves that are **not** motion to a target and so are not springs: an indeterminate loop has no
  * arrival (symmetric, eases at both ends), and a skeleton sweep is a constant drift. These are the
  * only cubic-béziers left in the app. CSS twins: `--ease-loop`, `--ease-sweep`.

@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
+import { CHECK_SNAP_DELAY_MS } from '@/lib/motionTokens';
+
 import CheckGlyph from './CheckGlyph';
 
 interface CheckboxProps {
@@ -113,7 +115,11 @@ export default function Checkbox({
           the system highlight (and the tick the highlight's own ink). */}
       <span
         aria-hidden="true"
-        className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden spring-fast-effects transition-[background-color,border-color] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
+        className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden ${
+          /* `Checkbox.kt`'s `colorAnimationSpecForState`: the box fills on DefaultEffects ("box
+             in") and empties on FastEffects ("box out"). */
+          checked ? 'spring-default-effects' : 'spring-fast-effects'
+        } transition-[background-color,border-color] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
           checked
             ? cn('bg-primary-ink border-primary-ink forced-mark forced-colors:border-[color:Highlight]', justChecked && 'animate-control-pop')
             : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —
@@ -127,16 +133,22 @@ export default function Checkbox({
       <CheckGlyph
         className="text-on-primary pointer-events-none absolute size-3 forced-color-adjust-none forced-colors:text-[color:HighlightText]"
         pathProps={{
-          strokeDasharray: '10.5',
+          /* Dash L, gap L, then a short dash before the period wraps (L = 10.5, the path is
+             10.26): offset L is fully hidden, 0 fully drawn, and a *negative* offset — the
+             spatial spring's overshoot — reads the wrapped dash, so the tick stays fully drawn
+             instead of opening a gap at its start. That is Compose's own clamp: it draws
+             `getSegment(0, length × fraction)`, and a fraction past 1 is simply the whole path. */
+          strokeDasharray: '10.5 10.5 1 0',
           strokeDashoffset: checked ? 0 : 10.5,
-          /* An *effects* spring, not a spatial one: this is a mark being drawn,
-             so it must not overshoot — a dash offset that overshoots draws past
-             the end of the path and then retracts. The press step lets the box
-             establish itself before the stroke starts; both finish within the
-             container's expressive settle. Reading the token also keeps this
-             delay in step with the user's motion speed and off preference. */
-          className: 'spring-fast-effects transition-[stroke-dashoffset]',
-          style: { transitionDelay: checked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
+          /* `Checkbox.kt`'s `checkDrawFraction`: checking draws the mark on **DefaultSpatial**
+             from the same frame as the box; unchecking **snaps** after `SnapAnimationDelay`
+             (100ms) while the box empties on FastEffects. */
+          className: checked
+            ? 'spring-default-spatial transition-[stroke-dashoffset]'
+            : 'transition-[stroke-dashoffset]',
+          style: checked
+            ? undefined
+            : { transitionDuration: '0s', transitionDelay: `calc(${CHECK_SNAP_DELAY_MS}ms * var(--motion-scale))` },
         }}
       />
       </span>
