@@ -362,12 +362,76 @@ def pull_frame(page, label):
         requestAnimationFrame(()=>{const second=value();send('pointercancel',45);resolve({first,second});});
       });
     })""")
-    assert abs(result['first']-20/(1+20/360))<.01,result
-    assert abs(result['second']-45/(1+45/360))<.01,'Drag lagged an extra frame: '+str(result)
+    # Rubber-banded finger travel, less the touch slop the recogniser spends deciding (6px).
+    band=lambda raw: raw/(1+raw/360)
+    assert abs(result['first']-band(20-6))<.01,result
+    assert abs(result['second']-band(45-6))<.01,'Drag lagged an extra frame: '+str(result)
     page.wait_for_function("!document.querySelector('[data-image-hero-pulling]')")
     page.keyboard.press('Escape')
     assert_clean(page)
     return result
+
+
+PULL_DRIVER = """n=>{
+  const box=n.getBoundingClientRect(); const x0=box.x+box.width/2, y0=box.y+100; let t=0;
+  window.__pull={ send(type,dx,dy){ n.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,
+    pointerId:79,pointerType:'touch',isPrimary:true,clientX:x0+dx,clientY:y0+dy})); } };
+}"""
+
+
+def pull_path(page, points, end='pointerup', gap=16):
+    """Drive a synthetic touch pull through (dx, dy) points, one per frame-ish gap, then release."""
+    page.locator(ROUTE).evaluate(PULL_DRIVER)
+    page.evaluate("window.__pull.send('pointerdown',0,0)")
+    for dx, dy in points:
+        page.wait_for_timeout(gap)
+        page.evaluate(f"window.__pull.send('pointermove',{dx},{dy})")
+    last = points[-1]
+    page.wait_for_timeout(4)
+    page.evaluate(f"window.__pull.send('{end}',{last[0]},{last[1]})")
+
+
+def pull_follow(page, label):
+    """Once the vertical drag is claimed the surface follows the finger on both axes, along the
+    finger's own direction (the vertical rubber band's ratio applies to the horizontal follow)."""
+    open_image(page)
+    route = page.locator(ROUTE)
+    route.evaluate('(n)=>n.scrollTop=0')
+    page.wait_for_timeout(150)
+    route.evaluate(PULL_DRIVER)
+    page.evaluate("window.__pull.send('pointerdown',0,0)")
+    for dx, dy in [(0, 10), (10, 60), (40, 160)]:
+        page.wait_for_timeout(30)
+        page.evaluate(f"window.__pull.send('pointermove',{dx},{dy})")
+    page.wait_for_timeout(60)
+    pose = route.evaluate("""n=>{const m=new DOMMatrixReadOnly(getComputedStyle(n.querySelector('.image-detail-overlay-content')).transform);
+      return {x:m.m41,y:m.m42};}""")
+    page.evaluate("window.__pull.send('pointercancel',40,160)")
+    page.wait_for_function("!document.querySelector('[data-image-hero-pulling]')")
+    # Claimed at the slop boundary on the first move (0, 6); the band's ratio applies to both axes.
+    raw = 160 - 6
+    ratio = 1 / (1 + raw / 360)
+    assert abs(pose['y'] - raw * ratio) < .5, pose
+    assert abs(pose['x'] - 40 * ratio) < .5, pose
+    state(page, 'detail-idle')
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    return pose
+
+
+def pull_retreat(page, label):
+    """Past the dismiss distance but moving back up at release: the hand is taking the pull
+    back, so the detail stays (it used to commit on distance alone)."""
+    open_image(page)
+    page.locator(ROUTE).evaluate('(n)=>n.scrollTop=0')
+    page.wait_for_timeout(150)
+    pull_path(page, [(0, 20), (0, 60), (0, 110), (0, 160), (0, 190), (0, 175), (0, 150), (0, 128)])
+    page.wait_for_timeout(500)
+    state(page, 'detail-idle')
+    page.wait_for_function("!document.querySelector('[data-image-hero-pulling]')")
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    return {'cancelled': True}
 
 
 def pull_loading_content(page, fixtures, label):
@@ -404,8 +468,8 @@ def pull_loading_content(page, fixtures, label):
           return {y:new DOMMatrixReadOnly(getComputedStyle(n.querySelector('.image-detail-overlay-content')).transform).m42,
             fades:[...root.querySelectorAll('[data-image-detail-surface],[data-image-detail-reveal]')].map(el=>Number(getComputedStyle(el).opacity))};
         }""")
-        assert abs(values['y']-45/(1+45/360))<.01, values
-        assert all(abs(value-(1-45/140))<.001 for value in values['fades']),values
+        assert abs(values['y']-(45-6)/(1+(45-6)/360))<.01, values
+        assert all(abs(value-(1-(45-6)/140))<.001 for value in values['fades']),values
         assert route.evaluate('n=>n.clientWidth') == width_before, 'Pull changed the media gutter'
         page.evaluate("window.__heldPull('pointercancel',45)")
         page.wait_for_function("!document.querySelector('[data-image-hero-pulling]')")
@@ -1358,6 +1422,8 @@ def run(browser, name, width, only=None):
                   ('cancel-return', lambda label: cancelled_return(page,label)),
                   ('pull-frame', lambda label: pull_frame(page,label)),
                   ('pull-loading', lambda label: pull_loading_content(page,fixtures,label)),
+                  ('pull-follow', lambda label: pull_follow(page,label)),
+                  ('pull-retreat', lambda label: pull_retreat(page,label)),
                   ('return-focus', lambda label: return_focus(page,label))]
         cases += [(f'loading-escape-scroll-{delay}', lambda label,delay=delay:
                    loading_escape_scroll(page,fixtures,label,delay)) for delay in [40,170,260,450]]

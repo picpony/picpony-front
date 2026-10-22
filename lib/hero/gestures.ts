@@ -4,10 +4,11 @@ import {
   DISMISS_DISTANCE_PX,
   DISMISS_MIN_FLING_DISTANCE_PX,
   DISMISS_VELOCITY_PX_PER_MS,
+  DISMISS_RETREAT_VELOCITY_PX_PER_MS,
   DRAG_ACTIVATION_PX,
-  RELEASE_SAMPLE_WINDOW_MS,
   TOUCH_AXIS_LOCK_PX,
 } from './constants';
+import { HeroVelocityTracker } from './velocity';
 import { createPullSample, PULL_REST, type HeroPullSample } from './pull';
 import { heroFrameScheduler } from './scheduler';
 import { noteHeroInteraction } from './input';
@@ -15,8 +16,10 @@ import { noteHeroInteraction } from './input';
 /** How the gesture ended, plus the fling speed that ended it. */
 export type HeroPullRelease = {
   sample: HeroPullSample;
-  /** px/ms of raw finger travel over the trailing sample window. */
+  /** Downward px/ms of the finger at release (`HeroVelocityTracker`); negative is upward. */
   velocity: number;
+  /** Rightward px/ms of the finger at release. */
+  velocityX: number;
 };
 
 export type HeroDismissGestureOptions = {
@@ -33,11 +36,11 @@ export type HeroDismissGestureOptions = {
   onPull: (sample: HeroPullSample) => void;
   onCancel: (release: HeroPullRelease) => void | Promise<void>;
   onCommit: (release: HeroPullRelease) => void | Promise<void>;
-};
-
-type DistanceSample = {
-  distance: number;
-  time: number;
+  /**
+   * A finger landed where a pull could start (`true`), or that candidate ended without one
+   * (`false`). Lets the surface promote its layers before the slop is crossed.
+   */
+  onCandidate?: (ready: boolean) => void;
 };
 
 type ReleasedClick = {
@@ -74,6 +77,7 @@ export function bindHeroDismissGesture({
   onPull,
   onCancel,
   onCommit,
+  onCandidate,
 }: HeroDismissGestureOptions) {
   const gestureOwner = `hero-dismiss:${Math.random().toString(36).slice(2)}`;
   const frameOwner = {};
@@ -83,8 +87,13 @@ export function bindHeroDismissGesture({
   let pointerId: number | null = null;
   let startX = 0;
   let startY = 0;
+  /* Where the finger was when the drag was claimed. The surface follows from there, so the
+     slop the recognizer spent deciding (`TOUCH_AXIS_LOCK_PX`) is not a jump on the first frame
+     — Flutter's `DragGestureRecognizer` subtracts it the same way. */
+  let claimX = 0;
+  let claimY = 0;
   let latest = PULL_REST;
-  let samples: DistanceSample[] = [];
+  const tracker = new HeroVelocityTracker();
   let releasedClick: ReleasedClick | null = null;
   let postCommitBridgeUntil = 0;
   /** Set when we synthesized a click, to swallow the browser's own duplicate. */
@@ -118,12 +127,10 @@ export function bindHeroDismissGesture({
     delete root.dataset.imageHeroDismissOwner;
   };
 
-  const releaseVelocity = () => {
-    const first = samples[0];
-    const last = samples.at(-1) ?? first;
-    if (!first || !last) return 0;
-    return (last.distance - first.distance) / Math.max(1, last.time - first.time);
-  };
+  const releaseVelocity = (event?: PointerEvent) =>
+    tracker.velocity(
+      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
+    );
 
   const finishGesture = (
     callback: (release: HeroPullRelease) => void | Promise<void>,
@@ -163,21 +170,26 @@ export function bindHeroDismissGesture({
     heroFrameScheduler.request(frameOwner, { read: () => latest, write: onPull });
   };
 
-  const record = (raw: number, time: number) => {
-    const sample = createPullSample(raw);
-    publish(sample);
-    samples.push({ distance: sample.raw, time });
-    const cutoff = time - RELEASE_SAMPLE_WINDOW_MS;
-    while (samples.length > 2 && samples[1].time < cutoff) samples.shift();
+  /** Feed every coalesced position to the tracker; publish only the newest pose. */
+  const track = (event: PointerEvent) => {
+    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    for (const point of coalesced.length ? coalesced : [event]) {
+      tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
+    }
+  };
+
+  const record = (clientX: number, clientY: number) => {
+    publish(createPullSample(clientY - claimY, clientX - claimX));
   };
 
   const resetPointer = () => {
     if (pointerWatchdog) window.clearTimeout(pointerWatchdog);
     pointerWatchdog = 0;
+    if (tracking) onCandidate?.(false);
     tracking = false;
     dragging = false;
     pointerId = null;
-    samples = [];
+    tracker.reset();
   };
 
   const detachCandidateListeners = () => {
@@ -204,11 +216,13 @@ export function bindHeroDismissGesture({
     }, POINTER_WATCHDOG_MS);
   };
 
-  const beginDrag = () => {
+  const beginDrag = (clientX: number, clientY: number) => {
     // A fresh pull owns any in-progress settle; bumping the generation retires
     // the previous callback so it cannot clear this gesture's state.
     settleGeneration += 1;
     dragging = true;
+    claimX = clientX;
+    claimY = clientY;
     setGestureState('dragging');
     noteHeroInteraction();
   };
@@ -242,14 +256,17 @@ export function bindHeroDismissGesture({
     startX = event.clientX;
     startY = event.clientY;
     latest = PULL_REST;
-    samples = [{ distance: 0, time: event.timeStamp }];
+    tracker.reset();
+    tracker.add(event.timeStamp, 0, 0);
     armPointerWatchdog();
     attachCandidateListeners();
+    onCandidate?.(true);
   }
 
   function handlePointerMove(event: PointerEvent) {
     if (!tracking || event.pointerId !== pointerId) return;
     armPointerWatchdog();
+    track(event);
     const deltaX = event.clientX - startX;
     const deltaY = event.clientY - startY;
     if (!dragging) {
@@ -265,10 +282,13 @@ export function bindHeroDismissGesture({
         detachCandidateListeners();
         return;
       }
-      beginDrag();
+      // Claimed at the point the slop was crossed, along the move: the surface then picks up
+      // the rest of this very event, as Flutter reports `delta - slop` on acceptance.
+      const lead = TOUCH_AXIS_LOCK_PX / Math.max(Math.abs(deltaX), Math.abs(deltaY));
+      beginDrag(startX + deltaX * lead, startY + deltaY * lead);
     }
     if (event.cancelable) event.preventDefault();
-    record(deltaY, event.timeStamp);
+    record(event.clientX, event.clientY);
   }
 
   function handlePointerUp(event: PointerEvent) {
@@ -281,14 +301,19 @@ export function bindHeroDismissGesture({
         detachCandidateListeners();
         return;
       }
-      beginDrag();
+      beginDrag(startX, startY);
     }
     if (event.cancelable) event.preventDefault();
-    record(deltaY, event.timeStamp);
+    record(event.clientX, event.clientY);
 
-    const velocity = releaseVelocity();
+    const { x: velocityX, y: velocity } = releaseVelocity(event);
+    /* A hand moving back up at release is taking the pull back, however far it got: native
+       viewers (and Flutter's `Dismissible`, which settles by fling direction first) cancel then.
+       Committing on distance alone flew the picture away from a finger that was visibly
+       returning it. */
     const shouldCommit =
       canStart() &&
+      velocity > -DISMISS_RETREAT_VELOCITY_PX_PER_MS &&
       (latest.raw >= DISMISS_DISTANCE_PX ||
         (latest.raw >= DISMISS_MIN_FLING_DISTANCE_PX && velocity >= DISMISS_VELOCITY_PX_PER_MS));
     releasedClick = {
@@ -299,7 +324,7 @@ export function bindHeroDismissGesture({
     };
     postCommitBridgeUntil = shouldCommit ? performance.now() + CLICK_SUPPRESSION_MS : 0;
 
-    const release: HeroPullRelease = { sample: latest, velocity };
+    const release: HeroPullRelease = { sample: latest, velocity, velocityX };
     resetPointer();
     detachCandidateListeners();
     setGestureState(shouldCommit ? 'dismissing' : 'settling');
@@ -309,7 +334,8 @@ export function bindHeroDismissGesture({
   function handlePointerCancel(event?: PointerEvent) {
     if (!tracking || (event && event.pointerId !== pointerId)) return;
     if (dragging) {
-      const release: HeroPullRelease = { sample: latest, velocity: releaseVelocity() };
+      const { x: velocityX, y: velocity } = releaseVelocity();
+      const release: HeroPullRelease = { sample: latest, velocity, velocityX };
       resetPointer();
       setGestureState('settling');
       finishGesture(onCancel, release, false);

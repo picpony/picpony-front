@@ -65,6 +65,7 @@ import type { HeroChoreography, HeroDirection } from './types';
    here; a private `matchMedia` cannot see the second of those. */
 import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { clamp01 } from '@/lib/utils';
+import { heroProbeMark } from './probe';
 
 type AnimationOwner = {
   animation: Animation;
@@ -177,6 +178,8 @@ type HeroMotionOptions = {
   container?: Pick<HeroContainer, 'card' | 'cardRadius'> | null;
   /** `dismiss` keeps the gesture's own pose instead of running the container. */
   choreography?: HeroChoreography;
+  /** px/ms along the travel the leg leaves at (a released drag). Omit to launch from rest. */
+  speed?: number;
 };
 
 
@@ -231,6 +234,9 @@ function timelineNow() {
   return performance.now();
 }
 
+/** Animations created inside `holdHeroMotion`, paused at their first frame. */
+let heldAnimations: Animation[] | null = null;
+
 /**
  * Start an animation **now**, meaning at the next frame the compositor produces — never at a
  * wall-clock instant this code picks. Explicitly setting `animation.startTime` anchors a leg
@@ -246,7 +252,29 @@ function animateAt(
   timing: KeyframeAnimationOptions,
 ): AnimationOwner {
   const animation = element.animate(keyframes, { ...timing, fill: 'both' });
+  if (heldAnimations) {
+    animation.pause();
+    heldAnimations.push(animation);
+  }
   return { animation, element };
+}
+
+/**
+ * Build a motion without starting it: every track is created — keyframes parsed, effects
+ * attached — and paused at its first frame, so `HeroMotion.release` later only has to `play()`
+ * them. A press builds the opening this way inside its still-hidden Stage
+ * (`HeroController.armOpen`), which takes the parse and the geometry off the click.
+ */
+export function holdHeroMotion(build: () => HeroMotion) {
+  const previous = heldAnimations;
+  heldAnimations = [];
+  try {
+    const motion = build();
+    motion.held = heldAnimations;
+    return motion;
+  } finally {
+    heldAnimations = previous;
+  }
 }
 
 function settle(owners: AnimationOwner[], finish: boolean) {
@@ -277,6 +305,20 @@ function readBackgroundAmount(element: HTMLElement) {
   } catch {
     return 0;
   }
+}
+
+/**
+ * The sink's shape inside its window. A bare `intervalProgress` is linear in travel and clamps,
+ * so the gallery stopped receding *at full speed* the instant the window closed (p 0.6 forward)
+ * and started at full speed mid-flight on the way home (p 0.4 back): a velocity step on a layer
+ * the size of the screen, which is what read as coarse. Shaped C1 at every window edge that lies
+ * inside the leg — forward eases out (it begins with the leg, which is already moving, and
+ * comes to rest at its end); back is a smoothstep (it starts mid-flight from rest and lands
+ * with the leg). Same depth, same window, no kink.
+ */
+export function easeSinkWindow(amount: number, direction: HeroDirection) {
+  const u = clamp01(amount);
+  return direction === 'forward' ? 1 - (1 - u) * (1 - u) : u * u * (3 - 2 * u);
 }
 
 function revealRole(element: HTMLElement) {
@@ -401,6 +443,37 @@ function buildContainerAnimations(
 }
 
 /**
+ * **A scalar track is two keyframes and a `linear()` easing, not a keyframe per sample.** Every
+ * track below is one number driven through the leg's progress table (an opacity, a translate
+ * distance, a scale), and both interpolate that number linearly between the same samples — so
+ * the two forms draw the same frames. What differs is the press: Blink parses each keyframe's
+ * value on `animate()`, 0.29ms for 49 transform keyframes against 0.04ms for one `linear()`
+ * string (1×, measured), and a press creates ten of these. `linear()` easings run on the
+ * compositor like any other timing function.
+ *
+ * `fraction(progress)` is where the track is between its two keyframes at that point of travel.
+ */
+type ScalarTrack = { keyframes: Keyframe[]; easing: string };
+
+function linearEasing(frames: readonly ProgressFrame[], fraction: (progress: number) => number) {
+  let points = '';
+  for (let index = 0; index < frames.length; index += 1) {
+    const { offset, progress } = frames[index];
+    if (index) points += ',';
+    points += `${round5(fraction(progress))} ${round5(offset * 100)}%`;
+  }
+  return `linear(${points})`;
+}
+
+function round5(value: number) {
+  return Math.round(value * 1e5) / 1e5;
+}
+
+function animateScalar(element: HTMLElement, track: ScalarTrack, duration: number): AnimationOwner {
+  return animateAt(element, track.keyframes, { duration, easing: track.easing });
+}
+
+/**
  * An opacity threshold on the leg's **travel**, not on its wall clock —
  * `MaterialContainerTransform` applies `ProgressThresholds` to the animator's interpolated
  * fraction, so "0.60" means "when the box is 60% home". Every fade window must be sampled
@@ -411,11 +484,13 @@ function fadeTrack(
   interval: { start: number; end: number },
   from: number,
   to: number,
-): Keyframe[] {
-  return frames.map(({ offset, progress }) => ({
-    offset,
-    opacity: from + (to - from) * intervalProgress(progress, interval.start, interval.end),
-  }));
+): ScalarTrack {
+  return {
+    keyframes: [{ opacity: from }, { opacity: to }],
+    easing: linearEasing(frames, (progress) =>
+      intervalProgress(progress, interval.start, interval.end),
+    ),
+  };
 }
 
 /**
@@ -429,25 +504,25 @@ function revealTrack(
   frames: readonly ProgressFrame[],
   role: keyof typeof HERO_REVEAL_WINDOW,
   continuedDistance?: number,
-): Keyframe[] {
+): ScalarTrack {
   const distance = continuedDistance ?? REVEAL_DISTANCE_PX[role];
   const { end } = HERO_REVEAL_WINDOW[role];
   const start = continuedDistance === undefined ? HERO_REVEAL_WINDOW[role].start : 0;
-  return frames.map(({ offset, progress }) => {
-    const interval = intervalProgress(progress, start, end);
-    // The body starts after the content is already partly visible. Ease the local
-    // gate into motion instead of switching straight from rest to full flight speed.
-    // This is a C1 blend of the shared travel, not a second clock/easing token.
-    // A resumed reveal already has momentum, so it keeps its continuous interval.
-    const settled = role === 'body' && continuedDistance === undefined
-      ? interval * interval * (3 - 2 * interval)
-      : interval;
-    return {
-      offset,
-      transform:
-        settled >= 1 ? 'none' : `translate3d(0, ${(distance * (1 - settled)).toFixed(3)}px, 0)`,
-    };
-  });
+  return {
+    // `none` at the far end, never a resting translate: an identity transform still makes the
+    // node a containing block for fixed-position descendants.
+    keyframes: [{ transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` }, { transform: 'none' }],
+    easing: linearEasing(frames, (progress) => {
+      const interval = intervalProgress(progress, start, end);
+      // The body starts after the content is already partly visible. Ease the local
+      // gate into motion instead of switching straight from rest to full flight speed.
+      // This is a C1 blend of the shared travel, not a second clock/easing token.
+      // A resumed reveal already has momentum, so it keeps its continuous interval.
+      return role === 'body' && continuedDistance === undefined
+        ? interval * interval * (3 - 2 * interval)
+        : interval;
+    }),
+  };
 }
 
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
@@ -484,16 +559,16 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
      instead of blinking it out and letting the picture travel alone. */
   if (surface && (direction === 'back' || fromCurrent)) {
     const from = fromCurrent?.get(surface)?.opacity ?? 1;
-    owners.push(animateAt(surface, fadeTrack(frames, fade, from, fadeTo), timing));
+    owners.push(animateScalar(surface, fadeTrack(frames, fade, from, fadeTo), duration));
   }
   if (content) {
     owners.push(
-      animateAt(content, fadeTrack(
+      animateScalar(content, fadeTrack(
         frames,
         fromCurrent ? { ...contentFade, start: 0 } : contentFade,
         fromCurrent?.get(content)?.opacity ?? fadeFrom,
         fadeTo,
-      ), timing),
+      ), duration),
     );
   }
 
@@ -505,9 +580,9 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   // the captured rise instead of restarting it.
   if (direction === 'forward' && !reduced) {
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      owners.push(animateAt(element, revealTrack(
+      owners.push(animateScalar(element, revealTrack(
         frames, revealRole(element), fromCurrent?.get(element)?.rise,
-      ), timing));
+      ), duration));
     });
   } else if (fromCurrent && !reduced) {
     // Hold the already-present pose while its parent fades. Cancelling the entrance
@@ -607,6 +682,8 @@ function buildDismissAnimations(
  */
 export class HeroMotion {
   readonly flight: HeroFlight;
+  /** Tracks built by `holdHeroMotion` and not yet released. */
+  held: Animation[] | null = null;
   private readonly owner = Symbol('hero-motion');
   private readonly background: HTMLElement | null;
   private readonly overlay: HTMLElement | null;
@@ -629,6 +706,7 @@ export class HeroMotion {
   private sharedRevision = 0;
   private sharedReleased = false;
   private pullOffset = 0;
+  private pullOffsetX = 0;
   private retired = false;
   private disposed = false;
   private landedCompletion = createCompletion();
@@ -681,11 +759,15 @@ export class HeroMotion {
       duration,
       startedAt: timelineNow() + 1,
       baseAspect: this.baseAspect,
+      speed: options.speed,
     });
     this.settleBows();
 
+    heroProbeMark('hx:t:leg');
     this.startVisual();
+    if (!heldAnimations) heroProbeMark(`hx:respond:${direction}`);
     this.startShared(options.continueBackground ?? false);
+    heroProbeMark('hx:t:shared');
   }
 
   get landed() {
@@ -706,7 +788,11 @@ export class HeroMotion {
     const time = typeof currentTime === 'number'
       ? this.leg.startedAt + currentTime
       : timelineNow();
-    return { ...evaluateLeg(this.leg, time), pullOffset: this.pullOffset };
+    return {
+      ...evaluateLeg(this.leg, time),
+      pullOffset: this.pullOffset,
+      pullOffsetX: this.pullOffsetX,
+    };
   }
 
   /**
@@ -757,9 +843,11 @@ export class HeroMotion {
    * Pull offset lives on the compensator rather than in the flight keyframes, so
    * a dismiss drag can move the flyer without invalidating its spring.
    */
-  setPullOffset(distance: number) {
+  setPullOffset(distance: number, x = 0) {
     this.pullOffset = distance;
-    this.flight.compensator.style.transform = distance ? `translate3d(0, ${distance}px, 0)` : '';
+    this.pullOffsetX = x;
+    this.flight.compensator.style.transform =
+      distance || x ? `translate3d(${x}px, ${distance}px, 0)` : '';
   }
 
   /**
@@ -789,10 +877,14 @@ export class HeroMotion {
     // The drag offset lives on the compensator, outside the flight keyframes: fold it
     // into the starting box and clear the compensator so the reverse begins exactly
     // where the flyer visually is, and no later frame stays shifted by a stale gesture.
-    const posed: HeroRect = pose.pullOffset
-      ? { ...pose.rect, top: pose.rect.top + pose.pullOffset }
+    const posed: HeroRect = pose.pullOffset || pose.pullOffsetX
+      ? {
+          ...pose.rect,
+          top: pose.rect.top + pose.pullOffset,
+          left: pose.rect.left + (pose.pullOffsetX ?? 0),
+        }
       : pose.rect;
-    if (this.pullOffset) this.setPullOffset(0);
+    if (this.pullOffset || this.pullOffsetX) this.setPullOffset(0, 0);
 
     // Capture screen space before any plane change; plane rects are relative to
     // their own scroller's captured origin and are not comparable across planes.
@@ -854,6 +946,7 @@ export class HeroMotion {
     this.settleBows();
 
     this.startVisual();
+    heroProbeMark(`hx:respond:reverse-${direction}`);
     this.startShared(true, sharedPose);
     await this.finished;
   }
@@ -1032,6 +1125,24 @@ export class HeroMotion {
     this.cancelShared(true, true);
   }
 
+  /**
+   * Start a motion `holdHeroMotion` built: the leg's analytic clock restarts now and is
+   * rebased onto the flyer's real start time the moment the compositor reports it, exactly as
+   * for a motion started on construction. Every track resumes from offset 0 in one task, so
+   * they share a start time.
+   */
+  release() {
+    const held = this.held;
+    if (!held || this.disposed) return;
+    this.held = null;
+    this.leg = { ...this.leg, startedAt: timelineNow() + 1 };
+    held.forEach((animation) => {
+      if (animation.playState === 'paused') animation.play();
+    });
+    heroProbeMark(`hx:respond:${this.leg.direction}`);
+    this.rebaseOnStart(this.visual[0]?.animation, this.visualRevision);
+  }
+
   finish() {
     settle(this.visual, true);
     settle([...this.shared, ...this.containerTracks], true);
@@ -1075,16 +1186,20 @@ export class HeroMotion {
        assigns it when the leg's first frame runs, which may be well after this task on a busy
        device. Reading it back is what keeps a pose measured for an interruption agreeing with
        what is on screen, and `ready` is the only point at which `startTime` is non-null. */
-    const flyer = owners[0]?.animation;
-    void flyer?.ready.then(() => {
-      if (revision !== this.visualRevision) return;
-      const started = Number(flyer.startTime);
-      if (Number.isFinite(started)) this.leg = { ...this.leg, startedAt: started };
-    }, () => {});
+    this.rebaseOnStart(owners[0]?.animation, revision);
     void Promise.allSettled(owners.map(({ animation }) => animation.finished)).then(() => {
       if (revision !== this.visualRevision) return;
       this.landedCompletion.resolve();
     });
+  }
+
+  private rebaseOnStart(flyer: Animation | undefined, revision: number) {
+    void flyer?.ready.then(() => {
+      // A held track is ready while paused, with no start time: `release` hooks it again.
+      if (revision !== this.visualRevision || flyer.startTime === null) return;
+      const started = Number(flyer.startTime);
+      if (Number.isFinite(started)) this.leg = { ...this.leg, startedAt: started };
+    }, () => {});
   }
 
   private startShared(continueBackground: boolean, fromCurrent?: Map<HTMLElement, OverlayPose>) {
@@ -1098,6 +1213,7 @@ export class HeroMotion {
       if (this.background) {
         backgroundOwners.set(this.background, this.owner);
         owners.push(this.buildBackgroundAnimation(continueBackground));
+        heroProbeMark('hx:t:s-background');
       }
       if (this.overlay) {
         owners.push(
@@ -1112,6 +1228,7 @@ export class HeroMotion {
             this.leg,
           ),
         );
+        heroProbeMark('hx:t:s-overlay');
         if (
           this.containerLeg &&
           this.clip &&
@@ -1184,15 +1301,18 @@ export class HeroMotion {
        leg runs, so a cue that peaked at p=1 peaked behind an opaque surface. See
        `HERO_BACKGROUND_SINK_WINDOW`. */
     const window = HERO_BACKGROUND_SINK_WINDOW[direction];
-    const keyframes = sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES).map(
-      ({ offset, progress }) => ({
-        offset,
-        transform: getHeroBackgroundSinkTransform(
-          from + (to - from) * intervalProgress(progress, window.start, window.end),
-        ),
-      }),
-    );
-    return animateAt(element, keyframes, { duration, easing: 'linear' });
+    // Scale is linear in the amount, so the amount's curve is the easing (`ScalarTrack`).
+    return animateScalar(element, {
+      keyframes: [
+        { transform: getHeroBackgroundSinkTransform(from) },
+        { transform: getHeroBackgroundSinkTransform(to) },
+      ],
+      easing: linearEasing(
+        sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES),
+        (progress) =>
+          easeSinkWindow(intervalProgress(progress, window.start, window.end), direction),
+      ),
+    }, duration);
   }
 
   private cancelVisual(finish: boolean) {

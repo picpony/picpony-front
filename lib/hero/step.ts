@@ -4,7 +4,8 @@ import { motionTier } from '@/lib/appearance';
 import { TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRINGS, springRate } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
-import { RELEASE_SAMPLE_WINDOW_MS, TOUCH_AXIS_LOCK_PX } from './constants';
+import { DISMISS_RETREAT_VELOCITY_PX_PER_MS, TOUCH_AXIS_LOCK_PX } from './constants';
+import { HeroVelocityTracker } from './velocity';
 import { noteHeroInteraction } from './input';
 import { relaunch, sampleProgress } from './progress';
 import type { SpringResponse } from './spring';
@@ -334,18 +335,27 @@ export function bindStepSwipe({
   let width = 1;
   let offset = 0;
   let frame = 0;
-  let samples: Array<{ x: number; time: number }> = [];
+  /* The slop spent deciding the axis, subtracted so the picture does not jump that far on the
+     first frame of the drag (Flutter's `DragGestureRecognizer` does the same). */
+  let claim = 0;
+  const tracker = new HeroVelocityTracker();
   let suppressClickUntil = 0;
   let listening = false;
 
-  const speed = () => {
-    const first = samples[0];
-    const last = samples.at(-1);
-    if (!first || !last || last === first) return 0;
-    return (last.x - first.x) / Math.max(1, last.time - first.time);
+  const speed = (event?: PointerEvent) =>
+    tracker.velocity(
+      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
+    ).x;
+
+  const track = (event: PointerEvent) => {
+    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    for (const point of coalesced.length ? coalesced : [event]) {
+      tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
+    }
   };
 
-  const offsetFor = (dx: number) => {
+  const offsetFor = (fingerDx: number) => {
+    const dx = fingerDx - claim;
     if (dx === 0) return 0;
     return resists(dx < 0 ? 1 : -1) ? rubberBand(dx, width) : dx;
   };
@@ -368,7 +378,8 @@ export function bindStepSwipe({
     frame = 0;
     pointerId = null;
     dragging = false;
-    samples = [];
+    claim = 0;
+    tracker.reset();
     stopListening();
   };
 
@@ -394,7 +405,9 @@ export function bindStepSwipe({
     startY = event.clientY;
     width = target.getBoundingClientRect().width || 1;
     offset = 0;
-    samples = [{ x: 0, time: event.timeStamp }];
+    claim = 0;
+    tracker.reset();
+    tracker.add(event.timeStamp, 0, 0);
     listening = true;
     window.addEventListener('pointermove', handleMove, { capture: true, passive: false });
     window.addEventListener('pointerup', handleUp, { capture: true, passive: false });
@@ -403,6 +416,7 @@ export function bindStepSwipe({
 
   function handleMove(event: PointerEvent) {
     if (event.pointerId !== pointerId) return;
+    track(event);
     const dx = event.clientX - startX;
     const dy = event.clientY - startY;
     if (!dragging) {
@@ -412,13 +426,12 @@ export function bindStepSwipe({
         return;
       }
       dragging = true;
+      // The slop boundary along the move, so the rest of this event already moves the picture.
+      claim = Math.sign(dx) * TOUCH_AXIS_LOCK_PX;
       onStart();
       noteHeroInteraction();
     }
     if (event.cancelable) event.preventDefault();
-    samples.push({ x: dx, time: event.timeStamp });
-    const cutoff = event.timeStamp - RELEASE_SAMPLE_WINDOW_MS;
-    while (samples.length > 2 && samples[1].time < cutoff) samples.shift();
     offset = offsetFor(dx);
     if (!frame) frame = requestAnimationFrame(flush);
   }
@@ -431,11 +444,14 @@ export function bindStepSwipe({
     }
     if (event.cancelable) event.preventDefault();
     const dx = event.clientX - startX;
-    samples.push({ x: dx, time: event.timeStamp });
     offset = offsetFor(dx);
-    const releaseSpeed = speed();
+    const releaseSpeed = speed(event);
     const direction: StepDirection = dx < 0 ? 1 : -1;
-    const far = Math.abs(dx) >= Math.min(width * SWIPE_COMMIT_FRACTION, SWIPE_COMMIT_MAX_PX);
+    /* A finger heading back towards where it started is taking the page back, however far it
+       had got — the same rule as the dismiss (`DISMISS_RETREAT_VELOCITY_PX_PER_MS`). */
+    const retreating = releaseSpeed * Math.sign(dx) < -DISMISS_RETREAT_VELOCITY_PX_PER_MS;
+    const far =
+      !retreating && Math.abs(dx) >= Math.min(width * SWIPE_COMMIT_FRACTION, SWIPE_COMMIT_MAX_PX);
     const flung =
       Math.abs(dx) >= SWIPE_MIN_FLING_PX &&
       Math.abs(releaseSpeed) >= SWIPE_FLING_PX_PER_MS &&

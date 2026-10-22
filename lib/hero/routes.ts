@@ -198,26 +198,72 @@ export class HeroRouteRegistry {
     return true;
   }
 
-  /** Make a route non-interactive while it is still visually present. */
-  freeze(route: HeroRoute, owner: symbol): DomLease {
+  /**
+   * Make a route non-interactive while it is still visually present.
+   *
+   * `deferInert` is for a close. Both ways of cutting a route's input restyle its whole subtree —
+   * `inert` and `pointer-events` alike, ~30ms each at 4× CPU on a phone for a detail of ~180
+   * nodes — and a close used to pay both in front of its flight, freezing the picture under a
+   * released finger. Deferred, a single transparent shield over the viewport takes the pointer at
+   * once (one new node, no restyle of anything else) and `applyInert` swaps it for the real thing
+   * once the flight is running on the compositor, so the restyle lands under a moving picture.
+   */
+  freeze(
+    route: HeroRoute,
+    owner: symbol,
+    { deferInert = false }: { deferInert?: boolean } = {},
+  ): DomLease & { applyInert: () => void } {
     route.interaction?.release();
-    const interaction = combineHeroLeases(
-      leaseAttribute(route.overlay, 'inert', ''),
-      route.floatingBack ? leaseAttribute(route.floatingBack, 'inert', '') : null,
-    );
+    let lock: DomLease | null = null;
+    let shield: HTMLElement | null = null;
+    let released = false;
+    const removeShield = () => {
+      shield?.remove();
+      shield = null;
+    };
+    const interaction: DomLease = {
+      release: () => {
+        released = true;
+        removeShield();
+        lock?.release();
+        lock = null;
+      },
+    };
+    const applyInert = () => {
+      if (released || lock || route.interaction !== interaction) return;
+      lock = combineHeroLeases(
+        leaseAttribute(route.overlay, 'inert', ''),
+        route.floatingBack ? leaseAttribute(route.floatingBack, 'inert', '') : null,
+        leaseInlineStyles(route.overlay, { pointerEvents: 'none' }),
+        route.floatingBack ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' }) : null,
+      );
+      removeShield();
+    };
     route.interaction = interaction;
     route.interactionOwner = owner;
-    return combineHeroLeases(
-      {
-        release: () => {
-          if (route.interaction !== interaction || route.interactionOwner !== owner) return;
-          interaction.release();
-          route.interaction = null;
-          route.interactionOwner = null;
-        },
+    if (deferInert && typeof document !== 'undefined' && document.body) {
+      shield = document.createElement('div');
+      shield.setAttribute('data-image-hero-close-shield', '');
+      shield.setAttribute('aria-hidden', 'true');
+      shield.style.cssText =
+        'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
+      document.body.appendChild(shield);
+    } else {
+      applyInert();
+    }
+    return {
+      release: () => {
+        if (route.interaction !== interaction || route.interactionOwner !== owner) {
+          // A newer owner took the route over; still never leave this shield behind.
+          removeShield();
+          return;
+        }
+        interaction.release();
+        route.interaction = null;
+        route.interactionOwner = null;
       },
-      leaseInlineStyles(route.overlay, { pointerEvents: 'none' }),
-    );
+      applyInert,
+    };
   }
 
   /** Hide whichever element is currently `route.target`, and keep following it. */

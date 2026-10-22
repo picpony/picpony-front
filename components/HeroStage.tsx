@@ -52,7 +52,7 @@ export default function HeroStage() {
   // flight is visible. Keep Escape owned by the mounted Stage so it reverses
   // the active session instead of falling through to browser navigation.
   useEffect(() => {
-    if (sessionId === null || state.phase === 'idle') return;
+    if (sessionId === null || state.phase === 'idle' || state.phase === 'armed') return;
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (!interruptImageHero()) return;
@@ -109,6 +109,8 @@ export default function HeroStage() {
   // landing target below the flyer. The real route receives the richer image
   // after the atomic handoff.
   const image = snapshot.image;
+  // Mounted by a press ahead of its click (`HeroController.armOpen`): laid out, never painted.
+  const armed = state.phase === 'armed';
 
   return (
     <>
@@ -127,6 +129,7 @@ export default function HeroStage() {
         data-image-detail-floating-back="stage"
         data-image-hero-stage-back
         data-image-hero-stage-foreground
+        data-image-hero-stage-armed={armed ? '' : undefined}
         onClick={() => {
           interruptImageHero();
         }}

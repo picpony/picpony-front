@@ -720,3 +720,29 @@ export function heroRectsEqual(a: HeroRect, b: HeroRect, epsilon: number) {
     Math.abs(a.height - b.height) < epsilon
   );
 }
+
+/** Below this, a release is a let-go rather than a throw: the leg launches from rest. */
+const MIN_RELEASE_SPEED_PX_PER_MS = 0.15;
+/** A flick can be far faster than the leg can carry without overshooting the card. */
+const MAX_RELEASE_SPEED_PX_PER_MS = 4;
+
+/**
+ * The finger's speed at release along the flight's own travel (centre to centre), in px/ms —
+ * the speed a dismissed picture leaves at, the way Flutter hands a drag's fling velocity to the
+ * route's controller. Only the component heading *towards* the card counts: a sideways or
+ * backwards component would launch the picture away from where it is going.
+ */
+export function releaseSpeedAlong(
+  velocity: { x: number; y: number } | undefined,
+  from: HeroRect,
+  to: HeroRect,
+) {
+  if (!velocity) return undefined;
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+  const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return undefined;
+  const along = (velocity.x * dx + velocity.y * dy) / length;
+  if (!Number.isFinite(along) || along < MIN_RELEASE_SPEED_PX_PER_MS) return undefined;
+  return Math.min(along, MAX_RELEASE_SPEED_PX_PER_MS);
+}

@@ -10,6 +10,8 @@
  */
 
 const QUIET_AFTER_MS = 96;
+/** A scroll event this recent means the content is still moving (a fling's frames are ~16ms). */
+const SCROLL_MOVING_MS = 100;
 /**
  * Wheel streams can gap well above one frame (trackpads and high-resolution
  * wheels especially). Releasing a handoff after ~48ms detached the latched
@@ -124,9 +126,15 @@ function resetInteraction() {
   publishQuiet(true);
 }
 
-const handleScroll = () => markActivity();
+let lastScrollAt = -Infinity;
+
+const handleScroll = () => {
+  lastScrollAt = now();
+  markActivity();
+};
 
 const handleWheel = () => {
+  lastScrollAt = now();
   if (!wheelActive) {
     wheelActive = true;
     notify(inputReleaseListeners);
@@ -229,6 +237,16 @@ export function initializeHeroInput() {
 export function noteHeroInteraction() {
   initializeHeroInput();
   markActivity();
+}
+
+/**
+ * True while content is actually moving under a scroll or wheel — narrower than
+ * `isScrollLikelyActive`, which a finger merely resting on the glass also sets. A press during
+ * a fling stops the fling rather than opening anything.
+ */
+export function isScrollMoving(withinMs = SCROLL_MOVING_MS) {
+  initializeHeroInput();
+  return now() - lastScrollAt < withinMs;
 }
 
 /** True while a real scroll/wheel/touch sequence is in flight. */

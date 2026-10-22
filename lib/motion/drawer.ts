@@ -90,6 +90,12 @@ export function useDrawerSwipe({
       let pending = false;
       /** Where a release's spring is taking the drawer while it owns the panel, else null. */
       let settling: boolean | null = null;
+      /* Whether this gesture ever wrote to the panel or the scrim. A hand-back with nothing to hand
+         back is not free: `clearProps` makes GSAP parse the transform through `getComputedStyle`,
+         and the reads below force a style pass — and `enabled` flips off in the very commit that
+         mounts a picture's opening flight (a background appears), so that pass landed between the
+         tap and the flight's first frame (~25ms of a 4×-throttled phone's tap, measured). */
+      let touched = false;
 
       const drawer = () => drawerRef.current;
       const scrim = () => scrimRef.current;
@@ -100,6 +106,8 @@ export function useDrawerSwipe({
          transitions still off, so nothing animates the hand-back; only then are the
          transitions given back. */
       const handBack = () => {
+        if (!touched) return;
+        touched = false;
         const d = drawer();
         const s = scrim();
         if (d) gsap.set(d, { clearProps: 'transform' });
@@ -118,6 +126,7 @@ export function useDrawerSwipe({
        *  after useGSAP's own callback returned — without it the inline transforms
        *  are invisible to `revert()` and an interrupted drag strands the panel. */
       const place = contextSafe!((x: number) => {
+        touched = true;
         const d = drawer();
         if (d) gsap.set(d, { x, xPercent: 0 });
         const s = scrim();
@@ -145,6 +154,7 @@ export function useDrawerSwipe({
         // A release caught by this finger is over: its spring will not finish.
         settling = null;
         active = true;
+        touched = true;
         // Suppress the class-level transitions for the duration of the drag.
         d.style.transition = 'none';
         if (s) {

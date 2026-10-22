@@ -22,15 +22,19 @@ import { progressAt, relaunch } from './progress';
    a spring while closing it on an effects curve. */
 import { motionScale, motionTier } from '@/lib/appearance';
 import { clamp } from '@/lib/utils';
+import { heroProbeMark } from './probe';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
+const PULL_READY_ATTRIBUTE = 'imageHeroPullReady';
 type PullStyle = { element: HTMLElement; property: 'transform' | 'opacity'; original: string; written: string };
 
 export type HeroPullSample = {
-  /** Unresisted finger travel, in px. Drives every derived value. */
+  /** Downward finger travel past the touch slop, in px. Drives every derived value. */
   raw: number;
   /** Rubber-banded travel actually applied to the surface. */
   distance: number;
+  /** Horizontal travel applied once the drag is claimed, at the vertical band's ratio. */
+  x: number;
   opacity: number;
   backgroundAmount: number;
 };
@@ -45,7 +49,7 @@ export type HeroPullNodes = {
 
 export type HeroPullOptions = {
   /** Mirror the drag onto an in-flight flyer's compensator. */
-  onOffset?: (distance: number) => void;
+  onOffset?: (distance: number, x: number) => void;
   /** Fired once per gesture, after the first pose is ready to take over. */
   onSeize?: () => void;
   /** Held for the duration of the gesture (e.g. the destination thumbnail). */
@@ -58,11 +62,16 @@ function resistedDistance(raw: number) {
   return positive / (1 + positive / DRAG_RESISTANCE_PX);
 }
 
-export function createPullSample(rawDistance: number): HeroPullSample {
+/* The vertical travel keeps its rubber band (an owner decision: it does not cost the feel). The
+   horizontal follow, once the drag is claimed, takes the *same* ratio, so the surface moves
+   along the finger's own direction instead of sliding sideways faster than it sinks. */
+export function createPullSample(rawDistance: number, x = 0): HeroPullSample {
   const raw = Math.max(0, rawDistance);
+  const distance = resistedDistance(raw);
   return {
     raw,
-    distance: resistedDistance(raw),
+    distance,
+    x: raw > 0 ? x * (distance / raw) : 0,
     opacity: Math.max(0, 1 - raw / SURFACE_FADE_DISTANCE_PX),
     backgroundAmount: Math.max(0, 1 - raw / BACKGROUND_REVEAL_DISTANCE_PX),
   };
@@ -103,6 +112,24 @@ export class HeroPullSurface {
 
   get isActive() {
     return this.active;
+  }
+
+  /**
+   * A finger is down where a pull could start. The pull's layers are promoted now, a frame or
+   * two before the slop is crossed, so the first dragged frame moves layers instead of creating
+   * (and rasterizing) them — which made the first moves of every pull the slowest (~45ms to
+   * screen against ~30 for the rest, 1× CPU). Undone when the candidate ends without a pull.
+   */
+  prime(ready: boolean) {
+    if (this.disposed) return;
+    const { overlay, floatingBack } = this.nodes;
+    if (ready) {
+      overlay.dataset[PULL_READY_ATTRIBUTE] = '';
+      if (floatingBack) floatingBack.dataset[PULL_READY_ATTRIBUTE] = '';
+    } else {
+      delete overlay.dataset[PULL_READY_ATTRIBUTE];
+      if (floatingBack) delete floatingBack.dataset[PULL_READY_ATTRIBUTE];
+    }
   }
 
   /** Batched drag update. Safe to call at pointer rate. */
@@ -149,6 +176,7 @@ export class HeroPullSurface {
       return Promise.resolve();
     }
     const start = Math.max(0, sample.raw);
+    const startX = sample.x;
     if (start < 0.5 || motionTier('image') === 'off') {
       this.reset();
       return Promise.resolve();
@@ -191,7 +219,7 @@ export class HeroPullSurface {
           return;
         }
         const progress = progressAt(model, elapsed / duration);
-        this.write(createPullSample(start * (1 - progress)));
+        this.write(createPullSample(start * (1 - progress), startX * (1 - progress)));
         heroFrameScheduler.request(this.settleOwner, { read: () => undefined, write: step });
       };
       heroFrameScheduler.request(this.settleOwner, { read: () => undefined, write: step });
@@ -239,7 +267,7 @@ export class HeroPullSurface {
       background.style.willChange = '';
     }
     this.background = null;
-    this.options.onOffset?.(0);
+    this.options.onOffset?.(0, 0);
 
     this.lease?.release();
     this.lease = null;
@@ -304,7 +332,7 @@ export class HeroPullSurface {
   private write(sample: HeroPullSample) {
     if (this.disposed) return;
     this.latest = sample;
-    const transform = `translate3d(0px, ${sample.distance}px, 0px)`;
+    const transform = `translate3d(${sample.x}px, ${sample.distance}px, 0px)`;
     const veil = String(sample.opacity);
     this.styles.forEach((style) => {
       if (!style.element.isConnected) return;
@@ -320,6 +348,7 @@ export class HeroPullSurface {
       background.style.transform = getHeroBackgroundSinkTransform(sample.backgroundAmount);
     }
 
-    this.options.onOffset?.(sample.distance);
+    heroProbeMark('hx:pull-write');
+    this.options.onOffset?.(sample.distance, sample.x);
   }
 }

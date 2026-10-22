@@ -55,6 +55,8 @@ export const HERO_ROUTE_TIMEOUT_MS = 4000;
  * of wedging the controller.
  */
 export const HERO_DETAIL_ROUTE_TIMEOUT_MS = 30000;
+/** How long a press's pre-mounted Stage waits for its click (`HeroController.armOpen`). */
+export const HERO_ARM_TTL_MS = 1200;
 export const SNAPSHOT_TTL = 2 * 60 * 1000;
 /**
  * Browsers may keep a wheel/touch stream latched to its original scroller after the last
@@ -389,9 +391,10 @@ export const DISMISS_DISTANCE_PX = 120;
 export const DISMISS_MIN_FLING_DISTANCE_PX = 48;
 export const DISMISS_VELOCITY_PX_PER_MS = 0.5;
 export const DRAG_RESISTANCE_PX = 360;
+/** Upward finger speed at release that takes a pull back regardless of its distance. */
+export const DISMISS_RETREAT_VELOCITY_PX_PER_MS = 0.25;
 export const BACKGROUND_REVEAL_DISTANCE_PX = 260;
 export const SURFACE_FADE_DISTANCE_PX = 140;
-export const RELEASE_SAMPLE_WINDOW_MS = 120;
 
 /**
  * The swipe-down dismiss: no motion shape of its own. Both exits are the same shared-element

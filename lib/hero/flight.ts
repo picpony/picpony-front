@@ -52,6 +52,8 @@ export type HeroPose = {
    * leaves both alone, since the compensator keeps applying it.
    */
   pullOffset: number;
+  /** Horizontal drag offset, alongside `pullOffset`. */
+  pullOffsetX?: number;
 };
 
 /**

@@ -300,6 +300,7 @@ function inputTransferHarness(t) {
     './dom', './frameCache', './geometry', './gestures', './history', './motion',
     './plane', './flight', './pull', './upgrade',
   ].map(name => [name, {}]));
+  dependencies['./probe'] = { heroProbeMark() {}, heroProbeDisabled: () => false };
   Object.assign(dependencies, {
     './constants': { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS, HERO_INPUT_TRANSFER_QUIET_MS: 320 },
     './input': { ...input, waitForHeroInteractionQuiet(signal, quietFor, budget) {
@@ -684,4 +685,78 @@ test('interruption boxes match emitted WAAPI tracks at 120Hz and 144Hz across sp
   const { leg } = interruptionFixture(0, undefined);
   assertRectClose(evaluateLeg(leg, leg.startedAt).rect, interruptionTo, 'zero-duration landing');
   assert.equal(evaluateLeg(leg, leg.startedAt).speed, 0);
+});
+
+// --- Release velocity (HeroVelocityTracker) -------------------------------------------------
+const { HeroVelocityTracker } = await import('../lib/hero/velocity.ts');
+
+test('a constant flick lifted at its last position keeps its speed', () => {
+  const tracker = new HeroVelocityTracker();
+  for (let t = 0; t <= 112; t += 14) tracker.add(t, -t * 1.5, 0);
+  const { x } = tracker.velocity({ time: 126, x: -112 * 1.5, y: 0 });
+  assert.ok(x < -1, `release ${x} must stay a leftward flick`);
+});
+
+test('release velocity follows the recent motion', () => {
+  const tracker = new HeroVelocityTracker();
+  // Accelerating flick: 0.5 px/ms rising to 2 px/ms over 90ms.
+  let y = 0;
+  for (let t = 0; t <= 90; t += 10) {
+    tracker.add(t, 0, y);
+    y += (0.5 + (1.5 * t) / 90) * 10;
+  }
+  const { y: vy } = tracker.velocity();
+  assert.ok(vy > 1.6 && vy < 2.4, `velocity at release ${vy}`);
+});
+
+test('a finger that rested before lifting releases with no speed', () => {
+  const tracker = new HeroVelocityTracker();
+  for (let t = 0; t <= 60; t += 10) tracker.add(t, 0, t * 2);
+  // Held still for 80ms, then lifted where it rested.
+  assert.deepEqual(tracker.velocity({ time: 140, x: 0, y: 120 }), { x: 0, y: 0 });
+});
+
+test('a finger moving back up reports a negative release speed', () => {
+  const tracker = new HeroVelocityTracker();
+  const path = [0, 20, 40, 60, 70, 72, 66, 52, 36];
+  path.forEach((y, index) => tracker.add(index * 12, index * 3, y));
+  const { x, y } = tracker.velocity();
+  assert.ok(y < -1, `retreat ${y}`);
+  assert.ok(x > 0.15 && x < 0.35, `sideways ${x}`);
+});
+
+// --- Background sink shape -------------------------------------------------------------------
+test('the gallery sink has no velocity step at an edge of its window inside the leg', async () => {
+  const source = readFileSync(new URL('../lib/hero/motion.ts', import.meta.url), 'utf8');
+  const match = source.match(/export function easeSinkWindow[\s\S]*?\n}\n/);
+  assert.ok(match, 'easeSinkWindow is exported from motion.ts');
+  const fn = new Function('clamp01', `${ts.transpileModule(match[0].replace('export ', ''), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText}; return easeSinkWindow;`)(clamp01);
+  const slope = (u, direction) => (fn(u + 1e-4, direction) - fn(u - 1e-4, direction)) / 2e-4;
+  assert.equal(fn(0, 'forward'), 0);
+  assert.equal(fn(1, 'forward'), 1);
+  assert.equal(fn(0, 'back'), 0);
+  assert.equal(fn(1, 'back'), 1);
+  // Forward ends inside the leg (p 0.6): it must arrive at rest.
+  assert.ok(Math.abs(slope(1 - 1e-4, 'forward')) < 0.01);
+  // Back starts inside the leg (p 0.4): it must leave from rest.
+  assert.ok(Math.abs(slope(1e-4, 'back')) < 0.01);
+});
+
+test('a dismiss released towards the card leaves at the finger speed; away from it, from rest', async () => {
+  const { releaseSpeedAlong } = await import('../lib/hero/geometry.ts');
+  const from = { left: 0, top: 100, width: 300, height: 300 };
+  const below = { left: 100, top: 700, width: 100, height: 100 };
+  const above = { left: 100, top: -400, width: 100, height: 100 };
+  const toward = releaseSpeedAlong({ x: 0, y: 1.8 }, from, below);
+  assert.ok(toward > 1.7 && toward <= 1.8, `towards ${toward}`);
+  assert.equal(releaseSpeedAlong({ x: 0, y: 1.8 }, from, above), undefined);
+  assert.equal(releaseSpeedAlong({ x: 0, y: 0.05 }, from, below), undefined);
+  assert.equal(releaseSpeedAlong({ x: 0, y: 40 }, from, below), 4);
+  const leg = createHeroLeg({ from, to: below, fromRadius: 0, toRadius: 16, direction: 'back',
+    duration: 300, startedAt: 0, baseAspect: 1, speed: toward });
+  const rest = createHeroLeg({ from, to: below, fromRadius: 0, toRadius: 16, direction: 'back',
+    duration: 300, startedAt: 0, baseAspect: 1 });
+  assert.ok(velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0), 'a throw leaves faster than a let-go');
 });

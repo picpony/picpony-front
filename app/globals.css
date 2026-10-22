@@ -2676,6 +2676,17 @@ html #nprogress .peg {
  * source without a scrollTop rAF correction. No z-index or transform on an anchor: that
  * creates a stacking context and traps a flyer below the Stage.
  */
+/* A Stage a press mounted ahead of its click (`HeroController.armOpen`): laid out so the click
+   reads clean geometry, but neither painted nor hit-tested until the click adopts it. An empty
+   clip, not `visibility` (or `pointer-events`, or `inert`): those are inherited, so taking them
+   off restyled every node of the Stage inside the click (~14ms at 4× CPU). A clip-path is the
+   element's own property, it removes the box from hit testing too, and lifting it is a paint
+   change. */
+[data-image-hero-stage-state='armed'],
+[data-image-hero-stage-armed] {
+  clip-path: inset(0 0 100% 0);
+}
+
 .image-hero-gallery-anchor,
 .image-hero-stage-anchor {
   position: absolute;
@@ -3202,14 +3213,21 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
  * Promotion is scoped to the active gesture; settle restores the inline styles and
  * removes this attribute, leaving no resting transform or permanent full-page layer.
  */
-[data-image-hero-pulling] .image-detail-overlay-content {
+[data-image-hero-pulling] .image-detail-overlay-content,
+[data-image-hero-pull-ready] .image-detail-overlay-content {
   will-change: transform;
 }
 
+/* `pull-ready`: a finger is down where a pull could start — promoted ahead of the claim so the
+   first dragged frame moves layers rather than creating them (`HeroPullController.prime`). */
 [data-image-hero-pulling] [data-image-detail-surface],
 [data-image-hero-pulling] [data-image-detail-reveal],
 [data-image-hero-pulling] [data-image-detail-chrome],
-[data-image-detail-floating-back][data-image-hero-pulling] {
+[data-image-detail-floating-back][data-image-hero-pulling],
+[data-image-hero-pull-ready] [data-image-detail-surface],
+[data-image-hero-pull-ready] [data-image-detail-reveal],
+[data-image-hero-pull-ready] [data-image-detail-chrome],
+[data-image-detail-floating-back][data-image-hero-pull-ready] {
   will-change: opacity;
 }
 

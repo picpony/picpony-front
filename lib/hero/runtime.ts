@@ -34,6 +34,7 @@ export const INITIAL_HERO_RUNTIME: ImageHeroRuntimeState = {
   imageId: null,
   stage: EMPTY_STAGE,
   background: null,
+  galleryExposed: false,
 };
 
 let runtime = INITIAL_HERO_RUNTIME;

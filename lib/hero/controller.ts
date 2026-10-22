@@ -2,6 +2,7 @@
 
 import {
   HERO_BACKGROUND_SELECTOR,
+  HERO_ARM_TTL_MS,
   HERO_DETAIL_ROUTE_TIMEOUT_MS,
   HERO_HANDOFF_SCROLL_DEFER_MAX_MS,
   HERO_HANDOFF_SCROLL_QUIET_MS,
@@ -29,7 +30,7 @@ import {
 } from './dom';
 import { revealInImageSequence } from '@/lib/imageSequence';
 import { captureHeroFrame, type FrameAsset } from './frameCache';
-import { heroRectsEqual, type HeroRect } from './geometry';
+import { heroRectsEqual, releaseSpeedAlong, type HeroRect } from './geometry';
 import { bindHeroDismissGesture, type HeroPullRelease } from './gestures';
 import {
   imageHeroHistory,
@@ -47,9 +48,9 @@ import {
   waitForHeroInteractionQuiet,
   type HeroInteractionQuietResult,
 } from './input';
-import { clearInactiveHeroBackground, HeroMotion } from './motion';
+import { clearInactiveHeroBackground, HeroMotion, holdHeroMotion } from './motion';
 import { getElementScrollPlane, getGalleryScrollPlane, type HeroScrollPlane } from './plane';
-import { createHeroFlight } from './flight';
+import { createHeroFlight, type HeroFlight } from './flight';
 import { watchImageHeroFlightUpgrade } from './upgrade';
 import { HeroPullSurface } from './pull';
 import { HeroRouteRegistry, type HeroRoute } from './routes';
@@ -85,6 +86,7 @@ import type {
   ImageHeroSnapshot,
   ImageHeroStageState,
 } from './types';
+import { heroProbeDisabled, heroProbeMark } from './probe';
 
 /** Keeps the Stage scroller and the routed scroller at the same offset. */
 type OpeningScrollBridge = {
@@ -142,6 +144,8 @@ type OpeningSession = HeroSessionBase & {
   handoffCommitted: boolean;
   allowExistingRoute: boolean;
   backgroundRecovery: Promise<boolean> | null;
+  /** The armed press's held flyer and motion, until the launch adopts or drops it. */
+  prepared: PreparedFlight | null;
 };
 
 type ClosingSession = HeroSessionBase & {
@@ -154,6 +158,8 @@ type ClosingSession = HeroSessionBase & {
   resolveClose: ((outcome: ImageHeroCloseOutcome) => void) | null;
   retirement: Promise<void> | null;
   routeScroll: { left: number; top: number };
+  /** Puts `inert` on the leaving route; deferred until the flight runs (`exposeGallery`). */
+  applyRouteInert?: (() => void) | null;
 };
 
 type HeroSession = OpeningSession | ClosingSession;
@@ -198,6 +204,25 @@ const BACKGROUND_SCROLL_RESTORE_MS = 1500;
 /* The store's own idle stage, so an idle update compares equal to the initial state. */
 const EMPTY_STAGE: ImageHeroStageState = INITIAL_HERO_RUNTIME.stage;
 
+type PreparedFlight = {
+  plane: HeroScrollPlane;
+  targetRect: HeroRect;
+  flight: HeroFlight;
+  motion: HeroMotion;
+  sourceRect: HeroRect;
+  stage: HeroStageNodes;
+  viewport: { width: number; height: number };
+};
+
+type ArmedOpen = {
+  id: number;
+  snapshot: ImageHeroSnapshot;
+  source: HTMLElement;
+  timer: number;
+  prepareFrame: number;
+  prepared: PreparedFlight | null;
+};
+
 const DETAIL_PATHNAME = /^\/pic\/(\d+)\/?$/;
 
 function backgroundHref(background: ImageHeroBackgroundLocation) {
@@ -234,6 +259,8 @@ function getGalleryLandingRect(element: HTMLElement) {
 export class HeroController {
   private initialized = false;
   private sessionSequence = 0;
+  /** A press on a card mounted the Stage ahead of the click; see `armOpen`. */
+  private armed: ArmedOpen | null = null;
   private readonly events = new HeroSignal();
   private readonly routes = new HeroRouteRegistry(() => this.events.notify());
   private stage: { sessionId: number; nodes: HeroStageNodes } | null = null;
@@ -395,6 +422,7 @@ export class HeroController {
   registerStage(sessionId: number, nodes: HeroStageNodes) {
     if (this.runtime.stage.sessionId !== sessionId) return () => {};
     const registration = { sessionId, nodes };
+    heroProbeMark('hx:t:stage-registered');
     this.stage = registration;
     this.syncLeaving();
     this.events.notify();
@@ -505,7 +533,109 @@ export class HeroController {
   // Intents
   // -------------------------------------------------------------------------
 
+  /**
+   * **The press lays out the Stage; the click only reveals it.** Between a finger landing on a
+   * card and the click that follows it there are 50–150ms in which nothing used to happen; the
+   * click then had to render the Stage (React), lay the whole document out to read the landing
+   * box, and only then could the flight start — ~30ms of a ~90ms click task at 4× CPU. Here the
+   * press mounts the Stage invisible (`visibility: hidden`, so laid out but neither painted nor
+   * hit-tested) under the session id the open will use, and the next frame lays it out for
+   * free. A click on the same card adopts it (`startOpening`); anything else — a scroll's
+   * `pointercancel`, a press on another card, the timeout — unmounts it. Nothing is fetched or
+   * decoded here: this is layout, not media warm-up.
+   */
+  armOpen(snapshot: ImageHeroSnapshot, source: HTMLElement, pointerType = 'touch') {
+    this.initialize();
+    if (
+      !snapshot.canAnimate ||
+      !source.isConnected ||
+      this.foreground ||
+      this.detailStep ||
+      this.closePreparation ||
+      this.runtime.phase !== 'gallery-idle' ||
+      heroProbeDisabled('arm')
+    ) {
+      return false;
+    }
+    const current = this.armed;
+    if (current && current.snapshot === snapshot && current.source === source) {
+      window.clearTimeout(current.timer);
+      current.timer = window.setTimeout(() => this.disarmOpen(current.id), HERO_ARM_TTL_MS);
+      return true;
+    }
+    this.disarmOpen();
+    const id = ++this.sessionSequence;
+    const armed: ArmedOpen = {
+      id,
+      snapshot,
+      source,
+      timer: window.setTimeout(() => this.disarmOpen(id), HERO_ARM_TTL_MS),
+      prepareFrame: 0,
+      prepared: null,
+    };
+    this.armed = armed;
+    this.updateRuntime({ stage: { phase: 'armed', snapshot, sessionId: id } });
+    /* Right after the press's own handler has committed the Stage. A mouse press gets a task of
+       its own; a touch cannot: until Blink knows whether a touch is a scroll it holds back
+       timers, posted tasks and frames alike (measured: none ran in 110ms of a held finger), so
+       the build runs in a microtask behind the press — after React commits the Stage, before
+       the finger lifts. */
+    const prepare = () => {
+      armed.prepareFrame = 0;
+      this.prepareArmedFlight(id);
+    };
+    if (pointerType === 'mouse') {
+      armed.prepareFrame = window.setTimeout(prepare, 0);
+    } else {
+      armed.prepareFrame = -1;
+      queueMicrotask(() => {
+        if (armed.prepareFrame === -1) prepare();
+      });
+    }
+    return true;
+  }
+
+  /** Unmount an armed Stage (all of them, or only session `id`). */
+  disarmOpen(id?: number) {
+    const armed = this.armed;
+    if (!armed || (id !== undefined && armed.id !== id)) return;
+    window.clearTimeout(armed.timer);
+    if (armed.prepareFrame > 0) window.clearTimeout(armed.prepareFrame);
+    armed.prepareFrame = 0;
+    armed.prepared?.motion.dispose();
+    this.armed = null;
+    const stage = this.runtime.stage;
+    if (stage.phase === 'armed' && stage.sessionId === armed.id) {
+      this.updateRuntime({ stage: EMPTY_STAGE });
+    }
+  }
+
+  /** The armed session id, iff the open about to start is the press that armed it. */
+  private adoptArmed(intent: HeroOpenIntent) {
+    const armed = this.armed;
+    if (!armed) return null;
+    this.armed = null;
+    window.clearTimeout(armed.timer);
+    if (armed.prepareFrame > 0) window.clearTimeout(armed.prepareFrame);
+    armed.prepareFrame = 0;
+    const stage = this.runtime.stage;
+    if (
+      stage.phase === 'armed' &&
+      stage.sessionId === armed.id &&
+      armed.source === intent.source &&
+      armed.snapshot.image.id === intent.snapshot.image.id &&
+      armed.snapshot.sourceKey === intent.snapshot.sourceKey &&
+      !intent.historyRestore
+    ) {
+      return armed;
+    }
+    armed.prepared?.motion.dispose();
+    if (stage.phase === 'armed') this.updateRuntime({ stage: EMPTY_STAGE });
+    return null;
+  }
+
   requestOpen(intent: HeroOpenIntent) {
+    heroProbeMark('hx:t:request');
     this.initialize();
     this.router = intent.navigation;
     if (!intent.snapshot.canAnimate || !intent.source.isConnected) return false;
@@ -742,14 +872,16 @@ export class HeroController {
         // The recognizer has already coalesced this into the scheduler's write phase.
         if (active()) pull.applyImmediate(sample);
       },
+      onCandidate: (ready) => pull.prime(ready),
       onCancel: ({ sample, velocity }: HeroPullRelease) => pull.settle(sample, velocity),
-      onCommit: ({ sample }: HeroPullRelease) => {
+      onCommit: ({ sample, velocity, velocityX }: HeroPullRelease) => {
         pull.commit(sample);
         void this.requestClose({
           imageId: route.imageId,
           navigation,
           backgroundMode: 'continue',
           cause: 'dismiss',
+          releaseVelocity: { x: velocityX, y: velocity },
         });
       },
     });
@@ -793,7 +925,7 @@ export class HeroController {
     const pull = new HeroPullSurface(
       { overlay: stage.overlay, floatingBack: stage.floatingBack },
       {
-        onOffset: (distance) => session.motion?.setPullOffset(distance),
+        onOffset: (distance, x) => session.motion?.setPullOffset(distance, x),
         onSeize: () => {
           session.pullSeized = true;
           // Hand the background sink and reveal cascade to the gesture.
@@ -812,6 +944,7 @@ export class HeroController {
       onPull: (sample) => {
         if (this.owns(session)) pull.applyImmediate(sample);
       },
+      onCandidate: (ready) => pull.prime(ready),
       onCancel: async ({ sample, velocity }: HeroPullRelease) => {
         await pull.settle(sample, velocity);
         // A fresh drag during the settle keeps the surface claimed.
@@ -860,7 +993,16 @@ export class HeroController {
     this.cancelRevealFocus();
     const background = intent.background ?? this.runtime.background ?? currentBackground();
     intent.background = background;
-    const id = ++this.sessionSequence;
+    const armed = this.adoptArmed(intent);
+    const adopted = armed?.id ?? null;
+    const id = adopted ?? ++this.sessionSequence;
+    if (adopted !== null && this.stage?.sessionId === adopted) {
+      /* React commits the new phase before this task paints, but the flight launches from a
+         microtask that may run first: reveal the laid-out Stage on the node itself so no
+         order of the two can paint a frame of flyer over an invisible window. */
+      this.stage.nodes.overlay.setAttribute('data-image-hero-stage-state', 'opening');
+      this.stage.nodes.floatingBack?.removeAttribute('data-image-hero-stage-armed');
+    }
     const record =
       options.historyRecord ??
       imageHeroHistory.createRecord(intent.snapshot, background, intent.detailHref, id);
@@ -899,7 +1041,9 @@ export class HeroController {
       handoffCommitted: false,
       allowExistingRoute: Boolean(options.allowExistingRoute),
       backgroundRecovery: null,
+      prepared: armed && !options.collapseRecord ? armed.prepared : null,
     };
+    if (armed?.prepared && session.prepared !== armed.prepared) armed.prepared.motion.dispose();
 
     // Plant a same-URL history entry now: it is a synchronous Back barrier while
     // the App Router is still preparing its asynchronous route commit.
@@ -917,6 +1061,7 @@ export class HeroController {
       this.setStage('opening', session);
       this.setPhase('opening.flight', session, background);
     }
+    heroProbeMark('hx:t:phase-set');
     void this.runOpening(session);
   }
 
@@ -929,12 +1074,14 @@ export class HeroController {
         session.collapsePromise = collapse;
       } else if (!session.historyRestore && !session.routeNavigationStarted) {
         if (!this.startRouteNavigation(session)) {
+          this.dropPreparedFlight(session);
           await this.reverseOpening(session, false);
           return;
         }
       }
 
       if (session.skipFlight) {
+        this.dropPreparedFlight(session);
         await this.recoverOpeningWithoutFlight(session, collapse);
         return;
       }
@@ -944,9 +1091,13 @@ export class HeroController {
         timeout: 1000,
         read: () => (this.stage?.sessionId === session.id ? this.stage.nodes : null),
       });
-      if (!this.owns(session)) return;
+      if (!this.owns(session)) {
+        this.dropPreparedFlight(session);
+        return;
+      }
       const frame = session.snapshot.previewFrame;
       if (!stage || !intent.source.isConnected || !frame) {
+        this.dropPreparedFlight(session);
         await this.recoverOpeningWithoutFlight(session, collapse);
         return;
       }
@@ -974,26 +1125,165 @@ export class HeroController {
       }
       await this.handoffOpening(session, route, stage);
     } catch (error) {
+      this.dropPreparedFlight(session);
       if (session.abort.signal.aborted || !this.owns(session)) return;
       console.error('[hero] opening transaction failed', error);
       await this.reverseOpening(session, false);
     }
   }
 
-  private launchFlight(session: OpeningSession, stage: HeroStageNodes, frame: FrameAsset) {
-    const { intent } = session;
+  /**
+   * The opening's flyer and motion: the plane, the landing box, the flyer, and every track.
+   * Shared by the click (`launchFlight`) and by a press building it ahead of the click inside
+   * the still-hidden Stage (`prepareArmedFlight`), where the tracks are held at frame 0.
+   */
+  private buildOpeningMotion(
+    stage: HeroStageNodes,
+    frame: FrameAsset,
+    source: HTMLElement,
+    sourceRect: HeroRect,
+    sessionId: number,
+    imageId: number,
+    continueBackground: boolean,
+  ) {
     const plane = getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
     const targetRect = getHeroRect(stage.target);
+    heroProbeMark('hx:t:rects');
     const flight = createHeroFlight({
       asset: frame,
-      treatment: intent.source,
+      treatment: source,
       plane,
-      from: session.sourceRect,
+      from: sourceRect,
       to: targetRect,
       direction: 'forward',
-      sessionId: session.id,
-      imageId: session.snapshot.image.id,
+      sessionId,
+      imageId,
     });
+    heroProbeMark('hx:t:flight-built');
+    try {
+      const motion = new HeroMotion({
+        flight,
+        from: sourceRect,
+        to: targetRect,
+        direction: 'forward',
+        background: getHeroBackgroundVisual(),
+        overlay: stage.overlay,
+        floatingBack: stage.floatingBack,
+        continueBackground,
+        // The container grows from the card itself, not from the picture's landing box:
+        // `_rectTween.end = Offset.zero & navSize` — the whole surface, not the media slot.
+        container: {
+          card: sourceRect,
+          cardRadius: getHeroCornerRadius(source),
+        },
+        choreography: 'container',
+      });
+      return { plane, targetRect, flight, motion };
+    } catch (error) {
+      flight.release();
+      throw error;
+    }
+  }
+
+  /**
+   * Build the armed press's opening in its hidden Stage, tracks held at frame 0, a frame after
+   * the Stage mounted (its layout is clean by then, so the reads are free). Pure geometry and
+   * animation setup on the card's own captured frame: nothing is fetched or decoded, the card
+   * is not touched (its leases wait for the click), and a press that never becomes a click
+   * disposes all of it (`disarmOpen`).
+   */
+  private prepareArmedFlight(id: number) {
+    heroProbeMark('hx:t:prep-enter');
+    const armed = this.armed;
+    const stage = this.stage;
+    if (
+      !armed ||
+      armed.id !== id ||
+      armed.prepared ||
+      stage?.sessionId !== id ||
+      this.foreground ||
+      this.runtime.phase !== 'gallery-idle' ||
+      !armed.source.isConnected
+    ) {
+      return;
+    }
+    const frame = armed.snapshot.previewFrame;
+    if (!frame) return;
+    try {
+      const sourceRect = getHeroRect(armed.source);
+      let built: ReturnType<HeroController['buildOpeningMotion']> | null = null;
+      const motion = holdHeroMotion(() => {
+        built = this.buildOpeningMotion(
+          stage.nodes,
+          frame,
+          armed.source,
+          sourceRect,
+          id,
+          armed.snapshot.image.id,
+          false,
+        );
+        return built.motion;
+      });
+      const result = built as ReturnType<HeroController['buildOpeningMotion']> | null;
+      if (!result) return;
+      armed.prepared = {
+        ...result,
+        motion,
+        sourceRect,
+        stage: stage.nodes,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      };
+    } catch {
+      // The click builds it the ordinary way.
+    }
+  }
+
+  /** The press's prepared opening, iff it still describes the geometry the click sees. */
+  private takePreparedFlight(session: OpeningSession, stage: HeroStageNodes) {
+    const prepared = session.prepared;
+    session.prepared = null;
+    if (!prepared) return null;
+    const same = (a: HeroRect, b: HeroRect) =>
+      Math.abs(a.left - b.left) < 0.5 &&
+      Math.abs(a.top - b.top) < 0.5 &&
+      Math.abs(a.width - b.width) < 0.5 &&
+      Math.abs(a.height - b.height) < 0.5;
+    /* The landing box is not re-read: the held tracks already hold the window at the card, so
+       a read now measures the scaled-down box. Nothing can have moved it without moving the
+       viewport (a resize), which is checked, or the card, which is. */
+    if (
+      prepared.stage === stage &&
+      prepared.viewport.width === window.innerWidth &&
+      prepared.viewport.height === window.innerHeight &&
+      same(prepared.sourceRect, session.sourceRect)
+    ) {
+      return prepared;
+    }
+    heroProbeMark('hx:t:prepared-stale');
+    prepared.motion.dispose();
+    return null;
+  }
+
+  private dropPreparedFlight(session: OpeningSession) {
+    session.prepared?.motion.dispose();
+    session.prepared = null;
+  }
+
+  private launchFlight(session: OpeningSession, stage: HeroStageNodes, frame: FrameAsset) {
+    const { intent } = session;
+    heroProbeMark('hx:t:launch');
+    const prepared = this.takePreparedFlight(session, stage);
+    const { plane, targetRect, flight, motion } =
+      prepared ??
+      this.buildOpeningMotion(
+        stage,
+        frame,
+        intent.source,
+        session.sourceRect,
+        session.id,
+        session.snapshot.image.id,
+        Boolean(session.collapseRecord),
+      );
     session.visual.add(flight.release);
     /* The card's bitmap is sized for a card: repaint the flyer from the detail's final the
        moment it decodes, mid-flight. It checks `canvas.isConnected` before every repaint, so
@@ -1003,32 +1293,18 @@ export class HeroController {
     }
     session.visual.add(leaseHeroCardChrome(intent.source));
     session.visual.add(leaseHeroVisibility(intent.source, false));
-
-    session.motion = new HeroMotion({
-      flight,
-      from: session.sourceRect,
-      to: targetRect,
-      direction: 'forward',
-      background: getHeroBackgroundVisual(),
-      overlay: stage.overlay,
-      floatingBack: stage.floatingBack,
-      continueBackground: Boolean(session.collapseRecord),
-      // The container grows from the card itself, not from the picture's landing box:
-      // `_rectTween.end = Offset.zero & navSize` — the whole surface, not the media slot.
-      container: {
-        card: session.sourceRect,
-        cardRadius: getHeroCornerRadius(intent.source),
-      },
-      choreography: 'container',
-    });
+    session.motion = motion;
+    motion.release();
 
     session.viewportBaseline = {
       destination: targetRect,
       planeWidth: plane.viewportWidth,
       planeHeight: plane.viewportHeight,
     };
+    heroProbeMark(prepared ? 'hx:t:motion-prepared' : 'hx:t:motion-built');
     this.bindOpeningScroll(session, stage);
     this.bindOpeningDismiss(session, stage);
+    heroProbeMark('hx:t:bound');
   }
 
   /** Push the detail URL, guarded by the provisional history barrier. */
@@ -1655,11 +1931,14 @@ export class HeroController {
       routeScroll: { left: route.scroller.scrollLeft, top: route.scroller.scrollTop },
     };
     this.foreground = session;
-    /* The leaving detail lets go of input in the same task as the gallery gets it back: the phase
-       below takes the gallery out of `inert`, and while the overlay was still a live modal layer
-       its focus trap pulled a focus the user had just given the gallery back into the detail —
-       for the two frames the flight waits before it starts (`runClosing`). */
-    session.shared.add(this.routes.freeze(route, session.owner));
+    /* The leaving detail lets go of input in the same task as the gallery gets it back, and both
+       wait for the flight to be running (`exposeGallery`): a shield takes the pointer at once,
+       while `inert` on the detail and the lift of the gallery's `inert` — each a restyle of a
+       whole subtree — land together under the moving picture. Done in one task, the overlay's
+       focus trap can never pull back a focus the user has just given the gallery. */
+    const freeze = this.routes.freeze(route, session.owner, { deferInert: true });
+    session.shared.add(freeze);
+    session.applyRouteInert = freeze.applyInert;
     this.setPhase('closing.flight', session, record.background);
     void this.runClosing(session, plane);
     return closePromise;
@@ -1672,15 +1951,20 @@ export class HeroController {
       return;
     }
     try {
-      /* The close has just changed what the shell renders around the detail: the gallery leaves
-         `inert`, which restyles every card (1,450 elements and ~66ms measured on a desktop,
-         several times that on a phone). Launched in the same frame, the flight's first frame was
-         presented that late with its clock already running, so the head of the leg never
-         showed. The first frame carries the restyle; the flight starts on the second. */
-      const signals = [session.abort.signal, this.lifecycleAbort.signal];
-      await waitForFrame(signals, HERO_ROUTE_TIMEOUT_MS);
-      await waitForFrame(signals, HERO_ROUTE_TIMEOUT_MS);
-      if (!(await this.guardClosing(session))) return;
+      /* No frame waits here any more. The gallery's `inert` restyle that the close used to wait
+         two frames for is now deferred until this flight is running (`exposeGallery`), so the
+         flight launches in the task that asked for the close: a released finger hands straight
+         over to the flight instead of freezing the picture for two frames. */
+      const exposeFallback = window.setTimeout(() => this.exposeGallery(session), 250);
+      session.shared.add(() => window.clearTimeout(exposeFallback));
+      /* Synchronous to the launch on purpose: the phase published by `beginClosing` re-renders
+         the shell in a microtask, and every rect read below would otherwise force that commit's
+         style and layout in front of the flight (~30ms at 4× CPU). Read now, the layout is the
+         clean one the detail was already showing. */
+      if ((session.retired || !this.owns(session)) && !(await this.guardClosing(session))) {
+        this.exposeGallery(session);
+        return;
+      }
       const asset = session.snapshot.previewFrame;
       if (!route.target?.isConnected || !thumbnail.isConnected || !asset) {
         await this.abandonToCollapse(session);
@@ -1722,8 +2006,15 @@ export class HeroController {
         // A swipe-down is already a motion the hand started, so it keeps the gesture's pose
         // instead of the container return.
         choreography: session.intent.cause === 'dismiss' ? 'dismiss' : 'container',
+        speed: releaseSpeedAlong(session.intent.releaseVelocity, from, to),
       });
 
+      /* The flyer's animation is ready once the compositor has it; one more frame and it has been
+         presented. The gallery restyle runs after that, underneath a moving flight. */
+      const flyer = flight.flyer.getAnimations()[0];
+      void (flyer?.ready ?? Promise.resolve())
+        .then(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+        .then(() => this.exposeGallery(session), () => this.exposeGallery(session));
       session.viewportBaseline = {
         destination: to,
         planeWidth: plane.viewportWidth,
@@ -1793,6 +2084,8 @@ export class HeroController {
    */
   private async abandonToCollapse(session: ClosingSession) {
     if (this.foreground !== session) return;
+    // No flight to run under: hand the gallery back now rather than after the collapse.
+    this.exposeGallery(session);
     session.abort.abort();
     session.shared.dispose();
     session.visual.dispose();
@@ -2842,6 +3135,23 @@ export class HeroController {
   // Runtime publication
   // -------------------------------------------------------------------------
 
+  /**
+   * Hand the gallery back to the shell once a close is on screen.
+   *
+   * Lifting `inert` restyles every card (1,450 elements, ~66ms on a desktop and several times that
+   * on a phone at 4× CPU). That restyle used to land in the very commit that started the close,
+   * so the flight had to wait two frames for it — the picture froze under a released finger for
+   * 120–250ms before it moved. The flight's tracks are transform and opacity on the compositor,
+   * which keeps producing frames while the main thread restyles: so the flight goes first, and
+   * the restyle runs underneath it.
+   */
+  private exposeGallery(session: HeroSession) {
+    if (!this.owns(session) || this.runtime.phase !== 'closing.flight') return;
+    if (session.kind === 'closing') session.applyRouteInert?.();
+    this.updateRuntime({ galleryExposed: true });
+    this.syncLeaving();
+  }
+
   private setStage(phase: ImageHeroStageState['phase'], session: OpeningSession | null) {
     this.updateRuntime({
       stage: session ? { phase, snapshot: session.snapshot, sessionId: session.id } : EMPTY_STAGE,
@@ -2858,13 +3168,22 @@ export class HeroController {
       : phase === 'closing.flight' ? 'back'
       : phase === 'reversing' ? (session?.kind === 'closing' ? 'forward' : 'back')
       : null;
-    this.updateRuntime({ phase, direction, sessionId: session?.id ?? null, imageId, background });
+    this.updateRuntime({
+      phase,
+      direction,
+      sessionId: session?.id ?? null,
+      imageId,
+      background,
+      // Only a close holds the gallery back, and only until its flight is running.
+      galleryExposed: phase !== 'closing.flight',
+    });
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       if (direction) root.dataset.imageHeroTransition = direction;
       else delete root.dataset.imageHeroTransition;
       root.dataset.imageHeroState = phase;
     }
+    heroProbeMark(`hero-phase:${phase}`);
     this.syncLeaving();
     if (phase === 'detail-idle' && !session) this.settleDetailSurface();
     else if (phase === 'recovering' && !session) this.scheduleIdleRecovery();
@@ -2974,7 +3293,10 @@ export class HeroController {
   private syncLeaving() {
     if (typeof document === 'undefined') return;
     const wanted = new Set<HTMLElement>();
-    if (this.runtime.direction === 'back') {
+    /* A close marks its surfaces once its flight runs (`exposeGallery`): the marker's
+       `[data-image-hero-leaving] *` rule restyles the whole leaving detail (~230 nodes, 16–34ms at
+       4× CPU), and the close shield already holds the pointer until then. */
+    if (this.runtime.direction === 'back' && this.runtime.galleryExposed) {
       if (this.stage) wanted.add(this.stage.nodes.overlay);
       for (const route of this.routes.values()) {
         wanted.add(route.overlay);
@@ -3002,7 +3324,8 @@ export class HeroController {
       next.sessionId === current.sessionId &&
       next.imageId === current.imageId &&
       next.stage === current.stage &&
-      next.background === current.background
+      next.background === current.background &&
+      next.galleryExposed === current.galleryExposed
     ) {
       return;
     }

@@ -1482,3 +1482,53 @@ The scheme, the motion tier, the speed and entrance motion stay on the device; t
 - **Scroll during the open.** The handoff holds the Stage on screen while a stream latched to it is still running (≤600ms, 120ms quiet): a route revealed over a latched stream could only follow it from the main thread, in steps.
 - **Handoff latency.** The detail body is pre-rendered hidden (`<Activity mode="hidden">`) once the flight's record exists, so the post-landing publish is a visibility switch; the `PicDetail` chunk is warmed once on gallery idle. 4× CPU, first open: landed→handoff 133–333ms → ~100ms.
 - Tools: `node scripts/reviewBrowser.mjs --hero-stress` (random open/Back/Esc/re-tap bursts, asserts a consistent settled screen), `--hero-open-probe [--cpu=4] [--no-scroll]` (phase timeline, body visibility). `HERO_BROWSER_CHANNEL=chromium` runs `test:hero` on bundled Chromium; `PYTHON=python3` overrides the interpreter. Known residual: a burst like open A → Back → open A → open B can leave A's detail entry under B, so one Back from B lands on A's detail (consistent and interactive, but one extra Back).
+
+## Hero: following the hand (2026-10, round 3)
+
+Measured with `HERO_SCRIPT=scripts/probeHeroCost.py node scripts/reviewBrowser.mjs --mobile [--close|--pull]` (390px, 4× CPU; every main-thread task over 40ms, broken into its children, plus User Timing marks when present).
+
+- **A close never waits for a restyle again.** Releasing a dismiss drag (or Esc / Back) froze the picture under the finger for 120–250ms: the close waited two frames for the gallery's `inert` restyle, then forced the `[data-image-hero-leaving] *` restyle of the whole detail and the detail's own `inert` restyle in front of its first frame. Now the flight launches synchronously in the task that asked for the close (rect reads before the shell's microtask commit), a transparent shield (`routes.freeze({deferInert})`) holds the pointer, and `HeroController.exposeGallery` — after the flyer's animation is ready plus one frame — lifts the gallery's `inert` (`runtime.galleryExposed`, read by `AppLayout`'s `closeHoldsGallery`), puts `inert` on the leaving detail and the leaving marker on, all in one task, under a flight the compositor keeps moving. Release→first flight frame at 4×: ~200ms → 75–90ms; Esc 126–294ms → 78–90ms. Both ways of cutting input (`inert`, `pointer-events`) restyle a subtree: ~30ms each for the 180-node detail at 4×.
+- **The pull is the finger's, 1:1, on both axes.** The rubber band (`raw/(1+raw/360)`) left the picture 25px behind at the commit distance; it is gone (a dismiss has no edge to resist). The surface follows x too once the vertical drag is claimed. The slop the axis lock spends (6px) is subtracted at the slop boundary, Flutter-style, so the claim is not a jump. Same slop rule in the 上一张/下一张 swipe.
+- **Release velocity is `HeroVelocityTracker`** (`lib/hero/velocity.ts`): 100ms horizon, 40ms stop rule (also against the pointerup's time), least-squares quadratic; a pointerup at the last move's position feeds only the stop rule — fitted as a sample it read every constant flick as a finger moving back. A release moving back (≥0.25px/ms against the drag) cancels both the dismiss and the step, however far it got.
+- **The dismiss leaves at the finger's speed** when the release heads towards the card (`releaseSpeedAlong` → `createHeroLeg({speed})`, a relaunched spring). Away from the card (the usual case: pulling down, card above) it launches from rest as before.
+- **The sink has no velocity step.** `easeSinkWindow`: forward eases out to rest at p 0.6 (it used to stop at full speed there), back is a smoothstep from rest at p 0.4. Depth (0.95), windows and pivot unchanged.
+- **The drawer gesture no longer restyles the page on every open.** `useDrawerSwipe`'s `enabled` flips off in the opening commit; its cleanup's hand-back (`gsap.set clearProps` + forced `getComputedStyle` reads) ran even when no gesture had touched the panel. Gated on `touched`. Tap→Stage commit at 4×: 40–70ms → 13–24ms (the remaining style pass moves to the flight's first rect read).
+- Remaining tap→first-frame budget on a 4× phone (~140ms): Stage commit ~20ms, Stage rect read (style+layout) ~13–23ms, `HeroMotion` build ~35ms (`startShared` ~25ms: overlay/container/sink keyframes), first frame ~25ms. Next candidates: start reveal and sink tracks a frame later with the flyer's `startTime`, or keep a pre-laid-out Stage mounted.
+- `test:hero` cases added: `pull-follow`, `pull-retreat`; `pull-frame`/`pull-loading` now assert 1:1 less slop.
+
+## Hero: the press builds the open, and how it is measured (2026-10, round 4)
+
+- **The press builds the opening; the click only plays it.** `useHero` → `armImageHeroOpen` on a
+  card's `pointerdown` (not during a fling: `isScrollMoving`). `HeroController.armOpen` mounts the
+  Stage under the session id the open will use (`stage.phase === 'armed'`), hidden with an empty
+  `clip-path` — never `visibility`/`pointer-events`/`inert`: those inherit, and lifting them
+  restyled the whole Stage inside the click (~14ms at 4×). Right after the press,
+  `prepareArmedFlight` builds the plane, the flyer and every track inside `holdHeroMotion`
+  (created, parsed, paused at frame 0). The click adopts the armed id (`adoptArmed`), checks the
+  card rect and viewport (`takePreparedFlight` — the landing box is *not* re-read: the held
+  container tracks already scale it), applies the card leases and calls `HeroMotion.release()`.
+  Anything else (pointercancel, another card, `HERO_ARM_TTL_MS`) disposes it. Nothing is fetched
+  or decoded at the press; the flight-upgrade watch still starts at launch.
+- **Touch must build in a microtask.** While a finger is down and Blink does not yet know whether
+  it is a scroll, it holds back timers, `scheduler.postTask` (even `user-blocking`) and frames —
+  none ran in 110ms of a held finger. A mouse press builds in a `setTimeout(0)`.
+- **Scalar tracks are two keyframes + `linear()`** (`ScalarTrack`): fades, reveal rises and the
+  sink. Identical frames (both interpolate linearly between the same samples), 0.04ms instead of
+  0.29ms per `animate()`, and `linear()` timing runs on the compositor (verified under a 300ms
+  main-thread block). The flyer and container tracks stay per-sample: they are arcs, not scalars.
+- **Shared tracks are not deferred past the first frame.** Tried on paper: the forward spring
+  covers 5% of its travel in one frame and ~17% in two, so a window that starts late visibly
+  lags the flyer.
+- **Pull layers are promoted on the candidate pointerdown** (`data-image-hero-pull-ready`,
+  `HeroPullController.prime`), so the first dragged frame moves layers instead of creating them.
+- **Rubber band kept** (owner, round 4): y = raw / (1 + raw/360); x follows at the same ratio.
+- **Acceptance harness** `scripts/acceptHeroMatrix.py` (via `HERO_SCRIPT`): trace-based latency
+  from the input's own `timeStamp` to the renderer's draw of the commit carrying the response
+  (`heroProbeMark`, gated on `__HERO_PROBE__`); dropped frames while a compositor animation
+  runs; longest main-thread task; per-move p95; scroll-update latency from Chrome's
+  `InputLatency::GestureScrollUpdate` (`RENDERER_SWAP`). Two traps: `PipelineReporter`'s
+  `scroll_state` says MAIN_THREAD on any page with a stylesheet (use the latency components'
+  `RENDERING_SCHEDULED_MAIN`), and "presented" includes headless software-GL display (30–60ms
+  a frame) — budget on the renderer's draw. Floors on a bare page: an input that writes a style
+  draws 32ms later at 1×; main-driven move p95 33ms at 1×, ~65ms at 4×. `--off=arm` turns the
+  press build off for A/B.

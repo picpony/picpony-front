@@ -13,9 +13,12 @@ import type Link from 'next/link';
 import type { ImagePreview } from '@/lib/types/image';
 import { cancelImageDetailPrefetch } from '@/lib/detail';
 import {
+  armImageHeroOpen,
   canAnimateImageHero,
+  disarmImageHeroOpen,
   getImageHeroNavigation,
   isScrollLikelyActive,
+  isScrollMoving,
   prepareImageHero,
   requestImageHeroOpen,
   warmImageHero,
@@ -182,8 +185,13 @@ export function useHeroLink<T extends HTMLElement>({
         return;
       }
       cancelIntent();
-      warmRouteAndMedia('immediate');
-      prepare();
+      // The press already warmed and prepared (and armed the Stage); only a click with no press
+      // before it — the keyboard — pays for that here.
+      const cached = preparedRef.current;
+      if (!cached || Date.now() - cached.createdAt >= SNAPSHOT_REUSE_MS) {
+        warmRouteAndMedia('immediate');
+        prepare();
+      }
       if (!activateHero()) return;
       clickOwnedRef.current = true;
       event.preventDefault();
@@ -226,6 +234,15 @@ export function useHeroLink<T extends HTMLElement>({
       // 100ms or more before the click lands.
       cancelIntent();
       warmRouteAndMedia('immediate');
+      /* Lay the Stage out now, in the gap before the click (`armOpen`) — not while a fling is
+         still running, where this press is far more likely to stop the scroll than to open. */
+      const source = sourceRef.current;
+      if (source && !isScrollMoving()) {
+        const snapshot = prepare();
+        if (snapshot && canAnimateImageHero(snapshot)) {
+          armImageHeroOpen(snapshot, source, event.pointerType);
+        }
+      }
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
         capturedPointerRef.current = event.pointerId;
@@ -245,6 +262,8 @@ export function useHeroLink<T extends HTMLElement>({
       }
     },
     onPointerCancel: (event: PointerEvent<HTMLAnchorElement>) => {
+      // The press became a scroll (or the system took it): the click is not coming.
+      disarmImageHeroOpen();
       if (capturedPointerRef.current !== event.pointerId) return;
       capturedPointerRef.current = null;
     },

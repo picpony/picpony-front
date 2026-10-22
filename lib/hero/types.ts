@@ -42,7 +42,7 @@ export type ImageHeroSnapshot = {
 };
 
 export type ImageHeroStageState = {
-  phase: 'idle' | 'opening' | 'landed';
+  phase: 'idle' | 'armed' | 'opening' | 'landed';
   snapshot: ImageHeroSnapshot | null;
   sessionId: number | null;
 };
@@ -58,6 +58,12 @@ export type ImageHeroRuntimeState = {
      in the controller. */
   stage: ImageHeroStageState;
   background: ImageHeroBackgroundLocation | null;
+  /**
+   * A close has put its flight on the compositor, so the shell may hand the gallery back
+   * (lift `inert`, show its scrollbar). Until then the list stays exactly as it was under the
+   * detail — see `HeroController.exposeGallery`.
+   */
+  galleryExposed: boolean;
 };
 
 export type ImageHeroCloseOutcome = 'closed' | 'handled' | 'restored';
@@ -124,6 +130,8 @@ export type HeroCloseIntent = {
   navigation: HeroNavigation;
   backgroundMode?: 'fresh' | 'continue';
   cause?: 'button' | 'history' | 'dismiss' | 'interrupt';
+  /** A dismiss drag's finger velocity at release, px/ms; the close leaves at that speed. */
+  releaseVelocity?: { x: number; y: number };
 };
 
 /**

@@ -431,17 +431,24 @@ export default function AppLayout({
      pill floating over /search (R12-018). */
   const browserLeftDetail =
     isImageDetailOpen && typeof window !== 'undefined' && !/^\/pic\/[^/]+$/.test(window.location.pathname);
-  const heroSettledOnDetail = imageHeroRuntime.phase === 'detail-idle';
+  /* A close holds the gallery exactly as it was under the detail until its flight is on the
+     compositor (`galleryExposed`, see `HeroController.exposeGallery`): the restyle that lifting
+     `inert` costs then runs under a moving picture instead of in front of it. */
+  const closeHoldsGallery =
+    imageHeroRuntime.phase === 'closing.flight' && !imageHeroRuntime.galleryExposed;
+  const heroSettledOnDetail = imageHeroRuntime.phase === 'detail-idle' || closeHoldsGallery;
   /* The gallery under an open detail is inert — **only once the detail has settled**. `inert` on
      this `<main>` restyles its whole subtree (every card; measured 1,450 elements and up to 66ms
      on a desktop, several times that on a phone), so it must not flip inside a flight's frames:
      the intercepted route commits mid-flight on an open, and a cancelled close turning back
      towards the detail used to flip it at the instant it reversed, taking the head of the
      reversed leg with it. The overlay already covers the gallery while it flies. A return
-     exposes the gallery at once — left inert until the route commit, a wheel or touch stream
+     exposes the gallery as soon as its flight is running — left inert until the route commit, a wheel or touch stream
      latched onto the non-scrollable host and stayed there after the flight landed — and the
-     close waits a frame for that restyle before it flies (`runClosing`). */
-  const detailCovers = isImageDetailOpen && imageHeroRuntime.direction !== 'back';
+     close holds the gallery as it is until its flight is running, so the restyle lands under the
+     moving picture (`closeHoldsGallery` below, `HeroController.exposeGallery`). */
+  const detailCovers =
+    isImageDetailOpen && (imageHeroRuntime.direction !== 'back' || closeHoldsGallery);
   /* And not in the commit that settles it either, but two frames later: that commit is the one
      that shows the detail, and the gallery's restyle in it held the detail's first settled frame
      back by ~50ms on a phone at 4× CPU. Nothing reaches the gallery meanwhile — the detail covers

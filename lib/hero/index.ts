@@ -14,6 +14,7 @@ import type {
   HeroNavigation,
   HeroOpenIntent,
   HeroRouteRegistration,
+  ImageHeroSnapshot,
 } from './types';
 
 export type {
@@ -46,7 +47,7 @@ export {
 } from './runtime';
 export { findImageHeroCardLink } from './dom';
 export { warmImageHeroFrame } from './frameCache';
-export { isScrollLikelyActive } from './input';
+export { isScrollLikelyActive, isScrollMoving } from './input';
 export { publishWhenHeroSettled } from './publish';
 export {
   canAnimateImageHero,
@@ -56,6 +57,19 @@ export {
 } from './media';
 
 // --- Intents -------------------------------------------------------------
+
+/** A press on a card: pre-mount its Stage for the click that may follow (`armOpen`). */
+export function armImageHeroOpen(
+  snapshot: ImageHeroSnapshot,
+  source: HTMLElement,
+  pointerType?: string,
+) {
+  return imageHeroController.armOpen(snapshot, source, pointerType);
+}
+
+export function disarmImageHeroOpen() {
+  imageHeroController.disarmOpen();
+}
 
 export function requestImageHeroOpen(intent: HeroOpenIntent) {
   return imageHeroController.requestOpen(intent);

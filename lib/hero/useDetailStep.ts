@@ -36,6 +36,7 @@ import {
   type StepDirection,
   type StepMotion,
 } from './step';
+import { heroProbeMark } from './probe';
 
 export type { StepDirection } from './step';
 
@@ -465,6 +466,7 @@ export function useDetailStep({
           const element = contentRef.current;
           if (element && draggingRef.current) {
             element.style.transform = `translate3d(${dragOriginRef.current + offset}px, 0, 0)`;
+            heroProbeMark('hx:step-write');
           }
         },
         onRelease: ({ speed, direction }) => {
