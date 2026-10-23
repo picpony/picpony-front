@@ -80,7 +80,7 @@ def check(browser, scenario, touch=False):
             assert urlparse(page.url).path == '/history', 'Back closes the layer, not its page'
             trigger.click()
 
-        username = dialog.get_by_label('用户名', exact=True)
+        username = dialog.get_by_label('用户名或邮箱', exact=True)
         expect(username).to_be_visible()
         expect(dialog.get_by_role('progressbar')).to_have_count(0)
         if touch:

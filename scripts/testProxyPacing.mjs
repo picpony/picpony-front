@@ -138,6 +138,51 @@ test('P1-F1 / P4-O2: a stalled body aborts the upstream call and answers 408, no
   assert.match(failure.error.message, /上传中断/);
 });
 
+test('a small declared body goes upstream whole, with its length, never chunked (WAF 拦截分块请求)', async () => {
+  let init;
+  const proxy = loadProxy(async (_url, value) => { init = value; return Response.json({ revision: 2 }); });
+  const payload = JSON.stringify({ visited_at: 1 });
+  const response = await proxy.exports.POST(request('https://app.invalid/api/v1/me/browsing-history/1', {
+    method: 'PUT', body: payload,
+    headers: { 'content-type': 'application/json', 'content-length': String(payload.length) },
+  }), context('me', 'browsing-history', '1'));
+  assert.equal(response.status, 200);
+  assert.equal(Object.prototype.toString.call(init.body), '[object ArrayBuffer]', 'a buffer, so fetch sends a Content-Length');
+  assert.equal(new TextDecoder().decode(init.body), payload);
+  assert.equal(init.headers.has('content-length'), false, 'fetch computes the length itself');
+  assert.deepEqual(proxy.budgets, [30_000], 'a buffered body gets the plain answer budget');
+  assert.equal(proxy.live().length, 0, 'no timer outlives the answer');
+});
+
+test('a body larger than declared is cut off at the cap with a 413', async () => {
+  let calls = 0;
+  const proxy = loadProxy(async () => { calls += 1; return Response.json({}); });
+  const big = new Uint8Array(1024 * 1024 + 1);
+  const body = new ReadableStream({ start(controller) { controller.enqueue(big); controller.close(); } });
+  const response = await proxy.exports.POST(request('https://app.invalid/api/v1/me/preferences', {
+    method: 'PUT', body, duplex: 'half', headers: { 'content-type': 'application/json', 'content-length': '10' },
+  }), context('me', 'preferences'));
+  assert.equal(response.status, 413);
+  assert.equal(calls, 0);
+});
+
+test('a streamed upload keeps its declared Content-Length upstream', async () => {
+  let init;
+  const proxy = loadProxy(async (_url, value) => {
+    init = value;
+    const reader = value.body.getReader();
+    while (!(await reader.read()).done) { /* drain */ }
+    return Response.json({ url: 'x' });
+  });
+  const body = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(4)); controller.close(); } });
+  await proxy.exports.POST(request('https://app.invalid/api/v1/me/avatar', {
+    method: 'POST', body, duplex: 'half',
+    headers: { 'content-type': 'multipart/form-data; boundary=x', 'content-length': '4' },
+  }), context('me', 'avatar'));
+  assert.ok(init.body instanceof ReadableStream, 'multipart still streams');
+  assert.equal(init.headers.get('content-length'), '4');
+});
+
 test('P4-O2: an upstream that fails on its own is still a 502', async () => {
   const proxy = loadProxy(async () => { throw new TypeError('fetch failed'); });
   const response = await proxy.exports.POST(request('https://app.invalid/api/v1/me/uploads/works', {

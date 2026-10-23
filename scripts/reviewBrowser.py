@@ -25,12 +25,30 @@ USER = {'id': 1, 'username': 'Review Admin', 'role': 'super_admin', 'token': 're
         'api_key': 'review-fixture-key', 'email': 'review@example.test', 'email_verified': True,
         'avatar': '', 'experience': 1350, 'coins': 100}
 cache = {}
+STAMP = 'Mon 2024-01-01 8:00 AM CST (UTC+08:00)'
 results = []
 failures = []
 
 
 def fulfill_json(route, value):
     route.fulfill(status=200, content_type='application/json', body=json.dumps(value))
+
+
+def refuse(route, message):
+    """The Rust backend's refusal: a non-2xx with `{"error":{"code","message"}}`. 409 rather than a
+    5xx (whose words the app replaces with 服务暂时不可用) or a 400/403 (which it never retries)."""
+    route.fulfill(status=409, content_type='application/json',
+                  body=json.dumps({'error': {'code': 'FIXTURE_REFUSED', 'message': message}}))
+
+
+def api_route(path):
+    """A `page.route` matcher for one PicPony `/api/v1` path, any query."""
+    return lambda url: urllib.parse.urlparse(url).path == '/api/v1' + path
+
+
+def only(method, handler):
+    """Hands `method` requests to `handler`; every other one goes on to the context fixtures."""
+    return lambda route: handler(route) if route.request.method == method else route.fallback()
 
 
 def admin_actions(context):
@@ -46,7 +64,7 @@ def admin_actions(context):
     page = context.new_page()
     audit_reads = []
     page.on('request', lambda request: audit_reads.append(request.url)
-            if 'action=admin_get_all_messages' in request.url else None)
+            if '/api/v1/admin/messages' in request.url else None)
     try:
         page.goto(BASE + '/admin?tab=messages', wait_until='networkidle')
         expect(page.get_by_label('审计用户 ID', exact=True)).to_be_visible()
@@ -58,7 +76,7 @@ def admin_actions(context):
         page.get_by_role('button', name='查看全站私信', exact=True).click()
         expect(page.get_by_text('Review fixture message', exact=True)).to_be_visible()
         pending = []
-        page.route('**/api.php?action=admin_get_all_messages*', lambda route: pending.append(route))
+        page.route(api_route('/admin/messages'), only('GET', pending.append))
         user_id = page.get_by_label('审计用户 ID', exact=True)
         user_id.fill('1')
         user_id.press('Enter')
@@ -68,8 +86,9 @@ def admin_actions(context):
         wait_requests(2)
         assert len(pending) == 2, 'Both explicit audit searches must be sent'
         def message(text):
-            return {'success': True, 'messages': [{'id': 10, 'content': text, 'sender_name': 'Fixture',
-                    'receiver_name': 'Review Admin', 'is_read': 1, 'created_at': '2024-01-01'}]}
+            return {'messages': [{'id': 10, 'sender_id': 2, 'sender_name': 'Fixture', 'receiver_id': 1,
+                    'receiver_name': 'Review Admin', 'content': text, 'read_at': STAMP,
+                    'created_at': STAMP}], 'next_cursor': None}
         fulfill_json(pending[1], message('latest audit result'))
         expect(page.get_by_text('latest audit result', exact=True)).to_be_visible()
         fulfill_json(pending[0], message('stale audit result'))
@@ -78,7 +97,7 @@ def admin_actions(context):
         expect(page.get_by_text('stale audit result', exact=True)).to_have_count(0)
         page.get_by_role('button', name='检索', exact=True).click()
         wait_requests(3)
-        fulfill_json(pending[-1], {'success': False, 'error': 'Fixture denied'})
+        refuse(pending[-1], 'Fixture denied')
         expect(page.get_by_text('Fixture denied', exact=True)).to_be_visible()
         page.get_by_role('button', name='重试', exact=True).click()
         wait_requests(4)
@@ -88,21 +107,21 @@ def admin_actions(context):
     finally:
         page.close()
 
-    for tab, action, text in [('users', 'admin_get_users', 'review@example.test'),
-                              ('shop', 'get_shop_items', 'Fixture item'),
-                              ('reports', 'admin_get_reports', 'Fixture report'),
-                              ('notifications', 'admin_get_notifications', 'Fixture notice'),
-                              ('team', 'get_team_members', 'FixtureDev'),
-                              ('blacklist', 'admin_get_blacklist', None),
-                              ('wealth', 'admin_get_users', 'Review Admin')]:
+    for tab, path, text in [('users', '/admin/users', 'review@example.test'),
+                            ('shop', '/shop/items', 'Fixture item'),
+                            ('reports', '/admin/image-reports', 'Fixture report'),
+                            ('notifications', '/admin/notifications', 'Fixture notice'),
+                            ('team', '/team-members', 'FixtureDev'),
+                            ('blacklist', '/admin/image-blocklist', None),
+                            ('wealth', '/admin/users', 'Review Admin')]:
         page = context.new_page()
         deny = {'value': True}
         def respond(route):
             if deny['value']:
-                fulfill_json(route, {'success': False, 'error': 'Fixture collection denied'})
+                refuse(route, 'Fixture collection denied')
             else:
                 route.fallback()
-        page.route('**/api.php?action=' + action + '*', respond)
+        page.route(api_route(path), only('GET', respond))
         try:
             page.goto(BASE + '/admin?tab=' + tab, wait_until='networkidle')
             expect(page.get_by_text('Fixture collection denied', exact=True)).to_be_visible()
@@ -116,7 +135,7 @@ def admin_actions(context):
 
     page = context.new_page()
     pending = []
-    page.route('**/api.php?action=admin_send_notification', lambda route: pending.append(route))
+    page.route(api_route('/admin/notifications'), only('POST', pending.append))
     try:
         page.goto(BASE + '/admin?tab=notifications', wait_until='networkidle')
         page.get_by_label('通知标题', exact=True).fill('Fixture title')
@@ -148,8 +167,8 @@ def admin_actions(context):
         page.wait_for_timeout(100)
         assert len(pending) == 1, 'Only one confirmed notification may be pending'
         assert json.loads(pending[0].request.post_data) == {
-            'user_id': 2, 'title': 'Fixture title', 'content': 'Fixture body', 'is_important': False}
-        fulfill_json(pending[0], {'success': True})
+            'recipient_id': 2, 'title': 'Fixture title', 'content': 'Fixture body', 'important': False}
+        fulfill_json(pending[0], {'id': 2})
         expect(page.get_by_label('通知标题', exact=True)).to_have_value('')
         # A broadcast is an explicit choice with a separate, audience-naming confirmation.
         page.get_by_label('通知标题', exact=True).fill('Fixture broadcast')
@@ -163,8 +182,8 @@ def admin_actions(context):
         broadcast.get_by_role('button', name='确认', exact=True).click()
         wait_requests(2)
         assert json.loads(pending[1].request.post_data) == {
-            'user_id': 0, 'title': 'Fixture broadcast', 'content': 'Fixture broadcast body', 'is_important': False}
-        fulfill_json(pending[1], {'success': False, 'error': '评审通知发送失败'})
+            'recipient_id': None, 'title': 'Fixture broadcast', 'content': 'Fixture broadcast body', 'important': False}
+        refuse(pending[1], '评审通知发送失败')
         expect(page.locator('.z-toast').get_by_text('评审通知发送失败', exact=True)).to_be_visible()
         expect(page.get_by_label('通知标题', exact=True)).to_have_value('Fixture broadcast')
     finally:
@@ -172,7 +191,8 @@ def admin_actions(context):
 
     page = context.new_page()
     pending = []
-    page.route('**/api.php?action=admin_save_shop_item', lambda route: pending.append(route))
+    page.route(api_route('/admin/shop/items'), only('POST', pending.append))
+    page.route(api_route('/admin/shop/items/1'), only('PUT', pending.append))
     try:
         page.goto(BASE + '/admin?tab=shop', wait_until='networkidle')
         add_form = page.get_by_role('form', name='添加商品', exact=True)
@@ -181,9 +201,10 @@ def admin_actions(context):
         add = add_form.get_by_role('button', name='添加商品', exact=True)
         add.evaluate('(button) => {button.click(); button.click()}')
         wait_requests(1)
+        assert pending[0].request.method == 'POST'
         assert json.loads(pending[0].request.post_data) == {
-            'id': 0, 'name': 'New fixture item', 'description': '', 'image_url': '',
-            'price': 10, 'stock': 100, 'active': 1}
+            'name': 'New fixture item', 'description': '', 'image_url': None,
+            'price': 10, 'stock': 100, 'active': True}
         # Creation and an existing row's editor own separate drafts and mutation locks.
         edit = page.get_by_role('button', name='编辑商品 Fixture item', exact=True)
         expect(edit).to_be_enabled()
@@ -196,23 +217,24 @@ def admin_actions(context):
         save = editor.get_by_role('button', name='保存修改', exact=True)
         save.evaluate('(button) => {button.click(); button.click()}')
         wait_requests(2)
+        assert pending[1].request.method == 'PUT'
         assert json.loads(pending[1].request.post_data) == {
-            'id': 1, 'name': 'Edited fixture item', 'description': 'Fixture description', 'image_url': '',
-            'price': 10, 'stock': 3, 'active': 1}
+            'name': 'Edited fixture item', 'description': 'Fixture description', 'image_url': None,
+            'price': 10, 'stock': 3, 'active': True, 'expected_revision': 1}
         add.evaluate('(button) => button.click()')
         save.evaluate('(button) => button.click()')
         page.wait_for_timeout(100)
         assert len(pending) == 2, 'Neither pending mutation may submit twice'
         expect(add).to_have_attribute('aria-busy', 'true')
         expect(save).to_have_attribute('aria-busy', 'true')
-        fulfill_json(pending[0], {'success': False, 'error': '评审商品添加失败'})
+        refuse(pending[0], '评审商品添加失败')
         # The painted snackbar and persistent live region are separate intentional nodes.
         expect(page.locator('.z-toast').get_by_text('评审商品添加失败', exact=True)).to_be_visible()
         expect(page.get_by_role('alert').filter(has_text='评审商品添加失败')).to_have_count(1)
         expect(field).to_have_value('New fixture item')
         expect(add).not_to_have_attribute('aria-busy', 'true')
         expect(save).to_have_attribute('aria-busy', 'true')
-        fulfill_json(pending[1], {'success': False, 'error': '评审商品修改失败'})
+        refuse(pending[1], '评审商品修改失败')
         expect(page.locator('.z-toast').get_by_text('评审商品修改失败', exact=True)).to_be_visible()
         expect(editor.get_by_label('商品名称', exact=False)).to_have_value('Edited fixture item')
         expect(save).not_to_have_attribute('aria-busy', 'true')

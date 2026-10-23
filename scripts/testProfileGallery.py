@@ -30,10 +30,12 @@ USER = {'id': 1, 'username': 'fixture', 'role': 'user', 'token': 'review-fixture
         'email': 'review@example.test', 'email_verified': True, 'avatar': '', 'experience': 1350}
 RESULTS = []
 FAILURES = []
+# The Rust backend's folder rows (`GET /api/v1/users/{owner_id}/favorite-folders`).
+STAMP = 'Mon 2024-01-01 8:00 AM CST (UTC+08:00)'
 FOLDERS = [
-    {'id': 1, 'name': '主收藏夹', 'is_main': 1, 'item_count': 1139, 'latest_image_id': 3004},
-    {'id': 8, 'name': '测试合并', 'is_main': 0, 'item_count': 10, 'latest_image_id': 3005},
-    {'id': 61, 'name': 'panel', 'is_main': 0, 'item_count': 0, 'latest_image_id': None},
+    {'id': 1, 'name': '主收藏夹', 'is_main': True, 'created_at': STAMP, 'image_count': 1139, 'latest_image_id': 3004},
+    {'id': 8, 'name': '测试合并', 'is_main': False, 'created_at': STAMP, 'image_count': 10, 'latest_image_id': 3005},
+    {'id': 61, 'name': 'panel', 'is_main': False, 'created_at': STAMP, 'image_count': 0, 'latest_image_id': None},
 ]
 
 
@@ -112,19 +114,24 @@ class Fixtures:
         parsed = urllib.parse.urlparse(request.url)
         target = unwrap(request.url)
         params = urllib.parse.parse_qs(target.query)
-        action = params.get('action', [''])[0]
-        if action == 'add_browsing_history':
-            self.history.append(json.loads(request.post_data))
-            self.json(route, {'success': True})
+        # PicPony's Rust backend (`/api/v1/...`, never Derpibooru's `/api/v1/json/...`), by route.
+        picpony = None
+        if re.match(r'/api/v1(/|$)', parsed.path) and not parsed.path.startswith('/api/v1/json'):
+            picpony = parsed.path[len('/api/v1'):]
+        visit = picpony and re.fullmatch(r'/me/browsing-history/(\d+)', picpony)
+        if visit and request.method == 'PUT':
+            # `add_browsing_history`: the image is the path; the body carries the revision.
+            self.history.append({'image_id': int(visit.group(1)), **json.loads(request.post_data or '{}')})
+            self.json(route, {'current_revision': len(self.history)})
             return
-        if action == 'get_user_profile' or '/profiles/' in target.path:
-            self.profile_reads.append({'action': action, 'userId': params.get('user_id', [None])[0],
-                                       'path': target.path})
-        if action == 'get_user_uploads':
-            raise AssertionError('get_user_uploads does not exist; uploads are an uploader_id: search')
-        if action == 'get_profile_fave_folders':
-            self.folder_reads.append(params.get('username', [None])[0])
-            self.json(route, {'success': True, 'folders': FOLDERS})
+        profile = picpony and re.fullmatch(r'/users/([^/]+)', picpony)
+        if (profile and request.method == 'GET') or '/profiles/' in target.path:
+            self.profile_reads.append({'action': 'get_user_profile' if profile else None,
+                                       'userId': profile.group(1) if profile else None, 'path': target.path})
+        folders = picpony and re.fullmatch(r'/users/([^/]+)/favorite-folders', picpony)
+        if folders and request.method == 'GET':
+            self.folder_reads.append(folders.group(1))
+            self.json(route, {'folders': FOLDERS})
             return
         api_path = target.path.replace('/api/v1/json', '')
         detail = re.fullmatch(r'/images/(\d+)', api_path)

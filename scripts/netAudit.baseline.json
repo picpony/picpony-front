@@ -36,7 +36,7 @@
       "label": "→ /search",
       "api": 1,
       "media": 0,
-      "serverApi": 0,
+      "serverApi": 1,
       "contentRound": null
     },
     {

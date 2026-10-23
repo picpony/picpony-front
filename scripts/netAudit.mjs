@@ -49,6 +49,8 @@ const ONLY = (() => {
 })();
 
 const EDGE_CANDIDATES = [
+  /* Any Chromium for a run off Windows (Linux, a container); CI's Windows runner uses Edge. */
+  ...(process.env.PICPONY_BROWSER ? [process.env.PICPONY_BROWSER] : []),
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
 ];
@@ -196,14 +198,17 @@ const JOURNEYS = [
     name: 'cold favorites',
     why: 'folder covers only; unopened folders, Derpibooru and privacy must not fetch',
     auth: true,
-    steps: [{ label: 'GET /favorites', navigate: '/favorites', content: GALLERY }],
+    /* `get_faves` is the page's 已收藏 index (`faveIds` in app/favorites/page.tsx), read beside the
+       folder list; the covers wait on the folder list alone. On a cold start it could settle just
+       before the cover search started and push it from r2 to r3 with no change in the code. */
+    steps: [{ label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] }],
   },
   {
     name: 'favorites → back → favorites',
     why: 'the screen that had no snapshot at all',
     auth: true,
     steps: [
-      { label: 'GET /favorites', navigate: '/favorites', content: GALLERY },
+      { label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] },
       { label: '→ /', click: 'a[href="/"]', content: GALLERY },
       /* Forward again through the sidebar's real `<Link>`, so the intent ladder on it runs exactly
          as a press would — then back, the cheapest path of all. */
@@ -388,9 +393,22 @@ class Cdp {
  * has run is timing alone. Left in the chain, a runner slow enough for the mascot read to *finish*
  * first moved `/history`'s and `/tasks`' own read from r1 to r2 and failed the baseline on a commit
  * whose earlier run had passed — the same timing the count assertions are already immune to.
+ *
+ * `get_my_badges` is the session read's other half: `GET /me` carries no badges, so the session
+ * asks `/me/badges` beside it on every signed-in document (`lib/resources.ts`). Counted in the
+ * chain, it settling before a screen's own read started pushed that read a round deeper
+ * (`/history`, `/tasks`, `/messages`… r1 → r2) with no change to the screen at all.
  */
+/**
+ * A step's own reads that run **beside** its content rather than before it — started in the same
+ * render, never awaited by it. They count toward the step's requests like any other; they are
+ * only kept out of its rounds chain, for the reason chrome is: whether one *finishes* before the
+ * content read *starts* is chunk timing, and the heuristic below would then call it an ancestor.
+ */
+const NO_SIBLINGS = new Set();
+
 const CHROME_READS = new Set([
-  'get_user', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions',
+  'get_user', 'get_my_badges', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions',
   'get_mascot_config', 'get_mascots_list', 'get_my_ponies',
 ]);
 
@@ -419,12 +437,13 @@ const SERVER_EVERY_ROUTE = new Set([
  * fetch landing and the effects it unblocks is dominated by hydration. What is deterministic is
  * the ordering, so what gets asserted is the round of the step's own `content` request.
  */
-function computeRounds(entries) {
-  const chain = entries.filter((e) => !CHROME_READS.has(e.name));
+function computeRounds(entries, beside = NO_SIBLINGS) {
+  const outside = (entry) => CHROME_READS.has(entry.name) || beside.has(entry.name);
+  const chain = entries.filter((e) => !outside(e));
   const settled = chain.filter((e) => e.end !== undefined).sort((a, b) => a.end - b.end);
   let worst = 0;
   for (const entry of entries) {
-    if (CHROME_READS.has(entry.name)) {
+    if (outside(entry)) {
       /* Marked rather than skipped, so every ledger line prints a round. `c` = chrome. */
       entry.round = 'c';
       continue;
@@ -537,7 +556,7 @@ async function runStep(cdp, step, origin, serverReads) {
       console.log(`      ${String(count).padStart(3)}x ${key}`);
     }
   }
-  const rounds = computeRounds(api);
+  const rounds = computeRounds(api, step.beside ? new Set(step.beside) : NO_SIBLINGS);
   /* Matched on the *name* as well as the href: a request on the relay or accel line carries its
      target percent-encoded inside `?url=`, so the pattern appears nowhere in the href. */
   const contentEntry = step.content

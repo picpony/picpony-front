@@ -225,6 +225,8 @@ const PICPONY = {
   assistant_quota: () => assistantQuota(),
   assistant_permission: () => ({ mode: 'default', revision: 1 }),
   get_user: () => ({ user: me() }),
+  /* The session's badge read (`GET /me/badges`), beside `GET /me` on every signed-in document. */
+  get_my_badges: () => ({ badges: [], equipped: [] }),
   get_user_profile: (url) => ({ user: profile(lastId(url)) }),
   get_unread_counts: () => ({ messages: 0, notifications: 0, interactions: 0, forum: 0 }),
   /* PicPony's own comment counts for one grid page (decision 15) — a read that travels as a POST,

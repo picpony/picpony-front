@@ -35,7 +35,8 @@ const until = async (fn, ms = 40000) => {
 };
 if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
-const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+/* `PICPONY_BROWSER`: any Chromium, for a run off Windows (as `net:audit` takes it). */
+const EDGE = process.env.PICPONY_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-ripple-'));
 const browser = spawn(EDGE, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${CDP}`,
   `--user-data-dir=${profile}`, '--window-size=1280,900', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
@@ -80,7 +81,9 @@ const out = await evalIn(`(async () => {
   const r = target.getBoundingClientRect();
   const opts = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, pointerId: 1, isPrimary: true, button: 0 };
   target.dispatchEvent(new PointerEvent('pointerdown', opts));
-  const css = getComputedStyle(document.querySelector('.ripple') || target).opacity;
+  /* The token itself, not the wave's opacity at spawn: the wave fades in from 0 to the token
+     (lib/ripple.ts), so its computed opacity at that instant is the start of the fade. */
+  const css = getComputedStyle(document.documentElement).getPropertyValue('--md-sys-state-pressed-opacity').trim();
   const samples = [];
   const t0 = performance.now();
   await new Promise((done) => {
@@ -100,13 +103,16 @@ const out = await evalIn(`(async () => {
 let failed = false;
 if (typeof out === 'string') { console.log(`FAIL: ${out}`); failed = true; }
 else {
-  console.log('css opacity at spawn:', out.cssOpacityAtStart);
+  console.log('pressed state-layer token:', out.cssOpacityAtStart);
   console.log('ms:opacity  ' + out.samples.map(([t, o]) => t + ':' + o).join('  '));
   const nums = out.samples.map(([, o]) => (o === 'gone' ? null : Number(o))).filter((n) => n !== null);
   const peak = Math.max(...nums);
   console.log('peak opacity:', peak);
   if (!nums.length) { console.log('FAIL: no wave was sampled'); failed = true; }
-  else if (peak > Number(out.cssOpacityAtStart) + 0.005) {
+  else if (!(Number(out.cssOpacityAtStart) > 0)) {
+    console.log(`FAIL: could not read the pressed state-layer token (got ${JSON.stringify(out.cssOpacityAtStart)})`);
+    failed = true;
+  } else if (peak > Number(out.cssOpacityAtStart) + 0.005) {
     console.log(`FAIL: the wave peaked at ${peak}, above its token ${out.cssOpacityAtStart}`);
     failed = true;
   }

@@ -154,10 +154,11 @@ function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController
 function shouldBuffer(request: NextRequest): boolean {
   const type = request.headers.get('content-type')?.toLowerCase() ?? '';
   if (type.startsWith('multipart/')) return false;
+  /* Only a declared small length: a browser always sends one for a JSON or text body. Without
+     one the size is unknown, so the body streams as before (and has to go chunked). */
   const declared = request.headers.get('content-length');
-  if (declared === null) return true; // read with the cap; over it answers 413
-  const length = Number(declared);
-  return Number.isFinite(length) && length >= 0 && length <= BUFFERED_BODY_MAX;
+  if (declared === null || !/^\d+$/.test(declared)) return false;
+  return Number(declared) <= BUFFERED_BODY_MAX;
 }
 
 /**
