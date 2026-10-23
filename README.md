@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://picpony.top"><b>在线访问 ↗</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#快速开始"><b>快速开始</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="./AGENTS.md"><b>设计规范</b></a>
+  <a href="https://dev.picpony.top"><b>在线访问 ↗</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#快速开始"><b>快速开始</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="./AGENTS.md"><b>设计规范</b></a>
 </p>
 
 <details>
