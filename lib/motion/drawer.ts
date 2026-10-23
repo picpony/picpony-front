@@ -132,6 +132,29 @@ export function useDrawerSwipe({
         }
       };
 
+      /* **The hand-back waits for both springs, not the panel's alone.** The panel and the scrim run
+         on different springs — closed from elsewhere, the panel shuts on FastEffects while the scrim
+         fades on DefaultEffects, the longer of the two — and the hand-back used to hang off the
+         panel's `onComplete`: it cleared the scrim's inline opacity mid-fade, and the scrim's still
+         running tween wrote it straight back, so a closed drawer was left with `opacity: 0` inline
+         over its class (and the next open's class fade had nothing to animate). Each pair counts its
+         own tweens down; a pair cut short (a finger catching it, `overwrite` from the next pair,
+         revert) never reaches zero, so a stale hand-back cannot land on a newer gesture. */
+      const springBoth = (
+        d: HTMLElement,
+        s: HTMLElement | null,
+        panel: gsap.TweenVars,
+        fade: gsap.TweenVars,
+        done: () => void,
+      ) => {
+        let left = s ? 2 : 1;
+        const finish = () => {
+          if (--left === 0) done();
+        };
+        if (s) gsap.to(s, { ...fade, overwrite: true, onComplete: finish });
+        gsap.to(d, { ...panel, overwrite: true, onComplete: finish });
+      };
+
       /** Places the panel at `x` ∈ [-width, 0] and fades the scrim to match.
        *  `contextSafe` throughout: these writes happen from Observer callbacks,
        *  after useGSAP's own callback returned — without it the inline transforms
@@ -217,18 +240,7 @@ export function useDrawerSwipe({
         const scrimSpec = spring('defaultEffects', 'overlay');
 
         settling = toOpen;
-        if (s)
-          gsap.to(s, {
-            opacity: toOpen ? 1 : 0,
-            ...scrimSpec,
-            overwrite: true,
-          });
-        gsap.to(d, {
-          x: target,
-          ...spec,
-          overwrite: true,
-          onComplete: release,
-        });
+        springBoth(d, s, { x: target, ...spec }, { opacity: toOpen ? 1 : 0, ...scrimSpec }, release);
       });
 
       /* **Opened or closed from elsewhere while the gesture owns the panel** — Back (on a
@@ -257,16 +269,16 @@ export function useDrawerSwipe({
         /* Opened or closed from elsewhere: the tap's pair — DefaultSpatial open (`openMotion`),
            FastEffects shut (`closeMotion`); the scrim on DefaultEffects. */
         const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
-        if (s) gsap.to(s, { opacity: openNow ? 1 : 0, ...spring('defaultEffects', 'overlay'), overwrite: true });
-        gsap.to(d, {
-          x: openNow ? 0 : -width,
-          ...spec,
-          overwrite: true,
-          onComplete: () => {
+        springBoth(
+          d,
+          s,
+          { x: openNow ? 0 : -width, ...spec },
+          { opacity: openNow ? 1 : 0, ...spring('defaultEffects', 'overlay') },
+          () => {
             settling = null;
             handBack();
           },
-        });
+        );
       });
 
       const observer = Observer.create({
