@@ -2,7 +2,7 @@
 /* useGSAP owns dependency cleanup; preserve its existing compiler boundary. */
 'use no memo';
 
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useDeferredValue, useLayoutEffect, useRef, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { motionTier } from '@/lib/appearance';
 import { gsap, Observer, spring, useGSAP } from './engine';
@@ -60,7 +60,7 @@ export function useDrawerSwipe({
    * *second* Observer holding a captured `open === true` forever — survivors read
    * `pending` as true for drags starting within a drawer's width of the left edge
    * and dragged the *closed* drawer into view. With refs the dependency list is just
-   * `enabled`: one Observer at a time, disposed by `revertOnUpdate`.
+   * `mounted` (`enabled`, below): one Observer at a time, disposed by `revertOnUpdate`.
    *
    * Written in a layout effect, in the commit that changes them, so no touch handled
    * after a close can read the drawer as still open; and a change made elsewhere is
@@ -68,16 +68,27 @@ export function useDrawerSwipe({
   const openRef = useRef(open);
   const onOpenChangeRef = useRef(onOpenChange);
   const interrupt = useRef<((openNow: boolean) => void) | null>(null);
+  /* **Switching off waits for the next render; switching on does not.** `enabled` flips off in
+     the commit that launches a picture's opening flight (a background appears), and tearing the
+     Observer and its context down there (`revert()` walks every tween and listener it made, ~2ms
+     of a 4×-throttled tap, profiled) sat between the tap and the flight's first frame. The
+     deferred value keeps the Observer mounted until a render after that frame; meanwhile
+     `enabledRef` — written in the same layout effect as `open`, so in the tap's own commit —
+     refuses any drag that would start, which is all being disabled means to the finger. */
+  const deferredEnabled = useDeferredValue(enabled);
+  const mounted = enabled || deferredEnabled;
+  const enabledRef = useRef(enabled);
   useLayoutEffect(() => {
     const changed = openRef.current !== open;
     openRef.current = open;
     onOpenChangeRef.current = onOpenChange;
+    enabledRef.current = enabled;
     if (changed) interrupt.current?.(open);
   });
 
   useGSAP(
     (_context, contextSafe) => {
-      if (!enabled) return;
+      if (!mounted) return;
 
       // `width` is read per gesture: the panel is 288dp, capped at the viewport less
       // 56dp on a narrow phone, so a rotation or a resize can change it between drags.
@@ -273,7 +284,8 @@ export function useDrawerSwipe({
           // Opening is anchored to the screen edge; closing can start anywhere on
           // the panel, which is the only thing under the finger while it is open.
           // Only a drag that starts on the open panel counts.
-          pending = openRef.current && startX <= (drawer()?.offsetWidth ?? 0);
+          pending =
+            enabledRef.current && openRef.current && startX <= (drawer()?.offsetWidth ?? 0);
         },
         onDrag: (self) => {
           if (pending) {
@@ -322,7 +334,7 @@ export function useDrawerSwipe({
         if (closing && openRef.current) onOpenChangeRef.current(false);
       };
     },
-    { dependencies: [enabled], revertOnUpdate: true },
+    { dependencies: [mounted], revertOnUpdate: true },
   );
 }
 

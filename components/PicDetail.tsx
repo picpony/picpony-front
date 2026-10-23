@@ -98,6 +98,7 @@ import {
   getImageHeroRuntime,
   interruptImageHero,
   isImageHeroDetailDataPublishable,
+  isImageHeroDetailBodyPublishable,
   isImageHeroPublicationQuiet,
   leaveImageHeroOrphanLadder,
   markImageHeroRoutePreviewPaintable,
@@ -109,6 +110,7 @@ import {
   subscribeImageHeroRuntime,
   updateImageHeroRouteTarget,
 } from '@/lib/hero';
+import { heroProbeMark } from '@/lib/hero/probe';
 import { readToken, useEscapeBack, useSession, useStoredBoolean } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { useOverlayLayer } from '@/lib/overlay';
@@ -600,6 +602,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   }
   const composerRef = useRef<HTMLDivElement>(null);
   const overlayContentRef = useRef<HTMLDivElement>(null);
+  const overlayAnchorRef = useRef<HTMLDivElement>(null);
   const overlaySurfaceRef = useRef<HTMLDivElement>(null);
   const overlayBackRef = useRef<HTMLButtonElement>(null);
   const detailTargetRef = useRef<HTMLDivElement>(null);
@@ -668,6 +671,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       surface,
       target: detailTargetRef.current,
       floatingBack: overlayBackRef.current,
+      anchor: overlayAnchorRef.current,
       previewPaintable: previewSurfaceRef.current === surfaceId,
       resolvedWithoutMedia: false,
     });
@@ -851,14 +855,18 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const hasRecordError = recordError !== null;
   useEffect(() => {
     if (heroSeed && !hasRecord && !hasRecordError && !offline) return;
-    return publishWhenHeroSettled(() => startTransition(() => setDeferredBodyId(imageId)), {
+    return publishWhenHeroSettled(() => {
+      heroProbeMark('hx:t:body-publish');
+      startTransition(() => setDeferredBodyId(imageId));
+    }, {
       idle: false,
       canPublish: () => {
         if (!isImageHeroDetailDataPublishable(imageId)) return false;
-        /* The whole `opening.` family, not just `opening.flight`: publication stays true
-           across `landed` and `handoff`, so the body's mount could land in the handoff frame
-           — the frame that must be pixel-identical on both sides. */
-        return !getImageHeroRuntime().phase.startsWith('opening.');
+        /* During an open, the controller decides (`isImageHeroDetailBodyPublishable`): where
+           the route follows the Stage on the compositor, the body mounts the moment its record
+           is in — inside the flight, so the route is revealed with it — and only where it does
+           not does it still wait out the whole `opening.` family. */
+        return isImageHeroDetailBodyPublishable(imageId);
       },
     });
   }, [hasRecord, hasRecordError, heroSeed, imageId, offline]);
@@ -1313,6 +1321,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   {content}
                 </div>
               </div>
+              {/* The flight's plane once the route owns an open's scroll: the flyer is planted
+                  here and rides the route's own native scroll (\`HeroController.promoteAdoption\`),
+                  as on the Stage's anchor before it. Empty otherwise; the controller owns it. */}
+              <div ref={overlayAnchorRef} data-image-hero-route-anchor aria-hidden="true" className="image-hero-stage-anchor" />
             </div>
           </div>
         </div>

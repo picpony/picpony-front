@@ -422,7 +422,28 @@ export default function DetailImage({
     if (heroActive || !finalReadyRef.current) return;
     // Capture a static final frame away from the close intent. GIF/APNG media
     // is intentionally ignored by the warmer and is captured live on return.
-    return warmImageHeroFrame(targetRef.current);
+    /* From an idle callback, not this passive effect: the warmer's first act is to pick the
+       presented layer, which reads computed style, and this effect runs in the commit that
+       makes the routed copy the detail — a forced style flush there was ~55ms at 4× CPU
+       (traced), between the landing and the user's next touch. The capture is for a close
+       that cannot start sooner than a frame or two from now anyway. */
+    const target = targetRef.current;
+    let cancelWarm: (() => void) | null = null;
+    const run = () => {
+      idle = null;
+      cancelWarm = warmImageHeroFrame(target);
+    };
+    let idle: number | null =
+      typeof requestIdleCallback === 'function'
+        ? requestIdleCallback(run, { timeout: 500 })
+        : window.setTimeout(run, 120);
+    return () => {
+      if (idle !== null) {
+        if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idle);
+        else window.clearTimeout(idle);
+      }
+      cancelWarm?.();
+    };
   }, [finalSrc, heroActive]);
 
   useEffect(() => {

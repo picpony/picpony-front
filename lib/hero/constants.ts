@@ -85,6 +85,13 @@ export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
  */
 export const HERO_HANDOFF_SCROLL_QUIET_MS = 120;
 export const HERO_HANDOFF_SCROLL_DEFER_MAX_MS = 600;
+/**
+ * The same hold where the route follows the Stage's scroll on the compositor
+ * (`lib/hero/follow.ts`). Waiting there costs no smoothness — the route the reader sees moves in
+ * the Stage's own frames — only the moment its controls start taking taps, so the stream gets to
+ * finish (a long fling runs ~1.5s) and the swap of input lands in a pause rather than mid-fling.
+ */
+export const HERO_HANDOFF_FOLLOW_MAX_MS = 1500;
 
 /**
  * Grace after the final media decodes before a still-silent preview is declared failed. The

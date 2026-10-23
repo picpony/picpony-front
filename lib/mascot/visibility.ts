@@ -9,25 +9,61 @@ function subscribeVisible(listener: () => void) {
   return () => document.removeEventListener('visibilitychange', listener);
 }
 export const useDocumentVisible = () => useSyncExternalStore(subscribeVisible, () => !document.hidden, () => false);
-function subscribeViewport(listener: () => void) {
-  window.visualViewport?.addEventListener('resize', listener);
-  window.visualViewport?.addEventListener('scroll', listener);
-  window.addEventListener('resize', listener);
-  return () => {
-    window.visualViewport?.removeEventListener('resize', listener);
-    window.visualViewport?.removeEventListener('scroll', listener);
-    window.removeEventListener('resize', listener);
-  };
-}
+/* The keyboard inset and the lightbox's presence are cached and refreshed only by their own
+   events. `useSyncExternalStore` calls `getSnapshot` on every render of every subscriber (and
+   again after each commit), and reading `innerHeight`/`visualViewport` there forced a layout
+   inside React's render: ~70ms at 4× CPU across a hero open, traced, all of it in the commits
+   that mount the detail route. */
 function viewportBottom() {
   const viewport = window.visualViewport;
   return viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop)) : 0;
 }
-export const useKeyboardInset = () => useSyncExternalStore(subscribeViewport, viewportBottom, () => 0);
+let keyboardInset = 0;
+const viewportListeners = new Set<() => void>();
+const updateKeyboardInset = () => {
+  const next = viewportBottom();
+  if (next === keyboardInset) return;
+  keyboardInset = next;
+  viewportListeners.forEach((listener) => listener());
+};
+function subscribeViewport(listener: () => void) {
+  if (viewportListeners.size === 0) {
+    keyboardInset = viewportBottom();
+    window.visualViewport?.addEventListener('resize', updateKeyboardInset);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardInset);
+    window.addEventListener('resize', updateKeyboardInset);
+  }
+  viewportListeners.add(listener);
+  return () => {
+    viewportListeners.delete(listener);
+    if (viewportListeners.size > 0) return;
+    window.visualViewport?.removeEventListener('resize', updateKeyboardInset);
+    window.visualViewport?.removeEventListener('scroll', updateKeyboardInset);
+    window.removeEventListener('resize', updateKeyboardInset);
+  };
+}
+export const useKeyboardInset = () => useSyncExternalStore(subscribeViewport, () => keyboardInset, () => 0);
+let lightboxOpen = false;
+const mediaListeners = new Set<() => void>();
+let mediaObserver: MutationObserver | null = null;
 function subscribeMedia(listener: () => void) {
-  const observer = new MutationObserver(listener);
-  observer.observe(document.body, { childList: true });
-  return () => observer.disconnect();
+  if (!mediaObserver) {
+    lightboxOpen = !!document.querySelector('.yarl__portal');
+    mediaObserver = new MutationObserver(() => {
+      const next = !!document.querySelector('.yarl__portal');
+      if (next === lightboxOpen) return;
+      lightboxOpen = next;
+      mediaListeners.forEach((notify) => notify());
+    });
+    mediaObserver.observe(document.body, { childList: true });
+  }
+  mediaListeners.add(listener);
+  return () => {
+    mediaListeners.delete(listener);
+    if (mediaListeners.size > 0 || !mediaObserver) return;
+    mediaObserver.disconnect();
+    mediaObserver = null;
+  };
 }
 /**
  * Whether the companions exist (`present`: the document is on screen) and whether something has the
@@ -45,7 +81,7 @@ export function useCompanionPresence(): { present: boolean; away: boolean } {
   const present = useDocumentVisible();
   const modal = useSyncExternalStore(subscribeModalLayers, hasModalLayer, () => false);
   const media = useSyncExternalStore(subscribeImageHeroRuntime, () => getImageHeroRuntime().imageId !== null, () => false);
-  const lightbox = useSyncExternalStore(subscribeMedia, () => !!document.querySelector('.yarl__portal'), () => false);
+  const lightbox = useSyncExternalStore(subscribeMedia, () => lightboxOpen, () => false);
   const keyboard = useKeyboardInset() > 80;
   const away = modal || media || lightbox || keyboard || pathname.startsWith('/pic/') || pathname.startsWith('/admin');
   return { present, away };

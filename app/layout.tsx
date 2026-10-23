@@ -94,7 +94,10 @@ export const viewport: Viewport = {
   // `var()` resolves to nothing. A static array cannot express eleven palettes, and
   // mutating Next's own tag does not survive a client navigation — so the tag is
   // rendered by hand below, from the cookie, using values `scripts/palette.mjs` generates.
-  colorScheme: 'light dark',
+  // `colorScheme` deliberately absent too: Next re-renders its viewport tags on client
+  // navigations, and every re-inserted `<meta name="color-scheme">` is a color-scheme change to
+  // Blink — a whole-document style recalc (traced: 708 elements / 123ms at 4x CPU in the commit
+  // that mounts a hero open's detail route). Rendered by hand below, once, like theme-color.
   /* Paints the shell under the notch and the home indicator; the shell pays the insets back
      on every edge that has one — the top chrome, both sides of the app bar, the drawer and
      the content, the home pill's bottom. */
@@ -287,6 +290,9 @@ export default async function RootLayout({
       style={{ ...motionCustomStyle(motionCustom), ...motionEffectsStyle(motionEffects) }}
       data-entrance={entrance}
       data-os={isWindows ? 'windows' : undefined}
+      /* First-paint chrome rows, for `--app-chrome-bottom` in globals.css (see there). */
+      data-chrome-dev-banner={!maintenanceLocked && devBannerVisible ? '' : undefined}
+      data-chrome-maintenance={!maintenanceLocked && maintenance.active ? '' : undefined}
       suppressHydrationWarning
     >
       <head>
@@ -299,6 +305,7 @@ export default async function RootLayout({
         {/* No `media`: this reports the scheme the *app* is in, which can differ from the OS's.
             Next's media-keyed tags meant that forcing dark mode on a light desktop left the
             browser chrome painted the light colour. */}
+        <meta name="color-scheme" content="light dark" />
         <meta
           name="theme-color"
           content={

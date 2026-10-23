@@ -315,6 +315,8 @@ function inputTransferHarness(t) {
     './runtime': { ...load('lib/hero/runtime.ts', {}, globals), bindImageHeroEngine() {} },
     './scheduler': { heroFrameScheduler: scheduler },
     './scroll': { HeroScrollContinuity },
+    './follow': { canFollowHeroScroll: () => false, followHeroScroll: () => null },
+    '@/lib/appearance': { motionTier: () => 'standard' },
     './session': sessionHelpers,
     '@/lib/imageSequence': { revealInImageSequence: async () => false },
   });

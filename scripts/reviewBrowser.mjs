@@ -106,6 +106,8 @@ try {
     : args.includes('--hero-stress') ? 'stressHeroReopen.py'
     : args.includes('--hero-open-probe') ? 'probeHeroOpening.py'
     : args.includes('--hero-scroll-thread') ? 'probeHeroScrollThread.py'
+    : args.includes('--hero-pending-scroll') ? 'probeHeroPendingScroll.py'
+    : args.includes('--hero-gestures') ? 'probeHeroGestures.py'
     : args.includes('--hero-performance') ? 'probeHeroPerformance.py'
     : args.includes('--hero') ? 'testHeroInteractions.py'
     : args.includes('--auth-loading') ? 'testAuthLoading.py'

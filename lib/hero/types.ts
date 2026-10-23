@@ -81,6 +81,11 @@ export type HeroRouteRegistration = HeroSurfaceNodes & {
   surfaceId: string;
   imageId: number;
   target: HTMLElement | null;
+  /**
+   * The flight's plane inside the route's scroller, for an open whose route takes the scroll
+   * over before the picture lands. Absent on a page presentation and in older registrations.
+   */
+  anchor?: HTMLElement | null;
   /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
   /**

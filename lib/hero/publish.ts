@@ -73,7 +73,14 @@ export function publishWhenHeroSettled(
     });
   }
 
-  const releaseRuntime = imageHeroController.subscribeRuntime(schedule);
+  const stopRuntime = imageHeroController.subscribeRuntime(schedule);
+  /* A route shown early (the open's adoption) is not a runtime change, and it is exactly what a
+     gate asking `isImageHeroDetailSurfaceLive` waits for. */
+  const stopSurface = imageHeroController.subscribeSurface(schedule);
+  const releaseRuntime = () => {
+    stopRuntime();
+    stopSurface();
+  };
   document.addEventListener('visibilitychange', schedule);
   schedule();
 

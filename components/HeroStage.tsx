@@ -84,9 +84,18 @@ export default function HeroStage() {
 
   const forwardOpeningCardClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (state.phase !== 'opening' || event.defaultPrevented) return;
+      /* `landed` too: a tap the main thread delivers late (it is busiest around the landing)
+         used to arrive after the phase moved on and was swallowed by the full-screen scroller. */
+      if ((state.phase !== 'opening' && state.phase !== 'landed') || event.defaultPrevented) return;
       const overlay = overlayRef.current;
       if (!overlay) return;
+      /* Inside the window the user is looking at the detail, not at the card beneath it. The
+         scroller sits inside the window's clip and hit testing honours that clip, so a click
+         that reached it was on the window; one outside it lands on the overlay itself. This
+         handler used to sit on the scroller — it saw only taps *inside* the window (and sent
+         them to whatever card lay under the picture) while a tap on a visible card outside the
+         window hit the overlay and was swallowed. */
+      if (event.target instanceof Node && scrollerRef.current?.contains(event.target)) return;
       for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
         const card = element.closest<HTMLAnchorElement>('a.image-hero-card-link');
         if (!card || overlay.contains(card)) continue;
@@ -140,6 +149,7 @@ export default function HeroStage() {
         data-image-detail-overlay
         data-image-hero-stage
         data-image-hero-stage-state={state.phase}
+        onClick={forwardOpeningCardClick}
         aria-hidden="true"
         className="pointer-events-auto absolute inset-0 z-hero-stage overflow-hidden"
       >
@@ -163,7 +173,6 @@ export default function HeroStage() {
           data-image-hero-stage-scroll
           aria-hidden="true"
           className="image-detail-overlay-scroll main-scrollbar pointer-events-auto absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
-          onClick={forwardOpeningCardClick}
         >
           <div
             ref={contentRef}

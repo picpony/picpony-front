@@ -47,6 +47,8 @@
     "perf:hydration": "node scripts/probeHydration.mjs",
     "perf:motion": "node scripts/probeMotion.mjs",
     "perf:hero": "node scripts/reviewBrowser.mjs --hero-performance",
+    "perf:hero-pending": "node scripts/reviewBrowser.mjs --hero-pending-scroll",
+    "perf:hero-gestures": "node scripts/reviewBrowser.mjs --hero-gestures",
     "perf:sw": "node scripts/probeServiceWorker.mjs",
     "perf:ripple": "node scripts/probeRipple.mjs",
     "perf:glass": "node scripts/probeFlutedGlass.mjs",

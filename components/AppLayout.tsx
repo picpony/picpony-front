@@ -44,6 +44,7 @@ import { clearScreenState } from '@/lib/screenState';
 import { sessionUser, unreadCounts } from '@/lib/resources';
 /* The runtime store only: the engine binds itself where a picture can open, and the shell renders
    on every route — see `lib/hero/runtime.ts`. */
+import type { ImageHeroRuntimeState } from '@/lib/hero/types';
 import {
   getImageHeroRuntime,
   initializeImageHeroHistory,
@@ -347,6 +348,47 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
 
 const SCHEME_LABEL: Record<ColorScheme, string> = { light: '浅色模式', dark: '深色模式' };
 
+/**
+ * The few facts the shell renders from the hero runtime, as one stable snapshot.
+ *
+ * Subscribing to the whole runtime re-rendered this component — the root of every route — on
+ * every publish: the Stage arming on a press, each flight phase (`opening.flight` → `landed` →
+ * `handoff`), every stage swap. None of those change anything the shell draws; they only moved
+ * its render (and React's context propagation through the whole tree under it) into the very
+ * tasks a flight cannot afford: the press that arms, the click that launches, the route commit
+ * mid-flight. Traced at 4× CPU, the shell's share of the launching click alone was ~18ms.
+ * The view below changes only when one of the shell's own inputs does, so
+ * `useSyncExternalStore` bails out of every other publish.
+ */
+type ShellHeroView = {
+  /** `gallery-idle` / `detail-idle` / a close still holding the gallery / anything else. */
+  settle: 'gallery-idle' | 'detail-idle' | 'close-holding' | 'moving';
+  back: boolean;
+  background: ImageHeroRuntimeState['background'];
+};
+
+let shellHeroView: ShellHeroView = { settle: 'gallery-idle', back: false, background: null };
+
+function readShellHeroView(): ShellHeroView {
+  const runtime = getImageHeroRuntime();
+  const settle: ShellHeroView['settle'] =
+    runtime.phase === 'gallery-idle' || runtime.phase === 'detail-idle'
+      ? runtime.phase
+      : runtime.phase === 'closing.flight' && !runtime.galleryExposed
+        ? 'close-holding'
+        : 'moving';
+  const back = runtime.direction === 'back';
+  const background = runtime.background;
+  if (
+    shellHeroView.settle !== settle ||
+    shellHeroView.back !== back ||
+    shellHeroView.background !== background
+  ) {
+    shellHeroView = { settle, back, background };
+  }
+  return shellHeroView;
+}
+
 export default function AppLayout({
   children,
   overlay,
@@ -416,8 +458,8 @@ export default function AppLayout({
   const isImageDetailRoute = Boolean(imageDetailId);
   const imageHeroRuntime = useSyncExternalStore(
     subscribeImageHeroRuntime,
-    getImageHeroRuntime,
-    getImageHeroRuntime,
+    readShellHeroView,
+    readShellHeroView,
   );
   const { openAuth } = useAuthModal();
   const { confirm, confirmDialog } = useConfirm();
@@ -434,9 +476,8 @@ export default function AppLayout({
   /* A close holds the gallery exactly as it was under the detail until its flight is on the
      compositor (`galleryExposed`, see `HeroController.exposeGallery`): the restyle that lifting
      `inert` costs then runs under a moving picture instead of in front of it. */
-  const closeHoldsGallery =
-    imageHeroRuntime.phase === 'closing.flight' && !imageHeroRuntime.galleryExposed;
-  const heroSettledOnDetail = imageHeroRuntime.phase === 'detail-idle' || closeHoldsGallery;
+  const closeHoldsGallery = imageHeroRuntime.settle === 'close-holding';
+  const heroSettledOnDetail = imageHeroRuntime.settle === 'detail-idle' || closeHoldsGallery;
   /* The gallery under an open detail is inert — **only once the detail has settled**. `inert` on
      this `<main>` restyles its whole subtree (every card; measured 1,450 elements and up to 66ms
      on a desktop, several times that on a phone), so it must not flip inside a flight's frames:
@@ -448,7 +489,7 @@ export default function AppLayout({
      close holds the gallery as it is until its flight is running, so the restyle lands under the
      moving picture (`closeHoldsGallery` below, `HeroController.exposeGallery`). */
   const detailCovers =
-    isImageDetailOpen && (imageHeroRuntime.direction !== 'back' || closeHoldsGallery);
+    isImageDetailOpen && (!imageHeroRuntime.back || closeHoldsGallery);
   /* And not in the commit that settles it either, but two frames later: that commit is the one
      that shows the detail, and the gallery's restyle in it held the detail's first settled frame
      back by ~50ms on a phone at 4× CPU. Nothing reaches the gallery meanwhile — the detail covers
@@ -495,6 +536,16 @@ export default function AppLayout({
     (isImageDetailOpen ? readDetailBackground(pathname) ?? lastPageLocation : null);
   const backgroundPathname = imageHeroBackground?.pathname ?? pathname;
   const frozenBackgroundSearch = imageHeroBackground?.search ?? null;
+  /* **Frozen only once it differs from the live URL.** A picture's open records its background
+     in the tap — the page it is leaving, so the same search the live URL still has. Handing that
+     to the provider changed its context from `null` to an equal string in the commit that starts
+     the flight, and React walked the whole shell for consumers (`propagateContextChanges`,
+     ~6ms of a 4×-throttled tap, profiled) to re-render the same params. Equal searches read the
+     same either way; the freeze takes over in the route's own commit, when the URL moves. */
+  const providedBackgroundSearch =
+    frozenBackgroundSearch !== null && frozenBackgroundSearch.replace(/^\?/, '') === liveSearch
+      ? null
+      : frozenBackgroundSearch;
   useLayoutEffect(() => {
     // The browser URL may still be the source during render; Next writes it during commit.
     // The helper checks the committed pathname, so do not gate on the render-time URL here.
@@ -512,8 +563,8 @@ export default function AppLayout({
      picture used to cut straight to the next page. A close never gets here — it lands on its
      record's own page, so the background does not change. */
   const crossFadeEnabled =
-    (imageHeroRuntime.phase === 'gallery-idle' && !imageHeroRuntime.background && !isImageDetailOpen) ||
-    (imageHeroRuntime.phase === 'detail-idle' && !isImageDetailOpen);
+    (imageHeroRuntime.settle === 'gallery-idle' && !imageHeroRuntime.background && !isImageDetailOpen) ||
+    (imageHeroRuntime.settle === 'detail-idle' && !isImageDetailOpen);
 
   useEffect(() => {
     initializeImageHeroHistory({
@@ -878,7 +929,7 @@ export default function AppLayout({
     isImageDetailOpen && onHome && new URLSearchParams(frozenBackgroundSearch ?? '').get('tab') !== 'forum';
 
   return (
-    <BackgroundLocationProvider frozenSearch={frozenBackgroundSearch}>
+    <BackgroundLocationProvider frozenSearch={providedBackgroundSearch}>
       {/* `data-app-root`: while a modal surface portalled outside the shell is up, this is
           made `inert` (`lib/overlay.ts`); toasts, dialogs and live regions live outside it.
           The phone's drawer is a modal layer *inside* it, so it inerts its siblings here

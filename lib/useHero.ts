@@ -195,6 +195,16 @@ export function useHeroLink<T extends HTMLElement>({
       if (!activateHero()) return;
       clickOwnedRef.current = true;
       event.preventDefault();
+      /* The hero owns this navigation, so the top progress line has nothing to report — and it
+         is hidden for the whole transition anyway (`html[data-image-hero-transition] #nprogress`).
+         Its document click listener does not consult `defaultPrevented`: it started NProgress
+         (a DOM insert, a style pass and a width transition) inside this very click, and the
+         hero's history claim finished it again a moment later — ~14ms of the click task at 4×
+         CPU, traced, plus a transition ticking through the launch frame. React's own listener
+         sits on the same node and was attached first (at hydration, before any effect), so
+         stopping the rest of this node's listeners reaches the loader and nothing above it:
+         window capture listeners have already run and no window bubble listener exists. */
+      event.nativeEvent.stopImmediatePropagation();
       queueMicrotask(() => {
         clickOwnedRef.current = false;
       });

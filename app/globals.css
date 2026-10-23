@@ -451,7 +451,7 @@
    The app-chrome-bottom value is the viewport y of the chrome's bottom edge: the dev banner,
    the app bar, the maintenance notice, the offline banner and the top safe-area inset,
    together. Toasts hang below it and the top loader rides it. These declarations are only the
-   first-paint answer (the server knows which rows it rendered, so the `:has()` forms are right
+   first-paint answer (the server knows which rows it rendered, so the attribute forms are right
    before any script runs); `AppLayout` then writes the measured value on `<html>` and keeps it
    live. The dev banner row is 6px + a 32dp control + its top inset, which is at least 6px; the
    maintenance notice under the bar is 6px + an 18px line + 6px.
@@ -465,15 +465,20 @@
   --home-bar-footprint: calc(3.75rem + max(0.75rem, env(safe-area-inset-bottom)));
 }
 
-:root:has([data-dev-banner]) {
+/* Attributes the server writes on `<html>` for the rows it rendered, not `:root:has(...)`.
+   A `:has()` whose subject is the root re-tests the root on every DOM insertion anywhere in
+   the document, and a root recalc carrying a custom property cascades into the whole tree:
+   traced at 708 elements / 121ms at 4x CPU in the single task that mounts a hero flight and
+   its route — the frame the picture had to start moving in. */
+:root[data-chrome-dev-banner] {
   --app-chrome-bottom: calc(6.375rem + max(0.375rem, env(safe-area-inset-top)));
 }
 
-:root:has([data-maintenance-notice]) {
+:root[data-chrome-maintenance] {
   --app-chrome-bottom: calc(5.875rem + env(safe-area-inset-top));
 }
 
-:root:has([data-dev-banner]):has([data-maintenance-notice]) {
+:root[data-chrome-dev-banner][data-chrome-maintenance] {
   --app-chrome-bottom: calc(8.25rem + max(0.375rem, env(safe-area-inset-top)));
 }
 

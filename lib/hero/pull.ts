@@ -48,6 +48,12 @@ export type HeroPullNodes = {
 };
 
 export type HeroPullOptions = {
+  /**
+   * Further surfaces the gesture moves with its own — the routed detail an opening revealed
+   * early in the Stage's place (`HeroMotion.attachMirror`). Read when a pull begins and whenever
+   * the surface's tree changes, so a mirror that arrives mid-drag is picked up.
+   */
+  mirrors?: () => readonly HTMLElement[];
   /** Mirror the drag onto an in-flight flyer's compensator. */
   onOffset?: (distance: number, x: number) => void;
   /** Fired once per gesture, after the first pose is ready to take over. */
@@ -104,6 +110,15 @@ export class HeroPullSurface {
   private styles: PullStyle[] = [];
   private observer: MutationObserver | null = null;
   private background: HTMLElement | null = null;
+  /**
+   * The flyer's compensator is the pull's until a reversal takes the flyer over: the reverse
+   * folds the drag into the leg's start and clears the compensator, so a later write from here —
+   * the tree observer re-applying the last pose when the Stage re-renders for the new phase —
+   * would offset the flyer a second time (measured: a 149px jump on the first reversed frame).
+   */
+  private offsetOwned = true;
+  /** The mirror overlays this pull marked, so `reset` unmarks exactly those. */
+  private markedMirrors: HTMLElement[] = [];
 
   constructor(
     private readonly nodes: HeroPullNodes,
@@ -255,6 +270,8 @@ export class HeroPullSurface {
     if (floatingBack) {
       delete floatingBack.dataset[PULL_ATTRIBUTE];
     }
+    this.markedMirrors.forEach((mirror) => delete mirror.dataset[PULL_ATTRIBUTE]);
+    this.markedMirrors = [];
     this.styles.forEach(({ element, property, original, written }) => {
       if (element.style[property] === written) element.style[property] = original;
     });
@@ -267,10 +284,15 @@ export class HeroPullSurface {
       background.style.willChange = '';
     }
     this.background = null;
-    this.options.onOffset?.(0, 0);
+    if (this.offsetOwned) this.options.onOffset?.(0, 0);
 
     this.lease?.release();
     this.lease = null;
+  }
+
+  /** Stop driving the flyer's offset — a reversal now owns it (`offsetOwned`). */
+  releaseOffset() {
+    this.offsetOwned = false;
   }
 
   dispose() {
@@ -313,6 +335,9 @@ export class HeroPullSurface {
       this.write(this.latest);
     });
     this.observer.observe(this.nodes.overlay, { childList: true, subtree: true });
+    this.options.mirrors?.().forEach((mirror) =>
+      this.observer?.observe(mirror, { childList: true, subtree: true }),
+    );
   }
 
   private refreshTargets() {
@@ -321,11 +346,18 @@ export class HeroPullSurface {
       if (this.styles.some((style) => style.element === element && style.property === property)) return;
       this.styles.push({ element, property, original: element.style[property], written: '' });
     };
-    const content = overlay.querySelector<HTMLElement>('.image-detail-overlay-content');
-    if (content) remember(content, 'transform');
-    overlay.querySelectorAll<HTMLElement>(
-      `${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
-    ).forEach((element) => remember(element, 'opacity'));
+    const surfaces = [overlay, ...(this.options.mirrors?.() ?? [])];
+    surfaces.forEach((surface) => {
+      const content = surface.querySelector<HTMLElement>('.image-detail-overlay-content');
+      if (content) remember(content, 'transform');
+      surface.querySelectorAll<HTMLElement>(
+        `${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
+      ).forEach((element) => remember(element, 'opacity'));
+      if (surface !== overlay && !this.markedMirrors.includes(surface)) {
+        surface.dataset[PULL_ATTRIBUTE] = '';
+        this.markedMirrors.push(surface);
+      }
+    });
     if (floatingBack) remember(floatingBack, 'opacity');
   }
 
@@ -349,6 +381,6 @@ export class HeroPullSurface {
     }
 
     heroProbeMark('hx:pull-write');
-    this.options.onOffset?.(sample.distance, sample.x);
+    if (this.offsetOwned) this.options.onOffset?.(sample.distance, sample.x);
   }
 }

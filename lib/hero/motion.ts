@@ -178,10 +178,38 @@ type HeroMotionOptions = {
   container?: Pick<HeroContainer, 'card' | 'cardRadius'> | null;
   /** `dismiss` keeps the gesture's own pose instead of running the container. */
   choreography?: HeroChoreography;
+  /**
+   * The overlay's live poses when this motion takes a surface over from another one mid-leg
+   * (`HeroMotion.handOver`): the cross-fade, chrome and floating back start from them instead of
+   * from their resting entrance values.
+   */
+  sharedFrom?: Map<HTMLElement, OverlayPose>;
   /** px/ms along the travel the leg leaves at (a released drag). Omit to launch from rest. */
   speed?: number;
 };
 
+
+/**
+ * A second detail surface that wears the opening's shared tracks in lockstep with the Stage.
+ *
+ * **The early reveal.** The routed detail can be ready while the picture is still flying, and
+ * Flutter shows a destination page *during* its route transition rather than after it. The route
+ * is laid out exactly like the Stage (the handoff has always depended on that), so the same
+ * keyframes drive the same window, fit, cross-fade and staircase on it; every mirror track is
+ * pinned to the flyer's own `startTime`, so the two surfaces are one picture on the compositor.
+ * The Stage keeps its tracks too: it still hosts the flyer (inside its window) and takes the
+ * screen back, in the very pose the mirror was in, if the open is reversed.
+ *
+ * No background (one sink owns the gallery) and no floating back (the Stage's copy owns the
+ * entrance; the route's own takes over at the handoff, as before).
+ */
+type HeroMirror = {
+  overlay: HTMLElement;
+  content: HTMLElement | null;
+  clip: HTMLElement | null;
+  unclip: HTMLElement | null;
+  tracks: AnimationOwner[];
+};
 
 /**
  * Only one motion may own the shared gallery background at a time; a superseded
@@ -702,6 +730,8 @@ export class HeroMotion {
    * the ones that have to be replaceable on their own. See `rebuildContainer`.
    */
   private containerTracks: AnimationOwner[] = [];
+  /** Surfaces mirroring the shared tracks — see `HeroMirror`. */
+  private mirrors: HeroMirror[] = [];
   private visualRevision = 0;
   private sharedRevision = 0;
   private sharedReleased = false;
@@ -711,6 +741,8 @@ export class HeroMotion {
   private disposed = false;
   private landedCompletion = createCompletion();
   private sharedCompletion = createCompletion();
+  /** The leg the shared tracks were built on, once a `retreat` gave the flyer a leg of its own. */
+  private sharedLeg: HeroLeg | null = null;
 
   constructor(options: HeroMotionOptions) {
     this.flight = options.flight;
@@ -766,7 +798,7 @@ export class HeroMotion {
     heroProbeMark('hx:t:leg');
     this.startVisual();
     if (!heldAnimations) heroProbeMark(`hx:respond:${direction}`);
-    this.startShared(options.continueBackground ?? false);
+    this.startShared(options.continueBackground ?? false, options.sharedFrom);
     heroProbeMark('hx:t:shared');
   }
 
@@ -835,6 +867,117 @@ export class HeroMotion {
     return height > 0 ? width / height : 1;
   }
 
+  /**
+   * Put a second surface on the shared tracks, from wherever the leg is now. Returns the
+   * disposer that takes them off again (its nodes then show their resting CSS, so the caller
+   * seals or hands over the surface in the same task).
+   *
+   * Only while the shared tracks are the leg's own: after a pull has taken them
+   * (`releaseShared`) or once the motion is retiring there is nothing to mirror, and the caller
+   * keeps the old handoff.
+   */
+  attachMirror(overlay: HTMLElement): (() => void) | null {
+    if (this.disposed || this.retired || this.sharedReleased || this.choreography === 'dismiss') {
+      return null;
+    }
+    if (this.mirrors.some((mirror) => mirror.overlay === overlay)) return null;
+    const mirror: HeroMirror = {
+      overlay,
+      content: overlay.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR),
+      clip: overlay.querySelector<HTMLElement>(HERO_CLIP_SELECTOR),
+      unclip: overlay.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR),
+      tracks: [],
+    };
+    this.mirrors.push(mirror);
+    /* Only while the shared tracks are running: a mirror attached after they finished has
+       nothing to follow — the Stage is at rest in the pose the route's CSS already has. */
+    if (!this.sharedCompletion.settled) {
+      try {
+        mirror.tracks = this.buildMirrorTracks(mirror);
+      } catch {
+        settle(mirror.tracks, false);
+        mirror.tracks = [];
+      }
+      this.syncToFlight(mirror.tracks);
+    }
+    return () => this.detachMirror(mirror);
+  }
+
+  private detachMirror(mirror: HeroMirror) {
+    const index = this.mirrors.indexOf(mirror);
+    if (index < 0) return;
+    this.mirrors.splice(index, 1);
+    settle(mirror.tracks, false);
+    mirror.tracks = [];
+  }
+
+  /** The mirror's overlay and container tracks on the current leg, built like the Stage's. */
+  private buildMirrorTracks(mirror: HeroMirror, fromCurrent?: Map<HTMLElement, OverlayPose>) {
+    const owners = buildOverlayAnimations(
+      {
+        overlay: mirror.overlay,
+        content: mirror.content,
+        floatingBack: null,
+        choreography: this.choreography,
+        fromCurrent,
+      },
+      this.leg,
+    );
+    if (
+      this.containerLeg &&
+      this.containerTracks.length > 0 &&
+      mirror.clip &&
+      mirror.unclip &&
+      this.choreography !== 'dismiss'
+    ) {
+      owners.push(
+        ...buildContainerAnimations(
+          {
+            clip: mirror.clip,
+            unclip: mirror.unclip,
+            // A flyer replanted into the route's plane takes its counter track from this window.
+            flightLayer: this.flightLayerIn(mirror.clip),
+            flightLayerOffset: this.flightLayerOffset(),
+          },
+          this.containerLeg,
+          this.leg,
+        ),
+      );
+    }
+    return owners;
+  }
+
+  /**
+   * Pin tracks created mid-leg to the flyer's clock. A fresh `animate()` would start at its
+   * own next frame — i.e. at offset 0, a whole leg behind the Stage it has to match.
+   */
+  private syncToFlight(owners: AnimationOwner[]) {
+    const reference = this.visual[0]?.animation;
+    if (!reference || owners.length === 0) return;
+    const apply = () => {
+      const start = reference.startTime;
+      owners.forEach(({ animation }) => {
+        try {
+          if (start !== null) animation.startTime = start;
+          else if (reference.currentTime !== null) animation.currentTime = reference.currentTime;
+        } catch {
+          // A cancelled track is already visually inert.
+        }
+      });
+    };
+    apply();
+    if (reference.startTime === null) void reference.ready.then(apply, () => {});
+  }
+
+  /** Every shared surface's presentation, read before any track is cancelled. */
+  private readSharedPoses() {
+    const poses = readOverlayPoses(this.overlay, this.floatingBack);
+    this.mirrors.forEach((mirror) => {
+      readOverlayPoses(mirror.overlay, null).forEach((pose, element) => poses.set(element, pose));
+    });
+    return poses;
+  }
+
   setRole(role: HeroFlightRole) {
     setFlightRole(this.flight, role);
   }
@@ -860,7 +1003,7 @@ export class HeroMotion {
   async reverse(destination?: HeroRect, plane?: HeroScrollPlane, measured?: HeroPose) {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
-    const sharedPose = readOverlayPoses(this.overlay, this.floatingBack);
+    const sharedPose = this.readSharedPoses();
     // The hand has already removed the mask/fit and placed the full surface. Returning
     // through its stale half-open container would apply a second, discontinuous motion.
     if (this.sharedReleased && this.leg.direction === 'forward') this.choreography = 'dismiss';
@@ -960,7 +1103,7 @@ export class HeroMotion {
     const pose = measured ?? this.measurePose();
     const previous = this.leg;
     const sharedPose = this.landedCompletion.settled || this.sharedReleased
-      ? undefined : readOverlayPoses(this.overlay, this.floatingBack);
+      ? undefined : this.readSharedPoses();
     this.cancelVisual(false);
 
     const currentScreen = planeRectToScreen(pose.rect, this.flight.plane);
@@ -1059,9 +1202,45 @@ export class HeroMotion {
    * Both `reverse` and `rebuild` re-plant the layer *before* rebuilding these tracks, so this
    * always sees the final parent.
    */
+  /** The flyer's layer when a window clips it — the Stage's, or a mirror's once replanted. */
   private containedFlightLayer(): HTMLElement | null {
     const layer = this.flight.layer;
-    return this.clip && layer && this.clip.contains(layer) ? layer : null;
+    if (!layer) return null;
+    if (this.clip?.contains(layer)) return layer;
+    return this.mirrors.some((mirror) => mirror.clip?.contains(layer)) ? layer : null;
+  }
+
+  /** The flyer's layer when this particular window clips it; the counter track goes there. */
+  private flightLayerIn(clip: HTMLElement | null) {
+    const layer = this.flight.layer;
+    return clip && layer && clip.contains(layer) ? layer : null;
+  }
+
+  /** Where the flyer's layer sits relative to a window's untransformed box. */
+  private flightLayerOffset() {
+    const container = this.containerLeg;
+    return container
+      ? {
+          x: this.flight.plane.host.left - container.host.left,
+          y: this.flight.plane.host.top - container.host.top,
+        }
+      : { x: 0, y: 0 };
+  }
+
+  /**
+   * Move the flyer into another scroller's plane **without touching its animations**: the plane
+   * passed in must describe the same screen geometry as the current one — the same host box and
+   * origin, the new scroller at the old one's offset — so every keyframe already written stays
+   * true. The open's route taking over the Stage's scroll is that case
+   * (`HeroController.promoteAdoption`): the two scrollers are identical boxes, aligned in the
+   * same write. The layer keeps its inline top/left (the origin) and its counter track; the
+   * window it now sits in wears the same container transform as the one it left.
+   */
+  replant(plane: HeroScrollPlane) {
+    if (this.disposed) return;
+    const layer = this.flight.layer;
+    if (layer.parentElement !== plane.anchor) plane.anchor.appendChild(layer);
+    this.flight.plane = plane;
   }
 
   /**
@@ -1119,6 +1298,102 @@ export class HeroMotion {
     }
   }
 
+  /**
+   * Give the surface to a successor opening, mid-leg: the window's live box and corner, and the
+   * overlay's live poses, read **before** this motion lets go of them — then this motion retires
+   * (its shared tracks frozen where they are, the background sink released) in the same task, so
+   * the successor's tracks, built next, start from exactly what is on screen. Null fields where
+   * nothing is running: the successor then starts from the resting pose.
+   */
+  handOver(): { window: { rect: HeroRect; radius: number } | null; shared: Map<HTMLElement, OverlayPose> | undefined } {
+    if (this.disposed) return { window: null, shared: undefined };
+    const shared = this.retired ? undefined : this.readSharedPoses();
+    let window: { rect: HeroRect; radius: number } | null = null;
+    const container = this.containerLeg;
+    if (container && !this.retired) {
+      const running = this.containerTracks.length > 0 && !this.sharedCompletion.settled;
+      if (running) {
+        // The leg the window runs on — not a retreat's, which replaced the flyer's alone.
+        const leg = this.sharedLeg ?? this.leg;
+        const current = this.containerTracks[0]?.animation.currentTime;
+        const elapsed = typeof current === 'number' ? current : this.measurePose().elapsed;
+        const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
+        const progress = progressAt(leg.progress, Math.min(1, Math.max(0, offset)));
+        const shape = HERO_CONTAINER_SHAPE[leg.direction];
+        window = {
+          rect: lerpRect(container.clipFrom, container.clipTo, progress, container.bow),
+          radius: interpolate(
+            container.radiusFrom,
+            container.radiusTo,
+            intervalProgress(progress, shape.start, shape.end),
+          ),
+        };
+      } else {
+        // At rest where its leg ended: full for an open, the card for a reversal.
+        window = { rect: container.clipTo, radius: container.radiusTo };
+      }
+    }
+    this.retire();
+    return { window, shared };
+  }
+
+  /**
+   * Fly the picture home on its own, after `handOver`/`retire` gave its surface away: the
+   * reversal's flight leg — caught from its live pose, replanted into the gallery's plane, a
+   * spring home — with no window, overlay or background tracks of its own.
+   */
+  retreat(destination: HeroRect, plane: HeroScrollPlane | undefined, measured: HeroPose) {
+    if (this.disposed) return Promise.resolve();
+    this.landedCompletion = createCompletion();
+    this.cancelVisual(false);
+    /* The window's counter-scale rides the flyer's layer; the window is no longer this motion's,
+       and outside it (in the gallery plane) the counter would distort the picture. */
+    this.flight.layer.getAnimations().forEach((animation) => animation.cancel());
+    this.flight.layer.style.transformOrigin = '';
+    const previous = this.leg;
+    const posed: HeroRect = measured.pullOffset || measured.pullOffsetX
+      ? {
+          ...measured.rect,
+          top: measured.rect.top + measured.pullOffset,
+          left: measured.rect.left + (measured.pullOffsetX ?? 0),
+        }
+      : measured.rect;
+    if (this.pullOffset || this.pullOffsetX) this.setPullOffset(0, 0);
+    const currentScreen = planeRectToScreen(posed, this.flight.plane);
+    if (plane) {
+      moveFlightToPlane(this.flight, plane, screenRectToPlane(currentScreen, plane), measured.radius);
+    }
+    const from = screenRectToPlane(currentScreen, this.flight.plane);
+    const to = screenRectToPlane(destination, this.flight.plane);
+    const direction: HeroDirection = 'back';
+    const fullTravel = heroRectCenterDistance(previous.from, previous.to);
+    const ratio = fullTravel > 0.5 ? clamp01(heroRectCenterDistance(from, to) / fullTravel) : 1;
+    const duration = Math.max(
+      scaledMs(HERO_REVERSE_MIN_DURATION_MS, 'image'),
+      Math.round(
+        HERO_DURATIONS[direction] *
+          motionScale('image') *
+          (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
+      ),
+    );
+    // The window keeps running on the leg it was built for, until a successor takes it over.
+    if (!this.retired) this.sharedLeg ??= previous;
+    this.leg = createHeroLeg({
+      from,
+      to,
+      fromRadius: measured.radius,
+      toRadius: getFlightRadii(this.flight, direction).to,
+      direction,
+      duration,
+      startedAt: timelineNow() + 1,
+      baseAspect: this.baseAspect,
+      speed: -measured.speed,
+    });
+    this.startVisual();
+    heroProbeMark('hx:respond:retreat');
+    return this.landed;
+  }
+
   /** Hand the background + chrome tracks to a gesture. */
   releaseShared() {
     this.sharedReleased = true;
@@ -1145,7 +1420,7 @@ export class HeroMotion {
 
   finish() {
     settle(this.visual, true);
-    settle([...this.shared, ...this.containerTracks], true);
+    settle([...this.shared, ...this.containerTracks, ...this.mirrorTracks()], true);
     this.landedCompletion.resolve();
     this.sharedCompletion.resolve();
   }
@@ -1157,6 +1432,7 @@ export class HeroMotion {
     this.sharedCompletion.resolve();
     this.cancelVisual(false);
     this.cancelShared(true, false);
+    this.mirrors = [];
     this.flight.release();
   }
 
@@ -1209,6 +1485,7 @@ export class HeroMotion {
        produces none would otherwise leave the previous pair in the array to be settled twice. */
     settle(this.containerTracks, false);
     this.containerTracks = [];
+    this.clearMirrorTracks();
     try {
       if (this.background) {
         backgroundOwners.set(this.background, this.owner);
@@ -1240,20 +1517,24 @@ export class HeroMotion {
             {
               clip: this.clip,
               unclip: this.unclip,
-              flightLayer: this.containedFlightLayer(),
+              flightLayer: this.flightLayerIn(this.clip),
               /* The plane host is the scroller's padding box (`createPlane`); the container
                  host is the overlay, the window's untransformed box. */
-              flightLayerOffset: {
-                x: this.flight.plane.host.left - this.containerLeg.host.left,
-                y: this.flight.plane.host.top - this.containerLeg.host.top,
-              },
+              flightLayerOffset: this.flightLayerOffset(),
             },
             this.containerLeg,
             this.leg,
           );
         }
+        /* Same task as the Stage's tracks, so the browser gives them one start time. */
+        if (this.choreography !== 'dismiss') {
+          this.mirrors.forEach((mirror) => {
+            mirror.tracks = this.buildMirrorTracks(mirror, fromCurrent);
+          });
+        }
       }
     } catch {
+      this.clearMirrorTracks();
       settle([...owners, ...this.containerTracks], false);
       this.disownBackground(true);
       this.shared = [];
@@ -1262,7 +1543,7 @@ export class HeroMotion {
       return;
     }
     this.shared = owners;
-    const all = [...owners, ...this.containerTracks];
+    const all = [...owners, ...this.containerTracks, ...this.mirrorTracks()];
     const revision = ++this.sharedRevision;
     if (all.length === 0) {
       this.sharedCompletion.resolve();
@@ -1271,6 +1552,17 @@ export class HeroMotion {
     void Promise.allSettled(all.map(({ animation }) => animation.finished)).then(() => {
       if (revision !== this.sharedRevision) return;
       this.sharedCompletion.resolve();
+    });
+  }
+
+  private mirrorTracks() {
+    return this.mirrors.flatMap((mirror) => mirror.tracks);
+  }
+
+  private clearMirrorTracks() {
+    this.mirrors.forEach((mirror) => {
+      settle(mirror.tracks, false);
+      mirror.tracks = [];
     });
   }
 
@@ -1331,6 +1623,7 @@ export class HeroMotion {
     settle([...this.shared, ...this.containerTracks], false);
     this.shared = [];
     this.containerTracks = [];
+    this.clearMirrorTracks();
     if (settleCompletion) this.sharedCompletion.resolve();
     this.disownBackground(clearBackground);
   }

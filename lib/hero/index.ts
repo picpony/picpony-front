@@ -132,6 +132,11 @@ export function isImageHeroPublicationQuiet() {
   return imageHeroController.isPublicationQuiet();
 }
 
+/** The detail's body may mount now — see `HeroController.isDetailBodyPublishable`. */
+export function isImageHeroDetailBodyPublishable(imageId: number) {
+  return imageHeroController.isDetailBodyPublishable(imageId);
+}
+
 /** True when this image's detail data may be shown without disturbing a flight. */
 export function isImageHeroDetailDataPublishable(imageId: number) {
   return imageHeroController.isDetailDataPublishable(imageId);
