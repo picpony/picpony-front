@@ -1,7 +1,7 @@
 # Motion standard — Material 3 Expressive
 
 Source of truth: `lib/spring.ts`. This page is the per-component assignment; the rules are in
-`AGENTS.md` → Motion. Every row names a role, never a number.
+`docs/motion-system.md` (moved out of `AGENTS.md` → Motion). Every row names a role, never a number.
 
 | Object | Arrives / moves | Leaves | Compose reference |
 | --- | --- | --- | --- |
