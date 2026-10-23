@@ -6,6 +6,10 @@
   <a href="https://picpony.top"><b>在线访问 ↗</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#快速开始"><b>快速开始</b></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="./AGENTS.md"><b>设计规范</b></a>
 </p>
 
+<details>
+<summary><b>产品一览</b></summary>
+<br>
+
 <p align="center">
   <img src="./assets/readme/showcase.webp" width="100%" alt="PicPony 在桌面浏览器与手机上的首页：顶部是近日推荐大图，下方是瀑布流图库。">
 </p>
@@ -28,6 +32,9 @@
 <p align="center">
   <img src="./assets/readme/features.svg" width="100%" alt="更多细节：以图搜图、中文标签、论坛、收藏夹、标签订阅、彩彩 AI、内容分级、线路加速与 PWA。">
 </p>
+
+</details>
+
 
 ## 快速开始
 
