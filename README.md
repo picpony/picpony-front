@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/hero-dark.svg">
-    <img src="./assets/readme/hero.svg" width="100%" alt="PicPony 小马图库：看图，本该如此优雅。为小马同好打造的图库与社区，以 Material 3 从头设计。">
-  </picture>
+  <img src="./assets/readme/hero.svg" width="100%" alt="PicPony 小马图库：看图，本该如此优雅。为小马同好打造的图库与社区，以 Material 3 从头设计。">
 </p>
 
 <p align="center">
@@ -29,14 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/darkmode.webp" width="100%" alt="浅色与深色：白昼，或深夜。同一页面在深色与浅色模式下的对比。">
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/features-dark.svg">
-    <img src="./assets/readme/features.svg" width="100%" alt="更多细节：以图搜图、中文标签、论坛、收藏夹、标签订阅、彩彩 AI、内容分级、线路加速与 PWA。">
-  </picture>
+  <img src="./assets/readme/features.svg" width="100%" alt="更多细节：以图搜图、中文标签、论坛、收藏夹、标签订阅、彩彩 AI、内容分级、线路加速与 PWA。">
 </p>
 
 ## 快速开始
@@ -77,10 +67,7 @@ bun run dev
 <br>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/readme/footer-dark.svg">
-    <img src="./assets/readme/footer.svg" width="100%" alt="PicPony：每一张图，都值得被好好看见。">
-  </picture>
+  <img src="./assets/readme/footer.svg" width="100%" alt="PicPony：每一张图，都值得被好好看见。">
 </p>
 
 <p align="center"><sub>README 中的作品均来自 Derpibooru，版权归各自作者所有。</sub></p>
