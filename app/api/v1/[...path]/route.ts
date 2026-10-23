@@ -53,6 +53,16 @@ const BODY_TOTAL_MS = 15 * 60_000;
 /** The abort reason a stalled body carries, so the answer can tell it from a dead upstream. */
 const BODY_STALLED = 'request body stalled';
 
+/**
+ * Bodies up to this size (every JSON write) are read whole and forwarded with a `Content-Length`.
+ * A streamed body goes upstream as `Transfer-Encoding: chunked`, which the WAF in front of the
+ * backend (宝塔「拦截分块请求」) blocks outright — and then bans the visitor's address it reads
+ * from `X-Forwarded-For`. Multipart uploads and anything declared larger keep streaming (see
+ * `BODY_IDLE_MS`) and carry the client's declared `Content-Length` upstream instead.
+ */
+const BUFFERED_BODY_MAX = 1024 * 1024;
+const BODY_TOO_LARGE = 'request body too large';
+
 /** Admin writes that change what the public site status (`get_site_status`) answers. */
 const STATUS_RESOURCES = new Set([
   '/admin/api-route-policy',
@@ -140,6 +150,54 @@ function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController
   return { stream, done: () => clearTimeout(timer) };
 }
 
+/** True when the body should be buffered rather than streamed (see `BUFFERED_BODY_MAX`). */
+function shouldBuffer(request: NextRequest): boolean {
+  const type = request.headers.get('content-type')?.toLowerCase() ?? '';
+  if (type.startsWith('multipart/')) return false;
+  const declared = request.headers.get('content-length');
+  if (declared === null) return true; // read with the cap; over it answers 413
+  const length = Number(declared);
+  return Number.isFinite(length) && length >= 0 && length <= BUFFERED_BODY_MAX;
+}
+
+/**
+ * Reads a small body whole, under the same pace rule as `pacedBody`: no chunk for `BODY_IDLE_MS`
+ * aborts with `BODY_STALLED`. Past `BUFFERED_BODY_MAX` it throws `BODY_TOO_LARGE`.
+ */
+async function readBounded(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ArrayBuffer> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const onAbort = () => void reader.cancel(signal.reason).catch(() => {});
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    for (;;) {
+      const stalled = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new DOMException(BODY_STALLED, 'TimeoutError')), BODY_IDLE_MS);
+      });
+      const { done, value } = await Promise.race([reader.read(), stalled]).finally(() => clearTimeout(timer));
+      if (done) break;
+      total += value.byteLength;
+      if (total > BUFFERED_BODY_MAX) throw new DOMException(BODY_TOO_LARGE, 'QuotaExceededError');
+      chunks.push(value);
+    }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer as ArrayBuffer;
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -178,19 +236,52 @@ async function proxy(
   if (address.realIp) headers.set('x-real-ip', address.realIp);
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
+
+  /* A small body is read whole so it goes upstream with a Content-Length, never chunked
+     (see `BUFFERED_BODY_MAX`). */
+  let buffered: ArrayBuffer | null = null;
+  if (hasBody && shouldBuffer(request)) {
+    try {
+      buffered = await readBounded(request.body!, request.signal);
+    } catch (error) {
+      const message = error instanceof DOMException ? error.message : '';
+      if (message === BODY_TOO_LARGE) {
+        return Response.json(
+          { error: { code: 'BODY_TOO_LARGE', message: '请求内容过大' } },
+          { status: 413, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+      if (message === BODY_STALLED) {
+        return Response.json(
+          { error: { code: 'BODY_STALLED', message: '请求中断，请检查网络后重试' } },
+          { status: 408, headers: { 'Cache-Control': 'private, no-store' } },
+        );
+      }
+      /* The client went away mid-body; nobody is left to read an answer. */
+      return new Response(null, { status: 499 });
+    }
+  }
+
   /* Bounded: without a signal the handler inherits the platform's socket timeout, so a hung
-     upstream hangs this route with it, holding a Node connection open. A bodyless request gets
-     one budget; a body gets a pace instead (see `BODY_IDLE_MS`). */
-  const paceController = hasBody ? new AbortController() : null;
-  const paced = hasBody && paceController ? pacedBody(request.body!, paceController) : null;
+     upstream hangs this route with it, holding a Node connection open. A bodyless or buffered
+     request gets one budget; a streamed body gets a pace instead (see `BODY_IDLE_MS`). */
+  const streamed = hasBody && buffered === null;
+  const paceController = streamed ? new AbortController() : null;
+  const paced = streamed && paceController ? pacedBody(request.body!, paceController) : null;
+  /* A streamed body with a declared length (every browser upload, XHR or fetch with FormData)
+     keeps that length upstream, so it is not sent chunked either. Without one it has to be. */
+  const declaredLength = request.headers.get('content-length');
+  if (streamed && declaredLength !== null && /^\d+$/.test(declaredLength)) {
+    headers.set('content-length', declaredLength);
+  }
   let upstream: Response;
   try {
     const init: RequestInit & { duplex: 'half' } = {
       method: request.method,
       headers,
-      /* Stream uploads with backpressure instead of buffering an unauthenticated request of
-         unbounded size in Node. */
-      body: paced ? paced.stream : undefined,
+      /* Small bodies go whole (fetch sets Content-Length). Uploads stream with backpressure
+         instead of buffering an unauthenticated request of unbounded size in Node. */
+      body: buffered ?? (paced ? paced.stream : undefined),
       duplex: 'half',
       redirect: 'manual',
       cache: 'no-store',
