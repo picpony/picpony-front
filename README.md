@@ -63,6 +63,54 @@ bun run dev
 
 </details>
 
+## 技术架构
+
+<p align="center">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="前端架构：浏览器端包含组件原语、资源缓存、API 适配器与动效引擎；Next.js 服务端负责路由与 SSR 种子、服务端 memo 与限流、API 代理和 sharp 图片优化；上游为 PicPony 后端与 Derpibooru。">
+</p>
+
+### 技术栈
+
+| 层 | 选型 |
+| :-- | :-- |
+| 框架 | Next.js 16（App Router、`standalone` 输出、React Compiler） |
+| 界面 | React 19 · TypeScript 5.9 · Tailwind CSS 4 |
+| 设计系统 | Material 3，配色由 `@material/material-color-utilities` 生成 |
+| 动效 | GSAP 与自研弹簧曲线，Lottie 播放插画动画 |
+| 富文本 | remark / rehype 解析，`rehype-sanitize` 净化，wangEditor 编辑 |
+| 图片 | `sharp` 服务端优化，Service Worker 缓存 |
+
+### 配置
+
+所有变量都可省略，默认直连生产服务。
+
+| 变量 | 默认值 | 作用 |
+| :-- | :-- | :-- |
+| `PICPONY_UPSTREAM_ORIGIN` | `https://api.picpony.top` | PicPony 后端地址，只接受裸 `http(s)` 源 |
+| `PICPONY_DERPI_ORIGIN` | `https://trixiebooru.org/api/v1/json` | Derpibooru 图源 API |
+| `NEXT_PUBLIC_BUILD_ID` | 构建时间戳 | 构建标识，决定 Service Worker 缓存版本；CI 可传入提交哈希 |
+| `PICPONY_SERVER_MEMO_TTL_MS` | 不设置 | 覆盖服务端缓存时长，测试时设为 `0` 让每次读取都走上游 |
+
+### 质量保障
+
+```bash
+bun run check        # 格式、Lint、类型检查、56 个测试套件，以及配色与动效令牌校验
+bun run test:browser # 真实浏览器回归
+bun run perf:weight  # 生产脚本体积
+```
+
+修改图片详情或弹层时，再跑 `test:hero` 与 `test:overlays`。在 Windows 上跑浏览器回归需要已安装 Edge 与 Python Playwright。
+
+### 部署
+
+```bash
+bun run build
+bun run package:standalone   # 产出 dist/picpony-front-<平台>-<架构>/
+node server.js               # 在产物目录内启动
+```
+
+产物自带 `.next/static`、`public` 和 `sharp` 的平台库，所以**在哪个平台构建，就只能在哪个平台运行**，Linux 生产包请在 Linux 上构建。当前为单进程模型，服务端缓存与限流不跨实例同步，多副本部署前需要先接入共享存储。
+
 <details>
 <summary><b>写代码之前</b></summary>
 <br>
