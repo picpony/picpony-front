@@ -17,10 +17,40 @@ import {
   isVolatileVisualMedia,
   normalizeHeroSrc,
 } from './dom';
-import { captureHeroFrame, type FrameAsset } from './frameCache';
+import { captureHeroFrame, isHeroFrameAlive, type FrameAsset } from './frameCache';
 import type { ImageHeroSnapshot } from './types';
 
 let detailComponentWarmup: Promise<unknown> | null = null;
+
+/**
+ * The last frame a press captured for each picture, so **a card that cannot be captured right
+ * now still flies**. `captureHeroFrame` needs the card's `<img>` decoded; one that is reloading —
+ * the image line switching after a failure re-points every card's `src`, a retry re-requests one
+ * with a cache-busting query — reads `complete === false` for that while, and a press then got no
+ * snapshot: the open fell through to an ordinary navigation, a cut with no flight, at random and
+ * most often on a flaky line. The picture was decoded a moment ago; its frame is still good.
+ * A few entries, each a canvas the frame cache already budgets; checked alive before use.
+ */
+const lastPressFrames = new Map<number, { src: string; asset: FrameAsset }>();
+const MAX_LAST_PRESS_FRAMES = 6;
+
+function rememberPressFrame(imageId: number, src: string, asset: FrameAsset) {
+  lastPressFrames.delete(imageId);
+  lastPressFrames.set(imageId, { src, asset });
+  while (lastPressFrames.size > MAX_LAST_PRESS_FRAMES) {
+    lastPressFrames.delete(lastPressFrames.keys().next().value!);
+  }
+}
+
+function fallbackPressFrame(imageId: number): { src: string; asset: FrameAsset } | null {
+  for (const store of [lastPressFrames, warmedDetailFrames]) {
+    const entry = store.get(imageId);
+    if (!entry) continue;
+    if (isHeroFrameAlive(entry.asset)) return entry;
+    store.delete(imageId);
+  }
+  return null;
+}
 
 /**
  * Detail-sized frames **already rasterised**, per image id — for steps (上一张 / 下一张) only.
@@ -149,9 +179,12 @@ export function prepareImageHero(
      cannot disagree. The card's bitmap is sized for a card; the flyer sharpens in the air from
      the detail's final `<img>` (`lib/hero/upgrade.ts`) rather than needing anything sharper
      before take-off. */
-  const previewFrame = captureHeroFrame(visual);
+  const captured = captureHeroFrame(visual);
+  const fallback = captured ? null : fallbackPressFrame(image.id);
+  const previewFrame = captured ?? fallback?.asset ?? null;
   if (!previewFrame) return null;
   const previewSrc = normalizeHeroSrc(
+    fallback?.src ||
     visual?.currentSrc ||
       visual?.getAttribute('src') ||
       previewSrcOverride ||
@@ -168,6 +201,7 @@ export function prepareImageHero(
       image.view_url ||
       '',
   );
+  if (captured && mediaType === 'image' && previewSrc) rememberPressFrame(image.id, previewSrc, captured);
   const rect = getHeroRect(source);
   return {
     image,
@@ -190,7 +224,9 @@ export function prepareImageHero(
 export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
   const card = findImageHeroThumbnail(image.id);
   const visual = card ? getVisualMedia(card) : null;
-  const warmed = warmedDetailFrames.get(image.id);
+  const warmedEntry = warmedDetailFrames.get(image.id);
+  const warmed = warmedEntry && isHeroFrameAlive(warmedEntry.asset) ? warmedEntry : undefined;
+  if (warmedEntry && !warmed) warmedDetailFrames.delete(image.id);
   const cardFrame = visual ? captureHeroFrame(visual) : null;
   const usedWarmed = Boolean(
     warmed && (!visual || !isVolatileVisualMedia(visual)) &&

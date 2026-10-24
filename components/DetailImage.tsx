@@ -15,7 +15,7 @@ import { MdFullscreen, MdRefresh } from 'react-icons/md';
 import IconButton from './IconButton';
 import Skeleton from './Skeleton';
 import ErrorRetry from './ErrorRetry';
-import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
+import { getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
 import { isDetailFinalOptimized, shouldBypassImageOptimization } from '@/lib/detailFinalSource';
 import {
@@ -28,6 +28,7 @@ import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
 import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { warmImageHeroFrame } from '@/lib/hero';
+import { getDetailFinalCandidate } from '@/lib/hero/finalWarm';
 import { cn } from '@/lib/utils';
 
 type DetailMediaTargetCallback = (surfaceId: string, target: HTMLDivElement | null) => void;
@@ -109,35 +110,6 @@ interface FinalLadder {
 function freshLadder(src: string, generation = 0): FinalLadder {
   const attempt = firstAttempt(src);
   return { src, attempt, shown: attempt, generation };
-}
-
-function getPrefetchCandidate(
-  srcSet: string | undefined,
-  fallback: string,
-  width: number,
-  height: number,
-) {
-  if (!srcSet || typeof window === 'undefined') return fallback;
-
-  const renderedWidth = getHeroMediaRenderedWidth(
-    { width, height },
-    { width: window.innerWidth, height: window.innerHeight },
-  );
-  const targetWidth = renderedWidth * Math.max(1, window.devicePixelRatio || 1);
-  const candidates = srcSet
-    .split(',')
-    .map((candidate) => {
-      const match = candidate.trim().match(/^(.*)\s+(\d+)w$/);
-      return match ? { url: match[1], width: Number(match[2]) } : null;
-    })
-    .filter((candidate): candidate is { url: string; width: number } => Boolean(candidate))
-    .sort((a, b) => a.width - b.width);
-
-  return (
-    candidates.find((candidate) => candidate.width >= targetWidth)?.url ??
-    candidates.at(-1)?.url ??
-    fallback
-  );
 }
 
 function createImagePrefetchLease(source: string, href: string): ImagePrefetchLease {
@@ -461,7 +433,7 @@ export default function DetailImage({
     });
     const lease = createImagePrefetchLease(
       finalSrc,
-      getPrefetchCandidate(props.srcSet, props.src, width, height),
+      getDetailFinalCandidate(props.srcSet, props.src, width, height),
     );
     prefetchLeaseRef.current = lease;
 

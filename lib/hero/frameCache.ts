@@ -29,6 +29,8 @@ export type FrameAsset = {
   readonly height: number;
   readonly pixels: number;
   acquire: () => FrameLease;
+  /** False once the canvas behind it lost its pixels (see `lostPrimaries`). */
+  alive: () => boolean;
 };
 
 type HeroFrameCapture = {
@@ -78,9 +80,50 @@ function getHeroFrameCacheKey(capture: HeroFrameCapture) {
   ].join('\n');
 }
 
+/**
+ * Primaries whose backing store was lost. **A 2D canvas loses its pixels with the GPU context**
+ * — on Android that happens on its own: memory pressure, the app going to the background, the GPU
+ * process restarting — and a restored context comes back *cleared*. A cached frame does not know:
+ * the next flight of that picture took off from a transparent canvas, so the open or the return
+ * ran with nothing on screen ("the animation vanished", intermittently, and always again for the
+ * same picture, because the cache handed out the same dead canvas). A lost primary leaves the
+ * cache, and a frame is checked before it is handed out.
+ */
+const lostPrimaries = new WeakSet<HTMLCanvasElement>();
+
+function watchContextLoss(canvas: HTMLCanvasElement) {
+  canvas.addEventListener(
+    'contextlost',
+    () => {
+      lostPrimaries.add(canvas);
+      const owner = assetByPrimary.get(canvas);
+      if (!owner) return;
+      heroFrameCache.forEach((asset, key) => {
+        if (asset === owner) heroFrameCache.delete(key);
+      });
+    },
+    { once: true },
+  );
+}
+
+function isCanvasLost(canvas: HTMLCanvasElement) {
+  if (lostPrimaries.has(canvas)) return true;
+  const context = canvas.getContext('2d') as (CanvasRenderingContext2D & { isContextLost?: () => boolean }) | null;
+  return !context || context.isContextLost?.() === true;
+}
+
+/** Whether a frame still holds its pixels — see `lostPrimaries`. */
+export function isHeroFrameAlive(asset: FrameAsset | null | undefined): asset is FrameAsset {
+  return Boolean(asset && asset.alive());
+}
+
 function getCachedHeroFrame(key: string) {
   const cached = heroFrameCache.get(key);
   if (!cached) return null;
+  if (!cached.alive()) {
+    heroFrameCache.delete(key);
+    return null;
+  }
   // LRU touch.
   heroFrameCache.delete(key);
   heroFrameCache.set(key, cached);
@@ -137,6 +180,7 @@ function createFrameAsset(source: string, primary: HTMLCanvasElement): FrameAsse
     width: primary.width,
     height: primary.height,
     pixels: primary.width * primary.height,
+    alive: () => !isCanvasLost(primary),
     acquire() {
       const ownsPrimary = !primaryLeased;
       const concurrentCopy = ownsPrimary ? null : copyCanvas(primary);
@@ -159,6 +203,7 @@ function createFrameAsset(source: string, primary: HTMLCanvasElement): FrameAsse
     },
   };
   assetByPrimary.set(primary, asset);
+  watchContextLoss(primary);
   return asset;
 }
 

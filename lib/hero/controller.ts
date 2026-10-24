@@ -31,7 +31,7 @@ import {
   type DomLease,
 } from './dom';
 import { revealInImageSequence } from '@/lib/imageSequence';
-import { captureHeroFrame, type FrameAsset } from './frameCache';
+import { captureHeroFrame, isHeroFrameAlive, type FrameAsset } from './frameCache';
 import { heroRectsEqual, releaseSpeedAlong, type HeroRect } from './geometry';
 
 function unionHeroRects(a: HeroRect, b: HeroRect): HeroRect {
@@ -2839,8 +2839,13 @@ export class HeroController {
     const plane = thumbnail ? getGalleryScrollPlane() : null;
     // Capture what the detail is showing right now, so the return flight starts
     // from the real pixels rather than the stale activation snapshot.
+    /* Then the open's own frame — only while it still holds pixels (a canvas loses them with
+       the GPU context, `isHeroFrameAlive`) — and then the card the picture flies home to. A
+       dead frame flew an invisible picture home; no frame at all dropped the return to a cut. */
     const liveAsset = route?.target
-      ? (captureHeroFrame(getVisualMedia(route.target)) ?? record.snapshot.previewFrame)
+      ? (captureHeroFrame(getVisualMedia(route.target)) ??
+        (isHeroFrameAlive(record.snapshot.previewFrame) ? record.snapshot.previewFrame : null) ??
+        (thumbnail ? captureHeroFrame(getVisualMedia(thumbnail)) : null))
       : null;
 
     // Nothing to fly between: fall back to an ordinary history collapse.
@@ -3735,8 +3740,8 @@ export class HeroController {
       findImageHeroThumbnail(record.imageId);
     /* A ladder a step rewrote may carry no frame (the list never painted that picture); the card
        being flown from has one now. */
-    const frame =
-      record.snapshot.previewFrame ?? (source ? captureHeroFrame(getVisualMedia(source)) : null);
+    const kept = isHeroFrameAlive(record.snapshot.previewFrame) ? record.snapshot.previewFrame : null;
+    const frame = kept ?? (source ? captureHeroFrame(getVisualMedia(source)) : null);
     const snapshot =
       frame === record.snapshot.previewFrame
         ? record.snapshot

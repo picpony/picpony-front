@@ -12,6 +12,7 @@ import {
 import type Link from 'next/link';
 import type { ImagePreview } from '@/lib/types/image';
 import { cancelImageDetailPrefetch } from '@/lib/detail';
+import { warmDetailFinal } from '@/lib/hero/finalWarm';
 import {
   armImageHeroOpen,
   canAnimateImageHero,
@@ -104,6 +105,9 @@ export function useHeroLink<T extends HTMLElement>({
       if (!image) return;
       getImageHeroNavigation()?.prefetch?.(href);
       void warmImageHero(image.id, priority);
+      /* The press (or a keyboard click) commits to this picture: its full-size file starts now
+         rather than when the detail route commits (`warmDetailFinal`). Hover stays cheap. */
+      if (priority === 'immediate') warmDetailFinal(image);
       cancelFrameWarmRef.current?.();
       /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
          without it the tapped card's capture always lands synchronously in the click

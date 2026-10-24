@@ -2636,6 +2636,15 @@ html #nprogress .peg {
   }
 }
 
+/* While an image detail covers the gallery (and until its return has settled), the slots far
+ * from the viewport skip their style work, so the restyle `inert` costs on `<main>` stays with
+ * the cards near the screen — see `lib/galleryCover.ts`. Temporary by design: permanent
+ * `content-visibility: auto` was measured slower for scrolling (the note below), and the slots
+ * are released a few at a time once the gallery is back. */
+#app-main[data-gallery-covered] .masonry-item:not([data-gallery-live]) {
+  content-visibility: auto;
+}
+
 /* Isolate each gallery tile's paint invalidation while its image decodes or its chips change.
  *
  * **Content-visibility auto was tried here and measured worse — do not add it.** The tile's

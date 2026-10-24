@@ -103,6 +103,7 @@ import { setRoutePayloadPrefetch } from '@/lib/routePayload';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { focusLanding } from '@/lib/focusLanding';
 import { useMaintenanceStatus } from '@/lib/useSiteStatus';
+import { coverGallery, uncoverGallery } from '@/lib/galleryCover';
 
 /**
  * A prefetch of the whole route, page and all (`lib/routePayload.ts`). The router takes it as the
@@ -533,6 +534,20 @@ export default function AppLayout({
     return () => cancelAnimationFrame(frame);
   }, [gallerySettledUnder]);
   const galleryInert = gallerySettledUnder && galleryInertArmed;
+  /* The off-screen cards sit out the `inert` restyles while a detail covers the gallery, and are
+     given back once a return has settled (`lib/galleryCover.ts`). Imperative, on `<main>`, so no
+     card re-renders for it. */
+  const gallerySettle = imageHeroRuntime.settle;
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    if (detailCovers) {
+      coverGallery(main);
+      return;
+    }
+    if (gallerySettle !== 'gallery-idle') return;
+    return uncoverGallery(main);
+  }, [detailCovers, gallerySettle]);
   // An intercepted detail also opens without a hero flight (reduced/off motion,
   // or an unavailable source bitmap). Keep that route's real background too:
   // guessing '/' changes the content key and remounts a multi-page favourites
