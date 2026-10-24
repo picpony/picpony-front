@@ -150,22 +150,53 @@ function pacedBody(body: ReadableStream<Uint8Array>, controller: AbortController
   return { stream, done: () => clearTimeout(timer) };
 }
 
-/** True when the body should be buffered rather than streamed (see `BUFFERED_BODY_MAX`). */
-function shouldBuffer(request: NextRequest): boolean {
+/**
+ * How the body goes upstream (see `BUFFERED_BODY_MAX`):
+ * - `buffer`: a declared small length — read whole, sent with a `Content-Length`;
+ * - `probe`: no declared length on a JSON, form or text body. A browser always declares one for a JSON
+ *   write, but a hop in front of this server (a LAN reverse proxy, a tunnel, HTTP/2 without
+ *   `content-length`) can deliver it chunked, and forwarding that as-is is exactly the request the
+ *   WAF blocks and bans the visitor for (`POST /images/comment-counts`, 2026-10-24). So it is read
+ *   up to the cap: whole if it fits, otherwise streamed on from where the read stopped;
+ * - `stream`: multipart, a declared length over the cap (streamed with that length), or an
+ *   undeclared body of any other type.
+ */
+function bodyMode(request: NextRequest): 'buffer' | 'probe' | 'stream' {
   const type = request.headers.get('content-type')?.toLowerCase() ?? '';
-  if (type.startsWith('multipart/')) return false;
-  /* Only a declared small length: a browser always sends one for a JSON or text body. Without
-     one the size is unknown, so the body streams as before (and has to go chunked). */
   const declared = request.headers.get('content-length');
-  if (declared === null || !/^\d+$/.test(declared)) return false;
-  return Number(declared) <= BUFFERED_BODY_MAX;
+  if (type.startsWith('multipart/')) return 'stream';
+  if (declared !== null && /^\d+$/.test(declared)) {
+    return Number(declared) <= BUFFERED_BODY_MAX ? 'buffer' : 'stream';
+  }
+  /* Undeclared: probe the API's own small bodies only. Anything else (a raw upload) keeps
+     streaming under the pace rule, as before. */
+  return /^(application\/(json|x-www-form-urlencoded)|text\/)/.test(type) ? 'probe' : 'stream';
 }
+
+/** What a probing read found: the whole body, or the start of one too large to hold. */
+type ProbedBody =
+  | { kind: 'whole'; body: ArrayBuffer }
+  | { kind: 'overflow'; body: ReadableStream<Uint8Array> };
 
 /**
  * Reads a small body whole, under the same pace rule as `pacedBody`: no chunk for `BODY_IDLE_MS`
  * aborts with `BODY_STALLED`. Past `BUFFERED_BODY_MAX` it throws `BODY_TOO_LARGE`.
  */
 async function readBounded(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ArrayBuffer> {
+  const read = await readUpTo(body, signal, false);
+  if (read.kind !== 'whole') throw new DOMException(BODY_TOO_LARGE, 'QuotaExceededError');
+  return read.body;
+}
+
+/**
+ * `readBounded`, except that with `overflow` a body past the cap is not an error: the chunks read
+ * so far and the rest of the stream are handed back as one stream, to be forwarded as is.
+ */
+async function readUpTo(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+  overflow: boolean,
+): Promise<ProbedBody> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -180,8 +211,29 @@ async function readBounded(body: ReadableStream<Uint8Array>, signal: AbortSignal
       const { done, value } = await Promise.race([reader.read(), stalled]).finally(() => clearTimeout(timer));
       if (done) break;
       total += value.byteLength;
-      if (total > BUFFERED_BODY_MAX) throw new DOMException(BODY_TOO_LARGE, 'QuotaExceededError');
       chunks.push(value);
+      if (total > BUFFERED_BODY_MAX) {
+        if (!overflow) throw new DOMException(BODY_TOO_LARGE, 'QuotaExceededError');
+        signal.removeEventListener('abort', onAbort);
+        clearTimeout(timer);
+        const head = chunks.splice(0);
+        return {
+          kind: 'overflow',
+          body: new ReadableStream<Uint8Array>({
+            pull: async (controller) => {
+              const next = head.shift();
+              if (next) {
+                controller.enqueue(next);
+                return;
+              }
+              const { done: finished, value: chunk } = await reader.read();
+              if (finished) controller.close();
+              else controller.enqueue(chunk);
+            },
+            cancel: (reason) => reader.cancel(reason),
+          }),
+        };
+      }
     }
   } catch (error) {
     void reader.cancel().catch(() => {});
@@ -196,7 +248,7 @@ async function readBounded(body: ReadableStream<Uint8Array>, signal: AbortSignal
     out.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return out.buffer as ArrayBuffer;
+  return { kind: 'whole', body: out.buffer as ArrayBuffer };
 }
 
 async function proxy(
@@ -241,9 +293,18 @@ async function proxy(
   /* A small body is read whole so it goes upstream with a Content-Length, never chunked
      (see `BUFFERED_BODY_MAX`). */
   let buffered: ArrayBuffer | null = null;
-  if (hasBody && shouldBuffer(request)) {
+  /** A probed body too large to hold: its start plus the rest, streamed on (chunked, unavoidably). */
+  let overflowBody: ReadableStream<Uint8Array> | null = null;
+  const mode = hasBody ? bodyMode(request) : 'stream';
+  if (hasBody && mode !== 'stream') {
     try {
-      buffered = await readBounded(request.body!, request.signal);
+      if (mode === 'buffer') {
+        buffered = await readBounded(request.body!, request.signal);
+      } else {
+        const probed = await readUpTo(request.body!, request.signal, true);
+        if (probed.kind === 'whole') buffered = probed.body;
+        else overflowBody = probed.body;
+      }
     } catch (error) {
       const message = error instanceof DOMException ? error.message : '';
       if (message === BODY_TOO_LARGE) {
@@ -268,7 +329,8 @@ async function proxy(
      request gets one budget; a streamed body gets a pace instead (see `BODY_IDLE_MS`). */
   const streamed = hasBody && buffered === null;
   const paceController = streamed ? new AbortController() : null;
-  const paced = streamed && paceController ? pacedBody(request.body!, paceController) : null;
+  const paced =
+    streamed && paceController ? pacedBody(overflowBody ?? request.body!, paceController) : null;
   /* A streamed body with a declared length (every browser upload, XHR or fetch with FormData)
      keeps that length upstream, so it is not sent chunked either. Without one it has to be. */
   const declaredLength = request.headers.get('content-length');

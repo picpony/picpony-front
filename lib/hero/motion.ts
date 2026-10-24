@@ -162,6 +162,11 @@ type Completion = {
   settled: boolean;
 };
 
+export type HeroReverseInputs = {
+  shared: Map<HTMLElement, OverlayPose>;
+  host: HeroRect | null;
+};
+
 type HeroMotionOptions = {
   flight: HeroFlight;
   /** Screen-space source box. */
@@ -175,7 +180,10 @@ type HeroMotionOptions = {
   /** Continue the background sink from its current depth (parallel handoff). */
   continueBackground?: boolean;
   /** The card box the container transform grows from. Omit to skip it. */
-  container?: Pick<HeroContainer, 'card' | 'cardRadius'> | null;
+  container?: (Pick<HeroContainer, 'card' | 'cardRadius'> & {
+    /** The overlay's box, when the caller read it before its own DOM writes (see `readRect`). */
+    host?: HeroRect;
+  }) | null;
   /** `dismiss` keeps the gesture's own pose instead of running the container. */
   choreography?: HeroChoreography;
   /**
@@ -766,7 +774,7 @@ export class HeroMotion {
         {
           card: options.container.card,
           cardRadius: options.container.cardRadius,
-          host: readRect(this.overlay),
+          host: options.container.host ?? readRect(this.overlay),
         },
         direction,
       );
@@ -1000,10 +1008,33 @@ export class HeroMotion {
    * to solve the replacement spring's launch velocity, so a reversal reads as
    * the flyer being caught and thrown back rather than teleported and restarted.
    */
-  async reverse(destination?: HeroRect, plane?: HeroScrollPlane, measured?: HeroPose) {
+  /**
+   * Everything `reverse` reads from the tree, for a caller that has writes of its own to make
+   * between deciding to turn round and turning (a phase, a released adoption): read first, on
+   * the layout the user is looking at, those writes no longer force a style pass in front of
+   * the reversed leg's first frame.
+   */
+  readReverseInputs(): HeroReverseInputs {
+    return {
+      shared: this.readSharedPoses(),
+      /* The overlay is the one box in the chain that is never transformed, so no write between
+         this read and the reversal can move it. */
+      host: this.containerLeg && this.overlay ? readRect(this.overlay) : null,
+    };
+  }
+
+  async reverse(
+    destination?: HeroRect,
+    plane?: HeroScrollPlane,
+    measured?: HeroPose,
+    inputs?: HeroReverseInputs,
+  ) {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
-    const sharedPose = this.readSharedPoses();
+    /* The host box with the other reads, before the cancels and the plane move below write to
+       the tree: read after them it forced a second style + layout pass inside the task that
+       turns the flight around. */
+    const { shared: sharedPose, host: hostRect } = inputs ?? this.readReverseInputs();
     // The hand has already removed the mask/fit and placed the full surface. Returning
     // through its stale half-open container would apply a second, discontinuous motion.
     if (this.sharedReleased && this.leg.direction === 'forward') this.choreography = 'dismiss';
@@ -1060,7 +1091,7 @@ export class HeroMotion {
     // progress — the same instant the flyer is being caught at.
     if (this.containerLeg) {
       const offset = previous.duration > 0 ? pose.elapsed / previous.duration : 1;
-      const host = this.overlay ? readRect(this.overlay) : this.containerLeg.host;
+      const host = hostRect ?? this.containerLeg.host;
       this.containerLeg = reverseContainerLeg(
         this.containerLeg,
         previous.direction,

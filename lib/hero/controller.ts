@@ -257,6 +257,21 @@ type ClosingSession = HeroSessionBase & {
   routeScroll: { left: number; top: number };
   /** Puts `inert` on the leaving route; deferred until the flight runs (`exposeGallery`). */
   applyRouteInert?: (() => void) | null;
+  /**
+   * Everything the flight reads, read in `beginClosing` before its first write (the shield,
+   * the phase attributes). Consumed once by `runClosing`; null once spent.
+   */
+  launchGeometry?: ClosingGeometry | null;
+};
+
+type ClosingGeometry = {
+  plane: HeroScrollPlane;
+  from: HeroRect;
+  to: HeroRect;
+  cardRadius: number;
+  host: HeroRect;
+  /** Baselined here too: its constructor reads both scrollers' offsets and line height. */
+  continuity: HeroScrollContinuity;
 };
 
 type HeroSession = OpeningSession | ClosingSession;
@@ -1386,12 +1401,18 @@ export class HeroController {
     continueBackground: boolean,
     handover: ReturnType<HeroMotion['handOver']> | null = null,
   ) {
+    /* Every read before the flight's first DOM write: `createHeroFlight` inserts the flight
+       layer, and a read after it (the card's corner, the overlay's box) forced a whole style and
+       layout pass in front of the picture's first frame. */
     const plane = getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
     const targetRect = getHeroRect(stage.target);
+    const sourceRadius = getHeroCornerRadius(source);
+    const hostRect = getHeroRect(stage.overlay);
     heroProbeMark('hx:t:rects');
     const flight = createHeroFlight({
       asset: frame,
       treatment: source,
+      treatmentRadius: sourceRadius,
       plane,
       from: sourceRect,
       to: targetRect,
@@ -1419,11 +1440,13 @@ export class HeroController {
                  which the tap landed outside of: the flyer rides inside the window, and a card
                  outside it would launch clipped away. */
               card: unionHeroRects(handover.window.rect, sourceRect),
-              cardRadius: Math.max(handover.window.radius, getHeroCornerRadius(source)),
+              cardRadius: Math.max(handover.window.radius, sourceRadius),
+              host: hostRect,
             }
           : {
               card: sourceRect,
-              cardRadius: getHeroCornerRadius(source),
+              cardRadius: sourceRadius,
+              host: hostRect,
             },
         choreography: 'container',
         sharedFrom: handover?.shared,
@@ -1869,10 +1892,10 @@ export class HeroController {
         if (!eligible()) return;
       }
       void runScheduledFrame(session.abort.signal, {
-        read: () => null,
-        write: () => {
+        read: () => stage.scroller.scrollTop,
+        write: (stageScrollTop) => {
           if (!eligible()) return;
-          if (!this.adoptOpeningRoute(session, route, stage, true)) return;
+          if (!this.adoptOpeningRoute(session, route, stage, true, stageScrollTop)) return;
           heroProbeMark('hx:t:early-reveal');
           /* The flyer was aimed at the Stage's landing box. The route's is the same box unless
              its record has already changed the header above the picture: re-aim from the
@@ -1900,6 +1923,8 @@ export class HeroController {
     route: HeroRoute,
     stage: HeroStageNodes,
     midFlight: boolean,
+    /** The Stage's offset, from the scheduler frame's read phase (see `promoteAdoption`). */
+    stageScrollTop?: number,
   ) {
     const bridge = session.scrollBridge;
     const node = route.content.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR);
@@ -1944,7 +1969,7 @@ export class HeroController {
       session.shared.add(follow);
       if (canOwn) this.watchPromotion(session);
     } else {
-      this.promoteAdoption(session);
+      this.promoteAdoption(session, stageScrollTop);
     }
     this.surface.notify();
     return true;
@@ -1961,19 +1986,22 @@ export class HeroController {
    * Runs inside a scheduler write, with the hand quiet: a gesture is never moved between
    * scrollers, and the recognizer is never rebound under a finger.
    */
-  private promoteAdoption(session: OpeningSession) {
+  private promoteAdoption(session: OpeningSession, stageScrollTop?: number) {
     const adoption = session.adoption;
     if (!adoption || adoption.owned || !this.owns(session)) return false;
     const { route, stage } = adoption;
     const anchor = route.anchor;
     if (!anchor?.isConnected) return false;
     const follow = session.follow;
+    /* `stageScrollTop` comes from the scheduler frame's read phase: read here, after the reveal's
+       writes in the same frame, the Stage's offset forced a style + layout pass in the landing
+       frame that the frame's own pass then repeated. */
     if (follow) {
       follow.commit();
       session.shared.release(follow);
       session.follow = null;
     } else {
-      route.scroller.scrollTop = stage.scroller.scrollTop;
+      route.scroller.scrollTop = stageScrollTop ?? stage.scroller.scrollTop;
     }
     const motion = session.motion;
     if (motion && motion.flight.layer.parentElement === stage.anchor) {
@@ -2041,8 +2069,8 @@ export class HeroController {
       (outcome) => {
         if (outcome === 'aborted' || session.adoption !== adoption || adoption.owned) return;
         void runScheduledFrame(session.abort.signal, {
-          read: () => null,
-          write: () => {
+          read: () => adoption.stage.scroller.scrollTop,
+          write: (stageScrollTop) => {
             if (session.adoption !== adoption || adoption.owned) return;
             /* A new stream started between the quiet and this frame: keep following and look
                again — never move a gesture in progress. */
@@ -2050,7 +2078,7 @@ export class HeroController {
               this.watchPromotion(session);
               return;
             }
-            this.promoteAdoption(session);
+            this.promoteAdoption(session, stageScrollTop);
           },
         });
       },
@@ -2144,10 +2172,10 @@ export class HeroController {
         if (!this.owns(session) || !session.motion) return;
       }
       await runScheduledFrame(session.abort.signal, {
-        read: () => null,
-        write: () => {
+        read: () => stage.scroller.scrollTop,
+        write: (stageScrollTop) => {
           if (this.owns(session) && !session.adoption) {
-            this.adoptOpeningRoute(session, route, stage, false);
+            this.adoptOpeningRoute(session, route, stage, false, stageScrollTop);
           }
         },
       });
@@ -2170,8 +2198,8 @@ export class HeroController {
            arriving on the Stage; its deltas are forwarded to the route (`own`'s residual) —
            the one main-thread scroll left, and only for this overflow. */
         await runScheduledFrame(session.abort.signal, {
-          read: () => null,
-          write: () => this.promoteAdoption(session),
+          read: () => pending.stage.scroller.scrollTop,
+          write: (stageScrollTop) => this.promoteAdoption(session, stageScrollTop),
         });
         if (!this.owns(session) || !session.motion) return;
       }
@@ -2466,6 +2494,10 @@ export class HeroController {
             destination: getGalleryLandingRect(source),
             plane: getGalleryScrollPlane() ?? undefined,
             pose: session.motion.measurePose(),
+            /* The reversal's own reads, here with the rest: `releaseAdoption` below writes to
+               the tree, and read inside `reverse` after it they forced a style pass between the
+               Back and the reversed leg's first frame. */
+            inputs: session.motion.readReverseInputs(),
           }
         : null;
 
@@ -2487,7 +2519,12 @@ export class HeroController {
        nothing the reverse reads. */
     const reversal =
       session.motion && measurement
-        ? session.motion.reverse(measurement.destination, measurement.plane, measurement.pose)
+        ? session.motion.reverse(
+            measurement.destination,
+            measurement.plane,
+            measurement.pose,
+            measurement.inputs,
+          )
         : null;
     // Caught, not dropped: `finished` rejects on cancel and the await below is later.
     reversal?.catch(() => undefined);
@@ -2813,6 +2850,19 @@ export class HeroController {
       return (await this.restoreGuardStrict(record)) ? 'restored' : 'handled';
     }
 
+    /* The flight's whole geometry, read here, before the first write of the close: the shield
+       and the phase attributes below dirty style, and every read `runClosing` used to make after
+       them (the plane, both boxes, the card's corner, the overlay's box) forced a full style and
+       layout pass in front of the return flight's first frame (~4–8ms at 4× CPU, traced). */
+    const launchGeometry: ClosingGeometry = {
+      plane,
+      from: getHeroRect(route.target),
+      to: getGalleryLandingRect(thumbnail),
+      cardRadius: getHeroCornerRadius(thumbnail),
+      host: getHeroRect(route.overlay),
+      continuity: new HeroScrollContinuity(plane.scroller),
+    };
+    launchGeometry.continuity.addDeltaSource(route.scroller);
     const snapshot = { ...record.snapshot, previewFrame: liveAsset, createdAt: Date.now() };
     const id = ++this.sessionSequence;
 
@@ -2844,6 +2894,7 @@ export class HeroController {
       resolveClose,
       retirement: null,
       routeScroll: { left: route.scroller.scrollLeft, top: route.scroller.scrollTop },
+      launchGeometry,
     };
     this.foreground = session;
     /* The leaving detail lets go of input in the same task as the gallery gets it back, and both
@@ -2862,6 +2913,8 @@ export class HeroController {
   private async runClosing(session: ClosingSession, measuredPlane: HeroScrollPlane) {
     const { route, thumbnail } = session;
     if (session.retired || !this.owns(session)) {
+      session.launchGeometry?.continuity.release();
+      session.launchGeometry = null;
       this.resolveClosing(session, 'handled');
       return;
     }
@@ -2874,28 +2927,43 @@ export class HeroController {
       session.shared.add(() => window.clearTimeout(exposeFallback));
       /* Synchronous to the launch on purpose: the phase published by `beginClosing` re-renders
          the shell in a microtask, and every rect read below would otherwise force that commit's
-         style and layout in front of the flight (~30ms at 4× CPU). Read now, the layout is the
-         clean one the detail was already showing. */
-      if ((session.retired || !this.owns(session)) && !(await this.guardClosing(session))) {
-        this.exposeGallery(session);
-        return;
+         style and layout in front of the flight (~30ms at 4× CPU). The reads themselves were
+         taken in `beginClosing`, ahead of its shield and phase writes, on the clean layout the
+         detail was already showing; they are re-read only if something ran in between. */
+      let measured = session.launchGeometry ?? null;
+      session.launchGeometry = null;
+      if (session.retired || !this.owns(session)) {
+        // Something ran in between: the reads taken before the close are no longer current.
+        measured?.continuity.release();
+        measured = null;
+        if (!(await this.guardClosing(session))) {
+          this.exposeGallery(session);
+          return;
+        }
       }
       const asset = session.snapshot.previewFrame;
       if (!route.target?.isConnected || !thumbnail.isConnected || !asset) {
+        measured?.continuity.release();
         await this.abandonToCollapse(session);
         return;
       }
-      const plane = getGalleryScrollPlane() ?? measuredPlane;
-      const from = getHeroRect(route.target);
-      const to = getGalleryLandingRect(thumbnail);
+      const plane = measured?.plane ?? getGalleryScrollPlane() ?? measuredPlane;
+      const from = measured?.from ?? getHeroRect(route.target);
+      const to = measured?.to ?? getGalleryLandingRect(thumbnail);
+      const cardRadius = measured?.cardRadius ?? getHeroCornerRadius(thumbnail);
+      const host = measured?.host;
 
-      const scrollContinuity = new HeroScrollContinuity(plane.scroller);
-      scrollContinuity.addDeltaSource(route.scroller);
+      let scrollContinuity = measured?.continuity ?? null;
+      if (!scrollContinuity) {
+        scrollContinuity = new HeroScrollContinuity(plane.scroller);
+        scrollContinuity.addDeltaSource(route.scroller);
+      }
       session.scrollContinuity = scrollContinuity;
 
       const flight = createHeroFlight({
         asset,
         treatment: thumbnail,
+        treatmentRadius: cardRadius,
         plane,
         from,
         to,
@@ -2917,7 +2985,7 @@ export class HeroController {
         overlay: route.overlay,
         floatingBack: route.floatingBack,
         continueBackground: session.intent.backgroundMode === 'continue',
-        container: { card: to, cardRadius: getHeroCornerRadius(thumbnail) },
+        container: { card: to, cardRadius, host },
         // A swipe-down is already a motion the hand started, so it keeps the gesture's pose
         // instead of the container return.
         choreography: session.intent.cause === 'dismiss' ? 'dismiss' : 'container',
@@ -3043,6 +3111,8 @@ export class HeroController {
         ? {
             destination: session.motion.unprojectRect(getHeroRect(routeTarget)),
             pose: session.motion.measurePose(),
+            // Before the phase write below, which would otherwise force these reads' style pass.
+            inputs: session.motion.readReverseInputs(),
           }
         : null;
 
@@ -3052,7 +3122,12 @@ export class HeroController {
 
     try {
       if (session.motion && measurement) {
-        await session.motion.reverse(measurement.destination, undefined, measurement.pose);
+        await session.motion.reverse(
+          measurement.destination,
+          undefined,
+          measurement.pose,
+          measurement.inputs,
+        );
       }
     } catch {
       // Continue restoring the real route even if the visual reverse was cut.

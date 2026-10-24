@@ -516,8 +516,10 @@ test('the /api/v1 proxy streams request bodies, keeps the session cookie over HT
     signal: controller.signal, headers: { Connection: 'x-request-hop', 'x-request-hop': 'remove' } });
   incoming.arrayBuffer = () => { throw new Error('request must not be buffered'); };
   const response = await v1.POST(incoming, context(['auth', 'login']));
-  /* Re-streamed (not buffered) so the body's pace can be watched — review P1-F1. */
-  assert.ok(fetched.init.body instanceof ReadableStream, 'the body is still a stream');
+  /* A small text body with no declared length is read through its stream under the pace rule
+     (never `arrayBuffer()`, review P1-F1) and sent whole: forwarded chunked, the WAF in front of
+     the backend blocks it and bans the visitor (宝塔「拦截分块请求」). */
+  assert.equal(Object.prototype.toString.call(fetched.init.body), '[object ArrayBuffer]', 'sent whole, with a length');
   assert.equal(fetched.init.duplex, 'half');
   assert.equal(await new Request(fetched.url, fetched.init).text(), 'payload');
   assert.equal(fetched.init.headers.has('x-request-hop'), false);

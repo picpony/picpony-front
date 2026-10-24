@@ -56,7 +56,7 @@ function loadProxy(fetchImpl) {
       '@/lib/proxyHeaders': proxyHeaders,
     })[name],
     process: { env: {} },
-    Response, Headers, URL, AbortController, DOMException, TransformStream,
+    Response, Headers, URL, AbortController, DOMException, TransformStream, ReadableStream,
     AbortSignal: FakeAbortSignal,
     setTimeout: (fn, ms) => { const timer = { fn, ms, cleared: false }; timers.push(timer); return timer; },
     clearTimeout: (timer) => { if (timer) timer.cleared = true; },
@@ -152,6 +152,50 @@ test('a small declared body goes upstream whole, with its length, never chunked 
   assert.equal(init.headers.has('content-length'), false, 'fetch computes the length itself');
   assert.deepEqual(proxy.budgets, [30_000], 'a buffered body gets the plain answer budget');
   assert.equal(proxy.live().length, 0, 'no timer outlives the answer');
+});
+
+test('a small body with no declared length still goes upstream whole, never chunked (WAF 拦截分块请求)', async () => {
+  /* A hop in front of the server (a LAN reverse proxy, a tunnel) can strip the browser's
+     Content-Length and deliver the JSON chunked; forwarded as is, the WAF blocked
+     `POST /images/comment-counts` and banned the visitor's address. */
+  let init;
+  const proxy = loadProxy(async (_url, value) => { init = value; return Response.json({ counts: {} }); });
+  const payload = JSON.stringify({ image_ids: [1, 2, 3] });
+  const body = new ReadableStream({
+    start(controller) {
+      const bytes = new TextEncoder().encode(payload);
+      controller.enqueue(bytes.slice(0, 5));
+      controller.enqueue(bytes.slice(5));
+      controller.close();
+    },
+  });
+  const response = await proxy.exports.POST(request('https://app.invalid/api/v1/images/comment-counts', {
+    method: 'POST', body, duplex: 'half', headers: { 'content-type': 'application/json' },
+  }), context('images', 'comment-counts'));
+  assert.equal(response.status, 200);
+  assert.equal(Object.prototype.toString.call(init.body), '[object ArrayBuffer]', 'a buffer, so fetch sends a Content-Length');
+  assert.equal(new TextDecoder().decode(init.body), payload);
+  assert.deepEqual(proxy.budgets, [30_000], 'a buffered body gets the plain answer budget');
+});
+
+test('an undeclared body past the cap streams on intact from where the probe stopped', async () => {
+  let received;
+  const proxy = loadProxy(async (_url, value) => {
+    const reader = value.body.getReader();
+    const parts = [];
+    for (;;) { const { done, value: chunk } = await reader.read(); if (done) break; parts.push(chunk); }
+    received = parts.reduce((sum, part) => sum + part.byteLength, 0);
+    return Response.json({});
+  });
+  const chunk = new Uint8Array(400 * 1024);
+  const body = new ReadableStream({
+    start(controller) { for (let i = 0; i < 4; i += 1) controller.enqueue(chunk); controller.close(); },
+  });
+  const response = await proxy.exports.POST(request('https://app.invalid/api/v1/me/preferences', {
+    method: 'PUT', body, duplex: 'half', headers: { 'content-type': 'application/json' },
+  }), context('me', 'preferences'));
+  assert.equal(response.status, 200);
+  assert.equal(received, 4 * 400 * 1024, 'no byte lost across the probe');
 });
 
 test('a body larger than declared is cut off at the cap with a 413', async () => {

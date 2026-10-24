@@ -284,24 +284,48 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
      beside it says which way the band went, so the floating element can take the pill's own leg
      — the arriving page's 80ms + 320ms decelerate, or the leaving page's FastEffects. */
   const band = useRef<HTMLElement | null>(null);
+  /* **The height is keyed on the route, the attribute on the pill's visibility.** The variable is
+     an inherited custom property on <html>, so every write of a new value — removing it included —
+     restyles the whole document. Keyed on `shown`, it was removed when an image detail hid the
+     pill and written back when the detail closed: a full restyle (1,437 elements, 87–116ms on a
+     phone at 4× CPU, traced on dev.picpony.top) inside the very frame the hero flight starts in,
+     and again as the picture flew home — the tap that "does nothing" for a beat. Nothing that
+     reads the height is on screen under a detail (the mascot stands down for it), so the value
+     stays while the pill is merely hidden, and only `data-bottom-chrome` — an attribute Blink
+     narrows to the rules that name it — follows the pill. */
   useLayoutEffect(() => {
     const node = band.current;
     const root = document.documentElement;
-    if (!shown || !node) {
+    if (!onHome || !node) {
       root.style.removeProperty('--app-bottom-chrome');
-      root.removeAttribute('data-bottom-chrome');
       return;
     }
-    const write = () => root.style.setProperty('--app-bottom-chrome', `${Math.round(node.offsetHeight)}px`);
+    let written = '';
+    const write = () => {
+      const height = Math.round(node.offsetHeight);
+      // A hidden band measures 0: keep the last real height rather than restyling to it.
+      if (height <= 0) return;
+      const value = `${height}px`;
+      if (value === written) return;
+      written = value;
+      root.style.setProperty('--app-bottom-chrome', value);
+    };
     write();
-    root.setAttribute('data-bottom-chrome', '');
     const observer = new ResizeObserver(write);
     observer.observe(node);
     return () => {
       observer.disconnect();
       root.style.removeProperty('--app-bottom-chrome');
-      root.removeAttribute('data-bottom-chrome');
     };
+  }, [onHome]);
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!shown) {
+      root.removeAttribute('data-bottom-chrome');
+      return;
+    }
+    root.setAttribute('data-bottom-chrome', '');
+    return () => root.removeAttribute('data-bottom-chrome');
   }, [shown]);
 
   return (
@@ -667,8 +691,15 @@ export default function AppLayout({
     const chrome = chromeRef.current;
     if (!chrome) return;
     const root = document.documentElement;
-    const write = () =>
-      root.style.setProperty('--app-chrome-bottom', `${chrome.getBoundingClientRect().bottom}px`);
+    /* Only a changed value is written: an inherited custom property on <html> restyles the
+       whole document on every write (see `--app-bottom-chrome`). */
+    let written = '';
+    const write = () => {
+      const value = `${chrome.getBoundingClientRect().bottom}px`;
+      if (value === written) return;
+      written = value;
+      root.style.setProperty('--app-chrome-bottom', value);
+    };
     write();
     const observer = new ResizeObserver(write);
     observer.observe(chrome);

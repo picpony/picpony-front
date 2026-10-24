@@ -374,6 +374,7 @@ export function createHeroFlight({
   direction,
   sessionId,
   imageId,
+  treatmentRadius,
 }: {
   asset: FrameAsset;
   treatment: HTMLElement;
@@ -385,7 +386,14 @@ export function createHeroFlight({
   direction: HeroDirection;
   sessionId: number;
   imageId: number;
+  /** The treatment's corner, when the caller already read it at a clean point. */
+  treatmentRadius?: number;
 }): HeroFlight {
+  /* Read before the first DOM write below: inserting the layer dirties style, and a
+     `getComputedStyle` after it forced a full style recalculation inside the very task that
+     launches the flight (on every open, close and retarget). */
+  const cardRadius =
+    treatmentRadius ?? (Number.parseFloat(getComputedStyle(treatment).borderRadius) || 0);
   const layer = document.createElement('div');
   layer.className = 'image-hero-flight-layer';
   layer.setAttribute('aria-hidden', 'true');
@@ -412,8 +420,6 @@ export function createHeroFlight({
     layer.appendChild(compensator);
     plane.anchor.appendChild(layer);
     sizePlaneLayer(layer, plane);
-
-    const cardRadius = Number.parseFloat(getComputedStyle(treatment).borderRadius) || 0;
 
     // Size the flyer to its destination box once; everything after is transform
     // only, so the flight never triggers layout.

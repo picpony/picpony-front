@@ -548,7 +548,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const offline = useOffline();
   /* The flight's record is in but the body is still held for the landing: render it ahead,
      hidden (see the `Activity` around the body). Only for the picture a flight is carrying in. */
-  const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && record !== null && !offline;
+  /* Not gated on the record any more: the body's controls (save, favourite, share, report) need
+     only the picture's id, so they are rendered ahead from the flight's own row and published
+     with the landing; only the parts that read the record wait for it (`recordBody` below). */
+  const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && image !== null && !offline;
   const recordPending = record === null && recordError === null && !offline;
 
   const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
@@ -846,15 +849,15 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     return () => window.removeEventListener('online', retryRecord);
   }, [recordFailedRetryably, retryRecord]);
 
-  // Fetch and final-media decode start immediately. Only the sizeable body subtree waits for
-  // resolved detail and the flight's two settling frames — no idle slice: the body is what the
+  // Fetch and final-media decode start immediately. Only the sizeable body subtree waits, for
+  // the flight's two settling frames — no idle slice: the body is what the
   // reader is about to read, and an idle wait on a busy phone held it back up to 240ms after the
   // flight had landed. It mounts as a transition, so a
   // wheel or touch stream that starts meanwhile still preempts it.
-  const hasRecord = record !== null;
-  const hasRecordError = recordError !== null;
+  /* The body publishes with the landing whether or not the record is in: its controls do not
+     need it, and a slow record (the backend answers in seconds under load) used to hold the whole
+     row of buttons back with it. The record-dependent parts fill in when it lands. */
   useEffect(() => {
-    if (heroSeed && !hasRecord && !hasRecordError && !offline) return;
     return publishWhenHeroSettled(() => {
       heroProbeMark('hx:t:body-publish');
       startTransition(() => setDeferredBodyId(imageId));
@@ -869,7 +872,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         return isImageHeroDetailBodyPublishable(imageId);
       },
     });
-  }, [hasRecord, hasRecordError, heroSeed, imageId, offline]);
+  }, [imageId]);
 
   // ---- Lightbox ----
   const handleOpenLightbox = useCallback(() => {
@@ -1578,6 +1581,19 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                     </div>
                   </div>
                   {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
+                  {recordPending && !image.tags?.length ? (
+                    /* The flight's row had no tags to show: the chips' and the description's
+                       place, until the record brings them. */
+                    <div aria-hidden="true" className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Skeleton className="h-8 w-16" />
+                        <Skeleton className="h-8 w-24" delay={60} />
+                        <Skeleton className="h-8 w-20" delay={120} />
+                        <Skeleton className="h-8 w-14" delay={180} />
+                      </div>
+                      <Skeleton className="h-4 w-3/4" delay={120} />
+                    </div>
+                  ) : (
                   <TagList
                     tags={image.tags}
                     visibleTagLimits={visibleTagLimits}
@@ -1587,8 +1603,12 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                     onShowMore={handleShowMore}
                     preparing={preparing?.imageId === imageId ? preparing.section : null}
                   />
-                  <DetailDescription description={image.description} />
-                  <DetailSources image={image} />
+                  )}
+                  {/* The row's description and sources may be partial (a preview carries what its
+                      list read); shown once the record is in, so they never change under the
+                      reader. */}
+                  {!recordPending && <DetailDescription description={image.description} />}
+                  {!recordPending && <DetailSources image={image} />}
                   <CommentSection
                     imageId={imageId}
                     derpiCount={record?.comment_count}
