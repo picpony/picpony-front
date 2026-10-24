@@ -2907,7 +2907,10 @@ export class HeroController {
        while `inert` on the detail and the lift of the gallery's `inert` — each a restyle of a
        whole subtree — land together under the moving picture. Done in one task, the overlay's
        focus trap can never pull back a focus the user has just given the gallery. */
-    const freeze = this.routes.freeze(route, session.owner, { deferInert: true });
+    const freeze = this.routes.freeze(route, session.owner, {
+      deferInert: true,
+      onShieldTap: (x, y) => this.replayShieldTap(x, y),
+    });
     session.shared.add(freeze);
     session.applyRouteInert = freeze.applyInert;
     this.setPhase('closing.flight', session, record.background);
@@ -4239,6 +4242,32 @@ export class HeroController {
    * which keeps producing frames while the main thread restyles: so the flight goes first, and
    * the restyle runs underneath it.
    */
+  /**
+   * A tap the close's shield caught (`watchShieldTap`), delivered to the card under it once the
+   * gallery takes input again: the card's own click then does what a tap there always does — the
+   * picture flying home turns round (`requestOpen` → `reverseClosing`), another card opens. Only a
+   * card is replayed; a tap anywhere else during those frames meant nothing.
+   */
+  private replayShieldTap(x: number, y: number) {
+    const deadline = performance.now() + 400;
+    const attempt = () => {
+      const hits = document.elementsFromPoint(x, y);
+      let link: HTMLAnchorElement | null = null;
+      for (const hit of hits) {
+        if (hit.hasAttribute('data-image-hero-close-shield')) continue;
+        link = hit.closest<HTMLAnchorElement>('a.image-hero-card-link');
+        if (link || hit.closest('[data-image-detail-overlay]')) break;
+      }
+      if (link && !link.closest('[inert]')) {
+        link.click();
+        return;
+      }
+      /* Still under the shield, or the gallery's `inert` not lifted yet: next frame. */
+      if (performance.now() < deadline) requestAnimationFrame(attempt);
+    };
+    attempt();
+  }
+
   private exposeGallery(session: HeroSession) {
     if (!this.owns(session) || this.runtime.phase !== 'closing.flight') return;
     if (session.kind === 'closing') session.applyRouteInert?.();

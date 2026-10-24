@@ -3321,6 +3321,16 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   background: transparent;
 }
 
+/* `scrollbar-color` is an inherited property, so flipping it on the scroller used to restyle the
+   whole gallery under it (about 1,250 elements, 190ms at 4× CPU, traced) in the middle of every
+   opening flight, and again on the way back. The scroller's one child pins the value its
+   descendants inherited before, so the change stops at the scroller: Blink compares the child's
+   style, finds it unchanged and does not descend. Zero specificity, so any scroller class
+   inside still wins. */
+:where(.app-scroller) > * {
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+
 /* The app's default transition set — not the all-properties shorthand (it animates layout,
    so a hover-grown padding animated the reflow, and anything inside a card being measured by
    the hero flight could be caught mid-tween). Duration and easing are baked in; a duration

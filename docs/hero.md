@@ -54,6 +54,25 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
 - **The sink has no velocity step** (`easeSinkWindow`): forward eases out to rest at p 0.6, back is a
   smoothstep from rest at p 0.4. Depth 0.95.
 
+- **A tap the close's shield caught is replayed** (`watchShieldTap` in `routes.ts`,
+  `HeroController.replayShieldTap`): a press that began on the shield is followed to its release on
+  the window and delivered to the card under it once the gallery takes input again. Before, a
+  re-tap within the shield's frame or two did nothing (~1 in 4 in a burst of open/close).
+- **A clean return folds the copy back** (`sinkTrack`): header and body sink half their entrance
+  distance, accelerating, inside `HERO_CONTENT_FADE.back`. A reversal keeps holding its pose.
+
+## Data on open
+
+- **A complete list row is the record's first paint** (`completeDetailRow`, `primeImageDetailFromRow`):
+  installed provisional at the press, so the Stage and the route render header, votes, tags and
+  description from the first frame; the open's own read revalidates it in place.
+- **Stale-while-revalidate** in `lib/detail.ts`: an expired record (TTL 2 min) is still shown for
+  `STALE_TTL` (30 min) while it is re-read; the screen never drops back to skeletons on a reopen.
+- The comment thread is prefetched once the body publishes (`prefetchImageComments`) and shown at
+  once when cached.
+- What reaches the *settled* detail later arrives with an M3 entrance (`playDetailArrival`), never
+  mid-flight.
+
 ## Settled states and recovery
 
 - **`detail-idle` enforces a visible detail.** With no session running, `setPhase('detail-idle')`
@@ -99,3 +118,15 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
   visibility). `HERO_BROWSER_CHANNEL=chromium` runs `test:hero` on bundled Chromium;
   `PYTHON=python3` overrides the interpreter. `test:hero` covers `pull-follow`, `pull-retreat`,
   `pull-frame`, `pull-loading`.
+
+### 打开时不要在 `<main>` 上改继承属性
+
+`scrollbar-color` 会继承。详情覆盖画廊时 `.app-scroller[data-scroll-hidden]` 会把它改成透明，结果整棵画廊子树（约 1,250 个元素）都要重算样式，在 4× CPU 下飞行中途卡约 190ms，返回时还会再来一次。现在由滚动容器唯一的子元素用 `:where(.app-scroller) > *` 固定住继承值，Blink 比较子元素样式发现没变就不再往下走。同一构建开关这条规则对比（390×844、4× CPU，每组 4 次全新加载）：首次打开呈现帧间隔超出部分 275ms → 21ms，最长间隔 196ms → 46ms。以后凡是跟随 hero 状态在 `<main>` 或 `<html>` 上切换的样式，都先确认改的不是继承属性。
+
+### 首次打开不要在飞行中拉代码和字体
+
+`PicDetail` 的 `import()` 预热并不覆盖首开要用的全部东西。生产构建抓网络发现，第一次点开时飞行途中还会下载、解析并执行：详情路由自己的 chunk 组（路由器加载的是页面的 client reference，Turbopack 把它和 `import()` 拆成了不同文件，约 110KB）、描述用的 Markdown 渲染器（`MarkdownDocument`，约 155KB，lazy），以及包含投票标签字形（`DetailVotes` 的读屏文字“踩”）的 Noto Sans SC 子集——它是 `font-display: swap`，到达后头部会再排一次版。
+
+`lib/useHero.ts` 的 `scheduleDetailCodeWarm` 现在在画廊空闲后按顺序、每步一个 idle slice 预热：`PicDetail` 模块 → 第一张卡片的完整路由载荷（`prefetchRoutePayload`，服务端只渲染客户端页面，不读后端、不计浏览，同时让这张卡的打开直接走缓存）→ `PicDetail` 导出的 `warmDetailDeferredCode`（库不直接 import 组件）→ `document.fonts.load` 加载详情字形。之后首次点击不再有任何 script/字体请求。同条件（390×844、4× CPU，每组 8–10 次全新加载）：首开帧间隔超出部分 123ms → 73ms，最长间隔 95ms → 77ms，promote 618ms → 535ms；第二次打开不变（8–13ms）。
+
+剩下的首开成本是详情路由第一次挂载的 React 渲染与随后一次样式/布局（JIT 尚冷），第二次打开同样的工作明显更快。要彻底去掉只能在后台离屏预渲染整个详情，会牵涉路由注册、数据读取和焦点，暂不这样做。

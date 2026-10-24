@@ -13,7 +13,13 @@ import { lazy, Suspense } from 'react';
  * does not move what is under it. A server-rendered text keeps the server's HTML while the chunk
  * arrives — hydration waits at this boundary rather than showing the placeholder.
  */
-const MarkdownDocument = lazy(() => import('./MarkdownDocument'));
+const loadMarkdownDocument = () => import('./MarkdownDocument');
+const MarkdownDocument = lazy(loadMarkdownDocument);
+
+/** Fetches the renderer's chunk ahead of a document that will need it (the detail's idle warm). */
+export function warmMarkdownDocument() {
+  return loadMarkdownDocument().catch(() => undefined);
+}
 
 function Placeholder({ content }: { content: string }) {
   return (

@@ -211,7 +211,7 @@ export class HeroRouteRegistry {
   freeze(
     route: HeroRoute,
     owner: symbol,
-    { deferInert = false }: { deferInert?: boolean } = {},
+    { deferInert = false, onShieldTap }: { deferInert?: boolean; onShieldTap?: (x: number, y: number) => void } = {},
   ): DomLease & { applyInert: () => void } {
     route.interaction?.release();
     let lock: DomLease | null = null;
@@ -248,6 +248,8 @@ export class HeroRouteRegistry {
       shield.style.cssText =
         'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
       document.body.appendChild(shield);
+      /* Followed past the shield's own life: the release may land after it is gone. */
+      if (onShieldTap) watchShieldTap(shield, onShieldTap);
     } else {
       applyInert();
     }
@@ -292,4 +294,56 @@ export class HeroRouteRegistry {
     seal.refresh();
     return seal;
   }
+}
+
+
+/** How long a press that began on a close's shield may take to count as a tap. */
+const SHIELD_TAP_MAX_MS = 600;
+const SHIELD_TAP_SLOP_PX = 10;
+
+/**
+ * **A tap the shield caught is still a tap.** The shield takes the pointer for the first frame or
+ * two of a close (until `applyInert`), and a press that began on it was swallowed: its pointerdown
+ * hit the shield, the shield was gone by its pointerup, and the browser dispatched the click to
+ * the two targets' common ancestor — the document — so a re-tap of the card a moment after Back
+ * ("no, keep it open") did nothing at all, one time in four in a burst of open/close. The press is
+ * followed to its release (on the window, since the shield may have left by then) and handed to
+ * the controller as a tap at that point.
+ */
+function watchShieldTap(shield: HTMLElement, onTap: (x: number, y: number) => void) {
+  let start: { id: number; x: number; y: number; at: number } | null = null;
+  const onDown = (event: PointerEvent) => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    start = { id: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp };
+  };
+  const onUp = (event: PointerEvent) => {
+    const press = start;
+    if (!press || event.pointerId !== press.id) return;
+    start = null;
+    stop();
+    if (event.timeStamp - press.at > SHIELD_TAP_MAX_MS) return;
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > SHIELD_TAP_SLOP_PX) return;
+    onTap(event.clientX, event.clientY);
+  };
+  const onCancel = (event: PointerEvent) => {
+    if (start && event.pointerId === start.id) {
+      start = null;
+      stop();
+    }
+  };
+  let timer = 0;
+  const stop = () => {
+    shield.removeEventListener('pointerdown', onDown);
+    window.removeEventListener('pointerup', onUp, true);
+    window.removeEventListener('pointercancel', onCancel, true);
+    if (timer) window.clearTimeout(timer);
+    timer = 0;
+  };
+  shield.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointerup', onUp, true);
+  window.addEventListener('pointercancel', onCancel, true);
+  /* The shield lives one or two frames (250ms at the outside); a press on it is over well inside
+     this. Nothing is left listening after. */
+  timer = window.setTimeout(stop, 1500 + SHIELD_TAP_MAX_MS);
+  return stop;
 }

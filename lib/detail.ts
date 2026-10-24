@@ -4,6 +4,9 @@ import { getImage } from '@/lib/api/derpi';
 import type { ImagePreview, PonyImage } from '@/lib/types/image';
 import { promoteLaneJob, scheduleLaneJob, unscheduleLaneJob } from '@/lib/resource';
 import { imageHeroController } from './hero/controller';
+import { completeDetailRow } from './detailRow';
+
+export { completeDetailRow };
 
 /**
  * The opened picture's record: a TTL'd, LRU cache of Derpibooru `images/<id>` reads with a
@@ -24,6 +27,13 @@ import { imageHeroController } from './hero/controller';
  */
 
 const CACHE_TTL = 2 * 60 * 1000;
+/**
+ * How long a record past its TTL is still *shown* while it is re-read (stale-while-revalidate).
+ * Reopening a picture used to find its record evicted two minutes after it was read and dropped
+ * the whole body back to skeletons until a fresh read landed; everything but the counts in a
+ * record is effectively immutable, so a stale one is a far better first paint than a skeleton.
+ */
+const STALE_TTL = 30 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 48;
 const LANE = 'derpi' as const;
 
@@ -42,6 +52,8 @@ type DetailEntry = {
   publishedValue?: DetailResult;
   /** When a stale-while-watched refresh was last started (review P3-O2), so it runs once a TTL. */
   refreshedAt?: number;
+  /** Installed from a list's row (`primeImageDetailFromRow`), not read from `images/<id>` yet. */
+  provisional?: boolean;
 };
 
 const detailCache = new Map<number, DetailEntry>();
@@ -58,9 +70,13 @@ function isExpired(entry: DetailEntry, timestamp = Date.now()) {
   return entry.status === 'resolved' && timestamp - entry.createdAt >= CACHE_TTL;
 }
 
+function isTooStale(entry: DetailEntry, timestamp = Date.now()) {
+  return entry.status === 'resolved' && timestamp - entry.createdAt >= STALE_TTL;
+}
+
 function deleteExpiredEntries(timestamp = Date.now()) {
   detailCache.forEach((entry, imageId) => {
-    if (isExpired(entry, timestamp) && !detailListeners.has(imageId)) {
+    if (isTooStale(entry, timestamp) && !detailListeners.has(imageId)) {
       detailCache.delete(imageId);
     }
   });
@@ -203,16 +219,25 @@ async function runEntry(imageId: number, entry: DetailEntry) {
  * a failed refresh changes nothing (the user did not ask for it, and the old record is still
  * right about everything but the counts).
  */
-function refreshWatchedEntry(imageId: number, entry: DetailEntry) {
+function refreshWatchedEntry(
+  imageId: number,
+  entry: DetailEntry,
+  priority: DetailRequestPriority = 'background',
+) {
   const now = Date.now();
-  if (entry.status !== 'resolved' || entry.controller) return;
+  if (entry.status !== 'resolved') return;
+  if (entry.controller) {
+    /* Already re-reading: an open of this picture takes the refresh to the front of the lane. */
+    if (priority === 'immediate') promoteLaneJob(LANE, `${jobKey(imageId)}:refresh`);
+    return;
+  }
   if (entry.refreshedAt !== undefined && now - entry.refreshedAt < CACHE_TTL) return;
   entry.refreshedAt = now;
   const controller = new AbortController();
   entry.controller = controller;
   scheduleLaneJob(LANE, {
     key: `${jobKey(imageId)}:refresh`,
-    priority: 'background',
+    priority,
     keep: true,
     cancel: () => {
       controller.abort();
@@ -226,6 +251,8 @@ function refreshWatchedEntry(imageId: number, entry: DetailEntry) {
         entry.value = result;
         entry.promise = Promise.resolve(result);
         entry.createdAt = Date.now();
+        entry.provisional = false;
+        detailErrors.delete(imageId);
         notifyImageDetail(imageId);
       } catch {
         /* Left as it was. */
@@ -288,7 +315,9 @@ export function prefetchImageDetail(
       cached.priority = 'immediate';
       if (cached.status === 'queued') promoteLaneJob(LANE, jobKey(imageId));
     }
-    if (isExpired(cached) && detailListeners.has(imageId)) refreshWatchedEntry(imageId, cached);
+    /* Stale-while-revalidate: an expired (or list-provided) record is handed back as it is and
+       re-read in place; the screen never drops to a skeleton for a picture it has seen. */
+    if (isExpired(cached) || cached.provisional) refreshWatchedEntry(imageId, cached, priority);
     touchEntry(imageId, cached);
     return cached.promise;
   }
@@ -347,6 +376,41 @@ export function seedImageDetail(image: PonyImage, fetchedAt: number) {
   trimDetailCache(imageId);
 }
 
+/**
+ * **The detail paints from the list's row at once.** Opening a picture used to show the header's
+ * placeholders, the vote skeleton and the tag skeleton for the whole flight and then some — a
+ * round trip to Derpibooru through a relay, 0.4–2s — although the card the user tapped already
+ * held every one of those fields. A complete row is installed as a *provisional* record:
+ * published immediately, so the Stage, the header, the votes, the tags and the description are
+ * all there from the first frame, and re-read in place by the open's own `prefetchImageDetail`
+ * (stale-while-revalidate), which only ever corrects the counts. An entry already present is left
+ * alone: it came from `images/<id>` and is at least as good.
+ */
+export function primeImageDetailFromRow(image: ImagePreview | null | undefined) {
+  if (typeof window === 'undefined') return false;
+  const row = completeDetailRow(image);
+  if (!row) return false;
+  const imageId = row.id;
+  if (detailCache.has(imageId)) return true;
+  const value: DetailResult = { image: row };
+  const noop = () => {};
+  detailCache.set(imageId, {
+    /* Already past its TTL (but well inside `STALE_TTL`), so the first request revalidates it. */
+    createdAt: Date.now() - CACHE_TTL,
+    promise: Promise.resolve(value),
+    resolve: noop,
+    reject: noop,
+    priority: 'immediate',
+    status: 'resolved',
+    value,
+    publishedValue: value,
+    provisional: true,
+  });
+  detailErrors.delete(imageId);
+  trimDetailCache(imageId);
+  return true;
+}
+
 export function cancelImageDetailPrefetch(id: number | string) {
   const imageId = normalizeId(id);
   const entry = detailCache.get(imageId);
@@ -367,6 +431,14 @@ export function cancelOtherBackgroundImageDetailPrefetch(preserveId: number | st
     const entry = detailCache.get(imageId);
     if (!entry) continue;
     if (cancelQueuedEntry(imageId, entry) || cancelLoadingEntry(imageId, entry)) {
+      cancelled += 1;
+    } else if (entry.status === 'resolved' && entry.controller && !detailListeners.has(imageId)) {
+      /* A hover's background re-read of a record we can already show: the opened picture's
+         slot matters more. The record stays; the next request re-reads it. */
+      unscheduleLaneJob(LANE, `${jobKey(imageId)}:refresh`);
+      entry.controller.abort();
+      entry.controller = undefined;
+      entry.refreshedAt = undefined;
       cancelled += 1;
     }
   }

@@ -108,6 +108,25 @@ export function replyReference(replyTo: { id: number; source: 'picpony' | 'trixi
   return { userId: replyTo.userId, commentId: replyTo.id };
 }
 
+/**
+ * Start a picture's thread before the reader scrolls to it. The section only asked once it came
+ * within reach of the viewport — below the fold on an open, so the reader scrolled down and then
+ * waited out two round trips (the relay's slowest answer among them). Called once the detail has
+ * settled: background priority, so an opened picture's own record and the list keep their slots.
+ */
+export function prefetchImageComments(imageId: number) {
+  siteComments.prefetch({ imageId }, { priority: 'background' });
+  derpiComments.prefetch({ imageId, page: 1 }, { priority: 'background' });
+}
+
+/** Both halves of the thread are already in the cache (a reopen, a step back): show it at once. */
+export function hasCachedImageComments(imageId: number) {
+  return (
+    siteComments.peek({ imageId }).data !== undefined &&
+    derpiComments.peek({ imageId, page: 1 }).data !== undefined
+  );
+}
+
 export function useImageComments(imageId: number, enabled: boolean): ImageComments {
   const site = useResource(siteComments, enabled ? { imageId } : SKIP);
   const first = useResource(derpiComments, enabled ? { imageId, page: 1 } : SKIP);

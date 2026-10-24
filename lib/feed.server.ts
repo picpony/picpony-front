@@ -257,7 +257,7 @@ function onLine(url: string | null | undefined, tier: 0 | 1 | 2): string {
  */
 const ROW_FIELDS = [
   'id', 'width', 'height', 'aspect_ratio', 'representations', 'format', 'name', 'view_url',
-  'source_url', 'uploader', 'uploader_id', 'created_at', 'updated_at', 'first_seen_at', 'size',
+  'source_url', 'source_urls', 'uploader', 'uploader_id', 'created_at', 'updated_at', 'first_seen_at', 'size',
   'score', 'comment_count', 'tags', 'description', 'upvotes', 'downvotes', 'faves', 'animated',
   'duration', 'mime_type', 'spoilered',
 ] as const;

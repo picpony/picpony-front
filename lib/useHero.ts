@@ -11,8 +11,9 @@ import {
 } from 'react';
 import type Link from 'next/link';
 import type { ImagePreview } from '@/lib/types/image';
-import { cancelImageDetailPrefetch } from '@/lib/detail';
+import { cancelImageDetailPrefetch, primeImageDetailFromRow } from '@/lib/detail';
 import { warmDetailFinal } from '@/lib/hero/finalWarm';
+import { prefetchRoutePayload } from '@/lib/routePayload';
 import {
   armImageHeroOpen,
   canAnimateImageHero,
@@ -36,20 +37,54 @@ const FOCUS_INTENT_DELAY_MS = 120;
 const SNAPSHOT_REUSE_MS = 1500;
 
 /**
- * The detail's code, fetched once the first gallery has gone idle rather than at the first press.
+ * **Everything a first open would otherwise fetch mid-flight, warmed once the gallery is idle.**
+ *
  * Cold, the first open's flyer landed and then waited 130–330ms (a 4× CPU phone, measured on a
  * production build) for the detail route to commit, a good part of it the `PicDetail` chunk that
- * the press had only just asked for. Once per document, in an idle slice, so it never competes
- * with the list's own first render.
+ * the press had only just asked for. That chunk alone was not the whole first-open bill: traced
+ * on a production build, the first press still fetched, parsed and ran, inside the flight,
+ *
+ * - the detail *route's* own chunk group — the router loads the page's client references, not the
+ *   `import()` above, and Turbopack splits the two into different files (~110KB);
+ * - the Markdown renderer behind the description (`MarkdownDocument`, ~155KB, lazy — reached
+ *   through `PicDetail`'s `warmDetailDeferredCode`, since a library does not import components);
+ * - the Noto Sans SC subset holding the vote labels' glyphs (`DetailVotes`' screen-reader text),
+ *   whose `font-display: swap` arrival relaid the header out a second time.
+ *
+ * Each step is its own idle slice, in that order, so none of them competes with the list's own
+ * first render or with each other, and a press that comes first simply finds less warm. The route
+ * payload is the server's render of a client page (`lib/routePayload.ts`): it reads nothing from
+ * the backend and counts no view, and the router keeps it, so this card's own open commits from
+ * cache too. Once per document.
  */
+const DETAIL_GLYPHS = '赞踩';
 let detailCodeWarmScheduled = false;
-function scheduleDetailCodeWarm() {
+function scheduleDetailCodeWarm(href: string) {
   if (detailCodeWarmScheduled || typeof window === 'undefined') return;
   detailCodeWarmScheduled = true;
-  const warm = () => void warmImageHero();
   const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] }).requestIdleCallback;
-  if (idle) idle.call(window, warm, { timeout: 4000 });
-  else setTimeout(warm, 1500);
+  const later = (run: () => void) => {
+    if (idle) idle.call(window, run, { timeout: 4000 });
+    else setTimeout(run, 1500);
+  };
+  const steps: Array<() => unknown> = [
+    () => warmImageHero(),
+    () => prefetchRoutePayload(href),
+    () =>
+      warmImageHero().then((detail) =>
+        (detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined)?.warmDetailDeferredCode?.(),
+      ),
+    () => {
+      const family = getComputedStyle(document.body).fontFamily;
+      return document.fonts?.load(`400 16px ${family}`, DETAIL_GLYPHS).catch(() => undefined);
+    },
+  ];
+  const next = () => {
+    const step = steps.shift();
+    if (!step) return;
+    void Promise.resolve(step()).finally(() => later(next));
+  };
+  later(next);
 }
 
 /* Before the shell has handed its router over (it does in its first effect, long before a press):
@@ -103,6 +138,9 @@ export function useHeroLink<T extends HTMLElement>({
   const warmRouteAndMedia = useCallback(
     (priority: 'background' | 'immediate') => {
       if (!image) return;
+      /* The row the card holds is the record's first paint (`primeImageDetailFromRow`): the
+         flight and the detail render it at once, and the read below only refreshes it. */
+      primeImageDetailFromRow(image);
       getImageHeroNavigation()?.prefetch?.(href);
       void warmImageHero(image.id, priority);
       /* The press (or a keyboard click) commits to this picture: its full-size file starts now
@@ -225,7 +263,7 @@ export function useHeroLink<T extends HTMLElement>({
   );
 
   useEffect(() => {
-    if (image) scheduleDetailCodeWarm();
+    if (image) scheduleDetailCodeWarm(`/pic/${image.id}`);
   }, [image]);
 
   return {

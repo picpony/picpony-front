@@ -22,7 +22,7 @@ import { deleteComment } from '@/lib/api/picpony';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { derpiCommentTarget, derpiMarkdown, plainTextOf } from '@/lib/derpiMarkup';
 import { formatCompactDateTime, formatCount, formatDate, formatDateTime } from '@/lib/format';
-import { useImageComments } from '@/lib/imageComments';
+import { hasCachedImageComments, useImageComments } from '@/lib/imageComments';
 import { useTextTranslation } from '@/lib/translation';
 import { readToken, useNow, useSession } from '@/lib/hooks';
 import { scrollAppToElement } from '@/lib/scrollTo';
@@ -236,7 +236,9 @@ export default function CommentSection({
     },
     [imageId],
   );
-  const enabled = reachedFor === imageId;
+  /* A thread already in the cache (a reopen, a prefetch the detail started on landing) is shown
+     at once rather than after the observer's first callback, which painted a skeleton first. */
+  const enabled = reachedFor === imageId || hasCachedImageComments(imageId);
   const thread = useImageComments(imageId, enabled);
 
   /* Back online: a source that failed for want of a network tries again by itself. */

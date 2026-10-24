@@ -217,7 +217,7 @@ test('P3-O1 / P3-O2 / P3-O4 / P3-O5: on-screen refreshes are kept, open records 
   const resource = source('lib/resource.ts');
   assert.match(resource, /keep: stale\.listeners\.size > 0/);
   assert.match(resource, /findIndex\(\(queued\) => !queued\.keep\)/);
-  assert.match(source('lib/detail.ts'), /refreshWatchedEntry\(imageId, cached\)/);
+  assert.match(source('lib/detail.ts'), /refreshWatchedEntry\(imageId, cached, priority\)/);
   assert.match(source('components/PicDetail.tsx'), /downloadCandidates\(source\.url\)\[0\]/);
   const composer = source('components/CommentComposer.tsx');
   assert.match(composer, /submittingFor === imageId/);

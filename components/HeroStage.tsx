@@ -13,6 +13,8 @@ import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
 import Skeleton from '@/components/Skeleton';
+import DetailVotes from '@/components/detail/DetailVotes';
+import { completeDetailRow } from '@/lib/detailRow';
 /* The runtime store, not the engine: the Stage is mounted by the shell on every route, and it
    only ever renders while a session — and therefore the engine — exists. */
 import {
@@ -118,6 +120,8 @@ export default function HeroStage() {
   // landing target below the flyer. The real route receives the richer image
   // after the atomic handoff.
   const image = snapshot.image;
+  /* The card's row, when it already is the full record (a Derpibooru list row is). */
+  const record = completeDetailRow(image);
   // Mounted by a press ahead of its click (`HeroController.armOpen`): laid out, never painted.
   const armed = state.phase === 'armed';
 
@@ -183,7 +187,7 @@ export default function HeroStage() {
             <div data-image-detail-crossfade className="w-full">
             <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
               <div className="flex flex-col rounded-md bg-transparent">
-                <DetailHeader key={image.id} image={image} layout="stage" pending />
+                <DetailHeader key={image.id} image={image} layout="stage" pending={record === null} />
                 <div className="relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6">
                   {/* The landing target is an ordinary in-flow flex item, because
                       the routed `DetailImage` is one too and the two must measure
@@ -205,13 +209,23 @@ export default function HeroStage() {
                 >
                   <div className="mx-auto w-full max-w-5xl">
                     <div aria-hidden="true" className="mb-6">
-                      <div className="mb-1.5 flex justify-between">
-                        <Skeleton className="h-4 w-14" />
-                        <Skeleton className="h-4 w-14" delay={60} />
-                      </div>
-                      {/* 4dp, matching the routed vote track — the Stage and the
-                          route must measure identically or the handoff shifts. */}
-                      <Skeleton className="h-1 w-full" delay={120} />
+                      {/* The route's own vote row, from the card's row when that row is the
+                          whole record (`completeDetailRow`): the flight shows the numbers the
+                          detail lands with instead of a placeholder that swaps after it.
+                          Same component on both sides, so the two still measure identically. */}
+                      {record ? (
+                        <DetailVotes image={record} pending={false} />
+                      ) : (
+                        <>
+                          <div className="mb-1.5 flex justify-between">
+                            <Skeleton className="h-4 w-14" />
+                            <Skeleton className="h-4 w-14" delay={60} />
+                          </div>
+                          {/* 4dp, matching the routed vote track — the Stage and the
+                              route must measure identically or the handoff shifts. */}
+                          <Skeleton className="h-1 w-full" delay={120} />
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -561,6 +561,29 @@ function revealTrack(
   };
 }
 
+/**
+ * The staircase's mirror on a clean return: the header and the body recede the way they came in —
+ * half their entrance distance, accelerating (an exit in M3 is quicker and shorter than its
+ * entrance), and inside the content's own fade window (`HERO_CONTENT_FADE.back`), so they are gone
+ * by the time the plane starts fading and never move on a frame where they are not also fading.
+ * Without it the copy sat dead still while its opacity fell, which read as the page blinking out
+ * rather than folding back into the card.
+ */
+function sinkTrack(
+  frames: readonly ProgressFrame[],
+  role: keyof typeof HERO_REVEAL_WINDOW,
+): ScalarTrack {
+  const distance = REVEAL_DISTANCE_PX[role] / 2;
+  const { start, end } = HERO_CONTENT_FADE.back;
+  return {
+    keyframes: [{ transform: 'none' }, { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` }],
+    easing: linearEasing(frames, (progress) => {
+      const interval = intervalProgress(progress, start, end);
+      return interval * interval;
+    }),
+  };
+}
+
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   const { overlay, content, floatingBack, choreography, fromCurrent } = ctx;
   const { direction, duration } = leg;
@@ -619,6 +642,12 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
       owners.push(animateScalar(element, revealTrack(
         frames, revealRole(element), fromCurrent?.get(element)?.rise,
       ), duration));
+    });
+  } else if (direction === 'back' && !fromCurrent && !reduced) {
+    overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
+      const role = revealRole(element);
+      if (role === 'chrome') return;
+      owners.push(animateScalar(element, sinkTrack(frames, role), duration));
     });
   } else if (fromCurrent && !reduced) {
     // Hold the already-present pose while its parent fades. Cancelling the entrance

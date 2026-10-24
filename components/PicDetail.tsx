@@ -62,6 +62,7 @@ import DetailSources from '@/components/detail/DetailSources';
 import DetailVotes from '@/components/detail/DetailVotes';
 import ImageTranslationStatus from '@/components/detail/ImageTranslationStatus';
 import ReportDialog from '@/components/detail/ReportDialog';
+import { playDetailArrival } from '@/components/detail/detailArrival';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
 import { shareThumbUrl } from '@/lib/api/messages';
 import { addBrowsingHistory, reportImage } from '@/lib/api/picpony';
@@ -82,6 +83,7 @@ import {
   peekImageDetail,
   peekImageDetailError,
   prefetchImageDetail,
+  primeImageDetailFromRow,
   seedImageDetail,
   subscribeImageDetail,
 } from '@/lib/detail';
@@ -116,9 +118,11 @@ import { ICON } from '@/lib/icons';
 import { useOverlayLayer } from '@/lib/overlay';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveFolders, faveIds as faveIdsResource, translateSwitch } from '@/lib/resources';
+import { warmMarkdownDocument } from '@/components/MarkdownRenderer';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { loadTagCounts } from '@/lib/tagCounts';
 import { loadTagTranslations, peekTagTranslations, rememberTagTranslations } from '@/lib/tagTranslations';
+import { prefetchImageComments } from '@/lib/imageComments';
 import { useImageTranslation } from '@/lib/translation';
 import { useIconToss } from '@/lib/useIconToss';
 import type { DetailSeed, ImagePreview, PonyImage } from '@/lib/types/image';
@@ -128,6 +132,15 @@ import { cn, copyText } from '@/lib/utils';
    `loading` keeps the first open from suspending to the route's boundary, which would replace
    the whole detail with the route skeleton while the chunk arrives. */
 const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false, loading: () => null });
+
+/**
+ * The detail's lazy code a first open would otherwise fetch mid-flight — the description's
+ * Markdown renderer. Called by the gallery's idle warm (`lib/useHero.ts`) once this module is in;
+ * the lightbox keeps its own intent ladder (`warmLightbox`).
+ */
+export function warmDetailDeferredCode() {
+  return warmMarkdownDocument();
+}
 
 /** Fetched on intent — a pointer arriving on the picture, a press, focus reaching its zoom control. */
 function warmLightbox() {
@@ -482,6 +495,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const seedImage = pageSeed?.image ?? null;
   const seedNotFound = pageSeed !== null && pageSeed.image === null;
   if (seedImage && pageSeed) seedImageDetail(seedImage, pageSeed.generatedAt);
+  /* The flight's row, when it is a whole record, is the first paint of this one (idempotent, and
+     a record already read is kept): see `primeImageDetailFromRow`. Same render-phase precedent. */
+  if (heroSeed?.image.id === imageId) primeImageDetailFromRow(heroSeed.image);
 
   const subscribeDetail = useCallback((listener: () => void) => subscribeImageDetail(imageId, listener), [imageId]);
   const readDetail = useCallback(() => peekImageDetail(imageId), [imageId]);
@@ -873,6 +889,32 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       },
     });
   }, [imageId]);
+
+  /* The thread under the picture, read once the body is out rather than when the reader scrolls
+     to it (`prefetchImageComments`). Not for a picture that does not exist. */
+  useEffect(() => {
+    if (!deferredBodyReady || offline || notFound) return;
+    prefetchImageComments(imageId);
+  }, [deferredBodyReady, imageId, notFound, offline]);
+
+  /* **What reaches the settled detail arrives; it does not cut in.** The body published a beat
+     after the handoff, the tags replacing their placeholder, the description and sources once the
+     record is in, an error in place of the controls: each block new to the box since the last
+     commit comes in as content does in M3 (`playDetailArrival`). Not for a new picture (a step
+     brings it with its own shared axis), not on the first commit (a direct load's server HTML, an
+     overlay that played its own entrance), and never mid-flight (the helper checks). */
+  const bodyContentRef = useRef<HTMLDivElement>(null);
+  const bodySeenRef = useRef<{ imageId: number; visible: boolean; blocks: WeakSet<Element> } | null>(null);
+  useLayoutEffect(() => {
+    const root = bodyContentRef.current;
+    const previous = bodySeenRef.current;
+    const blocks = root ? [...root.children] : [];
+    const visible = deferredBodyReady && root !== null;
+    bodySeenRef.current = { imageId, visible, blocks: new WeakSet(blocks) };
+    if (!visible || !previous || previous.imageId !== imageId || isStepping()) return;
+    const fresh = previous.visible ? blocks.filter((block) => !previous.blocks.has(block)) : blocks;
+    if (fresh.length > 0) playDetailArrival(fresh);
+  });
 
   // ---- Lightbox ----
   const handleOpenLightbox = useCallback(() => {
@@ -1492,6 +1534,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                  page: on a phone at 4× CPU the body arrived ~100–220ms after the detail settled,
                  the "it lands, then you still wait" the open read as. */
               <Activity mode={deferredBodyReady ? 'visible' : 'hidden'}>
+              {/* One box for the blocks under the votes, so what arrives after the landing can be
+                  brought in block by block (`playDetailArrival`). `space-y-6` again inside: the
+                  outer one spaces this box as it spaced its first child. */}
+              <div ref={bodyContentRef} className="space-y-6">
               {record === null && offline ? (
                 <ErrorRetry size="inline" title="网络不可用" message="恢复后自动加载图片信息" />
               ) : bodyError !== null ? (
@@ -1620,6 +1666,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   />
                 </>
               )}
+              </div>
               </Activity>
             )}
           </div>
