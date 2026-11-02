@@ -231,9 +231,28 @@ export class HeroRouteRegistry {
     };
     const applyInert = () => {
       if (released || lock || route.interaction !== interaction) return;
+      /* A close's leaving route is cut with `aria-hidden` + `pointer-events`, never `inert`:
+         `inert` is a subtree style change, so Blink re-resolved every node of the leaving detail
+         (traced at ~780 nodes with comments, the longest frame of a close on an E5 desktop and an
+         Iris Xe laptop alike). `pointer-events` is an independent inherited property, which
+         Blink pushes down without re-resolving the subtree; the few descendants that take the
+         pointer back are named by the `[data-image-hero-leaving]` rule. Focus still inside the
+         leaving detail is dropped, as `inert` would have. An open's freeze keeps `inert`. */
+      const light = deferInert;
+      if (light) {
+        const active = typeof document !== 'undefined' ? document.activeElement : null;
+        if (
+          active instanceof HTMLElement &&
+          (route.overlay.contains(active) || route.floatingBack?.contains(active))
+        ) {
+          active.blur();
+        }
+      }
+      const cut = light ? 'aria-hidden' : 'inert';
+      const cutValue = light ? 'true' : '';
       lock = combineHeroLeases(
-        leaseAttribute(route.overlay, 'inert', ''),
-        route.floatingBack ? leaseAttribute(route.floatingBack, 'inert', '') : null,
+        leaseAttribute(route.overlay, cut, cutValue),
+        route.floatingBack ? leaseAttribute(route.floatingBack, cut, cutValue) : null,
         leaseInlineStyles(route.overlay, { pointerEvents: 'none' }),
         route.floatingBack ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' }) : null,
       );

@@ -41,7 +41,9 @@ for (const [name, spec] of Object.entries(spring.COMPONENT_SPRINGS)) {
 lines.push(`  --motion-base-handoff: ${Math.round(spring.SPRING_MS.fastEffects / 2)}ms; /* half a fast-effects fade: a follower starts as its leader is ~90% there */`);
 const block = `${START}${lines.join('\n')}\n${END}`;
 
-const css = readFileSync(CSS, 'utf8');
+const source = readFileSync(CSS, 'utf8');
+// Git may check this out with CRLF; token content is independent of the checkout's EOL.
+const css = source.replace(/\r\n/g, '\n');
 const a = css.indexOf(START);
 const b = css.indexOf(END);
 if (a < 0 || b < a) {
@@ -50,7 +52,7 @@ if (a < 0 || b < a) {
 }
 const next = css.slice(0, a) + block + css.slice(b + END.length);
 if (process.argv.includes('--write')) {
-  writeFileSync(CSS, next);
+  writeFileSync(CSS, source.includes('\r\n') ? next.replace(/\n/g, '\r\n') : next);
   console.log('motion tokens written');
 } else if (next !== css) {
   console.error('globals.css motion tokens are stale — run `npm run motion:write`');

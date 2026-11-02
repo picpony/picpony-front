@@ -3214,8 +3214,20 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
  * root is invalidated by the attribute's name, so every open and close began with a style pass
  * over the whole document (R12-009). Here the pass is bounded by the subtree that is leaving. */
 [data-image-detail-overlay][data-image-hero-leaving],
-[data-image-detail-overlay][data-image-hero-leaving] *,
 [data-image-detail-floating-back][data-image-hero-leaving] {
+  pointer-events: none !important;
+}
+
+/* `pointer-events` inherits, so the surface's own `none` reaches every node that does not set it.
+   Only the ones that take the pointer back are named here — never `*`: a universal descendant
+   rule invalidates the whole leaving subtree when the marker lands (~780 nodes re-resolved in
+   one frame, mid-flight), while these selectors' rightmost class/tag features invalidate only
+   the handful of nodes that carry them. Keep this list in step with the `pointer-events: auto`
+   rules a detail can contain. */
+[data-image-detail-overlay][data-image-hero-leaving]
+  :is(.pointer-events-auto, .image-detail-back, .image-detail-final),
+[data-image-detail-overlay][data-image-hero-leaving]
+  [data-dropzone-content] :is(a, button, input, select, textarea, [tabindex]) {
   pointer-events: none !important;
 }
 

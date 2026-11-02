@@ -35,6 +35,26 @@ type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
 const HOVER_INTENT_DELAY_MS = 70;
 const FOCUS_INTENT_DELAY_MS = 120;
 const SNAPSHOT_REUSE_MS = 1500;
+/**
+ * **A touch tap opens on its release, not on its click** — Flutter's `onTap` is the pointer-up
+ * the gesture arena resolves, not a synthesized event a frame or more later. Between a touch's
+ * `pointerup` and its `click` Blink renders a frame, then runs the compatibility mouse events
+ * (`mouseover`/`mousemove`/`mousedown`/`mouseup`), moves focus, restyles `:hover`/`:active`/
+ * `:focus` and hit-tests again: traced on a production build at 4× CPU, 29–122ms (median ~65)
+ * before the click handler ran — all of it between the finger lifting and the picture moving.
+ *
+ * The release opens only when it is unmistakably the tap the browser would have clicked: the
+ * press armed the Stage (so it did not land on a fling — Blink swallows that tap's click too),
+ * the pointer stayed inside Chrome's tap slop, and it was not held long enough to become a long
+ * press (whose release fires `contextmenu`, never `click`). The click that follows is then
+ * swallowed (`TOUCH_CLICK_SWALLOW_MS`); when it lands on the Stage instead of the link, the Stage
+ * already ignores a click on the card it is opening (`forwardOpeningCardClick`). A mouse keeps
+ * the click: its `click` follows `mouseup` in the same task, so there is nothing to win, and a
+ * keyboard activation never has a pointer at all.
+ */
+const TAP_SLOP_PX = 15;
+const TAP_MAX_HOLD_MS = 450;
+const TOUCH_CLICK_SWALLOW_MS = 1000;
 
 /**
  * **Everything a first open would otherwise fetch mid-flight, warmed once the gallery is idle.**
@@ -100,12 +120,19 @@ export function useHeroLink<T extends HTMLElement>({
   previewSrc,
   canAnimate,
   kind,
+  onActivate,
 }: {
   image: ImagePreview | null;
   sourceRef: RefObject<T | null>;
   previewSrc: string;
   canAnimate: boolean;
   kind: HeroLinkKind;
+  /**
+   * What the caller does with every plain activation before the open launches (a card names its
+   * list). A click runs the caller's own handler; a touch tap that opens on its release has no
+   * click yet, so it runs this instead.
+   */
+  onActivate?: () => void;
 }) {
   /* No `useRouter()` here: it reads `LayoutRouterContext`, a new object on every router change, so
      every mounted card re-rendered on every URL write. The shell's router is read when it is
@@ -116,6 +143,10 @@ export function useHeroLink<T extends HTMLElement>({
   const cancelFrameWarmRef = useRef<Disposer | null>(null);
   const capturedPointerRef = useRef<number | null>(null);
   const clickOwnedRef = useRef(false);
+  /** The touch press that armed the Stage, so its release can open (see `TAP_SLOP_PX`). */
+  const tapRef = useRef<{ pointerId: number; x: number; y: number; at: number } | null>(null);
+  /** When a touch release opened the picture: the click that trails it is swallowed. */
+  const releaseOpenedAtRef = useRef(-Infinity);
   const href = image ? `/pic/${image.id}` : '#';
 
   const clearPrepared = useCallback(() => {
@@ -210,6 +241,11 @@ export function useHeroLink<T extends HTMLElement>({
     });
   }, [href, image, sourceRef, takePrepared]);
 
+  const activateOnRelease = () => {
+    onActivate?.();
+    return activateHero() === true;
+  };
+
   const handleNavigate: NavigateHandler = useCallback(
     (event) => {
       if (clickOwnedRef.current) {
@@ -224,6 +260,16 @@ export function useHeroLink<T extends HTMLElement>({
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      /* The trailing click of a tap whose release already opened the picture. */
+      if (
+        event.detail !== 0 &&
+        performance.now() - releaseOpenedAtRef.current < TOUCH_CLICK_SWALLOW_MS
+      ) {
+        releaseOpenedAtRef.current = -Infinity;
+        event.preventDefault();
+        event.nativeEvent.stopImmediatePropagation();
         return;
       }
       cancelIntent();
@@ -289,10 +335,23 @@ export function useHeroLink<T extends HTMLElement>({
       /* Lay the Stage out now, in the gap before the click (`armOpen`) — not while a fling is
          still running, where this press is far more likely to stop the scroll than to open. */
       const source = sourceRef.current;
+      tapRef.current = null;
+      releaseOpenedAtRef.current = -Infinity;
       if (source && !isScrollMoving()) {
         const snapshot = prepare();
-        if (snapshot && canAnimateImageHero(snapshot)) {
-          armImageHeroOpen(snapshot, source, event.pointerType);
+        if (
+          snapshot &&
+          canAnimateImageHero(snapshot) &&
+          armImageHeroOpen(snapshot, source, event.pointerType) &&
+          event.pointerType !== 'mouse' &&
+          event.isPrimary
+        ) {
+          tapRef.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            at: event.timeStamp,
+          };
         }
       }
       try {
@@ -303,6 +362,20 @@ export function useHeroLink<T extends HTMLElement>({
       }
     },
     onPointerUp: (event: PointerEvent<HTMLAnchorElement>) => {
+      const tap = tapRef.current;
+      tapRef.current = null;
+      if (
+        tap &&
+        tap.pointerId === event.pointerId &&
+        event.button === 0 &&
+        !event.defaultPrevented &&
+        event.timeStamp - tap.at < TAP_MAX_HOLD_MS &&
+        Math.hypot(event.clientX - tap.x, event.clientY - tap.y) <= TAP_SLOP_PX &&
+        activateOnRelease()
+      ) {
+        releaseOpenedAtRef.current = performance.now();
+        cancelIntent();
+      }
       if (capturedPointerRef.current !== event.pointerId) return;
       capturedPointerRef.current = null;
       try {
@@ -315,6 +388,7 @@ export function useHeroLink<T extends HTMLElement>({
     },
     onPointerCancel: (event: PointerEvent<HTMLAnchorElement>) => {
       // The press became a scroll (or the system took it): the click is not coming.
+      tapRef.current = null;
       disarmImageHeroOpen();
       if (capturedPointerRef.current !== event.pointerId) return;
       capturedPointerRef.current = null;

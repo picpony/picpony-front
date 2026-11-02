@@ -512,6 +512,87 @@ export function lerpHeroRect(
 }
 
 /**
+ * **One corner arc, sampled once for every bow.** `heroPointArcAt` is a convex combination of
+ * the chord point and the circular-arc point, and only the combination depends on the bow — so
+ * a solver that tries a hundred bows on one pair need not re-run the trigonometry, or allocate
+ * a point, a hundred times. Every value comes from the very expressions `heroPointArcAt`
+ * evaluates, in the same order, so a sampled answer is bit-identical to the direct one (the
+ * endpoint literals included). Traced at 1× CPU, `solveHeroArcContainBows` alone was 10–40ms of
+ * the press that builds an opening; it is now a few hundred microseconds.
+ */
+type HeroPointArcSamples = {
+  /** Chord point per sample (the endpoint literal at t = 0 and t = 1). */
+  chordX: Float64Array;
+  chordY: Float64Array;
+  /** Circle point per sample; only read where `bends` is set. */
+  arcX: Float64Array;
+  arcY: Float64Array;
+  /** Whether the bow applies at the sample: an interior t on a corner that has a centre. */
+  bends: Uint8Array;
+};
+
+function sampleHeroPointArc(arc: HeroPointArc, samples: number): HeroPointArcSamples {
+  const count = samples + 1;
+  const out: HeroPointArcSamples = {
+    chordX: new Float64Array(count),
+    chordY: new Float64Array(count),
+    arcX: new Float64Array(count),
+    arcY: new Float64Array(count),
+    bends: new Uint8Array(count),
+  };
+  for (let index = 0; index < count; index += 1) {
+    const t = index / samples;
+    if (t === 0) {
+      out.chordX[index] = arc.from.x;
+      out.chordY[index] = arc.from.y;
+      continue;
+    }
+    if (t >= 1) {
+      out.chordX[index] = arc.to.x;
+      out.chordY[index] = arc.to.y;
+      continue;
+    }
+    out.chordX[index] = arc.from.x + (arc.to.x - arc.from.x) * t;
+    out.chordY[index] = arc.from.y + (arc.to.y - arc.from.y) * t;
+    if (!arc.center) continue;
+    const angle = arc.beginAngle + (arc.endAngle - arc.beginAngle) * t;
+    out.arcX[index] = arc.center.x + Math.cos(angle) * arc.radius;
+    out.arcY[index] = arc.center.y + Math.sin(angle) * arc.radius;
+    out.bends[index] = 1;
+  }
+  return out;
+}
+
+/** A `HeroRectArc` sampled once (`sampleHeroPointArc`); `rectAt` is `lerpHeroRectArc`. */
+type HeroRectArcSamples = { lead: HeroPointArcSamples; trail: HeroPointArcSamples };
+
+function sampleHeroRectArc(arc: HeroRectArc, samples: number): HeroRectArcSamples {
+  return { lead: sampleHeroPointArc(arc.lead, samples), trail: sampleHeroPointArc(arc.trail, samples) };
+}
+
+/** Writes `lerpHeroRectArc(arc @ bow, index / samples)` into `out` (no allocation). */
+function sampledRectAt(arc: HeroRectArcSamples, index: number, bow: number, out: HeroRect) {
+  const { lead, trail } = arc;
+  let ax = lead.chordX[index];
+  let ay = lead.chordY[index];
+  if (lead.bends[index] && bow > 0) {
+    ax = ax + (lead.arcX[index] - ax) * bow;
+    ay = ay + (lead.arcY[index] - ay) * bow;
+  }
+  let bx = trail.chordX[index];
+  let by = trail.chordY[index];
+  if (trail.bends[index] && bow > 0) {
+    bx = bx + (trail.arcX[index] - bx) * bow;
+    by = by + (trail.arcY[index] - by) * bow;
+  }
+  out.left = Math.min(ax, bx);
+  out.top = Math.min(ay, by);
+  out.width = Math.abs(bx - ax);
+  out.height = Math.abs(by - ay);
+  return out;
+}
+
+/**
  * The fraction of the flyer's frame that is on screen: `min(a / aBase, aBase / a)`. Falls out
  * of `getHeroCoverTransform` — the canvas is object-cover, so it reduces to a function of the
  * box's aspect alone. This is what to measure: it is what the viewer actually sees.
@@ -577,12 +658,29 @@ export function solveHeroArcBow(
   if (!arc.lead.center && !arc.trail.center) return 1;
   // A degenerate box makes the criterion meaningless rather than false.
   if (Math.min(from.width, from.height, to.width, to.height) < 1) return 1;
-  if (heroArcCropRetrace(arc, baseAspect) <= budget) return 1;
+  /* `heroArcCropRetrace` over one sampling of the pair, re-weighted per bow. */
+  const samples = HERO_ARC_SOLVE_SAMPLES;
+  const sampled = sampleHeroRectArc(arc, samples);
+  const rect: HeroRect = { left: 0, top: 0, width: 0, height: 0 };
+  const retrace = (bow: number) => {
+    const first = heroArcCoverFraction(sampledRectAt(sampled, 0, bow, rect), baseAspect);
+    const last = heroArcCoverFraction(sampledRectAt(sampled, samples, bow, rect), baseAspect);
+    const rising = last >= first;
+    let extreme = first;
+    let worst = 0;
+    for (let index = 1; index <= samples; index += 1) {
+      const value = heroArcCoverFraction(sampledRectAt(sampled, index, bow, rect), baseAspect);
+      if (rising ? value > extreme : value < extreme) extreme = value;
+      else worst = Math.max(worst, Math.abs(extreme - value));
+    }
+    return worst;
+  };
+  if (retrace(1) <= budget) return 1;
   let low = 0;
   let high = 1;
   for (let step = 0; step < HERO_ARC_SOLVE_STEPS; step += 1) {
     const mid = (low + high) / 2;
-    if (heroArcCropRetrace({ ...arc, bow: mid }, baseAspect) <= budget) low = mid;
+    if (retrace(mid) <= budget) low = mid;
     else high = mid;
   }
   return low;
@@ -652,15 +750,21 @@ export function solveHeroArcContainBows(
    * whole leg, or every infeasible window reports whichever early sample first crossed the line
    * and the "friendliest" choice below is made between truncated numbers (R10-012).
    */
+  /* Both pairs sampled once; every bow below re-weights the same samples (see
+     `sampleHeroPointArc` — the results are bit-identical to rebuilding the arcs). */
+  const innerSamples = sampleHeroRectArc(createHeroRectArc(inner.from, inner.to, 1), samples);
+  const outerSamples = sampleHeroRectArc(createHeroRectArc(outer.from, outer.to, 1), samples);
+  const innerRect: HeroRect = { left: 0, top: 0, width: 0, height: 0 };
+  const outerRect: HeroRect = { left: 0, top: 0, width: 0, height: 0 };
   const escapeAt = (innerBow: number, outerBow: number, settle = true) => {
-    const innerArc = createHeroRectArc(inner.from, inner.to, innerBow);
-    const outerArc = createHeroRectArc(outer.from, outer.to, outerBow);
     let worst = -Infinity;
     for (let index = 0; index <= samples; index += 1) {
-      const progress = index / samples;
-      const seen = clip(lerpHeroRectArc(innerArc, progress));
+      const seen = clip(sampledRectAt(innerSamples, index, innerBow, innerRect));
       if (!(seen.width > 0) || !(seen.height > 0)) continue;
-      worst = Math.max(worst, heroRectEscape(seen, lerpHeroRectArc(outerArc, progress)));
+      worst = Math.max(
+        worst,
+        heroRectEscape(seen, sampledRectAt(outerSamples, index, outerBow, outerRect)),
+      );
       if (settle && worst > HERO_ARC_CONTAIN_SLACK) return worst;
     }
     return worst;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LS_KEYS, MEDIA } from './constants';
+import { getImageHeroRuntime, interruptImageHero, subscribeImageHeroRuntime } from './hero/runtime';
 
 /**
  * Subscribes to a media query. useSyncExternalStore over useState + an
@@ -53,19 +54,26 @@ function readStoredValue(key: string, fallback: string | null): string | null {
 /** A device preference with the same fallback during SSR and denied storage.
  * Both this tab's settings writer and another tab can change the value. */
 export function useStoredValue(key: string, fallback: string | null = null): string | null {
-  const subscribe = useCallback((listener: () => void) => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === key) listener();
-    };
-    window.addEventListener('settings_updated', listener);
-    window.addEventListener('storage', onStorage);
-    return () => {
-      window.removeEventListener('settings_updated', listener);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, [key]);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const onStorage = (event: StorageEvent) => {
+        if (event.key === null || event.key === key) listener();
+      };
+      window.addEventListener('settings_updated', listener);
+      window.addEventListener('storage', onStorage);
+      return () => {
+        window.removeEventListener('settings_updated', listener);
+        window.removeEventListener('storage', onStorage);
+      };
+    },
+    [key],
+  );
 
-  return useSyncExternalStore(subscribe, () => readStoredValue(key, fallback), () => fallback);
+  return useSyncExternalStore(
+    subscribe,
+    () => readStoredValue(key, fallback),
+    () => fallback,
+  );
 }
 
 export function useStoredBoolean(key: string, fallback = false): boolean {
@@ -99,9 +107,13 @@ function parseSession(stored: string | null): StoredUserInfo | null {
   if (!stored) return null;
   try {
     const user: unknown = JSON.parse(stored);
-    return user !== null && typeof user === 'object' && !Array.isArray(user) &&
-      'token' in user && typeof user.token === 'string' && user.token.length > 0
-      ? user as StoredUserInfo
+    return user !== null &&
+      typeof user === 'object' &&
+      !Array.isArray(user) &&
+      'token' in user &&
+      typeof user.token === 'string' &&
+      user.token.length > 0
+      ? (user as StoredUserInfo)
       : null;
   } catch {
     return null;
@@ -213,7 +225,12 @@ function revokeSession(user: StoredUserInfo) {
   const headers: Record<string, string> = { Authorization: `Bearer ${user.token}` };
   if (typeof user.csrfToken === 'string') headers['X-CSRF-Token'] = user.csrfToken;
   try {
-    void fetch('/api/v1/auth/session', { method: 'DELETE', headers, credentials: 'same-origin', keepalive: true })
+    void fetch('/api/v1/auth/session', {
+      method: 'DELETE',
+      headers,
+      credentials: 'same-origin',
+      keepalive: true,
+    })
       .then((response) => response.body?.cancel())
       .catch(() => {});
   } catch {
@@ -224,7 +241,10 @@ function revokeSession(user: StoredUserInfo) {
 /** The expected token protects a new login from an older request's 401. Storage that
  * refuses the removal cannot hold a session either, so the event still goes out — once.
  * `revoke: false` for a session the backend has already ended (a password change). */
-export function clearUserInfo(expectedToken: string, { revoke = true }: { revoke?: boolean } = {}): boolean {
+export function clearUserInfo(
+  expectedToken: string,
+  { revoke = true }: { revoke?: boolean } = {},
+): boolean {
   const current = readUserInfo();
   if (clearedToken === expectedToken || current?.token !== expectedToken) return false;
   clearedToken = expectedToken;
@@ -250,11 +270,14 @@ let clockTimer: ReturnType<typeof setTimeout> | undefined;
 const clockListeners = new Set<() => void>();
 
 function scheduleClockTick() {
-  clockTimer = setTimeout(() => {
-    clockNow = Date.now();
-    for (const listener of clockListeners) listener();
-    scheduleClockTick();
-  }, 60_000 - (Date.now() % 60_000) + 50);
+  clockTimer = setTimeout(
+    () => {
+      clockNow = Date.now();
+      for (const listener of clockListeners) listener();
+      scheduleClockTick();
+    },
+    60_000 - (Date.now() % 60_000) + 50,
+  );
 }
 
 function subscribeClock(listener: () => void) {
@@ -334,8 +357,18 @@ export function useDeferredLoading(
 
 /** Input types that take typed text — where Escape belongs to the field, not the screen. */
 const TEXT_ENTRY_TYPES = new Set([
-  'text', 'search', 'email', 'url', 'tel', 'password', 'number',
-  'date', 'datetime-local', 'month', 'time', 'week',
+  'text',
+  'search',
+  'email',
+  'url',
+  'tel',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week',
 ]);
 
 /**
@@ -383,6 +416,29 @@ export function escapeMeansBack(
  * `onBack` is held in a ref written from an effect: pages rebuild their handler
  * every render, and a render React discards must not mutate it.
  */
+/** Run `close` when the picture in motion lands on its detail; dropped if it lands anywhere else. */
+let pendingSettledClose: (() => void) | null = null;
+function closeOnceSettled(close: () => void) {
+  pendingSettledClose?.();
+  let timer = 0;
+  const stop = () => {
+    unsubscribe();
+    window.clearTimeout(timer);
+    if (pendingSettledClose === stop) pendingSettledClose = null;
+  };
+  const unsubscribe = subscribeImageHeroRuntime(() => {
+    const { phase } = getImageHeroRuntime();
+    if (phase === 'detail-idle') {
+      stop();
+      close();
+    } else if (phase === 'gallery-idle') {
+      stop();
+    }
+  });
+  timer = window.setTimeout(stop, 4_000);
+  pendingSettledClose = stop;
+}
+
 export function useEscapeBack(onBack: () => void, enabled = true) {
   const latest = useRef(onBack);
 
@@ -394,6 +450,24 @@ export function useEscapeBack(onBack: () => void, enabled = true) {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!escapeMeansBack(event)) return;
+      /* **While a picture is in motion Escape is the motion's, never the screen's.** The list
+         under an opening (or a reversing, or a closing) picture registered this listener long
+         before the Stage did, so it heard the key first: Escape pressed while a fast re-tap was
+         still turning around went `back` from the list itself, and the profile closed under the
+         picture (stress run: tap, Esc, tap, Esc landed on the previous page). */
+      const runtime = getImageHeroRuntime();
+      if (runtime.phase !== 'gallery-idle' && runtime.phase !== 'detail-idle') {
+        event.preventDefault();
+        if (runtime.phase.startsWith('opening')) {
+          interruptImageHero(); // the open turns around
+        } else if (runtime.phase === 'reversing' && runtime.direction === 'forward') {
+          /* A close the user turned back towards the picture cannot turn a second time: the
+             Escape closes it as soon as it has landed. */
+          closeOnceSettled(() => latest.current());
+        }
+        // Heading to the list already (a close, a reversed open, a recovery): nothing to add.
+        return;
+      }
       event.preventDefault();
       latest.current();
     };

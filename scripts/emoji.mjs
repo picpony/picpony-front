@@ -171,7 +171,7 @@ const output = build();
 if (process.argv.includes('--check')) {
   let current = '';
   try {
-    current = readFileSync(OUTPUT, 'utf8');
+    current = readFileSync(OUTPUT, 'utf8').replace(/\r\n/g, '\n');
   } catch {
     /* A missing file is a stale one. */
   }

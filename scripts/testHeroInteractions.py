@@ -337,9 +337,9 @@ def cancelled_return(page, label):
     state(page,'detail-idle')
     expect(page.locator('[data-image-hero-role=detail]')).to_be_visible()
     assert page.locator(ROUTE).evaluate('(n)=>n.scrollTop')==85
-    # The gallery goes inert once the detail has settled — the commit after `detail-idle`, never
+    # The gallery is covered (`aria-hidden`, focus guarded) once the detail has settled — the commit after `detail-idle`, never
     # inside the reversed leg's frames (R12-009) — so wait for that commit rather than race it.
-    page.wait_for_function("document.querySelector('[data-image-hero-gallery-scroll]').inert", timeout=1000)
+    page.wait_for_function("document.querySelector('[data-image-hero-gallery-scroll]').getAttribute('aria-hidden')==='true'", timeout=1000)
     save(page,label)
     page.keyboard.press('Escape')
     assert_clean(page)
@@ -486,22 +486,78 @@ def pull_loading_content(page, fixtures, label):
         fixtures.release_details()
 
 
+def covered_tab_order(page,label):
+    """Native Tab skips the covered list before it can scroll, in both directions."""
+    open_image(page)
+    page.wait_for_function("document.querySelector('[data-image-hero-gallery-scroll]').getAttribute('aria-hidden') === 'true'")
+    gallery = page.locator(GALLERY)
+    origin = gallery.evaluate('n => n.scrollTop')
+    back = page.locator('[data-image-hero-surface-id] [data-image-detail-back-button]')
+    back.focus()
+    page.keyboard.press('Shift+Tab')
+    assert page.evaluate("""() => {
+      const active = document.activeElement;
+      window.__heroChromeFocus = active;
+      return active instanceof HTMLElement && active !== document.body &&
+        !active.closest('[data-image-detail-overlay], [data-image-hero-gallery-scroll], [inert], [aria-hidden="true"]');
+    }"""), 'Shift+Tab must reach live chrome before the detail'
+    assert gallery.evaluate('n => n.scrollTop') == origin, 'Tab scrolled the covered gallery'
+    page.keyboard.press('Tab')
+    assert back.evaluate('n => document.activeElement === n'), 'Tab from chrome must reach the first detail control'
+    assert gallery.evaluate('n => n.scrollTop') == origin
+    # The initial dialog focus is the section itself (tabIndex=-1), outside the tab-stop list.
+    page.locator('[data-image-hero-surface-id]').focus()
+    page.keyboard.press('Shift+Tab')
+    assert page.evaluate('document.activeElement === window.__heroChromeFocus')
+    page.keyboard.press('Tab')
+    assert back.evaluate('n => document.activeElement === n')
+    assert gallery.evaluate('n => n.scrollTop') == origin
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    return {'chromeReachableBothWays': True, 'galleryScrollUnchanged': True}
+
+
+def covered_release(page,label):
+    """Off-screen slots stay covered through the return and are released in idle chunks."""
+    open_image(page)
+    page.wait_for_function("document.querySelector('[data-image-hero-gallery-scroll]').getAttribute('aria-hidden') === 'true'")
+    page.evaluate("""() => {
+      const gallery = document.querySelector('[data-image-hero-gallery-scroll]');
+      window.__coverRelease = [];
+      window.__coverObserver = new MutationObserver(() => window.__coverRelease.push({
+        phase: document.documentElement.dataset.imageHeroState,
+        covered: gallery.hasAttribute('data-gallery-covered'),
+        live: gallery.querySelectorAll('[data-gallery-live]').length,
+      }));
+      window.__coverObserver.observe(gallery, {
+        attributes: true, subtree: true, attributeFilter: ['data-gallery-covered', 'data-gallery-live'],
+      });
+    }""")
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    page.wait_for_function("!document.querySelector('[data-image-hero-gallery-scroll]').hasAttribute('data-gallery-covered')")
+    released = page.evaluate('window.__coverObserver.disconnect(); window.__coverRelease')
+    assert released and all(row['phase'] == 'gallery-idle' for row in released), released
+    assert any(row['covered'] and row['live'] > 0 for row in released), 'Slots were released all at once'
+    return {'releasedAfterLanding': True, 'releasedInChunks': True}
+
+
 def return_focus(page,label):
     """A focus given to the gallery the moment a close hands it back is kept: the leaving detail
     must have let go of the keyboard in that same commit. It is taken inside the mutation that
-    lifts the gallery's `inert` — polling for it from here was a race the full production run
+    lifts the gallery's cover (`aria-hidden`) — polling for it from here was a race the full production run
     once lost, since the flight waits two frames before it starts."""
     open_image(page)
     page.evaluate("""() => { window.__handback = null;
       const gallery = document.querySelector('[data-image-hero-gallery-scroll]');
       const target = document.querySelector('[data-tab-pane-active] [data-image-hero-role="thumbnail"][data-image-hero-id="3001"]').closest('a');
       const observer = new MutationObserver(() => {
-        if (gallery.inert) return;
+        if (gallery.getAttribute('aria-hidden') === 'true') return;
         observer.disconnect();
         target.focus();
         window.__handback = { immediate: document.activeElement === target, active: document.activeElement?.tagName };
       });
-      observer.observe(gallery, { attributes: true, attributeFilter: ['inert'] }); }""")
+      observer.observe(gallery, { attributes: true, attributeFilter: ['aria-hidden'] }); }""")
     page.keyboard.press('Escape')
     page.wait_for_function('window.__handback !== null')
     handback=page.evaluate('window.__handback')
@@ -1424,6 +1480,8 @@ def run(browser, name, width, only=None):
                   ('pull-loading', lambda label: pull_loading_content(page,fixtures,label)),
                   ('pull-follow', lambda label: pull_follow(page,label)),
                   ('pull-retreat', lambda label: pull_retreat(page,label)),
+                  ('covered-tab-order', lambda label: covered_tab_order(page,label)),
+                  ('covered-release', lambda label: covered_release(page,label)),
                   ('return-focus', lambda label: return_focus(page,label))]
         cases += [(f'loading-escape-scroll-{delay}', lambda label,delay=delay:
                    loading_escape_scroll(page,fixtures,label,delay)) for delay in [40,170,260,450]]

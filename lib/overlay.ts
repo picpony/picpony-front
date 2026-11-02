@@ -106,8 +106,8 @@ interface OverlayOptions {
   /**
    * False for a modal surface that covers the page but not the app: focus still enters it on
    * open and returns on close, but Tab may leave it and nothing pulls focus back. The image
-   * detail over a list is the one — the list beneath is `inert`, while the app bar and the
-   * drawer stay live beside it, as they are on the detail's own page.
+   * detail over a list is the one — the covered list is skipped by `skipCoveredTabStops`,
+   * while the app bar and drawer stay live beside it, as they are on the detail's own page.
    */
   containFocus?: boolean;
   /** Portalled siblings that belong to the same surface, e.g. the detail back button. */
@@ -245,6 +245,33 @@ export function moveFocusFrom(
   if (index < 0 || !items.length) return;
   const next = (index + (backwards ? -1 : 1) + items.length) % items.length;
   items[next].focus({ preventScroll: true });
+}
+
+/**
+ * Skip a covered page before Tab's default action can focus (and scroll) it. The detail and
+ * app chrome keep their document order; all other Tab moves, including leaving the document,
+ * remain native. Reuse the overlay's availability checks so hidden and disabled copies are
+ * never chosen. No layout is read inside the covered subtree.
+ */
+export function skipCoveredTabStops(event: KeyboardEvent, covered: HTMLElement): void {
+  if (
+    event.key !== 'Tab' || event.defaultPrevented || event.isComposing ||
+    event.altKey || event.ctrlKey || event.metaKey ||
+    covered.getAttribute('aria-hidden') !== 'true'
+  ) return;
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || covered.contains(active)) return;
+  const direction = event.shiftKey
+    ? Node.DOCUMENT_POSITION_PRECEDING
+    : Node.DOCUMENT_POSITION_FOLLOWING;
+  if (!(active.compareDocumentPosition(covered) & direction)) return;
+  const candidates = focusableItems([document.body]).filter(
+    (element) => active.compareDocumentPosition(element) & direction,
+  );
+  const target = event.shiftKey ? candidates.at(-1) : candidates[0];
+  if (!target || !(covered.compareDocumentPosition(target) & direction)) return;
+  event.preventDefault();
+  target.focus({ preventScroll: true });
 }
 
 function onOverlayKeyDown(event: KeyboardEvent): void {

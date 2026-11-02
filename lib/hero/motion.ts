@@ -107,10 +107,7 @@ type HeroContainerLeg = {
    with the flyer rather than re-typed here, and used at the sites that need a single sample
    rather than a whole track. A loop builds its arc once with `createHeroRectArc` instead. */
 
-function createContainerLeg(
-  container: HeroContainer,
-  direction: HeroDirection,
-): HeroContainerLeg {
+function createContainerLeg(container: HeroContainer, direction: HeroDirection): HeroContainerLeg {
   const { card, host, cardRadius } = container;
   /* `bow: 1` is a starting point rather than an answer — `settleBows` overwrites it as soon as the
      flight leg exists, because the containment solve needs the picture's bow as its input. */
@@ -150,7 +147,6 @@ function reverseContainerLeg(
   };
 }
 
-
 function readRect(element: HTMLElement): HeroRect {
   const { top, left, width, height } = element.getBoundingClientRect();
   return { top, left, width, height };
@@ -180,10 +176,12 @@ type HeroMotionOptions = {
   /** Continue the background sink from its current depth (parallel handoff). */
   continueBackground?: boolean;
   /** The card box the container transform grows from. Omit to skip it. */
-  container?: (Pick<HeroContainer, 'card' | 'cardRadius'> & {
-    /** The overlay's box, when the caller read it before its own DOM writes (see `readRect`). */
-    host?: HeroRect;
-  }) | null;
+  container?:
+    | (Pick<HeroContainer, 'card' | 'cardRadius'> & {
+        /** The overlay's box, when the caller read it before its own DOM writes (see `readRect`). */
+        host?: HeroRect;
+      })
+    | null;
   /** `dismiss` keeps the gesture's own pose instead of running the container. */
   choreography?: HeroChoreography;
   /**
@@ -194,8 +192,39 @@ type HeroMotionOptions = {
   sharedFrom?: Map<HTMLElement, OverlayPose>;
   /** px/ms along the travel the leg leaves at (a released drag). Omit to launch from rest. */
   speed?: number;
+  /**
+   * Layout values the caller read **before** its own DOM writes (creating the flight inserts
+   * the flight layer and styles it). Read here instead, each was a forced style + layout pass
+   * in the middle of the build — traced at 4× CPU on the press: the plane's live `scrollTop`
+   * (first `screenRectToPlane`, ~5ms) and the gallery scroller's `scrollTop`/`clientHeight` for
+   * the sink's pivot (~16ms). Same task as the read, so nothing can have scrolled in between.
+   */
+  preread?: {
+    /** The flight plane's scroll offset, as `createPlane` captured it. */
+    planeScroll?: { top: number; left: number };
+    /** The sink's pivot: the background scroller's `scrollTop + clientHeight / 2`. */
+    backgroundPivot?: number;
+    /** The sink's live amount, for a leg that continues it (`readHeroBackgroundAmount`). */
+    backgroundAmount?: number;
+    /** Live opacities the shared tracks start from (`readHeroOverlayOpacities`). */
+    opacities?: Map<HTMLElement, number>;
+  };
 };
 
+/** `screenRectToPlane` at a scroll offset read earlier in the same task (no layout read). */
+function screenRectToPlaneAt(
+  rect: HeroRect,
+  plane: HeroFlight['plane'],
+  scroll: { top: number; left: number } | undefined,
+): HeroRect {
+  if (!scroll) return screenRectToPlane(rect, plane);
+  return {
+    top: rect.top - plane.host.top + scroll.top - plane.originTop,
+    left: rect.left - plane.host.left + scroll.left - plane.originLeft,
+    width: rect.width,
+    height: rect.height,
+  };
+}
 
 /**
  * A second detail surface that wears the opening's shared tracks in lockstep with the Stage.
@@ -282,12 +311,35 @@ let heldAnimations: Animation[] | null = null;
  * `startedAt` survives as the analytic reference for interruption, rebased from the real
  * animation in `startVisual` so the two cannot drift.
  */
+/**
+ * /perf's A/B switch (`data-perf-no-corner` on `<html>`): the corner tracks are the only
+ * non-composited properties in a flight, and Gecko repaints the clipped picture on every frame
+ * they tick. With the switch on, a borderRadius track becomes an empty animation with the same
+ * timing (so ownership, seeking and cancel are unchanged) and the corner is held at its first
+ * frame. Diagnostic only; never set outside a perf run.
+ */
+function cornerAblation(element: HTMLElement, keyframes: Keyframe[]): Keyframe[] {
+  if (
+    typeof document === 'undefined' ||
+    !document.documentElement.hasAttribute('data-perf-no-corner') ||
+    !keyframes.some((frame) => 'borderRadius' in frame)
+  ) {
+    return keyframes;
+  }
+  const first = keyframes[0]?.borderRadius;
+  if (typeof first === 'string') element.style.borderRadius = first;
+  return keyframes.map(({ offset }) => ({ offset }));
+}
+
 function animateAt(
   element: HTMLElement,
   keyframes: Keyframe[],
   timing: KeyframeAnimationOptions,
 ): AnimationOwner {
-  const animation = element.animate(keyframes, { ...timing, fill: 'both' });
+  const animation = element.animate(cornerAblation(element, keyframes), {
+    ...timing,
+    fill: 'both',
+  });
   if (heldAnimations) {
     animation.pause();
     heldAnimations.push(animation);
@@ -324,12 +376,43 @@ function settle(owners: AnimationOwner[], finish: boolean) {
   });
 }
 
+/**
+ * Every live opacity a back or dismiss leg starts from, read in one pass before the leg writes
+ * anything. Read lazily inside the builders, each `getComputedStyle` landed right after an
+ * `animate()` (the gallery's sink first of all) and forced a style recalc of everything dirtied
+ * so far. On the slowest baseline machine (E5-2698 v3 + R5 240) that sat inside the 55–67ms
+ * frames on Esc / Back.
+ * Opacity is not inherited, so reading one element before another's track exists returns the
+ * same value the lazy read did.
+ */
+export function readHeroOverlayOpacities(
+  ctx: Pick<OverlayContext, 'overlay' | 'floatingBack' | 'fromCurrent'> & {
+    choreography: HeroChoreography;
+  },
+  direction: HeroLeg['direction'],
+) {
+  const reads = new Map<HTMLElement, number>();
+  const { overlay, floatingBack, choreography, fromCurrent } = ctx;
+  if (choreography === 'dismiss') {
+    const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
+    const targets = new Set<HTMLElement>([
+      ...(surface ? [surface] : []),
+      ...overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR),
+      ...(floatingBack ? [floatingBack] : []),
+    ]);
+    targets.forEach((element) => reads.set(element, numericOpacity(element)));
+  } else if (floatingBack && direction !== 'forward' && !fromCurrent?.get(floatingBack)) {
+    reads.set(floatingBack, numericOpacity(floatingBack));
+  }
+  return reads;
+}
+
 function numericOpacity(element: HTMLElement) {
   const value = Number.parseFloat(getComputedStyle(element).opacity);
   return Number.isFinite(value) ? value : 1;
 }
 
-function readBackgroundAmount(element: HTMLElement) {
+export function readHeroBackgroundAmount(element: HTMLElement) {
   const transform = getComputedStyle(element).transform;
   if (!transform || transform === 'none') return 0;
   try {
@@ -381,6 +464,8 @@ type OverlayContext = {
   floatingBack: HTMLElement | null;
   choreography: HeroChoreography;
   fromCurrent?: Map<HTMLElement, OverlayPose>;
+  /** Live opacities read before the leg writes anything (`readHeroOverlayOpacities`). */
+  liveOpacity?: Map<HTMLElement, number>;
 };
 
 type OverlayPose = { opacity: number; transform: string; rise: number };
@@ -389,9 +474,11 @@ type OverlayPose = { opacity: number; transform: string; rise: number };
 function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement | null) {
   const poses = new Map<HTMLElement, OverlayPose>();
   const targets = new Set<HTMLElement>(floatingBack ? [floatingBack] : []);
-  overlay?.querySelectorAll<HTMLElement>(
-    `${HERO_SURFACE_SELECTOR}, ${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
-  ).forEach((element) => targets.add(element));
+  overlay
+    ?.querySelectorAll<HTMLElement>(
+      `${HERO_SURFACE_SELECTOR}, ${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
+    )
+    .forEach((element) => targets.add(element));
   targets.forEach((element) => {
     const style = getComputedStyle(element);
     const transform = style.transform;
@@ -547,7 +634,10 @@ function revealTrack(
   return {
     // `none` at the far end, never a resting translate: an identity transform still makes the
     // node a containing block for fixed-position descendants.
-    keyframes: [{ transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` }, { transform: 'none' }],
+    keyframes: [
+      { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` },
+      { transform: 'none' },
+    ],
     easing: linearEasing(frames, (progress) => {
       const interval = intervalProgress(progress, start, end);
       // The body starts after the content is already partly visible. Ease the local
@@ -576,7 +666,10 @@ function sinkTrack(
   const distance = REVEAL_DISTANCE_PX[role] / 2;
   const { start, end } = HERO_CONTENT_FADE.back;
   return {
-    keyframes: [{ transform: 'none' }, { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` }],
+    keyframes: [
+      { transform: 'none' },
+      { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` },
+    ],
     easing: linearEasing(frames, (progress) => {
       const interval = intervalProgress(progress, start, end);
       return interval * interval;
@@ -585,12 +678,12 @@ function sinkTrack(
 }
 
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
-  const { overlay, content, floatingBack, choreography, fromCurrent } = ctx;
+  const { overlay, content, floatingBack, choreography, fromCurrent, liveOpacity } = ctx;
   const { direction, duration } = leg;
   const owners: AnimationOwner[] = [];
   const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
   if (choreography === 'dismiss') {
-    return buildDismissAnimations(overlay, floatingBack, surface, leg);
+    return buildDismissAnimations(overlay, floatingBack, surface, leg, liveOpacity);
   }
   const reduced = motionTier('image') !== 'standard';
   const fade = HERO_CONTAINER_FADE[direction];
@@ -622,12 +715,16 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   }
   if (content) {
     owners.push(
-      animateScalar(content, fadeTrack(
-        frames,
-        fromCurrent ? { ...contentFade, start: 0 } : contentFade,
-        fromCurrent?.get(content)?.opacity ?? fadeFrom,
-        fadeTo,
-      ), duration),
+      animateScalar(
+        content,
+        fadeTrack(
+          frames,
+          fromCurrent ? { ...contentFade, start: 0 } : contentFade,
+          fromCurrent?.get(content)?.opacity ?? fadeFrom,
+          fadeTo,
+        ),
+        duration,
+      ),
     );
   }
 
@@ -639,9 +736,13 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   // the captured rise instead of restarting it.
   if (direction === 'forward' && !reduced) {
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      owners.push(animateScalar(element, revealTrack(
-        frames, revealRole(element), fromCurrent?.get(element)?.rise,
-      ), duration));
+      owners.push(
+        animateScalar(
+          element,
+          revealTrack(frames, revealRole(element), fromCurrent?.get(element)?.rise),
+          duration,
+        ),
+      );
     });
   } else if (direction === 'back' && !fromCurrent && !reduced) {
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
@@ -654,9 +755,14 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
     // without replacing this transform snaps a still-visible header/body to y=0.
     overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
       const pose = fromCurrent.get(element);
-      if (pose) owners.push(animateAt(element, [
-        { transform: pose.transform }, { transform: pose.transform },
-      ], timing));
+      if (pose)
+        owners.push(
+          animateAt(
+            element,
+            [{ transform: pose.transform }, { transform: pose.transform }],
+            timing,
+          ),
+        );
     });
   }
 
@@ -680,13 +786,19 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
             ]
           : [
               {
-                opacity: current?.opacity ?? numericOpacity(floatingBack),
+                opacity:
+                  current?.opacity ??
+                  liveOpacity?.get(floatingBack) ??
+                  numericOpacity(floatingBack),
                 transform: current?.transform ?? 'none',
               },
               { opacity: 0, transform: pose },
             ],
         direction === 'forward'
-          ? { duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')), easing: REVEAL_EASING }
+          ? {
+              duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
+              easing: REVEAL_EASING,
+            }
           : {
               duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
               easing: HIDE_EASING,
@@ -710,6 +822,7 @@ function buildDismissAnimations(
   floatingBack: HTMLElement | null,
   surface: HTMLElement | null,
   leg: HeroLeg,
+  liveOpacity?: Map<HTMLElement, number>,
 ) {
   const owners: AnimationOwner[] = [];
   /* 8px at every tier that animates: it is already the weak form, so the tier has nothing
@@ -725,7 +838,7 @@ function buildDismissAnimations(
       animateAt(
         element,
         [
-          { opacity: numericOpacity(element), transform: 'none' },
+          { opacity: liveOpacity?.get(element) ?? numericOpacity(element), transform: 'none' },
           { opacity: 0, transform: `translate3d(0, ${distance}px, 0)` },
         ],
         // The leg's own duration, not the closing constant: an interrupted reverse runs
@@ -780,15 +893,17 @@ export class HeroMotion {
   private sharedCompletion = createCompletion();
   /** The leg the shared tracks were built on, once a `retreat` gave the flyer a leg of its own. */
   private sharedLeg: HeroLeg | null = null;
+  /** `HeroMotionOptions.preread`, consumed by the constructor's own build only. */
+  private preread: HeroMotionOptions['preread'] | null = null;
 
   constructor(options: HeroMotionOptions) {
+    this.preread = options.preread ?? null;
     this.flight = options.flight;
     this.background = options.background;
     this.overlay = options.overlay;
     this.floatingBack = options.floatingBack;
     this.choreography = options.choreography ?? 'container';
-    this.content =
-      this.overlay?.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR) ?? null;
+    this.content = this.overlay?.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR) ?? null;
     this.clip = this.overlay?.querySelector<HTMLElement>(HERO_CLIP_SELECTOR) ?? null;
     this.unclip = this.overlay?.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR) ?? null;
 
@@ -808,9 +923,10 @@ export class HeroMotion {
         direction,
       );
     }
-    const from = screenRectToPlane(options.from, this.flight.plane);
+    const planeScroll = this.preread?.planeScroll;
+    const from = screenRectToPlaneAt(options.from, this.flight.plane, planeScroll);
 
-    const to = screenRectToPlane(options.to, this.flight.plane);
+    const to = screenRectToPlaneAt(options.to, this.flight.plane, planeScroll);
     const radii = getFlightRadii(this.flight, direction);
     /* The animation speed reaches the flight here rather than in `constants.ts`, and it must:
        `scripts/heroPath.mjs` imports that file directly and cannot resolve `lib/appearance`
@@ -836,6 +952,9 @@ export class HeroMotion {
     this.startVisual();
     if (!heldAnimations) heroProbeMark(`hx:respond:${direction}`);
     this.startShared(options.continueBackground ?? false, options.sharedFrom);
+    /* Only true for the build that read them: anything later (a rebuild, a reversal, a scroll
+       since) reads live. */
+    this.preread = null;
     heroProbeMark('hx:t:shared');
   }
 
@@ -854,9 +973,7 @@ export class HeroMotion {
     const currentTime = this.visual[0]?.animation.currentTime;
     // WAAPI's currentTime describes the presented timeline, including a pending first
     // frame. performance.now() can be a whole task ahead and made an interruption jump.
-    const time = typeof currentTime === 'number'
-      ? this.leg.startedAt + currentTime
-      : timelineNow();
+    const time = typeof currentTime === 'number' ? this.leg.startedAt + currentTime : timelineNow();
     return {
       ...evaluateLeg(this.leg, time),
       pullOffset: this.pullOffset,
@@ -886,13 +1003,14 @@ export class HeroMotion {
       this.containerLeg = { ...container, bow: this.leg.bow };
       return;
     }
+    const scroll = this.preread?.planeScroll;
     const bows = solveHeroArcContainBows(
       { from: this.leg.from, to: this.leg.to, bow: this.leg.bow },
       {
-        from: screenRectToPlane(container.clipFrom, this.flight.plane),
-        to: screenRectToPlane(container.clipTo, this.flight.plane),
+        from: screenRectToPlaneAt(container.clipFrom, this.flight.plane, scroll),
+        to: screenRectToPlaneAt(container.clipTo, this.flight.plane, scroll),
       },
-      screenRectToPlane(container.host, this.flight.plane),
+      screenRectToPlaneAt(container.host, this.flight.plane, scroll),
     );
     if (bows.inner !== this.leg.bow) this.leg = { ...this.leg, bow: bows.inner };
     this.containerLeg = { ...container, bow: bows.outer };
@@ -1080,13 +1198,14 @@ export class HeroMotion {
     // The drag offset lives on the compensator, outside the flight keyframes: fold it
     // into the starting box and clear the compensator so the reverse begins exactly
     // where the flyer visually is, and no later frame stays shifted by a stale gesture.
-    const posed: HeroRect = pose.pullOffset || pose.pullOffsetX
-      ? {
-          ...pose.rect,
-          top: pose.rect.top + pose.pullOffset,
-          left: pose.rect.left + (pose.pullOffsetX ?? 0),
-        }
-      : pose.rect;
+    const posed: HeroRect =
+      pose.pullOffset || pose.pullOffsetX
+        ? {
+            ...pose.rect,
+            top: pose.rect.top + pose.pullOffset,
+            left: pose.rect.left + (pose.pullOffsetX ?? 0),
+          }
+        : pose.rect;
     if (this.pullOffset || this.pullOffsetX) this.setPullOffset(0, 0);
 
     // Capture screen space before any plane change; plane rects are relative to
@@ -1125,7 +1244,7 @@ export class HeroMotion {
         this.containerLeg,
         previous.direction,
         progressAt(previous.progress, offset),
-        direction === 'forward' ? host : destination ?? originScreen,
+        direction === 'forward' ? host : (destination ?? originScreen),
         direction === 'forward' ? 0 : this.flight.sourceRadius,
         host,
       );
@@ -1162,8 +1281,8 @@ export class HeroMotion {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
     const previous = this.leg;
-    const sharedPose = this.landedCompletion.settled || this.sharedReleased
-      ? undefined : this.readSharedPoses();
+    const sharedPose =
+      this.landedCompletion.settled || this.sharedReleased ? undefined : this.readSharedPoses();
     this.cancelVisual(false);
 
     const currentScreen = planeRectToScreen(pose.rect, this.flight.plane);
@@ -1192,7 +1311,10 @@ export class HeroMotion {
        than chosen: only a spring can be solved for a launch slope. The floor is scaled
        like everything else: "too short to sample" is a fraction of the flight's own clock,
        not a wall-clock figure. */
-    const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS, 'image'), previous.duration - pose.elapsed);
+    const duration = Math.max(
+      scaledMs(FLIGHT_REBUILD_MIN_MS, 'image'),
+      previous.duration - pose.elapsed,
+    );
     this.leg = createHeroLeg({
       from,
       to,
@@ -1343,7 +1465,6 @@ export class HeroMotion {
    * tracks — and safe uncancelled because `dispose()` detaches the layer it paints.
    */
   fadeRetiring(duration = scaledMs(FLIGHT_RETIRE_MS, 'image')) {
-
     if (this.disposed) return Promise.resolve();
     try {
       const fade = this.flight.layer.animate([{ opacity: 1 }, { opacity: 0 }], {
@@ -1365,7 +1486,10 @@ export class HeroMotion {
    * the successor's tracks, built next, start from exactly what is on screen. Null fields where
    * nothing is running: the successor then starts from the resting pose.
    */
-  handOver(): { window: { rect: HeroRect; radius: number } | null; shared: Map<HTMLElement, OverlayPose> | undefined } {
+  handOver(): {
+    window: { rect: HeroRect; radius: number } | null;
+    shared: Map<HTMLElement, OverlayPose> | undefined;
+  } {
     if (this.disposed) return { window: null, shared: undefined };
     const shared = this.retired ? undefined : this.readSharedPoses();
     let window: { rect: HeroRect; radius: number } | null = null;
@@ -1411,17 +1535,23 @@ export class HeroMotion {
     this.flight.layer.getAnimations().forEach((animation) => animation.cancel());
     this.flight.layer.style.transformOrigin = '';
     const previous = this.leg;
-    const posed: HeroRect = measured.pullOffset || measured.pullOffsetX
-      ? {
-          ...measured.rect,
-          top: measured.rect.top + measured.pullOffset,
-          left: measured.rect.left + (measured.pullOffsetX ?? 0),
-        }
-      : measured.rect;
+    const posed: HeroRect =
+      measured.pullOffset || measured.pullOffsetX
+        ? {
+            ...measured.rect,
+            top: measured.rect.top + measured.pullOffset,
+            left: measured.rect.left + (measured.pullOffsetX ?? 0),
+          }
+        : measured.rect;
     if (this.pullOffset || this.pullOffsetX) this.setPullOffset(0, 0);
     const currentScreen = planeRectToScreen(posed, this.flight.plane);
     if (plane) {
-      moveFlightToPlane(this.flight, plane, screenRectToPlane(currentScreen, plane), measured.radius);
+      moveFlightToPlane(
+        this.flight,
+        plane,
+        screenRectToPlane(currentScreen, plane),
+        measured.radius,
+      );
     }
     const from = screenRectToPlane(currentScreen, this.flight.plane);
     const to = screenRectToPlane(destination, this.flight.plane);
@@ -1530,12 +1660,15 @@ export class HeroMotion {
   }
 
   private rebaseOnStart(flyer: Animation | undefined, revision: number) {
-    void flyer?.ready.then(() => {
-      // A held track is ready while paused, with no start time: `release` hooks it again.
-      if (revision !== this.visualRevision || flyer.startTime === null) return;
-      const started = Number(flyer.startTime);
-      if (Number.isFinite(started)) this.leg = { ...this.leg, startedAt: started };
-    }, () => {});
+    void flyer?.ready.then(
+      () => {
+        // A held track is ready while paused, with no start time: `release` hooks it again.
+        if (revision !== this.visualRevision || flyer.startTime === null) return;
+        const started = Number(flyer.startTime);
+        if (Number.isFinite(started)) this.leg = { ...this.leg, startedAt: started };
+      },
+      () => {},
+    );
   }
 
   private startShared(continueBackground: boolean, fromCurrent?: Map<HTMLElement, OverlayPose>) {
@@ -1547,24 +1680,27 @@ export class HeroMotion {
     this.containerTracks = [];
     this.clearMirrorTracks();
     try {
+      /* Reads first, writes after: see `readHeroOverlayOpacities`. The sink's own read
+         (`readHeroBackgroundAmount`) already sits before its first write. */
+      const overlayCtx = this.overlay
+        ? {
+            overlay: this.overlay,
+            content: this.content,
+            floatingBack: this.floatingBack,
+            choreography: this.choreography,
+            fromCurrent,
+          }
+        : null;
+      const liveOpacity = overlayCtx
+        ? (this.preread?.opacities ?? readHeroOverlayOpacities(overlayCtx, this.leg.direction))
+        : undefined;
       if (this.background) {
         backgroundOwners.set(this.background, this.owner);
         owners.push(this.buildBackgroundAnimation(continueBackground));
         heroProbeMark('hx:t:s-background');
       }
       if (this.overlay) {
-        owners.push(
-          ...buildOverlayAnimations(
-            {
-              overlay: this.overlay,
-              content: this.content,
-              floatingBack: this.floatingBack,
-              choreography: this.choreography,
-              fromCurrent,
-            },
-            this.leg,
-          ),
-        );
+        owners.push(...buildOverlayAnimations({ ...overlayCtx!, liveOpacity }, this.leg));
         heroProbeMark('hx:t:s-overlay');
         if (
           this.containerLeg &&
@@ -1630,7 +1766,7 @@ export class HeroMotion {
     const element = this.background!;
     const { direction, duration } = this.leg;
     const from = continueFromCurrent
-      ? readBackgroundAmount(element)
+      ? (this.preread?.backgroundAmount ?? readHeroBackgroundAmount(element))
       : direction === 'forward'
         ? 0
         : 1;
@@ -1640,7 +1776,9 @@ export class HeroMotion {
        element-centred origin would fling the visible rows. Read once — the gallery scroller
        is hidden while the detail is open, so the offset cannot move under the leg. */
     const scroller = element.parentElement;
-    const centre = scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0;
+    const centre =
+      this.preread?.backgroundPivot ??
+      (scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0);
     // A scale matrix excludes transform-origin. Moving the pivot while continuing from
     // s<1 moves the grid by (1-s) * pivotDelta even though the scale did not change.
     if (!continueFromCurrent || from <= 0.001 || !element.style.transformOrigin) {
@@ -1654,17 +1792,19 @@ export class HeroMotion {
        `HERO_BACKGROUND_SINK_WINDOW`. */
     const window = HERO_BACKGROUND_SINK_WINDOW[direction];
     // Scale is linear in the amount, so the amount's curve is the easing (`ScalarTrack`).
-    return animateScalar(element, {
-      keyframes: [
-        { transform: getHeroBackgroundSinkTransform(from) },
-        { transform: getHeroBackgroundSinkTransform(to) },
-      ],
-      easing: linearEasing(
-        sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES),
-        (progress) =>
+    return animateScalar(
+      element,
+      {
+        keyframes: [
+          { transform: getHeroBackgroundSinkTransform(from) },
+          { transform: getHeroBackgroundSinkTransform(to) },
+        ],
+        easing: linearEasing(sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES), (progress) =>
           easeSinkWindow(intervalProgress(progress, window.start, window.end), direction),
-      ),
-    }, duration);
+        ),
+      },
+      duration,
+    );
   }
 
   private cancelVisual(finish: boolean) {

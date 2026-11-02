@@ -36,10 +36,14 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
 - **A close never waits for a restyle.** The flight launches synchronously in the task that asked
   for the close (rect reads before the shell's microtask commit); a transparent shield
   (`routes.freeze({deferInert})`) holds the pointer; `HeroController.exposeGallery` — once the
-  flyer's animation is ready, plus one frame — lifts the gallery's `inert` (`runtime.galleryExposed`,
-  read by `AppLayout`'s `closeHoldsGallery`), puts `inert` and the leaving marker on the detail, all
-  in one task, under a flight the compositor keeps moving. Both ways of cutting input (`inert`,
-  `pointer-events`) restyle a subtree, so neither may flip inside a frame that must move.
+  flyer's animation is ready, plus one frame — releases the gallery's `aria-hidden` and keyboard
+  exclusion (`runtime.galleryExposed`, read by `AppLayout`'s `closeHoldsGallery`), and applies
+  `aria-hidden` plus the leaving pointer marker to the detail. The open's freeze still uses
+  `inert`; the close avoids its subtree restyle.
+- **The gallery's content-visibility cover lasts through the return.** Only `coverGallery` and
+  `uncoverGallery` own `data-gallery-covered`, never a React prop tied to input availability.
+  Once `gallery-idle`, `uncoverGallery` restores four slots per idle slice, then removes the
+  marker. Removing it when the pointer returns releases every off-screen slot inside the flight.
 - **The rubber band stays** (owner decision): y = raw / (1 + raw / `DRAG_RESISTANCE_PX`), 360; x
   follows at the same ratio once the vertical drag is claimed. The axis-lock slop (6px) is
   subtracted at the slop boundary, Flutter-style, so the claim is not a jump. The 上一张/下一张
@@ -130,3 +134,40 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
 `lib/useHero.ts` 的 `scheduleDetailCodeWarm` 现在在画廊空闲后按顺序、每步一个 idle slice 预热：`PicDetail` 模块 → 第一张卡片的完整路由载荷（`prefetchRoutePayload`，服务端只渲染客户端页面，不读后端、不计浏览，同时让这张卡的打开直接走缓存）→ `PicDetail` 导出的 `warmDetailDeferredCode`（库不直接 import 组件）→ `document.fonts.load` 加载详情字形。之后首次点击不再有任何 script/字体请求。同条件（390×844、4× CPU，每组 8–10 次全新加载）：首开帧间隔超出部分 123ms → 73ms，最长间隔 95ms → 77ms，promote 618ms → 535ms；第二次打开不变（8–13ms）。
 
 剩下的首开成本是详情路由第一次挂载的 React 渲染与随后一次样式/布局（JIT 尚冷），第二次打开同样的工作明显更快。要彻底去掉只能在后台离屏预渲染整个详情，会牵涉路由注册、数据读取和焦点，暂不这样做。
+
+### 2026-11 第三轮：抬手即开、去掉构建里的强制布局、弧线求解只采样一次
+
+**触摸点按在抬手（`pointerup`）时打开，不再等 `click`。** 生产构建 4× CPU 下追踪：手指抬起后 Blink 先出一帧，再跑兼容鼠标事件（`mouseover`/`mousedown`/`mouseup`）、移焦点、重算 `:hover`/`:active`/`:focus` 样式、再做一次命中测试，之后才派发 `click`——`touchend` → `click` 实测 29–122ms（中位约 65ms），这段时间画面完全不动。Flutter 的 `onTap` 就是手势竞技场裁决后的那次抬起。现在 `useHeroLink` 在按下时记下点（只在本次按下确实 arm 了 Stage 时——也就排除了按停惯性滚动的那一下，那种按下浏览器本来也不会派发 click），抬手时若仍在 Chrome 的点按容差内（15px）且按住不足 450ms（再长就是长按，抬手只会有 `contextmenu`），就直接调用与 click 相同的打开路径；随后那次 `click` 被吞掉（落在链接上由 `handleClick` 吞，落在已展开的 Stage 上则 `forwardOpeningCardClick` 本来就忽略对正在打开的那张卡的点击）。鼠标不变：`click` 与 `mouseup` 同一任务，没有可省的时间；键盘激活（`detail === 0`）永远不被吞。调用方在激活时要做的事（卡片 `openFromSequence`、横幅 `clearImageSequence`）通过 `onActivate` 传入，两条路径都会执行。
+
+**打开过程中点另一张卡片不再切换。** 打开阶段（`opening.flight` / `landed` / `handoff`）收到别的图片的打开请求时，`requestOpen` 直接吞掉，当前这张照常打开完；中途换图（原 `retargetOpening`）已删除——真实使用里没有这个手势，它只会来自误触的第二下。Stage 的 `forwardOpeningCardClick` 只在 `armed` 时转发，路由接管后的 `guardAdoptedClicks` 只拦截不转发。关闭/回退中再点卡片（`retargetReversing`）保留。飞行中按下的那一下，其 `click` 在交接后仍会被吞掉（`HERO_PRESS_TAIL_MS`），不会落到刚到位的大图上打开灯箱。
+
+**构建航班时不再插入布局读取。** `createHeroFlight` 会插入并设置飞行层的样式，之后 `HeroMotion` 构造里第一次 `screenRectToPlane` 读 `scrollTop`、`buildBackgroundAnimation` 读画廊滚动容器的 `scrollTop`/`clientHeight`，各触发一次完整的样式 + 布局（4× CPU 下约 5ms 和 16ms，打开与关闭都有）。现在调用方在写 DOM 之前、同一任务里读好这些值，通过 `HeroMotionOptions.preread` 传入，只供构造函数这一次使用；之后的重建、反转都照旧读实时值。
+
+**弧线求解器只采样一次。** `heroPointArcAt` 是弦上点与圆弧点按 bow 的凸组合，只有组合系数依赖 bow。`solveHeroArcContainBows`（扫描 + 细分，上百次试探）和 `solveHeroArcBow`（二分）原来每次试探都重建弧线、重算三角函数并分配对象，按下时的构建里占 10–40ms（1×）。现在每对矩形采样一次（`sampleHeroRectArc`），每个 bow 只做加权；所有表达式与原实现逐项相同、求值顺序相同，随机 3000 组输入新旧结果逐位一致，`npm run hero:path` 全部通过。
+
+**还没解决、需要真机确认的：** 按下时 Stage 首次挂载后的那次布局（一次 15–65ms，4×）和 `drawImage` 截帧（软件画布下明显偏高，真机 GPU 画布应便宜得多）仍在按下的任务里；窗口圆角与飞行体的裁剪圆角是主线程动画（`borderRadius`），主线程被路由提交或关闭时解除 `inert` 的重算（约 600 个元素，4× 下 ~70ms）占住时，圆角会滞后几帧，变换本身仍在合成线程上平滑运行。
+
+## On-device performance run (/perf)
+
+设置 → 偏好 → 诊断 → 性能测试 opens `/perf`. 开始测试 loads `lib/perf/runner.ts` (a dynamic
+import; nothing of it is in another route's bundle) and drives the real gallery with the same
+synthetic input the browser tests use: a press and release on a card (touch on a coarse
+pointer, so the release opens), a horizontal flick on the picture, Escape, `history.back()` and a
+pointer pull. It watches `data-image-hero-state` on `<html>` — never the engine — and records
+`requestAnimationFrame` timestamps plus long animation frames (long tasks where LoAF is missing).
+It returns to `/perf` with a report (last one kept under `LS_KEYS.perfReport`) exportable as
+Markdown or JSON, copied, or shared.
+
+- The grid defaults to `/`; `/perf?gallery=/user/1` (any same-origin path) runs on another one.
+- Scenarios: idle baseline (refresh-rate estimate), list scroll, open, step, close by Escape,
+  pull and Back; N rounds each. Arithmetic and verdict thresholds live in `lib/perf/stats.ts`
+  (`scripts/testPerf.mjs`).
+- Frames are main-thread frames. A compositor-driven flight can stay smooth through a main-thread
+  stall, so a drop is not always visible — but it always hits the finger-driven parts (pull,
+  swipe, the corner radius) and the next input. Synthetic input skips the OS touch pipeline, so
+  real taps add ~10–30ms to the reported response latency.
+- A close or open that settles without a flight (card off screen, reduced motion) is reported
+  as “没有飞行动画，直接切换”, not as a failure.
+- An unavailable response latency does not lower a completed sample's verdict; its frame data
+  still counts, and a timeout still fails. The latest report is also kept in memory so denied or
+  full storage cannot discard the run before it can be viewed or exported.

@@ -172,6 +172,7 @@ test('stored preferences use stable SSR defaults and react to both settings and 
   let snapshot;
   let denied = false;
   const hooks = load('lib/hooks.ts', {
+    './hero/runtime': { getImageHeroRuntime: () => null, interruptImageHero: () => false, subscribeImageHeroRuntime: () => () => {} },
     './constants': constants,
     react: {
       useCallback: (callback) => callback,

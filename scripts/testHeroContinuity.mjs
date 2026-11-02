@@ -730,7 +730,7 @@ test('a finger moving back up reports a negative release speed', () => {
 // --- Background sink shape -------------------------------------------------------------------
 test('the gallery sink has no velocity step at an edge of its window inside the leg', async () => {
   const source = readFileSync(new URL('../lib/hero/motion.ts', import.meta.url), 'utf8');
-  const match = source.match(/export function easeSinkWindow[\s\S]*?\n}\n/);
+  const match = source.match(/export function easeSinkWindow[\s\S]*?\r?\n}\r?\n/);
   assert.ok(match, 'easeSinkWindow is exported from motion.ts');
   const fn = new Function('clamp01', `${ts.transpileModule(match[0].replace('export ', ''), {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },

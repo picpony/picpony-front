@@ -70,6 +70,10 @@ export const LS_KEYS = {
   /** /search's recent queries, newest first — the original front end's key, so its history carries over. */
   searchHistory: 'trixie_search_history',
   devBannerDismissed: 'picpony_dev_banner_dismissed',
+  /** The last /perf run's report (`lib/perf/report.ts`), so the page shows it again. */
+  perfReport: 'picpony_perf_report',
+  /** /perf's 设备备注 (CPU model etc.), kept between runs. */
+  perfNote: 'picpony_perf_note',
   darkMode: 'darkMode',
   followSystemScheme: 'followSystemPrefersColorScheme',
   sidebarCollapsed: 'sidebar_collapsed',

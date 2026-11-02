@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MdFilterList, MdNotifications, MdVisibility } from 'react-icons/md';
+import { MdFilterList, MdNotifications, MdSpeed, MdVisibility } from 'react-icons/md';
 import Button, { buttonClasses } from '@/components/Button';
 import Select from '@/components/Select';
 import { ICON } from '@/lib/icons';
@@ -203,6 +203,25 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           />
         </SettingsSection>
       )}
+
+      {/* The on-device performance run (/perf): the same scripted opens, pulls, steps and scrolls
+          on whatever device this is, with a report to export and compare. */}
+      <SettingsSection title="诊断" icon={<MdSpeed size={ICON.control} />}>
+        <SettingsRow
+          label="性能测试"
+          supporting="自动测试打开、关闭、拖动和滚动是否流畅，并导出报告"
+          action={
+            <Link
+              scroll={false}
+              href="/perf"
+              aria-label="打开性能测试"
+              className={buttonClasses({ variant: 'tonal' })}
+            >
+              打开
+            </Link>
+          }
+        />
+      </SettingsSection>
     </div>
   );
 }

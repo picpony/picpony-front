@@ -126,6 +126,7 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
     previewSrc: isVideo ? mediaUrl : animatedSrc,
     canAnimate: !covered,
     kind: 'card',
+    onActivate: () => openFromSequence(sequence),
   });
 
   /* **Every activation names the list first**, synchronously and before the hero launches, so

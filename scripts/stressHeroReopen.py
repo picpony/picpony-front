@@ -30,7 +30,7 @@ PROBE = """() => {
     overlayVisible: Boolean(ov && ov.visibility !== 'hidden' && overlay.getBoundingClientRect().width > 0),
     overlayInert: Boolean(overlay && overlay.closest('[inert]')),
     sealed: overlay?.dataset.imageHeroRouteState || null,
-    galleryInert: Boolean(main && main.closest('[inert]')),
+    galleryInert: Boolean(main && (main.closest('[inert]') || main.getAttribute('aria-hidden') === 'true')),
     scrollHidden: main?.hasAttribute('data-scroll-hidden') || false,
     stage: Boolean(stage),
     flyers: document.querySelectorAll('.image-hero-flight-layer').length,

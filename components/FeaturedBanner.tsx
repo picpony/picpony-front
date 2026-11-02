@@ -165,6 +165,7 @@ export default function FeaturedBanner({
     previewSrc: isVideo ? displayVideoUrl : displayImageUrl,
     canAnimate: !covered,
     kind: 'featured',
+    onActivate: () => clearImageSequence(),
   });
 
   if (!enabled && !featured) return <FeaturedBannerSkeleton />;

@@ -86,9 +86,11 @@ export default function HeroStage() {
 
   const forwardOpeningCardClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      /* `landed` too: a tap the main thread delivers late (it is busiest around the landing)
-         used to arrive after the phase moved on and was swallowed by the full-screen scroller. */
-      if ((state.phase !== 'opening' && state.phase !== 'landed') || event.defaultPrevented) return;
+      /* Only while armed: the press that armed the Stage has not opened anything yet, so a click
+         that reaches the (invisible, full-screen) Stage belongs to whatever card is under it.
+         Once a picture is opening, another card's tap does nothing — switching pictures mid-open
+         is not a behaviour (`HeroController.requestOpen`). */
+      if (state.phase !== 'armed' || event.defaultPrevented) return;
       const overlay = overlayRef.current;
       if (!overlay) return;
       /* Inside the window the user is looking at the detail, not at the card beneath it. The
@@ -166,80 +168,85 @@ export default function HeroStage() {
             structurally identical to this. */}
         <div data-image-detail-clip className="image-detail-clip absolute inset-0">
           <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
-        <div
-          ref={surfaceRef}
-          data-image-detail-surface
-          className="pointer-events-none absolute inset-0 bg-surface"
-        />
-        <div
-          ref={scrollerRef}
-          data-image-hero-stage-foreground
-          data-image-hero-stage-scroll
-          aria-hidden="true"
-          className="image-detail-overlay-scroll main-scrollbar pointer-events-auto absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
-        >
-          <div
-            ref={contentRef}
-            inert
-            className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
-          >
-            {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
-            <div data-image-detail-crossfade className="w-full">
-            <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
-              <div className="flex flex-col rounded-md bg-transparent">
-                <DetailHeader key={image.id} image={image} layout="stage" pending={record === null} />
-                <div className="relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6">
-                  {/* The landing target is an ordinary in-flow flex item, because
+            <div
+              ref={surfaceRef}
+              data-image-detail-surface
+              className="pointer-events-none absolute inset-0 bg-surface"
+            />
+            <div
+              ref={scrollerRef}
+              data-image-hero-stage-foreground
+              data-image-hero-stage-scroll
+              aria-hidden="true"
+              className="image-detail-overlay-scroll main-scrollbar pointer-events-auto absolute inset-0 z-10 overflow-y-auto overscroll-contain touch-pan-y"
+            >
+              <div
+                ref={contentRef}
+                inert
+                className="image-detail-overlay-content pointer-events-none relative min-h-full w-full"
+              >
+                {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
+                <div data-image-detail-crossfade className="w-full">
+                  <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
+                    <div className="flex flex-col rounded-md bg-transparent">
+                      <DetailHeader
+                        key={image.id}
+                        image={image}
+                        layout="stage"
+                        pending={record === null}
+                      />
+                      <div className="relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6">
+                        {/* The landing target is an ordinary in-flow flex item, because
                       the routed `DetailImage` is one too and the two must measure
                       identically — a second box inside an absolutely-positioned
                       wrapper resolved its width against a containing block 16px
                       narrower per side, and the flyer landed wide and snapped in. */}
-                  <div
-                    ref={targetRef}
-                    data-image-hero-stage-target
-                    data-image-hero-stage-id={image.id}
-                    aria-hidden="true"
-                    className="invisible relative flex-none overflow-hidden rounded-lg"
-                    style={getHeroMediaStyle(image)}
-                  />
-                </div>
-                <div
-                  data-image-detail-reveal="body"
-                  className="image-detail-stage-body bg-transparent p-4 sm:p-6"
-                >
-                  <div className="mx-auto w-full max-w-5xl">
-                    <div aria-hidden="true" className="mb-6">
-                      {/* The route's own vote row, from the card's row when that row is the
+                        <div
+                          ref={targetRef}
+                          data-image-hero-stage-target
+                          data-image-hero-stage-id={image.id}
+                          aria-hidden="true"
+                          className="invisible relative flex-none overflow-hidden rounded-lg"
+                          style={getHeroMediaStyle(image)}
+                        />
+                      </div>
+                      <div
+                        data-image-detail-reveal="body"
+                        className="image-detail-stage-body bg-transparent p-4 sm:p-6"
+                      >
+                        <div className="mx-auto w-full max-w-5xl">
+                          <div aria-hidden="true" className="mb-6">
+                            {/* The route's own vote row, from the card's row when that row is the
                           whole record (`completeDetailRow`): the flight shows the numbers the
                           detail lands with instead of a placeholder that swaps after it.
                           Same component on both sides, so the two still measure identically. */}
-                      {record ? (
-                        <DetailVotes image={record} pending={false} />
-                      ) : (
-                        <>
-                          <div className="mb-1.5 flex justify-between">
-                            <Skeleton className="h-4 w-14" />
-                            <Skeleton className="h-4 w-14" delay={60} />
-                          </div>
-                          {/* 4dp, matching the routed vote track — the Stage and the
+                            {record ? (
+                              <DetailVotes image={record} pending={false} />
+                            ) : (
+                              <>
+                                <div className="mb-1.5 flex justify-between">
+                                  <Skeleton className="h-4 w-14" />
+                                  <Skeleton className="h-4 w-14" delay={60} />
+                                </div>
+                                {/* 4dp, matching the routed vote track — the Stage and the
                               route must measure identically or the handoff shifts. */}
-                          <Skeleton className="h-1 w-full" delay={120} />
-                        </>
-                      )}
+                                <Skeleton className="h-1 w-full" delay={120} />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+              <div
+                ref={anchorRef}
+                data-image-hero-stage-anchor
+                aria-hidden="true"
+                className="image-hero-stage-anchor"
+              />
             </div>
-            </div>
-          </div>
-          <div
-            ref={anchorRef}
-            data-image-hero-stage-anchor
-            aria-hidden="true"
-            className="image-hero-stage-anchor"
-          />
-        </div>
           </div>
         </div>
       </section>

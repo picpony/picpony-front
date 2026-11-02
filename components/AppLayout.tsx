@@ -96,7 +96,7 @@ import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
 import { showToast } from '@/components/Toast';
 import { cn, runWhenIdle } from '@/lib/utils';
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from '@/lib/constants';
-import { hasModalLayer, useOverlayLayer, useScrollLock } from '@/lib/overlay';
+import { hasModalLayer, skipCoveredTabStops, useOverlayLayer, useScrollLock } from '@/lib/overlay';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { prefetchRoute } from '@/lib/prefetchRoute';
 import { setRoutePayloadPrefetch } from '@/lib/routePayload';
@@ -534,6 +534,21 @@ export default function AppLayout({
     return () => cancelAnimationFrame(frame);
   }, [gallerySettledUnder]);
   const galleryInert = gallerySettledUnder && galleryInertArmed;
+  /* **Not the `inert` attribute.** Flipping `inert` on this `<main>` is a subtree style change:
+     Blink recomputes every element under it (traced: 912 elements, the whole close's longest frame
+     — 45–49ms of style and layout on an E5-2698 v3 / R5 240 desktop, with no script in it). The
+     close lifts it under a moving picture, and the mask and corner tracks are main-thread, so the
+     hitch showed. What `inert` bought is had without a restyle: the overlay already takes every
+     pointer, `aria-hidden` takes the list out of the accessibility tree (no rule keys on it), and
+     Tab skips the list before native focus can scroll it. The detail and chrome stay in their
+     ordinary tab order in both directions (`skipCoveredTabStops`). */
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main || !galleryInert) return;
+    const guard = (event: KeyboardEvent) => skipCoveredTabStops(event, main);
+    document.addEventListener('keydown', guard);
+    return () => document.removeEventListener('keydown', guard);
+  }, [galleryInert]);
   /* The off-screen cards sit out the `inert` restyles while a detail covers the gallery, and are
      given back once a return has settled (`lib/galleryCover.ts`). Imperative, on `<main>`, so no
      card re-renders for it. */
@@ -1285,7 +1300,7 @@ export default function AppLayout({
                 ref={mainRef}
                 id="app-main"
                 data-image-detail-background
-                inert={galleryInert || undefined}
+                aria-hidden={galleryInert || undefined}
                 data-image-hero-gallery-scroll
                 data-scroll-hidden={detailCovers || undefined}
                 className="app-scroller main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-surface outline-hidden"

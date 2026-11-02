@@ -23,7 +23,7 @@ const storage = {
   removeItem: (key) => values.delete(key),
 };
 let announcements = 0;
-const session = moduleAt('lib/hooks.ts', { react: {}, './constants': {
+const session = moduleAt('lib/hooks.ts', { './hero/runtime': { getImageHeroRuntime: () => null, interruptImageHero: () => false, subscribeImageHeroRuntime: () => () => {} }, react: {}, './constants': {
   LS_KEYS: { userInfo: 'user_info', derpiApiKey: 'derpi_api_key' }, MEDIA: {},
 } }, { window: { dispatchEvent: () => announcements++ }, localStorage: storage, Event });
 values.set('user_info', JSON.stringify({ token: 'B', username: 'account B' }));

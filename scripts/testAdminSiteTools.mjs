@@ -9,6 +9,8 @@ import ts from 'typescript';
 const root = path.resolve(import.meta.dirname, '..');
 const plain = (value) => JSON.parse(JSON.stringify(value));
 function load(file, overrides = {}, globals = {}, cache = new Map()) {
+  // Aliases and relative imports must share one ApiError class on Windows as well.
+  file = path.normalize(file);
   if (cache.has(file)) return cache.get(file);
   const exports = {}; cache.set(file, exports);
   const code = ts.transpileModule(readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
