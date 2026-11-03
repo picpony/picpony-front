@@ -5,6 +5,7 @@ import { MdArrowDownward, MdExpandMore } from 'react-icons/md';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Chip from '@/components/Chip';
+import Collapse from '@/components/Collapse';
 import { Input } from '@/components/Input';
 import Select from '@/components/Select';
 import {
@@ -240,102 +241,87 @@ export default function SearchToolbar({
         </div>
       )}
 
-      {/* The form expands from the toolbar's own surface. */}
-      <div
-        id={advancedId}
-        role="region"
-        aria-label="高级筛选条件"
-        inert={!showAdvanced}
-        /* A collapsible panel: the layout spring both ways, since everything under it re-places to
-           follow its edge (globals.css, the spring utilities). `grid-template-rows` stays as the mechanism: the
-           inner track carries the whole subtree with its overflow clipped, so the contents
-           are clipped rather than left behind by a resizing box. */
-        className={`grid ${
-          showAdvanced
-            ? 'grid-rows-[1fr] opacity-100 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-default-effects)_var(--ease-spring-effects)]'
-            : 'grid-rows-[0fr] opacity-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]'
-        }`}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <Card variant="elevated" className="mt-4">
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                onApplyFilters(pending, 'panel');
-              }}
-            >
-              <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
-                <CountCondition
-                  label="点赞数"
-                  op={draft.upvotesOp}
-                  value={draft.upvotes}
-                  allowNegative={false}
-                  placeholder="例如 100"
-                  onOp={(upvotesOp) => edit({ upvotesOp })}
-                  onValue={(upvotes) => edit({ upvotes })}
-                />
-                <CountCondition
-                  label="净得分"
-                  op={draft.scoreOp}
-                  value={draft.score}
-                  allowNegative
-                  placeholder="例如 50"
-                  onOp={(scoreOp) => edit({ scoreOp })}
-                  onValue={(score) => edit({ score })}
-                />
+      {/* The form expands from the toolbar's own surface; everything under it re-places to
+          follow its edge on the layout spring (`Collapse`). */}
+      <Collapse id={advancedId} role="region" aria-label="高级筛选条件" open={showAdvanced}>
+        <Card variant="elevated" className="mt-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onApplyFilters(pending, 'panel');
+            }}
+          >
+            <div className="grid grid-cols-1 gap-4 @md:grid-cols-2">
+              <CountCondition
+                label="点赞数"
+                op={draft.upvotesOp}
+                value={draft.upvotes}
+                allowNegative={false}
+                placeholder="例如 100"
+                onOp={(upvotesOp) => edit({ upvotesOp })}
+                onValue={(upvotes) => edit({ upvotes })}
+              />
+              <CountCondition
+                label="净得分"
+                op={draft.scoreOp}
+                value={draft.score}
+                allowNegative
+                placeholder="例如 50"
+                onOp={(scoreOp) => edit({ scoreOp })}
+                onValue={(score) => edit({ score })}
+              />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 @xl:grid-cols-3">
+              <ChoiceCondition
+                label="宽高比"
+                value={draft.aspect}
+                onChange={(aspect) => edit({ aspect: aspect as Draft['aspect'] })}
+                options={[
+                  { value: '', label: '不限比例' },
+                  ...(Object.keys(ASPECT_LABELS) as AspectFilter[]).map((value) => ({ value, label: ASPECT_LABELS[value].option })),
+                ]}
+              />
+              <ChoiceCondition
+                label="媒体类型"
+                value={draft.media}
+                onChange={(media) => edit({ media: media as Draft['media'] })}
+                options={[
+                  { value: '', label: '所有类型' },
+                  ...(Object.keys(MEDIA_LABELS) as MediaFilter[]).map((value) => ({ value, label: MEDIA_LABELS[value].option })),
+                ]}
+              />
+              <ChoiceCondition
+                label="上传时间"
+                value={draft.since}
+                onChange={(since) => edit({ since: since as Draft['since'] })}
+                options={[
+                  { value: '', label: '不限时间' },
+                  ...(Object.keys(SINCE_LABELS) as SinceFilter[]).map((value) => ({ value, label: SINCE_LABELS[value] })),
+                ]}
+              />
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-body-s text-on-surface-variant">组合条件，进一步缩小搜索范围。</span>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="surface"
+                  disabled={draftEmpty && countSearchFilters(filters) === 0}
+                  onClick={() => {
+                    setDraft(draftOf(NO_SEARCH_FILTERS));
+                    if (countSearchFilters(filters) > 0) onApplyFilters(NO_SEARCH_FILTERS, 'chip');
+                  }}
+                >
+                  清除筛选
+                </Button>
+                <Button type="submit" variant="filled" disabled={!draftChanged}>
+                  应用并搜索
+                </Button>
               </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 @xl:grid-cols-3">
-                <ChoiceCondition
-                  label="宽高比"
-                  value={draft.aspect}
-                  onChange={(aspect) => edit({ aspect: aspect as Draft['aspect'] })}
-                  options={[
-                    { value: '', label: '不限比例' },
-                    ...(Object.keys(ASPECT_LABELS) as AspectFilter[]).map((value) => ({ value, label: ASPECT_LABELS[value].option })),
-                  ]}
-                />
-                <ChoiceCondition
-                  label="媒体类型"
-                  value={draft.media}
-                  onChange={(media) => edit({ media: media as Draft['media'] })}
-                  options={[
-                    { value: '', label: '所有类型' },
-                    ...(Object.keys(MEDIA_LABELS) as MediaFilter[]).map((value) => ({ value, label: MEDIA_LABELS[value].option })),
-                  ]}
-                />
-                <ChoiceCondition
-                  label="上传时间"
-                  value={draft.since}
-                  onChange={(since) => edit({ since: since as Draft['since'] })}
-                  options={[
-                    { value: '', label: '不限时间' },
-                    ...(Object.keys(SINCE_LABELS) as SinceFilter[]).map((value) => ({ value, label: SINCE_LABELS[value] })),
-                  ]}
-                />
-              </div>
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-body-s text-on-surface-variant">组合条件，进一步缩小搜索范围。</span>
-                <div className="ml-auto flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="surface"
-                    disabled={draftEmpty && countSearchFilters(filters) === 0}
-                    onClick={() => {
-                      setDraft(draftOf(NO_SEARCH_FILTERS));
-                      if (countSearchFilters(filters) > 0) onApplyFilters(NO_SEARCH_FILTERS, 'chip');
-                    }}
-                  >
-                    清除筛选
-                  </Button>
-                  <Button type="submit" variant="filled" disabled={!draftChanged}>
-                    应用并搜索
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </form>
+        </Card>
+      </Collapse>
     </div>
   );
 }

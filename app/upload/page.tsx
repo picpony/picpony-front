@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { MdBrokenImage, MdCheck, MdClose, MdCloudUpload, MdKey, MdOpenInNew, MdSettings } from 'react-icons/md';
 import Button from '@/components/Button';
 import { buttonClasses } from '@/components/buttonStyles';
+import Collapse from '@/components/Collapse';
 import { useConfirm } from '@/components/ConfirmDialog';
 import DropZone from '@/components/DropZone';
 import EmptyState from '@/components/EmptyState';
@@ -261,32 +262,6 @@ function FilePreview({
         <span className="break-all">{file.name || '未命名文件'}</span> · {megabytes(file.size)} MB
         <span className="block">{video ? '点击视频以外的区域可更换文件' : '点击此区域可更换文件'}</span>
       </p>
-    </div>
-  );
-}
-
-/**
- * A status row that opens and closes by its own height on DefaultEffects — the offline banner's
- * arrangement — so what follows it glides instead of jumping (M1-026: the progress row pushed the
- * submit button 68px in a frame). Its content is held by the caller while it closes; closed, it
- * is out of the tab order and the accessibility tree. The clip keeps a 4px margin, so a focused
- * control at the row's edge keeps its whole ring.
- */
-function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
-  return (
-    <div
-      inert={!open}
-      aria-hidden={open ? undefined : true}
-      /* Collapsible: height on the layout spring both ways; the contents fade in on DefaultEffects and
-         out on FastEffects (rules 2, 4, 5). */
-      className={cn(
-        'grid',
-        open
-          ? 'grid-rows-[1fr] [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-default-effects)_var(--ease-spring-effects)]'
-          : 'grid-rows-[0fr] opacity-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]',
-      )}
-    >
-      <div className="min-h-0 overflow-clip [overflow-clip-margin:4px]">{children}</div>
     </div>
   );
 }

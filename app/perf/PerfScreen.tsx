@@ -19,6 +19,7 @@ import {
 import Badge, { type BadgeTone } from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import Collapse from '@/components/Collapse';
 import EmptyState from '@/components/EmptyState';
 import { Input } from '@/components/Input';
 import PageBack from '@/components/PageBack';
@@ -31,6 +32,7 @@ import { SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/Settings
 import { ICON } from '@/lib/icons';
 import { LS_KEYS } from '@/lib/constants';
 import { useMounted } from '@/lib/overlay';
+import { formatDateTime } from '@/lib/format';
 import { useEscapeBack } from '@/lib/hooks';
 import { collectHardware, type PerfHardware } from '@/lib/perf/hardware';
 import {
@@ -80,9 +82,9 @@ const VERDICT_BADGE: Record<Verdict, BadgeTone> = {
 };
 
 const VERDICT_ICON: Record<Verdict, ReactNode> = {
-  smooth: <MdCheckCircle />,
-  minor: <MdWarningAmber />,
-  janky: <MdErrorOutline />,
+  smooth: <MdCheckCircle size={ICON.standard} />,
+  minor: <MdWarningAmber size={ICON.standard} />,
+  janky: <MdErrorOutline size={ICON.standard} />,
 };
 
 const ms = (value: number | null | undefined) =>
@@ -242,7 +244,7 @@ export default function PerfScreen() {
           subtitle="在这台设备上自动打开、切换、拖动和关闭图片，并滚动列表，测量动画是否流畅、操作是否跟手"
         />
 
-        <Card variant="filled" padding="lg" className="mt-6 mb-8">
+        <Card variant="filled" padding="lg" className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <span
@@ -277,7 +279,13 @@ export default function PerfScreen() {
               {report ? '重新测试' : '开始测试'}
             </Button>
           </div>
-          {starting && <ProgressBar className="mt-4" label="正在启动性能测试" />}
+          <Collapse open={starting}>
+            {starting && (
+              <div className="pt-4">
+                <ProgressBar label="正在启动性能测试" />
+              </div>
+            )}
+          </Collapse>
         </Card>
 
         <SettingsSection
@@ -300,6 +308,7 @@ export default function PerfScreen() {
             supporting="每项重复的次数，轮数越多结果越稳定，3 轮全部项目约 1.5 分钟"
             action={
               <Select
+                size="sm"
                 value={rounds}
                 onChange={setRounds}
                 options={ROUND_OPTIONS}
@@ -400,7 +409,7 @@ function ReportView({
   const counts = { smooth: 0, minor: 0, janky: 0 };
   for (const scenario of report.scenarios) counts[scenario.summary.verdict] += 1;
   const meta = [
-    new Date(report.createdAt).toLocaleString('zh-CN'),
+    formatDateTime(report.createdAt),
     `${device.refreshHz} Hz`,
     `每项 ${report.rounds} 轮`,
     device.noCorner ? '已关闭圆角动画' : null,
@@ -408,9 +417,8 @@ function ReportView({
   ].filter(Boolean);
 
   return (
-    <section aria-labelledby="perf-report-title">
+    <section aria-labelledby="perf-report-title" className="mb-8">
       <SectionHeading
-        id="perf-report-title"
         icon={<MdInsights size={ICON.control} />}
         actions={
           <>
@@ -431,7 +439,9 @@ function ReportView({
           </>
         }
       >
-        测试报告
+        {/* The heading's own id lands on the wrapper when it has actions; the section is named
+            by this span so the export controls are not read out as part of its name. */}
+        <span id="perf-report-title">测试报告</span>
       </SectionHeading>
 
       <Card variant="filled" padding="lg">
@@ -439,7 +449,7 @@ function ReportView({
           <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
             <span
               className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-full [&>svg]:size-7',
+                'grid size-12 shrink-0 place-items-center rounded-full',
                 report.overall === 'smooth' && 'bg-success-container text-on-success-container',
                 report.overall === 'minor' && 'bg-warning-container text-on-warning-container',
                 report.overall === 'janky' && 'bg-error-container text-on-error-container',
@@ -469,19 +479,19 @@ function ReportView({
         </div>
         <p className="mt-4 text-body-s wrap-anywhere text-on-surface-variant">{meta.join(' · ')}</p>
         {report.aborted && (
-          <p className="mt-3 flex items-start gap-2 rounded-sm bg-error-container px-3 py-2 text-body-m text-on-error-container">
+          <p className="mt-3 flex items-start gap-2 rounded-md bg-error-container p-4 text-body-m text-on-error-container">
             <MdErrorOutline size={ICON.control} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 wrap-anywhere">测试没有跑完：{report.aborted}</span>
           </p>
         )}
       </Card>
 
-      <div className="mt-6 flex flex-col gap-3">
+      {/* One grouped run: `.m3-row` owns the cut corners and the 2px seams. */}
+      <div className="mt-6">
         {report.scenarios.map((scenario) => (
-          <ScenarioCard key={scenario.id} scenario={scenario} />
+          <ScenarioRow key={scenario.id} scenario={scenario} />
         ))}
       </div>
-
     </section>
   );
 }
@@ -494,17 +504,34 @@ function VerdictBadge({ verdict, stress }: { verdict: Verdict; stress?: boolean 
   );
 }
 
-function ScenarioCard({ scenario }: { scenario: PerfScenario }) {
+/**
+ * One scenario of the report, a row of its grouped list. The header is the row's control — the
+ * `aria-expanded` pair, the state layer and the press wave every list row in the app carries — and
+ * the body opens on the layout spring (`Collapse`); the chevron turns on FastSpatial. Every row
+ * starts collapsed, so the report reads as one line per scenario and the failing ones are already
+ * called out by their badge — opening a row is the reader's move.
+ */
+function ScenarioRow({ scenario }: { scenario: PerfScenario }) {
   const s = scenario.summary;
   const stress = !!s.glitches;
   const incomplete = scenario.samples.filter((sample) => !sample.completed).length;
+  const [open, setOpen] = useState(false);
+  const headerId = `perf-scenario-${scenario.id}`;
+  const panelId = `${headerId}-panel`;
   return (
-    <details
-      className="group rounded-md bg-surface-container-low forced-boundary"
-      open={s.verdict !== 'smooth' || (s.frameVerdict && s.frameVerdict !== 'smooth') || undefined}
-    >
-      <summary className="state-layer flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-2 rounded-md p-4 focus-visible:outline-hidden focus-visible:ring-2 focus-ring [&::-webkit-details-marker]:hidden">
-        <span className="min-w-0 flex-1 basis-32 text-title-s text-on-surface">{scenario.label}</span>
+    <div className="m3-row bg-surface-container-low">
+      <button
+        type="button"
+        id={headerId}
+        aria-expanded={open}
+        aria-controls={panelId}
+        data-ripple=""
+        onClick={() => setOpen((value) => !value)}
+        /* The row is one control: its tint, wave and ring follow its own corner, and the ring is
+           inset because a grouped list's seams would clip an outset one. */
+        className="state-layer transition-ui flex w-full cursor-pointer flex-wrap touch-manipulation items-center gap-x-3 gap-y-2 rounded-[inherit] p-4 text-left focus-visible:inset-ring-2 focus-visible:outline-hidden focus-visible:focus-ring-inset"
+      >
+        <span className="min-w-0 flex-1 basis-32 text-label-l text-on-surface">{scenario.label}</span>
         <span className="order-last w-full text-body-s tabular-nums text-on-surface-variant sm:order-none sm:w-auto">
           {stress
             ? `${s.glitches?.actions ?? 0} 次操作 · 消失 ${s.glitches?.vanishes ?? 0} · 卡住 ${s.glitches?.stuck ?? 0}`
@@ -514,50 +541,55 @@ function ScenarioCard({ scenario }: { scenario: PerfScenario }) {
         {stress && s.frameVerdict && <VerdictBadge verdict={s.frameVerdict} />}
         <MdExpandMore
           size={ICON.standard}
-          className="shrink-0 text-on-surface-variant group-open:rotate-180"
+          className={cn(
+            'shrink-0 text-on-surface-variant transition-transform spring-fast-spatial',
+            open && 'rotate-180',
+          )}
           aria-hidden="true"
         />
-      </summary>
+      </button>
 
-      <div className="flex flex-col gap-5 px-4 pb-4">
-        {incomplete > 0 && (
-          <p className="text-body-m text-error">
-            {incomplete} 轮没有回到静止状态（未完成）
-          </p>
-        )}
-
-        {stress && s.glitches && <StressChecks scenario={scenario} />}
-
-        <div>
-          {stress && (
-            <p className="mb-2 text-label-m text-on-surface-variant">
-              帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}（不计入总体结论）
+      <Collapse open={open} id={panelId} role="region" aria-label={scenario.label}>
+        <div className="flex flex-col gap-5 px-4 pb-4">
+          {incomplete > 0 && (
+            <p className="text-body-m text-error">
+              {incomplete} 轮没有回到静止状态（未完成）
             </p>
           )}
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Metric label="响应延迟" value={ms(s.latencyMs)} />
-            <Metric label="完成用时" value={ms(s.settleMs)} />
-            <Metric label="平均帧率" value={`${s.fps} fps`} />
-            <Metric label="流畅度" value={pct(s.smoothness)} />
-            <Metric label="掉帧" value={String(s.dropped)} />
-            <Metric label="最长帧" value={ms(s.worstFrameMs)} />
-            <Metric label="P95 帧" value={ms(s.p95FrameMs)} />
-            <Metric label="长帧 / 阻塞" value={`${s.longFrames} / ${ms(s.blockingMs)}`} />
-          </dl>
+
+          {stress && s.glitches && <StressChecks scenario={scenario} />}
+
+          <div>
+            {stress && (
+              <p className="mb-2 text-label-m text-on-surface-variant">
+                帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}（不计入总体结论）
+              </p>
+            )}
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Metric label="响应延迟" value={ms(s.latencyMs)} />
+              <Metric label="完成用时" value={ms(s.settleMs)} />
+              <Metric label="平均帧率" value={`${s.fps} fps`} />
+              <Metric label="流畅度" value={pct(s.smoothness)} />
+              <Metric label="掉帧" value={String(s.dropped)} />
+              <Metric label="最长帧" value={ms(s.worstFrameMs)} />
+              <Metric label="P95 帧" value={ms(s.p95FrameMs)} />
+              <Metric label="长帧 / 阻塞" value={`${s.longFrames} / ${ms(s.blockingMs)}`} />
+            </dl>
+          </div>
+
+          <RoundsTable samples={scenario.samples} />
+
+          <WorstFrames samples={scenario.samples} />
         </div>
-
-        <RoundsTable samples={scenario.samples} />
-
-        <WorstFrames samples={scenario.samples} />
-      </div>
-    </details>
+      </Collapse>
+    </div>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-sm bg-surface-container-high px-3 py-2">
-      <dt className="text-label-s text-on-surface-variant">{label}</dt>
+      <dt className="text-label-m text-on-surface-variant">{label}</dt>
       <dd className="mt-0.5 text-title-m tabular-nums wrap-anywhere text-on-surface">{value}</dd>
     </div>
   );
@@ -730,8 +762,12 @@ function parseWorst(detail: string): Breakdown | null {
   return known ? result : null;
 }
 
+/* A 100%-stacked composition, like the detail's vote ratio: three parts, which a `ProgressBar`'s
+   single value cannot express. Its geometry is the linear indicator's — 4dp over
+   `secondary-container` — and its fills are the meter's neutral/accent pair, with `outline` for
+   style and layout. */
 const SEGMENTS = [
-  { key: 'scriptMs', label: '脚本', fill: 'bg-primary' },
+  { key: 'scriptMs', label: '脚本', fill: 'bg-secondary' },
   { key: 'renderMs', label: '渲染回调', fill: 'bg-tertiary' },
   { key: 'styleMs', label: '样式布局', fill: 'bg-outline' },
 ] as const;
@@ -774,7 +810,7 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
         <p className="text-title-s tabular-nums text-on-surface">{Math.round(parsed.totalMs)} ms</p>
       </div>
       <div
-        className="mt-2 flex h-2 overflow-hidden rounded-full bg-surface-container-highest forced-boundary"
+        className="mt-2 flex h-1 overflow-hidden rounded-full bg-secondary-container forced-boundary"
         role="img"
         aria-label={detail}
       >
@@ -782,7 +818,7 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
           parsed[segment.key] > 0 ? (
             <span
               key={segment.key}
-              className={cn('h-full', segment.fill)}
+              className={cn('h-full forced-mark', segment.fill)}
               style={{ width: `${(parsed[segment.key] / scale) * 100}%` }}
             />
           ) : null,

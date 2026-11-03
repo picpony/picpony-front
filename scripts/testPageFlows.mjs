@@ -346,7 +346,22 @@ fieldHooks.render(Field);
 assert.equal(popover().props.open, false, 'late results cannot reopen a cleared combobox');
 fieldHooks.dispose();
 
-/* The toolbar: the collapsed panel is inert, and its fields open on the query's conditions. */
+/* A closed `Collapse` is inert, and the accessibility tree drops it with the tab order. */
+{
+  const jsx = (type, props) => ({ type, props });
+  const { default: Collapse } = load('components/Collapse.tsx', {
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+  });
+  const closed = Collapse({ open: false, children: null });
+  assert.equal(closed.props.inert, true, 'Collapse is inert while closed');
+  assert.equal(closed.props['aria-hidden'], true);
+  const openPanel = Collapse({ open: true, children: null });
+  assert.equal(openPanel.props.inert, false, 'an open Collapse is reachable');
+  assert.equal(openPanel.props['aria-hidden'], undefined);
+}
+
+/* The toolbar: the collapsed panel is closed, and its fields open on the query's conditions. */
 const toolbarHooks = harness();
 const { default: SearchToolbar } = load('app/search/SearchToolbar.tsx', {
   ...toolbarHooks.dependencies,
@@ -359,7 +374,13 @@ const toolbarTree = toolbarHooks.render(() => SearchToolbar({
   filters: { ...searchQuery.NO_SEARCH_FILTERS, upvotes: { op: 'gte', value: 100 } },
   onApplyFilters: () => {},
 }));
-assert.equal(find(toolbarTree, (node) => node.props?.inert === true && String(node.props?.className ?? '').includes('grid'))?.props.inert, true, 'collapsed advanced controls are inert');
+/* The panel is `Collapse`'s (`components/Collapse.tsx`): the toolbar hands it `open`, and the
+   primitive owns the closed state. Its own contract is checked just above. */
+const collapsedPanel = find(
+  toolbarTree,
+  (node) => node.type === '@/components/Collapse:default' && node.props?.['aria-label'] === '高级筛选条件',
+);
+assert.equal(collapsedPanel?.props.open, false, 'collapsed advanced controls are closed');
 assert.ok(find(toolbarTree, (node) => node.props?.label === '点赞数' && node.props?.value === '100' && node.props?.op === 'gte'), 'the panel opens on the query conditions');
 assert.equal(find(toolbarTree, (node) => node.type === '@/components/Select:default' && node.props?.['aria-label'] === '排序方式').props.options.some((option) => option.value === '_score'), false, 'relevance only where the query can be ranked');
 toolbarHooks.dispose();
