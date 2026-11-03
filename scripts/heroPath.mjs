@@ -4,7 +4,7 @@
  * exact landing, crop retrace inside its budget, the flight moving on its first frame, cresting
  * early and arriving at rest, table
  * fidelity at the shipped sample count, and the container transform — accumulated content scale
- * isotropic and equal to the cover fit, clip ∘ compensator ∘ counter == identity parsed from the
+ * is the identity (the window is the reveal and its content does not move), parsed from the
  * emitted strings, the reconstructed box == the arc rect, corner containment under the browser's
  * radius clamp, exact unproject, and containment of the picture by the window at the window's own
  * bow. Prints everything else.
@@ -23,12 +23,9 @@ const constants = await import('../lib/hero/constants.ts');
 const { HERO_FLIGHT_PROGRESS, HERO_PROGRESS_SAMPLES } = constants;
 const {
   formatHeroContainerCompensator,
-  formatHeroContainerCounter,
-  formatHeroContainerCounterOrigin,
   formatHeroContainerRadius,
   formatHeroTransform,
   getHeroContainerPose,
-  unprojectHeroContainerRect,
 } = geometry;
 const { HERO_CONTAINER_SHAPE, HERO_TARGET_RADIUS_PX } = constants;
 const { intervalProgress } = await import('../lib/hero/progress.ts');
@@ -288,7 +285,7 @@ for (const [label, model] of MODELS) {
 // the construction wrong that still compiles, runs, and looks fine for 296ms.
 // ---------------------------------------------------------------------------
 
-/** `translate3d(x, y, 0) scale(a, b)` -> {x, y, a, b}. Parsed, not recomputed: see (e/compose). */
+/** `translate3d(x, y, 0) scale(a, b)` -> {x, y, a, b}. Parsed, not recomputed: see (e/still). */
 function parseTranslateScale(css) {
   const m = css.match(
     /^translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\) scale\(([-\d.]+), ([-\d.]+)\)$/,
@@ -299,21 +296,24 @@ function parseTranslateScale(css) {
 
 /** `scaleY(k)` -> k. */
 /**
- * The compensator, as the two emitted components. One is exactly 1 and the other carries the lift
- * (which is which is the fit's own choice). Parsed as a pair so the isotropy, compose and
- * anisotropy checks are written once for either axis.
+ * The compensator, as the window's exact inverse: `scale(a, b) translate(x, y)` in CSS's own
+ * order, where a point maps to `(a·(p + x), b·(p + y))` (the pair is parsed so the compose checks
+ * are written once for either axis).
  */
 function parseCompensator(css) {
-  const m = css.match(/^scale\(([-\d.e]+), ([-\d.e]+)\)$/);
+  const m = css.match(/^scale\(([-\d.e]+), ([-\d.e]+)\) translate\(([-\d.e]+)px, ([-\d.e]+)px\)$/);
   if (!m) throw new Error(`unparsable compensator: ${css}`);
-  return { x: +m[1], y: +m[2] };
+  return { a: +m[1], b: +m[2], x: +m[3], y: +m[4] };
 }
 
-/** `scale(k) translate(apx, bpx)` -> {k, a, b}. */
-function parseScaleTranslate(css) {
-  const m = css.match(/^scale\(([-\d.e]+)\) translate\(([-\d.e]+)px, ([-\d.e]+)px\)$/);
-  if (!m) throw new Error(`unparsable counter: ${css}`);
-  return { k: +m[1], a: +m[2], b: +m[3] };
+/** The composed map of a clip `(s, t)` under a compensator `(c, cx)`: `p -> s·c·p + s·c·cx + t`. */
+function composeContent(clip, comp) {
+  return {
+    a: clip.a * comp.a,
+    b: clip.b * comp.b,
+    x: clip.x + clip.a * comp.a * comp.x,
+    y: clip.y + clip.b * comp.b * comp.y,
+  };
 }
 
 const CONTAINER_SAMPLES = 97;
@@ -327,14 +327,15 @@ const CONTAINER_SAMPLES = 97;
  * shipped curve reaches 0.499% at 48 evenly spaced and 0.332% spaced on its travel and bend too
  * (`sampleOffsets`). `fastOutSlowIn`, leaving from rest, gave 0.441% at 48 and 0.99% at 32.
  */
-const ANISOTROPY_TOLERANCE = 0.006;
+const DRIFT_TOLERANCE = 0.006;
 
 let worstAnisotropy = 0;
+let worstDrift = 0;
 let worstCornerOvershoot = 0;
 let worstCornerRatio = 1;
 
 console.log('\ncontainer transform');
-console.log('case                 dir   isotropy   compose   landing   corner        cap');
+console.log('case                 dir      still    landing   corner        cap');
 
 for (const [label, card, image, viewport] of CASES) {
   const host = { left: 0, top: 0, width: viewport.width, height: viewport.height };
@@ -348,7 +349,6 @@ for (const [label, card, image, viewport] of CASES) {
     const arc = createHeroRectArc(clipFrom, clipTo, 1);
 
     let isotropy = 0;
-    let compose = 0;
     let boxError = 0;
     let fitError = 0;
     let capBound = false;
@@ -362,35 +362,21 @@ for (const [label, card, image, viewport] of CASES) {
 
       const clip = parseTranslateScale(formatHeroTransform(pose));
       const comp = parseCompensator(formatHeroContainerCompensator(pose));
-      const counter = parseScaleTranslate(formatHeroContainerCounter(pose));
 
-      /* (e/isotropy) The accumulated content scale must be the same on both axes — catches an
-         inverted compensator, one on the wrong node, or one lifting the wrong axis: a plausible
-         but squashed page, i.e. the failure nobody spots inside 194ms. */
-      const fitX = clip.a * comp.x;
-      const fitY = clip.b * comp.y;
-      isotropy = Math.max(isotropy, Math.abs(fitY - fitX) / Math.max(1, fitX));
-
-      /* (e/fit) The fit must be `max(sx, sy)` — cover. Fitting to the smaller scale leaves a band
-         of the window unpainted: measured 138px of an 866px window at 1920x1080 on a portrait
-         picture, with the flyer hanging 111px past the paint. */
-      fitError = Math.max(fitError, Math.abs(fitX - Math.max(clip.a, clip.b)));
-
-      /* (e/compose) clip . compensator . counter must be the identity, parsed from the emitted
-         strings rather than re-multiplied: the mistake worth catching is at the string level —
-         swap the counter's two functions and only this fails, where the app would merely put the
-         opening flyer ~100px out on a device you are not holding. */
-      const accX = fitX * counter.k;
-      const accY = fitY * counter.k;
-      const accDX = clip.x + fitX * counter.k * counter.a;
-      const accDY = clip.y + fitY * counter.k * counter.b;
-      compose = Math.max(
-        compose,
-        Math.abs(accX - 1),
-        Math.abs(accY - 1),
-        Math.abs(accDX),
-        Math.abs(accDY),
+      /* (e/still) **The content must not move.** The compensator is the window's exact inverse,
+         so clip ∘ compensator is the identity: the page inside the window is painted where it will
+         sit at the end, and only the window's edge travels (the theme-switch reveal). Parsed from
+         the emitted strings, not re-derived: an inverted pair, a swapped order or a compensator on
+         the wrong node all still compile and run, and look plausible for 290ms. */
+      const content = composeContent(clip, comp);
+      isotropy = Math.max(
+        isotropy,
+        Math.abs(content.a - 1),
+        Math.abs(content.b - 1),
+        Math.abs(content.x),
+        Math.abs(content.y),
       );
+
 
       /* (e/box) The visible box reconstructed from the pose must be the arc's own rect. */
       boxError = Math.max(
@@ -423,52 +409,38 @@ for (const [label, card, image, viewport] of CASES) {
         worstCornerRatio = Math.max(worstCornerRatio, Math.max(rx, ry) / Math.min(rx, ry));
       }
 
-      /* (e/unproject) The inverse must be exact, on both axes — projected at the *fit* scale,
-         which is what the compensator establishes. */
-      const probe = { left: 137, top: 241, width: 313, height: 97 };
-      const scale = geometry.heroContainerFitScale(pose);
-      const screen = {
-        left: box.left + (probe.left - host.left) * scale,
-        top: box.top + (probe.top - host.top) * scale,
-        width: probe.width * scale,
-        height: probe.height * scale,
-      };
-      const back = unprojectHeroContainerRect(screen, box, host);
-      const round = Math.max(
-        Math.abs(back.left - probe.left),
-        Math.abs(back.top - probe.top),
-        Math.abs(back.width - probe.width),
-        Math.abs(back.height - probe.height),
-      );
-      if (round > 1e-6) {
-        fail('e/unproject', `${label} ${direction} round-trips off by ${round.toExponential(2)}`);
-      }
     }
 
-    /* (e/anisotropy) WAAPI lerps `scale(sx, sy)` and the compensator's single axis independently,
-       so between two samples the product is not isotropic — real, unavoidable, and pinned to a
-       number so a change to `HERO_PROGRESS_SAMPLES` or the decomposition cannot quietly make it
-       visible. Sampled between the real keyframes (eased offsets, not the uniform steps above),
-       which is the only honest figure. */
+    /* (e/drift) WAAPI lerps the window's scale and the compensator's reciprocal independently
+       between two keyframes, so mid-segment the content is not *exactly* still — the reciprocal
+       of a lerp is not the lerp of a reciprocal. Real, unavoidable, and pinned: the scale error
+       is a fraction, the offset is in px, and both must stay under what the eye reads at these
+       durations. Sampled between the real keyframes (eased offsets, not uniform progress). */
     const keyPoses = sampleProgress(HERO_FLIGHT_PROGRESS[direction], HERO_PROGRESS_SAMPLES).map(
       ({ progress }) => getHeroContainerPose(lerpHeroRectArc(arc, progress), host),
     );
     for (let i = 0; i + 1 < keyPoses.length; i += 1) {
       const a = keyPoses[i];
       const b = keyPoses[i + 1];
-      const compOf = (p) => {
-        const fit = Math.max(p.scaleX, p.scaleY);
-        return { x: fit / p.scaleX, y: fit / p.scaleY };
-      };
-      const ca = compOf(a);
-      const cb = compOf(b);
+      const ca = { a: 1 / a.scaleX, b: 1 / a.scaleY, x: -a.x, y: -a.y };
+      const cb = { a: 1 / b.scaleX, b: 1 / b.scaleY, x: -b.x, y: -b.y };
+      const clipA = { a: a.scaleX, b: a.scaleY, x: a.x, y: a.y };
+      const clipB = { a: b.scaleX, b: b.scaleY, x: b.x, y: b.y };
       for (let k = 1; k < 8; k += 1) {
         const t = k / 8;
-        const sx = a.scaleX + (b.scaleX - a.scaleX) * t;
-        const sy = a.scaleY + (b.scaleY - a.scaleY) * t;
-        const fitX = sx * (ca.x + (cb.x - ca.x) * t);
-        const fitY = sy * (ca.y + (cb.y - ca.y) * t);
-        worstAnisotropy = Math.max(worstAnisotropy, Math.abs(fitY / fitX - 1));
+        const lerp = (p, q) => p + (q - p) * t;
+        const content = composeContent(
+          { a: lerp(clipA.a, clipB.a), b: lerp(clipA.b, clipB.b), x: lerp(clipA.x, clipB.x), y: lerp(clipA.y, clipB.y) },
+          { a: lerp(ca.a, cb.a), b: lerp(ca.b, cb.b), x: lerp(ca.x, cb.x), y: lerp(ca.y, cb.y) },
+        );
+        /* Pinned in px of the 1111-wide reference screen and as a scale fraction. */
+        worstDrift = Math.max(
+          worstDrift,
+          Math.abs(content.x) / host.width,
+          Math.abs(content.y) / host.height,
+          Math.abs(content.a - 1),
+          Math.abs(content.b - 1),
+        );
       }
     }
 
@@ -477,17 +449,15 @@ for (const [label, card, image, viewport] of CASES) {
     const endPose = getHeroContainerPose(lerpHeroRectArc(arc, 1), host);
     const endClip = formatHeroTransform(endPose);
     const endComp = formatHeroContainerCompensator(endPose);
-    const endCounter = formatHeroContainerCounter(endPose);
     const endRadius = formatHeroContainerRadius(endPose, host, radiusTo);
     const landed =
       (forward
         ? endClip === 'translate3d(0px, 0px, 0) scale(1, 1)' &&
-          endComp === 'scale(1, 1)' &&
-          endCounter === 'scale(1) translate(0px, 0px)'
+          endComp === 'scale(1, 1) translate(0px, 0px)'
         : true) && Number.parseFloat(endRadius) >= 0;
 
     if (!landed) {
-      fail('e/landing', `${label} ${direction} lands at ${endClip} / ${endComp} / ${endCounter}`);
+      fail('e/landing', `${label} ${direction} lands at ${endClip} / ${endComp}`);
     }
 
     /* (e/clamp) A negative-`top` source has to stay expressible; the old inset form clamped it
@@ -498,30 +468,28 @@ for (const [label, card, image, viewport] of CASES) {
       if (!above) fail('e/clamp', `${label} never expresses a box above the host`);
     }
 
-    if (isotropy > 1e-9) fail('e/isotropy', `${label} ${direction} off by ${isotropy.toExponential(2)}`);
-    if (fitError > 1e-9) fail('e/fit', `${label} ${direction} does not fit to cover, off by ${fitError.toExponential(2)}`);
-    if (compose > 1e-9) fail('e/compose', `${label} ${direction} off by ${compose.toExponential(2)}`);
+    if (isotropy > 1e-9) fail('e/still', `${label} ${direction} content moves, off by ${isotropy.toExponential(2)}`);
     if (boxError > 1e-9) fail('e/box', `${label} ${direction} off by ${boxError.toExponential(2)}`);
     if (capBound) fail('e/corner', `${label} ${direction} needs a radius the browser would clamp`);
 
     console.log(
       `${label.padEnd(20)} ${direction.padEnd(5)} ${isotropy.toExponential(1).padStart(8)}  ` +
-        `${compose.toExponential(1).padStart(8)}  ${(landed ? 'exact' : 'OFF').padEnd(7)}  ` +
+        `${(landed ? 'exact' : 'OFF').padEnd(7)}  ` +
         `${worstCornerRatio.toFixed(2).padStart(5)}:1 max     ${capBound ? 'BOUND' : 'clear'}`,
     );
   }
 }
 
 console.log(
-  `\nworst between-sample anisotropy ${(worstAnisotropy * 100).toFixed(3)}% ` +
-    `(tolerance ${(ANISOTROPY_TOLERANCE * 100).toFixed(1)}%), ` +
+  `\nworst between-sample content drift ${(worstDrift * 100).toFixed(3)}% of the frame ` +
+    `(tolerance ${(DRIFT_TOLERANCE * 100).toFixed(1)}%), ` +
     `worst corner overshoot ${worstCornerOvershoot.toFixed(2)}px, ` +
     `worst corner ellipticity ${worstCornerRatio.toFixed(2)}:1`,
 );
-if (worstAnisotropy > ANISOTROPY_TOLERANCE) {
+if (worstDrift > DRIFT_TOLERANCE) {
   fail(
-    'e/anisotropy',
-    `interpolated pair reaches ${(worstAnisotropy * 100).toFixed(3)}% anisotropy`,
+    'e/drift',
+    `interpolated pair drifts ${(worstDrift * 100).toFixed(3)}% of the frame`,
   );
 }
 
@@ -717,42 +685,34 @@ for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
 }
 
 /* (e/gutter) The flight layer starts at the Stage scroller's padding edge, one leading
-   scrollbar gutter `o` in from the window's origin. With the origin the counter is emitted for,
-   a layer point `p` must land on screen at `p + o` for every window pose — the take-off frame
-   included, where a classic 8px gutter once put the flyer (1 - f)·8 ≈ 4.6px left on a phone. */
+   scrollbar gutter `o` in from the window's origin. With the window's pair the identity there is
+   no counter and no origin to solve for: a layer point `p` lands at `p` for every pose, gutter
+   or not. The check stays because the gutter *did* shift the flyer once (~4.6px on a phone,
+   (1 - f)·8 from the old cover fit), and a future reconstruction that reintroduces a counter
+   must not reintroduce it silently. */
 {
   const host = { left: 0, top: 0, width: 393, height: 743 };
   const card = { left: 24, top: 300, width: 165, height: 165 };
   let worst = 0;
-  for (const o of [{ x: 0, y: 0 }, { x: 8, y: 0 }, { x: 10, y: 3 }]) {
-    /* The emitted origin is in the layer's own space; the layer's box sits at `o` in the window's. */
-    const [lx, ly] = formatHeroContainerCounterOrigin(o).split(' ').map((v) => Number.parseFloat(v));
-    const ox = o.x + lx;
-    const oy = o.y + ly;
-    for (let i = 0; i <= 20; i += 1) {
-      const t = i / 20;
-      const box = {
-        left: card.left + (host.left - card.left) * t,
-        top: card.top + (host.top - card.top) * t,
-        width: card.width + (host.width - card.width) * t,
-        height: card.height + (host.height - card.height) * t,
-      };
-      const pose = getHeroContainerPose(box, host);
-      const clip = parseTranslateScale(formatHeroTransform(pose));
-      const comp = parseCompensator(formatHeroContainerCompensator(pose));
-      const counter = parseScaleTranslate(formatHeroContainerCounter(pose));
-      const fit = clip.a * comp.x;
-      for (const p of [{ x: 0, y: 0 }, { x: 120, y: 40 }]) {
-        /* Layer-local p → window-local about the origin (ox, oy) in window space. */
-        const wx = ox + counter.k * (o.x + p.x - ox + counter.a);
-        const wy = oy + counter.k * (o.y + p.y - oy + counter.b);
-        const sx = clip.x + fit * wx;
-        const sy = clip.y + fit * wy;
-        worst = Math.max(worst, Math.abs(sx - (p.x + o.x)), Math.abs(sy - (p.y + o.y)));
-      }
+  for (let i = 0; i <= 20; i += 1) {
+    const t = i / 20;
+    const box = {
+      left: card.left + (host.left - card.left) * t,
+      top: card.top + (host.top - card.top) * t,
+      width: card.width + (host.width - card.width) * t,
+      height: card.height + (host.height - card.height) * t,
+    };
+    const pose = getHeroContainerPose(box, host);
+    const clip = parseTranslateScale(formatHeroTransform(pose));
+    const comp = parseCompensator(formatHeroContainerCompensator(pose));
+    const layer = composeContent(clip, comp);
+    for (const p of [{ x: 0, y: 0 }, { x: 120, y: 40 }]) {
+      const sx = layer.x + layer.a * p.x;
+      const sy = layer.y + layer.b * p.y;
+      worst = Math.max(worst, Math.abs(sx - p.x), Math.abs(sy - p.y));
     }
   }
-  if (worst > 1e-6) fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off with a leading gutter`);
+  if (worst > 1e-6) fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off under the window`);
 }
 
 if (failures.length) {

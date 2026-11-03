@@ -47,16 +47,49 @@ export default function DetailDescription({ description }: { description?: strin
   useLayoutEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
+    let frame = 0;
+    let idle = 0;
+    let timer = 0;
+    let cancelled = false;
     const measure = () => {
+      frame = 0;
+      idle = 0;
+      timer = 0;
+      if (cancelled) return;
       setContentHeight(body.scrollHeight);
       setOverflowing(body.scrollHeight > COLLAPSED_MAX_HEIGHT + 1);
     };
-    measure();
-    const observer = new ResizeObserver(measure);
+    /* **Measured after the paint, never inside the commit.** This card mounts with the image
+     * detail itself; a `scrollHeight` read in this layout effect laid the freshly committed page
+     * out a second time inside the frame (a hero flight's own frame, on an open), and the two
+     * state writes it fed re-rendered the card before that frame painted. One task later the
+     * browser has laid it out anyway and the read is free. The fold is 160px until the answer
+     * arrives, so nothing on screen depends on it landing in the commit. */
+    const idleCallback = window.requestIdleCallback as
+      | Window['requestIdleCallback']
+      | undefined;
+    const schedule = () => {
+      if (cancelled || frame || idle || timer) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (cancelled) return;
+        if (idleCallback) idle = idleCallback.call(window, measure, { timeout: 240 });
+        else timer = window.setTimeout(measure, 0);
+      });
+    };
+    const observer = new ResizeObserver(schedule);
     observer.observe(body);
     const content = body.firstElementChild;
     if (content) observer.observe(content);
-    return () => observer.disconnect();
+    schedule();
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+      if (idle) window.cancelIdleCallback(idle);
+      idle = 0;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [open, text]);
 
   const bodyStyle: CSSProperties = {

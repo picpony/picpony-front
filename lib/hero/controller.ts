@@ -163,6 +163,16 @@ type OpeningAdoption = {
   owned: boolean;
 };
 
+/**
+ * What a viewport re-aim needs, measured in one read: the landing box, the plane it lives in and
+ * the pose to continue from — see `handleViewportInvalidation`.
+ */
+type ViewportMeasurement = {
+  destination: HeroRect;
+  plane: HeroScrollPlane;
+  pose: ReturnType<HeroMotion['measurePose']>;
+};
+
 type ViewportBaseline = {
   destination: HeroRect;
   planeWidth: number;
@@ -552,25 +562,20 @@ export class HeroController {
   /**
    * Whether the detail's body — its largest subtree — may mount now.
    *
-   * At rest, always. During an open it used to wait for `detail-idle`, because the old handoff
-   * revealed the route in one frame that had to be cheap. Where the route follows the Stage on
-   * the compositor (`lib/hero/follow.ts`) no frame of the open depends on the main thread any
-   * more — the flyer, the window, the fades and the scroll all run on the compositor — and the
-   * route is either sealed (its body lays out unseen) or already the visible surface. So the
-   * body mounts the moment its record is in, during the flight, and the route is revealed with
-   * it rather than filling in after the landing. Where it does not follow, the old rule stands.
+   * **Never inside a flight.** It was allowed there while the route followed the Stage on the
+   * compositor, on the reasoning that no frame of the open then depends on the main thread. That
+   * missed what a mount costs: the body's first style and layout is ~9ms + 13ms of main-thread
+   * work in the single frame it lands in (traced at 1111×556; proportionally more at 1920×1080),
+   * and it lands in a frame the flight is being paced through — the one dropped frame of an
+   * otherwise smooth open, on both machines measured. The body is below the fold for the whole
+   * flight (the picture fills the viewport), so mounting it early bought nothing visible.
+   *
+   * It publishes once the detail has settled (`publishWhenHeroSettled`), where its blocks arrive
+   * as content does in M3 (`playDetailArrival`), and `PicDetail` publishes the part under the
+   * first screen one frame later so no single frame carries all of it.
    */
-  isDetailBodyPublishable(imageId: number) {
-    const phase = this.runtime.phase;
-    if (!phase.startsWith('opening.')) return true;
-    if (this.isDetailSurfaceLive(imageId)) return true;
-    const foreground = this.foreground;
-    return (
-      foreground?.kind === 'opening' &&
-      !foreground.reversing &&
-      foreground.snapshot.image.id === imageId &&
-      canFollowHeroScroll()
-    );
+  isDetailBodyPublishable() {
+    return !this.runtime.phase.startsWith('opening.');
   }
 
   isDetailDataPublishable(imageId: number) {
@@ -1151,6 +1156,8 @@ export class HeroController {
     session: OpeningSession,
     target: HTMLElement,
     scroller: HTMLElement,
+    /** The offset the route was just parked at (see `HeroDismissGestureOptions`). */
+    scrollTop?: number,
   ) {
     const pull = session.pull;
     if (!pull) return;
@@ -1160,6 +1167,7 @@ export class HeroController {
       // The Stage overlay is pointer-transparent by design, so listen wider.
       listenTarget: window,
       scroller,
+      initialScrollTop: scrollTop,
       canStart: () => this.owns(session) && !session.reversing,
       onPull: (sample) => {
         if (this.owns(session)) pull.applyImmediate(sample);
@@ -1785,6 +1793,11 @@ export class HeroController {
        superseded close (`retiring`, under the Stage). Left in the foreground it kept the flight
        layer's z-index and its picture crossed over the new detail on its way back. */
     motion.setRole('retiring');
+    /* It keeps flying home underneath, but it leaves the screen now: kept opaque it stood there
+       as a second picture for the whole of the new open, over the detail that open was revealing
+       (reported from 快速连续操作's 不同图片快速开关). The successor's tracks already wear the live
+       pose read above, so this is a dissolve between two pictures, not a cut. */
+    motion.fadeOutRetiring();
     session.predecessor.released();
     return handover;
   }
@@ -1946,12 +1959,13 @@ export class HeroController {
     /* `stageScrollTop` comes from the scheduler frame's read phase: read here, after the reveal's
        writes in the same frame, the Stage's offset forced a style + layout pass in the landing
        frame that the frame's own pass then repeated. */
+    const parked = stageScrollTop ?? stage.scroller.scrollTop;
     if (follow) {
       follow.commit();
       session.shared.release(follow);
       session.follow = null;
     } else {
-      route.scroller.scrollTop = stageScrollTop ?? stage.scroller.scrollTop;
+      route.scroller.scrollTop = parked;
     }
     const motion = session.motion;
     if (motion && motion.flight.layer.parentElement === stage.anchor) {
@@ -1973,7 +1987,7 @@ export class HeroController {
     session.shared.add(adoption.input);
     adoption.owned = true;
     session.scrollBridge?.own(route.scroller, route.content, !isHeroInteractionQuiet());
-    this.bindOpeningPullRecognizer(session, route.overlay, route.scroller);
+    this.bindOpeningPullRecognizer(session, route.overlay, route.scroller, parked);
     heroProbeMark('hx:t:promote');
     this.events.notify();
     return true;
@@ -3114,7 +3128,9 @@ export class HeroController {
     const measurement =
       session.motion && routeTarget?.isConnected
         ? {
-            destination: session.motion.unprojectRect(getHeroRect(routeTarget)),
+            /* The page behind the window is held still (the compensator is the window's
+               inverse), so the target's screen box is already the box it will occupy. */
+            destination: getHeroRect(routeTarget),
             pose: session.motion.measurePose(),
             // Before the phase write below, which would otherwise force these reads' style pass.
             inputs: session.motion.readReverseInputs(),
@@ -3199,9 +3215,15 @@ export class HeroController {
   private ensureRetirement(session: ClosingSession) {
     if (session.retirement) return session.retirement;
     const motion = session.motion;
-    session.retirement = (
-      motion ? motion.landed.then(() => motion.fadeRetiring()) : Promise.resolve()
-    )
+    /* **Fading from the moment it is superseded, not after its own leg lands.** Waiting for
+       `motion.landed` kept the previous picture at full opacity for the 150–270ms the new flight
+       needs to reach its reveal — a second picture apparently left on the detail page while the
+       next one opens (reported from 快速连续操作's 不同图片快速开关, both by hand and in the run).
+       The retire is the old picture *leaving*: it fades on the motion table's own
+       "leaves the screen" row (fastEffects, ~140ms) while it keeps flying home underneath, so the
+       two pictures are on screen together for about as long as one cross-fade, which is the
+       intent; standing there opaque is not. */
+    session.retirement = (motion ? motion.fadeRetiring() : Promise.resolve())
       .catch(() => undefined)
       .then(() => this.finishRetiring(session));
     return session.retirement;
@@ -3271,16 +3293,26 @@ export class HeroController {
     let following: HeroScrollFollow | null = null;
     let released = false;
     const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => syncHeight());
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => syncHeight(true));
 
     const sync = () => {
       if (released || !this.owns(session)) return;
       continuity.sync();
     };
-    const syncHeight = () => {
+    const syncHeight = (fromObserver = false) => {
       if (released || !this.owns(session) || !targetContent) return;
+      /* A ResizeObserver delivers after layout, so this frame's heights and boxes are already
+         there. Read in the scheduler's read phase instead, they forced the just-committed route's
+         style and layout (~11ms of forced layout inside the flush, traced on a bare `scrollHeight`
+         — see `handleViewportInvalidation` for the re-aim's own half).
+         Undefined means "measure it in the read phase". */
+      const measuredHeight = fromObserver ? (targetContent?.scrollHeight ?? 0) : undefined;
+      const measured =
+        fromObserver && session.adoption ? this.measureViewportDestination(session) : undefined;
       heroFrameScheduler.request(sizeOwner, {
-        read: () => targetContent?.scrollHeight ?? 0,
+        read: () => measuredHeight ?? targetContent?.scrollHeight ?? 0,
         write: (height) => {
           if (released || !this.owns(session) || !targetContent || height <= 0) return;
           const next = leaseInlineStyles(stage.content, { minHeight: `${Math.ceil(height)}px` });
@@ -3293,7 +3325,8 @@ export class HeroController {
           sync();
           /* The route's content moved under a route already on screen (its record arrived,
              the body mounted): if that moved its picture, the flyer re-aims at it. */
-          if (session.adoption) this.handleViewportInvalidation();
+          if (measured !== undefined) this.handleViewportInvalidation(measured);
+          else if (session.adoption) this.handleViewportInvalidation();
         },
       });
     };
@@ -3926,73 +3959,88 @@ export class HeroController {
   /**
    * Re-aim a live flight after a real viewport size change.
    *
-   * Measurement happens in the scheduler's read phase and the rebuild in its
-   * write phase, and an unchanged destination is skipped entirely, so a resize
-   * storm cannot turn into a per-frame spring restart.
+   * Measurement happens in the scheduler's read phase and the rebuild in its write phase, and an
+   * unchanged destination is skipped entirely, so a resize storm cannot turn into a per-frame
+   * spring restart. A caller that is **already inside a clean layout** (a ResizeObserver delivery,
+   * which runs after layout) measures first and passes the result: reading the same boxes in the
+   * next frame's read phase forced the just-committed detail's style recalc (~330 elements, 9ms
+   * — one dropped frame per open on a first mount), and the rebuild then dirtied the same styles
+   * for the frame's own pass to redo.
    */
-  private handleViewportInvalidation = () => {
+  private handleViewportInvalidation = (measured?: ViewportMeasurement | null) => {
     const session = this.foreground;
     if (!session?.motion) return;
+    if (measured !== undefined) {
+      this.applyViewportMeasurement(session, measured);
+      return;
+    }
     heroFrameScheduler.request(this.viewportFrameOwner, {
-      read: () => {
-        const motion = session.motion;
-        if (!motion) return null;
-        if (session.kind === 'opening') {
-          const stage = this.stage?.sessionId === session.id ? this.stage.nodes : null;
-          if (!stage?.target.isConnected) return null;
-          /* Once a route is on screen in the Stage's place, its picture is the one the flyer
-             lands on; it wears the same window and fit, so the same unprojection applies. */
-          const adopted = session.adoption?.route.target;
-          const target = adopted?.isConnected ? adopted : stage.target;
-          /* A route that owns the scroll carries the flyer in its own plane
-             (`promoteAdoption`); a re-aim must stay there or it moves the flyer back under a
-             scroller that no longer moves. */
-          const owner = session.adoption?.owned ? session.adoption.route : null;
-          const plane = owner?.anchor?.isConnected
-            ? getElementScrollPlane(owner.anchor, owner.scroller, owner.overlay)
-            : getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
-          return {
-            // The landing target sits inside the container transform's fit, so a
-            // mid-flight read is the scaled box; undo the fit before re-aiming.
-            destination: motion.unprojectRect(getHeroRect(target)),
-            plane,
-            pose: motion.measurePose(),
-          };
-        }
-        const plane = getGalleryScrollPlane();
-        if (!session.thumbnail.isConnected || !plane) return null;
-        return {
-          destination: getGalleryLandingRect(session.thumbnail),
-          plane,
-          pose: motion.measurePose(),
-        };
-      },
-      write: (measurement) => {
-        if (!measurement || !this.owns(session) || !session.motion) return;
-        const baseline = session.viewportBaseline;
-        const scrollTop = measurement.plane.scrollTop;
-        if (
-          baseline &&
-          baseline.planeWidth === measurement.plane.viewportWidth &&
-          baseline.planeHeight === measurement.plane.viewportHeight &&
-          heroRectsEqual(
-            { ...baseline.destination, top: baseline.destination.top + baseline.scrollTop },
-            { ...measurement.destination, top: measurement.destination.top + scrollTop },
-            HERO_VIEWPORT_REBUILD_EPSILON_PX,
-          )
-        ) {
-          return;
-        }
-        session.viewportBaseline = {
-          destination: measurement.destination,
-          planeWidth: measurement.plane.viewportWidth,
-          planeHeight: measurement.plane.viewportHeight,
-          scrollTop,
-        };
-        session.motion.rebuild(measurement.destination, measurement.plane, measurement.pose);
-      },
+      read: () => this.measureViewportDestination(session),
+      write: (measurement) => this.applyViewportMeasurement(session, measurement),
     });
   };
+
+  /** The re-aim's boxes, in one read. Cheap only while the layout is clean — see the caller. */
+  private measureViewportDestination(session: HeroSession): ViewportMeasurement | null {
+    const motion = session.motion;
+    if (!motion) return null;
+    if (session.kind === 'opening') {
+      const stage = this.stage?.sessionId === session.id ? this.stage.nodes : null;
+      if (!stage?.target.isConnected) return null;
+      /* Once a route is on screen in the Stage's place, its picture is the one the flyer lands
+         on; it wears the same window and fit, so the same unprojection applies. */
+      const adopted = session.adoption?.route.target;
+      const target = adopted?.isConnected ? adopted : stage.target;
+      /* A route that owns the scroll carries the flyer in its own plane (`promoteAdoption`); a
+         re-aim must stay there or it moves the flyer back under a scroller that no longer moves. */
+      const owner = session.adoption?.owned ? session.adoption.route : null;
+      const plane = owner?.anchor?.isConnected
+        ? getElementScrollPlane(owner.anchor, owner.scroller, owner.overlay)
+        : getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
+      return {
+        // The content is held still inside the window, so a mid-flight read of the landing
+        // target is already the box it will occupy: no unprojection.
+        destination: getHeroRect(target),
+        plane,
+        pose: motion.measurePose(),
+      };
+    }
+    const plane = getGalleryScrollPlane();
+    if (!session.thumbnail.isConnected || !plane) return null;
+    return {
+      destination: getGalleryLandingRect(session.thumbnail),
+      plane,
+      pose: motion.measurePose(),
+    };
+  }
+
+  private applyViewportMeasurement(
+    session: HeroSession,
+    measurement: ViewportMeasurement | null,
+  ) {
+    if (!measurement || !this.owns(session) || !session.motion) return;
+    const baseline = session.viewportBaseline;
+    const scrollTop = measurement.plane.scrollTop;
+    if (
+      baseline &&
+      baseline.planeWidth === measurement.plane.viewportWidth &&
+      baseline.planeHeight === measurement.plane.viewportHeight &&
+      heroRectsEqual(
+        { ...baseline.destination, top: baseline.destination.top + baseline.scrollTop },
+        { ...measurement.destination, top: measurement.destination.top + scrollTop },
+        HERO_VIEWPORT_REBUILD_EPSILON_PX,
+      )
+    ) {
+      return;
+    }
+    session.viewportBaseline = {
+      destination: measurement.destination,
+      planeWidth: measurement.plane.viewportWidth,
+      planeHeight: measurement.plane.viewportHeight,
+      scrollTop,
+    };
+    session.motion.rebuild(measurement.destination, measurement.plane, measurement.pose);
+  }
 
   // -------------------------------------------------------------------------
   // Shared helpers

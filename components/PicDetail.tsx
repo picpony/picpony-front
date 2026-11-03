@@ -569,6 +569,22 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
      with the landing; only the parts that read the record wait for it (`recordBody` below). */
   const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && image !== null && !offline;
   const recordPending = record === null && recordError === null && !offline;
+  /* **The body publishes in two frames, not one.** Its first style and layout is ~120 elements of
+     chrome (actions, tags) plus everything under the picture (description, sources, the thread):
+     together that is a whole frame's budget in one commit, and it was the dropped frame of an
+     open. The tail below the first screen is published one frame later — still under the fold,
+     arriving through `playDetailArrival` as any late content does. */
+  const [bodyTailReady, setBodyTailReady] = useState(false);
+  /* Reset during render, the shell's own pattern: a `setState` in the effect below lints as a
+     cascading render, and the tail must be gone in the commit that hides the body. */
+  if (!deferredBodyReady && bodyTailReady) setBodyTailReady(false);
+  useEffect(() => {
+    if (!deferredBodyReady) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setBodyTailReady(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [deferredBodyReady, imageId]);
 
   const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
   /* In the privacy space counts: the auto-privacy rule sends an explicit picture there rather than
@@ -881,11 +897,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       idle: false,
       canPublish: () => {
         if (!isImageHeroDetailDataPublishable(imageId)) return false;
-        /* During an open, the controller decides (`isImageHeroDetailBodyPublishable`): where
-           the route follows the Stage on the compositor, the body mounts the moment its record
-           is in — inside the flight, so the route is revealed with it — and only where it does
-           not does it still wait out the whole `opening.` family. */
-        return isImageHeroDetailBodyPublishable(imageId);
+        /* During an open, the controller decides (`isImageHeroDetailBodyPublishable`): the body
+           never mounts inside a flight — its first style and layout is a whole frame's work and
+           lands in a frame the flight is pacing. It publishes once the detail has settled, and
+           the part below the first screen one frame after that (`bodyTailReady`). */
+        return isImageHeroDetailBodyPublishable();
       },
     });
   }, [imageId]);
@@ -1653,17 +1669,21 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   {/* The row's description and sources may be partial (a preview carries what its
                       list read); shown once the record is in, so they never change under the
                       reader. */}
-                  {!recordPending && <DetailDescription description={image.description} />}
-                  {!recordPending && <DetailSources image={image} />}
-                  <CommentSection
-                    imageId={imageId}
-                    derpiCount={record?.comment_count}
-                    replyTo={replyTo}
-                    onReply={handleReply}
-                    onCancelReply={() => setReplyTo(null)}
-                    composerRef={composerRef}
-                    scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
-                  />
+                  {bodyTailReady && (
+                    <>
+                      {!recordPending && <DetailDescription description={image.description} />}
+                      {!recordPending && <DetailSources image={image} />}
+                      <CommentSection
+                        imageId={imageId}
+                        derpiCount={record?.comment_count}
+                        replyTo={replyTo}
+                        onReply={handleReply}
+                        onCancelReply={() => setReplyTo(null)}
+                        composerRef={composerRef}
+                        scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
+                      />
+                    </>
+                  )}
                 </>
               )}
               </div>

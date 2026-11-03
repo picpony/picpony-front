@@ -351,8 +351,8 @@ export function moveFlightToPlane(
   radius: number,
 ) {
   flight.layer.remove();
-  /* The container counter's origin belongs to the plane it was set for; the counter track is
-     rebuilt after every re-plant and sets its own (`formatHeroContainerCounterOrigin`). */
+  /* The layer is in screen space (the window's pair is the identity, so nothing counters it);
+     clearing any stale origin keeps a re-plant from inheriting an earlier window's. */
   flight.layer.style.transformOrigin = '';
   flight.plane = plane;
   plane.anchor.appendChild(flight.layer);
@@ -414,6 +414,13 @@ export function createHeroFlight({
     const image = frameLease.canvas;
     image.className = 'image-hero-flyer-image';
     image.setAttribute('aria-hidden', 'true');
+    /* **A picture with transparency carries its surface home.** Its alpha composites over
+       whatever is behind it, and on a return that is the list — through the hole of a ring,
+       chips and cards sliding under the page the picture just left (reported from the app:
+       带透明的图片，透明部分在关闭时会显示元素). On the detail it sat on `surface`, so in
+       flight it sits on `surface` too, as a card of its own. A forward leg needs none: the
+       window's plane is already behind it, and at take-off that plane is exactly the card. */
+    if (direction === 'back') clip.style.backgroundColor = 'var(--md-sys-color-surface)';
     clip.appendChild(image);
     flyer.appendChild(clip);
     compensator.appendChild(flyer);

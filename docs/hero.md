@@ -21,9 +21,10 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
 - **Touch must build in a microtask.** While a finger is down and Blink does not yet know whether it
   is a scroll, it holds back timers, `scheduler.postTask` (even `user-blocking`) and frames. A mouse
   press builds in a `setTimeout(0)`.
-- **Scalar tracks are two keyframes + `linear()`** (`ScalarTrack`): fades, reveal rises and the
-  sink. Same frames, far cheaper per `animate()`, and `linear()` timing runs on the compositor. The
-  flyer and container tracks stay per-sample: they are arcs, not scalars.
+- **Scalar tracks are two keyframes + `linear()`** (`ScalarTrack`): the plane's and the content's
+  fades, the pull's, the chrome's. Same frames, far cheaper per `animate()`, and `linear()` timing
+  runs on the compositor. The flyer and container tracks stay per-sample: they are arcs, not
+  scalars.
 - **Shared tracks are not deferred past the first frame**: the forward spring covers ~5% of its
   travel in one frame and ~17% in two, so a late window visibly lags the flyer.
 - **Pull layers are promoted on the candidate pointerdown** (`data-image-hero-pull-ready`,
@@ -62,8 +63,21 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
   `HeroController.replayShieldTap`): a press that began on the shield is followed to its release on
   the window and delivered to the card under it once the gallery takes input again. Before, a
   re-tap within the shield's frame or two did nothing (~1 in 4 in a burst of open/close).
-- **A clean return folds the copy back** (`sinkTrack`): header and body sink half their entrance
-  distance, accelerating, inside `HERO_CONTENT_FADE.back`. A reversal keeps holding its pose.
+- **Nothing inside the window travels, either way.** The staircase (a 12–40px rise per block,
+  staggered in reading order) and its mirror on a return (`sinkTrack`) are gone: the plane's
+  morph *is* the reveal, so header, chrome and body are shown exactly as the window's edge
+  uncovers them — the theme switch's circular reveal in a rounded rectangle. The content still
+  *dissolves* (a plain opacity cross-fade, no travel): forward on `HERO_CONTENT_FADE.forward`,
+  home on `HERO_RETURN_FADE`, which is narrower (0 → 0.3) on purpose — see the transparent-picture
+  rule below. The floating back is outside the window and dissolves in place, since the mask
+  cannot reach it.
+- **A picture with transparency carries its surface home** (`createHeroFlight`). Its alpha
+  composites over whatever is behind it; on the detail that is `surface`, and in flight behind
+  it are the list's cards, tabs and chips. Through the hole of a ring that read as the page
+  showing through the picture (reported from the app). A return leg therefore paints the flyer's
+  clip with `--md-sys-color-surface`, and the plane and copy fade on `HERO_RETURN_FADE` (0 → 0.3)
+  so the sheet behind the picture is gone before the picture is over the list. A forward leg
+  keeps neither: the window's plane is already behind it, and at take-off that plane is the card.
 
 ## Data on open
 
@@ -144,6 +158,30 @@ The current contracts of `lib/hero/`, condensed from the 2026-10 investigation r
 **构建航班时不再插入布局读取。** `createHeroFlight` 会插入并设置飞行层的样式，之后 `HeroMotion` 构造里第一次 `screenRectToPlane` 读 `scrollTop`、`buildBackgroundAnimation` 读画廊滚动容器的 `scrollTop`/`clientHeight`，各触发一次完整的样式 + 布局（4× CPU 下约 5ms 和 16ms，打开与关闭都有）。现在调用方在写 DOM 之前、同一任务里读好这些值，通过 `HeroMotionOptions.preread` 传入，只供构造函数这一次使用；之后的重建、反转都照旧读实时值。
 
 **弧线求解器只采样一次。** `heroPointArcAt` 是弦上点与圆弧点按 bow 的凸组合，只有组合系数依赖 bow。`solveHeroArcContainBows`（扫描 + 细分，上百次试探）和 `solveHeroArcBow`（二分）原来每次试探都重建弧线、重算三角函数并分配对象，按下时的构建里占 10–40ms（1×）。现在每对矩形采样一次（`sampleHeroRectArc`），每个 bow 只做加权；所有表达式与原实现逐项相同、求值顺序相同，随机 3000 组输入新旧结果逐位一致，`npm run hero:path` 全部通过。
+
+### 2026-11 第四轮：把强制布局移出飞行帧；被取代的图片立刻淡出
+
+**背景 sink 在飞行期间被提升。** sink 的缩放作用在整页列表上，不提升时浏览器每一帧都要为它重新分层：R5 240 @66Hz、1111×556 的一次打开约 79 次 Layerize。飞行期间（`html[data-image-hero-transition]`）给 `[data-image-detail-background-visual]` 加 `will-change: transform`，同一次构建里用运行时把它覆盖回 `auto` 的 A/B：60.6ms → 53.2ms 的 Layerize。提示只在飞行期间存在——常驻会让空闲的图库也保留一层列表大小的图层。
+
+**详情描述卡的测量移到提交之后。** `DetailDescription` 原来在 `useLayoutEffect` 里读 `scrollHeight` 并写两个 state：详情路由挂载的那一帧里，这次读把刚提交的页面再排一遍，两次状态写又让这张卡在绘制前重渲染（追踪：3.5ms 样式 + 4.5ms 布局，都在飞行的帧里）。现在 rAF 之后再走 idle 测一次，ResizeObserver 的回调同样延后；折叠高度本来就是 160px，屏幕上没有东西依赖它跑在提交里。
+
+**下拉识别器不再在绑定的下一帧读 `scrollTop`。** 绑定发生在揭示路由的那个写入里（adoption、landing），下一帧的读会强制新详情的样式重算（追踪：6.0 和 8.0ms 两次）。adoption 时调用方已经知道停靠的偏移（`promoteAdoption` 刚写进去），通过 `initialScrollTop` 传入；没有值的绑定（打开起点的 Stage）延到第二帧——那一帧浏览器已经排好版，读是免费的。
+
+**viewport 重瞄的量测在 ResizeObserver 回调里做。** RO 在布局之后投递，此时 `getBoundingClientRect`/`getComputedStyle` 免费；放到下一帧的 read 阶段，读的是刚提交的新详情（追踪：333 个元素，9.1ms 样式 + 2.5ms 布局在 flush 里），随后 rebuild 的写入又把这些样式弄脏一次。窗口 resize 走的那条（`subscribeHeroViewportInvalidation`）照旧在调度器的读阶段。
+
+**详情正文不再在飞行中挂载，并且分两帧发布。** `isDetailBodyPublishable` 原来在“路由跟随 Stage”时允许正文在飞行中挂载，理由是没有帧依赖主线程；漏掉的是挂载本身的成本——正文第一次样式 + 布局是同一帧里的约 9ms + 13ms（1111×556 追踪，1920×1080 上按比例更多），正好落在飞行正在配速的帧里，两台机器上“打开时那一帧”都是它。正文在整个飞行中都位于首屏下方（图片占满视口），提前挂载什么也看不到。现在它等 `detail-idle` 之后发布（`publishWhenHeroSettled`），由 `playDetailArrival` 按 M3 入场；`PicDetail` 再把首屏以下的尾部（描述、来源、评论）晚一帧发布，没有一帧要吞下全部。实测打开行（本机 66Hz、1111×556 与 1912×948 各三次运行）：冷开的头两次各丢 1–2 帧，其余多为 0；同一份报告里 8 项结论全部流畅（fixture 图片，避开真实后端 429/504 的干扰）。
+
+**窗口是唯一的揭示，里面的元素一动也不动。** 现在是主题切换那种揭示：**目的地整页从第一帧就按最终尺寸和位置排好**，从卡片长出来的圆角窗口只是遮罩，走到哪里露出哪里；图片本身仍然飞（共享元素），其余元素没有位置轨道、没有楼梯。
+
+- 补偿器（`.image-detail-unclip` 上的 transform）从「cover 拟合」改成**窗口变换的精确逆**：`scale(1/sx, 1/sy) translate(-x, -y)`，与窗口的 `translate3d(x,y,0) scale(sx,sy)` 复合为恒等。之前内容乘上 `max(sx,sy)` 的拟合比例，随窗口一起滑动、放大——header 会在窗口里滑上去，这就是要改掉的那件事。
+- 飞行层的 counter 随之**整个删掉**：页面不动了，图片的坐标本来就在屏幕空间，不再需要按滚动条 gutter 调 `transform-origin`（`formatHeroContainerCounter` / `formatHeroContainerCounterOrigin` 一并移除）。
+- 中点读取的落地目标框已经是它最终的位置（页面不动），`unprojectHeroContainerRect` 和 `HeroMotion.unprojectRect` 随之删除：视口重瞄直接用读到的框。
+- **带透明的图片在返回时自带它的表面**（`createHeroFlight`）：返回 leg 给飞行体的 clip 铺 `--md-sys-color-surface`，并在同一任务里让页面与表面按 `HERO_RETURN_FADE`（0 → 0.3）隐去。以前透明区域后面是列表本身——环形图中间会看到 "本站讨论"、标签和卡片从表面下滑过（用户报的 bug）。现在它在飞行中看起来和停在详情里一样：图片在一张 surface 卡上。
+- 楼梯（`revealTrack`）与返回时的下沉（`sinkTrack`）删除；浮动返回按钮在窗口之外，只淡入淡出。
+- `npm run hero:path` 的容器断言随之改写：(e/still) **每一采样内容复合变换必须是恒等**（`1±1e-9`、位移 0），(e/gutter) 飞行层的落点不再受 gutter 影响，(e/landing) 落地字符串为 `scale(1, 1) translate(0px, 0px)`，(e/drift) 关键帧之间 WAAPI 线性插值造成的偏差——倒数的线性插值不是线性插值的倒数——实测 0.507% 帧宽（容差 0.6%）。401 个审计点全部通过。
+- 观感实测（fixture 图、1111×556，seek 到 60/120/180ms）：60ms 时窗口是卡片大小的圆角框，框里是最终页面的那一块（投票条、图片区），120ms 露出 header 的固定位置，180ms 基本到位——内容没有任何滑动。帧预算与前面几项同一量级（这是结构与观感，不是丢帧来源）。
+
+**被取代的图片立刻淡出，而不是在屏幕上等到自己落地。** 两条路径都改：一次关闭被新的打开取代时（`ensureRetirement`），原来等 `motion.landed` 再淡出，上一张图以不透明度 1 停留 150–270ms；一次反向中的打开被另一张卡取代时（`takePredecessorSurface`），原来**根本不淡出**，那张图以 `--z-hero-retiring`（43）压在详情层（40）之上走完整个飞行。现在前者一被取代就按 fastEffects（约 140ms）淡出，后者用 `fadeOutRetiring()`：只淡图层、不交出生命周期（卡片的租约仍然在它落地时释放）。实测快速序列（打开 A → 90ms 后 Esc → 30ms 后打开 B）：上一张的不透明度 243ms 时 1.0 → 290ms 0.44 → 337ms 0.02。
 
 **还没解决、需要真机确认的：** 按下时 Stage 首次挂载后的那次布局（一次 15–65ms，4×）和 `drawImage` 截帧（软件画布下明显偏高，真机 GPU 画布应便宜得多）仍在按下的任务里；窗口圆角与飞行体的裁剪圆角是主线程动画（`borderRadius`），主线程被路由提交或关闭时解除 `inert` 的重算（约 600 个元素，4× 下 ~70ms）占住时，圆角会滞后几帧，变换本身仍在合成线程上平滑运行。
 

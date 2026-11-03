@@ -2684,6 +2684,15 @@ html #nprogress .peg {
   transform-origin: center top;
 }
 
+/* **Promoted only while a flight runs.** The sink scales the whole list under an opening
+ * picture, and without a compositing hint Chromium re-rastered and re-layerized the page on
+ * every frame of that scale (traced: ~6ms of Layerize per frame on an R5 240 at 66Hz, ~79
+ * layerizations across one open). The hint is transient by design: a standing one would keep a
+ * list-sized layer alive on an idle gallery, which is what the containers above refuse. */
+html[data-image-hero-transition] [data-image-detail-background-visual] {
+  will-change: transform;
+}
+
 /*
  * Each anchor lives in its native scroll coordinate system, positioned at the scroll origin
  * captured by the controller, so normal and inertial scrolling move the flyer with its

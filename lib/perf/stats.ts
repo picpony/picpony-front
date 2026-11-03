@@ -161,7 +161,11 @@ export function firstFrameAfter(timestamps: readonly number[], time: number) {
  * frames is smooth; under 8% and no gap of 100ms is a minor hitch; anything else is janky.
  */
 export function verdictOf(stats: FrameStats, interval: number): Verdict {
-  const missing = 1 - stats.smoothness;
+  /* The thresholds are inclusive, and the arithmetic has to say so: `smoothness` is rounded to
+     three decimals before it gets here, so a run that lost exactly 2% of its frames pairs a
+     `missing` of 0.020000000000000018 with a 0.02 line and is graded 轻微卡顿 by float error.
+     (`/perf` showed exactly that: an open row at 4 dropped of 208 frames, 0.98, "轻微卡顿".) */
+  const missing = 1 - stats.smoothness - 1e-9;
   if (missing <= 0.02 && stats.worstFrameMs <= interval * 2.5) return 'smooth';
   if (missing <= 0.08 && stats.worstFrameMs < 100) return 'minor';
   return 'janky';

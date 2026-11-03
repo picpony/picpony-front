@@ -159,84 +159,22 @@ export function getHeroContainerPose(box: HeroRect, host: HeroRect): HeroBoxTran
 }
 
 /**
- * The isotropic scale the content is fitted at: **`max(sx, sy)`, i.e. cover.**
+ * The counter-transform that **holds the destination still**: the window grows over a page that
+ * is already at its final size and position, exactly as a theme switch's circular reveal grows
+ * over a page that never moves.
  *
- * Fitting to width instead leaves an unpainted horizontal band across the window whenever
- * `sx < sy` — the window's aspect mid-leg runs between the card's and the host's while the
- * uniformly-scaled content always has the host's — and because the flyer is contained by the
- * window rather than by the paint, it hangs past the surface over the grid. Wide-desktop
- * only: that is where a portrait card meets a landscape host. Cover clips the content on the
- * other axis instead — what the empty outer margin of the column is for.
+ * It is the exact inverse of the window's own transform, so the pair composes to the identity:
+ * a block inside the window is painted where it will sit when the window is the whole screen,
+ * and the window's edge is the only thing that travels. The earlier form scaled the content to
+ * a *cover fit* (`max(sx, sy)`), which made the page ride the window — the header slid and grew
+ * with the box — and needed the flight layer's separate counter to put the picture back in
+ * screen space.
  *
- * `max` cannot flip mid-leg in practice: both scales rise to exactly 1 at p=1 from the same
- * side of each other, so the axis is decided by the card's aspect against the host's and
- * holds; at the crossing the two agree, so the compensator stays continuous.
- */
-export function heroContainerFitScale({ scaleX, scaleY }: HeroBoxTransform) {
-  return Math.max(scaleX, scaleY);
-}
-
-/**
- * The counter-scale that makes the accumulated content transform isotropic.
- *
- * Written as a two-component `scale(f/sx, f/sy)` with one component exactly 1 — load-bearing,
- * not cosmetic: a single-axis `scaleY` keyframe beside a `scaleX` one is a transform-list
- * mismatch that drops WAAPI onto matrix interpolation, and the fit axis *can* change hands
- * inside one leg. Componentwise emission keeps the interpolation continuous through the
- * crossing, where both components are 1.
+ * Written componentwise on purpose: a single-axis `scaleY` keyframe beside a `scaleX` one is a
+ * transform-list mismatch that drops WAAPI onto matrix interpolation.
  */
 export function formatHeroContainerCompensator(pose: HeroBoxTransform) {
-  const fit = heroContainerFitScale(pose);
-  return `scale(${fit / pose.scaleX}, ${fit / pose.scaleY})`;
-}
-
-/**
- * The exact inverse of the accumulated window transform, for a descendant that must stay in
- * screen space — the flight layer, on an opening leg only.
- *
- * The plane's anchor cannot leave the scroller (`sizePlaneLayer` puts it at the take-off
- * scroll offset inside a node that scrolls with the content — that is why the flyer follows
- * scrolling at zero per-frame cost), so the layer carries the inverse instead. Solving
- * `d + f*T(p) = p` with CSS's `scale(k) translate(a, b)` = `k*(p + (a, b))` gives
- * `k = 1/f, (a, b) = -d`, `f` being the fit scale, not `scaleX`.
- *
- * **Order matters and getting it backwards compiles** — `translate` before `scale` is a
- * different map, ~100px out of place on a phone; `npm run hero:path` asserts the composition
- * at the string level.
- *
- * Deliberately no scroll term: the landing target is inside the scaled subtree, so both it
- * and the flyer move by `f·Δ` and track each other for the whole leg.
- */
-export function formatHeroContainerCounter(pose: HeroBoxTransform) {
-  const fit = heroContainerFitScale(pose);
-  return `scale(${1 / fit}) translate(${-pose.x}px, ${-pose.y}px)`;
-}
-
-/**
- * `transform-origin` for the flight layer while it carries `formatHeroContainerCounter`.
- *
- * The counter solves `d + f*T(p) = p` for a layer whose box origin **is** the window's local
- * origin. It is not: the layer hangs off the plane anchor, which is `inset: 0` inside the
- * Stage's scroller and therefore starts at the scroller's *padding* edge — one leading
- * `scrollbar-gutter` in from the overlay (`.image-detail-overlay-scroll` reserves it on both
- * edges, and `clientLeft` reads it). With the layer's own top-left as the origin the counter
- * lands every flyer at `p + f*o` instead of `p + o`: `(1 - f)*o` short, i.e. the whole gutter
- * times however small the window is. On a phone with a classic 8px scrollbar (MIUI's browser
- * honours `::-webkit-scrollbar`) that is ~4.6px to the left on the take-off frame, shrinking
- * to 0 as the window grows to the overlay — read by eye as a one-frame jolt left. Overlay
- * scrollbars have `o = 0`, which is why emulators and most phones never showed it.
- *
- * Moving the origin to the window's own origin (`-o` in the layer's space) makes the same
- * `scale(1/f) translate(-d)` exact for any `o`, keeps the keyframe strings — and the compositor
- * path — untouched, and is a no-op whenever `o` is 0.
- *
- * @param offset the layer's untransformed box origin minus the window's (the container host's)
- *   origin, in CSS px: the plane host's padding-edge offset from the overlay.
- */
-export function formatHeroContainerCounterOrigin(offset: { x: number; y: number }) {
-  const x = Number.isFinite(offset.x) ? offset.x : 0;
-  const y = Number.isFinite(offset.y) ? offset.y : 0;
-  return `${-x}px ${-y}px`;
+  return `scale(${1 / pose.scaleX}, ${1 / pose.scaleY}) translate(${-pose.x}px, ${-pose.y}px)`;
 }
 
 /**
@@ -260,26 +198,6 @@ export function formatHeroContainerRadius(
   const stepped = Math.ceil(wanted / HERO_MASK_RADIUS_STEP_PX) * HERO_MASK_RADIUS_STEP_PX;
   const ceiling = Math.max(0, Math.min(host.width, host.height) / 2);
   return `${Math.min(stepped, ceiling)}px`;
-}
-
-/**
- * Screen rect to the un-transformed host-sized space, i.e. the inverse of the accumulated
- * pair: `local = hostOrigin + (screen - boxOrigin)/f`. Both axes divide by the same `f`
- * because the accumulated map is isotropic — the property the compensator exists to
- * establish; `f` is the fit scale, so this follows the fit axis rather than assuming width.
- */
-export function unprojectHeroContainerRect(
-  rect: HeroRect,
-  box: HeroRect,
-  host: HeroRect,
-): HeroRect {
-  const scale = safeScale(heroContainerFitScale(getHeroContainerPose(box, host)));
-  return {
-    left: host.left + (rect.left - box.left) / scale,
-    top: host.top + (rect.top - box.top) / scale,
-    width: rect.width / scale,
-    height: rect.height / scale,
-  };
 }
 
 /**

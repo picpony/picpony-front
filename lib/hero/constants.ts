@@ -217,6 +217,20 @@ export const HERO_CONTENT_FADE: Record<HeroDirection, { start: number; end: numb
   back: { start: 0, end: 0.6 },
 };
 
+/**
+ * The **detail's** own return window, narrower than `HERO_CONTENT_FADE.back`: the page has to be
+ * gone while the picture is still on its way home.
+ *
+ * A picture with transparency composites over whatever is behind it. Until the page is gone that
+ * is the detail's own text and chips — through the hole of a ring, over a surface the list is
+ * hidden behind (reported from the app: 带透明的图片，透明部分在关闭时会显示元素). The plane goes
+ * with it: left up, the same hole shows a sheet of `surface` instead of the list the picture is
+ * returning to. 0.6 was slow enough to be visible for most of the return; a third of the leg is
+ * the point where the picture is still near its box, so the dissolve reads as one page leaving
+ * rather than as a card blinking out.
+ */
+export const HERO_RETURN_FADE: { start: number; end: number } = { start: 0, end: 0.3 };
+
 /*
  * The forward row is a second deliberate divergence from Material's enter thresholds, and it
  * is the answer to "the flight looks stiff": at 0 → 0.25 every track finished within the
@@ -325,35 +339,15 @@ export const HERO_BACKGROUND_SINK_WINDOW: Record<HeroDirection, { start: number;
 };
 
 // ---------------------------------------------------------------------------
-// Content reveal cascade — chrome, then header, then body. The surface is driven
-// by the flight's own clock now; see the note on `buildOverlayAnimations`.
+// The detail's own content — a dissolve in place, and the flight's chrome. No
+// element inside the window travels: see `buildOverlayAnimations`.
 // ---------------------------------------------------------------------------
-
-/**
- * The reveal staircase as windows on the flight's own progress, not milliseconds: each step
- * starts and stops with the flyer and cannot drift when `HERO_DURATIONS` moves. (Absolute
- * delays overran the leg and left a residual transform on the node at the exact frame the
- * handoff swaps the Stage's copy for the route's.)
- *
- * `chrome` is unreachable, kept for symmetry: the cascade is a descendant query on the overlay
- * and both back buttons render as its *siblings* — their entrance is the `floatingBack`
- * branch of `buildOverlayAnimations`, which legitimately keeps its own clock.
- */
-export const HERO_REVEAL_WINDOW: Record<
-  'chrome' | 'header' | 'body' | 'default',
-  { start: number; end: number }
-> = {
-  chrome: { start: 0, end: 0.926 },
-  header: { start: 0.088, end: 0.986 },
-  body: { start: 0.469, end: 1 },
-  default: { start: 0.088, end: 0.986 },
-};
 
 /**
  * The one entrance still measured in milliseconds, and the one that should be: `floatingBack`
  * renders *outside* the overlay, so the container's parameters make no claim on it. A small
- * control fading in with an 8px rise, opacity and travel together on the default effects spring
- * (one keyframe list, so one critically damped clock: an opacity cannot ride an overshoot).
+ * control dissolving on the default effects spring — opacity only, like everything else inside
+ * the transform (see `buildOverlayAnimations`).
  */
 export const REVEAL_CONTENT_DURATION_MS = SPRING_MS.defaultEffects;
 
@@ -372,15 +366,6 @@ export const FLIGHT_RETIRE_MS = SPRING_MS.fastEffects;
  * `matchMedia` into a Node script.
  */
 export const FLIGHT_REBUILD_MIN_MS = 80;
-/** On the 4dp grid. header/body rise 24/40 so the motion is visible at these durations —
- *  under the 48px M3 uses for a full-screen enter; the reveal windows keep them from
- *  arriving together. */
-export const REVEAL_DISTANCE_PX = {
-  chrome: 8,
-  header: 24,
-  body: 40,
-  default: 24,
-} as const;
 /* `linear()` strings from the spring module, for WAAPI. Arriving on the default effects shape;
    leaving on the effects shape, as every exit in the app does, over whatever leg the caller gives
    it: it answers on the next frame. */

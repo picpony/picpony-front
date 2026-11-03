@@ -41,6 +41,14 @@ export type HeroDismissGestureOptions = {
    * (`false`). Lets the surface promote its layers before the slop is crossed.
    */
   onCandidate?: (ready: boolean) => void;
+  /**
+   * The scroller's offset, when the caller wrote it in this same task (an adoption parks the
+   * route at the Stage's offset). The recognizer needs it to choose the first `touch-action`,
+   * and reading `scrollTop` for it landed in the frame after a commit had dirtied the page —
+   * a forced style and layout of the whole newly mounted detail (6–15ms, one dropped frame per
+   * open). Read by the caller, it costs nothing: the value is already in hand.
+   */
+  initialScrollTop?: number;
 };
 
 type ReleasedClick = {
@@ -78,6 +86,7 @@ export function bindHeroDismissGesture({
   onCancel,
   onCommit,
   onCandidate,
+  initialScrollTop,
 }: HeroDismissGestureOptions) {
   const gestureOwner = `hero-dismiss:${Math.random().toString(36).slice(2)}`;
   const frameOwner = {};
@@ -107,8 +116,9 @@ export function bindHeroDismissGesture({
   // before pointerdown avoids a device-dependent cancelability race.
   const originalTouchAction = scroller.style.touchAction;
   let writtenTouchAction = '';
-  const syncTouchAction = () => {
-    const next = scroller.scrollTop <= 0.5 ? 'pan-x pan-down pinch-zoom' : 'pan-x pan-y pinch-zoom';
+  const syncTouchAction = (scrollTop?: number) => {
+    const top = scrollTop ?? scroller.scrollTop;
+    const next = top <= 0.5 ? 'pan-x pan-down pinch-zoom' : 'pan-x pan-y pinch-zoom';
     if (next === writtenTouchAction) return;
     writtenTouchAction = next;
     scroller.style.touchAction = next;
@@ -430,16 +440,27 @@ export function bindHeroDismissGesture({
   };
 
   const pointerSurface = listenTarget ?? target;
-  /* The first read waits for the next frame. The bind lands in the commit that reveals a route
-     (a landing, a step), when the layout is dirty: reading `scrollTop` then forced a layout of
-     the page in the middle of the commit (66ms on a first open, measured in development), only
-     for the frame to lay it out again. A frame later the layout is clean and the read is free;
-     no touch can begin in between that this surface could have claimed. */
-  let initialSync = requestAnimationFrame(() => {
-    initialSync = 0;
-    if (!disposed) syncTouchAction();
-  });
-  scroller.addEventListener('scroll', syncTouchAction, { passive: true });
+  /* A caller that already wrote the offset (an adoption) hands it over; the first
+     `touch-action` then costs nothing and no frame is spent forcing the new detail's layout. */
+  let initialSync = 0;
+  if (typeof initialScrollTop === 'number' && Number.isFinite(initialScrollTop)) {
+    syncTouchAction(initialScrollTop);
+  } else {
+    /* Two frames when the offset is not in hand. The bind lands in the commit that reveals a
+       route (a landing, a step) or mounts one (an open), when the layout is dirty: reading
+       `scrollTop` one frame later still forced a style pass of the fresh detail (7.8ms traced on
+       an open, on the very frame the route mounted). By the second frame the browser has laid
+       the commit out, the read is free, and no touch can begin in between that this surface
+       could have claimed. */
+    initialSync = requestAnimationFrame(() => {
+      initialSync = requestAnimationFrame(() => {
+        initialSync = 0;
+        if (!disposed) syncTouchAction();
+      });
+    });
+  }
+  const onScroll = () => syncTouchAction();
+  scroller.addEventListener('scroll', onScroll, { passive: true });
   pointerSurface.addEventListener('pointerdown', handlePointerDown as EventListener, {
     capture: true,
     passive: true,
@@ -464,7 +485,7 @@ export function bindHeroDismissGesture({
     target.removeEventListener('click', handleClick, true);
     window.removeEventListener('blur', handlePageExit);
     window.removeEventListener('pagehide', handlePageExit);
-    scroller.removeEventListener('scroll', syncTouchAction);
+    scroller.removeEventListener('scroll', onScroll);
     if (scroller.style.touchAction === writtenTouchAction) {
       scroller.style.touchAction = originalTouchAction;
     }

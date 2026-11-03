@@ -1,9 +1,9 @@
 'use client';
 
 import {
-  HERO_CONTAINER_FADE,
   HERO_CONTAINER_SHAPE,
   HERO_CONTENT_FADE,
+  HERO_RETURN_FADE,
   HERO_CLIP_SELECTOR,
   HERO_CONTENT_SELECTOR,
   HERO_DURATIONS,
@@ -12,7 +12,6 @@ import {
   HERO_REVERSE_MIN_DURATION_MS,
   HERO_REVERSE_TRAVEL_RATIO,
   HERO_REVEAL_SELECTOR,
-  HERO_REVEAL_WINDOW,
   HERO_SURFACE_SELECTOR,
   HERO_UNCLIP_SELECTOR,
   HIDE_DISTANCE_PX,
@@ -20,7 +19,6 @@ import {
   FLIGHT_REBUILD_MIN_MS,
   FLIGHT_RETIRE_MS,
   REVEAL_CONTENT_DURATION_MS,
-  REVEAL_DISTANCE_PX,
   REVEAL_EASING,
   HERO_BACKGROUND_SINK_SCALE,
   HERO_BACKGROUND_SINK_WINDOW,
@@ -28,12 +26,9 @@ import {
 import {
   createHeroRectArc,
   formatHeroContainerCompensator,
-  formatHeroContainerCounter,
-  formatHeroContainerCounterOrigin,
   formatHeroContainerRadius,
   formatHeroTransform,
   getHeroContainerPose,
-  unprojectHeroContainerRect,
   getHeroBackgroundSinkTransform,
   heroRectCenterDistance,
   solveHeroArcContainBows,
@@ -440,26 +435,21 @@ export function easeSinkWindow(amount: number, direction: HeroDirection) {
   return direction === 'forward' ? 1 - (1 - u) * (1 - u) : u * u * (3 - 2 * u);
 }
 
-function revealRole(element: HTMLElement) {
-  const role = element.dataset.imageDetailReveal;
-  return role === 'chrome' || role === 'header' || role === 'body' ? role : 'default';
-}
-
 /**
  * The detail side of a flight: a container transform, not a fade — one growing, clipping,
- * rounded box with the destination content laid out at its final size and scaled to the
- * box's current width (`MaterialContainerTransform` / `open_container.dart`), grown to the
- * whole navigator rather than the picture's box. A fade of a rectangle plus a page revealed
- * behind it is two objects for one gesture.
+ * rounded box over a page that **does not move**. The box is the reveal: the destination is
+ * laid out at its final size and position from the first frame (`formatHeroContainerCompensator`
+ * is the window's exact inverse), and the growing edge uncovers it — the theme switch's circular
+ * reveal, in a rounded rectangle. Grown to the whole navigator rather than the picture's box.
  *
- * Three tracks on one clock — mask, fit, cross-fade — plus the picture, which keeps its own
- * shared-element morph (a cropped thumbnail becoming a contained photo is worth more than a
- * plain cross-fade). Both start at the card's width and end at their own, so they stay
- * coherent without being coupled.
+ * One clock, two tracks — the window, and the content's cross-fade — plus the picture, which
+ * keeps its own shared-element morph (a cropped thumbnail becoming a contained photo is worth
+ * more than a plain cross-fade). The flyer is in screen space: the pair's identity leaves it
+ * nothing to counter.
  */
 type OverlayContext = {
   overlay: HTMLElement;
-  /** `[data-image-detail-crossfade]` — the full-width block the fit scales. */
+  /** `[data-image-detail-crossfade]` — the full-width block whose contrast the fade carries. */
   content: HTMLElement | null;
   floatingBack: HTMLElement | null;
   choreography: HeroChoreography;
@@ -504,15 +494,7 @@ function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement
  * single node.
  */
 function buildContainerAnimations(
-  nodes: {
-    clip: HTMLElement;
-    unclip: HTMLElement;
-    /** The opening leg's flyer, iff it is inside the window. */
-    flightLayer: HTMLElement | null;
-    /** The flight layer's box origin relative to the window's; see
-     *  `formatHeroContainerCounterOrigin`. */
-    flightLayerOffset: { x: number; y: number };
-  },
+  nodes: { clip: HTMLElement; unclip: HTMLElement },
   container: HeroContainerLeg,
   leg: HeroLeg,
 ): AnimationOwner[] {
@@ -527,7 +509,6 @@ function buildContainerAnimations(
   const clip: Keyframe[] = new Array(frames.length);
   const corner: Keyframe[] = new Array(frames.length);
   const counter: Keyframe[] = new Array(frames.length);
-  const flight: Keyframe[] = new Array(frames.length);
 
   for (let index = 0; index < frames.length; index += 1) {
     const { offset, progress } = frames[index];
@@ -546,7 +527,6 @@ function buildContainerAnimations(
       ),
     };
     counter[index] = { offset, transform: formatHeroContainerCompensator(pose) };
-    flight[index] = { offset, transform: formatHeroContainerCounter(pose) };
   }
 
   const timing = { duration, easing: 'linear' } satisfies KeyframeAnimationOptions;
@@ -555,13 +535,6 @@ function buildContainerAnimations(
     animateAt(nodes.clip, corner, timing),
     animateAt(nodes.unclip, counter, timing),
   ];
-  if (nodes.flightLayer) {
-    /* Before the track starts, or its first frame is a whole gutter times (1 - f) out. */
-    nodes.flightLayer.style.transformOrigin = formatHeroContainerCounterOrigin(
-      nodes.flightLayerOffset,
-    );
-    owners.push(animateAt(nodes.flightLayer, flight, timing));
-  }
   return owners;
 }
 
@@ -599,8 +572,8 @@ function animateScalar(element: HTMLElement, track: ScalarTrack, duration: numbe
 /**
  * An opacity threshold on the leg's **travel**, not on its wall clock —
  * `MaterialContainerTransform` applies `ProgressThresholds` to the animator's interpolated
- * fraction, so "0.60" means "when the box is 60% home". Every fade window must be sampled
- * this way or one gesture is measured on two clocks.
+ * fraction, so "0.60" means "when the box is 60% home". Every fade window must be sampled this
+ * way or one gesture is measured on two clocks.
  */
 function fadeTrack(
   frames: readonly ProgressFrame[],
@@ -616,67 +589,6 @@ function fadeTrack(
   };
 }
 
-/**
- * The staircase, position only, on the same table as everything else.
- *
- * Opacity belongs to the container's block fade above — two nested opacities multiply and read
- * as two entrances — so this is a rise and nothing else. See `HERO_REVEAL_WINDOW` for why the
- * steps are fractions of the leg rather than milliseconds behind a decelerate curve.
- */
-function revealTrack(
-  frames: readonly ProgressFrame[],
-  role: keyof typeof HERO_REVEAL_WINDOW,
-  continuedDistance?: number,
-): ScalarTrack {
-  const distance = continuedDistance ?? REVEAL_DISTANCE_PX[role];
-  const { end } = HERO_REVEAL_WINDOW[role];
-  const start = continuedDistance === undefined ? HERO_REVEAL_WINDOW[role].start : 0;
-  return {
-    // `none` at the far end, never a resting translate: an identity transform still makes the
-    // node a containing block for fixed-position descendants.
-    keyframes: [
-      { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` },
-      { transform: 'none' },
-    ],
-    easing: linearEasing(frames, (progress) => {
-      const interval = intervalProgress(progress, start, end);
-      // The body starts after the content is already partly visible. Ease the local
-      // gate into motion instead of switching straight from rest to full flight speed.
-      // This is a C1 blend of the shared travel, not a second clock/easing token.
-      // A resumed reveal already has momentum, so it keeps its continuous interval.
-      return role === 'body' && continuedDistance === undefined
-        ? interval * interval * (3 - 2 * interval)
-        : interval;
-    }),
-  };
-}
-
-/**
- * The staircase's mirror on a clean return: the header and the body recede the way they came in —
- * half their entrance distance, accelerating (an exit in M3 is quicker and shorter than its
- * entrance), and inside the content's own fade window (`HERO_CONTENT_FADE.back`), so they are gone
- * by the time the plane starts fading and never move on a frame where they are not also fading.
- * Without it the copy sat dead still while its opacity fell, which read as the page blinking out
- * rather than folding back into the card.
- */
-function sinkTrack(
-  frames: readonly ProgressFrame[],
-  role: keyof typeof HERO_REVEAL_WINDOW,
-): ScalarTrack {
-  const distance = REVEAL_DISTANCE_PX[role] / 2;
-  const { start, end } = HERO_CONTENT_FADE.back;
-  return {
-    keyframes: [
-      { transform: 'none' },
-      { transform: `translate3d(0, ${distance.toFixed(3)}px, 0)` },
-    ],
-    easing: linearEasing(frames, (progress) => {
-      const interval = intervalProgress(progress, start, end);
-      return interval * interval;
-    }),
-  };
-}
-
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   const { overlay, content, floatingBack, choreography, fromCurrent, liveOpacity } = ctx;
   const { direction, duration } = leg;
@@ -685,114 +597,75 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   if (choreography === 'dismiss') {
     return buildDismissAnimations(overlay, floatingBack, surface, leg, liveOpacity);
   }
-  const reduced = motionTier('image') !== 'standard';
-  const fade = HERO_CONTAINER_FADE[direction];
-  /* One table for the whole leg. The LRU in `progress.ts` keys on the model, so the mask, the
-     fit, both fades, the staircase and the sink all get the same array for free. */
-  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES);
-  const timing = { duration, easing: 'linear' } satisfies KeyframeAnimationOptions;
-
-  /* The plane and the content do not share a window: see `HERO_CONTENT_FADE` for why the
-     content leaves from the first frame on the way back, and why its window now ends exactly
-     where the plane's begins. */
-  const contentFade = HERO_CONTENT_FADE[direction];
-  const [fadeFrom, fadeTo] = direction === 'forward' ? [0, 1] : [1, 0];
-  /* **The plane does not fade in, and that was a real defect on a phone.** A cross-fade keeps
-     the destination's *layout* from popping into a container too small to hold it — a statement
-     about content, which a flat surface rectangle has none of — and fading it hid the first
-     quarter of the mask's growth, by a fraction that is breakpoint-dependent: the enter
-     threshold is a fraction of travel, but how much screen the card already covers is not
-     (0.23 of the width on a 1440 desktop against 0.45 on a 390 phone), so on mobile the blank
-     page appeared already most of the way open.
-
-     `open_container.dart` is unambiguous: the container's own `Material` carries **no opacity**;
-     only the closed and open *children* cross-fade. The mask is the reveal. The back leg keeps
-     `HERO_CONTAINER_FADE.back`'s 0.60 → 0.90, which hands the plane over to the thumbnail late
-     instead of blinking it out and letting the picture travel alone. */
-  if (surface && (direction === 'back' || fromCurrent)) {
-    const from = fromCurrent?.get(surface)?.opacity ?? 1;
-    owners.push(animateScalar(surface, fadeTrack(frames, fade, from, fadeTo), duration));
-  }
+  /* **The window is the reveal; the content only dissolves.** The page behind it is laid out at
+     its final size and position and held there — no travel, no scale. The plane never fades in
+     (it is the mask's own fill); the content cross-fades over 0.15 → 0.85 forward, following the
+     window in as `MaterialContainerTransform`'s children do, and over `HERO_RETURN_FADE`
+     (0 → 0.3) back, gone before the window has finished shrinking. A reversal continues from the
+     live opacity (`fromCurrent`), which is also what `readOverlayPoses` reads for a mid-leg
+     turn. */
+  const contentWindow = direction === 'forward' ? HERO_CONTENT_FADE.forward : HERO_RETURN_FADE;
   if (content) {
     owners.push(
       animateScalar(
         content,
         fadeTrack(
-          frames,
-          fromCurrent ? { ...contentFade, start: 0 } : contentFade,
-          fromCurrent?.get(content)?.opacity ?? fadeFrom,
-          fadeTo,
+          sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES),
+          fromCurrent ? { ...contentWindow, start: 0 } : contentWindow,
+          fromCurrent?.get(content)?.opacity ?? (direction === 'forward' ? 0 : 1),
+          direction === 'forward' ? 1 : 0,
+        ),
+        duration,
+      ),
+    );
+  }
+  /* **The plane leaves with the copy on a return** (`HERO_RETURN_FADE`). Left up, the window is an
+     opaque sheet under a picture with transparency: the hole of a ring shows `surface` instead
+     of the list the picture is returning to — the same defect, one layer down. A forward leg
+     keeps it: the plane is the mask. */
+  if (surface && direction === 'back') {
+    owners.push(
+      animateScalar(
+        surface,
+        fadeTrack(
+          sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES),
+          fromCurrent ? { ...HERO_RETURN_FADE, start: 0 } : HERO_RETURN_FADE,
+          fromCurrent?.get(surface)?.opacity ?? 1,
+          0,
         ),
         duration,
       ),
     );
   }
 
-  // Chrome, header and body still arrive in reading order — Flutter stages incoming content the
-  // same way, from about a quarter of the way through the morph.
-  // A closing reverse fades the current copy out; moving its already-partially-entered
-  // descendants a second time creates a counter-motion inside the shrinking container.
-  // Only a forward leg owns the reveal staircase, while a forward re-open may continue from
-  // the captured rise instead of restarting it.
-  if (direction === 'forward' && !reduced) {
-    overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      owners.push(
-        animateScalar(
-          element,
-          revealTrack(frames, revealRole(element), fromCurrent?.get(element)?.rise),
-          duration,
-        ),
-      );
-    });
-  } else if (direction === 'back' && !fromCurrent && !reduced) {
-    overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      const role = revealRole(element);
-      if (role === 'chrome') return;
-      owners.push(animateScalar(element, sinkTrack(frames, role), duration));
-    });
-  } else if (fromCurrent && !reduced) {
-    // Hold the already-present pose while its parent fades. Cancelling the entrance
-    // without replacing this transform snaps a still-visible header/body to y=0.
-    overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR).forEach((element) => {
-      const pose = fromCurrent.get(element);
-      if (pose)
-        owners.push(
-          animateAt(
-            element,
-            [{ transform: pose.transform }, { transform: pose.transform }],
-            timing,
-          ),
-        );
-    });
-  }
-
+  /* **No staircase, in either direction.** Chrome, header and body were moved (a 12–20px rise,
+     staggered in reading order) *inside* a container that was already morphing: two motions in
+     one transition, and a dozen animations whose transforms re-resolve style on every frame.
+     The container transform is the reveal — the window uncovers content that is already at its
+     final position, exactly as the window's own edge moves. Returning is the same read: the
+     window shrinks away and nothing inside it travels or fades. The captured rise stays in
+     `readOverlayPoses` for the reversal paths that still hold a pose, so a turn mid-leg does not
+     snap. */
   /* The floating back button renders *outside* the overlay, so the mask never reaches it and
      the container's parameter has no claim on it: it keeps the motion table's "small thing
-     entering" row. Do not "finish the job" by moving it onto the leg's progress. */
+     entering" row. Do not "finish the job" by moving it onto the leg's progress.
+     **Opacity only** — the same rule as everything else in this transform: chrome dissolves,
+     it does not travel. Its 8px rise was the last element of the old staircase on screen. */
   if (floatingBack) {
-    /* Unconditional, not zeroed on the reduced tier: 8px *is* the weak form every other
-       control keeps, and zeroing it made this the only control that faded in with no travel
-       at all on that tier. Under `off` the clock is 0 and the distance never renders. */
-    const distance = REVEAL_DISTANCE_PX.chrome;
-    const pose = `translate3d(0, ${distance}px, 0)`;
     const current = fromCurrent?.get(floatingBack);
     owners.push(
       animateAt(
         floatingBack,
         direction === 'forward'
-          ? [
-              { opacity: current?.opacity ?? 0, transform: current?.transform ?? pose },
-              { opacity: 1, transform: 'none' },
-            ]
+          ? [{ opacity: current?.opacity ?? 0 }, { opacity: 1 }]
           : [
               {
                 opacity:
                   current?.opacity ??
                   liveOpacity?.get(floatingBack) ??
                   numericOpacity(floatingBack),
-                transform: current?.transform ?? 'none',
               },
-              { opacity: 0, transform: pose },
+              { opacity: 0 },
             ],
         direction === 'forward'
           ? {
@@ -1087,13 +960,7 @@ export class HeroMotion {
     ) {
       owners.push(
         ...buildContainerAnimations(
-          {
-            clip: mirror.clip,
-            unclip: mirror.unclip,
-            // A flyer replanted into the route's plane takes its counter track from this window.
-            flightLayer: this.flightLayerIn(mirror.clip),
-            flightLayerOffset: this.flightLayerOffset(),
-          },
+          { clip: mirror.clip, unclip: mirror.unclip },
           this.containerLeg,
           this.leg,
         ),
@@ -1425,32 +1292,6 @@ export class HeroMotion {
     this.flight.plane = plane;
   }
 
-  /**
-   * Undo the accumulated window transform for a caller measuring a node inside it — the
-   * viewport-invalidation path re-reads the Stage's landing target, which lives under the
-   * window, so a mid-flight read is the scaled box. The transform is our own animation, so
-   * its origin and scale are known exactly (`unprojectHeroContainerRect`).
-   *
-   * The `containerTracks` guard matters below the standard tier: the flight is built for
-   * tiers that cannot fly, but these tracks are never created there, so without it this
-   * would divide by a transform that is not on screen.
-   */
-  unprojectRect(rect: HeroRect): HeroRect {
-    const container = this.containerLeg;
-    if (!container || this.choreography === 'dismiss' || this.containerTracks.length === 0) {
-      return rect;
-    }
-    const elapsed = this.measurePose().elapsed;
-    const offset = this.leg.duration > 0 ? elapsed / this.leg.duration : 1;
-    const box = lerpRect(
-      container.clipFrom,
-      container.clipTo,
-      progressAt(this.leg.progress, offset),
-      container.bow,
-    );
-    return unprojectHeroContainerRect(rect, box, container.host);
-  }
-
   /** Demote to a background layer that will fade out under a newer flight. */
   retire() {
     if (this.retired || this.disposed) return;
@@ -1476,6 +1317,25 @@ export class HeroMotion {
     } catch {
       this.dispose();
       return Promise.resolve();
+    }
+  }
+
+  /**
+   * The same fade, **without giving the surface up**: a retargeted open's predecessor keeps
+   * flying home underneath (its card lease is released when it lands, not now), but its picture
+   * has to leave while the successor flies — left opaque it stood on screen as a second picture
+   * for the whole of the next open, over the detail that open was revealing.
+   */
+  fadeOutRetiring(duration = scaledMs(FLIGHT_RETIRE_MS, 'image')) {
+    if (this.disposed) return;
+    try {
+      this.flight.layer.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration,
+        easing: HIDE_EASING,
+        fill: 'forwards',
+      });
+    } catch {
+      // A detached layer has nothing on screen to fade.
     }
   }
 
@@ -1710,14 +1570,7 @@ export class HeroMotion {
           motionTier('image') === 'standard'
         ) {
           this.containerTracks = buildContainerAnimations(
-            {
-              clip: this.clip,
-              unclip: this.unclip,
-              flightLayer: this.flightLayerIn(this.clip),
-              /* The plane host is the scroller's padding box (`createPlane`); the container
-                 host is the overlay, the window's untransformed box. */
-              flightLayerOffset: this.flightLayerOffset(),
-            },
+            { clip: this.clip, unclip: this.unclip },
             this.containerLeg,
             this.leg,
           );

@@ -44,6 +44,20 @@ test('a 120Hz display is held to its own frame', () => {
   assert.notEqual(stats.verdictOf(s, interval), 'janky');
 });
 
+test('exactly 2% of frames missing is still smooth — the threshold is inclusive', () => {
+  /* `smoothness` is rounded to three decimals before the verdict reads it, so 50 frames with one
+     dropped is 0.98 and a plain `1 - 0.98` is 0.020000000000000018. The line is "no more than
+     2%", and a run sitting exactly on it must not be graded by float error (a real /perf run
+     with 4 dropped of 208 frames was reported 轻微卡顿 for that reason). */
+  const interval = 1000 / 60;
+  const stamps = frames(50, interval);
+  for (let i = 26; i < stamps.length; i += 1) stamps[i] += interval;
+  const s = stats.frameStats(stamps, interval);
+  assert.equal(s.dropped, 1);
+  assert.equal(s.smoothness, 0.98);
+  assert.equal(stats.verdictOf(s, interval), 'smooth');
+});
+
 test('the response frame is the first frame at or after the change; long frames overlap the window', () => {
   assert.equal(stats.firstFrameAfter([0, 16, 33, 50], 20), 33);
   assert.equal(stats.firstFrameAfter([0, 16], 20), null);
