@@ -15,7 +15,7 @@
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "architecture:check": "node --test scripts/testArchitecture.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run colors && npm run motion && npm run hero:path && npm run emoji",
-    "test": "node --test scripts/testArchitecture.mjs scripts/testMotionPreferences.mjs scripts/testNetAuditActivity.mjs scripts/testToasts.mjs scripts/testResources.mjs scripts/testSessionAndTags.mjs scripts/repairSecurityTest.mjs scripts/testDataBoundaries.mjs scripts/testPageFlows.mjs scripts/testGlossaryFlows.mjs scripts/testSanitizeHtml.mjs scripts/testApiTransport.mjs scripts/testAdminConsistency.mjs scripts/testPageConsistency.mjs scripts/testCoreConsistency.mjs scripts/testHeroContinuity.mjs scripts/testApiErrors.mjs scripts/testDataLayer.mjs scripts/testShell.mjs scripts/testSearch.mjs scripts/testMessages.mjs scripts/testGallery.mjs scripts/testDetail.mjs scripts/testSettingsSync.mjs scripts/testProfiles.mjs scripts/testRichText.mjs scripts/testForum.mjs scripts/testFolderTransit.mjs scripts/testPalette.mjs scripts/testShop.mjs scripts/testSubscriptions.mjs scripts/testTracking.mjs scripts/testFaveFolders.mjs scripts/testFaveRecovery.mjs scripts/testPersonalScreens.mjs scripts/testUploadRecovery.mjs scripts/testAdminConsole.mjs scripts/testAdminInlineEditor.mjs scripts/testAdminSiteTools.mjs scripts/testMascotPreferences.mjs scripts/testMascotShape.mjs scripts/testPoniesStage.mjs scripts/testRouteFallback.mjs scripts/testAdminCatalogTools.mjs scripts/testSiteStatus.mjs scripts/testPonyChooser.mjs scripts/testAssistantRecovery.mjs scripts/testImageRecommendations.mjs scripts/testProxyPacing.mjs scripts/testReviewPart2.mjs scripts/testSettingsSyncTabs.mjs scripts/testReviewPart3.mjs scripts/testReviewPart4.mjs scripts/testReviewPart5.mjs scripts/testReviewPart6.mjs scripts/testReviewPart7.mjs scripts/testPerf.mjs",
+    "test": "node --test scripts/testArchitecture.mjs scripts/testMotionPreferences.mjs scripts/testNetAuditActivity.mjs scripts/testToasts.mjs scripts/testResources.mjs scripts/testSessionAndTags.mjs scripts/repairSecurityTest.mjs scripts/testDataBoundaries.mjs scripts/testPageFlows.mjs scripts/testGlossaryFlows.mjs scripts/testSanitizeHtml.mjs scripts/testApiTransport.mjs scripts/testAdminConsistency.mjs scripts/testPageConsistency.mjs scripts/testCoreConsistency.mjs scripts/testHeroContinuity.mjs scripts/testApiErrors.mjs scripts/testDataLayer.mjs scripts/testShell.mjs scripts/testSearch.mjs scripts/testMessages.mjs scripts/testGallery.mjs scripts/testDetail.mjs scripts/testSettingsSync.mjs scripts/testProfiles.mjs scripts/testRichText.mjs scripts/testForum.mjs scripts/testFolderTransit.mjs scripts/testPalette.mjs scripts/testShop.mjs scripts/testSubscriptions.mjs scripts/testTracking.mjs scripts/testFaveFolders.mjs scripts/testFaveRecovery.mjs scripts/testPersonalScreens.mjs scripts/testUploadRecovery.mjs scripts/testAdminConsole.mjs scripts/testAdminInlineEditor.mjs scripts/testAdminSiteTools.mjs scripts/testMascotPreferences.mjs scripts/testMascotShape.mjs scripts/testPoniesStage.mjs scripts/testRouteFallback.mjs scripts/testAdminCatalogTools.mjs scripts/testSiteStatus.mjs scripts/testPonyChooser.mjs scripts/testAssistantRecovery.mjs scripts/testImageRecommendations.mjs scripts/testProxyPacing.mjs scripts/testReviewPart2.mjs scripts/testSettingsSyncTabs.mjs scripts/testReviewPart3.mjs scripts/testReviewPart4.mjs scripts/testReviewPart5.mjs scripts/testReviewPart6.mjs scripts/testReviewPart7.mjs scripts/testPerf.mjs scripts/testToolchain.mjs",
     "test:primitives": "node scripts/testPrimitives.mjs",
     "test:presence": "node scripts/testPresenceFocus.mjs",
     "test:drawer": "node scripts/testDrawerSwipe.mjs",
@@ -63,7 +63,7 @@
     "@wangeditor/editor": "^5.1.23",
     "gsap": "^3.15.0",
     "lottie-web": "^5.13.0",
-    "next": "16.3.6",
+    "next": "16.4.4",
     "nextjs-toploader": "^3.9.17",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -85,12 +85,17 @@
     "axe-core": "4.13.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.4.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
   },
   "overrides": {
+    "minimatch": "11.0.4",
     "sharp": "0.35.5",
-    "source-map-js": "1.2.2"
+    "source-map-js": "1.2.2",
+    "zod": "4.6.7"
+  },
+  "patchedDependencies": {
+    "minimatch@11.0.4": "patches/minimatch@11.0.4.patch"
   }
 }

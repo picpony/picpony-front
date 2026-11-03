@@ -127,6 +127,7 @@ a class named in a `.tsx` comment is emitted, a transform does not apply to an i
 | the mascot or desktop ponies | `docs/companions.md` |
 | `public/sw.js`, offline, PWA | `docs/offline.md` |
 | bundle size, React Compiler, Next upgrades, probes | `docs/performance.md` |
+| dependency versions, security audits, lockfiles, package patches | `docs/dependencies.md` |
 | imports, lazy loading, `lib/` layout, storage keys | `docs/module-boundaries.md` and `docs/architecture-guide.md` |
 | an API adapter or auth | `docs/backend-api.md` |
 | resources, caching, SSR seeds, prefetch, settings sync | `docs/data-requests.md` |
