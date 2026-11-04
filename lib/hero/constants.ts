@@ -8,7 +8,6 @@ import {
   springLinear,
   springRate,
 } from '@/lib/spring';
-import { TRAVEL_PX } from '@/lib/motionTokens';
 import type { HeroProgressModel } from './progress';
 import type { SpringResponse } from './spring';
 import type { HeroDirection } from './types';
@@ -37,7 +36,6 @@ export const HERO_CONTENT_SELECTOR = '[data-image-detail-crossfade]';
 export const HERO_GALLERY_ANCHOR_SELECTOR = '[data-image-hero-gallery-anchor]';
 
 export const HERO_REVEAL_SELECTOR = '[data-image-detail-reveal]';
-export const HERO_SURFACE_SELECTOR = '[data-image-detail-surface]';
 /** Pinned controls inside the routed dialog besides the back affordance (the step arrows). */
 export const HERO_CHROME_SELECTOR = '[data-image-detail-chrome]';
 
@@ -217,18 +215,7 @@ export const HERO_CONTENT_FADE: Record<HeroDirection, { start: number; end: numb
   back: { start: 0, end: 0.6 },
 };
 
-/**
- * The **detail's** own return window, narrower than `HERO_CONTENT_FADE.back`: the page has to be
- * gone while the picture is still on its way home.
- *
- * A picture with transparency composites over whatever is behind it. Until the page is gone that
- * is the detail's own text and chips — through the hole of a ring, over a surface the list is
- * hidden behind (reported from the app: 带透明的图片，透明部分在关闭时会显示元素). The plane goes
- * with it: left up, the same hole shows a sheet of `surface` instead of the list the picture is
- * returning to. 0.6 was slow enough to be visible for most of the return; a third of the leg is
- * the point where the picture is still near its box, so the dissolve reads as one page leaving
- * rather than as a card blinking out.
- */
+/** Detail content leaves before the returning picture; the window's surface stays opaque. */
 export const HERO_RETURN_FADE: { start: number; end: number } = { start: 0, end: 0.3 };
 
 /*
@@ -249,7 +236,7 @@ export const HERO_CONTAINER_SHAPE: Record<HeroDirection, { start: number; end: n
 };
 /**
  * One sample count for every track on a leg — the flyer's three, the mask, the fit, both
- * fades, the reveal staircase and the background sink. WAAPI interpolates between these
+ * fades and the background sink. WAAPI interpolates between these
  * offsets at the display's refresh rate, so this is a fidelity constant, never scaled by
  * device class.
  *
@@ -318,25 +305,8 @@ export const HERO_REVERSE_MIN_DURATION_MS = 90;
 export const HERO_REVERSE_BASE_RATIO = 0.35;
 export const HERO_REVERSE_TRAVEL_RATIO = 0.65;
 
-/**
- * Depth cue on the gallery behind the detail surface: it **recedes** to 0.95, it does not
- * translate — a translate slid the grid down the screen and pushed the top row out of the
- * fold. The number is cited rather than picked: the captcha dialog over AuthModal recedes its
- * panel to 0.95. The timing is the other half — see `HERO_BACKGROUND_SINK_WINDOW`.
- */
-export const HERO_BACKGROUND_SINK_SCALE = 0.95;
-
-/**
- * When the sink happens, as a window on the leg's own travel: the depth cue must finish while
- * there is still gallery on screen to read it against (the window covers about half the host
- * by p 0.5), so 0 → 0.6 forward. The back row is mirrored, not shared: on the way home the
- * gallery is *revealed* rather than covered, so the cue must run late or it arrives before
- * there is anything to see it in.
- */
-export const HERO_BACKGROUND_SINK_WINDOW: Record<HeroDirection, { start: number; end: number }> = {
-  forward: { start: 0, end: 0.6 },
-  back: { start: 0.4, end: 1 },
-};
+/** Subtle gallery depth over the full flight spring; see docs/hero.md#window-content-and-interruption. */
+export const HERO_BACKGROUND_SINK_SCALE = 0.97;
 
 // ---------------------------------------------------------------------------
 // The detail's own content — a dissolve in place, and the flight's chrome. No
@@ -371,7 +341,6 @@ export const FLIGHT_REBUILD_MIN_MS = 80;
    it: it answers on the next frame. */
 export const REVEAL_EASING = springLinear('defaultEffects');
 export const HIDE_EASING = springLinear('fastEffects');
-export const HIDE_DISTANCE_PX = TRAVEL_PX.small;
 
 // ---------------------------------------------------------------------------
 // Pull-to-dismiss gesture

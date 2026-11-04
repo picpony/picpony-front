@@ -24,10 +24,13 @@ export type HeroScrollFollow = {
   /** Re-read the source's range; call after anything changes its scroll height. */
   refresh: () => void;
   /** Turn the translate into a real scroll position (one task) and stop following. */
-  commit: () => void;
+  commit: (offsets?: { source: number; target: number }) => void;
   /** Stop following without touching the target's scroll position. */
   release: () => void;
 };
+
+/** Measured before the route's reveal changes its styles; see docs/hero.md#rendering-constraints. */
+export type HeroScrollFollowStart = { source: number; target: number; range: number };
 
 type ScrollTimelineCtor = new (options: { source: Element; axis?: 'block' | 'inline' | 'x' | 'y' }) => AnimationTimeline;
 
@@ -51,14 +54,16 @@ export function followHeroScroll(
   source: HTMLElement,
   target: HTMLElement,
   node: HTMLElement,
+  initial?: HeroScrollFollowStart,
 ): HeroScrollFollow | null {
   const Ctor = scrollTimelineCtor();
   if (!Ctor) return null;
-  const base = source.scrollTop;
-  target.scrollTop = base;
+  const base = initial?.source ?? source.scrollTop;
+  const targetTop = initial?.target ?? target.scrollTop;
+  if (targetTop !== base) target.scrollTop = base;
   /* The browser clamps; the translate has to start from where the target really is, or the
      first frame is off by the clamp. */
-  const parked = target.scrollTop;
+  const parked = targetTop === base ? targetTop : target.scrollTop;
   let range = -1;
   let animation: Animation | null = null;
   let done = false;
@@ -70,7 +75,7 @@ export function followHeroScroll(
 
   try {
     const timeline = new Ctor({ source, axis: 'block' });
-    range = Math.max(0, source.scrollHeight - source.clientHeight);
+    range = initial?.range ?? Math.max(0, source.scrollHeight - source.clientHeight);
     animation = node.animate(keyframes(range), { timeline, fill: 'both', easing: 'linear' } as KeyframeAnimationOptions);
   } catch {
     animation?.cancel();
@@ -101,10 +106,10 @@ export function followHeroScroll(
         // A detached effect has nothing on screen to keep in step.
       }
     },
-    commit: () => {
+    commit: (offsets) => {
       if (done) return;
-      const offset = source.scrollTop;
-      target.scrollTop = offset;
+      const offset = offsets?.source ?? source.scrollTop;
+      if ((offsets?.target ?? target.scrollTop) !== offset) target.scrollTop = offset;
       stop();
     },
     release: stop,

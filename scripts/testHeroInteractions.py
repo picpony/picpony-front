@@ -466,10 +466,12 @@ def pull_loading_content(page, fixtures, label):
         values = route.evaluate("""n=>{
           const root=n.closest('[data-image-detail-overlay]');
           return {y:new DOMMatrixReadOnly(getComputedStyle(n.querySelector('.image-detail-overlay-content')).transform).m42,
-            fades:[...root.querySelectorAll('[data-image-detail-surface],[data-image-detail-reveal]')].map(el=>Number(getComputedStyle(el).opacity))};
+            surface:Number(getComputedStyle(root.querySelector('[data-image-detail-surface]')).opacity),
+            fades:[...root.querySelectorAll('[data-image-detail-reveal]')].map(el=>Number(getComputedStyle(el).opacity))};
         }""")
         assert abs(values['y']-(45-6)/(1+(45-6)/360))<.01, values
         assert all(abs(value-(1-(45-6)/140))<.001 for value in values['fades']),values
+        assert values['surface'] == 1, values
         assert route.evaluate('n=>n.clientWidth') == width_before, 'Pull changed the media gutter'
         page.evaluate("window.__heldPull('pointercancel',45)")
         page.wait_for_function("!document.querySelector('[data-image-hero-pulling]')")
@@ -615,9 +617,25 @@ DETAIL = '[data-image-hero-surface-id] [data-image-hero-role="detail"]'
 # Flyer, Stage landing target and routed media per frame, for the landing checks.
 LANDING = """() => { window.__landing = []; window.__landingOn = true;
   const rect = n => { if (!n) return null; const r = n.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
-  const tick = () => { window.__landing.push({ state: document.documentElement.dataset.imageHeroState,
+  const watched = new WeakSet();
+  const sample = () => { const a=document.querySelector('.image-hero-flyer')?.getAnimations()[0];
+    window.__landing.push({ at:performance.now(), time:a?.currentTime, duration:a?.effect.getTiming().duration,
+      state: document.documentElement.dataset.imageHeroState,
       flyer: rect(document.querySelector('.image-hero-flyer')),
-      target: rect(document.querySelector('[data-image-hero-stage-target]')) });
+      routed: rect(document.querySelector('[data-image-hero-surface-id] [data-image-hero-role="detail"]')),
+      target: rect(document.querySelector('[data-image-hero-stage-target]')) }); };
+  const tick = () => {
+    const flyer = document.querySelector('.image-hero-flyer');
+    const a = flyer?.getAnimations()[0];
+    if (a && !watched.has(a)) {
+      watched.add(a);
+      // Completion can dispose the flyer before the next rAF. Sample its actual endpoint,
+      // rather than comparing an arbitrary penultimate spring frame with the settled slot.
+      a.finished.then(() => {
+        if (window.__landingOn && flyer.isConnected && flyer.getAnimations()[0] === a) sample();
+      }, () => {});
+    }
+    sample();
     if (window.__landingOn) requestAnimationFrame(tick); };
   requestAnimationFrame(tick); }"""
 
@@ -713,6 +731,7 @@ def landing(page, label):
     state(page, 'detail-idle')
     page.evaluate('window.__landingOn = false')
     opening = [f for f in page.evaluate('window.__landing') if f['flyer']]
+    (OUTPUT / (label+'-opening.json')).write_text(json.dumps(opening, indent=2), encoding='utf-8')
     assert opening, 'The open did not fly'
     last = opening[-1]
     assert within(last['flyer'], last['target']), f"Opened onto {last['flyer']} vs target {last['target']}"
@@ -794,6 +813,271 @@ def reopen_during_close(page, label):
     return {'turnedAt': [round(v) for v in caught]}
 
 
+def repeat_open(page, label):
+    """Cold and prepared launches of the same card keep the Stage hidden until the first pose."""
+    source = page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]')
+    source.evaluate("n=>document.querySelector('[data-image-hero-gallery-scroll]').scrollTop=0")
+    page.wait_for_timeout(350)
+    page.evaluate("""() => {
+      window.__repeatBuilds = [];
+      window.__repeatNativeAnimate = Element.prototype.animate;
+      const seen = new Set();
+      Element.prototype.animate = function(...args) {
+        if (this.matches('.image-hero-flyer')) {
+          const stage = this.closest('[data-image-hero-stage]');
+          const id = this.closest('[data-image-hero-session]')?.dataset.imageHeroSession;
+          if (stage && !seen.has(id)) {
+            seen.add(id);
+            window.__repeatBuilds.push({id, clip:getComputedStyle(stage).clipPath});
+          }
+        }
+        return Reflect.apply(window.__repeatNativeAnimate, this, args);
+      };
+    }""")
+    try:
+        for held in [None, 0, 80, 350, None, 16]:
+            state(page, 'gallery-idle')
+            if held is None:
+                source.locator('..').evaluate('n=>n.click()')
+            else:
+                box = source.bounding_box()
+                page.mouse.move(box['x']+box['width']/2, box['y']+box['height']/2)
+                page.mouse.down()
+                page.wait_for_timeout(held)
+                page.mouse.up()
+            page.wait_for_function("document.querySelector('.image-hero-flyer')!==null")
+            state(page, 'detail-idle')
+            expect(page.locator(DETAIL)).to_be_visible()
+            page.keyboard.press('Escape')
+            assert_clean(page)
+        builds = page.evaluate('window.__repeatBuilds')
+        assert len(builds) == 6, builds
+        assert all('100%' in build['clip'] for build in builds), builds
+        return {'launches':len(builds), 'hiddenUntilReady':True}
+    finally:
+        page.evaluate('() => { Element.prototype.animate=window.__repeatNativeAnimate; }')
+
+
+def same_image_press_tail(page, cdp, label, touch=False):
+    """A press caught during reopening cannot turn into a lightbox click after landing."""
+    before = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    open_image(page)
+    page.wait_for_timeout(200)
+    media = page.locator(DETAIL)
+    box = media.bounding_box()
+    record(page)
+    page.keyboard.press('Escape')
+    page.wait_for_timeout(45)
+    page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]').evaluate(
+        'n=>n.closest("a").click()')
+    state(page, 'reversing')
+    x, y = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
+    if touch:
+        cdp.send('Input.dispatchTouchEvent', {'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+    else:
+        page.mouse.move(x, y)
+        page.mouse.down()
+    state(page, 'detail-idle')
+    if touch:
+        cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+    else:
+        page.mouse.up()
+    page.wait_for_timeout(300)
+    expect(page.locator('.yarl__portal')).to_have_count(0)
+    assert page.evaluate('Boolean(document.elementFromPoint(24,32)?.closest("[data-app-bar]"))'), 'The app bar was covered'
+    log = save(page, label)
+    presses = [e for e in log['events'] if e['type']=='pointerdown' and e['state']=='reversing']
+    assert presses and presses[-1]['receiver']=='route', presses
+    # A fresh, intentional click still works immediately after the swallowed release.
+    media.click()
+    expect(page.locator('.yarl__container')).to_be_visible(timeout=6000)
+    page.keyboard.press('Escape')
+    expect(page.locator('.yarl__container')).to_have_count(0)
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    after = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    assert after == before, (before, after)
+    return {'lateReleaseIgnored':True, 'freshClickWorks':True, 'input':'touch' if touch else 'mouse'}
+
+
+def same_image_interruption(page, label, history_back=False, from_detail=False, fast=False, button=False, turn_count=None):
+    """Keep reversing one flight before either endpoint, with exactly one history ladder."""
+    open_image(page)
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    before = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    turn_count = turn_count or (16 if fast else 8)
+    if from_detail:
+        open_image(page)
+    result = page.evaluate("""({historyBack, fromDetail, fast, button, turnCount}) => new Promise((resolve, reject) => {
+      const root=document.documentElement, turns=[];
+      const open=()=>document.querySelector('[data-tab-pane-active] a.image-hero-card-link '+
+        '[data-image-hero-id="3000"]')?.closest('a').click();
+      const close=()=>{
+        if (button) {
+          const back=[...document.querySelectorAll('[data-image-detail-back-button]')].find(n=>{
+            const r=n.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+            return hit && (hit===n || n.contains(hit));
+          });
+          if (!back) { reject(new Error('The in-flight Back button cannot receive a click')); return; }
+          back.click();
+        } else if (historyBack) history.back();
+        else window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+      };
+      let direction=fromDetail?'back':'forward', initialFlyer=null, token=null, oldAnimation=null;
+      const deadline=performance.now()+10000;
+      fromDetail?close():open();
+      const next=()=>{
+        const flyer=document.querySelector('.image-hero-flyer');
+        const animation=flyer?.getAnimations()[0];
+        const marker=history.state?.__picponyImageHero;
+        if (performance.now()>deadline) { reject(new Error(JSON.stringify({turns,
+          phase:root.dataset.imageHeroState,path:location.pathname,waitingFor:direction}))); return; }
+        const threshold=fast?[0,12,24,40][turns.length%4]:35;
+        if (!animation || animation===oldAnimation || root.dataset.imageHeroTransition!==direction ||
+          Number(animation.currentTime)<threshold) { requestAnimationFrame(next); return; }
+        if (!initialFlyer) initialFlyer=flyer;
+        if (!token && marker) token=marker.token;
+        if (flyer!==initialFlyer) { reject(new Error('The same-image reversal replaced its flyer: '+JSON.stringify(turns))); return; }
+        if (marker && marker.token!==token) { reject(new Error('The same-image reversal replaced its history token')); return; }
+        turns.push({direction,time:animation.currentTime,phase:root.dataset.imageHeroState});
+        if (turns.length===turnCount) { resolve({turns}); return; }
+        oldAnimation=animation;
+        direction=direction==='forward'?'back':'forward';
+        direction==='forward'?open():close();
+        requestAnimationFrame(next);
+      };
+      requestAnimationFrame(next);
+    })""", {'historyBack':history_back,'fromDetail':from_detail,'fast':fast,'button':button,'turnCount':turn_count})
+    ends_on_detail = from_detail if turn_count % 2 == 0 else not from_detail
+    expected = 'detail-idle' if ends_on_detail else 'gallery-idle'
+    state(page, expected)
+    if expected == 'detail-idle':
+        page.keyboard.press('Escape')
+    assert_clean(page)
+    after = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    assert after == before, {'before':before,'after':after,'turns':result['turns']}
+    return {'turns':len(result['turns']), 'oneFlyer':True, 'originalHistoryEntry':True}
+
+
+def pull_reopen(page, label):
+    """Reopening a dismissed picture lands in its original slot, not the translated pull pose."""
+    open_image(page)
+    original = page.locator(DETAIL).evaluate('n=>{const r=n.getBoundingClientRect();return [r.x,r.y,r.width,r.height]}')
+    page.evaluate(LANDING)
+    pull_path(page, [(0, 20), (0, 70), (0, 140), (0, 220)])
+    state(page, 'closing.flight')
+    page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]').locator('..').evaluate('n=>n.click()')
+    state(page, 'detail-idle')
+    page.evaluate('window.__landingOn=false')
+    frames = [f for f in page.evaluate('window.__landing') if f['flyer'] and f['state'] == 'reversing']
+    assert frames, 'Reopen did not reverse the dismiss flight'
+    assert within(frames[-1]['flyer'], original, 3), {'lastFlight':frames[-1]['flyer'], 'target':original}
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    return {'returnedToOriginalSlot':True}
+
+
+def pending_history_turn(page, label, restoring=False):
+    """Change intent after a traversal was requested but before the browser dispatched it."""
+    before = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    open_image(page)
+    page.evaluate("""positive => {
+      const native=History.prototype.go;
+      window.__releaseHeroGo=null;
+      window.__restoreHeroGo=()=>{History.prototype.go=native;};
+      let held=false;
+      History.prototype.go=function(delta) {
+        if (!held && (positive?delta>0:delta<0)) {
+          held=true;
+          window.__releaseHeroGo=()=>Reflect.apply(native,this,[delta]);
+          return;
+        }
+        return Reflect.apply(native,this,[delta]);
+      };
+    }""", restoring)
+    try:
+        source = page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]').locator('..')
+        if restoring:
+            page.evaluate('history.back()')
+            state(page, 'closing.flight')
+            source.evaluate('n=>n.click()')
+        else:
+            page.keyboard.press('Escape')
+        page.wait_for_function('window.__releaseHeroGo!==null')
+        page.evaluate("window.__heldHeroFlyer=document.querySelector('.image-hero-flyer')")
+        if restoring:
+            page.keyboard.press('Escape')
+        else:
+            source.evaluate('n=>n.click()')
+        page.wait_for_timeout(35)
+        assert page.evaluate("document.querySelector('.image-hero-flyer')===window.__heldHeroFlyer"), 'The pending traversal replaced its flyer'
+        page.evaluate('window.__releaseHeroGo()')
+        if not restoring:
+            state(page, 'detail-idle')
+            page.keyboard.press('Escape')
+        assert_clean(page)
+        after = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+        assert after == before, {'before':before,'after':after}
+        return {'latestIntentWon':True, 'originalHistoryEntry':True}
+    finally:
+        page.evaluate('window.__restoreHeroGo()')
+
+
+def return_surface(page, label):
+    """Sample the real return tracks: opaque surface, stationary content, untouched app header."""
+    open_image(page)
+    page.evaluate("""() => {
+      window.__returnTracks = [];
+      window.__returnNativeAnimate = Element.prototype.animate;
+      Element.prototype.animate = function(...args) {
+        const animation = Reflect.apply(window.__returnNativeAnimate, this, args);
+        if (this.matches('.image-hero-flyer,.image-hero-flyer-clip,.image-hero-flyer-image,'+
+          '[data-image-detail-background-visual],[data-image-detail-clip],[data-image-detail-unclip],'+
+          '[data-image-detail-crossfade],[data-image-detail-surface],[data-image-detail-reveal],'+
+          '[data-image-detail-floating-back]')) {
+          animation.pause(); animation.currentTime = 0;
+          window.__returnTracks.push(animation);
+        }
+        return animation;
+      };
+    }""")
+    samples = []
+    try:
+        page.keyboard.press('Escape')
+        state(page, 'closing.flight')
+        page.wait_for_function('window.__returnTracks.length>=6')
+        for ms in [0, 40, 100, 200, 260]:
+            sample = page.evaluate("""ms => {
+              for (const a of window.__returnTracks)
+                a.currentTime = Math.min(ms, Number(a.effect.getTiming().duration)-0.5);
+              const route = document.querySelector('[data-image-hero-surface-id]');
+              const content = route.querySelector('[data-image-detail-crossfade]');
+              const header = document.querySelector('header');
+              const h = header.getBoundingClientRect();
+              return {surface:Number(getComputedStyle(route.querySelector('[data-image-detail-surface]')).opacity),
+                contentOpacity:Number(getComputedStyle(content).opacity),
+                contentX:content.getBoundingClientRect().x, contentY:content.getBoundingClientRect().y,
+                headerOpacity:Number(getComputedStyle(header).opacity),
+                headerColour:getComputedStyle(header).backgroundColor, headerY:h.y,
+                headerHeight:h.height, overlayTop:route.getBoundingClientRect().top};
+            }""", ms)
+            samples.append(sample)
+        assert all(s['surface'] == 1 for s in samples), samples
+        assert samples[0]['contentOpacity'] == 1 and samples[-1]['contentOpacity'] < .01, samples
+        assert max(s['contentX'] for s in samples)-min(s['contentX'] for s in samples) < .5, samples
+        assert max(s['contentY'] for s in samples)-min(s['contentY'] for s in samples) < .5, samples
+        assert all(s['headerOpacity'] == 1 and s['headerColour'] == samples[0]['headerColour']
+                   and s['overlayTop'] >= s['headerY']+s['headerHeight'] for s in samples), samples
+    finally:
+        page.evaluate("""() => {
+          Element.prototype.animate=window.__returnNativeAnimate;
+          for (const a of window.__returnTracks) a.play();
+        }""")
+    assert_clean(page)
+    return {'samples':len(samples), 'surfaceOpacity':1, 'stationaryContent':True}
+
+
 # The step's content node: everything of one picture that the shared axis moves.
 STEP_CONTENT = '[data-image-hero-surface-id] [data-image-detail-crossfade]'
 
@@ -801,9 +1085,15 @@ STEP_CONTENT = '[data-image-hero-surface-id] [data-image-detail-crossfade]'
 def wait_shown(page, image_id, timeout=4000):
     """The viewer has swapped to `image_id` — the incoming half has just started, and the URL has
     not followed yet (it waits for the step's idle slice)."""
-    page.wait_for_function(
-        f"() => document.querySelector('{DETAIL}')?.getAttribute('data-image-hero-id') === '{image_id}'",
-        timeout=timeout)
+    try:
+        page.wait_for_function(
+            f"() => document.querySelector('{DETAIL}')?.getAttribute('data-image-hero-id') === '{image_id}'",
+            timeout=timeout)
+    except Exception as error:
+        current = page.evaluate("""() => ({phase:document.documentElement.dataset.imageHeroState,
+          path:location.pathname, image:document.querySelector('[data-image-hero-surface-id] '+
+          '[data-image-hero-role="detail"]')?.dataset.imageHeroId})""")
+        raise AssertionError(f'Expected image {image_id}; viewer stayed at {current}') from error
 
 
 def swipe_step(page, cdp, label):
@@ -1492,6 +1782,24 @@ def run(browser, name, width, only=None):
                   ('lightbox-back', lambda label: lightbox_back(page,label)),
                   ('dialog-back', lambda label: dialog_back(page,label)),
                   ('reopen-during-close', lambda label: reopen_during_close(page,label)),
+                  ('repeat-open', lambda label: repeat_open(page,label)),
+                  ('same-image-interruption', lambda label: same_image_interruption(page,label)),
+                  ('same-image-history-interruption', lambda label: same_image_interruption(page,label,True)),
+                  ('same-image-close-interruption', lambda label: same_image_interruption(page,label,False,True)),
+                  ('same-image-close-history-interruption', lambda label: same_image_interruption(page,label,True,True)),
+                  ('same-image-fast-interruption', lambda label: same_image_interruption(page,label,True,False,True)),
+                  ('same-image-fast-close-interruption', lambda label: same_image_interruption(page,label,True,True,True)),
+                  ('same-image-button-interruption', lambda label: same_image_interruption(page,label,button=True)),
+                  ('same-image-button-close-interruption', lambda label: same_image_interruption(page,label,from_detail=True,button=True)),
+                  ('same-image-reopen-settle', lambda label: same_image_interruption(page,label,turn_count=9)),
+                  ('same-image-history-reopen-settle', lambda label: same_image_interruption(page,label,True,turn_count=9)),
+                  ('same-image-close-settle', lambda label: same_image_interruption(page,label,from_detail=True,turn_count=9)),
+                  ('same-image-history-close-settle', lambda label: same_image_interruption(page,label,True,True,turn_count=9)),
+                  ('same-image-pending-close', lambda label: pending_history_turn(page,label)),
+                  ('same-image-pending-restore', lambda label: pending_history_turn(page,label,True)),
+                  ('same-image-press-tail', lambda label: same_image_press_tail(page,cdp,label,width<500)),
+                  ('pull-reopen', lambda label: pull_reopen(page,label)),
+                  ('return-surface', lambda label: return_surface(page,label)),
                   ('reload-collapse', lambda label: reload_collapse(page,label)),
                   ('direct-back', lambda label: direct_back(page,label)),
                   ('step-across-page', lambda label: step_across_page(page,label)),

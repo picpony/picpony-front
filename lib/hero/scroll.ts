@@ -8,6 +8,8 @@ const SCROLL_EPSILON_PX = 0.25;
 const WHEEL_RESIDUAL_RESPONSE_MS = 24;
 const WHEEL_SOURCE_SUPPRESSION_MS = 240;
 
+export type HeroScrollOffset = { left: number; top: number };
+
 type ScrollListener = {
   element: HTMLElement;
   listener: () => void;
@@ -56,10 +58,10 @@ export class HeroScrollContinuity {
   }
 
   /** The visible receiver, as distinct from the last peer that happened to scroll. */
-  setInputTarget(element: HTMLElement) {
+  setInputTarget(element: HTMLElement, initial?: HeroScrollOffset) {
     // A final input on the outgoing peer may have removed this pending receiver while
     // the controller waited for the reveal frame. Reattach before declaring it live.
-    if (!this.peers.has(element)) this.addPeer(element);
+    if (!this.peers.has(element)) this.addPeer(element, initial);
     if (this.inputTarget === element) return;
     this.inputTarget = element;
     this.nativeInput = false;
@@ -96,7 +98,7 @@ export class HeroScrollContinuity {
     this.transferListeners.forEach((notify) => notify());
   }
 
-  addPeer(element: HTMLElement) {
+  addPeer(element: HTMLElement, initial?: HeroScrollOffset) {
     if (this.released || this.peers.has(element)) return;
     this.removeDeltaSource(element);
     const listener = () => {
@@ -125,18 +127,17 @@ export class HeroScrollContinuity {
       this.primary = element;
       // Baseline the destination so a forwarded delta is not mistaken for the
       // user's own scroll on the very first event.
-      this.recordWrite(element);
+      this.recordWrite(element, initial);
     }
   }
 
-  replacePeers(element: HTMLElement) {
+  replacePeers(element: HTMLElement, initial?: HeroScrollOffset) {
     if (this.released) return;
     this.resetWheelResidual();
     this.clearPeers();
     this.primary = element;
     this.inputTarget = null;
-    this.setInputTarget(element);
-    this.addPeer(element);
+    this.setInputTarget(element, initial);
   }
 
   removePeer(element: HTMLElement) {
@@ -277,10 +278,11 @@ export class HeroScrollContinuity {
   /**
    * Remember where we left a scroller so its next scroll event can be
    * attributed. Read back rather than stored from the requested value, since the
-   * browser clamps to the scrollable range.
+   * browser clamps to the scrollable range. An adoption may pass the offset it measured and
+   * clamped before its DOM writes, avoiding a synchronous layout in the reveal frame.
    */
-  private recordWrite(element: HTMLElement) {
-    this.written.set(element, { left: element.scrollLeft, top: element.scrollTop });
+  private recordWrite(element: HTMLElement, initial?: HeroScrollOffset) {
+    this.written.set(element, initial ?? { left: element.scrollLeft, top: element.scrollTop });
   }
 
   /** True while any delta source recently saw a real wheel event. */

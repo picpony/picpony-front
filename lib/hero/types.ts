@@ -123,10 +123,8 @@ export type HeroOpenIntent = {
 /**
  * Which of the two exit choreographies a close runs.
  *
- * `container` shrinks the whole detail surface back into the thumbnail — Material's container
- * transform read backwards. `dismiss` does not: a swipe-down is a gesture the hand is already
- * driving, so the surface keeps the translate and veil the finger left it at and only
- * continues them. M3 draws the same line for a drawer.
+ * Both return an opaque window to the thumbnail. `container` fades the stationary content;
+ * `dismiss` continues the fade at the position and opacity the finger left it at.
  */
 export type HeroChoreography = 'container' | 'dismiss';
 

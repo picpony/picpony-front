@@ -12,16 +12,13 @@ import {
   HERO_REVERSE_MIN_DURATION_MS,
   HERO_REVERSE_TRAVEL_RATIO,
   HERO_REVEAL_SELECTOR,
-  HERO_SURFACE_SELECTOR,
   HERO_UNCLIP_SELECTOR,
-  HIDE_DISTANCE_PX,
   HIDE_EASING,
   FLIGHT_REBUILD_MIN_MS,
   FLIGHT_RETIRE_MS,
   REVEAL_CONTENT_DURATION_MS,
   REVEAL_EASING,
   HERO_BACKGROUND_SINK_SCALE,
-  HERO_BACKGROUND_SINK_WINDOW,
 } from './constants';
 import {
   createHeroRectArc,
@@ -177,7 +174,7 @@ type HeroMotionOptions = {
         host?: HeroRect;
       })
     | null;
-  /** `dismiss` keeps the gesture's own pose instead of running the container. */
+  /** `dismiss` continues the gesture's content fade inside the returning window. */
   choreography?: HeroChoreography;
   /**
    * The overlay's live poses when this motion takes a surface over from another one mid-leg
@@ -227,7 +224,7 @@ function screenRectToPlaneAt(
  * **The early reveal.** The routed detail can be ready while the picture is still flying, and
  * Flutter shows a destination page *during* its route transition rather than after it. The route
  * is laid out exactly like the Stage (the handoff has always depended on that), so the same
- * keyframes drive the same window, fit, cross-fade and staircase on it; every mirror track is
+ * keyframes drive the same window, counter-transform and content fade on it; every mirror track is
  * pinned to the flyer's own `startTime`, so the two surfaces are one picture on the compositor.
  * The Stage keeps its tracks too: it still hosts the flyer (inside its window) and takes the
  * screen back, in the very pose the mirror was in, if the open is reversed.
@@ -237,6 +234,7 @@ function screenRectToPlaneAt(
  */
 type HeroMirror = {
   overlay: HTMLElement;
+  floatingBack: HTMLElement | null;
   content: HTMLElement | null;
   clip: HTMLElement | null;
   unclip: HTMLElement | null;
@@ -337,6 +335,7 @@ function animateAt(
   });
   if (heldAnimations) {
     animation.pause();
+    animation.currentTime = 0;
     heldAnimations.push(animation);
   }
   return { animation, element };
@@ -389,9 +388,7 @@ export function readHeroOverlayOpacities(
   const reads = new Map<HTMLElement, number>();
   const { overlay, floatingBack, choreography, fromCurrent } = ctx;
   if (choreography === 'dismiss') {
-    const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
     const targets = new Set<HTMLElement>([
-      ...(surface ? [surface] : []),
       ...overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR),
       ...(floatingBack ? [floatingBack] : []),
     ]);
@@ -422,20 +419,6 @@ export function readHeroBackgroundAmount(element: HTMLElement) {
 }
 
 /**
- * The sink's shape inside its window. A bare `intervalProgress` is linear in travel and clamps,
- * so the gallery stopped receding *at full speed* the instant the window closed (p 0.6 forward)
- * and started at full speed mid-flight on the way home (p 0.4 back): a velocity step on a layer
- * the size of the screen, which is what read as coarse. Shaped C1 at every window edge that lies
- * inside the leg — forward eases out (it begins with the leg, which is already moving, and
- * comes to rest at its end); back is a smoothstep (it starts mid-flight from rest and lands
- * with the leg). Same depth, same window, no kink.
- */
-export function easeSinkWindow(amount: number, direction: HeroDirection) {
-  const u = clamp01(amount);
-  return direction === 'forward' ? 1 - (1 - u) * (1 - u) : u * u * (3 - 2 * u);
-}
-
-/**
  * The detail side of a flight: a container transform, not a fade — one growing, clipping,
  * rounded box over a page that **does not move**. The box is the reveal: the destination is
  * laid out at its final size and position from the first frame (`formatHeroContainerCompensator`
@@ -458,7 +441,7 @@ type OverlayContext = {
   liveOpacity?: Map<HTMLElement, number>;
 };
 
-type OverlayPose = { opacity: number; transform: string; rise: number };
+type OverlayPose = { opacity: number };
 
 /** Read all shared presentation before cancelling any track; one reversal, one pose. */
 function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement | null) {
@@ -466,14 +449,11 @@ function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement
   const targets = new Set<HTMLElement>(floatingBack ? [floatingBack] : []);
   overlay
     ?.querySelectorAll<HTMLElement>(
-      `${HERO_SURFACE_SELECTOR}, ${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
+      `${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
     )
     .forEach((element) => targets.add(element));
   targets.forEach((element) => {
-    const style = getComputedStyle(element);
-    const transform = style.transform;
-    const rise = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m42;
-    poses.set(element, { opacity: Number.parseFloat(style.opacity), transform, rise });
+    poses.set(element, { opacity: numericOpacity(element) });
   });
   return poses;
 }
@@ -530,12 +510,16 @@ function buildContainerAnimations(
   }
 
   const timing = { duration, easing: 'linear' } satisfies KeyframeAnimationOptions;
-  const owners = [
-    animateAt(nodes.clip, clip, timing),
-    animateAt(nodes.clip, corner, timing),
-    animateAt(nodes.unclip, counter, timing),
-  ];
-  return owners;
+  const owners: AnimationOwner[] = [];
+  try {
+    owners.push(animateAt(nodes.clip, clip, timing));
+    owners.push(animateAt(nodes.clip, corner, timing));
+    owners.push(animateAt(nodes.unclip, counter, timing));
+    return owners;
+  } catch (error) {
+    settle(owners, false);
+    throw error;
+  }
 }
 
 /**
@@ -593,9 +577,8 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
   const { overlay, content, floatingBack, choreography, fromCurrent, liveOpacity } = ctx;
   const { direction, duration } = leg;
   const owners: AnimationOwner[] = [];
-  const surface = overlay.querySelector<HTMLElement>(HERO_SURFACE_SELECTOR);
   if (choreography === 'dismiss') {
-    return buildDismissAnimations(overlay, floatingBack, surface, leg, liveOpacity);
+    return buildDismissAnimations(overlay, floatingBack, leg, liveOpacity);
   }
   /* **The window is the reveal; the content only dissolves.** The page behind it is laid out at
      its final size and position and held there — no travel, no scale. The plane never fades in
@@ -619,33 +602,19 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
       ),
     );
   }
-  /* **The plane leaves with the copy on a return** (`HERO_RETURN_FADE`). Left up, the window is an
-     opaque sheet under a picture with transparency: the hole of a ring shows `surface` instead
-     of the list the picture is returning to — the same defect, one layer down. A forward leg
-     keeps it: the plane is the mask. */
-  if (surface && direction === 'back') {
-    owners.push(
-      animateScalar(
-        surface,
-        fadeTrack(
-          sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES),
-          fromCurrent ? { ...HERO_RETURN_FADE, start: 0 } : HERO_RETURN_FADE,
-          fromCurrent?.get(surface)?.opacity ?? 1,
-          0,
-        ),
-        duration,
-      ),
-    );
+  // Only the content dissolves. The opaque surface is revealed by the window in both directions.
+  if (direction === 'forward' && fromCurrent) {
+    // A cancelled pull restores layout before this leg. Continue its faded elements from
+    // their captured opacity, so resetting the gesture cannot flash them back at full contrast.
+    for (const element of overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)) {
+      const current = fromCurrent.get(element);
+      if (!current || current.opacity >= 1) continue;
+      owners.push(animateAt(element, [{ opacity: current.opacity }, { opacity: 1 }], {
+        duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
+        easing: REVEAL_EASING,
+      }));
+    }
   }
-
-  /* **No staircase, in either direction.** Chrome, header and body were moved (a 12–20px rise,
-     staggered in reading order) *inside* a container that was already morphing: two motions in
-     one transition, and a dozen animations whose transforms re-resolve style on every frame.
-     The container transform is the reveal — the window uncovers content that is already at its
-     final position, exactly as the window's own edge moves. Returning is the same read: the
-     window shrinks away and nothing inside it travels or fades. The captured rise stays in
-     `readOverlayPoses` for the reversal paths that still hold a pose, so a turn mid-leg does not
-     snap. */
   /* The floating back button renders *outside* the overlay, so the mask never reaches it and
      the container's parameter has no claim on it: it keeps the motion table's "small thing
      entering" row. Do not "finish the job" by moving it onto the leg's progress.
@@ -683,26 +652,16 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
 }
 
 /**
- * The swipe-down exit: a different motion, not a different duration.
- *
- * No mask and no fit. The finger has already put the surface where it is via
- * its live transform / opacity, so this only continues what the gesture was doing —
- * from the live opacity, which is why `numericOpacity` is read rather than assumed — while
- * the picture flies home on its own release ladder.
+ * Continue the finger's content fade in place while the opaque window returns to the card.
  */
 function buildDismissAnimations(
   overlay: HTMLElement,
   floatingBack: HTMLElement | null,
-  surface: HTMLElement | null,
   leg: HeroLeg,
   liveOpacity?: Map<HTMLElement, number>,
 ) {
   const owners: AnimationOwner[] = [];
-  /* 8px at every tier that animates: it is already the weak form, so the tier has nothing
-     to weaken. `off` collapses the clock instead, which is where a dismiss stops moving. */
-  const distance = HIDE_DISTANCE_PX;
   const targets = new Set<HTMLElement>([
-    ...(surface ? [surface] : []),
     ...overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR),
     ...(floatingBack ? [floatingBack] : []),
   ]);
@@ -711,8 +670,8 @@ function buildDismissAnimations(
       animateAt(
         element,
         [
-          { opacity: liveOpacity?.get(element) ?? numericOpacity(element), transform: 'none' },
-          { opacity: 0, transform: `translate3d(0, ${distance}px, 0)` },
+          { opacity: liveOpacity?.get(element) ?? numericOpacity(element) },
+          { opacity: 0 },
         ],
         // The leg's own duration, not the closing constant: an interrupted reverse runs
         // short, and a fade outliving its own flight left the surface visibly settling
@@ -764,8 +723,6 @@ export class HeroMotion {
   private disposed = false;
   private landedCompletion = createCompletion();
   private sharedCompletion = createCompletion();
-  /** The leg the shared tracks were built on, once a `retreat` gave the flyer a leg of its own. */
-  private sharedLeg: HeroLeg | null = null;
   /** `HeroMotionOptions.preread`, consumed by the constructor's own build only. */
   private preread: HeroMotionOptions['preread'] | null = null;
 
@@ -844,11 +801,12 @@ export class HeroMotion {
   /** Current visual state — sampled from the emitted tracks, with no layout reads. */
   measurePose(): HeroPose {
     const currentTime = this.visual[0]?.animation.currentTime;
-    // WAAPI's currentTime describes the presented timeline, including a pending first
-    // frame. performance.now() can be a whole task ahead and made an interruption jump.
-    const time = typeof currentTime === 'number' ? this.leg.startedAt + currentTime : timelineNow();
+    // A pending animation has not presented any travel, even if setup blocked for a whole leg.
+    const elapsed = typeof currentTime === 'number'
+      ? currentTime
+      : this.landedCompletion.settled ? this.leg.duration : 0;
     return {
-      ...evaluateLeg(this.leg, time),
+      ...evaluateLeg(this.leg, this.leg.startedAt + elapsed),
       pullOffset: this.pullOffset,
       pullOffsetX: this.pullOffsetX,
     };
@@ -864,7 +822,7 @@ export class HeroMotion {
    * flyer's did; at capture time the scroll terms cancel and the comparison is exact.
    *
    * **Where the window does not clip the picture there is nothing to solve, and the two
-   * share.** A dismiss builds no window, and a closing leg's flyer is planted in the gallery
+   * share.** A closing leg's flyer is planted in the gallery
    * plane, outside both overlays — neither arc constrains the other, and the shrinking surface
    * and the picture have to read as one object. The gate is `containedFlightLayer`, the same
    * DOM question the counter track asks (a direction test goes stale).
@@ -904,13 +862,14 @@ export class HeroMotion {
    * (`releaseShared`) or once the motion is retiring there is nothing to mirror, and the caller
    * keeps the old handoff.
    */
-  attachMirror(overlay: HTMLElement): (() => void) | null {
+  attachMirror(overlay: HTMLElement, floatingBack: HTMLElement | null = null): (() => void) | null {
     if (this.disposed || this.retired || this.sharedReleased || this.choreography === 'dismiss') {
       return null;
     }
-    if (this.mirrors.some((mirror) => mirror.overlay === overlay)) return null;
+    if (overlay === this.overlay || this.mirrors.some((mirror) => mirror.overlay === overlay)) return null;
     const mirror: HeroMirror = {
       overlay,
+      floatingBack,
       content: overlay.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR),
       clip: overlay.querySelector<HTMLElement>(HERO_CLIP_SELECTOR),
       unclip: overlay.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR),
@@ -945,7 +904,7 @@ export class HeroMotion {
       {
         overlay: mirror.overlay,
         content: mirror.content,
-        floatingBack: null,
+        floatingBack: mirror.floatingBack,
         choreography: this.choreography,
         fromCurrent,
       },
@@ -995,7 +954,7 @@ export class HeroMotion {
   private readSharedPoses() {
     const poses = readOverlayPoses(this.overlay, this.floatingBack);
     this.mirrors.forEach((mirror) => {
-      readOverlayPoses(mirror.overlay, null).forEach((pose, element) => poses.set(element, pose));
+      readOverlayPoses(mirror.overlay, mirror.floatingBack).forEach((pose, element) => poses.set(element, pose));
     });
     return poses;
   }
@@ -1033,7 +992,7 @@ export class HeroMotion {
       shared: this.readSharedPoses(),
       /* The overlay is the one box in the chain that is never transformed, so no write between
          this read and the reversal can move it. */
-      host: this.containerLeg && this.overlay ? readRect(this.overlay) : null,
+      host: this.containerLeg && this.overlay?.isConnected ? readRect(this.overlay) : null,
     };
   }
 
@@ -1049,9 +1008,16 @@ export class HeroMotion {
        the tree: read after them it forced a second style + layout pass inside the task that
        turns the flight around. */
     const { shared: sharedPose, host: hostRect } = inputs ?? this.readReverseInputs();
-    // The hand has already removed the mask/fit and placed the full surface. Returning
-    // through its stale half-open container would apply a second, discontinuous motion.
-    if (this.sharedReleased && this.leg.direction === 'forward') this.choreography = 'dismiss';
+    // A pull released the window tracks: the visible window is now the full host.
+    if (this.sharedReleased && this.leg.direction === 'forward') {
+      this.choreography = 'dismiss';
+      if (this.containerLeg) {
+        const host = hostRect ?? this.containerLeg.host;
+        this.containerLeg = {
+          ...this.containerLeg, clipFrom: host, clipTo: host, radiusFrom: 0, radiusTo: 0, host,
+        };
+      }
+    }
     this.sharedReleased = false;
 
     this.landedCompletion.resolve();
@@ -1087,6 +1053,7 @@ export class HeroMotion {
 
     // Shorter trips home get proportionally shorter durations.
     const direction: HeroDirection = previous.direction === 'forward' ? 'back' : 'forward';
+    if (direction === 'forward') this.choreography = 'container';
     const fullTravel = heroRectCenterDistance(previous.from, previous.to);
     const returnTravel = heroRectCenterDistance(from, to);
     const ratio = fullTravel > 0.5 ? clamp01(returnTravel / fullTravel) : 1;
@@ -1216,7 +1183,7 @@ export class HeroMotion {
    */
   private rebuildContainer(destination: HeroRect, progress: number) {
     const previous = this.containerLeg;
-    if (!previous || !this.overlay || this.choreography === 'dismiss') return;
+    if (!previous || !this.overlay) return;
     settle(this.containerTracks, false);
     this.containerTracks = [];
     if (motionTier('image') !== 'standard') return;
@@ -1257,23 +1224,6 @@ export class HeroMotion {
     if (!layer) return null;
     if (this.clip?.contains(layer)) return layer;
     return this.mirrors.some((mirror) => mirror.clip?.contains(layer)) ? layer : null;
-  }
-
-  /** The flyer's layer when this particular window clips it; the counter track goes there. */
-  private flightLayerIn(clip: HTMLElement | null) {
-    const layer = this.flight.layer;
-    return clip && layer && clip.contains(layer) ? layer : null;
-  }
-
-  /** Where the flyer's layer sits relative to a window's untransformed box. */
-  private flightLayerOffset() {
-    const container = this.containerLeg;
-    return container
-      ? {
-          x: this.flight.plane.host.left - container.host.left,
-          y: this.flight.plane.host.top - container.host.top,
-        }
-      : { x: 0, y: 0 };
   }
 
   /**
@@ -1357,8 +1307,7 @@ export class HeroMotion {
     if (container && !this.retired) {
       const running = this.containerTracks.length > 0 && !this.sharedCompletion.settled;
       if (running) {
-        // The leg the window runs on — not a retreat's, which replaced the flyer's alone.
-        const leg = this.sharedLeg ?? this.leg;
+        const leg = this.leg;
         const current = this.containerTracks[0]?.animation.currentTime;
         const elapsed = typeof current === 'number' ? current : this.measurePose().elapsed;
         const offset = leg.duration > 0 ? elapsed / leg.duration : 1;
@@ -1379,69 +1328,6 @@ export class HeroMotion {
     }
     this.retire();
     return { window, shared };
-  }
-
-  /**
-   * Fly the picture home on its own, after `handOver`/`retire` gave its surface away: the
-   * reversal's flight leg — caught from its live pose, replanted into the gallery's plane, a
-   * spring home — with no window, overlay or background tracks of its own.
-   */
-  retreat(destination: HeroRect, plane: HeroScrollPlane | undefined, measured: HeroPose) {
-    if (this.disposed) return Promise.resolve();
-    this.landedCompletion = createCompletion();
-    this.cancelVisual(false);
-    /* The window's counter-scale rides the flyer's layer; the window is no longer this motion's,
-       and outside it (in the gallery plane) the counter would distort the picture. */
-    this.flight.layer.getAnimations().forEach((animation) => animation.cancel());
-    this.flight.layer.style.transformOrigin = '';
-    const previous = this.leg;
-    const posed: HeroRect =
-      measured.pullOffset || measured.pullOffsetX
-        ? {
-            ...measured.rect,
-            top: measured.rect.top + measured.pullOffset,
-            left: measured.rect.left + (measured.pullOffsetX ?? 0),
-          }
-        : measured.rect;
-    if (this.pullOffset || this.pullOffsetX) this.setPullOffset(0, 0);
-    const currentScreen = planeRectToScreen(posed, this.flight.plane);
-    if (plane) {
-      moveFlightToPlane(
-        this.flight,
-        plane,
-        screenRectToPlane(currentScreen, plane),
-        measured.radius,
-      );
-    }
-    const from = screenRectToPlane(currentScreen, this.flight.plane);
-    const to = screenRectToPlane(destination, this.flight.plane);
-    const direction: HeroDirection = 'back';
-    const fullTravel = heroRectCenterDistance(previous.from, previous.to);
-    const ratio = fullTravel > 0.5 ? clamp01(heroRectCenterDistance(from, to) / fullTravel) : 1;
-    const duration = Math.max(
-      scaledMs(HERO_REVERSE_MIN_DURATION_MS, 'image'),
-      Math.round(
-        HERO_DURATIONS[direction] *
-          motionScale('image') *
-          (HERO_REVERSE_BASE_RATIO + HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(ratio)),
-      ),
-    );
-    // The window keeps running on the leg it was built for, until a successor takes it over.
-    if (!this.retired) this.sharedLeg ??= previous;
-    this.leg = createHeroLeg({
-      from,
-      to,
-      fromRadius: measured.radius,
-      toRadius: getFlightRadii(this.flight, direction).to,
-      direction,
-      duration,
-      startedAt: timelineNow() + 1,
-      baseAspect: this.baseAspect,
-      speed: -measured.speed,
-    });
-    this.startVisual();
-    heroProbeMark('hx:respond:retreat');
-    return this.landed;
   }
 
   /** Hand the background + chrome tracks to a gesture. */
@@ -1566,7 +1452,6 @@ export class HeroMotion {
           this.containerLeg &&
           this.clip &&
           this.unclip &&
-          this.choreography !== 'dismiss' &&
           motionTier('image') === 'standard'
         ) {
           this.containerTracks = buildContainerAnimations(
@@ -1638,13 +1523,7 @@ export class HeroMotion {
       element.style.transformOrigin = `center ${centre}px`;
     }
     element.style.willChange = 'transform';
-    /* The sink shares the leg's own table, so depth and travel stay locked — a literal
-       sample count here would have forked off the mask's the moment either number moved.
-       It does not share the leg's whole *interval*: the window grows over the gallery as the
-       leg runs, so a cue that peaked at p=1 peaked behind an opaque surface. See
-       `HERO_BACKGROUND_SINK_WINDOW`. */
-    const window = HERO_BACKGROUND_SINK_WINDOW[direction];
-    // Scale is linear in the amount, so the amount's curve is the easing (`ScalarTrack`).
+    // Follow the entire spring. Compressing it into an early window spent the depth in ~60ms.
     return animateScalar(
       element,
       {
@@ -1652,9 +1531,7 @@ export class HeroMotion {
           { transform: getHeroBackgroundSinkTransform(from) },
           { transform: getHeroBackgroundSinkTransform(to) },
         ],
-        easing: linearEasing(sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES), (progress) =>
-          easeSinkWindow(intervalProgress(progress, window.start, window.end), direction),
-        ),
+        easing: linearEasing(sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES), clamp01),
       },
       duration,
     );

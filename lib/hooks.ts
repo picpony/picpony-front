@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { LS_KEYS, MEDIA } from './constants';
-import { getImageHeroRuntime, interruptImageHero, subscribeImageHeroRuntime } from './hero/runtime';
+import { getImageHeroRuntime, interruptImageHero } from './hero/runtime';
 
 /**
  * Subscribes to a media query. useSyncExternalStore over useState + an
@@ -416,29 +416,6 @@ export function escapeMeansBack(
  * `onBack` is held in a ref written from an effect: pages rebuild their handler
  * every render, and a render React discards must not mutate it.
  */
-/** Run `close` when the picture in motion lands on its detail; dropped if it lands anywhere else. */
-let pendingSettledClose: (() => void) | null = null;
-function closeOnceSettled(close: () => void) {
-  pendingSettledClose?.();
-  let timer = 0;
-  const stop = () => {
-    unsubscribe();
-    window.clearTimeout(timer);
-    if (pendingSettledClose === stop) pendingSettledClose = null;
-  };
-  const unsubscribe = subscribeImageHeroRuntime(() => {
-    const { phase } = getImageHeroRuntime();
-    if (phase === 'detail-idle') {
-      stop();
-      close();
-    } else if (phase === 'gallery-idle') {
-      stop();
-    }
-  });
-  timer = window.setTimeout(stop, 4_000);
-  pendingSettledClose = stop;
-}
-
 export function useEscapeBack(onBack: () => void, enabled = true) {
   const latest = useRef(onBack);
 
@@ -458,14 +435,9 @@ export function useEscapeBack(onBack: () => void, enabled = true) {
       const runtime = getImageHeroRuntime();
       if (runtime.phase !== 'gallery-idle' && runtime.phase !== 'detail-idle') {
         event.preventDefault();
-        if (runtime.phase.startsWith('opening')) {
-          interruptImageHero(); // the open turns around
-        } else if (runtime.phase === 'reversing' && runtime.direction === 'forward') {
-          /* A close the user turned back towards the picture cannot turn a second time: the
-             Escape closes it as soon as it has landed. */
-          closeOnceSettled(() => latest.current());
-        }
-        // Heading to the list already (a close, a reversed open, a recovery): nothing to add.
+        // The current turn handles Back immediately. A deferred page-level Back can outlive
+        // this request and close a later reopen of the same image.
+        interruptImageHero();
         return;
       }
       event.preventDefault();

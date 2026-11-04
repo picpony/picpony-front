@@ -2699,14 +2699,11 @@ html[data-image-hero-transition] [data-image-detail-background-visual] {
  * source without a scrollTop rAF correction. No z-index or transform on an anchor: that
  * creates a stacking context and traps a flyer below the Stage.
  */
-/* A Stage a press mounted ahead of its click (`HeroController.armOpen`): laid out so the click
-   reads clean geometry, but neither painted nor hit-tested until the click adopts it. An empty
-   clip, not `visibility` (or `pointer-events`, or `inert`): those are inherited, so taking them
-   off restyled every node of the Stage inside the click (~14ms at 4× CPU). A clip-path is the
-   element's own property, it removes the box from hit testing too, and lifting it is a paint
-   change. */
-[data-image-hero-stage-state='armed'],
-[data-image-hero-stage-armed] {
+/* Keep the Stage laid out but unpainted until its flight tracks are ready, and after they
+   retire until React unmounts it. The empty clip also removes hit testing without changing
+   inherited visibility, pointer or inert state across the Stage subtree. */
+[data-image-hero-stage]:not([data-image-hero-stage-ready]),
+[data-image-hero-stage-back]:not([data-image-hero-stage-ready]) {
   clip-path: inset(0 0 100% 0);
 }
 
@@ -3166,9 +3163,7 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
   contain: layout style;
 }
 
-/* A superseded close may finish below the new Stage, but must never cover the
-   newly opened foreground flyer. The Stage surface starts transparent, so the
-   retiring layer still receives real overlapping paint before it fades out. */
+/* A superseded close fades below the new Stage while its window opens from the card. */
 .image-hero-flight-layer[data-image-hero-role='retiring'] {
   z-index: var(--z-hero-retiring);
 }
@@ -3255,11 +3250,9 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
 
 /* `pull-ready`: a finger is down where a pull could start — promoted ahead of the claim so the
    first dragged frame moves layers rather than creating them (`HeroPullController.prime`). */
-[data-image-hero-pulling] [data-image-detail-surface],
 [data-image-hero-pulling] [data-image-detail-reveal],
 [data-image-hero-pulling] [data-image-detail-chrome],
 [data-image-detail-floating-back][data-image-hero-pulling],
-[data-image-hero-pull-ready] [data-image-detail-surface],
 [data-image-hero-pull-ready] [data-image-detail-reveal],
 [data-image-hero-pull-ready] [data-image-detail-chrome],
 [data-image-detail-floating-back][data-image-hero-pull-ready] {

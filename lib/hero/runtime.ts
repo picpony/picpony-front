@@ -120,7 +120,7 @@ export function registerImageHeroStage(sessionId: number, nodes: HeroStageNodes)
   return engine ? engine.registerStage(sessionId, nodes) : () => {};
 }
 
-/** Reverse whatever transition is running. Returns false if none was. */
+/** Request the gallery during a running transition. Returns false if none was. */
 export function interruptImageHero(navigationHandled = false) {
   return engine?.interrupt(navigationHandled) ?? false;
 }

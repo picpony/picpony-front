@@ -44,8 +44,10 @@ INSTALL_CAPTURE = r"""() => {
     const r = node.getBoundingClientRect();
     return {x:r.x, y:r.y, width:r.width, height:r.height};
   };
+  // A sealed route receives mirror tracks before it becomes visible. Capture those too,
+  // or it finishes opening behind the paused Stage and covers the sampled gallery.
   const relevant = element => element instanceof Element && element.matches(selector)
-    && element.isConnected && getComputedStyle(element).visibility !== 'hidden';
+    && element.isConnected;
   const name = element => ({tag:element.tagName.toLowerCase(), className:element.className,
     attributes:Object.fromEntries([...element.attributes]
       .filter(a => a.name.startsWith('data-image-')).map(a => [a.name, a.value]))});
@@ -97,17 +99,21 @@ INSTALL_CAPTURE = r"""() => {
       document.getAnimations().forEach(collect);
       await twoFrames();
       if (!this.hasFlight) throw new Error('No actual hero flight was created');
+      tracks = tracks.filter(t => t.animation.playState !== 'idle');
       tracks.forEach(t => { t.animation.pause(); t.animation.currentTime = 0; });
       return tracks.map(describe);
     },
     async sample(milliseconds) {
       if (!armed) throw new Error('Capture must be armed before sampling');
+      tracks = tracks.filter(t => t.animation.playState !== 'idle');
       // Absolute time, not a separate normalized fraction per animation.
       tracks.forEach(t => { t.animation.pause(); t.animation.currentTime = milliseconds; });
       await twoFrames();
       const layer = document.querySelector('.image-hero-flight-layer[data-image-hero-role="foreground"]')
         ?? document.querySelector('.image-hero-flight-layer');
-      const overlay = [...document.querySelectorAll('[data-image-detail-overlay]')]
+      const overlay = document.querySelector('[data-image-hero-route-state="adopted"]')
+        ?? layer?.closest('[data-image-detail-overlay]')
+        ?? [...document.querySelectorAll('[data-image-detail-overlay]')]
         .find(n => getComputedStyle(n).visibility !== 'hidden'
           && (direction === 'forward' ? n.hasAttribute('data-image-hero-stage')
             : !n.hasAttribute('data-image-hero-stage')))
@@ -133,7 +139,8 @@ INSTALL_CAPTURE = r"""() => {
       // Replaying from zero makes completion a real full-duration playback, not
       // an immediate finish caused by the final endpoint screenshot.
       armed = false;
-      tracks.forEach(t => { t.animation.currentTime = 0; t.animation.play(); });
+      tracks.filter(t => t.animation.playState !== 'idle')
+        .forEach(t => { t.animation.currentTime = 0; t.animation.play(); });
     }
   };
 }"""

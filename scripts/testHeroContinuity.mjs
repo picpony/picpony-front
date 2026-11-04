@@ -111,6 +111,60 @@ function assertNoScrollerListeners(element) {
   }
 }
 
+test('adopting a measured scroller does not flush layout again to establish its baseline', (t) => {
+  const { continuity } = scrollHarness(t);
+  const next = new Scroller(120);
+  let reads = 0;
+  Object.defineProperties(next, {
+    scrollLeft: { configurable: true, get() { reads += 1; return 0; } },
+    scrollTop: { configurable: true, get() { reads += 1; return 120; } },
+  });
+  continuity.replacePeers(next, { left: 0, top: 120 });
+  assert.equal(reads, 0);
+  next.dispatchEvent(new Event('pointerdown'));
+  assert.equal(continuity.hasNativeInput, true);
+  continuity.release();
+  assertNoScrollerListeners(next);
+});
+
+test('a measured scroll follower starts without reads and preserves a clamped target', () => {
+  let reads = 0;
+  let writes = 0;
+  let top = 0;
+  let keys;
+  let cancelled = false;
+  const source = {
+    get scrollTop() { reads += 1; return 80; },
+    get scrollHeight() { reads += 1; return 600; },
+    get clientHeight() { reads += 1; return 400; },
+  };
+  const target = {
+    get scrollTop() { reads += 1; return top; },
+    set scrollTop(value) { writes += 1; top = Math.min(40, value); },
+  };
+  const node = { animate(value) {
+    keys = value;
+    return { cancel() { cancelled = true; } };
+  } };
+  const { followHeroScroll } = load('lib/hero/follow.ts', {}, {
+    window: { ScrollTimeline: class {} },
+  });
+  const still = followHeroScroll(source, target, node, { source: 0, target: 0, range: 200 });
+  assert.equal(reads, 0);
+  assert.equal(writes, 0);
+  still.commit({ source: 0, target: 0 });
+  assert.equal(reads, 0);
+  assert.equal(writes, 0);
+  assert.equal(cancelled, true);
+
+  const scrolled = followHeroScroll(source, target, node, { source: 80, target: 0, range: 200 });
+  assert.equal(top, 40);
+  assert.equal(reads, 1, 'only the browser-clamped target is read back after a real scroll write');
+  assert.equal(keys[0].transform, 'translate3d(0, 40.000px, 0)');
+  assert.equal(keys[1].transform, 'translate3d(0, -160.000px, 0)');
+  scrolled.release();
+});
+
 for (const input of ['wheel', 'pointerdown', 'touchstart']) {
   test(`fresh ${input} stops the outgoing wheel residual before the destination scrolls`, async (t) => {
     const { continuity, destination, frames, frame, drain } = scrollHarness(t);
@@ -277,7 +331,7 @@ function transferClock() {
 }
 
 /** Load the real controller method, input waiters, scroll bridge and scheduler; no browser/server. */
-function inputTransferHarness(t) {
+function inputTransferHarness(t, history = {}) {
   const clock = transferClock();
   const window = Object.assign(new EventTarget(), {
     setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, innerWidth: 1440, innerHeight: 900,
@@ -302,6 +356,7 @@ function inputTransferHarness(t) {
   ].map(name => [name, {}]));
   dependencies['./probe'] = { heroProbeMark() {}, heroProbeDisabled: () => false };
   Object.assign(dependencies, {
+    './history': { imageHeroHistory: history },
     './constants': { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS, HERO_INPUT_TRANSFER_QUIET_MS: 320 },
     './input': { ...input, waitForHeroInteractionQuiet(signal, quietFor, budget) {
       const before = new Set(clock.timers.keys());
@@ -349,6 +404,81 @@ function inputTransferHarness(t) {
   return { clock, controller, session, continuity, destination, input, window, quietWaits, beginInput, assertClean,
     wait: () => controller.waitForInputTransfer(session) };
 }
+
+function closingFallbackHarness(t, collapse) {
+  const calls = [];
+  const h = inputTransferHarness(t, { ensureBackground: collapse });
+  Object.assign(h.session, {
+    kind: 'closing', record: {}, owner: Symbol('closing'),
+    route: { pull: { reset() { calls.push('pull'); } } },
+    motion: { dispose() { calls.push('motion'); } },
+    scrollContinuity: { release() { calls.push('scroll'); } },
+    shared: { dispose() { calls.push('shared'); } },
+    visual: { dispose() { calls.push('visual'); } },
+    resolveClose: outcome => calls.push(outcome),
+  });
+  Object.assign(h.controller, {
+    routes: { seal() { calls.push('seal'); } },
+    exposeGallery() {},
+    clearBackgroundVisual() { calls.push('background'); },
+    isRecordBackground: () => true,
+    setPhase: phase => calls.push(phase),
+    reconcileIdleLocation() { calls.push('reconcile'); },
+  });
+  return { ...h, calls };
+}
+
+test('a failed reopening disposes its flight and scroll owner before collapsing history', async (t) => {
+  const h = closingFallbackHarness(t, async () => {
+    assert.equal(h.session.motion, null);
+    assert.equal(h.session.scrollContinuity, null);
+    assert.deepEqual([...h.calls].sort(), ['seal', 'pull', 'motion', 'scroll', 'shared', 'visual', 'background'].sort());
+    assert.ok(h.calls.indexOf('seal') < h.calls.indexOf('motion'), 'seal the route before cancelling its window');
+    return true;
+  });
+  await h.controller.abandonToCollapse(h.session);
+  assert.equal(h.controller.foreground, null);
+  assert.equal(h.session.abort.signal.aborted, true);
+  assert.deepEqual(h.calls.slice(-2), ['gallery-idle', 'closed']);
+});
+
+test('an old fallback cannot reset a newer flight when its history traversal completes late', async (t) => {
+  let finish, current;
+  const h = closingFallbackHarness(t, (_record, owns) => {
+    current = owns;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const pending = h.controller.abandonToCollapse(h.session);
+  assert.equal(h.controller.foreground, null);
+  assert.equal(current(), true);
+  const next = { id: 2 };
+  h.controller.foreground = next;
+  assert.equal(current(), false);
+  finish(true);
+  await pending;
+  assert.equal(h.controller.foreground, next);
+  assert.equal(h.calls.filter(call => call === 'background').length, 1);
+  assert.equal(h.calls.includes('gallery-idle'), false);
+  assert.equal(h.calls.includes('reconcile'), false);
+  assert.equal(h.calls.at(-1), 'handled');
+});
+
+test('a newer flight finishing does not give an old fallback ownership again', async (t) => {
+  let finish, current;
+  const h = closingFallbackHarness(t, (_record, owns) => {
+    current = owns;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const pending = h.controller.abandonToCollapse(h.session);
+  h.controller.sessionSequence += 1;
+  h.controller.foreground = null;
+  assert.equal(current(), false);
+  finish(true);
+  await pending;
+  assert.equal(h.calls.includes('gallery-idle'), false);
+  assert.equal(h.calls.includes('reconcile'), false);
+  assert.equal(h.calls.at(-1), 'handled');
+});
 
 test('quiet wait reports quiet, expired and aborted separately and cleans up each waiter', async (t) => {
   const h = inputTransferHarness(t);
@@ -727,23 +857,33 @@ test('a finger moving back up reports a negative release speed', () => {
   assert.ok(x > 0.15 && x < 0.35, `sideways ${x}`);
 });
 
-// --- Background sink shape -------------------------------------------------------------------
-test('the gallery sink has no velocity step at an edge of its window inside the leg', async () => {
-  const source = readFileSync(new URL('../lib/hero/motion.ts', import.meta.url), 'utf8');
-  const match = source.match(/export function easeSinkWindow[\s\S]*?\r?\n}\r?\n/);
-  assert.ok(match, 'easeSinkWindow is exported from motion.ts');
-  const fn = new Function('clamp01', `${ts.transpileModule(match[0].replace('export ', ''), {
-    compilerOptions: { target: ts.ScriptTarget.ES2022 },
-  }).outputText}; return easeSinkWindow;`)(clamp01);
-  const slope = (u, direction) => (fn(u + 1e-4, direction) - fn(u - 1e-4, direction)) / 2e-4;
-  assert.equal(fn(0, 'forward'), 0);
-  assert.equal(fn(1, 'forward'), 1);
-  assert.equal(fn(0, 'back'), 0);
-  assert.equal(fn(1, 'back'), 1);
-  // Forward ends inside the leg (p 0.6): it must arrive at rest.
-  assert.ok(Math.abs(slope(1 - 1e-4, 'forward')) < 0.01);
-  // Back starts inside the leg (p 0.4): it must leave from rest.
-  assert.ok(Math.abs(slope(1e-4, 'back')) < 0.01);
+// --- Display clock ---------------------------------------------------------------------------
+test('a pending first frame cannot spend the flight while the main thread is busy', () => {
+  const dependencies = Object.fromEntries([
+    './constants', './geometry', './plane', './progress', './spring', './probe', '@/lib/appearance',
+  ].map(name => [name, {}]));
+  dependencies['./flight'] = { evaluateLeg };
+  dependencies['@/lib/utils'] = utils;
+  const { HeroMotion } = load('lib/hero/motion.ts', dependencies, {
+    performance: { now: () => 5000 },
+  });
+  const leg = createHeroLeg({
+    from: { left: 30, top: 200, width: 180, height: 140 },
+    to: { left: 300, top: 80, width: 720, height: 540 },
+    fromRadius: 16, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
+    startedAt: 1000, baseAspect: 4 / 3,
+  });
+  const motion = Object.create(HeroMotion.prototype);
+  Object.assign(motion, { leg, visual: [{ animation: { currentTime: null } }],
+    landedCompletion: { settled: false }, pullOffset: 0, pullOffsetX: 0 });
+  assert.equal(motion.measurePose().elapsed, 0);
+  assert.deepEqual(motion.measurePose().rect, leg.from);
+  motion.visual[0].animation.currentTime = 42;
+  assert.equal(motion.measurePose().elapsed, 42);
+  assert.deepEqual(motion.measurePose().rect, evaluateLeg(leg, leg.startedAt + 42).rect);
+  motion.visual = [];
+  motion.landedCompletion.settled = true;
+  assert.deepEqual(motion.measurePose().rect, leg.to);
 });
 
 test('a dismiss released towards the card leaves at the finger speed; away from it, from rest', async () => {
@@ -761,4 +901,127 @@ test('a dismiss released towards the card leaves at the finger speed; away from 
   const rest = createHeroLeg({ from, to: below, fromRadius: 0, toRadius: 16, direction: 'back',
     duration: 300, startedAt: 0, baseAspect: 1 });
   assert.ok(velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0), 'a throw leaves faster than a let-go');
+});
+
+function historyHarness() {
+  const entries = [{ href: 'https://fixture.test/user/1', state: {} }];
+  let index = 0;
+  const traversals = [];
+  const window = Object.assign(new EventTarget(), {
+    location: new URL(entries[0].href), setTimeout, clearTimeout,
+  });
+  const harness = { afterGo: null };
+  const select = () => { window.location = new URL(entries[index].href); };
+  window.history = {
+    get state() { return entries[index].state; },
+    pushState(state, _title, href) {
+      entries.splice(index + 1);
+      entries.push({ state, href: new URL(href, window.location.href).href });
+      index += 1;
+      select();
+    },
+    replaceState(state, _title, href) {
+      entries[index] = { state, href: new URL(href, window.location.href).href };
+      select();
+    },
+    go(delta) {
+      traversals.push(delta);
+      queueMicrotask(() => {
+        index += delta;
+        assert.ok(index >= 0 && index < entries.length, 'a traversal escaped its history ladder');
+        select();
+        const event = new Event('popstate');
+        Object.defineProperty(event, 'state', { value: entries[index].state });
+        window.dispatchEvent(event);
+        harness.afterGo?.();
+      });
+    },
+  };
+  const { imageHeroHistory: history } = load('lib/hero/history.ts', {
+    '@/lib/historyLayers': { consumeHistoryLayerPop: () => false, historyLayerBeneath: () => null,
+      setHistoryLayerGate() {}, settleHistoryLayers: async () => {} },
+    '@/lib/utils': { randomId: () => 'history-test' },
+  }, { window, URL, MessageChannel: undefined });
+  history.initialize(() => {});
+  const record = history.createRecord({ image: { id: 7 } }, { pathname: '/user/1', search: '' }, '/pic/7', 1);
+  assert.equal(history.claim(record), true);
+  window.history.pushState(window.history.state, '', '/pic/7');
+  assert.equal(history.install(record), true);
+  return Object.assign(harness, { history, record, window, entries, traversals,
+    getIndex: () => index });
+}
+
+test('re-entering the same detail guard does not add another history rung', () => {
+  const h = historyHarness();
+  for (let turn = 0; turn < 8; turn += 1) assert.equal(h.history.install(h.record), true);
+  assert.equal(h.entries.length, 4);
+  assert.equal(h.getIndex(), 3);
+});
+
+test('a superseded queued close cannot perform a second Back', async () => {
+  const h = historyHarness();
+  let turn = 1;
+  const previous = h.history.ensureBackground(h.record, () => turn === 1);
+  turn = 2;
+  const current = h.history.ensureBackground(h.record, () => turn === 2);
+  assert.equal(await previous, false);
+  assert.equal(await current, true);
+  assert.deepEqual(h.traversals, [-3]);
+  assert.equal(h.getIndex(), 0);
+});
+
+test('Back cancels a queued guard restore before it can reopen the detail', async () => {
+  const h = historyHarness();
+  h.window.history.go(-1);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const previous = h.history.restoreGuard(h.record, () => false);
+  const closing = h.history.ensureBackground(h.record);
+  assert.equal(await previous, false);
+  assert.equal(await closing, true);
+  assert.deepEqual(h.traversals, [-1, -2]);
+  assert.equal(h.getIndex(), 0);
+});
+
+test('a guard restore superseded after reaching the base does not traverse again', async () => {
+  const h = historyHarness();
+  await h.history.ensureBackground(h.record);
+  let current = true;
+  h.afterGo = () => { current = false; };
+  assert.equal(await h.history.restoreGuard(h.record, () => current), false);
+  assert.deepEqual(h.traversals, [-3, 2]);
+  assert.equal(h.getIndex(), 2);
+  await h.history.ensureBackground(h.record);
+  assert.equal(h.getIndex(), 0);
+});
+
+test('reopening from the provisional rung restores the original guard without adding entries', async () => {
+  const h = historyHarness();
+  h.window.history.go(-2);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(await h.history.restoreGuard(h.record), true);
+  assert.deepEqual(h.traversals, [-2, 1, 1]);
+  assert.equal(h.entries.length, 4);
+  assert.equal(h.getIndex(), 3);
+});
+
+test('an unfinished opening cannot restore a guard that has not been installed', async () => {
+  const h = historyHarness();
+  await h.history.ensureBackground(h.record);
+  const pending = h.history.createRecord({ image: { id: 8 } }, { pathname: '/user/1', search: '' }, '/pic/8', 2);
+  assert.equal(h.history.claim(pending), true);
+  assert.equal(await h.history.restoreGuard(pending), false);
+  assert.deepEqual(h.traversals, [-3]);
+  assert.equal(h.getIndex(), 1);
+  await h.history.ensureBackground(pending);
+});
+
+test('a guard confirmation cannot complete an already superseded turn', async () => {
+  const h = historyHarness();
+  h.window.history.go(-1);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  let current = true;
+  h.afterGo = () => { current = false; };
+  assert.equal(await h.history.restoreGuard(h.record, () => current), false);
+  assert.equal(await h.history.ensureBackground(h.record), true);
+  assert.equal(h.getIndex(), 0);
 });

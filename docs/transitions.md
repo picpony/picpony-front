@@ -114,6 +114,8 @@ Show a back affordance on routes without a permanent sidebar entry, including lo
 
 `PageBack` portals into `data-page-back-slot`, before the scroller in tab order. It and `useEscapeBack` share `useBackOrParent(parent)`: return to an in-app entry, otherwise replace with the parent.
 
+While Hero is active, Escape requests the gallery through the current Hero turn. Do not defer the page's own Back callback until Hero settles; a newer open can supersede that intent. See [repeated interruption](hero.md#repeated-interruption-of-one-image).
+
 Reserve space with the appropriate `page-back-room*` utility. Do not add independent page padding or an entrance on every remount. When only one route has the control, it fades with that route.
 
 When navigation removes focus, focus the incoming heading or main after it is visible. Do not steal focus on initial hydration or while Hero/modal layers own it.

@@ -71,7 +71,6 @@ import {
 import {
   getElementScrollPlane,
   getGalleryScrollPlane,
-  planeRectToScreen,
   type HeroScrollPlane,
 } from './plane';
 import { createHeroFlight, type HeroFlight } from './flight';
@@ -86,8 +85,13 @@ import {
   subscribeImageHeroRuntime,
 } from './runtime';
 import { heroFrameScheduler } from './scheduler';
-import { HeroScrollContinuity } from './scroll';
-import { canFollowHeroScroll, followHeroScroll, type HeroScrollFollow } from './follow';
+import { HeroScrollContinuity, type HeroScrollOffset } from './scroll';
+import {
+  canFollowHeroScroll,
+  followHeroScroll,
+  type HeroScrollFollow,
+  type HeroScrollFollowStart,
+} from './follow';
 import { motionTier } from '@/lib/appearance';
 import {
   HeroSignal,
@@ -114,6 +118,25 @@ import type {
 } from './types';
 import { heroProbeDisabled, heroProbeMark } from './probe';
 
+type OpeningScrollMeasurement = {
+  top: number;
+  range: number;
+  routeTop: number;
+  routeLeft: number;
+  routeRange: number;
+};
+
+/** Read before installing mirror tracks or changing the route's visibility. */
+function readOpeningScroll(stage: HeroStageNodes, route: HeroRoute): OpeningScrollMeasurement {
+  return {
+    top: stage.scroller.scrollTop,
+    range: Math.max(0, stage.scroller.scrollHeight - stage.scroller.clientHeight),
+    routeTop: route.scroller.scrollTop,
+    routeLeft: route.scroller.scrollLeft,
+    routeRange: Math.max(0, route.scroller.scrollHeight - route.scroller.clientHeight),
+  };
+}
+
 /** Keeps the Stage scroller and the routed scroller at the same offset. */
 type OpeningScrollBridge = {
   /** The route as a scroll peer: offsets mirrored from scroll events, on the main thread. */
@@ -127,6 +150,7 @@ type OpeningScrollBridge = {
     scroller: HTMLElement,
     content: HTMLElement,
     node: HTMLElement,
+    initial: HeroScrollFollowStart,
   ) => HeroScrollFollow | null;
   sync: () => void;
   /**
@@ -134,7 +158,12 @@ type OpeningScrollBridge = {
    * Stage from its content so the Stage can take the scroll back at the same offset. No offset
    * is mirrored anywhere while it owns — see `HeroController.promoteAdoption`.
    */
-  own: (scroller: HTMLElement, content: HTMLElement, forwardStageWheel?: boolean) => void;
+  own: (
+    scroller: HTMLElement,
+    content: HTMLElement,
+    forwardStageWheel: boolean,
+    initial: HeroScrollOffset,
+  ) => void;
   /** The Stage takes the scroll back, aligned once to where the route was. */
   disown: () => void;
   returnToGallery: (scroller: HTMLElement) => void;
@@ -206,6 +235,8 @@ type HeroSessionBase = {
 
 type OpeningSession = HeroSessionBase & {
   kind: 'opening';
+  /** The same journey is reversing forward while its existing navigation reconciles. */
+  resuming: boolean;
   intent: HeroOpenIntent;
   /** No flyer available; reconcile the URL only. */
   skipFlight: boolean;
@@ -271,8 +302,11 @@ type ClosingSession = HeroSessionBase & {
   resolveClose: ((outcome: ImageHeroCloseOutcome) => void) | null;
   retirement: Promise<void> | null;
   routeScroll: { left: number; top: number };
+  /** Resting media box survives a browser Back that unmounts the routed surface. */
+  detailRect: HeroRect;
   /** Puts `inert` on the leaving route; deferred until the flight runs (`exposeGallery`). */
   applyRouteInert?: (() => void) | null;
+  routeFreeze?: DomLease | null;
   /**
    * Everything the flight reads, read in `beginClosing` before its first write (the shield,
    * the phase attributes). Consumed once by `runClosing`; null once spent.
@@ -298,9 +332,9 @@ type StepTarget = {
   snapshot: ImageHeroSnapshot;
 };
 
-/** Upper bound on the detail's own step transition, after which its swap is assumed done. */
-/** How long after a press made mid-open its click may still arrive (`guardAdoptedClicks`). */
+/** How long after a press made mid-flight its click may still arrive (`guardRouteClicks`). */
 const HERO_PRESS_TAIL_MS = 1000;
+/** Upper bound on the detail's own step transition, after which its swap is assumed done. */
 const STEP_SWAP_TIMEOUT_MS = 2000;
 /**
  * How long the history half of a step may wait for an idle slice once the swap has landed. The
@@ -376,6 +410,12 @@ function defaultNavigation(): HeroNavigation {
  */
 function getGalleryLandingRect(element: HTMLElement) {
   return getHeroRectWithoutAncestorTransform(element, getHeroBackgroundVisual());
+}
+
+/** A laid-out Stage paints only after its tracks are installed; hide it before cancelling them. */
+function setStageReady(nodes: HeroStageNodes, ready: boolean) {
+  nodes.overlay.toggleAttribute('data-image-hero-stage-ready', ready);
+  nodes.floatingBack?.toggleAttribute('data-image-hero-stage-ready', ready);
 }
 
 /**
@@ -456,6 +496,7 @@ export class HeroController {
     this.releaseViewport = subscribeHeroViewportInvalidation(this.handleViewportInvalidation);
     window.addEventListener('pagehide', this.handlePageHide);
     window.addEventListener('pageshow', this.handlePageShow);
+    window.addEventListener('keydown', this.handleEscape);
     this.reconcileIdleLocation();
   }
 
@@ -470,6 +511,7 @@ export class HeroController {
     this.releaseViewport?.();
     window.removeEventListener('pagehide', this.handlePageHide);
     window.removeEventListener('pageshow', this.handlePageShow);
+    window.removeEventListener('keydown', this.handleEscape);
     this.initialized = false;
   }
 
@@ -597,12 +639,14 @@ export class HeroController {
     const registration = { sessionId, nodes };
     heroProbeMark('hx:t:stage-registered');
     this.stage = registration;
+    const session = this.foreground;
+    setStageReady(nodes, Boolean(session?.id === sessionId && session.motion));
     this.syncLeaving();
     this.events.notify();
     return () => {
+      this.releaseRetainedStageVisual(sessionId);
       if (this.stage !== registration) return;
       this.stage = null;
-      this.releaseRetainedStageVisual(sessionId);
       this.syncLeaving();
       this.events.notify();
     };
@@ -620,9 +664,10 @@ export class HeroController {
       registration,
       normalizeHeroHref(`/pic/${registration.imageId}`),
     );
+    const releaseClicks = this.guardRouteClicks(route);
 
     const foreground = this.foreground;
-    if (foreground?.kind === 'opening') {
+    if (foreground) {
       this.routes.seal(route, foreground.owner);
     } else if (this.runtime.phase === 'detail-idle') {
       const activeId = this.runtime.imageId;
@@ -632,9 +677,29 @@ export class HeroController {
     } else {
       this.routes.seal(route, this.routes.idleOwner);
     }
+    let releaseMirror: Disposer | null = null;
+    if (foreground?.kind === 'closing' && foreground.record.imageId === route.imageId) {
+      route.scroller.scrollLeft = foreground.routeScroll.left;
+      route.scroller.scrollTop = foreground.routeScroll.top;
+      foreground.route = route;
+      const detach = foreground.motion?.attachMirror(route.overlay, route.floatingBack);
+      const shared = foreground.shared;
+      const visual = foreground.visual;
+      const targetSeal = this.routes.sealTarget(route);
+      const mirror = detach ? { release: detach } : null;
+      if (mirror) shared.add(mirror);
+      visual.add(targetSeal);
+      releaseMirror = () => {
+        if (mirror) shared.release(mirror);
+        visual.release(targetSeal);
+      };
+      if (foreground.reversing) this.routes.reveal(route, foreground.owner);
+    }
     this.syncLeaving();
     this.events.notify();
     return () => {
+      releaseClicks();
+      releaseMirror?.();
       const owner = this.foreground;
       if (owner?.kind === 'opening' && owner.adoption?.route === route) this.releaseAdoption(owner);
       this.routes.unregister(route);
@@ -689,6 +754,9 @@ export class HeroController {
       if (normalized === expected) return;
       const background = normalizeHeroHref(backgroundHref(foreground.intent.background!));
       if (normalized === background) {
+        // The previous turn's restore may commit after this turn has resumed the same image.
+        // Native Back is handled by the history observer, independently of this commit.
+        if (foreground.resuming) return;
         // A close-A/open-B handoff deliberately traverses to the gallery before
         // pushing B. Every other observation of the opening background is a user
         // Back (including Safari's interactive edge swipe) and owns the reverse
@@ -717,8 +785,8 @@ export class HeroController {
    * card and the click that follows it there are 50–150ms in which nothing used to happen; the
    * click then had to render the Stage (React), lay the whole document out to read the landing
    * box, and only then could the flight start — ~30ms of a ~90ms click task at 4× CPU. Here the
-   * press mounts the Stage invisible (`visibility: hidden`, so laid out but neither painted nor
-   * hit-tested) under the session id the open will use, and the next frame lays it out for
+   * press mounts the Stage behind an empty clip under the session id the open will use,
+   * and the next frame lays it out for
    * free. A click on the same card adopts it (`startOpening`); anything else — a scroll's
    * `pointercancel`, a press on another card, the timeout — unmounts it. Nothing is fetched or
    * decoded here: this is layout, not media warm-up.
@@ -824,18 +892,23 @@ export class HeroController {
       return true;
     }
 
+    const active = this.foreground;
+    if (
+      active?.snapshot.image.id === intent.snapshot.image.id &&
+      (!active.snapshot.sourceKey || active.snapshot.sourceKey === intent.snapshot.sourceKey)
+    ) {
+      if (active.kind === 'opening') {
+        if (!active.reversing) return true;
+        return this.resumeOpening(active, intent);
+      }
+      if (!active.reversing) void this.reverseClosing(active);
+      return true;
+    }
+
     const phase = this.runtime.phase;
     if (phase === 'opening.flight' || phase === 'opening.landed' || phase === 'opening.handoff') {
       const opening = this.foreground;
       if (opening?.kind === 'opening') {
-        // One physical tap can arrive twice: the dismiss bridge synthesizes a
-        // click from a pointerup whose hit test still pointed at the dead route.
-        // Re-activating the image already flying must be idempotent — treating
-        // the duplicate as "open something else" reverses the flight it just
-        // started, and the unwind drops the queued intent, so the tap does nothing.
-        if (opening.snapshot.image.id === intent.snapshot.image.id && !opening.reversing) {
-          return true;
-        }
         /* Another card while one is opening: not a gesture anyone makes on purpose — it is a
            stray second tap. It is consumed and the open in flight carries on; switching the
            picture mid-open (a retarget) was dropped as a behaviour. */
@@ -843,9 +916,6 @@ export class HeroController {
         intent.background = opening.intent.background;
       }
       this.pendingOpen = intent;
-      if (opening?.kind === 'opening' && !opening.reversing) {
-        void this.reverseOpening(opening, false);
-      }
       return true;
     }
     if (phase === 'reversing' || phase === 'recovering') {
@@ -869,18 +939,6 @@ export class HeroController {
       const closing = this.foreground;
       if (closing?.kind !== 'closing') {
         this.pendingOpen = intent;
-        return true;
-      }
-      /* The picture flying home, tapped again ("no, keep it open"), turns the close around from
-         its live pose, the way Back then Forward always did (R10-006). Retiring it and flying a
-         fresh open out of the card snapped the picture ~240px onto the thumbnail in one frame,
-         held, then launched from rest, with two copies of it on screen meanwhile. A *different*
-         card still retires this close and opens beside it. */
-      if (
-        closing.record.imageId === intent.snapshot.image.id &&
-        (!closing.snapshot.sourceKey || closing.snapshot.sourceKey === intent.snapshot.sourceKey)
-      ) {
-        if (!closing.reversing) void this.reverseClosing(closing);
         return true;
       }
       // Hand the outgoing close's history record, route and scroll continuity to
@@ -926,7 +984,10 @@ export class HeroController {
       void this.reverseOpening(foreground, false);
       return Promise.resolve('handled');
     }
-    if (foreground?.kind === 'closing') return foreground.closePromise;
+    if (foreground?.kind === 'closing') {
+      if (foreground.reversing) return this.resumeClosing(foreground).closePromise;
+      return foreground.closePromise;
+    }
     if (this.runtime.phase !== 'detail-idle') return Promise.resolve('handled');
     return this.startClosing(intent);
   }
@@ -1009,11 +1070,17 @@ export class HeroController {
     if (!foreground) return false;
     if (foreground.kind === 'opening') {
       void this.reverseOpening(foreground, navigationHandled);
-    } else {
-      void this.reverseClosing(foreground);
+    } else if (foreground.reversing) {
+      this.resumeClosing(foreground);
     }
     return true;
   }
+
+  /** Back always means the gallery. Overlay Escape handlers get the event before this fallback. */
+  private handleEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+    if (this.interrupt()) event.preventDefault();
+  };
 
   private queuePendingOpen(intent: HeroOpenIntent, gate: Promise<unknown>) {
     this.pendingOpen = intent;
@@ -1204,14 +1271,12 @@ export class HeroController {
       previousRouteScroll?: { left: number; top: number };
       scrollContinuity?: HeroScrollContinuity | null;
       predecessor?: HeroPredecessor;
-      /** Where the picture is now, when it is already on screen (a reversal turned round). */
-      sourceRect?: HeroRect;
     } = {},
   ) {
     /* Measured before this method writes anything: the Stage's state attribute below dirties
        style, and a read after it forced a style pass inside the tap (~4ms of a 4×-throttled
        tap, traced) that the frame's own pass would otherwise have absorbed. */
-    const sourceRect = options.sourceRect ?? getHeroRect(intent.source);
+    const sourceRect = getHeroRect(intent.source);
     // A picture opening owns focus from here; a card revealed by the last close no longer asks.
     this.cancelRevealFocus();
     const background = intent.background ?? this.runtime.background ?? currentBackground();
@@ -1219,13 +1284,6 @@ export class HeroController {
     const armed = this.adoptArmed(intent);
     const adopted = armed?.id ?? null;
     const id = adopted ?? ++this.sessionSequence;
-    if (adopted !== null && this.stage?.sessionId === adopted) {
-      /* React commits the new phase before this task paints, but the flight launches from a
-         microtask that may run first: reveal the laid-out Stage on the node itself so no
-         order of the two can paint a frame of flyer over an invisible window. */
-      this.stage.nodes.overlay.setAttribute('data-image-hero-stage-state', 'opening');
-      this.stage.nodes.floatingBack?.removeAttribute('data-image-hero-stage-armed');
-    }
     const record =
       options.historyRecord ??
       imageHeroHistory.createRecord(intent.snapshot, background, intent.detailHref, id);
@@ -1235,6 +1293,7 @@ export class HeroController {
       id,
       owner: Symbol(`hero-opening:${id}`),
       kind: 'opening',
+      resuming: false,
       snapshot: intent.snapshot,
       intent,
       skipFlight: Boolean(options.skipFlight),
@@ -1304,7 +1363,9 @@ export class HeroController {
       let collapse: Promise<boolean> | null = null;
       /** A retarget's own navigation, behind its predecessor's unwind (`navigateAfterUnwind`). */
       let navigation: Promise<boolean> | null = null;
-      if (session.collapseRecord) {
+      if (session.resuming) {
+        navigation = this.resumeOpeningNavigation(session);
+      } else if (session.collapseRecord) {
         collapse = imageHeroHistory.ensureBackground(session.collapseRecord);
         session.collapsePromise = collapse;
       } else if (session.predecessor) {
@@ -1350,7 +1411,8 @@ export class HeroController {
         return;
       }
 
-      this.launchFlight(session, stage, frame);
+      if (!session.motion) this.launchFlight(session, stage, frame);
+      else this.scheduleOpeningBindings(session, stage, session.motion);
       this.watchEarlyReveal(session, stage);
       /* **The detail URL is pushed after the picture's first frame, not before it.** The push is
          the App Router's whole navigate dispatch — reducer, prefetch-cache lookup, fetch, a
@@ -1588,6 +1650,7 @@ export class HeroController {
     session.visual.add(leaseHeroCardChrome(intent.source));
     session.visual.add(leaseHeroVisibility(intent.source, false));
     session.motion = motion;
+    setStageReady(stage, true);
     motion.release();
 
     session.viewportBaseline = {
@@ -1597,6 +1660,10 @@ export class HeroController {
       scrollTop: plane.scrollTop,
     };
     heroProbeMark(prepared ? 'hx:t:motion-prepared' : 'hx:t:motion-built');
+    this.scheduleOpeningBindings(session, stage, motion);
+  }
+
+  private scheduleOpeningBindings(session: OpeningSession, stage: HeroStageNodes, motion: HeroMotion) {
     /* **The picture's first frame before anything else.** Its tracks are created above and go
        to the compositor with the frame that ends this task; binding the scroll follow and the
        dismiss recognisers here put their peer animations, leases and listeners (~15ms at 4×
@@ -1608,7 +1675,94 @@ export class HeroController {
       this.bindOpeningScroll(session, stage);
       this.bindOpeningDismiss(session, stage);
       heroProbeMark('hx:t:bound');
+      this.events.notify();
     });
+  }
+
+  /** A new turn owns the existing journey's pixels and history; the old async flow loses ownership. */
+  private resumeOpening(previous: OpeningSession, intent: HeroOpenIntent) {
+    if (this.foreground !== previous || !previous.reversing) return false;
+    this.dropPreparedFlight(previous);
+    const stage = this.stage?.sessionId === previous.id ? this.stage.nodes : null;
+    const motion = previous.motion;
+    const measured = motion && stage ? {
+      destination: getHeroRect(stage.target),
+      plane: getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay),
+      pose: motion.measurePose(),
+      inputs: motion.readReverseInputs(),
+    } : null;
+    const session: OpeningSession = {
+      ...previous,
+      intent: { ...previous.intent, source: intent.source, navigation: intent.navigation },
+      abort: new AbortController(),
+      shared: new ResourceScope(),
+      resuming: true,
+      reversing: false,
+      historyRestore: false,
+      routeNavigationStarted: false,
+      allowExistingRoute: true,
+      backgroundRecovery: null,
+      scrollBridge: null,
+      scrollContinuity: null,
+      pull: null,
+      pullSeized: false,
+      pullRecognizer: null,
+      adoption: null,
+      follow: null,
+      handoffRoute: null,
+      handoffVisual: null,
+      handoffCommitted: false,
+      reverseTurn: null,
+      prepared: null,
+    };
+    previous.abort.abort();
+    previous.scrollBridge?.release();
+    previous.scrollContinuity?.release();
+    previous.scrollContinuity = null;
+    previous.pull?.reset(false);
+    previous.shared.dispose();
+    // Transfer, rather than release, the card and canvas leases.
+    previous.visual = new ResourceScope();
+    previous.motion = null;
+    this.foreground = session;
+    this.pendingOpen = null;
+    if (motion && measured) {
+      void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
+        .catch(() => { if (this.owns(session)) void this.reverseOpening(session, false); });
+      setStageReady(stage!, true);
+      session.viewportBaseline = {
+        destination: measured.destination,
+        planeWidth: measured.plane.viewportWidth,
+        planeHeight: measured.plane.viewportHeight,
+        scrollTop: measured.plane.scrollTop,
+      };
+    }
+    this.setStage('opening', session);
+    this.setPhase('opening.flight', session, session.intent.background!);
+    void this.runOpening(session);
+    return true;
+  }
+
+  /** Reuse the current rung, or reclaim its original gallery entry after an in-flight collapse. */
+  private async resumeOpeningNavigation(session: OpeningSession) {
+    const pending = session.collapsePromise ?? session.predecessor?.unwind;
+    if (pending && !(await pending)) return false;
+    if (!(await imageHeroHistory.waitForStable()) || !this.owns(session)) return false;
+    const href = normalizeHeroHref(window.location.href);
+    const marker = imageHeroHistory.currentMarker();
+    if (marker && marker.token !== session.record.token) return false;
+    if (href === session.record.detailHref) {
+      session.routeNavigationStarted = true;
+    } else {
+      if (href !== normalizeHeroHref(backgroundHref(session.record.background))) return false;
+      if (marker?.role !== 'provisional' && !imageHeroHistory.claim(session.record)) return false;
+      session.provisionalClaimed = true;
+      this.startRouteNavigation(session);
+    }
+    const committed = await this.waitForRouterCommit(session.record.detailHref, session.abort.signal);
+    if (!this.owns(session)) return false;
+    session.resuming = false;
+    return committed;
   }
 
   /** Push the detail URL, guarded by the provisional history barrier. */
@@ -1680,34 +1834,14 @@ export class HeroController {
         opening.visual.dispose();
         finish();
       });
-    /* The same card again: the picture turns round rather than a second copy leaving the card —
-       the new flight starts from the live pose, and the old flyer goes in the task the new one
-       is built (before its card lease, which must not stack on the old one's). */
-    const turnRound = intent.source === opening.intent.source;
-    const pose = turnRound ? motion.measurePose() : null;
-    const sourceRect = pose
-      ? planeRectToScreen(
-          {
-            ...pose.rect,
-            top: pose.rect.top + pose.pullOffset,
-            left: pose.rect.left + (pose.pullOffsetX ?? 0),
-          },
-          motion.flight.plane,
-        )
-      : undefined;
     this.foreground = null;
     this.startOpening(intent, {
-      sourceRect,
       predecessor: {
         motion,
         unwind,
         token: opening.record.token,
         released: () => {
           handedOver = true;
-          if (turnRound) {
-            hasLanded = true;
-            opening.visual.dispose();
-          }
           finish();
         },
       },
@@ -1747,23 +1881,6 @@ export class HeroController {
     opening.scrollContinuity = null;
     this.handOffRetiringOpening(opening, motion, landed, unwind, intent);
     return true;
-  }
-
-  /** The replaced open's history, back on its background — whatever of it was built. */
-  private async unwindRetargeted(opening: OpeningSession) {
-    let onBackground = true;
-    if (opening.routeNavigationStarted) {
-      onBackground = opening.provisionalClaimed
-        ? await imageHeroHistory.ensureBackground(opening.record)
-        : await imageHeroHistory.returnUnmarkedToBackground(
-            opening.intent.background!,
-            opening.record.token,
-          );
-    } else if (opening.provisionalClaimed) {
-      onBackground = await imageHeroHistory.ensureBackground(opening.record);
-    }
-    if (onBackground) imageHeroHistory.forget(opening.record);
-    return onBackground;
   }
 
   /** A retarget's navigation: claim and push once the predecessor's history is unwound. */
@@ -1844,6 +1961,7 @@ export class HeroController {
           return false;
         }
         if (session.pullSeized || this.runtime.phase !== 'opening.flight') return null;
+        if (!session.scrollBridge) return null;
         const route = this.findOpeningRoute(session, true);
         return route && !route.resolvedWithoutMedia && route.target ? route : null;
       },
@@ -1855,10 +1973,10 @@ export class HeroController {
         if (!eligible()) return;
       }
       void runScheduledFrame(session.abort.signal, {
-        read: () => stage.scroller.scrollTop,
-        write: (stageScrollTop) => {
+        read: () => readOpeningScroll(stage, route),
+        write: (scroll) => {
           if (!eligible()) return;
-          if (!this.adoptOpeningRoute(session, route, stage, true, stageScrollTop)) return;
+          if (!this.adoptOpeningRoute(session, route, stage, true, scroll)) return;
           heroProbeMark('hx:t:early-reveal');
           /* The flyer was aimed at the Stage's landing box. The route's is the same box unless
              its record has already changed the header above the picture: re-aim from the
@@ -1886,8 +2004,7 @@ export class HeroController {
     route: HeroRoute,
     stage: HeroStageNodes,
     midFlight: boolean,
-    /** The Stage's offset, from the scheduler frame's read phase (see `promoteAdoption`). */
-    stageScrollTop?: number,
+    scroll: OpeningScrollMeasurement,
   ) {
     const bridge = session.scrollBridge;
     const node = route.content.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR);
@@ -1895,21 +2012,28 @@ export class HeroController {
     const canOwn = Boolean(route.anchor?.isConnected);
     const ownNow = canOwn && isHeroInteractionQuiet();
     if (!ownNow && !canFollowHeroScroll()) return false;
+    let follow: HeroScrollFollow | null = null;
+    // Scroll setters can force layout too. Align the still-sealed route before installing
+    // animations, and skip an already-correct offset (the usual unscrolled opening).
+    if (ownNow) {
+      const parked = Math.max(0, Math.min(scroll.top, scroll.routeRange));
+      if (scroll.routeTop !== parked) route.scroller.scrollTop = parked;
+      scroll = { ...scroll, routeTop: parked };
+    } else {
+      follow = bridge.follow(route.scroller, route.content, node, {
+        source: scroll.top, target: scroll.routeTop, range: scroll.range,
+      });
+      if (!follow) return false;
+    }
     const detachMirror = midFlight ? (session.motion?.attachMirror(route.overlay) ?? null) : null;
-    if (midFlight && !detachMirror) return false;
-    if (!this.routes.reveal(route, session.owner)) {
-      detachMirror?.();
+    if (midFlight && !detachMirror) {
+      follow?.release();
       return false;
     }
-    let follow: HeroScrollFollow | null = null;
-    if (!ownNow) {
-      follow = bridge.follow(route.scroller, route.content, node);
-      if (!follow) {
-        // No compositor follow after all: back to the landing reveal, sealed as it was.
-        detachMirror?.();
-        this.routes.seal(route, session.owner);
-        return false;
-      }
+    if (!this.routes.reveal(route, session.owner)) {
+      detachMirror?.();
+      follow?.release();
+      return false;
     }
     const lease = combineHeroLeases(
       leaseAttribute(route.overlay, 'data-image-hero-route-state', 'adopted'),
@@ -1932,7 +2056,7 @@ export class HeroController {
       session.shared.add(follow);
       if (canOwn) this.watchPromotion(session);
     } else {
-      this.promoteAdoption(session, stageScrollTop);
+      this.promoteAdoption(session, scroll);
     }
     this.surface.notify();
     return true;
@@ -1949,22 +2073,19 @@ export class HeroController {
    * Runs inside a scheduler write, with the hand quiet: a gesture is never moved between
    * scrollers, and the recognizer is never rebound under a finger.
    */
-  private promoteAdoption(session: OpeningSession, stageScrollTop?: number) {
+  private promoteAdoption(session: OpeningSession, scroll: OpeningScrollMeasurement) {
     const adoption = session.adoption;
     if (!adoption || adoption.owned || !this.owns(session)) return false;
     const { route, stage } = adoption;
     const anchor = route.anchor;
     if (!anchor?.isConnected) return false;
     const follow = session.follow;
-    /* `stageScrollTop` comes from the scheduler frame's read phase: read here, after the reveal's
-       writes in the same frame, the Stage's offset forced a style + layout pass in the landing
-       frame that the frame's own pass then repeated. */
-    const parked = stageScrollTop ?? stage.scroller.scrollTop;
+    const parked = Math.max(0, Math.min(scroll.top, scroll.routeRange));
     if (follow) {
-      follow.commit();
+      follow.commit({ source: parked, target: scroll.routeTop });
       session.shared.release(follow);
       session.follow = null;
-    } else {
+    } else if (scroll.routeTop !== parked) {
       route.scroller.scrollTop = parked;
     }
     const motion = session.motion;
@@ -1982,65 +2103,50 @@ export class HeroController {
     adoption.input = combineHeroLeases(
       leaseInlineStyles(stage.overlay, { pointerEvents: 'none' }),
       leaseInlineStyles(stage.scroller, { pointerEvents: 'none' }),
-      this.guardAdoptedClicks(session, route),
     );
     session.shared.add(adoption.input);
     adoption.owned = true;
-    session.scrollBridge?.own(route.scroller, route.content, !isHeroInteractionQuiet());
+    session.scrollBridge?.own(route.scroller, route.content, !isHeroInteractionQuiet(), {
+      left: scroll.routeLeft, top: parked,
+    });
     this.bindOpeningPullRecognizer(session, route.overlay, route.scroller, parked);
     heroProbeMark('hx:t:promote');
     this.events.notify();
     return true;
   }
 
-  /**
-   * The route takes the input before it is the detail, so it takes the Stage's click contract
-   * with it: nothing inside the route activates until the handoff — the Stage's content was
-   * inert, and a link followed mid-open would navigate under the transaction — and a tap on
-   * another card does nothing (opening a second picture mid-open is not a behaviour; see
-   * `requestOpen`). Scrolling is untouched; only `click` is filtered.
-   */
-  private guardAdoptedClicks(session: OpeningSession, route: HeroRoute): DomLease {
+  /** Keep a press's intent across turns and handoff; see docs/hero.md#input. */
+  private guardRouteClicks(route: HeroRoute): Disposer {
+    let held: { id: number; at: number } | null = null;
+    const inContent = (target: EventTarget | null) =>
+      target instanceof Node && route.scroller.contains(target);
+    const press = (event: PointerEvent) => {
+      held = !this.isPublicationQuiet() && inContent(event.target)
+        ? { id: event.pointerId, at: performance.now() }
+        : null;
+    };
+    const cancel = (event: PointerEvent) => {
+      if (held?.id === event.pointerId) held = null;
+    };
     const handle = (event: MouseEvent) => {
-      if (!this.owns(session)) return;
+      // Back lives outside the scroller and must remain available during a reopening turn.
+      if (!inContent(event.target)) return;
+      const tail = event.detail !== 0 && held !== null &&
+        performance.now() - held.at <= HERO_PRESS_TAIL_MS &&
+        (!(event instanceof PointerEvent) || event.pointerId === held.id);
+      held = null;
+      if (this.isPublicationQuiet() && !tail) return;
       event.preventDefault();
       event.stopPropagation();
     };
-    /* A press that began while the route was still inert must not finish as a click on the
-       detail: the guard is released at the handoff, and a tap whose pointerdown came mid-open
-       (a second card tapped while this one flies) would otherwise land its click on the picture
-       that just arrived under it and open the lightbox. The click is the press's tail, so it is
-       swallowed by the press's own time, not by the phase it happens to arrive in. */
-    let pressedAt = Number.NEGATIVE_INFINITY;
-    const press = () => {
-      if (this.owns(session)) pressedAt = performance.now();
-    };
+    // Route lifetime, not session lifetime: the same DOM survives reversals and final handoff.
     route.overlay.addEventListener('click', handle, true);
     route.overlay.addEventListener('pointerdown', press, true);
-    return {
-      release: () => {
-        route.overlay.removeEventListener('click', handle, true);
-        route.overlay.removeEventListener('pointerdown', press, true);
-        /* Only a session that landed leaves a detail under the press. One that was superseded
-           (the press opened another card) hands the input on, and its successor's taps are its
-           own — swallowing them stopped a third card from taking over. */
-        if (!session.handoffCommitted || session.reversing) return;
-        if (performance.now() - pressedAt > HERO_PRESS_TAIL_MS) return;
-        const tail = (event: MouseEvent) => {
-          /* Only the picture under the press: a tap that reaches a card is a new intent. */
-          if (!(event.target instanceof Node) || !route.scroller.contains(event.target)) return;
-          drop();
-          if (performance.now() - pressedAt > HERO_PRESS_TAIL_MS) return;
-          event.preventDefault();
-          event.stopPropagation();
-        };
-        const drop = () => {
-          window.clearTimeout(timer);
-          route.overlay.removeEventListener('click', tail, true);
-        };
-        const timer = window.setTimeout(drop, HERO_PRESS_TAIL_MS);
-        route.overlay.addEventListener('click', tail, true);
-      },
+    route.overlay.addEventListener('pointercancel', cancel, true);
+    return () => {
+      route.overlay.removeEventListener('click', handle, true);
+      route.overlay.removeEventListener('pointerdown', press, true);
+      route.overlay.removeEventListener('pointercancel', cancel, true);
     };
   }
 
@@ -2052,8 +2158,8 @@ export class HeroController {
       (outcome) => {
         if (outcome === 'aborted' || session.adoption !== adoption || adoption.owned) return;
         void runScheduledFrame(session.abort.signal, {
-          read: () => adoption.stage.scroller.scrollTop,
-          write: (stageScrollTop) => {
+          read: () => readOpeningScroll(adoption.stage, adoption.route),
+          write: (scroll) => {
             if (session.adoption !== adoption || adoption.owned) return;
             /* A new stream started between the quiet and this frame: keep following and look
                again — never move a gesture in progress. */
@@ -2061,7 +2167,7 @@ export class HeroController {
               this.watchPromotion(session);
               return;
             }
-            this.promoteAdoption(session, stageScrollTop);
+            this.promoteAdoption(session, scroll);
           },
         });
       },
@@ -2155,10 +2261,10 @@ export class HeroController {
         if (!this.owns(session) || !session.motion) return;
       }
       await runScheduledFrame(session.abort.signal, {
-        read: () => stage.scroller.scrollTop,
-        write: (stageScrollTop) => {
+        read: () => readOpeningScroll(stage, route),
+        write: (scroll) => {
           if (this.owns(session) && !session.adoption) {
-            this.adoptOpeningRoute(session, route, stage, false, stageScrollTop);
+            this.adoptOpeningRoute(session, route, stage, false, scroll);
           }
         },
       });
@@ -2181,8 +2287,8 @@ export class HeroController {
            arriving on the Stage; its deltas are forwarded to the route (`own`'s residual) —
            the one main-thread scroll left, and only for this overflow. */
         await runScheduledFrame(session.abort.signal, {
-          read: () => pending.stage.scroller.scrollTop,
-          write: (stageScrollTop) => this.promoteAdoption(session, stageScrollTop),
+          read: () => readOpeningScroll(pending.stage, pending.route),
+          write: (scroll) => this.promoteAdoption(session, scroll),
         });
         if (!this.owns(session) || !session.motion) return;
       }
@@ -2350,6 +2456,7 @@ export class HeroController {
     session.abort.abort();
     session.scrollBridge?.release();
     session.handoffRoute = null;
+    if (this.stage?.sessionId === session.id) setStageReady(this.stage.nodes, false);
     session.motion?.dispose();
     session.motion = null;
     session.visual.dispose();
@@ -2443,7 +2550,7 @@ export class HeroController {
       this.findOpeningRoute(session, false) ??
       this.routes.findByImage(session.snapshot.image.id, normalizeHeroHref(window.location.href));
     if (route) this.routes.reveal(route, route.sealOwner);
-    this.retainStagePointerShield(session.id);
+    this.concealRetainedStage(session.id);
     this.detailRecord = session.record;
     this.currentSnapshot = session.snapshot;
     this.foreground = null;
@@ -2532,10 +2639,12 @@ export class HeroController {
 
     const expectedBackground = normalizeHeroHref(backgroundHref(session.intent.background!));
     const currentHref = normalizeHeroHref(window.location.href);
+    const currentRole = imageHeroHistory.currentRole();
     if (
       session.provisionalClaimed &&
       session.routeNavigationStarted &&
       navigationHandled &&
+      currentRole !== 'base' && currentRole !== 'guard' &&
       (currentHref === expectedBackground || currentHref === session.record.detailHref)
     ) {
       // Supersede the still-pending App Router replace immediately. Waiting for
@@ -2555,7 +2664,7 @@ export class HeroController {
     }
     if (this.foreground !== session) return;
 
-    const onBackground = await this.returnToBackground(session, navigationHandled);
+    const onBackground = await this.returnToBackground(session, navigationHandled, () => this.foreground === session);
     if (this.foreground !== session) return;
 
     // Never tear down the flyer while a finger is still down: the user would see
@@ -2563,7 +2672,7 @@ export class HeroController {
     const released = await waitForHeroInputRelease(this.lifecycleAbort.signal);
     if (!released || this.foreground !== session) return;
 
-    this.retainStagePointerShield(session.id);
+    this.concealRetainedStage(session.id);
     session.motion?.dispose();
     session.motion = null;
     session.scrollBridge?.release();
@@ -2623,43 +2732,51 @@ export class HeroController {
    * the open actually got before it was interrupted, so each fallback is tried
    * in turn until one confirms we are standing on the background entry.
    */
-  private async returnToBackground(session: OpeningSession, navigationHandled: boolean) {
+  private async returnToBackground(
+    session: OpeningSession,
+    navigationHandled: boolean,
+    current: () => boolean = () => true,
+  ) {
     // A retarget that never navigated has only its predecessor's unwind to finish.
     if (session.predecessor && !session.routeNavigationStarted) {
       const unwound = await session.predecessor.unwind.catch(() => false);
+      if (!current()) return false;
       if (!session.provisionalClaimed) return unwound;
     }
     let onBackground = session.backgroundRecovery
       ? await session.backgroundRecovery
       : navigationHandled && this.isRecordBackground(session.record);
+    if (!current()) return false;
 
     // Recovery ran but did not land: force the URL back and confirm the commit.
     if (!onBackground && session.backgroundRecovery) {
       const href = backgroundHref(session.intent.background!);
       session.intent.navigation.replace(href);
       onBackground = await this.waitForRouterCommit(href);
+      if (!current()) return false;
     }
 
     if (!onBackground && session.collapseRecord && !session.routeNavigationStarted) {
       // Never navigated: the only thing to undo is the collapse already started.
       onBackground = await (session.collapsePromise ??
-        imageHeroHistory.ensureBackground(session.collapseRecord));
+        imageHeroHistory.ensureBackground(session.collapseRecord, current));
       if (onBackground) imageHeroHistory.forget(session.collapseRecord);
     } else if (navigationHandled && session.provisionalClaimed) {
       // The browser moved us; collapse whatever ladder we managed to build.
-      onBackground = await imageHeroHistory.ensureBackground(session.record);
+      onBackground = await imageHeroHistory.ensureBackground(session.record, current);
     } else if (!navigationHandled && session.routeNavigationStarted) {
       // We moved ourselves and must undo it.
       onBackground =
         session.historyRestore || session.provisionalClaimed
-          ? await imageHeroHistory.ensureBackground(session.record)
+          ? await imageHeroHistory.ensureBackground(session.record, current)
           : await imageHeroHistory.returnUnmarkedToBackground(
               session.intent.background!,
               session.record.token,
+              current,
             );
     } else if (!navigationHandled && session.provisionalClaimed) {
       // Reversed before its deferred push (`runOpening`): only the barrier to take down.
-      onBackground = await imageHeroHistory.ensureBackground(session.record);
+      onBackground = await imageHeroHistory.ensureBackground(session.record, current);
     }
     return onBackground;
   }
@@ -2887,6 +3004,9 @@ export class HeroController {
       resolveClose,
       retirement: null,
       routeScroll: { left: route.scroller.scrollLeft, top: route.scroller.scrollTop },
+      detailRect: intent.cause === 'dismiss'
+        ? getHeroRectWithoutAncestorTransform(route.target, route.content)
+        : launchGeometry.from,
       launchGeometry,
     };
     this.foreground = session;
@@ -2895,12 +3015,7 @@ export class HeroController {
        while `inert` on the detail and the lift of the gallery's `inert` — each a restyle of a
        whole subtree — land together under the moving picture. Done in one task, the overlay's
        focus trap can never pull back a focus the user has just given the gallery. */
-    const freeze = this.routes.freeze(route, session.owner, {
-      deferInert: true,
-      onShieldTap: (x, y) => this.replayShieldTap(x, y),
-    });
-    session.shared.add(freeze);
-    session.applyRouteInert = freeze.applyInert;
+    this.freezeClosingRoute(session);
     this.setPhase('closing.flight', session, record.background);
     void this.runClosing(session, plane);
     return closePromise;
@@ -3005,8 +3120,7 @@ export class HeroController {
         floatingBack: route.floatingBack,
         continueBackground,
         container: { card: to, cardRadius, host },
-        // A swipe-down is already a motion the hand started, so it keeps the gesture's pose
-        // instead of the container return.
+        // A swipe-down keeps the finger's content pose inside the returning window.
         choreography,
         speed: releaseSpeedAlong(session.intent.releaseVelocity, from, to),
       });
@@ -3027,7 +3141,16 @@ export class HeroController {
         scrollTop: plane.scrollTop,
       };
 
-      await session.motion.landed;
+      await this.finishClosing(session);
+    } catch (error) {
+      await this.failClosing(session, error);
+    }
+  }
+
+  /** Complete only the still-owned backward turn; the flyer may have changed direction meanwhile. */
+  private async finishClosing(session: ClosingSession) {
+    try {
+      await session.motion?.landed;
       if (!(await this.guardClosing(session))) return;
 
       if (!(await this.waitForInputTransfer(session))) {
@@ -3037,7 +3160,7 @@ export class HeroController {
 
       const closed =
         this.isRecordBackground(session.record) ||
-        (await imageHeroHistory.ensureBackground(session.record));
+        (await imageHeroHistory.ensureBackground(session.record, () => this.owns(session)));
       if (!(await this.guardClosing(session))) return;
       if (!closed || !this.isRecordBackground(session.record)) {
         await this.reverseClosing(session);
@@ -3058,14 +3181,15 @@ export class HeroController {
         return;
       }
 
+      // Seal before cancelling the window, so the route cannot flash its resting full-page pose.
+      this.routes.seal(session.route, session.owner);
       session.route.pull?.reset();
-      session.motion.dispose();
+      session.motion?.dispose();
       session.motion = null;
       session.scrollContinuity?.release();
       session.scrollContinuity = null;
       session.shared.dispose();
       session.visual.dispose();
-      this.routes.seal(route, session.owner);
       this.clearBackgroundVisual();
 
       this.foreground = null;
@@ -3075,30 +3199,44 @@ export class HeroController {
       this.events.notify();
       this.resolveClosing(session, 'closed');
     } catch (error) {
-      if (session.retired || session.abort.signal.aborted || !this.owns(session)) {
-        this.resolveClosing(session, 'handled');
-        return;
-      }
-      console.error('[hero] closing transaction failed', error);
-      await this.reverseClosing(session);
+      await this.failClosing(session, error);
     }
   }
 
-  /**
-   * The close cannot fly after all — its surfaces went away during the frames it waited for the
-   * shell to restyle. Collapse the ladder as an ordinary Back instead.
-   */
+  private async failClosing(session: ClosingSession, error: unknown) {
+    if (session.retired || session.abort.signal.aborted || !this.owns(session)) {
+      this.resolveClosing(session, 'handled');
+      return;
+    }
+    console.error('[hero] closing transaction failed', error);
+    await this.reverseClosing(session);
+  }
+
+  /** Release an unusable flight or failed reopening before falling back to history navigation. */
   private async abandonToCollapse(session: ClosingSession) {
     if (this.foreground !== session) return;
     // No flight to run under: hand the gallery back now rather than after the collapse.
     this.exposeGallery(session);
     session.abort.abort();
+    this.routes.seal(session.route, session.owner);
+    session.route.pull?.reset();
+    session.motion?.dispose();
+    session.motion = null;
+    session.scrollContinuity?.release();
+    session.scrollContinuity = null;
     session.shared.dispose();
     session.visual.dispose();
-    this.foreground = null;
-    this.events.notify();
-    const closed = await imageHeroHistory.ensureBackground(session.record);
     this.clearBackgroundVisual();
+    this.foreground = null;
+    const sequence = this.sessionSequence;
+    const lifecycle = this.lifecycleAbort.signal;
+    const current = () => this.foreground === null && this.sessionSequence === sequence && !lifecycle.aborted;
+    this.events.notify();
+    const closed = await imageHeroHistory.ensureBackground(session.record, current);
+    if (!current()) {
+      this.resolveClosing(session, 'handled');
+      return;
+    }
     if (closed && this.isRecordBackground(session.record)) {
       this.setPhase('gallery-idle', null, null);
       this.resolveClosing(session, 'closed');
@@ -3119,6 +3257,52 @@ export class HeroController {
     return true;
   }
 
+  private freezeClosingRoute(session: ClosingSession) {
+    if (session.routeFreeze) session.shared.release(session.routeFreeze);
+    const freeze = this.routes.freeze(session.route, session.owner, {
+      deferInert: true,
+      onShieldTap: (x, y) => this.replayShieldTap(x, y),
+    });
+    session.routeFreeze = freeze;
+    session.shared.add(freeze);
+    session.applyRouteInert = freeze.applyInert;
+  }
+
+  /** Back during a reopening close reverses that same flight again. */
+  private resumeClosing(previous: ClosingSession): ClosingSession {
+    if (this.foreground !== previous || !previous.reversing) return previous;
+    const motion = previous.motion;
+    const measured = motion ? {
+      destination: previous.thumbnail.isConnected ? getGalleryLandingRect(previous.thumbnail) : undefined,
+      plane: getGalleryScrollPlane() ?? undefined,
+      pose: motion.measurePose(),
+      inputs: motion.readReverseInputs(),
+    } : null;
+    const session: ClosingSession = {
+      ...previous,
+      abort: new AbortController(),
+      reversing: false,
+      intent: { ...previous.intent, cause: 'interrupt', backgroundMode: 'continue' },
+    };
+    previous.abort.abort();
+    previous.motion = null;
+    previous.shared = new ResourceScope();
+    previous.visual = new ResourceScope();
+    previous.scrollContinuity = null;
+    previous.resolveClose = null;
+    this.foreground = session;
+    this.pendingOpen = null;
+    this.freezeClosingRoute(session);
+    if (motion && measured) {
+      void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
+        .catch((error) => this.failClosing(session, error));
+    }
+    this.setPhase('closing.flight', session, session.record.background);
+    afterFirstFrame(() => this.exposeGallery(session));
+    void this.finishClosing(session);
+    return session;
+  }
+
   private async reverseClosing(session: ClosingSession) {
     if (session.retired || session.reversing || !this.owns(session)) {
       if (session.retired) this.resolveClosing(session, 'handled');
@@ -3126,11 +3310,12 @@ export class HeroController {
     }
     const routeTarget = session.route.target;
     const measurement =
-      session.motion && routeTarget?.isConnected
+      session.motion
         ? {
-            /* The page behind the window is held still (the compensator is the window's
-               inverse), so the target's screen box is already the box it will occupy. */
-            destination: getHeroRect(routeTarget),
+            // A cancelled dismiss lands at the resting slot, without the finger's translation.
+            destination: routeTarget?.isConnected
+              ? getHeroRectWithoutAncestorTransform(routeTarget, session.route.content)
+              : session.detailRect,
             pose: session.motion.measurePose(),
             // Before the phase write below, which would otherwise force these reads' style pass.
             inputs: session.motion.readReverseInputs(),
@@ -3139,7 +3324,15 @@ export class HeroController {
 
     session.reversing = true;
     session.abort.abort();
+    // The measured flyer and opacities carry the visible pose across this synchronous reset.
+    session.route.pull?.reset(false);
+    if (session.routeFreeze) session.shared.release(session.routeFreeze);
+    session.routeFreeze = null;
+    session.applyRouteInert = null;
+    this.routes.reveal(session.route, session.owner);
     this.setPhase('reversing', session, session.record.background);
+    // Restore the Back barrier alongside the visual turn, before another Back can pass the base.
+    const restoring = this.restoreGuardStrict(session.record, () => this.foreground === session);
 
     try {
       if (session.motion && measurement) {
@@ -3158,10 +3351,29 @@ export class HeroController {
       return;
     }
 
-    const restored = await this.restoreGuardStrict(session.record);
+    const restored = await restoring;
     if (this.foreground !== session) {
       this.resolveClosing(session, 'handled');
       return;
+    }
+
+    if (restored) {
+      const route = await waitForSignal<HeroRoute | false>(this.events, {
+        timeout: HERO_DETAIL_ROUTE_TIMEOUT_MS,
+        signal: this.lifecycleAbort.signal,
+        read: () => {
+          if (this.foreground !== session) return false;
+          const current = this.routes.findByImage(session.record.imageId, session.record.detailHref);
+          return current && (current.resolvedWithoutMedia || (current.previewPaintable && current.target))
+            ? current : null;
+        },
+      });
+      if (this.foreground !== session) return;
+      if (!route) {
+        await this.abandonToCollapse(session);
+        return;
+      }
+      session.route = route;
     }
 
     session.route.pull?.reset();
@@ -3343,14 +3555,14 @@ export class HeroController {
         syncHeight();
         sync();
       },
-      follow: (target, content, node) => {
+      follow: (target, content, node, initial) => {
         if (released) return null;
         if (targetContent) resizeObserver?.unobserve(targetContent);
         if (targetScroller) continuity.removePeer(targetScroller);
         targetScroller = null;
         targetContent = content;
         following?.release();
-        following = followHeroScroll(stage.scroller, target, node);
+        following = followHeroScroll(stage.scroller, target, node, initial);
         if (!following) {
           targetContent = null;
           return null;
@@ -3360,8 +3572,8 @@ export class HeroController {
         syncHeight();
         return {
           refresh: follow.refresh,
-          commit: () => {
-            follow.commit();
+          commit: (offsets) => {
+            follow.commit(offsets);
             if (following === follow) following = null;
           },
           release: () => {
@@ -3376,7 +3588,7 @@ export class HeroController {
         };
       },
       sync,
-      own: (target, content, forwardStageWheel) => {
+      own: (target, content, forwardStageWheel, initial) => {
         if (released) return;
         following?.release();
         following = null;
@@ -3384,7 +3596,7 @@ export class HeroController {
         targetScroller = target;
         targetContent = content;
         resizeObserver?.observe(content);
-        continuity.replacePeers(target);
+        continuity.replacePeers(target, initial);
         if (forwardStageWheel) continuity.addDeltaSource(stage.scroller);
         syncHeight();
       },
@@ -3613,6 +3825,8 @@ export class HeroController {
     const foreground = this.foreground;
 
     if (foreground?.kind === 'opening') {
+      if (navigation.programmatic && foreground.resuming &&
+        navigation.programmaticToken === foreground.record.token) return;
       const background = normalizeHeroHref(backgroundHref(foreground.intent.background!));
       if (navigation.href === background) {
         const ownsParallelCollapse = Boolean(
@@ -3688,9 +3902,13 @@ export class HeroController {
         navigation.position === 'background' &&
         navigation.href === normalizeHeroHref(backgroundHref(foreground.record.background))
       ) {
+        if (foreground.reversing) this.resumeClosing(foreground);
         return;
       }
-      if (sameRecord && navigation.position === 'base') return;
+      if (sameRecord && (navigation.position === 'base' || navigation.position === 'provisional')) {
+        if (foreground.reversing) this.resumeClosing(foreground);
+        return;
+      }
       this.abandonClosing(foreground);
       return;
     }
@@ -3860,14 +4078,15 @@ export class HeroController {
   }
 
   /** Reinstate the guard entry, retrying once history settles. */
-  private async restoreGuardStrict(record: HeroHistoryRecord) {
-    if (imageHeroHistory.isGuard(record)) return true;
-    if ((await imageHeroHistory.restoreGuard(record)) && imageHeroHistory.isGuard(record)) {
+  private async restoreGuardStrict(record: HeroHistoryRecord, current: () => boolean = () => true) {
+    if (!current()) return false;
+    // Queue even when the guard is current: a previous turn may already be traversing away.
+    if ((await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record)) {
       return true;
     }
-    if (!(await imageHeroHistory.waitForStable())) return false;
+    if (!(await imageHeroHistory.waitForStable()) || !current()) return false;
     if (imageHeroHistory.isGuard(record)) return true;
-    return (await imageHeroHistory.restoreGuard(record)) && imageHeroHistory.isGuard(record);
+    return (await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record);
   }
 
   /** Derive phase purely from the observable location, with no session running. */
@@ -4165,13 +4384,11 @@ export class HeroController {
     visual.release();
   }
 
-  /**
-   * Keep the outgoing Stage from eating the first tap meant for the route that
-   * replaced it. Released when the Stage actually unmounts.
-   */
-  private retainStagePointerShield(sessionId: number) {
+  /** Keep a departing Stage hidden and out of hit testing until React removes it. */
+  private concealRetainedStage(sessionId: number) {
     const stage = this.stage?.sessionId === sessionId ? this.stage.nodes : null;
     if (!stage) return;
+    setStageReady(stage, false);
     const shield = combineHeroLeases(
       leaseInlineStyles(stage.overlay, { pointerEvents: 'none' }),
       leaseInlineStyles(stage.scroller, { pointerEvents: 'none' }),

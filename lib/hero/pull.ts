@@ -6,7 +6,6 @@ import {
   DRAG_RESISTANCE_PX,
   HERO_CHROME_SELECTOR,
   HERO_REVEAL_SELECTOR,
-  HERO_SURFACE_SELECTOR,
   PULL_RELEASE_DURATION_MS,
   PULL_RELEASE_MIN_DURATION_MS,
   PULL_RELEASE_RESPONSE,
@@ -41,7 +40,7 @@ export type HeroPullSample = {
 
 /** The nodes a dismissible detail surface is made of. */
 export type HeroPullNodes = {
-  /** Owns the moving content and fading surface/reveal nodes. */
+  /** Owns the moving content and fading reveal nodes. The surface stays opaque. */
   overlay: HTMLElement;
   /** Rendered outside the overlay; participates in the same veil. */
   floatingBack: HTMLElement | null;
@@ -351,7 +350,7 @@ export class HeroPullSurface {
       const content = surface.querySelector<HTMLElement>('.image-detail-overlay-content');
       if (content) remember(content, 'transform');
       surface.querySelectorAll<HTMLElement>(
-        `${HERO_SURFACE_SELECTOR}, ${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
+        `${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
       ).forEach((element) => remember(element, 'opacity'));
       if (surface !== overlay && !this.markedMirrors.includes(surface)) {
         surface.dataset[PULL_ATTRIBUTE] = '';

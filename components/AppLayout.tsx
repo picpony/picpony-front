@@ -48,6 +48,7 @@ import type { ImageHeroRuntimeState } from '@/lib/hero/types';
 import {
   getImageHeroRuntime,
   initializeImageHeroHistory,
+  observeImageHeroClientNavigation,
   requestImageDetailClose,
   subscribeImageHeroRuntime,
 } from '@/lib/hero/runtime';
@@ -629,6 +630,11 @@ export default function AppLayout({
     setRoutePayloadPrefetch((href) => router.prefetch(href, { kind: FULL_PREFETCH }));
     return () => setRoutePayloadPrefetch(null);
   }, [router]);
+
+  // The Stage only subscribes to Hero state; router commits must not suspend its flight.
+  useEffect(() => {
+    observeImageHeroClientNavigation(`${pathname}${liveSearch ? `?${liveSearch}` : ''}`);
+  }, [pathname, liveSearch]);
 
   const getRevealOrigin = useCallback(() => {
     // The icon, not the button's box: the wipe grows out of the glyph, and the button
@@ -1390,9 +1396,7 @@ export default function AppLayout({
                 onOpenChange={setModalOpen}
                 enabled={isOverlayDrawer && !isImageDetailRoute && !imageHeroRuntime.background}
               />
-              <Suspense fallback={null}>
-                <HeroStage />
-              </Suspense>
+              <HeroStage />
               {/* The slot arrives from the server as a lazy reference, and among static siblings
                   React resolves it during reconciliation and finds an element nothing marked as
                   checked — a missing-key warning on every route. As the single child of its own

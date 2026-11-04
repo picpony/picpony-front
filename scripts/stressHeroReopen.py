@@ -7,6 +7,8 @@ After every round the screen must be one of the two settled states, consistently
   - the picture: `detail-idle`, `/pic/<id>`, the routed overlay visible and interactive.
 """
 import json
+import os
+import pathlib
 import random
 import sys
 from playwright.sync_api import sync_playwright, expect
@@ -16,6 +18,8 @@ ROUNDS = next((int(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--roun
 SEED = next((int(a.split('=', 1)[1]) for a in sys.argv if a.startswith('--seed=')), 7)
 HEADED = '--headed' in sys.argv
 GALLERY = '[data-image-hero-gallery-scroll]'
+OUTPUT = pathlib.Path(__file__).resolve().parent.parent / '.workbuddy' / 'hero-stress'
+OUTPUT.mkdir(parents=True, exist_ok=True)
 
 PROBE = """() => {
   const root = document.documentElement;
@@ -144,7 +148,7 @@ def run(browser, width, rounds, seed):
         print(('ok   ' if ok else 'FAIL ') + f'{width} r{round_no} {" ".join(seq)} -> {json.dumps(end)}', flush=True)
         if not ok:
             failures.append({'round': round_no, 'seq': seq, 'end': end})
-            page.screenshot(path=f'/tmp/stress-{width}-{round_no}.png')
+            page.screenshot(path=str(OUTPUT / f'stress-{width}-{round_no}.png'))
             page.goto(BASE + '/user/1', wait_until='networkidle')
             page.wait_for_timeout(600)
             continue
@@ -162,7 +166,9 @@ def run(browser, width, rounds, seed):
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(headless=not HEADED)
+    channel = os.environ.get('HERO_BROWSER_CHANNEL', 'msedge')
+    browser = playwright.chromium.launch(**({} if channel == 'chromium' else {'channel': channel}),
+                                         headless=not HEADED)
     total = []
     for width in [1440, 390]:
         failures, errors = run(browser, width, ROUNDS, SEED + width)

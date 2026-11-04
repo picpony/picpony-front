@@ -1,14 +1,10 @@
 'use client';
 
 import {
-  useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useSyncExternalStore,
-  type MouseEvent as ReactMouseEvent,
 } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
@@ -20,7 +16,6 @@ import { completeDetailRow } from '@/lib/detailRow';
 import {
   getImageHeroStage,
   interruptImageHero,
-  observeImageHeroClientNavigation,
   registerImageHeroStage,
   subscribeImageHeroStage,
 } from '@/lib/hero/runtime';
@@ -33,9 +28,6 @@ function getServerStage() {
 }
 
 export default function HeroStage() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const search = searchParams.toString();
   const state = useSyncExternalStore(subscribeImageHeroStage, getImageHeroStage, getServerStage);
   const overlayRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -45,24 +37,6 @@ export default function HeroStage() {
   const anchorRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   const sessionId = state.sessionId;
-
-  useEffect(() => {
-    observeImageHeroClientNavigation(`${pathname}${search ? `?${search}` : ''}`);
-  }, [pathname, search]);
-
-  // The routed detail component may not have committed yet while an opening
-  // flight is visible. Keep Escape owned by the mounted Stage so it reverses
-  // the active session instead of falling through to browser navigation.
-  useEffect(() => {
-    if (sessionId === null || state.phase === 'idle' || state.phase === 'armed') return;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (!interruptImageHero()) return;
-      event.preventDefault();
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [sessionId, state.phase]);
 
   useLayoutEffect(() => {
     if (sessionId === null) return;
@@ -84,37 +58,6 @@ export default function HeroStage() {
     });
   }, [sessionId]);
 
-  const forwardOpeningCardClick = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      /* Only while armed: the press that armed the Stage has not opened anything yet, so a click
-         that reaches the (invisible, full-screen) Stage belongs to whatever card is under it.
-         Once a picture is opening, another card's tap does nothing — switching pictures mid-open
-         is not a behaviour (`HeroController.requestOpen`). */
-      if (state.phase !== 'armed' || event.defaultPrevented) return;
-      const overlay = overlayRef.current;
-      if (!overlay) return;
-      /* Inside the window the user is looking at the detail, not at the card beneath it. The
-         scroller sits inside the window's clip and hit testing honours that clip, so a click
-         that reached it was on the window; one outside it lands on the overlay itself. This
-         handler used to sit on the scroller — it saw only taps *inside* the window (and sent
-         them to whatever card lay under the picture) while a tap on a visible card outside the
-         window hit the overlay and was swallowed. */
-      if (event.target instanceof Node && scrollerRef.current?.contains(event.target)) return;
-      for (const element of document.elementsFromPoint(event.clientX, event.clientY)) {
-        const card = element.closest<HTMLAnchorElement>('a.image-hero-card-link');
-        if (!card || overlay.contains(card)) continue;
-        const thumbnail = card.querySelector<HTMLElement>('[data-image-hero-role="thumbnail"]');
-        if (!thumbnail || Number(thumbnail.dataset.imageHeroId) === state.snapshot?.image.id)
-          return;
-        event.preventDefault();
-        event.stopPropagation();
-        card.click();
-        return;
-      }
-    },
-    [state.phase, state.snapshot?.image.id],
-  );
-
   const snapshot = state.snapshot;
   if (state.phase === 'idle' || !snapshot) return null;
   // The stage is the geometry contract for the flight: it stays bound to the
@@ -124,8 +67,6 @@ export default function HeroStage() {
   const image = snapshot.image;
   /* The card's row, when it already is the full record (a Derpibooru list row is). */
   const record = completeDetailRow(image);
-  // Mounted by a press ahead of its click (`HeroController.armOpen`): laid out, never painted.
-  const armed = state.phase === 'armed';
 
   return (
     <>
@@ -144,7 +85,6 @@ export default function HeroStage() {
         data-image-detail-floating-back="stage"
         data-image-hero-stage-back
         data-image-hero-stage-foreground
-        data-image-hero-stage-armed={armed ? '' : undefined}
         onClick={() => {
           interruptImageHero();
         }}
@@ -155,7 +95,6 @@ export default function HeroStage() {
         data-image-detail-overlay
         data-image-hero-stage
         data-image-hero-stage-state={state.phase}
-        onClick={forwardOpeningCardClick}
         aria-hidden="true"
         className="pointer-events-auto absolute inset-0 z-hero-stage overflow-hidden"
       >

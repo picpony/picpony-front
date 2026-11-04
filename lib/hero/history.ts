@@ -362,6 +362,9 @@ class HeroHistoryDriver {
   install(record: HeroHistoryRecord) {
     if (!this.isStableForWrite()) return false;
     if (normalizeHref(window.location.href) !== record.detailHref) return false;
+    const current = this.currentMarker();
+    if (current && current.token !== record.token) return false;
+    if (current?.role === 'guard') return true;
     try {
       window.history.replaceState(
         stateWithMarker(markerFor(record, 'base')),
@@ -385,24 +388,25 @@ class HeroHistoryDriver {
   }
 
   /** Collapse this record's whole ladder and land back on the gallery. */
-  ensureBackground(record: HeroHistoryRecord) {
+  ensureBackground(record: HeroHistoryRecord, current: () => boolean = () => true) {
     return this.enqueue(false, async () => {
+      if (!current()) return false;
       const expectedHref = normalizeHref(
         `${record.background.pathname}${record.background.search}`,
       );
       const currentHref = normalizeHref(window.location.href);
-      const current = this.currentMarker();
+      const marker = this.currentMarker();
       const ownsUnmarkedProvisional =
-        !current && this.position === 'provisional' && this.provisionalTokens.has(record.token);
+        !marker && this.position === 'provisional' && this.provisionalTokens.has(record.token);
 
-      if (currentHref === expectedHref && !current && !ownsUnmarkedProvisional) {
+      if (currentHref === expectedHref && !marker && !ownsUnmarkedProvisional) {
         this.position = 'background';
         return true;
       }
       if (this.hasLateTraversal()) return false;
-      if (current && current.token !== record.token) return false;
+      if (marker && marker.token !== record.token) return false;
 
-      const role = current?.role ?? (ownsUnmarkedProvisional ? 'provisional' : null);
+      const role = marker?.role ?? (ownsUnmarkedProvisional ? 'provisional' : null);
       // A provisional entry that already routed sits one level deeper.
       const routedProvisional = role === 'provisional' && currentHref === record.detailHref;
       const steps =
@@ -422,8 +426,10 @@ class HeroHistoryDriver {
         (marker, href) => href === expectedHref && !marker,
         record.token,
       );
-      if (confirmed) this.position = 'background';
-      return confirmed;
+      const landed = current() && confirmed && !this.currentMarker() &&
+        normalizeHref(window.location.href) === expectedHref;
+      if (landed) this.position = 'background';
+      return landed;
     });
   }
 
@@ -431,8 +437,10 @@ class HeroHistoryDriver {
   returnUnmarkedToBackground(
     background: ImageHeroBackgroundLocation,
     ownerToken: string | null = null,
+    current: () => boolean = () => true,
   ) {
     return this.enqueue(false, async () => {
+      if (!current()) return false;
       const expected = normalizeHref(`${background.pathname}${background.search}`);
       if (normalizeHref(window.location.href) === expected) {
         this.position = 'background';
@@ -444,8 +452,10 @@ class HeroHistoryDriver {
         (marker, href) => !marker && href === expected,
         ownerToken,
       );
-      if (confirmed) this.position = 'background';
-      return confirmed;
+      const landed = current() && confirmed && !this.currentMarker() &&
+        normalizeHref(window.location.href) === expected;
+      if (landed) this.position = 'background';
+      return landed;
     });
   }
 
@@ -469,9 +479,9 @@ class HeroHistoryDriver {
   }
 
   /** Put the guard entry back so this detail view is closable again. */
-  restoreGuard(record: HeroHistoryRecord) {
+  restoreGuard(record: HeroHistoryRecord, current: () => boolean = () => true) {
     return this.enqueue(false, async () => {
-      if (this.hasLateTraversal()) return false;
+      if (!current() || this.hasLateTraversal()) return false;
       let marker = this.currentMarker();
 
       if (!marker || marker.token !== record.token) {
@@ -484,7 +494,19 @@ class HeroHistoryDriver {
           (next) => next?.token === record.token && next.role === 'base',
           record.token,
         );
-        if (!restoredBase) return false;
+        if (!restoredBase || !current()) return false;
+        marker = this.currentMarker();
+      }
+      if (!marker || marker.token !== record.token) return false;
+      if (marker.role === 'provisional') {
+        // An opening that never installed a base has no detail rung to traverse forward to.
+        if (this.provisionalTokens.has(record.token)) return false;
+        const restoredBase = await this.goAndConfirm(
+          1,
+          (next) => next?.token === record.token && next.role === 'base',
+          record.token,
+        );
+        if (!restoredBase || !current()) return false;
         marker = this.currentMarker();
       }
       if (!marker || marker.token !== record.token) return false;
@@ -501,13 +523,14 @@ class HeroHistoryDriver {
           record.token,
         )
       ) {
+        if (!current() || !this.isGuard(record)) return false;
         this.position = 'guard';
         return true;
       }
 
       // A timed-out `history.go(1)` may still arrive; pushing another guard in
       // that window would permanently duplicate the pair.
-      if (this.hasLateTraversal()) return false;
+      if (!current() || this.hasLateTraversal()) return false;
 
       const stillBase = this.currentMarker();
       if (
