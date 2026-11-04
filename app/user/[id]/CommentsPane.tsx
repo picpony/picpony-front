@@ -30,7 +30,7 @@ function target(comment: UserComment): { href: string; label: string; icon: Reac
  * 历史评论 — each row is the comment and a link to where it was written, and **the whole row is
  * the target** (R7-036: the only link was the small badge and date). The row cannot *be* the link:
  * the comment is rich text, whose own links would then be nested inside it, which is invalid and
- * fails invisibly (AGENTS: an interactive element may not be nested inside another). So the link
+ * fails invisibly (docs/design/primitives.md#buttons-icons-and-semantics). So the link
  * is a sibling laid under the row's content — the `DropZone` arrangement: the content lets the
  * pointer through to it, except on a link of the comment's own.
  */

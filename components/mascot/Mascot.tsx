@@ -164,9 +164,8 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     toolsAt.current = coarse ? null : toolsLift;
   }, [head, coarse, toolsLift]);
 
-  /* Arrive and leave on the tier's terms. The first appearance is volunteered by the app — an
-     entrance — so 入场动画 off makes the figure simply be there; leaving and returning with a
-     route or an overlay is the tier's business and always animates (AGENTS: 入场动画). */
+  /* Entrance preferences gate the first appearance; later visibility changes use the motion tier.
+     See docs/motion-system.md#entrance-and-splash. */
   useEffect(() => {
     if (!visible) {
       const frame = requestAnimationFrame(() => setShown(false));
@@ -392,7 +391,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
 
   /* The countdown starts where the hold already is — the hint appears 350ms in — and runs to the
      end of the hold on a linear clock, because it *is* that clock: a determinate meter of elapsed
-     time, which every tier shows (AGENTS: under 关闭 a determinate meter still shows its value). */
+     time, whose value remains visible on every tier (docs/motion-system.md#reduced-and-off-behaviour). */
   useEffect(() => {
     const fill = holdFill.current;
     const current = hold.current;
@@ -582,7 +581,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             data-ripple={collapsed ? 'inner' : undefined}
             /* The ring keeps a band of the page's surface inside it: the figure stands over whatever
                the page shows, a picture included, and the band gives the ring the edge it has
-               everywhere else (G1-022; AGENTS → Focus). */
+               everywhere else (docs/design/colour.md#focus). */
             className={cn(styles.control, 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
             aria-label={collapsed ? '展开吉祥物' : '与彩彩互动，长按或按住空格 3 秒打开彩彩 AI'}
             onPointerDown={onPointerDown}

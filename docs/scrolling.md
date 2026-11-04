@@ -1,62 +1,100 @@
 # Scrolling
 
-> Split out of `AGENTS.md`; read on demand. Cross-references such as "see Motion" or "under Shape" name sections listed in the index in `AGENTS.md`.
+Scroll ownership, paging and image delivery. Transition mechanics are in [Transitions](transitions.md); flight details are in [Hero engine](hero.md).
 
-`<body>` is `overflow: hidden`. The page scroller is `<main class="app-scroller">` in `components/AppLayout.tsx`, reachable via `getAppScroller()`. `window.scrollTo` is a no-op — use `scrollAppToTop` / `scrollAppToElement`.
+## Scroll containers
 
-Every scroll container carries `.main-scrollbar` (page-level, reserves its gutter), `.popover-scrollbar` (overlays, no gutter) or `.scrollbar-hide` (a horizontally scrolled chip row or tab rail, where a visible bar is chrome the row cannot afford). Never leave one unstyled: the browser default is a different width and colour, and the app then appears to change its scrollbar as you navigate.
+The body is `overflow: hidden`. The page scroller is `<main class="app-scroller">` in `AppLayout`, reached through `getAppScroller()`.
 
-Never give a child of the scroller `min-h-dvh` — the scroller is already shorter than the viewport (header + margins), so it forces a permanent scrollbar. Use `min-h-full`.
+Use `scrollAppToTop` / `scrollAppToElement`, not `window.scrollTo`. Scroller children use `min-h-full`, not `min-h-dvh`.
 
-## Vertical position has one owner
+| Container | Utility |
+| --- | --- |
+| Page-level scroller | `.main-scrollbar`, reserved gutter |
+| Overlay scroller | `.popover-scrollbar`, no gutter |
+| Horizontal chips or tabs | `.scrollbar-hide` |
 
-`lib/scrollMemory.ts`, mounted once in `AppLayout` as `<RouteScrollMemory>`, and **every `router.push`/`replace` and every `<Link>` in the app passes `scroll: false`**. That is not a per-call-site decision; a new one that forgets it is a bug, and the flag is only a suppression — the position is written explicitly.
+## Scroll ownership
 
-**A traversal from a picture's overlay back to the page it covered keeps that page's own offset.** The page never unmounted (the overlay is a parallel route, and `[data-page-content]` is keyed on the background pathname, so it is the same node), and a close that nothing flies may just have moved it on purpose — the list turning to the picture last on screen (`revealInImageSequence`). Restoring the entry's offset from before the picture opened put /history's list back 1466px under its closing container and landed the container on the scroll. A remount (R12-017, a page-presentation `/pic/` going back) is a new node and still restores.
+`lib/scrollMemory.ts` mounts once as `RouteScrollMemory`. Every router push/replace passes `scroll: false`; every Link passes `scroll={false}`.
 
-Five situations, and the page turn and the tab switch are one rule:
+| Change | Owner and result |
+| --- | --- |
+| New pathname | Route memory starts at zero |
+| Back / Forward | Restore that history entry's offset |
+| Page turn | Pagination scrolls to its anchor using the distance-based law |
+| Tab switch | `startTabTransition` / `TabPanesDriver` |
+| Back / Forward between search queries | Search restores after the matching results render |
+| Image detail | Hero owns the detail and its background handoff |
 
-| a new pathname | jump to 0. A new page starts at its top |
-| back / forward | restore what that history entry had |
-| a page turn (`?page=`) | `Pagination` owns it, and it **positions rather than travels** — see below |
-| a tab switch (`?tab=`) | `startTabTransition` / `TabPanesDriver` own it |
-| Back / Forward between two searches (`/search?q=`) | /search owns it: it keeps its own offsets by the same entry key and restores one once that search's results are on screen (a picture closing back onto a search is the hero's, not this). It learns of the traversal from the entry it renders, never from `popstate`: React renders a transition started inside that event synchronously, so the router's traversal can commit before a listener of the screen's own has run |
+The route owner depends on pathname, not query changes. Search traversal is detected from the rendered entry rather than a racing `popstate` listener.
 
-The owner depends on `pathname` alone, so it does not run for a search-only change at all — which is stronger than testing for one. The image detail stays the hero subsystem's, guarded both by `heroOwnsScreen()` and by a `/pic/` test for a cold load.
+An overlay closes onto the background node's current offset, including deliberate sequence repositioning. A remounted page still restores its entry offset.
 
-**Next's own handler is off rather than merely overridden.** It does reach the app scroller (`layout-router.js` falls through to `domNode.scrollIntoView()`), but it is the one writer that cannot consult `heroOwnsScreen()`, it tests the segment's top against `document.documentElement.clientHeight` rather than the scroller's box, `block: 'start'` lands on the segment's top edge rather than on `scrollTop === 0`, it fires after the commit and so races `RouteCrossFade`, and it ends with `domNode.focus()`, moving focus to the route segment. `scroll: false` is also not a hard opt-out: `completeSoftNavigation` neutralises the *current* navigation's targets while leaving an earlier unconsumed `scrollRef` live.
+Offsets use `window.navigation.currentEntry.key`, with the documented URL fallback. Do not merge private scroll keys into App Router's `history.state`. Next may retain an earlier scroll target even after a later `scroll: false`; its handler is not the app's restoration owner.
 
-**Offsets are keyed per history entry, not per URL** — `window.navigation.currentEntry.key`, with a URL fallback whose one observable difference is documented at the call site. Do not merge a key into `history.state`: the App Router rebuilds that object on every commit and drops anything it does not own, which `lib/hero/history.ts` already spends three mechanisms working around.
+## Paging
 
-**A page turn glides on the distance law, like every other programmatic scroll, and there is no fixed-length escape hatch.** `scrollAppToElement` scales its tween with the square root of the travel (360–1100ms), so the *rate* is non-linear in the distance: a short hop is brisk, a long one takes its time. Hold the duration still and the speed rises with however far you happened to be scrolled. **Its shape is the tab strip's response** — launched at half its family's rate, so it leaves at its top speed with no jerk — and it moves on the frame after the press: 5–15% of the way in the first frame and 10% in 11–34ms, where the `cubic-bezier(0.33, 0, 0, 1)` it was left from rest, 0.1–0.8% after a frame and 10% only after 48–146ms.
+- `Pagination` finds `[data-pagination-anchor]` through `closest()`; the marker must be an ancestor, not a sibling.
+- An overlay's scrolling body also carries `data-app-scroll-container`. Modal and Sheet already supply it.
+- Several pagers can share an enclosing anchor.
+- Without `totalPages`, show only the current page and a possible next page.
+- Retain rows during a page read with scoped `keepPrevious`; see [Data requests](data-requests.md#resource-snapshots).
 
-**`npm run perf:pageturn` asserts the predicate, not the mechanism: no in-view card may be blank during a page turn, and none may be hidden after a cold load has painted it.** The lesson behind it, learned over three passes: when a transition reads wrong, check what is on screen during it before changing how long it lasts — the glide was blamed for blank travel that `FadeInImage`'s dropped placeholder caused, and fixing the placeholder is what made the honest duration affordable. Reaching for the duration or the easing is the mistake the report invites; both times the fault was which bitmap was on screen. Standing rules from the same stretch:
+Programmatic scrolling follows the square root of travel over the shared 360–1100 ms range, using the tab-strip response. Do not add a fixed-duration argument to `runScroll`. The off tier still positions immediately.
 
-- `<StaggerGrid>` is a **sibling after** the grid it targets (a parent's ref attaches only after its children's layout effects run, so nesting it meant the mount pass found no root), and the hook **latches once per mount**: a page turn is a content replacement inside a grid that never left the screen — the motion carrying it is the glide, and a second entrance on top is the 动画重叠 failure. A breakpoint reflow no longer replays it either: a resize is not an arrival.
-- **The cascade must not play on a cold load or compete with an active route entrance.** `/` renders its first feed page on the server, so on a cold load the cards are painted before the engine arrives and a late cascade would park visible cards at `autoAlpha: 0`. `StaggerGrid` decides **once, at mount**, whether the engine is already resident and never subscribes to its later arrival. Even with the engine resident, `useStaggerGridOn` checks the route's pre-commit marker before seeding any card transforms and latches the skip when that route owns the entrance. `warmMotion()` still fetches the engine on an idle callback for every other consumer.
-- `FadeInImage`'s placeholder **cross-fades rather than unmounting**: the skeleton fades out on the image's own clock, released one `MOTION_SPEED_SCALE.slow`-scaled duration later — the wall-clock rule, because a timer written against the unscaled figure fires inside the motion it is meant to outlast.
-- `runScroll` takes no length argument: a parameter with no call sites is one the next screen reaches for.
+## Grid continuity
 
-**The server cannot see which image line this device is on.** `resolveImageLine()` reads `localStorage` and the fetched route policy; in Node it falls back to the defaults and emits the proxy line for everybody — a visitor who had turned the image proxy off got a hydration mismatch on every card, and React does not patch mismatched attributes, so their preference was ignored for the whole first screen. `COOKIE_KEYS.imageLine` is the answer, in the same shape as `browsing`: `lib/route.ts` mirrors its own resolution into the cookie on every change, and `app/layout.tsx` hands it down through `ImageLineProvider` so the client's first render asks the same question. `createInitialAttempt` takes the line as an argument for that first attempt only; the failover ladder still reads the live answer, so a stale cookie costs one corrected attempt. (In production the first attempt is the optimizer on the raw URL, which no line touches, so only a browser-direct first attempt — development, an animated card — depends on it.) A first visit has no cookie and uses the defaults on both sides, and the cookie written during that load makes every load after it exact.
+`StaggerGrid` is a sibling after its target grid and latches once per mount. Page turns and breakpoint reflows do not replay the entrance.
 
-**The detail's picture is served as the CDN made it, not re-encoded.** `next.config.ts` sets `images.unoptimized` in development, so dev has always shown the untouched file; production put it through `/_next/image`, and at identical pixel dimensions (the optimizer clamps to the source) one real picture went 373,365 bytes → 170,826 at `q=82` (46%), 217,511 at `q=88` (58%) — less than half the bytes for the same resolution, plus **3–4 seconds of this server's CPU** per variant. `shouldBypassImageOptimization` covers Derpibooru's own derivatives now — `large`, `medium`, `small`, the thumbs — matched on the *raw* URL, since the image line may have wrapped it in a proxy's `?url=`. They are already size-appropriate files off a CDN; it gives up bytes (373KB against 171KB for an opened picture) and that is the right way round: the picture *is* the content here, and it now arrives in one hop. Gallery cards keep the optimizer, where a 308px card from an 800px source is a real saving — **handed the raw Derpibooru URL**, never a line-wrapped one: the optimizer runs on the server's network, and the worker and the CDN are open `?url=` proxies that `remotePatterns` therefore no longer allows (it pinned an open image proxy to this server). One optimizer attempt, then the visitor's line browser-direct, each retry on a backoff (`lib/imageLoader.ts`). An **animated** card skips the optimizer — it passes animations through unresized, so a card asked for the 800px `medium.gif` and got all 3.4MB — and takes the smallest Derpibooru rendition as wide as the card at up to 1.5× density (`pickRendition`). `sizes` comes from the layout's own numbers (`MASONRY_CARD_SIZES`: the docked drawer, the gutters, the column cap).
+A cold load must not hide already painted SSR cards when the motion engine arrives. Decide engine availability once at mount and skip cascade when the route already owns entrance.
 
-**The flight paints a `<canvas>` blitted from the gallery card's bitmap, and that — not the detail's `<img>` — is what flight sharpness is a property of.** `launchFlight` hands `createHeroFlight` the snapshot's `previewFrame`, which `captureHeroFrame` draws from the card's own `<img>`; `[data-image-detail-layer]` — preview and final alike — is the surface *underneath* it. In production the card is correctly sized *for a card* (304px from `/_next/image`) and the 944px flight box blows it up **3.11x**; in development the card holds 800px raw (`images.unoptimized`) and the same box is **1.18x**. So the flyer **sharpens in the air** (`lib/hero/upgrade.ts`): the detail's final `<img>` mounts at route render, during the flight, at `fetchpriority=high`, and the moment it *decodes* the flyer's canvas is repainted from it in place (`repaintHeroFrame`, upward only, through a scratch canvas). Geometry reads only `flight.base`, a CSS box, so a bigger bitmap is a pure resolution change. Stills only — an animated source decodes at frame 0.
+`FadeInImage` cross-fades its placeholder on the image's clock and removes it only after the slowest-speed watchdog. No visible card may become blank during a page turn.
 
-**Nothing sharper is required before take-off, by design.** An earlier version rasterised a pre-warmed `medium` on the intent ladder and handed *that* to the flight when it had decoded before the click. The click almost always won the race, which is exactly the reported "soft the first time, sharp the second"; a warm that failed on the visitor's line or was evicted left a picture soft on every open. Do not reintroduce a pre-take-off source for the opening flight. `warmImageHeroSource` / `warmedDetailFrames` remain for **steps** (上一张 / 下一张) only, where the neighbours are warmed on arrival and nothing races a press.
+## Tab offsets
 
-**A slow line is still the floor, and it is inherent.** If the final has not decoded by the landing, the leg runs on the card's bitmap and the handoff shows the detail as usual. Closing that would mean enlarging every card: measured through the optimizer at q=75 on three real pictures, the card's variant costs 62KB and the next step up 103KB — **+2MB on a fifty-card page** to improve the first 250ms of the few cards anyone opens. Not taken.
+Tab memory is keyed by pathname, tab-group position and tab name. Traversal retains it, a push clears that pathname, and a session change clears all tab offsets.
 
-Probe rules that came out of that search, all load-bearing: measure image work at **DPR 2** — `npm run perf:sharpness` takes `PROBE_DPR`, and a fix that is perfect at DPR 1 can be inert on a phone. `scripts/probeHeroSharpness.mjs` must sample the flight's own canvas (`.image-hero-flyer-image`), not `[data-image-detail-layer]`, which answers "what will this look like once it has landed" and never "what does the flight look like"; `npm run perf:sharpness:assert` **asserts** the flight's canvas is repainted bigger than the card's bitmap before landing, and stays under 1.5x from then on. `--throttle=<mbps>` shapes the faked CDN by delaying each fulfillment in proportion to the rung's weight and **must not be `Network.emulateNetworkConditions`** — a CDP-fulfilled response is synthesised inside the browser and is not subject to it, so it reports `transferSize: 0` and measures localhost; the rungs are padded to their real weights with a tEXt chunk. The probe's `--fake-cdn` answers the **browser's** derpicdn requests with a locally generated checkerboard PNG (checkerboard, because a flat image is sharp at every scale); it intercepts CDP, which cannot reach the Next server, so `/_next/image` still fetches through the real optimizer and the card-versus-flight comparison stays honest. The assertion is skipped without that flag, so a plain `npm run perf:sharpness` remains a report.
+- Move the scroller only when the panel is effectively the page.
+- If shared chrome above the panel exceeds `TAB_SHARED_CHROME_PX` (64 dp), keep the offset except for the settled-height clamp.
+- A panel-page tab with no remembered offset uses zero; it must not inherit the previous tab's bottom.
+- Record the outgoing offset before React commits, including reactive switches reached through navigation.
+- The off tier uses the same positioning rules. `applyInstantTabScroll` is only the pre-engine fallback.
+- During transit the panel keeps `max(H_out, H_in)`; clamp against the settled height and hide the footer until the run settles.
 
-**Every pager needs a `[data-pagination-anchor]`, and it has to be an *ancestor* of the pager.** `Pagination` finds it with `closest()`, which fails silently: a marker on the list with the pager as its *sibling* is one the pager cannot see, and the turn falls back exactly as if there were none. Several pagers may share one enclosing anchor (a profile's four tabs use the box that holds the tab row and the panes), and a pager handed to a list component as `children` is inside its anchor by construction. A pager inside a dialog needs a *scroller* as well: the box with `overflow-y: auto` carries `data-app-scroll-container`, which `Pagination` also finds with `closest()` — `Modal`'s body and `Sheet`'s body have it. The admin feedback dialog uses that body directly, without a second nested scroller.
+## Image delivery and SSR
 
-**A cursor pager offers only pages that can exist.** Without `totalPages` it knows the current page and whether there is a next one, so its window ends at the current page plus one — it used to draw five numbers regardless, and a two-result search offered pages 2–5 beside a disabled 下一页.
+`COOKIE_KEYS.imageLine` mirrors the resolved image line. `ImageLineProvider` makes server markup and the client's first attempt agree. Later retries read live policy; a stale cookie may cost one corrected attempt.
 
-**The per-tab memory is keyed on the page and the tab group's position on it**, then on the tab name (`lib/tabScroll.ts`). Tab values are unique app-wide, but the collision is between *instances of one screen*: `posts`/`uploads`/`faves`/`comments` carried an offset from one profile to the next, and the pathname carries the profile's id. It was a `WeakMap` on the panel element, which went with every navigation because `[data-page-content]` is keyed on the pathname — the forum is a tab on `/`, so reading a thread and coming back threw the gallery's place away. Its lifetime is the route memory's rule: a page reached by traversal keeps its tabs' offsets, a push clears that pathname's, a session change clears all.
+| Image | Delivery |
+| --- | --- |
+| Still gallery card | Raw Derpibooru URL through the optimizer once, then the visitor's browser-direct line with backoff |
+| Animated gallery card | Bypass optimizer; `pickRendition` uses card width at up to 1.5× density |
+| Detail final | Original CDN rendition via `shouldBypassImageOptimizer(true)` |
 
-**A tab switch only moves the scroller when the panel is the page.** The memory is what makes leaving the gallery at row 20 and coming back land on row 20 — but applying it on a screen with a header above the panel drags that header, which reads as a jump. So the decision is a property of the *screen*, measured rather than assumed — `panelTop`, the shared chrome above `[data-tab-panel]`, is **24px on the home route** (the page gutter; the tab pill is fixed chrome outside the scroller), **209px on /policy** (page header and tab row) and **914px on a profile** (banner, name, level bar, badge wall, account card, tab row; 632 without a banner). Above `TAB_SHARED_CHROME_PX`, the app bar's own 64dp, the scroller is left alone and only `finalMax`'s clamp can move it. Per-screen rather than per-scroll-position on purpose: a rule that fires depending on how far you happen to have scrolled is not one a user can learn.
+Do not send line-wrapped open proxy URLs into Next's optimizer. `MASONRY_CARD_SIZES` comes from the actual drawer, gutters and column cap. Development bypasses optimization, so verify production too.
 
-**And it positions under the 关闭 tier.** A scroll position is state, not decoration; the preference asks for less movement, not for less positioning. Under 关闭 the switch takes the animated path's own code with no run — `runTabTransition` lands in the task it starts — so the offset, the `panelTop` test (the half that must not be dropped: without it, turning the preference on is what makes a profile's 914px jump reachable again), the `?? 0` and the floor are one implementation, not two. Every switch records the offset it leaves, the reactive path included: the driver reads it in `getSnapshotBeforeUpdate`, before the commit can move it — the pre-commit hook the old hook-based driver lacked, so a tab reached by a sidebar link or the back button is remembered too. `applyInstantTabScroll` remains only for the moment before the engine's chunk has arrived (`lib/motionLazy.tsx`).
+## Flight sharpness
 
-**A tab with no remembered offset opens at its own top — on a screen whose panel is the page.** "Stay exactly where you are" is right on a screen with shared chrome and is the same bug wearing the other face where the panel *is* the page: measured at 1440×900, leave the gallery at 1500, switch to a forum whose whole content is 1708 against a 768px scrollport, and `finalMax` is 1160 — the carried-over offset clamps to exactly the maximum and **the forum opens on its last row**. Both paths take the `?? 0` (`runTabTransition` and `applyInstantTabScroll`), and the memory is untouched: switching back still lands on 1500. `node scripts/netAuditTabHeight.mjs` asserts all three numbers. It also checks the transit: during the run the panel measures `max(H_out, H_in)`, so a tall gallery leaves ~2000px under a short forum for the run — deliberate (see `runTabTransition`), invisible because the footer is held at `opacity: 0` for the transit and the offset is clamped against the *settled* height.
+The flight paints the card's decoded bitmap into a canvas. The underlying detail image is not the flight's resolution.
+
+- Capture decoded pixels using `getMediaPixelSize`, not density-corrected `naturalWidth`.
+- Launch from the available card frame. Do not wait for a sharper preflight source.
+- A decoded still-image final may repaint the flyer upward in resolution through `repaintHeroFrame`; geometry remains based on `flight.base`.
+- Do not upgrade an animated source to frame zero.
+- `warmImageHeroSource` / `warmedDetailFrames` are for previous/next steps only.
+- A slow final can leave the opening flight on the card bitmap until landing. Do not enlarge every gallery download to eliminate that short-lived limit.
+
+## Verification
+
+| Command | Checks |
+| --- | --- |
+| `bun run net:scroll` | No empty grid frame during paging |
+| `bun run net:tabs` | Tab height, remembered offsets and first-visit zero |
+| `bun run net:tabnav` | Tab → detail → Back |
+| `bun run perf:pageturn` | No blank in-view card or late hiding of painted cards |
+| `bun run perf:sharpness:assert` | Controlled-CDN flyer upgrade before landing |
+
+Measure image work at DPR 2. The sharpness probe must sample `.image-hero-flyer-image`, not the underlying detail layer.
+
+`--fake-cdn` intercepts browser CDN requests; the optimizer still fetches on the server. Throttled fixture responses must delay fulfilment by payload size: CDP network emulation does not throttle a fulfilled response. Uncontrolled real-network sharpness runs report measurements without asserting the upgrade.

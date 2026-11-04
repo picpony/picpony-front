@@ -42,9 +42,8 @@ export default function MascotsTab({ token }: AdminPanelProps) {
   const columns: Column<Mascot>[] = [
     { key: 'name', header: '吉祥物', primary: true, render: (row) => <span className="flex min-w-0 items-center gap-3"><span className="relative block size-14 shrink-0"><FadeInImage src={getAssetUrl(row.image_url)} alt="" unoptimized fill sizes="56px" className="object-contain" /></span><span className="min-w-0 break-words">{row.name}</span></span> },
     { key: 'tips', header: '台词', width: 'auto', render: (row) => `${tipCount(row.tips)} 条` },
-    /* `aria-label`, not a visible `label`: the column header already says 展示, and a control whose
-       accessible name changes as you use it ('已启用' / '已停用') is the 收藏 / 取消收藏 mistake
-       AGENTS names — `aria-checked` is what carries the state. */
+    /* The column header supplies the visible label. Keep the toggle's accessible name stable;
+       aria-checked reports its state (docs/design/primitives.md#buttons-icons-and-semantics). */
     { key: 'active', header: '展示', render: (row) => <ToggleSwitch checked={row.is_active} aria-label={`展示 ${row.name}`} disabled={mutation.busy || mutation.uncertain} onChange={(enabled) => void mutation.run(() => api.toggleMascot(token, revision, row.id, enabled), () => showToast('已更新展示状态', 'success'), () => committed(token))} /> },
     { key: 'actions', header: '操作', actions: true, render: (row) => <><Button size="xs" variant="text" disabled={mutation.busy} onClick={() => open(row)}>编辑</Button><Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除吉祥物', `确定要删除吉祥物「${row.name}」及其 ${tipCount(row.tips)} 条台词吗？此操作不可撤销。`, () => void mutation.run(() => api.deleteMascot(token, revision, row.id), () => showToast('已删除吉祥物', 'success'), () => committed(token)))}>删除</Button></> },
   ];

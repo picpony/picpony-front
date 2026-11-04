@@ -4,7 +4,7 @@ import FolderScreen from './FolderScreen';
 /**
  * One of your own favourite folders. The folder's id comes from this route's own params, handed
  * down — never `useParams()`, which follows the foreground and would read the picture's id while a
- * picture opened from this folder is over it (AGENTS: a background route owns its parameters).
+ * picture opened from this folder is over it (docs/design/primitives.md#lists-grids-and-presence).
  * Everything else is token-gated and read in the browser.
  */
 export default async function FavoriteFolderPage({ params }: { params: Promise<{ id: string }> }) {

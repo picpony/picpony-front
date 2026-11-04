@@ -1,41 +1,61 @@
-# Motion standard — Material 3 Expressive
+# Component motion
 
-Source of truth: `lib/spring.ts`. This page is the per-component assignment; the rules are in
-`docs/motion-system.md` (moved out of `AGENTS.md` → Motion). Every row names a role, never a number.
+Role assignments for shared components. Selection rules and preferences are defined in [Motion system](motion-system.md); numeric definitions stay in [lib/spring.ts](../lib/spring.ts).
 
-| Object | Arrives / moves | Leaves | Compose reference |
+## Controls and feedback
+
+| Component or property | Arrival / change | Departure | Reference |
 | --- | --- | --- | --- |
-| Hover, focus, state layer, ink | `fastEffects` | `fastEffects` | state layers |
-| Press feedback | ripple (Compose `RippleAnimation`), held while pressed | 150ms fade after release + spread | `ripple()` |
-| Button / icon button press morph (and the icon button's selected corner) | `defaultEffects` on `border-radius` via `data-pressed` — no bounce in a shape | `defaultEffects` | `Button.kt` / `IconButton.kt` `shapeByInteraction` |
-| Switch handle | travel, press swell and release `fastSpatial` (Compose snaps the press swell; springing it is an owner decision — the snap read as abrupt); colours `fastEffects` | `fastSpatial` | `Switch.kt` `ThumbNode` |
-| Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial` (+ `fastEffects` on any opacity); the radio ring's colour `defaultEffects` | — | `RadioButton.kt` |
-| Grid selection mark (gallery select mode) | box scale `fastSpatial`, colours `fastEffects` | `fastEffects` | — |
-| Floating selection / cart bar | travel `defaultSpatial`, opacity `defaultEffects` (`surfaceArrival('default')`) | `fastEffects` | — |
-| Checkbox | mark draws on `defaultSpatial` (overshoot held by the dash pattern); box fills on `defaultEffects` | box empties on `fastEffects`; the mark snaps after 100ms (`CHECK_SNAP_DELAY_MS`) | `Checkbox.kt` |
-| Slider handle width | `fastSpatial` (position follows the finger, no motion) | — | `Slider.kt` |
-| Icon turning (chevrons, refresh, sort, dismiss ×) | `fastSpatial` | `fastSpatial` | — |
-| Anchored menu / listbox / tooltip | scale `fastSpatial` (0.8 → 1 on the tooltip), opacity `fastEffects` | scale `fastSpatial`, opacity `fastEffects` | `DropdownMenu`, `Tooltip.kt` |
-| Toast | drop `fastSpatial`, opacity `fastEffects`; the stack closing up `layout` | travel `fastSpatial`, opacity `fastEffects` | `SnackbarHost` `FadeInFadeOutWithScale` |
-| In-place content swap (`SwapContent`) | `surfaceArrival('fast')` after `HANDOFF_MS` | `fastEffects` | `AnimatedContent` |
-| Dialog | `surfaceArrival('default')` | `defaultEffects` | — |
-| Bottom sheet, side panel, phone drawer | `defaultSpatial`, overshoot onto an `edge-skirt-*`; scrim `defaultEffects` | `fastEffects` (scrim `defaultEffects`); drag release either way → `defaultSpatial` | `BottomSheet.kt` show/hide/fling, `ModalNavigationDrawer` open/close |
-| Docked drawer / content width | `layout` both ways | `layout` | — |
-| Search suggestion view (`Popover variant="search"`) | height `slowSpatial`, fade `defaultEffects`; its list changing under it `layout` | height `defaultSpatial`, fade `defaultEffects` | `rememberSearchBarState` |
-| Collapsible panel (messages rail, search filters, upload options, offline banner, description fold, inline editor) | `layout` both ways (content opacity: `defaultEffects` in, `fastEffects` out) | — | `animateContentSize`, `expandVertically` |
-| Box following its content (`FollowHeight`, `SizeSwap`, cart spacer) | `layout` | `layout` | `animateContentSize`, `SizeTransform` |
-| List / grid placement (`PresenceList`, `MasonryGrid`, `DataTable`) | `layout`; a new grid card scales in on `defaultSpatial`, fades on `defaultEffects` | `fastEffects` | `Modifier.animateItem` |
-| Tab indicator; tab content colour | indicator `defaultSpatial`; colour in `defaultEffects` | colour out `fastEffects` | `TabRow.kt`, `Tab.kt` `TabTransition` |
-| Tab strip (pane pager) | `PAGER_SPRING` (ζ1 k400, Compose pager snap), launched at half its rate | — | `HorizontalPager` snap |
-| Lightbox swipe; zoom step | swipe `PAGER_SPRING` (the same pager spring as the tab strip); zoom `layout` | — | `HorizontalPager` snap |
-| Lightbox slide arriving | scale `defaultSpatial`, opacity `defaultEffects` | `defaultEffects` | — |
-| Page / route change | fade through: leaving `fastEffects` (rise `defaultEffects`), arriving `slowEffects` after `HANDOFF_MS` | — | Material fade through |
-| Image hero flight, forum / folder container transform | `FLIGHT_SPRING` (ζ1 k1000, ~268ms) over its settle time, both ways; interruptions relaunch the same spring with the current velocity | same | `SharedTransitionLayout` `DefaultBoundsTransform` |
-| Hero swipe-down release | `layout`, duration by travel left, launched at the finger's speed | — | — |
-| Picture step (prev/next) | in: `defaultSpatial` + `defaultEffects`; out: `fastEffects`; un-paged swipe returns on `layout` | — | Material shared axis |
-| Detail arriving with no card | `surfaceArrival('slow')` | — | — |
-| Gallery cascade, `Reveal` | per item `surfaceArrival('default')`, `STAGGER` | — | — |
-| Theme circular reveal | the **radius** on ζ0.8 k100 (expressive spatial damping), cut at its first crossing of the farthest corner — the overshoot is off screen | — | — |
-| Determinate meter (`ProgressBar`, vote ratio) | value `PROGRESS_SPRING` (ζ1 k50); a tone change `fastEffects`; a wait for it to fill reads `COMPONENT_SPRING_MS.progress` | same | `ProgressIndicatorDefaults.ProgressAnimationSpec` |
-| Top loading bar | `layout` (not `PROGRESS_SPRING`: its finish waits one settle before fading, and k50's ~1.2s would hold a finished bar on screen) | — | — |
-| Indeterminate spinners, loading dots, skeleton shimmer | `--ease-loop` / `--ease-sweep` (not motion to a target) | — | — |
+| Hover, focus, state layer, ink | `fastEffects` | `fastEffects` | State layers |
+| Ripple | Compose `RippleAnimation`, held while pressed | Release after spread | `ripple()` |
+| Button / icon-button pressed or selected corner | `defaultEffects` | `defaultEffects` | `Button.kt`, `IconButton.kt` |
+| Switch handle | `fastSpatial` for travel, press and release; colour `fastEffects` | `fastSpatial` | `Switch.kt`; sprung press is a project refinement |
+| Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial`; opacity `fastEffects`; radio ring colour `defaultEffects` | Assigned effects fade | `RadioButton.kt` |
+| Checkbox mark / box | Mark `defaultSpatial`, box `defaultEffects` | Box `fastEffects`; mark uses `CHECK_SNAP_DELAY_MS` | `Checkbox.kt` |
+| Slider handle width | `fastSpatial`; position follows input directly | Same role | `Slider.kt` |
+| Icon rotation, including dismiss | `fastSpatial` | `fastSpatial` | Project mapping |
+| Grid selection mark | Box `fastSpatial`, colour `fastEffects` | `fastEffects` | Project mapping |
+| Field label and notch | Bounds `layout`, ink `fastEffects` | Same split | `.m3-field` |
+| Tab indicator / content colour | Indicator `defaultSpatial`, colour `defaultEffects` | Colour `fastEffects` | `TabRow.kt`, `Tab.kt` |
+
+## Surfaces and layout
+
+| Component | Arrival / change | Departure | Reference |
+| --- | --- | --- | --- |
+| Anchored menu, listbox, tooltip | Scale `fastSpatial`, opacity `fastEffects` | Same split | `DropdownMenu`, `Tooltip.kt` |
+| Toast | Travel `fastSpatial`, opacity `fastEffects`; stack `layout` | Same split | `SnackbarHost` |
+| `SwapContent` | `surfaceArrival('fast')` after `HANDOFF_MS` | `fastEffects` | `AnimatedContent` |
+| Dialog | `surfaceArrival('default')` | `defaultEffects` | Project mapping |
+| Sheet, side panel, modal drawer | `defaultSpatial` with edge skirt; scrim `defaultEffects` | Surface `fastEffects`, scrim `defaultEffects`; drag release `defaultSpatial` | `BottomSheet.kt`, `ModalNavigationDrawer` |
+| Docked drawer / content width | `layout` | `layout` | Project mapping |
+| Search suggestions | Height `slowSpatial`, fade `defaultEffects`; replacement height `layout` | Height `defaultSpatial`, fade `defaultEffects` | `rememberSearchBarState` |
+| Collapsible panel | Bounds `layout`, content `defaultEffects` | Bounds `layout`, content `fastEffects` | `animateContentSize`, `expandVertically` |
+| `FollowHeight`, `SizeSwap`, cart spacer | `layout` | `layout` | `animateContentSize`, `SizeTransform` |
+| List/grid/table placement | `layout`; new grid card `defaultSpatial` + `defaultEffects` | `fastEffects` | `Modifier.animateItem` |
+| Selection / cart bar | `surfaceArrival('default')` | `fastEffects` | Project mapping |
+| Gallery cascade, `Reveal` | `surfaceArrival('default')`, `STAGGER` | No separate exit | Project mapping |
+
+## Navigation and media
+
+| Transition | Roles |
+| --- | --- |
+| Tab strip | `PAGER_SPRING`, launched at half its rate |
+| Lightbox swipe / zoom | `PAGER_SPRING` / `layout` |
+| Lightbox slide | Scale `defaultSpatial`, opacity `defaultEffects`; exit `defaultEffects` |
+| Route fade through | Exit `fastEffects`, rise `defaultEffects`; arrival `slowEffects` after `HANDOFF_MS` |
+| Hero, forum and folder container transform | `FLIGHT_SPRING` both ways; interruption retains the appropriate current pose/velocity |
+| Hero swipe-down release | `layout`, remaining-travel timing and release velocity |
+| Previous/next picture | Exit `fastEffects`; arrival `defaultSpatial` + `defaultEffects`; cancelled swipe `layout` |
+| Detail without a shared card | `surfaceArrival('slow')` |
+| Theme reveal | Radius spring from `lib/spring.ts`, clipped at full coverage |
+
+## Progress
+
+| Component | Role |
+| --- | --- |
+| Determinate meter, vote ratio | `PROGRESS_SPRING`; tone `fastEffects`; waiters use `COMPONENT_SPRING_MS.progress` |
+| Top loading bar | `layout`, so completion does not wait for a slow progress settle |
+| Indeterminate spinner / loading dots | `--ease-loop` |
+| Skeleton shimmer | `--ease-sweep` |
+
+The loop and ripple clocks are documented exceptions. A new component reuses a role from this table; verification follows [Motion system](motion-system.md#verification).

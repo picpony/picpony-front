@@ -162,7 +162,7 @@ function land(target: HTMLElement): boolean {
  * running transforms included).
  *
  * Under 关闭 nothing is kept or moved. A press anywhere lands every move at once: a gallery card
- * must never be measured mid-move (AGENTS: no residual transform on a card's ancestor), and a
+ * must never be measured mid-move (docs/hero.md#window-content-and-interruption), and a
  * moving target is a hard one to hit.
  *
  * **A removal decides where its focus goes, in the commit that removes the entry, on every tier.**

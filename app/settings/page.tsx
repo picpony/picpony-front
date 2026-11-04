@@ -125,7 +125,7 @@ function SettingsScreen() {
         </div>
       )}
       <Tabs tabs={settingsTabs(signedIn)} value={shown} onChange={select} label={TAB_ROW_LABEL} className="mb-6" />
-      {/* Leaning: the three panes are static once mounted (AGENTS "lean"), and a pane still
+      {/* Leaning: the three panes are static once mounted (docs/transitions.md#window-and-lean), and a pane still
           showing placeholders marks itself loading, which the lean stands down for. */}
       <TabPanes value={shown} lean>
         <TabPane value="preferences">

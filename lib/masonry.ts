@@ -252,7 +252,7 @@ export function slotsInBand(
  *
  * The entrance cascade exists for a grid *arriving*. When the grid takes over from its own
  * skeleton, the skeleton already said "arriving" for as long as it was up, and a cascade on top
- * is the same news twice — the judgement AGENTS.md makes for a page turn. The skeleton reports
+ * duplicates the entrance (docs/scrolling.md#grid-continuity). The skeleton reports
  * its own unmount; the grid that mounts in the same commit reads it. Commit-scoped rather than
  * timed: React runs every removed component's layout cleanup before any new layout effect in
  * the same commit, and the flag is cleared on the next microtask, after that commit.

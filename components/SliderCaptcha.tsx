@@ -315,7 +315,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
    * A rejected attempt: report it, glide the knob home, and — once the shake has
    * played — load the next challenge, so the knob works again without a detour
    * through a retry button. A wall-clock bound on a GSAP animation, so it takes the
-   * slowest speed's scale (see AGENTS.md on timers that outlast motion).
+   * slowest speed's scale (docs/motion-system.md#animation-watchdogs).
    */
   const rejectAttempt = useCallback(
     (message: string) => {

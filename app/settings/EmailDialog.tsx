@@ -21,7 +21,7 @@ export type EmailStep = 'change' | 'verify';
 /**
  * 邮箱 — changing the address, in two steps of one dialog, each a real form (Enter submits).
  *
- * The backend's contract (`POST /me/email-changes`, `docs/auth-api.md`): the change asks for the
+ * The backend's contract (`POST /me/email-changes`): the change asks for the
  * current password and sends a code to the **new** address; the old one stays bound until the code
  * is confirmed (`POST /me/email-changes/{verification}/confirmation`), from the same session. So
  * the code step is reachable on its own: the row offers 验证 for as long as this session's change

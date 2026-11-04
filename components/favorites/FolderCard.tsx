@@ -51,8 +51,7 @@ export interface FolderCardSelection {
  * to the folder's page, so it can be middle-clicked, copied and long-pressed like any link. The
  * one folder card in the app: /favorites' grid and a profile's 收藏夹 tab both render it.
  *
- * Two controls can sit over it, both **siblings** of the link and never inside it (AGENTS: no
- * interactive element inside another): `menu`, the folder's own commands at the caption's
+ * Two controls can sit over it, both **siblings** of the link and never inside it (docs/design/primitives.md#buttons-icons-and-semantics): `menu`, the folder's own commands at the caption's
  * trailing edge, and in the folder batch mode the card's checkbox, laid over the whole card while
  * the link under it is `inert`. The card is their containing block, wherever it is rendered —
  * render it inside an `li` of `FOLDER_GRID`.
@@ -107,7 +106,7 @@ export const FolderCard = memo(function FolderCard({
     setPopped(selected && selecting);
   }
 
-  /* A plain click navigates in the app, without the router's own scroll (AGENTS: one owner), and
+  /* A plain click navigates in the app, without the router's own scroll (docs/scrolling.md#scroll-ownership), and
      names the card the page grows out of. */
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

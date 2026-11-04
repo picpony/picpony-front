@@ -94,7 +94,7 @@ function revealCard(grid: string, id: number): boolean {
 
 /**
  * Whether every tab pane around `el` is the shown one. Geometry read inside a concealed pane makes
- * the engine lay the hidden subtree out just to answer (AGENTS), so a grid there is not measured.
+ * the engine lay the hidden subtree out (docs/transitions.md#tab-state-and-history), so a grid there is not measured.
  */
 function inShownPanes(el: Element): boolean {
   for (let pane = el.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
@@ -480,8 +480,7 @@ function watchFloor(
  * mounted — no chunk restart, no remount, no image read again — and the edit plays (`playEdit`):
  * the cards that moved glide from their old slot to their new one, what left fades where it was,
  * and the page under the grid follows its height instead of jumping. A press lands every move at
- * once, so the hero flight never measures a card mid-glide (AGENTS: no residual transform on a
- * gallery card's ancestor).
+ * once, so the hero flight never measures a card mid-glide (docs/hero.md#window-content-and-interruption).
  */
 export default memo(function MasonryGrid({
   images: latestImages,
@@ -765,7 +764,7 @@ const LONG_PRESS_MS = 500;
 
 /**
  * One card's part of the selection mode, a **sibling of the card** in its slot — never inside the
- * card's link, where a control would be interactive content nested in an anchor (AGENTS).
+ * card's link, where a control would be interactive content nested in an anchor (docs/design/primitives.md#buttons-icons-and-semantics).
  *
  * It is the card's checkbox: a button over the whole picture, named by it, that a press, a tap,
  * Enter or Space toggles. The card under it is `inert` for the mode's length — out of the tab

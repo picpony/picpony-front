@@ -287,7 +287,7 @@ def inspect(page, name, route_path):
             expect(page).to_have_url(re.compile(r'/messages\?tab=notification$'))
         elif 'to' in query and page.viewport_size['width'] < 500:
             # On a phone a deep-linked conversation opens as its own full-height view, a modal
-            # layer over the list and its tabs (AGENTS "A pane split follows its content width"),
+            # layer over the list and its tabs (docs/design/layout.md#rows-and-responsive-regions),
             # so the tab row is covered by design: the conversation is what must be on screen.
             expect(page.get_by_role('dialog', name=re.compile(r'^与 .+ 的私信$'))).to_be_visible()
         else:
@@ -355,8 +355,8 @@ def inspect(page, name, route_path):
     report = page.evaluate("""async () => {
       const result = await axe.run(document, {
         runOnly: {type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']},
-        // AGENTS.md documents deliberate palette contrast exceptions. The palette generator
-        // asserts its own role matrix; this suite checks the remaining WCAG contracts.
+        // Palette exceptions: docs/design/colour.md#known-contrast-exceptions.
+        // The generator checks its role matrix; this suite checks the other WCAG contracts.
         rules: {'color-contrast': {enabled: false}}
       });
       const main = document.querySelector('main');

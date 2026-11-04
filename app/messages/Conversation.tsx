@@ -310,7 +310,7 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
         label={`与 ${contact.username} 的聊天记录`}
       />
 
-      {/* 8dp around three 48dp targets: the dense composer row (AGENTS: the chat composer). The
+      {/* 8dp around three 48dp targets: the dense composer row (docs/design/layout.md#dense-rows-and-chat-composer). The
           two controls stay outside the field and at its bottom as it grows. The safe-area inset
           keeps them above the home indicator — or goes to the emoji panel when it is below. */}
       <div

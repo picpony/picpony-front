@@ -12,7 +12,7 @@
  * `excludedTagsFrom` — the one the query's `-tag` terms are written from (the content filter's
  * own list, none in developer mode; the two ban toggles; the hidden tags) — and then the
  * only-pony requirement, as the query adds it. The public blacklist is deliberately absent — see
- * AGENTS.md: the banner is not a search and the site's list is applied to searches. Plain
+ * docs/data-requests.md#home-cache-and-filtering. The banner is not a search. Plain
  * module: the server renders the same decision the client hydrates.
  */
 import type { BlockFilters } from '@/lib/blockFilters';

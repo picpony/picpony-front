@@ -13,7 +13,7 @@ import { upstreamOrigin } from '@/lib/upstream.server';
  * read, which replaces this one quietly once the session is known.
  *
  * `/` alone does not read it: there the forum is the hidden pane, mounted on an idle callback, and
- * its first read is the client's (AGENTS "the forum pane is already `api: 0` on tap").
+ * its first read is the client's (docs/data-requests.md#prefetch-and-scheduling).
  *
  * The `lib/route.server.ts` rules: bounded, `null` rather than a throw (no seed is a state the pane
  * already handles), direct to the backend's `/api/v1` (the browser's relative base goes through

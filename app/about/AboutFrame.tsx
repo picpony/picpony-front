@@ -17,7 +17,7 @@ import { useEscapeBack } from '@/lib/hooks';
  * without moving, with its way back on screen throughout (G4-024).
  *
  * Reachable only from the footer, so not a sidebar destination — it carries the shared back
- * affordance (see AGENTS.md).
+ * affordance (docs/transitions.md#back-and-focus).
  */
 export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: ReactNode }) {
   const handleBack = useBackOrParent('/');

@@ -21,7 +21,7 @@
  *
  * The writes are native `history.pushState` / `replaceState` / `back`, which Next's router
  * integrates: `useSearchParams` follows, nothing is fetched, and nothing races another
- * navigation (see AGENTS.md on why a tab switch is not `router.push`). A traversal lands a task
+ * navigation (docs/transitions.md#tab-state-and-history). A traversal lands a task
  * later, so a switch requested while one of ours is still in flight is held until it lands.
  *
  * **The write waits for the tap's first frame.** Next applies a history write through React,

@@ -1,7 +1,7 @@
 /**
  * A remark plugin: every newline inside a paragraph's text is a line break.
  *
- * The one line-break rule the two renderers share (AGENTS "Rich-text rhythm"): BBCode turns a
+ * The one line-break rule the two renderers share (docs/design/typography-and-copy.md#rich-text-rhythm): BBCode turns a
  * single newline into a break and a blank line into a paragraph, and so does Derpibooru's own
  * Markdown, which renders with hard breaks. CommonMark folds a single newline into a space, so
  * the same comment came out on one line or two depending on which renderer it reached. What

@@ -8,7 +8,7 @@ import { readRoutePolicy } from '@/lib/route.server';
  * the HTML, the hydrating render and the rows' own URLs all agree.
  *
  * **A forced policy first, then the device's cookie, then nothing.** The policy is the
- * administrator's and "a forced line is not ours to leave" (AGENTS.md, Request lines); the
+ * administrator's routing constraint (docs/request-lines.md#policy-and-maintenance); the
  * cookie is only the device's own choice under `auto`. The cookie alone was the old answer, and
  * on a first visit under a forced policy the server rendered the defaults while the client
  * rendered the forced line: a hydration mismatch React does not patch, so the whole first

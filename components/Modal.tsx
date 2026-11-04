@@ -408,12 +408,8 @@ export default function Modal({
         >
           {children}
         </div>
-        {/* The action row, and the only place a dialog's actions belong (AGENTS.md
-            says why). `flex-wrap justify-end gap-3`; a leading member takes
-            `mr-auto` — an auto margin in a justify-end row absorbs the free
-            space to its right, no nested wrapper needed. `flex-wrap` is a guard:
-            a fourth action or a longer label wraps to a second line instead of
-            being clipped, and changes nothing for a row that fits. */}
+        {/* Keep actions in the wrapping footer; a leading action uses an auto margin.
+            See docs/design/primitives.md#overlays-and-history. */}
         {footer && (
           <div
             ref={footerRef}

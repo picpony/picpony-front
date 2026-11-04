@@ -51,7 +51,7 @@ function originalOf(img: HTMLImageElement): string {
 /**
  * The picture has arrived, or has definitely not: a failed optimizer read falls back to the
  * picture's own URL once, and a failed own URL says so in place — `complete` alone is true for a
- * failed picture too, so the test is `naturalWidth` (AGENTS "Complete is not loaded").
+ * failed picture too, so the test is `naturalWidth` (docs/design/primitives.md#loading-and-failure).
  */
 function settleImage(img: HTMLImageElement, failed: boolean) {
   if (!failed) {

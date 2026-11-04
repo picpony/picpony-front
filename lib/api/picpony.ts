@@ -70,7 +70,7 @@ async function allPages<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Session and accounts (`docs/auth-api.md`, `src/pg/auth.rs`, `src/pg/account.rs`)
+// Session and accounts (docs/backend-api.md#protocol)
 // ---------------------------------------------------------------------------
 
 /** What a sign-in (or a confirmed registration) grants: the bearer, its CSRF token, its life. */
@@ -141,7 +141,7 @@ export async function getUser(token: string, signal?: AbortSignal) {
  * The `GET /me` record in the shape the stored session keeps (`StoredUserInfo`). The Derpibooru
  * identity is the verified upstream binding (`upstream_identity`, `null` when none is verified),
  * so an empty string there is the backend's word that there is none. The API key itself is never
- * sent back (`docs/auth-api.md`), so `api_key` is absent and the device keeps the one it holds.
+ * sent back, so `api_key` is absent and the device keeps the one it holds.
  */
 export function sessionRecordFromMe(user: MeUser): Record<string, unknown> {
   const identity = user.upstream_identity;
@@ -418,7 +418,7 @@ export async function captchaVerify(challengeId: string, x: number, trace: reado
   });
 }
 
-/** The proof errors that mean "solve another challenge", and nothing else (`docs/auth-api.md`). */
+/** Only these refusal codes require a new captcha challenge. */
 export const CAPTCHA_RETRY_CODES = ['CAPTCHA_REQUIRED', 'CAPTCHA_SESSION_REQUIRED', 'CAPTCHA_EXPIRED'] as const;
 
 /**

@@ -20,7 +20,7 @@ import { ICON } from '@/lib/icons';
  * shell's own placeholder is drawn at that same size, so opening it is one change of height
  * rather than two. `loading` is what keeps the lazy chunk from suspending to the route's
  * boundary, which would replace the whole detail with the route skeleton for as long as the chunk
- * takes (AGENTS, the dynamic-dialog rule).
+ * takes (docs/module-boundaries.md#initial-document-and-lazy-boundaries).
  */
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,

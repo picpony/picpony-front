@@ -1,11 +1,43 @@
-# Backend: Rust /api/v1 (api.picpony.top)
+# Backend API
 
-> Split out of `AGENTS.md`; read on demand. Cross-references such as "see Motion" or "under Shape" name sections listed in the index in `AGENTS.md`.
+Protocol and transport rules for the Rust backend at [api.picpony.top](https://api.picpony.top). Resource caching belongs to [Data requests](data-requests.md); Derpibooru routing belongs to [Request lines](request-lines.md).
 
-PicPony's own backend is the Rust service at `https://api.picpony.top`, and its whole surface is `/api/v1/...`. The PHP backend (`/api.php?action=…`, the `{ success, … }` envelope, the `PHPSESSID` session) is gone, and so is everything in this app that only existed for it: `picponyRequest` / `picponyPostJson` / `readJson` / `readEnvelope` / `envelopeMessage` / `pageCount`, `PICPONY_API_BASE`, the `app/api.php` proxy and `/admin/import-tools`. Do not reintroduce `?action=`: the backend answers it with 400.
+## Protocol
 
-**The protocol, which every adapter relies on.** Resource paths; the ID in the path is authoritative (a different ID in the body is a 400); a GET has no body. A 2xx is the bare JSON DTO, or 204 with no body — **there is no `success` field**, so a 2xx is never a refusal. A failure is a non-2xx with `{"error":{"code","message"}}`. A session is `Authorization: Bearer <token>` **plus** the `HttpOnly` `auth_bind` cookie the backend sets at login, and every write also carries `X-CSRF-Token` (`csrf_token` from login, kept beside the token). Login/register answer `{ token, csrf_token, expires_in }`; the profile is `GET /me`. A write the UI may retry (a post, a reply, a message) carries an `Idempotency-Key`.
+- The API surface is `/api/v1/...`. The path ID is authoritative; a conflicting body ID returns 400. GET requests have no body.
+- A successful response is a bare JSON DTO, or 204 without a body. There is no `success` envelope.
+- A failure is non-2xx with `{"error":{"code","message"}}`.
+- Login and registration return `{ token, csrf_token, expires_in }`. Read the profile with `GET /me`.
+- A session needs both `Authorization: Bearer <token>` and the backend's `HttpOnly` `auth_bind` cookie. Writes also send `X-CSRF-Token`.
+- Retryable UI operations such as posting, replying and messaging carry an `Idempotency-Key`. Never automatically retry a write whose outcome is unknown.
 
-**One transport: `api()` in `lib/api/http.ts`** (`apiRequest()` + `readApi()` when the `Response` itself is needed — a stream, a header). It throws `ApiError` (kind `http` with `status`, the backend's `code` and its `message` as `serverMessage`; network failures and our own deadline as `network` / `timeout`); 404 is `notFound`, and `notFoundStatuses` adds others. A `CSRF_MISMATCH` refusal is rejected before the handler runs, so it is refreshed (`GET /auth/csrf`) and sent once more; nothing else is ever retried, and a write is never retried on its own. **Adapters map the backend's real field names to the domain types and trust the types Rust guarantees** — no `a ?? b ?? c` spellings, no `Number(x) === 1 || x === true`, no `listOf()` around a field that is always an array. What stays is real input validation, the fields Rust declares nullable, and the browser guards this file gives reasons for. `readObject` and `listOf` remain for Derpibooru and the image-search service, which are third-party and keep their own shapes.
+## Transport and adapters
 
-**The browser reaches it through `app/api/v1/[...path]/route.ts`, same-origin.** The backend sends no CORS headers and binds the session to `auth_bind`, which is `Secure` on an https base — a browser silently drops a `Secure` cookie on a page that is not a secure context, so over plain HTTP (a LAN address from a phone) every write would fail its session binding. The handler drops `Secure` on the way back out when the request did not arrive over HTTPS, strips the app's own cookies from what it forwards, bounds a bodyless request at 30s and paces an upload's body (`BODY_IDLE_MS`) instead, and expires the public filter, blacklist and site-status caches after an admin write the backend accepted. **Server code does not use the proxy**: `*.server.ts` readers and route handlers fetch `${upstreamOrigin()}/api/v1/...` (`lib/upstream.server.ts`; `PICPONY_API_ORIGIN` is the public site's origin for assets, not the backend's).
+[lib/api/http.ts](../lib/api/http.ts) owns transport:
+
+| API | Use |
+| --- | --- |
+| `api()` | Decoded responses |
+| `apiRequest()` + `readApi()` | A stream, header or other access to the `Response` |
+| `ApiError` | HTTP status and backend code; `network` / `timeout` for transport failures |
+
+A 404 maps to `notFound`; `notFoundStatuses` adds endpoint-specific cases. Preserve the backend message as `serverMessage`; user-facing errors use [lib/api/errors.ts](../lib/api/errors.ts).
+
+A `CSRF_MISMATCH` refusal happens before the handler runs. Transport refreshes via `GET /auth/csrf` and sends the request once more. Other failures are not automatically retried.
+
+Adapters map Rust's actual field names to domain types. Validate real inputs and nullable fields; do not add speculative aliases or coercions for fields whose types are guaranteed. `readObject` and `listOf` remain appropriate for third-party Derpibooru and image-search responses.
+
+## Browser and server paths
+
+The browser uses the same-origin [API proxy](../app/api/v1/[...path]/route.ts). It:
+
+- Forwards only the backend cookies, removing application preference cookies.
+- Removes `Secure` from the returned `auth_bind` cookie when the incoming request is plain HTTP.
+- Bounds bodyless requests at 30 seconds; upload bodies use the `BODY_IDLE_MS` pacing rule.
+- Expires public filter, blacklist and site-status caches after accepted admin writes.
+
+Server readers and route handlers use `upstreamOrigin()` from [lib/upstream.server.ts](../lib/upstream.server.ts) and append `/api/v1/...`; they do not fetch the relative browser proxy URL. `PICPONY_API_ORIGIN` is the public asset origin, not the backend origin.
+
+## Verification
+
+Run `bun run check` after transport or adapter changes. The focused suites are `scripts/testApiTransport.mjs`, `scripts/testApiErrors.mjs` and `scripts/testSessionAndTags.mjs`. If reads change, also run `bun run net:audit`.

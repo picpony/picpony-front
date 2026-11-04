@@ -274,7 +274,7 @@ test('a probe re-sends the same body while the backend says running, and ends on
 });
 test('manual accelerator checks judge an image line by a decode and an API line by its status', async () => {
   /* The three image lines are proxies: an opaque `fetch` resolves on a 500 as readily as on a 200,
-     so only a decoded bitmap answers "does this line work" (AGENTS, "Request lines"). They must make
+     so only a decoded bitmap answers "does this line work" (docs/request-lines.md#failure-and-recovery). They must make
      no `fetch` at all; the four API/site lines still report their HTTP status. */
   const f = fixture(undefined, { fetchStatus: 503 }), reports = [];
   await f.api.checkServiceLines('fixture-token', new AbortController().signal, (row) => reports.push(row));

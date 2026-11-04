@@ -247,8 +247,7 @@ export default function BlockGroupsPage() {
     );
   } else {
     body = (
-      /* One run of the grouped list (D1-009: a list page, as AGENTS' column table has it — the
-         three-up grid cut names to 118px). The rows come and go in place (M1-023): a deleted row
+      /* One run of the grouped list (docs/design/layout.md#columns-and-spacing). The rows come and go in place: a deleted row
          fades where it stood while the ones under it close the gap, and a created one arrives in
          its own place as the dialog that made it leaves. The list stays mounted while it is
          empty, so the first row has somewhere to arrive into; the last one leaving fades over the

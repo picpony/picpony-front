@@ -8,7 +8,7 @@
 
 /* Tailwind scans raw file text (comments included) for class candidates, so prose naming a
    deleted class resurrects it — spell removed values in prose. Markdown is excluded here
-   because AGENTS.md's "Never" column names real palette classes. */
+   because documentation examples can contain utility names (docs/css-traps.md#utility-extraction). */
 @source not "../**/*.md";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -1048,7 +1048,7 @@ body {
 
      The token files put fields and menus on the extra-small step (the field and menu
      container-shape tokens); the filled field, the dropdown field and the menu family above
-     are this app's stated refinements of that — AGENTS.md's shape table is the authority.
+     follow the project refinements in docs/design/surfaces.md#shape.
      The base radius token exists so the bare rounded utility follows the scale. */
   --radius: 0.25rem; /* 4, == --radius-xs */
   --radius-xs: 0.25rem; /* 4  extra-small */

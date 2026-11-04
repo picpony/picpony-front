@@ -20,7 +20,7 @@ const warmDictionary = () => badgeDictionary.prefetch({});
 
 /**
  * One badge on the wall: the badge's own colours, and a **control** — pressing it opens the
- * badge's description (AGENTS: a `Badge` is a mark, a `Chip` a control). It cannot be a `Chip`,
+ * badge's description (docs/design/primitives.md#cards-badges-and-avatars). It cannot be a `Chip`,
  * whose colours are token pairs from `lib/roles.ts` / `lib/tagCategories.ts`, while a badge's
  * fill is the author's hex; so this takes the chip's geometry instead — 32dp tall, the 8dp chip
  * corner, `label-l`, the 48px target under a finger with the matching block margin, the state

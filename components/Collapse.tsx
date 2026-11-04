@@ -15,7 +15,7 @@ interface CollapseProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children' 
  * **The mechanism is `grid-template-rows`, not an animated height.** The inner track carries the
  * whole subtree with its overflow clipped, so the content is clipped rather than left behind by a
  * resizing box, and `0fr` measures nothing. The contents fade in on DefaultEffects and out on
- * FastEffects on top of the layout clock (see docs/motion.md, "Collapsible panel").
+ * FastEffects on top of the layout clock (docs/motion.md#surfaces-and-layout).
  *
  * **`grid-cols-1` is `minmax(0, 1fr)`, not `auto`**: without it the track takes the min-content
  * width of what it holds, so a wide child (a table with a minimum width) widened the panel past its

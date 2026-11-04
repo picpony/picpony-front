@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * The console's form: a real `<form>`, so Enter in any field submits it (the submit `Button` takes
  * `type="submit"`; every other button in it takes `type="button"`). A column of labelled outlined
  * fields — one field family (R9-039) — capped at the form column's `2xl`, because a 900px field is
- * harder to fill in than a 560px one (AGENTS "a block inside a column is not a column").
+ * harder to fill in than a 560px one (docs/design/layout.md#columns-and-spacing).
  *
  * **No card around it.** A form wrapped in a padded surface started 16px in from its panel's
  * header while the lists beside it started flush; a form is separated by spacing.

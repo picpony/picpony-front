@@ -38,7 +38,7 @@ export default function QuotaExchangeDialog({ isOpen, onClose, quota, pending, c
     <form id={formId} onSubmit={event => { event.preventDefault(); if (valid && !insufficient && !busy) onSubmit(); }} className="space-y-5">
       <p className="text-body-m text-on-surface-variant">现有 <span className="text-on-surface tabular-nums">{formatExactCount(quota.coins)}</span> 金币，1 金币可兑换 {quota.points_per_coin} 点额度。</p>
       <Input label="使用金币" type="number" inputMode="numeric" min={1} max={100000} step={1} value={pending ? String(pending.coins) : coins} disabled={busy || !!pending} onChange={e => onCoinsChange(e.target.value)} error={fieldError} data-autofocus="" />
-      {/* `filled` is the step for "a distinct block inside this one" (AGENTS' container table); the
+      {/* `filled` is the step for "a distinct block inside this one" (docs/design/colour.md#surface-and-media-roles); the
           values take `title-l` so the dialog's own `headline-s` title stays the top of the hierarchy. */}
       <Card>
         <dl className="grid grid-cols-2 gap-4">

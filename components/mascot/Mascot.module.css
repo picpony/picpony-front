@@ -10,8 +10,8 @@
    below); drawn, it would re-run the silhouette shadow's blur every frame for as long as a page is
    open, beside whatever is being read, for two pixels of movement.
 
-   Every duration goes through the spring tokens or `--motion-scale` (AGENTS: the duration
-   invariant), so the speed setting scales all of it and the off tier collapses it to a cut. */
+   Every duration uses the shared spring clock (docs/motion-system.md#tiers-speed-and-categories),
+   so speed scales the whole interaction and the off tier collapses transitions. */
 
 .dock {
   position: sticky;

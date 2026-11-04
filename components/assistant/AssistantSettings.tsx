@@ -46,8 +46,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   const [enabledShown, setEnabledShown] = useState<boolean | null>(null);
   const enabling = useRef<{ inFlight: boolean; next: boolean | null }>({ inFlight: false, next: null });
   const current = () => readToken() === token;
-  /* A success is a transient status report, so it is a toast (AGENTS: `showToast`) rather than a
-     paragraph appended under the rows, where it read as part of the section and stayed there. */
+  /* Report success with the shared toast (docs/design/primitives.md#status-lists-and-media). */
   const setNotice = (message: string) => { if (current()) showToast(message, 'success'); };
   function applyQuota(value: AssistantQuota) {
     if (!current()) return;
@@ -139,9 +138,8 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   const problem = quota.error ?? permission.error;
   const refresh = () => { void quota.refresh(); void permission.refresh(); };
   return <>
-    {/* No neighbour dims while one request is out (AGENTS: busy is active, disabled is
-        unavailable — a native `disabled` on a control that was just used drops its focus to the
-        document). Each action guards its own second press instead. */}
+    {/* Busy actions retain focus and material while blocking duplicate activation.
+        See docs/design/primitives.md#buttons-icons-and-semantics. */}
     <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} subtitle="权限与额度随当前账户保存" actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh size={ICON.standard} />} />}>
       {!quota.data || !permission.data ? !problem && <AssistantSettingsSkeleton /> : <>
         <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '管理员暂未开放彩彩 AI，你的选择仍会保留' : '开启后可长按吉祥物与彩彩聊天'} />

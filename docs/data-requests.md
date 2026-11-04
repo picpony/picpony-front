@@ -1,132 +1,149 @@
 # Data requests
 
-> Split out of `AGENTS.md`; read on demand. Cross-references such as "see Motion" or "under Shape" name sections listed in the index in `AGENTS.md`.
+Resource reads, caching, SSR seeds, prefetch and settings synchronization. Transport rules are in [Backend API](backend-api.md).
 
-**Private favourites have a shorter lifetime than ordinary cached data.** The own list stays in memory and is dropped on lock, expiry and session change, including its image sequence. Presence runs every five seconds only while the space is visible; leaving sends inactive with keepalive. Shared private answers are concealed on hide/leave and rechecked on return. Passwords are never persisted.
+## State ownership
 
-**A screen does not fetch. It reads a resource, and the resource decides whether that costs a request.** `lib/resource.ts` is the primitive, `lib/resources.ts` is the catalogue, and `useResource(forumThread, { id })` is the whole of the call site. `npm run net:audit` is the request ledger that argues for the layer: before it, the shell asked twice and re-asked on every navigation, screens re-read what they had just read on a remount, screens read in series when they could read in parallel, and screens read things nobody asked for.
-
-## The two stores, and why they are two
-
-| What | Where | Keyed on |
+| State | Owner | Key |
 | --- | --- | --- |
-| What the server said | `lib/resource.ts` | the arguments of the read |
-| What this screen was showing | `lib/screenState.ts` | a string the screen picks |
+| Server answers | `lib/resource.ts` | Read arguments |
+| Screen state | `lib/screenState.ts` | Screen identity |
+| Resource catalogue | `lib/resources.ts` or domain `queries.ts` | Domain-defined arguments |
 
-`lib/pageCache.ts` was both at once, and using it meant lifting your whole render into one snapshot object — which is why only three components ever adopted it; it is gone, /messages having been the last. Split apart, a remount reads its page number from `useScreenState` and its rows from the resource cache, and paints in the first frame with neither a skeleton nor a request.
+Screens use `useResource`; they do not fetch directly. Use `useScreenStateFor` when the same screen component can represent different records.
 
-`useScreenStateFor` is the same thing scoped to a record. Two profiles are two screens sharing a component, and a flat key carries page 4 of one into the other. Unique is not the same as sufficient.
+Both stores are in memory. Reloading reloads data. The week-long tag-count and tag-translation caches are separate concerns.
 
-## Reading a snapshot
+## Resource snapshots
 
-`useResource` returns `{ data, error, isLoading, isStale, isPrevious, refresh }`, and **`data` and `isLoading` are independent on purpose**. A cached screen refreshing underneath has both; that is the entire point of the layer. So:
+`useResource` returns `{ data, error, isLoading, isStale, isPrevious, refresh }`.
 
-- the *placeholder* branches on `data === undefined`
-- a *dim* may branch on `isLoading`
-- branching the placeholder on `isLoading` puts a skeleton over content that is already correct, which undoes the reason for having a cache at all
+- Show a placeholder when `data === undefined`, not whenever `isLoading` is true.
+- Keep existing data visible during refresh.
+- Pass `SKIP` for an unselected tab, signed-out visitor or unresolved ID.
+- Use `isNotFound`, `isRetryable` and `apiErrorMessage` from `lib/api/errors.ts`. Do not show raw engine errors.
+- Paged lists pass `keepPrevious`. If `isPrevious` and `error` are both set, report the failed page turn.
+- Scope retained pages by owner and content filter. `SKIP`, a new owner or a changed browsing fingerprint must discard the retained answer.
+- Put a filter snapshot in both the resource key and the actual request; policy waits must not change what that key means.
 
-Pass `SKIP` for a read that should not happen yet — an unselected tab, a signed-out visitor, an id that has not resolved. That is the mechanism that stops a screen paying for content nobody asked for.
+### Refresh and sessions
 
-**`error` is an `ApiError` (`lib/api/errors.ts`), and its `message` is already the sentence to print** under the screen's `{X}加载失败` title — every adapter throws one, a status and a kind on it, the technical detail in `cause`. `isNotFound(error)` picks a not-found state over an error; `isRetryable(error)` decides whether 重试 is offered (a 404, a 400, a query Derpibooru cannot parse and an owner's privacy refusal are not). `apiErrorMessage(anything)` reads any thrown value the same way and never lets an engine error (`TypeError: Failed to fetch`) reach the UI.
+`refetchInterval` refreshes mounted data quietly, with ±10% jitter. It skips hidden/offline periods and catches up on return. Current message intervals are ten seconds for an open conversation's newest page, 30 seconds for visible contacts and 60 seconds for the shell badge. Reading messages updates `unreadCounts` immediately.
 
-**A dead session ends once, in `lib/api/http.ts`, not per screen.** A 401 on a request that carried the token signs out through the token-checked `clearUserInfo` — so an older request can never sign out a newer login — with one 登录已过期，请重新登录. Only `GET /me` is taken at its word; any other 401 is confirmed by one `GET /me` per token first, because a resource may answer 401 about a password rather than the session. A PicPony read has a 15s deadline (`timeoutMs` overrides it); a write has none, since aborting one does not stop the server accepting it.
+Transport owns session expiry. A token-bearing 401 is confirmed by one `GET /me` per token unless that failing request already was `GET /me`. Token-checked cleanup cannot sign out a newer login. Report session expiry once.
 
-**An answer somebody else changes is re-read, not waited for.** `useResource(r, args, { refetchInterval })` re-reads the key underneath what is on screen while it is mounted — quietly (no loading state; a failure leaves the shown value), jittered ±10%, skipped while the tab is hidden or the device is offline, with one read on return if a tick was missed. A TTL alone never moved a badge that stays mounted. /messages reads this way throughout (decision 13): an open conversation's newest page every 10s, the contact list every 30s while its tab is on screen, the badge the shell's 60s — and reading a list or a conversation writes the lowered count into `unreadCounts` at once, before the re-read confirms it, so the badge does not lag the screen by a minute.
+PicPony reads default to a 15-second deadline, overridable by `timeoutMs`. Writes have no default deadline: aborting a client request does not establish that the server rejected it.
 
-**A paged list must pass `keepPrevious`, and forgetting it is a scroll bug rather than a data one.** Changing the page changes the key, and a key with nothing cached reports `data === undefined` — the rows unmount for one round trip, the scroll container collapses, the browser clamps `scrollTop` to the new tiny maximum, and the page snaps to the very top with the pager's own scroll-to-the-list undone. `node scripts/netAuditScroll.mjs` samples the card count every frame across a page turn and fails on a single empty frame, because one commit is enough. It is off by default because for an unpaged screen it is wrong: showing the *previous* profile while the next one loads is worse than a skeleton. **`isPrevious` says the rows on screen belong to another key** — with `error` set, the page turn *failed*, and the screen must say so rather than leave a pager reading 2 over page 1's pictures.
+## SSR seeds
 
-**Pass a scope string when a paged list changes owner or content filter.** `keepPrevious: true`
-retains pages within the resource; a string made from `userId` and `contentFilter` retains only
-within that scope. A new profile or filter drops the old answer immediately, including when the
-new read fails. Disabling a read with `SKIP` also clears its retained answer. The Derpi uploader
-resource puts the filter snapshot in both its key and its actual request, so a preference change
-while waiting for route policy cannot store an unfiltered answer under a safe key. A list whose
-query carries the viewer's exclusions (the home feed, the uploader grids) scopes retention to the
-browsing fingerprint: rows the user just asked not to see must never be held across the change.
+| Route | Server data |
+| --- | --- |
+| `/` | Addressed gallery page up to page 20 and anonymous featured image |
+| `/?tab=forum` | Initial default forum list |
+| `/about` | Team roster |
+| `/user/[id]` | Profile header; missing users call `notFound()` |
+| Direct `/pic/[id]` | Picture record and glossary names available in time |
 
-## Arriving with the answer: `seed` and `initial`
+The image overlay performs no server read. It starts from its list row. Personal data, search results and keyed featured-image reads remain client-side. A thread is never read on the server, including for metadata, because its read counts a view; it sets its title with `useDocumentTitle`.
 
-Five screens render their first read on the server and hand it down: `/` (the gallery page in the address, `?page=` up to 20, and the anonymous 近日推荐 picture beside it), `/?tab=forum` (the forum's first page — the default list, every visitor's landing; `lib/forum.server.ts`, keyed by `lib/forumKeys.ts` — while `/` alone leaves the hidden forum pane to its idle read), `/about` (the team roster), `/user/[id]` (the profile header, not the four tabs — and a user the backend says does not exist is the route's `notFound()`, before anything renders) and a direct `/pic/[id]` (the picture's record, with its tags' glossary names when they land in time). Each has a `.server.ts` module beside it, a server shell that awaits it, and an island that takes it as a prop and passes it to `useResource` as `initial` — except the picture, whose record lives outside the catalogue (below): `PicDetail` installs it with `seedImageDetail`, the same idempotent, browser-only, render-time seam. The overlay presentation reads nothing on the server: it has the list's row, and a server read would sit inside the flight's window.
+### Seed and write contracts
 
-**The home feed has one server cache: its 120-second process memo.** Its inner fetch is `no-store`. Next's persistent Data Cache can return an expired response while refreshing in the background; stamping that response with a new `generatedAt` made days-old pictures appear fresh to both the memo and the browser. Less-used developer-filter queries made the defect particularly visible. The memo still coalesces concurrent reads and serves prefetches, but an expired entry now waits for a real upstream response within the existing timeout. After a 429 or a 5xx the server leaves Derpibooru alone for 15s (`Retry-After` honoured, 60s cap), for every fingerprint — all SSR reads share one IP. Two feeds get no seed at all: a fingerprint the device could not mirror into its cookie (`browsing=unmirrorable`, which the server once answered with the *default* feed, hidden pictures included) and the random sort; nor does 本站讨论 (`?view=discussed`) or a deep link to the forum tab, whose hidden gallery reads for itself once the browser is idle. The seed's rows are raw `derpicdn.net` URLs; the page puts them on the document's image line with `seedOnImageLine` (the featured row with `featuredOnImageLine`). Both seeds' keys come from `lib/feedKeys.ts`, which the resources use too.
+Use `resource.seed(args, value, fetchedAt)` through `initial`; image detail uses `seedImageDetail`.
 
-**The seam is `resource.seed(args, value, fetchedAt)`.** Both `seed` and `write` build a resolved `Entry` directly: a cold write must not call `create`, because `enqueue` → `pump` → `job.run()` starts a fetch synchronously. `seed` additionally preserves the server's timestamp and publishes its first snapshot synchronously; ordinary writes retain the existing entry's age and publish on a paint boundary. A write replaces the old entry and cancels its work, so an older response cannot undo a successful mutation. Imperative `read()` returns the current value, including after a write or background refresh; an already-settled first-read promise is not a mutable cache.
+- Build resolved entries directly. A cold seed or write must not enqueue a fetch.
+- Seed synchronously, including the first snapshot and `args`; rAF publication is too late for hydration.
+- Preserve `Math.min(generatedAt, Date.now())`. Never relabel old RSC data as fresh.
+- Seeding is a no-op on the server, where module state is shared across requests.
+- Writes replace and cancel older work, preserve the existing entry's age and publish on the normal paint boundary.
+- Imperative `read()` returns the current value, not an obsolete settled promise.
+- First entry insertion registers lifecycle cleanup; subscriber placeholders remain distinct from real queued reads.
 
-Four details of it are load-bearing:
+Keys are pure and identical on server and client. `lib/feedKeys.ts` supplies shared feed keys; `COOKIE_KEYS.browsing` mirrors the fingerprint. Hydration starts with the server fingerprint and adopts the device's after mount. A changed fingerprint shows a new placeholder instead of retaining differently filtered rows. An absent cookie means `DEFAULT_BROWSING_FINGERPRINT`.
 
-- **The snapshot is built synchronously, not through `publish()`.** `publish` is rAF-bound and hydration renders before the next frame — a seed that went through it would arrive one frame late, which is exactly the skeleton flash it exists to remove.
-- **`args` is set.** It is what `expire()` and `bindResourceRefresh` re-read from; a seed without it is invisible to "the tab came back after a minute".
-- **`fetchedAt` is `Math.min(generatedAt, Date.now())`.** An RSC payload can be minutes old, and stamping it "just fetched" would pin stale HTML for a whole TTL. The clamp only ever errs toward *stale*, never toward *fresh*.
-- **It is a no-op on the server** (`typeof window === 'undefined'`). `lib/resource.ts` is a `'use client'` module, and such a module is still *evaluated in Node* during SSR — so its module-scope `store` is shared across concurrent requests. Seeding there would hand one visitor's feed to another's render.
+### Home cache and filtering
 
-**The keys have to agree on both sides, and key functions must be pure.** `homeFeed` used to read the browsing fingerprint out of `localStorage` *inside* its key function — a hydration mismatch the moment content comes from the key. It takes `{page, sort, fp}` now, and `COOKIE_KEYS.browsing` mirrors `browsingFingerprint()`'s own output so the server can compute the same string. The island renders its first frame with the **server's** fingerprint and switches to the device's after mount: identical, and there is no mismatch; different, and the key changes once, costing one request — over a skeleton rather than the server's rows, which were filtered for other settings (the feed's retention is scoped to the fingerprint). `DEFAULT_BROWSING_FINGERPRINT` is what an *absent* cookie means — without it the server keyed on `''` while the browser keyed on `safe|-|d|-|`, and the seed never applied.
+The home feed uses one 120-second process memo with an inner `no-store` fetch. Expired entries await a real upstream response. A 429 or 5xx pauses SSR Derpibooru reads across fingerprints for 15 seconds, honouring `Retry-After` up to 60 seconds.
 
-**The site's public blacklist is part of every Derpibooru image search**, in every content mode including 开发者: `buildSearchQuery` appends `-id:N` for the newest hundred ids and `searchImagesByIds` drops them, so a listed picture reaches no feed, search result, profile tab or favourites list. The featured banner and a picture opened by its own link are not searches and the site's list is not applied to them (the banner does apply the device's own content settings, after the read — `lib/imageFilters.ts` — and wears the grid's spoiler cover). The server reads it (`readPublicBlacklist`, anonymous, five minutes, invalidated by the `/api/v1` proxy when an administrator's edit of the list is accepted) and inlines it with the route policy; the browsing fingerprint includes it, so the server seed and the first client key still agree.
+Do not seed random sorting, `本站讨论` or an unmirrorable browsing fingerprint. A forum deep link leaves the hidden gallery to its idle read. Apply the document's image line through `seedOnImageLine` and `featuredOnImageLine`.
 
-**What does not move, and why.** The *keyed* `featuredImage` read stays on the client: `getFeatured` puts the user's Derpibooru API key in the URL, so a shared server cache would leak it. (The anonymous one is seeded — `readFeatured` — and a visitor with a key re-reads over it, the seeded picture held meanwhile.) Personal reads for `/favorites`, `/history`, `/tasks` (including `/tasks/coins`), `/block-groups`, `/tag-groups` and /messages' account-only panes are token-gated and the token is in `localStorage`, which the server cannot read — moving them means moving auth into a cookie, which is a security decision rather than a performance one. `/search` reads `searchParams` and would explode the cache key. On `/` the forum pane is already `api: 0` on tap, mounted on an idle callback, so a seed there would only add bytes for the majority who never open it — only a deep link to `/?tab=forum` is seeded. **A thread is never read on the server**, not even for its title: `get_forum_post_detail` counts a view per read (measured), so a server read would count every visit twice; the thread names the document itself once its read lands (`useDocumentTitle`, which holds the title against the metadata Next resolves after the page mounts).
+The public blacklist applies to every Derpibooru image search, including `developer` mode. `buildSearchQuery` excludes the newest hundred IDs and `searchImagesByIds` filters them. The anonymous five-minute server cache is invalidated after accepted admin changes and included in the browsing fingerprint.
 
-## Speculation may move a request earlier. It may never add one.
+The featured banner and a directly opened picture are not searches. The banner still applies the device's content settings and spoiler cover.
 
-That is the rule, and `npm run net:audit` asserts it: every journey's request count may fall and may not rise. Three consequences:
+## Search queries
 
-- **Prefetch is intent-driven, never idle.** `useIntentPrefetch` is `useHeroLink`'s ladder with the gallery card taken out of it — hover at 70ms, focus at 120ms, a mouse or pen press immediately and a finger's press 100ms later (the tap timeout: a flick that becomes a scroll fires `pointercancel` and warms nothing), cancel on leave, gated by `isScrollLikelyActive()`. `prefetchRoute` maps a path to the reads that path starts, in one table rather than scattered across the components that link there. **A forum thread is the exception to the ladder**: its read counts a view on the server, so it is warmed on a press only (`ForumPostList`), never on a hover or a focus, `prefetchRoute` does not warm `/forum/<id>`, and the thread's pager prefetches nothing. **A route's page is not a read**: a row that opens with a container transform — a forum row, a history row — warms its route's whole payload, page as well as layouts, on the ladder and at the press (`prefetchRoutePayload`, `lib/routePayload.ts`; a `<Link>` alone stops at the root `loading.tsx`), so the press commits the page in one piece. Those pages are client pages whose server render reads nothing, so the warm counts no view and moves no data read. The 本站讨论 tab warms its own read on the same ladder (two round trips — the discussed ids, then the pictures — so the tap usually lands on rows); `Tabs` takes no handlers per tab, so they are delegated from a wrapper with no box. The idle reads are a stated exception: the home route's hidden pane mounts on an idle callback — the forum behind the gallery, so a tap on 论坛 costs nothing (the `get_forum_posts` in the ledger's cold home journey), and the gallery behind a deep link to the forum, which used to read with the visible forum rather than after it.
-- **The obvious pagination win is not taken.** Warming page *n+1* as soon as page *n* settles was written and removed: it is a request for a page that may never be looked at, on every paged screen. What survives is the intent ladder on the controls, which buys the same head start and costs nothing until somebody reaches for them. The viewer is the one place it is taken, and only at the end of the run: a step that lands within four pictures of the loaded list's end, in the direction it is going, reads the list's next page (`PAGE_READ_AHEAD` in `lib/hero/useDetailStep.ts`, behind the same `saveData` switch). Somebody stepping through pictures one at a time is walking toward that page — the step past the last one would read it anyway — and without the head start every page boundary stopped a run of flicks for a round trip on the Derpibooru lane.
-- **Guessing cannot starve a real read.** Each upstream has its own four slots — `lane: 'picpony' | 'derpi'` on `defineResource`, and the opened picture (`lib/detail.ts`) shares Derpibooru's — so a slow or rate-limited Derpibooru cannot leave the forum or the badge with nothing in flight; background work is capped at two of a lane's four, so a prefetch can never take the last one. A first read the screen has moved off (four page turns in a row, an unmount) is abandoned so the page now on screen gets the slot. `saveData` and the two slowest `effectiveType`s switch speculation off entirely — the concurrency cap protects latency, and nothing but that switch protects *bytes*.
+`parseSearchFilters` / `composeQuery` in `lib/searchQuery.ts` read and update the committed query. Advanced conditions are not a second snippet appended blindly to it; removing an active chip updates the same query.
 
-**A `<Link>` prefetch is not a data prefetch.** Next warms the RSC payload and the chunk when the link is in the viewport, which is real and is not the expensive half: every screen here is a client component that starts its reads in its first effect, so a warm chunk still arrives at an empty page.
+When site status enables semantic search, Chinese text without query syntax uses `semanticQuery` and `isSemanticText`. Keep the original words in `q`; after parsing, replace the URL with the resolved `tags=` so reloads and shared links reuse the result. `raw=1` searches the original text.
 
-## Coming back
+Timeout/unavailable results fall back to the typed query with an explanation. Model-result feedback is offered only when the model produced the tags and uses the sign-in captcha flow. The pending/result row's geometry belongs to [Primitives](design/primitives.md#search-toolbar).
 
-`bindResourceRefresh`, mounted once in the shell, re-reads what is on screen when the tab returns after a minute away and whenever the network reconnects. It **expires rather than invalidates**, and that is the whole difference between a refresh and a reload: every mounted screen keeps what it is showing and re-reads underneath, with no loading state. Dropping the entries instead would empty every screen in the app in one frame.
+## Prefetch and scheduling
 
-`expire` also has to *start* the re-read rather than merely mark: `useResource`'s effect is keyed on the resource and the key, and neither changes when a value goes stale. The entry holds its own args for this.
+Speculation may move a read earlier; it must not add unused reads.
 
-`invalidate` preserves mounted subscribers and re-reads their keys with the answer still on screen, starting a microtask later — so a mutation that invalidates and then `write`s its own authoritative answer in the same tick sends nothing it would only abort; deleting the listener slot would leave an unchanged key permanently empty. A background refresh moves `fetchedAt` only when it lands: one the queue dropped or that failed leaves the answer stale, so the next read tries again. `clearAllResources` is separate: signing out aborts and drops every entry without issuing requests for the old account. `node scripts/testResources.mjs` checks these distinctions and the races between reads, refreshes and writes.
+- `useIntentPrefetch`: hover at 70 ms, focus at 120 ms, mouse/pen press immediately, touch after the 100 ms tap timeout. Cancel on leave or scroll intent.
+- Keep route-to-read mapping in `prefetchRoute`.
+- Forum detail data warms on press only. Hover/focus and its pager must not count views.
+- Container-transform destinations may warm their complete route payload through `prefetchRoutePayload`; their server render does not read the record.
+- Next Link prefetch warms code/RSC, not a client component's domain reads.
+- Do not fetch page n+1 when page n settles. Pager intent may prefetch it.
+- Exceptions: the home route mounts its hidden pane on idle; the image viewer reads ahead within `PAGE_READ_AHEAD` pictures of the list's end in the travel direction.
+- `saveData` and the two slowest connection types disable speculation.
 
-## Two mistakes this layer made, both worth not repeating
+Each `picpony` and `derpi` lane has four slots, at most two for background work. Image detail uses the same Derpibooru lane. Abandon obsolete first reads so visible content gets the slot.
 
-**A subscriber arrives before the reader.** `useSyncExternalStore` subscribes during render and the read happens in the effect a tick later, so every mounted component creates a listener slot for a key nothing has requested; it must not be confused with a real queued entry (a resolved promise that carries nothing — every migrated screen went silent at once). `Entry.placeholder` is the distinction.
+## Refresh, invalidation and private data
 
-**And the ledger called it a triumph.** The home page "improved" from five requests to one, with the gallery empty behind it, because the only assertion was an upper bound. An upper bound cannot tell an optimisation from a breakage. `net:audit` now also holds a floor — a step that read something before must still read something, and a step whose own content request was identified before must still identify it.
+| Operation | Contract |
+| --- | --- |
+| `expire` | Keep data and start a background read |
+| `invalidate` | Keep mounted subscribers; schedule reread in a microtask |
+| `write` | Replace the answer and cancel stale work |
+| `clearAllResources` | Abort and drop entries without fetching for the old account |
 
-## `npm run net:audit`
+A same-tick invalidate followed by an authoritative write should send no redundant request. Failed or dropped refreshes leave the original timestamp stale.
 
-**A step waits for route payloads as well as counted APIs.** Next's document and RSC prefetch requests are not API costs, but they can still start server reads after the browser APIs look quiet. Ignoring an in-flight profile prefetch moved one server read from the initial favourites step to the next navigation (1 + 4 instead of 2 + 3), falsely failing the unchanged per-step baseline. `scripts/netAuditActivity.mjs` tracks their completion; server activity restarts the quiet interval, failed requests release it, and an unsettled step fails at its deadline instead of reporting a partial count. The ledger prints server request names beside browser entries. Counts, content floors and round assertions remain in place; `scripts/testNetAuditActivity.mjs` covers the delayed-prefetch boundary.
+`bindResourceRefresh` refreshes visible resources after a minute away or on network reconnection. Every new server reader uses `createServerMemo`; visible Link prefetch can invoke it before navigation. In-flight coalescing remains active even with TTL zero.
 
-Drives Edge over CDP through a fixed set of journeys and counts requests per step. It asserts **counts** and the **round** of each step's own content request; wall-clock timings are printed and asserted nowhere, which is the same split `palette.mjs` draws between a `floor` pair and a `report` pair.
+Private favourites and their image sequence are memory-only and cleared on lock, expiry or session change. Presence runs every five seconds only while visible; leaving sends inactive with keepalive. Shared private answers hide on leave and are rechecked on return. Never persist passwords.
 
-The upstream is **stubbed** (`netAuditFixtures.mjs`), and not because it is down: `proxyFetch`'s retry ladder turns one logical read into one *or* three depending on which line is reachable, so the count stops being a property of the code. `--live` runs against the real thing for a payload-shape check and refuses to write a baseline. A second fixture server is handed to `next start` through `PICPONY_UPSTREAM_ORIGIN`, because CDP intercepts the *browser* and reaches nothing the server does — without it the SSR-side policy read could not be measured at all.
+Image detail stays in `lib/detail.ts` because publication is gated by `isDetailDataPublishable`. It shares the lane scheduler and preserves errors for `peekImageDetailError`; do not fold it into ordinary resources without retaining the publication gate.
 
-Two numbers it reports and does not assert: the maximum `rounds` over a step (an idle-scheduled request inherits depth it does not owe), and chrome reads — `get_user`, `get_unread_counts`, `get_announcement`, and signed in `get_tag_subscriptions` (the drawer's 标签订阅 count) — are excluded from the rounds chain entirely, because they fire on every screen in parallel and were making `contentRound` race. They are still counted.
+## Request ledger
 
-One request is not counted at all, on either layer: `track_visitor`, the visit count a production build sends (`components/VisitorTracker.tsx`) — a statistics POST on an idle callback that nothing waits on, whose landing inside a step's window is timing rather than code. The tracker itself stands down where the probes run: never in development (the dev server proxies to the real backend), never under `navigator.webdriver`, and never in a headless browser — `net:*` and `perf:*` drive headless Edge over plain CDP, where `webdriver` is false (the service worker's blind spot, in its section above) but the user agent says `HeadlessChrome`. A signed-in visitor is never counted either, as in the original front end.
+`bun run net:audit` uses stubbed upstreams and Edge over CDP. `--live` checks real payloads and must not write a baseline.
 
-**A third column, `srv`, and a third round value, `r0`.** Once a read moves to the server, CDP cannot see it — from the ledger's point of view the request vanished, which is indistinguishable from the screen having stopped loading, precisely what the floor exists to catch. So the fixture server that `PICPONY_UPSTREAM_ORIGIN` points at now tallies what the Next server asks it for. `srv` is that count, `r0` means "this screen's own read was already in the first byte", and the two assertions split by what is reproducible:
+- Assert browser and combined browser/server request ceilings.
+- Keep a content floor: a screen must still produce its expected read.
+- Assert the content request's round; `r0` means server-seeded content.
+- Report timings and maximum rounds without asserting wall-clock speed.
+- Wait for documents, RSC payloads and server activity as well as counted APIs. A step that never settles fails at its deadline.
+- Clear server tallies per step. Use `PICPONY_SERVER_MEMO_TTL_MS=0` to disable both the process memo and any Next cache revalidation for deterministic runs; retain in-flight coalescing.
+- Chrome reads remain counted but are outside the content-round chain. Maintenance and public-blacklist server reads are excluded from `srv`.
+- Visitor tracking is excluded on both layers and disabled in development, automation/headless browsers and signed-in sessions.
 
-- **The ceiling is applied twice** — to browser requests, which is what a user waits on, and to `api + srv`, because "speculation may move a request earlier, never add one" is a rule about requests and not about which process sends them.
-- **The floor counts both layers**, and asks only "did this step read anything, anywhere". A step that reads nothing on either side is a screen that has stopped loading.
+`scripts/netAuditActivity.mjs` owns the quiet-window boundary. CDP only observes browser requests, so the fixture server must also tally SSR requests.
 
-`get_maintenance_status` is excluded from `srv` for the same reason `get_user` is excluded from the rounds chain: the server does it on every route, including ones that read nothing. `get_public_blacklist`, read beside it for the same inline policy, is excluded with it.
+## Settings synchronization
 
-Two harness facts make `srv` assertable, both load-bearing: the tally is cleared before each step (the `r0` classification tests that list — a stale tally would mark a later screen's content as "already in the first byte", the one failure the floor exists to catch), and Next's Data Cache persists to disk (`.next/cache/fetch-cache`) — and, contrary to what this file once said, an explicit `next: { revalidate }` is **not** vetoed by an upstream `Cache-Control: no-store`; the veto applies to the default heuristic, not to an explicit instruction. `PICPONY_SERVER_MEMO_TTL_MS=0` is what the harness sets, and it reaches **both** caches through `cacheSeconds` (`lib/serverMemo.ts`) — the memo and the `revalidate` argument share one number. It has to be both or it is neither: either cache alone serves the second journey to open `/` from memory, and from outside a cache hit and a screen that has stopped loading are the same observation.
+`lib/settingsSync.ts` owns `SYNCED_SETTINGS`. `SettingsSync` starts it after mounting; do not start it during module evaluation.
 
-**In-flight coalescing is not caching and survives the switch.** `/user/[id]` has two callers per request — `generateMetadata` and the page — and Next renders them concurrently, so a slot that is only written on resolution has both miss and both fetch. The memo joins an **unsettled** slot whatever the TTL says, which is de-duplication rather than staleness.
+Each entry declares storage keys, cloud keys, fallback and scope. Account reads adopt cloud settings; local changes debounce for 600 ms.
 
-**A server-side read is reached by `<Link>` prefetching, not only by a visit.** The footer links to /about from every route, Next prefetches the RSC payload of every visible link, and rendering that payload runs the read — so without a cache in front of it, one page view *anywhere* becomes one upstream fetch. All three `.server.ts` reads go through `createServerMemo`, and any future one should too.
+- Send the whole settings object: the backend replaces rather than merges it. Preserve unmanaged cloud keys and refresh a cloud copy older than one minute.
+- Persist pending changes per account in `LS_KEYS.settingsSyncPending`. Older cloud responses must not overwrite newer local edits.
+- A failed write retains the local setting, reports once and offers a retry action. Retry on reconnect, tab return or the next change, backing off to five minutes.
+- `device` scope survives logout and can fill a missing cloud key. `account` scope resets on logout and never takes its initial value from another account's device state.
+- Scheme, motion tier, speed and custom motion maps stay device-only.
+- Palette sync uses `theme`, `themeCustomSeed`, `themeCustomAccent` and `themeHues`. Write `null` for an automatic custom accent.
+- Entrance mode also syncs, through `introAnimationEnabled` and `introAnimationBlocking`. Its `device` scope controls logout retention, not whether it synchronizes. An enabled-only setting preserves an existing active mode.
+- The `spoilers` filter requires a saved age of at least 16 on the Beijing calendar; the `developer` filter requires developer mode. Recheck on logout, account reads and profile saves.
 
-## What is not in the catalogue
+Add a setting through one registry entry. Mirror SSR-visible values into cookies on installation and sync startup.
 
-**The opened picture.** `lib/detail.ts` holds that one, and it is where this layer's machinery came from: TTL, LRU, priority queue, concurrency cap, real cancellation and a paint-bound notification tuned so a response can never land inside a hero flight's geometry frame. It stays separate because its publication is gated on `imageHeroController.isDetailDataPublishable`; `ResourceOptions.publishGate` is the seam that would let it fold in, and folding it in has not been done. Its queue is no longer its own: it schedules on the resource layer's Derpibooru lane (`scheduleLaneJob`), so an opened picture and a gallery page compete for one set of slots instead of each assuming it has four. A failed read's error is kept for `peekImageDetailError`: an open overlay subscribed to a record that failed used to see exactly what it saw while loading, and kept its skeletons forever.
+## Verification
 
-**Persistence.** The store is a `Map` and a reload genuinely reloads, which is `lib/screenState.ts`'s rule too. `lib/tagCounts.ts` and `lib/tagTranslations.ts` keep their own localStorage caches on week-long TTLs; that is a different problem, and keeping it separate is what stops this from growing a quota policy.
+Run `bun run check`. Read or prefetch changes also need `bun run net:audit`; paging changes need `bun run net:scroll`.
 
-## Settings follow the account
-
-**One module, on every screen.** `lib/settingsSync.ts` holds the registry, `SYNCED_SETTINGS`: each entry names its storage key, its key or keys in the account's object (the original front end's names, which are the contract), a fallback and a scope. `components/SettingsSync.tsx` starts the engine from the root layout once the app has mounted, not while a module is evaluated, because the Node suites import `lib/resources.ts` under stubbed globals. From then on every `get_user` answer adopts the account's copy through `sessionUser`'s fetch: at sign-in, on each load and on each return to the tab. A change made here (`changeSyncedSetting`, or `noteSettingChanged` for a value its own module wrote) is written after a 600ms pause, so a run of toggles costs one request. Four rules hold it up, and each one is a bug this app shipped:
-
-- **The write is the whole object.** `update_settings` replaces what is stored; it does not merge. The old /settings sent `{ [key]: value }` per toggle, and the accounts it reached were left holding that one key. The engine sends the last cloud copy with this device's changes laid over it, so keys it does not manage ride through untouched. A copy older than a minute is read again first.
-- **A newer local change is never overwritten by an older cloud copy.** Pending changes are persisted per account (`LS_KEYS.settingsSyncPending`), and a read that started before a change cannot speak for it.
-- **A failed write keeps the local value and says so once:** a toast, plus 有设置尚未同步到账号 with 重试 on /settings. It retries on reconnect, on return to the tab and on the next change, backing off to five minutes.
-- **Scope is part of the entry.** A `device` entry describes how this device browses (filter, sorts, lines, palette). It survives signing out, and fills in a key the account lacks. An `account` entry is a fact about the account: what the profile shows, 隐藏 IP 属地 (the backend itself answers the profile's `ip_location` with 该用户已隐藏) and the email notifications. It resets on sign-out and is never filled in from the device.
-
-The scheme, the motion tier, the speed and entrance motion stay on the device; the palette syncs as `theme` (plus `themeCustomSeed` and `themeCustomAccent`, written out as `null` for 自动 so an older hue cannot ride through), and 配色方案 beside it as `themeHues` (`node --test scripts/testPalette.mjs` covers the two). 中等限制 needs a saved birthday of 16 or more on the Beijing calendar, and 开发者模式 needs developer mode. That gate is enforced on sign-out, on every account read and after a profile save, so a birthday typed and cancelled unlocks nothing. To add a setting, add one registry entry; nothing in /settings, the shell or the resource layer changes. `node --test scripts/testSettingsSync.mjs` covers these rules.
+Focused tests include `scripts/testResources.mjs`, `scripts/testNetAuditActivity.mjs`, `scripts/testSettingsSync.mjs` and `scripts/testPalette.mjs`.

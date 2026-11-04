@@ -47,7 +47,7 @@ type CardProps = CardAppearanceProps & (
  * cast a decorative shadow; floating overlays own their own elevation.
  *
  * Each variant's container tone is M3's own, not a step chosen by eye; see the
- * container table in AGENTS.md for the whole set.
+ * container table in docs/design/colour.md#surface-and-media-roles.
  */
 const VARIANTS: Record<CardVariant, string> = {
   /* M3's *filled* card is `surface-container-highest` at elevation 0 — the highest

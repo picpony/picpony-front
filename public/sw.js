@@ -29,15 +29,15 @@
  *   account's data, and the login answer carries the `auth_bind` session cookie the handler
  *   rewrites so it survives plain HTTP. A cached body plus a cached `Set-Cookie` on a shared
  *   device hands one user's session to the next.
- * - **`/relay`.** It validates protocol, host, port, credentials **and path**, and AGENTS.md
- *   states that the path check *is* the security of the endpoint. A cache would serve an old
+ * - **`/relay`.** Its protocol, host, port, credentials and path checks enforce the boundary
+ *   in docs/request-lines.md#relay-and-response-boundaries. A cache would serve a previously
  *   validated response for a URL the current policy may no longer allow, and it echoes the
  *   upstream `content-type`, so caching it stores third-party bytes under this origin.
  * - **`/search-api/*` and RSC payloads.** Both are data.
  * - **The three image proxy hosts** (`derpicdn.net`, `wsrv.nl`, `147052.xyz`). Cross-origin, and
  *   the `<img>` tags carry no `crossorigin`, so the responses are **opaque** — a 500 is
- *   indistinguishable from a 200, exactly the blindness AGENTS.md records the image *probes*
- *   hitting. Caching one would pin a dead line for the session and defeat `lib/imageLoader.ts`'s
+ *   indistinguishable from a 200 (docs/request-lines.md#failure-and-recovery).
+ *   Caching one would pin a dead line for the session and defeat `lib/imageLoader.ts`'s
  *   degrade ladder, which is the most carefully tuned failure path in the app. Opaque entries
  *   also bill ~7 MB each against the origin quota, and a single gallery page holds 50 thumbnails.
  *   `/_next/image` already covers the gallery.

@@ -1,36 +1,11 @@
 /**
- * The tab strip's motion: the pure half of `playSharedAxis` (`lib/motion.ts`), a module of its
- * own so the numbers it is argued by are a test (`scripts/testShell.mjs`) rather than a comment.
+ * Pure tab-strip geometry for playSharedAxis. PAGER_SPRING is critically damped so adjacent
+ * panes never overshoot into a gap. Launch at half its normalized rate for a continuous start;
+ * reversals retain the displayed pose and use the shared remaining-distance rule.
  *
- * **The strip is thrown by the tap and caught by a critically damped spring**, not eased along
- * `emphasized` — a stated divergence from MaterialSharedAxis's easing (AGENTS.md, "Transitions
- * between screens"). Per 60 Hz frame, as a percentage of the window:
- *
- *     emphasized, 500ms       0.9  2.9  5.6 10.0 20.7 23.6 …   50% at  89ms  90% at 189ms
- *     launch 2, 400ms         9.5 10.8 10.9 10.3  9.4  8.3 …   50% at  82ms  90% at 210ms
- *     launch 4.5, 300ms      22.7 18.2 14.4 11.2  8.6  6.5 …   50% at  44ms  90% at 133ms
- *     this, 350ms            15.5 14.5 12.9 11.1  9.3  7.7 …   50% at  60ms  90% at 170ms
- *
- * `emphasized` hangs back for its first 50ms and then lurches. The launch-2 strip that replaced it
- * left at twice a switch's average speed and *gained* speed for its first 34ms: an even, unhurried
- * glide that took 82ms to reach halfway and 210ms to look arrived, which on a phone read as the
- * page dragging behind the finger. Thrown at 4.5 over 300ms instead, it covered nearly a quarter
- * of the way in its first frame and was all but over in 130ms — a lunge, then a crawl. Most of what had read as dragging was
- * the time before the first frame, which the press now pays for (`primeTabTransition`), so the
- * curve need not lunge to keep up with the finger.
- *
- * **Caught by Compose's pager spring.** The strip *is* a pager — two adjacent panes, one window —
- * so it settles on the spring Compose gives `HorizontalPager`'s snap: the layout spring
- * (`PAGER_SPRING`, ζ1 k400 — Compose's own pager snap, kept off `layout`'s k700 because a launched spring's first frame scales with its stiffness; `lib/spring.ts`). Critically damped because the two sides are
- * adjacent and an overshoot would open a sliver of bare panel past the strip's end.
- *
- * **Launched at half the spring's rate, which is the one launch with no jerk:** a critically
- * damped response launched below it gains speed after it leaves (the glide), above it starts
- * shedding speed at once (the throw), and at it holds its launch speed for the first instant and
- * only then slows — the smoothest start a launched spring has. Below a launch of `rate` a
- * critically damped response cannot overshoot, and every launch here stays under it.
- *
- * `p` is the strip's position: 0 rests on the pane being left, 1 on the one arriving.
+ * p = 0 is the departing pane; p = 1 is the arriving pane.
+ * Contract: docs/transitions.md#priming-and-interruption.
+ * Verification: scripts/testShell.mjs.
  */
 import { PAGER_SPRING, springDurationMs, springRate } from '@/lib/spring';
 import { clamp01 } from '@/lib/utils';

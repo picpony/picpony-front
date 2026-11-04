@@ -49,8 +49,8 @@ const PAGE_READ_AHEAD = 4;
  * page ahead, in the way the reader is stepping: a reader walking through the list reaches its
  * end, and waiting there for a live page read (seconds, on Derpibooru's lane) is what read as the
  * swipe having stopped working. At a step rather than on arrival, so a run of quick flicks — which
- * never lets the viewer settle — still has it read in time. The one read this speculation adds
- * (AGENTS.md), and the very read the step at the end makes, which joins it rather than repeats it.
+ * never lets the viewer settle — still has it read in time. The boundary step joins this read
+ * rather than repeating it (docs/data-requests.md#prefetch-and-scheduling).
  */
 function readAhead(id: number, direction: StepDirection) {
   if (!speculationAllowed()) return;

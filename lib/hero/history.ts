@@ -179,8 +179,7 @@ function stateWithMarker(marker: HeroMarker) {
  * The state handed over carries our marker and nothing of the router's: without `__NA` the App
  * Router's patched `replaceState` copies its own `__NA` and tree into it and dispatches a restore
  * for the new URL, so `usePathname` follows while the tree — and so the mounted detail route —
- * stays exactly where it is (`dist/docs/01-app/01-getting-started/04-linking-and-navigating.md`,
- * "`window.history.replaceState`"). With `__NA` it would take its internal fast path and never
+ * stays exactly where it is (node_modules/next/dist/docs/01-app/01-getting-started/04-linking-and-navigating.md#windowhistoryreplacestate). With `__NA` it would take its internal fast path and never
  * learn the URL, and the next router commit would write the old one back.
  *
  * The router is always mounted in this app, so its patch is always there; the fix-up is for the

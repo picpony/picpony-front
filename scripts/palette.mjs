@@ -322,7 +322,7 @@ for (const m of css.matchAll(/--md-sys-color-(accent-[a-z]+):\s*oklch\(([\d.]+) 
  * ------------------------------------------------------------------------ */
 
 /**
- * The pairs written down somewhere (globals.css, AGENTS.md, or both).
+ * Contrast pairs documented in docs/design/colour.md and app/globals.css.
  *
  * Third column: the WCAG floor for *that* pair (4.5:1 text / 1.4.3, 3:1 non-text / 1.4.11,
  * 2.4.11), so the ten-theme check can say "every theme clears whatever the default clears"
@@ -765,22 +765,11 @@ for (const theme of THEMES) {
   }
 }
 
-/* ASSERTION 18 — the brand's two literals in `lib/paletteSpec.ts` are the rule's own output.
- *
- * Numbered 18 so the numbers AGENTS.md cites do not move. The brand used to be the one theme
- * exempt from direction A — `品牌色，给定`, two hexes at tone 61/54 and chroma 56.8, which is
- * 20.8 over the light register's C36 ceiling and 8.8 over the deep register's C48, in the middle
- * band that belongs to neither register. It now carries a `fill` decision like the nine
- * characters, so ASSERTION 9's area ceiling and ASSERTION 1's tone fidelity hold it too.
- *
- * What this adds is the one thing those cannot: `BRAND_SEED` has to stay a **literal**, because
- * `lib/paletteSpec.ts` is the import-free module every client reads a preference through and HCT
- * may not reach it. So the literal and the decision are two statements of one colour, and
- * `--write` cannot reconcile them — it only substitutes `--md-sys-color-*` declarations. This is
- * the check that says so, with the two lines to paste. `BRAND_RAMP_SEED` is asserted the other
- * way round: it is the mascot's mane, the colour the brand *was*, and it must not drift into
- * being the fill, or `BRAND_CHROMA` — the floor under every theme's ramp — follows a tint down
- * and takes all eleven `primary-ink`s with it (ASSERTION 6 is what would then fail). */
+/* ASSERTION 18 — brand literals match the generated fills.
+ * BRAND_SEED and BRAND_SEED_DARK stay literal in import-free paletteSpec.ts; --write only
+ * updates CSS declarations, so this check reports the replacement values explicitly.
+ * BRAND_RAMP_SEED remains the mascot's mane colour and the basis of the shared chroma floor.
+ * See docs/design/colour.md#fill-and-foreground-policy. */
 {
   const decided = fillsOf(THEMES[0]);
   for (const [name, literal, want] of [
@@ -968,32 +957,10 @@ for (const [token, { d, who }] of Object.entries(closestContainer)) {
   console.log(`  closest ${pad(token, 22)} to a severity: ΔE ${d.toFixed(1)} (${who})`);
 }
 
-/* ASSERTION 17 — a dark container is a shade of its hue, not a greyed tone.
- *
- * Numbered 17 rather than inserted at 14 so the numbers AGENTS.md and the ledger already cite do
- * not move; it belongs beside ASSERTION 13, which is the other half of the same question — 13 asks
- * whether a container reads as something it is not, this asks whether it reads as a colour at all.
- *
- * Decision 29's intent is 清色 only, never 浊色 ("a pure hue plus grey"), and the one place the
- * generator could not keep it was here: a second colour is declared once, as the tint the light
- * scheme's tone-90 containers wear, and M3 reuses that chroma at tone 30 in dark, where the gamut
- * is two to four times as wide. 天琴 #594234 (brown), 苹果嘉儿 #414a32 (olive), 小蝶 #5b3f4b (plum)
- * and 云宝 #504158 were the four the owner named, and they held 0.37–0.51 of their hue's own deep
- * register where 邪茧, 露娜, 瑞瑞 and 碧琪 held 0.68–0.81. So the bar is the clean four's own
- * standard, with room, and the rule that meets it is `deepSecondChroma`.
- *
- * Measured on the emitted hex, not on the ask: gamut mapping, a palette built at the wrong chroma,
- * or the deep register being dropped all fail it. One bound relaxes it, argued where it is
- * declared (`lib/paletteRule.ts`): the area cap, since a broad surface may not reach the accent's
- * purity. 多色, dark and the ten built-ins only — 单色's secondary palette is `SchemeTonalSpot`'s,
- * pinned by ASSERTION 8; in light a container is a tint, where the whole of the gamut's
- * narrowness is the point; and a saved custom theme keeps its existing derivation, so the custom
- * sweep (ASSERTION 15) is not held to it.
- *
- * `CLARITY_ROUNDING` is one chroma unit because a `TonalPalette` tone is an sRGB integer triple,
- * and 8-bit rounding alone moves a measured chroma by a few tenths. The shortfalls this catches
- * are 4.5–6.4 (the six themes below the bar before the deep register existed), so a unit of slack
- * cannot hide one. */
+/* ASSERTION 17 — built-in dark selection containers retain the required chroma.
+ * deepSecondChroma uses the declared chroma or the bounded share of the deep register.
+ * Exact custom values retain their own derivation.
+ * See docs/design/colour.md#multi-hue-harmony. */
 const CLARITY_ROUNDING = 1;
 const clarityRows = [];
 for (const theme of THEMES) {
@@ -1383,15 +1350,9 @@ if (!writing && !exportDirectory) {
     else if (!sameText(got, want)) failures.push(`${name} is stale — run \`npm run colors:write\``);
   }
 
-  /* And the same standard for `globals.css`, which used to be exempt.
-   *
-   * `changed` was printed and handed to `--write`, and nothing else: a hand-edited
-   * `--md-sys-color-*` in that file was listed under CHANGED and the run still exited 0 —
-   * while AGENTS.md claimed idempotence against it as *the* check that those values are
-   * still the recipe's output rather than someone's edit. The generated files were held
-   * to that standard and the one with prose in it was not, which is the wrong way round:
-   * it is the file a person can plausibly edit by hand. A legitimate re-seed goes through
-   * `colors:write`, which is exactly the message. */
+  /* Verify root declarations as well as generated files. Any changed value requires
+   * colors:write; a report without a failing exit code would not enforce reproducibility.
+   * See docs/design/colour.md#source-of-truth. */
   if (changed.length > 0) {
     failures.push(
       `app/globals.css has ${changed.length} declaration(s) that are not the recipe's output` +

@@ -1,33 +1,75 @@
-# Companions: the mascot and the desktop ponies
+# Companions
 
-> Split out of `AGENTS.md`; read on demand. Cross-references such as "see Motion" or "under Shape" name sections listed in the index in `AGENTS.md`.
+Runtime rules for the mascot and desktop ponies. Source and licensing details belong to [asset provenance](../public/companions/ORIGIN.md).
 
-Both are shell chrome, mounted by `components/mascot/CompanionHost.tsx` after the page's useful paint and never in a route's first document. **The ponies' own chunk waits for a selection**: `CompanionRuntime` reads the account's choice itself (one small `get_my_ponies`) and mounts `PoniesRuntime` — the engine's frame, its stylesheet, the catalogue read — only once it is non-empty, latched per account so 清空 still fades the ponies on the engine's clock and its 撤销 finds the frame. Not a synced flag: the original front end edits the same selection and would leave one stale.
+## Loading and visibility
 
-**What hides them is `useCompanionPresence` (`lib/mascot/visibility.ts`), and a navigation is not on the list.** `present` is the document being on screen; `away` is a modal layer, an open picture, the lightbox, the on-screen keyboard, a picture's own page or the admin console. Away, the mascot fades and the ponies pause where they stand. A route transit and a hero flight are neither: this used to be `isScreenQuiet()`, which is false for both, so the mascot blinked out and back on every navigation and the ponies' frame was torn down and rebuilt — every pony gone for a second or two and respawned somewhere else. `isScreenQuiet` is for the app's own interruptions (the announcement), which wait for the user to be between tasks; it is not a predicate for chrome.
+`CompanionHost` mounts after useful page paint. Companion code must not enter a route's initial document.
 
-**A floating element rises above the home pill on the pill's own legs.** The pill publishes its band's height as `--app-bottom-chrome` and the direction it went as `data-bottom-chrome` on `<html>`; the mascot's lift takes the arriving page's 80ms + 320ms `decelerate` when the band appears and the leaving page's FastEffects when it goes, on the page tier's speed gated by the ambient switch, so it rises *with* the pill instead of on a spring of its own. The ponies' layer stops above the band.
+`CompanionRuntime` reads the account's selection; `PoniesRuntime`, its frame, stylesheet and catalogue wait for a non-empty selection. Latch loading per account so clearing the selection can fade out and undo can reuse the frame.
 
-**The mascot keeps one box.** The stage is the art's box in both states; collapsed, the control is a 56dp plate (M3's FAB) at the stage's bottom-right with the figure tucked into it, and the plate, the figure and the collapse control each animate inside that box — switching the box itself in one frame dropped an open bubble onto the figure and flashed a disc the art's size. The collapse control stays mounted and fades with the figure (`inert` while collapsed). The greeting on expanding opens on the figure's own `transitionend`, bounded by the wall-clock rule. Its silhouette shadows are `--md-sys-elevation-drop-2` / `-3` — a `filter: drop-shadow`, because a character is an alpha shape and a box shadow would draw its transparent margins as a slab.
+`useCompanionPresence` owns visibility:
 
-**The mascot answers only on its body.** Its hit region is the character's outline, applied as `clip-path: path()` on the `.hit` box — which clips hit-testing with the paint — so the artwork's transparent margins and the gap between a wing and the tail are the page's: no hover, no press, no pointer cursor there. The outline is grown 3px under a mouse and 8px under a finger, round at a tip; an ellipse over the art stands in until it lands, or if it never does. Two consequences. **The collapse control keeps off the character**: a finger's 48px target around that 32dp button reached the ear of a small figure, and a tap there tucked the figure away. So where the head reaches the art's top-right corner, the control rises by what the outline says it must (`shapeLift`) until its target — the touch floor around it — keeps 4px off the character, and the `.hit` box sits above it anyway (it paints nothing), so wherever the two could still meet, what is drawn under the finger answers. Under a finger the control is always shown, so while the figure speaks it steps aside — the bubble has its own close — rather than push the bubble up above it, far off the head. And a pointer crossing a gap in the outline is still on the character: the lift waits 150ms (`HOVER_GRACE_MS`) before settling, and an enter that soon after a leave is the same visit — without both, every gap bobbed the figure and greeted again.
+- `present`: the document is visible.
+- `away`: a modal layer, open picture, lightbox, on-screen keyboard, standalone picture page or admin console covers the companions.
+- Ordinary navigation and Hero flight are not reasons to recreate the companions.
+- Away pauses ponies in place and fades the mascot. `isScreenQuiet` is for interruptions such as announcements, not companion chrome.
 
-**The outline is read on the server** (`app/mascot-shape/route.ts`; the model, run-length rows on a 96-cell grid, is the import-free `lib/mascot/shapeModel.ts`), because the asset host sends no CORS headers — a canvas holding the picture is tainted — and the optimizer, which would give a same-origin copy, is off in development. **It is not a proxy, and that is the security of the endpoint**: only the runs leave the handler; the target is pinned to the asset host, an image path with no query, credentials or redirect; the body is bounded in bytes and pixels. Answers are memoised per address, failures are not. Its exposure is the optimizer's — an unauthenticated read of an image on a host `remotePatterns` already allows. The same outline says where the head is (`shapeHead`), which is where the bubble points.
+The home pill publishes `--app-bottom-chrome` and `data-bottom-chrome`. The mascot follows the pill's arrival with the layout spring after the page handoff, and leaves on FastEffects; it uses the page clock gated by the ambient setting. The pony layer ends above that band.
 
-**Each motion owns a block box.** `.pose` (the hover lift and the silhouette shadow), `.squash` (the press) and `.react` (the WAAPI hop) are spans inside the button and are `display: block` — inline, none of their transforms drew (the fourth trap). The press squashes the figure about its feet, `scale(1.05, 0.93)` on FastSpatial, released on the expressive fast spring, whose overshoot is the spring in it, and it grounds the hover lift for the squash to push against — under a mouse the pointer is always over what it presses. Press comes from pointer events (the `ToggleSwitch` reasoning); a finger's press waits for the tap timeout, and a tap too quick for it still squashes for `MIN_PRESS_MS` (120ms, scaled). A tip's hop waits for the squash to let go, so the release springs into it. There is no idle loop: a breath at the feet would re-run the silhouette's blur every frame for as long as a page is open, for two pixels of movement.
+## Mascot geometry and input
 
-**One utterance at a time, standing over the head.** What is on screen leaves on FastEffects before the next one rises — a tap's tip after a hover's, the hold's countdown after a tip — so the bubble never changes its words and its size in one frame. A hover greets once per visit and never replaces an open tip; a tap asks for another. The bubble is measured whenever it is given something to say: centred over the head where the scroller allows, never past the art's right edge or within 16px of the scroller's left, its tail on the head and its foot 14px above it. Under a mouse, where it would pass over the collapse control, it steps left of the control while its tail can still reach the head, and stands above it only otherwise — standing above a risen control put a small figure's tail 23px off its head. Its shadow is the filter level in the Elevation section, so the tail casts one. Holding for three seconds (or Space) opens 彩彩 AI; the countdown appears after 350ms as its own bubble, its meter the hold's own linear clock, which every tier shows. **Letting go after the countdown has shown is cancelling**, not a tap: no tip and no hop answer it, and the meter stays where the hold left it while the bubble fades.
+- Keep one stage box in expanded and collapsed states. Animate the plate, figure and collapse control inside it.
+- Collapsed: a 56 dp FAB on `surface-container-high`, elevation 3, inner ripple and state layer.
+- Keep the collapse control mounted, fading and inert while collapsed. Expansion greetings wait for the figure's transition, bounded by the motion watchdog.
+- Hit testing follows `clip-path: path()` on the character outline. Transparent margins belong to the page.
+- Outline expansion is 3 px for a mouse and 8 px for touch; use an ellipse while unavailable.
+- Keep the collapse control's touch target 4 px clear of the character using `shapeLift`; the hit box has priority where they overlap.
+- Hover exit uses `HOVER_GRACE_MS` so gaps within the outline do not restart the greeting.
+- The collapse control remains visible for touch and steps aside while the bubble supplies its own close action.
 
-**Collapsed, the plate is a FAB**: 56dp on `surface-container-high` at `e3`, the control's ripple painting into it (`data-ripple="inner"`, the plate its host) and its `::before` the state layer for hover, focus and press. The collapse control is a tonal `IconButton` with the chevron a docked player collapses with, revealed with the figure's hover and held 240ms after the pointer leaves it (a tooltip's grace — the way to it crosses the art's empty corner), always shown under a finger.
+`app/mascot-shape/route.ts` reads the outline server-side because the asset host cannot supply a CORS-safe canvas. Only the run-length outline leaves the handler. Pin the host and image path; reject queries, credentials and redirects, and bound bytes and pixels. Memoize successful answers only. `shapeHead` supplies the bubble anchor.
 
-**The ponies run the original Browser Ponies engine in a sandboxed, opaque-origin frame** (`public/companions/ponies-frame.*`), with one invisible control per pony laid over its sprite only while it matters (`PoniesRuntime`). Five rules hold it up:
+## Mascot motion and speech
 
-- **`color-scheme: light` on the `<iframe>` is load-bearing.** A frame whose document's scheme differs from its element's gets an opaque canvas — under the dark scheme the transparent frame painted the content area white.
-- **The layer is the content area's box, and the frame is the window's.** The layer sits beside the scroller in the box the scroller fills (`absolute`, its bottom raised by `--app-bottom-chrome`), so a docked drawer moves and resizes it in the page's own layout — no script, never a frame behind — and it is `z-companions`: above the route cross-fade's still frame, below the page chrome (the back affordance, the home pill, the mascot), which a pony walks behind. The frame inside it is window-sized, and no change of the content area resizes it: a sandboxed frame is its own process, and resized on every frame of a drawer run it held each of the page's frames on its new surface (one pony: 18 dropped frames in six runs, none without). The engine walks a *stage* instead — the layer's box, sent once it has held still for two frames, which `innerWidth` / `innerHeight` answer with inside the frame — and a pony a smaller stage leaves outside walks back in at once, first put at the edge unseen if it is out of sight. Through a run the ponies ride the content area's leading edge, as the page does: the trailing edge would sweep the drawer over them.
-- **A change of selection is a diff, applied in place** (`configs`): a pony that left fades on the engine's clock, one that joined walks in, the rest carry on. Configurations are read only for ponies not yet loaded.
-- **Covered, the engine pauses; it is not unmounted.** `pause` / `resume` reach the frame as messages; the frame keeps its reasons (`away`, and `focus` while the keyboard holds a pony) so one ending does not wake the ponies under another, defers the engine's start while held, queues a selection change for the release (the engine draws a spawn only into a running clock) and stops its own rect loop. The layer fades on FastEffects meanwhile. Unmounted only when the document hides, the tier leaves 标准 or the account changes.
-- **An emptied frame is kept for ten seconds** (`EMPTY_GRACE_MS`) and **a pony back within a minute walks in where it left** — so 清空 fades each pony out instead of cutting the frame, and its 撤销 puts them back where they stood.
+Each transform owns a block box: `.pose`, `.squash`, `.react`. Inline spans do not visibly transform.
 
-**A pony's speech is the mascot's bubble, standing over its speaker.** The engine places a bubble once — centred on the sprite with its own padding, hanging below it — and leaves it there while the pony walks on. The frame wraps the engine's one `speak` method (once, on the prototype) to adopt the bubble it appends, and re-places every speaking bubble each frame after all the rects are read, so following costs no forced layout: centred over the sprite, above it (below only where the top of the window is in the way, and kept on its side while it still fits, so a pony walking along an edge does not flip it), its tail on the sprite, 8px inside the window. It wears the mascot's material — container, ink, the large corner, `body-m` read off a probe, the filter shadow — sent in the `theme` message, since the frame's document is outside the tokens' reach.
+The press squashes about the feet on FastSpatial and grounds the hover lift. Use pointer events; touch waits for the tap timeout and quick taps retain `MIN_PRESS_MS`. The hop follows release. Do not add an idle breathing loop.
 
-/settings' 桌面小马 saves a run of choices as one debounced write and **keeps showing its draft until the resource shows the saved selection** — `write` publishes on a paint boundary, and clearing the draft as the save landed reverted the lineup for a frame and replayed its motion. In the lineup each place is pinned to its own cell, so a pony that leaves keeps its cell while it shrinks and fades under the one sliding in over it.
+Speech rules:
+
+- One utterance at a time; the outgoing bubble leaves on FastEffects before the next arrives.
+- Hover greets once per visit and cannot replace an open tip. Tap requests another tip.
+- Position over the head, within the scroller: 16 px clear of its left edge, no farther right than the art, bubble foot 14 px above the head.
+- Avoid the collapse control while keeping the tail on the head.
+- Hold for three seconds, or Space, to open `彩彩 AI`. Show the countdown after 350 ms.
+- Releasing after the countdown appears cancels the hold; it must not become a tip or hop. The meter retains its value while fading.
+
+Use the elevation filter tokens for alpha-shaped silhouettes and bubble tails. Do not apply a box shadow to transparent art margins.
+
+## Desktop pony frame
+
+The original Browser Ponies engine runs in the sandboxed opaque-origin `public/companions/ponies-frame.*` frame.
+
+| Concern | Contract |
+| --- | --- |
+| Frame scheme | Keep `color-scheme: light` on the iframe so its canvas stays transparent |
+| Layer geometry | Follow the content-area box; `z-companions` stays below page chrome |
+| Frame geometry | Keep the frame window-sized; send a stage resize after two stable frames |
+| Selection | Apply a configuration diff; retained ponies continue where they are |
+| Pause | Keep independent `away` and keyboard-focus reasons; queue changes while held |
+| Teardown | Hidden document, leaving the standard tier, or account change |
+| Empty selection | Keep the frame for `EMPTY_GRACE_MS` so clear and undo retain continuity |
+| Return | A pony returning within one minute reuses its saved position |
+
+Do not resize the iframe on each drawer-animation frame. Ponies move with the content area's leading edge; out-of-stage ponies return into bounds.
+
+Speech bubbles follow their sprite after rect reads, remain 8 px within the window, and retain their side while it fits. The `theme` message supplies container, text, corner, type and filter-shadow values because application CSS does not reach the frame.
+
+Settings debounce a sequence of selection edits and keep the local draft until the resource publishes the saved selection. Lineup cells stay fixed while a departing pony fades beneath its replacement.
+
+## Verification
+
+Run `bun run check`. Focused coverage includes `scripts/testMascotPreferences.mjs`, `scripts/testMascotShape.mjs`, `scripts/testPoniesStage.mjs` and `scripts/testPonyChooser.mjs`.
+
+Verify the changed interaction in all relevant motion tiers, with mouse and touch input. Use the [motion system](motion-system.md) for spring roles and watchdogs.

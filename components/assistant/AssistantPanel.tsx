@@ -186,9 +186,8 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       </div>
     </div>
     <p role="status" className="min-h-5 text-body-s text-on-surface-variant">{state.status || (quota.data?.remaining === 0 ? '当前额度已用完' : '')}</p>
-    {/* The dense composer row /messages has (AGENTS: the chat composer): a 48dp field that grows
-        with what is typed to 160px and then scrolls, and a 48dp send beside it at its bottom —
-        the field was a fixed two-row 84px box beside a 40dp button. */}
+    {/* Use the shared 48dp composer and controls; text grows to 160px before scrolling.
+        See docs/design/layout.md#dense-rows-and-chat-composer. */}
     <form onSubmit={event => { event.preventDefault(); if (canSend && current()) { nearEnd.current = true; void session.send(); } }} className="flex shrink-0 items-end gap-2 [--touch-floor:48px]">
       <Textarea ref={composer} size="sm" rows={1} aria-label="告诉彩彩" placeholder="告诉彩彩你想做什么…" className="max-h-40 resize-none [field-sizing:content]" fieldClassName="min-w-0 flex-1" maxLength={MAX_MESSAGE} value={text} disabled={!state.available} readOnly={state.busy || !!state.pending} data-autofocus="" onChange={event => session.setDraft(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && canSend) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }

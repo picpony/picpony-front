@@ -1,7 +1,7 @@
 /**
  * The palette recipe: a theme's two fills and its accents in, a whole M3 scheme out — twice, once
- * per 配色方案. Derivation only — no filesystem, no assertions, no report; AGENTS.md's "The palette
- * axis" section carries the history and the ten-theme table.
+ * per harmony mode. Derivation only; no filesystem, assertions or reporting.
+ * Contracts: docs/design/colour.md#built-in-themes-and-harmony.
  *
  * A PLAIN MODULE: no `'use client'`, no framework imports. Three consumers agree
  * by construction — `scripts/palette.mjs` (builds the ten built-in themes, writes
@@ -428,8 +428,8 @@ export const isGuardedHue = (hue: number) => {
  *                    move, so the four clean themes stay byte-identical.
  *
  * **The ten built-ins only**, by the same split as `inkPolicy`: a saved custom theme keeps its
- * whole existing role derivation (AGENTS: "Exact manual and saved custom themes retain their full
- * existing role derivation"), so its dark containers do not move under a user who chose them.
+ * exact role derivation (docs/design/colour.md#fill-and-foreground-policy),
+ * so a stored custom choice retains its dark containers.
  * A built-in second colour is never on a guarded hue (ASSERTION 13), so purity is never raised in
  * the olive shoulder or under a severity.
  *

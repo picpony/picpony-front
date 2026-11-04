@@ -163,7 +163,7 @@ export interface ContainerStage {
   scroller: HTMLElement | null;
   /** While true after the container lands, the handoff waits (the forum: the route's own fade). */
   holdHandoff?: () => boolean;
-  /** The wall-clock bound, already at the slowest speed (AGENTS: the wall-clock rule). */
+  /** The wall-clock bound, already at the slowest speed (docs/motion-system.md#animation-watchdogs). */
   boundMs: number;
   /**
    * Hand off by fading the layer out over the live element (FastEffects) rather than removing it

@@ -257,7 +257,7 @@ function failureOf(error: unknown, fallback: string) {
   return apiErrorMessage(error, fallback);
 }
 
-/** A refusal that means "solve another challenge" — and only those (`docs/auth-api.md`). */
+/** Only the adapter's captcha refusal codes require a new proof. */
 const needsNewProof = (error: unknown) => isRefusal(error, ...CAPTCHA_RETRY_CODES);
 
 /**

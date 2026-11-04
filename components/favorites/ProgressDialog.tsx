@@ -18,8 +18,8 @@ export { completeProgress, runSummary, type ProgressState } from './progressStat
  *
  * The meter's fill runs on `PROGRESS_SPRING` (ζ1 k50, ~1.2s — Compose's `ProgressAnimationSpec`);
  * waiting a slow-effects fade instead closed the dialog with the bar at ~60–80%. A wall-clock wait for it takes the slowest
- * speed (AGENTS: a timer that bounds an animation reads `MOTION_SPEED_SCALE.slow`, never the
- * animation's own number). Under 关闭 there is nothing to wait for.
+ * speed through `MOTION_SPEED_SCALE.slow` (docs/motion-system.md#animation-watchdogs).
+ * The off tier has no animated fill to wait for.
  */
 export function progressLanding(): Promise<void> {
   if (motionTier('overlay') === 'off') return Promise.resolve();
