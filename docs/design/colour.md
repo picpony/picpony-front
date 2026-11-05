@@ -160,6 +160,10 @@ Use container tones or add an owned token instead of adding alpha to a colour.
 - Element opacity is for motion, the shared paging dim or `disabled-content`, not secondary text weight.
 - Disabled content uses `disabled-content` at 38%; busy controls retain active material.
 
+Owned alpha colours use `rgb(var(--md-sys-color-*-rgb) / alpha)` so Chrome 109 keeps the same opacity. Scrim and on-media channels are scheme-independent. `scripts/palette.mjs` and `paletteBlocksCss` generate on-surface channels beside the source colour for both built-in and custom palettes, including SSR. Keep channel use inside existing tokens and primitives; it does not permit call-site alpha.
+
+Filled-field hover composites the on-surface state layer in `fieldset::before`; `::after` remains the focus ring. This preserves the sRGB mix and its opacity transition without a runtime `color-mix()` requirement. Static OKLCH accents retain their source values and receive build-time fallbacks.
+
 ## Focus
 
 The ordinary ring is the theme's TonalSpot secondary in both harmony modes. It identifies keyboard position consistently; it is not recoloured for each button variant.

@@ -107,9 +107,8 @@ export function Tooltip({
     const anchor = anchorRef.current;
     if (!anchor) return;
     const a = anchor.getBoundingClientRect();
-    const bubble = bubbleRef.current?.getBoundingClientRect();
-    const width = bubble?.width ?? 0;
-    const height = bubble?.height ?? 0;
+    const width = bubbleRef.current?.offsetWidth ?? 0;
+    const height = bubbleRef.current?.offsetHeight ?? 0;
     const below = a.bottom + OFFSET;
     const above = window.innerHeight - a.top + OFFSET;
     /* Above only when it does not fit below: a tooltip belongs under its control
@@ -131,6 +130,20 @@ export function Tooltip({
     if (!open || !rendering) return;
     measure();
   }, [open, rendering, measure, place.top, place.left]);
+
+  useLayoutEffect(() => {
+    const bubble = bubbleRef.current;
+    if (!mounted || !rendering || !bubble || 'CSSStartingStyleRule' in window) return;
+    // Establish the closed style once; CSS then owns interruption in both directions.
+    // See docs/motion-system.md#browser-compatibility.
+    bubble.style.transition = 'none';
+    bubble.style.opacity = '0';
+    bubble.style.scale = '0.8';
+    getComputedStyle(bubble).getPropertyValue('opacity');
+    bubble.style.removeProperty('transition');
+    bubble.style.removeProperty('opacity');
+    bubble.style.removeProperty('scale');
+  }, [mounted, rendering]);
 
   /* The bubble is `position: fixed`, so it does not move with its anchor. Without
      this, opening one by keyboard focus and then scrolling the app scroller — arrow

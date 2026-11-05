@@ -2,6 +2,16 @@
 
 React Compiler constraints and the repository's measurement tools. Dependency upgrades also follow [Dependencies](dependencies.md).
 
+## Browser support
+
+Chrome 109 is the minimum Chrome target. `package.json` retains Next's other browser targets. Next's Lightning CSS pass handles nesting, static colour fallbacks and prefixes using that Browserslist; Tailwind's separate optimizer is disabled so it cannot lower CSS against a different target first.
+
+`scripts/postcssChrome109.cjs` guards Tailwind's registrations that omit an initial value. Chrome 109 otherwise invalidates empty `var()` fallbacks, breaking rings and filters. On that browser the same properties are reset in Tailwind's lowest layer to preserve their non-inheriting behaviour. Modern browsers keep the registrations.
+
+Runtime alpha colours use the [owned RGB channels](design/colour.md#alpha-and-disabled-content). Dynamic animation and mask values follow [Motion system](motion-system.md#browser-compatibility) and [CSS verification](css-traps.md#inline-masks). View Transitions retain the existing immediate theme-change fallback when the API is absent; scroll-following retains its event-driven fallback.
+
+Use a real browser executable for compatibility checks. Changing only the user agent does not test CSS or API support. After `bun run build`, set `PICPONY_BROWSER` to its absolute executable path and run `bun run test:compat`, `bun run test:browser`, `bun run test:hero` and `bun run test:overlays`. Omit it for the usual Edge test run. All business traffic uses the existing fixtures.
+
 ## React Compiler
 
 React Compiler is enabled through Babel. Keep `experimental.turbopackRustReactCompiler` off until a production comparison proves that the Rust transform optimizes this repository.

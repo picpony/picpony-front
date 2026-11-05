@@ -14,7 +14,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
 import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
 import { useMotionScale } from '@/lib/appearance';
-import { COMPONENT_SPRING_MS, PAGER_SPRING, SPRING_MS, springLinear, springToLinear } from '@/lib/spring';
+import { COMPONENT_SPRING_MS, SPRING_MS, springLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
 /**
@@ -147,8 +147,8 @@ export default function PicLightbox({
         zoom: SPRING_MS.layout * scale,
         easing: {
           fade: springLinear('defaultEffects'),
-          swipe: springToLinear(PAGER_SPRING),
-          navigation: springToLinear(PAGER_SPRING),
+          swipe: springLinear('layout'),
+          navigation: springLinear('layout'),
         },
       }}
       zoom={{

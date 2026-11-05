@@ -842,6 +842,10 @@ export function monoTokens(derived: DerivedTheme): string[] {
   );
 }
 
+/** Channels for owned alpha colours; emitted for built-in and custom palettes alike. */
+export const colorChannels = (hex: string): string =>
+  [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)).join(' ');
+
 /**
  * The CSS blocks for one palette id, in the exact shape `app/theme-palettes.css`
  * carries, so generated and runtime-injected blocks cannot diverge: 多色 as the
@@ -861,7 +865,12 @@ export function paletteBlocksCss(
   const out: string[] = [];
   const block = (selector: string, roles: RoleMap, tokens: readonly string[]) => {
     out.push(`${indent}${selector} {`);
-    for (const token of tokens) out.push(`${indent}  --md-sys-color-${token}: ${roles[token]};`);
+    for (const token of tokens) {
+      out.push(`${indent}  --md-sys-color-${token}: ${roles[token]};`);
+      if (token === 'on-surface') {
+        out.push(`${indent}  --md-sys-color-on-surface-rgb: ${colorChannels(roles[token])};`);
+      }
+    }
     out.push(`${indent}}`);
   };
   const palette = `[data-palette='${id}']`;

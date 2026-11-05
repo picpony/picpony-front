@@ -4,6 +4,8 @@ import { motionScale, motionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRING_MS, springLinear } from '@/lib/spring';
+import { sampleEasing, sampledTrack } from '@/lib/sampledAnimation';
+import { maskProperty, supportsMask } from '@/lib/maskStyle';
 import {
   freshStripLeg, lagSampler, stripProgress, turnStrip, STRIP_DURATION_MS,
   type StripLeg, type StripSegment,
@@ -102,34 +104,7 @@ const FRESH_LEAN_LIMIT = 256;
 /** Whether the engine can fade a window's edges (`edge`): a strip bounded to the column without
  *  them would show the arriving side waiting in the margin, so the scroller stays the window. */
 export function supportsEdgeMask(): boolean {
-  return typeof CSS !== 'undefined' && !!CSS.supports?.('mask-image', 'linear-gradient(#000, #000)');
-}
-
-/** Whether the engine takes a `linear()` easing — the strip's shape, and the lean's. */
-function supportsLinearEasing(): boolean {
-  return typeof CSS !== 'undefined' && !!CSS.supports?.('transition-timing-function', 'linear(0, 1)');
-}
-
-/**
- * A response as a Web Animations easing, sampled where it bends until straight segments stay
- * within 0.15% of it. An engine without `linear()` (none this app supports) gets the browser's
- * `ease-out`, which also leaves at speed.
- */
-function linearEasingOf(ease: (t: number) => number, tolerance = 0.0015): string {
-  if (!supportsLinearEasing()) return 'ease-out';
-  const stops: string[] = [`${+ease(0).toFixed(4)} 0%`];
-  const split = (t0: number, v0: number, t1: number, v1: number, depth: number) => {
-    const mid = (t0 + t1) / 2;
-    const value = ease(mid);
-    if (depth < 4 || (depth < 12 && Math.abs(value - (v0 + v1) / 2) > tolerance)) {
-      split(t0, v0, mid, value, depth + 1);
-      split(mid, value, t1, v1, depth + 1);
-      return;
-    }
-    stops.push(`${+v1.toFixed(4)} ${+(t1 * 100).toFixed(3)}%`);
-  };
-  split(0, ease(0), 1, ease(1), 0);
-  return `linear(${stops.join(', ')})`;
+  return supportsMask();
 }
 
 export interface SharedAxisHandle {
@@ -429,12 +404,15 @@ export function playSharedAxis(opts: {
   if (opts.edge && axis === 'x') {
     const { panel, reach, fade } = opts.edge;
     const style = panel.style;
-    const before = [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight, style.maskImage];
+    const property = maskProperty('image');
+    const before = [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight];
+    const previousMask = style.getPropertyValue(property);
     style.marginLeft = style.marginRight = `${-reach}px`;
     style.paddingLeft = style.paddingRight = `${reach}px`;
-    style.maskImage = `linear-gradient(to right, transparent, black ${fade}px, black calc(100% - ${fade}px), transparent)`;
+    style.setProperty(property, `linear-gradient(to right, transparent, black ${fade}px, black calc(100% - ${fade}px), transparent)`);
     restoreEdge = () => {
-      [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight, style.maskImage] = before;
+      [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight] = before;
+      style.setProperty(property, previousMask);
     };
   }
 
@@ -451,8 +429,7 @@ export function playSharedAxis(opts: {
      from 0, and the blocks wait with it. */
   let history: StripSegment[] = [];
   let historyPending = false;
-  /* The lean's shape is a `linear()` easing (below); an engine without one gets no lean. */
-  const leans = axis === 'x' && supportsLinearEasing();
+  const leans = axis === 'x';
   const blocks = leans ? (opts.lean?.blocks ?? []) : [];
   /* Restacked for the run — see `LeanPlan` — in the frame the run starts rather than in the tap:
      written in the tap, the inline writes made every attribute React sets in that same task
@@ -488,24 +465,18 @@ export function playSharedAxis(opts: {
     const at = startTime ?? 0;
     history = [...prior, { leg: next, start: at }];
     historyPending = startTime === null;
-    const timing = {
-      duration: next.duration,
-      easing: linearEasingOf(stripProgress(next.launch)),
-      fill: 'both' as const,
-    };
-    leavingKeyframes = () => [
-      { transform: place(-direction * distance * leg.from, leavingOffsetY) },
-      { transform: place(-direction * distance * leg.to, leavingOffsetY) },
-    ];
-    run(leaving, leavingKeyframes(), timing);
-    run(
-      entering,
-      [
-        { transform: place(direction * distance * (1 - next.from)) },
-        { transform: place(direction * distance * (1 - next.to)) },
-      ],
-      timing,
-    );
+    const samples = sampleEasing(stripProgress(next.launch));
+    const travel = (p: number) => next.from + (next.to - next.from) * p;
+    const leavingTrack = () => sampledTrack(samples, (p) => ({
+      transform: place(-direction * distance * travel(p), leavingOffsetY),
+    }));
+    leavingKeyframes = () => leavingTrack().keyframes;
+    const departing = leavingTrack();
+    const timing = { duration: next.duration, easing: departing.easing, fill: 'both' as const };
+    run(leaving, departing.keyframes, timing);
+    run(entering, sampledTrack(samples, (p) => ({
+      transform: place(direction * distance * (1 - travel(p))),
+    })).keyframes, timing);
     /* A block's own transform is its lag behind the pane it sits in, the same on both
        sides, in the direction of travel — sampled once per depth (`lagSampler`, which samples the
        strip once for all of them) and shared by every block at that depth. Linear between
@@ -536,18 +507,16 @@ export function playSharedAxis(opts: {
       const span = samples[samples.length - 1][0] - at;
       const peak = samples.reduce((most, [, lag]) => Math.max(most, Math.abs(lag)), 0);
       if (!(span > 0) || !(peak > 0)) continue;
-      const easing = `linear(${samples
-        .map(([t, lag]) => `${+(lag / peak).toFixed(5)} ${+(((t - at) / span) * 100).toFixed(3)}%`)
-        .join(', ')})`;
+      const progress = samples.map(([t, lag]) => ({ offset: (t - at) / span, progress: lag / peak }));
       for (const [base, els] of bases) {
         const tail = base && base !== 'none' ? ` ${base}` : '';
+        const track = sampledTrack(progress, (p) => ({
+          transform: `translate3d(${direction * distance * peak * p}px, 0px, 0px)${tail}`,
+        }));
         const model = new KeyframeEffect(
           null,
-          [
-            { transform: `translate3d(0px, 0px, 0px)${tail}` },
-            { transform: `translate3d(${direction * distance * peak}px, 0px, 0px)${tail}` },
-          ],
-          { duration: span, easing, fill: 'both' },
+          track.keyframes,
+          { duration: span, easing: track.easing, fill: 'both' },
         );
         for (const el of els) {
           const effect = new KeyframeEffect(model);

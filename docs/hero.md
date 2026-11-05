@@ -28,7 +28,7 @@ The Stage subscribes only to the Hero runtime. `AppLayout` observes route commit
 
 ### Track construction
 
-Scalar tracks use two keyframes plus `linear()`; arc and container tracks retain their samples. Start shared tracks with the flyer, not a frame later.
+Scalar tracks use two keyframes plus `linear()` where supported, and the same progress samples as keyframes on Chrome 109. Arc and container tracks retain their samples. Start shared tracks with the flyer, not a frame later. The shared representation is documented in [Motion system](motion-system.md#browser-compatibility).
 
 Read initial offsets and dimensions before inserting flight DOM and pass `HeroMotionOptions.preread`. Later rebuilds read current geometry. Sample each rectangle arc once through `sampleHeroRectArc` and reuse it across bow solving.
 

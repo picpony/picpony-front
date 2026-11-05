@@ -88,6 +88,7 @@ const {
   SPARK_TONE,
   FACE_ROLES,
   contrast,
+  colorChannels,
   deepSecondChroma,
   deriveCustomTheme,
   deriveTheme,
@@ -304,6 +305,11 @@ function oklchToHex(L, C, hueDeg) {
  * ------------------------------------------------------------------------ */
 
 const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
+// Keep alpha colours in sync with both default schemes and runtime custom palettes.
+const withSurfaceChannels = (source) => source.replace(
+  /(  --md-sys-color-on-surface: (#[0-9a-f]{6});)(\r?\n)(?:  --md-sys-color-on-surface-rgb: [\d ]+;\r?\n)?/g,
+  (_, declaration, hex, eol) => `${declaration}${eol}  --md-sys-color-on-surface-rgb: ${colorChannels(hex)};${eol}`,
+);
 const darkAt = css.indexOf('.dark {');
 if (darkAt < 0) throw new Error('cannot find the .dark block in globals.css');
 
@@ -1359,6 +1365,9 @@ if (!writing && !exportDirectory) {
         ' — see CHANGED above, then run `npm run colors:write`',
     );
   }
+  if (withSurfaceChannels(css) !== css) {
+    failures.push('app/globals.css has stale on-surface channels — run `bun run colors:write`');
+  }
 }
 
 if (failures.length) {
@@ -1398,7 +1407,7 @@ if (writing || exportDirectory) {
   }
   const outputRoot = exportDirectory ?? fileURLToPath(new URL('../', import.meta.url));
   for (const [relative, content] of [
-    ['app/globals.css', halves.light + halves.dark],
+    ['app/globals.css', withSurfaceChannels(halves.light + halves.dark)],
     ['app/theme-palettes.css', paletteCss],
     ['lib/generated/themeColors.ts', themeColorsTs],
     ['lib/generated/themeFaces.ts', themeFacesTs],

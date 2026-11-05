@@ -4,7 +4,7 @@ import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { captureVisualClone, restoreSnapshotScroll } from '@/lib/pageSnapshot';
 import { FORUM_FADE, FORUM_TRANSFORM_MS, visibleBox, type Box, type Radii } from '@/lib/forumContainer';
-import { hide, playContainerRun, rectOf, supportsLinearEasing, surfaceOf, type Hidden } from '@/lib/containerTransformPlay';
+import { hide, playContainerRun, rectOf, surfaceOf, type Hidden } from '@/lib/containerTransformPlay';
 import { unsealDetailCopy, type DetailExitSnapshot } from '@/lib/detailTransit';
 
 /**
@@ -50,7 +50,7 @@ function mountBeside(parent: HTMLElement) {
 export function playDetailOpen(section: HTMLElement, row: HTMLElement): (() => void) | null {
   const parent = section.parentElement;
   const scroller = getAppScroller();
-  if (!parent || !scroller || !supportsLinearEasing()) return null;
+  if (!parent || !scroller) return null;
   const rowBox = rectOf(row);
   const fromBox = visibleBox(rowBox, rectOf(scroller));
   const toBox = rectOf(section);
@@ -93,7 +93,7 @@ export function playDetailOpen(section: HTMLElement, row: HTMLElement): (() => v
 /** Closing, back into the row. False when it cannot run, and the caller fades the overlay out. */
 export function playDetailReturn(exit: DetailExitSnapshot, row: HTMLElement): boolean {
   const scroller = getAppScroller();
-  if (!scroller || !supportsLinearEasing()) return false;
+  if (!scroller) return false;
   const rowBox = rectOf(row);
   /* A row the list's offset leaves off screen has nowhere to be carried to. */
   if (!visibleBox(rowBox, rectOf(scroller))) return false;

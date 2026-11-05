@@ -2,7 +2,7 @@
 //
 // The springs are `lib/spring.ts`, not here — this only renders them into the one generated block
 // of `app/globals.css` (between `@motion-generated:start` and `@motion-generated:end`): the three
-// shape tables as `linear()`, the seven settle times and the page hand-off. The prose, the role
+// shape tables, their cubic fits, the settle times and the page hand-off. The prose, the role
 // eases and the utilities around the block are hand-written and never touched.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +31,9 @@ const shapeNote = {
 for (const [shape, spec] of Object.entries(spring.SHAPE_SPEC)) {
   lines.push(`  /* ${shapeNote[shape]} */`);
   lines.push(`  --motion-shape-${shapeName[shape]}: ${wrap(spring.springToLinear(spec))};`);
+}
+for (const [shape, easing] of Object.entries(spring.SPRING_BEZIER)) {
+  lines.push(`  --motion-fallback-${shapeName[shape]}: ${easing};`);
 }
 for (const [name, spec] of Object.entries(spring.SPRINGS)) {
   lines.push(`  --motion-base-spring-${kebab(name)}: ${spring.SPRING_MS[name]}ms; /* ζ${spec.damping} k${spec.stiffness} */`);

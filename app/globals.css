@@ -152,6 +152,7 @@
   --md-sys-color-surface-container-high: #f6e5dd;
   --md-sys-color-surface-container-highest: #f0dfd7;
   --md-sys-color-on-surface: #221a15;
+  --md-sys-color-on-surface-rgb: 34 26 21;
   --md-sys-color-on-surface-variant: #52443c;
   --md-sys-color-outline: #85746b;
   --md-sys-color-outline-variant: #d7c2b9;
@@ -178,19 +179,19 @@
   --md-sys-color-inverse-surface: #382e29;
   --md-sys-color-inverse-on-surface: #ffede5;
   --md-sys-color-inverse-primary: #ffb1c1;
-  --md-sys-color-scrim: #000000;
+  --md-sys-color-scrim-rgb: 0 0 0;
+  --md-sys-color-scrim: rgb(var(--md-sys-color-scrim-rgb));
 
   /* The dim behind a dialog, sheet or modal drawer, as a token: 32% is the scrim container
      opacity token; the hand-written 50% call sites were 56% heavier and
-     three chances to drift. Written as a colour mix so the weight is part of the token. Same
-     value in both schemes (the scrim itself does not follow the tone scale). The engine
-     fallback for a failed colour mix is its first colour, hence the scrim named first. */
-  --md-sys-color-scrim-veil: color-mix(in srgb, var(--md-sys-color-scrim) 32%, transparent);
+     three chances to drift. The weight belongs to the token, in both schemes.
+     RGB channels preserve that alpha on Chrome 109 (docs/design/colour.md#alpha-and-disabled-content). */
+  --md-sys-color-scrim-veil: rgb(var(--md-sys-color-scrim-rgb) / 32%);
 
   /* Deliberately heavier than the dialog dim: a crop mask has to make "outside the crop"
      unmistakably inactive while the picture stays legible enough to aim with. M3 has no token
      for it; giving it its own name is the point. */
-  --md-sys-color-crop-mask: color-mix(in srgb, var(--md-sys-color-scrim) 62%, transparent);
+  --md-sys-color-crop-mask: rgb(var(--md-sys-color-scrim-rgb) / 62%);
 
   /* Something on *top of* a filled track that must read as raised: a switch thumb, a
      segmented-control pill, a slider knob. Its own token because no single container level
@@ -238,18 +239,19 @@
   /* Ink for labels drawn *on top of photography* — a format badge, a score pill, a caption.
      Scheme-independent for the same reason the scrim is: what is behind it is the picture,
      not the app's surface. Its container partner is the media plate, below. */
-  --md-sys-color-on-media: #ffffff;
+  --md-sys-color-on-media-rgb: 255 255 255;
+  --md-sys-color-on-media: rgb(var(--md-sys-color-on-media-rgb));
 
   /* The plate the on-media ink sits on. 55% is the gallery cards' value, tuned against real
      photography: below ~50 a white label loses its edge over a pale sky, above ~60 the plate
      reads as a hole punched in the picture. Scheme-independent like the ink it carries. */
-  --md-sys-color-media-plate: color-mix(in oklab, #000000 55%, transparent);
+  --md-sys-color-media-plate: rgb(var(--md-sys-color-scrim-rgb) / 55%);
 
   /* Secondary ink on media (78% — the lightbox's own inactive-control dim, so the banner's
      caption and the lightbox's chrome are the same grey), and the faint rule level below it
      (28% — structure rather than content: cropper guides, the experience track). */
-  --md-sys-color-on-media-variant: color-mix(in oklab, #ffffff 78%, transparent);
-  --md-sys-color-media-outline: color-mix(in oklab, #ffffff 28%, transparent);
+  --md-sys-color-on-media-variant: rgb(var(--md-sys-color-on-media-rgb) / 78%);
+  --md-sys-color-media-outline: rgb(var(--md-sys-color-on-media-rgb) / 28%);
 
   /* — Categorical accents. Derpibooru tag categories and staff roles are a *categorical*
      dimension: the eight only have to stay apart. `lib/tagCategories.ts` is the single map
@@ -329,6 +331,7 @@
   --md-sys-color-surface-container-high: #2a292f;
   --md-sys-color-surface-container-highest: #35343a;
   --md-sys-color-on-surface: #e4e1e9;
+  --md-sys-color-on-surface-rgb: 228 225 233;
   --md-sys-color-on-surface-variant: #c8c5d0;
   --md-sys-color-outline: #918f9a;
   --md-sys-color-outline-variant: #47464f;
@@ -346,7 +349,7 @@
   --md-sys-color-inverse-surface: #e4e1e9;
   --md-sys-color-inverse-on-surface: #303036;
   --md-sys-color-inverse-primary: #a33857;
-  --md-sys-color-scrim: #000000;
+  --md-sys-color-scrim: rgb(var(--md-sys-color-scrim-rgb));
 
   /* Lighter than every container level, so a thumb still reads as lifted — which
      in this scheme is the *top* of the tone scale rather than the bottom. See the
@@ -1112,6 +1115,9 @@ body {
     1.0964 40.92%, 1.0828 46.17%, 1.0213 60.5%, 1.0007 68.67%, 0.9949 73.67%, 0.993 79.42%,
     1
   );
+  --motion-fallback-effects: cubic-bezier(0.28183, 0.4013, 0.05716, 1);
+  --motion-fallback-spatial: cubic-bezier(0.27619, 0.35799, 0.06722, 1.18517);
+  --motion-fallback-spatial-fast: cubic-bezier(0.36902, 1.02467, 0.01, 1.17824);
   --motion-base-spring-fast-spatial: 348ms; /* ζ0.6 k800 */
   --motion-base-spring-default-spatial: 412ms; /* ζ0.8 k380 */
   --motion-base-spring-slow-spatial: 569ms; /* ζ0.8 k200 */
@@ -1351,6 +1357,15 @@ html[data-motion='off'] {
   --motion-enabled-theme: 0;
   --motion-enabled-scroll: 0;
   --motion-enabled-ambient: 0;
+}
+
+/* The same fitted shapes as WAAPI; see docs/motion-system.md#browser-compatibility. */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root {
+    --motion-shape-effects: var(--motion-fallback-effects);
+    --motion-shape-spatial: var(--motion-fallback-spatial);
+    --motion-shape-spatial-fast: var(--motion-fallback-spatial-fast);
+  }
 }
 
 /* The moving surface owns this scale. A drawer's controls keep their feedback clock. */
@@ -1749,7 +1764,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
     background: linear-gradient(
       90deg,
       transparent,
-      color-mix(in oklab, var(--foreground) 7%, transparent),
+      rgb(var(--md-sys-color-on-surface-rgb) / 7%),
       transparent
     );
     /* **Fast through the pass, easing out of the exit.** One of the app's two sweeps that take a
@@ -1947,11 +1962,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 .media-hover-scrim {
   /* One targeted tone for pointer hover and keyboard focus. The hover token plus two
      points gives a photograph the same readable feedback as a flat surface. */
-  --media-targeted-scrim: color-mix(
-    in oklab,
-    var(--md-sys-color-scrim) calc(var(--md-sys-state-hover-opacity) * 100% + 2%),
-    transparent
-  );
+  --media-targeted-scrim: rgb(var(--md-sys-color-scrim-rgb) / calc(var(--md-sys-state-hover-opacity) + 0.02));
   background-color: transparent;
   /* The state layer's own clock (fast effects): the veil is the whole of a tile's hover —
      the tile no longer scales and has no caption to fade (R4-051) — which makes it a photograph's
@@ -1993,7 +2004,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 .media-caption-gradient {
   background-image: linear-gradient(
     to top,
-    color-mix(in oklab, var(--md-sys-color-scrim) 60%, transparent),
+    rgb(var(--md-sys-color-scrim-rgb) / 60%),
     transparent
   );
 }
@@ -2194,7 +2205,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   --yarl__color_backdrop: var(--md-sys-color-media-stage);
   --yarl__color_button: var(--md-sys-color-on-media-variant);
   --yarl__color_button_active: var(--md-sys-color-on-media);
-  --yarl__color_button_disabled: color-mix(in oklab, var(--md-sys-color-on-media) 38%, transparent);
+  --yarl__color_button_disabled: rgb(var(--md-sys-color-on-media-rgb) / 38%);
   /* M3 icon buttons are 24dp glyphs in a 40dp container, reading against the backdrop on
      their own — the stock drop-shadow was compensating for having no container at all. */
   --yarl__icon_size: 24px;
@@ -2230,11 +2241,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
    deliberately equal in M3 (.10); the focus ring below is what separates them, not the tint. */
 @media (hover: hover) {
   .yarl__button:hover {
-    background-color: color-mix(
-      in oklab,
-      var(--md-sys-color-on-media) calc(var(--md-sys-state-hover-opacity) * 100%),
-      transparent
-    );
+    background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-hover-opacity));
   }
 }
 
@@ -2244,21 +2251,13 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
    focus-ring-on-media utility because this is a plugin's class in a plain rule with none of
    Tailwind's ring machinery; the token is the same one, so the two cannot drift. */
 .yarl__button:focus-visible {
-  background-color: color-mix(
-    in oklab,
-    var(--md-sys-color-on-media) calc(var(--md-sys-state-focus-opacity) * 100%),
-    transparent
-  );
+  background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-focus-opacity));
   outline: none;
   box-shadow: inset 0 0 0 2px var(--md-sys-color-focus-on-media);
 }
 
 .yarl__button:active {
-  background-color: color-mix(
-    in oklab,
-    var(--md-sys-color-on-media) calc(var(--md-sys-state-pressed-opacity) * 100%),
-    transparent
-  );
+  background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-pressed-opacity));
 }
 
 /* The counter is a label, not a control: it exposes its own tokens, so go through those
@@ -3923,7 +3922,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   border-radius: var(--radius-sm);
   border-color: transparent;
   background-color: var(--md-sys-color-surface-container-highest);
-  /* The fill's hover is a state layer mixed in (below), so it takes the state layer's clock. */
+  /* The hover layer below owns its opacity transition. */
   transition:
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
@@ -3942,22 +3941,21 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
-/* Hover is a **state layer**, not the next tone step — M3 never moves a field's container
- * tone; it composites the surface ink at the hover opacity, which is what every other hover
- * in this app does through the state-layer utility. That utility cannot be used here (it
- * keys on the element's own hover; this keys on the wrapper's), so the layer is mixed
- * into the background from the same two tokens.
- *
- * The container is named *first* in the mix, and that ordering is load-bearing: the
- * automatic fallback for engines without color-mix support is the first colour — written the
- * other way round, the fallback was a near-black fill over the whole field on hover. */
+/* Compositing the state layer preserves the same sRGB mix on every supported browser.
+   The wrapper owns hover; the existing after pseudo-element owns the focus ring. */
+.m3-field:not([data-labelled]) > fieldset::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background-color: var(--md-sys-color-on-surface);
+  opacity: 0;
+  transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
 @media (hover: hover) {
-  .m3-field:not([data-labelled]):hover:not(:focus-within):not(:has(> :is(input, textarea):disabled)) > fieldset {
-    background-color: color-mix(
-      in srgb,
-      var(--md-sys-color-surface-container-highest) calc(100% - var(--md-sys-state-hover-opacity) * 100%),
-      var(--md-sys-color-on-surface)
-    );
+  .m3-field:not([data-labelled]):hover:not(:focus-within):not(:has(> :is(input, textarea):disabled)) > fieldset::before {
+    opacity: var(--md-sys-state-hover-opacity);
   }
 }
 
@@ -4213,11 +4211,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 }
 
 .m3-field[data-labelled]:has(> :is(input, textarea, button):disabled) > fieldset {
-  border-color: color-mix(in srgb, transparent 88%, var(--md-sys-color-on-surface));
+  border-color: rgb(var(--md-sys-color-on-surface-rgb) / 12%);
 }
 
 .m3-field:not([data-labelled]):has(> :is(input, textarea):disabled) > fieldset {
-  background-color: color-mix(in srgb, transparent 96%, var(--md-sys-color-on-surface));
+  background-color: rgb(var(--md-sys-color-on-surface-rgb) / 4%);
 }
 
 /* A textarea's label belongs on its first line, not in the middle of the box, and the box

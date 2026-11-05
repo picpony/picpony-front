@@ -31,7 +31,7 @@ import type { PonyImage } from '@/lib/types/image';
    schemes — but "black" should still come from the token, not from a literal,
    or a change to `scrim` silently skips these two gradients. */
 const scrim = (alpha: number) =>
-  `color-mix(in oklab, var(--md-sys-color-scrim) ${alpha * 100}%, transparent)`;
+  `rgb(var(--md-sys-color-scrim-rgb) / ${alpha})`;
 
 /**
  * The slot's height: a wide picture (over 1.5:1) takes the shorter one. The skeleton takes the

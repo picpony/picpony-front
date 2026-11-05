@@ -127,10 +127,11 @@ const server = createServer((req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const python = String.raw`
-import sys, json, base64
+import sys, json, base64, os
 from playwright.sync_api import sync_playwright, expect
 with sync_playwright() as p:
-    browser=p.chromium.launch(channel='msedge',headless=True)
+    options = {'executable_path': os.environ['PICPONY_BROWSER']} if os.environ.get('PICPONY_BROWSER') else {'channel': 'msedge'}
+    browser=p.chromium.launch(**options,headless=True)
     page=browser.new_page()
     errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)+'\n'+(e.stack or '')))

@@ -3,13 +3,19 @@
 import { scaledMs } from '@/lib/appearance';
 import type { MotionCategory } from '@/lib/motionPreferences';
 import { springTiming } from '@/lib/springTiming';
+import { supportsLinearEasing } from '@/lib/spring';
+import { sampleEasing } from '@/lib/sampledAnimation';
 import {
   FORUM_TRANSFORM_EASING,
   FORUM_TRANSFORM_MS,
   containerPose,
+  colourAt,
+  fadeAt,
   fadeTrack,
+  forumTransformProgress,
   freshContainerLeg,
   sameColumn,
+  radiiAt,
   shutterLevels,
   turnContainer,
   type Box,
@@ -78,10 +84,6 @@ const CORNER_PROPS = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBott
 
 /** The markers a copy must not carry, or a lookup for the live element would resolve into it. */
 const COPY_MARKERS = ['data-forum-row', 'data-forum-card', 'data-detail-origin', 'data-folder-card', 'data-folder-page'];
-
-export function supportsLinearEasing(): boolean {
-  return typeof CSS !== 'undefined' && !!CSS.supports?.('transition-timing-function', 'linear(0, 1)');
-}
 
 export function hide(el: HTMLElement, prop: 'visibility' | 'opacity', hidden: Hidden[]) {
   hidden.push({ el, prop, value: el.style[prop] });
@@ -292,6 +294,10 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   const full = scaledMs(FORUM_TRANSFORM_MS, stage.category);
   /** The current leg's two ends, for the pose a turn leaves from (`containerPose`). */
   let ends: { a: Surface; b: Surface };
+  const legacySamples = supportsLinearEasing() ? null : sampleEasing(forumTransformProgress);
+  const track = (frame: (progress: number) => Keyframe): Keyframe[] => legacySamples
+    ? legacySamples.map(({ offset, progress }) => ({ ...frame(progress), offset }))
+    : [frame(0), frame(1)];
   /**
    * One leg: the clip from `a` to `b`, its corners and its tone, and each content over its own
    * stretch of the travel. Offsets are in progress (the easing), so the fade windows are windows
@@ -299,25 +305,31 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
    */
   const playLeg = (leg: ContainerLeg, a: Surface, b: Surface): Animation[] => {
     ends = { a, b };
-    const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: FORUM_TRANSFORM_EASING, fill: 'both' };
+    const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: legacySamples ? 'linear' : FORUM_TRANSFORM_EASING, fill: 'both' };
     const list: Animation[] = [];
     chain.levels.forEach((level, index) => {
       const el = chain.elements[index];
       const [x0, y0] = level.translate(a.box);
       const [x1, y1] = level.translate(b.box);
-      list.push(el.animate([{ transform: `translate(${x0}px, ${y0}px)` }, { transform: `translate(${x1}px, ${y1}px)` }], timing));
+      list.push(el.animate(track((p) => ({ transform: `translate(${x0 + (x1 - x0) * p}px, ${y0 + (y1 - y0) * p}px)` })), timing));
       /* The corners, on an animation of their own so the transform above stays on the compositor. */
       const corners = level.corners.filter((corner) => a.radii[corner] !== b.radii[corner]);
       if (corners.length > 0) {
         const at = (radii: Radii) => Object.fromEntries(corners.map((corner) => [CORNER_PROPS[corner], `${radii[corner]}px`]));
-        list.push(el.animate([at(a.radii), at(b.radii)], timing));
+        list.push(el.animate(track((p) => at(radiiAt(a.radii, b.radii, p))), timing));
       }
     });
-    if (a.colour !== b.colour) list.push(surface.animate([{ backgroundColor: a.colour }, { backgroundColor: b.colour }], timing));
+    if (a.colour !== b.colour) list.push(surface.animate(
+      legacySamples ? track((p) => ({ backgroundColor: colourAt(a.colour, b.colour, p) }))
+        : [{ backgroundColor: a.colour }, { backgroundColor: b.colour }], timing,
+    ));
     /* The outgoing content goes over its window and the incoming one comes over its own, on top
        of it, so where the two would meet the newer one is in front. */
-    if (run.outgoing) list.push(run.outgoing.el.animate(fadeTrack(run.fade.outgoing, leg.from, leg.to, true), timing));
-    list.push(fading.animate(fadeTrack(run.fade.incoming, leg.from, leg.to), timing));
+    const fade = (window: FadeWindow, out = false) => legacySamples
+      ? track((p) => ({ opacity: fadeAt(window, leg.from + (leg.to - leg.from) * p, out) }))
+      : fadeTrack(window, leg.from, leg.to, out);
+    if (run.outgoing) list.push(run.outgoing.el.animate(fade(run.fade.outgoing, true), timing));
+    list.push(fading.animate(fade(run.fade.incoming), timing));
     /* One frame ahead: the first frame that shows the container already shows it moving (the
        curve leaves at once), rather than the page it replaced standing still. A current time,
        not a start time, so the leg stays pending until the compositor draws it, and starts there.

@@ -16,8 +16,8 @@ from playwright.sync_api import sync_playwright, expect
 import urllib.parse
 
 # `HERO_BROWSER_CHANNEL=chromium` runs on Playwright's bundled Chromium (CI / Linux sandboxes).
-_channel = os.environ.get('HERO_BROWSER_CHANNEL', 'msedge')
-BROWSER_CHANNEL = {} if _channel == 'chromium' else {'channel': _channel}
+from browserLaunch import browser_options
+BROWSER_CHANNEL = browser_options()
 from testProfileGallery import BASE, Fixtures, USER, THUMB, image_record, unwrap
 
 OUTPUT = pathlib.Path(__file__).resolve().parent.parent / '.workbuddy' / 'hero-interactions'

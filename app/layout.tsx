@@ -16,7 +16,7 @@ import TagSubscriptionSync from '@/components/subscriptions/TagSubscriptionSync'
 import VisitorTracker from '@/components/VisitorTracker';
 import LegacySharedSearch from '@/app/search/LegacySharedSearch';
 import { COOKIE_KEYS } from '@/lib/constants';
-import { SPRING_MS, springLinear } from '@/lib/spring';
+import { SPRING_MS } from '@/lib/spring';
 import {
   MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
   formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
@@ -380,11 +380,8 @@ export default async function RootLayout({
           showSpinner={false}
           /* M3's indicator has no glow. */
           shadow={false}
-          /* The bar's width follows the load's progress — bounds following a change — so the
-             layout spring, as a `linear()` string from the spring module: `easing` lands in an
-             animation string, where a failed `var()` silently falls back to `ease`. (`color`
-             can take a `var()` because it lands in a style declaration.) */
-          easing={springLinear('layout')}
+          /* NProgress writes a CSS transition, so the shared token also supplies its Chrome 109 fit. */
+          easing="var(--ease-spring-effects)"
           speed={SPRING_MS.layout}
         />
         <ImageLineProvider value={imageLine}>

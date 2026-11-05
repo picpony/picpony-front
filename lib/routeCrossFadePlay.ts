@@ -9,6 +9,7 @@ import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransi
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
 import { restoreSnapshotScroll, type RouteSnapshot } from '@/lib/pageSnapshot';
 import { columnWindow } from '@/lib/tabStrip';
+import { maskProperty } from '@/lib/maskStyle';
 
 /**
  * **On a wide screen a route move slides past the pages' columns and a faded margin**, as a tab
@@ -36,23 +37,22 @@ function maskRouteWindow(layer: HTMLElement, clone: HTMLElement, page: HTMLEleme
   if (!span) return null;
   const from = left - span.reach;
   const image = `linear-gradient(to right, transparent, black ${span.fade}px, black calc(100% - ${span.fade}px), transparent)`;
+  const properties = (['image', 'size', 'position', 'repeat'] as const).map(maskProperty);
   const masked = [layer, plane].map((node) => {
     const style = node.style;
-    const before = [style.maskImage, style.maskSize, style.maskPosition, style.maskRepeat] as const;
+    const before = properties.map((property) => style.getPropertyValue(property));
     const offset = from - node.getBoundingClientRect().left;
     return { style, before, offset };
   });
   for (const { style, offset } of masked) {
-    style.maskImage = image;
-    style.maskSize = `${span.width}px 100%`;
-    style.maskPosition = `${offset}px 0`;
-    style.maskRepeat = 'no-repeat';
+    const values = [image, `${span.width}px 100%`, `${offset}px 0`, 'no-repeat'];
+    properties.forEach((property, index) => style.setProperty(property, values[index]));
   }
   return {
     distance: span.width,
     restore: () => {
       for (const { style, before } of masked) {
-        [style.maskImage, style.maskSize, style.maskPosition, style.maskRepeat] = before;
+        properties.forEach((property, index) => style.setProperty(property, before[index]));
       }
     },
   };

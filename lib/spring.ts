@@ -204,6 +204,25 @@ export const SHAPE_SPEC: Record<SpringShape, SpringSpec> = {
   spatialFast: SPRINGS.fastSpatial,
 };
 
+/** CSS transitions cannot carry sampled keyframes. These fits retain each shape and clock;
+ * effects stay monotone. See docs/motion-system.md#browser-compatibility. */
+export const SPRING_BEZIER: Record<SpringShape, string> = {
+  effects: 'cubic-bezier(0.28183, 0.4013, 0.05716, 1)',
+  spatial: 'cubic-bezier(0.27619, 0.35799, 0.06722, 1.18517)',
+  spatialFast: 'cubic-bezier(0.36902, 1.02467, 0.01, 1.17824)',
+};
+
+let linearSupport: boolean | undefined;
+
+export function supportsLinearEasing(): boolean {
+  if (typeof CSS === 'undefined') return true;
+  return linearSupport ??= CSS.supports('transition-timing-function', 'linear(0, 1)');
+}
+
+export function springEasing(shape: SpringShape): string {
+  return supportsLinearEasing() ? springToLinear(SHAPE_SPEC[shape]) : SPRING_BEZIER[shape];
+}
+
 /**
  * Unnormalised displacement of a unit-mass spring released from rest at 0 and
  * pulled to 1, at time `t` **in seconds**.
@@ -368,7 +387,7 @@ export function springToLinear(spec: SpringSpec, tolerance = 0.002): string {
   return result;
 }
 
-/** The `linear()` string for a named spring's shape. */
+/** The browser-compatible easing for a named spring's shape. */
 export function springLinear(name: SpringName): string {
-  return springToLinear(SHAPE_SPEC[shapeOf(name)]);
+  return springEasing(shapeOf(name));
 }

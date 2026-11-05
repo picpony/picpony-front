@@ -26,6 +26,10 @@ Verify pixels or `getBoundingClientRect()`. `getComputedStyle()` can report a tr
 
 Tailwind 4 implements `space-y-*` with low-specificity child margins. A child's `mb-0` can cancel that spacing. Let the stack own the gap, or give children explicit margins without `space-y-*`.
 
+## Inline masks
+
+Inline styles bypass Lightning CSS. Use `maskProperty` from `lib/maskStyle.ts` for runtime mask image, size, position and repeat writes; Chrome 109 needs the prefixed family. Restore the same properties after a transition. Stylesheet masks receive prefixes from the build.
+
 ## Whitespace
 
 A whitespace-only JSX text node does not create an extra flex or grid item. Spaces in running inline text remain meaningful.

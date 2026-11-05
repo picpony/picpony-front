@@ -1,6 +1,6 @@
 import { motionTier, scaledMs } from '@/lib/appearance';
 import type { MotionCategory } from '@/lib/motionPreferences';
-import { SHAPE_SPEC, SPRING_MS, shapeOf, springToLinear, type SpringName, type SpringShape } from '@/lib/spring';
+import { SPRING_MS, shapeOf, springEasing, type SpringName, type SpringShape } from '@/lib/spring';
 
 /**
  * The WAAPI face of the motion system (`lib/spring.ts`): a spring as a `{ duration, easing }` pair.
@@ -8,9 +8,8 @@ import { SHAPE_SPEC, SPRING_MS, shapeOf, springToLinear, type SpringName, type S
  * **The duration is already scaled** by the user's speed for the category — GSAP scales through its
  * global timeline, WAAPI has no global, so an unscaled pair would be deaf to 快速 / 缓慢.
  *
- * The easing is a `linear()` string, not a CSS `var()`: a var() that fails to resolve inside a
- * WAAPI easing falls back to `ease` silently. It comes out of the same closed form that generates
- * the CSS tables, so the two renderers cannot drift.
+ * WAAPI needs a concrete easing, including the shared cubic fit on Chrome 109.
+ * CSS uses the same shape selection (docs/motion-system.md#browser-compatibility).
  */
 export interface SpringTiming {
   duration: number;
@@ -27,7 +26,7 @@ export function shapeFor(name: SpringName, category: MotionCategory = 'feedback'
 }
 
 export function springTiming(name: SpringName, category: MotionCategory = 'feedback'): SpringTiming {
-  return { duration: scaledMs(SPRING_MS[name], category), easing: springToLinear(SHAPE_SPEC[shapeFor(name, category)]) };
+  return { duration: scaledMs(SPRING_MS[name], category), easing: springEasing(shapeFor(name, category)) };
 }
 
 /**

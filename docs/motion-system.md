@@ -48,6 +48,14 @@ A screen-edge surface keeps its spatial spring and an `edge-skirt-*` for oversho
 
 Indeterminate loops, skeleton shimmer and Compose's ripple are explicit exceptions to spring timing. Ripple owns its held press, spread and release clock; consumers only use `data-ripple`.
 
+### Browser compatibility
+
+Keep the native `linear()` path when supported. `sampledTrack` in `lib/sampledAnimation.ts` represents the same curve as explicit keyframes on Chrome 109, preserving Hero travel, tab lean, fade windows and reversals without a per-frame JavaScript loop. Container transforms use the same physical progress samples.
+
+CSS transitions and ordinary two-keyframe effects use the three `SPRING_BEZIER` fits from `lib/spring.ts` when `linear()` is absent. Their clocks, tiers and speed scaling are unchanged. Effects stay monotone; spatial fits retain overshoot. Unit checks bound normalized displacement error below 2% for effects/default spatial and 5.1% for fast spatial. `springTiming` and generated CSS share these values.
+
+Tooltip first entry establishes its closed style before paint when `@starting-style` is unavailable. The existing CSS transitions then own entry, exit and interruption. Measure its untransformed dimensions so scale animation cannot feed back into placement.
+
 ## Tiers, speed and categories
 
 `lib/appearance.ts` owns storage, cookies and resolved root attributes. Read the current attribute-backed value rather than interpreting storage at a call site.

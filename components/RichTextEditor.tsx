@@ -688,7 +688,7 @@ export default function RichTextEditor({
           --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-highest);
           --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
           --w-e-toolbar-active-bg-color: var(--md-sys-color-surface-container-high);
-          --w-e-toolbar-disabled-color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+          --w-e-toolbar-disabled-color: rgb(var(--md-sys-color-on-surface-rgb) / 38%);
           --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
           --w-e-modal-button-bg-color: var(--md-sys-color-surface-container-high);
           --w-e-modal-button-border-color: var(--md-sys-color-outline);
@@ -856,11 +856,7 @@ export default function RichTextEditor({
         @media (hover: hover) {
           .w-e-bar-item button:hover:not(.disabled):not(:disabled),
           .rich-text-editor [data-toolbar-toggle]:hover:not(:disabled) {
-            background-color: color-mix(
-              in oklab,
-              var(--md-sys-color-on-surface) calc(var(--md-sys-state-hover-opacity) * 100%),
-              transparent
-            );
+            background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-hover-opacity));
             color: var(--md-sys-color-on-surface);
           }
         }
@@ -871,22 +867,14 @@ export default function RichTextEditor({
            literal, and one would end the string. */
         .w-e-bar-item button:focus-visible,
         .rich-text-editor [data-toolbar-toggle]:focus-visible {
-          background-color: color-mix(
-            in oklab,
-            var(--md-sys-color-on-surface) calc(var(--md-sys-state-focus-opacity) * 100%),
-            transparent
-          );
+          background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-focus-opacity));
           outline: 2px solid transparent;
           box-shadow: 0 0 0 2px var(--md-sys-color-focus);
         }
 
         .w-e-bar-item button:active:not(.disabled):not(:disabled),
         .rich-text-editor [data-toolbar-toggle]:active:not(:disabled) {
-          background-color: color-mix(
-            in oklab,
-            var(--md-sys-color-on-surface) calc(var(--md-sys-state-pressed-opacity) * 100%),
-            transparent
-          );
+          background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-pressed-opacity));
         }
 
         .rich-text-editor [data-toolbar-toggle]:disabled {

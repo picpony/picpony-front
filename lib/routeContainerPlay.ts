@@ -9,7 +9,6 @@ import { FORUM_TRANSFORM_MS } from '@/lib/forumContainer';
 import {
   playContainerRun,
   reveal,
-  supportsLinearEasing,
   type ContainerHandle,
   type ContainerRun,
   type ContainerTurn,
@@ -57,7 +56,7 @@ export function inShownPanes(el: HTMLElement): boolean {
 
 /** Whether a transform may ride this route change at all. */
 export function routePlayable(el: HTMLElement): boolean {
-  return motionTier('page') === 'standard' && routeTransitActive(el) && supportsLinearEasing();
+  return motionTier('page') === 'standard' && routeTransitActive(el);
 }
 
 /** By the wall-clock rule: the slowest speed, the transform or the page fade, whichever ends later. */

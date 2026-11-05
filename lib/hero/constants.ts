@@ -336,7 +336,7 @@ export const FLIGHT_RETIRE_MS = SPRING_MS.fastEffects;
  * `matchMedia` into a Node script.
  */
 export const FLIGHT_REBUILD_MIN_MS = 80;
-/* `linear()` strings from the spring module, for WAAPI. Arriving on the default effects shape;
+/* Browser-compatible easings from the spring module. Arriving on the default effects shape;
    leaving on the effects shape, as every exit in the app does, over whatever leg the caller gives
    it: it answers on the next frame. */
 export const REVEAL_EASING = springLinear('defaultEffects');

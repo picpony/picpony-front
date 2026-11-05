@@ -57,6 +57,7 @@ import type { HeroChoreography, HeroDirection } from './types';
    here; a private `matchMedia` cannot see the second of those. */
 import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { clamp01 } from '@/lib/utils';
+import { sampledTrack, type SampledTrack } from '@/lib/sampledAnimation';
 import { heroProbeMark } from './probe';
 
 type AnimationOwner = {
@@ -523,7 +524,7 @@ function buildContainerAnimations(
 }
 
 /**
- * **A scalar track is two keyframes and a `linear()` easing, not a keyframe per sample.** Every
+ * A scalar track uses two keyframes and a `linear()` easing where supported. Every
  * track below is one number driven through the leg's progress table (an opacity, a translate
  * distance, a scale), and both interpolate that number linearly between the same samples — so
  * the two forms draw the same frames. What differs is the press: Blink parses each keyframe's
@@ -531,25 +532,10 @@ function buildContainerAnimations(
  * string (1×, measured), and a press creates ten of these. `linear()` easings run on the
  * compositor like any other timing function.
  *
- * `fraction(progress)` is where the track is between its two keyframes at that point of travel.
+ * `sampledTrack` preserves those samples as keyframes on Chrome 109; see
+ * docs/motion-system.md#browser-compatibility.
  */
-type ScalarTrack = { keyframes: Keyframe[]; easing: string };
-
-function linearEasing(frames: readonly ProgressFrame[], fraction: (progress: number) => number) {
-  let points = '';
-  for (let index = 0; index < frames.length; index += 1) {
-    const { offset, progress } = frames[index];
-    if (index) points += ',';
-    points += `${round5(fraction(progress))} ${round5(offset * 100)}%`;
-  }
-  return `linear(${points})`;
-}
-
-function round5(value: number) {
-  return Math.round(value * 1e5) / 1e5;
-}
-
-function animateScalar(element: HTMLElement, track: ScalarTrack, duration: number): AnimationOwner {
+function animateScalar(element: HTMLElement, track: SampledTrack, duration: number): AnimationOwner {
   return animateAt(element, track.keyframes, { duration, easing: track.easing });
 }
 
@@ -564,13 +550,12 @@ function fadeTrack(
   interval: { start: number; end: number },
   from: number,
   to: number,
-): ScalarTrack {
-  return {
-    keyframes: [{ opacity: from }, { opacity: to }],
-    easing: linearEasing(frames, (progress) =>
-      intervalProgress(progress, interval.start, interval.end),
-    ),
-  };
+): SampledTrack {
+  return sampledTrack(
+    frames,
+    (p) => ({ opacity: from + (to - from) * p }),
+    (progress) => intervalProgress(progress, interval.start, interval.end),
+  );
 }
 
 function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
@@ -1526,13 +1511,11 @@ export class HeroMotion {
     // Follow the entire spring. Compressing it into an early window spent the depth in ~60ms.
     return animateScalar(
       element,
-      {
-        keyframes: [
-          { transform: getHeroBackgroundSinkTransform(from) },
-          { transform: getHeroBackgroundSinkTransform(to) },
-        ],
-        easing: linearEasing(sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES), clamp01),
-      },
+      sampledTrack(
+        sampleProgress(this.leg.progress, HERO_PROGRESS_SAMPLES),
+        (p) => ({ transform: getHeroBackgroundSinkTransform(from + (to - from) * p) }),
+        clamp01,
+      ),
       duration,
     );
   }

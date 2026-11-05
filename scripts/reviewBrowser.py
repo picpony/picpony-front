@@ -7,6 +7,7 @@ import sys
 import urllib.parse
 import urllib.request
 from playwright.sync_api import sync_playwright, expect, TimeoutError as PlaywrightTimeout
+from browserLaunch import browser_options
 
 BASE, FIXTURES = sys.argv[1:3]
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -390,7 +391,7 @@ def inspect(page, name, route_path):
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(channel='msedge', headless=True)
+    browser = playwright.chromium.launch(**browser_options(), headless=True)
     profiles = [('desktop-guest', 1440, False, 'light'), ('desktop-admin', 1440, True, 'dark'),
                 ('mobile-admin', 390, True, 'light')]
     if '--quick' in sys.argv:

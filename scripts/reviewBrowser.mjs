@@ -121,7 +121,8 @@ try {
     : args.includes('--hero') ? 'testHeroInteractions.py'
     : args.includes('--auth-loading') ? 'testAuthLoading.py'
     : args.includes('--profile-gallery') ? 'testProfileGallery.py'
-    : args.includes('--motion') ? 'testMotionRegression.py' : 'reviewBrowser.py';
+    : args.includes('--motion') ? 'testMotionRegression.py'
+    : args.includes('--compat') ? 'testBrowserCompatibility.py' : 'reviewBrowser.py';
   python = spawn(process.env.PYTHON ?? 'python', [process.env.HERO_SCRIPT ?? path.join(root, 'scripts', browserScript), base, fixtureUrl,
     ...args.filter((arg) => arg !== '--hero-visuals')], {
     cwd: root, windowsHide: true, stdio: 'inherit', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },

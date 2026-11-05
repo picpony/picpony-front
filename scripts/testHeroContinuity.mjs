@@ -15,6 +15,7 @@ const { velocityAt } = await import('../lib/hero/progress.ts');
 const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
 const utils = { clamp, clamp01 };
+const sampling = await import('../lib/sampledAnimation.ts');
 
 function load(file, dependencies, globals) {
   const source = ts.transpileModule(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), {
@@ -864,6 +865,7 @@ test('a pending first frame cannot spend the flight while the main thread is bus
   ].map(name => [name, {}]));
   dependencies['./flight'] = { evaluateLeg };
   dependencies['@/lib/utils'] = utils;
+  dependencies['@/lib/sampledAnimation'] = sampling;
   const { HeroMotion } = load('lib/hero/motion.ts', dependencies, {
     performance: { now: () => 5000 },
   });
