@@ -35,7 +35,7 @@ import {
 import type { PicLightboxSlide } from '@/components/PicLightbox';
 import { useAuthModal } from '@/components/AuthModal';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import CommentSection, { type ReplyTarget } from '@/components/CommentSection';
 import DetailBack from '@/components/DetailBack';
 import DetailHeader from '@/components/DetailHeader';
@@ -1580,15 +1580,17 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                       >
                         下载原图
                       </Button>
-                      <a
+                      <ButtonLink
                         href={`https://trixiebooru.org/${image.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="在 Derpibooru 查看（在新标签页打开）"
-                        className={buttonClasses({ variant: 'tonal' })}
+                        variant="tonal"
+                        prefetch={false}
+                        icon={<MdOpenInNew />}
                       >
-                        <MdOpenInNew aria-hidden="true" />在 Derpibooru 查看
-                      </a>
+                        在 Derpibooru 查看
+                      </ButtonLink>
                     </div>
                     <div className="mx-auto flex items-center gap-1 sm:me-0 sm:ms-auto">
                       <IconButton

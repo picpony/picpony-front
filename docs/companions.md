@@ -66,7 +66,7 @@ Do not resize the iframe on each drawer-animation frame. Ponies move with the co
 
 Speech bubbles follow their sprite after rect reads, remain 8 px within the window, and retain their side while it fits. The `theme` message supplies container, text, corner, type and filter-shadow values because application CSS does not reach the frame.
 
-Settings debounce a sequence of selection edits and keep the local draft until the resource publishes the saved selection. Lineup cells stay fixed while a departing pony fades beneath its replacement.
+Settings debounce a sequence of selection edits and keep the local draft until the resource publishes the saved selection. `PresenceList` owns lineup arrivals, removals and placement in the `list` category. Cells stay fixed while a departing pony fades beneath its replacement; restored selections reuse their existing entry.
 
 ## Verification
 

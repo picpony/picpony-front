@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { MdReceiptLong, MdShoppingCart, MdStorefront, MdToll } from 'react-icons/md';
 import Button from '@/components/Button';
@@ -9,7 +8,7 @@ import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageHeader from '@/components/PageHeader';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { useAuthModal } from '@/components/AuthModal';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
@@ -325,10 +324,9 @@ export default function ShopScreen() {
                   </span>
                 </span>
               )}
-              <Link scroll={false} href={TRANSACTIONS_HREF} className={buttonClasses({ variant: 'text' })}>
-                <MdReceiptLong aria-hidden="true" />
+              <ButtonLink href={TRANSACTIONS_HREF} variant="text" icon={<MdReceiptLong />}>
                 金币明细
-              </Link>
+              </ButtonLink>
             </div>
           ) : ready ? (
             <Button variant="filled" onClick={() => openAuth('login')}>

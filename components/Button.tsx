@@ -2,8 +2,8 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import Spinner from './Spinner';
+import ButtonContent from './ButtonContent';
 import { buttonClasses, type ButtonSize, type ButtonVariant } from './buttonStyles';
-import { cn } from '@/lib/utils';
 
 export type { ButtonSize, ButtonVariant, ButtonClassOptions } from './buttonStyles';
 /* Re-exported so `import { buttonClasses } from '@/components/Button'` keeps working
@@ -70,8 +70,6 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   },
   ref,
 ) {
-  const hasIcon = Boolean(icon || trailingIcon);
-  const replaceLabel = loading && !hasIcon && Boolean(children);
   // A busy action retains its own ink and container; only its glyph changes.
   const spinner = busyIcon ?? <Spinner size={size === 'lg' ? 'md' : 'sm'} tone="inherit" />;
 
@@ -121,36 +119,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       aria-label={derivedLabel}
       aria-busy={loading || rest['aria-busy'] || undefined}
     >
-      <span data-ripple-host="" aria-hidden="true" />
-      {icon && (
-        <span aria-hidden="true" className="shrink-0 [&>svg]:block">
-          {loading ? spinner : icon}
-        </span>
-      )}
-      {loading && !hasIcon && (
-        /* A text-only action keeps its own footprint while busy. Adding a new
-           leading slot moves every neighbour in a dialog's action row. */
-        <span
-          aria-hidden="true"
-          className={replaceLabel ? 'pointer-events-none absolute inset-0 grid place-items-center' : 'shrink-0'}
-        >
-          {spinner}
-        </span>
-      )}
-      {children && (
-        /* Opacity preserves both the measured label and the button's name. */
-        <span className={cn('min-w-0 truncate', responsiveLabel && 'max-sm:hidden', replaceLabel && 'opacity-0')}>
-          {children}
-        </span>
-      )}
-      {trailingIcon && (
-        <span
-          aria-hidden="true"
-          className={cn('shrink-0 [&>svg]:block', responsiveLabel && icon && 'max-sm:hidden')}
-        >
-          {loading && !icon ? spinner : trailingIcon}
-        </span>
-      )}
+      <ButtonContent
+        icon={icon}
+        trailingIcon={trailingIcon}
+        responsiveLabel={responsiveLabel}
+        loading={loading}
+        busyIcon={spinner}
+      >
+        {children}
+      </ButtonContent>
     </button>
   );
 });

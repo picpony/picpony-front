@@ -9,6 +9,7 @@ Compose the existing components; do not copy their class strings or interaction 
 | Need | Use |
 | --- | --- |
 | Button | `components/Button.tsx`; commands default to `type="button"` |
+| Navigation action | `ButtonLink`; renders a link with the shared button slots and `scroll={false}` |
 | Text field / textarea | `Input`, `Textarea`, `Field` from `components/Input.tsx` |
 | Search or filter | `SearchInput`: 40 dp `filter` by default, 56 dp standalone `search` |
 | Arbitrary badge colour | `ColorSwatch`; shared `ColorPicker` with `hues="mono"` |
@@ -95,7 +96,11 @@ Do not use browser confirm/prompt, naked clipboard writes, secure-context-only U
 
 ## Buttons, icons and semantics
 
-Button variants are `filled`, `tonal`, `surface`, `accent`, `text`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
+Button variants are `filled`, `tonal`, `surface`, `accent`, `text`, `on-fill`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
+
+`ButtonLink` shares Button's icon slots, responsive labels, inner ripple host and pressed shape. Pass icons through `icon` / `trailingIcon`; do not copy the button recipe onto navigation links. External links retain their `target` / `rel` and use `prefetch={false}`. Text links in prose keep the prose-link treatment.
+
+`Button variant="on-fill"` supplies snackbar actions with `on-fill` ink and an inset contrasting focus ring. Do not override a text button's colour at the call site.
 
 IconButton owns its glyph size and tooltip:
 
@@ -246,6 +251,8 @@ MasonryGrid owns aspect ratios, column placement, gaps, image links, list semant
 Batch mode keeps geometry and Hero paths intact. Space toggles, Shift extends, and Escape/Back leaves the selection layer. SelectionBar/CartBar retain their hidden state and spacer through exit.
 
 Content inserted above masonry must compensate only actual offset movement; browser scroll anchoring is not reliable for absolute slots. Use `FailedTurnHold` for the existing failed-page-turn case. Background profiles read their own route props, not the foreground image's `useParams()`.
+
+`Collapse` owns its layout and opacity transitions on the `list` category. Closing always hides and inerts its contents; an explicit `inert` or `aria-hidden` also applies while open. Its child controls retain their own feedback category.
 
 ### Removal and focus
 

@@ -500,7 +500,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/components/PageBack': { default: 'PageBack' },
     '@/components/EmptyState': { default: 'EmptyState' },
     '@/components/Button': { default: 'Button', buttonClasses: () => '' },
-    '@/components/buttonStyles': { buttonClasses: () => '' },
+    '@/components/ButtonLink': { default: 'ButtonLink' },
     '@/components/FailedTurnHold': { default: 'FailedTurnHold' },
     '@/components/Tooltip': { useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }) },
     '@/components/SectionHeading': { default: 'SectionHeading' },

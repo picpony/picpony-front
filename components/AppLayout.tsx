@@ -61,7 +61,8 @@ import { warmRouteCrossFade } from '@/lib/routeCrossFade';
 import RouteScrollMemory from '@/lib/scrollMemory';
 import Tabs from '@/components/Tabs';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
-import { buttonClasses } from '@/components/buttonStyles';
+import { useTooltip } from '@/components/Tooltip';
+import ButtonLink from '@/components/ButtonLink';
 /* Through the lazy facade, not `lib/motion` directly: that module registers GSAP and its
    plugins at module scope, and this component wraps every route. Each entry point falls back
    to the 关闭 tier's own behaviour until the chunk lands. See `lib/motionLazy.tsx`. */
@@ -163,7 +164,7 @@ function SearchBar() {
         size="md"
         className="touch-size"
         aria-label="搜索"
-        icon={<MdSearch size={ICON.standard} />}
+        icon={<MdSearch />}
       />
     </form>
   );
@@ -799,6 +800,8 @@ export default function AppLayout({
   /* `/messages` marking a tab read moves this badge with no event and no second request: it
      force-reads the same resource entry, and this component is subscribed to it. */
   const totalUnread = token ? (unread.data?.total ?? 0) : 0;
+  const messagesLabel = totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息';
+  const { anchorRef: messagesAnchorRef, anchorProps: messagesAnchorProps, tooltip: messagesTooltip } = useTooltip(messagesLabel);
   /* 论坛's own badge: posts created since the last forum read receipt (`ForumPane` sends it). */
   const forumUnread = token ? (unread.data?.forum ?? 0) : 0;
 
@@ -1004,17 +1007,15 @@ export default function AppLayout({
       <div data-app-root className="h-full flex flex-col overflow-hidden">
         {/* The first tab stop. Visually hidden until it takes focus; moves focus to the page's
             heading rather than following a fragment, which would add a history entry. */}
-        <a
+        <ButtonLink
           href="#app-main"
           onClick={skipToMain}
-          className={buttonClasses({
-            variant: 'surface',
-            className:
-              'sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-[calc(env(safe-area-inset-top)+0.75rem)] focus-visible:left-[max(1rem,env(safe-area-inset-left))] focus-visible:z-skip-link',
-          })}
+          prefetch={false}
+          variant="surface"
+          className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-[calc(env(safe-area-inset-top)+0.75rem)] focus-visible:left-[max(1rem,env(safe-area-inset-left))] focus-visible:z-skip-link"
         >
           跳到主要内容
-        </a>
+        </ButtonLink>
 
         {/* The chrome band. Everything in it counts towards `--app-chrome-bottom`; the band,
             not each row, takes the app-bar layer. */}
@@ -1050,7 +1051,7 @@ export default function AppLayout({
               aria-expanded={drawerExpanded}
               aria-controls="app-sidebar"
               className="mr-1 touch-size sm:mr-3"
-              icon={<MdMenu size={ICON.standard} />}
+              icon={<MdMenu />}
             />
             <Link
               scroll={false}
@@ -1105,24 +1106,24 @@ export default function AppLayout({
             <Suspense fallback={<div className="h-10 w-10 touch-size" aria-hidden="true" />}>
               <SearchBar />
             </Suspense>
-            {/* A `<Link>` wearing the same recipe from `iconButtonClasses` rather than a
-                fifth copy of it. The badge is a **sibling** of the anchor, not a child:
-                `data-ripple` sets `overflow: hidden`, and a corner badge on a circular clip
-                always loses its outer arc. The anchor's `aria-label` carries the count, so
-                the badge is decorative. */}
+            {/* The count stays outside the anchor's ripple and is included in its accessible name. */}
             <span className="relative ml-1 flex shrink-0">
               <Link
+                ref={(node) => { messagesAnchorRef.current = node; }}
+                {...messagesAnchorProps}
                 scroll={false}
                 href="/messages"
-                aria-label={totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息'}
-                data-ripple
+                aria-label={messagesLabel}
+                data-ripple="inner"
                 className={cn(iconButtonClasses({ variant: 'on-primary', size: 'md' }), 'touch-size')}
               >
-                <MdNotifications size={ICON.standard} />
+                <span data-ripple-host="" aria-hidden="true" />
+                <MdNotifications aria-hidden="true" />
               </Link>
               <span className="pointer-events-none absolute top-0 right-0">
                 <CountBadge count={totalUnread} />
               </span>
+              {messagesTooltip}
             </span>
           </header>
           {maintenance && <MaintenanceNotice inert={chromeInert} />}

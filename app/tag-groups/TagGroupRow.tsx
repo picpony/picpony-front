@@ -1,10 +1,9 @@
 'use client';
 
 import { memo } from 'react';
-import Link from 'next/link';
 import { MdDeleteOutline, MdEdit, MdSearch, MdShare } from 'react-icons/md';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { GroupMenu, GroupRow, TagMarks } from '@/components/groups/GroupRow';
 import { tagGroupQuery, type TagGroup } from '@/lib/api/tagGroups';
 
@@ -59,15 +58,15 @@ function TagGroupRow({
             搜索
           </Button>
         ) : (
-          <Link
-            scroll={false}
+          <ButtonLink
             href={tagGroupSearchHref(group.tags)}
             aria-label={searchLabel}
-            className={buttonClasses({ variant: 'tonal', responsiveLabel: true })}
+            variant="tonal"
+            responsiveLabel
+            icon={<MdSearch />}
           >
-            <MdSearch aria-hidden="true" />
-            <span className="max-sm:hidden">搜索</span>
-          </Link>
+            搜索
+          </ButtonLink>
         )
       }
       menu={

@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MdBrokenImage, MdCheck, MdClose, MdCloudUpload, MdKey, MdOpenInNew, MdSettings } from 'react-icons/md';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import Collapse from '@/components/Collapse';
 import { useConfirm } from '@/components/ConfirmDialog';
 import DropZone from '@/components/DropZone';
@@ -589,10 +588,13 @@ export default function UploadPage() {
         title="需要绑定 API Key"
         description="发布作品需要绑定 Derpibooru API Key，作品会以对应的 Derpibooru 账号发布。"
         action={
-          <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'filled' })}>
-            <MdSettings aria-hidden="true" />
+          <ButtonLink
+            href={settingsHref('account')}
+            variant="filled"
+            icon={<MdSettings />}
+          >
             前往设置
-          </Link>
+          </ButtonLink>
         }
       />
     );
@@ -611,9 +613,12 @@ export default function UploadPage() {
         </p>
         <p className="mb-6 mt-1 text-body-s">Derpibooru 处理完成后作品即会上架；不符合上传规则的作品不会上架。</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Link scroll={false} href={`/pic/${uploaded}`} className={buttonClasses({ variant: 'filled' })}>
+          <ButtonLink
+            href={`/pic/${uploaded}`}
+            variant="filled"
+          >
             查看图片
-          </Link>
+          </ButtonLink>
           <Button variant="tonal" onClick={() => resetUpload(token)}>
             继续发布
           </Button>

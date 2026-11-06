@@ -17,7 +17,6 @@ import {
   useScrollLock,
   OverlayLayerContext,
 } from '@/lib/overlay';
-import { ICON } from '@/lib/icons';
 
 interface SidePanelProps {
   isOpen: boolean;
@@ -206,8 +205,7 @@ export default function SidePanel({
                 onClick={handleClose}
                 aria-label="关闭"
                 dismiss
-                className="hover:text-on-surface"
-                icon={<MdClose size={ICON.standard} />}
+                icon={<MdClose />}
               />
             )}
           </div>

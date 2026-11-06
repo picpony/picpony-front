@@ -17,6 +17,7 @@ import { Script } from 'node:vm';
 const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
   'next/dynamic': `module.exports=()=>()=>null;`,
+  'next/link': `const React=require('react');module.exports=({children,scroll,prefetch,onNavigate,...props})=>React.createElement('a',{...props,'data-scroll':String(scroll)},children);`,
   /* ColorSwatch's dialog (components/Input.tsx) loads on demand and carries the HCT tools; no fixture here opens it. */
   './ColorPicker': `module.exports=()=>null;`,
   '@/lib/appearance': `exports.MOTION_SPEED_SCALE={fast:1,default:1,slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
@@ -44,6 +45,8 @@ import React, {useMemo, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
+import Collapse from '@/components/Collapse';
 import IconButton from '@/components/IconButton';
 import Chip from '@/components/Chip';
 import Select from '@/components/Select';
@@ -96,8 +99,10 @@ function Fixture(){
   const [count,setCount]=useState(3),[checked,setChecked]=useState(true),[on,setOn]=useState(false);
   const [q,setQ]=useState(''),[pw,setPw]=useState(''),[avatar,setAvatar]=useState('http://127.0.0.1:9/broken.png');
   const [positioning,setPositioning]=useState(false);
+  const [foldOpen,setFoldOpen]=useState(false),[foldLocked,setFoldLocked]=useState(false);
   window.fx={setBusy:v=>flushSync(()=>setBusy(v)),setCount:v=>flushSync(()=>setCount(v)),setChecked:v=>flushSync(()=>setChecked(v)),setAvatar:v=>flushSync(()=>setAvatar(v)),code:()=>code,positioning:()=>flushSync(()=>setPositioning(true))};
   window.codeValue=code;
+  window.fx.setFold=(open,locked=false)=>flushSync(()=>{setFoldOpen(open);setFoldLocked(locked);});
   if(positioning)return <Positioning/>;
   return <main>
     <form onSubmit={e=>{e.preventDefault();window.log.push('submit');}}><input id="field" aria-label="字段"/>
@@ -126,6 +131,9 @@ function Fixture(){
     <SearchInput value={q} onChange={setQ} placeholder="筛选"/>
     <Input type="password" label="密码" value={pw} onChange={e=>setPw(e.target.value)}/>
     <Combo/>
+    <ButtonLink id="action-link" href="/destination" target="_blank" rel="noopener noreferrer" responsiveLabel icon={<svg/>}
+      onClick={event=>{event.preventDefault();window.log.push('action-link:'+event.ctrlKey);}}>查看目标</ButtonLink>
+    <Collapse id="fold" open={foldOpen} inert={foldLocked}><Button id="fold-action">折叠内容</Button></Collapse>
   </main>;
 }
 createRoot(document.getElementById('root')).render(<Fixture/>);`;
@@ -271,7 +279,23 @@ with sync_playwright() as p:
   assert log()[-1]=='pick:apricot', log(); expect(page.locator('#after-combo')).to_be_focused()
   c.focus(); c.fill(''); page.keyboard.type('b'); expect(page.get_by_role('listbox',name='建议')).to_be_visible(); page.keyboard.press('Escape')
   expect(page.get_by_role('listbox',name='建议')).to_have_count(0); ok('combobox-contract')
-  # 18. Floating panels follow only their anchor's scroll chain. Scrolling their own
+  # Navigation actions keep native link semantics, accessible labels and their caller's event.
+  action=page.get_by_role('link',name='查看目标',exact=True)
+  expect(action).to_have_attribute('href','/destination'); expect(action).to_have_attribute('target','_blank')
+  expect(action).to_have_attribute('rel','noopener noreferrer'); expect(action).to_have_attribute('data-scroll','false')
+  assert action.locator('button').count()==0
+  action.focus(); page.keyboard.press('Enter'); assert log()[-1]=='action-link:false'
+  action.click(modifiers=['Control']); assert log()[-1]=='action-link:true'
+  ok('navigation-actions-preserve-link-semantics')
+  # Collapsing always removes interaction; an open panel still honors an enclosing lock.
+  fold=page.locator('#fold'); assert fold.evaluate('e=>e.inert')
+  expect(fold).to_have_attribute('aria-hidden','true')
+  page.evaluate('window.fx.setFold(true)'); assert not fold.evaluate('e=>e.inert')
+  page.locator('#fold-action').focus(); expect(page.locator('#fold-action')).to_be_focused()
+  page.evaluate('window.fx.setFold(true,true)'); assert fold.evaluate('e=>e.inert')
+  page.evaluate('window.fx.setFold(false)'); assert fold.evaluate('e=>e.inert')
+  ok('collapse-preserves-interaction-gates')
+  # Floating panels follow only their anchor's scroll chain. Scrolling their own
   # options or an unrelated list must not measure the anchor or undo its edge clamp.
   page.evaluate('window.fx.positioning()')
   panel=page.get_by_role('listbox',name='定位选项'); expect(panel).to_be_visible()

@@ -10,7 +10,6 @@ import Spinner from '@/components/Spinner';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { ICON } from '@/lib/icons';
 import { clamp } from '@/lib/utils';
 
 export type CropShape = 'circle' | 'rect';
@@ -490,7 +489,7 @@ export default function ImageCropper({
             onClick={() => nudgeZoom(-ZOOM_STEP)}
             disabled={!ready || v.zoom <= 1}
             aria-label="缩小"
-            icon={<MdZoomOut size={ICON.control} />}
+            icon={<MdZoomOut />}
           />
           {/* `Slider`, the primitive — not a global class remembered at each
               call site, which left the two range inputs without a focus ring. */}
@@ -509,7 +508,7 @@ export default function ImageCropper({
             onClick={() => nudgeZoom(ZOOM_STEP)}
             disabled={!ready || v.zoom >= MAX_ZOOM}
             aria-label="放大"
-            icon={<MdZoomIn size={ICON.control} />}
+            icon={<MdZoomIn />}
           />
         </div>
 

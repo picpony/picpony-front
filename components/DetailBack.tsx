@@ -3,7 +3,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 import IconButton from './IconButton';
-import { ICON } from '@/lib/icons';
 
 type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   passive?: boolean;
@@ -69,7 +68,7 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
          corner outranks the shape axis (`HAS_RADIUS`), which is not what a morph wants. */
       variant="quiet"
       size="md"
-      icon={<MdArrowBack size={ICON.standard} aria-hidden="true" />}
+      icon={<MdArrowBack aria-hidden="true" />}
       title={title}
       tabIndex={passive ? -1 : tabIndex}
       aria-label={ariaLabel}

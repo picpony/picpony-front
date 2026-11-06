@@ -628,7 +628,7 @@ ${duplicatePage.listKey}` : pageKey;
             variant="filter"
             selected={untranslated}
             disabled={duplicates}
-            icon={<MdTranslate size={ICON.dense} />}
+            icon={<MdTranslate />}
             onClick={() => setUntranslated((value) => !value)}
           >
             只看未翻译
@@ -636,7 +636,7 @@ ${duplicatePage.listKey}` : pageKey;
           <Chip
             variant="filter"
             selected={duplicates}
-            icon={<MdContentCopy size={ICON.dense} />}
+            icon={<MdContentCopy />}
             onClick={() => {
               setDuplicates((value) => !value);
               setSelected(new Set());

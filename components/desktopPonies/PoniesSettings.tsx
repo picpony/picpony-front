@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MdPets, MdRefresh } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import SearchInput from '@/components/SearchInput';
 import Card from '@/components/Card';
+import PresenceList from '@/components/PresenceList';
 import Chip from '@/components/Chip';
 import CheckGlyph from '@/components/CheckGlyph';
 import Skeleton from '@/components/Skeleton';
@@ -22,8 +23,6 @@ import { useResource, SKIP } from '@/lib/resource';
 import { MAX_PONIES, saveMyPonies, type PonyChoice } from '@/lib/api/desktopPonies';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { ICON } from '@/lib/icons';
-import { motionTier, useMotionTier } from '@/lib/appearance';
-import { springTiming } from '@/lib/springTiming';
 import { clamp, cn } from '@/lib/utils';
 import PonyPreview from './PonyPreview';
 import styles from './PoniesSettings.module.css';
@@ -176,7 +175,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
 
   return <SettingsSection
     title="桌面小马" icon={<MdPets size={ICON.control} />} subtitle="挑选喜欢的角色，陪你一起看图"
-    actions={token ? <IconButton aria-label="刷新桌面小马" onClick={refresh} icon={<MdRefresh size={ICON.standard} />} /> : undefined}
+    actions={token ? <IconButton aria-label="刷新桌面小马" onClick={refresh} icon={<MdRefresh />} /> : undefined}
     status={problem !== undefined && <ErrorRetry size="inline" title="桌面小马加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
   >
     {ready && !token ? <SignInRequired size="inline" description="登录后即可选择并保存桌面小马" />
@@ -232,72 +231,39 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
  * the gap rather than jumping into it.
  */
 function Lineup({ names, ponies }: { names: readonly string[]; ponies: readonly PonyChoice[] }) {
-  const root = useRef<HTMLDivElement>(null);
-  const previous = useRef<readonly string[] | null>(null);
-  const tier = useMotionTier();
-  /* **A pony that leaves keeps its place while it goes.** Each slot is pinned to its own cell, so a
-     leaver can stay in the cell it held, shrinking and fading on FastEffects under the pony that
-     slides in over it — it used to vanish in the frame it was deselected, and 清空 emptied all six
-     at once. Compared by content: the array is rebuilt on every render. */
-  const key = names.join('\n');
-  const [trail, setTrail] = useState<{ key: string; names: readonly string[]; leaving: readonly { name: string; index: number }[] }>(() => ({ key, names, leaving: [] }));
-  if (trail.key !== key) {
-    const gone = tier === 'off' ? [] : trail.names.flatMap((name, index) => (names.includes(name) ? [] : [{ name, index }]));
-    setTrail({ key, names, leaving: [...trail.leaving.filter((item) => !names.includes(item.name) && !gone.some((next) => next.name === item.name)), ...gone] });
-  }
-  useLayoutEffect(() => {
-    const node = root.current;
-    if (!node) return;
-    for (const ghost of node.querySelectorAll<HTMLElement>('[data-leaving]:not([data-exiting])')) {
-      ghost.setAttribute('data-exiting', '');
-      const name = ghost.dataset.leaving;
-      const timing = { ...springTiming('fastEffects'), fill: 'forwards' as const };
-      ghost.animate([{ transform: 'none' }, { transform: 'scale(0.6)' }], timing);
-      ghost.animate([{ opacity: 1 }, { opacity: 0 }], timing).finished.then(
-        () => setTrail((current) => ({ ...current, leaving: current.leaving.filter((item) => item.name !== name) })),
-        () => { /* Cancelled: the pony came back and its slot replaced the leaver. */ },
-      );
-    }
-  }, [trail.leaving]);
-  useLayoutEffect(() => {
-    const before = previous.current;
-    previous.current = names;
-    const node = root.current;
-    if (!before || !node || motionTier() === 'off') return;
-    const first = node.querySelector<HTMLElement>('[data-slot]');
-    const step = first ? first.offsetWidth + (parseFloat(getComputedStyle(node).columnGap) || 0) : 0;
-    names.forEach((name, index) => {
-      const slot = node.querySelector<HTMLElement>(`[data-slot="${CSS.escape(name)}"]`);
-      if (!slot) return;
-      const was = before.indexOf(name);
-      if (was === -1) {
-        slot.animate([{ transform: 'scale(0.6)' }, { transform: 'none' }], springTiming('fastSpatial'));
-        slot.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('fastEffects'));
-      } else if (was !== index && step) {
-        slot.animate([{ transform: `translateX(${(was - index) * step}px)` }, { transform: 'none' }], springTiming('layout'));
-      }
-    });
-  }, [names]);
   const sprite = (name: string) => {
     const pony = ponies.find((item) => item.name === name);
     const src = pony ? ponyPreview(pony) : null;
     /* eslint-disable-next-line @next/next/no-img-element -- the bundled first-frame previews, as in the grid. */
     return src ? <img src={src} alt="" draggable={false} className={styles.slotSprite} /> : <MdPets size={ICON.standard} className="text-on-surface-variant" />;
   };
-  /* Painted in three layers within each cell: the empty place, a leaver above it, and a pony that
-     has arrived or slid over the leaver on top. */
   return (
-    <div ref={root} className={styles.lineup} aria-hidden="true">
-      {Array.from({ length: MAX_PONIES }, (_, index) => {
-        const name = names[index];
-        const cell = { gridColumn: index + 1, gridRow: 1 };
-        if (!name) return <span key={`empty-${index}`} className={styles.slot} style={cell} />;
-        return <span key={name} data-slot={name} data-filled="" className={styles.slot} style={{ ...cell, zIndex: 2 }}>{sprite(name)}</span>;
-      })}
-      {trail.leaving.map(({ name, index }) => (
-        <span key={`leaving-${name}`} data-leaving={name} data-filled="" className={styles.slot} style={{ gridColumn: index + 1, gridRow: 1, zIndex: 1 }}>{sprite(name)}</span>
-      ))}
-    </div>
+    <PresenceList items={names} getKey={(name) => name} variant="grid">
+      {(entries, ref) => (
+        <div ref={ref} className={cn('relative', styles.lineup)} aria-hidden="true">
+          {Array.from({ length: MAX_PONIES }, (_, index) => (
+            <span key={index} className={styles.slot} style={{ gridColumn: index + 1, gridRow: 1 }} />
+          ))}
+          {entries.map(({ item: name, key, leaving }) => (
+            <span
+              key={key}
+              data-presence-key={key}
+              data-slot={leaving ? undefined : name}
+              data-leaving={leaving ? name : undefined}
+              data-filled=""
+              className={styles.slot}
+              style={{
+                gridColumn: leaving ? undefined : names.indexOf(name) + 1,
+                gridRow: leaving ? undefined : 1,
+                zIndex: leaving ? 1 : 2,
+              }}
+            >
+              {sprite(name)}
+            </span>
+          ))}
+        </div>
+      )}
+    </PresenceList>
   );
 }
 

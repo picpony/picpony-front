@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { MdClose, MdConstruction } from 'react-icons/md';
 import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
-import { iconButtonClasses } from './IconButton';
+import IconButton from './IconButton';
 import { ICON } from '@/lib/icons';
 
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
@@ -82,24 +82,14 @@ export default function DevBanner({
       <p className="text-body-s-emphasized min-w-0 flex-1 text-center">
         网站处于开发阶段，不代表最终品质
       </p>
-      {/* Shared icon-button classes, not the component — and the ripple is
-          deliberately absent: this control needs the touch floor inside a 44px
-          banner, and the hit-area utility cannot combine with `data-ripple`
-          (its clipping removes the pseudo-element from hit-testing), which the
-          component always sets. Growing the box instead would push the banner
-          down the page. The state layer still carries the press. */}
-      <button
-        type="button"
+      <IconButton
+        size="sm"
+        dismiss
         onClick={dismiss}
         aria-label="不再显示此提示"
-        className={iconButtonClasses({
-          size: 'sm',
-          dismiss: true,
-          className: 'touch-target -mr-1.5 h-8 w-8',
-        })}
-      >
-        <MdClose size={ICON.dense} />
-      </button>
+        className="-mr-1.5"
+        icon={<MdClose />}
+      />
     </div>
   );
 }

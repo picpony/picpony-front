@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MdCheckCircle, MdChevronRight } from 'react-icons/md';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import Card from '@/components/Card';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageHeader from '@/components/PageHeader';
@@ -282,9 +282,14 @@ function TaskRow({
             领取
           </Button>
         ) : task.href ? (
-          <Link scroll={false} href={task.href} className={buttonClasses({ variant: 'text', size: 'xs', fullWidth: true })}>
+          <ButtonLink
+            href={task.href}
+            variant="text"
+            size="xs"
+            fullWidth
+          >
             去完成
-          </Link>
+          </ButtonLink>
         ) : (
           <span className="flex h-8 items-center text-label-m text-on-surface-variant">未完成</span>
         )}

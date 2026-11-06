@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { MdFilterAlt, MdKey } from 'react-icons/md';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Modal from '@/components/Modal';
@@ -104,9 +103,13 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
         title="需要绑定 API Key"
         description="导入会读取你在 Derpibooru 上创建的过滤器，请先在设置中绑定 Derpibooru API Key。"
         action={
-          <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'filled' })} onClick={onClose}>
+          <ButtonLink
+            href={settingsHref('account')}
+            onClick={onClose}
+            variant="filled"
+          >
             前往设置
-          </Link>
+          </ButtonLink>
         }
       />
     );

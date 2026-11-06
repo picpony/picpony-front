@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef } from 'react';
-import Link from 'next/link';
 import { MdFolder } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { folderCovers, profileFaveFolders, useBrowsingFingerprint } from '@/lib/resources';
@@ -12,7 +11,7 @@ import { sharedFolderHref } from '@/lib/favorites';
 import { useFolderReturn } from '@/lib/folderTransit';
 import { ICON } from '@/lib/icons';
 import EmptyState from '@/components/EmptyState';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 /* The favourites' own card, grid and placeholder: a profile's folder opens the very page
    /favorites' card for it does, and the two used to disagree about its name and its count
    (G3-010) — one copy now. */
@@ -53,9 +52,12 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
         title="你还没有公开的收藏夹"
         description="公开的收藏夹会显示在你的个人主页上"
         action={
-          <Link scroll={false} href="/favorites" className={buttonClasses({ variant: 'tonal' })}>
+          <ButtonLink
+            href="/favorites"
+            variant="tonal"
+          >
             管理收藏夹
-          </Link>
+          </ButtonLink>
         }
       />
     ) : (

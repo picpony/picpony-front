@@ -16,6 +16,7 @@ import { motionTier, scaledMs } from '@/lib/appearance';
 import { springTiming, surfaceArrival } from '@/lib/springTiming';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
+import Button from './Button';
 
 import { subscribeToasts, type ToastListener, type ToastNotice, type ToastType } from '@/lib/toast';
 
@@ -280,17 +281,10 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
           {toast.message}
         </span>
         {toast.action && (
-          /* Hand-built rather than `Button`: the action's ink is `on-fill` on a fill
-             tone, a pairing no `Button` variant carries, and a variant plus a colour
-             override emits two colour utilities. Everything else is the primitives'
-             vocabulary — state layer, ripple, and the ring drawn inward in the white
-             every fill tone carries (the media role is that same scheme-independent
-             white, and the only inward white ring the system has). */
-          <button
-            type="button"
-            data-ripple=""
+          <Button
+            variant="on-fill"
             aria-describedby={`toast-${toast.id}`}
-            className="state-layer text-label-l touch-size pointer-events-auto relative h-10 shrink-0 cursor-pointer overflow-hidden rounded-full px-3 focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-on-media"
+            className="touch-size pointer-events-auto"
             onPointerEnter={() => setHeld(true)}
             onPointerLeave={() => setHeld(false)}
             onFocus={() => setHeld(true)}
@@ -301,7 +295,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
             }}
           >
             {toast.action.label}
-          </button>
+          </Button>
         )}
       </div>
     </div>

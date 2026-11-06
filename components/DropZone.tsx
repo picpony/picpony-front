@@ -186,11 +186,12 @@ export default function DropZone({
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
+        data-ripple=""
         className={cn(
           'absolute inset-0 rounded-[inherit] touch-manipulation',
           'focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-          state === 'idle' && !disabled && 'state-layer',
+          state !== 'dragging' && !disabled && 'state-layer',
         )}
       />
       <input

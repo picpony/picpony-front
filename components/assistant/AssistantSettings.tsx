@@ -140,7 +140,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   return <>
     {/* Busy actions retain focus and material while blocking duplicate activation.
         See docs/design/primitives.md#buttons-icons-and-semantics. */}
-    <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} subtitle="权限与额度随当前账户保存" actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh size={ICON.standard} />} />}>
+    <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} subtitle="权限与额度随当前账户保存" actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh />} />}>
       {!quota.data || !permission.data ? !problem && <AssistantSettingsSkeleton /> : <>
         <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '管理员暂未开放彩彩 AI，你的选择仍会保留' : '开启后可长按吉祥物与彩彩聊天'} />
         <SettingsRow label="权限规则" supporting={permission.data === 'full' ? '按你的指令直接执行，不再逐次确认' : '写入、发送和删除等操作执行前需要确认'}

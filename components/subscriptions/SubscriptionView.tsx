@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { MdImage, MdSearch, MdSettings } from 'react-icons/md';
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
@@ -12,7 +11,7 @@ import MasonryGrid from '@/components/MasonryGrid';
 import PageBack from '@/components/PageBack';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import FollowHeight from '@/components/FollowHeight';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { normaliseTagName } from '@/lib/api/tagSubscriptions';
@@ -164,10 +163,9 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
           title="暂无可显示的图片"
           description="此标签下没有图片，或者都在当前的内容筛选设置之外"
           action={
-            <Link scroll={false} href="/settings" className={buttonClasses({ variant: 'tonal' })}>
-              <MdSettings aria-hidden="true" />
+            <ButtonLink href="/settings" variant="tonal" icon={<MdSettings />}>
               前往设置
-            </Link>
+            </ButtonLink>
           }
         />
       );
@@ -239,14 +237,13 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
             <div className="mt-1 text-body-m text-on-surface-variant tabular-nums">{status}</div>
           </FollowHeight>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Link
-              scroll={false}
+            <ButtonLink
               href={`/search?q=${encodeURIComponent(tagName)}`}
-              className={buttonClasses({ variant: 'text' })}
+              variant="text"
+              icon={<MdSearch />}
             >
-              <MdSearch aria-hidden="true" />
               在搜索中查看
-            </Link>
+            </ButtonLink>
             <SubscribeButton tag={tagName} />
           </div>
         </div>

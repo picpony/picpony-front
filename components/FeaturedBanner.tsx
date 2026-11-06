@@ -350,9 +350,10 @@ export default function FeaturedBanner({
         <button
           type="button"
           onClick={handleReveal}
+          data-ripple=""
           inert={!covered}
           aria-label={`显示剧透图片：${spoilers.join('、')}`}
-          className={`absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg bg-surface-container-highest px-6 text-center text-on-surface-variant select-none focus-visible:outline-hidden focus-visible:ring-2 focus-ring forced-boundary transition-opacity spring-fast-effects ${
+          className={`state-layer absolute inset-0 z-30 flex cursor-pointer touch-manipulation flex-col items-center justify-center gap-2 rounded-lg bg-surface-container-highest px-6 text-center text-on-surface-variant select-none focus-visible:outline-hidden focus-visible:ring-2 focus-ring forced-boundary transition-opacity spring-fast-effects ${
             covered ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
         >

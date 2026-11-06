@@ -157,32 +157,22 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
     onCancelReply();
   };
 
-  if (!signedIn) {
-    return (
-      <button
-        type="button"
-        /* Before hydration the session is unknown; pressing it then does nothing wrong. */
-        onClick={() => openAuth('login')}
-        className="flex h-14 w-full cursor-pointer items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
-      >
-        {trimmed ? '登录后继续编辑评论' : '登录后发表评论'}
-      </button>
-    );
-  }
-
-  if (!editorOpen) {
+  if (!signedIn || !editorOpen) {
     return (
       /* A real `<button>` shaped as the filled field it opens into: it starts the editor, so it
          has to be reachable by keyboard and announce itself. 56dp, the field's own height — the
          354px box it used to reserve put most of a phone screen of nothing above the thread. */
       <button
         type="button"
-        onClick={() => setPressedWrite(imageId)}
-        onPointerEnter={warmEditor}
-        onFocus={warmEditor}
-        className="flex h-14 w-full cursor-text items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+        onClick={() => signedIn ? setPressedWrite(imageId) : openAuth('login')}
+        onPointerEnter={signedIn ? warmEditor : undefined}
+        onFocus={signedIn ? warmEditor : undefined}
+        data-ripple=""
+        className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
       >
-        <span className="truncate">{trimmed ? '继续编辑评论…' : '写下你的评论…'}</span>
+        <span className="truncate">
+          {signedIn ? (trimmed ? '继续编辑评论…' : '写下你的评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}
+        </span>
       </button>
     );
   }

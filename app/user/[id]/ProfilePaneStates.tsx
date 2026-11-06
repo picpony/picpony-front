@@ -1,12 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { MdBlock, MdVisibilityOff } from 'react-icons/md';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Skeleton from '@/components/Skeleton';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
 import { settingsHref } from '@/app/settings/tabs';
@@ -63,9 +62,13 @@ export function OwnerHiddenNote({ tab }: { tab: ProfileTab }) {
         <MdVisibilityOff size={ICON.dense} aria-hidden="true" />
         你的{what}已对其他人隐藏
       </span>
-      <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'text', size: 'xs' })}>
+      <ButtonLink
+        href={settingsHref('account')}
+        variant="text"
+        size="xs"
+      >
         前往设置
-      </Link>
+      </ButtonLink>
     </div>
   );
 }

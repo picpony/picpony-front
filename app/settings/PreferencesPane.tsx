@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { MdFilterList, MdNotifications, MdSpeed, MdVisibility } from 'react-icons/md';
-import Button, { buttonClasses } from '@/components/Button';
+import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import Select from '@/components/Select';
 import { ICON } from '@/lib/icons';
 import { LS_KEYS } from '@/lib/constants';
@@ -119,14 +119,13 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           label="屏蔽组"
           supporting="按标签隐藏图片，或给图片盖上遮罩"
           action={
-            <Link
-              scroll={false}
+            <ButtonLink
               href="/block-groups"
               aria-label="管理屏蔽组"
-              className={buttonClasses({ variant: 'tonal' })}
+              variant="tonal"
             >
               管理
-            </Link>
+            </ButtonLink>
           }
         />
       </SettingsSection>
@@ -211,14 +210,13 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           label="性能测试"
           supporting="自动测试打开、关闭、拖动和滚动是否流畅，并导出报告"
           action={
-            <Link
-              scroll={false}
+            <ButtonLink
               href="/perf"
               aria-label="打开性能测试"
-              className={buttonClasses({ variant: 'tonal' })}
+              variant="tonal"
             >
               打开
-            </Link>
+            </ButtonLink>
           }
         />
       </SettingsSection>

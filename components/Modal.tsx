@@ -12,7 +12,6 @@ import {
   useScrollLock,
   OverlayLayerContext,
 } from '@/lib/overlay';
-import { ICON } from '@/lib/icons';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { surfaceArrival, surfaceDeparture } from '@/lib/springTiming';
@@ -381,8 +380,8 @@ export default function Modal({
                 dismiss
                 /* Centred on the headline's 32dp line, overhanging the row by 4dp
                    each way, so the ✕ never sets the header's height. */
-                className="-my-1 -mr-2 ml-auto hover:text-on-surface"
-                icon={<MdClose size={ICON.standard} />}
+                className="-my-1 -mr-2 ml-auto"
+                icon={<MdClose />}
               />
             )}
           </div>

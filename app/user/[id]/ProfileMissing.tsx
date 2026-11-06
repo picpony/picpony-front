@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { MdHome, MdPersonOff } from 'react-icons/md';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageBack from '@/components/PageBack';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useEscapeBack } from '@/lib/hooks';
 import { apiErrorMessage } from '@/lib/api/errors';
@@ -34,10 +33,13 @@ export function ProfileMissing() {
         title="用户不存在"
         description="该用户可能已注销，或者链接本来就不对。"
         action={
-          <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
-            <MdHome aria-hidden="true" />
+          <ButtonLink
+            href="/"
+            variant="filled"
+            icon={<MdHome />}
+          >
             回到首页
-          </Link>
+          </ButtonLink>
         }
       />
     </>

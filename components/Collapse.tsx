@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-interface CollapseProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'inert' | 'aria-hidden'> {
+interface CollapseProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   open: boolean;
   children: ReactNode;
 }
@@ -25,19 +25,21 @@ interface CollapseProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children' 
  * than focusable inside `aria-hidden`. The clip keeps a 4px margin, so a focused control at the
  * row's edge keeps its whole ring; the caller holds the content while it closes.
  */
-export default function Collapse({ open, children, className = '', ...rest }: CollapseProps) {
+export default function Collapse({
+  open,
+  children,
+  className = '',
+  inert = false,
+  'aria-hidden': ariaHidden,
+  ...rest
+}: CollapseProps) {
   return (
     <div
       {...rest}
-      inert={!open}
-      aria-hidden={open ? undefined : true}
-      className={cn(
-        'grid grid-cols-1',
-        open
-          ? 'grid-rows-[1fr] [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-default-effects)_var(--ease-spring-effects)]'
-          : 'grid-rows-[0fr] opacity-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects),opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]',
-        className,
-      )}
+      inert={!open || inert}
+      aria-hidden={open ? ariaHidden : true}
+      data-open={open}
+      className={cn('m3-collapse grid grid-cols-1', className)}
     >
       <div className="min-h-0 min-w-0 overflow-clip [overflow-clip-margin:4px]">{children}</div>
     </div>

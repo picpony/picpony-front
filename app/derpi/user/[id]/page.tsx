@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   MdChatBubbleOutline,
@@ -38,7 +37,7 @@ import FailedTurnHold from '@/components/FailedTurnHold';
 import PageBack from '@/components/PageBack';
 import SectionHeading from '@/components/SectionHeading';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { useTooltip } from '@/components/Tooltip';
 import DerpiDescription from './DerpiDescription';
 import { derpiFallbackUrl, derpiProfileUrl } from './derpiLinks';
@@ -202,10 +201,13 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             title="用户不存在"
             description="这个 Derpibooru 账户不存在，或者链接本来就不对。"
             action={
-              <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
-                <MdHome aria-hidden="true" />
+              <ButtonLink
+                href="/"
+                variant="filled"
+                icon={<MdHome />}
+              >
                 回到首页
-              </Link>
+              </ButtonLink>
             }
           />
         ) : (
@@ -219,15 +221,16 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             onRetry={isRetryable(profileRead.error) ? profileRead.refresh : undefined}
             action={
               isRetryable(profileRead.error) ? undefined : (
-                <a
+                <ButtonLink
                   href={derpiFallbackUrl(userId)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={buttonClasses({ variant: 'filled' })}
+                  variant="filled"
+                  prefetch={false}
+                  icon={<MdOpenInNew />}
                 >
-                  <MdOpenInNew aria-hidden="true" />
-                  <span className="min-w-0 truncate">在 Derpibooru 查看</span>
-                </a>
+                  在 Derpibooru 查看
+                </ButtonLink>
               )
             }
           />
@@ -313,15 +316,18 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 >
                   搜索 TA 的作品
                 </Button>
-                <a
+                <ButtonLink
                   href={derpiProfileUrl(profile)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={buttonClasses({ variant: 'tonal', size: 'lg', className: '@lg:flex-1' })}
+                  variant="tonal"
+                  size="lg"
+                  className="@lg:flex-1"
+                  prefetch={false}
+                  icon={<MdOpenInNew />}
                 >
-                  <MdOpenInNew aria-hidden="true" />
-                  <span className="min-w-0 truncate">在 Derpibooru 查看主页</span>
-                </a>
+                  在 Derpibooru 查看主页
+                </ButtonLink>
               </>
             ) : (
               <>

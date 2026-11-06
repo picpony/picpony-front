@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Link from 'next/link';
 import { MdAdd, MdClose, MdRemove, MdShoppingCartCheckout, MdToll } from 'react-icons/md';
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
@@ -10,7 +9,7 @@ import PresenceBlock from '@/components/PresenceBlock';
 import PresenceList from '@/components/PresenceList';
 import Skeleton from '@/components/Skeleton';
 import { statusViewBox } from '@/components/StatusView';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { formatExactCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
@@ -201,9 +200,9 @@ function CartFooter({
                     <p className="text-body-s text-error" role="status">
                       金币不足，还差 {formatExactCount(part.short)} 金币
                     </p>
-                    <Link scroll={false} href="/tasks" className={buttonClasses({ variant: 'text', size: 'xs' })}>
+                    <ButtonLink href="/tasks" variant="text" size="xs">
                       去做任务赚金币
-                    </Link>
+                    </ButtonLink>
                   </div>
                 </div>
               );

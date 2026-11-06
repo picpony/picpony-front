@@ -6,6 +6,7 @@ export type ButtonVariant =
   | 'surface'
   | 'accent'
   | 'text'
+  | 'on-fill'
   | 'danger'
   | 'danger-text'
   | 'success'
@@ -28,9 +29,8 @@ export type ButtonSize = 'xs' | 'md' | 'lg';
 
 /**
  * Every variant is a container/on-container token pair, so none needs a dark
- * counterpart. Every variant carries the *same* focus ring — deliberate: a
- * focus ring answers "where is the keyboard" and must look identical on every
- * control (M3 draws it from one role for the same reason).
+ * counterpart. Ordinary controls share one focus ring; on-fill actions use an
+ * inset contrasting ring within their enclosing fill.
  *
  * **There is no outlined variant.** M3 does specify one; every use here was a
  * secondary action beside a filled primary, where a 1dp keyline reads as a
@@ -50,6 +50,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
   accent: 'bg-primary-container text-on-primary-container focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
+  // Actions within a semantic fill keep its ink and draw focus inside that fill.
+  'on-fill': 'bg-transparent text-on-fill focus-ring-on-media',
   danger: 'bg-error-fill text-on-fill focus-ring forced-boundary',
   /* A destructive action that is not the primary one on its screen. A variant,
      not `variant="text"` plus a colour at the call site: `cn` is a plain join
@@ -103,9 +105,9 @@ const HAS_MAX_WIDTH = /(?:^|\s)max-w-\S+/;
    jumps. The press itself is `data-pressed`, written by `RippleLayer`. A call site that
    names its own corner keeps it, and gets no morph. */
 const SHAPES: Record<ButtonSize, string> = {
-  xs: 'rounded-[1rem] data-pressed:rounded-sm',
-  md: 'rounded-[1.25rem] data-pressed:rounded-md',
-  lg: 'rounded-[1.75rem] data-pressed:rounded-lg',
+  xs: 'rounded-lg data-pressed:rounded-sm',
+  md: 'rounded-xl data-pressed:rounded-md',
+  lg: 'rounded-2xl data-pressed:rounded-lg',
 };
 const HAS_RADIUS = /(?:^|\s)(?:\S+:)?rounded(?:-\S+)?/;
 
@@ -164,7 +166,8 @@ export function buttonClasses({
     loading ? 'cursor-wait' : disabled ? 'cursor-not-allowed' : 'cursor-pointer',
     /* Material changes share FastEffects with the icon button and text field; the corner morph
        is on DefaultEffects, as `Button.kt` (no bounce in a shape morph). */
-    '[transition:color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-radius_var(--duration-spring-default-effects)_var(--ease-spring-effects)] focus-visible:ring-2',
+    '[transition:color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-radius_var(--duration-spring-default-effects)_var(--ease-spring-effects)]',
+    variant === 'on-fill' ? 'focus-visible:inset-ring-2' : 'focus-visible:ring-2',
     /* Hover/focus/press are the shared M3 state layer. No press scale: a transforming
        button is one more thing the hero flight's rect read can catch mid-change (a corner
        is not — it moves nothing's box). */

@@ -14,8 +14,8 @@ const virtual = {
   'next/dynamic': `module.exports=()=>()=>null;`,
   /* ColorSwatch's dialog (components/Input.tsx) loads on demand and carries the HCT tools; no fixture here opens it. */
   './ColorPicker': `module.exports=()=>null;`,
-  '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
-  '@/lib/motion': `exports.spring=()=>({});exports.gsap={to:()=>({kill(){}})};`,
+  '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=(category='feedback')=>category==='feedback'?(window.feedbackTier||'off'):'off';exports.scaledMs=x=>x;`,
+  '@/lib/motion': `exports.spring=()=>({});exports.gsap={to:(_,options)=>{const run={killed:false,complete:()=>options.onComplete?.()};window.resetRuns.push(run);return {kill(){run.killed=true;}};}};`,
   /* `POST /auth/challenges` → the challenge; `POST /auth/challenges/{id}/verification {x, trace}` → `{proof}`. */
   '@/lib/api/picpony': `exports.captchaGet=()=>window.captchaGet();exports.captchaVerify=(id,x,trace)=>window.captchaVerify(id,x,trace);`,
   'react-icons/md': `const React=require('react');module.exports=new Proxy({}, {get:()=>props=>React.createElement('svg',props)});`,
@@ -41,7 +41,7 @@ import Select from '@/components/Select';
 import Menu from '@/components/Menu';
 import CaptchaModal from '@/components/CaptchaModal';
 import {useOverlayLayer} from '@/lib/overlay';
-window.calls=[]; window.getCalls=0; window.failGet=true; window.verifySuccess=true;
+window.calls=[]; window.getCalls=0; window.failGet=true; window.verifySuccess=true; window.resetRuns=[];
 window.captchaGet=async()=>{
   window.getCalls++;
   if(window.failGet) throw new Error('offline');
@@ -283,19 +283,46 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     page.evaluate('window.verifySuccess=false;window.verified=null')
     page.get_by_role('button',name='Open captcha',exact=True).click()
-    drag_captcha()
+    expect(captcha.locator('img[alt="验证码背景"]')).to_be_visible()
     gets=page.evaluate('window.getCalls')
+    drag_captcha()
     expect(captcha).to_contain_text('校验未通过')
     assert page.evaluate('window.verified') is None
-    # A rejected attempt fetches the next challenge by itself (no retry button to find), the
-    # knob is home, and the reason stays on screen.
+    # Off motion resets immediately, fetches exactly one fresh challenge and retains the error.
     page.wait_for_function('window.getCalls > %d' % gets)
+    assert page.evaluate('window.getCalls')==gets+1
     expect(captcha.locator('img[alt="验证码背景"]')).to_be_visible()
     expect(slider).to_have_css('transform','matrix(1, 0, 0, 1, 0, 0)')
     expect(captcha).to_contain_text('校验未通过')
+    # Standard motion waits for the reset, then cancels its watchdog. A racing or repeated
+    # completion must never fetch a second challenge.
+    page.evaluate('window.feedbackTier="standard"')
+    gets=page.evaluate('window.getCalls')
+    drag_captcha()
+    page.wait_for_function('window.resetRuns.length===1')
+    assert page.evaluate('window.getCalls')==gets
+    page.evaluate('window.resetRuns[0].complete();window.resetRuns[0].complete()')
+    page.wait_for_function('window.getCalls===%d' % (gets+1))
+    page.wait_for_timeout(650)
+    assert page.evaluate('window.getCalls')==gets+1
+    # If the animation never completes, the bound refreshes once and kills the old reset.
+    gets=page.evaluate('window.getCalls')
+    drag_captcha()
+    page.wait_for_function('window.resetRuns.length===2')
+    page.wait_for_function('window.getCalls===%d' % (gets+1))
+    assert page.evaluate('window.resetRuns[1].killed')
+    page.evaluate('window.resetRuns[1].complete()')
+    assert page.evaluate('window.getCalls')==gets+1
+    # Closing while a reset is pending cancels both paths, including a late completion.
+    gets=page.evaluate('window.getCalls')
+    drag_captcha()
+    page.wait_for_function('window.resetRuns.length===3')
     page.get_by_role('button',name='取消',exact=True).click()
     expect(page.get_by_role('dialog',name='安全验证')).not_to_be_visible()
-    page.wait_for_timeout(300)
+    assert page.evaluate('window.resetRuns[2].killed')
+    page.evaluate('window.resetRuns[2].complete();window.feedbackTier="off"')
+    page.wait_for_timeout(650)
+    assert page.evaluate('window.getCalls')==gets
     page.evaluate('window.verifySuccess=true;window.pendingVerify=true')
     page.get_by_role('button',name='Open captcha',exact=True).click()
     drag_captcha()
@@ -325,7 +352,7 @@ with sync_playwright() as p:
     assert pointer_track[0]==[0,0,0] and pointer_track[-1][0]==round(pointer['x'])
     assert pointer_track[-1][1]==3 and len(pointer_track)>2
     assert not errors, errors
-    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, uncontained layer beside live chrome, captcha failure/retry/cancel, mouse and touch protocol, no keyboard/contact entry, cancellation during exit')
+    print('PASS: modal Tab boundaries, portal focus, topmost Escape, simultaneous nesting and paint order, real editor Tab, menu Tab exits, callback updates, disabled Escape, nested restoration, drawer/detail isolation, uncontained layer beside live chrome, captcha failure/retry/cancel, reset completion/watchdog/closing, mouse and touch protocol, no keyboard/contact entry, cancellation during exit')
     browser.close()
 `;
 try {

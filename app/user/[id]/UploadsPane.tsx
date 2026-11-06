@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { MdCloudUpload, MdLinkOff, MdSearch, MdSettings, MdUpload } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { useBrowsingFingerprint, userUploads } from '@/lib/resources';
@@ -19,7 +18,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import FailedTurnHold from '@/components/FailedTurnHold';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
 import { settingsHref } from '@/app/settings/tabs';
@@ -103,10 +102,13 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         title="你还没有绑定 API Key"
         description="绑定 Derpibooru 的 API Key 后，你上传的作品会显示在这里"
         action={
-          <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'tonal' })}>
-            <MdSettings aria-hidden="true" />
+          <ButtonLink
+            href={settingsHref('account')}
+            variant="tonal"
+            icon={<MdSettings />}
+          >
             前往设置
-          </Link>
+          </ButtonLink>
         }
       />
     ) : (
@@ -137,10 +139,13 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         title="暂无上传记录"
         description="在当前的内容筛选设置下没有可显示的作品"
         action={
-          <Link scroll={false} href="/upload" className={buttonClasses({ variant: 'tonal' })}>
-            <MdUpload aria-hidden="true" />
+          <ButtonLink
+            href="/upload"
+            variant="tonal"
+            icon={<MdUpload />}
+          >
             上传作品
-          </Link>
+          </ButtonLink>
         }
       />
     ) : (
@@ -162,14 +167,14 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <p className="text-body-m text-on-surface-variant tabular-nums">共 {formatCount(data.total)} 张</p>
         {term && (
-          <Link
-            scroll={false}
+          <ButtonLink
             href={`/search?q=${encodeURIComponent(term)}`}
-            className={buttonClasses({ variant: 'text', size: 'xs' })}
+            variant="text"
+            size="xs"
+            icon={<MdSearch />}
           >
-            <MdSearch aria-hidden="true" />
             {own ? '搜索我的作品' : '搜索 TA 的作品'}
-          </Link>
+          </ButtonLink>
         )}
       </div>
       {failedTurn && (

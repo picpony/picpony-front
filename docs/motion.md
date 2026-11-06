@@ -13,6 +13,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial`; opacity `fastEffects`; radio ring colour `defaultEffects` | Assigned effects fade | `RadioButton.kt` |
 | Checkbox mark / box | Mark `defaultSpatial`, box `defaultEffects` | Box `fastEffects`; mark uses `CHECK_SNAP_DELAY_MS` | `Checkbox.kt` |
 | Slider handle width | `fastSpatial`; position follows input directly | Same role | `Slider.kt` |
+| Captcha handle reset | `fastSpatial`; refresh after completion with the shared watchdog | No additional puzzle motion | Control feedback |
 | Icon rotation, including dismiss | `fastSpatial` | `fastSpatial` | Project mapping |
 | Grid selection mark | Box `fastSpatial`, colour `fastEffects` | `fastEffects` | Project mapping |
 | Field label and notch | Bounds `layout`, ink `fastEffects` | Same split | `.m3-field` |
@@ -29,7 +30,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Sheet, side panel, modal drawer | `defaultSpatial` with edge skirt; scrim `defaultEffects` | Surface `fastEffects`, scrim `defaultEffects`; drag release `defaultSpatial` | `BottomSheet.kt`, `ModalNavigationDrawer` |
 | Docked drawer / content width | `layout` | `layout` | Project mapping |
 | Search suggestions | Height `slowSpatial`, fade `defaultEffects`; replacement height `layout` | Height `defaultSpatial`, fade `defaultEffects` | `rememberSearchBarState` |
-| Collapsible panel | Bounds `layout`, content `defaultEffects` | Bounds `layout`, content `fastEffects` | `animateContentSize`, `expandVertically` |
+| Collapsible panel | Bounds `layout`, content `defaultEffects`, both in `list` | Bounds `layout`, content `fastEffects` | `animateContentSize`, `expandVertically` |
 | `FollowHeight`, `SizeSwap`, cart spacer | `layout` | `layout` | `animateContentSize`, `SizeTransform` |
 | List/grid/table placement | `layout`; new grid card `defaultSpatial` + `defaultEffects` | `fastEffects` | `Modifier.animateItem` |
 | Selection / cart bar | `surfaceArrival('default')` | `fastEffects` | Project mapping |

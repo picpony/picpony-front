@@ -3400,6 +3400,22 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
+/* Collapse owns layout and content opacity on the list clock. Its controls keep feedback timing. */
+.m3-collapse {
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows calc(var(--motion-base-spring-layout) * var(--motion-scale-list)) var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-list)) var(--ease-spring-effects);
+}
+
+.m3-collapse[data-open='false'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition-duration:
+    calc(var(--motion-base-spring-layout) * var(--motion-scale-list)),
+    calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-list));
+}
+
 /* A newly portalled tooltip has no previous style for a transition to start from.
    Supply only that first frame — `Tooltip.kt`'s closed pose, 0.8 scale at zero opacity;
    subsequent open/close changes reverse the same transitions from the current pose, including

@@ -2,7 +2,6 @@
 
 import type { MouseEvent, ReactNode } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   MdAccessTime,
@@ -27,7 +26,7 @@ import ProgressBar from '@/components/ProgressBar';
 import RoleBadge from '@/components/RoleBadge';
 import Skeleton from '@/components/Skeleton';
 import UserBadge from '@/components/UserBadge';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
 import { settingsHref } from '@/app/settings/tabs';
@@ -180,16 +179,22 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
             that was already there (48dp band, 40dp control; 64dp from `sm`). */}
         <div className="absolute right-0 top-1 flex gap-2 sm:top-3">
           {profile && own && (
-            <Link scroll={false} href={settingsHref('account')} className={buttonClasses({ variant: 'tonal' })}>
-              <MdEdit aria-hidden="true" />
+            <ButtonLink
+              href={settingsHref('account')}
+              variant="tonal"
+              icon={<MdEdit />}
+            >
               编辑资料
-            </Link>
+            </ButtonLink>
           )}
           {profile && canMessage && (
-            <Link scroll={false} href={`/messages?to=${profile.id}`} className={buttonClasses({ variant: 'filled' })}>
-              <MdMessage aria-hidden="true" />
+            <ButtonLink
+              href={`/messages?to=${profile.id}`}
+              variant="filled"
+              icon={<MdMessage />}
+            >
               发送私信
-            </Link>
+            </ButtonLink>
           )}
         </div>
 

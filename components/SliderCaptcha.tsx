@@ -7,6 +7,7 @@ import { apiErrorMessage } from '@/lib/api/errors';
 import { clamp, clamp01, cn } from '@/lib/utils';
 import { gsap, spring } from '@/lib/motion';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
+import { SPRING_MS } from '@/lib/spring';
 import { ICON } from '@/lib/icons';
 import Spinner from './Spinner';
 import Skeleton from './Skeleton';
@@ -56,9 +57,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const puzzleHeight = 155;
   const pieceSize = 50;
   const maxSliderX = puzzleWidth - pieceSize;
-  /** `long1` on M3's scale — the shake is a pre-sampled keyframe track, so this
-   *  is its whole clock and the curve is `none`. */
-  const SHAKE_SECONDS = 0.45;
 
   const [bgImage, setBgImage] = useState('');
   const [pieceImage, setPieceImage] = useState('');
@@ -175,7 +173,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   }, [layout, pieceImage, paint]);
 
   /** Glide the knob (and piece) home instead of teleporting after a miss. */
-  const snapBack = useCallback(() => {
+  const snapBack = useCallback((onComplete?: () => void) => {
     snapTweenRef.current?.kill();
     const from = sliderXRef.current;
     sliderXRef.current = 0;
@@ -184,6 +182,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
        input never having been registered — so `reduced` keeps the glide. */
     if (from <= 0 || motionTier() === 'off') {
       paint(0);
+      onComplete?.();
       return;
     }
     const proxy = { x: from };
@@ -198,6 +197,8 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       onComplete: () => {
         sliderXRef.current = 0;
         paint(0);
+        snapTweenRef.current = null;
+        onComplete?.();
       },
     });
   }, [paint]);
@@ -215,29 +216,6 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     },
     [],
   );
-
-  // Physical feedback on failure: shake the puzzle while the message appears.
-  useEffect(() => {
-    /* The shake is pure feedback with no state in it, so both non-standard tiers
-        drop it and the message under the track carries the failure alone. */
-    if (!errorMsg || loadFailed || motionTier() !== 'standard') return;
-    const el = containerRef.current;
-    if (!el) return;
-    const tween = gsap.to(el, {
-      keyframes: { x: [0, -9, 8, -5, 3, 0] },
-      duration: SHAKE_SECONDS,
-      /* `none`, because the amplitudes are already in the keyframe list: laying a
-          curve over an explicit track re-shapes the whole shake, so the numbers
-          were not the ones that played. The pre-sampled-track case the motion
-          rules allow `linear` for. */
-      ease: 'none',
-      clearProps: 'transform',
-    });
-    return () => {
-      tween.kill();
-      gsap.set(el, { clearProps: 'transform' });
-    };
-  }, [errorMsg, loadFailed]);
 
   const getClientX = (e: MouseEvent | TouchEvent): number => {
     if ('touches' in e) {
@@ -300,6 +278,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     if (!active) {
       requestRef.current += 1;
       window.clearTimeout(refetchTimerRef.current);
+      snapTweenRef.current?.kill();
       // The ref alone: a leaving dialog's knob does not need to redraw, and a reopen fetches anew.
       challengeReadyRef.current = false;
       removeDragListenersRef.current?.();
@@ -311,21 +290,21 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     return () => { fetchedRef.current = false; };
   }, [active, fetchCaptcha]);
 
-  /**
-   * A rejected attempt: report it, glide the knob home, and — once the shake has
-   * played — load the next challenge, so the knob works again without a detour
-   * through a retry button. A wall-clock bound on a GSAP animation, so it takes the
-   * slowest speed's scale (docs/motion-system.md#animation-watchdogs).
-   */
+  /** Refresh after the handle returns, bounded by docs/motion-system.md#animation-watchdogs. */
   const rejectAttempt = useCallback(
     (message: string) => {
-      snapBack();
       trackRef.current = [];
       setErrorMsg(message);
       window.clearTimeout(refetchTimerRef.current);
-      refetchTimerRef.current = window.setTimeout(() => {
+      let refreshed = false;
+      const refresh = () => {
+        if (refreshed) return;
+        refreshed = true;
+        window.clearTimeout(refetchTimerRef.current);
         if (mountedRef.current && activeRef.current) void fetchCaptcha({ keepError: true });
-      }, SHAKE_SECONDS * 1000 * MOTION_SPEED_SCALE.slow);
+      };
+      refetchTimerRef.current = window.setTimeout(refresh, SPRING_MS.fastSpatial * MOTION_SPEED_SCALE.slow);
+      snapBack(refresh);
     },
     [fetchCaptcha, snapBack],
   );

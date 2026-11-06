@@ -278,9 +278,10 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
         <button
           type="button"
           onClick={handleReveal}
+          data-ripple=""
           inert={revealed}
           aria-label={`显示剧透图片：${spoilers.join('、')}`}
-          className={`card-spoiler absolute inset-0 z-20 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg bg-surface-container-highest px-3 text-center text-on-surface-variant select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset forced-boundary transition-opacity spring-fast-effects ${
+          className={`card-spoiler state-layer absolute inset-0 z-20 flex cursor-pointer touch-manipulation flex-col items-center justify-center gap-1 rounded-lg bg-surface-container-highest px-3 text-center text-on-surface-variant select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset forced-boundary transition-opacity spring-fast-effects ${
             revealed ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >

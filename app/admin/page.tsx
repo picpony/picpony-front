@@ -1,14 +1,13 @@
 'use client';
 
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { MdDashboard, MdHome } from 'react-icons/md';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
 import FollowHeight from '@/components/FollowHeight';
 import SignInRequired from '@/components/SignInRequired';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import { ICON } from '@/lib/icons';
 import { useSession } from '@/lib/hooks';
 import type { Role } from '@/lib/roles';
@@ -83,10 +82,13 @@ function AdminGate() {
           title="没有访问权限"
           description="管理面板仅对管理员与小编开放。权限刚刚变更的话，重新登录后再试。"
           action={
-            <Link scroll={false} href="/" className={buttonClasses({ variant: 'filled' })}>
-              <MdHome size={ICON.dense} aria-hidden="true" />
+            <ButtonLink
+              href="/"
+              variant="filled"
+              icon={<MdHome />}
+            >
               回到首页
-            </Link>
+            </ButtonLink>
           }
         />
       </ConsoleColumn>

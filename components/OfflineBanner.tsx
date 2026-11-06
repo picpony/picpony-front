@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useOffline } from 'next/offline';
 import { MdWifiOff } from 'react-icons/md';
 import { ICON } from '@/lib/icons';
-import { cn } from '@/lib/utils';
+import Collapse from './Collapse';
 
 const MESSAGE = '当前网络不可用，恢复后会自动重试';
 
@@ -54,7 +54,7 @@ function useSettledOffline(): boolean {
  * which keeps crawling while a navigation waits for the network — rides its bottom edge.
  * That move is why it follows a settled answer (`useSettledOffline`), not every flip.
  *
- * It opens and closes by its row's height on DefaultEffects, never over its own content.
+ * Collapse owns its layout spring and list-category timing.
  * The strip itself is presentation; the announcement is a separate, always-mounted status
  * region whose text changes, which is what makes a screen reader say it.
  *
@@ -69,23 +69,17 @@ export default function OfflineBanner({ inert }: { inert?: boolean }) {
       <div role="status" className="sr-only">
         {isOffline ? MESSAGE : ''}
       </div>
-      <div
+      <Collapse
+        open={isOffline}
         aria-hidden="true"
-        inert={inert || !isOffline || undefined}
-        className={cn(
-          /* A collapsible strip: its height re-places everything under it, so the layout spring
-             (`expandVertically`), never an effects one. */
-          'grid shrink-0 [transition:grid-template-rows_var(--duration-spring-layout)_var(--ease-spring-effects)]',
-          isOffline ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
+        inert={inert}
+        className="shrink-0"
       >
-        <div className="min-h-0 overflow-hidden">
-          <div className="bg-warning-fill text-on-fill text-label-l flex select-none items-center justify-center gap-2 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-            <MdWifiOff size={ICON.dense} aria-hidden="true" />
-            {MESSAGE}
-          </div>
+        <div className="bg-warning-fill text-on-fill text-label-l flex select-none items-center justify-center gap-2 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
+          <MdWifiOff size={ICON.dense} aria-hidden="true" />
+          {MESSAGE}
         </div>
-      </div>
+      </Collapse>
     </>
   );
 }

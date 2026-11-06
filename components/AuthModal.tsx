@@ -10,7 +10,6 @@ import FollowHeight from './FollowHeight';
 import Spinner from '@/components/Spinner';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks';
-import { ICON } from '@/lib/icons';
 import { MEDIA } from '@/lib/constants';
 
 // Modal owns focus, history and closing even while the form chunk is loading. Its body is
@@ -282,8 +281,8 @@ function AuthModal({
             dismiss
             /* Where every dialog's ✕ sits: 16dp from the trailing edge, centred on the
                first 32dp line (the same place `Modal`'s own header puts it). */
-            className="absolute right-4 top-5 z-10 hover:text-on-surface"
-            icon={<MdClose size={ICON.standard} />}
+            className="absolute right-4 top-5 z-10"
+            icon={<MdClose />}
           />
           <FollowHeight className="my-auto">
             <div

@@ -149,11 +149,11 @@ export default function DetailHeader({
               scroll={false}
               ref={uploaderRef as React.Ref<HTMLAnchorElement>}
               {...uploaderProps}
-              className="group relative flex min-w-0 shrink items-center gap-1.5 rounded-xs touch-target transition-ui hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+              className="group relative flex min-w-0 shrink items-center gap-1.5 rounded-xs touch-target transition-ui hover:text-primary-ink focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
             >
               <MdPerson
                 size={ICON.dense}
-                className="shrink-0 text-on-surface-variant group-hover:text-primary"
+                className="shrink-0 text-on-surface-variant group-hover:text-primary-ink"
                 aria-hidden="true"
               />
               <span className="truncate decoration-1 underline-offset-2 group-hover:underline">

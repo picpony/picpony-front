@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { MdEmojiEvents } from 'react-icons/md';
 import Button from '@/components/Button';
-import { buttonClasses } from '@/components/buttonStyles';
+import ButtonLink from '@/components/ButtonLink';
 import Card from '@/components/Card';
 import ErrorRetry from '@/components/ErrorRetry';
 import PageBack from '@/components/PageBack';
@@ -53,9 +52,12 @@ function ClaimSkeleton() {
 /** The way out of the card: the account's own page when there is one, else home. */
 function ExitLink({ profileHref, emphasized }: { profileHref: string; emphasized: boolean }) {
   return (
-    <Link scroll={false} href={profileHref} className={buttonClasses({ variant: emphasized ? 'filled' : 'tonal' })}>
+    <ButtonLink
+      href={profileHref}
+      variant={emphasized ? 'filled' : 'tonal'}
+    >
       {profileHref === '/' ? '返回首页' : '返回个人主页'}
-    </Link>
+    </ButtonLink>
   );
 }
 
