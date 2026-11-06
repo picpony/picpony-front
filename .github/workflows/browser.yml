@@ -131,6 +131,9 @@ jobs:
       - name: Profile gallery
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:profile-gallery
+      - name: Video card recovery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: bun run test:browser --card-video
       - name: Hero interactions
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:hero

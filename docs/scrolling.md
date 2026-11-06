@@ -74,6 +74,14 @@ Tab memory is keyed by pathname, tab-group position and tab name. Traversal reta
 
 Do not send line-wrapped open proxy URLs into Next's optimizer. `MASONRY_CARD_SIZES` comes from the actual drawer, gutters and column cap. Development bypasses optimization, so verify production too.
 
+## Video cards
+
+`ImageCardVideo` attaches its source near the viewport and keeps `preload="metadata"` with a `#t=0.1` still frame. Hover playback remains subject to motion, visibility and data-saver preferences through `startCardVideoPreview`.
+
+Video cards use the browser-direct attempts in `lib/imageLoader.ts`, including backoff, cache busting and the current forced-line policy. They never enter Next's image optimizer. Each retry mounts a fresh video element to clear its media error. A source change starts a new ladder; an offline failure holds its attempt until connectivity returns. The online listener also checks current connectivity so a quick reconnect cannot be missed. Only an exhausted ladder shows the card's retry control.
+
+Frame readiness requires `readyState >= 2` without a media error. Load, can-play and seek events can reveal the frame; the load watchdog also checks the element before declaring a timeout. Metadata alone is not a decoded frame. Retrying clears the previous frame's readiness and shimmer state.
+
 ## Flight sharpness
 
 The flight paints the card's decoded bitmap into a canvas. The underlying detail image is not the flight's resolution.
@@ -94,6 +102,7 @@ The flight paints the card's decoded bitmap into a canvas. The underlying detail
 | `bun run net:tabnav` | Tab → detail → Back |
 | `bun run perf:pageturn` | No blank in-view card or late hiding of painted cards |
 | `bun run perf:sharpness:assert` | Controlled-CDN flyer upgrade before landing |
+| `bun run test:browser --card-video` | Video frame readiness, media retries, offline recovery and hover playback |
 
 Measure image work at DPR 2. The sharpness probe must sample `.image-hero-flyer-image`, not the underlying detail layer.
 

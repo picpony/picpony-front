@@ -1,10 +1,18 @@
 'use client';
 
-import { startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
 import Skeleton from '@/components/Skeleton';
+import { useSsrImageLine } from '@/components/ImageLineProvider';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
-import { LOAD_TIMEOUT_MS } from '@/lib/imageLoader';
+import {
+  createInitialAttempt,
+  getRawImageUrl,
+  isResilientImageUrl,
+  LOAD_TIMEOUT_MS,
+  resolveNextAttempt,
+  type LoadAttempt,
+} from '@/lib/imageLoader';
 import { startCardVideoPreview } from '@/lib/cardVideoPreview';
 
 type ImageCardVideoProps = {
@@ -26,21 +34,65 @@ type ImageCardVideoProps = {
  * Saver, resting on the card plays the video muted from the start and leaving stops it back on
  * the still. A touch screen has no hover, and 减弱 / 关闭 drop decorative motion by definition.
  *
- * Same shimmer, same cross-fade as `FadeInImage`; a video that fails (or shows no frame within
- * the load timeout) reports it, and the card draws the failure plate.
+ * Loading and recovery follow docs/scrolling.md#video-cards. Only an exhausted retry ladder
+ * reports failure to the card; a transient media error keeps the shimmer while recovering.
  */
-export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
+export default function ImageCardVideo(props: ImageCardVideoProps) {
+  return <ImageCardVideoInner key={props.src} {...props} />;
+}
+
+function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [near, setNear] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const [placeholderGone, setPlaceholderGone] = useState(false);
   const preview = useRef<(() => void) | null>(null);
+  const ssrLine = useSsrImageLine();
+  const rawUrl = getRawImageUrl(src).split('#')[0];
+  const resilient = isResilientImageUrl(src);
+  const [load, setLoad] = useState(() => {
+    const attempt: LoadAttempt = resilient
+      ? createInitialAttempt(rawUrl, { line: ssrLine, optimize: false })
+      : { url: src, optimized: false, tier: 2, retries: 0, giveUp: false, delayMs: 0 };
+    return { attempt, shown: attempt, generation: 0 };
+  });
+  const { attempt, shown, generation } = load;
+  const displayKey = `${generation}:${shown.tier}:${shown.retries}:${shown.url}`;
+  const [heldOffline, setHeldOffline] = useState(false);
+  const timerRef = useRef(0);
+  const reportedRef = useRef(false);
+
+  const fail = () => {
+    if (attempt !== shown || attempt.giveUp || heldOffline) return;
+    window.clearTimeout(timerRef.current);
+    setFrameReady(false);
+    setPlaceholderGone(false);
+    if (navigator.onLine === false) {
+      setHeldOffline(true);
+      return;
+    }
+    setLoad((state) => {
+      if (state.shown !== shown || state.attempt !== state.shown || state.attempt.giveUp) return state;
+      const next = resilient
+        ? resolveNextAttempt(rawUrl, state.attempt)
+        : { ...state.attempt, giveUp: true };
+      return { ...state, attempt: next, shown: next.delayMs > 0 && !next.giveUp ? state.shown : next };
+    });
+  };
+
+  const markFrameReady = (event: SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    if (video !== videoRef.current || attempt !== shown || attempt.giveUp || heldOffline) return;
+    if (video.readyState < 2 || video.error) return;
+    window.clearTimeout(timerRef.current);
+    startTransition(() => setFrameReady(true));
+  };
 
   /* A changed source or an unmounted card ends both playing and still-pending previews. */
   useEffect(() => () => {
     preview.current?.();
     preview.current = null;
-  }, [src, near]);
+  }, [displayKey, near]);
 
   /* Attach the source once the card is within a screen of the viewport — the app scroller,
      or the overlay's own scroller when the grid sits behind an open picture. */
@@ -65,16 +117,59 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
   }, [near]);
 
   useLayoutEffect(() => {
-    /* A cached frame (a return visit) is already decoded: nothing to fade in. */
-    if (near && (videoRef.current?.readyState ?? 0) >= 2) setFrameReady(true);
-  }, [near]);
+    /* Cached frames may precede the listener; a new attempt must clear the old frame's latch. */
+    const video = videoRef.current;
+    const ready = Boolean(near && video && video.readyState >= 2 && !video.error);
+    setFrameReady(ready);
+    if (!ready) setPlaceholderGone(false);
+  }, [near, displayKey]);
 
-  /* No frame within the load timeout counts as a failure, like an image that never loads. */
+  const onLoadTimeout = useEffectEvent(() => {
+    /* `loadeddata` can be missed or suppressed. A decoded frame is success either way. */
+    const video = videoRef.current;
+    if (video && video.readyState >= 2 && !video.error) {
+      startTransition(() => setFrameReady(true));
+    } else {
+      fail();
+    }
+  });
   useEffect(() => {
-    if (!near || frameReady) return;
-    const timer = window.setTimeout(onGiveUp, LOAD_TIMEOUT_MS);
+    if (!near || frameReady || attempt !== shown || attempt.giveUp || heldOffline) return;
+    timerRef.current = window.setTimeout(() => onLoadTimeout(), LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(timerRef.current);
+  }, [near, frameReady, attempt, shown, generation, heldOffline]);
+
+  useEffect(() => {
+    if (attempt === shown || attempt.giveUp) return;
+    const timer = window.setTimeout(() => {
+      setLoad((state) => state.attempt === attempt ? { ...state, shown: attempt } : state);
+    }, attempt.delayMs);
     return () => window.clearTimeout(timer);
-  }, [near, frameReady, onGiveUp]);
+  }, [attempt, shown]);
+
+  useEffect(() => {
+    if (!heldOffline) return;
+    let waiting = true;
+    const onOnline = () => {
+      if (!waiting || navigator.onLine === false) return;
+      waiting = false;
+      setHeldOffline(false);
+      setLoad((state) => ({ ...state, generation: state.generation + 1 }));
+    };
+    window.addEventListener('online', onOnline);
+    /* The network may have recovered between the error and this effect installing its listener. */
+    if (navigator.onLine !== false) queueMicrotask(onOnline);
+    return () => {
+      waiting = false;
+      window.removeEventListener('online', onOnline);
+    };
+  }, [heldOffline]);
+
+  useEffect(() => {
+    if (!attempt.giveUp || reportedRef.current) return;
+    reportedRef.current = true;
+    onGiveUp();
+  }, [attempt.giveUp, onGiveUp]);
 
   useEffect(() => {
     if (!frameReady) return;
@@ -113,8 +208,10 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
         />
       )}
       <video
+        /* A fresh element clears the browser's sticky media error, including an offline retry. */
+        key={displayKey}
         ref={videoRef}
-        src={near ? `${src}#t=0.1` : undefined}
+        src={near ? `${shown.url.split('#')[0]}#t=0.1` : undefined}
         preload={near ? 'metadata' : 'none'}
         muted
         playsInline
@@ -123,8 +220,10 @@ export default function ImageCardVideo({ src, onGiveUp }: ImageCardVideoProps) {
         tabIndex={-1}
         /* A transition, like `FadeInImage`'s load: cosmetic, and it must not interrupt a page
            still mounting its cards. */
-        onLoadedData={() => startTransition(() => setFrameReady(true))}
-        onError={onGiveUp}
+        onLoadedData={markFrameReady}
+        onCanPlay={markFrameReady}
+        onSeeked={markFrameReady}
+        onError={(event) => { if (event.currentTarget === videoRef.current) fail(); }}
         onPointerEnter={startPreview}
         onPointerLeave={stopPreview}
         className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity spring-default-effects ${
