@@ -124,6 +124,7 @@ try {
     : args.includes('--card-video') ? 'testCardVideo.py'
     : args.includes('--editor') ? 'testRichTextEditor.py'
     : args.includes('--motion') ? 'testMotionRegression.py'
+    : args.includes('--slider') ? 'testSlider.py'
     : args.includes('--compat') ? 'testBrowserCompatibility.py' : 'reviewBrowser.py';
   python = spawn(process.env.PYTHON ?? 'python', [process.env.HERO_SCRIPT ?? path.join(root, 'scripts', browserScript), base, fixtureUrl,
     ...args.filter((arg) => arg !== '--hero-visuals')], {

@@ -12,7 +12,8 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Switch handle | `fastSpatial` for travel, press and release; colour `fastEffects` | `fastSpatial` | `Switch.kt`; sprung press is a project refinement |
 | Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial`; opacity `fastEffects`; radio ring colour `defaultEffects` | Assigned effects fade | `RadioButton.kt` |
 | Checkbox mark / box | Mark `defaultSpatial`, box `defaultEffects` | Box `fastEffects`; mark uses `CHECK_SNAP_DELAY_MS` | `Checkbox.kt` |
-| Slider handle width | `fastSpatial`; position follows input directly | Same role | `Slider.kt` |
+| Slider handle ink | Immediate press/focus narrowing inside a fixed box | Immediate restoration | `Slider.kt` (`ThumbContent`) |
+| Slider select jump | `fastSpatial` for handle translation and track clips; drag and keyboard input stay immediate | Release does not restart motion | [Slider](design/layout.md#slider); project addition |
 | Captcha handle reset | `fastSpatial`; refresh after completion with the shared watchdog | No additional puzzle motion | Control feedback |
 | Icon rotation, including dismiss | `fastSpatial` | `fastSpatial` | Project mapping |
 | Grid selection mark | Box `fastSpatial`, colour `fastEffects` | `fastEffects` | Project mapping |

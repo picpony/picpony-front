@@ -1,7 +1,11 @@
 'use client';
 
-import { useId, type InputHTMLAttributes } from 'react';
+import { useCallback, useId, useLayoutEffect, useRef, type InputHTMLAttributes, type PointerEvent } from 'react';
 import { cn, clamp01 } from '@/lib/utils';
+import { useMotionScale, useMotionTier } from '@/lib/appearance';
+import { sampleEasing, sampledTrack } from '@/lib/sampledAnimation';
+import { SHAPE_SPEC, springEase } from '@/lib/spring';
+import { shapeFor, springTiming } from '@/lib/springTiming';
 
 interface SliderProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange' | 'size'> {
@@ -13,39 +17,26 @@ interface SliderProps
   disabled?: boolean;
   /** Required — a bare track has nothing to name it. */
   'aria-label': string;
-  /**
-   * What the current value *means*, read out instead of the bare number —
-   * "0.35" tells a screen-reader user nothing.
-   */
+  /** The meaning of the current value, instead of a bare number. */
   valueText?: (value: number) => string;
   className?: string;
 }
 
+function sliderPose(fraction: number) {
+  return {
+    transform: `translateX(${fraction * 100}%)`,
+    // Oversized insets collapse to an empty clip at either endpoint. Keeping the
+    // gap in every keyframe also keeps it constant during select jumps.
+    active: `inset(0 calc(${(1 - fraction) * 100}% + 0.5rem) 0 0 round var(--radius-sm) 0.125rem 0.125rem var(--radius-sm))`,
+    inactive: `inset(0 0 0 calc(${fraction * 100}% + 0.5rem) round 0.125rem var(--radius-sm) var(--radius-sm) 0.125rem)`,
+  };
+}
+
 /**
- * M3 slider (M3 Expressive geometry — deliberately unlike the old one).
- *
- * The real `<input type="range">` does the work and is painted invisible over
- * the top, like `Checkbox`/`Radio`/`ToggleSwitch`: the platform keeps the drag,
- * the arrow keys, Home/End, the form value and the `slider` role; only the
- * appearance is ours. It is the first child so the painted parts key off it
- * with `peer-*`, and stays on top via z-index rather than document order. Its
- * thumb is 44dp wide so the grab area matches the painted handle's height —
- * the touch target may extend past the component's bounds.
- *
- * **Nothing about the position is transitioned**, deliberately: a slider
- * reports where the input is, and a transition would put the mark behind the
- * finger for the whole drag. The only animated property is the handle's
- * *width* (4dp → 2dp on press — it narrows, never grows).
- *
- * **The painted track spans the handle's travel, not the box.** The native thumb's
- * centre can only travel from half its width to the far end less half its width, and
- * the handle is drawn there; a track painted edge to edge left a 14px active stub at
- * the minimum and the handle standing 22px in, so a value at its minimum read as above
- * it (and the maximum mirrored it). Inset by the half-thumb, the minimum is an empty
- * track with the handle at its start.
- *
- * **Focus is on the handle**, as M3 draws it — the ring used to wrap the whole 44dp-tall
- * control in a pill.
+ * Native range semantics with M3 Expressive paint. Press/focus changes only the
+ * handle's ink; its layout and the native grab target stay fixed. Track selection
+ * animates the paint, while dragging and keyboard input remain immediate.
+ * Geometry, source references and motion: docs/design/layout.md#slider.
  */
 export default function Slider({
   value,
@@ -56,33 +47,75 @@ export default function Slider({
   disabled = false,
   valueText,
   className = '',
+  id,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onLostPointerCapture,
+  onKeyDown,
+  onBlur,
   'aria-label': ariaLabel,
   ...rest
 }: SliderProps) {
-  const id = useId();
-  const span = max - min || 1;
-  const fraction = clamp01((value - min) / span);
+  const generatedId = useId();
+  const railRef = useRef<HTMLDivElement>(null);
+  const positionRef = useRef<HTMLSpanElement>(null);
+  const activeRef = useRef<HTMLSpanElement>(null);
+  const inactiveRef = useRef<HTMLSpanElement>(null);
+  const animations = useRef<Animation[]>([]);
+  const jumpFrom = useRef<number | null>(null);
+  const pointer = useRef<{ id: number; x: number; y: number } | null>(null);
+  const tier = useMotionTier();
+  const scale = useMotionScale('feedback');
+  const fraction = max > min ? clamp01((value - min) / (max - min)) : 0;
+  const pose = sliderPose(fraction);
+
+  const stop = useCallback(() => {
+    for (const animation of animations.current) animation.cancel();
+    animations.current = [];
+  }, []);
+
+  useLayoutEffect(() => {
+    const from = jumpFrom.current;
+    jumpFrom.current = null;
+    stop();
+    const position = positionRef.current;
+    const active = activeRef.current;
+    const inactive = inactiveRef.current;
+    if (disabled || tier === 'off' || from === null || from === fraction || !position || !active || !inactive) return stop;
+
+    const distance = fraction - from;
+    const samples = sampleEasing(springEase(SHAPE_SPEC[shapeFor('fastSpatial')]));
+    // Clamp spring overshoot to the range, without cutting off its settling tail.
+    const bounded = (progress: number) => (clamp01(from + distance * progress) - from) / distance;
+    const timing = springTiming('fastSpatial');
+    const tracks: [HTMLElement, (progress: number) => Keyframe][] = [
+      [position, (progress) => ({ transform: sliderPose(from + distance * progress).transform })],
+      [active, (progress) => ({ clipPath: sliderPose(from + distance * progress).active })],
+      [inactive, (progress) => ({ clipPath: sliderPose(from + distance * progress).inactive })],
+    ];
+    animations.current = tracks.map(([element, frame]) => {
+      const track = sampledTrack(samples, frame, bounded);
+      return element.animate(track.keyframes, { ...timing, easing: track.easing });
+    });
+    return stop;
+  }, [fraction, disabled, tier, scale, stop]);
+
+  function resetPointer(event: PointerEvent<HTMLInputElement>) {
+    if (pointer.current?.id !== event.pointerId) return;
+    pointer.current = null;
+    jumpFrom.current = null;
+  }
 
   return (
     <div
-      className={cn(
-        'relative flex h-11 w-full min-w-0 items-center',
-        disabled && 'disabled-content',
-        className,
-      )}
-      style={
-        {
-          /* The browser's own thumb coordinates: the native thumb travels from
-             half-thumb to 100% minus half-thumb, so a plain percentage would
-             lead the mark at the start and lag it at the end. `--slider-inset` is
-             that half-thumb — where the painted track starts and ends. */
-          '--slider-inset': '1.375rem',
-          '--slider-pos': `calc(${fraction} * (100% - 2.75rem) + 1.375rem)`,
-        } as React.CSSProperties
-      }
+      data-slider=""
+      className={cn('relative flex h-12 w-full min-w-0 select-none items-center', disabled && 'disabled-content', className)}
     >
       <input
-        id={id}
+        {...rest}
+        id={id ?? generatedId}
         type="range"
         min={min}
         max={max}
@@ -92,54 +125,95 @@ export default function Slider({
         aria-label={ariaLabel}
         aria-valuetext={valueText?.(value)}
         onChange={(event) => onValueChange(Number(event.target.value))}
+        onPointerDown={(event) => {
+          onPointerDown?.(event);
+          if (event.defaultPrevented || disabled || !event.isPrimary || event.button !== 0) return;
+          const rail = railRef.current?.getBoundingClientRect();
+          const position = positionRef.current?.getBoundingClientRect();
+          if (!rail || !position || rail.width <= 0) return;
+          pointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+          const halfThumb = (event.currentTarget.getBoundingClientRect().width - rail.width) / 2;
+          const onThumb = Math.abs(event.clientX - (rail.left + fraction * rail.width)) <= halfThumb;
+          jumpFrom.current = onThumb ? null : clamp01((position.left - rail.left) / rail.width);
+          if (onThumb) stop();
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          onPointerMove?.(event);
+          const held = pointer.current;
+          if (!held || held.id !== event.pointerId || (held.x === event.clientX && held.y === event.clientY)) return;
+          jumpFrom.current = null;
+          stop();
+        }}
+        onPointerUp={(event) => {
+          resetPointer(event);
+          onPointerUp?.(event);
+        }}
+        onPointerCancel={(event) => {
+          resetPointer(event);
+          stop();
+          onPointerCancel?.(event);
+        }}
+        onLostPointerCapture={(event) => {
+          if (pointer.current?.id === event.pointerId) {
+            resetPointer(event);
+            stop();
+          }
+          onLostPointerCapture?.(event);
+        }}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          if (!event.defaultPrevented && /^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(event.key)) {
+            jumpFrom.current = null;
+            stop();
+          }
+        }}
+        onBlur={(event) => {
+          pointer.current = null;
+          jumpFrom.current = null;
+          stop();
+          onBlur?.(event);
+        }}
         className={cn(
-          /* On top and transparent: this is the control, everything below is
-             the picture of it. It takes focus; the handle shows it. */
           'peer absolute inset-0 z-10 h-full w-full appearance-none rounded-full bg-transparent focus-visible:outline-hidden',
+          '[touch-action:pan-y_pinch-zoom]',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           '[&::-webkit-slider-thumb]:size-11 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0',
           '[&::-moz-range-thumb]:size-11 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:opacity-0',
         )}
-        {...rest}
       />
-      {/* Active segment: 16dp, from the track's start to 8dp short of the handle's
-          centre (6dp gap + 2dp half-width) — nothing at all at the minimum. A painted
-          mark, so forced colors repaints it in the system highlight. */}
-      <span
-        aria-hidden="true"
-        className="bg-primary-ink absolute h-4 rounded-full forced-mark"
-        style={{
-          left: 'var(--slider-inset)',
-          width: 'max(0px, calc(var(--slider-pos) - var(--slider-inset) - 0.5rem))',
-        }}
-      />
-      {/* Inactive segment: the M3 inactive-track role (secondary-container), the
-          same one the progress indicators use, ending where the handle's travel
-          does. It carries the stop indicator — a 4dp dot saying the track has an
-          end rather than a fade — and clips it, so the dot goes as the segment
-          narrows past it instead of being left sitting on nothing. */}
-      <span
-        aria-hidden="true"
-        className="bg-secondary-container absolute h-4 overflow-hidden rounded-full forced-boundary"
-        style={{
-          left: 'min(calc(100% - var(--slider-inset)), calc(var(--slider-pos) + 0.5rem))',
-          right: 'var(--slider-inset)',
-        }}
-      >
-        <span className="bg-on-secondary-container absolute top-1/2 right-1.5 size-1 -translate-y-1/2 rounded-full" />
-      </span>
-      {/* The handle: 4dp × 44dp, narrowing to 2dp while pressed or focused, and the
-          one part that shows focus. */}
-      <span
+      <div
         aria-hidden="true"
         className={cn(
-          'bg-primary-ink spring-fast-spatial pointer-events-none absolute h-11 w-1 -translate-x-1/2 rounded-full transition-[width]',
-          'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden',
-          'forced-color-adjust-none forced-colors:bg-[color:CanvasText]',
-          !disabled && 'peer-active:w-0.5 peer-focus-visible:w-0.5',
+          'pointer-events-none absolute inset-0 flex items-center overflow-clip',
+          'peer-focus-visible:[&_[data-slider-thumb]]:ring-2 peer-focus-visible:[&_[data-slider-thumb]]:focus-ring',
+          !disabled && 'peer-active:[&_[data-slider-ink]]:scale-x-50 peer-focus-visible:[&_[data-slider-ink]]:scale-x-50',
         )}
-        style={{ left: 'var(--slider-pos)' }}
-      />
+      >
+        {/* The full-width translation box must not widen the surrounding scroller.
+            This paint clip includes the thumb's focus ring and leaves the input outside. */}
+        <div ref={railRef} data-slider-rail="" className="absolute inset-x-5.5 flex h-11 items-center">
+          <span
+            ref={activeRef}
+            data-slider-track="active"
+            className="bg-primary-ink forced-mark absolute h-4 w-full rounded-sm"
+            style={{ clipPath: pose.active }}
+          />
+          <span
+            ref={inactiveRef}
+            data-slider-track="inactive"
+            className="bg-secondary-container forced-boundary absolute h-4 w-full rounded-sm"
+            style={{ clipPath: pose.inactive }}
+          >
+            <span className="bg-primary-ink absolute top-1/2 right-1.5 size-1 -translate-y-1/2 rounded-full" />
+          </span>
+          <span ref={positionRef} data-slider-position="" className="absolute inset-0" style={{ transform: pose.transform }}>
+            <span data-slider-thumb="" className="absolute left-0 h-11 w-1 -translate-x-1/2 rounded-full">
+              <span data-slider-ink="" className="bg-primary-ink block size-full rounded-full forced-color-adjust-none forced-colors:bg-[color:CanvasText]" />
+            </span>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

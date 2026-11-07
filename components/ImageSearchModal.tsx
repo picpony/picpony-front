@@ -248,6 +248,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
           max={1.0}
           step={0.01}
           value={distance}
+          disabled={isUploading}
           onValueChange={(value) => {
             setDistance(value);
             if (status.kind === 'empty') setStatus({ kind: 'idle' });

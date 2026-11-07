@@ -103,13 +103,23 @@ Avatar/SkeletonCircle take box sizes, not icon roles. Avatar supports 32 / 40 / 
 Keep the M3 Expressive geometry:
 
 - Track: 16 dp.
-- Handle: 4 × 44 dp, narrowing to 2 dp on press.
-- Gap around the handle: 6 dp.
-- Position follows the input directly; only handle width animates.
+- Handle: a fixed 4 × 44 dp box, with ink narrowing to 2 dp on press or keyboard focus.
+- Handle state changes are immediate; releasing does not spring its width or move its centre.
+- Reserve a 6 dp gap around the unpressed handle box, including while the ink is narrowed.
+- Track corners: 8 dp at the outer ends, 2 dp towards the handle. The inner corner is a slider-specific shape.
 - The painted track follows handle travel, with the native range's half-thumb inset preserved.
-- Retain the inactive-side stop indicator.
+- Retain the 4 dp inactive-side stop indicator, inset 6 dp from the end.
+- The native input has a 48 dp-high hit region and a fixed 44 dp-wide grab target.
 
-Do not replace the handle with a circular knob or animate its position behind the finger.
+These dimensions and the fixed handle box follow Compose's [SliderTokens](https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SliderTokens.kt) and [Slider.kt](https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Slider.kt) (`ThumbContent`, `TrackInsideCornerSize`). The inset around the native web thumb is a PicPony adaptation.
+
+Select jump is a PicPony addition: clicking the track commits the native value immediately and animates the handle position and both track clips together on `fastSpatial`. A second click starts from the currently painted position. Clamp spatial overshoot to the value range; reduced motion removes overshoot, and off skips interpolation. Use the shared `feedback` tier and speed.
+
+Clip the full-width translated paint box to the control's bounds so it cannot widen an enclosing scroller. The clip must fit the handle's focus ring; keep the native input outside it.
+
+Dragging, keyboard input and externally supplied values paint immediately. Pointer movement takes over an unfinished jump, and release does not launch another animation. Cancellation, blur, disabling and unmounting clear unfinished motion. Do not replace the handle with a circular knob or make it lag behind a drag.
+
+Run `bun run test:slider` against the production build for press/release, select jump, drag interruption, keyboard input, endpoints, touch cancellation and motion preferences. Follow [CSS verification](../css-traps.md) for emitted selectors and rendered geometry.
 
 ## Navigation geometry
 
