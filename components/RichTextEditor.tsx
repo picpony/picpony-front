@@ -835,13 +835,13 @@ export default function RichTextEditor({
           height: max(40px, var(--touch-floor));
           min-width: max(40px, var(--touch-floor));
           padding: 0 8px;
-          border-radius: 9999px;
+          border-radius: calc(max(40px, var(--touch-floor)) / 2);
           color: var(--w-e-toolbar-color, var(--md-sys-color-on-surface-variant));
           fill: currentColor;
           transition:
             background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
             color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-            border-radius var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial);
+            border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
         }
 
         .rich-text-editor [data-toolbar-toggle] {

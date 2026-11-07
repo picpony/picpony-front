@@ -99,14 +99,10 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      leading navigation action over content: the tonal container, in the *square* shape, since
      the button is pinned just inside the content section's 12dp corner, where a pill reads as
      something stuck on the frame. This is `DetailBack`, the back affordance.
-
-     `rounded-md` is `SHAPES.square`'s step, spelled out here because a *state* cannot come from
-     the shape axis — that axis describes the resting box — and emitted here rather than from
-     the call site's `className`, where the `HAS_RADIUS` guard would read it as the call site
-     naming its own corner and suppress the disc. It wins on specificity, and both radii are in
-     `transition-icon-button`'s list, so the disc turns into the tile as it fills. */
+     Shape is resolved with the other corners below so press state and caller-owned corners
+     take precedence over hover; see docs/design/primitives.md#buttons-icons-and-semantics. */
   quiet:
-    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:rounded-md enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
+    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
   outlined:
     'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
@@ -339,6 +335,7 @@ export function iconButtonClasses({
         shape === 'round' && selected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
         shape === 'round' && !selected && SHAPES.round,
         shape === 'square' && SHAPES.square,
+        variant === 'quiet' && shape === 'round' && !selected && 'enabled:hover:not-data-pressed:rounded-md',
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */

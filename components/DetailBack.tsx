@@ -21,9 +21,8 @@ type DetailBackProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  * too large for the corners to read as one curve inside another) — they are neighbours, and 12dp
  * is the shape table's step for a square icon button.
  *
- * A touch screen has no hover, so a finger only ever sees the quiet disc. That is the intent
- * rather than a gap in it: the morph is a reward for a pointer that has committed, and what a
- * finger gets is the form that stays out of the picture's way.
+ * Touch keeps the quiet material and uses the shared icon-button pressed corner. A held press
+ * owns that corner for mouse input too, including while the pointer leaves and re-enters.
  *
  * Icon-only is the M3 back affordance; the label survives as the accessible name
  * and the tooltip. The container, state layer and elevation step come from

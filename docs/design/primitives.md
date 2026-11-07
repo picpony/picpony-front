@@ -112,6 +112,8 @@ IconButton owns its glyph size and tooltip:
 - `toggle` reports both true and false `aria-pressed`; its accessible label stays stable. `selected` alone is visual state.
 - Corner morphs use DefaultEffects, rotation FastSpatial and material FastEffects through `transition-icon-button`.
 
+Pressed corners take precedence over hover and remain unchanged when a held pointer leaves or re-enters. IconButton uses 8 dp at its 32 / 40 dp steps and 12 dp at 56 dp. An explicit corner class suppresses both hover and pressed shape changes, including for `quiet`.
+
 A loading Button/IconButton keeps its footprint, material and focus. It uses `aria-disabled`, `aria-busy` and blocked activation; native `disabled` is for unavailable controls. Loading wins when both props are set. Spinners inherit the intended ink without moving the label.
 
 Spinner takes `tone="primary"`, `"on-primary"` or `"inherit"`. Its primary ink is `primary-ink`, not the pale primary fill.
