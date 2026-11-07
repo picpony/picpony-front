@@ -70,12 +70,15 @@ Do not expand inline prose links into surrounding lines. Keep `touch-manipulatio
 
 | Row | Fine pointer | Coarse pointer |
 | --- | --- | --- |
-| Menu / Select option | 40 dp | 48 dp |
+| Menu / Select option | 40 dp | 40 dp |
 | Drawer navigation | 48 dp | 56 dp |
 | Message contact | 64 dp | 64 dp |
 | Drawer account | 64 dp | 64 dp |
 
 Message contacts use a 40 dp portrait and 12 dp padding. The collapsed rail is 80 dp including its insets.
+
+Menu, Select and one-line menu suggestions share a 40 dp row on mouse and touch. This is a
+PicPony refinement; neither narrow triggers nor pointer density change their row height.
 
 `ChatComposer` is an editable filled-field shell with its own undo history and rendered emoji. A 28 px line plus 10 px padding per side gives its 48 dp field; 8 dp around the field and accessories gives a 64 dp single-line row. Content grows to 160 px, then scrolls.
 

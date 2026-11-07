@@ -59,6 +59,7 @@ import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { clamp01 } from '@/lib/utils';
 import { sampledTrack, type SampledTrack } from '@/lib/sampledAnimation';
 import { heroProbeMark } from './probe';
+import { followHeroWindowScroll, type HeroWindowScroll } from './follow';
 
 type AnimationOwner = {
   animation: Animation;
@@ -154,6 +155,7 @@ type Completion = {
 export type HeroReverseInputs = {
   shared: Map<HTMLElement, OverlayPose>;
   host: HeroRect | null;
+  windowScroll: number;
 };
 
 type HeroMotionOptions = {
@@ -240,6 +242,7 @@ type HeroMirror = {
   clip: HTMLElement | null;
   unclip: HTMLElement | null;
   tracks: AnimationOwner[];
+  windowScroll: HeroWindowScroll | null;
 };
 
 /**
@@ -697,6 +700,8 @@ export class HeroMotion {
    * the ones that have to be replaceable on their own. See `rebuildContainer`.
    */
   private containerTracks: AnimationOwner[] = [];
+  private windowScroll: HeroWindowScroll | null = null;
+  private windowScrollStart: { top: number; range: number } | null = null;
   /** Surfaces mirroring the shared tracks — see `HeroMirror`. */
   private mirrors: HeroMirror[] = [];
   private visualRevision = 0;
@@ -859,6 +864,7 @@ export class HeroMotion {
       clip: overlay.querySelector<HTMLElement>(HERO_CLIP_SELECTOR),
       unclip: overlay.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR),
       tracks: [],
+      windowScroll: null,
     };
     this.mirrors.push(mirror);
     /* Only while the shared tracks are running: a mirror attached after they finished has
@@ -881,6 +887,8 @@ export class HeroMotion {
     this.mirrors.splice(index, 1);
     settle(mirror.tracks, false);
     mirror.tracks = [];
+    mirror.windowScroll?.release();
+    mirror.windowScroll = null;
   }
 
   /** The mirror's overlay and container tracks on the current leg, built like the Stage's. */
@@ -909,6 +917,13 @@ export class HeroMotion {
           this.leg,
         ),
       );
+      const scroller = this.windowScrollStart
+        ? mirror.unclip.querySelector<HTMLElement>('.image-detail-overlay-scroll') : null;
+      if (scroller && this.windowScrollStart) {
+        mirror.windowScroll = followHeroWindowScroll(
+          this.flight.plane.scroller, mirror.clip, scroller, this.windowScrollStart,
+        );
+      }
     }
     return owners;
   }
@@ -978,6 +993,7 @@ export class HeroMotion {
       /* The overlay is the one box in the chain that is never transformed, so no write between
          this read and the reversal can move it. */
       host: this.containerLeg && this.overlay?.isConnected ? readRect(this.overlay) : null,
+      windowScroll: this.windowScroll?.offset() ?? 0,
     };
   }
 
@@ -992,7 +1008,8 @@ export class HeroMotion {
     /* The host box with the other reads, before the cancels and the plane move below write to
        the tree: read after them it forced a second style + layout pass inside the task that
        turns the flight around. */
-    const { shared: sharedPose, host: hostRect } = inputs ?? this.readReverseInputs();
+    const { shared: sharedPose, host: hostRect, windowScroll } = inputs ?? this.readReverseInputs();
+    this.foldWindowScroll(windowScroll);
     // A pull released the window tracks: the visible window is now the full host.
     if (this.sharedReleased && this.leg.direction === 'forward') {
       this.choreography = 'dismiss';
@@ -1100,6 +1117,7 @@ export class HeroMotion {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
     const previous = this.leg;
+    const windowScroll = this.windowScroll?.offset() ?? 0;
     const sharedPose =
       this.landedCompletion.settled || this.sharedReleased ? undefined : this.readSharedPoses();
     this.cancelVisual(false);
@@ -1123,6 +1141,7 @@ export class HeroMotion {
       previous.progress,
       previous.duration > 0 ? pose.elapsed / previous.duration : 1,
     );
+    this.foldWindowScroll(windowScroll);
     if (!this.sharedReleased) this.cancelShared(false, false);
 
     /* Preserve the current speed so a resize mid-flight is not a visible restart — which
@@ -1191,6 +1210,17 @@ export class HeroMotion {
     /* The window's endpoints just moved, so its bow is a stale answer to a question about a
        box that no longer exists — and so is the picture's, since the two are solved together. */
     this.settleBows();
+  }
+
+  /** Keep a turn or viewport rebuild at the window's presented, already-scrolled position. */
+  private foldWindowScroll(offset: number) {
+    const leg = this.containerLeg;
+    if (!leg || !offset) return;
+    this.containerLeg = {
+      ...leg,
+      clipFrom: { ...leg.clipFrom, top: leg.clipFrom.top + offset },
+      clipTo: { ...leg.clipTo, top: leg.clipTo.top + offset },
+    };
   }
 
   /**
@@ -1287,6 +1317,7 @@ export class HeroMotion {
   } {
     if (this.disposed) return { window: null, shared: undefined };
     const shared = this.retired ? undefined : this.readSharedPoses();
+    this.foldWindowScroll(this.windowScroll?.offset() ?? 0);
     let window: { rect: HeroRect; radius: number } | null = null;
     const container = this.containerLeg;
     if (container && !this.retired) {
@@ -1404,6 +1435,9 @@ export class HeroMotion {
 
   private startShared(continueBackground: boolean, fromCurrent?: Map<HTMLElement, OverlayPose>) {
     const owners: AnimationOwner[] = [];
+    this.windowScroll?.release();
+    this.windowScroll = null;
+    this.windowScrollStart = null;
     /* Idempotent: every caller reaches here through `cancelShared`, but the container tracks
        live in their own array and are only *assigned* inside the branch below, so a run that
        produces none would otherwise leave the previous pair in the array to be settled twice. */
@@ -1444,6 +1478,17 @@ export class HeroMotion {
             this.containerLeg,
             this.leg,
           );
+          if (this.leg.direction === 'back' && !this.containedFlightLayer()) {
+            const scroller = this.unclip.querySelector<HTMLElement>('.image-detail-overlay-scroll');
+            if (scroller) {
+              const plane = this.flight.plane;
+              this.windowScrollStart = {
+                top: this.preread?.planeScroll?.top ?? plane.scroller.scrollTop,
+                range: plane.maxScrollTop,
+              };
+              this.windowScroll = followHeroWindowScroll(plane.scroller, this.clip, scroller, this.windowScrollStart);
+            }
+          }
         }
         /* Same task as the Stage's tracks, so the browser gives them one start time. */
         if (this.choreography !== 'dismiss') {
@@ -1453,6 +1498,9 @@ export class HeroMotion {
         }
       }
     } catch {
+      this.windowScroll?.release();
+      this.windowScroll = null;
+      this.windowScrollStart = null;
       this.clearMirrorTracks();
       settle([...owners, ...this.containerTracks], false);
       this.disownBackground(true);
@@ -1482,6 +1530,8 @@ export class HeroMotion {
     this.mirrors.forEach((mirror) => {
       settle(mirror.tracks, false);
       mirror.tracks = [];
+      mirror.windowScroll?.release();
+      mirror.windowScroll = null;
     });
   }
 
@@ -1528,6 +1578,9 @@ export class HeroMotion {
 
   private cancelShared(clearBackground: boolean, settleCompletion: boolean) {
     this.sharedRevision += 1;
+    this.windowScroll?.release();
+    this.windowScroll = null;
+    this.windowScrollStart = null;
     if (this.background && backgroundOwners.get(this.background) === this.owner) {
       // Freeze the sink where it is so releasing to a gesture never snaps.
       const transform = getComputedStyle(this.background).transform;

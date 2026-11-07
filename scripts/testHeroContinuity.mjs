@@ -83,6 +83,7 @@ function scrollHarness(t, top = 200) {
   const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
     './input': { noteHeroInteraction() {} },
     './scheduler': { heroFrameScheduler: scheduler },
+    './returnInput': { takeOverHeroReturnInput: () => null },
     '@/lib/utils': utils,
   }, {
     WheelEvent: TestWheelEvent,
@@ -164,6 +165,47 @@ test('a measured scroll follower starts without reads and preserves a clamped ta
   assert.equal(keys[0].transform, 'translate3d(0, 40.000px, 0)');
   assert.equal(keys[1].transform, 'translate3d(0, -160.000px, 0)');
   scrolled.release();
+});
+
+test('a returning window follows gallery scroll without moving its content, and releases the fallback', () => {
+  const source = new Scroller(340);
+  const clip = { style: { translate: '' } };
+  const content = { style: { translate: '' } };
+  const { followHeroWindowScroll } = load('lib/hero/follow.ts', {}, { window: {} });
+  const follow = followHeroWindowScroll(source, clip, content, { top: 200, range: 5200 });
+  assert.equal(clip.style.translate, '0 -140px', 'a remounted window adopts scroll that already happened');
+  assert.equal(content.style.translate, '0 140px');
+  assert.equal(follow.offset(), -140, 'a reversal must capture the scrolled position');
+  source.scrollTo(400);
+  assert.equal(clip.style.translate, '0 -200px');
+  assert.equal(content.style.translate, '0 200px');
+  follow.release();
+  assert.equal(clip.style.translate, '');
+  assert.equal(content.style.translate, '');
+  assert.equal(getEventListeners(source, 'scroll').length, 0);
+  source.scrollTo(480);
+  assert.equal(clip.style.translate, '', 'the finished return must not move a reused surface');
+});
+
+test('a returning window uses one native scroll timeline and leaves no scroll animation behind', () => {
+  const source = new Scroller(200);
+  const calls = [];
+  let cancelled = 0;
+  const node = () => ({ style: { translate: '' }, animate(keys, timing) {
+    calls.push({ keys, timing });
+    return { cancel() { cancelled += 1; } };
+  } });
+  const { followHeroWindowScroll } = load('lib/hero/follow.ts', {}, {
+    window: { ScrollTimeline: class { constructor(options) { Object.assign(this, options); } } },
+  });
+  const follow = followHeroWindowScroll(source, node(), node(), { top: 200, range: 5200 });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].timing.timeline, calls[1].timing.timeline);
+  assert.equal(calls[0].timing.timeline.source, source);
+  assert.equal(getEventListeners(source, 'scroll').length, 0, 'native scroll must stay on the compositor');
+  follow.release();
+  follow.release();
+  assert.equal(cancelled, 2, 'each track is released exactly once');
 });
 
 for (const input of ['wheel', 'pointerdown', 'touchstart']) {
@@ -332,6 +374,258 @@ function transferClock() {
 }
 
 /** Load the real controller method, input waiters, scroll bridge and scheduler; no browser/server. */
+function returnInputHarness(t) {
+  const clock = transferClock();
+  const window = Object.assign(new Scroller(), {
+    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, innerWidth: 1440, innerHeight: 900,
+  });
+  const document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+  const globals = { window, document, performance: clock.performance, Node: Scroller,
+    WheelEvent: TestWheelEvent, getComputedStyle: () => ({ lineHeight: '24px' }),
+    requestAnimationFrame: clock.requestAnimationFrame, cancelAnimationFrame: clock.cancelAnimationFrame };
+  const input = load('lib/hero/input.ts', {}, globals);
+  input.initializeHeroInput();
+  const relay = load('lib/hero/returnInput.ts', { './input': input }, globals);
+  const scheduler = load('lib/hero/scheduler.ts', {}, globals).heroFrameScheduler;
+  const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
+    './input': input, './returnInput': relay, './scheduler': { heroFrameScheduler: scheduler }, '@/lib/utils': utils,
+  }, globals);
+  const destination = new Scroller(200), source = new Scroller(100), leaf = new Scroller();
+  source.contains = node => node === source || node === leaf;
+  const dispatch = (target, event) => {
+    Object.defineProperties(event, { target: { value: target }, timeStamp: { value: clock.now } });
+    if (target.isConnected) window.dispatchEvent(event);
+    target.dispatchEvent(event);
+    return event;
+  };
+  const wheel = (target, options) => dispatch(target, new TestWheelEvent(options));
+  const touch = (type, y, ended = false) => {
+    const contact = { identifier: 5, clientX: 10, clientY: y, target: leaf };
+    return dispatch(leaf, Object.assign(new Event(type), { touches: ended ? [] : [contact], changedTouches: [contact] }));
+  };
+  const continuity = new HeroScrollContinuity(destination);
+  const begin = () => { continuity.addDeltaSource(source); continuity.takeOverReturnInput(source); };
+  const frame = async () => { await clock.advanceTo(clock.now + 16); await clock.frame(); };
+  const drain = async () => { for (let i=0; clock.frames.size && i<100; i++) await frame(); };
+  t.after(() => { continuity.release(); window.dispatchEvent(new Event('blur')); });
+  return { clock, window, input, source, leaf, destination, continuity, dispatch, wheel, touch, begin, frame, drain };
+}
+
+test('one wheel flow survives route removal and 200ms gaps without mistaking its own scroll writes for native input', async t => {
+  const h = returnInputHarness(t);
+  h.wheel(h.leaf, { deltaY: 10 });
+  h.begin();
+  assert.equal(h.continuity.canCompleteReturn, true);
+  let released = 0;
+  h.continuity.retire(() => released++);
+  h.source.isConnected = h.leaf.isConnected = false;
+  for (let i=0; i<30; i++) {
+    await h.clock.advanceTo(h.clock.now + 200);
+    h.wheel(h.destination, { deltaY: 20 });
+    await h.frame();
+    h.destination.dispatchEvent(new Event('scroll'));
+    assert.equal(h.continuity.hasNativeInput, false, 'retargeted DOM events and own writes are not compositor takeover');
+    assert.equal(released, 0, 'the active flow must not expire with the old visual session');
+  }
+  assert.ok(h.destination.scrollTop > 700, h.destination.scrollTop);
+  await h.drain();
+  await h.clock.advanceTo(h.clock.now + 400);
+  assert.equal(released, 1);
+  assert.equal(h.clock.frames.size, 0);
+  assert.equal(getEventListeners(h.window, 'wheel').length, 1, 'only the shared input monitor remains');
+  assert.equal(getEventListeners(h.leaf, 'wheel').length, 0);
+  assertNoScrollerListeners(h.destination);
+});
+
+for (const takeover of ['pointer', 'ctrl-wheel', 'native-scroll', 'native-before-event']) {
+  test(`a ${takeover} takeover cancels pending old-flow writes`, async t => {
+    const h = returnInputHarness(t);
+    h.wheel(h.leaf, { deltaY: 10 }); h.begin();
+    let released = false;
+    h.continuity.retire(() => { released = true; });
+    h.wheel(h.destination, { deltaY: 100 });
+    if (takeover === 'pointer') h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'mouse' }));
+    else if (takeover === 'ctrl-wheel') assert.equal(h.wheel(h.destination, { ctrlKey: true }).defaultPrevented, false);
+    else {
+      h.destination.scrollTop += 30;
+      if (takeover === 'native-scroll') h.destination.dispatchEvent(new Event('scroll'));
+    }
+    const top = h.destination.scrollTop;
+    await h.drain();
+    assert.equal(released, true);
+    assert.equal(h.destination.scrollTop, top);
+    assert.equal(h.clock.frames.size, 0);
+  });
+}
+
+test('a detached touch target keeps direct drag input alive beyond the safety window and clears all input on end', async t => {
+  const h = returnInputHarness(t);
+  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
+  h.touch('touchstart', 600); h.begin();
+  let released = false;
+  h.continuity.retire(() => { released = true; });
+  h.source.isConnected = h.leaf.isConnected = false;
+  for (let i=1; i<=60; i++) {
+    await h.clock.advanceTo(h.clock.now + 100);
+    h.touch('touchmove', 600-i*3); await h.frame();
+    h.destination.dispatchEvent(new Event('scroll'));
+    assert.equal(h.destination.scrollTop, 200+i*3);
+    assert.equal(h.input.hasActiveHeroInput(), true);
+    assert.equal(released, false);
+  }
+  h.touch('touchend', 420, true);
+  assert.equal(h.input.hasActiveHeroInput(), false);
+  assert.equal(h.input.readHeroScrollInput().touches.length, 0);
+  assert.equal(released, true);
+  assert.equal(h.clock.frames.size, 0);
+  assert.equal(getEventListeners(h.leaf, 'touchmove').length, 0);
+  h.touch('touchmove', 300);
+  await h.drain();
+  assert.equal(h.destination.scrollTop, 380);
+});
+
+test('fractional touch movement survives native scroll offset rounding', async t => {
+  const h = returnInputHarness(t);
+  let top = 200;
+  Object.defineProperty(h.destination, 'scrollTop', { get: () => top, set: value => { top = Math.round(value); } });
+  h.touch('touchstart', 600); h.begin();
+  h.source.isConnected = h.leaf.isConnected = false;
+  for (let i=1; i<=20; i++) {
+    h.touch('touchmove', 600-i*.1); await h.frame();
+    h.destination.dispatchEvent(new Event('scroll'));
+    assert.equal(h.continuity.hasNativeInput, false);
+  }
+  assert.equal(top, 202);
+  h.touch('touchend', 598, true);
+});
+
+test('fractional wheel packets accumulate across native scroll offset rounding in both directions', async t => {
+  const h = returnInputHarness(t);
+  let top = 200;
+  Object.defineProperty(h.destination, 'scrollTop', { get: () => top, set: value => { top = Math.round(value); } });
+  h.wheel(h.leaf, { deltaY: 10 }); h.begin();
+  for (const direction of [1,-1]) {
+    for (let i=0; i<20; i++) {
+      h.wheel(h.destination, { deltaY: direction*.1 }); await h.frame();
+      h.destination.dispatchEvent(new Event('scroll'));
+      assert.equal(h.continuity.hasNativeInput, false);
+    }
+    assert.equal(top, direction===1 ? 202 : 200);
+  }
+});
+
+test('blurring the departing detail control does not cancel its ongoing wheel flow', async t => {
+  const h = returnInputHarness(t);
+  const before = getEventListeners(h.window, 'blur');
+  h.wheel(h.leaf, { deltaY: 10 }); h.begin();
+  let released = false;
+  h.continuity.retire(() => { released = true; });
+  const controlBlur = new Event('blur');
+  Object.defineProperty(controlBlur, 'target', { value: h.leaf });
+  // Element blur only reaches a window capture listener; the shared window-blur monitor
+  // must not receive this simulated capture dispatch.
+  for (const listener of getEventListeners(h.window, 'blur').filter(fn => !before.includes(fn))) listener(controlBlur);
+  assert.equal(released, false);
+  h.wheel(h.destination, { deltaY: 40 }); await h.drain();
+  assert.ok(h.destination.scrollTop > 220);
+  h.window.dispatchEvent(new Event('blur'));
+  assert.equal(released, true);
+});
+
+function beginDetachedTouch(h) {
+  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
+  h.touch('touchstart', 600);
+  h.dispatch(h.leaf, Object.assign(new Event('pointercancel'), { pointerType: 'touch', pointerId: 9 }));
+  h.begin();
+  h.continuity.retire(() => {});
+  h.source.isConnected = h.leaf.isConnected = false;
+}
+
+function assertNoTouchTargetListeners(h) {
+  for (const type of ['touchmove', 'touchend', 'touchcancel']) {
+    assert.equal(getEventListeners(h.leaf, type).length, 0, `${type} observer leaked`);
+  }
+}
+
+for (const detached of [false,true]) {
+  for (const end of ['touchend','touchcancel']) {
+    test(`a ${detached ? 'detached' : 'connected'} ${end} before the next frame ${end === 'touchend' ? 'drains' : 'cancels'} its pending movement`, async t => {
+      const h = returnInputHarness(t);
+      h.touch('touchstart', 600); h.begin();
+      let released = false;
+      h.continuity.retire(() => { released = true; });
+      if (detached) h.source.isConnected = h.leaf.isConnected = false;
+      h.touch('touchmove', 580);
+      h.touch(end, 576, true);
+      assert.equal(h.input.hasActiveHeroInput(), false);
+      assertNoTouchTargetListeners(h);
+      await h.frame();
+      assert.equal(h.destination.scrollTop, end === 'touchend' ? 224 : 200);
+      assert.equal(released, true);
+      assertNoScrollerListeners(h.destination);
+      assert.equal(h.clock.frames.size, 0);
+    });
+  }
+}
+
+for (const end of ['touchend', 'touchcancel']) {
+  test(`a navigation or new Hero can release movement before the detached ${end} without losing input state`, async t => {
+    const h = returnInputHarness(t);
+    beginDetachedTouch(h);
+    h.touch('touchmove', 580); await h.frame();
+    h.continuity.release();
+    const top = h.destination.scrollTop;
+    h.touch('touchmove', 570); await h.frame();
+    assert.equal(h.destination.scrollTop, top, 'the cancelled relay must not keep moving the gallery');
+    assert.equal(h.input.hasActiveHeroInput(), true, 'the original finger is still held');
+    assert.equal(h.input.readHeroScrollInput().touches[0].clientY, 570);
+    h.touch(end, 570, true);
+    assert.equal(h.input.hasActiveHeroInput(), false, 'the real ending must not wait for the safety timer');
+    assert.equal(h.input.readHeroScrollInput().touches.length, 0);
+    assertNoTouchTargetListeners(h);
+    assert.equal(h.clock.frames.size, 0);
+  });
+}
+
+test('an ended detached touch does not clear the new touch that superseded its relay', async t => {
+  const h = returnInputHarness(t);
+  beginDetachedTouch(h);
+  const oldTouch = { identifier: 5, clientX: 10, clientY: 600, target: h.leaf };
+  const newTouch = { identifier: 6, clientX: 30, clientY: 40, target: h.destination };
+  h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 10 }));
+  h.dispatch(h.destination, Object.assign(new Event('touchstart'), { touches: [oldTouch,newTouch], changedTouches: [newTouch] }));
+  h.dispatch(h.leaf, Object.assign(new Event('touchend'), { touches: [newTouch], changedTouches: [oldTouch] }));
+  assert.equal(h.input.hasActiveHeroInput(), true);
+  assert.deepEqual(Array.from(h.input.readHeroScrollInput().touches, touch => touch.identifier), [6]);
+  assertNoTouchTargetListeners(h);
+  h.dispatch(h.destination, Object.assign(new Event('touchend'), { touches: [], changedTouches: [newTouch] }));
+  assert.equal(h.input.hasActiveHeroInput(), false);
+  assert.equal(h.clock.frames.size, 0);
+});
+
+for (const releaseFirst of [false,true]) {
+  for (const stop of ['blur','timeout']) {
+    test(`${stop} clears detached touch observers and cancels pending movement ${releaseFirst ? 'after release' : 'during relay'}`, async t => {
+      const h = returnInputHarness(t);
+      beginDetachedTouch(h);
+      h.touch('touchmove', 580);
+      const top = h.destination.scrollTop;
+      if (releaseFirst) h.continuity.release();
+      if (stop === 'blur') h.window.dispatchEvent(new Event('blur'));
+      else await h.clock.advanceTo(h.clock.now + 4100);
+      assert.equal(h.input.hasActiveHeroInput(), false);
+      assert.equal(h.input.readHeroScrollInput().touches.length, 0);
+      assertNoTouchTargetListeners(h);
+      assertNoScrollerListeners(h.destination);
+      // Cancelling one owner leaves the shared scheduler's already-requested empty flush.
+      await h.frame();
+      assert.equal(h.destination.scrollTop, top, 'cancelled movement must not run in the pending frame');
+      assert.equal(h.clock.frames.size, 0);
+    });
+  }
+}
+
+/** Load the real controller method, input waiters, scroll bridge and scheduler; no browser/server. */
 function inputTransferHarness(t, history = {}) {
   const clock = transferClock();
   const window = Object.assign(new EventTarget(), {
@@ -349,6 +643,7 @@ function inputTransferHarness(t, history = {}) {
   }, globals);
   const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
     './input': input, './scheduler': { heroFrameScheduler: scheduler }, '@/lib/utils': utils,
+    './returnInput': { takeOverHeroReturnInput: () => null },
   }, globals);
   const quietWaits = [];
   const dependencies = Object.fromEntries([
@@ -861,7 +1156,7 @@ test('a finger moving back up reports a negative release speed', () => {
 // --- Display clock ---------------------------------------------------------------------------
 test('a pending first frame cannot spend the flight while the main thread is busy', () => {
   const dependencies = Object.fromEntries([
-    './constants', './geometry', './plane', './progress', './spring', './probe', '@/lib/appearance',
+    './constants', './geometry', './plane', './progress', './spring', './probe', './follow', '@/lib/appearance',
   ].map(name => [name, {}]));
   dependencies['./flight'] = { evaluateLeg };
   dependencies['@/lib/utils'] = utils;

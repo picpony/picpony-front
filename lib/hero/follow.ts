@@ -44,6 +44,67 @@ export function canFollowHeroScroll() {
   return scrollTimelineCtor() !== null;
 }
 
+export type HeroWindowScroll = {
+  /** Screen displacement to fold into a replacement window leg before releasing this one. */
+  offset: () => number;
+  release: () => void;
+};
+
+/**
+ * A returning window travels with the gallery plane that carries its flyer. Its scroller gets
+ * the inverse translation so the departing content stays stationary inside the moving clip.
+ * Independent translate tracks compose with the window's existing transform/counter-transform.
+ * See docs/hero.md#window-content-and-interruption.
+ */
+export function followHeroWindowScroll(
+  source: HTMLElement,
+  clip: HTMLElement,
+  content: HTMLElement,
+  initial: { top: number; range: number },
+): HeroWindowScroll {
+  const { top, range } = initial;
+  const animations: Animation[] = [];
+  const original = { clip: clip.style.translate, content: content.style.translate };
+  let fallback = false;
+  let released = false;
+  const offset = () => released ? 0 : top - source.scrollTop;
+  const sync = () => {
+    const distance = offset();
+    clip.style.translate = `0 ${distance}px`;
+    content.style.translate = `0 ${-distance}px`;
+  };
+  const Ctor = scrollTimelineCtor();
+  if (Ctor && range > 0) {
+    try {
+      const timeline = new Ctor({ source, axis: 'block' });
+      const timing = { timeline, fill: 'both', easing: 'linear' } as KeyframeAnimationOptions;
+      animations.push(clip.animate([{ translate: `0 ${top}px` }, { translate: `0 ${top - range}px` }], timing));
+      animations.push(content.animate([{ translate: `0 ${-top}px` }, { translate: `0 ${range - top}px` }], timing));
+    } catch {
+      animations.forEach((animation) => animation.cancel());
+      animations.length = 0;
+    }
+  }
+  if (animations.length === 0) {
+    fallback = true;
+    source.addEventListener('scroll', sync, { passive: true });
+    sync();
+  }
+  return {
+    offset,
+    release: () => {
+      if (released) return;
+      released = true;
+      animations.forEach((animation) => animation.cancel());
+      if (fallback) {
+        source.removeEventListener('scroll', sync);
+        clip.style.translate = original.clip;
+        content.style.translate = original.content;
+      }
+    },
+  };
+}
+
 /**
  * @param source  The scroller the input is latched to (the Stage's).
  * @param target  The scroller whose content must look scrolled with it (the route's).

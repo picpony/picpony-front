@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
 import { moveFocusFrom } from '@/lib/overlay';
@@ -27,6 +27,9 @@ interface MenuProps {
   onSelect: (value: string) => void;
   'aria-label'?: string;
   className?: string;
+  /** Contextual actions can keep the editing caret until focus enters the menu. */
+  focusOnOpen?: boolean;
+  handleRef?: RefObject<PopoverHandle | null>;
 }
 
 /**
@@ -50,6 +53,8 @@ export default function Menu({
   onSelect,
   'aria-label': ariaLabel,
   className = '',
+  focusOnOpen = true,
+  handleRef,
 }: MenuProps) {
   const menuId = useId();
   /* `-1` means "not chosen yet", resolved to the first runnable item at render.
@@ -59,6 +64,10 @@ export default function Menu({
   const [chosenIndex, setChosenIndex] = useState(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const popoverRef = useRef<PopoverHandle | null>(null);
+  useImperativeHandle(handleRef, () => ({
+    get element() { return popoverRef.current?.element ?? null; },
+    get scroller() { return popoverRef.current?.scroller ?? null; },
+  }), []);
 
   const firstEnabled = Math.max(0, items.findIndex((i) => !i.disabled));
   const activeIndex = chosenIndex < 0 ? firstEnabled : chosenIndex;
@@ -85,9 +94,10 @@ export default function Menu({
      screen reader announces it and Enter reaches it without a key handler. */
   useEffect(() => {
     if (!open) return;
+    if (!focusOnOpen && !popoverRef.current?.element?.contains(document.activeElement)) return;
     const raf = requestAnimationFrame(() => itemRefs.current[activeIndex]?.focus());
     return () => cancelAnimationFrame(raf);
-  }, [open, activeIndex]);
+  }, [open, activeIndex, focusOnOpen]);
 
   const step = (delta: number) => {
     setChosenIndex(() => {
@@ -173,13 +183,14 @@ export default function Menu({
           tabIndex={index === activeIndex ? 0 : -1}
           onClick={() => run(item)}
           onKeyDown={onKeyDown}
-          onPointerEnter={() => !item.disabled && setChosenIndex(index)}
+          onPointerEnter={() => {
+            if (!item.disabled && (focusOnOpen || popoverRef.current?.element?.contains(document.activeElement))) setChosenIndex(index);
+          }}
           data-ripple=""
           /* An 8dp row corner inside the panel's 16dp corner and 8dp inset.
-             The explicit pointer variant keeps the 40dp / 48dp density without
-             two min-height utilities competing in the generated stylesheet. */
+             Menu rows keep the same 40dp height across input types. */
           className={cn(
-            'flex min-h-10 pointer-coarse:min-h-12 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l',
+            'flex min-h-10 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l',
             'focus-visible:outline-hidden select-none touch-manipulation',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
                row's outset ring at the ends of its scroll area. */
@@ -190,7 +201,7 @@ export default function Menu({
           )}
         >
           {item.icon && (
-            <span className="grid shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
+            <span className="grid size-6 shrink-0 place-items-center [&_svg]:block [&_svg]:size-6" aria-hidden="true">
               {item.icon}
             </span>
           )}

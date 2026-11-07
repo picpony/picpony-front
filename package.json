@@ -27,6 +27,7 @@
     "test:drawer": "node scripts/testDrawerSwipe.mjs",
     "test:tab-press": "node scripts/testTabPress.mjs",
     "test:ui": "node scripts/reviewUiTest.mjs",
+    "test:editor": "node scripts/reviewBrowser.mjs --editor",
     "test:auth-loading": "node scripts/reviewBrowser.mjs --auth-loading",
     "test:sanitize": "node scripts/testSanitizeHtml.mjs",
     "test:browser": "node scripts/reviewBrowser.mjs",

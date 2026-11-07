@@ -19,6 +19,8 @@ const SCROLL_MOVING_MS = 100;
  * appeared to vanish.
  */
 const WHEEL_RELEASE_MS = 160;
+/** A quiet wheel can still be latched to its old receiver after its active flag clears. */
+export const HERO_INPUT_TRANSFER_QUIET_MS = 320;
 /** A touch that never reports an end (tab switch mid-drag) must not latch. */
 const TOUCH_SAFETY_MS = 4000;
 
@@ -31,6 +33,29 @@ let lastActivityAt = 0;
 let quietTimer = 0;
 let touchSafetyTimer = 0;
 let quiet = true;
+
+export type HeroTouchInput = {
+  identifier: number;
+  clientX: number;
+  clientY: number;
+  target: EventTarget;
+};
+
+let wheelSequence = 0;
+let wheelStream: { id: number; target: EventTarget | null; at: number; seenAt: number } | null = null;
+let touchInputs: HeroTouchInput[] = [];
+const touchTargets = new Map<EventTarget, EventListener>();
+
+function releaseTouchTarget(target: EventTarget) {
+  const listener = touchTargets.get(target);
+  if (!listener) return;
+  for (const type of ['touchmove', 'touchend', 'touchcancel']) target.removeEventListener(type, listener);
+  touchTargets.delete(target);
+}
+
+function clearTouchTargets() {
+  for (const target of touchTargets.keys()) releaseTouchTarget(target);
+}
 
 const activityListeners = new Set<() => void>();
 const inputReleaseListeners = new Set<() => void>();
@@ -104,6 +129,8 @@ function armTouchSafety() {
     touchSafetyTimer = 0;
     const hadTouches = activeTouchCount() > 0;
     legacyTouchCount = 0;
+    touchInputs = [];
+    clearTouchTargets();
     activeTouchPointers.clear();
     if (hadTouches) notify(inputReleaseListeners);
     markActivity();
@@ -115,6 +142,9 @@ function resetInteraction() {
   legacyTouchCount = 0;
   activeTouchPointers.clear();
   wheelActive = false;
+  wheelStream = null;
+  touchInputs = [];
+  clearTouchTargets();
   if (wheelReleaseTimer) window.clearTimeout(wheelReleaseTimer);
   wheelReleaseTimer = 0;
   if (hadInput) notify(inputReleaseListeners);
@@ -133,7 +163,14 @@ const handleScroll = () => {
   markActivity();
 };
 
-const handleWheel = () => {
+const handleWheel = (event: WheelEvent) => {
+  const at = event.timeStamp || now();
+  if (!wheelStream || at - wheelStream.at > HERO_INPUT_TRANSFER_QUIET_MS) {
+    wheelStream = { id: ++wheelSequence, target: event.target, at, seenAt: now() };
+  } else {
+    wheelStream.at = at;
+    wheelStream.seenAt = now();
+  }
   lastScrollAt = now();
   if (!wheelActive) {
     wheelActive = true;
@@ -151,7 +188,19 @@ const handleWheel = () => {
 };
 
 const handleTouch = (event: TouchEvent) => {
+  touchInputs = Array.from(event.touches, ({ identifier, clientX, clientY, target }) => ({
+    identifier, clientX, clientY, target,
+  }));
+  for (const target of touchTargets.keys()) {
+    if (!touchInputs.some((touch) => touch.target === target)) releaseTouchTarget(target);
+  }
   setLegacyTouchCount(event.touches.length);
+  // An outgoing touch target can be detached before pointerup reaches the window. The native
+  // touch list still proves that no touch pointer remains; see docs/hero.md#closing-and-pull.
+  if (event.touches.length === 0 && activeTouchPointers.size > 0) {
+    activeTouchPointers.clear();
+    notify(inputReleaseListeners);
+  }
   armTouchSafety();
   markActivity();
 };
@@ -237,6 +286,38 @@ export function initializeHeroInput() {
 export function noteHeroInteraction() {
   initializeHeroInput();
   markActivity();
+}
+
+/** Native input already in progress when a return changes its visible scroll owner. */
+export function readHeroScrollInput() {
+  initializeHeroInput();
+  return {
+    wheel: wheelStream && now() - wheelStream.seenAt <= HERO_INPUT_TRANSFER_QUIET_MS ? wheelStream : null,
+    touches: touchInputs,
+  };
+}
+
+/** Detached native targets still deliver events directly, outside the window capture path. */
+export function noteDetachedHeroInput(event: WheelEvent | TouchEvent) {
+  if (event.type === 'wheel') handleWheel(event as WheelEvent);
+  else handleTouch(event as TouchEvent);
+}
+
+/**
+ * Keep observing the real end of a touch whose DOM target may leave. Input state outlives a
+ * cancelled scroll relay: removing the movement lease must neither forget a held finger nor
+ * strand its eventual touchend outside the window's capture path.
+ */
+export function observeHeroTouchTarget(target: EventTarget) {
+  initializeHeroInput();
+  if (touchTargets.has(target)) return;
+  const listener: EventListener = (raw) => {
+    if (target instanceof Node && !target.isConnected) handleTouch(raw as TouchEvent);
+  };
+  touchTargets.set(target, listener);
+  for (const type of ['touchmove', 'touchend', 'touchcancel']) {
+    target.addEventListener(type, listener, { passive: true });
+  }
 }
 
 /**

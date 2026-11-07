@@ -2,6 +2,7 @@
 
 import { noteHeroInteraction } from './input';
 import { heroFrameScheduler } from './scheduler';
+import { takeOverHeroReturnInput, type HeroReturnInput } from './returnInput';
 import { clamp } from '@/lib/utils';
 
 const SCROLL_EPSILON_PX = 0.25;
@@ -21,6 +22,8 @@ type DeltaListener = ScrollListener & {
   top: number;
   suppressScrollUntil: number;
   wheelListener: (event: WheelEvent) => void;
+  lineHeight: number;
+  pageHeight: number;
 };
 
 type ResidualMeasurement = {
@@ -52,6 +55,15 @@ export class HeroScrollContinuity {
   private residualTargetLeft: number | null = null;
   private residualTargetTop: number | null = null;
   private residualSampleAt = 0;
+  private wheelRemainderLeft = 0;
+  private wheelRemainderTop = 0;
+  private pendingTouchLeft = 0;
+  private pendingTouchTop = 0;
+  private touchTargetLeft: number | null = null;
+  private touchTargetTop: number | null = null;
+  private returnInput: HeroReturnInput | null = null;
+  private returnManaged = false;
+  private retired: (() => void) | null = null;
 
   constructor(primary: HTMLElement) {
     this.replacePeers(primary);
@@ -69,6 +81,54 @@ export class HeroScrollContinuity {
 
   get hasNativeInput() {
     return this.nativeInput;
+  }
+
+  /** A latched stream is already being carried safely, so visual/history teardown can proceed. */
+  get canCompleteReturn() {
+    return this.returnManaged;
+  }
+
+  takeOverReturnInput(source: HTMLElement) {
+    if (this.released || this.returnInput || !this.primary) return;
+    const dimensions = this.deltaSources.get(source);
+    if (!dimensions) return;
+    const input = takeOverHeroReturnInput({
+      source, destination: this.primary,
+      lineHeight: dimensions.lineHeight, pageHeight: dimensions.pageHeight,
+      onWheel: (left, top) => this.queueWheelResidual(left, top),
+      onTouch: (left, top) => {
+        this.pendingTouchLeft += left;
+        this.pendingTouchTop += top;
+        if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX) this.scheduleWheelResidual();
+      },
+      onEnd: (reason) => {
+        if (this.returnInput !== input) return;
+        this.returnInput = null;
+        if (reason === 'superseded') this.resetWheelResidual();
+        this.finishRetired();
+      },
+    });
+    this.returnInput = input;
+    if (input) {
+      this.returnManaged = true;
+      this.clearDeltaSources();
+    }
+  }
+
+  /** Keep only the current input lease alive after its visual session has closed. */
+  retire(onReleased: () => void) {
+    if (this.released) { onReleased(); return; }
+    this.retired = onReleased;
+    this.clearDeltaSources();
+    this.finishRetired();
+  }
+
+  stopReturnInput() {
+    this.returnInput?.release();
+  }
+
+  private finishRetired() {
+    if (this.retired && !this.returnInput && !this.hasWheelResidual()) this.release();
   }
 
   waitForNativeInput(signal: AbortSignal) {
@@ -90,6 +150,8 @@ export class HeroScrollContinuity {
     // Claim on input, BEFORE its first scroll event. A queued residual write can otherwise
     // cancel the browser's new wheel/touch scroll before there is a foreign scroll to detect.
     this.nativeInput = true;
+    this.stopReturnInput();
+    if (this.released) return;
     this.releaseDeltaSources();
     this.primary = element;
     for (const peer of this.peers.keys()) {
@@ -112,6 +174,7 @@ export class HeroScrollContinuity {
     };
     const inputListener = (event: Event) => {
       if (event instanceof WheelEvent && event.ctrlKey) return;
+      if (event instanceof WheelEvent && this.returnInput?.ownsWheel(event)) return;
       this.claimNativeInput(element);
     };
     this.peers.set(element, { element, listener, inputListener });
@@ -133,6 +196,9 @@ export class HeroScrollContinuity {
 
   replacePeers(element: HTMLElement, initial?: HeroScrollOffset) {
     if (this.released) return;
+    this.stopReturnInput();
+    if (this.released) return;
+    this.returnManaged = false;
     this.resetWheelResidual();
     this.clearPeers();
     this.primary = element;
@@ -156,7 +222,7 @@ export class HeroScrollContinuity {
   }
 
   addDeltaSource(element: HTMLElement) {
-    if (this.released || this.peers.has(element) || this.deltaSources.has(element)) return;
+    if (this.released || this.returnInput || this.peers.has(element) || this.deltaSources.has(element)) return;
     const computedLineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
     const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 16;
     const pageHeight = Math.max(1, element.clientHeight);
@@ -165,6 +231,8 @@ export class HeroScrollContinuity {
       left: element.scrollLeft,
       top: element.scrollTop,
       suppressScrollUntil: 0,
+      lineHeight,
+      pageHeight,
       wheelListener: (event) => {
         if (this.released || event.ctrlKey) return;
         const unit =
@@ -220,8 +288,12 @@ export class HeroScrollContinuity {
    * rescue, so every source is dropped along with any queued residual.
    */
   releaseDeltaSources() {
-    if (this.deltaSources.size === 0 && !this.hasWheelResidual()) return;
+    if (this.deltaSources.size === 0 && !this.hasWheelResidual() && !this.wheelRemainderLeft && !this.wheelRemainderTop) return;
     this.resetWheelResidual();
+    this.clearDeltaSources();
+  }
+
+  private clearDeltaSources() {
     this.deltaSources.forEach(({ element, listener, wheelListener }) => {
       element.removeEventListener('wheel', wheelListener);
       element.removeEventListener('scroll', listener);
@@ -248,6 +320,8 @@ export class HeroScrollContinuity {
   release = () => {
     if (this.released) return;
     this.released = true;
+    this.returnInput?.release();
+    this.returnInput = null;
     this.resetWheelResidual();
     this.clearPeers();
     this.deltaSources.forEach(({ element, listener, wheelListener }) => {
@@ -259,6 +333,9 @@ export class HeroScrollContinuity {
     this.inputTarget = null;
     this.transferListeners.forEach((notify) => notify());
     this.transferListeners.clear();
+    const retired = this.retired;
+    this.retired = null;
+    retired?.();
   };
 
   private clearPeers() {
@@ -324,7 +401,7 @@ export class HeroScrollContinuity {
   }
 
   private queueWheelResidual(left: number, top: number) {
-    if (Math.abs(left) < SCROLL_EPSILON_PX && Math.abs(top) < SCROLL_EPSILON_PX) return;
+    if (left === 0 && top === 0) return;
     this.pendingResidualLeft += left;
     this.pendingResidualTop += top;
     if (!this.residualSampleAt) this.residualSampleAt = performance.now();
@@ -356,10 +433,30 @@ export class HeroScrollContinuity {
       return;
     }
 
+    // A DOM wheel target is not a compositor handoff. An offset changed by another owner is.
+    if (this.returnManaged && measurement.target === this.inputTarget && this.isForeignScroll(measurement.target)) {
+      this.claimNativeInput(measurement.target);
+      return;
+    }
+    if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX) {
+      const left = clamp((this.touchTargetLeft ?? measurement.left) + this.pendingTouchLeft, 0, measurement.maxLeft);
+      const top = clamp((this.touchTargetTop ?? measurement.top) + this.pendingTouchTop, 0, measurement.maxTop);
+      // Keep fractional drag distance even when the browser quantizes its scroll offset.
+      this.touchTargetLeft = left;
+      this.touchTargetTop = top;
+      this.pendingTouchLeft = 0;
+      this.pendingTouchTop = 0;
+      this.writeResidual(measurement, left, top);
+      this.finishRetired();
+      return;
+    }
+
     const startLeft = this.residualTargetLeft ?? measurement.left;
     const startTop = this.residualTargetTop ?? measurement.top;
-    this.residualTargetLeft = clamp(startLeft + this.pendingResidualLeft, 0, measurement.maxLeft);
-    this.residualTargetTop = clamp(startTop + this.pendingResidualTop, 0, measurement.maxTop);
+    this.residualTargetLeft = clamp(startLeft + this.pendingResidualLeft + this.wheelRemainderLeft, 0, measurement.maxLeft);
+    this.residualTargetTop = clamp(startTop + this.pendingResidualTop + this.wheelRemainderTop, 0, measurement.maxTop);
+    this.wheelRemainderLeft = 0;
+    this.wheelRemainderTop = 0;
     this.pendingResidualLeft = 0;
     this.pendingResidualTop = 0;
 
@@ -376,6 +473,29 @@ export class HeroScrollContinuity {
       nextTop = this.residualTargetTop;
     }
 
+    this.writeResidual(measurement, nextLeft, nextTop);
+
+    if (
+      Math.abs(this.residualTargetLeft - nextLeft) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.residualTargetTop - nextTop) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.pendingResidualLeft) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX
+    ) {
+      this.scheduleWheelResidual();
+      return;
+    }
+    // Native scroll offsets can round below one device pixel. Preserve that remainder for
+    // the next packet instead of filtering out a slow high-resolution wheel stream.
+    const written = this.written.get(measurement.target)!;
+    const remainderLeft = this.residualTargetLeft - written.left;
+    const remainderTop = this.residualTargetTop - written.top;
+    this.resetWheelResidual();
+    this.wheelRemainderLeft = remainderLeft;
+    this.wheelRemainderTop = remainderTop;
+    this.finishRetired();
+  }
+
+  private writeResidual(measurement: ResidualMeasurement, nextLeft: number, nextTop: number) {
     if (Math.abs(nextLeft - measurement.left) >= SCROLL_EPSILON_PX) {
       measurement.target.scrollLeft = nextLeft;
     }
@@ -391,24 +511,15 @@ export class HeroScrollContinuity {
       element.scrollTop = nextTop;
       this.recordWrite(element);
     });
-
-    if (
-      Math.abs(this.residualTargetLeft - nextLeft) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.residualTargetTop - nextTop) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.pendingResidualLeft) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX
-    ) {
-      this.scheduleWheelResidual();
-      return;
-    }
-    this.resetWheelResidual();
   }
 
   private hasWheelResidual() {
     return (
       this.residualTargetLeft !== null ||
       Math.abs(this.pendingResidualLeft) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX
+      Math.abs(this.pendingResidualTop) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX
     );
   }
 
@@ -416,8 +527,14 @@ export class HeroScrollContinuity {
     heroFrameScheduler.cancel(this.residualFrameOwner);
     this.pendingResidualLeft = 0;
     this.pendingResidualTop = 0;
+    this.pendingTouchLeft = 0;
+    this.pendingTouchTop = 0;
+    this.touchTargetLeft = null;
+    this.touchTargetTop = null;
     this.residualTargetLeft = null;
     this.residualTargetTop = null;
     this.residualSampleAt = 0;
+    this.wheelRemainderLeft = 0;
+    this.wheelRemainderTop = 0;
   }
 }

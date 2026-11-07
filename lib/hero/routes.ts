@@ -9,6 +9,7 @@ import {
   type DomLease,
 } from './dom';
 import type { HeroPullSurface } from './pull';
+import type { HeroScrollPlane } from './plane';
 import type { HeroRouteRegistration } from './types';
 
 /**
@@ -201,17 +202,19 @@ export class HeroRouteRegistry {
   /**
    * Make a route non-interactive while it is still visually present.
    *
-   * `deferInert` is for a close. Both ways of cutting a route's input restyle its whole subtree —
-   * `inert` and `pointer-events` alike, ~30ms each at 4× CPU on a phone for a detail of ~180
-   * nodes — and a close used to pay both in front of its flight, freezing the picture under a
-   * released finger. Deferred, a single transparent shield over the viewport takes the pointer at
-   * once (one new node, no restyle of anything else) and `applyInert` swaps it for the real thing
-   * once the flight is running on the compositor, so the restyle lands under a moving picture.
+   * `deferInert` keeps the leaving route's inherited input-style changes behind the flight's
+   * first presented frame. A transparent shield in the gallery scroller blocks commands while
+   * preserving native scrolling; `applyInert` replaces it once the flight is on the compositor.
+   * The gallery plane is measured before the close writes to the tree.
    */
   freeze(
     route: HeroRoute,
     owner: symbol,
-    { deferInert = false, onShieldTap }: { deferInert?: boolean; onShieldTap?: (x: number, y: number) => void } = {},
+    { deferInert = false, scrollPlane, onShieldTap }: {
+      deferInert?: boolean;
+      scrollPlane?: HeroScrollPlane;
+      onShieldTap?: (x: number, y: number) => void;
+    } = {},
   ): DomLease & { applyInert: () => void } {
     route.interaction?.release();
     let lock: DomLease | null = null;
@@ -260,13 +263,19 @@ export class HeroRouteRegistry {
     };
     route.interaction = interaction;
     route.interactionOwner = owner;
-    if (deferInert && typeof document !== 'undefined' && document.body) {
+    if (deferInert && scrollPlane?.scroller.isConnected) {
       shield = document.createElement('div');
       shield.setAttribute('data-image-hero-close-shield', '');
       shield.setAttribute('aria-hidden', 'true');
+      // Keep the first gesture in the gallery's native scroll space. A fixed shield on body
+      // latched touch to the non-scrolling document; removing it cannot retarget that gesture.
+      // The full, premeasured scroll range keeps controls covered as the gallery moves.
+      // See docs/hero.md#closing-and-pull.
       shield.style.cssText =
-        'position:fixed;inset:0;z-index:2147483647;background:transparent;touch-action:none';
-      document.body.appendChild(shield);
+        `position:absolute;top:0;left:0;width:${scrollPlane.viewportWidth}px;` +
+        `height:${scrollPlane.viewportHeight + scrollPlane.maxScrollTop}px;` +
+        'z-index:var(--z-hero-back);background:transparent;pointer-events:auto;touch-action:pan-y pinch-zoom';
+      scrollPlane.scroller.appendChild(shield);
       /* Followed past the shield's own life: the release may land after it is gone. */
       if (onShieldTap) watchShieldTap(shield, onShieldTap);
     } else {
@@ -321,13 +330,9 @@ const SHIELD_TAP_MAX_MS = 600;
 const SHIELD_TAP_SLOP_PX = 10;
 
 /**
- * **A tap the shield caught is still a tap.** The shield takes the pointer for the first frame or
- * two of a close (until `applyInert`), and a press that began on it was swallowed: its pointerdown
- * hit the shield, the shield was gone by its pointerup, and the browser dispatched the click to
- * the two targets' common ancestor — the document — so a re-tap of the card a moment after Back
- * ("no, keep it open") did nothing at all, one time in four in a burst of open/close. The press is
- * followed to its release (on the window, since the shield may have left by then) and handed to
- * the controller as a tap at that point.
+ * Replay a tap caught before `applyInert` lets the gallery accept commands. If the shield leaves
+ * before pointerup, the native click need not reach the card. Follow the release on the window
+ * and let the controller deliver the tap once the gallery is exposed.
  */
 function watchShieldTap(shield: HTMLElement, onTap: (x: number, y: number) => void) {
   let start: { id: number; x: number; y: number; at: number } | null = null;

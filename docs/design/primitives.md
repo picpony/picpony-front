@@ -187,6 +187,11 @@ There is no general scroll-driven reveal helper. Use the existing entrance owner
 
 ## Overlays and history
 
+`Menu focusOnOpen={false}` supports contextual actions without moving text focus. Keyboard
+navigation still moves focus once it enters the menu. `handleRef` exposes the shared popover's
+frame and scroller for focus ownership checks; ordinary menus keep their default initial focus.
+Menu owns a 24 dp leading icon slot and SVG size; icon size must not inherit its label's font size.
+
 Use the overlay hooks for focus, scroll locks and dismissal. A normal modal makes the app root inert; `aria-hidden` alone is insufficient.
 
 - Modal scrim and panel are siblings so opacity does not multiply.
@@ -196,6 +201,8 @@ Use the overlay hooks for focus, scroll locks and dismissal. A normal modal make
 - A gesture ends on release, cancellation, external state changes, disablement or unmount. Cleanup must restore React's state.
 - Use Modal's wrapping `footer`; `mr-auto` supplies a leading action. Do not duplicate a footer in the scrolling body.
 - Keep the header/body gap at 8 + 8 dp so a floating field label is not clipped.
+- Use `Modal returnFocus` for a stable focus destination when its opener may become disabled
+  or be replaced. The overlay still preserves a newer focus choice outside the departing panel.
 
 Modal, Sheet, confirm/prompt and lightbox use one same-URL history layer. Back closes only the topmost dismissible layer. Closing another way unwinds its entry; navigation unwinds layers before writing the new page. Stale entries are skipped. Non-dismissible surfaces consume Back.
 

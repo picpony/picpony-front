@@ -12,7 +12,6 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn, clamp } from '@/lib/utils';
-import { MEDIA } from '@/lib/constants';
 import { motionTier, scaledMs } from '@/lib/appearance';
 import { HANDOFF_MS } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
@@ -69,9 +68,8 @@ function visibleFraction(element: HTMLElement, clippers: HTMLElement[]): number 
 /**
  * The height a list of `rows` menu rows will come out at, for `estimatedHeight`.
  *
- * A menu row has a 40dp minimum under a fine pointer and 48dp under a coarse one,
- * so the estimate has to read the same density axis or
- * `Popover` picks its side against the wrong number and flips the panel on the way in.
+ * A menu row has the same 40dp minimum across input types. The estimate matches
+ * that geometry so `Popover` chooses its side before the surface enters.
  * Include the 2dp row gaps and the 8dp padding at each end of the container — the
  * panel's own inset now, so that term is true for every caller of this (the one
  * panel that stands the inset down states its own estimate instead).
@@ -79,10 +77,8 @@ function visibleFraction(element: HTMLElement, clippers: HTMLElement[]): number 
  * Pass `suggestionRow`'s `height` rather than a literal, so the number the row lays
  * out at and the number the side is chosen against cannot be two different numbers.
  */
-export function estimateMenuHeight(rows: number, rowHeight?: number): number {
-  const coarse =
-    typeof window !== 'undefined' && window.matchMedia(MEDIA.pointerCoarse).matches;
-  return rows * (rowHeight ?? (coarse ? 48 : 40)) + Math.max(0, rows - 1) * 2 + 8 * 2;
+export function estimateMenuHeight(rows: number, rowHeight = 40): number {
+  return rows * rowHeight + Math.max(0, rows - 1) * 2 + 8 * 2;
 }
 
 /**
@@ -96,7 +92,7 @@ const ROW_BASE = 'flex w-full items-center gap-3 py-1 text-left select-none touc
 export interface SuggestionRow {
   /** Spread with `useCombobox`'s `optionClassName(index)`, which adds the row's state. */
   className: string;
-  /** For `estimateMenuHeight`; absent where the row takes the pointer-density default. */
+  /** For `estimateMenuHeight`; absent where the row takes the ordinary menu height. */
   height: number | undefined;
 }
 
@@ -108,7 +104,7 @@ export interface SuggestionRow {
  * a row's corner is the panel's less the 8dp inset — 16 − 8 = 8dp under a menu, 28 − 8 = 20dp
  * under a search bar — and `height` is the figure `estimateMenuHeight` must be handed. Five
  * hand-copied strings had drifted to three geometries, two of each number that matters (8 and
- * 20dp corners, 8 and 12dp inline padding, 12 and 16dp gaps, 40/48 and 56dp rows), and one of
+ * 20dp corners, 8 and 12dp inline padding, 12 and 16dp gaps, dense and 56dp rows), and one of
  * them disagreed with its own estimate: a two-line row declared the 40dp dense floor,
  * estimated 48 and laid out at 50.
  *
@@ -119,7 +115,7 @@ export interface SuggestionRow {
  *   `.m3-field[data-size='lg'] > .m3-field-lead` draws the field's glyph, and + 24 + 12 = 56px
  *   is `--field-lead`, where the text you typed starts. A 24dp leading slot and `gap-3` are
  *   therefore not free numbers — they are the two that make both columns land.
- * - **`menu`** — the ordinary density step, 40dp under a pointer and 48 under a finger, with
+ * - **`menu`** — the ordinary 40dp row on both mouse and touch, with
  *   `Select`'s own 8dp inline padding, which with the panel's inset lands on the field's 16dp
  *   text inset. `lines: 2` raises it to 56dp: a 20dp label over an 18dp supporting line does
  *   not fit a dense row, and 56 is the next step the scale offers.
@@ -130,7 +126,7 @@ export function suggestionRow({
 }: { variant?: 'menu' | 'search'; lines?: 1 | 2 } = {}): SuggestionRow {
   if (variant === 'search') return { className: `${ROW_BASE} min-h-14 rounded-xl px-3`, height: 56 };
   if (lines === 2) return { className: `${ROW_BASE} min-h-14 rounded-sm px-2`, height: 56 };
-  return { className: `${ROW_BASE} min-h-10 pointer-coarse:min-h-12 rounded-sm px-2`, height: undefined };
+  return { className: `${ROW_BASE} min-h-10 rounded-sm px-2`, height: undefined };
 }
 
 /* A **menu** unfolds out of its trigger and folds back into it as Compose's `DropdownMenu`

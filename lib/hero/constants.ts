@@ -57,11 +57,10 @@ export const HERO_DETAIL_ROUTE_TIMEOUT_MS = 30000;
 export const HERO_ARM_TTL_MS = 1200;
 export const SNAPSHOT_TTL = 2 * 60 * 1000;
 /**
- * Browsers may keep a wheel/touch stream latched to its original scroller after the last
- * dispatched event. Keep the outgoing receiver alive until the stream has been quiet long
- * enough to make the next input a new native hit.
+ * A browser can keep a wheel stream latched through a brief pause. This quiet window gates
+ * opening handoff and retirement of a return-input relay, independently of its old route DOM.
  */
-export const HERO_INPUT_TRANSFER_QUIET_MS = 320;
+export { HERO_INPUT_TRANSFER_QUIET_MS } from './input';
 
 /**
  * Overall ceiling on the input handover, after which it proceeds anyway. A trackpad's

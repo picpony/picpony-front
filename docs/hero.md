@@ -37,10 +37,15 @@ Read initial offsets and dimensions before inserting flight DOM and pass `HeroMo
 A close launches in the requesting task, with rect reads before the shell's microtask commit. `routes.freeze({deferInert})` installs the temporary pointer shield; `exposeGallery` releases the gallery after the animation is ready and applies the leaving detail's exclusion.
 
 - Replay a tap caught by the closing shield once the gallery accepts input.
+- Place the closing shield in the gallery scroller's premeasured scroll space, outside its covered content. Keep it absolute and allow native vertical panning; a fixed shield can latch a gesture to the non-scrolling document even when it is a DOM child of the gallery. Removing the shield must leave the gesture's native scroll owner intact.
 - Freeze the departing detail before it can reclaim gallery focus.
 - Input availability and off-screen content coverage are separate. Only `coverGallery` / `uncoverGallery` own `data-gallery-covered`.
 - After `gallery-idle`, uncover slots in idle batches before removing that marker.
 - Preserve newly chosen gallery focus and fresh wheel/touch streams; a continuing stream must not indefinitely block handoff.
+- A wheel or touch stream that began on the leaving route or Stage has an input lease independent of the flight and route. Keep forwarding that same stream after the old scroller unmounts; do not hold visual or history completion for it. Wheel DOM hit testing alone does not prove that the compositor changed scroll owners.
+- Confirm native takeover from a gallery offset not written by the relay. Baseline each relay write after browser clamping. Fresh pointer/touch input, Ctrl-wheel, another Hero or navigation releases the old lease. Detached touch targets still report moves and endings to the shared input monitor.
+- Cancelling movement does not end a held touch. The shared input monitor keeps the original target's state listener until its real end/cancel, window reset or existing touch-safety timeout. The ending retains any other active touches and leaves no listener or pending relay frame behind.
+- Wheel activity clears after 160 ms; stream identity and relay cleanup use the existing 320 ms quiet window. A shorter pause must not discard a still-latched flow. End an idle lease only after its last scheduled delta is drained.
 - Quiet, expiry and abort are distinct outcomes. A still-owned transfer can finish on budget expiry.
 
 Pull uses the existing `DRAG_RESISTANCE_PX` rubber band and subtracts axis-lock slop at claim time. Horizontal picture stepping uses the same slop rule.
@@ -57,6 +62,7 @@ The window reveals a stationary page. Its content counter-transform is the exact
 - The floating back control stays outside the window and fades in place.
 - On return, a transparent image carries `--md-sys-color-surface` behind its alpha.
 - The window's surface stays opaque in both directions, including pull dismissal. Container-return content uses `HERO_RETURN_FADE`; the shrinking window exposes the gallery.
+- While returning, the window follows the gallery's native scroll with the flyer. Its content receives the inverse scroll translation and stays stationary. Reversals, remounted route mirrors and viewport rebuilds preserve that position; all scroll tracks leave with their motion owner.
 - A superseded flyer fades immediately on FastEffects. Keep its card lease until its lifecycle releases it.
 
 Interruptions use the rendered WAAPI clock and pose. An unresolved first frame has zero elapsed travel; setup time must not advance it. Rebuild the flyer and container together on viewport changes, toward a freshly measured untransformed host. Keep the remaining clock unless a pull owns it; real host/card destinations survive a rebase.
@@ -120,8 +126,11 @@ Run `bun run check`, `bun run test:hero` and `bun run test:overlays` after engin
 Useful scenarios:
 
 - Native wheel/touch at return boundaries and delayed-data close.
+- `shield-wheel` and `shield-touch` hold the first-frame shield long enough for the first native input to hit it, then continue the same gesture after removal. `shield-tap` verifies one replay and cleanup through reopening. A continuous wheel test uses a single CDP scroll gesture so a fresh stream cannot hide a bad initial latch.
+- `continued-wheel`, `continued-opening-wheel` and `continued-touch` start one native stream before requesting Back, then assert movement after both animation completion and removal of the original scroller. `continued-wheel-reopen` verifies that a new Hero stops the old gallery relay.
 - Rapid reopen/reversal, pull-follow, pull-retreat, pull-frame and pull-loading.
 - `repeat-open` covers prepared and unprepared launches of the same card; `return-surface` samples surface opacity, stationary content and header geometry through the return. `pull-reopen` verifies the resting landing slot after reversing a dismissal.
+- `return-scroll-surface`, `return-scroll-fallback` and `return-scroll-reopen` keep a return unfinished while scrolling. The window and flyer must move together, content must stay stationary, and reopening must preserve the scrolled pose with or without `ScrollTimeline`.
 - The `same-image-*` cases alternate eight or nine directions before either leg settles, using the Back button, Escape and browser Back from both opening and closing. Fast variants run sixteen turns near the first presented frame. Cover both final directions; assert one flyer and history token, then the exact original gallery history entry.
 - `same-image-press-tail` holds a mouse or touch press through a reopening handoff. Assert that it cannot open a lightbox or cover the app bar, that a fresh click can, and that closing returns to the original gallery entry.
 - Missing media, terminal errors, failed preview and late final decode.

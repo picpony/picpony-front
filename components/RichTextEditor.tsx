@@ -1,23 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { htmlToBBCode, bbcodeToHtml } from '@/lib/bbcode';
 import { readToken } from '@/lib/hooks';
 import { showToast } from '@/components/Toast';
-import { clamp, cn, getAssetUrl } from '@/lib/utils';
+import { cn, getAssetUrl } from '@/lib/utils';
 import { mediaPreview, mediaWithoutPreview, previewMediaText, rememberMediaPreview, storedMediaText } from '@/lib/mediaPreview';
 import { ICON } from '@/lib/icons';
 import { useTooltip } from '@/components/Tooltip';
+import RichTextEditorPanels, { type RichTextEditorPanelsHandle, type EditorFormField } from '@/components/RichTextEditorPanels';
+import FollowHeight from '@/components/FollowHeight';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero/runtime';
 import { uploadForumPicture } from '@/lib/forumImages';
 import {
   EDITOR_MIN_HEIGHT,
+  EDITOR_FRAME_CLASS_NAME,
+  EDITOR_TOOLBAR_CLASS_NAME,
   type RichTextEditorHandle,
   type RichTextEditorSize,
 } from '@/components/RichTextEditorShell';
-import '@wangeditor/editor/dist/css/style.css';
+import './RichTextEditor.css';
 
-import type { IDomEditor, Toolbar, IEditorConfig } from '@wangeditor/editor';
+import type { IDomEditor, Toolbar, IEditorConfig, IDropPanelMenu, IModalMenu } from '@wangeditor/editor';
 
 export type { RichTextEditorHandle, RichTextEditorSize };
 
@@ -44,13 +48,39 @@ interface RichTextEditorProps {
 }
 
 interface EditorHint {
-  target: HTMLButtonElement;
+  target: HTMLElement;
   label?: string;
 }
 
 function EditorControlTooltip({ target, label }: EditorHint) {
   return useTooltip(label, target).tooltip;
 }
+
+const EDITOR_CONTROL_CLASSES = 'state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring transition-icon-button select-none touch-manipulation';
+
+/** Avoid no-op attribute mutations: the package's DOM is observed for new controls. */
+function addClasses(element: HTMLElement, classes: string) {
+  const missing = classes.split(' ').filter((name) => name && !element.classList.contains(name));
+  if (missing.length) element.classList.add(...missing);
+}
+
+/** Simple mode draws flat list rows; keep Slate's DOM and apply the shared prose rhythm. */
+function styleListRows(editable: HTMLElement) {
+  const rows = new Set(Array.from(editable.querySelectorAll<HTMLElement>(':scope > div > [data-w-e-reserve]'))
+    .map((marker) => marker.parentElement!));
+  for (const row of rows) {
+    row.setAttribute('data-editor-list', '');
+    row.toggleAttribute('data-editor-list-start', !rows.has(row.previousElementSibling as HTMLElement));
+    row.toggleAttribute('data-editor-list-end', !rows.has(row.nextElementSibling as HTMLElement));
+  }
+}
+
+const TOGGLE_TOOLS = new Set([
+  'bold', 'italic', 'underline', 'through', 'header2', 'header3',
+  'bulletedList', 'numberedList', 'justifyLeft', 'justifyCenter', 'justifyRight', 'tableHeader',
+]);
+
+const PANEL_TOOLS_HANDLED = new Set(['color', 'bgColor', 'group-image', 'insertLink', 'editLink', 'insertImage', 'insertTable']);
 
 /* ---------------------------------------------------------------------------
  * The toolbar
@@ -123,14 +153,14 @@ const MENU_LABELS: Record<string, string> = {
   enter: '换行',
 };
 
-/* The geometry the plan below assumes, from the stylesheet in this file (and measured): a tool is
-   a max(40px, touch floor) square — one that opens a panel carries an arrow and is at least 56px
+/* Geometry shared with RichTextEditor.css: a tool is
+   a max(40px, touch floor) square — one that opens a panel carries an arrow and is at least 60px
    wide — 2px apart; a divider is 1px with 4px either side; the bar sits 6px in from its edges;
    the 更多 toggle is one more tool with the bar's 6px after it. */
 const TOOL_GAP = 2;
 const DIVIDER = 9;
 const BAR_PADDING = 12;
-const PANEL_TOOL_MIN = 56;
+const PANEL_TOOL_MIN = 60;
 const PANEL_TOOLS: ReadonlySet<string> = new Set(['color', 'bgColor', 'group-image', 'insertTable']);
 
 interface ToolbarPlan {
@@ -149,8 +179,8 @@ function runWidth(keys: readonly string[], tool: number): number {
     if (key === '|') width += DIVIDER;
     else {
       width += widthOf(key, tool);
-      items += 1;
     }
+    items += 1;
   }
   return width + Math.max(0, items - 1) * TOOL_GAP;
 }
@@ -198,7 +228,7 @@ const loadEditorPackage = () => import('@wangeditor/editor');
 /**
  * Creates the editor without the package's one warning about a short editing area: it checks
  * the height a microtask after creation and warns under 300px, about the placement of its
- * panels — which `placePanels` below does itself. A reply box is shorter on purpose. Only that
+ * panels — the shared editor panels own placement. A reply box is shorter on purpose. Only that
  * message is dropped, and only until the next task.
  */
 let unfilteredWarn: typeof console.warn | null = null;
@@ -228,6 +258,11 @@ function safely(label: string, run: () => void) {
   }
 }
 
+/** WangEditor installs Slate history but omits its stacks from IDomEditor's public type. */
+function editorHistory(editor: IDomEditor) {
+  return (editor as IDomEditor & { history?: { undos: unknown[]; redos: unknown[] } }).history;
+}
+
 /** Replaces the editor's content with `next`, flagged so its change handler knows it was us. */
 function writeEditorValue(
   editor: IDomEditor,
@@ -246,6 +281,11 @@ function writeEditorValue(
     /* A staged upload is drawn from its Blob URL preview (`lib/mediaPreview.ts`): the media
        endpoint shows an unpublished picture only to a request carrying the token. */
     editor.setHtml(previewMediaText(bbcodeToHtml(next)));
+    const history = editorHistory(editor);
+    if (history) {
+      history.undos = [];
+      history.redos = [];
+    }
     if (focused) queueMicrotask(() => {
       if (current() === editor && !editor.isDestroyed) editor.focus(true);
     });
@@ -303,6 +343,8 @@ export default function RichTextEditor({
   onUploaded,
   onUploadingChange,
 }: RichTextEditorProps) {
+  const toolbarId = useId();
+  const panelsRef = useRef<RichTextEditorPanelsHandle | null>(null);
   const editorRef = useRef<IDomEditor | null>(null);
   const toolbarRef = useRef<Toolbar | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -355,7 +397,7 @@ export default function RichTextEditor({
     const uploads = uploadsRef.current;
     let semantics: MutationObserver | null = null;
     let resize: ResizeObserver | null = null;
-    let placementFrame = 0;
+    let stopPanelControls = () => {};
     let uploading = 0;
     let cancelSelection = () => {};
     const isCurrent = () => generationRef.current === generation;
@@ -382,6 +424,9 @@ export default function RichTextEditor({
           },
         },
         MENU_CONF: {},
+        customAlert(info, type) {
+          showToast(info, type === 'success' ? 'success' : 'error');
+        },
         onChange(editor: IDomEditor) {
           if (!isCurrent() || isUpdatingRef.current) return;
           latest.current.onChange(editorValue(editor));
@@ -474,6 +519,161 @@ export default function RichTextEditor({
         editor.focus(true);
       }
 
+      const menuOf = (key: string) => toolbarRef.current?.getMenus()[key] ?? DomEditor.getHoverbar(editor)?.getMenus()[key];
+      const canEdit = () => isCurrent() && !editor.isDestroyed && !latest.current.disabled;
+      const editorFocusTarget = () => canEdit() ? editor.toDOMNode(editor) : null;
+      const returnToEditor = () => {
+        if (canEdit()) editor.restoreSelection();
+        return editorFocusTarget();
+      };
+      const restoreAfterPanel = (anchor: HTMLElement) => () => {
+        const active = document.activeElement;
+        if (canEdit() && (active === document.body || active === anchor || active === editorFocusTarget())) editor.restoreSelection();
+      };
+      const openTool = (key: string, anchor: HTMLElement) => {
+        if (!canEdit()) return;
+        if (!editor.selection) editor.focus(true);
+        if (key === 'group-image') {
+          panelsRef.current?.open({ kind: 'image', key, title: '插入图片', anchor,
+            uploadDisabled: !latest.current.enableImageUpload,
+            select: (action) => {
+              if (!canEdit()) return;
+              editor.restoreSelection();
+              if (!editor.selection) editor.focus(true);
+              if (action === 'insertImage') openTool(action, anchor);
+              else {
+                const upload = menuOf(action);
+                if (upload && !upload.isDisabled(editor)) upload.exec(editor, upload.getValue(editor));
+              }
+            },
+          });
+          return;
+        }
+        const menu = menuOf(key);
+        if (!menu || menu.isDisabled(editor)) return;
+        if ((key === 'color' || key === 'bgColor') && 'getPanelContentElem' in menu) {
+          const native = (menu as IDropPanelMenu).getPanelContentElem(editor);
+          const colors = Array.from(native.querySelectorAll<HTMLElement>('li[data-value]'))
+            .map((cell) => cell.dataset.value ?? '').filter((value) => value && value !== '0');
+          panelsRef.current?.open({ kind: 'color', key, title: MENU_LABELS[key], anchor,
+            colors, value: String(menu.getValue(editor) || ''),
+            pick: (value) => {
+              if (!canEdit()) return;
+              editor.restoreSelection();
+              if (value) editor.addMark(key, value);
+              else editor.removeMark(key);
+            },
+          });
+          return;
+        }
+        if (key === 'insertTable' && 'getPanelContentElem' in menu) {
+          const native = (menu as IDropPanelMenu).getPanelContentElem(editor);
+          const cells = Array.from(native.querySelectorAll<HTMLElement>('td[data-x][data-y]'));
+          const columns = Math.max(...cells.map((cell) => Number(cell.dataset.x))) + 1;
+          const rows = Math.max(...cells.map((cell) => Number(cell.dataset.y))) + 1;
+          panelsRef.current?.open({ kind: 'form', key, title: '插入表格', anchor,
+            returnFocus: returnToEditor,
+            restore: restoreAfterPanel(anchor),
+            fields: [{ label: '行数', value: '3', max: rows, required: true }, { label: '列数', value: '3', max: columns, required: true }],
+            submit: (values) => {
+              if (!canEdit()) return;
+              editor.restoreSelection();
+              native.querySelector<HTMLElement>(`td[data-x="${Number(values[1]) - 1}"][data-y="${Number(values[0]) - 1}"]`)?.click();
+            },
+          });
+          return;
+        }
+        if ('getModalContentElem' in menu) {
+          const native = (menu as IModalMenu).getModalContentElem(editor);
+          const inputs = Array.from(native.querySelectorAll<HTMLInputElement>('input'));
+          const labels = key === 'insertImage' ? ['图片地址', '图片描述（选填）', '跳转链接（选填）']
+            : key === 'editLink' ? ['链接地址'] : ['链接文本', '链接地址'];
+          const fields: EditorFormField[] = inputs.map((input, index) => ({
+            label: labels[index] ?? input.closest('label')?.textContent?.trim() ?? '内容',
+            value: input.value,
+            required: key === 'insertImage' ? index === 0 : true,
+            url: key === 'editLink' || (key === 'insertImage' ? index !== 1 : index === 1),
+          }));
+          panelsRef.current?.open({ kind: 'form', key, title: MENU_LABELS[key], anchor, fields,
+            returnFocus: returnToEditor,
+            restore: restoreAfterPanel(anchor),
+            submit: (values) => {
+              if (!canEdit()) return;
+              editor.restoreSelection();
+              inputs.forEach((input, index) => { input.value = values[index]; });
+              native.querySelector<HTMLButtonElement>('button')?.click();
+            },
+          });
+        }
+      };
+      const shell = shellRef.current;
+      const keepEditingFocus = (event: PointerEvent) => {
+        if (event.button !== 0 || !editor.isFocused()) return;
+        if ((event.target as Element).closest('button[data-menu-key]')) event.preventDefault();
+      };
+      const panelClick = (event: MouseEvent) => {
+        const button = (event.target as Element).closest<HTMLButtonElement>('button[data-menu-key]');
+        const key = button?.dataset.menuKey;
+        if (button && (key === 'undo' || key === 'redo')) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!canEdit() || button.matches(':disabled, [aria-disabled="true"]')) return;
+          editor.restoreSelection();
+          editor[key]?.();
+          return;
+        }
+        if (!button || !key || !PANEL_TOOLS_HANDLED.has(key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openTool(key, button);
+      };
+      const panelKey = (event: KeyboardEvent) => {
+        if (event.isComposing) return;
+        const linkShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+        const button = linkShortcut ? shell.querySelector<HTMLButtonElement>('button[data-menu-key="insertLink"]')
+          : (event.target as Element).closest<HTMLButtonElement>('button[data-menu-key]');
+        const key = linkShortcut ? 'insertLink' : button?.dataset.menuKey;
+        if (!button || !key || (!linkShortcut && event.key !== 'ArrowDown') || !PANEL_TOOLS_HANDLED.has(key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openTool(key, button);
+      };
+      shell.addEventListener('pointerdown', keepEditingFocus, true);
+      shell.addEventListener('click', panelClick, true);
+      shell.addEventListener('keydown', panelKey, true);
+      stopPanelControls = () => {
+        shell.removeEventListener('pointerdown', keepEditingFocus, true);
+        shell.removeEventListener('click', panelClick, true);
+        shell.removeEventListener('keydown', panelKey, true);
+      };
+
+      const syncContextMenu = () => {
+        const bar = shell.querySelector<HTMLElement>('.w-e-hover-bar');
+        if (!bar?.classList.contains('w-e-bar-show') || !canEdit()) { panelsRef.current?.context(null); return; }
+        const buttons = Array.from(bar.querySelectorAll<HTMLButtonElement>('button[data-menu-key]'));
+        const type = buttons.some((button) => button.dataset.menuKey === 'editLink') ? 'link'
+          : buttons.some((button) => button.dataset.menuKey === 'deleteImage') ? 'image' : 'table';
+        const node = DomEditor.getSelectedNodeByType(editor, type);
+        if (!node) { panelsRef.current?.context(null); return; }
+        const anchor = editor.toDOMNode(node);
+        panelsRef.current?.context({ kind: 'context', key: type, anchor,
+          title: type === 'link' ? '链接操作' : type === 'image' ? '图片操作' : '表格操作',
+          items: buttons.map((button) => ({ value: button.dataset.menuKey!, label: MENU_LABELS[button.dataset.menuKey!] ?? button.textContent,
+            disabled: button.classList.contains('disabled'), destructive: ['deleteImage', 'deleteTable'].includes(button.dataset.menuKey!),
+          })),
+          select: (key) => {
+            if (!canEdit()) return;
+            if (PANEL_TOOLS_HANDLED.has(key)) openTool(key, anchor);
+            else {
+              const action = menuOf(key);
+              editor.restoreSelection();
+              if (action && !action.isDisabled(editor)) action.exec(editor, action.getValue(editor));
+            }
+          },
+          dismiss: () => DomEditor.getHoverbar(editor)?.hideAndClean(),
+        });
+      };
+
       // WangEditor uses a non-ARIA role and CSS-only tooltip labels. Bridge its
       // real DOM, including controls added when a toolbar group opens.
       const nameControls = () => {
@@ -482,6 +682,9 @@ export default function RichTextEditor({
           const { label: name, placeholder: hint, invalid: bad, describedBy: described } = latest.current;
           editable.setAttribute('role', 'textbox');
           editable.setAttribute('aria-multiline', 'true');
+          addClasses(editable, 'rich-text-content focus-visible:outline-hidden');
+          editable.classList.toggle('disabled-content', latest.current.disabled);
+          styleListRows(editable);
           if (editable.getAttribute('aria-label') !== (name || hint)) editable.setAttribute('aria-label', name || hint);
           if (bad) editable.setAttribute('aria-invalid', 'true');
           else editable.removeAttribute('aria-invalid');
@@ -496,58 +699,51 @@ export default function RichTextEditor({
           // added above; the key itself is an implementation detail.
           const name = label || '编辑器工具栏操作';
           if (button.getAttribute('aria-label') !== name) button.setAttribute('aria-label', name);
+          if (PANEL_TOOLS_HANDLED.has(key)) {
+            const popup = key === 'group-image' ? 'menu' : 'dialog';
+            if (button.getAttribute('aria-haspopup') !== popup) button.setAttribute('aria-haspopup', popup);
+          }
+          addClasses(button, EDITOR_CONTROL_CLASSES);
+          if (!button.hasAttribute('data-ripple')) button.setAttribute('data-ripple', '');
+          if (!button.hasAttribute('type')) button.type = 'button';
+          const history = editorHistory(editor);
+          const historyEmpty = key === 'undo' ? !history?.undos.length : key === 'redo' ? !history?.redos.length : false;
+          const unavailable = latest.current.disabled || button.classList.contains('disabled') || historyEmpty;
+          if (button.disabled !== unavailable) button.disabled = unavailable;
+          button.classList.toggle('disabled-content', unavailable);
+          const selected = button.classList.contains('active') || button.getAttribute('aria-expanded') === 'true';
+          button.classList.toggle('forced-selected', selected);
+          if (button.getAttribute('aria-disabled') !== String(unavailable)) button.setAttribute('aria-disabled', String(unavailable));
+          if (TOGGLE_TOOLS.has(key) && button.getAttribute('aria-pressed') !== String(selected)) {
+            button.setAttribute('aria-pressed', String(selected));
+          }
+          // The shared tooltip uses the same label; the package's pseudo-elements
+          // must not take over the state-layer pseudo-element on a button.
+          if (button.classList.contains('w-e-menu-tooltip-v5')) button.classList.remove('w-e-menu-tooltip-v5');
         });
-        const nextHints = Array.from(shellRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]') ?? [])
+        shell.querySelectorAll<HTMLElement>('.w-e-scroll, .table-container').forEach((scroller) => addClasses(scroller, 'popover-scrollbar'));
+        const nextHints = Array.from(shellRef.current?.querySelectorAll<HTMLElement>('button[data-menu-key]') ?? [])
+          .filter((target) => !target.closest('.w-e-hover-bar, .w-e-bar-item-menus-container'))
           .map((target) => ({
             target,
-            label: target.matches(':disabled, [aria-disabled="true"], .disabled')
+            label: target.matches(':disabled, [aria-disabled="true"], [aria-expanded="true"], .disabled')
               ? undefined : target.getAttribute('aria-label') ?? undefined,
           }));
         setHints((previous) => previous.length === nextHints.length && nextHints.every((hint, index) =>
           hint.target === previous[index].target && hint.label === previous[index].label,
         ) ? previous : nextHints);
+        syncContextMenu();
       };
 
-      // The package clamps to the browser, while this editor lives in a narrower
-      // clipped column. Keep its native panels inside that column and its focus
-      // boundary, including when the editor is inside an application dialog.
-      const placePanels = () => {
-        if (placementFrame) return;
-        placementFrame = requestAnimationFrame(() => {
-          placementFrame = 0;
-          const shell = shellRef.current;
-          if (!isCurrent() || !shell) return;
-          const panels = Array.from(shell.querySelectorAll<HTMLElement>('.w-e-drop-panel, .w-e-select-list, .w-e-modal'));
-          const maxWidth = `${Math.max(0, shell.clientWidth - 16)}px`;
-          for (const panel of panels) {
-            if (panel.style.maxWidth !== maxWidth) panel.style.maxWidth = maxWidth;
-          }
-          const bounds = shell.getBoundingClientRect();
-          const left = bounds.left + shell.clientLeft + 8;
-          const right = left + shell.clientWidth - 16;
-          const offsets = panels.filter((panel) => panel.getClientRects().length).map((panel) => {
-            const rect = panel.getBoundingClientRect();
-            const previous = parseFloat(panel.style.translate) || 0;
-            const originalLeft = rect.left - previous;
-            return { panel, offset: clamp(originalLeft, left, right - rect.width) - originalLeft };
-          });
-          for (const { panel, offset } of offsets) {
-            if (Math.abs((parseFloat(panel.style.translate) || 0) - offset) > 0.5) {
-              panel.style.translate = `${offset}px`;
-            }
-          }
-        });
-      };
       nameControls();
-      semantics = new MutationObserver(() => { nameControls(); placePanels(); });
+      semantics = new MutationObserver(nameControls);
       semantics.observe(shellRef.current, {
-        childList: true, subtree: true, attributes: true,
-        attributeFilter: ['data-tooltip', 'class', 'disabled', 'aria-disabled', 'style'],
+        childList: true, characterData: true, subtree: true, attributes: true,
+        attributeFilter: ['data-tooltip', 'class', 'disabled', 'aria-disabled', 'aria-expanded', 'style'],
       });
       /* A width change re-plans the row (a phone turned, a sidebar opened); nothing is rebuilt
          unless the tools that fit have changed. */
       resize = new ResizeObserver(() => {
-        placePanels();
         const plan = measure();
         if (plan) rebuildRef.current?.(plan);
       });
@@ -563,7 +759,7 @@ export default function RichTextEditor({
       planRef.current = null;
       semantics?.disconnect();
       resize?.disconnect();
-      if (placementFrame) cancelAnimationFrame(placementFrame);
+      stopPanelControls();
       for (const controller of uploads) controller.abort();
       uploads.clear();
       if (uploading > 0) latest.current.onUploadingChange?.(false);
@@ -596,7 +792,10 @@ export default function RichTextEditor({
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-    if (disabled) editor.disable();
+    if (disabled) {
+      editor.disable();
+      panelsRef.current?.close();
+    }
     else editor.enable();
   }, [disabled]);
 
@@ -623,341 +822,42 @@ export default function RichTextEditor({
   const [phone, wide] = EDITOR_MIN_HEIGHT[size ?? 'default'];
 
   return (
-    /* outline, not outline-variant: this is the boundary of a control you
-       type into — the same object as a text field's border, which the app's
-       rule gives outline while outline-variant is for dividers. (The w-e
-       custom properties below keep outline-variant where they genuinely
-       are dividers.)
-
-       **One focus indicator, and 4dp not 8**: the outline thickening to
-       primary *is* the indicator — no ring beside it (two nested boxes is the
-       defect CodeInput records removing) — and the corner is the text field's
-       4dp step, not the chip's 8dp. */
     <div
       ref={shellRef}
       data-invalid={invalid ? '' : undefined}
-      className={cn('rich-text-editor w-full min-w-0 overflow-hidden rounded-xs border', invalid ? 'border-error' : 'border-outline')}
-      style={{ '--editor-min-phone': `${phone}px`, '--editor-min-wide': `${wide}px` } as CSSProperties}
+      data-disabled={disabled ? '' : undefined}
+      className={cn(EDITOR_FRAME_CLASS_NAME, invalid ? 'border-error' : 'border-outline')}
+      style={{ '--editor-min-phone': `${phone}px`, '--editor-min-wide': `${wide}px`, '--editor-icon-size': `${ICON.control}px` } as CSSProperties}
     >
-      <style>{`
-        /* Paint the focused 2dp boundary inward. Changing the actual border
-           moved every toolbar target by 1px and rewrapped a nearly full row. */
-        .rich-text-editor {
-          outline: 2px solid transparent;
-          outline-offset: -2px;
-          transition:
-            border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-            outline-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
-        }
-
-        .rich-text-editor:focus-within {
-          border-color: var(--md-sys-color-primary-ink);
-          outline-color: var(--md-sys-color-primary-ink);
-        }
-
-        /* An invalid field keeps its error boundary when focused, as an outlined text field
-           does: the thickening is in the error role, not the brand's. */
-        .rich-text-editor[data-invalid]:focus-within {
-          border-color: var(--md-sys-color-error);
-          outline-color: var(--md-sys-color-error);
-        }
-
-        /* wangEditor is themed entirely through its own w-e custom properties.
-           Pointing them at the design tokens means the editor follows the
-           scheme on its own, and neither branch can drift. */
-        .w-e-bar,
-        .w-e-text-container,
-        .w-e-modal,
-        .w-e-select-list,
-        .w-e-drop-panel,
-        .w-e-bar-item-group .w-e-bar-item-menus-container {
-          --w-e-textarea-bg-color: var(--md-sys-color-surface);
-          --w-e-textarea-color: var(--md-sys-color-on-surface);
-          --w-e-textarea-border-color: var(--md-sys-color-outline-variant);
-          --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
-          --w-e-textarea-slight-color: var(--md-sys-color-on-surface-variant);
-          --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
-          /* A selection border and four drag handles: marks on the composer's surface with
-             nothing sitting inside them, so they take the ink rather than the fill — the
-             same call the focus outline twenty lines above makes. On a palette whose brand
-             sits above tone 61 the fill would put the handles at 1.5–2.4:1 against the
-             container behind them. */
-          --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
-          --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
-          --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
-          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-highest);
-          --w-e-toolbar-active-color: var(--md-sys-color-on-surface);
-          --w-e-toolbar-active-bg-color: var(--md-sys-color-surface-container-high);
-          --w-e-toolbar-disabled-color: rgb(var(--md-sys-color-on-surface-rgb) / 38%);
-          --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
-          --w-e-modal-button-bg-color: var(--md-sys-color-surface-container-high);
-          --w-e-modal-button-border-color: var(--md-sys-color-outline);
-        }
-
-        /* The toolbar row: the package's bar and, when the row cannot hold every tool, the
-           更多 toggle after it on the same tone. One row tall before the package mounts. */
-        .rich-text-editor [data-toolbar-row] {
-          display: flex;
-          align-items: flex-start;
-          min-height: calc(max(40px, var(--touch-floor)) + 12px);
-          background-color: var(--md-sys-color-surface-container-highest);
-          border-bottom: 1px solid var(--md-sys-color-outline-variant);
-        }
-
-        .w-e-text-container [data-slate-editor] pre > code {
-          background-color: var(--md-sys-color-surface-container-high);
-          border-color: var(--md-sys-color-outline-variant);
-          text-shadow: none;
-        }
-
-        .w-e-text-container [data-slate-editor] table th {
-          background-color: var(--md-sys-color-surface-container);
-        }
-
-        .w-e-text-container [data-slate-editor] table td,
-        .w-e-text-container [data-slate-editor] table th {
-          border-color: var(--md-sys-color-outline-variant);
-        }
-
-        .w-e-panel-content-color {
-          max-width: 100%;
-        }
-
-        .w-e-panel-content-color li {
-          border-color: var(--w-e-toolbar-bg-color);
-        }
-
-        /* The editing area's height is the caller's size (see EDITOR_MIN_HEIGHT): shorter on a
-           phone, where the toolbar and the keyboard share the rest of the screen. It grows
-           with the text. The host holds the same height before the package mounts. */
-        .rich-text-editor [data-editor-host],
-        .w-e-text-container,
-        .w-e-text-container [data-slate-editor] {
-          min-height: var(--editor-min-phone);
-        }
-
-        @media (min-width: 640px) {
-          .rich-text-editor [data-editor-host],
-          .w-e-text-container,
-          .w-e-text-container [data-slate-editor] {
-            min-height: var(--editor-min-wide);
-          }
-        }
-
-        .w-e-text-container {
-          height: auto !important;
-          border-radius: 0 0 calc(var(--radius-xs) - 1px) calc(var(--radius-xs) - 1px);
-        }
-        .w-e-text-container [data-slate-editor] {
-          padding: 0.75rem 1rem;
-          font-size: var(--text-body-l);
-          line-height: var(--text-body-l--line-height);
-          letter-spacing: var(--text-body-l--letter-spacing);
-        }
-
-        .w-e-text-container [data-slate-editor] p {
-          margin-block: 0.75em;
-        }
-
-        /* The package gives these descendants a separate 1.5 line-height,
-           overriding the editor's body token unless inheritance is explicit. */
-        .w-e-text-container [data-slate-editor] :is(p, li, blockquote, td, th) {
-          line-height: inherit;
-        }
-
-        .w-e-text-container [data-slate-editor] :is(h1, h2, h3, h4, h5, h6) {
-          margin-block: 1.25em 0.5em;
-        }
-
-        .w-e-text-container [data-slate-editor] > :first-child {
-          margin-top: 0;
-        }
-
-        .w-e-text-container [data-slate-editor] > :last-child {
-          margin-bottom: 0;
-        }
-
-        .w-e-text-placeholder {
-          top: 0.75rem;
-          left: 1rem;
-          font-size: var(--text-body-l);
-          line-height: var(--text-body-l--line-height);
-          font-style: normal;
-        }
-
-        .w-e-bar {
-          border-radius: calc(var(--radius-xs) - 1px) calc(var(--radius-xs) - 1px) 0 0;
-        }
-
-        /* ---- Toolbar -------------------------------------------------
-           Rebuilt here as a row of M3 icon buttons: 40dp round targets, a
-           state-layer hover, secondary-container for the active state. The row
-           holds only what fits (the plan in this file); the rest waits behind
-           the 更多 toggle, whose expanded form wraps.
-           (No backticks in this block: it lives inside a JS template literal.) */
-        .w-e-bar {
-          padding: 6px;
-          font-size: var(--text-label-l);
-          font-weight: var(--text-label-l--font-weight);
-          line-height: var(--text-label-l--line-height);
-          letter-spacing: var(--text-label-l--letter-spacing);
-        }
-
-        .w-e-bar-show {
-          flex-wrap: wrap;
-          gap: 2px;
-        }
-
-        .w-e-bar svg,
-        .rich-text-editor [data-toolbar-toggle] svg {
-          height: ${ICON.control}px;
-          width: ${ICON.control}px;
-          flex-shrink: 0;
-        }
-
-        .w-e-bar-item {
-          height: auto;
-          padding: 0;
-        }
-
-        /* The shared Tooltip handles timing, keyboard focus, dismissal and
-           viewport clamping; suppress the package's 600ms pseudo-tooltip. */
-        .rich-text-editor .w-e-menu-tooltip-v5::before,
-        .rich-text-editor .w-e-menu-tooltip-v5::after {
-          display: none;
-        }
-
-        .w-e-bar-item button,
-        .rich-text-editor [data-toolbar-toggle] {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          height: max(40px, var(--touch-floor));
-          min-width: max(40px, var(--touch-floor));
-          padding: 0 8px;
-          border-radius: calc(max(40px, var(--touch-floor)) / 2);
-          color: var(--w-e-toolbar-color, var(--md-sys-color-on-surface-variant));
-          fill: currentColor;
-          transition:
-            background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-            color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-            border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
-        }
-
-        .rich-text-editor [data-toolbar-toggle] {
-          flex-shrink: 0;
-          margin: 6px 6px 6px 0;
-          color: var(--md-sys-color-on-surface-variant);
-        }
-
-        /* The three state weights read the tokens rather than repeating numbers.
-           The old hand-typed weights had no focus weight at all — the one state
-           a keyboard user actually needs to see. */
-        @media (hover: hover) {
-          .w-e-bar-item button:hover:not(.disabled):not(:disabled),
-          .rich-text-editor [data-toolbar-toggle]:hover:not(:disabled) {
-            background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-hover-opacity));
-            color: var(--md-sys-color-on-surface);
-          }
-        }
-
-        /* Focus gets the state layer *and* the app's own ring — a ring sits
-           outside the target, unlike the inset outline this used to draw.
-           No backticks anywhere in this block: it lives inside a template
-           literal, and one would end the string. */
-        .w-e-bar-item button:focus-visible,
-        .rich-text-editor [data-toolbar-toggle]:focus-visible {
-          background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-focus-opacity));
-          outline: 2px solid transparent;
-          box-shadow: 0 0 0 2px var(--md-sys-color-focus);
-        }
-
-        .w-e-bar-item button:active:not(.disabled):not(:disabled),
-        .rich-text-editor [data-toolbar-toggle]:active:not(:disabled) {
-          background-color: rgb(var(--md-sys-color-on-surface-rgb) / var(--md-sys-state-pressed-opacity));
-        }
-
-        .rich-text-editor [data-toolbar-toggle]:disabled {
-          opacity: 0.38;
-        }
-
-        /* Selected state — the M3 pairing, not a grey wash. The expanded toggle is one too. */
-        .w-e-bar-item .active,
-        .w-e-bar-item button.active:hover:not(.disabled):not(:disabled),
-        .rich-text-editor [data-toolbar-toggle][aria-expanded='true'] {
-          background-color: var(--md-sys-color-secondary-container);
-          color: var(--md-sys-color-on-secondary-container);
-          border-radius: var(--radius-md);
-        }
-
-        .w-e-bar-item .active svg {
-          fill: var(--md-sys-color-on-secondary-container);
-        }
-
-        .w-e-bar-divider {
-          height: 24px;
-          align-self: center;
-          margin: 0 4px;
-          background-color: var(--md-sys-color-outline-variant);
-        }
-
-        /* Grouped menus opened on hover only, so on a touch device they could not be opened
-           at all. */
-        .w-e-bar-item-group:focus-within .w-e-bar-item-menus-container {
-          display: block;
-        }
-
-        /* These are third-party DOM panels; adapt them once to Popover's
-           material instead of leaving the package's 3px corners and shadow. */
-        .w-e-select-list,
-        .w-e-drop-panel,
-        .w-e-modal,
-        .w-e-hover-bar,
-        .w-e-bar-item-group .w-e-bar-item-menus-container {
-          --w-e-toolbar-bg-color: var(--md-sys-color-surface-container);
-          border-radius: var(--radius-lg);
-          border: 0;
-          box-shadow: var(--md-sys-elevation-2);
-        }
-
-        .w-e-bar-item-group .w-e-bar-item-menus-container,
-        .w-e-select-list,
-        .w-e-drop-panel {
-          margin-top: calc(max(40px, var(--touch-floor)) + 8px);
-          padding: 8px;
-        }
-
-        @media (forced-colors: active) {
-          .rich-text-editor[data-invalid] {
-            border-color: Mark;
-          }
-        }
-      `}</style>
-      <div ref={rowRef} data-toolbar-row="">
-        <div ref={toolbarContainerRef} role="toolbar" aria-label="格式" className="min-w-0 flex-1" />
-        {overflow && (
-          <button
-            type="button"
-            data-toolbar-toggle=""
-            data-menu-key="more-formats"
-            aria-label="更多格式"
-            aria-expanded={expanded}
-            disabled={disabled}
-            onClick={toggleExpanded}
-          >
-            {/* Three dots, or a chevron to fold the extra rows away. */}
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {expanded ? (
-                <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
-              ) : (
-                <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-              )}
-            </svg>
-          </button>
-        )}
-      </div>
+      <FollowHeight track>
+        <div ref={rowRef} data-toolbar-row="" className={EDITOR_TOOLBAR_CLASS_NAME}>
+          <div ref={toolbarContainerRef} id={toolbarId} role="toolbar" aria-label="格式" className="min-w-0 flex-1" />
+          {overflow && (
+            <button
+              type="button"
+              data-toolbar-toggle=""
+              data-menu-key="more-formats"
+              aria-label="更多格式"
+              aria-expanded={expanded}
+              aria-controls={toolbarId}
+              disabled={disabled}
+              onClick={toggleExpanded}
+            >
+              {/* Three dots, or a chevron to fold the extra rows away. */}
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                {expanded ? (
+                  <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+                ) : (
+                  <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                )}
+              </svg>
+            </button>
+          )}
+        </div>
+      </FollowHeight>
       <div ref={editorContainerRef} data-editor-host="" />
       {hints.map((hint, index) => <EditorControlTooltip key={index} {...hint} />)}
+      <RichTextEditorPanels handleRef={panelsRef} ownerRef={shellRef} />
     </div>
   );
 }

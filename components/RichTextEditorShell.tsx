@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils';
 /**
  * What a caller needs from the rich-text editor without loading it: the handle type, the size
  * axis and the placeholder its `dynamic()` import shows while the editor's chunk loads. Kept out
- * of `RichTextEditor.tsx`, which imports the editor package and its stylesheet at module scope —
- * importing the placeholder from there would put both in the caller's chunk.
+ * of `RichTextEditor.tsx` so its package loader, panel adapter and stylesheet stay behind the
+ * editor's lazy boundary.
  */
 
 export interface RichTextEditorHandle {
@@ -33,6 +33,10 @@ export const EDITOR_MIN_HEIGHT: Record<RichTextEditorSize | 'default', readonly 
   default: [300, 300],
 };
 
+/** Shared geometry for the loaded field and its lazy placeholder. */
+export const EDITOR_FRAME_CLASS_NAME = 'rich-text-editor relative w-full min-w-0 rounded-xl border bg-surface';
+export const EDITOR_TOOLBAR_CLASS_NAME = 'flex min-h-[calc(max(40px,var(--touch-floor))+13px)] rounded-t-[calc(var(--radius-xl)-1px)] border-b border-outline-variant bg-surface-container-low';
+
 /**
  * The editor's footprint while its chunk loads: the one-row toolbar (a 40dp control, or the touch
  * floor under a finger, inside 6px of padding) and the editing area at its minimum height.
@@ -40,14 +44,14 @@ export const EDITOR_MIN_HEIGHT: Record<RichTextEditorSize | 'default', readonly 
 export function EditorPlaceholder({ size }: { size?: RichTextEditorSize }) {
   const [phone, wide] = EDITOR_MIN_HEIGHT[size ?? 'default'];
   return (
-    <div aria-hidden="true" className="overflow-hidden rounded-xs border border-outline">
-      <div className="flex h-[calc(max(40px,var(--touch-floor))+13px)] items-center gap-2 border-b border-outline-variant px-3">
+    <div aria-hidden="true" className={cn(EDITOR_FRAME_CLASS_NAME, 'overflow-hidden border-outline')}>
+      <div className={cn(EDITOR_TOOLBAR_CLASS_NAME, 'items-center gap-2 px-3')}>
         {[0, 1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="size-6 rounded-full" delay={i * 40} />
         ))}
       </div>
       <div
-        className={cn('px-4 py-3', 'h-(--editor-phone) sm:h-(--editor-wide)')}
+        className={cn('p-4', 'h-(--editor-phone) sm:h-(--editor-wide)')}
         style={{ '--editor-phone': `${phone}px`, '--editor-wide': `${wide}px` } as CSSProperties}
       >
         <Skeleton className="h-4 w-2/3" delay={120} />

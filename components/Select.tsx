@@ -184,9 +184,7 @@ export default function Select<T extends string = string>({
      take the pill shape of their neighbouring buttons. */
   const pad = size === 'sm' ? 'h-10 px-4 text-label-l' : 'h-14 px-4 text-body-l';
 
-  /* A row is 40dp under a fine pointer and 48dp under a finger. Express the
-     two sizes on the pointer axis: two base min-height utilities would leave
-     Tailwind's emission order to decide whether the touch floor applies. */
+  /* Menu and Select rows share a 40dp height across input types and widths. */
   const optionRows = () =>
     options.map((option, index) => {
       const isSelected = option.value === value;
@@ -211,7 +209,7 @@ export default function Select<T extends string = string>({
              it, which is where every open starts. It used to take neither, so the
              row the cursor opened on showed no cursor and no hover. */
           className={cn(
-            'flex min-h-10 pointer-coarse:min-h-12 items-center gap-2 rounded-sm px-2 py-1 text-label-l spring-fast-effects transition-[color,background-color,opacity]',
+            'flex min-h-10 items-center gap-2 rounded-sm px-2 py-1 text-label-l spring-fast-effects transition-[color,background-color,opacity]',
             option.disabled
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : cn(

@@ -66,6 +66,8 @@ interface ModalProps {
   /** Fires once the close animation has finished — for work that must not run on top
    *  of a leaving dialog (a theme wipe snapshotting the screen). */
   onExited?: () => void;
+  /** A stable focus destination when the opener can be replaced or disabled while open. */
+  returnFocus?: () => HTMLElement | null;
 }
 
 /** A dialog arrives as every partial-screen surface does (`surfaceArrival`): its rise and scale
@@ -155,6 +157,7 @@ export default function Modal({
   bodyClassName = '',
   panelClassName = '',
   onExited,
+  returnFocus,
 }: ModalProps) {
   const mounted = useMounted();
   const rendering = useExitAnimation(isOpen, CLOSE_ANIM_DURATION);
@@ -175,6 +178,7 @@ export default function Modal({
   useScrollLock(isOpen);
   const layer = useOverlayLayer(isOpen && mounted && rendering, panelRef, {
     onClose,
+    returnFocus,
     closeOnEscape,
     history: closeOnBack,
   });

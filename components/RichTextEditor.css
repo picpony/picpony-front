@@ -1,0 +1,237 @@
+/* Keep the package below the shared control utilities. See docs/css-traps.md. */
+@import '@wangeditor/editor/dist/css/style.css' layer(components);
+
+@layer components {
+  /* Third-party DOM is adapted here; colour and geometry follow the same tokens as
+     the other fields and popovers. See docs/design/typography-and-copy.md#editor. */
+  .rich-text-editor {
+    --editor-tool-size: max(40px, var(--touch-floor));
+    --w-e-textarea-bg-color: var(--md-sys-color-surface);
+    --w-e-textarea-color: var(--md-sys-color-on-surface);
+    --w-e-textarea-border-color: var(--md-sys-color-outline-variant);
+    --w-e-textarea-slight-border-color: var(--md-sys-color-outline-variant);
+    --w-e-textarea-slight-color: var(--md-sys-color-on-surface-variant);
+    --w-e-textarea-slight-bg-color: var(--md-sys-color-surface-container);
+    --w-e-textarea-selected-border-color: var(--md-sys-color-primary-ink);
+    --w-e-textarea-handler-bg-color: var(--md-sys-color-primary-ink);
+    --w-e-toolbar-color: var(--md-sys-color-on-surface-variant);
+    --w-e-toolbar-bg-color: var(--md-sys-color-surface-container-low);
+    --w-e-toolbar-active-color: var(--md-sys-color-on-surface-variant);
+    --w-e-toolbar-active-bg-color: transparent;
+    --w-e-toolbar-disabled-color: var(--md-sys-color-on-surface-variant);
+    --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
+    isolation: isolate;
+    outline: 2px solid transparent;
+    outline-offset: -1px;
+    transition:
+      border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+      outline-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+  }
+
+  .rich-text-editor:is(:focus-within, [data-panel-open]) {
+    z-index: 1;
+    border-color: var(--md-sys-color-primary-ink);
+    outline-color: var(--md-sys-color-primary-ink);
+  }
+
+  .rich-text-editor[data-invalid]:is(:focus-within, [data-panel-open]) {
+    border-color: var(--md-sys-color-error);
+    outline-color: var(--md-sys-color-error);
+  }
+
+  .rich-text-editor[data-disabled] {
+    border-color: var(--md-sys-color-outline-variant);
+  }
+
+  .rich-text-editor [data-editor-host],
+  .rich-text-editor .w-e-text-container,
+  .rich-text-editor [data-slate-editor] {
+    min-height: var(--editor-min-phone);
+  }
+
+  @media (min-width: 640px) {
+    .rich-text-editor [data-editor-host],
+    .rich-text-editor .w-e-text-container,
+    .rich-text-editor [data-slate-editor] {
+      min-height: var(--editor-min-wide);
+    }
+  }
+
+  .rich-text-editor .w-e-text-container {
+    height: auto !important;
+    border-radius: 0 0 calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px);
+  }
+
+  .rich-text-editor [data-slate-editor] {
+    border-top: 0;
+    padding: 16px;
+    font-size: var(--text-body-l);
+    font-weight: var(--text-body-l--font-weight);
+    line-height: var(--text-body-l--line-height);
+    letter-spacing: var(--text-body-l--letter-spacing);
+    caret-color: var(--md-sys-color-primary-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .rich-text-editor .w-e-text-container [data-slate-editor] :is(p, li, blockquote, td, th) {
+    line-height: inherit;
+  }
+
+  /* Simple mode's list markers are reserved spans in flat rows. The package
+     writes margins inline, so these scoped overrides keep the published rhythm. */
+  .rich-text-editor [data-editor-list] {
+    display: flex;
+    align-items: baseline;
+    margin-block: 0.25em !important;
+  }
+
+  .rich-text-editor [data-editor-list-start] {
+    margin-top: 0.75em !important;
+  }
+
+  .rich-text-editor [data-editor-list-end] {
+    margin-bottom: 0.75em !important;
+  }
+
+  .rich-text-editor [data-editor-list]:first-child {
+    margin-top: 0 !important;
+  }
+
+  .rich-text-editor [data-editor-list]:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  .rich-text-editor [data-editor-list] > [data-w-e-reserve] {
+    flex: 0 0 1.5em;
+    margin: 0 !important;
+    padding-inline-end: 0.5em;
+    color: var(--md-sys-color-on-surface-variant);
+    text-align: end;
+  }
+
+  .rich-text-editor [data-editor-list] > span:not([data-w-e-reserve]) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Slate keeps its image selection wrapper; the shared prose stylesheet owns
+     paragraphs, headings, links, lists, quotes, media sizing and table cells. */
+  .rich-text-editor [data-slate-editor] .table-container {
+    border: 0;
+    padding: 0;
+  }
+
+  .rich-text-editor [data-slate-editor] pre > code {
+    text-shadow: none;
+    font-family: var(--font-mono);
+  }
+
+  .rich-text-editor .w-e-text-placeholder {
+    inset: 16px 16px auto;
+    width: auto;
+    font-size: var(--text-body-l);
+    line-height: var(--text-body-l--line-height);
+    letter-spacing: var(--text-body-l--letter-spacing);
+    font-style: normal;
+  }
+
+  .rich-text-editor [data-toolbar-row] {
+    align-items: flex-start;
+  }
+
+  .rich-text-editor .w-e-bar {
+    padding: 6px;
+    border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+    font-size: var(--text-label-l);
+    font-weight: var(--text-label-l--font-weight);
+    line-height: var(--text-label-l--line-height);
+    letter-spacing: var(--text-label-l--letter-spacing);
+  }
+
+  .rich-text-editor .w-e-bar-show {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .rich-text-editor .w-e-bar-item {
+    height: auto;
+    padding: 0;
+  }
+
+  .rich-text-editor .w-e-bar-item button,
+  .rich-text-editor [data-toolbar-toggle] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: var(--editor-tool-size);
+    min-width: var(--editor-tool-size);
+    padding: 0 8px;
+    border: 0;
+    border-radius: calc(var(--editor-tool-size) / 2);
+    background: transparent;
+    color: var(--md-sys-color-on-surface-variant);
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  .rich-text-editor .w-e-bar svg,
+  .rich-text-editor [data-toolbar-toggle] svg {
+    width: var(--editor-icon-size);
+    height: var(--editor-icon-size);
+    flex-shrink: 0;
+    fill: currentColor;
+  }
+
+  .rich-text-editor [data-toolbar-toggle] {
+    flex-shrink: 0;
+    margin: 6px 6px 6px 0;
+  }
+
+  .rich-text-editor .w-e-bar-item button.active,
+  .rich-text-editor .w-e-bar-item button[aria-expanded='true'],
+  .rich-text-editor [data-toolbar-toggle][aria-expanded='true'] {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    border-radius: var(--radius-md);
+  }
+
+  .rich-text-editor .w-e-bar-item button[data-pressed],
+  .rich-text-editor [data-toolbar-toggle][data-pressed] {
+    border-radius: var(--radius-sm);
+  }
+
+  .rich-text-editor .w-e-bar-item button:is(.disabled, :disabled) {
+    background: transparent;
+    color: var(--md-sys-color-on-surface-variant);
+    cursor: not-allowed;
+  }
+
+  .rich-text-editor .w-e-bar-divider {
+    height: 24px;
+    align-self: center;
+    margin: 0 4px;
+  }
+
+  .rich-text-editor .w-e-menu-tooltip-v5::before,
+  .rich-text-editor .w-e-menu-tooltip-v5::after {
+    display: none;
+  }
+
+  /* Native menus remain command adapters; shared React surfaces own their UI. */
+  .rich-text-editor :is(.w-e-bar-item-menus-container, .w-e-hover-bar, .w-e-drop-panel, .w-e-select-list, .w-e-modal) {
+    display: none !important;
+  }
+
+  @media (forced-colors: active) {
+    .rich-text-editor:is(:focus-within, [data-panel-open]) {
+      outline-color: Highlight;
+    }
+
+    .rich-text-editor[data-invalid] {
+      border-color: Mark;
+    }
+  }
+}

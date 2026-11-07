@@ -115,6 +115,7 @@ def assert_clean(page, image_id=3000):
     state(page, 'gallery-idle')
     expect(page).to_have_url(BASE + '/user/1')
     expect(page.locator('.image-hero-flight-layer')).to_have_count(0)
+    expect(page.locator('[data-image-hero-close-shield]')).to_have_count(0)
     expect(page.locator('[data-image-detail-overlay]')).to_have_count(0)
     assert page.locator(GALLERY).evaluate("n=>getComputedStyle(n).pointerEvents") != 'none'
     assert page.locator('[data-image-detail-background-visual]').evaluate("n=>getComputedStyle(n).transform") == 'none'
@@ -227,6 +228,222 @@ def touch_return(page, cdp, label, gap):
     assert_clean(page)
     idle = next(s['at'] for s in log['states'] if s['state'] == 'gallery-idle')
     return {'idleMs':round(idle-start), 'scrollDelta':round(after-before)}
+
+
+def hold_close_shield(page, input_type):
+    """Keep the real first-frame shield until native input reaches it, then release ready."""
+    page.evaluate("""type => {
+      const native=Element.prototype.animate,gates=[];
+      window.__shieldInputs=[];
+      const gallery=document.querySelector('[data-image-hero-gallery-scroll]');
+      const input=e=>{
+        window.__shieldInputs.push({at:performance.now(),trusted:e.isTrusted,
+          shield:e.target?.hasAttribute?.('data-image-hero-close-shield'),
+          gallery:e.composedPath().includes(gallery),scroll:gallery.scrollTop});
+        if(window.__shieldInputs.length===1)setTimeout(()=>gates.splice(0).forEach(release=>release()),80);
+      };
+      addEventListener(type,input,{capture:true,passive:true});
+      Element.prototype.animate=function(...args){
+        const animation=Reflect.apply(native,this,args);
+        if(this.matches('.image-hero-flyer')&&document.documentElement.dataset.imageHeroState==='closing.flight'){
+          const ready=animation.ready,gate=new Promise(resolve=>gates.push(resolve));
+          Object.defineProperty(animation,'ready',{configurable:true,
+            value:Promise.all([ready,gate]).then(()=>animation)});
+        }
+        return animation;
+      };
+      window.__restoreCloseShield=()=>{
+        Element.prototype.animate=native;
+        removeEventListener(type,input,true);
+        gates.splice(0).forEach(release=>release());
+      };
+    }""", input_type)
+
+
+def shield_scroll(page, cdp, label, touch=False):
+    """Start one native scroll stream on the real shield and keep it moving past removal."""
+    open_image(page)
+    bounds = page.locator(GALLERY).bounding_box()
+    offsets = page.locator(GALLERY).evaluate('n=>({top:n.scrollTop,max:n.scrollHeight-n.clientHeight})')
+    before = offsets['top']
+    direction = 1 if touch or offsets['max']-before >= 300 else -1
+    room = offsets['max']-before if direction > 0 else before
+    distance = min(400, room-16)
+    assert distance > 120, offsets
+    x = bounds['x'] + bounds['width']*.55
+    y = bounds['y'] + bounds['height']*.82
+    hold_close_shield(page, 'touchstart' if touch else 'wheel')
+    start = record(page)
+    touching = False
+    initial = None
+    try:
+        page.keyboard.press('Escape')
+        page.locator('[data-image-hero-close-shield]').wait_for(state='attached')
+        if touch:
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+            touching = True
+            for i in range(1,25):
+                cdp.send('Input.dispatchTouchEvent', {'type':'touchMove',
+                    'touchPoints':[{'x':x,'y':y-distance*i/24}]})
+                page.wait_for_timeout(25)
+                if i==6:
+                    initial = page.locator(GALLERY).evaluate('n=>n.scrollTop')-before
+            # The same finger is still held after the shield and route have left.
+            state(page, 'gallery-idle')
+            after = page.locator(GALLERY).evaluate('n=>n.scrollTop')
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+            touching = False
+        else:
+            # A single browser-generated wheel gesture preserves scroll latching. Repeated
+            # mouse.wheel calls may start fresh streams and hide the lost-first-packet bug.
+            cdp.send('Input.synthesizeScrollGesture', {'x':x,'y':y,'yDistance':-direction*distance,
+                'speed':max(1,round(distance/5)),'gestureSourceType':'mouse','preventFling':True})
+            inputs = page.evaluate('window.__shieldInputs')
+            early = next(event for event in inputs if event['at'] >= inputs[0]['at']+500)
+            initial = direction*(early['scroll']-before)
+            after = page.locator(GALLERY).evaluate('n=>n.scrollTop')
+        first = page.evaluate('window.__shieldInputs[0]')
+        assert first and first['trusted'] and first['shield'] and first['gallery'], first
+        assert initial > 15, f'The first part of the native stream did not scroll: {initial}'
+        assert direction*(after-before) > distance*.8, (before, after, distance)
+        assert_clean(page)
+        log = save(page, label)
+        idle = next(s['at'] for s in log['states'] if s['state']=='gallery-idle')
+        assert idle-start < 1200, f'The new stream waited for an old receiver: {idle-start}'
+        return {'nativeInput':'touch' if touch else 'wheel','firstInputOnShield':True,
+                'initialDelta':round(initial),'totalDelta':round(direction*(after-before))}
+    finally:
+        if touching:
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+        page.evaluate('() => { window.__restoreCloseShield(); }')
+
+
+def shield_tap(page, cdp, label, touch=False):
+    """A native tap during the shield still reopens once and leaves no shield after close."""
+    open_image(page)
+    before = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+    source = page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]')
+    box = source.bounding_box()
+    x,y = box['x']+box['width']/2, box['y']+box['height']/2
+    hold_close_shield(page, 'pointerdown')
+    record(page)
+    try:
+        page.keyboard.press('Escape')
+        page.locator('[data-image-hero-close-shield]').wait_for(state='attached')
+        if touch:
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+        else:
+            page.mouse.click(x,y)
+        first = page.evaluate('window.__shieldInputs[0]')
+        assert first and first['trusted'] and first['shield'] and first['gallery'], first
+        state(page, 'detail-idle')
+        expect(page.locator('[data-image-hero-close-shield]')).to_have_count(0)
+        after = page.evaluate('({key:navigation.currentEntry.key,index:navigation.currentEntry.index})')
+        assert after == before, (before, after)
+    finally:
+        page.evaluate('() => { window.__restoreCloseShield(); }')
+    page.keyboard.press('Escape')
+    assert_clean(page)
+    save(page, label)
+    return {'firstInputOnShield':True,'tapReplayedOnce':True,'cleanup':True}
+
+
+def continued_scroll(page, cdp, label, touch=False, opening=False, reopen=False):
+    """One native stream starts on detail/Stage and continues after that exact node is removed."""
+    open_image(page)
+    if opening:
+        page.keyboard.press('Escape')
+        assert_clean(page)
+    gallery_box = page.locator(GALLERY).bounding_box()
+    x = gallery_box['x'] + gallery_box['width']*.55
+    y = gallery_box['y'] + gallery_box['height']*.78
+    page.evaluate("""({touch,opening,reopen}) => {
+      const gallery=document.querySelector('[data-image-hero-gallery-scroll]');
+      let source=null,closeTimer=0,reopenTimer=0;
+      const log=window.__continuedLog={frames:[],first:null,close:null,reopen:null};
+      const snapshot=window.__continuedSnapshot=()=>({at:performance.now(),gallery:gallery.scrollTop,
+        old:source?.scrollTop??0,connected:Boolean(source?.isConnected),phase:document.documentElement.dataset.imageHeroState});
+      const requestClose=()=>{
+        log.close=snapshot();
+        window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        if(reopen)reopenTimer=setTimeout(()=>{
+          log.reopen=snapshot();
+          document.querySelector('[data-tab-pane-active] [data-image-hero-id="3000"]')?.closest('a').click();
+        },900);
+      };
+      const input=e=>{
+        if(log.first)return;
+        source=e.composedPath().find(n=>n instanceof HTMLElement&&n.classList.contains('image-detail-overlay-scroll'));
+        log.first={...snapshot(),trusted:e.isTrusted,source:Boolean(source),
+          stage:Boolean(source?.hasAttribute('data-image-hero-stage-scroll'))};
+        if(!touch)closeTimer=setTimeout(requestClose,opening?60:180);
+      };
+      const type=touch?'touchstart':'wheel';
+      addEventListener(type,input,{capture:true,passive:true});
+      window.__continuedOn=true;
+      const frame=()=>{if(window.__continuedOn){log.frames.push(snapshot());requestAnimationFrame(frame);}};
+      requestAnimationFrame(frame);
+      window.__restoreContinued=()=>{
+        window.__continuedOn=false;removeEventListener(type,input,true);
+        clearTimeout(closeTimer);clearTimeout(reopenTimer);
+      };
+    }""", {'touch':touch,'opening':opening,'reopen':reopen})
+    touching = False
+    try:
+        if opening:
+            source = page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]')
+            box = source.bounding_box()
+            x,y = box['x']+box['width']/2, box['y']+box['height']/2
+            source.locator('..').evaluate('n=>n.click()')
+            page.wait_for_function("p=>Boolean(document.elementFromPoint(p.x,p.y)?.closest('.image-detail-overlay-scroll'))", arg={'x':x,'y':y})
+        if touch:
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+            touching = True
+            for distance in [25,50,75]:
+                cdp.send('Input.dispatchTouchEvent', {'type':'touchMove','touchPoints':[{'x':x,'y':y-distance}]})
+                page.wait_for_timeout(25)
+            page.evaluate('window.__continuedLog.close=window.__continuedSnapshot()')
+            page.keyboard.press('Escape')
+            for i in range(1,121):
+                cdp.send('Input.dispatchTouchEvent', {'type':'touchMove','touchPoints':[{'x':x,'y':y-75-i*2}]})
+                page.wait_for_timeout(25)
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+            touching = False
+        else:
+            cdp.send('Input.synthesizeScrollGesture', {'x':x,'y':y,'yDistance':-400,'speed':65,
+                'gestureSourceType':'mouse','preventFling':True})
+        page.wait_for_timeout(450)
+        data = page.evaluate('window.__continuedLog')
+        (OUTPUT/(label+'.json')).write_text(json.dumps(data,indent=2),encoding='utf-8')
+        assert data['first']['trusted'] and data['first']['source'], data['first']
+        assert data['close'] and data['close']['old'] > 0, 'The native stream must already be scrolling before close'
+        if opening:
+            assert data['close']['phase'].startswith('opening'), data['close']
+        frames = [f for f in data['frames'] if f['at'] >= data['close']['at']]
+        idle = next(f for f in frames if f['phase']=='gallery-idle')
+        assert idle['at']-data['close']['at'] < 1200, 'A live stream must not hold history behind timeout budgets'
+        gone = next(f for f in frames if not f['connected'])
+        if reopen:
+            assert data['reopen'] and data['reopen']['phase']=='gallery-idle', data['reopen']
+            state(page, 'detail-idle')
+            later = [f for f in frames if f['at'] > data['reopen']['at']+100]
+            assert max(abs(f['gallery']-data['reopen']['gallery']) for f in later) < 1, 'The old relay scrolled beneath a new Hero'
+            page.keyboard.press('Escape')
+        else:
+            later = [f for f in frames if f['at'] > gone['at']+800]
+            assert later[-1]['gallery']-later[0]['gallery'] > 30, 'Scroll stopped when the old route was removed'
+            movement = frames[-1]['gallery']-data['close']['gallery']
+            assert movement > (200 if touch else 300), movement
+            positions = [f['gallery'] for f in frames]
+            assert all(b>=a-1 for a,b in zip(positions,positions[1:])), 'The removed source pulled the gallery backwards'
+        assert_clean(page)
+        return {'startedOn':'stage' if data['first']['stage'] else 'route',
+                'closedWhileMoving':True,'continuedAfterUnmount':not reopen,'newHeroProtected':reopen}
+    finally:
+        if touching:
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd','touchPoints':[]})
+        page.evaluate('() => { window.__restoreContinued(); }')
 
 
 def interrupted_open(page, label, resize=False):
@@ -1024,7 +1241,7 @@ def pending_history_turn(page, label, restoring=False):
         page.evaluate('window.__restoreHeroGo()')
 
 
-def return_surface(page, label):
+def return_surface(page, label, scroll=False, fallback=False, reopen=False):
     """Sample the real return tracks: opaque surface, stationary content, untouched app header."""
     open_image(page)
     page.evaluate("""() => {
@@ -1032,7 +1249,7 @@ def return_surface(page, label):
       window.__returnNativeAnimate = Element.prototype.animate;
       Element.prototype.animate = function(...args) {
         const animation = Reflect.apply(window.__returnNativeAnimate, this, args);
-        if (this.matches('.image-hero-flyer,.image-hero-flyer-clip,.image-hero-flyer-image,'+
+        if (animation.timeline===document.timeline && this.matches('.image-hero-flyer,.image-hero-flyer-clip,.image-hero-flyer-image,'+
           '[data-image-detail-background-visual],[data-image-detail-clip],[data-image-detail-unclip],'+
           '[data-image-detail-crossfade],[data-image-detail-surface],[data-image-detail-reveal],'+
           '[data-image-detail-floating-back]')) {
@@ -1043,6 +1260,9 @@ def return_surface(page, label):
       };
     }""")
     samples = []
+    scroll_samples = []
+    if fallback:
+        page.evaluate('window.__returnScrollTimeline=window.ScrollTimeline;window.ScrollTimeline=undefined')
     try:
         page.keyboard.press('Escape')
         state(page, 'closing.flight')
@@ -1069,13 +1289,51 @@ def return_surface(page, label):
         assert max(s['contentY'] for s in samples)-min(s['contentY'] for s in samples) < .5, samples
         assert all(s['headerOpacity'] == 1 and s['headerColour'] == samples[0]['headerColour']
                    and s['overlayTop'] >= s['headerY']+s['headerHeight'] for s in samples), samples
+        if scroll:
+            read = """() => {
+              const route=document.querySelector('[data-image-hero-surface-id]');
+              const y=n=>n.getBoundingClientRect().y;
+              return {scroll:document.querySelector('[data-image-hero-gallery-scroll]').scrollTop,
+                clip:y(route.querySelector('[data-image-detail-clip]')),
+                flyer:y(document.querySelector('.image-hero-flyer')),
+                content:y(route.querySelector('[data-image-detail-crossfade]'))};
+            }"""
+            before = page.evaluate(read)
+            box = page.locator(GALLERY).bounding_box()
+            page.mouse.move(box['x'] + box['width'] * .7, box['y'] + box['height'] * .5)
+            for delta in [140, -100, 80]:
+                page.mouse.wheel(0, delta)
+                page.wait_for_function("""before => Math.abs(document.querySelector(
+                  '[data-image-hero-gallery-scroll]').scrollTop-before)>40""", arg=before['scroll'])
+                page.wait_for_timeout(100)
+                after = page.evaluate(read)
+                distance = after['scroll'] - before['scroll']
+                assert abs(after['flyer'] - before['flyer'] + distance) < .5, (before, after)
+                assert abs(after['clip'] - before['clip'] + distance) < .5, (before, after)
+                assert abs(after['content'] - before['content']) < .5, (before, after)
+                scroll_samples.append({'scroll':distance, 'window':after['clip']-before['clip']})
+                before = after
+            if reopen:
+                page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3000"]').locator('..').click(no_wait_after=True)
+                state(page, 'reversing')
+                after = page.evaluate(read)
+                assert abs(after['clip']-before['clip']) < 1, (before, after)
+                assert abs(after['flyer']-before['flyer']) < 1, (before, after)
+                assert abs(after['content']-before['content']) < 1, (before, after)
     finally:
         page.evaluate("""() => {
           Element.prototype.animate=window.__returnNativeAnimate;
-          for (const a of window.__returnTracks) a.play();
+          for (const a of window.__returnTracks) if (a.playState!=='idle') a.play();
         }""")
+        if fallback:
+            page.evaluate('() => { window.ScrollTimeline=window.__returnScrollTimeline; }')
+    if reopen:
+        state(page, 'detail-idle')
+        assert page.locator('[data-image-hero-surface-id] [data-image-detail-clip]').evaluate('n=>getComputedStyle(n).translate') == 'none'
+        assert page.locator(ROUTE).evaluate('n=>getComputedStyle(n).translate') == 'none'
+        page.keyboard.press('Escape')
     assert_clean(page)
-    return {'samples':len(samples), 'surfaceOpacity':1, 'stationaryContent':True}
+    return {'samples':len(samples), 'surfaceOpacity':1, 'stationaryContent':True, 'scroll':scroll_samples}
 
 
 # The step's content node: everything of one picture that the shared axis moves.
@@ -1756,11 +2014,18 @@ def run(browser, name, width, only=None):
         expect(page.locator('[data-tab-pane-active] '+THUMB)).to_have_count(12)
         page.wait_for_timeout(600)
         cases = [(f'wheel-{gap}', lambda label,gap=gap: wheel_return(page,label,gap)) for gap in [0,110,245,320]]
+        cases += [('shield-wheel', lambda label: shield_scroll(page,cdp,label)),
+                  ('shield-tap', lambda label: shield_tap(page,cdp,label,width<500)),
+                  ('continued-wheel', lambda label: continued_scroll(page,cdp,label)),
+                  ('continued-opening-wheel', lambda label: continued_scroll(page,cdp,label,opening=True)),
+                  ('continued-wheel-reopen', lambda label: continued_scroll(page,cdp,label,reopen=True))]
         if width >= 500:
             cases += [('wheel-before', lambda label: wheel_return(page,label,0,True)),
                       ('stale-wheel-takeover', lambda label: stale_wheel_takeover(page,label))]
         else:
             cases += [(f'touch-{gap}', lambda label,gap=gap: touch_return(page,cdp,label,gap)) for gap in [70,245,320]]
+            cases += [('shield-touch', lambda label: shield_scroll(page,cdp,label,True))]
+            cases += [('continued-touch', lambda label: continued_scroll(page,cdp,label,touch=True))]
         cases += [('interrupt', lambda label: interrupted_open(page,label)),
                   ('stale-wheel-expiry', lambda label: stale_wheel_expiry(page,label)),
                   ('resize-interrupt', lambda label: interrupted_open(page,label,True)),
@@ -1800,6 +2065,9 @@ def run(browser, name, width, only=None):
                   ('same-image-press-tail', lambda label: same_image_press_tail(page,cdp,label,width<500)),
                   ('pull-reopen', lambda label: pull_reopen(page,label)),
                   ('return-surface', lambda label: return_surface(page,label)),
+                  ('return-scroll-surface', lambda label: return_surface(page,label,True)),
+                  ('return-scroll-fallback', lambda label: return_surface(page,label,True,True,True)),
+                  ('return-scroll-reopen', lambda label: return_surface(page,label,True,False,True)),
                   ('reload-collapse', lambda label: reload_collapse(page,label)),
                   ('direct-back', lambda label: direct_back(page,label)),
                   ('step-across-page', lambda label: step_across_page(page,label)),

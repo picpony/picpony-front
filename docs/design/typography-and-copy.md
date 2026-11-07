@@ -59,6 +59,30 @@ Do not restore unsupported font size, indent, code-block, image-width or full-wi
 
 Import through `dynamic()` with `EditorPlaceholder` from `RichTextEditorShell`. The public handle is `focus()`; `size` selects the post/reply editing area.
 
+The editor and its placeholder share the outlined field's 20 dp corners, toolbar surface and
+minimum height. Editing uses `body-l` at both sizes; `.rich-text-content` supplies the same
+paragraph, heading, list, link, quote and table treatment as published content.
+Adapt the package's flat list rows to that rhythm without replacing Slate's DOM.
+
+`components/RichTextEditor.css` scopes the package adapter to the editor and loads its base
+stylesheet in the component cascade layer. Keep this stylesheet behind the editor's lazy
+boundary. Toolbar controls use the shared state layer, ripple, focus ring and disabled ink;
+format toggles expose `aria-pressed`.
+
+`RichTextEditorPanels` uses `Popover`, `Menu`, `Modal`, `Input`, `Button` and `IconButton` for
+every editor panel, including contextual link, image and table actions. WangEditor's panels
+supply command data only; their native surfaces remain hidden. Shared components own motion,
+placement, scrolling, focus, Escape/outside dismissal and dialog history.
+
+The image menu opens on click, tap or keyboard activation, never on hover. It stays open
+when the pointer leaves; selection, trigger activation, Escape or outside dismissal closes it. Colour
+choices support arrow keys, Home and End. Link, image and table forms validate at their fields
+and apply their saved command after the dialog exits, preserving the editing selection.
+An open editor panel retains the editor's active boundary while its fields own keyboard focus.
+Toolbar pointer presses preserve the editing caret. Undo and redo are disabled when their
+history stack is empty; an external content replacement starts a new history baseline.
+The expanded toolbar follows `FollowHeight`'s layout spring rather than jumping between rows.
+
 ## Copy
 
 The product UI is Chinese. These rules apply to strings, including loading, confirmation and error states.
@@ -82,4 +106,7 @@ Do not duplicate a completed batch's toast in a second live region. Use `useConf
 
 ## Verification
 
-Run `bun run check`. Rich-text changes use `scripts/testRichText.mjs` and `scripts/testSanitizeHtml.mjs`; renderer geometry and font changes also need browser inspection in both schemes. Follow [CSS verification](../css-traps.md) for stylesheet changes.
+Run `bun run check`. Rich-text changes use `scripts/testRichText.mjs` and `scripts/testSanitizeHtml.mjs`;
+editor menus, dialogs, selection and motion also use `bun run test:editor`. Renderer geometry
+and font changes need browser inspection in both schemes. Follow
+[CSS verification](../css-traps.md) for stylesheet changes.

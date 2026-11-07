@@ -166,8 +166,8 @@ type OpeningScrollBridge = {
   ) => void;
   /** The Stage takes the scroll back, aligned once to where the route was. */
   disown: () => void;
-  returnToGallery: (scroller: HTMLElement) => void;
-  release: () => void;
+  returnToGallery: (scroller: HTMLElement, outgoing?: HTMLElement) => void;
+  release: (options?: { preserveInput?: boolean }) => void;
 };
 
 /**
@@ -461,6 +461,8 @@ export class HeroController {
   private cancelBackgroundScrollRead: Disposer | null = null;
   /** A close waiting for the list to bring its card into view (`startClosing`). */
   private closePreparation: Promise<ImageHeroCloseOutcome> | null = null;
+  /** A native stream may outlive the route and flight that handed it to the gallery. */
+  private returnedScroll: HeroScrollContinuity | null = null;
   /** The frame a card the list revealed is waiting in for the detail to leave (`focusRevealedCard`). */
   private revealFocusFrame = 0;
   private detailRecord: HeroHistoryRecord | null = null;
@@ -505,6 +507,8 @@ export class HeroController {
     /* Never initialised (a server render evaluates this module too, and a development reload
        rebinds there): nothing was attached, and `window` may not exist. */
     if (!this.initialized || typeof window === 'undefined') return;
+    this.releaseReturnedScroll();
+    this.foreground?.scrollContinuity?.stopReturnInput();
     this.cancelRevealFocus();
     this.releaseHistory?.();
     this.releaseInteraction?.();
@@ -734,6 +738,7 @@ export class HeroController {
     this.initialize();
     const normalized = normalizeHeroHref(href);
     if (normalized === this.observedHref) return;
+    this.releaseReturnedScroll();
     this.observedHref = normalized;
     this.routes.bumpEpoch();
     this.events.notify();
@@ -886,6 +891,8 @@ export class HeroController {
     this.initialize();
     this.router = intent.navigation;
     if (!intent.snapshot.canAnimate || !intent.source.isConnected) return false;
+    this.releaseReturnedScroll();
+    this.foreground?.scrollContinuity?.stopReturnInput();
 
     if (this.detailStep) {
       this.queuePendingOpen(intent, this.detailStep);
@@ -2593,6 +2600,7 @@ export class HeroController {
                the tree, and read inside `reverse` after it they forced a style pass between the
                Back and the reversed leg's first frame. */
             inputs: session.motion.readReverseInputs(),
+            inputSource: session.adoption?.route.scroller ?? session.handoffRoute?.scroller,
           }
         : null;
 
@@ -2653,7 +2661,7 @@ export class HeroController {
     }
 
     const galleryScroller = measurement?.plane?.scroller ?? getGalleryScrollPlane()?.scroller;
-    if (galleryScroller) session.scrollBridge?.returnToGallery(galleryScroller);
+    if (galleryScroller) session.scrollBridge?.returnToGallery(galleryScroller, measurement?.inputSource);
     this.setPhase('reversing', session, session.intent.background!);
     session.shared.dispose();
 
@@ -2667,16 +2675,19 @@ export class HeroController {
     const onBackground = await this.returnToBackground(session, navigationHandled, () => this.foreground === session);
     if (this.foreground !== session) return;
 
-    // Never tear down the flyer while a finger is still down: the user would see
-    // the thumbnail reappear under their own touch.
-    const released = await waitForHeroInputRelease(this.lifecycleAbort.signal);
+    // An unclaimed touch still holds its flyer. A managed return can settle the pixels while
+    // its input lease keeps carrying that finger independently of the old Stage.
+    const continuity = session.scrollContinuity;
+    const preserveInput = Boolean(onBackground && continuity?.canCompleteReturn);
+    const released = preserveInput || await waitForHeroInputRelease(this.lifecycleAbort.signal);
     if (!released || this.foreground !== session) return;
 
     this.concealRetainedStage(session.id);
     session.motion?.dispose();
     session.motion = null;
-    session.scrollBridge?.release();
-    session.scrollContinuity?.release();
+    session.scrollBridge?.release({ preserveInput });
+    if (preserveInput) this.retainReturnInput(continuity);
+    else continuity?.release();
     session.scrollContinuity = null;
     session.visual.dispose();
     this.clearBackgroundVisual();
@@ -2973,6 +2984,7 @@ export class HeroController {
       continuity: new HeroScrollContinuity(plane.scroller),
     };
     launchGeometry.continuity.addDeltaSource(route.scroller);
+    launchGeometry.continuity.takeOverReturnInput(route.scroller);
     const snapshot = { ...record.snapshot, previewFrame: liveAsset, createdAt: Date.now() };
     const id = ++this.sessionSequence;
 
@@ -3015,7 +3027,7 @@ export class HeroController {
        while `inert` on the detail and the lift of the gallery's `inert` — each a restyle of a
        whole subtree — land together under the moving picture. Done in one task, the overlay's
        focus trap can never pull back a focus the user has just given the gallery. */
-    this.freezeClosingRoute(session);
+    this.freezeClosingRoute(session, launchGeometry.plane);
     this.setPhase('closing.flight', session, record.background);
     void this.runClosing(session, plane);
     return closePromise;
@@ -3068,6 +3080,7 @@ export class HeroController {
       if (!scrollContinuity) {
         scrollContinuity = new HeroScrollContinuity(plane.scroller);
         scrollContinuity.addDeltaSource(route.scroller);
+        scrollContinuity.takeOverReturnInput(route.scroller);
       }
       session.scrollContinuity = scrollContinuity;
 
@@ -3186,7 +3199,7 @@ export class HeroController {
       session.route.pull?.reset();
       session.motion?.dispose();
       session.motion = null;
-      session.scrollContinuity?.release();
+      this.retainReturnInput(session.scrollContinuity);
       session.scrollContinuity = null;
       session.shared.dispose();
       session.visual.dispose();
@@ -3210,6 +3223,23 @@ export class HeroController {
     }
     console.error('[hero] closing transaction failed', error);
     await this.reverseClosing(session);
+  }
+
+  /** A new navigation or Hero intent supersedes the previous gallery's remaining input. */
+  private releaseReturnedScroll() {
+    const scroll = this.returnedScroll;
+    this.returnedScroll = null;
+    scroll?.release();
+  }
+
+  private retainReturnInput(scroll: HeroScrollContinuity | null) {
+    if (!scroll) return;
+    if (!scroll.canCompleteReturn) { scroll.release(); return; }
+    this.releaseReturnedScroll();
+    this.returnedScroll = scroll;
+    scroll.retire(() => {
+      if (this.returnedScroll === scroll) this.returnedScroll = null;
+    });
   }
 
   /** Release an unusable flight or failed reopening before falling back to history navigation. */
@@ -3257,10 +3287,11 @@ export class HeroController {
     return true;
   }
 
-  private freezeClosingRoute(session: ClosingSession) {
+  private freezeClosingRoute(session: ClosingSession, scrollPlane?: HeroScrollPlane) {
     if (session.routeFreeze) session.shared.release(session.routeFreeze);
     const freeze = this.routes.freeze(session.route, session.owner, {
       deferInert: true,
+      scrollPlane,
       onShieldTap: (x, y) => this.replayShieldTap(x, y),
     });
     session.routeFreeze = freeze;
@@ -3278,9 +3309,14 @@ export class HeroController {
       pose: motion.measurePose(),
       inputs: motion.readReverseInputs(),
     } : null;
+    const plane = measured?.plane ?? motion?.flight.plane;
+    const continuity = plane ? new HeroScrollContinuity(plane.scroller) : null;
+    continuity?.addDeltaSource(previous.route.scroller);
+    continuity?.takeOverReturnInput(previous.route.scroller);
     const session: ClosingSession = {
       ...previous,
       abort: new AbortController(),
+      scrollContinuity: continuity,
       reversing: false,
       intent: { ...previous.intent, cause: 'interrupt', backgroundMode: 'continue' },
     };
@@ -3288,11 +3324,12 @@ export class HeroController {
     previous.motion = null;
     previous.shared = new ResourceScope();
     previous.visual = new ResourceScope();
+    previous.scrollContinuity?.release();
     previous.scrollContinuity = null;
     previous.resolveClose = null;
     this.foreground = session;
     this.pendingOpen = null;
-    this.freezeClosingRoute(session);
+    this.freezeClosingRoute(session, measured?.plane ?? motion?.flight.plane);
     if (motion && measured) {
       void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
         .catch((error) => this.failClosing(session, error));
@@ -3609,17 +3646,20 @@ export class HeroController {
         stage.scroller.scrollTop = owner.scrollTop;
         continuity.replacePeers(stage.scroller);
       },
-      returnToGallery: (galleryScroller) => {
+      returnToGallery: (galleryScroller, priorSource) => {
         if (released) return;
-        const outgoing = [stage.scroller, targetScroller].filter(
+        const outgoing = [stage.scroller, targetScroller, priorSource].filter(
           (element): element is HTMLElement => Boolean(element && element !== galleryScroller),
         );
         continuity.replacePeers(galleryScroller);
         // The browser may still be delivering a wheel stream to the old
         // scroller; keep it as a delta source so that momentum is not lost.
-        outgoing.forEach((element) => continuity.addDeltaSource(element));
+        outgoing.forEach((element) => {
+          continuity.addDeltaSource(element);
+          continuity.takeOverReturnInput(element);
+        });
       },
-      release: () => {
+      release: ({ preserveInput = false } = {}) => {
         if (released) return;
         released = true;
         heroFrameScheduler.cancel(sizeOwner);
@@ -3630,7 +3670,7 @@ export class HeroController {
         heightLease = null;
         targetScroller = null;
         targetContent = null;
-        continuity.release();
+        if (!preserveInput) continuity.release();
         if (session.scrollContinuity === continuity) session.scrollContinuity = null;
         if (session.scrollBridge === bridge) session.scrollBridge = null;
       },
@@ -4130,6 +4170,7 @@ export class HeroController {
   // -------------------------------------------------------------------------
 
   private handlePageHide = () => {
+    this.releaseReturnedScroll();
     this.lifecycleAbort.abort();
     const foreground = this.foreground;
     if (foreground) {
@@ -4421,6 +4462,7 @@ export class HeroController {
       if (session.abort.signal.aborted || lifecycleSignal.aborted) return false;
       if (performance.now() >= deadline) return true;
       const continuity = session.scrollContinuity;
+      if (session.kind === 'closing' && continuity?.canCompleteReturn) return true;
       // Only the OLD receiver needs a quiet window. Fresh input on the visible receiver
       // proves the browser has retargeted; waiting for that new scroll to stop held a close
       // open for two full timeout budgets and withheld detail content after an open.
