@@ -1,6 +1,6 @@
 'use client';
 
-import { HERO_BACKGROUND_SELECTOR, HERO_BACKGROUND_VISUAL_SELECTOR } from './constants';
+import { HERO_BACKGROUND_SELECTOR, HERO_BACKGROUND_VISUAL_SELECTOR, HERO_UNCLIP_SELECTOR } from './constants';
 import type { HeroRect } from './geometry';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
@@ -64,6 +64,30 @@ export function getHeroRect(element: HTMLElement): HeroRect {
     left: rect.left,
     width: rect.width,
     height: rect.height,
+  };
+}
+
+/**
+ * The detail's landing box with its window/counter-transform pair removed. Their sampled
+ * tracks are inverse at keyframes, but can drift between them. Measuring that drift as layout
+ * re-aims a flight at a box the resting detail will never occupy; see docs/hero.md#opening.
+ * Both window boxes fill the untransformed overlay, so the counter box supplies the complete
+ * axis-aligned projection, including the transform origins, without changing any live track.
+ */
+export function getHeroRestingDetailRect(element: HTMLElement, overlay: HTMLElement): HeroRect {
+  const rect = getHeroRect(element);
+  const unclip = overlay.querySelector<HTMLElement>(HERO_UNCLIP_SELECTOR);
+  if (!unclip?.contains(element)) return rect;
+  const projected = getHeroRect(unclip);
+  const host = getHeroRect(overlay);
+  if (Math.min(projected.width, projected.height, host.width, host.height) <= 0) return rect;
+  const scaleX = host.width / projected.width;
+  const scaleY = host.height / projected.height;
+  return {
+    left: host.left + (rect.left - projected.left) * scaleX,
+    top: host.top + (rect.top - projected.top) * scaleY,
+    width: rect.width * scaleX,
+    height: rect.height * scaleY,
   };
 }
 

@@ -649,6 +649,92 @@ test('developer-mode writes preserve accepted settings after closing without upd
   harness.dispose();
 });
 
+for (const kind of ['Image', 'Video']) {
+  for (const finalFirst of [true, false]) {
+    test(`detail ${kind.toLowerCase()} exposes a decoded final before handoff when its preview fails (${finalFirst ? 'final first' : 'error first'})`, async () => {
+      const frames = new Map();
+      let frameId = 0;
+      const jsx = (type, props) => ({ type, props });
+      const react = {
+        useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
+        useRef: (current) => ({ current }),
+        useCallback: (callback) => callback,
+        useEffect() {}, useLayoutEffect() {},
+        startTransition: (callback) => callback(),
+      };
+      const dependencies = {
+        react,
+        'react/jsx-runtime': { jsx, jsxs: jsx },
+        'next/image': { default: 'Image' },
+        'react-icons/md': {},
+        './IconButton': { default: 'IconButton' },
+        './Skeleton': { default: 'Skeleton' },
+        './ErrorRetry': { default: 'ErrorRetry' },
+        '@/lib/hero/geometry': { getHeroMediaResponsiveSizes: () => '', getHeroMediaPreviewSizes: () => '' },
+        '@/lib/hero/constants': { HERO_PREVIEW_FALLBACK_MS: 1000 },
+        '@/lib/detailFinalSource': { isDetailFinalOptimized: () => false, shouldBypassImageOptimization: () => true },
+        '@/lib/imageLoader': {},
+        '@/lib/constants': { IMAGE_CDN_BASE: 'https://cdn.invalid', IMAGE_WORKER_BASE: 'https://worker.invalid' },
+        '@/lib/spring': { SPRING_MS: {} },
+        '@/lib/appearance': { MOTION_SPEED_SCALE: {} },
+        '@/lib/hero': {},
+        '@/lib/hero/finalWarm': {},
+        '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+      };
+      const { default: Detail } = load(`components/Detail${kind}.tsx`, dependencies, {
+        window: { setTimeout: () => 1, clearTimeout() {} },
+        requestAnimationFrame: (callback) => { frames.set(++frameId, callback); return frameId; },
+        cancelAnimationFrame: (id) => frames.delete(id),
+        HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
+      });
+      const attributes = new Map([['data-image-detail-hero-active', 'true']]);
+      const target = { setAttribute: (name, value) => attributes.set(name, value) };
+      let handedOff = 0;
+      let failed = 0;
+      const tree = Detail({
+        imageId: 4, surfaceId: 'test-surface', previewSrc: 'preview.png', finalSrc: 'final.png',
+        width: 400, height: 300, alt: 'fixture', style: {}, heroActive: true, preloadFinal: true,
+        // Intentionally leave React's state update pending, as a busy commit can do.
+        onPreviewFailed: () => { failed++; },
+        onPreviewReady: () => {
+          handedOff++;
+          assert.equal(attributes.get('data-image-detail-final-ready'), 'true');
+          assert.equal(attributes.get('data-image-detail-hero-active'), 'false', 'Handoff must not expose the hidden final');
+        },
+      });
+      tree.props.ref.current = target;
+      const children = tree.props.children.filter(Boolean);
+      const preview = children.find((node) => node.props?.['data-image-detail-layer'] === 'preview');
+      const final = children.find((node) => node.props?.['data-image-detail-layer'] === 'final');
+      const decoded = {
+        currentSrc: 'final.png', isConnected: true, complete: true, naturalWidth: 400,
+        readyState: 2, decode: async () => {},
+      };
+      if (kind === 'Video') final.props.ref(decoded);
+      const decode = async () => {
+        (final.props.onLoad ?? final.props.onLoadedData)({ currentTarget: decoded });
+        await new Promise(setImmediate);
+        while (frames.size) {
+          const work = [...frames.values()];
+          frames.clear();
+          work.forEach((callback) => callback());
+        }
+      };
+      if (finalFirst) {
+        await decode();
+        assert.equal(handedOff, 0, 'A pending preview is still the visual authority');
+        preview.props.onError();
+      } else {
+        preview.props.onError();
+        assert.equal(handedOff, 0, 'A failed preview alone is not paintable');
+        await decode();
+      }
+      assert.equal(failed, 1);
+      assert.equal(handedOff, 1);
+    });
+  }
+}
+
 test('tag groups keep their distinct navigation actions and independent expansion limits', () => {
   const pushes = [];
   const selected = [];
@@ -660,12 +746,19 @@ test('tag groups keep their distinct navigation actions and independent expansio
     useRef: () => ({ current: null }),
     useEffect: () => {},
   };
+  const tagSections = load('components/detail/DetailTagSections.tsx', {
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    '@/components/Skeleton': { default: 'Skeleton' },
+  });
   const { default: TagList } = load('components/TagList.tsx', {
     react,
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     'next/navigation': { useRouter: () => ({ push: (...args) => pushes.push(args) }) },
     '@/components/Button': { default: 'Button' },
     '@/components/Chip': { default: 'Chip' },
+    '@/components/EmptyState': { default: 'EmptyState' },
+    '@/components/FollowHeight': { default: 'FollowHeight' },
+    '@/components/detail/DetailTagSections': tagSections,
     '@/components/Tooltip': { useTooltip: (label) => ({ anchorRef: null, anchorProps: { tip: label }, tooltip: null }) },
     '@/lib/format': { formatCount: (value) => String(value) },
     '@/lib/tagCategories': { tagCategoryChip: (category) => category },

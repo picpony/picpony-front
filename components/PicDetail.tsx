@@ -20,22 +20,13 @@ import { useOffline } from 'next/offline';
 import {
   MdChevronLeft,
   MdChevronRight,
-  MdDownload,
-  MdFlag,
   MdIosShare,
-  MdLibraryAdd,
   MdLink,
-  MdOpenInNew,
   MdSend,
-  MdShare,
-  MdStar,
-  MdStarBorder,
-  MdTranslate,
 } from 'react-icons/md';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
 import { useAuthModal } from '@/components/AuthModal';
 import Button from '@/components/Button';
-import ButtonLink from '@/components/ButtonLink';
 import CommentSection, { type ReplyTarget } from '@/components/CommentSection';
 import DetailBack from '@/components/DetailBack';
 import DetailHeader from '@/components/DetailHeader';
@@ -43,6 +34,7 @@ import DetailImage from '@/components/DetailImage';
 import DetailVideo from '@/components/DetailVideo';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
 import Menu, { type MenuAction } from '@/components/Menu';
 import PageBack from '@/components/PageBack';
@@ -57,6 +49,8 @@ import TagList, {
   type VisibleTagLimits,
 } from '@/components/TagList';
 import { showToast } from '@/components/Toast';
+import DetailActions from '@/components/detail/DetailActions';
+import DetailTagSkeleton from '@/components/detail/DetailTagSections';
 import DetailDescription from '@/components/detail/DetailDescription';
 import DetailSources from '@/components/detail/DetailSources';
 import DetailVotes from '@/components/detail/DetailVotes';
@@ -90,6 +84,7 @@ import {
 import { downloadCandidates, downloadOriginal } from '@/lib/download';
 import { describeImage } from '@/lib/imageDescription';
 import { getRawImageUrl } from '@/lib/imageLoader';
+import { sourceLinksOf } from '@/lib/imageSources';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
 import { useDetailStep } from '@/lib/hero/useDetailStep';
 import { findDetailOriginLink, opensFromDetailOrigin, playDetailEntrance } from '@/lib/detailTransit';
@@ -407,18 +402,10 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
           <Skeleton className="absolute inset-4 rounded-lg" delay={90} />
         </div>
         <div className="image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
-          <div className="mx-auto w-full max-w-5xl space-y-6">
-            <div>
-              <div className="mb-1.5 flex justify-between">
-                <Skeleton className="h-4 w-14" />
-                <Skeleton className="h-4 w-14" delay={60} />
-              </div>
-              <Skeleton className="h-1 w-full rounded-full" delay={120} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-10 w-28 rounded-full" delay={150} />
-              <Skeleton className="h-10 w-40 rounded-full" delay={180} />
-            </div>
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+            <DetailVotes image={null} pending />
+            <DetailActions passive />
+            <DetailTagSkeleton />
           </div>
         </div>
       </div>
@@ -525,9 +512,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
   const [revealedHeroSeedAt, setRevealedHeroSeedAt] = useState<number | null>(null);
   const [finalReadyId, setFinalReadyId] = useState<number | null>(null);
-  /* The body waits for a later commit when something is about to carry the overlay in — a flight,
-     or a row's container, whose copy is taken in the commit that mounts the overlay — so that
-     commit is the picture and its header rather than the whole page (`opensFromDetailOrigin`). */
+  // Publish tag values after the flight; actions and the regular tag heading appear immediately.
   const [deferredBodyId, setDeferredBodyId] = useState<number | null>(() =>
     heroSeed || (presentation === 'overlay' && opensFromDetailOrigin(imageId)) ? null : imageId,
   );
@@ -562,19 +547,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   /* Offline, a record still on its way is not "loading" — nothing will arrive until the network
      does, so its placeholders give way to saying so, and the read runs again on reconnect. */
   const offline = useOffline();
-  /* The flight's record is in but the body is still held for the landing: render it ahead,
-     hidden (see the `Activity` around the body). Only for the picture a flight is carrying in. */
-  /* Not gated on the record any more: the body's controls (save, favourite, share, report) need
-     only the picture's id, so they are rendered ahead from the flight's own row and published
-     with the landing; only the parts that read the record wait for it (`recordBody` below). */
+  // Prerender the below-fold tail without effects or layout during the flight.
   const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && image !== null && !offline;
   const recordPending = record === null && recordError === null && !offline;
-  /* **The body publishes in two frames, not one.** Its first style and layout is ~120 elements of
-     chrome (actions, tags) plus everything under the picture (description, sources, the thread):
-     together that is a whole frame's budget in one commit, and it was the dropped frame of an
-     open. The tail below the first screen is published one frame later — still under the fold,
-     arriving through `playDetailArrival` as any late content does. */
-  const [bodyTailReady, setBodyTailReady] = useState(false);
+  // Keep the first layout of tag values and the tail in separate frames.
+  const [bodyTailReady, setBodyTailReady] = useState(deferredBodyReady);
   /* Reset during render, the shell's own pattern: a `setState` in the effect below lints as a
      cascading render, and the tail must be gone in the commit that hides the body. */
   if (!deferredBodyReady && bodyTailReady) setBodyTailReady(false);
@@ -881,14 +858,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     return () => window.removeEventListener('online', retryRecord);
   }, [recordFailedRetryably, retryRecord]);
 
-  // Fetch and final-media decode start immediately. Only the sizeable body subtree waits, for
-  // the flight's two settling frames — no idle slice: the body is what the
-  // reader is about to read, and an idle wait on a busy phone held it back up to 240ms after the
-  // flight had landed. It mounts as a transition, so a
-  // wheel or touch stream that starts meanwhile still preempts it.
-  /* The body publishes with the landing whether or not the record is in: its controls do not
-     need it, and a slow record (the backend answers in seconds under load) used to hold the whole
-     row of buttons back with it. The record-dependent parts fill in when it lands. */
+  // Only values and rich content wait for the flight. Fixed chrome stays visible throughout;
+  // see docs/hero.md#data-and-handoff. A transition lets fresh input preempt tag layout.
   useEffect(() => {
     return publishWhenHeroSettled(() => {
       heroProbeMark('hx:t:body-publish');
@@ -897,10 +868,6 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       idle: false,
       canPublish: () => {
         if (!isImageHeroDetailDataPublishable(imageId)) return false;
-        /* During an open, the controller decides (`isImageHeroDetailBodyPublishable`): the body
-           never mounts inside a flight — its first style and layout is a whole frame's work and
-           lands in a frame the flight is pacing. It publishes once the detail has settled, and
-           the part below the first screen one frame after that (`bodyTailReady`). */
         return isImageHeroDetailBodyPublishable();
       },
     });
@@ -913,19 +880,15 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     prefetchImageComments(imageId);
   }, [deferredBodyReady, imageId, notFound, offline]);
 
-  /* **What reaches the settled detail arrives; it does not cut in.** The body published a beat
-     after the handoff, the tags replacing their placeholder, the description and sources once the
-     record is in, an error in place of the controls: each block new to the box since the last
-     commit comes in as content does in M3 (`playDetailArrival`). Not for a new picture (a step
-     brings it with its own shared axis), not on the first commit (a direct load's server HTML, an
-     overlay that played its own entrance), and never mid-flight (the helper checks). */
+  // Fade newly published tail blocks in place. Tag rows instead use FollowHeight to move the
+  // content below them; neither restarts the fixed chrome's entrance or the picture's flight.
   const bodyContentRef = useRef<HTMLDivElement>(null);
   const bodySeenRef = useRef<{ imageId: number; visible: boolean; blocks: WeakSet<Element> } | null>(null);
   useLayoutEffect(() => {
     const root = bodyContentRef.current;
     const previous = bodySeenRef.current;
     const blocks = root ? [...root.children] : [];
-    const visible = deferredBodyReady && root !== null;
+    const visible = bodyTailReady && root !== null;
     bodySeenRef.current = { imageId, visible, blocks: new WeakSet(blocks) };
     if (!visible || !previous || previous.imageId !== imageId || isStepping()) return;
     const fresh = previous.visible ? blocks.filter((block) => !previous.blocks.has(block)) : blocks;
@@ -1450,6 +1413,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const directPreview = heroSeed ? undefined : detailStillPreview(image);
   const previewSrc = heroSeed?.previewSrc ?? directPreview;
   const canTranslate = Boolean(translationSource) && !translateOff;
+  const detailSources = sourceLinksOf(image);
+  const infoReady = bodyTailReady && !recordPending;
+  const hasDescription = Boolean(image.description?.trim());
+  const hasInfo = infoReady && (hasDescription || detailSources.length > 0);
   const shareItems: MenuAction[] = [
     { value: 'copy', label: '复制链接', icon: <MdLink size={ICON.standard} /> },
     ...(shareMenu?.native ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare size={ICON.standard} /> }] : []),
@@ -1541,19 +1508,59 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           // globals.css). Stated inline so no utility can reintroduce the isolation.
           style={{ contentVisibility: 'visible', contain: 'none' }}
         >
-          <div className="mx-auto w-full max-w-5xl space-y-6">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
             <DetailVotes image={record} pending={recordPending} />
-            {(deferredBodyReady || bodyPrerender) && (
-              /* Hidden, the body is rendered ahead in the flight's idle time (an offscreen-priority
-                 render React yields from, with no effects and `display: none`), so the publish
-                 after the landing is a visibility switch rather than the largest render on the
-                 page: on a phone at 4× CPU the body arrived ~100–220ms after the detail settled,
-                 the "it lands, then you still wait" the open read as. */
-              <Activity mode={deferredBodyReady ? 'visible' : 'hidden'}>
-              {/* One box for the blocks under the votes, so what arrives after the landing can be
-                  brought in block by block (`playDetailArrival`). `space-y-6` again inside: the
-                  outer one spaces this box as it spaced its first child. */}
-              <div ref={bodyContentRef} className="space-y-6">
+            <DetailActions
+              imageId={image.id}
+              isFaved={isFaved}
+              faveFill={faveFillFor === imageId}
+              faveBusy={faveBusy}
+              downloading={downloadingId === image.id}
+              sharing={sharingId === image.id}
+              pickerOpen={pickerOpen}
+              shareOpen={shareOpen}
+              canTranslate={canTranslate}
+              translationShown={imageTranslation.shown}
+              translationBusy={translationBusy}
+              faveRef={faveButtonRef}
+              shareRef={shareButtonRef}
+              onDownload={handleDownload}
+              onFave={handleToggleFave}
+              onPickFolder={handleOpenFolderPicker}
+              onShare={() => setShareMenu(shareOpen ? null : { imageId, native: typeof navigator.share === 'function' })}
+              onTranslate={handleTranslate}
+              onReport={handleReportPress}
+            >
+              <Menu
+                open={shareOpen}
+                onClose={() => setShareMenu(null)}
+                anchorRef={shareButtonRef}
+                aria-label="分享"
+                items={shareItems}
+                onSelect={handleShareSelect}
+              />
+            </DetailActions>
+            {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
+            <TagList
+              key={imageId}
+              tags={deferredBodyReady ? image.tags : undefined}
+              pending={!deferredBodyReady || (recordPending && !image.tags?.length)}
+              visibleTagLimits={visibleTagLimits}
+              translations={showChineseTags ? currentTagData.translations : undefined}
+              counts={showTagCounts ? currentTagData.counts : undefined}
+              onTagClick={setSelectedTag}
+              onShowMore={handleShowMore}
+              preparing={preparing?.imageId === imageId ? preparing.section : null}
+            />
+            <div>
+              <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
+                {hasInfo && (
+                  <div className="space-y-6 pb-6">
+                    {hasDescription && <DetailDescription description={image.description} />}
+                    <DetailSources image={image} />
+                  </div>
+                )}
+              </FollowHeight>
               {record === null && offline ? (
                 <ErrorRetry size="inline" title="网络不可用" message="恢复后自动加载图片信息" />
               ) : bodyError !== null ? (
@@ -1563,134 +1570,22 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   message={isNotFound(bodyError) ? undefined : apiErrorMessage(bodyError)}
                   onRetry={isRetryable(bodyError) ? retryRecord : undefined}
                 />
-              ) : (
-                <>
-                  {/* The picture's actions: saving it (the reason most people are here) and its
-                      page upstream, then favourite, share, translate and report. */}
-                  {/* One wrapping row: the two buttons lead, the icon group trails — beside them
-                      while the line holds all of it, on a line of its own (centred on a phone, at
-                      the trailing edge above) when it does not. */}
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="filled"
-                        icon={<MdDownload />}
-                        loading={downloadingId === image.id}
-                        onClick={handleDownload}
-                      >
-                        下载原图
-                      </Button>
-                      <ButtonLink
-                        href={`https://trixiebooru.org/${image.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="在 Derpibooru 查看（在新标签页打开）"
-                        variant="tonal"
-                        prefetch={false}
-                        icon={<MdOpenInNew />}
-                      >
-                        在 Derpibooru 查看
-                      </ButtonLink>
-                    </div>
-                    <div className="mx-auto flex items-center gap-1 sm:me-0 sm:ms-auto">
-                      <IconButton
-                        ref={faveButtonRef}
-                        toggle
-                        selected={isFaved}
-                        selectedTone="tertiary"
-                        loading={faveBusy}
-                        aria-label="收藏"
-                        icon={isFaved ? <MdStar className={cn(faveFillFor === imageId && 'animate-reaction-fill')} /> : <MdStarBorder />}
-                        onClick={handleToggleFave}
-                      />
-                      <IconButton
-                        aria-label="收藏到…"
-                        aria-haspopup="dialog"
-                        aria-expanded={pickerOpen}
-                        icon={<MdLibraryAdd />}
-                        onClick={handleOpenFolderPicker}
-                      />
-                      <IconButton
-                        ref={shareButtonRef}
-                        aria-label="分享"
-                        aria-haspopup="menu"
-                        aria-expanded={shareOpen}
-                        loading={sharingId === image.id}
-                        icon={<MdShare />}
-                        onClick={() =>
-                          setShareMenu(
-                            shareOpen ? null : { imageId, native: typeof navigator.share === 'function' },
-                          )
-                        }
-                      />
-                      <Menu
-                        open={shareOpen}
-                        onClose={() => setShareMenu(null)}
-                        anchorRef={shareButtonRef}
-                        aria-label="分享"
-                        items={shareItems}
-                        onSelect={handleShareSelect}
-                      />
-                      {canTranslate && (
-                        <IconButton
-                          toggle
-                          selected={imageTranslation.shown}
-                          loading={translationBusy}
-                          aria-label="图片翻译"
-                          icon={<MdTranslate />}
-                          onClick={handleTranslate}
-                        />
-                      )}
-                      <IconButton aria-label="举报" icon={<MdFlag />} onClick={handleReportPress} />
-                    </div>
+              ) : (deferredBodyReady || bodyPrerender) && (
+                <Activity mode={bodyTailReady ? 'visible' : 'hidden'}>
+                  <div ref={bodyContentRef} className="space-y-6">
+                    <CommentSection
+                      imageId={imageId}
+                      derpiCount={record?.comment_count}
+                      replyTo={replyTo}
+                      onReply={handleReply}
+                      onCancelReply={() => setReplyTo(null)}
+                      composerRef={composerRef}
+                      scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
+                    />
                   </div>
-                  {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
-                  {recordPending && !image.tags?.length ? (
-                    /* The flight's row had no tags to show: the chips' and the description's
-                       place, until the record brings them. */
-                    <div aria-hidden="true" className="space-y-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Skeleton className="h-8 w-16" />
-                        <Skeleton className="h-8 w-24" delay={60} />
-                        <Skeleton className="h-8 w-20" delay={120} />
-                        <Skeleton className="h-8 w-14" delay={180} />
-                      </div>
-                      <Skeleton className="h-4 w-3/4" delay={120} />
-                    </div>
-                  ) : (
-                  <TagList
-                    tags={image.tags}
-                    visibleTagLimits={visibleTagLimits}
-                    translations={showChineseTags ? currentTagData.translations : undefined}
-                    counts={showTagCounts ? currentTagData.counts : undefined}
-                    onTagClick={setSelectedTag}
-                    onShowMore={handleShowMore}
-                    preparing={preparing?.imageId === imageId ? preparing.section : null}
-                  />
-                  )}
-                  {/* The row's description and sources may be partial (a preview carries what its
-                      list read); shown once the record is in, so they never change under the
-                      reader. */}
-                  {bodyTailReady && (
-                    <>
-                      {!recordPending && <DetailDescription description={image.description} />}
-                      {!recordPending && <DetailSources image={image} />}
-                      <CommentSection
-                        imageId={imageId}
-                        derpiCount={record?.comment_count}
-                        replyTo={replyTo}
-                        onReply={handleReply}
-                        onCancelReply={() => setReplyTo(null)}
-                        composerRef={composerRef}
-                        scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
-                      />
-                    </>
-                  )}
-                </>
+                </Activity>
               )}
-              </div>
-              </Activity>
-            )}
+            </div>
           </div>
         </div>
       </div>

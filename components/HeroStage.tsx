@@ -8,7 +8,8 @@ import {
 import DetailHeader from '@/components/DetailHeader';
 import DetailBack from '@/components/DetailBack';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
-import Skeleton from '@/components/Skeleton';
+import DetailActions from '@/components/detail/DetailActions';
+import DetailTagSkeleton from '@/components/detail/DetailTagSections';
 import DetailVotes from '@/components/detail/DetailVotes';
 import { completeDetailRow } from '@/lib/detailRow';
 /* The runtime store, not the engine: the Stage is mounted by the shell on every route, and it
@@ -153,26 +154,10 @@ export default function HeroStage() {
                         data-image-detail-reveal="body"
                         className="image-detail-stage-body bg-transparent p-4 sm:p-6"
                       >
-                        <div className="mx-auto w-full max-w-5xl">
-                          <div aria-hidden="true" className="mb-6">
-                            {/* The route's own vote row, from the card's row when that row is the
-                          whole record (`completeDetailRow`): the flight shows the numbers the
-                          detail lands with instead of a placeholder that swaps after it.
-                          Same component on both sides, so the two still measure identically. */}
-                            {record ? (
-                              <DetailVotes image={record} pending={false} />
-                            ) : (
-                              <>
-                                <div className="mb-1.5 flex justify-between">
-                                  <Skeleton className="h-4 w-14" />
-                                  <Skeleton className="h-4 w-14" delay={60} />
-                                </div>
-                                {/* 4dp, matching the routed vote track — the Stage and the
-                              route must measure identically or the handoff shifts. */}
-                                <Skeleton className="h-1 w-full" delay={120} />
-                              </>
-                            )}
-                          </div>
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+                          <DetailVotes image={record} pending={record === null} />
+                          <DetailActions imageId={image.id} passive canTranslate={Boolean(image.view_url) && snapshot.mediaType !== 'video'} />
+                          <DetailTagSkeleton />
                         </div>
                       </div>
                     </div>

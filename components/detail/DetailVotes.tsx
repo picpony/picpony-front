@@ -17,8 +17,9 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
   if (pending) {
     return (
       <div aria-hidden="true" data-image-detail-score-loading>
-        <div className="mb-1.5 flex justify-between">
+        <div className="mb-1.5 flex items-center justify-between text-label-l">
           <Skeleton className="h-4 w-14" />
+          <span aria-hidden="true">{'\u200b'}</span>
           <Skeleton className="h-4 w-14" delay={60} />
         </div>
         <Skeleton className="h-1 w-full rounded-full" delay={120} />

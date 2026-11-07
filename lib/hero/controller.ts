@@ -21,6 +21,7 @@ import {
   getHeroBackgroundVisual,
   getHeroCornerRadius,
   getHeroRect,
+  getHeroRestingDetailRect,
   getHeroRectWithoutAncestorTransform,
   getVisualMedia,
   isHeroThumbnailInView,
@@ -55,6 +56,7 @@ import {
   hasActiveHeroInput,
   initializeHeroInput,
   isHeroInteractionQuiet,
+  readHeroScrollInput,
   subscribeHeroInteraction,
   subscribeHeroViewportInvalidation,
   waitForHeroInputRelease,
@@ -161,7 +163,7 @@ type OpeningScrollBridge = {
   own: (
     scroller: HTMLElement,
     content: HTMLElement,
-    forwardStageWheel: boolean,
+    transferStageInput: boolean,
     initial: HeroScrollOffset,
   ) => void;
   /** The Stage takes the scroll back, aligned once to where the route was. */
@@ -605,21 +607,8 @@ export class HeroController {
     );
   }
 
-  /**
-   * Whether the detail's body — its largest subtree — may mount now.
-   *
-   * **Never inside a flight.** It was allowed there while the route followed the Stage on the
-   * compositor, on the reasoning that no frame of the open then depends on the main thread. That
-   * missed what a mount costs: the body's first style and layout is ~9ms + 13ms of main-thread
-   * work in the single frame it lands in (traced at 1111×556; proportionally more at 1920×1080),
-   * and it lands in a frame the flight is being paced through — the one dropped frame of an
-   * otherwise smooth open, on both machines measured. The body is below the fold for the whole
-   * flight (the picture fills the viewport), so mounting it early bought nothing visible.
-   *
-   * It publishes once the detail has settled (`publishWhenHeroSettled`), where its blocks arrive
-   * as content does in M3 (`playDetailArrival`), and `PicDetail` publishes the part under the
-   * first screen one frame later so no single frame carries all of it.
-   */
+  /** Tag values and rich content wait for settlement; actions and the regular tag heading do not.
+   *  See docs/hero.md#data-and-handoff. */
   isDetailBodyPublishable() {
     return !this.runtime.phase.startsWith('opening.');
   }
@@ -2073,12 +2062,13 @@ export class HeroController {
    * **The route takes the scroll over**: its own scroller at the Stage's offset (the follow
    * folded into it, or a plain copy when nothing followed), the flyer replanted into the route's
    * plane so the route's native scroll carries it exactly as the Stage's did, new input landing
-   * on the route, the opening pull rebound to it. From here to the end of the open nothing
-   * mirrors, follows or forwards a scroll offset: one compositor-scrolled element carries the
-   * page and the picture, on every engine, and the landing has no scroll to hand over.
+   * on the route, the opening pull rebound to it. One native scroller now carries the page and
+   * picture. A still-latched stream is relayed until native takeover or its real quiet window;
+   * that input lease outlives the visual handoff. See docs/hero.md#input.
    *
-   * Runs inside a scheduler write, with the hand quiet: a gesture is never moved between
-   * scrollers, and the recognizer is never rebound under a finger.
+   * Runs inside a scheduler write, normally after input quiets. At the handoff deadline the
+   * original input lease carries the remaining stream; the arriving recognizer handles new
+   * gestures only.
    */
   private promoteAdoption(session: OpeningSession, scroll: OpeningScrollMeasurement) {
     const adoption = session.adoption;
@@ -2113,7 +2103,10 @@ export class HeroController {
     );
     session.shared.add(adoption.input);
     adoption.owned = true;
-    session.scrollBridge?.own(route.scroller, route.content, !isHeroInteractionQuiet(), {
+    // A wheel may pause past its active flag while the browser still owns the same stream.
+    // Preserve that stream independently of the Stage's visual lifetime.
+    const input = readHeroScrollInput();
+    session.scrollBridge?.own(route.scroller, route.content, Boolean(input.wheel || input.touches.length), {
       left: scroll.routeLeft, top: parked,
     });
     this.bindOpeningPullRecognizer(session, route.overlay, route.scroller, parked);
@@ -2290,9 +2283,8 @@ export class HeroController {
       });
       if (!this.owns(session) || !session.motion) return;
       if (session.adoption === pending && !pending.owned) {
-        /* A stream that outlasted the bound: take over now. A latched wheel stream keeps
-           arriving on the Stage; its deltas are forwarded to the route (`own`'s residual) —
-           the one main-thread scroll left, and only for this overflow. */
+        /* A stream that outlasted the bound: take over now and keep its input lease alive
+           after the Stage leaves. Neither data publication nor the user waits for it. */
         await runScheduledFrame(session.abort.signal, {
           read: () => readOpeningScroll(pending.stage, pending.route),
           write: (scroll) => this.promoteAdoption(session, scroll),
@@ -2321,7 +2313,7 @@ export class HeroController {
       return;
     }
     if (session.follow && !(await this.transferFollowedInput(session, route))) return;
-    // A route that owned the scroll has no input to transfer.
+    // An owned route already carries any remaining input through its independent lease.
     if (!owned && !(await this.waitForInputTransfer(session, () => session.scrollBridge?.sync()))) {
       return;
     }
@@ -2461,7 +2453,10 @@ export class HeroController {
     session.follow?.commit();
     session.follow = null;
     session.abort.abort();
-    session.scrollBridge?.release();
+    const continuity = session.scrollContinuity;
+    const preserveInput = Boolean(continuity?.canCompleteReturn);
+    session.scrollBridge?.release({ preserveInput });
+    if (preserveInput) this.retainReturnInput(continuity);
     session.handoffRoute = null;
     if (this.stage?.sessionId === session.id) setStageReady(this.stage.nodes, false);
     session.motion?.dispose();
@@ -2966,6 +2961,7 @@ export class HeroController {
 
     // Nothing to fly between: fall back to an ordinary history collapse.
     if (!route?.target || !thumbnail || !plane || !liveAsset) {
+      this.releaseReturnedScroll();
       const closed = await imageHeroHistory.ensureBackground(record);
       if (closed && this.isRecordBackground(record)) return 'closed';
       return (await this.restoreGuardStrict(record)) ? 'restored' : 'handled';
@@ -2983,6 +2979,11 @@ export class HeroController {
       host: getHeroRect(route.overlay),
       continuity: new HeroScrollContinuity(plane.scroller),
     };
+    // An opening may already have removed the original wheel receiver. Carry its lease into
+    // this close before trying the route itself; see docs/hero.md#input.
+    const inheritedInput = this.returnedScroll;
+    this.returnedScroll = null;
+    inheritedInput?.transferInputTo(launchGeometry.continuity);
     launchGeometry.continuity.addDeltaSource(route.scroller);
     launchGeometry.continuity.takeOverReturnInput(route.scroller);
     const snapshot = { ...record.snapshot, previewFrame: liveAsset, createdAt: Date.now() };
@@ -3225,7 +3226,7 @@ export class HeroController {
     await this.reverseClosing(session);
   }
 
-  /** A new navigation or Hero intent supersedes the previous gallery's remaining input. */
+  /** A new navigation or Hero intent supersedes the settled surface's remaining input. */
   private releaseReturnedScroll() {
     const scroll = this.returnedScroll;
     this.returnedScroll = null;
@@ -3625,7 +3626,7 @@ export class HeroController {
         };
       },
       sync,
-      own: (target, content, forwardStageWheel, initial) => {
+      own: (target, content, transferStageInput, initial) => {
         if (released) return;
         following?.release();
         following = null;
@@ -3634,7 +3635,10 @@ export class HeroController {
         targetContent = content;
         resizeObserver?.observe(content);
         continuity.replacePeers(target, initial);
-        if (forwardStageWheel) continuity.addDeltaSource(stage.scroller);
+        if (transferStageInput) {
+          continuity.addDeltaSource(stage.scroller);
+          continuity.takeOverReturnInput(stage.scroller);
+        }
         syncHeight();
       },
       disown: () => {
@@ -4247,10 +4251,13 @@ export class HeroController {
     if (session.kind === 'opening') {
       const stage = this.stage?.sessionId === session.id ? this.stage.nodes : null;
       if (!stage?.target.isConnected) return null;
-      /* Once a route is on screen in the Stage's place, its picture is the one the flyer lands
-         on; it wears the same window and fit, so the same unprojection applies. */
-      const adopted = session.adoption?.route.target;
-      const target = adopted?.isConnected ? adopted : stage.target;
+      const adopted = session.adoption?.route;
+      let target = stage.target;
+      let overlay = stage.overlay;
+      if (adopted?.target?.isConnected) {
+        target = adopted.target;
+        overlay = adopted.overlay;
+      }
       /* A route that owns the scroll carries the flyer in its own plane (`promoteAdoption`); a
          re-aim must stay there or it moves the flyer back under a scroller that no longer moves. */
       const owner = session.adoption?.owned ? session.adoption.route : null;
@@ -4258,9 +4265,7 @@ export class HeroController {
         ? getElementScrollPlane(owner.anchor, owner.scroller, owner.overlay)
         : getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
       return {
-        // The content is held still inside the window, so a mid-flight read of the landing
-        // target is already the box it will occupy: no unprojection.
-        destination: getHeroRect(target),
+        destination: getHeroRestingDetailRect(target, overlay),
         plane,
         pose: motion.measurePose(),
       };

@@ -11,6 +11,7 @@ requireTypeStripping('testHeroContinuity');
 
 const { buildFlightKeyframes, createHeroLeg, evaluateLeg } = await import('../lib/hero/flight.ts');
 const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
+const { getHeroRestingDetailRect } = await import('../lib/hero/dom.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
 const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
@@ -112,6 +113,30 @@ function assertNoScrollerListeners(element) {
     assert.equal(getEventListeners(element, type).length, 0, `${type} listener leaked`);
   }
 }
+
+test('detail landing measurements remove interpolated window drift without losing resize or scroll', () => {
+  for (const host of [
+    { left: 312, top: 64, width: 1128, height: 836 },
+    { left: 0, top: 64, width: 390, height: 780 },
+  ]) {
+    for (const scroll of [0, 128.5]) {
+      const expected = { left: host.left + 24.25, top: host.top + 78 - scroll,
+        width: host.width - 48.5, height: 285.75 };
+      for (const [sx, sy, dx, dy] of [[1.0015, 1.003, 0.17, -0.048], [1.02, 1.04, -3.5, 2.5], [1, 1, 0, 0]]) {
+        const projected = { left: host.left + dx, top: host.top + dy, width: host.width * sx, height: host.height * sy };
+        const measured = { left: projected.left + (expected.left - host.left) * sx,
+          top: projected.top + (expected.top - host.top) * sy, width: expected.width * sx, height: expected.height * sy };
+        const target = { getBoundingClientRect: () => measured };
+        const unclip = { contains: (node) => node === target, getBoundingClientRect: () => projected };
+        const overlay = { getBoundingClientRect: () => host, querySelector: () => unclip };
+        const actual = getHeroRestingDetailRect(target, overlay);
+        for (const key of ['left', 'top', 'width', 'height']) {
+          assert.ok(Math.abs(actual[key] - expected[key]) < 1e-7, `${key} retained window drift`);
+        }
+      }
+    }
+  }
+});
 
 test('adopting a measured scroller does not flush layout again to establish its baseline', (t) => {
   const { continuity } = scrollHarness(t);
@@ -434,6 +459,42 @@ test('one wheel flow survives route removal and 200ms gaps without mistaking its
   assert.equal(h.clock.frames.size, 0);
   assert.equal(getEventListeners(h.window, 'wheel').length, 1, 'only the shared input monitor remains');
   assert.equal(getEventListeners(h.leaf, 'wheel').length, 0);
+  assertNoScrollerListeners(h.destination);
+});
+
+test('an opening handoff can acquire a wheel stream after its active flag clears', async t => {
+  const h = returnInputHarness(t);
+  h.wheel(h.leaf, { deltaY: 10 });
+  await h.clock.advanceTo(h.clock.now + 200);
+  assert.equal(h.input.isHeroInteractionQuiet(), true);
+  h.begin();
+  assert.equal(h.continuity.canCompleteReturn, true, 'quiet input can still belong to the outgoing scroller');
+  h.source.isConnected = h.leaf.isConnected = false;
+  h.continuity.retire(() => {});
+  h.wheel(h.destination, { deltaY: 80 });
+  await h.drain();
+  assert.equal(h.destination.scrollTop, 280);
+});
+
+test('a close inherits an opening wheel stream after its Stage has unmounted', async t => {
+  const h = returnInputHarness(t);
+  h.wheel(h.leaf, { deltaY: 10 });
+  h.begin();
+  let openingReleased = false;
+  h.continuity.retire(() => { openingReleased = true; });
+  h.source.isConnected = h.leaf.isConnected = false;
+  h.source.clientHeight = 0;
+  const gallery = new Scroller(500);
+  const closing = new h.continuity.constructor(gallery);
+  t.after(() => closing.release());
+  h.continuity.transferInputTo(closing);
+  assert.equal(openingReleased, true);
+  assert.equal(closing.canCompleteReturn, true);
+  const before = h.destination.scrollTop;
+  h.wheel(gallery, { deltaY: 1, deltaMode: TestWheelEvent.DOM_DELTA_PAGE });
+  await h.drain();
+  assert.equal(gallery.scrollTop, 1300, 'the detached source keeps its original page unit');
+  assert.equal(h.destination.scrollTop, before, 'the old route no longer receives residual writes');
   assertNoScrollerListeners(h.destination);
 });
 

@@ -246,6 +246,7 @@ export default function DetailVideo({
     clearPreviewFallback();
     if (previewFailedRef.current) return;
     previewFailedRef.current = true;
+    targetRef.current?.setAttribute('data-image-detail-hero-active', 'false');
     cancelPreviewReady();
     const failedSurfaceId = surfaceIdRef.current;
     if (failedSurfaceId) onPreviewFailedRef.current?.(failedSurfaceId);

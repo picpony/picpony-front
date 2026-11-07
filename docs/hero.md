@@ -14,6 +14,8 @@ Current contracts for `lib/hero/`. Read [Transitions](transitions.md) for route 
 
 Do not reread the landing box while held tracks already transform it. Flight preparation does not fetch or decode a sharper bitmap.
 
+Mid-flight remeasurement uses `getHeroRestingDetailRect` to remove the window/counter-transform pair. Their sampled tracks can drift between keyframes; that drift is not a new layout destination. Real viewport and media-box changes still re-aim the flight.
+
 The Stage subscribes only to the Hero runtime. `AppLayout` observes route commits; router suspension must not replace an in-flight Stage. Clear readiness before cancelling a departing Stage's tracks, and keep it clipped until React removes it. Seal a returning route before resetting its window or pull styles.
 
 ### Input
@@ -25,6 +27,10 @@ The Stage subscribes only to the Hero runtime. `AppLayout` observes route commit
 - Keep click protection for each registered route, across opening, reversal and handoff. A press that starts during flight cannot activate detail content when released after landing; match its pointer within `HERO_PRESS_TAIL_MS`. A fresh settled press and keyboard activation remain available.
 - Guard only the detail scroller. The floating Back control must work during every reopening turn.
 - Prime pull layers on candidate pointerdown through `HeroPullController.prime`.
+
+Opening and closing share the native input lease in `returnInput.ts`. A wheel's active flag clears after 160 ms, while its stream identity remains valid through the 320 ms quiet window. Promotion during that gap must retain the stream. DOM hit testing alone does not prove that the compositor changed scroll owners.
+
+The lease survives Stage removal and visual handoff, without holding detail data or controls. A close immediately after handoff inherits the original receiver and its line/page units, even when that receiver is detached. A new open or navigation cancels the old lease. Confirm native takeover from a destination offset not written by the relay, and drain the final scheduled delta before ending an idle lease.
 
 ### Track construction
 
@@ -42,10 +48,9 @@ A close launches in the requesting task, with rect reads before the shell's micr
 - Input availability and off-screen content coverage are separate. Only `coverGallery` / `uncoverGallery` own `data-gallery-covered`.
 - After `gallery-idle`, uncover slots in idle batches before removing that marker.
 - Preserve newly chosen gallery focus and fresh wheel/touch streams; a continuing stream must not indefinitely block handoff.
-- A wheel or touch stream that began on the leaving route or Stage has an input lease independent of the flight and route. Keep forwarding that same stream after the old scroller unmounts; do not hold visual or history completion for it. Wheel DOM hit testing alone does not prove that the compositor changed scroll owners.
-- Confirm native takeover from a gallery offset not written by the relay. Baseline each relay write after browser clamping. Fresh pointer/touch input, Ctrl-wheel, another Hero or navigation releases the old lease. Detached touch targets still report moves and endings to the shared input monitor.
+- Keep the [input lease](#input) for a stream that began on the leaving route or Stage. Do not hold visual or history completion for it.
+- Baseline each relay write after browser clamping. Fresh pointer/touch input and Ctrl-wheel release the old lease. Detached touch targets still report moves and endings to the shared input monitor.
 - Cancelling movement does not end a held touch. The shared input monitor keeps the original target's state listener until its real end/cancel, window reset or existing touch-safety timeout. The ending retains any other active touches and leaves no listener or pending relay frame behind.
-- Wheel activity clears after 160 ms; stream identity and relay cleanup use the existing 320 ms quiet window. A shorter pause must not discard a still-latched flow. End an idle lease only after its last scheduled delta is drained.
 - Quiet, expiry and abort are distinct outcomes. A still-owned transfer can finish on budget expiry.
 
 Pull uses the existing `DRAG_RESISTANCE_PX` rubber band and subtracts axis-lock slop at claim time. Horizontal picture stepping uses the same slop rule.
@@ -84,7 +89,13 @@ A gallery card's ancestors must finish with no residual transform. Inverse proje
 
 `lib/detail.ts` keeps its two-minute TTL and 30-minute stale window so reopening does not replace usable data with skeletons. Comments prefetch after body publication and display immediately when cached.
 
-The body can prerender inside hidden React `Activity` from the flight's row; record-dependent pieces still wait for the record. Make it visible only when `isDetailBodyPublishable` permits it. Publish the below-fold tail in subsequent frames; late visible content uses `playDetailArrival` on DefaultEffects, fading at its final position without a second spatial entrance.
+The Stage, loading view and routed detail share `DetailActions` and the regular tag section frame. Show the controls and the `标签` heading from the first paint. Stage and loading copies are inert and have no tooltips. Keep routed controls mounted as values arrive, including after a metadata failure.
+
+Tag values and rich content wait for `isDetailBodyPublishable`. Artists, OCs, description and sources arrive with their headings only when data exists; do not reserve empty placeholders for these optional sections. Publish tag values first, then the below-fold content in subsequent frames; comments can prerender inside hidden React `Activity`. Cached direct-page content needs no publication delay.
+
+`FollowHeight` follows optional sections and tag-row height changes on the layout spring in the `list` category. Empty section wrappers have zero height and no gap; section spacing belongs inside the expanding content. One-row chip placeholders include the coarse-pointer margins; vote placeholders use the real row's type-role line height. Filling values must not move the media or actions. Tag visibility observers and settling timers wait until values are publishable. Late comment blocks use `playDetailArrival` on DefaultEffects at their final position.
+
+When a preview fails, switch the media's DOM layer flag before publishing a decoded final as paintable. The parent React state may commit later; that must not expose a transparent target at handoff.
 
 Keep published body content normally painted, without containment or skipped-content rules that can reveal blank space on the first scroll.
 
@@ -123,12 +134,17 @@ Do not warm a sharper opening source; neighbour warming is for steps. Production
 
 Run `bun run check`, `bun run test:hero` and `bun run test:overlays` after engine or detail changes. `bun run hero:path` verifies path and container geometry, including stationary content composition.
 
+Hero browser fixtures block Service Workers before interception, so cached navigation cannot bypass their network answers. Use `bun run test:hero --profile=mobile` (or `desktop`, `wide`) to rerun one viewport profile; `--case=` further selects a scenario.
+
 Useful scenarios:
 
 - Native wheel/touch at return boundaries and delayed-data close.
 - `shield-wheel` and `shield-touch` hold the first-frame shield long enough for the first native input to hit it, then continue the same gesture after removal. `shield-tap` verifies one replay and cleanup through reopening. A continuous wheel test uses a single CDP scroll gesture so a fresh stream cannot hide a bad initial latch.
 - `continued-wheel`, `continued-opening-wheel` and `continued-touch` start one native stream before requesting Back, then assert movement after both animation completion and removal of the original scroller. `continued-wheel-reopen` verifies that a new Hero stops the old gallery relay.
+- `opening-native-wheel` keeps one browser-generated wheel stream moving through opening handoff, checking full travel without a rebound and a fresh reopen at zero. `opening-native-wheel-close` also closes after handoff while the same stream continues, checking movement after both original surfaces leave.
 - Rapid reopen/reversal, pull-follow, pull-retreat, pull-frame and pull-loading.
+- `detail-content`, `detail-content-reduced` and `detail-content-off` hold the record through handoff, verify fixed controls and the regular tag heading, then fill optional sections and multiple tag rows. Assert retained nodes, stationary media/actions and the correct layout interpolation for each tier. `detail-content-empty` verifies that absent optional sections never appear.
+- `landing-content-resize` repeatedly changes content below the media during flight. The final flyer must still match the resting media box within half a pixel.
 - `repeat-open` covers prepared and unprepared launches of the same card; `return-surface` samples surface opacity, stationary content and header geometry through the return. `pull-reopen` verifies the resting landing slot after reversing a dismissal.
 - `return-scroll-surface`, `return-scroll-fallback` and `return-scroll-reopen` keep a return unfinished while scrolling. The window and flyer must move together, content must stay stationary, and reopening must preserve the scrolled pose with or without `ScrollTimeline`.
 - The `same-image-*` cases alternate eight or nine directions before either leg settles, using the Back button, Escape and browser Back from both opening and closing. Fast variants run sixteen turns near the first presented frame. Cover both final directions; assert one flyer and history token, then the exact original gallery history entry.

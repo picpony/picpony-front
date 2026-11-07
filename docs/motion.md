@@ -47,6 +47,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Hero, forum and folder container transform | `FLIGHT_SPRING` both ways; interruption retains the appropriate current pose/velocity |
 | Hero gallery depth | Full `FLIGHT_SPRING` progress, with the depth and pivot defined in [Hero engine](hero.md#window-content-and-interruption) |
 | Late detail content | `defaultEffects`, opacity only at its final position |
+| Detail tag rows and optional sections filling | Bounds `layout` in `list`; actions and the regular tag heading stay mounted |
 | Hero swipe-down release | `layout`, remaining-travel timing and release velocity |
 | Previous/next picture | Exit `fastEffects`; arrival `defaultSpatial` + `defaultEffects`; cancelled swipe `layout` |
 | Detail without a shared card | `surfaceArrival('slow')` |

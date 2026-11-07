@@ -5,15 +5,15 @@ import { HERO_INPUT_TRANSFER_QUIET_MS, noteDetachedHeroInput, observeHeroTouchTa
 type EndReason = 'ended' | 'superseded';
 
 export type HeroReturnInput = {
-  /** The same wheel stream can hit the gallery in the DOM while still latched elsewhere. */
+  /** The same wheel stream can hit its destination in the DOM while still latched elsewhere. */
   ownsWheel: (event: Event) => boolean;
   release: () => void;
 };
 
 /**
  * Carry an already-running native stream across removal of its old scroll node. This lease
- * outlives the visual return, but leaves on a fresh gesture, navigation or confirmed native
- * gallery scroll. See docs/hero.md#closing-and-pull.
+ * outlives the visual handoff in either direction, but leaves on a fresh gesture, navigation
+ * or confirmed native destination scroll. See docs/hero.md#input.
  */
 export function takeOverHeroReturnInput({
   source, destination, lineHeight, pageHeight, onWheel, onTouch, onEnd,

@@ -73,12 +73,11 @@ export { HERO_INPUT_TRANSFER_QUIET_MS } from './input';
 export const HERO_INPUT_TRANSFER_MAX_MS = 2000;
 
 /**
- * The opening's handoff holds the Stage on screen while a scroll the reader started on it is
- * still running (`handoffOpening`): the Stage scrolls on the compositor, while a route revealed
- * over a stream still latched to the Stage could only follow it from the main thread, in steps.
- * Quiet for this long counts as the stream having ended (a fling's last events are ~16ms apart,
- * a wheel stream's ~8–16ms; a pause of 120ms is a hand at rest), and the hold never exceeds the
- * ceiling, so a long fling costs at most that much of the detail's arrival.
+ * Opening prefers to leave a running stream on the Stage, with the route following on the
+ * compositor when supported. Without a scroll timeline the Stage stays visible until takeover.
+ * This quiet interval allows the visible scroller to take over. The input lease still respects
+ * HERO_INPUT_TRANSFER_QUIET_MS: a pause does not prove the browser has unlatched its wheel
+ * receiver. The hold never exceeds the ceiling, so a long fling cannot withhold detail data.
  */
 export const HERO_HANDOFF_SCROLL_QUIET_MS = 120;
 export const HERO_HANDOFF_SCROLL_DEFER_MAX_MS = 600;

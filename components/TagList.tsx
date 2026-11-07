@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/Button';
 import Chip from '@/components/Chip';
+import EmptyState from '@/components/EmptyState';
+import FollowHeight from '@/components/FollowHeight';
+import { DETAIL_TAG_SECTIONS, DetailTagPlaceholder, DetailTagSection } from '@/components/detail/DetailTagSections';
 import { useTooltip } from '@/components/Tooltip';
 import { formatCount } from '@/lib/format';
 import { tagCategoryChip } from '@/lib/tagCategories';
@@ -54,6 +57,8 @@ export function visibleTagsOf(groups: TagGroups, limits: VisibleTagLimits): stri
 
 interface TagListProps {
   tags: string[] | undefined;
+  /** Keep only the regular heading on screen while values wait for publication. */
+  pending?: boolean;
   visibleTagLimits: VisibleTagLimits;
   /**
    * The glossary's Chinese names as far as they are known (keys as `tagTranslationKey` makes
@@ -125,6 +130,7 @@ const SETTLE_MS = 300;
  */
 export default function TagList({
   tags,
+  pending = false,
   visibleTagLimits,
   translations,
   counts,
@@ -135,38 +141,40 @@ export default function TagList({
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const { artists, ocs, regularTags } = groupTags(tags);
-  const sections = [
-    { key: 'artists', title: '艺术家', tags: artists, prefix: 'artist:', colors: tagCategoryChip('artist'), more: '显示更多艺术家标签' },
-    { key: 'ocs', title: '图中包含的 OC', tags: ocs, prefix: 'oc:', colors: tagCategoryChip('oc'), more: '显示更多 OC 标签' },
-    { key: 'regular', title: '标签', tags: regularTags, prefix: '', colors: undefined, more: '显示更多标签' },
-  ] as const;
+  const sections = DETAIL_TAG_SECTIONS.map((section) => ({
+    ...section,
+    tags: section.key === 'artists' ? artists : section.key === 'ocs' ? ocs : regularTags,
+    colors: section.category ? tagCategoryChip(section.category) : undefined,
+  }));
 
   /* Which chips, and in which mode: switching names or counts on or off is a new set, not a late
      arrival — it applies at once. */
-  const chipSet = `${visibleTagLimits.imageId}|${visibleTagLimits.artists}|${visibleTagLimits.ocs}|${visibleTagLimits.regular}|${tags?.length ?? 0}|${translations ? 'cn' : 'en'}|${counts ? 'n' : '-'}`;
+  const chipSet = `${visibleTagLimits.imageId}|${visibleTagLimits.artists}|${visibleTagLimits.ocs}|${visibleTagLimits.regular}|${tags?.length ?? 0}|${translations ? 'cn' : 'en'}|${counts ? 'n' : '-'}|${pending}`;
   const [offscreen, setOffscreen] = useState(false);
   const [settledFor, setSettledFor] = useState<string | null>(null);
   const settling = settledFor !== chipSet;
   const [applied, setApplied] = useState({ chipSet, translations, counts });
-  if (
+  if (!pending && (
     applied.chipSet !== chipSet ||
     ((offscreen || settling) && (applied.translations !== translations || applied.counts !== counts))
-  ) {
+  )) {
     setApplied({ chipSet, translations, counts });
   }
 
   useEffect(() => {
+    if (pending) return;
     const timer = window.setTimeout(() => setSettledFor(chipSet), SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [chipSet]);
+  }, [chipSet, pending]);
 
   useEffect(() => {
+    if (pending) return;
     const root = rootRef.current;
     if (!root || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(([entry]) => setOffscreen(!entry?.isIntersecting));
     observer.observe(root);
     return () => observer.disconnect();
-  }, []);
+  }, [pending]);
 
   const label = (name: string) => {
     const translation = applied.translations?.[tagTranslationKey(name)];
@@ -174,42 +182,57 @@ export default function TagList({
   };
 
   return (
-    <div ref={rootRef} className="space-y-6">
+    <div ref={rootRef}>
       {sections.map((section) => {
-        if (section.tags.length === 0) return null;
         const visible = section.tags.slice(0, visibleTagLimits[section.key]);
         const remaining = section.tags.length - visible.length;
+        const show = section.key === 'regular' || (!pending && visible.length > 0);
+        // Measure only changes that can wrap a row, after the Hero publication gate opens.
+        const layoutKey = !show ? 'empty' : pending
+          ? 'pending'
+          : JSON.stringify([visible.map((tag) => [label(tag), applied.counts?.[tag]]), remaining]);
         return (
-          <div key={section.key}>
-            <h2 className="mb-2 text-label-m-emphasized text-on-surface-variant">{section.title}</h2>
-            <div className="flex flex-wrap gap-2">
-              {visible.map((tag) => (
-                <TagChip
-                  key={tag}
-                  tag={tag}
-                  label={label(tag)}
-                  count={section.key === 'regular' ? applied.counts?.[tag] : undefined}
-                  colors={section.colors}
-                  onClick={() =>
-                    section.prefix
-                      ? router.push(`/search?q=${encodeURIComponent(section.prefix + tag)}`, { scroll: false })
-                      : onTagClick(tag)
-                  }
-                />
-              ))}
-            </div>
-            {remaining > 0 && (
-              <Button
-                variant="text"
-                size="xs"
-                className="mt-3"
-                loading={preparing === section.key}
-                onClick={() => onShowMore(section.key)}
-              >
-                {section.more}（剩余 {formatCount(remaining)}）
-              </Button>
+          <FollowHeight key={section.key} watch={layoutKey}>
+            {show && (
+              <div className={section.key !== 'regular' ? 'pb-6' : undefined}>
+                <DetailTagSection section={section}>
+                  {pending ? <DetailTagPlaceholder /> : visible.length === 0 ? (
+                    <EmptyState size="inline" title="暂无标签" entrance={false} />
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-2">
+                        {visible.map((tag) => (
+                          <TagChip
+                            key={tag}
+                            tag={tag}
+                            label={label(tag)}
+                            count={section.key === 'regular' ? applied.counts?.[tag] : undefined}
+                            colors={section.colors}
+                            onClick={() =>
+                              section.prefix
+                                ? router.push(`/search?q=${encodeURIComponent(section.prefix + tag)}`, { scroll: false })
+                                : onTagClick(tag)
+                            }
+                          />
+                        ))}
+                      </div>
+                      {remaining > 0 && (
+                        <Button
+                          variant="text"
+                          size="xs"
+                          className="mt-3"
+                          loading={preparing === section.key}
+                          onClick={() => onShowMore(section.key)}
+                        >
+                          {section.more}（剩余 {formatCount(remaining)}）
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </DetailTagSection>
+              </div>
             )}
-          </div>
+          </FollowHeight>
         );
       })}
     </div>

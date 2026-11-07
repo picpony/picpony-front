@@ -25,6 +25,7 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 RESULTS = []
 FAILURES = []
 REQUESTED_CASES = {arg.split('=',1)[1] for arg in sys.argv if arg.startswith('--case=')}
+REQUESTED_PROFILES = {arg.split('=',1)[1] for arg in sys.argv if arg.startswith('--profile=')}
 MATCHED_CASES = set()
 GALLERY = '[data-image-hero-gallery-scroll]'
 ROUTE = '[data-image-hero-surface-id] .image-detail-overlay-scroll'
@@ -524,6 +525,122 @@ def opening_handoff(page, label):
     return {'handoffAfterInputMs':round(idle-start),'scroll':round(top)}
 
 
+def detail_content_handoff(page, fixtures, label, tier='standard', empty=False):
+    """Static chrome survives adoption; a held record expands only the content below its rows."""
+    page.mouse.move(1, 1)
+    fixtures.hold_details = True
+    try:
+        fresh_profile(page)
+        source = page.locator('[data-tab-pane-active] '+THUMB+'[data-image-hero-id="3004"]')
+        source.scroll_into_view_if_needed()
+        page.wait_for_timeout(350)
+        page.evaluate("""() => {
+          window.__detailFrames=[]; window.__recordDetail=true;
+          const frame=()=>{
+            if(!window.__recordDetail)return;
+            const stage=document.querySelector('[data-image-hero-stage]');
+            const route=document.querySelector('[data-image-hero-surface-id]');
+            const sample=root=>{
+              const actions=root?.querySelector('[data-image-detail-actions]');
+              if(!actions)return null;
+              const headings=[...root.querySelectorAll('h2')].filter(n=>n.checkVisibility()).map(n=>n.textContent);
+              return {visible:actions.checkVisibility(),y:actions.getBoundingClientRect().y,headings};
+            };
+            window.__detailFrames.push({phase:document.documentElement.dataset.imageHeroState,
+              stage:sample(stage),route:sample(route)});
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        }""")
+        source.locator('..').click()
+        state(page, 'detail-idle')
+        page.wait_for_timeout(180)
+        frames = page.evaluate('window.__recordDetail=false;window.__detailFrames')
+        opening = [f for f in frames if f['phase'].startswith('opening')]
+        assert opening, 'Test must observe a real flight'
+        assert any(f['stage'] and f['stage']['visible'] for f in opening), 'Actions waited for landing'
+        optional = ['艺术家', '图中包含的 OC', '简介', '来源']
+        for f in opening:
+            visible = f['route'] if f['route'] and f['route']['visible'] else f['stage']
+            assert visible and visible['visible'], 'Static content disappeared during handoff'
+            assert '标签' in visible['headings'], visible
+            assert not any(title in visible['headings'] for title in optional), visible
+
+        route = page.locator(ROUTE)
+        expect(route.get_by_role('button', name='下载原图', exact=True)).to_be_visible()
+        expect(route.get_by_role('button', name='收藏', exact=True)).to_be_enabled()
+        expect(route.locator('[data-image-detail-score-loading]')).to_have_count(1)
+        assert any(i == 3004 for _, i in fixtures.pending_details), 'Test needs an unresolved record'
+        route.get_by_role('button', name='分享', exact=True).click()
+        expect(page.get_by_role('menu', name='分享', exact=True)).to_be_visible()
+        page.keyboard.press('Escape')
+
+        page.evaluate("""tier => {
+          // Isolate list motion: changing the image tier would start its CSS arrival too.
+          document.documentElement.dataset.motion='custom';
+          document.documentElement.dataset.motionEffects='list:'+tier;
+          document.documentElement.dataset.motionList=tier;
+          const scroller=document.querySelector('[data-image-hero-surface-id] .image-detail-overlay-scroll');
+          const root=scroller.closest('[data-image-hero-surface-id]');
+          const tagHeading=root.querySelector('[data-image-detail-tag-section="regular"]');
+          scroller.scrollTop+=tagHeading.getBoundingClientRect().top-scroller.getBoundingClientRect().top-160;
+          window.__fixedDetailNodes=[...root.querySelectorAll('[data-image-detail-actions] button,[data-image-detail-tag-section="regular"] h2')];
+          window.__sampleDetail=()=>{
+            const y=selector=>root.querySelector(selector).getBoundingClientRect().top+scroller.scrollTop;
+            return {image:y('[data-image-detail-media]'),actions:y('[data-image-detail-actions]'),
+              tags:y('[data-image-detail-tag-section="regular"]')};
+          };
+          window.__detailLayout=[];window.__recordDetail=true;
+          const frame=()=>{if(!window.__recordDetail)return;
+            window.__detailLayout.push(window.__sampleDetail());requestAnimationFrame(frame);};
+          requestAnimationFrame(frame);
+        }""", tier)
+        before = page.evaluate('window.__sampleDetail()')
+        pending = fixtures.pending_details.copy()
+        fixtures.pending_details.clear()
+        fixtures.hold_details = False
+        for held, image_id in pending:
+            data = image_record(image_id)
+            if image_id == 3004 and not empty:
+                data['tags'] = ([f'artist:Fixture Artist {i:02}' for i in range(28)] +
+                                [f'oc:Fixture Pony {i:02}' for i in range(8)] + ['pony', 'safe', 'solo'])
+                data['description'] = 'Fixture description\n\nA second paragraph fills the existing section.'
+                data['source_urls'] = ['https://example.test/art/3004']
+            fixtures.json(held, {'image': data})
+        expect(route.locator('[data-image-detail-score-loading]')).to_have_count(0)
+        if not empty:
+            expect(route.get_by_role('button', name='Fixture Artist 27', exact=True)).to_have_count(1)
+        page.wait_for_function("""!document.getAnimations().some(a=>
+          a.effect?.target?.closest('[data-image-hero-surface-id]') &&
+          a.effect.getKeyframes().some(f=>f.height!==undefined))""")
+        after = page.evaluate('window.__sampleDetail()')
+        samples = page.evaluate('window.__recordDetail=false;window.__detailLayout')
+        intermediate = [f['tags'] for f in samples if before['tags'] + 1 < f['tags'] < after['tags'] - 1]
+        if empty:
+            for title in optional:
+                expect(route.get_by_role('heading', name=title, exact=True)).to_have_count(0)
+            assert abs(after['tags'] - before['tags']) < 1, 'Empty optional sections reserved space'
+        else:
+            assert after['tags'] > before['tags'] + 40, (before, after)
+            if tier == 'off':
+                assert not intermediate, 'Off tier interpolated the layout'
+            else:
+                assert len(set(round(v, 1) for v in intermediate)) >= 3, 'Multi-row content jumped instead of following'
+        for key in ['image', 'actions']:
+            assert abs(after[key] - before[key]) < 1, f'{key} moved as record values arrived: {before} -> {after}'
+        assert page.evaluate('window.__fixedDetailNodes.every(n=>n.isConnected)'), 'Fixed chrome remounted'
+        expect(route.locator('[data-image-detail-score-loading]')).to_have_count(0)
+        page.screenshot(path=str(OUTPUT/(label+'.png')))
+        page.evaluate("document.documentElement.dataset.motion='standard'")
+        page.keyboard.press('Escape')
+        assert_clean(page, 3004)
+        return {'staticDuringFlight':True,'layoutTier':tier,'intermediateFrames':len(intermediate),
+                'fixedGeometry':True,'retainedNodes':True,'emptyOptionalSections':empty}
+    finally:
+        page.evaluate("window.__recordDetail=false;document.documentElement.dataset.motion='standard'")
+        fixtures.release_details()
+
+
 def cancelled_return(page, label):
     open_image(page)
     page.locator(ROUTE).evaluate('(n)=>n.scrollTop=85')
@@ -832,7 +949,7 @@ NAV = """() => { const nav = window.navigation; if (!nav) return null;
     marker: history.state?.__picponyImageHero?.role ?? null }; }"""
 DETAIL = '[data-image-hero-surface-id] [data-image-hero-role="detail"]'
 # Flyer, Stage landing target and routed media per frame, for the landing checks.
-LANDING = """() => { window.__landing = []; window.__landingOn = true;
+LANDING = """() => { window.__landing = []; window.__landingOn = true; window.__landingTracks = 0;
   const rect = n => { if (!n) return null; const r = n.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; };
   const watched = new WeakSet();
   const sample = () => { const a=document.querySelector('.image-hero-flyer')?.getAnimations()[0];
@@ -846,6 +963,7 @@ LANDING = """() => { window.__landing = []; window.__landingOn = true;
     const a = flyer?.getAnimations()[0];
     if (a && !watched.has(a)) {
       watched.add(a);
+      window.__landingTracks++;
       // Completion can dispose the flyer before the next rAF. Sample its actual endpoint,
       // rather than comparing an arbitrary penultimate spring frame with the settled slot.
       a.finished.then(() => {
@@ -853,6 +971,10 @@ LANDING = """() => { window.__landing = []; window.__landingOn = true;
       }, () => {});
     }
     sample();
+    if(window.__resizeDetailTail && document.documentElement.dataset.imageHeroState==='opening.flight') {
+      const content=document.querySelector('[data-image-hero-surface-id] .image-detail-overlay-content');
+      if(content)content.style.paddingBottom=(window.__landing.length%2)+'px';
+    }
     if (window.__landingOn) requestAnimationFrame(tick); };
   requestAnimationFrame(tick); }"""
 
@@ -932,7 +1054,7 @@ def forward_replay(page, label):
     return {'replayed': True}
 
 
-def landing(page, label):
+def landing(page, label, resize_tail=False):
     """The last flyer frame is the destination's own box, both ways — within half a pixel, with a
     classic scrollbar's gutter between the scroller's border and padding edges (the regression
     that put every return 10px right of its thumbnail)."""
@@ -943,15 +1065,22 @@ def landing(page, label):
       return i?.complete && i.naturalWidth>0 && getComputedStyle(i).opacity==='1'; }""")
     page.wait_for_timeout(350)
     gutter = page.locator(GALLERY).evaluate('n => n.offsetWidth - n.clientWidth')
+    # Simulate repeated below-media layout changes while the window tracks interpolate.
+    # These must not turn the sampled counter-transform's residual into a new landing box.
+    page.evaluate('value=>window.__resizeDetailTail=value', resize_tail)
     page.evaluate(LANDING)
     source.locator('..').click()
     state(page, 'detail-idle')
+    page.evaluate("""() => { window.__resizeDetailTail=false;
+      document.querySelector('[data-image-hero-surface-id] .image-detail-overlay-content').style.paddingBottom=''; }""")
     page.evaluate('window.__landingOn = false')
     opening = [f for f in page.evaluate('window.__landing') if f['flyer']]
     (OUTPUT / (label+'-opening.json')).write_text(json.dumps(opening, indent=2), encoding='utf-8')
     assert opening, 'The open did not fly'
     last = opening[-1]
     assert within(last['flyer'], last['target']), f"Opened onto {last['flyer']} vs target {last['target']}"
+    if resize_tail:
+        assert page.evaluate('window.__landingTracks') == 1, 'Below-media layout changes rebuilt an unchanged flight'
     page.wait_for_timeout(300)
     page.evaluate(LANDING)
     page.keyboard.press('Escape')
@@ -1008,9 +1137,16 @@ def dialog_back(page, label):
     return {'layers': 'dialog, then viewer'}
 
 
-def reopen_during_close(page, label):
+def reopen_during_close(page, label, scrolled=False):
     """Tapping the card again while it flies home turns the same flight around (R10-006)."""
     open_image(page)
+    if scrolled:
+        bounds=page.locator(ROUTE).bounding_box()
+        page.mouse.move(bounds['x']+bounds['width']*.6,bounds['y']+bounds['height']*.5)
+        page.mouse.wheel(0,220)
+        page.wait_for_function("document.querySelector('[data-image-hero-surface-id] .image-detail-overlay-scroll').scrollTop>150")
+        page.wait_for_timeout(350)
+    previous_top=page.locator(ROUTE).evaluate('n=>n.scrollTop')
     page.evaluate(LANDING)
     page.keyboard.press('Escape')
     state(page, 'closing.flight')
@@ -1025,6 +1161,7 @@ def reopen_during_close(page, label):
     # The same flight turns around where it is: no snap to the thumbnail, no second copy.
     assert within(caught, first, 3), f'The reversal left from {first}, not from the caught {caught}'
     assert page.locator('.image-hero-flight-layer').count() <= 1, 'Two copies of the picture were flying'
+    assert abs(page.locator(ROUTE).evaluate('n=>n.scrollTop')-previous_top)<=1, 'Cancelling a close must retain the reading position'
     page.keyboard.press('Escape')
     assert_clean(page)
     return {'turnedAt': [round(v) for v in caught]}
@@ -1992,9 +2129,93 @@ def direct_back(page, label):
         tab.close()
     return {'replaced': True}
 
+def opening_native_wheel(page, cdp, fixtures, label, close_after_handoff=False):
+    """One native wheel stream starts on the Stage and outlives its visual handoff."""
+    fixtures.hold_details = False
+    page.mouse.move(0,0)
+    fresh_profile(page)
+    source = page.locator('[data-tab-pane-active] ' + THUMB + '[data-image-hero-id="3004"]')
+    source.scroll_into_view_if_needed()
+    page.wait_for_timeout(400)
+    page.evaluate("""closeAfter => {
+      const log=window.__openingWheel={frames:[],events:[]};window.__openingWheelOn=true;
+      const originalFetch=window.fetch;
+      let releaseRoute;
+      const gate=new Promise(resolve=>{releaseRoute=resolve;});
+      window.fetch=async (...args)=>{
+        const result=await Reflect.apply(originalFetch,window,args);
+        const raw=args[0] instanceof Request?args[0].url:String(args[0]);
+        if(new URL(raw,location.href).pathname==='/pic/3004')await gate;
+        return result;
+      };
+      window.__restoreOpeningFetch=()=>{releaseRoute();window.fetch=originalFetch;};
+      let released=false,closeAt=null;
+      const owner=n=>n?.closest?.('[data-image-hero-stage-scroll]')?'stage'
+        :n?.closest?.('[data-image-hero-surface-id]')?'route':'gallery';
+      const input=e=>{
+        log.events.push({at:performance.now(),owner:owner(e.target),trusted:e.isTrusted});
+        if(!released){released=true;setTimeout(releaseRoute,120);}
+      };
+      addEventListener('wheel',input,{capture:true,passive:true});
+      const tick=()=>{
+        if(!window.__openingWheelOn){removeEventListener('wheel',input,true);return;}
+        const stage=document.querySelector('[data-image-hero-stage-scroll]');
+        const route=document.querySelector('[data-image-hero-surface-id] .image-detail-overlay-scroll');
+        const flyer=document.querySelector('.image-hero-flyer');
+        const target=route?.querySelector('[data-image-hero-role="detail"]');
+        const picture=flyer??target;
+        const phase=document.documentElement.dataset.imageHeroState;
+        const at=performance.now();
+        log.frames.push({at,phase,stage:stage?.scrollTop??null,route:route?.scrollTop??null,
+          gallery:document.querySelector('[data-image-hero-gallery-scroll]')?.scrollTop,
+          y:picture?.getBoundingClientRect().y??null});
+        if(closeAfter&&phase==='detail-idle'){
+          closeAt??=at;
+          if(at-closeAt>150){closeAt=Infinity;document.querySelector('[data-image-hero-surface-id] [data-image-detail-back-button]')?.click();}
+        }
+        requestAnimationFrame(tick);
+      };requestAnimationFrame(tick);
+    }""", close_after_handoff)
+    try:
+        source.locator('..').evaluate('link=>link.click()')
+        cdp.send('Input.synthesizeScrollGesture', {'x':900,'y':500,'yDistance':-480,
+            'speed':90,'gestureSourceType':'mouse','preventFling':True})
+        state(page, 'gallery-idle' if close_after_handoff else 'detail-idle')
+        page.wait_for_timeout(400)
+        log = page.evaluate('window.__openingWheelOn=false;window.__openingWheel')
+        (OUTPUT/(label+'.json')).write_text(json.dumps(log),encoding='utf-8')
+        assert log['events'][0]['trusted'] and log['events'][0]['owner']=='stage', log['events'][:1]
+        handoff = next(f for f in log['frames'] if f['phase']=='detail-idle')
+        end = log['frames'][-1]
+        assert handoff['at'] < log['events'][-1]['at']-1000, 'the handoff must finish while the same stream continues'
+        if close_after_handoff:
+            closed = next(f for f in log['frames'] if f['phase']=='gallery-idle' and f['at']>handoff['at'])
+            assert end['gallery']-closed['gallery']>60, 'the inherited stream stopped after closing'
+            assert_clean(page,3004)
+        else:
+            assert end['route']>=460, f"Opening lost wheel movement: {end['route']} of 480 px"
+            settled = [f['y'] for f in log['frames'] if f['phase'] in ('opening.landed','opening.handoff','detail-idle') and f['y'] is not None]
+            assert all(b<=a+2 for a,b in zip(settled,settled[1:])), 'the image rebounded while scrolling downward'
+            page.keyboard.press('Escape')
+            assert_clean(page,3004)
+        source.scroll_into_view_if_needed()
+        page.wait_for_timeout(350)
+        source.locator('..').click()
+        state(page,'detail-idle')
+        page.wait_for_timeout(250)
+        reopened=page.locator(ROUTE).evaluate('n=>n.scrollTop')
+        assert reopened==0, f'The new open retained a previous offset: {reopened}'
+        page.keyboard.press('Escape')
+        assert_clean(page,3004)
+        return {'nativeWheelContinued':True,'closedDuringStream':close_after_handoff,'reopenedAtTop':True}
+    finally:
+        page.evaluate('window.__openingWheelOn=false;window.__restoreOpeningFetch()')
+        fixtures.release_details()
+
+
 def run(browser, name, width, only=None):
     context = browser.new_context(viewport={'width':width,'height':900}, reduced_motion='no-preference',
-                                  is_mobile=width<500, has_touch=width<500)
+                                  is_mobile=width<500, has_touch=width<500, service_workers='block')
     fixtures = HeroFixtures()
     fixtures.hold_uploads = False
     fixtures.hold_details = False
@@ -2021,7 +2242,9 @@ def run(browser, name, width, only=None):
                   ('continued-wheel-reopen', lambda label: continued_scroll(page,cdp,label,reopen=True))]
         if width >= 500:
             cases += [('wheel-before', lambda label: wheel_return(page,label,0,True)),
-                      ('stale-wheel-takeover', lambda label: stale_wheel_takeover(page,label))]
+                      ('stale-wheel-takeover', lambda label: stale_wheel_takeover(page,label)),
+                      ('opening-native-wheel', lambda label: opening_native_wheel(page,cdp,fixtures,label)),
+                      ('opening-native-wheel-close', lambda label: opening_native_wheel(page,cdp,fixtures,label,True))]
         else:
             cases += [(f'touch-{gap}', lambda label,gap=gap: touch_return(page,cdp,label,gap)) for gap in [70,245,320]]
             cases += [('shield-touch', lambda label: shield_scroll(page,cdp,label,True))]
@@ -2030,6 +2253,10 @@ def run(browser, name, width, only=None):
                   ('stale-wheel-expiry', lambda label: stale_wheel_expiry(page,label)),
                   ('resize-interrupt', lambda label: interrupted_open(page,label,True)),
                   ('opening-handoff', lambda label: opening_handoff(page,label)),
+                  ('detail-content', lambda label: detail_content_handoff(page,fixtures,label)),
+                  ('detail-content-reduced', lambda label: detail_content_handoff(page,fixtures,label,'reduced')),
+                  ('detail-content-off', lambda label: detail_content_handoff(page,fixtures,label,'off')),
+                  ('detail-content-empty', lambda label: detail_content_handoff(page,fixtures,label,empty=True)),
                   ('cancel-return', lambda label: cancelled_return(page,label)),
                   ('pull-frame', lambda label: pull_frame(page,label)),
                   ('pull-loading', lambda label: pull_loading_content(page,fixtures,label)),
@@ -2041,12 +2268,14 @@ def run(browser, name, width, only=None):
         cases += [(f'loading-escape-scroll-{delay}', lambda label,delay=delay:
                    loading_escape_scroll(page,fixtures,label,delay)) for delay in [40,170,260,450]]
         cases += [('landing', lambda label: landing(page,label)),
+                  ('landing-content-resize', lambda label: landing(page,label,True)),
                   ('prev-next', lambda label: prev_next(page,label)),
                   ('step-back', lambda label: step_back(page,label)),
                   ('forward-replay', lambda label: forward_replay(page,label)),
                   ('lightbox-back', lambda label: lightbox_back(page,label)),
                   ('dialog-back', lambda label: dialog_back(page,label)),
                   ('reopen-during-close', lambda label: reopen_during_close(page,label)),
+                  ('reopen-scrolled-close', lambda label: reopen_during_close(page,label,True)),
                   ('repeat-open', lambda label: repeat_open(page,label)),
                   ('same-image-interruption', lambda label: same_image_interruption(page,label)),
                   ('same-image-history-interruption', lambda label: same_image_interruption(page,label,True)),
@@ -2109,12 +2338,16 @@ def run(browser, name, width, only=None):
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(**BROWSER_CHANNEL, headless=True)
     for profile in [('desktop',1440),('mobile',390)]:
-        run(browser,*profile)
+        if not REQUESTED_PROFILES or profile[0] in REQUESTED_PROFILES:
+            run(browser,*profile)
     # The wide desktop: four columns and a centred well, where both legs have the longest reach.
-    run(browser,'wide',1920,only={'landing','step-back'})
+    if not REQUESTED_PROFILES or 'wide' in REQUESTED_PROFILES:
+        run(browser,'wide',1920,only={'landing','landing-content-resize','step-back'})
     browser.close()
 for missing in sorted(REQUESTED_CASES - MATCHED_CASES):
     FAILURES.append({'case':missing,'error':'Unknown hero test case'})
+for missing in sorted(REQUESTED_PROFILES - {'desktop','mobile','wide'}):
+    FAILURES.append({'case':missing,'error':'Unknown hero test profile'})
 (OUTPUT/'results.json').write_text(json.dumps({'results':RESULTS,'failures':FAILURES},indent=2),encoding='utf-8')
 print(f'{len(RESULTS)} passed, {len(FAILURES)} failed; {OUTPUT / "results.json"}',flush=True)
 sys.exit(1 if FAILURES else 0)

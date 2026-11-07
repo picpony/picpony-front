@@ -278,18 +278,14 @@ export default function DetailImage({
    * *final* layer on top; then paintability is published — or, if neither layer
    * will ever paint, the terminal answer the flight waits for goes out instead.
    *
-   * **The order is the call order and nothing stronger.** `onPreviewFailed`
-   * schedules a React state update while `markPreviewReady()` publishes
-   * synchronously, so the controller can learn the preview is paintable in the
-   * same task, while the hero-active flag is still set and the final layer is
-   * still transparent. Guaranteeing the order would mean waiting for the flag to
-   * land before publishing — another round trip on the failure path. Against a
-   * 30-second hang, one possibly blank frame is the trade taken here.
+   * Switch the DOM's layer flag before publishing readiness. The parent callback updates
+   * React's matching state, but that commit may be later than the Hero's atomic handoff.
    */
   const markPreviewFailed = useCallback(() => {
     clearPreviewFallback();
     if (previewFailedRef.current) return;
     previewFailedRef.current = true;
+    targetRef.current?.setAttribute('data-image-detail-hero-active', 'false');
     const failedSurfaceId = surfaceIdRef.current;
     if (failedSurfaceId) onPreviewFailedRef.current?.(failedSurfaceId);
     if (finalReadyRef.current) markPreviewReady();

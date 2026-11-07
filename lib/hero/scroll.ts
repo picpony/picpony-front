@@ -26,6 +26,8 @@ type DeltaListener = ScrollListener & {
   pageHeight: number;
 };
 
+type InputSource = Pick<DeltaListener, 'element' | 'lineHeight' | 'pageHeight'>;
+
 type ResidualMeasurement = {
   target: HTMLElement;
   left: number;
@@ -62,6 +64,7 @@ export class HeroScrollContinuity {
   private touchTargetLeft: number | null = null;
   private touchTargetTop: number | null = null;
   private returnInput: HeroReturnInput | null = null;
+  private inputSource: InputSource | null = null;
   private returnManaged = false;
   private retired: (() => void) | null = null;
 
@@ -104,15 +107,26 @@ export class HeroScrollContinuity {
       onEnd: (reason) => {
         if (this.returnInput !== input) return;
         this.returnInput = null;
+        this.inputSource = null;
         if (reason === 'superseded') this.resetWheelResidual();
         this.finishRetired();
       },
     });
     this.returnInput = input;
     if (input) {
+      this.inputSource = dimensions;
       this.returnManaged = true;
       this.clearDeltaSources();
     }
+  }
+
+  /** A close can follow an opening handoff before its original wheel stream has ended. */
+  transferInputTo(next: HeroScrollContinuity) {
+    const source = this.inputSource;
+    this.release();
+    if (!source) return;
+    next.addDeltaSource(source.element, source);
+    next.takeOverReturnInput(source.element);
   }
 
   /** Keep only the current input lease alive after its visual session has closed. */
@@ -221,11 +235,11 @@ export class HeroScrollContinuity {
     }
   }
 
-  addDeltaSource(element: HTMLElement) {
+  addDeltaSource(element: HTMLElement, initial?: Pick<InputSource, 'lineHeight' | 'pageHeight'>) {
     if (this.released || this.returnInput || this.peers.has(element) || this.deltaSources.has(element)) return;
-    const computedLineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+    const computedLineHeight = initial?.lineHeight ?? Number.parseFloat(getComputedStyle(element).lineHeight);
     const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 16;
-    const pageHeight = Math.max(1, element.clientHeight);
+    const pageHeight = initial?.pageHeight ?? Math.max(1, element.clientHeight);
     const state: DeltaListener = {
       element,
       left: element.scrollLeft,
@@ -322,6 +336,7 @@ export class HeroScrollContinuity {
     this.released = true;
     this.returnInput?.release();
     this.returnInput = null;
+    this.inputSource = null;
     this.resetWheelResidual();
     this.clearPeers();
     this.deltaSources.forEach(({ element, listener, wheelListener }) => {
