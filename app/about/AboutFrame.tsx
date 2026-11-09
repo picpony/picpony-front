@@ -48,7 +48,7 @@ export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: R
 
         <Card variant="filled" padding="lg" className="mt-8">
           <SectionHeading className="mb-3">关于 PicPony</SectionHeading>
-          <p className="text-body-m text-on-surface-variant">一个看图的网站，没了</p>
+          <p className="text-body-m text-on-surface-variant">一个看图的网站<br />其中 114514 行代码由 AK 生成</p>
         </Card>
 
         {team}
