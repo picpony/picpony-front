@@ -51,7 +51,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
     { key: 'date', header: '时间', render: (r) => formatDateTime(r.date) },
     { key: 'actions', header: '操作', actions: true, render: (r) => <>
       <IconButton size="sm" icon={<MdVisibility />} aria-label={`查看公告「${r.title}」`} onClick={() => setPreview({ announcement: r, open: true })} />
-      <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除公告「${r.title}」`} loading={remove.pendingKeys.has(r.id)} onClick={() => confirmThen('确认删除公告', `确定要删除公告「${r.title}」（#${r.id}）吗？删除后无法恢复。`, () => void remove.run(() => adminApi.adminDeleteAnnouncement(token, Number(r.id)), () => showToast('已删除公告', 'success'), '公告删除失败', { key: r.id, onCommitted: refresh }))} />
+      <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除公告「${r.title}」`} loading={remove.pendingKeys.has(r.id)} onClick={() => confirmThen('确认删除公告', `确定要删除公告「${r.title}」（#${r.id}）吗？删除后无法恢复。`, () => void remove.run(() => adminApi.adminDeleteAnnouncement(token, Number(r.id)), () => showToast('已删除公告', 'success'), '公告删除失败', { key: r.id, onCommitted: refresh }), { tone: 'danger' })} />
     </> },
   ];
   return <div className="space-y-6">

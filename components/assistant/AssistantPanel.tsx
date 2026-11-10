@@ -141,7 +141,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
             {history && message.id && (
               <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>
                 <IconButton size="sm" aria-label={`删除第 ${index + 1} 条消息`} disabled={state.busy} icon={<MdDeleteOutline />} onClick={async () => {
-                  if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？' }) && current()) void session.removeMessage(message.id);
+                  if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？', tone: 'danger' }) && current()) void session.removeMessage(message.id);
                 }} />
               </div>
             )}
@@ -158,7 +158,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     <div className="flex flex-wrap items-center gap-2">
       <Chip variant="filter" selected={history} onClick={() => setHistory(value => !value)}>全部记录</Chip>
       {history && <Button variant="danger-text" size="xs" disabled={state.busy || !state.messages.length} onClick={async () => {
-        if (await confirm({ title: '确认清空', message: '确定要清空此会话的聊天记录吗？彩彩将不再记得这些内容。' }) && current()) void session.clear();
+        if (await confirm({ title: '确认清空', message: '确定要清空此会话的聊天记录吗？彩彩将不再记得这些内容。', tone: 'danger' }) && current()) void session.clear();
       }}>清空</Button>}
       {quota.data && <span className="ml-auto text-body-s tabular-nums text-on-surface-variant">剩余 {formatExactCount(quota.data.remaining)} 点</span>}
     </div>

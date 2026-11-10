@@ -238,7 +238,7 @@ function AccountSections({ account }: { account: Account }) {
     const confirmed = await confirm({
       title: '确认解除绑定',
       message: '确定要解除该 Derpibooru API Key 的绑定吗？解除后将不再同步 Derpibooru 的黑名单过滤等设置。',
-      tone: 'danger',
+      tone: 'filled',
     });
     if (!confirmed || readToken() !== token) return;
     setKeyBusy('unbind');

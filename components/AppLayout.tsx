@@ -892,7 +892,7 @@ export default function AppLayout({
     const confirmed = await confirm({
       title: '确认登出',
       message: '确定要登出当前账号吗？',
-      tone: 'danger',
+      tone: 'filled',
     });
     if (!confirmed) return;
     if (pathname === '/') {

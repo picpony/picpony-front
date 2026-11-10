@@ -225,7 +225,7 @@ export default function ForumThreadPage() {
   const deletePost = async () => {
     const session = readToken();
     if (!session || !post) return;
-    const ok = await confirm({ title: '确认删除', message: '确定要删除此帖子吗？删除后无法恢复。' });
+    const ok = await confirm({ title: '确认删除', message: '确定要删除此帖子吗？删除后无法恢复。', tone: 'danger' });
     if (!ok) return;
     setDeletingPost(true);
     const outcome = await removePost(session, post.id);
@@ -279,7 +279,7 @@ export default function ForumThreadPage() {
     async (comment: ForumComment) => {
       const session = readToken();
       if (!session) return;
-      const ok = await confirm({ title: '确认删除', message: '确定要删除此回复吗？' });
+      const ok = await confirm({ title: '确认删除', message: '确定要删除此回复吗？', tone: 'danger' });
       if (!ok) return;
       setDeletingReply(comment.id);
       const outcome = await removeComment(session, comment.id);

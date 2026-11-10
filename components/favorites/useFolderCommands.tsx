@@ -116,6 +116,7 @@ export function useFolderCommands({
         const ok = await confirm({
           title: '确认删除收藏夹',
           message: `确定要删除收藏夹「${name}」吗？其中的图片会移入主收藏夹。`,
+          tone: 'danger',
         });
         if (!ok || readToken() !== token) return;
         /* The settings it rewrites are read as it rewrites them, not from this render (G3-007). */

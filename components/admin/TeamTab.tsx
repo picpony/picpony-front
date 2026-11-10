@@ -116,6 +116,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
           },
         },
       ),
+      { tone: 'danger' },
     );
 
   const openEditor = async (member: TeamMemberRow, trigger: HTMLElement) => {

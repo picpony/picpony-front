@@ -182,6 +182,7 @@ ${currentPage}`, history.isPrevious);
         '删除失败',
         { key: item.id, onCommitted: () => notificationsQuery.invalidate() },
       ),
+      { tone: 'danger' },
     );
   };
 

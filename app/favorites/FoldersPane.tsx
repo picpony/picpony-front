@@ -108,6 +108,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     const ok = await confirm({
       title: '确认删除收藏夹',
       message: `确定要删除选中的 ${chosen.length} 个收藏夹吗？其中的图片会移入主收藏夹。`,
+      tone: 'danger',
     });
     if (!ok || readToken() !== token) return;
     setBusy(true);
@@ -124,7 +125,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const merge = async (targetId: number) => {
     const target = folders.find((folder) => folder.id === targetId);
     if (!target) return false;
-    const ok = await confirm({ title: '确认合并收藏夹', message: `确定要将选中的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。` });
+    const ok = await confirm({ title: '确认合并收藏夹', message: `确定要将选中的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。`, tone: 'danger' });
     if (!ok || readToken() !== token) return false;
     const outcome = await settled(
       mergeFolders(

@@ -131,6 +131,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
           },
         },
       ),
+      { tone: 'danger' },
     );
 
   const openEditor = async (item: ShopItemRow, trigger: HTMLElement) => {

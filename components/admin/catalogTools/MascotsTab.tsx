@@ -45,7 +45,7 @@ export default function MascotsTab({ token }: AdminPanelProps) {
     /* The column header supplies the visible label. Keep the toggle's accessible name stable;
        aria-checked reports its state (docs/design/primitives.md#buttons-icons-and-semantics). */
     { key: 'active', header: '展示', render: (row) => <ToggleSwitch checked={row.is_active} aria-label={`展示 ${row.name}`} disabled={mutation.busy || mutation.uncertain} onChange={(enabled) => void mutation.run(() => api.toggleMascot(token, revision, row.id, enabled), () => showToast('已更新展示状态', 'success'), () => committed(token))} /> },
-    { key: 'actions', header: '操作', actions: true, render: (row) => <><Button size="xs" variant="text" disabled={mutation.busy} onClick={() => open(row)}>编辑</Button><Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除吉祥物', `确定要删除吉祥物「${row.name}」及其 ${tipCount(row.tips)} 条台词吗？此操作不可撤销。`, () => void mutation.run(() => api.deleteMascot(token, revision, row.id), () => showToast('已删除吉祥物', 'success'), () => committed(token)))}>删除</Button></> },
+    { key: 'actions', header: '操作', actions: true, render: (row) => <><Button size="xs" variant="text" disabled={mutation.busy} onClick={() => open(row)}>编辑</Button><Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除吉祥物', `确定要删除吉祥物「${row.name}」及其 ${tipCount(row.tips)} 条台词吗？此操作不可撤销。`, () => void mutation.run(() => api.deleteMascot(token, revision, row.id), () => showToast('已删除吉祥物', 'success'), () => committed(token)), { tone: 'danger' })}>删除</Button></> },
   ];
   return <div className="space-y-6">
     <SectionHeader section="mascots" onRefresh={read.refresh} isLoading={read.refreshing} />

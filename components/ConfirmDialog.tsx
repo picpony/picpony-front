@@ -15,8 +15,11 @@ export interface ConfirmOptions {
   cancelLabel?: string;
   /**
    * `danger` for anything that destroys or is hard to undo — deleting a row,
-   * blacklisting an image. `filled` for a step that merely needs acknowledging,
-   * which is what an upload's guideline check is.
+   * blacklisting an image. It is the only tone that tints the scrim red, so a
+   * destructive question must name it; the default keeps the cancel-first focus
+   * without claiming the question is destructive. An action a user can simply undo —
+   * logging out, unbinding a key — is `filled`, not `danger`. `filled` also suits a
+   * step that merely needs acknowledging, which is what an upload's guideline check is.
    */
   tone?: 'danger' | 'filled';
 }
@@ -91,6 +94,7 @@ export function useConfirm() {
       aria-describedby={messageId}
       hideCloseButton
       maxWidth="sm"
+      danger={options?.tone === 'danger'}
       footer={
         <>
           <Button

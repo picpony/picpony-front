@@ -31,7 +31,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
     { key: 'description', header: '简介', className: 'whitespace-pre-wrap break-words', render: (row) => row.description || '暂无简介' },
     { key: 'actions', header: '操作', actions: true, render: (row) => <>
       <Button size="xs" variant="text" disabled={mutation.busy} onClick={() => { setName(row.badge_name); setDescription(row.description); }}>编辑</Button>
-      <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除简介', `确定要删除徽章「${row.badge_name}」的简介吗？已授予的徽章仍会保留。`, () => void mutation.run(() => api.deleteBadgeDescription(token, row.badge_name), () => showToast('已删除徽章简介', 'success'), committed))}>删除</Button>
+      <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除简介', `确定要删除徽章「${row.badge_name}」的简介吗？已授予的徽章仍会保留。`, () => void mutation.run(() => api.deleteBadgeDescription(token, row.badge_name), () => showToast('已删除徽章简介', 'success'), committed), { tone: 'danger' })}>删除</Button>
     </> },
   ];
   return <div className="space-y-6">

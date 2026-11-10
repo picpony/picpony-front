@@ -197,6 +197,7 @@ Use the overlay hooks for focus, scroll locks and dismissal. A normal modal make
 - Modal scrim and panel are siblings so opacity does not multiply.
 - Reverse from the current animated pose; a drag cancels settling before taking over.
 - Only one scrim is visible across a handoff between dialogs.
+- A question that destroys something tints the scrim red: `Modal danger`, or `tone: 'danger'` on `useConfirm`. The veil carries a slow diagonal hatch that the reduced tier stops and the off tier removes; the tint is opt-in, so a delete confirmation names the tone, and every other dialog keeps the neutral veil. An action the user can undo — logging out, unbinding a key — answers with `filled`, never `danger`.
 - Keep exiting surfaces mounted but excluded from interaction.
 - A gesture ends on release, cancellation, external state changes, disablement or unmount. Cleanup must restore React's state.
 - Use Modal's wrapping `footer`; `mr-auto` supplies a leading action. Do not duplicate a footer in the scrolling body.

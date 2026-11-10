@@ -123,7 +123,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
             read.refresh();
           },
         },
-      ));
+      ), { tone: 'danger' });
 
   const toggleAdding = (key: BlockFilterKey) => {
     setDraft('');

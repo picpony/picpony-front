@@ -288,7 +288,7 @@ ${duplicatePage.listKey}` : pageKey;
             refreshLists();
           },
         },
-      ));
+      ), { tone: 'danger' });
 
   const removeSelected = () => {
     const ids = [...selected];
@@ -313,7 +313,7 @@ ${duplicatePage.listKey}` : pageKey;
             refreshLists();
           },
         },
-      ));
+      ), { tone: 'danger' });
   };
 
   const importTags = (tasks: ImportTask[]) =>

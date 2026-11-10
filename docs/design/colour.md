@@ -154,7 +154,7 @@ Use `ProgressBar` for a 4 dp determinate track and translated rounded fill. The 
 
 Use container tones or add an owned token instead of adding alpha to a colour.
 
-- Scrims use `bg-scrim-veil`; cropping uses `--md-sys-color-crop-mask`.
+- Scrims use `bg-scrim-veil`; a destructive confirmation uses `bg-scrim-danger`; cropping uses `--md-sys-color-crop-mask`.
 - Sheet drag handles use full-strength `on-surface-variant`.
 - State opacity comes through `state-layer`, not a copied number.
 - Element opacity is for motion, the shared paging dim or `disabled-content`, not secondary text weight.

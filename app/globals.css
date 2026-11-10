@@ -188,6 +188,15 @@
      RGB channels preserve that alpha on Chrome 109 (docs/design/colour.md#alpha-and-disabled-content). */
   --md-sys-color-scrim-veil: rgb(var(--md-sys-color-scrim-rgb) / 32%);
 
+  /* The dim for a question that destroys something, tinted with the error fill so the page
+     reads as the destructive state before the copy is. Half again the neutral veil's weight
+     (48% to its 32%): the red alone read as a light wash, and a destructive question should
+     dim the page further, not less. Its own channel rather than the scheme's `error`: that
+     role flips, while this veil must stay red in both — the reasoning the semantic fills
+     above record. */
+  --md-sys-color-scrim-danger-rgb: 209 65 74;
+  --md-sys-color-scrim-danger: rgb(var(--md-sys-color-scrim-danger-rgb) / 48%);
+
   /* Deliberately heavier than the dialog dim: a crop mask has to make "outside the crop"
      unmistakably inactive while the picture stays legible enough to aim with. M3 has no token
      for it; giving it its own name is the point. */
@@ -829,6 +838,7 @@ body {
   --color-inverse-primary: var(--md-sys-color-inverse-primary);
   --color-scrim: var(--md-sys-color-scrim);
   --color-scrim-veil: var(--md-sys-color-scrim-veil);
+  --color-scrim-danger: var(--md-sys-color-scrim-danger);
   --color-crop-mask: var(--md-sys-color-crop-mask);
   --color-surface-raised: var(--md-sys-color-surface-raised);
 
@@ -1980,6 +1990,47 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
   .group:hover .media-hover-scrim {
     background-color: var(--media-targeted-scrim);
   }
+}
+
+/* The destructive question's scrim: the red veil (`bg-scrim-danger`) with a slow diagonal
+ * hatch drifting across it. The line and the gap are the same 3px — a hatch rather than a
+ * few rules — and the cycle travels four of those periods (24/√2 on each axis), so it ends
+ * exactly where the pattern repeats and has no seam. The oversize is that shift plus a
+ * margin, not a rotated full-screen sheet. The movement is a compositor transform rather
+ * than a repaint the way `background-position` would be.
+ *
+ * A decorative loop, so it answers the motion preference: reduced keeps the hatch but stops
+ * it at rest, and the off tier removes the animation as well. The veil itself never goes. */
+.danger-scrim {
+  overflow: hidden;
+}
+.danger-scrim::before {
+  content: '';
+  position: absolute;
+  inset: -32px;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(var(--md-sys-color-on-media-rgb) / 10%) 0 3px,
+    transparent 3px 6px
+  );
+  transform: translate3d(0, 0, 0);
+  animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale)) linear infinite;
+}
+
+@keyframes scrim-hatch {
+  to {
+    transform: translate3d(16.97px, 16.97px, 0);
+  }
+}
+
+html:is(
+  [data-motion='reduced'],
+  [data-motion='custom'][data-motion-feedback='reduced'],
+  [data-motion='off'],
+  [data-motion='custom'][data-motion-feedback='off']
+) .danger-scrim::before {
+  animation: none;
 }
 
 /* Captions and secondary controls can wait for hover only when the device has

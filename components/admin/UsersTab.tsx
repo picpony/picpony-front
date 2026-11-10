@@ -186,6 +186,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
           read.refresh();
         },
       ),
+      { tone: 'danger' },
     );
   };
 
@@ -199,6 +200,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         '删除失败',
         { key: badge.id, onCommitted: () => userDetail.invalidate({ token, id: owner.id }) },
       ),
+      { tone: 'danger' },
     );
   };
 

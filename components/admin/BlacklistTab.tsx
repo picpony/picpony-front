@@ -86,6 +86,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
             },
           },
         ),
+      { tone: 'danger' },
     );
   };
 

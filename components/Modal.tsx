@@ -46,6 +46,12 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | 'fit';
   /** Drops the ✕ — for a dialog whose footer already carries its dismiss (取消). */
   hideCloseButton?: boolean;
+  /**
+   * A question that destroys something: the scrim is tinted with the error colour instead of
+   * the neutral veil. Opt-in, because most dialogs — an acknowledgement, a save — must not
+   * paint the page red.
+   */
+  danger?: boolean;
   footer?: React.ReactNode;
   /** A press that starts and ends on the scrim closes the dialog. */
   closeOnOverlayClick?: boolean;
@@ -150,6 +156,7 @@ export default function Modal({
   children,
   maxWidth = 'md',
   hideCloseButton = false,
+  danger = false,
   footer,
   closeOnOverlayClick = true,
   closeOnEscape = true,
@@ -349,7 +356,12 @@ export default function Modal({
        * tree together. */
       inert={!isOpen}
     >
-      <div ref={scrimRef} data-modal-scrim="" aria-hidden="true" className="bg-scrim-veil absolute inset-0" />
+      <div
+        ref={scrimRef}
+        data-modal-scrim=""
+        aria-hidden="true"
+        className={cn('absolute inset-0', danger ? 'danger-scrim bg-scrim-danger' : 'bg-scrim-veil')}
+      />
       <div
         ref={panelRef}
         role={role}

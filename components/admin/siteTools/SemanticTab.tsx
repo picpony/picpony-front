@@ -48,7 +48,7 @@ function Feedback({ token }: { token: string }) {
   const refresh = () => { setSelection({ scope, ids: [] }); feedbackQuery.invalidate(); };
   const deleteIds = (targets: number[]) => {
     if (!targets.length || locked) return;
-    confirmThen('确认删除搜索反馈', `确定要删除反馈 ${targets.map((id) => `#${id}`).join('、')} 吗？共 ${targets.length} 条，删除后无法恢复。`, () => void remove.run(() => api.deleteFeedback(token, targets), () => showToast('已删除反馈', 'success'), '反馈删除失败', { onCommitted: refresh }));
+    confirmThen('确认删除搜索反馈', `确定要删除反馈 ${targets.map((id) => `#${id}`).join('、')} 吗？共 ${targets.length} 条，删除后无法恢复。`, () => void remove.run(() => api.deleteFeedback(token, targets), () => showToast('已删除反馈', 'success'), '反馈删除失败', { onCommitted: refresh }), { tone: 'danger' });
   };
   const columns: Column<api.Feedback>[] = [
     { key: 'select', header: '选择', leading: true, render: (r) => <Checkbox aria-label={`选择反馈 #${r.id}`} checked={selected.includes(r.id)} disabled={locked} onChange={(v) => change(r.id, v)} /> },

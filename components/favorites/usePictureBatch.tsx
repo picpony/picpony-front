@@ -213,6 +213,7 @@ export function usePictureBatch({
           source.kind === 'folder'
             ? `确定要将选中的 ${images.length} 张图片移出此收藏夹吗？不在其他收藏夹中的图片将取消收藏。`
             : `确定要将选中的 ${images.length} 张图片移出隐私空间吗？移出后无法从隐私空间找回。`,
+        tone: 'danger',
       });
       if (!ok || readToken() !== token) return;
     }

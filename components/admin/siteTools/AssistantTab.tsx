@@ -124,7 +124,7 @@ function Providers({ token }: { token: string }) {
             () => { showToast('已删除模型配置', 'success'); if (editing === p.id) setEditing(null); },
             '模型配置删除失败',
             { key: p.id, onCommitted: (d) => { assistantQuery.write(token, d); assistantQuota.invalidate({ token }); } },
-          ))} />
+          ), { tone: 'danger' })} />
         </> },
       ]} />
       {!editing && <Button variant="tonal" icon={<MdAdd />} disabled={config.providers.length >= api.PROVIDER_LIMIT} onClick={() => setEditing('new')}>添加模型配置</Button>}
