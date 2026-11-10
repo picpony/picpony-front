@@ -1993,11 +1993,12 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 }
 
 /* The destructive question's scrim: the red veil (`bg-scrim-danger`) with a slow diagonal
- * hatch drifting across it. The line and the gap are the same 3px — a hatch rather than a
- * few rules — and the cycle travels four of those periods (24/√2 on each axis), so it ends
- * exactly where the pattern repeats and has no seam. The oversize is that shift plus a
- * margin, not a rotated full-screen sheet. The movement is a compositor transform rather
- * than a repaint the way `background-position` would be.
+ * hatch drifting across it. The line and the gap are the same 4px — a hatch rather than a
+ * few rules, coarse enough that its edge does not shimmer as it passes — and the cycle
+ * travels three of those periods (24/√2 on each axis), so it ends exactly where the pattern
+ * repeats and has no seam. The oversize is that shift plus a margin, not a rotated
+ * full-screen sheet. The movement is a compositor transform rather than a repaint the way
+ * `background-position` would be.
  *
  * A decorative loop, so it answers the motion preference: reduced keeps the hatch but stops
  * it at rest, and the off tier removes the animation as well. The veil itself never goes. */
@@ -2011,10 +2012,11 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
   pointer-events: none;
   background-image: repeating-linear-gradient(
     135deg,
-    rgb(var(--md-sys-color-on-media-rgb) / 10%) 0 3px,
-    transparent 3px 6px
+    rgb(var(--md-sys-color-on-media-rgb) / 10%) 0 4px,
+    transparent 4px 8px
   );
   transform: translate3d(0, 0, 0);
+  will-change: transform;
   animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale)) linear infinite;
 }
 
