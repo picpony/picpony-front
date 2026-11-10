@@ -308,16 +308,20 @@ function AccountSections({ account }: { account: Account }) {
           supporting="宽高比 4:1，不超过 10 MB"
           leading={
             <div className="bg-surface-container-high text-on-surface-variant relative grid h-14 w-24 shrink-0 place-items-center overflow-hidden rounded-md">
-              <MdImage size={ICON.control} aria-hidden="true" />
+              {!banner && <MdImage size={ICON.control} aria-hidden="true" />}
               {banner && (
-                <FadeInImage
-                  key={banner}
-                  src={getAssetUrl(banner)}
-                  alt="主页横幅"
-                  fill
-                  sizes="96px"
-                  className="object-cover"
-                />
+                /* The picture covers the plate only when it is its own layer: a grid child would
+                   take a second row and leave the placeholder glyph above it. */
+                <div className="absolute inset-0">
+                  <FadeInImage
+                    key={banner}
+                    src={getAssetUrl(banner)}
+                    alt="主页横幅"
+                    fill
+                    sizes="96px"
+                    className="object-cover"
+                  />
+                </div>
               )}
               {uploading === 'banner' && (
                 <div className="bg-media-plate text-on-media absolute inset-0 flex items-center justify-center">
