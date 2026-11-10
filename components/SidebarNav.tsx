@@ -10,7 +10,7 @@ import {
   MdForum,
   MdSearch,
   MdCloudUpload,
-  MdEditNote,
+  MdNoteAdd,
   MdCollectionsBookmark,
   MdNotifications,
   MdHistory,
@@ -19,9 +19,24 @@ import {
   MdBookmarks,
   MdSettings,
   MdDashboard,
-  MdLogout,
-  MdRssFeed,
-  MdStorefront,
+  MdSubscriptions,
+  MdStore,
+  MdOutlineHome,
+  MdOutlineForum,
+  MdOutlineSearch,
+  MdOutlineCloudUpload,
+  MdOutlineNoteAdd,
+  MdOutlineCollectionsBookmark,
+  MdOutlineNotifications,
+  MdOutlineHistory,
+  MdOutlineEmojiEvents,
+  MdOutlineShield,
+  MdOutlineBookmarks,
+  MdOutlineSettings,
+  MdOutlineDashboard,
+  MdOutlineLogout,
+  MdOutlineSubscriptions,
+  MdOutlineStore,
 } from 'react-icons/md';
 import { useBackgroundSearchParams } from './BackgroundLocation';
 import { useSubscriptionUpdates } from './subscriptions/actions';
@@ -88,6 +103,7 @@ function RowTrailing({ badge, badgeLabel }: { badge?: number; badgeLabel?: strin
 function NavItem({
   href,
   icon,
+  activeIcon,
   label,
   active,
   current = active,
@@ -98,7 +114,10 @@ function NavItem({
   onReselect,
 }: {
   href?: string;
+  /** The outlined glyph, shown while the row is at rest. */
   icon: ReactNode;
+  /** The filled counterpart, shown on the active row. */
+  activeIcon?: ReactNode;
   label: string;
   active?: boolean;
   /** The row's own destination is the page on screen — not only lit for it, as 论坛 is in a thread. */
@@ -123,9 +142,10 @@ function NavItem({
   const glyph = (
     /* A fixed, centred cell rather than a bare span around the glyph: an inline svg sits on
        the text baseline, which left each icon a fraction low and by a different amount per
-       glyph. */
+       glyph. The active row swaps its outlined glyph for the filled one — M3's navigation
+       drawer convention, and it repeats the pill's own state without a second cue. */
     <span className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
-      {icon}
+      {active && activeIcon ? activeIcon : icon}
     </span>
   );
   const text = <span className="min-w-0 flex-1 truncate text-left">{label}</span>;
@@ -233,7 +253,8 @@ export default function SidebarNav({
             `lib/scrollMemory.ts` owns every other case and skips a search-only change. */}
         <NavItem
           href="/"
-          icon={<MdHome size={ICON.standard} />}
+          icon={<MdOutlineHome size={ICON.standard} />}
+          activeIcon={<MdHome size={ICON.standard} />}
           label="主页"
           active={onHome && !forumTab}
           homeTab="gallery"
@@ -242,7 +263,8 @@ export default function SidebarNav({
         />
         <NavItem
           href="/?tab=forum"
-          icon={<MdForum size={ICON.standard} />}
+          icon={<MdOutlineForum size={ICON.standard} />}
+          activeIcon={<MdForum size={ICON.standard} />}
           label="论坛"
           active={(onHome && forumTab) || inThread}
           current={onHome && forumTab}
@@ -252,9 +274,12 @@ export default function SidebarNav({
           onClick={onNavigate}
           onReselect={onReselect}
         />
+        {/* Material Icons' magnifier has no filled form — both sets draw the same glyph — so
+            here the active pill alone carries the state. Every other row swaps. */}
         <NavItem
           href="/search"
-          icon={<MdSearch size={ICON.standard} />}
+          icon={<MdOutlineSearch size={ICON.standard} />}
+          activeIcon={<MdSearch size={ICON.standard} />}
           label="搜索"
           active={backgroundPathname === '/search'}
           onClick={onNavigate}
@@ -266,7 +291,8 @@ export default function SidebarNav({
         <Section label="创作">
           <NavItem
             href="/upload"
-            icon={<MdCloudUpload size={ICON.standard} />}
+            icon={<MdOutlineCloudUpload size={ICON.standard} />}
+            activeIcon={<MdCloudUpload size={ICON.standard} />}
             label="发布图片"
             active={backgroundPathname === '/upload'}
             onClick={onNavigate}
@@ -274,7 +300,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/forum/create"
-            icon={<MdEditNote size={ICON.standard} />}
+            icon={<MdOutlineNoteAdd size={ICON.standard} />}
+            activeIcon={<MdNoteAdd size={ICON.standard} />}
             label="发布帖子"
             active={backgroundPathname === '/forum/create'}
             onClick={onNavigate}
@@ -287,7 +314,8 @@ export default function SidebarNav({
         <Section label="我的">
           <NavItem
             href="/favorites"
-            icon={<MdCollectionsBookmark size={ICON.standard} />}
+            icon={<MdOutlineCollectionsBookmark size={ICON.standard} />}
+            activeIcon={<MdCollectionsBookmark size={ICON.standard} />}
             label="我的收藏"
             active={backgroundPathname === '/favorites'}
             onClick={onNavigate}
@@ -295,7 +323,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/subscriptions"
-            icon={<MdRssFeed size={ICON.standard} />}
+            icon={<MdOutlineSubscriptions size={ICON.standard} />}
+            activeIcon={<MdSubscriptions size={ICON.standard} />}
             label="标签订阅"
             active={backgroundPathname === '/subscriptions' || backgroundPathname.startsWith('/subscriptions/')}
             current={backgroundPathname === '/subscriptions'}
@@ -306,7 +335,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/messages"
-            icon={<MdNotifications size={ICON.standard} />}
+            icon={<MdOutlineNotifications size={ICON.standard} />}
+            activeIcon={<MdNotifications size={ICON.standard} />}
             label="消息"
             active={backgroundPathname === '/messages'}
             badge={unread}
@@ -315,7 +345,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/history"
-            icon={<MdHistory size={ICON.standard} />}
+            icon={<MdOutlineHistory size={ICON.standard} />}
+            activeIcon={<MdHistory size={ICON.standard} />}
             label="浏览历史"
             active={backgroundPathname === '/history'}
             onClick={onNavigate}
@@ -323,7 +354,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/tasks"
-            icon={<MdEmojiEvents size={ICON.standard} />}
+            icon={<MdOutlineEmojiEvents size={ICON.standard} />}
+            activeIcon={<MdEmojiEvents size={ICON.standard} />}
             label="任务"
             active={backgroundPathname === '/tasks'}
             onClick={onNavigate}
@@ -331,7 +363,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/shop"
-            icon={<MdStorefront size={ICON.standard} />}
+            icon={<MdOutlineStore size={ICON.standard} />}
+            activeIcon={<MdStore size={ICON.standard} />}
             label="金币商店"
             active={backgroundPathname === '/shop'}
             onClick={onNavigate}
@@ -339,7 +372,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/block-groups"
-            icon={<MdShield size={ICON.standard} />}
+            icon={<MdOutlineShield size={ICON.standard} />}
+            activeIcon={<MdShield size={ICON.standard} />}
             label="屏蔽组"
             active={backgroundPathname === '/block-groups'}
             onClick={onNavigate}
@@ -347,7 +381,8 @@ export default function SidebarNav({
           />
           <NavItem
             href="/tag-groups"
-            icon={<MdBookmarks size={ICON.standard} />}
+            icon={<MdOutlineBookmarks size={ICON.standard} />}
+            activeIcon={<MdBookmarks size={ICON.standard} />}
             label="标签组"
             active={backgroundPathname === '/tag-groups'}
             onClick={onNavigate}
@@ -365,7 +400,8 @@ export default function SidebarNav({
       <Section>
         <NavItem
           href="/settings"
-          icon={<MdSettings size={ICON.standard} />}
+          icon={<MdOutlineSettings size={ICON.standard} />}
+          activeIcon={<MdSettings size={ICON.standard} />}
           label="设置"
           active={backgroundPathname === '/settings'}
           onClick={onNavigate}
@@ -374,7 +410,8 @@ export default function SidebarNav({
         {staff && (
           <NavItem
             href="/admin"
-            icon={<MdDashboard size={ICON.standard} />}
+            icon={<MdOutlineDashboard size={ICON.standard} />}
+            activeIcon={<MdDashboard size={ICON.standard} />}
             label="管理面板"
             active={backgroundPathname.startsWith('/admin')}
             current={backgroundPathname === '/admin'}
@@ -382,7 +419,7 @@ export default function SidebarNav({
             onReselect={onReselect}
           />
         )}
-        {user && <NavItem icon={<MdLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
+        {user && <NavItem icon={<MdOutlineLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
       </Section>
     </nav>
   );

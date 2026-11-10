@@ -118,7 +118,7 @@ A loading Button/IconButton keeps its footprint, material and focus. It uses `ar
 
 Spinner takes `tone="primary"`, `"on-primary"` or `"inherit"`. Its primary ink is `primary-ink`, not the pale primary fill.
 
-Use `ICON` for standalone icons. Button and Badge size their own icon slots. Delete uses `MdDeleteOutline`; repeated row deletes use `danger-quiet`.
+Use `ICON` for standalone icons. Button and Badge size their own icon slots. Delete uses `MdDeleteOutline`; repeated row deletes use `danger-quiet`. Navigation rows use the outlined glyph at rest and the filled glyph on the active row (`MdOutlineHome` / `MdHome`). Pick a pair whose paths actually differ: `storefront`, `edit_note` and `rss_feed` are ink-identical in both Material Icons sets, and the magnifier has no filled form.
 
 Never nest interactive elements. Spoiler toggles, retry buttons and drop-zone targets are siblings of the primary link/control. A pointer convenience handler still needs a real keyboard control.
 
