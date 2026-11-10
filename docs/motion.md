@@ -60,7 +60,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | --- | --- |
 | Determinate meter, vote ratio | `PROGRESS_SPRING`; tone `fastEffects`; waiters use `COMPONENT_SPRING_MS.progress` |
 | Top loading bar | `layout`, so completion does not wait for a slow progress settle |
-| Indeterminate spinner / loading dots | `--ease-loop` |
+| Indeterminate spinner / loading dots | `--ease-loop`; the off tier keeps only the ring's turn, over a fade instead of a dash |
 | Skeleton shimmer | `--ease-sweep` |
 
 The loop and ripple clocks are documented exceptions. A new component reuses a role from this table; verification follows [Motion system](motion-system.md#verification).

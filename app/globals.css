@@ -2072,7 +2072,8 @@ html:is(
  *
  * **These are three of the four durations in the app that do not go through
  * the motion scale** (the fourth is the 加载更多 dots): an indeterminate indicator's whole
- * message is "this is still happening", so it slows under the off tier instead of stopping. */
+ * message is "this is still happening", so the off tier reserves its own treatment for each
+ * rather than freezing them (see the tier block below). */
 .m3-progress-spin {
   animation: m3-progress-rotate 1.6s linear infinite;
   transform-origin: center;
@@ -2132,20 +2133,26 @@ html:is(
   }
 }
 
-/* The four indeterminate indicators, and the only durations in the app outside
-   the motion scale (see the spin note above): the arc stops sweeping but the ring keeps
-   turning, so the control still reads as busy rather than as a frozen graphic.
+/* The indeterminate indicators, and the only durations in the app outside the motion scale
+   (see the spin note above). The bar and the dots slow, so they still report progress without
+   drawing attention.
 
    **Off only.** The reduced tier leaves all four at their own speed: they carry information
    rather than polish, and slowing them is a concession to "no motion", not to "simple motion". */
 html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) {
+  /* The ring is the exception. With the dash frozen the arc cannot grow, so it becomes one
+     continuous stroke that fades from transparent to solid — `Spinner` hands that ramp down
+     through `--spinner-arc-fade`, and the fade, not the growth, is what still says "busy".
+     The turn is quickened rather than slowed (1s against the 1.6s standard): a static-looking
+     ring at half speed reads as stalled, and it is the only thing left moving. */
   & .m3-progress-spin {
-    animation-duration: 3.2s;
+    animation-duration: 1s;
   }
 
   & .m3-progress-arc {
     animation: none;
-    stroke-dasharray: 62 38;
+    stroke-dasharray: none;
+    stroke: var(--spinner-arc-fade, currentColor);
   }
 
   & .m3-linear-bar {

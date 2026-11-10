@@ -1,5 +1,7 @@
 'use client';
 
+import { useId, type CSSProperties } from 'react';
+
 import { clamp, cn } from '@/lib/utils';
 
 interface SpinnerProps {
@@ -55,6 +57,11 @@ export default function Spinner({
   const determinate = typeof value === 'number' && Number.isFinite(value);
   const pct = determinate ? clamp(value, 0, 100) : 0;
 
+  /* The off tier freezes the dash, so it paints the ring with the fade below instead of a
+     growing arc (globals.css switches the stroke). Every indicator carries its own paint
+     server; React's generated id keeps only characters a `url(#…)` fragment accepts. */
+  const fadeId = `spinner-fade-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+
   // Inset by half the stroke so the ring is not clipped by the viewBox.
   const r = 50 - ((cfg.ring / cfg.width) * 100) / 2;
   const color =
@@ -86,6 +93,17 @@ export default function Spinner({
       aria-valuemax={determinate ? 100 : undefined}
       style={{ color }}
     >
+      {!determinate && (
+        /* Transparent at the left of the box, solid at the right: one continuous ring that
+           reads as a direction of travel without the dash moving. `userSpaceOnUse` keeps the
+           ramp the same at every size, since the viewBox is always 100 units. */
+        <defs>
+          <linearGradient id={fadeId} x1="0" y1="50" x2="100" y2="50" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="currentColor" stopOpacity="0" />
+            <stop offset="1" stopColor="currentColor" stopOpacity="1" />
+          </linearGradient>
+        </defs>
+      )}
       {track && (
         <circle
           cx="50"
@@ -109,6 +127,7 @@ export default function Spinner({
         // are radius-independent.
         pathLength={100}
         className={cn(!determinate && 'm3-progress-arc')}
+        style={determinate ? undefined : ({ '--spinner-arc-fade': `url(#${fadeId})` } as CSSProperties)}
         strokeDasharray={determinate ? `${pct} ${100 - pct}` : undefined}
       />
     </svg>
