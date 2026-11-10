@@ -168,7 +168,12 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
             className="p-2"
             value={shown}
             onChange={select}
-            tabs={offered.map((item) => ({ value: item.id, label: item.label, icon: item.icon }))}
+            tabs={offered.map((item) => ({
+              value: item.id,
+              label: item.label,
+              icon: item.icon,
+              activeIcon: item.activeIcon,
+            }))}
           />
         </div>
         {/* The window a section switch slides past (`data-tab-window`): the panel's own region,

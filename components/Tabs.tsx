@@ -20,6 +20,12 @@ export interface TabItem<T extends string = string> {
   label: ReactNode;
   /** Leading glyph. Size it 24 (`rail`) or 18–20 (`pill`); omit for `underline`. */
   icon?: ReactNode;
+  /**
+   * The filled counterpart of `icon`, shown while this tab is selected — the navigation row's
+   * rest/active pair (`SidebarNav` states it the same way). Omit where Material Icons draws no
+   * second weight and the selected container has to carry the state alone.
+   */
+  activeIcon?: ReactNode;
   /** Count rendered as a pill after the label; 0 hides it. */
   badge?: number;
   /** What the count means, read out in place of the bare number. Defaults to `N 条未读`. */
@@ -393,9 +399,10 @@ export default function Tabs<T extends string = string>({
         {tab.icon && (
           /* A fixed, centred cell rather than a bare glyph: an inline svg sits
              on the text baseline and inherits the line box, so each icon lands a
-             fraction low and by a different amount per glyph. */
+             fraction low and by a different amount per glyph. The selected tab swaps
+             its outlined glyph for the filled one — M3's navigation-drawer rule. */
           <span className="grid shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
-            {tab.icon}
+            {selected && tab.activeIcon ? tab.activeIcon : tab.icon}
           </span>
         )}
         <span className={cn('grid min-w-0', variant === 'rail' && 'flex-1')}>

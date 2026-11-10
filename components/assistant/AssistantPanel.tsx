@@ -124,12 +124,18 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     </div>
   ) : state.ready && !state.available ? (
     <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在账户设置中查看当前开关与额度" size="inline" />
-  ) : !messages.length ? (
+  ) : !messages.length && !state.pending ? (
+    /* A sent-but-unanswered first message is not an empty thread: the pending bubble below is
+       the thread, so the invitation would be telling the visitor to do what they just did. */
     <EmptyState title="和彩彩聊聊吧" description="可以查找图片，也可以告诉彩彩你想处理的站内任务" size="inline" />
   ) : (
     /* A thread, read as /messages reads one: who spoke is the side and the cut corners, so a
        run of one speaker sits 2dp apart and a new speaker 12dp below. (Each bubble used to carry
-       彩彩 / 你 in the slot `ChatBubble` keeps for the delivery state.) */
+       彩彩 / 你 in the slot `ChatBubble` keeps for the delivery state.)
+
+       **Only the visitor's own words are a bubble.** A reply here is prose — often a list, a
+       link, a paragraph per picture — and a filled lozenge around each of them turned the panel
+       into a stack of cards. 彩彩 answers as `plain` rows: full column width, no surface. */
     <ol aria-label={history ? '全部聊天记录' : '最近对话'}>
       {messages.map((message, index) => {
         const own = message.role === 'user';
@@ -137,7 +143,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
         return (
           <li key={message.id || `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
-            <ChatBubble own={own} startOfRun={startOfRun} endOfRun={endOfRun}>{message.content.replaceAll('||', '\n\n')}</ChatBubble>
+            <ChatBubble own={own} plain={!own} startOfRun={startOfRun} endOfRun={endOfRun}>{message.content.replaceAll('||', '\n\n')}</ChatBubble>
             {history && message.id && (
               <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>
                 <IconButton size="sm" aria-label={`删除第 ${index + 1} 条消息`} disabled={state.busy} icon={<MdDeleteOutline />} onClick={async () => {
@@ -170,11 +176,26 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
           long thread still scrolls to its first message. */}
       <div className="flex min-h-full flex-col gap-3">
         <div className="mt-auto">{thread}</div>
-        {state.pending && <Card padding="sm"><p className="text-body-m text-on-surface wrap-anywhere whitespace-pre-wrap">{state.pending.message}</p><p className="mt-2 text-body-s text-on-surface-variant">{state.busy ? '正在等待彩彩回复…' : '此条消息的结果尚未确认，草稿已保留。'}</p>
-          {!state.busy && <div className="mt-2 flex flex-wrap gap-2"><Button variant="text" onClick={() => void session.restore()}>核对记录</Button><Button variant="text" onClick={async () => {
-            if (await confirm({ title: '确认保留草稿', message: '之前的请求可能已经受理。确定要解除待确认状态并保留文字草稿吗？此操作不会重复发送。' }) && current()) session.discardPending();
-          }}>保留草稿</Button></div>}
-        </Card>}
+        {/* **The message you just sent is a message, not a status card.** Until the request
+            returns, the text exists only as `pending` — it is not in `messages` — so this is the
+            one row that has to stand in for it. It takes the tail of the thread as your own
+            bubble, exactly as it will look once it lands in the record, and the wait is left to
+            the panel's status line (`彩彩正在思考…`) instead of a filling that says "waiting".
+
+            Only an unconfirmed outcome adds anything under it: the note and its two ways out,
+            right-aligned with the bubble so they read as belonging to it. */}
+        {state.pending && <>
+          <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
+          {!state.busy && <div className="flex flex-col items-end gap-1.5">
+            <p className="text-body-s text-on-surface-variant text-end">此条消息的结果尚未确认，草稿已保留。</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="text" onClick={() => void session.restore()}>核对记录</Button>
+              <Button variant="text" onClick={async () => {
+                if (await confirm({ title: '确认保留草稿', message: '之前的请求可能已经受理。确定要解除待确认状态并保留文字草稿吗？此操作不会重复发送。' }) && current()) session.discardPending();
+              }}>保留草稿</Button>
+            </div>
+          </div>}
+        </>}
         {state.task?.pending_id && <Card padding="sm">
           <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
           <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>
@@ -200,7 +221,10 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         className="touch-size"
         /* Pressing it must not take focus from the field — that closes a phone's keyboard. */
         onPointerDown={event => event.preventDefault()}
-        loading={state.busy}
+        /* **No loading mark on this one.** While 彩彩 is thinking the control has nothing to
+           offer, which is exactly what a disabled control is for: the spinner stayed up for as
+           long as a reply took and read as "the click is still registering". `state.busy` keeps
+           `canSend` false, so the disabled ink is the whole report. */
         disabled={!canSend || !text.trim()}
         aria-label={state.pending ? '重试发送' : '发送'}
         icon={state.pending ? <MdRefresh /> : <MdSend />}

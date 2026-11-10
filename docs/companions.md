@@ -42,7 +42,7 @@ Speech rules:
 - Hover greets once per visit and cannot replace an open tip. Tap requests another tip.
 - Position over the head, within the scroller: 16 px clear of its left edge, no farther right than the art, bubble foot 14 px above the head.
 - Avoid the collapse control while keeping the tail on the head.
-- Hold for three seconds, or Space, to open `彩彩 AI`. Show the countdown after 350 ms.
+- Hold for 1.5 s, or Space, to open `彩彩 AI`. Show the countdown after 350 ms.
 - Releasing after the countdown appears cancels the hold; it must not become a tip or hop. The meter retains its value while fading.
 
 Use the elevation filter tokens for alpha-shaped silhouettes and bubble tails. Do not apply a box shadow to transparent art margins.

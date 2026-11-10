@@ -18,8 +18,9 @@ import { springTiming } from '@/lib/springTiming';
 import { clamp, cn } from '@/lib/utils';
 import styles from './Mascot.module.css';
 
-/** How long a hold takes to open 彩彩 AI — the original's three seconds. */
-const HOLD_MS = 3000;
+/** How long a hold takes to open 彩彩 AI. The original asked three seconds; a hold that long reads
+    as "nothing happened" on a phone, and the countdown already explains itself after 350 ms. */
+const HOLD_MS = 1500;
 /** A hold shows its countdown only once it is clearly a hold, so a tap never flashes the hint. */
 const HOLD_HINT_MS = 350;
 /** The squash shows for at least this long — scaled with the motion speed — so a tap too quick to
@@ -68,8 +69,8 @@ const dwellFor = (text: string) => Math.min(12_000, Math.max(4_500, 3_000 + text
  * **What is kept from the original**, which is the identity decision 30 asks for: the character
  * standing at the bottom-right in its own silhouette shadow; lifting under a hovering pointer and
  * squashing under a press; hopping when it speaks a tip (on a tap, or a hover on a desktop); a long
- * press — or Space held — for three seconds opening 彩彩 AI; collapsing into a small, quiet peek in
- * the corner and greeting you with 我回来啦！ when brought back; and a drag that starts on it
+ * press — or Space held — for a second and a half opening 彩彩 AI; collapsing into a small, quiet
+ * peek in the corner and greeting you with 我回来啦！ when brought back; and a drag that starts on it
  * scrolling the page instead of being swallowed.
  *
  * **What is this app's**: the motion system (springs per object, the three tiers, the speed scale,
@@ -355,7 +356,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     const bound = window.setTimeout(greet, motionTier('ambient') === 'off' ? 0 : SPRING_MS.defaultSpatial * MOTION_SPEED_SCALE.slow + 50);
   }
 
-  /* ---- The hold: three seconds to 彩彩 AI ---------------------------------------------------- */
+  /* ---- The hold: 1.5s to 彩彩 AI ------------------------------------------------------------- */
 
   /** `started` is the pressing event's own time stamp, on the clock `performance.now()` reads. */
   function beginHold(pointer: number, x: number, y: number, started: number) {
@@ -583,7 +584,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
                the page shows, a picture included, and the band gives the ring the edge it has
                everywhere else (docs/design/colour.md#focus). */
             className={cn(styles.control, 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
-            aria-label={collapsed ? '展开吉祥物' : '与彩彩互动，长按或按住空格 3 秒打开彩彩 AI'}
+            aria-label={collapsed ? '展开吉祥物' : '与彩彩互动，长按或按住空格 1.5 秒打开彩彩 AI'}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

@@ -172,6 +172,8 @@ The toolbar stays between the search field and results in success, empty and fai
 
 Tabs own ARIA relationships, roving focus, keyboard navigation and selected-tab visibility. Use manual activation when choosing a panel starts a read. A scrolling rail scrolls itself, never the page.
 
+A `rail` tab passes the outlined mark as `icon` and the filled one as `activeIcon`; the selected tab swaps to the filled form, the same rest/active pair navigation rows use. Where Material Icons draws the pair identically, omit `activeIcon` and let the selected container, the emphasized label and the ink carry the state.
+
 Account-only tabs are omitted from both Tabs and TabPanes when signed out; a public screen does not need a sign-in wall in each missing tab. A protected screen uses SignInRequired instead of opening login on arrival.
 
 Pane lifecycle, address writes and motion belong to [Transitions](../transitions.md#tab-state-and-history).

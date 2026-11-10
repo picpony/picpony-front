@@ -32,6 +32,13 @@ import { cn } from '@/lib/utils';
  *
  * **The portrait is not here.** `ChatRun` owns it, at the head of the turn.
  *
+ * **A plain row is not a smaller bubble — there is no bubble.** `plain` drops the fill, the
+ * padding and the corner seams and leaves the text on the host's own surface, aligned to its
+ * speaker's side so the conversation still reads by side. The 彩彩 AI panel answers this way: a
+ * reply is prose, and a filled lozenge around every paragraph made the thread look like a wall of
+ * cards. The width cap goes with the fill — nothing is being held inside a shape — so a plain row
+ * uses the column's full width.
+ *
  * **Width.** 85% in a narrow message column, 70% once that column reaches 32rem.
  * The contact rail and app drawer share the viewport, so the viewport cannot say
  * how much room a message has. A narrow column needs readable lines either way.
@@ -42,6 +49,11 @@ export interface ChatBubbleProps {
   children: ReactNode;
   /** A card (a shared picture, a folder) rather than text: no bubble surface around it. */
   attachment?: boolean;
+  /**
+   * Text with no surface of its own, for a reply that is prose rather than a message. See the
+   * note on the component; the speaker's side and the run spacing still apply.
+   */
+  plain?: boolean;
   /** Rendered under the bubble. Pass only on the last bubble of a run. */
   timestamp?: ReactNode;
   /**
@@ -70,6 +82,7 @@ export default function ChatBubble({
   own,
   children,
   attachment = false,
+  plain = false,
   timestamp,
   status,
   startOfRun = true,
@@ -78,7 +91,13 @@ export default function ChatBubble({
 }: ChatBubbleProps) {
   return (
     <div className={cn('@container/bubble flex', own ? 'justify-end' : 'justify-start', className)}>
-      <div className={cn('flex min-w-0 max-w-[85%] flex-col @lg/bubble:max-w-[70%]', own ? 'items-end' : 'items-start')}>
+      <div
+        className={cn(
+          'flex min-w-0 flex-col',
+          plain ? 'max-w-full' : 'max-w-[85%] @lg/bubble:max-w-[70%]',
+          own ? 'items-end' : 'items-start',
+        )}
+      >
         {attachment ? (
           <div className="min-w-0 max-w-full">{children}</div>
         ) : (
@@ -90,16 +109,19 @@ export default function ChatBubble({
                  bubble wider than its cap and pushed the chat frame off screen.
                  `pre-wrap` keeps the sender's line breaks and spaces; the words
                  still wrap at the bubble's edge. */
-              'text-body-m min-w-0 max-w-full whitespace-pre-wrap rounded-lg px-4 py-2 wrap-anywhere',
+              'text-body-m min-w-0 max-w-full whitespace-pre-wrap wrap-anywhere',
+              /* Everything that makes a row a bubble. A plain row keeps only the text. */
+              !plain && 'rounded-lg px-4 py-2',
               /* Forced colors flattens the two fills to one canvas; the edge is what is left
                  of a bubble there. */
-              'forced-boundary',
+              !plain && 'forced-boundary',
               /* Two steps of one family rather than a fill and a tint: see the note on
                  the component. The ink is the container's own `on-` role either way, so
                  it follows the fill in both schemes. */
-              own
-                ? 'bg-secondary-container text-on-secondary-container'
-                : 'bg-surface-container-highest text-on-surface',
+              !plain &&
+                (own
+                  ? 'bg-secondary-container text-on-secondary-container'
+                  : 'bg-surface-container-highest text-on-surface'),
               /* **The run is one block, cut where the rows meet.** On the speaker's
                  side a corner drops to 4dp wherever another row of the same turn
                  is against it; everything else stays 16dp, so a turn keeps the row
@@ -108,8 +130,8 @@ export default function ChatBubble({
                  the shape scale has no 0dp role for anything holding text.
                  Both flags are needed; with the bottom cut unconditionally every
                  row ended in a seam, including the last, which has nothing below. */
-              !startOfRun && (own ? 'rounded-tr-xs' : 'rounded-tl-xs'),
-              !endOfRun && (own ? 'rounded-br-xs' : 'rounded-bl-xs'),
+              !plain && !startOfRun && (own ? 'rounded-tr-xs' : 'rounded-tl-xs'),
+              !plain && !endOfRun && (own ? 'rounded-br-xs' : 'rounded-bl-xs'),
             )}
           >
             {children}

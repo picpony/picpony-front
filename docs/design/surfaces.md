@@ -60,6 +60,8 @@ Direct messages use the plain model in `app/messages/messageText.ts`: preserve b
 
 Shared pictures, folders and privacy spaces render as attachment cards without a second bubble fill. One to three standalone emoji also use attachment treatment. Keep the shared wire format in `encodeShare` / `parseShare`.
 
+A reply that is prose rather than a message passes `plain` to `ChatBubble`: no fill, no padding, no corner seams, and the column keeps its full width, because nothing is being held inside a shape. The 彩彩 AI panel answers this way — only the visitor's own lines are bubbles. The speaker's side and the run spacing still apply.
+
 ## Elevation
 
 Use `shadow-e1` through `shadow-e5`. Tone provides the first depth cue; ordinary controls and cards have no rest or hover shadow, including `Card variant="elevated"`.

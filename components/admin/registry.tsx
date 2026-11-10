@@ -37,7 +37,10 @@ export type AdminAccess = 'staff' | 'admin' | 'super_admin';
 interface AdminTabEntry {
   id: string;
   label: string;
+  /** Rest state — the section's outlined mark, or its filled one where Material has no pair. */
   icon: ReactNode;
+  /** Selected state: the filled mark the panel's own heading also shows. */
+  activeIcon: ReactNode;
   access: AdminAccess;
   component: ComponentType<AdminPanelProps>;
 }
@@ -48,12 +51,28 @@ const panel = (load: () => Promise<{ default: ComponentType<AdminPanelProps> }>)
 /* Rail glyphs at 24dp: a rail tab is a navigation row (`ICON.standard`, the `Tabs` rail's size). */
 const icon = (Glyph: ComponentType<{ size?: number }>) => <Glyph size={ICON.standard} />;
 
-/** A rail entry: its name and mark come from `ADMIN_SECTIONS`, which the panel's heading reads too. */
+/**
+ * A rail entry: its name and both marks come from `ADMIN_SECTIONS`, which the panel's heading reads
+ * too. The outlined form is the rest state, the filled one the selected state — a navigation row
+ * that only thickens once it is chosen, as `SidebarNav` does. Nine sections have no second weight
+ * in Material Icons (listed in `sections.ts`) and pass the same glyph twice.
+ */
 const entry = <const Id extends AdminSectionId>(
   id: Id,
   access: AdminAccess,
   load: () => Promise<{ default: ComponentType<AdminPanelProps> }>,
-) => ({ id, label: ADMIN_SECTIONS[id].label, icon: icon(ADMIN_SECTIONS[id].glyph), access, component: panel(load) });
+) => {
+  const section = ADMIN_SECTIONS[id];
+  return {
+    id,
+    label: section.label,
+    /* `in`: the nine sections with no second weight do not declare `outline` at all. */
+    icon: icon('outline' in section ? section.outline : section.glyph),
+    activeIcon: icon(section.glyph),
+    access,
+    component: panel(load),
+  };
+};
 
 /** In rail order. The first entry is where bare `/admin` lands, and every staff role can open it. */
 export const ADMIN_TABS = [
