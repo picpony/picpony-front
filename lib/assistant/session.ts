@@ -32,6 +32,8 @@ const POLL_LIMIT_MS = 150_000;
 const ENDED: Record<string, string> = {
   failed: '彩彩这次没能完成，请稍后再试', cancelled: '这次操作已取消', interrupted: '这次对话已中断，可重新发送',
 };
+/** The status while a turn is still running. The panel sweeps this exact line. */
+export const THINKING_STATUS = '彩彩正在思考…';
 const wait = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   const timer = setTimeout(resolve, ms);
   signal.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Session closed', 'AbortError')); }, { once: true });
@@ -119,7 +121,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       }
       if (ACTIVE_STATES.includes(turn.status)) {
         if (Date.now() - started > POLL_LIMIT_MS) { publish({ task: following(taskId, turn.status), status: '彩彩仍在处理，可稍后核对任务' }); return; }
-        publish({ task: following(taskId, turn.status), status: '彩彩正在思考…' });
+        publish({ task: following(taskId, turn.status), status: THINKING_STATUS });
         await wait(POLL_MS, controller.signal);
         continue;
       }
@@ -249,7 +251,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         const pending = snapshot.pending ?? { requestId: newRequestId(), message };
         // The id must survive before a request can be sent; a blocked store stops here.
         writeJournalText(accountId, 'pending-chat', JSON.stringify(pending));
-        publish({ pending, status: '彩彩正在思考…' });
+        publish({ pending, status: THINKING_STATUS });
         const turn = await assistantChat(token, { message, request_id: pending.requestId, session_key: key, page_context: assistantPageContext(pageInstance) });
         assertCurrent();
         add('user', message);

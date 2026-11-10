@@ -18,7 +18,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { useSession, useMediaQuery, readToken } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
 import { formatExactCount } from '@/lib/format';
-import { createAssistantSession } from '@/lib/assistant/session';
+import { createAssistantSession, THINKING_STATUS } from '@/lib/assistant/session';
 import { actionLabel, actionSupported } from '@/lib/assistant/actions';
 import { assistantQuota } from '@/lib/assistant/queries';
 import { faveFolders } from '@/lib/resources';
@@ -206,7 +206,16 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         {state.error && <ErrorRetry size="inline" title="彩彩 AI 操作未完成" message={state.error} onRetry={!state.available && !state.busy ? () => void session.restore() : undefined} />}
       </div>
     </div>
-    <p role="status" className="min-h-5 text-body-s text-on-surface-variant">{state.status || (quota.data?.remaining === 0 ? '当前额度已用完' : '')}</p>
+    {/* The wait says "still running" the way the semantic parse line does: the shimmer crosses
+        the words themselves (`text-shimmer`), rather than a spinner that would claim a position
+        the backend never reported. Only the thinking status sweeps; an operation or a finished
+        turn keeps plain ink. */}
+    <p
+      role="status"
+      className={cn('min-h-5 text-body-s text-on-surface-variant', state.status === THINKING_STATUS && 'text-shimmer')}
+    >
+      {state.status || (quota.data?.remaining === 0 ? '当前额度已用完' : '')}
+    </p>
     {/* Use the shared 48dp composer and controls; text grows to 160px before scrolling.
         See docs/design/layout.md#dense-rows-and-chat-composer. */}
     <form onSubmit={event => { event.preventDefault(); if (canSend && current()) { nearEnd.current = true; void session.send(); } }} className="flex shrink-0 items-end gap-2 [--touch-floor:48px]">
