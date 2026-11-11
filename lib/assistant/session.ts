@@ -2,7 +2,7 @@
 
 import {
   assertAssistantAccount, assistantChat, clearAssistantHistory, decideAssistantAction, deleteAssistantMessage,
-  getAssistantConfig, getAssistantPending, getAssistantState, getAssistantPermission, claimAssistantAction, pollAssistantTask, saveAssistantReceipt,
+  getAssistantConfig, getAssistantPending, getAssistantState, getAssistantPermission, claimAssistantAction, pollAssistantTask, saveAssistantReceipt, streamAssistantTask,
 } from '@/lib/api/assistant';
 import { ApiError, apiErrorMessage, isAborted } from '@/lib/api/errors';
 import { tasks as taskResource, coinTransactions, sessionUser } from '@/lib/resources';
@@ -14,7 +14,7 @@ import { createActionRunner } from './runner';
 import { createReceiptJournal, newRequestId, parsePendingChat, readJournalText, sessionKeyFor, writeJournalText, type PendingChat } from './journal';
 import {
   ACTIVE_STATES, MAX_HISTORY, MAX_MESSAGE, clientCallAction, obj, pendingAction, str, uuid,
-  type AssistantAction, type AssistantMessage, type AssistantReceipt, type AssistantTask, type JsonObject,
+  type AssistantAction, type AssistantLiveTool, type AssistantMessage, type AssistantReceipt, type AssistantTask, type JsonObject,
 } from './protocol';
 
 export interface AssistantSnapshot {
@@ -22,8 +22,12 @@ export interface AssistantSnapshot {
   messages: AssistantMessage[]; draft: string; pending: PendingChat | null;
   task: AssistantTask | null; receipts: AssistantReceipt[];
   error: string; status: string;
+  /** The reply as it is being written; the persisted message replaces it when the turn ends. */
+  streaming: string;
+  /** Tools this turn has asked for, newest last. Cleared when the turn ends or parks. */
+  tools: AssistantLiveTool[];
 }
-const INITIAL: AssistantSnapshot = { ready: false, available: false, loading: false, busy: false, messages: [], draft: '', pending: null, task: null, receipts: [], error: '', status: '' };
+const INITIAL: AssistantSnapshot = { ready: false, available: false, loading: false, busy: false, messages: [], draft: '', pending: null, task: null, receipts: [], error: '', status: '', streaming: '', tools: [] };
 
 /** One status request at a time, no faster than the backend asks (≥ 500ms). */
 const POLL_MS = 900;
@@ -62,6 +66,8 @@ export function createAssistantSession(token: string, accountId: string, env: { 
   let approvals: TaskApproval[] = [];
   /** Issued client calls this document has already taken up (the runner dedupes in-flight ones too). */
   const handled = new Set<string>();
+  /** The live reply stream for the turn being followed; the poll below remains authoritative. */
+  let live: AbortController | null = null;
   const isActive = () => (active || continuingNavigation) && env.active();
   const journal = createReceiptJournal(localStorage, accountId);
   const assertCurrent = () => {
@@ -96,14 +102,54 @@ export function createAssistantSession(token: string, accountId: string, env: { 
   });
   const following = (id: string, status: string): AssistantTask => ({ id, status, pending_id: null, actions: [], confirmed: false });
 
+  /**
+   * One live tool event folded into the list the panel shows, keyed by the server's call id so
+   * the first fragment (name only) and the completed call are one row.
+   */
+  function mergeTool(tools: AssistantLiveTool[], event: AssistantLiveTool): AssistantLiveTool[] {
+    const index = tools.findIndex(tool => tool.id === event.id);
+    if (index < 0) return [...tools, event].slice(-8);
+    return tools.map((tool, at) => (at === index ? { ...tool, ...event, ok: event.ok ?? tool.ok } : tool));
+  }
+
+  /** Tail the turn's events. A stream failure costs the live view only; `follow` keeps polling. */
+  function startStream(taskId: string) {
+    live?.abort();
+    const stream = new AbortController();
+    live = stream;
+    publish({ streaming: '', tools: [] });
+    void streamAssistantTask(token, taskId, (event) => {
+      if (stream.signal.aborted || disposed) return;
+      if (event.type === 'delta') publish({ streaming: snapshot.streaming + event.text });
+      else if (event.type === 'tool') publish({ tools: mergeTool(snapshot.tools, { id: event.id, name: event.name, arguments: event.arguments }) });
+      else if (event.type === 'tool_result') publish({ tools: snapshot.tools.map(tool => (tool.id === event.id ? { ...tool, ok: event.ok } : tool)) });
+      else if (event.type === 'reset') publish({ streaming: '', tools: [] });
+      /* The turn is over or parked: stop reading rather than hold a keep-alive connection open.
+         `done` keeps the text — `follow` replaces it with the persisted message a poll later. */
+      else if (event.type === 'done') stream.abort();
+      else if (event.type === 'paused' || event.type === 'failed') {
+        publish({ streaming: '', tools: [] });
+        stream.abort();
+      }
+    }, stream.signal).catch(() => { /* polling is the source of truth */ }).finally(() => {
+      if (live === stream) live = null;
+    });
+  }
+  function stopStream() {
+    live?.abort();
+    live = null;
+    publish({ streaming: '', tools: [] });
+  }
+
   /** Poll one turn until it ends, parks on a confirmation, or outlives the backend's budget. */
   async function follow(taskId: string) {
+    startStream(taskId);
     const started = Date.now();
     for (;;) {
       assertCurrent();
       const turn = await pollAssistantTask(token, taskId, controller.signal);
       assertCurrent();
-      if (turn.status === 'waiting_confirmation') { await showPending(taskId); return; }
+      if (turn.status === 'waiting_confirmation') { stopStream(); await showPending(taskId); return; }
       /* Calls the server issued to this page while the turn runs (page observations, clicks, reads
          and confirmed / fully granted writes). Each is executed once: the runner claims it (a call
          already answered comes back `cached`) and its receipt resumes the model. */
@@ -120,13 +166,14 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         continue;
       }
       if (ACTIVE_STATES.includes(turn.status)) {
-        if (Date.now() - started > POLL_LIMIT_MS) { publish({ task: following(taskId, turn.status), status: '彩彩仍在处理，可稍后核对任务' }); return; }
+        if (Date.now() - started > POLL_LIMIT_MS) { stopStream(); publish({ task: following(taskId, turn.status), status: '彩彩仍在处理，可稍后核对任务' }); return; }
         publish({ task: following(taskId, turn.status), status: THINKING_STATUS });
         await wait(POLL_MS, controller.signal);
         continue;
       }
       add('assistant', turn.reply);
-      publish({ task: null, status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
+      publish({ task: null, streaming: '', tools: [], status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
+      stopStream();
       return;
     }
   }
@@ -230,6 +277,9 @@ export function createAssistantSession(token: string, accountId: string, env: { 
           /* Active tasks come newest first. */
           const activeTask = state.tasks.find(task => ACTIVE_STATES.includes(task.status));
           publish({ ready: true, available: true, messages: state.messages, task: activeTask ? following(activeTask.id, activeTask.status) : null, status: activeTask ? '上次任务尚未完成，请核对后继续' : '' });
+          /* A turn still running here lost its page's stream on reload; tail it again. A parked
+             confirmation is not streamed — the card is the whole of that state. */
+          if (activeTask && activeTask.status !== 'waiting_confirmation') startStream(activeTask.id);
         } catch (error) {
           if (!disposed && !isAborted(error)) publish({ error: apiErrorMessage(error), ready: true });
         } finally { restoring = null; if (!disposed) publish({ loading: false }); }
@@ -304,6 +354,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       return run(async () => {
         await clearAssistantHistory(token); assertCurrent();
         writeJournalText(accountId, 'pending-chat', null);
+        stopStream();
         publish({ messages: [], receipts: [], task: null, pending: null, status: '已清空聊天记录' });
       });
     },
@@ -318,7 +369,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         try { assertCurrent(); publish({ error: apiErrorMessage(error), status: '' }); } catch { /* Another account owns the screen now. */ }
       }
     },
-    dispose() { disposed = true; controller.abort(); listeners.clear(); },
+    dispose() { disposed = true; live?.abort(); live = null; controller.abort(); listeners.clear(); },
   };
 }
 export type AssistantSession = ReturnType<typeof createAssistantSession>;

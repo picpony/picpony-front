@@ -289,6 +289,9 @@ async function proxy(
   if (address.realIp) headers.set('x-real-ip', address.realIp);
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
+  /* A live reply is a stream the client reads as it arrives: the ordinary total timeout would
+     cut it at 30s, and a buffered or compressed response would defeat it entirely. */
+  const eventStream = request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false;
 
   /* A small body is read whole so it goes upstream with a Content-Length, never chunked
      (see `BUFFERED_BODY_MAX`). */
@@ -350,7 +353,9 @@ async function proxy(
       cache: 'no-store',
       signal: paceController
         ? AbortSignal.any([request.signal, paceController.signal, AbortSignal.timeout(BODY_TOTAL_MS)])
-        : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+        : eventStream
+          ? request.signal
+          : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     };
     upstream = await fetch(target, init);
   } catch {
@@ -407,6 +412,13 @@ async function proxy(
   responseHeaders.set('Cache-Control', 'private, no-store');
   responseHeaders.set('X-Content-Type-Options', 'nosniff');
   responseHeaders.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
+  if (eventStream && upstream.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) {
+    /* The body is already streamed through; keep proxies from collecting it first. */
+    responseHeaders.set('Cache-Control', 'no-cache, no-store, no-transform');
+    responseHeaders.set('X-Accel-Buffering', 'no');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('content-encoding');
+  }
 
   return new Response(request.method === 'HEAD' ? null : upstream.body, {
     status: upstream.status,

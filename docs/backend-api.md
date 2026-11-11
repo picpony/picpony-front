@@ -34,6 +34,7 @@ The browser uses the same-origin [API proxy](../app/api/v1/[...path]/route.ts). 
 - Forwards only the backend cookies, removing application preference cookies.
 - Removes `Secure` from the returned `auth_bind` cookie when the incoming request is plain HTTP.
 - Bounds bodyless requests at 30 seconds; upload bodies use the `BODY_IDLE_MS` pacing rule.
+- Passes `Accept: text/event-stream` through unbuffered and without the total deadline, so the AI turn's live reply may outlast the ordinary read bound; `X-Accel-Buffering: no` keeps a front proxy from collecting it.
 - Expires public filter, blacklist and site-status caches after accepted admin writes.
 
 Server readers and route handlers use `upstreamOrigin()` from [lib/upstream.server.ts](../lib/upstream.server.ts) and append `/api/v1/...`; they do not fetch the relative browser proxy URL. `PICPONY_API_ORIGIN` is the public asset origin, not the backend origin.

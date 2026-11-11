@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdDeleteOutline, MdRefresh, MdSend } from 'react-icons/md';
+import { MdBuild, MdDeleteOutline, MdRefresh, MdSend } from 'react-icons/md';
 import SidePanel from '@/components/SidePanel';
 import Sheet from '@/components/Sheet';
 import Button from '@/components/Button';
@@ -19,10 +19,11 @@ import { useSession, useMediaQuery, readToken } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
 import { formatExactCount } from '@/lib/format';
 import { createAssistantSession, THINKING_STATUS } from '@/lib/assistant/session';
-import { actionLabel, actionSupported } from '@/lib/assistant/actions';
+import { actionLabel, actionSupported, toolLabel } from '@/lib/assistant/actions';
 import { assistantQuota } from '@/lib/assistant/queries';
 import { faveFolders } from '@/lib/resources';
 import { MAX_MESSAGE } from '@/lib/assistant/protocol';
+import { ICON } from '@/lib/icons';
 import { useResource, SKIP } from '@/lib/resource';
 import { cn } from '@/lib/utils';
 import styles from './AssistantPanel.module.css';
@@ -93,7 +94,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   }, [isOpen, quota.data, onClose]);
   useEffect(() => {
     if (nearEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [state.messages, state.receipts, state.pending, state.task, state.error, history]);
+  }, [state.messages, state.receipts, state.pending, state.task, state.error, state.streaming, state.tools, history]);
   useEffect(() => {
     if (!isOpen) return;
     const root = document.documentElement;
@@ -196,6 +197,18 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
             </div>
           </div>}
         </>}
+        {/* The live turn: the tools 彩彩 is using, then the words as it writes them. The persisted
+            reply below replaces this block when the poll sees the turn end, so nothing is said twice. */}
+        {(state.tools.length > 0 || state.streaming) && <div className="flex flex-col gap-2">
+          {state.tools.length > 0 && <ul aria-label="彩彩正在使用工具" className="flex flex-col gap-1.5">
+            {state.tools.map(tool => <li key={tool.id} className="flex min-w-0 items-center gap-2 text-body-s text-on-surface-variant">
+              <MdBuild size={ICON.dense} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">{toolLabel(tool.name, tool.arguments)}</span>
+              {tool.ok === false && <span className="text-error">失败</span>}
+            </li>)}
+          </ul>}
+          {state.streaming && <ChatBubble own={false} plain>{state.streaming.replaceAll('||', '\n\n')}</ChatBubble>}
+        </div>}
         {state.task?.pending_id && <Card padding="sm">
           <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
           <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>

@@ -89,6 +89,29 @@ export function actionLabel(action: AssistantAction, folderName?: (id: number) =
   const labels: Record<string, string> = { search_images: '查找图片', set_search_filters: '调整搜索条件', navigate: '打开站内页面', open_settings: '打开设置', open_folder: '打开收藏夹', open_main_folder: '打开主收藏夹', start_folder_slideshow: '放映收藏夹', open_image: '打开图片', get_capabilities: '查看支持的功能', get_page_controls: '查看页面入口' };
   return labels[action.name] ?? '此操作需要手动完成';
 }
+/** The line the live turn shows beside the wrench while the model is calling a tool. */
+const TOOL_LABELS: Record<string, string> = {
+  account_summary: '读取账号信息',
+  my_collections: '读取收藏夹',
+  assistant_quota_status: '查询彩彩额度',
+  my_task_status: '查询任务进度',
+  claim_task_reward: '领取任务奖励',
+  get_site_api_catalog: '查找站内接口',
+  call_site_api: '调用站内接口',
+  get_page_controls: '查看页面控件',
+  interact_page: '操作页面控件',
+};
+export function toolLabel(name: string, args: JsonObject): string {
+  if (name === 'call_site_api') {
+    const endpoint = str(args.endpoint, 80);
+    return endpoint ? `${TOOL_LABELS[name]} · ${endpoint}` : TOOL_LABELS[name];
+  }
+  if (name === 'interact_page') {
+    const control = PAGE_CONTROLS.find(item => item.id === args.control_id)?.label;
+    return control ? `操作页面 · ${control}` : TOOL_LABELS[name];
+  }
+  return TOOL_LABELS[name] ?? `调用 ${name}`;
+}
 function foldersLabel(value: unknown, name?: (id: number) => string | undefined): string {
   if (!Array.isArray(value)) return '';
   return value.map(positiveId).filter(Boolean).map((id) => {

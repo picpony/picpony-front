@@ -1,11 +1,11 @@
 import { readToken } from '@/lib/hooks';
 import { randomId } from '@/lib/utils';
 import { ApiError } from './errors';
-import { api, seg, type ApiOptions } from './http';
+import { api, apiRequest, seg, type ApiOptions } from './http';
 import { parseSemanticQuery } from './semantic';
 import {
-  parseState, uuid,
-  type AssistantClientCall, type AssistantPending, type AssistantQuota, type AssistantReceipt, type AssistantTaskPoll, type JsonObject, type PermissionMode,
+  obj, parseState, uuid,
+  type AssistantClientCall, type AssistantPending, type AssistantQuota, type AssistantReceipt, type AssistantStreamEvent, type AssistantTaskPoll, type JsonObject, type PermissionMode,
 } from '@/lib/assistant/protocol';
 import { READ_ENDPOINTS } from '@/lib/assistant/actions';
 
@@ -145,6 +145,74 @@ export async function assistantChat(token: string, body: { message: string; requ
   const taskId = uuid(data.task_id);
   if (!taskId) throw new ApiError('invalid');
   return { task_id: taskId };
+}
+
+/** Validate one `data:` frame. An unknown type is ignored so the browser can outlive the server. */
+function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const event = raw as Record<string, unknown>;
+  const id = typeof event.id === 'string' ? event.id.slice(0, 128) : '';
+  const name = typeof event.name === 'string' ? event.name.slice(0, 64) : '';
+  switch (event.type) {
+    case 'reset': return { type: 'reset' };
+    case 'delta': return typeof event.text === 'string' ? { type: 'delta', text: event.text } : null;
+    case 'tool': return id && name ? { type: 'tool', id, name, arguments: obj(event.arguments) } : null;
+    case 'tool_result': return id && name ? { type: 'tool_result', id, name, ok: event.ok === true } : null;
+    case 'paused': return { type: 'paused' };
+    case 'done': return { type: 'done', reply: typeof event.reply === 'string' ? event.reply : '' };
+    case 'failed': return { type: 'failed' };
+    default: return null;
+  }
+}
+
+/**
+ * `GET /me/assistant/tasks/{task_id}/events` — the turn's live text and tool calls. The turn
+ * still persists its answer and the panel still polls `state`; this only removes the wait from
+ * what the user sees. Reading stops when the server closes the stream, the signal aborts, or the
+ * connection drops — the caller treats all three the same and keeps polling.
+ */
+export async function streamAssistantTask(
+  token: string,
+  taskId: string,
+  onEvent: (event: AssistantStreamEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  assertAssistantAccount(token);
+  const response = await apiRequest('GET', `/me/assistant/tasks/${seg(taskId)}/events`, {
+    token,
+    signal,
+    timeoutMs: false,
+    cache: 'no-store',
+    headers: { Accept: 'text/event-stream' },
+  });
+  if (!response.ok || !response.body) {
+    void response.body?.cancel().catch(() => {});
+    throw new ApiError('http', { status: response.status, serverMessage: '实时回复暂不可用' });
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
+        const line = buffer.slice(0, newline).replace(/\r$/, '');
+        buffer = buffer.slice(newline + 1);
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (!data) continue;
+        let parsed: unknown;
+        try { parsed = JSON.parse(data); } catch { continue; }
+        const event = parseStreamEvent(parsed);
+        if (event) onEvent(event);
+      }
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+    assertAssistantAccount(token);
+  }
 }
 
 /**

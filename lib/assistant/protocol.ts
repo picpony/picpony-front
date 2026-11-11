@@ -41,6 +41,21 @@ export interface AssistantClientCall {
 }
 /** One turn, as `state {task_id}` reports it. */
 export interface AssistantTaskPoll { id: string; status: string; reply: string; ok: boolean; client_calls: AssistantClientCall[] }
+/** One tool the model asked for, as the live turn stream reports it. */
+export interface AssistantLiveTool { id: string; name: string; arguments: JsonObject; ok?: boolean }
+/**
+ * One event on `GET /me/assistant/tasks/{id}/events`. The stream is cosmetic: the persisted
+ * reply still arrives through `state`, so a dropped connection only costs the live view.
+ * `reset` starts a provider attempt or a tool round; `paused` parks the stream for a decision.
+ */
+export type AssistantStreamEvent =
+  | { type: 'reset' }
+  | { type: 'delta'; text: string }
+  | { type: 'tool'; id: string; name: string; arguments: JsonObject }
+  | { type: 'tool_result'; id: string; name: string; ok: boolean }
+  | { type: 'paused' }
+  | { type: 'done'; reply: string }
+  | { type: 'failed' };
 /** The turn the panel is following. `pending_id` names the confirmation the card decides. */
 export interface AssistantTask {
   id: string; status: string; pending_id: string | null;
