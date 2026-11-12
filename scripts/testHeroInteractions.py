@@ -1122,6 +1122,119 @@ def lightbox_back(page, label):
     return {'layers': 'lightbox, then viewer'}
 
 
+def lightbox_depth(page, label):
+    """The complete shell recedes while the fullscreen surface rises, and every close restores it."""
+    open_image(page)
+    results = []
+    modes = [('standard', 'standard', False), ('reduced', 'reduced', False),
+             ('off', 'off', False), ('custom', 'reduced', False), ('custom', 'off', False),
+             ('standard', 'standard', True)]
+    try:
+        for motion, image_tier, system_reduced in modes:
+            page.emulate_media(reduced_motion='reduce' if system_reduced else 'no-preference')
+            page.evaluate("""([motion, tier]) => {
+              const root=document.documentElement;
+              root.dataset.motion=motion; root.dataset.motionImage=tier;
+              root.style.setProperty('--motion-custom-enabled-image',tier==='off'?'0':'1');
+              window.__lightboxFrames=[]; window.__lightboxRecording=true;
+              const tick=()=>{
+                const shell=document.querySelector('[data-app-root]');
+                const portal=document.querySelector('.pic-lightbox');
+                const bar=document.querySelector('[data-app-bar]');
+                window.__lightboxFrames.push({at:performance.now(), depth:shell.hasAttribute('data-lightbox-depth'),
+                  scale:shell.getBoundingClientRect().width/innerWidth,
+                  barScale:bar.getBoundingClientRect().width/innerWidth,
+                  radius:parseFloat(getComputedStyle(shell).borderTopLeftRadius),
+                  shellOpacity:+getComputedStyle(shell).opacity,
+                  y:portal?.getBoundingClientRect().top??null,
+                  opacity:portal?+getComputedStyle(portal).opacity:null});
+                if(window.__lightboxRecording)requestAnimationFrame(tick);
+              }; requestAnimationFrame(tick);
+            }""", [motion, image_tier])
+            page.locator(DETAIL).click()
+            portal = page.locator('.pic-lightbox')
+            expect(portal).to_have_count(1)
+            if motion=='standard' and not system_reduced:
+                page.wait_for_timeout(70)
+                page.screenshot(path=str(OUTPUT/(label+'-arrival.png')))
+            page.wait_for_timeout(850)
+            frames = page.evaluate('window.__lightboxFrames')
+            (OUTPUT/(label+'-'+motion+'-'+image_tier+'-'+str(system_reduced)+'-frames.json')).write_text(json.dumps(frames),encoding='utf-8')
+            pose = frames[-1]
+            assert abs(pose['scale']-(.92 if image_tier=='standard' else 1))<.001, pose
+            assert abs(pose['barScale']-pose['scale'])<.001, pose
+            assert abs(pose['shellOpacity']-.8)<.001, pose
+            assert abs(pose['y'])<.5 and pose['opacity']==1, pose
+            moving = [frame['y'] for frame in frames if frame['y'] is not None]
+            if image_tier=='standard':
+                assert max(moving)>80, 'The viewer did not arrive from below the viewport'
+                assert any(.925<frame['scale']<.995 for frame in frames), 'The shell snapped to depth'
+                assert any(0<frame['radius']<27.5 for frame in frames), 'Shell corners snapped into place'
+                early = [frame for frame in frames if .972<frame['scale']<.996]
+                assert early and max(frame['radius'] for frame in early)<14, 'Corners rounded ahead of the retreat'
+                first = next(frame for frame in frames if frame['depth'])
+                assert first['radius']<.1, 'The first depth frame must retain square corners'
+                assert any(.8<frame['shellOpacity']<.999 for frame in frames), 'Background opacity snapped'
+                assert abs(pose['radius']-28)<.1, pose
+            elif image_tier=='reduced':
+                assert max(moving)<=8.5, moving[:5]
+            else:
+                assert max(abs(y) for y in moving)<.5, moving[:5]
+            assert portal.evaluate('n=>n.contains(document.activeElement)'), 'Viewer lost focus'
+            buttons = portal.locator('.yarl__button')
+            backgrounds = buttons.evaluate_all('ns=>ns.map(n=>getComputedStyle(n).backgroundColor)')
+            assert backgrounds and all(bg in ('transparent','rgba(0, 0, 0, 0)') for bg in backgrounds), 'Viewer buttons have separate media plates'
+            toolbar = portal.locator('.yarl__toolbar')
+            plate = toolbar.evaluate('n=>getComputedStyle(n).backgroundColor')
+            assert plate not in ('transparent','rgba(0, 0, 0, 0)'), 'Toolbar has no shared media plate'
+            if page.viewport_size['width']>=500:
+                close_button = portal.get_by_role('button',name='关闭',exact=True)
+                close_button.hover()
+                page.wait_for_timeout(200)
+                assert toolbar.evaluate('n=>getComputedStyle(n).backgroundColor')==plate, 'Hover removed the shared toolbar background'
+                if image_tier!='off':
+                    assert close_button.evaluate("n=>+getComputedStyle(n,'::before').opacity")>0, 'Control lost state feedback'
+            if motion=='standard' and not system_reduced:
+                page.screenshot(path=str(OUTPUT/(label+'-controls.png')))
+            page.keyboard.press('Escape')
+            expect(portal).to_have_count(0)
+            page.wait_for_timeout(300)
+            if image_tier=='standard':
+                returned = page.evaluate('window.__lightboxFrames')[len(frames):]
+                assert any(0<frame['radius']<27.5 for frame in returned), 'Shell corners snapped back'
+            assert page.locator('[data-app-root]').evaluate("n=>getComputedStyle(n).transform")=='none'
+            assert page.locator('[data-app-root]').evaluate('n=>+getComputedStyle(n).opacity')==1
+            assert page.locator('[data-app-root]').evaluate("n=>parseFloat(getComputedStyle(n).borderTopLeftRadius)")==0
+            assert not page.locator('[data-app-root][data-lightbox-depth]').count()
+            assert not page.locator('[data-app-root]').evaluate('n=>n.inert')
+            page.evaluate('window.__lightboxRecording=false')
+            results.append({'motion':motion,'image':image_tier,'systemReduced':system_reduced})
+
+        # Closing before arrival settles must return from its current pose and allow a fresh open.
+        page.emulate_media(reduced_motion='no-preference')
+        page.evaluate("document.documentElement.dataset.motion='standard'")
+        for _ in range(3):
+            page.locator(DETAIL).click()
+            expect(page.locator('.pic-lightbox.yarl__portal_open')).to_have_count(1)
+            page.wait_for_timeout(40)
+            page.keyboard.press('Escape')
+            expect(page.locator('.pic-lightbox')).to_have_count(0)
+            page.wait_for_timeout(250)
+            assert page.locator('[data-app-root]').evaluate("n=>getComputedStyle(n).transform")=='none'
+            assert page.locator('[data-app-root]').evaluate('n=>+getComputedStyle(n).opacity')==1
+            assert not page.locator('[data-app-root][data-lightbox-depth]').count()
+        page.go_back()
+        assert_clean(page)
+        return {'tiers':results,'rapidCloses':3,'shellRestored':True}
+    finally:
+        page.emulate_media(reduced_motion='no-preference')
+        page.evaluate("""() => {
+          window.__lightboxRecording=false;
+          const root=document.documentElement; root.dataset.motion='standard';
+          delete root.dataset.motionImage; root.style.removeProperty('--motion-custom-enabled-image');
+        }""")
+
+
 def dialog_back(page, label):
     """Back peels a dialog opened inside the viewer — 举报 here — before the viewer (R10-004)."""
     open_image(page)
@@ -2273,6 +2386,7 @@ def run(browser, name, width, only=None):
                   ('step-back', lambda label: step_back(page,label)),
                   ('forward-replay', lambda label: forward_replay(page,label)),
                   ('lightbox-back', lambda label: lightbox_back(page,label)),
+                  ('lightbox-depth', lambda label: lightbox_depth(page,label)),
                   ('dialog-back', lambda label: dialog_back(page,label)),
                   ('reopen-during-close', lambda label: reopen_during_close(page,label)),
                   ('reopen-scrolled-close', lambda label: reopen_during_close(page,label,True)),
@@ -2342,7 +2456,7 @@ with sync_playwright() as playwright:
             run(browser,*profile)
     # The wide desktop: four columns and a centred well, where both legs have the longest reach.
     if not REQUESTED_PROFILES or 'wide' in REQUESTED_PROFILES:
-        run(browser,'wide',1920,only={'landing','landing-content-resize','step-back'})
+        run(browser,'wide',1920,only={'landing','landing-content-resize','step-back','lightbox-back','lightbox-depth'})
     browser.close()
 for missing in sorted(REQUESTED_CASES - MATCHED_CASES):
     FAILURES.append({'case':missing,'error':'Unknown hero test case'})

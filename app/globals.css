@@ -2263,14 +2263,15 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   /* The media-stage, not the scrim: a photo-viewing backdrop is what that token was defined
      for, and scheme-independent for the same reason. */
   --yarl__color_backdrop: var(--md-sys-color-media-stage);
-  --yarl__color_button: var(--md-sys-color-on-media-variant);
+  --yarl__color_button: var(--md-sys-color-on-media);
   --yarl__color_button_active: var(--md-sys-color-on-media);
   --yarl__color_button_disabled: rgb(var(--md-sys-color-on-media-rgb) / 38%);
-  /* M3 icon buttons are 24dp glyphs in a 40dp container, reading against the backdrop on
-     their own — the stock drop-shadow was compensating for having no container at all. */
+  /* M3 icon controls use 24dp glyphs; the toolbar supplies their shared media plate.
+     Navigation arrows read directly against the media stage. */
   --yarl__icon_size: 24px;
   --yarl__button_padding: 8px;
   --yarl__button_margin: 4px;
+  --yarl__button_background_color: transparent;
   --yarl__button_filter: none;
   --yarl__toolbar_padding: 12px;
   --yarl__navigation_button_padding: 16px;
@@ -2283,26 +2284,33 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
 }
 
+/* One concentric plate around the toolbar, with the controls at their existing inset.
+   See docs/transitions.md#fullscreen-image-viewer. */
+.pic-lightbox .yarl__toolbar {
+  @apply rounded-full;
+  margin: var(--yarl__toolbar_padding);
+  padding: 0;
+  background-color: var(--md-sys-color-media-plate);
+}
+
 /* Give every control the M3 icon-button container it was missing: a 48dp circle with a
    state layer, so hover/focus/press read the same here as everywhere else. */
 .yarl__button {
+  @apply rounded-full state-layer forced-boundary;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 48px;
   min-height: 48px;
-  border-radius: var(--radius-full, 9999px);
   transition:
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
-/* The three state weights, from the tokens rather than by hand. Focus and pressed are
-   deliberately equal in M3 (.10); the focus ring below is what separates them, not the tint. */
-@media (hover: hover) {
-  .yarl__button:hover {
-    background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-hover-opacity));
-  }
+/* Navigation arrows already have an absolute anchor; toolbar controls need a local
+   containing block for the shared state layer. See docs/design/colour.md#focus. */
+.yarl__button:not(.yarl__navigation_prev, .yarl__navigation_next) {
+  position: relative;
 }
 
 /* One rule for one state (the state layer and the ring used to be two blocks 19 lines
@@ -2311,13 +2319,8 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
    focus-ring-on-media utility because this is a plugin's class in a plain rule with none of
    Tailwind's ring machinery; the token is the same one, so the two cannot drift. */
 .yarl__button:focus-visible {
-  background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-focus-opacity));
-  outline: none;
+  @apply outline-hidden;
   box-shadow: inset 0 0 0 2px var(--md-sys-color-focus-on-media);
-}
-
-.yarl__button:active {
-  background-color: rgb(var(--md-sys-color-on-media-rgb) / var(--md-sys-state-pressed-opacity));
 }
 
 /* The counter is a label, not a control: it exposes its own tokens, so go through those
@@ -2334,46 +2337,62 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   letter-spacing: var(--text-label-m--letter-spacing);
 }
 
-/* Entrance: the viewer grows out of the picture you tapped.
- *
- * The transform origin is set from the detail image's centre by `handleOpenLightbox`. A
- * one-shot animation rather than a transition, so nothing is left holding a transform once
- * it has played — the slide element is an ancestor of the zoom plugin's own transforms and must
- * not compound with them.
- *
- * **Backwards fill, not both.** A both-fill keeps applying the last keyframe after the
- * animation finishes, so a none-transform outranked every declaration *and every inline
- * style* the zoom and swipe plugins wrote to this node — the exact compounding this rule
- * exists to avoid, caused by the rule itself. With no delay, a backwards fill gives a
- * byte-identical first frame and releases the element the instant it ends.
- *
- * The timing is every surface's arrival (`surfaceArrival`, as the dialog, the bottom sheet and
- * the side panel): the scale on the default spatial spring, the fade on the default effects one
- * — two animations, because one shorthand carries one clock and an opacity on an under-damped
- * spring is clipped above 1. It rides the motion scale: 0s under the off tier, no overshoot
- * under reduced (a picture arriving *is* the basic form). */
-.yarl__slide {
-  transform-origin: var(--m3-lightbox-origin-x, 50%) var(--m3-lightbox-origin-y, 50%);
-  animation:
-    m3-lightbox-fade calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects)
-      backwards,
-    m3-lightbox-grow calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-image)) var(--ease-spring-default-spatial)
-      backwards;
+/* Fullscreen viewer depth and bottom arrival. See docs/transitions.md#fullscreen-image-viewer.
+   The shell includes chrome and image detail. At rest it has no transform or containing block. */
+[data-app-root] {
+  border-radius: 0;
+  opacity: 1;
+  transform-origin: 50% 50%;
+  transition:
+    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
+    border-radius calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects);
 }
 
-@keyframes m3-lightbox-fade {
-  from {
-    opacity: 0;
-  }
+[data-app-root][data-lightbox-depth] {
+  transform: scale(0.92);
+  border-radius: var(--radius-2xl);
+  opacity: 0.8;
+  /* Keep the monotone corner morph on the depth's full clock, so corners remain
+     visibly in progress while the shell recedes. */
+  transition-duration:
+    calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale-image)),
+    calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale-image)),
+    calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-image));
+  transition-timing-function: var(--motion-shape-spatial), var(--ease-spring-effects), var(--ease-spring-effects);
 }
 
-@keyframes m3-lightbox-grow {
-  from {
-    transform: scale(var(--motion-enter-scale));
-  }
-  to {
-    transform: none;
-  }
+/* The portal moves as one surface; slides retain the zoom/pager plugin's transforms.
+   The media-coloured skirt covers spatial overshoot beyond the bottom dock. */
+.pic-lightbox.yarl__portal {
+  --pic-lightbox-travel: 100%;
+  transform: translateY(var(--pic-lightbox-travel));
+  box-shadow: 0 10vh 0 0 var(--md-sys-color-media-stage);
+  transition:
+    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects);
+}
+
+.pic-lightbox.yarl__portal_open {
+  transform: none;
+  transition-duration:
+    calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale-image)),
+    calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-image));
+  transition-timing-function: var(--motion-shape-spatial), var(--ease-spring-effects);
+}
+
+html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][data-motion-image='reduced'], [data-motion='custom'][data-motion-image='off']) [data-app-root][data-lightbox-depth] {
+  transform: none;
+  border-radius: 0;
+}
+
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-image='reduced']) .pic-lightbox.yarl__portal {
+  --pic-lightbox-travel: var(--motion-travel-small);
+  transition-timing-function: var(--ease-spring-effects);
+}
+
+html:is([data-motion='off'], [data-motion='custom'][data-motion-image='off']) .pic-lightbox.yarl__portal {
+  --pic-lightbox-travel: 0px;
 }
 
 /* M3 shared-axis tab panes.

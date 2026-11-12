@@ -149,8 +149,23 @@ Closing calls `revealInImageSequence` before measuring the return. After `STEP_R
 
 Reloaded orphan ladders collapse to their original list. A cold detail without a ladder returns within the app or replaces with `/`. Browser-coalesced Forward during a close may never reach the page; Forward after settlement reopens normally.
 
+## Fullscreen image viewer
+
+`PicLightbox` owns the same entrance for image detail, embedded pictures and folder slideshows.
+
+- The complete viewer rises from below the viewport on SlowSpatial and fades in on SlowEffects. A media-stage edge skirt covers spatial overshoot.
+- The complete `data-app-root`, including the app bar, drawer and current detail, recedes to 92% around the viewport centre. Scale uses SlowSpatial. Corners start at zero and gradually reach the existing 28 dp surface shape, using the monotone effects curve over the full depth clock so they do not round ahead of the retreat. Both return on DefaultEffects.
+- Shell opacity eases from 100% to 80% on SlowEffects during arrival and returns to 100% on DefaultEffects during close. Reduced motion retains this fade; off applies it immediately.
+- The top-right toolbar uses one continuous `media-plate` background with `on-media` ink. Individual buttons and navigation arrows have transparent backgrounds and retain the shared hover, focus and press state layer. Navigation arrows keep their existing anchors.
+- Closing returns the shell while the viewer moves down and fades on DefaultEffects. Transitions continue from their displayed pose when interrupted.
+- Reduced motion keeps an 8 px arrival and fade, without shell scaling. Off applies state immediately. Both use the image motion category, including custom settings.
+- Shell depth is leased from portal entry until departure starts, with cleanup on external close or unmount. Overlapping viewers retain depth until the last lease leaves.
+- The portal remains mounted through its actual departure even when the library skips its timer for system reduced motion. Back releases its history layer when departure starts; zoom, paging and focus remain owned by the viewer library.
+
 ## Verification
 
 Run the relevant `bun run test:hero`, `bun run test:overlays`, `bun run test:tab-press`, `bun run net:tabs` and `bun run net:tabnav`.
+
+`bun run test:hero --case=lightbox-depth --case=lightbox-back` covers fullscreen arrival geometry, shell depth, motion tiers, rapid close and layered Back on desktop, mobile and wide viewports.
 
 Measure presented frames and release-to-response latency using [Performance](performance.md#measurement-rules). Cover real input, rapid reversal, missing data, shared chrome, reload and focus.

@@ -898,18 +898,6 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   // ---- Lightbox ----
   const handleOpenLightbox = useCallback(() => {
     if (!isImageHeroPublicationQuiet()) return;
-    /* Record where the detail image is, so the viewer grows out of the picture you
-       tapped rather than the middle of the screen. */
-    const media = document.querySelector<HTMLElement>('[data-image-hero-role="detail"]');
-    const root = document.documentElement;
-    if (media) {
-      const rect = media.getBoundingClientRect();
-      root.style.setProperty('--m3-lightbox-origin-x', `${rect.left + rect.width / 2}px`);
-      root.style.setProperty('--m3-lightbox-origin-y', `${rect.top + rect.height / 2}px`);
-    } else {
-      root.style.removeProperty('--m3-lightbox-origin-x');
-      root.style.removeProperty('--m3-lightbox-origin-y');
-    }
     setIsLightboxOpen(true);
   }, []);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import Counter from 'yet-another-react-lightbox/plugins/counter';
@@ -13,7 +13,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
    open, and this module is the lazily loaded one. */
 import 'yet-another-react-lightbox/styles.css';
 import Spinner from '@/components/Spinner';
-import { useMotionScale } from '@/lib/appearance';
+import { MOTION_SPEED_SCALE, useMotionScale } from '@/lib/appearance';
 import { COMPONENT_SPRING_MS, SPRING_MS, springLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
 
@@ -41,6 +41,24 @@ import { useHistoryLayer } from '@/lib/historyLayers';
  */
 export type PicLightboxSlide = Slide;
 
+// One shell depth lease per viewer, including overlapping viewer departures.
+// See docs/transitions.md#fullscreen-image-viewer.
+const backgroundOwners = new WeakMap<HTMLElement, Set<object>>();
+
+function sinkBackground() {
+  const root = document.querySelector<HTMLElement>('[data-app-root]');
+  if (!root) return () => {};
+  const owners = backgroundOwners.get(root) ?? new Set<object>();
+  const owner = {};
+  owners.add(owner);
+  backgroundOwners.set(root, owners);
+  root.setAttribute('data-lightbox-depth', '');
+  return () => {
+    owners.delete(owner);
+    if (!owners.size) root.removeAttribute('data-lightbox-depth');
+  };
+}
+
 export default function PicLightbox({
   open,
   close,
@@ -64,12 +82,39 @@ export default function PicLightbox({
   onSlideshowStop?: () => void;
 }) {
   const scale = useMotionScale('image');
+  const portalId = useId();
+  const releaseBackground = useRef<(() => void) | null>(null);
+  const closeTurn = useRef(0);
+  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* Back closes the viewer and nothing under it (`lib/historyLayers.ts`). The library owns
-     its exit: `close` is only called once its fade has finished, so a Back press asks the
-     controller to close — the same fade Esc and the close button play — and the entry is
-     released the moment that fade starts, so the step back off it (after a close from
-     inside) runs beside the fade rather than after it. */
+  useEffect(() => () => {
+    closeTurn.current += 1;
+    if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+    releaseBackground.current?.();
+    releaseBackground.current = null;
+  }, [open]);
+
+  const finishClose = async () => {
+    const turn = ++closeTurn.current;
+    const animations = document.getElementById(portalId)?.getAnimations() ?? [];
+    // YARL skips its lifetime on OS reduced motion. Keep the controlled portal mounted
+    // through the app's remaining departure, including an explicit standard preference.
+    if (animations.length) {
+      await Promise.race([
+        Promise.allSettled(animations.map(animation => animation.finished)),
+        new Promise<void>(resolve => {
+          exitTimer.current = setTimeout(resolve, SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow);
+        }),
+      ]);
+      if (turn !== closeTurn.current) return;
+      if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+      exitTimer.current = null;
+    }
+    if (turn === closeTurn.current) close();
+  };
+
+  /* Back closes the viewer and nothing under it (docs/transitions.md#fullscreen-image-viewer).
+     Release the history entry when departure starts, alongside the shell's return. */
   const controller = useRef<ControllerRef>(null);
   const slideshowController = useRef<SlideshowRef>(null);
   const resumeOnVisible = useRef(false);
@@ -106,13 +151,22 @@ export default function PicLightbox({
   return (
     <Lightbox
       open={open}
-      close={close}
+      close={finishClose}
+      className="pic-lightbox"
+      portal={{ container: { id: portalId } }}
       slides={slides}
       index={index}
       controller={{ ref: controller }}
       on={{
-        entering: () => setExiting(false),
+        entering: () => {
+          closeTurn.current += 1;
+          if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+          if (!releaseBackground.current) releaseBackground.current = sinkBackground();
+          setExiting(false);
+        },
         exiting: () => {
+          releaseBackground.current?.();
+          releaseBackground.current = null;
           resumeOnVisible.current = false;
           slideshowController.current?.pause();
           setExiting(true);
@@ -135,9 +189,8 @@ export default function PicLightbox({
          tracks. A CSS-only fade left slow exits cut off at 250ms and kept an
          invisible portal blocking input under the off tier. */
       animation={{
-        /* The container fade is DefaultEffects both ways — the clock every large surface leaves
-           on: YARL takes one fade for both directions, and a close must answer the press on the
-           next frame. The slide's own entrance is every surface's arrival (globals.css). */
+        /* YARL's lifetime follows departure. CSS splits fullscreen arrival into SlowSpatial
+           travel and SlowEffects opacity; departure uses DefaultEffects for both. */
         fade: SPRING_MS.defaultEffects * scale,
         /* A slide is a pager turning: `PAGER_SPRING`, Compose's `HorizontalPager` snap (ζ1 k400) —
            the same spring the tab strip pages on, so the app's two pagers turn alike. A zoom step

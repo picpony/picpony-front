@@ -43,7 +43,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | --- | --- |
 | Tab strip | `PAGER_SPRING`, launched at half its rate |
 | Lightbox swipe / zoom | `PAGER_SPRING` / `layout` |
-| Lightbox slide | Scale `defaultSpatial`, opacity `defaultEffects`; exit `defaultEffects` |
+| Fullscreen lightbox | Bottom arrival `slowSpatial`, opacity `slowEffects`; exit `defaultEffects`. Shell depth follows `slowSpatial` and returns on `defaultEffects`; see [Fullscreen image viewer](transitions.md#fullscreen-image-viewer) |
 | Route fade through | Exit `fastEffects`, rise `defaultEffects`; arrival `slowEffects` after `HANDOFF_MS` |
 | Hero, forum and folder container transform | `FLIGHT_SPRING` both ways; interruption retains the appropriate current pose/velocity |
 | Hero gallery depth | Full `FLIGHT_SPRING` progress, with the depth and pivot defined in [Hero engine](hero.md#window-content-and-interruption) |
