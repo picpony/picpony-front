@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import type { ReactNode } from 'react';
 
 /**
  * A time-series line chart for /stats.
@@ -29,6 +30,8 @@ interface StatChartProps {
   labels: string[];
   /** Read out as the chart's accessible name; it should summarise the direction, not the axes. */
   ariaLabel: string;
+  /** Trailing controls on the legend row — the daily/cumulative view switch. */
+  actions?: ReactNode;
   className?: string;
 }
 
@@ -80,7 +83,7 @@ function tickIndexes(count: number): number[] {
   return [...indexes].sort((a, b) => a - b);
 }
 
-export default function StatChart({ series, labels, ariaLabel, className = '' }: StatChartProps) {
+export default function StatChart({ series, labels, ariaLabel, actions, className = '' }: StatChartProps) {
   const count = labels.length;
   const maxValue = Math.max(0, ...series.flatMap((s) => s.values));
   const step = niceStep(maxValue / 4);
@@ -100,13 +103,16 @@ export default function StatChart({ series, labels, ariaLabel, className = '' }:
   return (
     <figure className={cn('m-0', className)}>
       <figcaption className="sr-only">{ariaLabel}</figcaption>
-      <div className="text-label-m mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-        {series.map((item) => (
-          <span key={item.key} className="flex items-center gap-1.5 text-on-surface-variant">
-            <span className={cn('h-0.5 w-4 rounded-full bg-current', TONE[item.tone])} aria-hidden="true" />
-            {item.label}
-          </span>
-        ))}
+      <div className="text-label-m mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {series.map((item) => (
+            <span key={item.key} className="flex items-center gap-1.5 text-on-surface-variant">
+              <span className={cn('h-0.5 w-4 rounded-full bg-current', TONE[item.tone])} aria-hidden="true" />
+              {item.label}
+            </span>
+          ))}
+        </div>
+        {actions && <div className="shrink-0">{actions}</div>}
       </div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}

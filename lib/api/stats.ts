@@ -46,6 +46,11 @@ export interface SiteStats {
   granularity: StatsGranularity;
   start: string;
   end: string;
+  /**
+   * The first day any ranked record exists — the range slider's left bound. Optional so the
+   * screen still works against a backend deployed before this field existed.
+   */
+  earliest?: string;
   totals: StatsTotals;
   /** Visitor counts summed over the selected window (they are not cumulative totals). */
   window: { visitors: number; hits: number };

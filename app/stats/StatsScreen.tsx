@@ -3,27 +3,40 @@
 import { useState, type ReactNode } from 'react';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
-import DateInput from '@/components/admin/DateInput';
+import Chip from '@/components/Chip';
+import DateRangeSlider from '@/components/DateRangeSlider';
 import ErrorRetry from '@/components/ErrorRetry';
-import SectionHeading from '@/components/SectionHeading';
 import Skeleton from '@/components/Skeleton';
 import StatChart, { type ChartSeries } from '@/components/StatChart';
+import Tabs, { type TabItem } from '@/components/Tabs';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import type { SiteStats, StatsGranularity } from '@/lib/api/stats';
 import { formatExactCount } from '@/lib/format';
 import { useResource } from '@/lib/resource';
 import { siteStats } from '@/lib/resources';
-import { formatChineseDay, type StatsWindow } from '@/lib/statsDates';
+import { shiftDay, type StatsWindow } from '@/lib/statsDates';
 import type { StatsSeed } from '@/lib/stats.server';
 
 /**
  * /stats — the public site statistics screen.
  *
  * Four reads' worth of data arrive as one `stats` answer: cumulative users, cumulative Chinese
- * dictionary tags, visit counts and community content, all bucketed by the same Beijing calendar
- * unit. The page owns only the chosen start and end days; the server picks daily, weekly or
- * monthly buckets from the span so a long window stays bounded.
+ * dictionary tags, visit counts and community content. Each is one tab of the same answer; the
+ * page owns only the chosen start and end days, and the server picks daily, weekly or monthly
+ * buckets from the span so a long window stays bounded.
  */
+
+type StatsTab = 'stats-users' | 'stats-tags' | 'stats-visits' | 'stats-community';
+
+type ChartView = 'daily' | 'total';
+
+const STAT_TABS: TabItem<StatsTab>[] = [
+  { value: 'stats-users', label: '用户' },
+  { value: 'stats-tags', label: '中文词条' },
+  { value: 'stats-visits', label: '访客与浏览量' },
+  { value: 'stats-community', label: '社区内容' },
+];
 
 /** "每日" / "每周" / "每月" — the unit a bucket's new-count is counted in. */
 function periodWord(granularity: StatsGranularity): string {
@@ -40,49 +53,58 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
-/** One metric section: a heading, the headline figure, and one or two charts. */
+/** The daily/cumulative switch sitting at the chart's top-right. */
+function ChartViewToggle({ value, onChange }: { value: ChartView; onChange: (next: ChartView) => void }) {
+  return (
+    <div role="group" aria-label="图表视图" className="flex items-center gap-1">
+      <Chip variant="filter" tone="primary" selected={value === 'daily'} onClick={() => onChange('daily')}>
+        每日
+      </Chip>
+      <Chip variant="filter" tone="primary" selected={value === 'total'} onClick={() => onChange('total')}>
+        累计
+      </Chip>
+    </div>
+  );
+}
+
+/** One metric panel: the headline figure and its chart. The tab names the section. */
 function MetricCard({
-  title,
   figureLabel,
   figure,
   note,
   children,
 }: {
-  title: string;
   figureLabel: string;
   figure: string;
   note?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="mb-8">
-      <SectionHeading className="mb-3">{title}</SectionHeading>
-      <Card padding="lg">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-          <div>
-            <p className="text-label-m text-on-surface-variant">{figureLabel}</p>
-            <p className="text-headline-m text-on-surface tabular-nums">{figure}</p>
-          </div>
-          {note && <p className="text-body-s text-on-surface-variant">{note}</p>}
+    <Card variant="transparent" padding="lg">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+        <div>
+          <p className="text-label-m text-on-surface-variant">{figureLabel}</p>
+          <p className="text-headline-m text-on-surface tabular-nums">{figure}</p>
         </div>
-        <div className="mt-5 space-y-6">{children}</div>
-      </Card>
-    </section>
+        {note && <p className="text-body-s text-on-surface-variant">{note}</p>}
+      </div>
+      <div className="mt-5">{children}</div>
+    </Card>
   );
 }
 
 function StatsSkeleton() {
   return (
-    <div className="space-y-8" aria-busy="true" aria-label="正在加载站点统计">
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index}>
-          <Skeleton className="mb-3 h-5 w-20" />
-          <Card padding="lg">
-            <Skeleton className="h-8 w-28" />
-            <Skeleton className="mt-5 h-48 w-full" />
-          </Card>
-        </div>
-      ))}
+    <div aria-busy="true" aria-label="正在加载站点统计">
+      <div className="mb-6 flex gap-6">
+        {[0, 1, 2, 3].map((index) => (
+          <Skeleton key={index} className="h-6 w-16" delay={index * 80} />
+        ))}
+      </div>
+      <Card variant="transparent" padding="lg">
+        <Skeleton className="h-8 w-28" />
+        <Skeleton className="mt-5 h-48 w-full" />
+      </Card>
     </div>
   );
 }
@@ -97,21 +119,11 @@ export default function StatsScreen({
   const [period, setPeriod] = useState<StatsWindow>(() =>
     seed ? { start: seed.data.start, end: seed.data.end } : defaultWindow,
   );
-  const read = useResource(siteStats, period, { initial: seed ?? undefined });
+  /* `keepPrevious`: changing the window keeps the tabs, the chosen view and the last chart on
+     screen while the next answer is out, instead of unmounting the whole body for a skeleton. */
+  const read = useResource(siteStats, period, { initial: seed ?? undefined, keepPrevious: true });
   const data = read.data;
   const loading = data === undefined && read.error === undefined;
-
-  /* Keep the two fields in calendar order while typing or picking: a start after the current
-     end carries the end with it, and an end before the start carries the start back. The native
-     inputs also carry min/max, so the invalid intermediate state cannot be committed. */
-  const changeStart = (value: string) => {
-    if (!value) return;
-    setPeriod((current) => ({ start: value, end: value > current.end ? value : current.end }));
-  };
-  const changeEnd = (value: string) => {
-    if (!value) return;
-    setPeriod((current) => ({ start: value < current.start ? value : current.start, end: value }));
-  };
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -119,32 +131,6 @@ export default function StatsScreen({
         title="站点统计"
         subtitle="数据按北京时间聚合。累计数字是截至每个时间点的总量；访客与浏览量是各时段自身的计数。"
       />
-      <div className="mb-2 flex flex-wrap items-end gap-x-3 gap-y-4">
-        <DateInput
-          label="开始日期"
-          fieldClassName="w-full sm:w-44"
-          value={period.start}
-          max={period.end}
-          onChange={(event) => changeStart(event.currentTarget.value)}
-        />
-        <span aria-hidden="true" className="text-title-m text-on-surface-variant pb-4">
-          ～
-        </span>
-        <DateInput
-          label="结束日期"
-          fieldClassName="w-full sm:w-44"
-          value={period.end}
-          min={period.start}
-          max={defaultWindow.end}
-          onChange={(event) => changeEnd(event.currentTarget.value)}
-        />
-      </div>
-      <p className="text-body-m text-on-surface-variant mb-6">
-        统计区间：
-        <span className="text-on-surface tabular-nums">
-          {formatChineseDay(period.start)} ～ {formatChineseDay(period.end)}
-        </span>
-      </p>
 
       {data === undefined && read.error !== undefined && (
         <Card padding="lg">
@@ -155,16 +141,34 @@ export default function StatsScreen({
           />
         </Card>
       )}
+      {/* The previous window's chart stays visible, so a failed turn reports itself in place. */}
+      {data !== undefined && read.error !== undefined && (
+        <p className="text-body-s text-error mb-3">{apiErrorMessage(read.error)}</p>
+      )}
       {loading && <StatsSkeleton />}
-      {data !== undefined && <StatsBody data={data} />}
+      {data !== undefined && (
+        <StatsBody data={data} period={period} maxDay={defaultWindow.end} onPeriodChange={setPeriod} />
+      )}
     </div>
   );
 }
 
-function StatsBody({ data }: { data: SiteStats }) {
+function StatsBody({
+  data,
+  period,
+  maxDay,
+  onPeriodChange,
+}: {
+  data: SiteStats;
+  period: StatsWindow;
+  maxDay: string;
+  onPeriodChange: (next: StatsWindow) => void;
+}) {
+  const [category, setCategory] = useState<StatsTab>('stats-users');
+  const [view, setView] = useState<ChartView>('total');
   const points = data.series;
   const labels = points.map((point) => bucketLabel(point.date, data.granularity));
-  const period = periodWord(data.granularity);
+  const unit = periodWord(data.granularity);
   const first = points[0];
   const last = points[points.length - 1];
 
@@ -178,7 +182,7 @@ function StatsBody({ data }: { data: SiteStats }) {
     { key: 'total-users', label: '累计用户', values: points.map((point) => point.total_users), tone: 'primary' },
   ];
   const userNew: ChartSeries[] = [
-    { key: 'new-users', label: `${period}新增`, values: points.map((point) => point.new_users), tone: 'secondary' },
+    { key: 'new-users', label: `${unit}新增`, values: points.map((point) => point.new_users), tone: 'secondary' },
   ];
   const tagTotal: ChartSeries[] = [
     {
@@ -191,7 +195,7 @@ function StatsBody({ data }: { data: SiteStats }) {
   const tagNew: ChartSeries[] = [
     {
       key: 'new-tags',
-      label: `${period}新增`,
+      label: `${unit}新增`,
       values: points.map((point) => point.new_chinese_tags),
       tone: 'secondary',
     },
@@ -209,7 +213,7 @@ function StatsBody({ data }: { data: SiteStats }) {
   const contentNew: ChartSeries[] = [
     {
       key: 'new-content',
-      label: `${period}新增内容`,
+      label: `${unit}新增内容`,
       values: points.map(
         (point) => point.new_posts + point.new_comments + point.new_favorites + point.new_badges,
       ),
@@ -217,77 +221,105 @@ function StatsBody({ data }: { data: SiteStats }) {
     },
   ];
 
+  /* The slider's left bound is the first ranked day; fall back to 90 days when the deployed
+     backend predates that field, and never hide the window the page opened on. */
+  const earliest = data.earliest ?? shiftDay(maxDay, -89);
+  const domainStart = earliest < period.start ? earliest : period.start;
+  const domainEnd = period.end > maxDay ? period.end : maxDay;
+  const toggle = <ChartViewToggle value={view} onChange={setView} />;
+
   return (
     <div>
-      <MetricCard
-        title="用户"
-        figureLabel="累计用户"
-        figure={formatExactCount(data.totals.users)}
-        note={`本期间新增 ${formatExactCount(newUsers)} 人`}
-      >
-        <StatChart
-          series={userTotal}
-          labels={labels}
-          ariaLabel={`累计用户折线图，从 ${first ? formatExactCount(first.total_users) : 0} 增长到 ${last ? formatExactCount(last.total_users) : 0}`}
-        />
-        <StatChart
-          series={userNew}
-          labels={labels}
-          ariaLabel={`${period}新增用户折线图`}
-          className="border-outline-variant border-t pt-6"
-        />
-      </MetricCard>
+      <Tabs
+        tabs={STAT_TABS}
+        value={category}
+        onChange={setCategory}
+        label="统计项目"
+        className="mb-6"
+      />
+      <TabPanes value={category}>
+        <TabPane value="stats-users" className="mb-4">
+          <MetricCard
+            figureLabel="累计用户"
+            figure={formatExactCount(data.totals.users)}
+            note={`本期间新增 ${formatExactCount(newUsers)} 人`}
+          >
+            <StatChart
+              series={view === 'total' ? userTotal : userNew}
+              labels={labels}
+              actions={toggle}
+              ariaLabel={
+                view === 'total'
+                  ? `累计用户折线图，从 ${first ? formatExactCount(first.total_users) : 0} 增长到 ${last ? formatExactCount(last.total_users) : 0}`
+                  : `${unit}新增用户折线图`
+              }
+            />
+          </MetricCard>
+        </TabPane>
 
-      <MetricCard
-        title="中文词条"
-        figureLabel="累计中文词条"
-        figure={formatExactCount(data.totals.chinese_tags)}
-        note={`本期间新增 ${formatExactCount(newChineseTags)} 条`}
-      >
-        <StatChart
-          series={tagTotal}
-          labels={labels}
-          ariaLabel={`累计中文词条折线图，从 ${first ? formatExactCount(first.total_chinese_tags) : 0} 增长到 ${last ? formatExactCount(last.total_chinese_tags) : 0}`}
-        />
-        <StatChart
-          series={tagNew}
-          labels={labels}
-          ariaLabel={`${period}新增中文词条折线图`}
-          className="border-outline-variant border-t pt-6"
-        />
-      </MetricCard>
+        <TabPane value="stats-tags" className="mb-4">
+          <MetricCard
+            figureLabel="累计中文词条"
+            figure={formatExactCount(data.totals.chinese_tags)}
+            note={`本期间新增 ${formatExactCount(newChineseTags)} 条`}
+          >
+            <StatChart
+              series={view === 'total' ? tagTotal : tagNew}
+              labels={labels}
+              actions={toggle}
+              ariaLabel={
+                view === 'total'
+                  ? `累计中文词条折线图，从 ${first ? formatExactCount(first.total_chinese_tags) : 0} 增长到 ${last ? formatExactCount(last.total_chinese_tags) : 0}`
+                  : `${unit}新增中文词条折线图`
+              }
+            />
+          </MetricCard>
+        </TabPane>
 
-      <MetricCard
-        title="访客与浏览量"
-        figureLabel="本期间独立访客"
-        figure={formatExactCount(data.window.visitors)}
-        note={`本期间浏览量 ${formatExactCount(data.window.hits)}`}
-      >
-        <StatChart series={visits} labels={labels} ariaLabel={`${period}独立访客与浏览量折线图`} />
-      </MetricCard>
+        <TabPane value="stats-visits" className="mb-4">
+          <MetricCard
+            figureLabel="本期间独立访客"
+            figure={formatExactCount(data.window.visitors)}
+            note={`本期间浏览量 ${formatExactCount(data.window.hits)}`}
+          >
+            <StatChart series={visits} labels={labels} ariaLabel={`${unit}独立访客与浏览量折线图`} />
+          </MetricCard>
+        </TabPane>
 
-      <MetricCard
-        title="社区内容"
-        figureLabel="累计内容"
-        figure={formatExactCount(
-          data.totals.posts + data.totals.comments + data.totals.favorites + data.totals.badges,
-        )}
-        note={`帖子 ${formatExactCount(data.totals.posts)} · 评论 ${formatExactCount(data.totals.comments)} · 收藏 ${formatExactCount(data.totals.favorites)} · 徽章 ${formatExactCount(data.totals.badges)}`}
-      >
-        <StatChart
-          series={contentTotal}
-          labels={labels}
-          ariaLabel="帖子、评论、收藏与徽章的累计折线图"
-        />
-        <StatChart
-          series={contentNew}
-          labels={labels}
-          ariaLabel={`${period}新增社区内容折线图，本期间共 ${formatExactCount(newContent)} 条`}
-          className="border-outline-variant border-t pt-6"
-        />
-      </MetricCard>
+        <TabPane value="stats-community" className="mb-4">
+          <MetricCard
+            figureLabel="累计内容"
+            figure={formatExactCount(
+              data.totals.posts + data.totals.comments + data.totals.favorites + data.totals.badges,
+            )}
+            note={`帖子 ${formatExactCount(data.totals.posts)} · 评论 ${formatExactCount(data.totals.comments)} · 收藏 ${formatExactCount(data.totals.favorites)} · 徽章 ${formatExactCount(data.totals.badges)}`}
+          >
+            <StatChart
+              series={view === 'total' ? contentTotal : contentNew}
+              labels={labels}
+              actions={toggle}
+              ariaLabel={
+                view === 'total'
+                  ? '帖子、评论、收藏与徽章的累计折线图'
+                  : `${unit}新增社区内容折线图，本期间共 ${formatExactCount(newContent)} 条`
+              }
+            />
+          </MetricCard>
+        </TabPane>
+      </TabPanes>
 
-      <p className="text-body-s text-on-surface-variant">
+      {/* Directly under the chart, as the one control for its window; its own labels move with
+          the handles. */}
+      <div className="mt-2">
+        <DateRangeSlider
+          min={domainStart}
+          max={domainEnd}
+          value={period}
+          onCommit={onPeriodChange}
+        />
+      </div>
+
+      <p className="text-body-s text-on-surface-variant mt-6">
         访客为匿名访问计数，仅保留最近 90 天；中文词条按首次获得中文译名的时间计入。
       </p>
     </div>
