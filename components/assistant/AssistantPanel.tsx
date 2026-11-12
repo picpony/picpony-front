@@ -10,6 +10,7 @@ import IconButton from '@/components/IconButton';
 import Card from '@/components/Card';
 import Chip from '@/components/Chip';
 import ChatBubble from '@/components/ChatBubble';
+import MarkdownRenderer, { warmMarkdownDocument } from '@/components/MarkdownRenderer';
 import { Textarea } from '@/components/Input';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -22,11 +23,22 @@ import { createAssistantSession, THINKING_STATUS } from '@/lib/assistant/session
 import { actionLabel, actionSupported, toolLabel } from '@/lib/assistant/actions';
 import { assistantQuota } from '@/lib/assistant/queries';
 import { faveFolders } from '@/lib/resources';
-import { MAX_MESSAGE } from '@/lib/assistant/protocol';
+import { MAX_MESSAGE, type AssistantLiveTool } from '@/lib/assistant/protocol';
 import { ICON } from '@/lib/icons';
 import { useResource, SKIP } from '@/lib/resource';
 import { cn } from '@/lib/utils';
 import styles from './AssistantPanel.module.css';
+
+/** A tool call inside the live reply, at the point the server emitted it. */
+function LiveToolRow({ tool }: { tool: AssistantLiveTool }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 text-body-s text-on-surface-variant">
+      <MdBuild size={ICON.dense} aria-hidden="true" className="shrink-0" />
+      <span className="truncate">{toolLabel(tool.name, tool.arguments)}</span>
+      {tool.ok === false && <span className="text-error">失败</span>}
+    </div>
+  );
+}
 
 export default function AssistantPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { token, user } = useSession();
@@ -79,6 +91,9 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     session.setActive(isOpen);
     if (isOpen) { focusPending.current = true; interacted.current = false; }
     if (isOpen && !session.getSnapshot().ready) void session.restore();
+    /* The reply stream is Markdown; start the renderer's chunk while the visitor is still
+       typing, so the first delta is formatted rather than waiting on a lazy boundary. */
+    if (isOpen) void warmMarkdownDocument();
   }, [session, isOpen]);
   useEffect(() => {
     if (isOpen && state.available && !state.loading && focusPending.current && !interacted.current) {
@@ -94,7 +109,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   }, [isOpen, quota.data, onClose]);
   useEffect(() => {
     if (nearEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [state.messages, state.receipts, state.pending, state.task, state.error, state.streaming, state.tools, history]);
+  }, [state.messages, state.receipts, state.pending, state.task, state.error, state.streaming, state.tools, state.live, history]);
   useEffect(() => {
     if (!isOpen) return;
     const root = document.documentElement;
@@ -144,7 +159,11 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
         return (
           <li key={message.id || `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
-            <ChatBubble own={own} plain={!own} startOfRun={startOfRun} endOfRun={endOfRun}>{message.content.replaceAll('||', '\n\n')}</ChatBubble>
+            <ChatBubble own={own} plain={!own} rich={!own} startOfRun={startOfRun} endOfRun={endOfRun}>
+              {own
+                ? message.content.replaceAll('||', '\n\n')
+                : <MarkdownRenderer content={message.content.replaceAll('||', '\n\n')} />}
+            </ChatBubble>
             {history && message.id && (
               <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>
                 <IconButton size="sm" aria-label={`删除第 ${index + 1} 条消息`} disabled={state.busy} icon={<MdDeleteOutline />} onClick={async () => {
@@ -197,18 +216,28 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
             </div>
           </div>}
         </>}
-        {/* The live turn: the tools 彩彩 is using, then the words as it writes them. The persisted
-            reply below replaces this block when the poll sees the turn end, so nothing is said twice. */}
-        {(state.tools.length > 0 || state.streaming) && <div className="flex flex-col gap-2">
-          {state.tools.length > 0 && <ul aria-label="彩彩正在使用工具" className="flex flex-col gap-1.5">
-            {state.tools.map(tool => <li key={tool.id} className="flex min-w-0 items-center gap-2 text-body-s text-on-surface-variant">
-              <MdBuild size={ICON.dense} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">{toolLabel(tool.name, tool.arguments)}</span>
-              {tool.ok === false && <span className="text-error">失败</span>}
-            </li>)}
-          </ul>}
-          {state.streaming && <ChatBubble own={false} plain>{state.streaming.replaceAll('||', '\n\n')}</ChatBubble>}
-        </div>}
+        {/* The live turn, in server order: prose and tool calls interleaved, both rendered as
+            they arrive. The persisted reply below replaces this block when the poll sees the
+            turn end, so nothing is said twice. */}
+        {(state.live.length > 0 || state.streaming) && (
+          <div role="group" aria-label="彩彩正在回复" className="flex flex-col gap-2">
+            {state.live.length > 0 ? (
+              state.live.map((block, index) =>
+                block.type === 'text' ? (
+                  <div key={`text-${index}`} className="text-body-m min-w-0 max-w-full wrap-anywhere">
+                    <MarkdownRenderer content={block.text.replaceAll('||', '\n\n')} />
+                  </div>
+                ) : (
+                  <LiveToolRow key={`tool-${block.tool.id}`} tool={block.tool} />
+                ),
+              )
+            ) : (
+              <div className="text-body-m min-w-0 max-w-full wrap-anywhere">
+                <MarkdownRenderer content={state.streaming.replaceAll('||', '\n\n')} />
+              </div>
+            )}
+          </div>
+        )}
         {state.task?.pending_id && <Card padding="sm">
           <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
           <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>

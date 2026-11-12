@@ -17,6 +17,11 @@ import {
   type AssistantAction, type AssistantLiveTool, type AssistantMessage, type AssistantReceipt, type AssistantTask, type JsonObject,
 } from './protocol';
 
+/** One piece of the live reply, in the order the turn produced it. */
+export type AssistantLiveBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; tool: AssistantLiveTool };
+
 export interface AssistantSnapshot {
   ready: boolean; available: boolean; loading: boolean; busy: boolean;
   messages: AssistantMessage[]; draft: string; pending: PendingChat | null;
@@ -26,8 +31,13 @@ export interface AssistantSnapshot {
   streaming: string;
   /** Tools this turn has asked for, newest last. Cleared when the turn ends or parks. */
   tools: AssistantLiveTool[];
+  /**
+   * Text and tool calls interleaved exactly as the server emitted them — what the panel draws
+   * inside the reply stream. `streaming`/`tools` remain for the status line and older callers.
+   */
+  live: AssistantLiveBlock[];
 }
-const INITIAL: AssistantSnapshot = { ready: false, available: false, loading: false, busy: false, messages: [], draft: '', pending: null, task: null, receipts: [], error: '', status: '', streaming: '', tools: [] };
+const INITIAL: AssistantSnapshot = { ready: false, available: false, loading: false, busy: false, messages: [], draft: '', pending: null, task: null, receipts: [], error: '', status: '', streaming: '', tools: [], live: [] };
 
 /** One status request at a time, no faster than the backend asks (≥ 500ms). */
 const POLL_MS = 900;
@@ -112,23 +122,55 @@ export function createAssistantSession(token: string, accountId: string, env: { 
     return tools.map((tool, at) => (at === index ? { ...tool, ...event, ok: event.ok ?? tool.ok } : tool));
   }
 
+  /** Append a delta to the text run it belongs to, starting a new run after a tool call. */
+  function appendText(live: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
+    if (!text) return live;
+    const last = live[live.length - 1];
+    if (last?.type === 'text') {
+      return [...live.slice(0, -1), { type: 'text', text: last.text + text }];
+    }
+    return [...live, { type: 'text', text }];
+  }
+
+  /** The first fragment and the completed call are one block, at the point the call began. */
+  function mergeLiveTool(live: AssistantLiveBlock[], tool: AssistantLiveTool): AssistantLiveBlock[] {
+    const index = live.findIndex(block => block.type === 'tool' && block.tool.id === tool.id);
+    if (index < 0) return [...live, { type: 'tool', tool }];
+    return live.map((block, at) =>
+      at === index && block.type === 'tool'
+        ? { type: 'tool', tool: { ...block.tool, ...tool, ok: tool.ok ?? block.tool.ok } }
+        : block,
+    );
+  }
+
   /** Tail the turn's events. A stream failure costs the live view only; `follow` keeps polling. */
   function startStream(taskId: string) {
     live?.abort();
     const stream = new AbortController();
     live = stream;
-    publish({ streaming: '', tools: [] });
+    publish({ streaming: '', tools: [], live: [] });
     void streamAssistantTask(token, taskId, (event) => {
       if (stream.signal.aborted || disposed) return;
-      if (event.type === 'delta') publish({ streaming: snapshot.streaming + event.text });
-      else if (event.type === 'tool') publish({ tools: mergeTool(snapshot.tools, { id: event.id, name: event.name, arguments: event.arguments }) });
-      else if (event.type === 'tool_result') publish({ tools: snapshot.tools.map(tool => (tool.id === event.id ? { ...tool, ok: event.ok } : tool)) });
-      else if (event.type === 'reset') publish({ streaming: '', tools: [] });
+      if (event.type === 'delta') {
+        publish({ streaming: snapshot.streaming + event.text, live: appendText(snapshot.live, event.text) });
+      } else if (event.type === 'tool') {
+        const tool = { id: event.id, name: event.name, arguments: event.arguments };
+        publish({ tools: mergeTool(snapshot.tools, tool), live: mergeLiveTool(snapshot.live, tool) });
+      } else if (event.type === 'tool_result') {
+        publish({
+          tools: snapshot.tools.map(tool => (tool.id === event.id ? { ...tool, ok: event.ok } : tool)),
+          live: snapshot.live.map(block =>
+            block.type === 'tool' && block.tool.id === event.id
+              ? { type: 'tool', tool: { ...block.tool, ok: event.ok } }
+              : block,
+          ),
+        });
+      } else if (event.type === 'reset') publish({ streaming: '', tools: [], live: [] });
       /* The turn is over or parked: stop reading rather than hold a keep-alive connection open.
          `done` keeps the text — `follow` replaces it with the persisted message a poll later. */
       else if (event.type === 'done') stream.abort();
       else if (event.type === 'paused' || event.type === 'failed') {
-        publish({ streaming: '', tools: [] });
+        publish({ streaming: '', tools: [], live: [] });
         stream.abort();
       }
     }, stream.signal).catch(() => { /* polling is the source of truth */ }).finally(() => {
@@ -138,7 +180,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
   function stopStream() {
     live?.abort();
     live = null;
-    publish({ streaming: '', tools: [] });
+    publish({ streaming: '', tools: [], live: [] });
   }
 
   /** Poll one turn until it ends, parks on a confirmation, or outlives the backend's budget. */
@@ -172,7 +214,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         continue;
       }
       add('assistant', turn.reply);
-      publish({ task: null, streaming: '', tools: [], status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
+      publish({ task: null, streaming: '', tools: [], live: [], status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
       stopStream();
       return;
     }

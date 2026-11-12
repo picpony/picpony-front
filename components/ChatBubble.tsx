@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils';
  *
  * **The text is plain text.** Line breaks are kept (`pre-wrap`) and nothing is parsed as
  * Markdown — a message is what was typed. The caller hands in the rendered pieces (links,
- * emoji pictures); the bubble only lays them out.
+ * emoji pictures); the bubble only lays them out. The one exception is `rich`: a rendered
+ * block document (the assistant's Markdown reply) supplies its own block layout, so the
+ * wrapper drops `pre-wrap` and keeps only the width and wrapping rules.
  *
  * **An attachment is not a bubble.** A shared picture or folder is a card with its own
  * surface (`attachment`), laid out on the speaker's side in the same column — wrapping it in
@@ -54,6 +56,11 @@ export interface ChatBubbleProps {
    * note on the component; the speaker's side and the run spacing still apply.
    */
   plain?: boolean;
+  /**
+   * Rendered block content (Markdown) rather than plain text: the wrapper keeps the width and
+   * wrapping rules but not `pre-wrap`, so block elements own their own whitespace.
+   */
+  rich?: boolean;
   /** Rendered under the bubble. Pass only on the last bubble of a run. */
   timestamp?: ReactNode;
   /**
@@ -83,6 +90,7 @@ export default function ChatBubble({
   children,
   attachment = false,
   plain = false,
+  rich = false,
   timestamp,
   status,
   startOfRun = true,
@@ -109,7 +117,8 @@ export default function ChatBubble({
                  bubble wider than its cap and pushed the chat frame off screen.
                  `pre-wrap` keeps the sender's line breaks and spaces; the words
                  still wrap at the bubble's edge. */
-              'text-body-m min-w-0 max-w-full whitespace-pre-wrap wrap-anywhere',
+              'text-body-m min-w-0 max-w-full wrap-anywhere',
+              !rich && 'whitespace-pre-wrap',
               /* Everything that makes a row a bubble. A plain row keeps only the text. */
               !plain && 'rounded-lg px-4 py-2',
               /* Forced colors flattens the two fills to one canvas; the edge is what is left
