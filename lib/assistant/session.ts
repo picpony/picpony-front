@@ -63,6 +63,16 @@ const wait = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, re
  * dispatch → receipt); the last receipt resumes the model and the turn is followed on. Receipts
  * settle no quota: the turn settles once when it ends, and the panel re-reads the quota then.
  */
+/**
+ * A reply worth putting in the thread. Blank output, or output with no letter, digit or Han
+ * character, is a failed answer — a stray `.` or `—` is not something the visitor can read.
+ */
+function usableReply(raw: string): string {
+  const text = raw.trim();
+  if (!text) return '';
+  return /[\p{L}\p{N}]/u.test(text) ? text : '';
+}
+
 export function createAssistantSession(token: string, accountId: string, env: { active(): boolean; navigate(href: string): Promise<void> }) {
   let snapshot = INITIAL;
   let key = '';
@@ -228,9 +238,24 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         await wait(POLL_MS, controller.signal);
         continue;
       }
+      const finished = turn.status === 'done';
+      const text = finished ? usableReply(turn.reply) : '';
       const tools = snapshot.live.flatMap(block => (block.type === 'tool' ? [block.tool] : []));
-      add('assistant', turn.reply, '', tools);
-      publish({ task: null, streaming: '', tools: [], live: [], status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
+      if (text || tools.length) add('assistant', text, '', tools);
+      publish({
+        task: null,
+        streaming: '',
+        tools: [],
+        live: [],
+        status: '',
+        /* A turn that ends without readable words is a failure, not an empty bubble. A failed
+           or cancelled turn names its state; a "done" turn with nothing usable says so. */
+        error: finished
+          ? text || tools.length
+            ? ''
+            : '彩彩没有返回有效回复，请重新发送'
+          : ENDED[turn.status] ?? '彩彩这次没能完成，请稍后再试',
+      });
       stopStream();
       return;
     }

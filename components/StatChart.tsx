@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import type { ReactNode } from 'react';
+import { formatExactCount } from '@/lib/format';
 
 /**
  * A time-series line chart for /stats.
@@ -86,6 +87,7 @@ function tickIndexes(count: number): number[] {
 }
 
 export default function StatChart({ series, labels, ariaLabel, loading = false, actions, className = '' }: StatChartProps) {
+  const [hover, setHover] = useState<number | null>(null);
   const count = labels.length;
   const maxValue = Math.max(0, ...series.flatMap((s) => s.values));
   const step = niceStep(maxValue / 4);
@@ -102,6 +104,15 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
     );
   }
 
+  /* A bucket is highlighted only while the pointer is over the plot, and never over a stale
+     chart that is being replaced. */
+  const active = !loading && hover !== null && hover < count ? hover : null;
+  const activeX = active === null ? 0 : pointX(active, count);
+  const tooltipLeft = (activeX / WIDTH) * 100;
+  /* Keep the tooltip inside the plot at both ends instead of letting it hang off the card. */
+  const tooltipShift =
+    activeX < PAD.left + PLOT_W * 0.2 ? '0' : activeX > PAD.left + PLOT_W * 0.8 ? '-100%' : '-50%';
+
   return (
     <figure className={cn('m-0', className)}>
       <figcaption className="sr-only">{ariaLabel}</figcaption>
@@ -116,7 +127,20 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>
-      <div className="relative" aria-busy={loading || undefined}>
+      <div
+        className={cn('relative', !loading && 'cursor-crosshair')}
+        aria-busy={loading || undefined}
+        onPointerMove={(event) => {
+          if (loading || event.pointerType === 'touch') return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (rect.width <= 0) return;
+          const left = rect.left + (PAD.left / WIDTH) * rect.width;
+          const width = ((WIDTH - PAD.left - PAD.right) / WIDTH) * rect.width;
+          const ratio = Math.min(1, Math.max(0, (event.clientX - left) / width));
+          setHover(Math.round(ratio * (count - 1)));
+        }}
+        onPointerLeave={() => setHover(null)}
+      >
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           className="h-auto w-full"
@@ -198,7 +222,55 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
             </g>
           );
         })}
+        {active !== null && (
+          <g className="text-outline-variant">
+            <line
+              x1={activeX}
+              x2={activeX}
+              y1={PAD.top}
+              y2={HEIGHT - PAD.bottom}
+              stroke="currentColor"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+              className="opacity-60"
+            />
+          </g>
+        )}
+        {active !== null &&
+          series.map((item) => (
+            <circle
+              key={`hover-${item.key}`}
+              cx={activeX}
+              cy={pointY(item.values[active] ?? 0, max)}
+              r={3}
+              fill="currentColor"
+              className={TONE[item.tone]}
+            />
+          ))}
       </svg>
+        {active !== null && (
+          <div
+            aria-hidden="true"
+            className="bg-surface-container-highest text-on-surface shadow-e2 pointer-events-none absolute top-1 z-10 min-w-32 rounded-md px-2.5 py-1.5 text-label-s"
+            style={{ left: `${tooltipLeft}%`, transform: `translateX(${tooltipShift})` }}
+          >
+            <p className="text-label-s-emphasized mb-1 tabular-nums">{labels[active]}</p>
+            <ul className="flex flex-col gap-0.5">
+              {series.map((item) => (
+                <li key={item.key} className="flex items-center justify-between gap-3 tabular-nums">
+                  <span className="text-on-surface-variant flex items-center gap-1.5">
+                    <span
+                      className={cn('h-0.5 w-3 rounded-full bg-current', TONE[item.tone])}
+                      aria-hidden="true"
+                    />
+                    {item.label}
+                  </span>
+                  <span>{formatExactCount(item.values[active])}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {loading && (
           <span
             aria-hidden="true"
