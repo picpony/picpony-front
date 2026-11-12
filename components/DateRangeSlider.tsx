@@ -169,19 +169,31 @@ export default function DateRangeSlider({
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-5.5 flex h-11 items-center"
         >
-          {/* The single slider's paint, twice: an inactive rail with its end stop, and the active
-              run clipped to stop 8dp short of each handle. */}
-          <span className="bg-secondary-container forced-boundary absolute h-4 w-full rounded-sm">
-            {endFraction < 0.99 && (
-              <span className="bg-primary-ink absolute top-1/2 right-1.5 size-1 -translate-y-1/2 rounded-full" />
-            )}
-          </span>
+          {/* The single slider's paint, three times over: the rail is active up to 8dp short
+              of a handle and inactive again 8dp after it, leaving the gap transparent rather
+              than filling it with the inactive tone. */}
+          <span
+            className="bg-secondary-container forced-boundary absolute h-4 w-full rounded-sm"
+            style={{
+              clipPath: `inset(0 calc(${(1 - low) * 100}% + 0.5rem) 0 0 round var(--radius-sm) 0.125rem 0.125rem var(--radius-sm))`,
+            }}
+          />
           <span
             className="bg-primary-ink forced-mark absolute h-4 w-full rounded-sm"
             style={{
-              clipPath: `inset(0 calc(${(1 - high) * 100}% + 0.5rem) 0 calc(${low * 100}% + 0.5rem) round var(--radius-sm) 0.125rem 0.125rem var(--radius-sm))`,
+              /* Both ends face a handle gap, so both take the single slider's 2dp edge —
+                 the 8dp cap belongs only to the rail's own outer ends. */
+              clipPath: `inset(0 calc(${(1 - high) * 100}% + 0.5rem) 0 calc(${low * 100}% + 0.5rem) round 0.125rem)`,
             }}
           />
+          <span
+            className="bg-secondary-container forced-boundary absolute h-4 w-full rounded-sm"
+            style={{
+              clipPath: `inset(0 0 0 calc(${high * 100}% + 0.5rem) round 0.125rem var(--radius-sm) var(--radius-sm) 0.125rem)`,
+            }}
+          >
+            <span className="bg-primary-ink absolute top-1/2 right-1.5 size-1 -translate-y-1/2 rounded-full" />
+          </span>
           <span
             className={cn(
               'absolute top-1/2 h-11 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full',
