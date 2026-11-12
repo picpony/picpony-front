@@ -27,7 +27,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Anchored menu, listbox, tooltip | Scale `fastSpatial`, opacity `fastEffects` | Same split | `DropdownMenu`, `Tooltip.kt` |
 | Toast | Travel `fastSpatial`, opacity `fastEffects`; stack `layout` | Same split | `SnackbarHost` |
 | `SwapContent` | `surfaceArrival('fast')` after `HANDOFF_MS` | `fastEffects` | `AnimatedContent` |
-| Dialog | `surfaceArrival('default')` | `defaultEffects` | Project mapping |
+| Dialog | `surfaceArrival('default')`; standard tier tilts a card from perspective to front | `defaultEffects`; same perspective pose | Project mapping |
 | Sheet, side panel, modal drawer | `defaultSpatial` with edge skirt; scrim `defaultEffects` | Surface `fastEffects`, scrim `defaultEffects`; drag release `defaultSpatial` | `BottomSheet.kt`, `ModalNavigationDrawer` |
 | Docked drawer / content width | `layout` | `layout` | Project mapping |
 | Search suggestions | Height `slowSpatial`, fade `defaultEffects`; replacement height `layout` | Height `defaultSpatial`, fade `defaultEffects` | `rememberSearchBarState` |

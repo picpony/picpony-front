@@ -76,13 +76,25 @@ interface ModalProps {
   returnFocus?: () => HTMLElement | null;
 }
 
-/** A dialog arrives as every partial-screen surface does (`surfaceArrival`): its rise and scale
- *  on the default spatial spring — the expressive scheme's soft landing, with a hair of give —
- *  and its fade (and its scrim's) on the default effects spring, so it is opaque well before the
- *  crest. It leaves on DefaultEffects (`surfaceDeparture`), everything on that one critically
- *  damped clock, answering the press on the frame after it. A reversal mid-way starts from the
- *  committed pose. */
+/** A dialog arrives as every partial-screen surface does (`surfaceArrival`): its rise, depth and
+ *  scale on the default spatial spring — the expressive scheme's soft landing, with a hair of
+ *  give — and its fade (and its scrim's) on the default effects spring, so it is opaque well
+ *  before the crest. The standard tier starts as a card leaning back in perspective and rotates
+ *  to face the viewer rather than only sliding; the reduced tier keeps the flat rise and scale.
+ *  It leaves on DefaultEffects (`surfaceDeparture`), everything on that one critically damped
+ *  clock, answering the press on the frame after it, and leaves through the same perspective
+ *  pose. A reversal mid-way starts from the committed pose. */
 const CLOSE_ANIM_DURATION = SPRING_MS.defaultEffects;
+
+/** Perspective pose for the standard tier: the dialog starts as a card leaning away, then
+ *  rotates to face the viewer; the exit tilts back through the same pose as it fades. The
+ *  depth's own scale (900/(900+48) ≈ 0.95) is `ENTER_SCALE.surface`, so the stronger tilt adds
+ *  dimension without shrinking the card. */
+const PERSPECTIVE_PX = 900;
+const ENTER_DEPTH_PX = 48;
+const ENTER_TILT_DEG = 24;
+const EXIT_DEPTH_PX = 48;
+const EXIT_TILT_DEG = 24;
 
 /**
  * Hide the scrims of dialogs that are still leaving and return the strongest opacity among
@@ -232,8 +244,10 @@ export default function Modal({
     const reduced = tier === 'reduced';
     const entryTransform = reduced
       ? `translateY(${TRAVEL_PX.small}px) scale(${ENTER_SCALE.surfaceReduced})`
-      : `translateY(${TRAVEL_PX.standard}px) scale(${ENTER_SCALE.surface})`;
-    const exitTransform = `translateY(${TRAVEL_PX.small}px) scale(${ENTER_SCALE.surfaceReduced})`;
+      : `perspective(${PERSPECTIVE_PX}px) translate3d(0, ${TRAVEL_PX.standard}px, -${ENTER_DEPTH_PX}px) rotateX(${ENTER_TILT_DEG}deg)`;
+    const exitTransform = reduced
+      ? `translateY(${TRAVEL_PX.small}px) scale(${ENTER_SCALE.surfaceReduced})`
+      : `perspective(${PERSPECTIVE_PX}px) translate3d(0, ${TRAVEL_PX.standard}px, -${EXIT_DEPTH_PX}px) rotateX(${EXIT_TILT_DEG}deg)`;
     const arriving = firstPlacement && isOpen;
     const handedOver = arriving ? takeOverLeavingScrims(overlay, depth) : 0;
     const fromScrim = arriving ? String(handedOver) : getComputedStyle(scrim).opacity;
