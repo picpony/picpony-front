@@ -60,9 +60,11 @@ export const CHECK_SNAP_DELAY_MS = 100;
 /**
  * Curves that are **not** motion to a target and so are not springs: an indeterminate loop has no
  * arrival (symmetric, eases at both ends), and a skeleton sweep is a constant drift. These are the
- * only cubic-béziers left in the app. CSS twins: `--ease-loop`, `--ease-sweep`.
+ * only cubic-béziers left in the app. CSS twins: `--ease-loop`, `--ease-sweep` (the semantic
+ * line) and `--ease-skeleton-sweep` (loading blocks).
  */
 export const LOOP_EASE = {
   loop: 'cubic-bezier(0.4, 0, 0.6, 1)',
   sweep: 'cubic-bezier(0, 0, 0.58, 1)',
+  skeleton: 'cubic-bezier(0.25, -0.00, 0.00, 1.00)',
 } as const;

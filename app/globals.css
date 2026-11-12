@@ -1158,13 +1158,14 @@ body {
   --duration-spring-slow-effects: calc(var(--motion-base-spring-slow-effects) * var(--motion-scale));
   --duration-spring-layout: calc(var(--motion-base-spring-layout) * var(--motion-scale));
 
-  /* **Not motion to a target, so not springs** — the only two curves left. An indeterminate
+  /* **Not motion to a target, so not springs** — the only curves left. An indeterminate
      loop has no arrival: a one-sided curve is velocity-discontinuous once per cycle, so it eases
-     at both ends. The skeleton sweep is a drift with a soft end. (`LOOP_EASE` in
-     lib/motionTokens.ts.) */
+     at both ends. The semantic line's sweep keeps a drift with a soft end; the loading blocks
+     take their own one-sided pass. (`LOOP_EASE` in lib/motionTokens.ts.) */
   --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
   --motion-base-sweep: 1.6s;
   --ease-sweep: cubic-bezier(0, 0, 0.58, 1);
+  --ease-skeleton-sweep: cubic-bezier(0.25, -0.00, 0.00, 1.00);
 
   /* Travel and arrival scale (`TRAVEL_PX` / `ENTER_SCALE` in lib/motionTokens.ts). */
   --motion-travel: 16px;
@@ -1785,7 +1786,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
        pass, and easing out of it reads as light going past rather than a conveyor belt.
        Not a decelerating curve: one that spends most of its travel in the first tenth, which
        over a 1.6s pass is a flash and then a stall. */
-    animation: shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep) infinite;
+    animation: shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-skeleton-sweep) infinite;
     /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
        inline delay on the skeleton element stagger the sweep. */
     animation-delay: inherit;
