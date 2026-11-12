@@ -3,16 +3,17 @@
 import { useState, type ReactNode } from 'react';
 import PageHeader from '@/components/PageHeader';
 import Card from '@/components/Card';
+import DateInput from '@/components/admin/DateInput';
 import ErrorRetry from '@/components/ErrorRetry';
 import SectionHeading from '@/components/SectionHeading';
 import Skeleton from '@/components/Skeleton';
-import Tabs, { type TabItem } from '@/components/Tabs';
 import StatChart, { type ChartSeries } from '@/components/StatChart';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import type { SiteStats, StatsGranularity, StatsRange } from '@/lib/api/stats';
+import type { SiteStats, StatsGranularity } from '@/lib/api/stats';
 import { formatExactCount } from '@/lib/format';
 import { useResource } from '@/lib/resource';
 import { siteStats } from '@/lib/resources';
+import { formatChineseDay, type StatsWindow } from '@/lib/statsDates';
 import type { StatsSeed } from '@/lib/stats.server';
 
 /**
@@ -20,16 +21,9 @@ import type { StatsSeed } from '@/lib/stats.server';
  *
  * Four reads' worth of data arrive as one `stats` answer: cumulative users, cumulative Chinese
  * dictionary tags, visit counts and community content, all bucketed by the same Beijing calendar
- * unit. The page owns only the chosen range; the server picks daily, weekly or monthly buckets so
- * `全部` stays bounded.
+ * unit. The page owns only the chosen start and end days; the server picks daily, weekly or
+ * monthly buckets from the span so a long window stays bounded.
  */
-
-const RANGES: TabItem<StatsRange>[] = [
-  { value: '7', label: '最近 7 天' },
-  { value: '30', label: '最近 30 天' },
-  { value: '90', label: '最近 90 天' },
-  { value: 'all', label: '全部' },
-];
 
 /** "每日" / "每周" / "每月" — the unit a bucket's new-count is counted in. */
 function periodWord(granularity: StatsGranularity): string {
@@ -93,15 +87,31 @@ function StatsSkeleton() {
   );
 }
 
-export default function StatsScreen({ seed }: { seed: StatsSeed | null }) {
-  const [range, setRange] = useState<StatsRange>('7');
-  const read = useResource(
-    siteStats,
-    { range },
-    { initial: range === '7' ? (seed ?? undefined) : undefined },
+export default function StatsScreen({
+  seed,
+  defaultWindow,
+}: {
+  seed: StatsSeed | null;
+  defaultWindow: StatsWindow;
+}) {
+  const [period, setPeriod] = useState<StatsWindow>(() =>
+    seed ? { start: seed.data.start, end: seed.data.end } : defaultWindow,
   );
+  const read = useResource(siteStats, period, { initial: seed ?? undefined });
   const data = read.data;
   const loading = data === undefined && read.error === undefined;
+
+  /* Keep the two fields in calendar order while typing or picking: a start after the current
+     end carries the end with it, and an end before the start carries the start back. The native
+     inputs also carry min/max, so the invalid intermediate state cannot be committed. */
+  const changeStart = (value: string) => {
+    if (!value) return;
+    setPeriod((current) => ({ start: value, end: value > current.end ? value : current.end }));
+  };
+  const changeEnd = (value: string) => {
+    if (!value) return;
+    setPeriod((current) => ({ start: value < current.start ? value : current.start, end: value }));
+  };
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -109,14 +119,32 @@ export default function StatsScreen({ seed }: { seed: StatsSeed | null }) {
         title="站点统计"
         subtitle="数据按北京时间聚合。累计数字是截至每个时间点的总量；访客与浏览量是各时段自身的计数。"
       />
-      <Tabs
-        tabs={RANGES}
-        value={range}
-        onChange={setRange}
-        variant="pill"
-        label="统计时间范围"
-        className="mb-6"
-      />
+      <div className="mb-2 flex flex-wrap items-end gap-x-3 gap-y-4">
+        <DateInput
+          label="开始日期"
+          fieldClassName="w-full sm:w-44"
+          value={period.start}
+          max={period.end}
+          onChange={(event) => changeStart(event.currentTarget.value)}
+        />
+        <span aria-hidden="true" className="text-title-m text-on-surface-variant pb-4">
+          ～
+        </span>
+        <DateInput
+          label="结束日期"
+          fieldClassName="w-full sm:w-44"
+          value={period.end}
+          min={period.start}
+          max={defaultWindow.end}
+          onChange={(event) => changeEnd(event.currentTarget.value)}
+        />
+      </div>
+      <p className="text-body-m text-on-surface-variant mb-6">
+        统计区间：
+        <span className="text-on-surface tabular-nums">
+          {formatChineseDay(period.start)} ～ {formatChineseDay(period.end)}
+        </span>
+      </p>
 
       {data === undefined && read.error !== undefined && (
         <Card padding="lg">

@@ -1,15 +1,15 @@
 import { api } from './http';
 import { ApiError } from './errors';
+import type { StatsWindow } from '@/lib/statsDates';
 
 /**
- * `/stats`'s aggregate read: `GET /api/v1/stats?range=7|30|90|all` (`stats::site_stats`).
+ * `/stats`'s aggregate read: `GET /api/v1/stats?start=YYYY-MM-DD&end=YYYY-MM-DD`
+ * (`stats::site_stats`).
  *
  * Public and anonymous — the backend returns counts only, never accounts, visitor hashes or
- * paths. An explicit range is bucketed by Asia/Shanghai day; `all` widens to weeks or months
- * once the install is old enough, and `granularity` says which unit the dates use.
+ * paths. The window is inclusive and interpreted as Asia/Shanghai calendar days; `granularity`
+ * says whether the returned buckets are days, weeks or months.
  */
-export type StatsRange = '7' | '30' | '90' | 'all';
-
 export type StatsGranularity = 'day' | 'week' | 'month';
 
 /** One bucket. Cumulative fields describe the end of the bucket; `visitors`/`hits` are its own counts. */
@@ -43,7 +43,6 @@ export interface StatsTotals {
 
 export interface SiteStats {
   timezone: string;
-  range: StatsRange;
   granularity: StatsGranularity;
   start: string;
   end: string;
@@ -53,8 +52,12 @@ export interface SiteStats {
   series: StatsPoint[];
 }
 
-export async function readSiteStats(range: StatsRange, signal?: AbortSignal): Promise<SiteStats> {
-  const data = await api<SiteStats>('GET', '/stats', { query: { range }, signal, cache: 'no-store' });
+export async function readSiteStats({ start, end }: StatsWindow, signal?: AbortSignal): Promise<SiteStats> {
+  const data = await api<SiteStats>('GET', '/stats', {
+    query: { start, end },
+    signal,
+    cache: 'no-store',
+  });
   /* The screen maps over both, so a malformed answer is an `invalid` failure rather than a
      render-time crash. Field names are the backend's own; there is nothing to alias. */
   if (!Array.isArray(data.series) || typeof data.totals?.users !== 'number') {

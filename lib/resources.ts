@@ -103,6 +103,7 @@ import { adoptCloudSettings, type SettingsSyncBridge } from '@/lib/settingsSync'
 import * as shop from '@/lib/api/shop';
 import * as statsApi from '@/lib/api/stats';
 import * as subscriptions from '@/lib/api/tagSubscriptions';
+import { statsWindowKey, type StatsWindow } from '@/lib/statsDates';
 
 export type { ProfileUser, TeamMember, BlockGroup };
 export type HistoryItem = historyApi.HistoryEntry;
@@ -1096,16 +1097,16 @@ export const teamMembers = /* @__PURE__ */ defineResource<Record<string, never>,
 });
 
 /**
- * /stats's aggregate read, keyed on the selected range. A minute: the figures are counts of
+ * /stats's aggregate read, keyed on the inclusive window. A minute: the figures are counts of
  * records other people create, so a visitor watching the page expects the last bucket to keep
  * up — but nothing here is worth a shorter clock or a blocking placeholder.
  */
-export const siteStats = /* @__PURE__ */ defineResource<{ range: statsApi.StatsRange }, statsApi.SiteStats>({
+export const siteStats = /* @__PURE__ */ defineResource<StatsWindow, statsApi.SiteStats>({
   name: 'site-stats',
-  key: ({ range }) => range,
+  key: statsWindowKey,
   ttl: 1 * MINUTES,
-  maxEntries: 4,
-  fetch: ({ range }, signal) => statsApi.readSiteStats(range, signal),
+  maxEntries: 8,
+  fetch: (window, signal) => statsApi.readSiteStats(window, signal),
 });
 
 // ---------------------------------------------------------------------------

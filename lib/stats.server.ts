@@ -1,11 +1,12 @@
 import type { SiteStats } from '@/lib/api/stats';
+import { defaultStatsWindow, statsWindowKey } from '@/lib/statsDates';
 import { cacheSeconds, createServerMemo } from '@/lib/serverMemo';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
  * /stats's first paint, read on the server so the default seven-day window arrives with its
  * numbers instead of a full set of skeletons; the island seeds it through `resource.seed()` and
- * reads every other range itself.
+ * reads every other window itself.
  *
  * Public and anonymous, identical for every visitor, so there is no cache to partition — the
  * same contract as `lib/team.server.ts`: a bounded wait, `null` rather than a throw, and the
@@ -19,9 +20,6 @@ const REVALIDATE_S = 60;
 /** A missing seed falls back to the island's own read, so this must never hold the document. */
 const TIMEOUT_MS = 2500;
 
-/** The range the page opens on, and therefore the only key warmed here. */
-const DEFAULT_RANGE = '7';
-
 const UPSTREAM_ORIGIN = upstreamOrigin();
 
 export interface StatsSeed {
@@ -32,19 +30,23 @@ export interface StatsSeed {
 
 export const readStatsSeed = createServerMemo({
   ttlMs: REVALIDATE_S * 1000,
-  keyOf: () => DEFAULT_RANGE,
+  /* One slot: the page only ever opens on today's seven-day window. The seed's own `key` is the
+     concrete date pair, so a request that crosses midnight simply fails the island's key check
+     and falls back to a client read rather than showing yesterday under today's controls. */
+  keyOf: () => 'default',
   load: async (): Promise<StatsSeed | null> => {
+    const window = defaultStatsWindow();
     try {
-      const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/stats?range=${DEFAULT_RANGE}`, {
-        next: { revalidate: cacheSeconds(REVALIDATE_S) },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      const res = await fetch(
+        `${UPSTREAM_ORIGIN}/api/v1/stats?start=${window.start}&end=${window.end}`,
+        {
+          next: { revalidate: cacheSeconds(REVALIDATE_S) },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        },
+      );
       if (!res.ok) return null;
       const data = (await res.json()) as SiteStats;
-      /* Spelled rather than imported from `lib/resources`: the catalogue's key function is the
-         fact this has to match, and importing it would pull the whole client catalogue into the
-         server bundle for one string. A drift falls back to a client read, not a wrong answer. */
-      return { key: DEFAULT_RANGE, data, generatedAt: Date.now() };
+      return { key: statsWindowKey(window), data, generatedAt: Date.now() };
     } catch {
       return null;
     }

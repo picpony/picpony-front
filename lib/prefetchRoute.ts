@@ -26,7 +26,6 @@ import {
   quickTags,
   sharedFaveIds,
   shopItems,
-  siteStats,
   tagGallery,
   tagGroups,
   tagSubscriptions,
@@ -112,13 +111,6 @@ export function prefetchRoute(href: string) {
   /* Public, so it comes before the token guard. */
   if (path === '/about') {
     teamMembers.prefetch({});
-    return;
-  }
-
-  /* /stats opens on the seven-day range; the server seeds the same answer, and this warms it
-     for a navigation that outruns that render. */
-  if (path === '/stats') {
-    siteStats.prefetch({ range: '7' });
     return;
   }
 
