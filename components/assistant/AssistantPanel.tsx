@@ -160,9 +160,16 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         return (
           <li key={message.id || `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
             <ChatBubble own={own} plain={!own} rich={!own} startOfRun={startOfRun} endOfRun={endOfRun}>
-              {own
-                ? message.content.replaceAll('||', '\n\n')
-                : <MarkdownRenderer content={message.content.replaceAll('||', '\n\n')} />}
+              {own ? message.content.replaceAll('||', '\n\n') : (
+                <>
+                  {message.tools?.length ? (
+                    <div className="mb-2 flex flex-col gap-1.5">
+                      {message.tools.map(tool => <LiveToolRow key={tool.id} tool={tool} />)}
+                    </div>
+                  ) : null}
+                  <MarkdownRenderer content={message.content.replaceAll('||', '\n\n')} />
+                </>
+              )}
             </ChatBubble>
             {history && message.id && (
               <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>

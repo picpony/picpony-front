@@ -26,7 +26,11 @@ export interface AssistantReceipt {
   error?: string; page_effect?: JsonObject; defer_navigation?: string;
 }
 /** `id` is the backend's message UUID; `''` for a bubble only this page has seen. */
-export interface AssistantMessage { id: string; role: 'user' | 'assistant'; content: string }
+export interface AssistantMessage {
+  id: string; role: 'user' | 'assistant'; content: string;
+  /** Tool calls this page saw for the reply; the persisted history does not carry them. */
+  tools?: AssistantLiveTool[];
+}
 /** `assistant_pending_actions` as `run-task` returns it: one write waiting for the user's decision. */
 export interface AssistantPending { id: string; operation: string; arguments: JsonObject; expires_at: string }
 /**

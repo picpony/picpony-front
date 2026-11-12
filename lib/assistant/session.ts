@@ -89,9 +89,11 @@ export function createAssistantSession(token: string, accountId: string, env: { 
     snapshot = { ...snapshot, ...next };
     listeners.forEach(listener => listener());
   };
-  const add = (role: AssistantMessage['role'], content: string, id = '') => {
-    if (!content || id && snapshot.messages.some(message => message.id === id)) return;
-    publish({ messages: [...snapshot.messages, { role, content, id }].slice(-MAX_HISTORY) });
+  const add = (role: AssistantMessage['role'], content: string, id = '', tools?: AssistantLiveTool[]) => {
+    if ((!content && !tools?.length) || (id && snapshot.messages.some(message => message.id === id))) return;
+    const message: AssistantMessage = { role, content, id };
+    if (tools?.length) message.tools = tools;
+    publish({ messages: [...snapshot.messages, message].slice(-MAX_HISTORY) });
   };
   const runner = createActionRunner({
     assertCurrent,
@@ -165,7 +167,16 @@ export function createAssistantSession(token: string, accountId: string, env: { 
               : block,
           ),
         });
-      } else if (event.type === 'reset') publish({ streaming: '', tools: [], live: [] });
+      } else if (event.type === 'reset') {
+        /* A new model round (or a fallback attempt) starts. The trailing partial text belongs
+           to the round that just ended; text before a tool call and every tool call stay, so a
+           tool no longer disappears when the next round begins. */
+        const last = snapshot.live[snapshot.live.length - 1];
+        publish({
+          streaming: '',
+          live: last?.type === 'text' ? snapshot.live.slice(0, -1) : snapshot.live,
+        });
+      }
       /* The turn is over or parked: stop reading rather than hold a keep-alive connection open.
          `done` keeps the text — `follow` replaces it with the persisted message a poll later. */
       else if (event.type === 'done') stream.abort();
@@ -213,7 +224,8 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         await wait(POLL_MS, controller.signal);
         continue;
       }
-      add('assistant', turn.reply);
+      const tools = snapshot.live.flatMap(block => (block.type === 'tool' ? [block.tool] : []));
+      add('assistant', turn.reply, '', tools);
       publish({ task: null, streaming: '', tools: [], live: [], status: turn.status === 'done' || turn.reply ? '' : ENDED[turn.status] ?? '' });
       stopStream();
       return;
