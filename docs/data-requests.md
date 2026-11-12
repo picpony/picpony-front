@@ -41,6 +41,7 @@ PicPony reads default to a 15-second deadline, overridable by `timeoutMs`. Write
 | `/` | Addressed gallery page up to page 20 and anonymous featured image |
 | `/?tab=forum` | Initial default forum list |
 | `/about` | Team roster |
+| `/stats` | Default seven-day statistics; other ranges read on the client |
 | `/user/[id]` | Profile header; missing users call `notFound()` |
 | Direct `/pic/[id]` | Picture record and glossary names available in time |
 

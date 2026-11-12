@@ -1364,6 +1364,16 @@ export default function AppLayout({
                         </span>
                         <Link
                           scroll={false}
+                          href="/stats"
+                          className="touch-target rounded-xs transition-ui focus-visible:outline-hidden hover:text-on-surface hover:underline focus-visible:ring-2 focus-ring"
+                        >
+                          站点统计
+                        </Link>
+                        <span aria-hidden="true" className="text-outline">
+                          ·
+                        </span>
+                        <Link
+                          scroll={false}
                           href="/policy"
                           className="touch-target rounded-xs transition-ui focus-visible:outline-hidden hover:text-on-surface hover:underline focus-visible:ring-2 focus-ring"
                         >

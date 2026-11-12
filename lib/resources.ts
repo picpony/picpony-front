@@ -101,6 +101,7 @@ import {
 import { DEFAULT_BROWSING_FINGERPRINT, UNMIRRORABLE_FINGERPRINT } from '@/lib/searchQuery';
 import { adoptCloudSettings, type SettingsSyncBridge } from '@/lib/settingsSync';
 import * as shop from '@/lib/api/shop';
+import * as statsApi from '@/lib/api/stats';
 import * as subscriptions from '@/lib/api/tagSubscriptions';
 
 export type { ProfileUser, TeamMember, BlockGroup };
@@ -1092,6 +1093,19 @@ export const teamMembers = /* @__PURE__ */ defineResource<Record<string, never>,
   ttl: 30 * MINUTES,
   maxEntries: 1,
   fetch: async (_, signal) => (await picpony.getTeamMembers(signal)).members,
+});
+
+/**
+ * /stats's aggregate read, keyed on the selected range. A minute: the figures are counts of
+ * records other people create, so a visitor watching the page expects the last bucket to keep
+ * up — but nothing here is worth a shorter clock or a blocking placeholder.
+ */
+export const siteStats = /* @__PURE__ */ defineResource<{ range: statsApi.StatsRange }, statsApi.SiteStats>({
+  name: 'site-stats',
+  key: ({ range }) => range,
+  ttl: 1 * MINUTES,
+  maxEntries: 4,
+  fetch: ({ range }, signal) => statsApi.readSiteStats(range, signal),
 });
 
 // ---------------------------------------------------------------------------
