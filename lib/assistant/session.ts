@@ -150,7 +150,9 @@ export function createAssistantSession(token: string, accountId: string, env: { 
     live?.abort();
     const stream = new AbortController();
     live = stream;
-    publish({ streaming: '', tools: [], live: [] });
+    /* Keep tool blocks across a resumed stream (a confirmation parks and restarts the turn).
+       A new turn clears them in `send`; a finished turn clears them in `follow`. */
+    publish({ streaming: '' });
     void streamAssistantTask(token, taskId, (event) => {
       if (stream.signal.aborted || disposed) return;
       if (event.type === 'delta') {
@@ -181,7 +183,9 @@ export function createAssistantSession(token: string, accountId: string, env: { 
          `done` keeps the text — `follow` replaces it with the persisted message a poll later. */
       else if (event.type === 'done') stream.abort();
       else if (event.type === 'paused' || event.type === 'failed') {
-        publish({ streaming: '', tools: [], live: [] });
+        /* Parked or terminal: stop the stream, keep what the turn already showed. The pending
+           card or the final reply sits below the tool calls that led to it. */
+        publish({ streaming: '' });
         stream.abort();
       }
     }, stream.signal).catch(() => { /* polling is the source of truth */ }).finally(() => {
@@ -191,7 +195,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
   function stopStream() {
     live?.abort();
     live = null;
-    publish({ streaming: '', tools: [], live: [] });
+    publish({ streaming: '' });
   }
 
   /** Poll one turn until it ends, parks on a confirmation, or outlives the backend's budget. */
@@ -360,7 +364,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         assertCurrent();
         add('user', message);
         writeJournalText(accountId, 'pending-chat', null); writeJournalText(accountId, 'draft', null);
-        publish({ draft: '', pending: null, task: following(turn.task_id, 'queued') });
+        publish({ draft: '', pending: null, task: following(turn.task_id, 'queued'), streaming: '', tools: [], live: [] });
         await follow(turn.task_id);
       });
     },
@@ -409,7 +413,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         await clearAssistantHistory(token); assertCurrent();
         writeJournalText(accountId, 'pending-chat', null);
         stopStream();
-        publish({ messages: [], receipts: [], task: null, pending: null, status: '已清空聊天记录' });
+        publish({ messages: [], receipts: [], task: null, pending: null, status: '已清空聊天记录', tools: [], live: [] });
       });
     },
     /* Not through `run()` (it is not a request and must not show busy), so it catches for itself:
