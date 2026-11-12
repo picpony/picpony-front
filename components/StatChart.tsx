@@ -30,6 +30,8 @@ interface StatChartProps {
   labels: string[];
   /** Read out as the chart's accessible name; it should summarise the direction, not the axes. */
   ariaLabel: string;
+  /** The window is being re-read: a horizontal sweep crosses the plot until it lands. */
+  loading?: boolean;
   /** Trailing controls on the legend row — the daily/cumulative view switch. */
   actions?: ReactNode;
   className?: string;
@@ -83,7 +85,7 @@ function tickIndexes(count: number): number[] {
   return [...indexes].sort((a, b) => a - b);
 }
 
-export default function StatChart({ series, labels, ariaLabel, actions, className = '' }: StatChartProps) {
+export default function StatChart({ series, labels, ariaLabel, loading = false, actions, className = '' }: StatChartProps) {
   const count = labels.length;
   const maxValue = Math.max(0, ...series.flatMap((s) => s.values));
   const step = niceStep(maxValue / 4);
@@ -114,12 +116,13 @@ export default function StatChart({ series, labels, ariaLabel, actions, classNam
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-auto w-full"
-        focusable="false"
-        aria-hidden="true"
-      >
+      <div className="relative" aria-busy={loading || undefined}>
+        <svg
+          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          className="h-auto w-full"
+          focusable="false"
+          aria-hidden="true"
+        >
         {yTicks.map((value) => {
           const y = pointY(value, max);
           return (
@@ -196,6 +199,21 @@ export default function StatChart({ series, labels, ariaLabel, actions, classNam
           );
         })}
       </svg>
+        {loading && (
+          <span
+            aria-hidden="true"
+            className="skeleton pointer-events-none absolute rounded-md"
+            /* Only the plotting rectangle: the y tick labels sit left of PAD.left and the x
+               labels below PAD.bottom, so the sweep must stop short of both. */
+            style={{
+              left: `${(PAD.left / WIDTH) * 100}%`,
+              right: `${(PAD.right / WIDTH) * 100}%`,
+              top: `${(PAD.top / HEIGHT) * 100}%`,
+              bottom: `${(PAD.bottom / HEIGHT) * 100}%`,
+            }}
+          />
+        )}
+      </div>
     </figure>
   );
 }

@@ -147,7 +147,13 @@ export default function StatsScreen({
       )}
       {loading && <StatsSkeleton />}
       {data !== undefined && (
-        <StatsBody data={data} period={period} maxDay={defaultWindow.end} onPeriodChange={setPeriod} />
+        <StatsBody
+          data={data}
+          period={period}
+          maxDay={defaultWindow.end}
+          onPeriodChange={setPeriod}
+          loading={read.isLoading}
+        />
       )}
     </div>
   );
@@ -158,11 +164,13 @@ function StatsBody({
   period,
   maxDay,
   onPeriodChange,
+  loading,
 }: {
   data: SiteStats;
   period: StatsWindow;
   maxDay: string;
   onPeriodChange: (next: StatsWindow) => void;
+  loading: boolean;
 }) {
   const [category, setCategory] = useState<StatsTab>('stats-users');
   const [view, setView] = useState<ChartView>('total');
@@ -247,6 +255,7 @@ function StatsBody({
             <StatChart
               series={view === 'total' ? userTotal : userNew}
               labels={labels}
+              loading={loading}
               actions={toggle}
               ariaLabel={
                 view === 'total'
@@ -266,6 +275,7 @@ function StatsBody({
             <StatChart
               series={view === 'total' ? tagTotal : tagNew}
               labels={labels}
+              loading={loading}
               actions={toggle}
               ariaLabel={
                 view === 'total'
@@ -282,7 +292,12 @@ function StatsBody({
             figure={formatExactCount(data.window.visitors)}
             note={`本期间浏览量 ${formatExactCount(data.window.hits)}`}
           >
-            <StatChart series={visits} labels={labels} ariaLabel={`${unit}独立访客与浏览量折线图`} />
+            <StatChart
+              series={visits}
+              labels={labels}
+              loading={loading}
+              ariaLabel={`${unit}独立访客与浏览量折线图`}
+            />
           </MetricCard>
         </TabPane>
 
@@ -297,6 +312,7 @@ function StatsBody({
             <StatChart
               series={view === 'total' ? contentTotal : contentNew}
               labels={labels}
+              loading={loading}
               actions={toggle}
               ariaLabel={
                 view === 'total'
