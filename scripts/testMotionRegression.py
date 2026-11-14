@@ -152,7 +152,7 @@ def run_tier(browser, motion, speed, scale):
         check(tier, 'transition-ui travel on FastSpatial', all(near(lists.get(p), fs) for p in travel), lists)
     else:
         check(tier, 'transition-ui travel dropped under off', not any(p in lists for p in travel), lists)
-    for selector in ['a[aria-label="PicPony 主页"]', '[role=tab]']:
+    for selector in ['a[aria-label="PicPony 首页"]', '[role=tab]']:
         lists = page.evaluate(TRANSITIONS, [selector, ''])
         check(tier, f'focus ring on FastEffects: {selector}', lists and near(lists.get('box-shadow'), fe), lists)
 

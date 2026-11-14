@@ -99,8 +99,8 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       <EmptyState
         size="pane"
         icon={<MdLinkOff size={ICON.display} />}
-        title="你还没有绑定 API Key"
-        description="绑定 Derpibooru 的 API Key 后，你上传的作品会显示在这里"
+        title="需要绑定 API Key"
+        description="绑定 Derpibooru API Key 后，你上传的图片会显示在这里"
         action={
           <ButtonLink
             href={settingsHref('account')}
@@ -115,8 +115,8 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       <EmptyState
         size="pane"
         icon={<MdLinkOff size={ICON.display} />}
-        title="该用户未绑定 API Key"
-        description="绑定 Derpibooru 账户后，这里会显示 TA 上传的作品"
+        title="未绑定 API Key"
+        description="该用户尚未绑定 Derpibooru API Key"
       />
     );
   }
@@ -127,7 +127,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       return (
         <EmptyState
           size="pane"
-          title="这一页没有图片"
+          title="此页暂无图片"
           action={<Button variant="tonal" onClick={() => setPage(1)}>回到第一页</Button>}
         />
       );
@@ -137,14 +137,14 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         size="pane"
         icon={<MdCloudUpload size={ICON.display} />}
         title="暂无上传记录"
-        description="在当前的内容筛选设置下没有可显示的作品"
+        description="在当前内容筛选设置下，暂无可显示的图片"
         action={
           <ButtonLink
             href="/upload"
             variant="tonal"
             icon={<MdUpload />}
           >
-            上传作品
+            上传图片
           </ButtonLink>
         }
       />
@@ -153,7 +153,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         size="pane"
         icon={<MdCloudUpload size={ICON.display} />}
         title="暂无上传记录"
-        description="在当前的内容筛选设置下，该用户没有可显示的作品"
+        description="在当前内容筛选设置下，暂无可显示的图片"
       />
     );
   }
@@ -173,7 +173,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
             size="xs"
             icon={<MdSearch />}
           >
-            {own ? '搜索我的作品' : '搜索 TA 的作品'}
+            {own ? '搜索我的作品' : '搜索该用户的作品'}
           </ButtonLink>
         )}
       </div>

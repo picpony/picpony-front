@@ -268,7 +268,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
               <p className="whitespace-pre-wrap wrap-anywhere text-body-m text-on-surface">{bio}</p>
             ) : (
               <p className="text-body-m text-on-surface-variant">
-                {own ? '你还没有填写个人简介' : '该用户很懒，什么都没有留下。'}
+                {own ? '尚未填写个人简介' : '暂无个人简介'}
               </p>
             )}
           </div>

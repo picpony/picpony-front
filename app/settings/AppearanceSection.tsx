@@ -28,8 +28,8 @@ import { MotionSpeedDialog, MotionEffectsDialog } from './MotionPreferencesDialo
 
 /** What each 入场动画 does, under the row. */
 const ENTRANCE_DESCRIPTIONS: Record<EntranceMode, string> = {
-  blocking: '全屏播放标志动画，播放完毕再显示页面',
-  'non-blocking': '全屏播放标志动画，页面加载完成即结束',
+  blocking: '完整播放开屏动画后再显示页面',
+  'non-blocking': '页面就绪后即结束开屏动画',
   off: '不播放入场动画',
 };
 
@@ -182,8 +182,8 @@ export function ModeAndMotionSection() {
             onChange={(value) => changeSyncedSetting('introAnimation', value)}
             aria-label="入场动画"
             options={[
-              { value: 'blocking', label: '阻塞' },
-              { value: 'non-blocking', label: '不阻塞' },
+              { value: 'blocking', label: '完整播放' },
+              { value: 'non-blocking', label: '快速进入' },
               { value: 'off', label: '关闭' },
             ]}
           />

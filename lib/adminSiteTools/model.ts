@@ -126,7 +126,7 @@ export function fieldsPayload(fields: FieldSpec[], values: Values): Row {
       if (list.some((item) => f.kind === 'ips' ? !ipAddress(item) : !webUrl(item, true))) errors[f.key] = f.kind === 'ips' ? '请每行填写一个有效的 IP 地址' : '请每行填写一个完整的 HTTP 或 HTTPS 站点地址，不含路径或账号';
       else result[f.key] = list;
     } else if (!s && !f.optional) errors[f.key] = `请填写${f.label}`;
-    else if (f.max && s.length > f.max) errors[f.key] = `${f.label}最多 ${f.max} 字`;
+    else if (f.max && s.length > f.max) errors[f.key] = `${f.label}最多 ${f.max} 个字符`;
     else if (s && f.kind === 'url' && !webUrl(s)) errors[f.key] = '请输入完整的 HTTP 或 HTTPS 地址，不含账号或片段';
     else if (f.options && !f.options.some((o) => o.value === s)) errors[f.key] = `请选择${f.label}`;
     else result[f.key] = s;
@@ -147,7 +147,7 @@ export const cloudFields: FieldSpec[] = [
   { key: 'semantic_cloud_model', label: '模型名称', max: 120 },
   { key: 'semantic_cloud_timeout_ms', label: '请求超时（毫秒）', kind: 'number', min: 500, max: 30000 },
   { key: 'semantic_cloud_api_key', label: '模型密钥', kind: 'password', optional: true, helper: '留空保留已保存的密钥' },
-  { key: 'semantic_cloud_clear_key', label: '清除已保存的模型密钥', kind: 'boolean' },
+  { key: 'semantic_cloud_clear_key', label: '清除已保存的密钥', kind: 'boolean' },
 ];
 /* The policy field is 线路规则 — the original console's own word for it — under the editor's API 线路
    / 图片线路 heading: as 全站 API 线路 and 全站图片线路 the field repeated the heading directly above it
@@ -170,17 +170,17 @@ export const relayFields: FieldSpec[] = [
   { key: 'allowed_origins', label: '允许使用的站点', kind: 'origins', optional: true, helper: '每行一个完整站点地址，不含路径' },
 ];
 export const quotaFields: FieldSpec[] = [
-  { key: 'enabled', label: '开放彩彩 AI', kind: 'boolean', helper: '还需同时启用上方的助手模型' },
+  { key: 'enabled', label: '开放彩彩 AI', kind: 'boolean', helper: '还需同时启用助手模型' },
   { key: 'daily_points', label: '每日赠送点数', kind: 'number', min: 0, max: 100000 },
   { key: 'points_per_coin', label: '每金币兑换点数', kind: 'number', min: 1, max: 10000 },
 ];
 /** 文本翻译 (Azure Translator), `text_translation::Save`. The key is write-only: the read shows its mask. */
 export const textTranslationFields: FieldSpec[] = [
   { key: 'enabled', label: '启用文本翻译', kind: 'boolean', helper: '启用前须已保存密钥' },
-  { key: 'endpoint', label: '翻译服务地址', kind: 'url', max: 300, helper: '例如 https://api.cognitive.microsofttranslator.com' },
-  { key: 'region', label: '资源区域', optional: true, max: 64, helper: '例如 eastasia；全局资源留空' },
-  { key: 'target_language', label: '目标语言', max: 16, helper: '例如 zh-Hans' },
-  { key: 'timeout_ms', label: '超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
+  { key: 'endpoint', label: '翻译服务地址', kind: 'url', max: 300, helper: '例如：https://api.cognitive.microsofttranslator.com' },
+  { key: 'region', label: '资源区域', optional: true, max: 64, helper: '例如：eastasia；全局资源留空' },
+  { key: 'target_language', label: '目标语言', max: 16, helper: '例如：zh-Hans' },
+  { key: 'timeout_ms', label: '请求超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
   { key: 'api_key', label: '翻译服务密钥', kind: 'password', optional: true, max: 400, helper: '留空保留已保存的密钥' },
   { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
 ];
@@ -198,7 +198,7 @@ export function textTranslationPayload(values: Values): Row {
   if (!azureEndpoint(text(body.endpoint))) problems.endpoint = '请填写 Azure Translator 的 HTTPS 地址';
   const region = text(body.region).toLowerCase();
   if (!/^[a-z0-9]*$/.test(region)) problems.region = '区域只能包含小写字母和数字';
-  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(text(body.target_language))) problems.target_language = '目标语言代码无效（例如 zh-Hans）';
+  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(text(body.target_language))) problems.target_language = '目标语言代码无效（例如：zh-Hans）';
   const key = text(body.api_key);
   if (key && !/^[\x21-\x7e]+$/.test(key)) problems.api_key = '密钥包含无效字符';
   if (body.clear_key && key) problems.api_key = '清除密钥时请先清空新密钥';
@@ -234,12 +234,12 @@ export const providerFields: FieldSpec[] = [
   { key: 'model_selection', label: '模型选择', options: [{ value: 'auto', label: '自动（候选中延迟最低）' }, { value: 'manual', label: '固定模型' }] },
   { key: 'model', label: '固定模型', optional: true, max: 160, helper: '「固定模型」时必填' },
   { key: 'api_key', label: '助手模型密钥', kind: 'password', optional: true, max: 400, helper: '留空保留已保存的密钥' },
-  { key: 'timeout_ms', label: '超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
-  { key: 'max_tokens', label: '最大输出长度（词元）', kind: 'number', min: 64, max: 4096 },
+  { key: 'timeout_ms', label: '请求超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
+  { key: 'max_tokens', label: '最大输出长度（Token）', kind: 'number', min: 64, max: 4096 },
   { key: 'temperature', label: '随机程度', kind: 'number', min: 0, max: 2, decimal: true },
   { key: 'thinking', label: '思考模式', options: [{ value: 'off', label: '关闭' }, { value: 'low', label: '轻度' }] },
   { key: 'fallback_rank', label: '备用顺序', kind: 'number', min: 0, max: 100, helper: '数字越小越优先' },
-  { key: 'system_prompt', label: '角色提示词', kind: 'textarea', optional: true, max: 12000, helper: '留空使用默认角色词；不会覆盖工具权限、确认流程或隐私规则' },
+  { key: 'system_prompt', label: '角色提示词', kind: 'textarea', optional: true, max: 12000, helper: '留空使用默认角色词' },
   { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '启用前须已保存密钥' },
   { key: 'is_primary', label: '设为主模型', kind: 'boolean', helper: '已有主模型时，原主模型改为备用' },
   { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },

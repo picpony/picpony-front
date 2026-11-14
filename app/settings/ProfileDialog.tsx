@@ -104,7 +104,7 @@ export default function ProfileDialog({
       if (data.adjustments.length) void sessionUser.read({ token }, { force: true }).catch(() => {});
       /* Choosing one of the named races awards its badge (and takes the previous one back). */
       const awarded = draft.race !== saved.race && RACE_BADGES.has(draft.race);
-      showToast(awarded ? '已保存个人资料，种族徽章已放入我的徽章' : '已保存个人资料', 'success');
+      showToast(awarded ? '已保存个人资料，种族徽章已放入徽章墙' : '已保存个人资料', 'success');
       onClose();
     } catch (error) {
       if (readToken() !== token) return;

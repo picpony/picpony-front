@@ -95,8 +95,7 @@ export function useFolderCommands({
         if (!isFolderPublic(folder.id, publicIds)) {
           const ok = await confirm({
             title: '确认公开收藏夹',
-            message: `「${name}」未在个人主页公开，对方打开链接时将无法查看。确定要公开该收藏夹吗？`,
-            confirmLabel: '公开',
+            message: `「${name}」尚未在个人主页公开，对方暂时无法通过链接查看。\n确定要公开此收藏夹吗？`,
             tone: 'filled',
           });
           if (!ok || readToken() !== token) return;
@@ -115,7 +114,7 @@ export function useFolderCommands({
         if (folder.isMain) return;
         const ok = await confirm({
           title: '确认删除收藏夹',
-          message: `确定要删除收藏夹「${name}」吗？其中的图片会移入主收藏夹。`,
+          message: `确定要删除收藏夹「${name}」吗？其中的图片将移入主收藏夹。`,
           tone: 'danger',
         });
         if (!ok || readToken() !== token) return;

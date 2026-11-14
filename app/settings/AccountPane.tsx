@@ -237,7 +237,7 @@ function AccountSections({ account }: { account: Account }) {
     if (keyBusy || !credential) return;
     const confirmed = await confirm({
       title: '确认解除绑定',
-      message: '确定要解除该 Derpibooru API Key 的绑定吗？解除后将不再同步 Derpibooru 的黑名单过滤等设置。',
+      message: '确定要解除当前 Derpibooru API Key 的绑定吗？',
       tone: 'filled',
     });
     if (!confirmed || readToken() !== token) return;
@@ -277,7 +277,7 @@ function AccountSections({ account }: { account: Account }) {
         </div>
       )}
 
-      <SettingsSection title="个人主页" icon={<MdPerson size={ICON.control} />} subtitle="他人访问你的主页时看到的内容">
+      <SettingsSection title="个人主页" icon={<MdPerson size={ICON.control} />}>
         <SettingsRow
           label="头像"
           supporting="JPG、PNG 或 WebP，不超过 5 MB（裁剪后保存为静态图片）"
@@ -443,7 +443,7 @@ function AccountSections({ account }: { account: Account }) {
                   ? identified
                     ? `Derpibooru 账号：${derpiName}`
                     : `${keyLabel}，尚未确认所属账号`
-                  : '绑定后可同步 Derpibooru 的黑名单过滤等设置'
+                  : '绑定后可同步 Derpibooru 的屏蔽与过滤设置'
           }
           action={
             /* Keyed: without keys the unbound row's 绑定 would be reused as the bound row's 核验,
@@ -504,12 +504,11 @@ function AccountSections({ account }: { account: Account }) {
       <SettingsSection
         title="隐私"
         icon={<MdShield size={ICON.control} />}
-        subtitle="他人访问你的个人主页时能看到哪些内容"
       >
         <SwitchRow label="公开我的上传" checked={showUploads} onChange={(v) => changeSyncedSetting('showUploads', v)} />
         <SwitchRow
           label="公开我的收藏"
-          description="关闭后个人主页不显示任何收藏夹；开启时只显示设为公开的收藏夹"
+          description="仅在开启后于个人主页显示公开收藏夹"
           checked={showFaves}
           onChange={(v) => changeSyncedSetting('showFaves', v)}
         />
@@ -517,7 +516,6 @@ function AccountSections({ account }: { account: Account }) {
         <SwitchRow label="公开我的评论" checked={showComments} onChange={(v) => changeSyncedSetting('showComments', v)} />
         <SwitchRow
           label="隐藏 IP 属地"
-          description="他人查看你的主页时，IP 属地显示为已隐藏"
           checked={hideIpLocation}
           onChange={(v) => changeSyncedSetting('hideIpLocation', v)}
         />

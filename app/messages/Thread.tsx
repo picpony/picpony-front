@@ -244,7 +244,7 @@ export default function Thread({
         <EmptyState
           size="inline"
           icon={<MdOutlineChatBubbleOutline size={ICON.large} />}
-          title="还没有消息，说点什么吧"
+          title="暂无消息"
         />
       );
     }

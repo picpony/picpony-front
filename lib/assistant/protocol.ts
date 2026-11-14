@@ -116,7 +116,7 @@ export function parseState(raw: JsonObject): AssistantState {
  * receipt limit. The backend redacts again (`assistant_site_api::redact`) before the model reads it.
  */
 export function redact(value: unknown, depth = 0): unknown {
-  if (depth > 4) return '[内容已截短]';
+  if (depth > 4) return '[内容已截断]';
   if (Array.isArray(value)) return value.slice(0, 30).map(v => redact(v, depth + 1));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).slice(0, 40)
     .filter(([k]) => !/password|passphrase|api_?key|secret|token|captcha|session|cookie|authorization|credential|encryption|csrf|email|(^|_)ip($|_)|image_data|__proto__|constructor|prototype/i.test(k))

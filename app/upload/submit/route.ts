@@ -172,7 +172,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     /* Our own deadline: the relay held the request, so it may have reached Derpibooru. A refused
        connection never left this server. The form tells the two apart by status. */
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-    return timedOut ? answer(504, '上传线路没有在时限内应答') : answer(502, '上传线路不可用');
+    return timedOut ? answer(504, '上传线路响应超时') : answer(502, '上传线路不可用');
   }
 
   if (response.status >= 300 && response.status < 400) {
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (response.status >= 400 && response.status < 500) {
       return answer(response.status, `Derpibooru 返回 ${response.status}`);
     }
-    return answer(502, '上传线路返回了非 JSON 内容');
+    return answer(502, '上传线路返回了无效响应');
   }
 
   const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);

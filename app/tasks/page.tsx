@@ -215,7 +215,7 @@ function LevelMeter({ level, progress }: { level: number | null; progress: numbe
     };
   }, [shown.rolling]);
   /* A new bar for the empty frame: remounted at 0 it has no transition to run backwards on. */
-  return <ProgressBar key={shown.epoch} value={shown.progress} tone="tertiary" label={`等级 ${level ?? ''} 经验进度`} />;
+  return <ProgressBar key={shown.epoch} value={shown.progress} tone="tertiary" label={level != null ? `等级 ${level} 经验进度` : '等级经验进度'} />;
 }
 
 function TaskRow({
@@ -407,7 +407,7 @@ export default function TasksPage() {
                 <ErrorRetry
                   size="pane"
                   title="任务进度加载失败"
-                  message="服务器返回的任务进度不完整"
+                  message="任务进度数据不完整"
                   onRetry={read.refresh}
                 />
               ) : (

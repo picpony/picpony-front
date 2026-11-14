@@ -46,7 +46,7 @@ function RelayStats({ token }: { token: string }) {
       </FormGrid>
     </AdminForm>
     <AdminListAnchor>
-      <DataTable rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r, i) => `${r.ip}:${r.username}:${i}`} loading={read.loading} {...tableError(read.isPrevious ? `第 ${args.page} 页加载失败` : '中转统计加载失败', read.message)} onRetry={read.retry} empty="暂无中转请求" columns={[
+      <DataTable rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r, i) => `${r.ip}:${r.username}:${i}`} loading={read.loading} {...tableError(read.isPrevious ? `中转统计第 ${args.page} 页加载失败` : '中转统计加载失败', read.message)} onRetry={read.retry} empty="暂无中转请求" columns={[
         { key: 'ip', header: 'IP 地址', primary: true, className: 'wrap-anywhere', render: (r) => r.ip },
         { key: 'user', header: '用户', render: (r) => r.username || '访客' },
         { key: 'total', header: '总请求', render: (r) => formatCount(r.total) },
@@ -54,7 +54,7 @@ function RelayStats({ token }: { token: string }) {
         { key: 'normal', header: '其他请求', render: (r) => formatCount(r.normal) },
         { key: 'last', header: '最后请求', className: 'tabular-nums', render: (r) => r.last_seen === null ? '—' : typeof r.last_seen === 'string' ? r.last_seen : formatDateTime(r.last_seen) },
       ]} />
-      <AdminPager page={args.page} totalPages={read.data?.totalPages ?? 1} onPageChange={(page) => setArgs({ ...args, page })} disabled={read.isLoading} summary={read.data ? `共 ${read.data.total} 条记录` : undefined} />
+      <AdminPager page={args.page} totalPages={read.data?.totalPages ?? 1} onPageChange={(page) => setArgs({ ...args, page })} disabled={read.isLoading} summary={read.data ? `共 ${read.data.total} 条` : undefined} />
     </AdminListAnchor>
   </div>;
 }
@@ -67,15 +67,15 @@ function RelayErrors({ token }: { token: string }) {
       <Select size="sm" aria-label="日志日期" value={args.date} options={[{ value: '', label: '全部日期' }, ...(read.data?.dates ?? []).map((date) => ({ value: date, label: date }))]} onChange={(date) => setArgs({ date, page: 1 })} />
       <RefreshButton onClick={read.refresh} label="刷新日志" loading={read.refreshing} />
     </div>
-    <AdminNote>{read.data?.available === false ? '尚无错误日志。原站出现错误响应后会自动记录。' : '这里展示最近 5000 条原站错误记录。'}</AdminNote>
+    <AdminNote>{read.data?.available === false ? '尚无错误日志。' : '仅展示最近 5,000 条原站错误记录。'}</AdminNote>
     <AdminListAnchor>
-      <DataTable rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r) => r.key} loading={read.loading} {...tableError(read.isPrevious ? `第 ${args.page} 页加载失败` : '中转日志加载失败', read.message)} onRetry={read.retry} empty="暂无原站错误记录" columns={[
+      <DataTable rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r) => r.key} loading={read.loading} {...tableError(read.isPrevious ? `中转日志第 ${args.page} 页加载失败` : '中转日志加载失败', read.message)} onRetry={read.retry} empty="暂无原站错误记录" columns={[
         { key: 'reason', header: '原因', primary: true, className: 'wrap-anywhere', render: (r) => r.reason || (r.status === null ? '未收到原站响应' : `原站返回 ${r.status}`) },
         { key: 'status', header: '状态', render: (r) => `原站 ${r.status ?? '—'} · 中转 ${r.relay ?? '—'}` },
         { key: 'target', header: '目标', className: 'wrap-anywhere', render: (r) => `${r.method} ${r.target}` },
         { key: 'time', header: '时间与耗时', render: (r) => <>{formatDateTime(r.time)}<br />{r.duration === null ? '耗时未记录' : `${r.duration} 毫秒`} · {r.phase || '阶段未记录'}</> },
       ]} />
-      <AdminPager page={args.page} totalPages={read.data?.totalPages ?? 1} onPageChange={(page) => setArgs({ ...args, page })} disabled={read.isLoading} summary={read.data ? `共 ${read.data.total} 条记录` : undefined} />
+      <AdminPager page={args.page} totalPages={read.data?.totalPages ?? 1} onPageChange={(page) => setArgs({ ...args, page })} disabled={read.isLoading} summary={read.data ? `共 ${read.data.total} 条` : undefined} />
     </AdminListAnchor>
   </div>;
 }

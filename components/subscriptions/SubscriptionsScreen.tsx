@@ -140,7 +140,7 @@ export default function SubscriptionsScreen() {
     if (!token) return;
     const confirmed = await confirm({
       title: '确认取消订阅',
-      message: `确定要取消订阅标签「${name}」吗？取消后不再追踪它的新图片。`,
+      message: `确定要取消订阅标签「${name}」吗？`,
     });
     if (!confirmed) return;
     const release = presence.current?.claimFocus([normaliseTagName(entry.tagName)]);
@@ -159,7 +159,7 @@ export default function SubscriptionsScreen() {
 
   let body: React.ReactNode;
   if (!ready) body = <RowsSkeleton />;
-  else if (!token) body = <SignInRequired description="登录后即可订阅标签，追踪它们的新图片。" />;
+  else if (!token) body = <SignInRequired description="登录后即可订阅标签并追踪新图片" />;
   else if (list === undefined && read.error !== undefined) {
     body = (
       <ErrorRetry
@@ -202,8 +202,7 @@ export default function SubscriptionsScreen() {
                   size="pane"
                   entrance={!emptyAfterRows}
                   icon={<MdRssFeed size={ICON.display} />}
-                  title="还没有订阅标签"
-                  description="在上方输入一个感兴趣的标签开始追踪，也可以在图片的标签上点「订阅」"
+                  title="暂无订阅标签"
                 />
               </div>
             </PresenceBlock>
@@ -215,10 +214,7 @@ export default function SubscriptionsScreen() {
 
   return (
     <div className="mx-auto w-full max-w-4xl">
-      <PageHeader
-        title="标签订阅"
-        subtitle={token ? '订阅的标签出现新图片时，这里会显示新增的数量，并发送系统通知' : undefined}
-      />
+      <PageHeader title="标签订阅" />
       {/* Keyed on the session: a field typed into under one account starts empty under the next. */}
       {token && <SubscribeField key={token} token={token} />}
       {body}

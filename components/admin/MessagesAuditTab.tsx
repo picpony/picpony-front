@@ -113,7 +113,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
         isLoading={read.isLoading && read.data !== undefined}
       />
       <AdminNote tone="warning">
-        管理员可以查阅私信，用于排查违规交易、辱骂或诈骗。请严格遵守用户隐私准则，只在必要时查阅，切勿滥用。
+        私信内容涉及用户隐私，仅限排查违规交易、辱骂或诈骗时查阅。
       </AdminNote>
       <form
         role="search"
@@ -130,7 +130,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
           inputMode="numeric"
           autoComplete="off"
           aria-label="审计用户 ID"
-          placeholder="输入用户 ID，查看 TA 收发的私信"
+          placeholder="输入用户 ID，查看该用户收发的私信"
           value={draft}
           error={draftError ?? undefined}
           fieldClassName="min-w-0 sm:flex-1"

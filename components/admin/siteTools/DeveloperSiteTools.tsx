@@ -47,7 +47,7 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
     () => showToast(banned ? '已禁用 API 加速' : '已恢复 API 加速', 'success'),
     'API 加速权限修改失败',
     { key: r.id, onCommitted: (d) => { remember(r.id, d.banned); } },
-  ));
+  ), { tone: banned ? 'danger' : 'filled' });
   return <div className="space-y-6">
     <section aria-labelledby="admin-acceleration-heading" className="space-y-4">
       <SectionHeading as="h3" id="admin-acceleration-heading">API 加速权限</SectionHeading>
@@ -65,7 +65,7 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
             const locked = r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');
             const banned = bannedOf(r.id);
             return <>
-              <IconButton size="sm" icon={<MdRefresh />} aria-label={`查询 ${r.username} 的 API 加速状态`} loading={lookup.pendingKeys.has(r.id)} onClick={() => void lookup.run(async () => ({ banned: await api.readAccelerationBan(token, r.id) }), () => {}, 'API 加速状态查询失败', { key: r.id, onCommitted: (d) => remember(r.id, d.banned) })} />
+              <IconButton size="sm" icon={<MdRefresh />} aria-label={`查询 ${r.username} 的 API 加速状态`} loading={lookup.pendingKeys.has(r.id)} onClick={() => void lookup.run(async () => ({ banned: await api.readAccelerationBan(token, r.id) }), () => {}, 'API 加速状态加载失败', { key: r.id, onCommitted: (d) => remember(r.id, d.banned) })} />
               {banned !== true && <IconButton size="sm" icon={<MdBlock />} variant="danger-text" aria-label={`禁用 ${r.username} 的 API 加速`} disabled={locked} loading={ban.pendingKeys.has(r.id)} onClick={() => { if (!locked) change(r, true); }} />}
               {banned !== false && <IconButton size="sm" icon={<MdLockOpen />} aria-label={`恢复 ${r.username} 的 API 加速`} disabled={locked} loading={ban.pendingKeys.has(r.id)} onClick={() => { if (!locked) change(r, false); }} />}
             </>;

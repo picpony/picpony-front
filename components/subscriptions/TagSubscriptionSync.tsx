@@ -13,7 +13,7 @@ const LOAD_DELAY_MS = 1000;
 function announce(result: SyncResult, open: () => void) {
   if (!result.ok || result.updatedTags <= 0) return;
   /* The original's sentence: the notifications are what the sync just produced. */
-  showToast(`有 ${result.updatedTags} 个订阅标签出现了新图片，已生成系统通知`, 'success', {
+  showToast(`已订阅的 ${result.updatedTags} 个标签有新图片`, 'success', {
     action: { label: '查看', onClick: open },
   });
 }

@@ -77,7 +77,7 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
   const seeded = read.data === undefined && !read.error && entry !== undefined;
   const name = entry ? folderLabel(entry) : folderId === 0 ? '公开收藏' : null;
   const pageRef = useFolderPage(route);
-  useDocumentTitle(read.data && listed ? `${name ?? '收藏夹'} - ${username ?? '用户'} 的收藏 - PicPony` : null);
+  useDocumentTitle(read.data && listed ? `${name ?? '收藏夹'} - ${username ? `${username} 的` : ''}收藏 - PicPony` : null);
   const folderMissing = isApiError(read.error) && read.error.code === 'FOLDER_NOT_FOUND';
 
   const pageBack = <PageBack onClick={back} />;
@@ -128,7 +128,7 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
             fill
             icon={<MdFolderOff size={ICON.display} />}
             title="收藏夹不存在或未公开"
-            description={username ? `${username} 没有公开该收藏夹` : '该收藏夹不存在或未公开'}
+            description={username ? `${username} 未公开此收藏夹` : undefined}
             action={
               own ? (
                 <Button variant="tonal" onClick={() => router.push(favoritesHref(), { scroll: false })}>
@@ -150,7 +150,7 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
           title={name ?? '收藏夹'}
           subtitle={
             <span className="tabular-nums">
-              {username ?? '用户'} 的收藏夹 · 共 {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
+              {username ? `${username} 的收藏夹 · ` : ''}共 {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
             </span>
           }
           actions={
@@ -170,8 +170,8 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
             page={page}
             setPage={setPage}
             listKey={`fave-shared:${ownerKey}:${folderId}`}
-            failureTitle="收藏加载失败"
-            empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="此收藏夹还没有图片" />}
+            failureTitle="收藏夹加载失败"
+            empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="暂无图片" />}
           />
         </div>
       </div>

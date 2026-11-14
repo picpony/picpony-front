@@ -289,12 +289,12 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             </div>
           }
         />
-        {Boolean(index.error) && ids !== undefined && <ErrorRetry size="inline" title="收藏更新失败" message={apiErrorMessage(index.error)}
+        {Boolean(index.error) && ids !== undefined && <ErrorRetry size="inline" title="收藏夹更新失败" message={apiErrorMessage(index.error)}
           onRetry={isRetryable(index.error) ? index.refresh : undefined} />}
         {index.error && ids === undefined ? (
           <ErrorRetry
             size="pane"
-            title="收藏加载失败"
+            title="收藏夹加载失败"
             message={apiErrorMessage(index.error)}
             onRetry={isRetryable(index.error) ? index.refresh : undefined}
           />
@@ -306,13 +306,12 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
               setPage={setPage}
               listKey={listKey}
               selection={gridSelection}
-              failureTitle="收藏加载失败"
+              failureTitle="收藏夹加载失败"
               empty={
                 <EmptyState
                   size="pane"
                   icon={<MdPhotoLibrary size={ICON.display} />}
-                  title="此收藏夹还没有图片"
-                  description="在图片详情页点收藏到…，就能把图片放进来"
+                  title="暂无图片"
                 />
               }
             />

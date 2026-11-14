@@ -273,7 +273,6 @@ export default function ShopScreen() {
         size="pane"
         icon={<MdStorefront size={ICON.display} />}
         title="暂无在售商品"
-        description="新的商品上架后会显示在这里"
       />
     );
   } else {
@@ -300,7 +299,6 @@ export default function ShopScreen() {
     <div ref={columnRef} className="@container/shop mx-auto w-full max-w-7xl">
       <PageHeader
         title="金币商店"
-        subtitle={ready && !token ? '登录后即可用金币兑换商品' : undefined}
         actions={
           token ? (
             /* One block, which below the column's md step (28rem) is as wide as the column, so it

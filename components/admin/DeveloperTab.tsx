@@ -81,7 +81,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
   const rotate = () =>
     confirmThen(
       '确认更新维护密码',
-      '确定要立即更新维护密码吗？当前密码会马上失效，已告知他人的旧密码将无法再开启开发者模式。',
+      '确定要立即更新维护密码吗？当前密码将立即失效，原密码无法再开启开发者模式。',
       () =>
         void rotateMutation.run(
           async () => {
@@ -207,11 +207,16 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
           onClick={() => {
             if (user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin')) return;
             const banned = user.developer_access.banned;
-            confirmThen(banned ? '确认解封开发者权限' : '确认封禁开发者权限', `确定要${banned ? '解封' : '封禁'}用户${named(user)}的开发者权限吗？${banned ? '' : '封禁后，该用户将无法自主开启开发者模式。'}`, () => void banMutation.run(
-              () => banned ? adminApi.adminUnbanDeveloper(token, user.id, accessRevision(token, user.id)) : adminApi.adminBanDeveloper(token, user.id, accessRevision(token, user.id)),
-              () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
-              banned ? '开发者权限解封失败' : '开发者权限封禁失败', { key: user.id, onCommitted: () => usersQuery.invalidate() },
-            ));
+            confirmThen(
+              banned ? '确认解封开发者权限' : '确认封禁开发者权限',
+              `确定要${banned ? '解封' : '封禁'}用户${named(user)}的开发者权限吗？${banned ? '' : '封禁后，该用户将无法自行开启开发者模式。'}`,
+              () => void banMutation.run(
+                () => banned ? adminApi.adminUnbanDeveloper(token, user.id, accessRevision(token, user.id)) : adminApi.adminBanDeveloper(token, user.id, accessRevision(token, user.id)),
+                () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
+                banned ? '开发者权限解封失败' : '开发者权限封禁失败', { key: user.id, onCommitted: () => usersQuery.invalidate() },
+              ),
+              { tone: banned ? 'filled' : 'danger' },
+            );
           }} />
         </>,
     },
@@ -285,7 +290,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
               value={target}
               readOnly={enableMutation.busy}
               error={targetError ?? undefined}
-              helper="不检查前置条件，直接为该用户开启开发者模式"
+              helper="直接为该用户开启开发者模式"
               fieldClassName="sm:w-80"
               onChange={(event) => {
                 setTarget(event.target.value);
@@ -307,7 +312,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
             skeletonRows={5}
             {...tableError('开发者列表加载失败', users.error)}
             onRetry={users.retryable ? users.refresh : undefined}
-            empty="还没有开启开发者模式的用户"
+            empty="暂无开发者用户"
           />
           <AdminPager
             page={paged.page}

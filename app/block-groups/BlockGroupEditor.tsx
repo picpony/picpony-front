@@ -87,7 +87,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
     if (taken.length < fresh.length) {
       setErrors((previous) => ({
         ...previous,
-        tags: `${target === 'hide' ? '隐藏' : '遮挡'}列表最多 ${MAX_TAGS_PER_LIST} 个标签${taken.length > 0 ? `，有 ${fresh.length - taken.length} 个没有加入` : ''}`,
+        tags: `${target === 'hide' ? '隐藏' : '遮挡'}列表最多 ${MAX_TAGS_PER_LIST} 个标签${taken.length > 0 ? `，其余 ${fresh.length - taken.length} 个未加入` : ''}`,
       }));
     } else {
       setErrors((previous) => ({ ...previous, tags: undefined }));
@@ -126,7 +126,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
     if (dirty && !(await confirm({
       title: '确认放弃修改',
       message: '确定要放弃对此屏蔽组的修改吗？',
-      tone: 'danger',
+      tone: 'filled',
     }))) return;
     onClose();
   };
@@ -164,7 +164,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
           maxLength={MAX_GROUP_NAME}
           count={{ value: Array.from(draft.name).length, max: MAX_GROUP_NAME }}
           error={errors.name}
-          placeholder="例如：重口味屏蔽、黑名单画师…"
+          placeholder="例如：偏好过滤、画师屏蔽…"
           onChange={(event) => {
             const name = event.target.value;
             setDraft((previous) => ({ ...previous, name }));
@@ -172,7 +172,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
           }}
         />
         <fieldset>
-          <legend className="mb-1 text-label-l text-on-surface">新加入的标签</legend>
+          <legend className="mb-1 text-label-l text-on-surface">标签处理方式</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
             <Radio
               name="block-group-target"
@@ -180,7 +180,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
               checked={target === 'hide'}
               onChange={() => setTarget('hide')}
               tone="error"
-              label={<span className="flex items-center gap-1.5"><MdBlock size={ICON.dense} aria-hidden="true" />彻底隐藏</span>}
+              label={<span className="flex items-center gap-1.5"><MdBlock size={ICON.dense} aria-hidden="true" />隐藏</span>}
             />
             <Radio
               name="block-group-target"
@@ -188,7 +188,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
               checked={target === 'spoiler'}
               onChange={() => setTarget('spoiler')}
               tone="warning"
-              label={<span className="flex items-center gap-1.5"><MdVisibilityOff size={ICON.dense} aria-hidden="true" />遮挡打码</span>}
+              label={<span className="flex items-center gap-1.5"><MdVisibilityOff size={ICON.dense} aria-hidden="true" />遮挡</span>}
             />
           </div>
         </fieldset>
@@ -200,7 +200,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
           onAdd={add}
           disabled={saving}
           error={errors.tags}
-          helper="支持中文名称搜索；输入多个标签时用逗号分隔"
+          helper="支持中文搜索；多个标签可用逗号分隔"
         />
         <TagWell
           title="隐藏标签"

@@ -67,7 +67,7 @@ export default function UserSearchField({
     const list = [...matches, ...people];
     if (searching) list.push({ kind: 'status', text: '正在搜索用户…', busy: true });
     else if (error !== undefined) list.push({ kind: 'status', text: `用户搜索失败：${apiErrorMessage(error)}`, busy: false });
-    else if (list.length === 0) list.push({ kind: 'status', text: '没有找到用户', busy: false });
+    else if (list.length === 0) list.push({ kind: 'status', text: '未找到用户', busy: false });
     return list;
   }, [keyword, contacts, users, myId, searching, error]);
 
@@ -151,7 +151,7 @@ export default function UserSearchField({
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-label-l-emphasized text-on-surface">{option.person.username}</span>
                       <span className="truncate text-body-s text-on-surface-variant">
-                        {option.kind === 'contact' ? '联系人' : '发起私信'}
+                        {option.kind === 'contact' ? '联系人' : '新对话'}
                       </span>
                     </span>
                   </>

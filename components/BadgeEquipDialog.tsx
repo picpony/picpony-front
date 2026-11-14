@@ -115,7 +115,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
     }
     setSaving(false);
     if (failure !== null) {
-      showToast(apiErrorMessage(failure, '徽章佩戴保存失败，请稍后再试'), 'error');
+      showToast(apiErrorMessage(failure, '保存失败，请稍后再试'), 'error');
       return;
     }
     /* A save that lands after the account changed is not this account's to write. */
@@ -152,7 +152,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
       }
     >
       <p className="text-body-m text-on-surface-variant">
-        最多同时佩戴 {MAX_EQUIPPED_BADGES} 个徽章，佩戴的徽章会显示在你的名字旁。
+        最多可佩戴 {MAX_EQUIPPED_BADGES} 个徽章，将显示在你的名称旁
       </p>
       {source === null && data === undefined && read.error ? (
         <ErrorRetry
@@ -173,7 +173,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
           ))}
         </ul>
       ) : held.length === 0 ? (
-        <EmptyState size="inline" title="你还没有获得任何徽章" />
+        <EmptyState size="inline" title="暂无徽章" />
       ) : (
         <>
           <ul className="mt-4 flex flex-col gap-1">
@@ -198,7 +198,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
             })}
           </ul>
           <p className="mt-3 text-body-s text-on-surface-variant tabular-nums" aria-live="polite">
-            已选择 {draft.chosen.size} / {MAX_EQUIPPED_BADGES}
+            已佩戴 {draft.chosen.size} / {MAX_EQUIPPED_BADGES}
           </p>
         </>
       )}

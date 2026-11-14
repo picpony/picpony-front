@@ -36,7 +36,6 @@ export default function MascotSettings() {
     <SettingsSection
       title="吉祥物"
       icon={<MdEmojiEmotions size={ICON.control} />}
-      subtitle="绘云彩彩陪你看图，长按可打开彩彩 AI"
       status={config.data === undefined && config.error !== undefined && (
         <ErrorRetry
           size="inline"
@@ -46,7 +45,7 @@ export default function MascotSettings() {
         />
       )}
     >
-      <SwitchRow label="显示吉祥物" description="轻触互动，收起后仍可随时展开" checked={shown} onChange={v => changeSyncedSetting('showMascot', v)} />
+      <SwitchRow label="显示吉祥物" checked={shown} onChange={v => changeSyncedSetting('showMascot', v)} />
       {config.data === undefined ? (
         /* Direct siblings, not wrapped: `.m3-row`'s corners and 2px seams are scoped per parent
            (`app/globals.css`), so a wrapper around the placeholder rows turned 显示吉祥物 into a
@@ -56,8 +55,8 @@ export default function MascotSettings() {
         config.error === undefined && (
           <>
             <SettingsRow label="选择角色" aria-hidden="true" leading={<Skeleton className="h-12 w-12 rounded-md" data-page-loading="" />} action={<Skeleton className="h-10 w-32" />} />
-            <SettingsRow label="电脑端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
-            <SettingsRow label="手机端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
+            <SettingsRow label="桌面端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
+            <SettingsRow label="移动端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
           </>
         )
       ) : !available ? (
@@ -72,12 +71,12 @@ export default function MascotSettings() {
             action={<Select aria-label="选择吉祥物" size="sm" disabled={!shown} value={selected} options={options} onChange={value => changeSyncedSetting('mascotId', value)} />}
           />
           <SettingsRow
-            label="电脑端大小"
-            action={<Select aria-label="吉祥物电脑端大小" size="sm" disabled={!shown} value={desktop} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeDesktop', value)} />}
+            label="桌面端大小"
+            action={<Select aria-label="吉祥物桌面端大小" size="sm" disabled={!shown} value={desktop} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeDesktop', value)} />}
           />
           <SettingsRow
-            label="手机端大小"
-            action={<Select aria-label="吉祥物手机端大小" size="sm" disabled={!shown} value={mobile} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeMobile', value)} />}
+            label="移动端大小"
+            action={<Select aria-label="吉祥物移动端大小" size="sm" disabled={!shown} value={mobile} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeMobile', value)} />}
           />
         </>
       )}

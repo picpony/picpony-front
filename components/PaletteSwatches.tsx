@@ -83,7 +83,7 @@ const accentName = (accent: AccentChoice) =>
   accent === null ? '自动' : typeof accent === 'number' ? `${accent}°` : ACCENT_NAMES[accent];
 
 /** The owner's own line for the choice, under its label. */
-const HUES_DESCRIPTION = '多色在选中、收藏、等级等少数地方加入角色的第二色与点缀色；单色只用主色一种色相';
+const HUES_DESCRIPTION = '多色会在选中、收藏等处使用副色相与点缀色；单色仅使用主色';
 
 /**
  * A palette's tile: 72 × 56 at the card's corner, and no edge of its own — the miniature inside
@@ -312,7 +312,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             type="button"
             role="radio"
             aria-checked={customActive}
-            aria-label={customSeed ? `自定义 ${customSeed}` : '自定义，尚未选择颜色'}
+            aria-label={customSeed ? `自定义 ${customSeed}` : '自定义，未设置'}
             disabled={!customSeed}
             tabIndex={customActive ? 0 : -1}
             onClick={(event) => pick(CUSTOM_PALETTE, event.currentTarget)}

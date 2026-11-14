@@ -29,7 +29,7 @@ export default function CreateForumPostPage() {
       {!ready ? (
         <ComposerSkeleton />
       ) : !token ? (
-        <SignInRequired description="登录后即可发布帖子。" />
+        <SignInRequired description="登录后即可发布帖子" />
       ) : (
         <PostComposer
           key={token}

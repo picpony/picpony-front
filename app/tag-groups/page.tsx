@@ -144,7 +144,7 @@ export default function TagGroupsPage() {
       {
         targetUrl: target.href,
         title: `分享标签组：${group.name || '未命名标签组'}`,
-        desc: `包含标签：${group.tags.join(', ')}\n点击链接即可在 PicPony 中搜索这组标签`,
+        desc: `包含标签：${group.tags.join('、')}\n点击链接即可在 PicPony 中搜索此标签组`,
       },
       { token, signal: controller.signal },
     ));
@@ -167,7 +167,7 @@ export default function TagGroupsPage() {
         label: '复制',
         onClick: () => {
           void copyLink().then((copied) => {
-            if (!copied && current()) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
+            if (!copied && current()) showToast('复制失败，请检查剪贴板权限', 'error');
           });
         },
       },
@@ -181,8 +181,8 @@ export default function TagGroupsPage() {
       subtitle={
         signedIn && groups
           ? full
-            ? `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组，已达上限`
-            : `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组。把常用的标签放在一起，一键搜索`
+            ? `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组（已达上限）`
+            : `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组`
           : undefined
       }
       actions={
@@ -200,7 +200,7 @@ export default function TagGroupsPage() {
   if (!ready || (token && groups === undefined && read.error === undefined)) {
     body = <GroupRowsSkeleton control="button" />;
   } else if (!token) {
-    body = <SignInRequired description="登录后即可创建标签组，把常用的标签放在一起一键搜索。" />;
+    body = <SignInRequired description="登录后即可创建和管理标签组" />;
   } else if (!groups) {
     body = (
       <ErrorRetry
@@ -246,8 +246,8 @@ export default function TagGroupsPage() {
                 <EmptyState
                   entrance={!emptyAfterRows}
                   icon={<MdBookmarks size={ICON.display} />}
-                  title="还没有任何标签组"
-                  description="把常用的标签放在一起，以后一键就能搜索这组标签。"
+                  title="暂无标签组"
+                  description="将常用标签归为一组，便于一键搜索"
                   action={
                     <Button variant="filled" icon={<MdAdd />} onClick={() => openEditor(null)}>
                       新建标签组

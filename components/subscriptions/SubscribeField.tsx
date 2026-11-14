@@ -126,7 +126,7 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
           shape="pill"
           value={value}
           onChange={handleChange}
-          placeholder="输入标签订阅，例如 rainbow dash"
+          placeholder="输入标签以订阅，例如 暮光闪闪 / rainbow dash"
           aria-label="要订阅的标签"
           autoComplete="off"
           autoCorrect="off"

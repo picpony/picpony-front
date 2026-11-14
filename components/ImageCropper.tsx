@@ -443,7 +443,7 @@ export default function ImageCropper({
 
         {imageError ? (
           <div className="absolute inset-0 grid place-items-center bg-surface-container-low">
-            <ErrorRetry size="inline" title="图片无法读取，请选择其他图片" onRetry={onClose} retryLabel="重新选择" />
+            <ErrorRetry size="inline" title="图片加载失败" message="无法读取此图片" onRetry={onClose} retryLabel="重新选择" />
           </div>
         ) : !ready && (
           <div className="text-on-media absolute inset-0 grid place-items-center">

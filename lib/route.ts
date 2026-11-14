@@ -51,7 +51,7 @@ const IMAGE_POLICIES: readonly string[] = ['auto', 'direct', 'cdn', 'picpony'];
 
 const API_LINE_LABELS: Record<ApiLine, string> = {
   direct: '直连',
-  api_accel: 'API 加速 (derpibooru)',
+  api_accel: 'API 加速（Derpibooru）',
   picpony_api: 'PicPony API',
   third_party: '第三方 API',
 };
@@ -684,7 +684,7 @@ export function stepApiFailover(status?: number): boolean {
     if (prefs.useHongKongRelay) {
       apiState.hongKong = true;
       emit();
-      announceOnce('API 加速异常，已切换至香港服务器中转');
+      announceOnce('API 加速异常，已切换至 PicPony 代理中转');
       return true;
     }
     apiState.cooldownUntil = Date.now() + (busy ? COOLDOWN_BUSY_MS : COOLDOWN_MS);
@@ -862,7 +862,7 @@ function probeWorkerRecovery() {
       imageState.raceWinner = null;
       health.workerRecovering = false;
       emit();
-      announceThrottled('服务器完成冷却，已恢复至 PicPony 加速服务器');
+      announceThrottled('已恢复至 PicPony 加速服务器');
     })
     .catch(() => {
       /* Still down. Measure the two lines that are left while we wait. */

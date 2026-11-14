@@ -32,9 +32,8 @@ function RoutesTab({ token }: AdminPanelProps) {
   const data = routes.data;
   return <div className="space-y-6">
     <SectionHeader section="routes" onRefresh={routes.refresh} isLoading={routes.refreshing} />
-    <section className="space-y-4" aria-labelledby="admin-route-heading">
-      <SectionHeading as="h3" id="admin-route-heading">全站生效线路</SectionHeading>
-      <AdminNote>所有访客与用户的浏览器按此线路访问图库与图片；「按用户设置」由各自的偏好决定。中转服务检测到原站异常时会自动切换到第一个可用的第三方候选地址，恢复后切回原线路。</AdminNote>
+    <div className="space-y-4">
+      <AdminNote>所有访客与用户按此线路访问图库与图片；原站异常时将自动切换至可用的第三方候选地址，恢复后切回原线路。</AdminNote>
       <ReadState title="全站线路加载失败" loading={routes.loading} error={routes.error} retry={routes.retryable ? routes.refresh : undefined}>
         {data && <>
           <ConfigEditor title="API 线路" token={token} initial={data.api} fields={apiRouteFields} validate={routePayload} save={(v) => api.saveApiRoute(token, v)} refresh={applied}
@@ -49,12 +48,12 @@ function RoutesTab({ token }: AdminPanelProps) {
           {data.history.length > 0 && <section className="space-y-2" aria-labelledby="admin-route-history-heading">
             <SectionHeading as="h3" id="admin-route-history-heading">自动切换记录</SectionHeading>
             <ul className="space-y-1 text-body-s text-on-surface-variant">
-              {data.history.slice(-HISTORY_SHOWN).reverse().map((h, i) => <li key={`${h.time}:${i}`} className="wrap-anywhere">{h.time || '时间未记录'}（北京时间） · {h.url || '未记录地址'}{h.reason ? ` · ${h.reason}` : ''}</li>)}
+              {data.history.slice(-HISTORY_SHOWN).reverse().map((h, i) => <li key={`${h.time}:${i}`} className="wrap-anywhere">{h.time ? `${h.time}（北京时间）` : '时间未记录'} · {h.url || '未记录地址'}{h.reason ? ` · ${h.reason}` : ''}</li>)}
             </ul>
           </section>}
         </>}
       </ReadState>
-    </section>
+    </div>
   </div>;
 }
 export default protectedPanel(RoutesTab);

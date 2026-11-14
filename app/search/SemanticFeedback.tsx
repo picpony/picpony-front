@@ -54,7 +54,7 @@ export default function SemanticFeedback({
       await submitSemanticFeedback({ query, tags, engines, captchaProof }, readToken());
       reported.add(query);
       setSentFor(query);
-      showToast('已提交反馈，感谢帮助改进中文搜索', 'success');
+      showToast('已提交反馈', 'success');
     } catch (error) {
       showToast(apiErrorMessage(error, '反馈提交失败，请稍后再试'), 'error');
     } finally {
@@ -73,9 +73,7 @@ export default function SemanticFeedback({
       >
         {sent ? '已反馈' : '反馈本次搜索结果'}
       </Button>
-      <p className="text-body-s text-on-surface-variant">
-        {sent ? '管理员会查看这次中文搜索的转换结果。' : '这次中文搜索的结果不准确？提交给管理员查看。'}
-      </p>
+      {sent && <p className="text-body-s text-on-surface-variant">已提交给管理员核查</p>}
       {captchaMounted && (
         <CaptchaModal isOpen={captchaOpen} onClose={() => setCaptchaOpen(false)} onVerify={send} />
       )}

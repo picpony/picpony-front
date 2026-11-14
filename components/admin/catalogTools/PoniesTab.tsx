@@ -12,7 +12,7 @@ import { showToast } from '@/components/Toast';
 import * as api from '@/lib/api/adminCatalogTools';
 import { mergeDiscovery, type Pony, type Speech } from '@/lib/adminCatalogTools/model';
 import { defineResource, useResource, SKIP } from '@/lib/resource';
-import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
+import { apiErrorMessage, FAILURE_MESSAGES, isRetryable } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
 import { ponyCatalog, myPonies, ponyConfigs } from '@/lib/desktopPonies/queries';
 import type { AdminPanelProps } from '../registry';
@@ -25,7 +25,7 @@ import MutationResult from './MutationResult';
 
 const query = defineAdminQuery('catalog-ponies', api.getPonies);
 const committed = (token: string) => { query.expire(token); ponyCatalog.expire(); myPonies.expire({ token }); ponyConfigs.expire(); };
-const speechQuery = defineResource<{ token: string; name: string; path: string }, Speech[]>({ name: 'admin-pony-speeches', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 8, fetch: (p, signal) => { if (readToken() !== p.token) throw new Error('登录状态已失效'); return api.getPonySpeeches(p.token, p.path, signal); } });
+const speechQuery = defineResource<{ token: string; name: string; path: string }, Speech[]>({ name: 'admin-pony-speeches', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 8, fetch: (p, signal) => { if (readToken() !== p.token) throw new Error(FAILURE_MESSAGES.unauthorized); return api.getPonySpeeches(p.token, p.path, signal); } });
 export default function PoniesTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(query, token);
   const [draft, setDraft] = useState<{ enabled: boolean; ponies: Pony[] } | null>(null);
@@ -55,10 +55,10 @@ export default function PoniesTab({ token }: AdminPanelProps) {
     { key: 'enabled', header: '展示', render: (row) => <Checkbox checked={row.enabled} aria-label={`展示 ${row.name}`} disabled={busy} onChange={(enabled) => { if (config) setDraft({ ...config, ponies: config.ponies.map((p) => p.path === row.path ? { ...p, enabled } : p) }); }} /> },
     { key: 'actions', header: '操作', actions: true, render: (row) => <Button size="xs" variant="text" disabled={busy} onClick={() => { setShownRow(row); setSelected(row); }}>名称与台词</Button> },
   ];
-  function scan() { if (config) void discovery.run(() => api.scanPonies(token), (found) => { setDraft({ ...config, ponies: mergeDiscovery(config.ponies, found) }); showToast(`已发现 ${found.length} 个角色，请保存展示设置`, 'success'); }); }
+  function scan() { if (config) void discovery.run(() => api.scanPonies(token), (found) => { setDraft({ ...config, ponies: mergeDiscovery(config.ponies, found) }); showToast(`已发现 ${found.length} 个角色`, 'success'); }); }
   return <div className="space-y-6">
-    <SectionHeader section="ponies" onRefresh={() => { if (!draft) read.refresh(); else confirmThen('确认重新读取', '确定要放弃尚未保存的展示设置并重新读取吗？', () => { setDraft(null); read.refresh(); }); }} isLoading={read.refreshing} />
-    <AdminNote>扫描资源库后选择可展示的角色，再保存全站设置。名称和台词分别保存。</AdminNote>
+    <SectionHeader section="ponies" onRefresh={() => { if (!draft) read.refresh(); else confirmThen('确认重新读取', '确定要放弃尚未保存的展示设置并重新读取吗？', () => { setDraft(null); read.refresh(); }, { tone: 'filled' }); }} isLoading={read.refreshing} />
+    <AdminNote>角色名称与台词单独保存。</AdminNote>
     {config && <AdminForm aria-label="桌面小马设置" onSubmit={() => confirmThen('确认保存展示设置', `确定要${config.enabled ? '开启' : '关闭'}桌面小马并保存 ${config.ponies.length} 个角色的设置吗？其中 ${config.ponies.filter((row) => row.enabled).length} 个角色已勾选。`, () => void mutation.run(() => api.savePonies(token, revision, config.enabled, config.ponies), () => { setDraft(null); showToast('已保存桌面小马设置', 'success'); }, () => { query.write(token, { enabled: config.enabled, ponies: config.ponies, revision }); committed(token); }), { tone: 'filled' })}>
       <ToggleSwitch layout="row" checked={config.enabled} label="全局展示桌面小马" disabled={busy} onChange={(enabled) => setDraft({ ...config, enabled })} />
       <FormActions><Button type="button" variant="text" loading={discovery.busy} disabled={mutation.busy || discovery.uncertain} onClick={scan}>扫描资源库</Button><Button type="submit" loading={mutation.busy} disabled={discovery.busy || mutation.uncertain}>保存展示设置</Button></FormActions>
@@ -97,7 +97,7 @@ function PonyEditor({ isOpen, token, revision, pony, onClose, onRenamed }: { isO
     <div className="space-y-6">
       <AdminForm aria-label="修改角色名称" onSubmit={() => void rename.run(() => api.savePonyName(token, revision, pony.path, pony.name, name), (data) => { const saved = data.new_name; onRenamed(saved); setName(saved); showToast('已保存角色名称', 'success'); }, () => committed(token))}><Input label="角色名称" value={name} maxLength={200} readOnly={busy} onChange={(event) => setName(event.target.value)} /><FormActions><Button type="submit" variant="tonal" loading={rename.busy} disabled={save.busy || rename.uncertain}>保存名称</Button></FormActions><MutationResult mutation={rename} /></AdminForm>
       <DataTable columns={columns} rows={read.data ?? []} rowKey={(row) => row.name} loading={read.data === undefined && !read.error} {...tableError('台词加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty="暂无台词" />
-      {editing && <AdminForm aria-label={`编辑台词 ${editing.name}`} onSubmit={() => void save.run(() => api.savePonySpeech(token, revision, pony.path, editing.name, editing.text), () => { setEditing(null); showToast('已保存台词', 'success'); }, () => { speechQuery.expire({ token, name: pony.name, path: pony.path }); ponyConfigs.expire(); query.expire(token); })}><Textarea label={`台词内容 · ${editing.name}`} rows={4} maxLength={2000} value={editing.text} readOnly={busy} onChange={(event) => setEditing({ ...editing, text: event.target.value })} /><FormActions><Button type="button" variant="text" disabled={busy} onClick={() => setEditing(null)}>取消编辑</Button><Button type="submit" loading={save.busy} disabled={rename.busy || save.uncertain}>保存台词</Button></FormActions></AdminForm>}
+      {editing && <AdminForm aria-label={`编辑台词 ${editing.name}`} onSubmit={() => void save.run(() => api.savePonySpeech(token, revision, pony.path, editing.name, editing.text), () => { setEditing(null); showToast('已保存台词', 'success'); }, () => { speechQuery.expire({ token, name: pony.name, path: pony.path }); ponyConfigs.expire(); query.expire(token); })}><Textarea label={`台词内容 · ${editing.name}`} rows={4} maxLength={2000} value={editing.text} readOnly={busy} onChange={(event) => setEditing({ ...editing, text: event.target.value })} /><FormActions><Button type="button" variant="text" disabled={busy} onClick={() => setEditing(null)}>取消</Button><Button type="submit" loading={save.busy} disabled={rename.busy || save.uncertain}>保存台词</Button></FormActions></AdminForm>}
       <MutationResult mutation={save} />
     </div>
   </Modal>;

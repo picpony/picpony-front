@@ -214,12 +214,12 @@ function prepareTagBatch(
 /** Short links made this page life, per picture: a second copy does not store a second row. */
 const shareLinks = new Map<number, string>();
 
-const shareTitle = (id: number) => `分享一张精美的小马图（ID：${id}）`;
+const shareTitle = (id: number) => `PicPony 图片 #${id}`;
 
 /** The link preview's line: the description's first words, else an invitation. */
 function shareDescription(description: string | null | undefined): string {
   const text = plainTextOf(description).replace(/\s+/g, ' ').trim();
-  if (!text) return '点击链接自动打开详情，快来看看吧~';
+  if (!text) return '点击查看图片详情';
   const chars = Array.from(text);
   return chars.length > 40 ? `${chars.slice(0, 40).join('')}…` : text;
 }
@@ -261,7 +261,7 @@ async function copyImageLink(image: ImagePreview, token: string | null): Promise
       label: '复制',
       onClick: () => {
         void copyLink(url).then((copied) => {
-          if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
+          if (!copied) showToast('复制失败，请检查剪贴板权限', 'error');
         });
       },
     },
@@ -1200,7 +1200,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         showToast(outcome.message, 'error');
         return;
       }
-      showToast('已提交举报，感谢反馈', 'success');
+      showToast('已提交举报', 'success');
       setReport((current) => (current.imageId === targetId ? { imageId: targetId, open: false, reason: '' } : current));
     });
   };
@@ -1278,7 +1278,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           data-image-detail-floating-back="route"
           data-image-hero-route-id={String(imageId)}
           aria-keyshortcuts="Escape"
-          title="返回图片列表 (Esc)"
+          title="返回图片列表（Esc）"
           onClick={handleBackToGallery}
           className="image-detail-back"
         />

@@ -48,7 +48,7 @@ export default function PageBack({
       /* The key the page binds to the same action (`useEscapeBack`) — announced, and kept out
          of the name: a name reading "返回 (Esc)" spoke the parenthesis aloud. */
       aria-keyshortcuts="Escape"
-      title={title ?? `${label} (Esc)`}
+      title={title ?? `${label}（Esc）`}
       className="image-detail-back"
     />
   );

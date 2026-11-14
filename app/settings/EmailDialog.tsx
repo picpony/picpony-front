@@ -182,7 +182,7 @@ export default function EmailDialog({
               {sendLabel}
             </Button>
             <Button variant="text" type="button" onClick={close} disabled={busy !== null}>
-              稍后
+              取消
             </Button>
             <Button variant="filled" type="submit" form="email-verify-form" loading={busy === 'verify'}>
               验证
@@ -232,7 +232,7 @@ export default function EmailDialog({
               name="current-password"
               autoComplete="current-password"
               value={password}
-              helper="为了你的账户安全，更换邮箱需要验证密码；验证码将发送至新邮箱"
+              helper="需验证当前密码，验证码将发送至新邮箱"
               onChange={(event) => {
                 setPassword(event.target.value);
                 change.clear('password');
@@ -251,7 +251,7 @@ export default function EmailDialog({
             className="space-y-4"
           >
             <p id={introId} className="text-body-m text-on-surface-variant wrap-anywhere">
-              {`验证码已发送至 ${target}，请在下方输入 ${CODE_LENGTH} 位数字。验证后它将替换当前绑定的邮箱。`}
+              {`验证码已发送至 ${target}，请在下方输入 ${CODE_LENGTH} 位数字`}
             </p>
             <Field error={codeError}>
               <div ref={codeBox}>

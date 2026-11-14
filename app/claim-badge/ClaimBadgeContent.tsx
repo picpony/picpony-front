@@ -56,7 +56,7 @@ function ExitLink({ profileHref, emphasized }: { profileHref: string; emphasized
       href={profileHref}
       variant={emphasized ? 'filled' : 'tonal'}
     >
-      {profileHref === '/' ? '返回首页' : '返回个人主页'}
+      {profileHref === '/' ? '回到首页' : '返回个人主页'}
     </ButtonLink>
   );
 }
@@ -89,7 +89,7 @@ export default function ClaimBadgeContent({ claimToken }: { claimToken: string }
         ) : !ready ? (
           <ClaimSkeleton />
         ) : !token ? (
-          <SignInRequired description="登录后即可领取此徽章，领取链接会保留在当前页面。" />
+          <SignInRequired description="登录后即可领取此徽章" />
         ) : (
           <ClaimForm key={`${token}:${claimToken}`} token={token} claimToken={claimToken} profileHref={profileHref} />
         )}
@@ -273,7 +273,7 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         entrance={!pressed}
         icon={<MdEmojiEvents size={ICON.display} />}
         title={outcome.name ? `已领取「${outcome.name}」` : '已领取徽章'}
-        description="徽章已加入当前账号，可以在个人主页佩戴。"
+        description="徽章已加入当前账号，可在个人主页佩戴"
         action={home}
       >
         {outcome.name && (outcome.look
@@ -289,7 +289,7 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         size="pane"
         entrance={!pressed}
         title="未能确认领取结果"
-        message={`${outcome.message.replace(/[。.！!]+$/, '')}。重试时如果提示已经领取过，徽章就已在你的账号里。`}
+        message={`${outcome.message.replace(/[。.！!]+$/, '')}。若重试提示已经领取过，表示徽章已在当前账号中`}
         onRetry={outcome.retryable ? () => void submit() : undefined}
         action={outcome.retryable ? undefined : home}
       />
@@ -300,8 +300,7 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         size="pane"
         entrance={!pressed}
         icon={<MdEmojiEvents size={ICON.display} />}
-        title="有一枚徽章等你领取"
-        description="领取后，此徽章将加入当前账号。"
+        title="待领取徽章"
         action={
           <Button variant="filled" onClick={() => void submit()} loading={busy} icon={<MdEmojiEvents />}>
             领取徽章

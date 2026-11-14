@@ -21,7 +21,7 @@ import { userProfile } from '@/lib/resources';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
 import * as adminApi from '@/lib/api/admin';
 import SectionHeader from './SectionHeader';
-import { AdminForm, AdminNote, FormActions } from './AdminForm';
+import { AdminForm, FormActions } from './AdminForm';
 import { AdminListAnchor, AdminPager, useCursorPages, useShownListKey } from './paging';
 import { tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
@@ -100,7 +100,7 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
     if (audience !== 'user' || !typedId) return undefined;
     if (!lookupCurrent || (lookup.data === undefined && lookup.error === undefined)) return '正在查找该用户…';
     if (recipientName) return `将发送给「${recipientName}」`;
-    if (lookup.error !== undefined && !recipientMissing) return '暂时无法确认该用户，发送时由服务器校验';
+    if (lookup.error !== undefined && !recipientMissing) return '暂时无法确认该用户';
     return undefined;
   })();
 
@@ -175,7 +175,7 @@ ${currentPage}`, history.isPrevious);
   const remove = (item: NotificationItem) => {
     confirmThen(
       '确认删除通知',
-      `确定要删除通知「${item.title}」吗？删除后接收者将无法在信箱中看到它。`,
+      `确定要删除通知「${item.title}」吗？删除后接收者将无法在信箱中查看该通知。`,
       () => void deleteMutation.run(
         () => adminApi.adminDeleteNotification(token, item.id),
         () => showToast('已删除通知', 'success'),
@@ -238,13 +238,12 @@ ${currentPage}`, history.isPrevious);
   ];
 
   const historyError = history.error
-    ? tableError(history.isPrevious ? `第 ${currentPage} 页加载失败` : '通知记录加载失败', apiErrorMessage(history.error))
+    ? tableError(history.isPrevious ? `通知记录第 ${currentPage} 页加载失败` : '通知记录加载失败', apiErrorMessage(history.error))
     : {};
 
   return (
     <div className="space-y-6">
       <SectionHeader section="notifications" />
-      <AdminNote>系统通知出现在接收者的信箱里，并点亮信箱的红点提醒。全站广播只会生成一条推送记录。</AdminNote>
 
       <AdminForm onSubmit={send} aria-labelledby="notifications-send-heading">
         <SectionHeading as="h3" id="notifications-send-heading">发送通知</SectionHeading>
@@ -294,7 +293,7 @@ ${currentPage}`, history.isPrevious);
           value={title}
           readOnly={sending}
           error={errors.title}
-          placeholder="例如：您的稿件已被审核通过"
+          placeholder="例如：你的稿件已通过审核"
           onChange={(event) => { setTitle(event.target.value); clear('title'); }}
         />
         <Textarea
@@ -313,7 +312,7 @@ ${currentPage}`, history.isPrevious);
           disabled={sending}
           onChange={setImportant}
           label="同时发送邮件"
-          description="通知内容还会以邮件发给接收者；全站广播会给所有用户发邮件，耗时较长。"
+          description="开启全站广播时将向所有用户发送邮件，耗时较长"
         />
         <FormActions>
           <Button type="submit" variant="filled" icon={<MdSend />} loading={sending}>

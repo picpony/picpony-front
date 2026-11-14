@@ -156,7 +156,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
           {read.error !== undefined && (
             <ErrorRetry
               size="inline"
-              title="你的组加载失败"
+              title="标签组与屏蔽组加载失败"
               message={apiErrorMessage(read.error)}
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
@@ -164,10 +164,10 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
           {options.length === 0 && read.error === undefined ? (
             <EmptyState
               size="inline"
-              title="你还没有可分享的标签组或屏蔽组"
+              title="暂无可分享的标签组或屏蔽组"
               action={
                 <Link href="/block-groups" scroll={false} className="text-body-m text-link underline underline-offset-2">
-                  去创建屏蔽组
+                  前往创建屏蔽组
                 </Link>
               }
             />
@@ -212,7 +212,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
                         {option.tags.length > TAG_PREVIEW && (
                           <span className="text-body-s text-on-surface-variant">+{option.tags.length - TAG_PREVIEW}</span>
                         )}
-                        {option.tags.length === 0 && <span className="text-body-s text-on-surface-variant">没有标签</span>}
+                        {option.tags.length === 0 && <span className="text-body-s text-on-surface-variant">暂无标签</span>}
                       </p>
                     </div>
                   </li>

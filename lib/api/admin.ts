@@ -145,7 +145,9 @@ export async function adminUpdateUser(token: string, user: AdminUserDetail, chan
       applied.push(label);
     } catch (error) {
       if (!applied.length || !(error instanceof ApiError)) throw error;
-      throw new ApiError(error.kind, { status: error.status, code: error.code, retryable: false, message: `已保存${applied.join('、')}；${label}未保存：${error.message}` });
+      const saved = applied.join('、');
+      const space = /^[A-Za-z0-9]/.test(saved) ? ' ' : '';
+      throw new ApiError(error.kind, { status: error.status, code: error.code, retryable: false, message: `已保存${space}${saved}；${label}未保存：${error.message}` });
     }
   };
   const profile: AdminRow = {};

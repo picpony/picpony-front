@@ -44,7 +44,7 @@ export default function FavoritesSection() {
     <SettingsSection title="收藏" icon={<MdStar size={ICON.control} />}>
       <SwitchRow
         label="一键收藏"
-        description="点收藏时直接存入默认收藏夹；关闭后每次都选择收藏夹"
+        description="开启后点击收藏将直接存入默认收藏夹"
         checked={oneTap}
         onChange={(on) => changeSyncedSetting('defaultFaveToMain', on)}
       />
@@ -52,14 +52,13 @@ export default function FavoritesSection() {
         label="默认收藏夹"
         supporting={`「${resolved.name}」`}
         action={
-          <RowButton label="更改默认收藏夹" icon={<MdEdit />} onClick={() => setChoosing(true)}>
-            更改
+          <RowButton label="选择默认收藏夹" icon={<MdEdit />} onClick={() => setChoosing(true)}>
+            选择
           </RowButton>
         }
       />
       <SwitchRow
         label="显示隐私空间"
-        description="在我的收藏中显示需要密码才能查看的隐私空间"
         checked={showPrivacy}
         onChange={(on) => changeSyncedSetting('showPrivacyFaves', on)}
       />

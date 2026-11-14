@@ -7,7 +7,7 @@ import SearchInput from '@/components/SearchInput';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import * as api from '@/lib/api/adminCatalogTools';
-import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
+import { apiErrorMessage, FAILURE_MESSAGES, isRetryable } from '@/lib/api/errors';
 import { defineResource, useResource } from '@/lib/resource';
 import { readToken } from '@/lib/hooks';
 import { shopItems } from '@/lib/resources';
@@ -24,7 +24,7 @@ type Params = { token: string; keyword: string; legacy: boolean; before?: number
 type Row = Purchase | LegacyPurchase;
 /* One cursor page per read (`before` → `next_cursor`): the backend never says how many there are. */
 const query = defineResource<Params, api.PurchasePage<Row>>({ name: 'admin-catalog-purchases', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 12, fetch: (p, signal) => {
-  if (readToken() !== p.token) throw new Error('登录状态已失效');
+  if (readToken() !== p.token) throw new Error(FAILURE_MESSAGES.unauthorized);
   return p.legacy ? api.getLegacyShopPurchases(p.token, p.keyword, p.before, signal) : api.getShopPurchases(p.token, p.keyword, p.before, signal);
 } });
 export default function PurchasesPane({ token, legacy = false }: { token: string; legacy?: boolean }) {
@@ -46,13 +46,13 @@ export default function PurchasesPane({ token, legacy = false }: { token: string
     { key: 'amount', header: '金币', width: 'auto', className: 'tabular-nums', render: (row) => 'amount' in row ? formatSignedCount(row.amount) : formatExactCount(row.total_amount) },
     { key: 'time', header: '时间', render: (row) => formatDateTime(row.created_at) },
     { key: 'status', header: '状态', render: (row) => <Badge>{'status' in row ? row.status === 'completed' ? '已完成' : row.status === 'refunded' ? '已退款' : '待核对' : '旧版流水'}</Badge> },
-    ...(!legacy ? [{ key: 'actions', header: '操作', actions: true, render: (row: Row) => 'status' in row && row.status === 'completed' ? <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认退款', `确定要将订单 #${row.id}「${row.item_name}」的 ${row.total_amount} 金币退还给 ${row.username || '用户'}（#${row.user_id}）吗？将恢复 ${row.quantity} 件库存，此操作不可撤销。`, () => void mutation.run(() => api.refundShopPurchase(token, row.id), () => showToast(`已退还 ${row.total_amount} 金币`, 'success'), committed))}>退款</Button> : '—' }] : []),
+    ...(!legacy ? [{ key: 'actions', header: '操作', actions: true, render: (row: Row) => 'status' in row && row.status === 'completed' ? <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认退款', `确定要将订单 #${row.id}「${row.item_name}」的 ${row.total_amount} 金币退还给 ${row.username || '用户'}（#${row.user_id}）吗？将恢复 ${row.quantity} 件库存，此操作无法恢复。`, () => void mutation.run(() => api.refundShopPurchase(token, row.id), () => showToast(`已退还 ${row.total_amount} 金币`, 'success'), committed), { tone: 'danger' })}>退款</Button> : '—' }] : []),
   ];
   return <div className="space-y-4">
     {legacy && <AdminNote>旧版流水仅供人工核对，不提供自动退款。</AdminNote>}
-    <AdminForm aria-label={legacy ? '查询旧版流水' : '查询消费记录'} onSubmit={() => { setFilter(keyword.trim()); if (filter === keyword.trim()) read.refresh(); }}><SearchInput value={keyword} maxLength={200} onChange={setKeyword} placeholder="用户或商品关键词…" /><FormActions><RefreshButton onClick={read.refresh} label="刷新记录" loading={read.isLoading && read.data !== undefined} /><Button type="submit" variant="tonal">查询</Button></FormActions></AdminForm>
+    <AdminForm aria-label={legacy ? '查询旧版流水' : '查询消费记录'} onSubmit={() => { setFilter(keyword.trim()); if (filter === keyword.trim()) read.refresh(); }}><SearchInput value={keyword} maxLength={200} onChange={setKeyword} placeholder={legacy ? '用户或原因关键词…' : '用户或商品关键词…'} /><FormActions><RefreshButton onClick={read.refresh} label="刷新记录" loading={read.isLoading && read.data !== undefined} /><Button type="submit" variant="tonal">查询</Button></FormActions></AdminForm>
     <MutationResult mutation={mutation} />
-    <AdminListAnchor><DataTable columns={columns} rows={read.data?.rows ?? []} listKey={listKey} rowKey={(row) => row.id} loading={read.data === undefined && !read.error} {...tableError('消费记录加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty={legacy ? '暂无旧版流水' : '暂无消费记录'} /><AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading} /></AdminListAnchor>
+    <AdminListAnchor><DataTable columns={columns} rows={read.data?.rows ?? []} listKey={listKey} rowKey={(row) => row.id} loading={read.data === undefined && !read.error} {...tableError(legacy ? '旧版流水加载失败' : '消费记录加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty={legacy ? '暂无旧版流水' : '暂无消费记录'} /><AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading} /></AdminListAnchor>
     {confirmDialog}
   </div>;
 }

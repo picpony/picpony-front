@@ -107,7 +107,7 @@ export default function HistoryDialog({
               </div>
               <div>
                 <dt className="text-label-l text-on-surface-variant">别名</dt>
-                <dd className="text-on-surface wrap-anywhere">{historyAliases(selected.aliases) || '无'}</dd>
+                <dd className="text-on-surface wrap-anywhere">{historyAliases(selected.aliases) || '—'}</dd>
               </div>
               <div>
                 <dt className="text-label-l text-on-surface-variant">分类</dt>
@@ -121,7 +121,7 @@ export default function HistoryDialog({
               </div>
               <div className="sm:col-span-2">
                 <dt className="text-label-l text-on-surface-variant">简介</dt>
-                <dd className="whitespace-pre-wrap text-on-surface-variant wrap-anywhere">{selected.description || '无'}</dd>
+                <dd className="whitespace-pre-wrap text-on-surface-variant wrap-anywhere">{selected.description || '—'}</dd>
               </div>
             </dl>
           )}

@@ -40,7 +40,6 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
         size="pane"
         icon={<MdArticle size={ICON.display} />}
         title="暂无帖子"
-        description={own ? '你还没有发表过帖子' : '该用户还没有发表过任何帖子'}
       />
     );
   }

@@ -334,7 +334,7 @@ def inspect(page, name, route_path):
         elif route_path == '/tasks/coins':
             page.get_by_text('每日登录', exact=True).first.wait_for(state='visible')
         elif route_path == '/subscriptions':
-            page.get_by_text('还没有订阅标签', exact=True).first.wait_for(state='visible')
+            page.get_by_text('暂无订阅标签', exact=True).first.wait_for(state='visible')
     # **The audit sees the page, not its cold-load placeholder.** Every route paints one first
     # (the route fallback, then its own skeleton). The composer's is taller than the scroller and
     # holds the footer — the page's only focusable content while it is up — so `#app-main` is a

@@ -24,8 +24,8 @@ import CommentsPane from './CommentsPane';
 const TABS: { value: ProfileTab; label: string }[] = [
   { value: 'uploads', label: '上传记录' },
   { value: 'faves', label: '收藏夹' },
-  { value: 'posts', label: '发布的帖子' },
-  { value: 'comments', label: '历史评论' },
+  { value: 'posts', label: '帖子' },
+  { value: 'comments', label: '评论' },
 ];
 
 /**

@@ -141,7 +141,7 @@ export async function exchangeAssistantQuota(token: string, pending: { coins: nu
  */
 export async function assistantChat(token: string, body: { message: string; request_id: string; session_key: string; page_context: JsonObject }): Promise<{ task_id: string }> {
   const data = await call<{ success: boolean; task_id?: string; error?: string }>('POST', '/me/assistant/chat', token, { json: body }).catch(refusal);
-  if (data.success === false) throw new AssistantRefusal(data.error === 'assistant_not_ready' ? '彩彩 AI 暂未就绪，请稍后再试' : '彩彩暂时无法回复');
+  if (data.success === false) throw new AssistantRefusal(data.error === 'assistant_not_ready' ? '彩彩 AI 暂未就绪，请稍后再试' : '彩彩 AI 暂时无法回复');
   const taskId = uuid(data.task_id);
   if (!taskId) throw new ApiError('invalid');
   return { task_id: taskId };
@@ -288,6 +288,6 @@ export async function readAssistantSiteInfo(token: string, endpoint: string, que
 export async function resolveAssistantSearch(query: string): Promise<{ tags: string[] }> {
   const parsed = await parseSemanticQuery(query, { timeoutMs: 45_000 });
   const tags = parsed.tags.filter(tag => tag.length <= 300).slice(0, 24);
-  if (!parsed.enabled || !tags.length) throw new ApiError('envelope', { serverMessage: '未能把这条查询转换为标签，未执行搜索' });
+  if (!parsed.enabled || !tags.length) throw new ApiError('envelope', { serverMessage: '未能将此查询转换为标签，未执行搜索' });
   return { tags };
 }

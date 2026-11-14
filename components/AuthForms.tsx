@@ -507,7 +507,7 @@ function RegisterDetails({
       if (!operation.current(pending)) return;
       if (data.mail?.status !== 'existing') startCooldown(registrationCooldownKey(address));
       onPendingChange({ verification: data.verification, username: name, email: address });
-      showToast(data.message ?? '验证码已发送至邮箱', 'success');
+      showToast(data.message ?? '已发送验证码至邮箱', 'success');
     } catch (err) {
       if (!operation.current(pending)) return;
       showToast(failureOf(err, '注册失败，请检查填写的内容'), 'error');
@@ -659,7 +659,7 @@ function VerifyEmail({
       onPendingChange(null);
       cooldown.reset();
       if (!(await establishSession(grant, pending, operation.current))) return;
-      showToast('邮箱已验证，欢迎加入', 'success');
+      showToast('已验证邮箱并登录', 'success');
       onSuccess();
     } catch (err) {
       if (!operation.current(pending)) return;
@@ -682,7 +682,7 @@ function VerifyEmail({
       if (!operation.current(pending)) return;
       onPendingChange({ ...registration, verification: data.verification });
       cooldown.start();
-      showToast('验证码已重新发送', 'success');
+      showToast('已重新发送验证码', 'success');
     } catch (err) {
       if (!operation.current(pending)) return;
       showToast(failureOf(err, '验证码发送失败，请稍后再试'), 'error');
@@ -855,7 +855,7 @@ function ResetForm({
       cooldown.start();
       setVerification(data.verification);
       writePendingReset({ account, verification: data.verification, sentAt: Date.now() });
-      showToast(data.message ?? (resend ? '验证码已重新发送' : '验证码已发送至注册邮箱'), 'success');
+      showToast(data.message ?? (resend ? '已重新发送验证码' : '已发送验证码至注册邮箱'), 'success');
       if (!resend) goTo('reset');
     } catch (err) {
       if (!operation.current(pending)) return;
@@ -891,7 +891,7 @@ function ResetForm({
       if (!operation.current(pending)) return;
       cooldown.reset();
       writePendingReset(null);
-      showToast('密码已重置，请重新登录', 'success');
+      showToast('已重置密码，请重新登录', 'success');
       onSwitch({ view: 'login', account });
     } catch (err) {
       if (!operation.current(pending)) return;
@@ -907,14 +907,11 @@ function ResetForm({
     <div ref={viewRef}>
       <BackToLogin onSwitch={onSwitch} />
       <div key={step} className={cn(stepChanged && 'animate-page-transition')}>
-        <ViewHeading id={headingId} className="mb-2">
-          {step === 'request' ? '忘记密码' : '重置密码'}
+        <ViewHeading id={headingId} className={step === 'request' ? 'mb-8' : 'mb-2'}>
+          {step === 'request' ? '找回密码' : '重置密码'}
         </ViewHeading>
         {step === 'request' ? (
           <>
-            <p className="text-body-m text-on-surface-variant mb-8">
-              输入账号的注册邮箱，验证码将发送至该邮箱。
-            </p>
             <form onSubmit={handleRequestCode} className="space-y-4" noValidate>
               <Input
                 {...accountField}

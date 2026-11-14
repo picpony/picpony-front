@@ -161,7 +161,7 @@ export default function ThreadComments({
       {failed && (
         <ErrorRetry
           size="inline"
-          title={comments ? '这一页回复加载失败' : '回复加载失败'}
+          title={comments ? `第 ${page} 页加载失败` : '回复加载失败'}
           message={apiErrorMessage(error)}
           onRetry={isRetryable(error) ? onRetry : undefined}
         />

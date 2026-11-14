@@ -64,7 +64,7 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
         </span>
         <span className="flex items-center gap-2 px-3 py-2.5">
           <MdImage size={ICON.dense} aria-hidden="true" className="shrink-0 text-on-surface-variant" />
-          <span className="min-w-0 flex-1 truncate text-label-l text-on-surface">分享了一张图片</span>
+          <span className="min-w-0 flex-1 truncate text-label-l text-on-surface">分享的图片</span>
           <span className="shrink-0 text-label-m text-on-surface-variant tabular-nums">#{target.imageId}</span>
         </span>
       </Card>

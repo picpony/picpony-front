@@ -73,10 +73,7 @@ export function validateNewPassword(value: string): string | null {
   if (!value) return '请输入密码';
   const length = passwordLength(value);
   if (length < PASSWORD_MIN || length > PASSWORD_MAX) {
-    /* Only a password with a non-ASCII character can be surprised by the byte count. */
-    return length === value.length
-      ? `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位`
-      : `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位（中文等字符每个按 3 位计）`;
+    return `密码需为 ${PASSWORD_MIN} 到 ${PASSWORD_MAX} 位`;
   }
   if (!/[A-Za-z]/.test(value) || !/[^A-Za-z]/.test(value)) return '密码需包含字母和数字或符号';
   return null;
@@ -116,7 +113,7 @@ export function validatePasswordConfirmation(password: string, confirmation: str
  * can save is one publishing takes.
  */
 export const API_KEY_PATTERN = /^[A-Za-z0-9_-]{20}$/;
-export const API_KEY_MESSAGE = 'API Key 应为 20 位字母、数字、- 或 _，请检查是否多复制或漏复制了字符';
+export const API_KEY_MESSAGE = 'API Key 须为 20 位字母、数字、- 或 _';
 
 export function validateApiKey(value: string): string | null {
   return API_KEY_PATTERN.test(value.trim()) ? null : API_KEY_MESSAGE;

@@ -30,7 +30,7 @@ import { formatShortDateTime } from '@/lib/format';
 import { readToken } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { shareableGroups } from '@/lib/resources';
-import type { ForumCategory, ForumPost } from '@/lib/types/forum';
+import type { ForumPost } from '@/lib/types/forum';
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
@@ -41,13 +41,6 @@ const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
 const TITLE_MIN = 5;
 const TITLE_MAX = 100;
 const EXCERPT_MAX = 300;
-
-/** What each kind of post is for, under the choice. */
-const CATEGORY_HINTS: Record<ForumCategory, string> = {
-  discussion: '聊聊图片、画师或站内的任何事',
-  commission: '发布约稿信息，可以附上约稿平台的链接',
-  taggroups: '把你的标签组或屏蔽组分享出去，大家可以一键导入',
-};
 
 type FieldKey = 'title' | 'excerpt' | 'content' | 'link' | 'groups';
 type Errors = Partial<Record<FieldKey, string>>;
@@ -193,8 +186,9 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
 
   const discard = async () => {
     const ok = await confirm({
-      title: '确认丢弃',
-      message: editing === null ? '确定要丢弃此草稿吗？丢弃后无法恢复。' : '确定要丢弃此次修改吗？丢弃后无法恢复。',
+      title: editing === null ? '确认丢弃草稿' : '确认放弃修改',
+      message: editing === null ? '确定要丢弃此草稿吗？' : '确定要放弃未保存的修改吗？',
+      tone: editing === null ? 'danger' : 'filled',
     });
     if (!ok) return;
     clearDraft(userId, editing);
@@ -226,8 +220,8 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
     if (draft.category === 'discussion' && isBlankRichText(draft.content)) next.content = '请输入正文';
     if (draft.category === 'commission') {
       const link = draft.commissionLink.trim();
-      if (link && !isCommissionLink(link)) next.link = '约稿链接需以 http:// 或 https:// 开头';
-      else if (!link && isBlankRichText(draft.content)) next.content = '正文和约稿链接至少填写一项';
+      if (link && !isCommissionLink(link)) next.link = '约稿平台链接需以 http:// 或 https:// 开头';
+      else if (!link && isBlankRichText(draft.content)) next.content = '正文和约稿平台链接至少填写一项';
     }
     if (draft.category === 'taggroups' && draft.groups.length === 0) next.groups = '请至少选择一个标签组或屏蔽组';
     return next;
@@ -305,14 +299,14 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
             {editing === null ? '已恢复上次未完成的草稿' : '已恢复上次未保存的修改'}（{formatShortDateTime(restoredAt)}）
           </p>
           <Button type="button" variant="text" size="xs" onClick={() => void discard()}>
-            丢弃草稿
+            {editing === null ? '丢弃草稿' : '放弃修改'}
           </Button>
         </div>
       )}
 
-      <div role="radiogroup" aria-labelledby={categoryId} aria-describedby={`${categoryId}-hint`}>
+      <div role="radiogroup" aria-labelledby={categoryId}>
         <p id={categoryId} className="mb-2 text-title-s text-on-surface">
-          帖子类型
+          分类
         </p>
         <div className="flex flex-wrap gap-x-6 gap-y-1">
           {FORUM_CATEGORIES.map((entry) => (
@@ -336,9 +330,6 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
             />
           ))}
         </div>
-        <p id={`${categoryId}-hint`} className="mt-1 px-4 text-body-s text-on-surface-variant">
-          {CATEGORY_HINTS[category]}
-        </p>
       </div>
 
       <Input
@@ -363,21 +354,21 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
         count={{ value: draft.excerpt.length, max: EXCERPT_MAX }}
         rows={2}
         error={errors.excerpt}
-        helper="显示在帖子列表里；留空时自动截取正文"
+        helper="显示在帖子列表中，留空时自动截取正文"
       />
 
       {showEditor && (
         <div>
           <p id={contentId} className="mb-2 text-title-s text-on-surface">
             正文
-            {category === 'commission' && <span className="text-body-m text-on-surface-variant">（和约稿链接至少填写一项）</span>}
+            {category === 'commission' && <span className="text-body-m text-on-surface-variant">（和约稿平台链接至少填写一项）</span>}
           </p>
           <RichTextEditor
             value={draft.content}
             onChange={(next) => set('content', next, 'content')}
             size="post"
             label="正文"
-            placeholder={category === 'commission' ? '介绍你的约稿：价格、周期、要求…' : '写下你的帖子内容…'}
+            placeholder={category === 'commission' ? '输入约稿说明（价格、周期、要求等）…' : '输入帖子内容…'}
             invalid={Boolean(errors.content)}
             describedBy={errors.content ? contentErrorId : undefined}
             handleRef={editor}
@@ -403,7 +394,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
           onChange={(event) => set('commissionLink', event.target.value, 'link')}
           placeholder="https://…"
           error={errors.link}
-          helper="读者前往前会看到一段提醒，请使用正规的交易托管平台"
+          helper="跳转前将提示外部链接风险"
         />
       )}
 
@@ -413,7 +404,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
             label="说明（选填）"
             value={draft.groupsDescription}
             onChange={(event) => set('groupsDescription', event.target.value)}
-            placeholder="简单介绍一下你要分享的组…"
+            placeholder="输入组分享说明…"
             rows={3}
           />
           <SharedGroupsPicker
@@ -442,7 +433,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
               layout="row"
               checked={draft.firstImageAsCover}
               onChange={(on) => set('firstImageAsCover', on)}
-              label="没有封面时，使用正文的第一张图片"
+              label="无封面时使用正文首张图片"
             />
           )}
         </div>
@@ -455,9 +446,6 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       )}
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-outline-variant pt-4">
-        {editing === null && (
-          <p className="me-auto text-body-s text-on-surface-variant">草稿会自动保存在此设备上</p>
-        )}
         <Button type="button" variant="text" onClick={onCancel}>
           取消
         </Button>

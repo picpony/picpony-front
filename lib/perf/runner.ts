@@ -186,7 +186,7 @@ function describeLongFrame(entry: PerformanceEntry): string | undefined {
   if (forced >= 1) parts.push(`其中强制布局 ${Math.round(forced)}`);
   if (renderMs >= 1) parts.push(`渲染回调 ${Math.round(renderMs)}`);
   parts.push(`样式布局 ${Math.round(styleMs)}`);
-  return `${Math.round(loaf.duration)}ms = ${parts.join(' + ')}`;
+  return `${Math.round(loaf.duration)} ms = ${parts.join(' + ')}`;
 }
 
 function heroState() {
@@ -667,7 +667,7 @@ class PerfRun {
       glitches.vanishes += 1;
       if (glitches.events.length < 6) {
         glitches.events.push(
-          `${label} +${Math.round(episode.at - start)}ms ${episode.phase} 消失 ${episode.frames} 帧`,
+          `${label} +${Math.round(episode.at - start)} ms ${episode.phase} 消失 ${episode.frames} 帧`,
         );
       }
       episode = null;

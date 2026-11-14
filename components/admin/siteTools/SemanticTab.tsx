@@ -74,7 +74,7 @@ function Feedback({ token }: { token: string }) {
       <Button variant="danger-text" disabled={!selected.length || read.isPrevious || archive.busy} loading={remove.busy} onClick={() => deleteIds(selected)}>删除所选（{selected.length}）</Button>
     </div>
     <AdminListAnchor>
-      <DataTable columns={columns} rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r) => r.id} loading={read.loading} {...tableError(read.isPrevious ? `第 ${pages.page} 页加载失败` : '搜索反馈加载失败', read.message)} onRetry={read.retry} empty="暂无搜索反馈" />
+      <DataTable columns={columns} rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r) => r.id} loading={read.loading} {...tableError(read.isPrevious ? `搜索反馈第 ${pages.page} 页加载失败` : '搜索反馈加载失败', read.message)} onRetry={read.retry} empty="暂无搜索反馈" />
       <AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading || archive.busy || remove.busy} summary={read.data ? `共 ${read.data.counts[filter.status]} 条反馈` : undefined} />
     </AdminListAnchor>
     {confirmDialog}
@@ -84,7 +84,7 @@ function Feedback({ token }: { token: string }) {
 /** What the key field leaves in place: the stored key by its mask, or why it cannot be used. */
 function keyNote(config: api.SemanticConfig): string {
   if (!config.hasKey) return '尚未保存模型密钥。';
-  if (!config.keyReadable) return '已保存的模型密钥无法在此服务器上解密，请重新填写密钥后保存。';
+  if (!config.keyReadable) return '当前服务器无法解密该密钥，请重新填写。';
   return `已保存模型密钥（${config.masked}），留空即可保留。`;
 }
 
@@ -109,7 +109,7 @@ function SemanticTab({ token }: AdminPanelProps) {
         }} confirmation={(v) => `确定要保存云端模型设置吗？${v.semantic_cloud_clear_key ? '已保存的模型密钥将被清除。' : '设置将用于全站智能搜索。'}`}>
           <AdminNote>{keyNote(read.data)}</AdminNote>
         </ConfigEditor>
-        <div className="space-y-3"><Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次模型测试请求吗？测试可能消耗服务额度，未保存的内容不会参与测试。', () => void test.run(() => api.testSemanticCloud(token), (d) => setResult(d), '云端连接测试失败'))}>测试云端连接</Button>{result && <Card variant="filled" padding="sm" className="max-w-2xl space-y-2"><p role="status" className="text-body-m">{result.ok ? `连接正常：${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒` : `模型服务返回 HTTP ${result.http_status}（${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒）`}</p></Card>}</div>
+        <div className="space-y-3"><Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testSemanticCloud(token), (d) => setResult(d), '测试失败'), { tone: 'filled' })}>测试云端连接</Button>{result && <Card variant="filled" padding="sm" className="max-w-2xl space-y-2"><p role="status" className="text-body-m">{result.ok ? `连接正常：${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒` : `模型服务返回 HTTP ${result.http_status}（${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒）`}</p></Card>}</div>
       </>}
     </ReadState>
     <Feedback token={token} />

@@ -41,7 +41,7 @@ export default function ServiceChecks({ token }: { token: string }) {
       });
   };
   return <div className="space-y-4">
-    <AdminNote>从当前设备发起匿名读取，检测各条线路，每条最多等待 5 秒。图片线路以能否解码出图片为准；跨站的接口响应可能只允许确认已收到响应，无法读取其状态码。</AdminNote>
+    <AdminNote>从当前设备发起匿名检测，每条线路最多等待 5 秒。</AdminNote>
     <div className="flex flex-wrap gap-3"><Button variant="tonal" loading={busy} onClick={() => void run()}>检测线路</Button>{busy && <Button variant="text" onClick={() => { controller.current?.abort(); controller.current = null; setBusy(false); }}>停止检测</Button>}</div>
     <DataTable rows={checks} rowKey={(r) => r.name} loading={busy && !checks.length} {...tableError('线路检测失败', error || undefined)} empty={<EmptyState size="inline" title="按下「检测线路」查看当前状态" />} columns={[
       { key: 'name', header: '线路', primary: true, render: (r) => r.name },

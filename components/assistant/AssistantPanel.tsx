@@ -139,11 +139,11 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       <Skeleton className="h-20 w-4/5 rounded-lg" />
     </div>
   ) : state.ready && !state.available ? (
-    <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在账户设置中查看当前开关与额度" size="inline" />
+    <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在设置的账户页签中查看开关与额度" size="inline" />
   ) : !messages.length && !state.pending ? (
     /* A sent-but-unanswered first message is not an empty thread: the pending bubble below is
        the thread, so the invitation would be telling the visitor to do what they just did. */
-    <EmptyState title="和彩彩聊聊吧" description="可以查找图片，也可以告诉彩彩你想处理的站内任务" size="inline" />
+    <EmptyState title="暂无对话" description="可输入搜图需求或要执行的站内操作" size="inline" />
   ) : (
     /* A thread, read as /messages reads one: who spoke is the side and the cut corners, so a
        run of one speaker sits 2dp apart and a new speaker 12dp below. (Each bubble used to carry
@@ -191,7 +191,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     <div className="flex flex-wrap items-center gap-2">
       <Chip variant="filter" selected={history} onClick={() => setHistory(value => !value)}>全部记录</Chip>
       {history && <Button variant="danger-text" size="xs" disabled={state.busy || !state.messages.length} onClick={async () => {
-        if (await confirm({ title: '确认清空', message: '确定要清空此会话的聊天记录吗？彩彩将不再记得这些内容。', tone: 'danger' }) && current()) void session.clear();
+        if (await confirm({ title: '确认清空', message: '确定要清空当前会话的全部聊天记录吗？此操作无法恢复。', tone: 'danger' }) && current()) void session.clear();
       }}>清空</Button>}
       {quota.data && <span className="ml-auto text-body-s tabular-nums text-on-surface-variant">剩余 {formatExactCount(quota.data.remaining)} 点</span>}
     </div>
@@ -214,11 +214,11 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         {state.pending && <>
           <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
           {!state.busy && <div className="flex flex-col items-end gap-1.5">
-            <p className="text-body-s text-on-surface-variant text-end">此条消息的结果尚未确认，草稿已保留。</p>
+            <p className="text-body-s text-on-surface-variant text-end">此条消息的执行状态尚未确认，草稿已保留</p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="text" onClick={() => void session.restore()}>核对记录</Button>
               <Button variant="text" onClick={async () => {
-                if (await confirm({ title: '确认保留草稿', message: '之前的请求可能已经受理。确定要解除待确认状态并保留文字草稿吗？此操作不会重复发送。' }) && current()) session.discardPending();
+                if (await confirm({ title: '确认保留草稿', message: '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。', tone: 'filled' }) && current()) session.discardPending();
               }}>保留草稿</Button>
             </div>
           </div>}
@@ -246,9 +246,9 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
           </div>
         )}
         {state.task?.pending_id && <Card padding="sm">
-          <p className="mb-2 text-title-s text-on-surface">请确认操作</p>
+          <p className="mb-2 text-title-s text-on-surface">确认操作</p>
           <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>
-          <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>取消</Button><Button variant="filled" loading={state.busy} disabled={state.task.actions.some(action => !actionSupported(action))} onClick={() => void session.decide('confirm')}>确认执行</Button></div>
+          <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>取消</Button><Button variant="filled" loading={state.busy} disabled={state.task.actions.some(action => !actionSupported(action))} onClick={() => void session.decide('confirm')}>确认</Button></div>
         </Card>}
         {state.receipts.length > 0 && <ul className="space-y-2 text-body-s text-on-surface-variant" aria-label="操作结果">{state.receipts.slice(-8).map((receipt, index) => <li key={`${receipt.task_id}:${receipt.call_id}:${index}`}>{receipt.summary}</li>)}</ul>}
         {state.task && !state.task.pending_id && !state.busy && <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>核对任务</Button>}
@@ -268,7 +268,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     {/* Use the shared 48dp composer and controls; text grows to 160px before scrolling.
         See docs/design/layout.md#dense-rows-and-chat-composer. */}
     <form onSubmit={event => { event.preventDefault(); if (canSend && current()) { nearEnd.current = true; void session.send(); } }} className="flex shrink-0 items-end gap-2 [--touch-floor:48px]">
-      <Textarea ref={composer} size="sm" rows={1} aria-label="告诉彩彩" placeholder="告诉彩彩你想做什么…" className="max-h-40 resize-none [field-sizing:content]" fieldClassName="min-w-0 flex-1" maxLength={MAX_MESSAGE} value={text} disabled={!state.available} readOnly={state.busy || !!state.pending} data-autofocus="" onChange={event => session.setDraft(event.target.value)} onKeyDown={event => {
+      <Textarea ref={composer} size="sm" rows={1} aria-label="输入消息" placeholder="输入搜图需求或操作指令…" className="max-h-40 resize-none [field-sizing:content]" fieldClassName="min-w-0 flex-1" maxLength={MAX_MESSAGE} value={text} disabled={!state.available} readOnly={state.busy || !!state.pending} data-autofocus="" onChange={event => session.setDraft(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && canSend) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
       }} />
       <IconButton

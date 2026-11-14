@@ -48,8 +48,8 @@ export const ASPECT_LABELS: Record<AspectFilter, { option: string; chip: string 
   ultrawide: { option: '超宽屏壁纸', chip: '超宽屏壁纸' },
 };
 export const MEDIA_LABELS: Record<MediaFilter, { option: string; chip: string }> = {
-  animated: { option: '动态内容 (GIF/视频)', chip: '动态内容' },
-  still: { option: '静态图片 (PNG/JPG)', chip: '静态图片' },
+  animated: { option: '动态内容（GIF/视频）', chip: '动态内容' },
+  still: { option: '静态图片（PNG/JPG）', chip: '静态图片' },
   video: { option: '仅限视频', chip: '仅限视频' },
 };
 export const SINCE_LABELS: Record<SinceFilter, string> = {
@@ -232,7 +232,7 @@ export default function SearchToolbar({
               <Chip
                 variant="input"
                 onRemove={() => onApplyFilters({ ...filters, [chip.key]: null }, 'chip')}
-                removeLabel={`移除条件：${chip.label}`}
+                removeLabel={`移除 ${chip.label}`}
               >
                 {chip.label}
               </Chip>
@@ -300,9 +300,8 @@ export default function SearchToolbar({
                 ]}
               />
             </div>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-body-s text-on-surface-variant">组合条件，进一步缩小搜索范围。</span>
-              <div className="ml-auto flex flex-wrap gap-2">
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="surface"

@@ -142,7 +142,7 @@ function FavoritesScreen({ token }: { token: string }) {
         title="我的收藏"
         subtitle={
           total === undefined ? (
-            <span>正在读取收藏…</span>
+            <span>正在加载收藏…</span>
           ) : (
             <span className="tabular-nums">
               共 {formatCount(total)} 张收藏{folderCount !== undefined ? `，${formatCount(folderCount)} 个收藏夹` : ''}

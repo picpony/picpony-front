@@ -73,12 +73,12 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
   const pendingReports = reports.data?.filter((report) => report.status === 'pending').length;
   const stats = dictionary.data?.stats ?? null;
   const share = translatedShare(stats);
-  const failed = '暂时无法读取';
+  const failed = '加载失败';
 
   return (
     <div className="space-y-6">
       <SectionHeader section="welcome"
-        subtitle="待处理的事项和站点状态。按下卡片进入对应的分区，其余功能在面板分区中选择。"
+        subtitle="待处理的事项与站点状态"
       />
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="待办事项">
         {admin && (

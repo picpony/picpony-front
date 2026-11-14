@@ -203,7 +203,7 @@ ${duplicatePage.listKey}` : pageKey;
         await adminApi.handleTagFeedback(token, order.id, 'processed');
         if (readToken() === token) tagFeedback.invalidate();
       } catch {
-        if (readToken() === token) showToast('标签已保存，但该反馈仍是待处理', 'warning');
+        if (readToken() === token) showToast('已保存标签，反馈状态未变更', 'warning');
       }
     })();
   };
@@ -371,7 +371,7 @@ ${duplicatePage.listKey}` : pageKey;
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    showToast('已导出', 'success');
+    showToast('已导出当前页标签', 'success');
   };
 
   const runTool = (value: string) => {
@@ -400,6 +400,7 @@ ${duplicatePage.listKey}` : pageKey;
       const discard = await confirm({
         title: '确认放弃修改',
         message: `确定要放弃对标签「${current?.en ?? ''}」的修改吗？`,
+        tone: 'filled',
       });
       if (!discard) return;
     }
@@ -668,7 +669,7 @@ ${duplicatePage.listKey}` : pageKey;
 
       <div data-pagination-anchor="" className="space-y-4">
         {turnFailed && (
-          <ErrorRetry size="inline" title={`第 ${currentPage} 页加载失败`} message={apiErrorMessage(list.error)} onRetry={isRetryable(list.error) ? list.refresh : undefined} />
+          <ErrorRetry size="inline" title={`词库第 ${currentPage} 页加载失败`} message={apiErrorMessage(list.error)} onRetry={isRetryable(list.error) ? list.refresh : undefined} />
         )}
         <DataTable<GlossaryTag>
           columns={columns}
@@ -686,7 +687,7 @@ ${duplicatePage.listKey}` : pageKey;
             ) : keyword || untranslated || category !== 'all' ? (
               '没有符合条件的标签'
             ) : (
-              '词库中还没有标签'
+              '暂无标签'
             )
           }
         />

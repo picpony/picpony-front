@@ -347,7 +347,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       spoken = true;
       node?.removeEventListener('transitionend', onEnd);
       window.clearTimeout(bound);
-      present({ kind: 'tip', text: '我回来啦！' });
+      present({ kind: 'tip', text: '我回来啦' });
     };
     const onEnd = (event: TransitionEvent) => {
       if (event.target === node && event.propertyName === 'transform') greet();
@@ -584,7 +584,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
                the page shows, a picture included, and the band gives the ring the edge it has
                everywhere else (docs/design/colour.md#focus). */
             className={cn(styles.control, 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
-            aria-label={collapsed ? '展开吉祥物' : '与彩彩互动，长按或按住空格 1.5 秒打开彩彩 AI'}
+            aria-label={collapsed ? '展开吉祥物' : '吉祥物（长按或按住空格打开彩彩 AI）'}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

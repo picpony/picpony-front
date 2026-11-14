@@ -138,7 +138,7 @@ export async function copyPostLink(post: ForumPost, token: string | null): Promi
       label: '复制',
       onClick: () => {
         void copyLink(url).then((copied) => {
-          if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
+          if (!copied) showToast('复制失败，请检查剪贴板权限', 'error');
         });
       },
     },

@@ -171,7 +171,7 @@ test('P2-O3: a new password is measured in bytes, as the backend measures it', a
   const { validateNewPassword, passwordLength } = await import('../lib/validation.ts');
   assert.equal(passwordLength('中中a1234'), 11);
   assert.equal(validateNewPassword('中中a1234'), null, 'seven characters, eleven bytes: the server accepts it');
-  assert.match(validateNewPassword('中文中文中文中a'), /按 3 位计/, 'eight characters, 22 bytes: the server refuses it');
+  assert.match(validateNewPassword('中文中文中文中a'), /^密码需为 8 到 20 位$/, 'eight characters, 22 bytes: the server refuses it');
   assert.equal(validateNewPassword('abcdefg1'), null);
   assert.match(validateNewPassword('abc1'), /^密码需为 8 到 20 位$/);
 });
@@ -293,7 +293,7 @@ test('P5-O2: a confirmation card names the folders it acts on', async () => {
   const { actionLabel } = await import('../lib/assistant/actions.ts');
   const action = { name: 'call_site_api', call_id: 'c', arguments: { endpoint: 'delete_fave_folders', parameters: { folder_ids: [12, 15] } } };
   const names = new Map([[12, '日常'], [15, '壁纸']]);
-  assert.equal(actionLabel(action, (id) => names.get(id)), '删除收藏夹及其中记录：「日常」(12)、「壁纸」(15)');
+  assert.equal(actionLabel(action, (id) => names.get(id)), '删除收藏夹及其中记录：「日常」（12）、「壁纸」（15）');
   assert.equal(actionLabel(action), '删除收藏夹及其中记录：12、15');
 });
 

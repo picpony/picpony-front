@@ -208,7 +208,7 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
     body = read.error ? (
       <ErrorRetry
         size="pane"
-        title="论坛加载失败"
+        title="帖子加载失败"
         message={apiErrorMessage(read.error)}
         onRetry={isRetryable(read.error) ? read.refresh : undefined}
       />
@@ -220,7 +220,7 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
       <EmptyState
         size="pane"
         icon={<MdSearchOff size={ICON.display} />}
-        title="没有找到相关帖子"
+        title="未找到相关帖子"
         description={category === 'all' ? `没有标题、正文或作者包含「${search}」的帖子` : `「${categoryLabel(category)}」中没有包含「${search}」的帖子`}
         action={
           <Button
@@ -238,7 +238,7 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
       <EmptyState
         size="pane"
         icon={<CategoryIcon category={category} size={ICON.display} />}
-        title={`「${categoryLabel(category)}」还没有帖子`}
+        title={`「${categoryLabel(category)}」暂无帖子`}
         action={
           <Button variant="tonal" onClick={() => changeCategory('all')}>
             查看全部帖子
@@ -248,7 +248,7 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
     ) : page > 1 ? (
       <EmptyState
         size="pane"
-        title="这一页没有帖子"
+        title="此页暂无帖子"
         action={
           <Button variant="tonal" onClick={() => setPage(1)}>
             回到第一页
@@ -260,7 +260,6 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
         size="pane"
         icon={<MdForum size={ICON.display} />}
         title="暂无帖子"
-        description="还没有人开过话题，来发第一个吧。"
         action={
           <Button variant="tonal" icon={<MdEdit />} onClick={compose}>
             发帖

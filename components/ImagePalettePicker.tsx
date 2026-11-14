@@ -30,7 +30,7 @@ import { ImageDecodeError, imageOptions, usePaletteTools, type ImageOption } fro
  */
 /** A file this browser cannot read, told apart from every other failure. */
 const failureMessage = (error: unknown) =>
-  error instanceof ImageDecodeError ? '无法读取此图片，换一张试试。' : apiErrorMessage(error);
+  error instanceof ImageDecodeError ? '无法读取此图片' : apiErrorMessage(error);
 
 export default function ImagePalettePicker({
   isOpen,
@@ -153,8 +153,8 @@ export default function ImagePalettePicker({
               {phase === 'reading'
                 ? '正在取色…'
                 : preview
-                  ? '点击或拖拽以更换图片'
-                  : '拖一张图片进来，或点击选择'}
+                  ? '点击或拖拽更换图片'
+                  : '点击或拖拽选择图片'}
             </span>
           </div>
         </DropZone>
@@ -163,7 +163,6 @@ export default function ImagePalettePicker({
           (options.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="text-label-m text-on-surface-variant">{multi ? '从图片推荐的配色' : '从图片推荐的颜色'}</p>
-              <p className="text-body-s text-on-surface-variant">按色彩占比推荐，并调整明度与彩度，让颜色更适合界面。</p>
               {/* `role="radiogroup"` with a roving tab stop, because a single
                   choice among up to eight is what this is — the same argument
                   `PaletteSwatches` makes about the eleven, and the same tile: each
@@ -215,12 +214,12 @@ export default function ImagePalettePicker({
                 <p className="text-body-s text-on-surface-variant">
                   {picked.accent === null
                     ? '未找到合适的图中副色，已自动搭配'
-                    : '副色相也取自这张图'}
+                    : '副色相同样取自该图片'}
                 </p>
               )}
             </div>
           ) : (
-            <EmptyState size="inline" title="没有找到可读取的颜色，换一张试试。" />
+            <EmptyState size="inline" title="未提取到可用颜色" />
           ))}
 
         {phase === 'failed' && <ErrorRetry size="inline" title={failure} />}

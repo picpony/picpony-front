@@ -107,7 +107,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     if (chosen.length === 0 || busy) return;
     const ok = await confirm({
       title: '确认删除收藏夹',
-      message: `确定要删除选中的 ${chosen.length} 个收藏夹吗？其中的图片会移入主收藏夹。`,
+      message: `确定要删除已选的 ${chosen.length} 个收藏夹吗？其中的图片将移入主收藏夹。`,
       tone: 'danger',
     });
     if (!ok || readToken() !== token) return;
@@ -125,7 +125,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const merge = async (targetId: number) => {
     const target = folders.find((folder) => folder.id === targetId);
     if (!target) return false;
-    const ok = await confirm({ title: '确认合并收藏夹', message: `确定要将选中的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。`, tone: 'danger' });
+    const ok = await confirm({ title: '确认合并收藏夹', message: `确定要将已选的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。`, tone: 'danger' });
     if (!ok || readToken() !== token) return false;
     const outcome = await settled(
       mergeFolders(
@@ -232,8 +232,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
         <EmptyState
           size="pane"
           icon={<MdFolder size={ICON.display} />}
-          title="还没有收藏夹"
-          description="在图片详情页点一下收藏，就会出现在这里"
+          title="暂无收藏夹"
         />
       ) : (
         /* A folder deleted or merged away fades where it was while the cards after it glide into

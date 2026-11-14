@@ -66,12 +66,12 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
 
   const remove = async () => {
     if (!(await confirm({
-      title: '确认删除',
-      message: `确定要从待定标签库中删除选中的 ${selection.length} 个标签吗？`,
+      title: '确认移除',
+      message: `确定要从待定标签库移除所选的 ${selection.length} 个标签吗？`,
       tone: 'danger',
     }))) return;
     if (!removePendingTags(selection)) {
-      showToast('待定标签删除失败，请检查浏览器是否允许本地存储', 'error');
+      showToast('移除失败', 'error');
       return;
     }
     setPicked(new Set());
@@ -80,7 +80,7 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
   const clear = async () => {
     if (!(await confirm({ title: '确认清空', message: '确定要清空待定标签库吗？', tone: 'danger' }))) return;
     if (!clearPendingTags()) {
-      showToast('待定标签库清空失败，请检查浏览器是否允许本地存储', 'error');
+      showToast('清空失败', 'error');
       return;
     }
     setPicked(new Set());
@@ -94,10 +94,12 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
         待定标签库
       </SectionHeading>
       <div className="rounded-md bg-surface-container-highest p-3 forced-boundary">
-        <p id={hintId} className="text-body-s text-on-surface-variant">
-          {inList > 0 ? `选择后添加到上方列表，其中 ${inList} 个已在列表中` : '选择后添加到上方列表'}
-        </p>
-        <div role="group" aria-label="待定标签" aria-describedby={hintId} className="mt-2 flex flex-wrap gap-2">
+        {inList > 0 && (
+          <p id={hintId} className="mb-2 text-body-s text-on-surface-variant">
+            其中 {inList} 个已在列表中
+          </p>
+        )}
+        <div role="group" aria-label="待定标签" aria-describedby={inList > 0 ? hintId : undefined} className="flex flex-wrap gap-2">
           {library.map((tag) => {
             const added = chosen.has(tag);
             return (
@@ -120,10 +122,10 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
             under its own question. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button type="button" size="xs" variant="tonal" disabled={disabled || selection.length === 0} onClick={add}>
-            {selection.length > 0 ? `添加选中（${selection.length}）` : '添加选中'}
+            {selection.length > 0 ? `添加所选（${selection.length}）` : '添加所选'}
           </Button>
           <Button type="button" size="xs" variant="danger-text" disabled={disabled || selection.length === 0} onClick={() => void remove()}>
-            删除选中
+            移除所选
           </Button>
           <Button type="button" size="xs" variant="danger-text" className="ml-auto" disabled={disabled} onClick={() => void clear()}>
             清空全部

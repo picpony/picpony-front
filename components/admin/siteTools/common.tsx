@@ -20,7 +20,7 @@ import { useAdminMutation } from '../useAdminMutation';
 
 export function protectedPanel(Content: ComponentType<AdminPanelProps>) {
   return function SiteToolPanel(props: AdminPanelProps) {
-    if (!props.token || !canAccess('admin', props.role)) return <EmptyState size="pane" title="没有权限查看此内容" />;
+    if (!props.token || !canAccess('admin', props.role)) return <EmptyState size="pane" title="没有访问权限" />;
     return <Content key={props.token} {...props} />;
   };
 }
@@ -89,7 +89,7 @@ export function ConfigEditor({ title, token, initial, fields, validate, save, re
       }
       setDraft({ values: clean, savedFrom: initial }); showToast(saved, 'success');
     }, `${title}保存失败`, { onCommitted: (data) => refresh(data, snapshot) });
-    if (confirmation) confirmThen(`确认保存${title}`, confirmation(snapshot), commit);
+    if (confirmation) confirmThen(`确认保存${title}`, confirmation(snapshot), commit, { tone: 'filled' });
     else commit();
   };
   return <>

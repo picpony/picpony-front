@@ -105,8 +105,8 @@ export default function ContactList({
         <EmptyState
           size="inline"
           icon={<MdOutlineChatBubbleOutline size={ICON.large} />}
-          title="还没有任何私信"
-          description="在上方搜索用户，即可发起私信。"
+          title="暂无私信"
+          description="在上方搜索用户发起私信"
         />
       );
     }

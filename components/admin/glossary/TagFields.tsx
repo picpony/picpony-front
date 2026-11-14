@@ -61,7 +61,7 @@ export default function TagFields({
         label="中文翻译"
         value={form.translations}
         readOnly={busy}
-        placeholder="例如：紫悦, 暮光闪闪, ts"
+        placeholder="例如：紫悦，暮光闪闪，ts"
         helper="第一个是主译名，其余为别名，用逗号分隔"
         onChange={(event) => onChange({ translations: event.target.value })}
       />
@@ -81,7 +81,6 @@ export default function TagFields({
         <ToggleSwitch
           layout="row"
           label="限制级标签"
-          description="是否是限制级标签"
           checked={form.flags.restricted}
           disabled={busy}
           onChange={(restricted) => onChange({ flags: { restricted } })}
@@ -97,7 +96,7 @@ export function WorkOrderNote({ workOrder, onUse }: { workOrder: Feedback; onUse
     <Card variant="filled" padding="sm" className="flex flex-wrap items-start gap-3">
       <div className="min-w-0 flex-1">
         <p className="text-label-l text-on-surface">
-          {`正在处理反馈 #${workOrder.id} · ${workOrder.username || '游客'}`}
+          {`正在处理反馈 #${workOrder.id} · ${workOrder.username || '访客'}`}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap wrap-anywhere text-body-m text-on-surface-variant">{workOrder.content}</p>
       </div>

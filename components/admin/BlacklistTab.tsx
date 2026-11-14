@@ -69,7 +69,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
     }
     confirmThen(
       '确认屏蔽图片',
-      `确定要屏蔽图片 #${id} 吗？屏蔽后全站的图库、搜索和个人主页都不会再显示这张图片。`,
+      `确定要屏蔽图片 #${id} 吗？屏蔽后全站的图库、搜索和个人主页都不会再显示该图片。`,
       () =>
         void addMutation.run(
           () => adminApi.adminAddBlacklist(token, blacklistQuery.peek(token).data?.revision ?? revision, id, reason.trim()),
@@ -91,27 +91,31 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
   };
 
   const remove = (id: number) =>
-    confirmThen('确认解除屏蔽', `确定要解除对图片 #${id} 的屏蔽吗？`, () =>
-      void removeMutation.run(
-        async () => {
-          /* The revision as it is when the confirmation is answered, not when it opened. */
-          const current = blacklistQuery.peek(token).data?.revision;
-          return current === undefined ? null : adminApi.adminRemoveBlacklist(token, current, id);
-        },
-        () => showToast(`已解除对图片 #${id} 的屏蔽`, 'success'),
-        '解除失败',
-        {
-          key: id,
-          onCommitted: (data) => {
-            blacklistQuery.write(token, (previous) => ({
-              revision: nextRevision(data, previous?.revision ?? 0),
-              items: previous?.items.filter((item) => item.image_id !== id) ?? [],
-            }));
-            read.refresh();
+    confirmThen(
+      '确认解除屏蔽',
+      `确定要解除对图片 #${id} 的屏蔽吗？`,
+      () =>
+        void removeMutation.run(
+          async () => {
+            /* The revision as it is when the confirmation is answered, not when it opened. */
+            const current = blacklistQuery.peek(token).data?.revision;
+            return current === undefined ? null : adminApi.adminRemoveBlacklist(token, current, id);
           },
-        },
-      ),
-      { tone: 'filled' });
+          () => showToast(`已解除对图片 #${id} 的屏蔽`, 'success'),
+          '解除失败',
+          {
+            key: id,
+            onCommitted: (data) => {
+              blacklistQuery.write(token, (previous) => ({
+                revision: nextRevision(data, previous?.revision ?? 0),
+                items: previous?.items.filter((item) => item.image_id !== id) ?? [],
+              }));
+              read.refresh();
+            },
+          },
+        ),
+      { tone: 'filled' },
+    );
 
   const columns: Column<BlacklistItem>[] = [
     {
@@ -207,7 +211,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
           skeletonRows={6}
           {...tableError('屏蔽库加载失败', read.error)}
           onRetry={read.retryable ? read.refresh : undefined}
-          empty={keyword ? '没有匹配的屏蔽记录' : '屏蔽库是空的'}
+          empty={keyword ? '没有匹配的屏蔽记录' : '暂无屏蔽记录'}
         />
         <AdminPager
           page={paged.page}

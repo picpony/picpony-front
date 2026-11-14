@@ -284,7 +284,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
       /* A band of the page's surface inside the ring: a pony walks over anything, pictures included
          (G1-022; the mascot's control does the same). */
       className={cn(styles.target, 'rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
-      aria-label={`${config.name}，方向键移动，回车让它说话`}
+      aria-label={`${config.name}，方向键移动，回车播放台词`}
       onFocus={() => { focused.current = config.name; track(config.name, true); if (!gesture.current) send('focus', { name: config.name }); }}
       onBlur={() => { focused.current = null; if (gesture.current?.name !== config.name) track(config.name, false); send('blur', { name: config.name }); }}
       onKeyDown={event => {

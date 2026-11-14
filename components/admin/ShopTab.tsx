@@ -142,6 +142,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
       const discard = await confirm({
         title: '确认放弃修改',
         message: `确定要放弃对商品「${current?.name ?? ''}」的修改吗？`,
+        tone: 'filled',
       });
       if (!discard) return;
     }
@@ -248,7 +249,6 @@ export default function ShopTab({ token }: AdminPanelProps) {
           token={token}
           onUploadBusy={(busy) => setUploading(busy ? current.id : null)}
           item={current}
-          heading={`编辑商品 · ${current.name}`}
           submitLabel="保存修改"
           busy={saveMutation.pendingKeys.has(item.id)}
           onSubmit={(payload) => save(current, payload)}
@@ -324,7 +324,7 @@ function ShopItemForm({
   token: string;
   onUploadBusy?: (busy: boolean) => void;
   item?: ShopItemRow;
-  heading: string;
+  heading?: string;
   submitLabel: string;
   busy: boolean;
   onSubmit: (payload: adminApi.ShopItemBody) => void;
@@ -363,7 +363,7 @@ function ShopItemForm({
     /* Above the list this form is the region, named by its heading; under a row the editor's panel
        is (`InlineEditorPanel`'s label), so the form inside it is not a second landmark (G4-031). */
     <AdminForm onSubmit={submit} aria-labelledby={item ? undefined : `${prefix}-heading`}>
-      <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>
+      {heading && <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>}
       <FormGrid>
         <Input
           id={`${prefix}-name`}

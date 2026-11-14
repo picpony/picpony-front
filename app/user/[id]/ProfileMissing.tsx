@@ -31,7 +31,7 @@ export function ProfileMissing() {
         fill
         icon={<MdPersonOff size={ICON.display} />}
         title="用户不存在"
-        description="该用户可能已注销，或者链接本来就不对。"
+        description="该用户可能已注销，或链接地址有误"
         action={
           <ButtonLink
             href="/"

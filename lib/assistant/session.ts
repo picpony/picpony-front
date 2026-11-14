@@ -44,10 +44,10 @@ const POLL_MS = 900;
 /** Past the backend's own budget (90s run, +120s after a dispatch) the panel stops waiting and offers 核对任务. */
 const POLL_LIMIT_MS = 150_000;
 const ENDED: Record<string, string> = {
-  failed: '彩彩这次没能完成，请稍后再试', cancelled: '这次操作已取消', interrupted: '这次对话已中断，可重新发送',
+  failed: '彩彩 AI 未能完成此次请求，请稍后再试', cancelled: '已取消此操作', interrupted: '对话已中断，可重新发送',
 };
 /** The status while a turn is still running. The panel sweeps this exact line. */
-export const THINKING_STATUS = '彩彩正在思考…';
+export const THINKING_STATUS = '彩彩 AI 正在思考…';
 const wait = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   const timer = setTimeout(resolve, ms);
   signal.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Session closed', 'AbortError')); }, { once: true });
@@ -222,7 +222,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
          already answered comes back `cached`) and its receipt resumes the model. */
       const calls = turn.client_calls.filter(call => call.task_id === taskId && !handled.has(call.id));
       if (calls.length) {
-        publish({ task: following(taskId, turn.status), status: '彩彩正在操作页面…' });
+        publish({ task: following(taskId, turn.status), status: '彩彩 AI 正在操作页面…' });
         calls.forEach(call => handled.add(call.id));
         /* A paused or failed run releases its calls for 核对任务; the runner's journal still keeps a
            write that may have reached the backend from being sent twice. */
@@ -233,7 +233,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         continue;
       }
       if (ACTIVE_STATES.includes(turn.status)) {
-        if (Date.now() - started > POLL_LIMIT_MS) { stopStream(); publish({ task: following(taskId, turn.status), status: '彩彩仍在处理，可稍后核对任务' }); return; }
+        if (Date.now() - started > POLL_LIMIT_MS) { stopStream(); publish({ task: following(taskId, turn.status), status: '彩彩 AI 仍在处理，可稍后核对任务' }); return; }
         publish({ task: following(taskId, turn.status), status: THINKING_STATUS });
         await wait(POLL_MS, controller.signal);
         continue;
@@ -253,8 +253,8 @@ export function createAssistantSession(token: string, accountId: string, env: { 
         error: finished
           ? text || tools.length
             ? ''
-            : '彩彩没有返回有效回复，请重新发送'
-          : ENDED[turn.status] ?? '彩彩这次没能完成，请稍后再试',
+            : '彩彩 AI 未返回有效回复，请重新发送'
+          : ENDED[turn.status] ?? '彩彩 AI 未能完成此次请求，请稍后再试',
       });
       stopStream();
       return;
@@ -268,7 +268,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       publish({ task: ACTIVE_STATES.includes(status) ? following(taskId, status) : null, status: ACTIVE_STATES.includes(status) ? '待确认的操作已失效，可核对任务' : '' });
       return;
     }
-    if (taskRejected(approvals, taskId)) { publish({ task: null, status: '此操作已取消，未继续执行' }); return; }
+    if (taskRejected(approvals, taskId)) { publish({ task: null, status: '此操作已取消' }); return; }
     publish({ task: { id: taskId, status: 'waiting_confirmation', pending_id: pending.id, actions: [pendingAction(pending)], confirmed: false }, status: '请核对以下操作' });
   }
   /** Execute client actions the server issued for this turn, receipting each. */
@@ -302,14 +302,14 @@ export function createAssistantSession(token: string, accountId: string, env: { 
     const dispatched = result.dispatched === true ? result : first.dispatched === true ? first : null;
     if (dispatched) {
       const callId = uuid(dispatched.call_id);
-      if (!callId) throw new Error('服务器未返回可核对的操作标识，未执行');
+      if (!callId) throw new Error('服务器未返回确认凭证，未执行');
       handled.add(callId);
       const ran = await runActions(taskId, [{ name: 'call_site_api', arguments: action.arguments, call_id: callId, risk: 'write_confirm', approval_granted: true }]);
       if (ran) await follow(taskId);
       return;
     }
     if (result.status === 'completed') {
-      const receipt: AssistantReceipt = { task_id: taskId, call_id: action.call_id, name: action.name, action: action.name, ok: first.ok === true, summary: `已完成：${actionLabel(action)}`, data: {} };
+      const receipt: AssistantReceipt = { task_id: taskId, call_id: action.call_id, name: action.name, action: action.name, ok: first.ok === true, summary: `已完成 ${actionLabel(action)}`, data: {} };
       journal.save(receipt); journal.acknowledge(taskId, action.call_id);
       publish({ receipts: [...snapshot.receipts, receipt].slice(-24) });
       taskResource.expire({ token }); coinTransactions.expire(); sessionUser.expire({ token });
@@ -359,7 +359,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
           const [state] = await Promise.all([getAssistantState(token, controller.signal), assistantQuota.read({ token })]); assertCurrent();
           /* Active tasks come newest first. */
           const activeTask = state.tasks.find(task => ACTIVE_STATES.includes(task.status));
-          publish({ ready: true, available: true, messages: state.messages, task: activeTask ? following(activeTask.id, activeTask.status) : null, status: activeTask ? '上次任务尚未完成，请核对后继续' : '' });
+          publish({ ready: true, available: true, messages: state.messages, task: activeTask ? following(activeTask.id, activeTask.status) : null, status: activeTask ? '上次任务尚未完成，可核对后继续' : '' });
           /* A turn still running here lost its page's stream on reload; tail it again. A parked
              confirmation is not streamed — the card is the whole of that state. */
           if (activeTask && activeTask.status !== 'waiting_confirmation') startStream(activeTask.id);
@@ -374,7 +374,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       const draft = value.slice(0, MAX_MESSAGE);
       publish({ draft });
       try { writeJournalText(accountId, 'draft', draft || null); }
-      catch { publish({ error: '草稿未能保存在此设备，请勿在发送前关闭页面' }); }
+      catch { publish({ error: '草稿未能保存，请勿在发送前关闭页面' }); }
     },
     send() {
       return run(async () => {
@@ -398,7 +398,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
       if (!task?.pending_id) return Promise.resolve();
       const pendingId = task.pending_id;
       return run(async () => {
-        if (decision === 'confirm' && task.actions.some(action => !actionSupported(action))) throw new Error('此操作需要到对应页面手动完成，未提交确认');
+        if (decision === 'confirm' && task.actions.some(action => !actionSupported(action))) throw new Error('此操作需前往对应页面手动完成，未提交确认');
         // Persist the human's exact reviewed plan before the confirmation response can be lost.
         /* Merged with what storage holds now (review P5-O3): another tab's confirmation written
            since this one last read would otherwise be overwritten by this tab's older copy. */
@@ -447,7 +447,7 @@ export function createAssistantSession(token: string, accountId: string, env: { 
     discardPending() {
       try {
         assertCurrent(); writeJournalText(accountId, 'pending-chat', null);
-        publish({ pending: null, error: '', status: '已保留草稿，可修改后发送；之前的请求仍以站内记录为准' });
+        publish({ pending: null, error: '', status: '已保留草稿，可修改后发送；此前提交的请求仍以站内记录为准' });
       } catch (error) {
         try { assertCurrent(); publish({ error: apiErrorMessage(error), status: '' }); } catch { /* Another account owns the screen now. */ }
       }

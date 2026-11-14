@@ -49,8 +49,7 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
       <EmptyState
         size="pane"
         icon={<MdFolder size={ICON.display} />}
-        title="你还没有公开的收藏夹"
-        description="公开的收藏夹会显示在你的个人主页上"
+        title="暂无公开收藏夹"
         action={
           <ButtonLink
             href="/favorites"
@@ -61,7 +60,7 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
         }
       />
     ) : (
-      <EmptyState size="pane" icon={<MdFolder size={ICON.display} />} title="该用户没有公开的收藏夹" />
+      <EmptyState size="pane" icon={<MdFolder size={ICON.display} />} title="暂无公开收藏夹" />
     );
   }
 

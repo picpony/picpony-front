@@ -31,7 +31,7 @@ const MAX_TEXT_LENGTH = 4000;
  */
 export async function translateText(text: string, signal?: AbortSignal): Promise<string> {
   const source = text.trim().slice(0, MAX_TEXT_LENGTH);
-  if (!source) throw new ApiError('invalid', { message: '没有可以翻译的内容' });
+  if (!source) throw new ApiError('invalid', { message: '没有可翻译的内容' });
   try {
     const data = await api<{ translation: string }>('POST', '/translations', {
       json: { text: source },

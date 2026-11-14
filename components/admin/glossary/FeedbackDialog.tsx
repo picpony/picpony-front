@@ -124,7 +124,7 @@ export default function FeedbackDialog({
         ) : (
           <div data-pagination-anchor="" className="space-y-3">
             {read.isPrevious && Boolean(read.error) && (
-              <ErrorRetry size="inline" title={`第 ${current} 页加载失败`} message={apiErrorMessage(read.error)} onRetry={read.refresh} />
+              <ErrorRetry size="inline" title={`反馈第 ${current} 页加载失败`} message={apiErrorMessage(read.error)} onRetry={read.refresh} />
             )}
             <ul className="space-y-3">
               {rows.map((feedback) => (
@@ -134,7 +134,7 @@ export default function FeedbackDialog({
                       <div className="min-w-0">
                         <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">{feedback.tag}</p>
                         <p className="text-body-s text-on-surface-variant">
-                          {`来自：${feedback.username || '游客'} · ${formatDateTime(feedback.created_at)}`}
+                          {`来自：${feedback.username || '访客'} · ${formatDateTime(feedback.created_at)}`}
                         </p>
                       </div>
                       <Badge tone={STATUS_TONE[feedback.status]} size="md">

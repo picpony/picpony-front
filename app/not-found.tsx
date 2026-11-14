@@ -24,7 +24,7 @@ export default function NotFound() {
         </span>
       }
       title="这里什么都没有"
-      description="页面可能已被删除，或者链接本来就不对。"
+      description="页面可能已被删除，或链接地址有误"
       action={
         <ButtonLink
           href="/"

@@ -135,7 +135,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
     <div className="space-y-6">
       <SectionHeader section="blocktags" onRefresh={read.refresh} isLoading={read.refreshing} />
       <AdminNote>
-        这些规则作用于全站所有用户的搜索结果：前四项中的标签会作为排除项加入搜索，「只看小马」中的标签是允许的物种范围，满足其中任一即可。
+        以下规则作用于全站所有用户的搜索结果：前四项中的标签会作为排除项加入搜索，「只看小马」中的标签是允许的物种范围，满足其中任一即可。
       </AdminNote>
       {read.error && !read.data ? (
         <ErrorRetry size="pane" {...retryError('屏蔽标签加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} />
@@ -149,7 +149,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                 <SectionHeading
                   as="h3"
                   className="mb-3"
-                  subtitle={`${RULES[key].role}（${key}）`}
+                  subtitle={RULES[key].role}
                   actions={
                     <Button
                       type="button"
@@ -179,7 +179,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                     <Input
                       size="sm"
                       aria-label="标签名"
-                      placeholder="输入英文标签名，例如 grimdark"
+                      placeholder="输入英文标签名，例如：grimdark"
                       autoComplete="off"
                       autoCapitalize="none"
                       spellCheck={false}
@@ -205,7 +205,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                     ))}
                   </div>
                 ) : tags.length === 0 ? (
-                  <EmptyState size="inline" title="这条规则还没有标签" />
+                  <EmptyState size="inline" title="暂无标签" />
                 ) : (
                   <ul className="flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
                     {tags.map((tag) => (

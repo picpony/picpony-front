@@ -371,7 +371,7 @@ export default function CartPanel({
           <div className={cn(arrived === 'empty' && 'animate-page-transition')}>
             {/* Its entrance stands down where it replaces the list: that swap is the press's
                 answer, faded on the pane-swap clock, not an entrance the app volunteers. */}
-            <EmptyState size="inline" entrance={arrived !== 'empty'} title="购物车是空的" description="在商品上点「加入购物车」" />
+            <EmptyState size="inline" entrance={arrived !== 'empty'} title="购物车是空的" description="在商品上点击「加入购物车」" />
           </div>
         </PresenceBlock>
       </>

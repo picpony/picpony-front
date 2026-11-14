@@ -17,9 +17,8 @@ import { saveAccountFields } from './useAccount';
 const ACCOUNT_SETTINGS_URL = 'https://derpibooru.org/registrations/edit';
 /* One string: JSX would join its lines with a space, which Chinese prose does not take after 。 */
 const INTRO =
-  '绑定后可同步你在 Derpibooru 的黑名单过滤等设置，不需要提供密码；内容分级仍按本站的内容筛选设置生效。' +
-  '获取方法：登录 Derpibooru，打开账户设置（Account Settings），在 API Key 一栏点击显示并复制到下方。' +
-  '保存时会先核验该 Key 属于哪个 Derpibooru 账号。';
+  '绑定后可同步 Derpibooru 的屏蔽与过滤设置（无需密码；内容分级仍以本站筛选为准）。' +
+  '请登录 Derpibooru，在账户设置（Account Settings）中复制 API Key 并粘贴到下方。';
 
 /**
  * 绑定 API Key (`PUT /me/upstream-credential`). The backend checks the key against Derpibooru
@@ -88,7 +87,7 @@ export default function ApiKeyDialog({
     } catch (error) {
       if (readToken() !== token) return;
       if (isRefusal(error, 'INVALID_API_KEY', 'INVALID_API_KEY_FORMAT')) {
-        form.set('key', '该 API Key 无效，或没有访问 Derpibooru 的权限');
+        form.set('key', '该 API Key 无效或没有访问权限');
       } else {
         if (isRefusal(error, 'CREDENTIAL_CONFLICT')) onConflict();
         showToast(apiErrorMessage(error, '绑定失败'), 'error');

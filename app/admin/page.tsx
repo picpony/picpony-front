@@ -69,7 +69,7 @@ function AdminGate() {
   if (!token) {
     return (
       <ConsoleColumn>
-        <SignInRequired description="登录管理员或小编账号后即可使用管理面板。" />
+        <SignInRequired description="登录管理员或小编账号后即可使用管理面板" />
       </ConsoleColumn>
     );
   }
@@ -80,7 +80,7 @@ function AdminGate() {
         <EmptyState
           icon={<MdDashboard size={ICON.display} />}
           title="没有访问权限"
-          description="管理面板仅对管理员与小编开放。权限刚刚变更的话，重新登录后再试。"
+          description="管理面板仅限管理员与小编使用；若权限刚刚变更，请重新登录"
           action={
             <ButtonLink
               href="/"

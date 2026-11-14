@@ -15,7 +15,7 @@ function summaryOf(group: BlockGroup): string {
   const parts: string[] = [];
   if (group.hidden_tags.length > 0) parts.push(`隐藏 ${group.hidden_tags.length} 个标签`);
   if (group.spoilered_tags.length > 0) parts.push(`遮挡 ${group.spoilered_tags.length} 个标签`);
-  return parts.length > 0 ? parts.join(' · ') : '还没有标签，编辑它来添加';
+  return parts.length > 0 ? parts.join(' · ') : '暂无标签';
 }
 
 /**
@@ -77,8 +77,8 @@ function BlockGroupRow({
     >
       {!empty && (
         <>
-          <TagMarks tags={group.hidden_tags} preview={PREVIEW} label="隐藏的标签" icon={<MdBlock size={ICON.dense} />} active={active} />
-          <TagMarks tags={group.spoilered_tags} preview={PREVIEW} label="遮挡的标签" icon={<MdVisibilityOff size={ICON.dense} />} active={active} />
+          <TagMarks tags={group.hidden_tags} preview={PREVIEW} label="隐藏标签" icon={<MdBlock size={ICON.dense} />} active={active} />
+          <TagMarks tags={group.spoilered_tags} preview={PREVIEW} label="遮挡标签" icon={<MdVisibilityOff size={ICON.dense} />} active={active} />
         </>
       )}
     </GroupRow>

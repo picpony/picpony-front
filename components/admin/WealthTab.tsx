@@ -220,7 +220,7 @@ function WealthDialog({
             取消
           </Button>
           <Button type="submit" form={formId} variant="filled" loading={busy}>
-            确认修改
+            保存修改
           </Button>
         </>
       }
@@ -234,7 +234,7 @@ function WealthDialog({
           value={form.experience}
           readOnly={busy}
           error={errors.experience}
-          helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : '经验值直接设为这里的数值'}
+          helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : undefined}
           onChange={(event) => set('experience', event.target.value)}
           data-autofocus=""
         />

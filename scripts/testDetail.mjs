@@ -92,7 +92,7 @@ test('a translation is the backend\'s words, and a failure is its sentence rathe
     Response.json({ error: { code: 'TRANSLATION_NOT_CONFIGURED', message: '文本翻译服务未开启或尚未配置' } }, { status: 503 });
   await assert.rejects(translate.translateText('Some words'), (error) =>
     error.code === 'TRANSLATION_NOT_CONFIGURED' && error.message.includes('文本翻译服务未开启'));
-  await assert.rejects(translate.translateText('   '), /没有可以翻译的内容/);
+  await assert.rejects(translate.translateText('   '), /没有可翻译的内容/);
   globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
 });
 

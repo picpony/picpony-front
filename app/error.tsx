@@ -30,19 +30,13 @@ export default function Error({
   return (
     <ErrorRetry
       fill
-      title="出了点问题"
+      title="页面加载失败"
       message={
-        <>
-          页面加载时发生错误，可以重试一次；如果反复出现，请稍后再来。
-          {/* A `<span class="block">`, not a second paragraph: this sits inside
-              `StatusView`'s own <p>, and a nested <p> is invalid and gets hoisted out
-              by the parser — which put the digest above the sentence it belongs to. */}
-          {error.digest && (
-            <span className="text-label-s text-on-surface-variant mt-3 block font-mono">
-              错误编号：{error.digest}
-            </span>
-          )}
-        </>
+        error.digest ? (
+          <span className="text-label-s text-on-surface-variant block font-mono">
+            错误编号：{error.digest}
+          </span>
+        ) : undefined
       }
       onRetry={reset}
     />

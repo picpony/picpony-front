@@ -43,7 +43,7 @@ export default function BatchImportDialog({
     ? `正在导入 ${parsed.tasks.length} 个标签…`
     : parsed.tasks.length > 0
       ? `将导入 ${parsed.tasks.length} 个标签${parsed.skipped ? `，${parsed.skipped} 行无法识别或重复，将跳过` : ''}；词库中已有的标签会自动跳过`
-      : '每行一个标签：英文标签 = 主译名, 别名1, 别名2；以 # 开头的行会被忽略';
+      : '每行一个标签：英文标签 = 主译名，别名 1，别名 2；以 # 开头的行会被忽略';
 
   return (
     <Modal

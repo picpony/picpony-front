@@ -147,7 +147,7 @@ function ShareToContactDialog({
     : [];
 
   const list = (() => {
-    if (!token) return <SignInRequired size="inline" description="登录后即可分享给其他用户。" />;
+    if (!token) return <SignInRequired size="inline" description="登录后即可分享给其他用户" />;
     if (contacts.data === undefined && contacts.error === undefined) return <PersonRowsSkeleton />;
     const people = [...contactRows, ...userRows];
     return (
@@ -185,7 +185,7 @@ function ShareToContactDialog({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="分享给"
+      title="分享给联系人"
       maxWidth="md"
       footer={
         <Button variant="text" onClick={onClose}>
@@ -313,7 +313,7 @@ function SearchStatus({
     );
   }
   if (keyword && empty) return <EmptyState size="inline" title="没有找到用户" />;
-  if (noContacts) return <EmptyState size="inline" title="还没有联系人" description="搜索用户名即可分享给任何人。" />;
+  if (noContacts) return <EmptyState size="inline" title="暂无联系人" description="搜索用户名即可分享" />;
   return null;
 }
 

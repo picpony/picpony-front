@@ -59,7 +59,7 @@ export default function DerpiSearchDialog({
           <Input
             size="sm"
             shape="pill"
-            aria-label="原站标签"
+            aria-label="搜索原站标签"
             icon={<MdSearch size={ICON.control} />}
             placeholder="输入英文标签名…"
             autoComplete="off"
@@ -100,7 +100,7 @@ export default function DerpiSearchDialog({
               <li key={tag.name} className="m3-row flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface-container-highest p-3">
                 <Badge colors={tagCategoryChip(tag.category)}>{tag.category || 'general'}</Badge>
                 <span className="min-w-0 flex-1 font-mono text-body-m text-on-surface wrap-anywhere">{tag.name}</span>
-                <span className="text-body-s tabular-nums text-on-surface-variant">{`（${formatCount(tag.images)} 图）`}</span>
+                <span className="text-body-s tabular-nums text-on-surface-variant">{`（${formatCount(tag.images)} 张）`}</span>
                 <Button type="button" variant="tonal" size="xs" icon={<MdAdd />} onClick={() => onImport(tag)}>
                   导入
                 </Button>

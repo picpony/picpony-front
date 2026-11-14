@@ -36,7 +36,7 @@ function CommissionLink({ href }: { href: string }) {
     const ok = await confirm({
       title: '确认前往约稿平台',
       message:
-        'PicPony 只提供画师的约稿信息，不为交易的任何细节担保。此链接应通向正规的交易托管平台，交易前请与画师仔细沟通。\n确定要前往吗？',
+        'PicPony 仅提供画师约稿信息，不担保交易细节。\n确定要前往此约稿平台吗？',
       tone: 'filled',
     });
     if (ok) window.open(href, '_blank', 'noopener,noreferrer');
@@ -156,8 +156,8 @@ function SharedGroups({ groups }: { groups: SharedGroupsBody }) {
       title: target.kind === 'tag' ? '确认导入标签组' : '确认导入屏蔽组',
       message:
         target.kind === 'tag'
-          ? `确定要将标签组「${target.group.name}」导入到你的标签组吗？`
-          : `确定要将屏蔽组「${target.group.name}」导入到你的屏蔽组吗？导入后需要在屏蔽组页面启用才会生效。`,
+          ? `确定要导入标签组「${target.group.name}」吗？`
+          : `确定要导入屏蔽组「${target.group.name}」吗？`,
       tone: 'filled',
     });
     if (!ok) return;
@@ -185,7 +185,7 @@ function SharedGroups({ groups }: { groups: SharedGroupsBody }) {
   const stateOf = (key: string) => (imported.has(key) ? 'done' : busy === key ? 'busy' : 'idle');
 
   if (groups.tagGroups.length === 0 && groups.blockGroups.length === 0) {
-    return <p className="mt-4 text-body-m text-on-surface-variant">这篇帖子没有分享任何组</p>;
+    return <p className="mt-4 text-body-m text-on-surface-variant">此帖子未分享标签组或屏蔽组</p>;
   }
 
   return (
@@ -209,7 +209,7 @@ function SharedGroups({ groups }: { groups: SharedGroupsBody }) {
                   {group.tags.length > 0 ? (
                     <TagList tags={group.tags} />
                   ) : (
-                    <p className="text-body-s text-on-surface-variant">没有标签</p>
+                    <p className="text-body-s text-on-surface-variant">暂无标签</p>
                   )}
                 </GroupRow>
               );
@@ -235,8 +235,8 @@ function SharedGroups({ groups }: { groups: SharedGroupsBody }) {
                   onImport={() => void run(key, { kind: 'block', group })}
                 >
                   <TagList label="隐藏" tags={group.hidden_tags} />
-                  <TagList label="打码" tags={group.spoilered_tags} />
-                  {empty && <p className="text-body-s text-on-surface-variant">没有标签</p>}
+                  <TagList label="遮挡" tags={group.spoilered_tags} />
+                  {empty && <p className="text-body-s text-on-surface-variant">暂无标签</p>}
                 </GroupRow>
               );
             })}

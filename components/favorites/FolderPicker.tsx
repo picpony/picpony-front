@@ -116,7 +116,7 @@ export default function FolderPicker({
       });
     } else if (!faved) {
       const names = folders.filter((folder) => checked.has(folder.id)).map((folder) => `「${folderLabel(folder)}」`);
-      showToast(names.length <= 2 ? `已收藏到${names.join('')}` : `已收藏到 ${names.length} 个收藏夹`);
+      showToast(names.length <= 2 ? `已收藏到${names.join('、')}` : `已收藏到 ${names.length} 个收藏夹`);
     } else {
       showToast('已更新收藏夹');
     }
@@ -173,9 +173,6 @@ export default function FolderPicker({
       ) : (
         <>
           <FolderChecklist folders={folders} checked={checked} onChange={toggle} disabled={busy} />
-          {faved && (
-            <p className="mt-1 text-body-s text-on-surface-variant">不勾选任何收藏夹即取消收藏</p>
-          )}
           <NewFolderRow token={token} disabled={busy} onBusyChange={setCreating} onCreated={(folder) => toggle(folder.id, true)} />
         </>
       )}

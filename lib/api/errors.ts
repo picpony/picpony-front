@@ -110,7 +110,7 @@ export const FAILURE_MESSAGES = {
   unavailable: '服务暂时不可用，请稍后再试',
   notFound: '内容不存在或已被删除',
   unauthorized: '登录已过期，请重新登录',
-  forbidden: '没有权限查看此内容',
+  forbidden: '没有操作权限',
   badRequest: '请求无效',
   syntax: '搜索语法有误，请检查括号和运算符',
   invalid: '服务器返回了无法识别的数据',

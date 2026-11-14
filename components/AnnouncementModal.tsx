@@ -76,7 +76,7 @@ export default function AnnouncementModal() {
       maxWidth="lg"
       footer={
         <Button variant="text" onClick={handleClose}>
-          我已知悉
+          知道了
         </Button>
       }
     >

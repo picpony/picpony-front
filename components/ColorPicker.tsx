@@ -218,7 +218,7 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
  * palette tools arrive, so loading cannot restart the overlay's entrance.
  */
 function PickerDialog({
-  title = '自定义主题色',
+  title = '自定义颜色',
   preview,
   tools,
   isOpen,
@@ -582,7 +582,7 @@ function PickerDialog({
                 })}
               </div>
               {accent.mode === 'custom' && (
-                <div role="radiogroup" aria-label="副色相的色相" className={RAIL_CLASS}>
+                <div role="radiogroup" aria-label="副色相" className={RAIL_CLASS}>
                   {HUE_STOPS.map((h, index) => {
                     const on = choice === h;
                     const swatch = tools.accentSwatch(tools.customAccents(hex, h));

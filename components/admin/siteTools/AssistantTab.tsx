@@ -47,12 +47,12 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
     if (busy) return;
     let draft: ReturnType<typeof providerPayload>;
     try { draft = providerPayload(values); setErrors({}); } catch (error) { setErrors(fieldErrors(error)); return; }
-    confirmThen('确认保存模型配置', `确定要保存「${draft.name}」吗？${draft.clear_key ? '已保存的密钥将被清除。' : draft.is_primary ? '它将成为主模型，原主模型改为备用。' : ''}`, () => void save.run(
+    confirmThen('确认保存模型配置', `确定要保存「${draft.name}」吗？${draft.clear_key ? '已保存的密钥将被清除。' : draft.is_primary ? '该配置将设为主模型，原主模型改为备用。' : ''}`, () => void save.run(
       () => api.saveAssistantProvider(token, config.revision, draft, provider?.id),
       () => { showToast('已保存模型配置', 'success'); onDone(); },
       '模型配置保存失败',
       { onCommitted: (d) => { assistantQuery.write(token, d.config); assistantQuota.invalidate({ token }); } },
-    ));
+    ), { tone: draft.clear_key ? 'danger' : 'filled' });
   };
   const run = (kind: 'discover' | 'benchmark', model?: string) => {
     if (busy || !provider) return;
@@ -60,7 +60,7 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
       () => api.probeProvider(token, provider.id, config.revision, kind, model),
       (d) => setNotice(d.ok
         ? kind === 'discover' ? `已获取 ${d.result.models?.length ?? 0} 个模型` : `${model} 可用，耗时 ${d.result.latency_ms} 毫秒`
-        : `${kind === 'discover' ? '获取模型列表' : `测速 ${model}`}失败：${d.failure}`),
+        : `${kind === 'discover' ? '获取模型列表' : `测速 ${model} `}失败：${d.failure}`),
       kind === 'discover' ? '模型列表获取失败' : '模型测速失败',
       /* Every finished probe changes the global revision; the next one names the new list's. */
       { key: model ?? kind, onCommitted: () => assistantQuery.invalidate(token) },
@@ -74,9 +74,9 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
     <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
     {provider && <>
       <SectionHeading as="h3">候选模型</SectionHeading>
-      <AdminNote>自动选择时，只在勾选的候选中使用测速延迟最低的模型；不勾选则在全部测速成功的模型中选择。修改后请保存配置。获取与测速使用已保存的地址和密钥。</AdminNote>
+      <AdminNote>自动选择模式下，将在所选候选中选用延迟最低的模型；未勾选候选则在全部测速成功的模型中选择。</AdminNote>
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="tonal" loading={probe.pendingKeys.has('discover')} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认获取模型列表', '确定要使用已保存的地址与密钥获取模型列表吗？', () => run('discover'))}>获取模型列表</Button>
+        <Button type="button" variant="tonal" loading={probe.pendingKeys.has('discover')} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认获取模型列表', '确定要使用已保存的地址与密钥获取模型列表吗？', () => run('discover'), { tone: 'filled' })}>获取模型列表</Button>
         <Button type="button" variant="text" disabled={busy || !candidates.length} onClick={() => change({ ...values, model_candidates: [] })}>清空选择</Button>
       </div>
       {unsaved && <p className="text-body-s text-on-surface-variant">请先保存当前地址与密钥，再获取模型或测速。</p>}
@@ -86,7 +86,7 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
           { key: 'name', header: '模型', primary: true, className: 'wrap-anywhere', render: (r) => <>{r.name}{provider.selected_model === r.name && <> <Badge tone="success">使用中</Badge></>}</> },
           /* Three states: untested, a duration, and 可用 for a success that reported none (G2-003). */
           { key: 'latency', header: '测试结果', render: (r) => r.result ? <Badge tone={r.result.ok ? 'success' : 'error'}>{r.result.ok ? (r.result.latency === null ? '可用' : `${r.result.latency} 毫秒`) : (r.result.failure ?? '不可用')}</Badge> : '未测速' },
-          { key: 'actions', header: '操作', actions: true, render: (r) => <Button type="button" size="xs" variant="text" loading={probe.pendingKeys.has(r.name)} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认测速', `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`, () => run('benchmark', r.name))}>测速</Button> },
+          { key: 'actions', header: '操作', actions: true, render: (r) => <Button type="button" size="xs" variant="text" loading={probe.pendingKeys.has(r.name)} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认测速', `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`, () => run('benchmark', r.name), { tone: 'filled' })}>测速</Button> },
         ]} />
         <AdminPager page={modelRows.page} totalPages={modelRows.totalPages} onPageChange={modelRows.setPage} />
       </AdminListAnchor>
@@ -119,7 +119,7 @@ function Providers({ token }: { token: string }) {
         { key: 'updated', header: '更新时间', render: (p) => formatDateTime(p.updated_at) },
         { key: 'actions', header: '操作', actions: true, render: (p) => <>
           <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑 ${p.name}`} disabled={remove.busy} onClick={() => setEditing(p.id)} />
-          <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除 ${p.name}`} loading={remove.pendingKeys.has(p.id)} onClick={() => confirmThen('确认删除模型配置', `确定要删除「${p.name}」吗？其密钥会一并清除，此操作不可撤销。`, () => void remove.run(
+          <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除 ${p.name}`} loading={remove.pendingKeys.has(p.id)} onClick={() => confirmThen('确认删除模型配置', `确定要删除「${p.name}」吗？此配置的密钥将一并清除，此操作无法恢复。`, () => void remove.run(
             () => api.removeAssistantProvider(token, config.revision, p.id),
             () => { showToast('已删除模型配置', 'success'); if (editing === p.id) setEditing(null); },
             '模型配置删除失败',
@@ -141,7 +141,7 @@ function AssistantTab({ token }: AdminPanelProps) {
     <Providers token={token} />
     <ReadState title="额度规则加载失败" loading={quota.loading} error={quota.error} retry={quota.retryable ? quota.refresh : undefined}>
       {quota.data && <ConfigEditor title="额度规则" token={token} initial={quota.data.values} fields={quotaFields} validate={(v) => fieldsPayload(quotaFields, v)} save={(v) => api.saveAiQuota(token, quota.data!.revision, v)} refresh={() => { quotaQuery.invalidate(); assistantQuota.invalidate({ token }); }} confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}>
-        <AdminNote>仅登录用户可使用。成功回复扣 1 点，成功任务共扣 2 点。每日赠送在北京时间零点清零，兑换余额保留。</AdminNote>
+        <AdminNote>成功回复扣 1 点，成功任务共扣 2 点；每日赠送于北京时间零点重置，兑换余额长期保留。</AdminNote>
       </ConfigEditor>}
     </ReadState>
   </div>;

@@ -104,7 +104,6 @@ function SettingsScreen() {
     <div className="max-w-4xl mx-auto">
       <PageHeader
         title="设置"
-        subtitle={signedIn ? '偏好与主题配色会随账号同步到你登录的设备' : '登录后，偏好与个性化设置会随账号同步'}
         /* 32dp, the title's own line height, so the header keeps its height when the action goes. */
         actions={
           signedIn ? undefined : (
@@ -149,7 +148,7 @@ function SettingsScreen() {
 function SettingsSkeleton() {
   return (
     <div className="max-w-4xl mx-auto" data-page-loading>
-      <PageHeader title="设置" subtitle={<span className="invisible">偏好与主题配色会随账号同步</span>} />
+      <PageHeader title="设置" />
       <Skeleton className="mb-6 h-12 w-full rounded-sm" />
       {[4, 4].map((rows, section) => (
         <section key={section} className="mb-8">

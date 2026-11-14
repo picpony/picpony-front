@@ -126,6 +126,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
       const discard = await confirm({
         title: '确认放弃修改',
         message: `确定要放弃对成员「${current?.name ?? ''}」的修改吗？`,
+        tone: 'filled',
       });
       if (!discard) return;
     }
@@ -220,7 +221,6 @@ export default function TeamTab({ token }: AdminPanelProps) {
       >
         <TeamMemberForm
           member={current}
-          heading={`编辑成员 · ${current.name}`}
           submitLabel="保存修改"
           busy={saveMutation.pendingKeys.has(member.id)}
           onSubmit={(payload) => save(current, payload)}
@@ -246,7 +246,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
       <section aria-labelledby="admin-team-members-heading" className="space-y-4">
         <SectionHeading as="h3" id="admin-team-members-heading">成员列表</SectionHeading>
         <AdminNote>
-          小编团队按词库贡献榜自动同步前 16 名：每次读取列表时更新榜单成员、名次和贡献数；姓名、头衔、关联用户和备用头像仍可编辑，不在榜单上的小编记录只保留在后台。
+          小编团队自动同步词库贡献榜前 16 名；姓名、头衔、关联用户与备用头像支持手动编辑。
         </AdminNote>
         <AdminListAnchor>
           <DataTable<TeamMemberRow>
@@ -284,7 +284,7 @@ function TeamMemberForm({
   onDirtyChange,
 }: {
   member?: TeamMemberRow;
-  heading: string;
+  heading?: string;
   submitLabel: string;
   busy: boolean;
   onSubmit: (payload: adminApi.TeamMemberBody) => void;
@@ -377,7 +377,7 @@ function TeamMemberForm({
     /* Above the list this form is the region, named by its heading; under a row the editor's panel
        is (`InlineEditorPanel`'s label), so the form inside it is not a second landmark (G4-031). */
     <AdminForm onSubmit={submit} aria-labelledby={member ? undefined : `${prefix}-heading`}>
-      <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>
+      {heading && <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>}
       <FormGrid>
         <Input
           id={`${prefix}-user`}
@@ -445,7 +445,7 @@ function TeamMemberForm({
       </FormGrid>
       {external && (
         <p className="px-4 text-body-s text-on-surface-variant wrap-anywhere">
-          {`当前卡片链接：${external}。关联站内用户后，卡片会改为链接到该用户的主页。`}
+          {`当前卡片链接：${external}（关联站内用户后将改链至该用户主页）`}
         </p>
       )}
       <FormActions>

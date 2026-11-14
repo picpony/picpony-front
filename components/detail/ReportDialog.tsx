@@ -46,7 +46,6 @@ export default function ReportDialog({
         </>
       }
     >
-      <p className="mb-4 text-body-m text-on-surface-variant">请描述违规原因，管理员将会审核处理。</p>
       <Textarea
         label="举报原因"
         required

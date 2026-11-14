@@ -79,7 +79,7 @@ let screens = 0;
  * landed — and the form says that, rather than calling the person's own upload a duplicate.
  */
 let unconfirmedFile: File | null = null;
-const LANDED = 'Derpibooru 上已有这张图片——很可能是上一次未能确认的发布已经成功。请在 Derpibooru 上查看你的上传以确认';
+const LANDED = 'Derpibooru 已存在此作品，上一次未能确认的发布可能已成功，请前往查看你的上传以确认';
 
 function emit(next: State) {
   state = next;

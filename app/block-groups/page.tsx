@@ -164,7 +164,7 @@ export default function BlockGroupsPage() {
     /* The question comes first; nothing on the card changes until it is answered (R5-039). */
     if (!(await confirm({
       title: '确认删除',
-      message: `确定要删除屏蔽组「${group.name}」吗？`,
+      message: `确定要删除屏蔽组「${group.name || '未命名屏蔽组'}」吗？`,
       tone: 'danger',
     }))) return;
     if (readToken() !== token) return;
@@ -197,7 +197,7 @@ export default function BlockGroupsPage() {
     if (readToken() !== token) return;
     setImportOpen(false);
     showToast(
-      result.dropped > 0 ? `已导入屏蔽组，有 ${result.dropped} 个标签超出上限未导入` : '已导入屏蔽组',
+      result.dropped > 0 ? `已导入屏蔽组，${result.dropped} 个标签超出上限未导入` : '已导入屏蔽组',
       result.dropped > 0 ? 'warning' : 'success',
     );
   };
@@ -209,8 +209,8 @@ export default function BlockGroupsPage() {
       subtitle={
         signedIn && groups
           ? full
-            ? `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组，已达上限`
-            : `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组。开启后，图库与搜索会自动处理包含这些标签的图片`
+            ? `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组（已达上限）`
+            : `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组`
           : undefined
       }
       actions={
@@ -235,7 +235,7 @@ export default function BlockGroupsPage() {
   if (!ready || (token && groups === undefined && read.error === undefined)) {
     body = <GroupRowsSkeleton control="switch" />;
   } else if (!token) {
-    body = <SignInRequired description="登录后即可创建和管理屏蔽组。" />;
+    body = <SignInRequired description="登录后即可创建和管理屏蔽组" />;
   } else if (!groups) {
     /* A failed read is a failure, never 还没有任何屏蔽组 (R5-035): the adapter throws on a refusal. */
     body = (
@@ -283,8 +283,8 @@ export default function BlockGroupsPage() {
                 <EmptyState
                   entrance={!emptyAfterRows}
                   icon={<MdShield size={ICON.display} />}
-                  title="还没有任何屏蔽组"
-                  description="创建一个后，图库与搜索会自动处理包含这些标签的图片。"
+                  title="暂无屏蔽组"
+                  description="开启后将自动隐藏或遮挡指定标签的图片"
                   action={
                     <Button variant="filled" icon={<MdAdd />} onClick={() => openEditor(null)}>
                       新建屏蔽组

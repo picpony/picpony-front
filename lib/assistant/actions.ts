@@ -93,30 +93,47 @@ export function actionLabel(action: AssistantAction, folderName?: (id: number) =
 const TOOL_LABELS: Record<string, string> = {
   account_summary: '读取账号信息',
   my_collections: '读取收藏夹',
-  assistant_quota_status: '查询彩彩额度',
+  assistant_quota_status: '查询彩彩 AI 额度',
   my_task_status: '查询任务进度',
   claim_task_reward: '领取任务奖励',
-  get_site_api_catalog: '查找站内接口',
-  call_site_api: '调用站内接口',
+  get_site_api_catalog: '查询可用功能',
+  call_site_api: '执行站内操作',
   get_page_controls: '查看页面控件',
   interact_page: '操作页面控件',
 };
+const SITE_ENDPOINT_LABELS: Record<string, string> = {
+  get_faves: '读取收藏夹',
+  get_recent_contacts: '读取联系人',
+  get_tag_subscriptions: '读取标签订阅',
+  get_my_ponies: '读取桌面小马',
+  claim_task: '领取任务奖励',
+  send_message: '发送私信',
+  create_fave_folder: '新建收藏夹',
+  delete_fave_folders: '删除收藏夹',
+  merge_fave_folders: '合并收藏夹',
+  set_image_fave_folders: '调整收藏夹',
+  toggle_fave: '收藏图片',
+  batch_transfer_faves: '批量整理收藏',
+  add_tag_subscription: '订阅标签',
+  remove_tag_subscription: '取消订阅标签',
+  save_my_ponies: '保存桌面小马',
+};
 export function toolLabel(name: string, args: JsonObject): string {
   if (name === 'call_site_api') {
-    const endpoint = str(args.endpoint, 80);
-    return endpoint ? `${TOOL_LABELS[name]} · ${endpoint}` : TOOL_LABELS[name];
+    const label = SITE_ENDPOINT_LABELS[str(args.endpoint, 80)];
+    return label ? `执行操作 · ${label}` : TOOL_LABELS[name];
   }
   if (name === 'interact_page') {
     const control = PAGE_CONTROLS.find(item => item.id === args.control_id)?.label;
     return control ? `操作页面 · ${control}` : TOOL_LABELS[name];
   }
-  return TOOL_LABELS[name] ?? `调用 ${name}`;
+  return TOOL_LABELS[name] ?? '执行操作';
 }
 function foldersLabel(value: unknown, name?: (id: number) => string | undefined): string {
   if (!Array.isArray(value)) return '';
   return value.map(positiveId).filter(Boolean).map((id) => {
     const known = name?.(id);
-    return known ? `「${known.slice(0, 40)}」(${id})` : String(id);
+    return known ? `「${known.slice(0, 40)}」（${id}）` : String(id);
   }).join('、');
 }
 function idsLabel(value: unknown): string {
@@ -140,10 +157,10 @@ export function validateSiteSpec(action: AssistantAction, raw: unknown): { endpo
   const endpoint = str(request.endpoint, 80);
   const method = request.method;
   if (endpoint !== action.arguments.endpoint || method !== 'GET' && method !== 'POST' || method === 'GET' && !READ_ENDPOINTS.has(endpoint) || method === 'POST' && !WRITE_ENDPOINTS.has(endpoint)) {
-    throw new Error('此操作不在已支持的站内操作中，请到对应页面手动完成');
+    throw new Error('此操作不支持自动执行，请前往对应页面手动完成');
   }
   const values = obj(method === 'GET' ? request.query : request.body);
-  if (Object.keys(values).some(key => /token|password|secret|authorization|user_id|url|headers|action/i.test(key))) throw new Error('操作包含不可代填的信息，未执行');
+  if (Object.keys(values).some(key => /token|password|secret|authorization|user_id|url|headers|action/i.test(key))) throw new Error('操作包含受限信息，未执行');
   const reviewed = obj(action.arguments.parameters);
   const targets: Record<string, string[]> = {
     claim_task: ['task_type'], send_message: ['receiver_id', 'content'], create_fave_folder: ['name'],

@@ -22,7 +22,7 @@ function TextTranslationTab({ token }: AdminPanelProps) {
       {read.data && <ConfigEditor title="Azure 文本翻译" token={token} initial={read.data.values} fields={textTranslationFields} validate={textTranslationPayload}
         save={(v) => api.saveTextTranslation(token, v)} refresh={() => textTranslationQuery.invalidate(token)}
         confirmation={(v) => `确定要保存文本翻译设置吗？${v.clear_key ? '已保存的密钥将被清除，文本翻译将无法使用。' : '全站的文本翻译将使用新设置。'}`}>
-        <AdminNote>{read.data.hasKey ? `已保存密钥：${read.data.masked}。留空即可保留。` : '尚未保存密钥，启用前请先填写。'}</AdminNote>
+        <AdminNote>{read.data.hasKey ? `已保存密钥（${read.data.masked}），留空即可保留。` : '尚未保存密钥。'}</AdminNote>
       </ConfigEditor>}
     </ReadState>
   </div>;

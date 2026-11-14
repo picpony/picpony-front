@@ -48,17 +48,17 @@ export function ShareSearchButton({ href, query }: { href: string; query: string
         {
           targetUrl: target.href,
           title: `分享搜索结果：${query}`,
-          desc: `${name} 向您分享了ta的搜索结果，快来看看吧~`,
+          desc: `查看 ${name} 分享的搜索结果`,
         },
         { token },
       );
       if (await copyShareLink(link.url)) return;
-      showToast('分享链接已生成', 'info', {
+      showToast('已生成分享链接', 'info', {
         action: {
           label: '复制',
           onClick: () => {
             void copyShareLink(link.url).then((copied) => {
-              if (!copied) showToast('复制失败，请检查浏览器的剪贴板权限', 'error');
+              if (!copied) showToast('复制失败，请检查剪贴板权限', 'error');
             });
           },
         },
@@ -94,7 +94,7 @@ export function SharedByNotice({ name, onDismiss }: { name: string; onDismiss: (
     <div className="flex h-10 min-w-0 items-center gap-2 text-body-m text-on-surface-variant" role="status">
       <MdShare size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
       <p className="min-w-0 flex-1 truncate">
-        <span className="text-body-m-emphasized text-on-surface">{name}</span> 分享了这次搜索
+        <span className="text-body-m-emphasized text-on-surface">{name}</span> 分享了此次搜索
       </p>
       <IconButton size="sm" dismiss aria-label="关闭分享提示" icon={<MdClose />} onClick={onDismiss} />
     </div>

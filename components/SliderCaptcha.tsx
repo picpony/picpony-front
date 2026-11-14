@@ -571,7 +571,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       <p className={cn('text-body-s text-center', errorMsg ? 'text-error' : 'text-on-surface-variant')}>
         {/* Only the failure is announced; the hint coming back after it is not news. */}
         <span aria-live="polite">{errorMsg}</span>
-        {!errorMsg && '拖动拼图对齐缺口。'}
+        {!errorMsg && '拖动拼图对齐缺口'}
       </p>
     </div>
   );

@@ -259,9 +259,9 @@ test('import dedupes ids, skips existing favourites and sends the rest as one re
 });
 
 test('batch summaries use actual affected counts and per-target shortfalls', () => {
-  assert.deepEqual(transferSummary({ affected: 1, targets: [] }, 'move', 3), { text: '已移动 1 张，2 张未完成', partial: true });
+  assert.deepEqual(transferSummary({ affected: 1, targets: [] }, 'move', 3), { text: '已移动 1 张，2 张失败', partial: true });
   const summary = transferSummary({ affected: null, targets: [{ folderId: 2, folderName: '风景', requested: 3, succeeded: 1, failed: 2, reasons: { 已存在: 2 } }] }, 'copy', 3);
-  assert.equal(summary.partial, true); assert.match(summary.text, /风景.*成功 1 张，失败 2 张.*已存在 2 张/);
+  assert.equal(summary.partial, true); assert.match(summary.text, /风景.*成功 1 张，2 张失败.*已存在 2 张/);
 });
 
 test('acknowledged favourite changes expire this account’s task progress without inventing counters', async t => {

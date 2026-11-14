@@ -64,14 +64,13 @@ export default function TagEditor({
       <AdminForm onSubmit={submit}>
         <SectionHeading
           as="h3"
-          subtitle={tag.en}
           actions={
             <Button type="button" variant="text" size="xs" icon={<MdHistory />} onClick={onHistory}>
               查看编辑历史
             </Button>
           }
         >
-          编辑标签
+          {tag.en}
         </SectionHeading>
         {workOrder && (
           <WorkOrderNote

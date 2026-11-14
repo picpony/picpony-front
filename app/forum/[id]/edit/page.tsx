@@ -43,7 +43,7 @@ export default function EditForumPostPage() {
 
   let body: React.ReactNode;
   if (!ready) body = <ComposerSkeleton />;
-  else if (!token) body = <SignInRequired description="登录后即可编辑自己的帖子。" />;
+  else if (!token) body = <SignInRequired description="登录后即可编辑帖子" />;
   else if (!post && read.error !== undefined) {
     body = isNotFound(read.error) ? (
       <EmptyState

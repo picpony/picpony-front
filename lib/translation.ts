@@ -201,7 +201,7 @@ async function translatePicture(
         try {
           await preload(url, signal);
         } catch {
-          if (!signal.aborted) patch({ phase: 'failed', message: '译图加载失败，请稍后重试' });
+          if (!signal.aborted) patch({ phase: 'failed', message: '译图加载失败，请稍后再试' });
           return;
         }
         imageCache.set(sourceUrl, url);
@@ -210,7 +210,7 @@ async function translatePicture(
         return;
       }
       if (status.state === 'failed') {
-        patch({ phase: 'failed', message: status.message ?? '翻译失败，请稍后重试' });
+        patch({ phase: 'failed', message: status.message ?? '翻译失败，请稍后再试' });
         return;
       }
       if (polls >= MAX_POLLS) {
@@ -223,7 +223,7 @@ async function translatePicture(
       status = await pollImageTranslation(sourceUrl, signal);
     }
   } catch (error) {
-    if (!signal.aborted) patch({ phase: 'failed', message: apiErrorMessage(error, '翻译失败，请稍后重试') });
+    if (!signal.aborted) patch({ phase: 'failed', message: apiErrorMessage(error, '翻译失败，请稍后再试') });
   }
 }
 

@@ -162,7 +162,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
         showToast(outcome.message, 'error');
         return;
       }
-      showToast('已提交反馈，感谢帮助完善词库', 'success');
+      showToast('已提交反馈', 'success');
       setReason('');
       setTranslation('');
       switchTo('entry');
@@ -210,7 +210,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
                   if (outcome === 'added') showToast('已添加到待定标签库', 'success');
                   else if (outcome === 'exists') showToast('此标签已在待定标签库中', 'info');
                   else if (outcome === 'full') showToast(`待定标签库已满（最多 ${MAX_PENDING} 个），请先整理后再添加`, 'error');
-                  else showToast('待定标签保存失败，请检查浏览器是否允许本地存储', 'error');
+                  else showToast('保存失败，请检查浏览器本地存储权限', 'error');
                 }}>
                   添加到待定标签
                 </Button>
@@ -251,7 +251,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
                 disabled={sending}
               />
               <Textarea
-                label="建议的正确翻译（可选）"
+                label="建议译名（选填）"
                 value={translation}
                 onChange={(event) => setTranslation(event.target.value)}
                 rows={2}
@@ -264,7 +264,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
           ) : result.error !== undefined && entry === undefined ? (
             <ErrorRetry
               size="inline"
-              title="词库查询失败"
+              title="标签信息加载失败"
               message={apiErrorMessage(result.error)}
               onRetry={isRetryable(result.error) ? result.refresh : undefined}
             />
@@ -298,7 +298,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
               )}
             </div>
           ) : (
-            <EmptyState size="inline" title="词库中暂无此标签的详细信息" />
+            <EmptyState size="inline" title="暂无此标签的详细信息" />
           )}
         </div>
       </FollowHeight>

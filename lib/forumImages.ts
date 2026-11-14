@@ -101,9 +101,9 @@ async function shrink(file: File): Promise<File> {
  */
 export async function prepareForumImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) throw new Error('请选择图片文件');
-  if (file.size > MAX_SOURCE_BYTES) throw new Error('原图不能超过 50MB');
+  if (file.size > MAX_SOURCE_BYTES) throw new Error('原图不能超过 50 MB');
   if (file.type === 'image/gif') {
-    if (file.size > FORUM_IMAGE_MAX_BYTES) throw new Error('动图超过 5MB，压缩会丢失动画，请缩小后再上传');
+    if (file.size > FORUM_IMAGE_MAX_BYTES) throw new Error('动图超过 5 MB，压缩会丢失动画，请缩小后再上传');
     return file;
   }
   if (file.size <= FORUM_IMAGE_MAX_BYTES) return file;
@@ -112,9 +112,9 @@ export async function prepareForumImage(file: File): Promise<File> {
     shrunk = await shrink(file);
   } catch {
     /* A format the browser cannot decode (HEIC on most desktops): nothing to redraw. */
-    throw new Error('图片超过 5MB，且无法在浏览器中压缩，请缩小后再上传');
+    throw new Error('图片超过 5 MB，且无法在浏览器中压缩，请缩小后再上传');
   }
-  if (shrunk.size > FORUM_IMAGE_MAX_BYTES) throw new Error('图片压缩后仍超过 5MB，请降低分辨率后再试');
+  if (shrunk.size > FORUM_IMAGE_MAX_BYTES) throw new Error('图片压缩后仍超过 5 MB，请降低分辨率后再试');
   return shrunk;
 }
 

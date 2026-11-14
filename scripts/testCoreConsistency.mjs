@@ -233,7 +233,7 @@ test('file validation does not read pixels, and failed or aborted readers never 
   validateImageFile(file);
   assert.equal(readers.length, 0);
   assert.throws(() => validateImageFile({ ...file, type: 'text/plain' }), /有效的图片/);
-  assert.throws(() => validateImageFile({ ...file, size: 6 * 1024 * 1024 }), /5MB/);
+  assert.throws(() => validateImageFile({ ...file, size: 6 * 1024 * 1024 }), /5 MB/);
   await assert.rejects(processImageFile({ ...file, type: '' }), /有效的图片/);
   assert.equal(readers.length, 0);
 

@@ -193,7 +193,7 @@ export default function SearchResults({
         <ErrorRetry
           size="pane"
           title={syntax ? '搜索语法有误' : '搜索结果加载失败'}
-          message={syntax ? '请检查括号和运算符，或去掉特殊符号后再试。' : apiErrorMessage(error)}
+          message={apiErrorMessage(error)}
           onRetry={isRetryable(error) ? refresh : undefined}
         />
         {footer}

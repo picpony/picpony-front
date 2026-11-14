@@ -91,8 +91,7 @@ async function runRemoval(
 /** `已移出 3 张，1 张失败`, the tone it is said in, and whether it is the backend's own refusal. */
 function countSentence(done: number, failed: unknown[], verb: string, fallback: string): { text: string; tone: ToastType } {
   if (done === 0 && failed.length > 0) return { text: apiErrorMessage(failed[0], fallback), tone: 'error' };
-  const text = `${verb} ${done} 张${failed.length > 0 ? `，${failed.length} 张失败` : ''}`;
-  return { text, tone: failed.length > 0 ? 'warning' : 'success' };
+  return { text: runSummary(verb, done, failed.length), tone: failed.length > 0 ? 'warning' : 'success' };
 }
 
 /**
@@ -211,8 +210,8 @@ export function usePictureBatch({
         title: `确认移出${where}`,
         message:
           source.kind === 'folder'
-            ? `确定要将选中的 ${images.length} 张图片移出此收藏夹吗？不在其他收藏夹中的图片将取消收藏。`
-            : `确定要将选中的 ${images.length} 张图片移出隐私空间吗？移出后无法从隐私空间找回。`,
+            ? `确定要将已选的 ${images.length} 张图片移出此收藏夹吗？未在其他收藏夹中的图片将取消收藏。`
+            : `确定要将已选的 ${images.length} 张图片移出此隐私空间吗？移出后无法从隐私空间找回。`,
         tone: 'danger',
       });
       if (!ok || readToken() !== token) return;
@@ -246,7 +245,7 @@ export function usePictureBatch({
     if (running.current || images.length === 0 || source.kind !== 'folder') return;
     const ok = await confirm({
       title: '确认移入隐私空间',
-      message: `确定要将选中的 ${images.length} 张图片移入隐私空间吗？移入后它们将从收藏夹中移除。`,
+      message: `确定要将已选的 ${images.length} 张图片移入隐私空间吗？移入后将从收藏夹移除。`,
       tone: 'filled',
     });
     if (!ok || readToken() !== token) return;
@@ -275,7 +274,7 @@ export function usePictureBatch({
     const sentence = countSentence(
       moved.length,
       outcome.value.failed.map((failure) => failure.error),
-      '已移入隐私空间',
+      '已移入',
       '移入失败',
     );
     showToast(sentence.text, sentence.tone);
@@ -319,7 +318,7 @@ export function usePictureBatch({
     if (packed.cancelled) {
       showToast(packed.archives > 0 ? `已停止下载，已保存 ${packed.archives} 个压缩包` : '已停止下载', 'info');
     } else if (packed.archives === 0) {
-      showToast('所选图片均下载失败，没有生成空压缩包', 'error');
+      showToast('所选图片均下载失败', 'error');
     } else {
       showToast(packedSentence(packed.packed, packed.failed, packed.archives), packed.failed > 0 ? 'warning' : 'success');
     }

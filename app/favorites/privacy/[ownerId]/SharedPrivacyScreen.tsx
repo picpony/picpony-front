@@ -116,7 +116,7 @@ function OwnSpace() {
       fill
       icon={<MdLock size={ICON.display} />}
       title="这是你自己的隐私空间"
-      description={showPrivacy ? '在我的收藏中查看和管理' : '在设置中开启显示隐私空间后，可在我的收藏中查看'}
+      description={showPrivacy ? '可在「我的收藏」中查看和管理' : '在设置中开启「显示隐私空间」后即可查看'}
       action={
         <Button variant="tonal" onClick={() => router.push(showPrivacy ? favoritesHref('privacy') : '/settings', { scroll: false })}>
           {showPrivacy ? '前往我的隐私空间' : '前往设置'}
@@ -247,7 +247,7 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
             setPage={setPage}
             listKey={listKey}
             failureTitle="隐私空间加载失败"
-            empty={<EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="此隐私空间还没有图片" />}
+            empty={<EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="暂无图片" />}
           />
         </div>
       </div>
@@ -300,7 +300,7 @@ function SharedUnlockForm({
     <GateCard
       icon={<MdLock size={ICON.display} />}
       title="需要隐私密码"
-      description={message ?? `输入${ownerName ? ` ${ownerName} ` : '对方'}告诉你的隐私密码以查看`}
+      description={message ?? `输入${ownerName ?? '对方'}分享的隐私密码`}
     >
       <form onSubmit={submit} noValidate autoComplete="off" className="flex flex-col gap-4">
         <Input

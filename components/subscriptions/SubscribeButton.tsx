@@ -92,7 +92,7 @@ export default function SubscribeButton({
     const name = tagName;
     const confirmed = await confirm({
       title: '确认取消订阅',
-      message: `确定要取消订阅标签「${name}」吗？取消后不再追踪它的新图片。`,
+      message: `确定要取消订阅标签「${name}」吗？`,
     });
     if (!confirmed) return;
     setBusy(true);

@@ -56,9 +56,6 @@ function MotionOptionsDialog<T extends string>({
             />
           }
         />
-        <p className="mt-3 text-body-s text-on-surface-variant">
-          修改后立即生效，仅保存在本设备。
-        </p>
       </div>
       <div>
         {MOTION_CATEGORIES.map(({ id, label, description }) => (

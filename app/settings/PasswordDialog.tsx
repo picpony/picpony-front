@@ -62,7 +62,7 @@ export default function PasswordDialog({
     try {
       await changePassword(token, { old_password: current, new_password: next });
       if (readToken() !== token) return;
-      showToast('密码已修改，请重新登录', 'success');
+      showToast('已修改密码，请重新登录', 'success');
       onClose();
       /* The backend has ended every session of the account, this one included. */
       if (clearUserInfo(token, { revoke: false })) openAuth('login');
@@ -94,7 +94,7 @@ export default function PasswordDialog({
             取消
           </Button>
           <Button variant="filled" type="submit" form="password-form" loading={busy}>
-            修改密码
+            保存
           </Button>
         </>
       }

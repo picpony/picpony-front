@@ -52,7 +52,6 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
         size="pane"
         icon={<MdChatBubbleOutline size={ICON.display} />}
         title="暂无评论"
-        description={own ? '你还没有发表过评论' : '该用户还没有发表过任何评论'}
       />
     );
   }

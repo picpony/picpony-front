@@ -199,7 +199,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             fill
             icon={<MdPersonOff size={ICON.display} />}
             title="用户不存在"
-            description="这个 Derpibooru 账户不存在，或者链接本来就不对。"
+            description="此 Derpibooru 账号不存在或链接地址有误"
             action={
               <ButtonLink
                 href="/"
@@ -314,7 +314,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                   className="@lg:flex-1"
                   icon={<MdSearch />}
                 >
-                  搜索 TA 的作品
+                  搜索该用户的作品
                 </Button>
                 <ButtonLink
                   href={derpiProfileUrl(profile)}
@@ -374,8 +374,8 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                   title="暂无上传"
                   description={
                     (profile?.uploads_count ?? 0) > 0
-                      ? '在当前的内容筛选设置下，该用户没有可显示的图片'
-                      : '该用户尚未上传任何图片'
+                      ? '在当前内容筛选设置下，该用户没有可显示的图片'
+                      : undefined
                   }
                 />
               )

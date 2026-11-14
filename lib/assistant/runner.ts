@@ -6,7 +6,7 @@ import type { createReceiptJournal } from './journal';
 export const CLIENT_CALLS: readonly string[] = ['call_site_api', 'get_page_controls', 'interact_page'];
 
 export class UncertainAction extends Error {
-  constructor(message = '操作结果尚未确认，已停止重复提交。请先核对站内结果，再核对任务回执。') { super(message); }
+  constructor(message = '操作结果尚未确认，已停止重复提交，请先核对站内结果后再继续') { super(message); }
 }
 export interface ActionDependencies {
   assertCurrent(): void;
@@ -28,7 +28,7 @@ export function createActionRunner(deps: ActionDependencies) {
   async function settle(action: AssistantAction, taskId: string, approved: boolean): Promise<AssistantReceipt> {
     deps.assertCurrent();
     if (!uuid(taskId) || !/^[A-Za-z0-9._:-]{1,160}$/.test(action.call_id)) {
-      return receipt(action, taskId, { summary: '任务缺少可核对的操作标识，未执行', error: 'missing_identity' });
+      return receipt(action, taskId, { summary: '任务信息不完整，未执行', error: 'missing_identity' });
     }
     /* Every call the server dispatches to the browser (`assistant_runner::CLIENT_TOOLS`) is an issued
        `assistant_client_calls` row: it is claimed before it runs and answered with a receipt, which is
@@ -53,7 +53,7 @@ export function createActionRunner(deps: ActionDependencies) {
         /* `{cached, result:{name, call_id (the model's), ok, summary, data, source}}`, where `data`
            is the receipt this client sent — its own task and call ids identify it. */
         const cached = obj(claim.result), sent = obj(cached.data);
-        if (sent.task_id !== taskId || sent.call_id !== action.call_id || typeof cached.ok !== 'boolean') throw new UncertainAction('服务器回执与此操作不一致，未重复执行');
+        if (sent.task_id !== taskId || sent.call_id !== action.call_id || typeof cached.ok !== 'boolean') throw new UncertainAction('服务器返回的结果与此操作不一致，未重复执行');
         const result = receipt(action, taskId, { ok: cached.ok, summary: str(cached.summary, 1000), data: receiptData(sent.data), ...(typeof sent.error === 'string' ? { error: str(sent.error, 100) } : {}) });
         deps.journal.save(result); return result;
       }
@@ -88,7 +88,7 @@ export function createActionRunner(deps: ActionDependencies) {
   async function save(value: AssistantReceipt) {
     deps.assertCurrent();
     const saved = await deps.save(value); deps.assertCurrent();
-    if (saved.success !== true || !saved.result) throw new UncertainAction('业务操作已有结果，回执尚未确认；核对时只会补交此回执');
+    if (saved.success !== true || !saved.result) throw new UncertainAction('操作已完成，状态同步尚未确认');
     deps.journal.acknowledge(value.task_id, value.call_id);
   }
   return {

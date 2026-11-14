@@ -91,8 +91,8 @@ export default function LinesSection() {
             onChange={(on) => changeSyncedSetting('useCdn', on)}
           />
           <SwitchRow
-            label="启用 PicPony 加速服务器 (beta)"
-            description="通过 PicPony 代理服务器加载图片，开启后自动启用 CDN 作为下一档"
+            label="启用 PicPony 加速服务器（Beta）"
+            description="通过 PicPony 代理服务器加载图片，开启后同时启用 CDN"
             checked={picponyProxy}
             onChange={(on) => {
               changeSyncedSetting('usePicponyProxy', on);

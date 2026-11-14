@@ -137,7 +137,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       // The accepted device setting outlives a closed form; UI feedback does not.
       if (!isCurrent()) return;
       setIsDeveloper(enabled);
-      showToast(enabled ? '开发者模式已开启' : '开发者模式已关闭', enabled ? 'success' : 'info');
+      showToast(enabled ? '已开启开发者模式' : '已关闭开发者模式', enabled ? 'success' : 'info');
     } catch (failure) {
       if (!isCurrent()) return;
       const message = apiErrorMessage(failure);
@@ -201,7 +201,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
         )}
 
         {status === 'banned' && (
-          <p className="text-body-m text-error">您的开发者权限已被封禁，请联系管理员</p>
+          <p className="text-body-m text-error">你的开发者权限已被封禁，请联系管理员</p>
         )}
 
         {status === 'error' && (
@@ -228,7 +228,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                 <div className="space-y-2">
                   <PreqRow label="用户已登录" met={!!prerequisites.logged_in} />
                   <PreqRow label="已绑定 Derpibooru API Key" met={!!prerequisites.api_bound} />
-                  <PreqRow label="账户等级高于 3 级" met={!!prerequisites.level_gt_3} />
+                  <PreqRow label="账号等级高于 3 级" met={!!prerequisites.level_gt_3} />
                 </div>
 
                 {allMet ? (
@@ -256,13 +256,13 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                       data-lpignore="true"
                       data-bwignore=""
                       data-form-type="other"
-                      helper="8 位维护密码"
+                      helper="向管理员获取的 8 位数字密码"
                       error={error || undefined}
                     />
                   </form>
                 ) : (
                   <p className="text-body-s text-on-surface-variant">
-                    满足以上条件后，方可开启开发者模式（不过滤任何标签内容）。
+                    满足以上条件后可开启开发者模式（不过滤标签内容）
                   </p>
                 )}
               </>

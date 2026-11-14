@@ -45,7 +45,7 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
   {
     passive = false,
     className = '',
-    title = '返回图库 (Esc)',
+    title = '返回图片列表（Esc）',
     tabIndex,
     onMouseDown,
     'aria-label': ariaLabel = '返回图片列表',

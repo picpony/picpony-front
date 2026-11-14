@@ -89,21 +89,21 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
               onChange={(value) => changeSyncedSetting('contentFilter', value)}
               aria-label="内容分级"
               options={[
-                { value: 'safe', label: '完全安全 (Safe)' },
-                { value: 'spoilers', label: '中等限制 (Spoilers)', disabled: blocked !== null },
+                { value: 'safe', label: '完全安全（Safe）' },
+                { value: 'spoilers', label: '中等限制（Spoilers）', disabled: blocked !== null },
                 ...(developer || filter === 'developer' ? [{ value: 'developer', label: '开发者模式' }] : []),
               ]}
             />
           }
         />
         <SwitchRow
-          label="禁止类人生物（马头人）"
-          description="隐藏拟人化与人形化的角色图"
+          label="隐藏类人生物"
+          description="隐藏拟人化与人形化的角色图片"
           checked={banAnthro}
           onChange={(on) => changeSyncedSetting('banAnthro', on)}
         />
         <SwitchRow
-          label="屏蔽可能令您不适的内容"
+          label="屏蔽敏感或不适内容"
           description="隐藏肥胖、惊悚、政治及部分恋物题材"
           checked={banDiscomfort}
           onChange={(on) => changeSyncedSetting('banDiscomfort', on)}
@@ -133,13 +133,12 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
       <SettingsSection title="显示与排序" icon={<MdVisibility size={ICON.control} />}>
         <SwitchRow
           label="显示标签数量"
-          description="在标签旁显示带有该标签的图片数"
+          description="在标签旁显示图片数量"
           checked={showTagCounts}
           onChange={(on) => changeSyncedSetting('showTagCounts', on)}
         />
         <SwitchRow
-          label="显示中文标签 (beta)"
-          description="用中文显示标签名"
+          label="显示中文标签（Beta）"
           checked={showChineseTags}
           onChange={(on) => changeSyncedSetting('showChineseTags', on)}
         />
@@ -188,14 +187,14 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
         >
           <SwitchRow
             label="有人给我发私信"
-            description="收到新私信时发邮件提醒"
+            description="收到新私信时发送通知"
             checked={notifyMessage}
             onChange={(on) => changeSyncedSetting('emailNotifMessage', on)}
             disabled={!email}
           />
           <SwitchRow
             label="有人回复我"
-            description="帖子或评论收到回复时发邮件提醒"
+            description="帖子或评论收到回复时发送通知"
             checked={notifyReply}
             onChange={(on) => changeSyncedSetting('emailNotifReply', on)}
             disabled={!email}
@@ -208,7 +207,7 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
       <SettingsSection title="诊断" icon={<MdSpeed size={ICON.control} />}>
         <SettingsRow
           label="性能测试"
-          supporting="自动测试打开、关闭、拖动和滚动是否流畅，并导出报告"
+          supporting="检测交互与滚动流畅度，并生成测试报告"
           action={
             <ButtonLink
               href="/perf"

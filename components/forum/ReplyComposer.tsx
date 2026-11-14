@@ -174,7 +174,7 @@ export default function ReplyComposer({
             }}
             size="reply"
             label={replyTo ? `回复 ${replyTo.username}` : '回复内容'}
-            placeholder={replyTo ? `回复 ${replyTo.username}…` : '写下你的回复…'}
+            placeholder={replyTo ? `回复 ${replyTo.username}…` : '输入回复内容…'}
             invalid={error !== null}
             describedBy={error ? errorId : undefined}
             handleRef={editor}

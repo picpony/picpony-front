@@ -193,8 +193,7 @@ function OpenPrivacy({ token, username, ownerId, active, images, error }: {
         onRetry={isRetryable(error) ? () => void reloadPrivacy(token) : undefined} />}
       <FaveGridView state={state} page={page} setPage={setPage} listKey={listKey} selection={gridSelection}
         entrance={false} failureTitle="隐私空间加载失败" empty={
-          <EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="隐私空间还没有图片"
-            description="选择收藏夹里的图片后移入，就会出现在这里" />
+          <EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="暂无图片" />
         } />
       <SelectionBar active={selection.active} count={selection.count} unit="张" label="隐私空间多选" commands={barCommands} onExit={exit} />
       <PrivacyPasswordDialog open={passwordOpen} token={token} username={username} onClose={() => setPasswordOpen(false)} />

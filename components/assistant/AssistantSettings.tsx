@@ -104,7 +104,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
     if (busy || !permission.data || mode === permission.data) return;
     if (mode === 'full' && !await confirm({
       title: '确认开启完全权限', tone: 'danger',
-      message: '确定要让彩彩免去逐次确认，按你的指令修改、发送、删除账户内容或消耗金币吗？模型可能理解错误，操作不一定能够撤销。这不会绕过密码、隐私锁或账户权限，你可以随时切回默认模式。',
+      message: '开启后，彩彩 AI 将不再逐次请求确认，直接执行修改、删除或消耗金币等操作。部分操作可能无法撤销。\n确定要开启完全权限吗？',
     })) return;
     if (!current()) return;
     await mutate(async () => {
@@ -140,14 +140,14 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   return <>
     {/* Busy actions retain focus and material while blocking duplicate activation.
         See docs/design/primitives.md#buttons-icons-and-semantics. */}
-    <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} subtitle="权限与额度随当前账户保存" actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh />} />}>
+    <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh />} />}>
       {!quota.data || !permission.data ? !problem && <AssistantSettingsSkeleton /> : <>
-        <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '管理员暂未开放彩彩 AI，你的选择仍会保留' : '开启后可长按吉祥物与彩彩聊天'} />
-        <SettingsRow label="权限规则" supporting={permission.data === 'full' ? '按你的指令直接执行，不再逐次确认' : '写入、发送和删除等操作执行前需要确认'}
+        <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'} />
+        <SettingsRow label="权限规则" supporting={permission.data === 'full' ? '直接执行指令，不再逐次确认' : '执行写入、发送和删除操作前需确认'}
           action={<Select aria-label="彩彩 AI 权限规则" size="sm" value={permission.data} options={[{ value: 'default', label: '默认模式' }, { value: 'full', label: '完全权限' }]} onChange={mode => void changePermission(mode)} />} />
         <QuotaRow quota={quota.data} />
         <SettingsRow label="兑换额度"
-          supporting={exchange ? '上次兑换尚未确认，可沿用原标识核对结果' : <>现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 · 1 金币兑换 {quota.data.points_per_coin} 点</>}
+          supporting={exchange ? '上次兑换结果尚未确认，可点击核对' : <>现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 · 1 金币兑换 {quota.data.points_per_coin} 点</>}
           action={<Button variant="tonal" onClick={() => { if (busy) return; setError(undefined); setCoins('1'); setExchangeOpen(true); }}>{exchange ? '核对兑换' : '兑换'}</Button>} />
       </>}
       {problem !== undefined && <ErrorRetry size="inline" title="彩彩 AI 设置加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}

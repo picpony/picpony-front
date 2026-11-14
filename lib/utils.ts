@@ -107,7 +107,7 @@ export function randomId(): string {
 export function validateImageFile(file: File, maxSizeMB = 5): void {
   if (!file.type.startsWith('image/')) throw new Error('请选择有效的图片文件');
   if (file.size > maxSizeMB * 1024 * 1024) {
-    throw new Error(`图片大小不能超过 ${maxSizeMB}MB`);
+    throw new Error(`图片大小不能超过 ${maxSizeMB} MB`);
   }
 }
 

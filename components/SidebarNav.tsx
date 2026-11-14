@@ -255,7 +255,7 @@ export default function SidebarNav({
           href="/"
           icon={<MdOutlineHome size={ICON.standard} />}
           activeIcon={<MdHome size={ICON.standard} />}
-          label="主页"
+          label="首页"
           active={onHome && !forumTab}
           homeTab="gallery"
           onClick={onNavigate}

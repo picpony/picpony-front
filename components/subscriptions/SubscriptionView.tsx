@@ -130,7 +130,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
       ? `自上次查看新增 ${formatCount(fresh)} 张 · 记录 ${formatCount(subscription.imageCount)} 张`
       : `暂无新图片 · 记录 ${formatCount(subscription.imageCount)} 张`;
   } else {
-    status = token ? '未订阅此标签，订阅后有新图片时会通知你' : '登录并订阅后，有新图片时会通知你';
+    status = token ? '未订阅此标签' : '登录后可订阅此标签';
   }
 
   const failedTurn = read.isPrevious && Boolean(read.error);
@@ -153,7 +153,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
       page > 1 ? (
         <EmptyState
           size="pane"
-          title="这一页没有图片"
+          title="此页暂无图片"
           action={<Button variant="tonal" onClick={() => setPage(1)}>回到第一页</Button>}
         />
       ) : (
@@ -161,7 +161,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
           size="pane"
           icon={<MdImage size={ICON.display} />}
           title="暂无可显示的图片"
-          description="此标签下没有图片，或者都在当前的内容筛选设置之外"
+          description="在当前内容筛选设置下，此标签暂无可显示的图片"
           action={
             <ButtonLink href="/settings" variant="tonal" icon={<MdSettings />}>
               前往设置

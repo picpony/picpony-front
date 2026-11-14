@@ -22,16 +22,16 @@ export function required(value: string, label: string, max = 200): string {
 }
 export function assetUrl(value: string): string {
   const result = value.trim();
-  if (!result || result.length > 2048 || /[\u0000-\u0020\\]/.test(result)) throw new ApiError('invalid', { message: '请输入有效的图片链接', retryable: false });
+  if (!result || result.length > 2048 || /[\u0000-\u0020\\]/.test(result)) throw new ApiError('invalid', { message: '请输入有效的图片地址', retryable: false });
   let parsed: URL;
   try { parsed = new URL(result, 'https://picpony.top/'); }
-  catch { throw new ApiError('invalid', { message: '请输入有效的图片链接', retryable: false }); }
+  catch { throw new ApiError('invalid', { message: '请输入有效的图片地址', retryable: false }); }
   /* `https:` only, because that is what the public readers accept: `mascotAsset`
      (`lib/api/mascot.ts`) returns `''` for any other protocol and `lib/api/desktopPonies.ts`
      additionally pins the host, both silently. The console used to accept `http://` and even render
      it in its own list, so an admin saw a picture the site would never show. A bare path still
      passes — it resolves against `https://picpony.top/` here and through `getAssetUrl` there. */
-  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new ApiError('invalid', { message: '图片链接须为 HTTPS 地址，且不含凭据', retryable: false });
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new ApiError('invalid', { message: '图片地址须为 HTTPS 地址，且不含账号信息', retryable: false });
   return result;
 }
 export interface BadgeDescription { badge_name: string; description: string }

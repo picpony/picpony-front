@@ -108,7 +108,7 @@ export default function QuickTags({
 
   return (
     <section className="mb-8">
-      <SectionHeading className="mb-2" subtitle="点选标签加入搜索框，可多选">
+      <SectionHeading className="mb-2">
         快捷标签
       </SectionHeading>
       {read.data === undefined ? (

@@ -144,7 +144,7 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
         role={error ? 'alert' : undefined}
         className={error ? 'mt-1.5 px-4 text-body-s text-error' : 'mt-1.5 px-4 text-body-s text-on-surface-variant'}
       >
-        {error ?? '最大 5MB，更大的照片会自动压缩'}
+        {error ?? '最大 5 MB，超出时将自动压缩'}
       </p>
     </div>
   );

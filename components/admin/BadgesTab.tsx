@@ -144,7 +144,6 @@ function GrantPane({ token }: { token: string }) {
 
   return (
     <div className="space-y-6">
-      <AdminNote>向指定的用户，或在一段日期内注册的所有用户授予专属徽章。徽章会显示在用户的发言、个人主页等处。</AdminNote>
       <AdminForm onSubmit={submit} aria-label="授予徽章">
         <FormGrid>
           <Input
@@ -177,7 +176,7 @@ function GrantPane({ token }: { token: string }) {
               readOnly={busy}
               error={errors.userIds}
               helper="多个 ID 用逗号分隔"
-              placeholder="例如：1, 2, 5"
+              placeholder="例如：1，2，5"
               onChange={(event) => set('userIds', event.target.value)}
             />
           ) : (
@@ -310,16 +309,16 @@ function LinksPane({
   const reveal = async (claimToken: string, done: string) => {
     const url = claimUrl(claimToken);
     if (await copyText(url)) {
-      showToast(`${done}并已复制，链接只显示这一次`, 'success');
+      showToast(`${done}并已复制链接`, 'success');
       return;
     }
-    void prompt({ title: done, label: '领取链接', defaultValue: url, message: '链接只显示这一次，请立即复制保存。', confirmLabel: '完成', allowEmpty: true });
+    void prompt({ title: done, label: '领取链接', defaultValue: url, message: '链接仅显示一次，请立即复制保存', confirmLabel: '完成', allowEmpty: true });
   };
 
   const rotate = (link: BadgeLink) =>
     confirmThen(
       '确认重新生成链接',
-      `徽章「${link.name}」的领取链接只在生成时可见。确定要重新生成吗？之前发出的链接会立即失效。`,
+      `确定要重新生成徽章「${link.name}」的领取链接吗？原链接将立即失效，新链接仅在生成时显示一次。`,
       () => void rotateMutation.run(
         () => adminApi.adminRotateBadgeLink(token, link.id),
         (data) => void reveal(String(data.token), '已重新生成领取链接'),
@@ -344,7 +343,7 @@ function LinksPane({
       },
     );
     if (enabling) run();
-    else confirmThen('确认停用链接', `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run);
+    else confirmThen('确认停用链接', `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run, { tone: 'filled' });
   };
 
   const expiry = (link: BadgeLink) =>
@@ -363,7 +362,7 @@ function LinksPane({
       width: 'auto',
       render: (link) => (
         <Badge tone={link.active ? 'success' : 'neutral'} size="md">
-          {link.active ? '生效中' : '已停用'}
+          {link.active ? '已启用' : '已停用'}
         </Badge>
       ),
     },
@@ -404,7 +403,7 @@ function LinksPane({
 
   return (
     <div className="space-y-6">
-      <AdminNote>生成一个领取链接，用户打开并登录后即可领取指定的徽章。链接只在生成时显示一次（生成后自动复制）；遗失后可重新生成，旧链接随即失效。链接可以随时停用。</AdminNote>
+      <AdminNote>领取链接仅在生成时显示一次，遗失后需重新生成，原链接随即失效。</AdminNote>
       <AdminForm onSubmit={create} aria-label="生成领取链接">
         <FormGrid>
           <Input

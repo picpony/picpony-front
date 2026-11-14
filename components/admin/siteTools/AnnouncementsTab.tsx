@@ -43,7 +43,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
     setErrors({});
     confirmThen('确认发布公告', `确定要向全站用户发布「${payload.title}」（${payload.version}）吗？发布后会提醒所有用户。`, () => void publish.run(
       () => adminApi.saveAnnouncement(token, payload), () => { setDraft({ ...draft, content: '' }); showToast('已发布公告', 'success'); }, '公告发布失败', { onCommitted: refresh },
-    ));
+    ), { tone: 'filled' });
   };
   const columns: Column<Announcement>[] = [
     { key: 'title', header: '标题', primary: true, render: (r) => r.title },
@@ -56,14 +56,14 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
   ];
   return <div className="space-y-6">
     <SectionHeader section="announcement" onRefresh={history.refresh} isLoading={history.refreshing} />
-    <AdminNote>发布后，公告会出现在全站用户的信箱中。正文支持 HTML，换行会保留。</AdminNote>
+    <AdminNote>正文支持 HTML，换行会保留；发布后将推送至全站用户信箱。</AdminNote>
     <AdminForm aria-label="发布公告" onSubmit={submit}>
       <FormGrid>{['version', 'title'].map((key) => <Input key={key} label={key === 'version' ? '版本' : '标题'} value={String(draft[key])} error={errors[key]} readOnly={publish.busy} onChange={(e) => { setDraft({ ...draft, [key]: e.target.value }); setErrors({}); }} />)}</FormGrid>
       <Textarea label="公告正文" rows={7} value={String(draft.content)} error={errors.content} readOnly={publish.busy} onChange={(e) => { setDraft({ ...draft, content: e.target.value }); setErrors({}); }} />
       <FormActions><Button type="submit" loading={publish.busy}>发布公告</Button></FormActions>
     </AdminForm>
     <AdminListAnchor>
-      <DataTable columns={columns} rows={history.data?.announcements ?? []} listKey={history.listKey} rowKey={(r) => r.id} loading={history.loading} {...tableError(history.isPrevious ? `第 ${page} 页加载失败` : '公告记录加载失败', history.message)} onRetry={history.retry} empty="暂无公告" />
+      <DataTable columns={columns} rows={history.data?.announcements ?? []} listKey={history.listKey} rowKey={(r) => r.id} loading={history.loading} {...tableError(history.isPrevious ? `公告记录第 ${page} 页加载失败` : '公告记录加载失败', history.message)} onRetry={history.retry} empty="暂无公告" />
       <AdminPager page={page} totalPages={history.data?.totalPages ?? 1} onPageChange={setPage} disabled={history.isLoading} />
     </AdminListAnchor>
     {/* The same treatment the readers get, copied from `AnnouncementModal`: this is the only tool

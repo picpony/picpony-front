@@ -378,7 +378,7 @@ export default function CommentSection({
             !thread.site.loading &&
             !thread.derpi.loading &&
             !siteFailed &&
-            !derpiFailed && <EmptyState size="inline" title="还没有评论" />
+            !derpiFailed && <EmptyState size="inline" title="暂无评论" />
           )}
           {thread.derpi.loading && (
             <p role="status" className="flex items-center justify-center gap-2 text-body-m text-on-surface-variant">

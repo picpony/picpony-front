@@ -68,7 +68,7 @@ function LegacyImage({ src }: { src: string }) {
       }
     >
       {failed ? (
-        '[图片无法显示]'
+        '图片无法显示'
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element -- a picture from anywhere, in a message the original front end sent */
         <img

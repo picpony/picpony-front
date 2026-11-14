@@ -28,7 +28,7 @@ import { ICON } from '@/lib/icons';
  * demotes one it does not.
  */
 
-const DEFAULT_MESSAGE = '服务器正在升级维护，暂时无法访问。给您带来的不便，敬请谅解。';
+const DEFAULT_MESSAGE = '服务器正在维护，暂时无法访问';
 /** How often an open maintenance screen asks whether maintenance is over. */
 const RECHECK_MS = 60_000;
 const HINT_MAX_AGE_S = 30 * 24 * 60 * 60;
@@ -160,7 +160,7 @@ export default function MaintenanceScreen({ message }: { message: string }) {
           <>
             {message || DEFAULT_MESSAGE}
             <span className="text-body-s mt-2 block">
-              {refused ? '当前登录的账号在维护期间无法访问。' : '请稍后再来，或关注网站公告获取最新通知。'}
+              {refused ? '当前账号在维护期间无法访问' : '请稍后再试'}
             </span>
           </>
         }
@@ -173,7 +173,7 @@ export default function MaintenanceScreen({ message }: { message: string }) {
             {ready &&
               (token ? (
                 <Button variant="text" onClick={signOut}>
-                  退出登录
+                  登出
                 </Button>
               ) : (
                 <Button variant="text" onClick={() => openAuth('login')}>

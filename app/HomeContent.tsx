@@ -543,7 +543,7 @@ function FeedList({
           <EmptyState
             size="pane"
             title="暂无图片"
-            description="当前的内容筛选设置下没有可显示的图片"
+            description="当前内容筛选设置下没有可显示的图片"
             action={
               <Button variant="tonal" icon={<MdTune />} onClick={() => router.push('/settings', { scroll: false })}>
                 前往设置
@@ -565,9 +565,9 @@ const discussedImagesOf = (data: { images: PonyImage[] }) => data.images;
 /** 本页有 3 张图片因当前的内容筛选设置未显示，2 张已被删除或无法访问 */
 function withheldSentence(filtered: number, missing: number): string {
   if (filtered > 0 && missing > 0) {
-    return `本页有 ${filtered} 张图片因当前的内容筛选设置未显示，${missing} 张已被删除或无法访问`;
+    return `本页有 ${filtered} 张图片因当前内容筛选设置未显示，${missing} 张已被删除或无法访问`;
   }
-  if (filtered > 0) return `本页有 ${filtered} 张图片因当前的内容筛选设置未显示`;
+  if (filtered > 0) return `本页有 ${filtered} 张图片因当前内容筛选设置未显示`;
   return `本页有 ${missing} 张图片已被删除或无法访问`;
 }
 
@@ -650,7 +650,7 @@ function DiscussedList({
             action={<Button variant="tonal" onClick={() => onPageChange(1)}>回到第一页</Button>}
           />
         ) : (
-          <EmptyState size="pane" title="暂无本站用户讨论过的图片" />
+          <EmptyState size="pane" title="暂无讨论过的图片" />
         )
       }
     />
@@ -764,7 +764,7 @@ function HomeContent({
   /* The pill switches tabs with a history write, which re-runs no metadata; the title follows
      the tab here (the server's `generateMetadata` gives the first document the same answer). */
   useEffect(() => {
-    document.title = tab === 'forum' ? '论坛 - PicPony' : '主页 - PicPony';
+    document.title = tab === 'forum' ? '论坛 - PicPony' : '首页 - PicPony';
   }, [tab]);
 
   /* The forum is mounted once, then kept mounted and hidden alongside the gallery —

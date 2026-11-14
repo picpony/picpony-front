@@ -54,11 +54,19 @@ function sum(values: number[]): number {
 }
 
 /** The daily/cumulative switch sitting at the chart's top-right. */
-function ChartViewToggle({ value, onChange }: { value: ChartView; onChange: (next: ChartView) => void }) {
+function ChartViewToggle({
+  value,
+  onChange,
+  dailyLabel = '每日',
+}: {
+  value: ChartView;
+  onChange: (next: ChartView) => void;
+  dailyLabel?: string;
+}) {
   return (
     <div role="group" aria-label="图表视图" className="flex items-center gap-1">
       <Chip variant="filter" tone="primary" selected={value === 'daily'} onClick={() => onChange('daily')}>
-        每日
+        {dailyLabel}
       </Chip>
       <Chip variant="filter" tone="primary" selected={value === 'total'} onClick={() => onChange('total')}>
         累计
@@ -129,13 +137,14 @@ export default function StatsScreen({
     <div className="mx-auto max-w-4xl">
       <PageHeader
         title="站点统计"
-        subtitle="数据按北京时间聚合。累计数字是截至每个时间点的总量；访客与浏览量是各时段自身的计数。"
+        subtitle="统计数据按北京时间聚合"
       />
 
       {data === undefined && read.error !== undefined && (
         <Card padding="lg">
           <ErrorRetry
             size="inline"
+            title="站点统计加载失败"
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
@@ -234,7 +243,7 @@ function StatsBody({
   const earliest = data.earliest ?? shiftDay(maxDay, -89);
   const domainStart = earliest < period.start ? earliest : period.start;
   const domainEnd = period.end > maxDay ? period.end : maxDay;
-  const toggle = <ChartViewToggle value={view} onChange={setView} />;
+  const toggle = <ChartViewToggle value={view} onChange={setView} dailyLabel={unit} />;
 
   return (
     <div>
@@ -250,7 +259,7 @@ function StatsBody({
           <MetricCard
             figureLabel="累计用户"
             figure={formatExactCount(data.totals.users)}
-            note={`本期间新增 ${formatExactCount(newUsers)} 人`}
+            note={`此期间新增 ${formatExactCount(newUsers)} 人`}
           >
             <StatChart
               series={view === 'total' ? userTotal : userNew}
@@ -259,7 +268,7 @@ function StatsBody({
               actions={toggle}
               ariaLabel={
                 view === 'total'
-                  ? `累计用户折线图，从 ${first ? formatExactCount(first.total_users) : 0} 增长到 ${last ? formatExactCount(last.total_users) : 0}`
+                  ? `累计用户折线图（${first ? formatExactCount(first.total_users) : 0} 至 ${last ? formatExactCount(last.total_users) : 0}）`
                   : `${unit}新增用户折线图`
               }
             />
@@ -270,7 +279,7 @@ function StatsBody({
           <MetricCard
             figureLabel="累计中文词条"
             figure={formatExactCount(data.totals.chinese_tags)}
-            note={`本期间新增 ${formatExactCount(newChineseTags)} 条`}
+            note={`此期间新增 ${formatExactCount(newChineseTags)} 条`}
           >
             <StatChart
               series={view === 'total' ? tagTotal : tagNew}
@@ -279,7 +288,7 @@ function StatsBody({
               actions={toggle}
               ariaLabel={
                 view === 'total'
-                  ? `累计中文词条折线图，从 ${first ? formatExactCount(first.total_chinese_tags) : 0} 增长到 ${last ? formatExactCount(last.total_chinese_tags) : 0}`
+                  ? `累计中文词条折线图（${first ? formatExactCount(first.total_chinese_tags) : 0} 至 ${last ? formatExactCount(last.total_chinese_tags) : 0}）`
                   : `${unit}新增中文词条折线图`
               }
             />
@@ -288,9 +297,9 @@ function StatsBody({
 
         <TabPane value="stats-visits" className="mb-4">
           <MetricCard
-            figureLabel="本期间独立访客"
+            figureLabel="此期间独立访客"
             figure={formatExactCount(data.window.visitors)}
-            note={`本期间浏览量 ${formatExactCount(data.window.hits)}`}
+            note={`此期间浏览量 ${formatExactCount(data.window.hits)}`}
           >
             <StatChart
               series={visits}
@@ -317,7 +326,7 @@ function StatsBody({
               ariaLabel={
                 view === 'total'
                   ? '帖子、评论、收藏与徽章的累计折线图'
-                  : `${unit}新增社区内容折线图，本期间共 ${formatExactCount(newContent)} 条`
+                  : `${unit}新增社区内容折线图，此期间共 ${formatExactCount(newContent)} 条`
               }
             />
           </MetricCard>

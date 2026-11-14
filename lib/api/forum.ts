@@ -221,7 +221,7 @@ export async function uploadForumImage(
   form.append('image', file, file instanceof File && file.name ? file.name : 'image');
   const media = await uploadMedia('/me/uploads/forum-images', token, form, {
     ...options,
-    tooLarge: '图片太大，服务器拒绝了这次上传',
+    tooLarge: '图片太大，服务器拒绝了此次上传',
   });
   return media.url;
 }

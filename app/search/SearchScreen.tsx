@@ -614,7 +614,7 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     if (page > 1 && total > 0) {
       return {
         title: '这一页没有图片',
-        description: `这次搜索共 ${pagesFor(total)} 页。`,
+        description: `当前结果共 ${pagesFor(total)} 页`,
         action: <Button variant="tonal" onClick={() => refine({})}>回到第一页</Button>,
       };
     }
@@ -622,27 +622,27 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     if (blocked.length > 0) {
       return {
         title: '没有可显示的图片',
-        description: `「${blocked.join('」「')}」属于当前内容筛选设置排除的内容。`,
+        description: `「${blocked.join('」「')}」已被当前内容筛选设置排除`,
         action: <Button variant="tonal" onClick={() => router.push('/settings', { scroll: false })}>前往设置</Button>,
       };
     }
     if (countSearchFilters(filters) > 0) {
       return {
         title: '没有找到匹配的图片',
-        description: baseTerms.length === 0 ? '放宽筛选条件再试。' : '放宽筛选条件，或换个关键词再试。',
+        description: baseTerms.length === 0 ? '请放宽筛选条件后再试' : '请放宽筛选条件或更换关键词',
         action: <Button variant="tonal" onClick={() => applyFilters(NO_SEARCH_FILTERS, 'chip')}>清除筛选条件</Button>,
       };
     }
     if (interpretation.kind === 'converted') {
       return {
         title: '没有找到匹配的图片',
-        description: '可以去掉部分标签，或改为搜索原文。',
+        description: '可减少部分标签，或改用原文搜索',
         action: <Button variant="tonal" onClick={() => refine({ literal: true, tags: null })}>搜索原文</Button>,
       };
     }
     return {
       title: '没有找到匹配的图片',
-      description: <>没有与「{location.query}」相关的结果，换个关键词或检查一下拼写。</>,
+      description: <>没有与「{location.query}」匹配的结果，请检查拼写或更换关键词</>,
     };
   };
 
@@ -651,7 +651,7 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     ? <SemanticFeedback query={baseText} tags={parse.data.tags} engines={parse.data.engines} />
     : null;
 
-  const placeholder = semantic.availability === 'off' ? '搜索图片…' : '搜索图片，也可以直接用中文描述…';
+  const placeholder = semantic.availability === 'off' ? '搜索图片…' : '搜索图片或输入中文描述…';
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -738,8 +738,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
               title="输入关键词搜索图片"
               description={
                 semantic.availability === 'off'
-                  ? '支持标签、角色名与英文原名；也可以用搜索框右侧的以图搜图按钮。'
-                  : '支持中文描述、标签、角色名与英文原名；也可以用搜索框右侧的以图搜图按钮。'
+                  ? '支持标签或英文原名搜索'
+                  : '支持中文描述、标签或英文原名搜索'
               }
             />
           </div>

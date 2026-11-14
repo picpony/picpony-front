@@ -140,7 +140,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
   }
   function toggle(name: string, selected: boolean) {
     if (selected) { change(chosen.filter((item) => item !== name)); return; }
-    if (atLimit) { showToast(`最多同时选择 ${MAX_PONIES} 个角色，先取消一个吧`, 'info'); return; }
+    if (atLimit) { showToast(`最多选择 ${MAX_PONIES} 个角色`, 'info'); return; }
     change([...chosen, name]);
   }
   /* Leaving the page with a choice still waiting sends it rather than dropping it. Through a ref:
@@ -164,17 +164,17 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
   const status =
     saveState === 'pending' || saveState === 'saving' ? '正在保存…'
     : saveState === 'error' ? `未能保存：${apiErrorMessage(saveError)}`
-    : saveState === 'saved' ? '已保存，会随账户同步'
+    : saveState === 'saved' ? '已保存'
     : offline.length ? `${offline.join('、')}已下线，不会出现在页面上`
-    : '最多六个；减弱或关闭动画时会休息';
+    : `最多 ${MAX_PONIES} 个；减弱或关闭动画时暂停显示`;
   const action =
     saveState === 'error' ? <Button variant="tonal" size="xs" onClick={() => void flush()}>重试</Button>
-    : offline.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll(chosen.filter((name) => !offline.includes(name)), '已移除下线的角色')}>移除已下线</Button>
+    : offline.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll(chosen.filter((name) => !offline.includes(name)), '已移除下线角色')}>移除已下线</Button>
     : chosen.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll([], '已清空桌面小马')}>清空</Button>
     : undefined;
 
   return <SettingsSection
-    title="桌面小马" icon={<MdPets size={ICON.control} />} subtitle="挑选喜欢的角色，陪你一起看图"
+    title="桌面小马" icon={<MdPets size={ICON.control} />}
     actions={token ? <IconButton aria-label="刷新桌面小马" onClick={refresh} icon={<MdRefresh />} /> : undefined}
     status={problem !== undefined && <ErrorRetry size="inline" title="桌面小马加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
   >
@@ -185,7 +185,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
       : !ponies.length ? <EmptyState title="暂无可选角色" size="inline" />
       : <>
         <SettingsRow
-          label={chosen.length ? (atLimit ? `已选满 ${MAX_PONIES} 个` : `已选 ${chosen.length} / ${MAX_PONIES}`) : '还没有选择角色'}
+          label={chosen.length ? (atLimit ? `已选满 ${MAX_PONIES} 个` : `已选 ${chosen.length} / ${MAX_PONIES}`) : '尚未选择角色'}
           supporting={<span role="status" aria-atomic="true">{status}</span>}
           action={action}
         >
@@ -216,8 +216,8 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
               })}
             </div>
           </> : <EmptyState size="inline"
-            title={onlySelected && !chosen.length ? '还没有选择角色' : '没有找到匹配的角色'}
-            description={query.trim() ? '试试角色的中文名或英文名' : undefined}
+            title={onlySelected && !chosen.length ? '尚未选择角色' : '无匹配角色'}
+            description={query.trim() ? '可尝试输入角色的中文或英文名称' : undefined}
             action={<Button variant="text" onClick={() => { setQuery(''); setOnlySelected(false); setPage(1); search.current?.focus(); }}>查看全部角色</Button>} />}
           {pages > 1 && <Pagination currentPage={currentPage} totalPages={pages} onPageChange={setPage} siblings={1} className="mt-0" />}
         </div>

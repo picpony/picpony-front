@@ -49,7 +49,7 @@ function TagGroupRow({
   return (
     <GroupRow
       name={name}
-      summary={empty ? '还没有标签，编辑它来添加' : `${group.tags.length} 个标签`}
+      summary={empty ? '暂无标签' : `${group.tags.length} 个标签`}
       busy={deleting}
       data-presence-key={presenceKey}
       control={

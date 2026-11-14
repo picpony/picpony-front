@@ -2,6 +2,7 @@
 
 import { checkoutBody, checkoutCart, type CheckoutLine, type CheckoutResult } from '@/lib/api/shop';
 import { ApiError } from '@/lib/api/errors';
+import { formatExactCount } from '@/lib/format';
 import { readToken, readUserInfo, updateUserInfo } from '@/lib/hooks';
 import { coinTransactions, myBadges, sessionUser, shopItems, tasks } from '@/lib/resources';
 import { randomId } from '@/lib/utils';
@@ -138,5 +139,5 @@ async function performCheckout(token: string, account: string, lines: readonly C
     sessionUser.write({ token }, { ...session, user: { ...session.user, coins: result.balance } });
   }
   refreshAfterPurchase(token);
-  return { kind: 'done', message: `已购买，花费 ${result.spent} 金币` };
+  return { kind: 'done', message: `已购买，花费 ${formatExactCount(result.spent)} 金币` };
 }

@@ -24,7 +24,7 @@ export async function generateMetadata({
 }: {
   searchParams: HomeSearchParams;
 }): Promise<Metadata> {
-  return { title: isForumTab(await searchParams) ? '论坛' : '主页' };
+  return { title: isForumTab(await searchParams) ? '论坛' : '首页' };
 }
 
 /**

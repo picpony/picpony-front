@@ -50,7 +50,7 @@ export function GateCard({
 }: {
   icon: ReactNode;
   title: string;
-  description: ReactNode;
+  description?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -60,7 +60,7 @@ export function GateCard({
           {icon}
         </span>
         <h2 className="text-title-l text-on-surface">{title}</h2>
-        <p className="text-body-m text-on-surface-variant">{description}</p>
+        {description && <p className="text-body-m text-on-surface-variant">{description}</p>}
       </div>
       {children}
     </Card>
@@ -99,7 +99,7 @@ export function PrivacyCreateForm({ token, username }: { token: string; username
     <GateCard
       icon={<MdLock size={ICON.display} />}
       title="创建隐私空间"
-      description="隐私空间里的图片需要密码才能查看。隐私密码无法找回，忘记时只能清空隐私空间。"
+      description="隐私密码无法找回，忘记后只能清空隐私空间"
     >
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
         <SpaceIdentity username={username} />
@@ -171,7 +171,6 @@ export function PrivacyUnlockForm({
     <GateCard
       icon={<MdLock size={ICON.display} />}
       title={autoLocked ? '隐私空间已自动锁定' : '隐私空间已锁定'}
-      description="输入隐私密码以查看其中的图片"
     >
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
         <SpaceIdentity username={username} />
@@ -241,7 +240,7 @@ export function PrivacyResetDialog({
     setBusy(false);
     if (readToken() !== token) return;
     if (outcome.ok) {
-      showToast('已清空隐私空间，请重新设置隐私密码');
+      showToast('已清空隐私空间');
       onClose();
       return;
     }
@@ -268,14 +267,14 @@ export function PrivacyResetDialog({
             取消
           </Button>
           <Button variant="danger" type="submit" form={formId} loading={busy}>
-            清空并重置
+            确认重置
           </Button>
         </>
       }
     >
       <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
         <p className="text-body-m text-on-surface-variant">
-          隐私密码无法找回。重置将清空隐私空间中的所有图片并清除隐私密码，此操作不可撤销。请输入账号密码以确认。
+          重置将清空隐私空间中的所有图片并清除隐私密码，请输入账号密码确认
         </p>
         {/* The account's own credential: its username, its current password. */}
         <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
@@ -345,7 +344,7 @@ export function PrivacyPasswordDialog({
       onClose();
     } else if (isRefusal(outcome.error)) {
       /* The backend's refusal here is about the current password (原密码错误). */
-      form.set('current', apiErrorMessage(outcome.error, '原密码错误'));
+      form.set('current', apiErrorMessage(outcome.error, '当前隐私密码错误'));
     } else {
       showToast(apiErrorMessage(outcome.error, '修改失败'), 'error');
     }
@@ -371,7 +370,7 @@ export function PrivacyPasswordDialog({
             取消
           </Button>
           <Button variant="filled" type="submit" form={formId} loading={busy}>
-            修改
+            保存
           </Button>
         </>
       }

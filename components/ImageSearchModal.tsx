@@ -106,7 +106,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
       setSelectedImage(dataUrl);
     } catch (err) {
       if (active.current && current === generation.current && request === fileRead.current) {
-        setStatus({ kind: 'error', message: apiErrorMessage(err, '无法读取此图片，换一张试试') });
+        setStatus({ kind: 'error', message: apiErrorMessage(err, '无法读取此图片') });
       }
     } finally {
       if (active.current && current === generation.current && request === fileRead.current) setIsReading(false);
@@ -263,7 +263,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         {/* Always in the tree, so the sentence is announced when it arrives; empty, it takes
             no space. A failure is an alert, "nothing found" a status. */}
         <p role="status" className="text-body-m text-on-surface-variant mt-4 empty:mt-0">
-          {status.kind === 'empty' ? '未找到相似图片，试试调大容差' : ''}
+          {status.kind === 'empty' ? '未找到相似图片，可尝试调大容差' : ''}
         </p>
         <p role="alert" className="text-body-m text-error mt-4 empty:mt-0">
           {status.kind === 'error' ? status.message : ''}

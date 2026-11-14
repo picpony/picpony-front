@@ -157,9 +157,9 @@ export function withholdFromDevice(
 /** 本页有 3 张收藏因当前的内容筛选设置未显示，2 张已被删除或无法访问 */
 export function withheldSentence(filtered: number, missing: number): string {
   if (filtered > 0 && missing > 0) {
-    return `本页有 ${filtered} 张收藏因当前的内容筛选设置未显示，${missing} 张已被删除或无法访问`;
+    return `本页有 ${filtered} 张收藏因当前内容筛选设置未显示，${missing} 张已被删除或无法访问`;
   }
-  if (filtered > 0) return `本页有 ${filtered} 张收藏因当前的内容筛选设置未显示`;
+  if (filtered > 0) return `本页有 ${filtered} 张收藏因当前内容筛选设置未显示`;
   return `本页有 ${missing} 张收藏已被删除或无法访问`;
 }
 
@@ -182,23 +182,23 @@ export function transferSummary(
   const verb = VERB[mode];
   if (result.targets.length === 0) {
     const done = result.affected ?? count;
-    return { text: `已${verb} ${done} 张${done < count ? `，${count - done} 张未完成` : ''}`, partial: done < count };
+    return { text: `已${verb} ${done} 张${done < count ? `，${count - done} 张失败` : ''}`, partial: done < count };
   }
   const partial = result.targets.some((target) => target.failed > 0 || target.succeeded < target.requested);
   if (!partial) {
-    const names = result.targets.map((target) => `「${target.folderName || '收藏夹'}」`);
-    const where = names.length <= 3 ? names.join('') : `${names.length} 个收藏夹`;
+    const names = result.targets.map((target) => `「${target.folderName || UNNAMED_FOLDER}」`);
+    const where = names.length <= 3 ? names.join('、') : `${names.length} 个收藏夹`;
     const counts = new Set(result.targets.map((target) => target.succeeded));
     if (counts.size === 1) return { text: `已${verb} ${result.targets[0].succeeded} 张到${where}`, partial: false };
   }
   const lines = result.targets.map((target) => {
-    const name = `「${target.folderName || '收藏夹'}」`;
+    const name = `「${target.folderName || UNNAMED_FOLDER}」`;
     const unfinished = Math.max(target.failed, target.requested - target.succeeded);
     if (unfinished === 0) return `${name}成功 ${target.succeeded} 张`;
     const reasons = Object.entries(target.reasons)
       .map(([reason, n]) => `${reason} ${n} 张`)
       .join('、');
-    const shortfall = target.failed > 0 ? `失败 ${target.failed} 张` : `${unfinished} 张未完成`;
+    const shortfall = `${target.failed > 0 ? target.failed : unfinished} 张失败`;
     return `${name}成功 ${target.succeeded} 张，${shortfall}${reasons ? `（${reasons}）` : ''}`;
   });
   return { text: `${verb}完成：${lines.join('；')}`, partial };

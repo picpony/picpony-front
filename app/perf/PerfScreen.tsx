@@ -354,7 +354,7 @@ export default function PerfScreen() {
             <Input
               fieldClassName="mt-6"
               label="设备备注"
-              helper="浏览器读不到 CPU 型号，可以写在这里，会一起写进报告，例如“E5-2690 v3 + RX 6500 XT”"
+              helper="浏览器读不到 CPU 型号，可以写在这里，会一起写进报告，例如「E5-2690 v3 + RX 6500 XT」"
               value={note}
               maxLength={120}
               onChange={(event) => changeNote(event.target.value)}
@@ -374,8 +374,8 @@ export default function PerfScreen() {
             <EmptyState
               size="pane"
               icon={<MdInsights size={ICON.display} />}
-              title="还没有测试报告"
-              description="点击“开始测试”，在这台设备上跑一遍"
+              title="暂无测试报告"
+              description="点击「开始测试」即可运行"
             />
           )
         )}
@@ -481,7 +481,7 @@ function ReportView({
         {report.aborted && (
           <p className="mt-3 flex items-start gap-2 rounded-md bg-error-container p-4 text-body-m text-on-error-container">
             <MdErrorOutline size={ICON.control} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 wrap-anywhere">测试没有跑完：{report.aborted}</span>
+            <span className="min-w-0 wrap-anywhere">测试未完成：{report.aborted}</span>
           </p>
         )}
       </Card>

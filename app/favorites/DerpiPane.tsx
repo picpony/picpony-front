@@ -39,8 +39,8 @@ function importSentence(
 ): [string, 'success' | 'warning' | 'error'] {
   const failed = result.failed.length;
   if (failed > 0 && result.imported.length === 0) return [apiErrorMessage(result.failed[0].error, '导入失败'), 'error'];
-  const text = `${stopped ? '已停止，' : ''}已导入 ${result.imported.length} 张${failed > 0 ? `，${failed} 张失败` : ''}`;
-  return [text, failed > 0 ? 'warning' : 'success'];
+  const summary = runSummary('已导入', result.imported.length, failed);
+  return [stopped ? `已停止：${summary}` : summary, failed > 0 ? 'warning' : 'success'];
 }
 
 /**
@@ -119,7 +119,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
     setChecking(false);
     if (readToken() !== token) return;
     if (!outcome.ok) {
-      showToast(apiErrorMessage(outcome.error, '收藏读取失败'), 'error');
+      showToast(apiErrorMessage(outcome.error, '收藏加载失败'), 'error');
       return;
     }
     const known = new Set(outcome.value.ids);
@@ -180,8 +180,8 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
       <EmptyState
         size="pane"
         icon={<MdKey size={ICON.display} />}
-        title="未绑定 API Key"
-        description="绑定 Derpibooru 的 API Key 后，你在 Derpibooru 上的收藏会显示在这里"
+        title="需要绑定 API Key"
+        description="绑定后可查看你在 Derpibooru 的收藏"
         action={
           <Button variant="tonal" onClick={() => router.push(settingsHref('account'), { scroll: false })}>
             前往设置
@@ -235,8 +235,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
           <EmptyState
             size="pane"
             icon={<MdStarBorder size={ICON.display} />}
-            title="Derpibooru 上还没有收藏"
-            description="在 Derpibooru 上收藏的图片会显示在这里"
+            title="暂无收藏"
           />
         )
       ) : (

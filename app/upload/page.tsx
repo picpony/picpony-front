@@ -91,7 +91,7 @@ function megabytes(bytes: number): string {
 
 function fileProblem(file: File): string | null {
   if (!(UPLOAD_TYPES as readonly string[]).includes(file.type)) {
-    return '不支持这种文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频';
+    return '不支持此文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频';
   }
   if (file.size > UPLOAD_MAX_BYTES) return `文件为 ${megabytes(file.size)} MB，超过 50 MB 的上限`;
   return null;
@@ -259,7 +259,7 @@ function FilePreview({
       </div>
       <p className="max-w-full text-body-s text-on-surface-variant">
         <span className="break-all">{file.name || '未命名文件'}</span> · {megabytes(file.size)} MB
-        <span className="block">{video ? '点击视频以外的区域可更换文件' : '点击此区域可更换文件'}</span>
+        <span className="block">{video ? '点击视频以外区域更换文件' : '点击此区域更换文件'}</span>
       </p>
     </div>
   );
@@ -301,7 +301,7 @@ function ProgressRow({ job, onCancel }: { job: UploadJob; onCancel: () => void }
     <div className="space-y-2">
       <div className="flex min-h-8 items-center justify-between gap-3">
         <p aria-hidden="true" className="text-body-m text-on-surface-variant">
-          {staging ? '正在上传文件' : '正在提交到 Derpibooru，请稍候'}
+          {staging ? '正在上传文件' : '正在提交到 Derpibooru…'}
           {staging && job.progress !== null && (
             <span className="ml-2 tabular-nums">{Math.round(job.progress * 100)}%</span>
           )}
@@ -554,7 +554,7 @@ export default function UploadPage() {
     if (!(await confirm({
       title: '确认发布',
       message:
-        '作品会以你的 Derpibooru 账号直接提交到 Derpibooru。请确认你拥有作品的版权或授权、分级与标签准确，并且 Derpibooru 上还没有这张图片。多次违反上传规则可能导致 Derpibooru 账户被封禁。\n确定要发布吗？',
+        '作品将通过当前绑定的 Derpibooru 账号直接发布。请确认拥有版权或授权、分级与标签准确，且 Derpibooru 尚无相同作品。多次违规可能导致账号被封禁。\n确定要发布此作品吗？',
       tone: 'filled',
     }))) return;
     if (readToken() !== token) return;
@@ -568,25 +568,19 @@ export default function UploadPage() {
     });
   };
 
-  const signedIn = ready && Boolean(token);
-  const header = (
-    <PageHeader
-      title="发布图片"
-      subtitle={signedIn && apiKey ? '作品会以你的 Derpibooru 账号直接提交到 Derpibooru' : undefined}
-    />
-  );
+  const header = <PageHeader title="发布图片" />;
 
   let body;
   if (!ready) {
     body = <UploadSkeleton />;
   } else if (!token) {
-    body = <SignInRequired description="登录后即可把作品发布到 Derpibooru。" />;
+    body = <SignInRequired description="登录后即可发布作品到 Derpibooru" />;
   } else if (!apiKey) {
     body = (
       <EmptyState
         icon={<MdKey size={ICON.display} />}
         title="需要绑定 API Key"
-        description="发布作品需要绑定 Derpibooru API Key，作品会以对应的 Derpibooru 账号发布。"
+        description="发布作品需绑定 Derpibooru API Key，作品将通过对应账号发布"
         action={
           <ButtonLink
             href={settingsHref('account')}
@@ -611,7 +605,7 @@ export default function UploadPage() {
         <p className="text-body-m">
           图片 ID：<span className="text-body-m-emphasized font-mono">{uploaded}</span>
         </p>
-        <p className="mb-6 mt-1 text-body-s">Derpibooru 处理完成后作品即会上架；不符合上传规则的作品不会上架。</p>
+        <p className="mb-6 mt-1 text-body-s">Derpibooru 处理完成后作品才会显示，不符合规范的作品不会通过审核</p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <ButtonLink
             href={`/pic/${uploaded}`}
@@ -634,7 +628,7 @@ export default function UploadPage() {
             onFile={pickFile}
             onReject={() => setErrors((previous) => ({
               ...previous,
-              file: '不支持这种文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频',
+              file: '不支持此文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频',
             }))}
             filled={zone !== 'prompt'}
             aria-label={zone !== 'prompt' ? '更换文件' : '选择或拖拽要发布的图片或视频'}
@@ -673,7 +667,7 @@ export default function UploadPage() {
         >
           <fieldset ref={ratingRef} aria-describedby={errors.rating ? 'upload-rating-error' : undefined}>
             <legend className="mb-1 text-label-l text-on-surface">
-              分级 <span className="text-on-surface-variant">（必选）</span>
+              分级<span className="text-on-surface-variant">（必选）</span>
             </legend>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
               {RATING_TAGS.map((rating) => (
@@ -715,7 +709,7 @@ export default function UploadPage() {
               title="已添加的标签"
               tags={formDraft.tags}
               onRemove={(tag) => edit({ tags: draft.tags.filter((item) => item !== tag) }, ['tags'])}
-              empty="还没有添加标签"
+              empty="暂无标签"
               disabled={showBusy}
             />
             <UploadQuickTags chosen={chosen} onToggle={toggleTag} disabled={showBusy} />
@@ -728,7 +722,7 @@ export default function UploadPage() {
             value={formDraft.source}
             disabled={showBusy}
             error={errors.source}
-            helper="选填。作品首次发布的地址，例如画师的个人主页"
+            helper="作品首次发布的地址（选填）"
             placeholder="https://"
             onChange={(event) => edit({ source: event.target.value }, ['source'])}
           />
@@ -741,7 +735,7 @@ export default function UploadPage() {
             error={errors.description}
             helper="选填"
             rows={3}
-            placeholder="简单介绍这件作品"
+            placeholder="介绍此作品"
             onChange={(event) => edit({ description: event.target.value }, ['description'])}
           />
 
@@ -750,7 +744,7 @@ export default function UploadPage() {
                 sentence changes is what gets said (the row's own text would announce every
                 percent, or nothing at all as it opened). */}
             <p role="status" className="sr-only">
-              {busy ? (staging ? '正在上传文件' : '正在提交到 Derpibooru，请稍候') : ''}
+              {busy ? (staging ? '正在上传文件' : '正在提交到 Derpibooru…') : ''}
             </p>
             <Collapse open={noticeOutcome !== null}>
               {notice && (
@@ -774,12 +768,12 @@ export default function UploadPage() {
               )}
             </Collapse>
             <p className="text-body-s text-on-surface-variant">
-              发布即表示你拥有作品的版权或授权，并遵守{' '}
+              发布即表示确认拥有作品授权并遵守{' '}
               <a href={DERPI_RULES} target="_blank" rel="noopener noreferrer" className="text-link underline underline-offset-2">
                 Derpibooru 上传规则
                 <MdOpenInNew size={ICON.dense} className="ml-0.5 inline align-[-0.125em]" aria-hidden="true" />
               </a>
-              。Derpibooru 上已有的图片不能重复上传。
+              ，勿重复上传已有图片
             </p>
             <Button
               ref={submitRef}
@@ -791,7 +785,7 @@ export default function UploadPage() {
               icon={<MdCloudUpload />}
               className="mt-6"
             >
-              确认发布
+              发布图片
             </Button>
           </div>
         </form>

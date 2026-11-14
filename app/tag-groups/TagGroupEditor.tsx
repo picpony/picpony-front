@@ -103,7 +103,7 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
     if (dirty && !(await confirm({
       title: '确认放弃修改',
       message: '确定要放弃对此标签组的修改吗？',
-      tone: 'danger',
+      tone: 'filled',
     }))) return;
     onClose();
   };
@@ -141,7 +141,7 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
           maxLength={MAX_TAG_GROUP_NAME}
           count={{ value: Array.from(draft.name).length, max: MAX_TAG_GROUP_NAME }}
           error={errors.name}
-          placeholder="例如：每日必刷、高分精选…"
+          placeholder="例如：日常浏览、高分精选…"
           onChange={(event) => {
             const name = event.target.value;
             setDraft((previous) => ({ ...previous, name }));
@@ -156,15 +156,15 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
           onAdd={add}
           disabled={saving}
           error={errors.tags}
-          helper="支持中文名称搜索；输入多个标签时用逗号分隔"
+          helper="支持中文搜索；多个标签可用逗号分隔"
         />
         <TagWell
-          title="包含的标签"
+          title="已添加标签"
           icon={<MdSell size={ICON.dense} />}
           tags={draft.tags}
           max={MAX_TAGS_PER_TAG_GROUP}
           onRemove={remove}
-          empty="还没有添加标签"
+          empty="暂无标签"
           disabled={saving}
         />
         <PendingTagsPicker chosen={chosen} onAdd={add} confirm={confirm} disabled={saving} />

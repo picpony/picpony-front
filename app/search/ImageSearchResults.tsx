@@ -37,7 +37,7 @@ export default function ImageSearchResults({
         size="pane"
         icon={<MdImageSearch size={ICON.display} />}
         title="以图搜图结果已失效"
-        description="这组结果只保留在打开它的页面里。重新选择图片即可再次搜索。"
+        description="仅在当前页面会话中有效，请重新选择图片搜索"
         action={
           <Button variant="tonal" icon={<MdImageSearch />} onClick={onSearchAgain}>
             以图搜图
@@ -64,7 +64,7 @@ export default function ImageSearchResults({
           </h2>
           <p className="text-body-m text-on-surface-variant" role="status">
             找到 {result.found} 张相似图片
-            {hidden > 0 ? `，其中 ${hidden} 张因当前的内容筛选设置未显示` : ''}
+            {hidden > 0 ? `，其中 ${hidden} 张因当前内容筛选设置未显示` : ''}
           </p>
         </div>
         <Button variant="surface" icon={<MdImageSearch />} responsiveLabel onClick={onSearchAgain}>
@@ -79,7 +79,7 @@ export default function ImageSearchResults({
           size="pane"
           icon={<MdTune size={ICON.display} />}
           title="相似图片都被内容筛选隐藏了"
-          description={`找到的 ${result.found} 张相似图片都不符合当前的内容筛选设置。`}
+          description={`找到的 ${result.found} 张相似图片均被当前内容筛选设置隐藏`}
           action={
             <Button variant="tonal" onClick={() => router.push('/settings', { scroll: false })}>
               前往设置

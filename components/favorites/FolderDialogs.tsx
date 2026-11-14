@@ -197,7 +197,7 @@ export function NewFolderRow({
   return (
     <form id={formId} onSubmit={submit} noValidate className="mt-2 flex items-start gap-2">
       <Input
-        label="新收藏夹名称"
+        label="名称"
         value={name}
         error={error ?? undefined}
         readOnly={busy}
@@ -307,7 +307,7 @@ export function TransferDialog({
       {error ? <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} /> : loading ? (
         <div aria-hidden="true" className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
       ) : folders.length === 0 ? (
-        <EmptyState size="inline" title="还没有其他收藏夹，先新建一个" />
+        <EmptyState size="inline" title="暂无其他收藏夹" />
       ) : (
         <FolderChecklist folders={folders} checked={targets} onChange={toggle} disabled={busy} />
       )}
@@ -373,7 +373,7 @@ export function MergeDialog({
       }
     >
       <p className="mb-2 text-body-m text-on-surface-variant">
-        选择保留的收藏夹。其余 {others} 个收藏夹的图片将并入其中，合并后它们将被删除。
+        选择要保留的收藏夹，其余 {others} 个收藏夹的图片将并入其中
       </p>
       <FolderRadioList folders={folders} value={target} onChange={setChosen} name={radioName} disabled={busy} />
     </ChoiceSurface>

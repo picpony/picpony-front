@@ -101,7 +101,7 @@ export default function CoinLedger() {
   if (!ready || (token && data === undefined && read.error === undefined)) {
     body = <LedgerSkeleton />;
   } else if (!token) {
-    body = <SignInRequired description="登录后即可查看金币的每一笔收支。" />;
+    body = <SignInRequired description="登录后可查看金币收支明细" />;
   } else if (!data) {
     body = (
       <ErrorRetry
@@ -115,7 +115,6 @@ export default function CoinLedger() {
       <EmptyState
         icon={<MdReceiptLong size={ICON.display} />}
         title="暂无金币记录"
-        description="完成任务、领取奖励或在商店消费后，每一笔收支都会记在这里。"
       />
     );
   } else {
@@ -124,7 +123,7 @@ export default function CoinLedger() {
         {read.isPrevious && read.error !== undefined && (
           <ErrorRetry
             size="inline"
-            title="这一页加载失败"
+            title={`第 ${page} 页加载失败`}
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />

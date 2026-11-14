@@ -190,7 +190,7 @@ export async function stageUpload(
   const media = await uploadMedia('/me/uploads/works', token, form, {
     signal,
     onProgress,
-    tooLarge: '文件太大，服务器拒绝了这次上传',
+    tooLarge: '文件太大，服务器拒绝了此次上传',
   });
   /* Derpibooru fetches it by this address, so it must be one it can reach. */
   let url: URL | null = null;
@@ -224,7 +224,7 @@ export interface DerpiUploadInput {
   username?: string;
 }
 
-const UNCONFIRMED = '未能确认上传结果，文件和填写内容已保留。请先检查 Derpibooru 上是否已有这张图片，再重试';
+const UNCONFIRMED = '未能确认上传结果，文件和填写内容已保留，请先检查 Derpibooru 是否已有此图片后再试';
 
 /** Philomena's field names, onto the form's. */
 function fieldOf(key: string): UploadField {
@@ -235,7 +235,7 @@ function fieldOf(key: string): UploadField {
 }
 
 /** What a refusal of a picture Derpibooru already has says — the form recognises it after a lost answer. */
-export const DUPLICATE_COMPLAINT = '这张图片已在 Derpibooru 上，不能重复上传';
+export const DUPLICATE_COMPLAINT = '此图片已在 Derpibooru 上，不能重复上传';
 
 /** Philomena's English complaints, as the form says them. Unknown ones keep their own words. */
 export function uploadComplaint(field: UploadField, raw: string): string {

@@ -75,7 +75,7 @@ test('both transfers expose per-folder partial failures',async()=>{
  const result=await api.batchTransferFaves(token,{imageIds:[7,8],sourceFolderId:1,targetFolderIds:[3],mode:'copy',folderNames:new Map([[3,'画作']])});
  assert.deepEqual(result.targets[0],{folderId:3,folderName:'画作',requested:2,succeeded:1,failed:1,reasons:{'该项目已存在':1}});
  assert.equal(model.transferSummary(result,'copy',2).partial,true);
- assert.match(model.transferSummary(result,'copy',2).text,/失败 1 张/);
+ assert.match(model.transferSummary(result,'copy',2).text,/1 张失败/);
  await api.batchTransferPrivacyFaves(token,{imageIds:[7,8],targetFolderIds:[3],mode:'move'});
  assert.equal(sent[0].path,'/api/v1/me/favorite-folders/1/transfers');assert.equal('source_folder_id' in sent[0].body,false);
  assert.equal(sent[1].path,'/api/v1/me/privacy-space/transfers');assert.deepEqual(sent[1].body,{image_ids:[7,8],target_folder_ids:[3],mode:'move'});

@@ -27,7 +27,7 @@ export interface FilterImport {
 }
 
 export function importOf(filter: ImportedFilter): FilterImport {
-  const name = Array.from(`[导入] ${filter.name}`).slice(0, MAX_GROUP_NAME).join('');
+  const name = Array.from(filter.name.trim() || 'Derpibooru 过滤器').slice(0, MAX_GROUP_NAME).join('');
   const hidden = filter.hidden.slice(0, MAX_TAGS_PER_LIST);
   const spoilered = filter.spoilered.slice(0, MAX_TAGS_PER_LIST);
   return {
@@ -85,7 +85,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
     } else {
       const result = importOf(read.value);
       if (result.hidden.length === 0 && result.spoilered.length === 0) {
-        setProblem({ id: filter.id, message: '这个过滤器只有搜索表达式或通配符，没有可以导入的标签' });
+        setProblem({ id: filter.id, message: '此过滤器仅包含搜索表达式或通配符，没有可导入的标签' });
       } else {
         const imported = await settle(onImport(result));
         if (!imported.ok) setProblem({ id: filter.id, message: apiErrorMessage(imported.error, '导入失败') });
@@ -101,7 +101,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
         size="pane"
         icon={<MdKey size={ICON.display} />}
         title="需要绑定 API Key"
-        description="导入会读取你在 Derpibooru 上创建的过滤器，请先在设置中绑定 Derpibooru API Key。"
+        description="需在设置中绑定 Derpibooru API Key，以读取你的过滤器"
         action={
           <ButtonLink
             href={settingsHref('account')}
@@ -129,8 +129,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
       <EmptyState
         size="pane"
         icon={<MdFilterAlt size={ICON.display} />}
-        title="没有可导入的过滤器"
-        description="你在 Derpibooru 上还没有创建自己的过滤器。"
+        title="暂无可导入的过滤器"
       />
     );
   } else {
@@ -138,7 +137,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
       <div>
         {!canCreate && (
           <p className="mb-3 px-1 text-body-m text-error" role="alert">
-            屏蔽组已达上限，删除一些后才能导入。
+            屏蔽组已达上限，请删除部分后导入
           </p>
         )}
         <div role="list">
@@ -148,7 +147,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-label-l text-on-surface" title={filter.name}>{filter.name}</p>
                   <p className="mt-0.5 line-clamp-2 text-body-s text-on-surface-variant">
-                    {filter.description || '没有描述'}
+                    {filter.description || '暂无简介'}
                   </p>
                 </div>
                 <Button
@@ -182,7 +181,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
       maxWidth="lg"
     >
       <p id="derpi-import-intro" className="mb-4 text-body-m text-on-surface-variant">
-        选择一个你在 Derpibooru 上创建的过滤器，它的隐藏与遮挡标签会成为一个新的屏蔽组。
+        选择 Derpibooru 过滤器，将其隐藏与遮挡标签导入为新的屏蔽组
       </p>
       {body}
     </Modal>

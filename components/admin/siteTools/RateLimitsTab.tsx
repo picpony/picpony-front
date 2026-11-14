@@ -40,7 +40,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
     if (save.isPending()) return;
     try { ratePayload(rules); } catch (error) { setErrors(fieldErrors(error)); return; }
     const snapshot = rules.map((r) => ({ ...r }));
-    confirmThen('确认保存频率规则', `确定要更新全部 ${rules.length} 项接口的请求频率规则吗？所有访客与用户都会受此规则影响。`, () => void save.run(() => api.saveRateLimits(token, snapshot), () => { setDraft(null); showToast('已保存频率规则', 'success'); }, '频率规则保存失败', { onCommitted: () => rateQuery.invalidate() }));
+    confirmThen('确认保存频率规则', `确定要更新全部 ${rules.length} 项接口的请求频率规则吗？所有访客与用户都会受此规则影响。`, () => void save.run(() => api.saveRateLimits(token, snapshot), () => { setDraft(null); showToast('已保存频率规则', 'success'); }, '频率规则保存失败', { onCommitted: () => rateQuery.invalidate() }), { tone: 'filled' });
   };
   return <div className="space-y-6">
     <SectionHeader section="rate-management" onRefresh={read.refresh} isLoading={read.refreshing} />
@@ -48,16 +48,16 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
       {read.data && <>
         <AdminForm aria-labelledby="admin-rate-rules-heading" onSubmit={submit} className="max-w-none">
           <SectionHeading as="h3" id="admin-rate-rules-heading">频率规则</SectionHeading>
-          <AdminNote>{superAdmin ? '展开一项规则进行编辑，完成后按「保存频率规则」统一提交。' : '仅超级管理员可以修改频率规则和解除临时封禁。'}</AdminNote>
+          <AdminNote>{superAdmin ? '展开一项规则进行编辑，完成后按「保存频率规则」统一提交。' : '仅创始人可修改频率规则与解除临时封禁。'}</AdminNote>
           <AdminListAnchor>
             <DataTable rows={paged.rows} listKey={paged.listKey} rowKey={(r) => r.action} empty="暂无可配置的接口" expandedRow={(r) => editing?.action === r.action ? <InlineEditorPanel id={`rate-editor-${r.action}`} label={`编辑${r.label}`} isClosing={editing.closing} onEscape={closeEditor} onExitComplete={() => setEditing((current) => current?.action === r.action && current.closing ? null : current)}>
               <div className="max-w-2xl space-y-4">
                 <FormGrid>
-                  <Input label={`${r.label}次数`} inputMode="numeric" value={r.max} readOnly={save.busy} onChange={(e) => change(r.action, 'max', e.target.value)} />
-                  <Input label={`${r.label}窗口（秒）`} inputMode="numeric" value={r.window} readOnly={save.busy} onChange={(e) => change(r.action, 'window', e.target.value)} />
+                  <Input label="最多次数" inputMode="numeric" value={r.max} readOnly={save.busy} onChange={(e) => change(r.action, 'max', e.target.value)} />
+                  <Input label="时间窗口（秒）" inputMode="numeric" value={r.window} readOnly={save.busy} onChange={(e) => change(r.action, 'window', e.target.value)} />
                   <Select label="计数对象" value={r.key_type} options={[{ value: 'ip', label: 'IP 地址' }, { value: 'user', label: '用户' }]} disabled={save.busy} onChange={(v) => change(r.action, 'key_type', v)} />
                 </FormGrid>
-                <FormActions><Button type="button" variant="text" onClick={closeEditor}>收起编辑</Button></FormActions>
+                <FormActions><Button type="button" variant="text" onClick={closeEditor}>收起</Button></FormActions>
               </div>
             </InlineEditorPanel> : null} columns={[
               { key: 'name', header: '用途', primary: true, render: (r) => r.label },
@@ -81,7 +81,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
               { key: 'name', header: '用户', primary: true, render: (r) => `${r.username}（#${r.id}）` },
               { key: 'attempts', header: '尝试次数', render: (r) => r.attempts },
               { key: 'until', header: '解除时间', render: (r) => r.until ? formatDateTime(r.until) : '—' },
-              { key: 'actions', header: '操作', actions: true, render: (r) => <IconButton size="sm" icon={<MdLockOpen />} aria-label={`解除 ${r.username} 的临时封禁`} disabled={!superAdmin} loading={release.pendingKeys.has(r.id)} onClick={() => confirmThen('确认解除临时封禁', `确定要解除「${r.username}」（#${r.id}）的临时封禁吗？`, () => void release.run(() => api.releaseLock(token, r.id), () => showToast('已解除临时封禁', 'success'), '临时封禁解除失败', { key: r.id, onCommitted: () => rateQuery.invalidate() }))} /> },
+              { key: 'actions', header: '操作', actions: true, render: (r) => <IconButton size="sm" icon={<MdLockOpen />} aria-label={`解除 ${r.username} 的临时封禁`} disabled={!superAdmin} loading={release.pendingKeys.has(r.id)} onClick={() => confirmThen('确认解除临时封禁', `确定要解除「${r.username}」（#${r.id}）的临时封禁吗？`, () => void release.run(() => api.releaseLock(token, r.id), () => showToast('已解除临时封禁', 'success'), '临时封禁解除失败', { key: r.id, onCommitted: () => rateQuery.invalidate() }), { tone: 'filled' })} /> },
             ]} />
             <AdminPager page={locks.page} totalPages={locks.totalPages} onPageChange={locks.setPage} />
           </AdminListAnchor>

@@ -48,10 +48,10 @@ export default function SemanticLine({ state, onSearchOriginal, onUseTags, onTog
       );
       action = (
         <Button variant="text" className="shrink-0" onClick={onSearchOriginal}>
-          直接搜索原文
+          搜索原文
         </Button>
       );
-      announcement = '正在理解搜索内容';
+      announcement = '正在解析搜索内容';
       break;
     case 'converted':
       body = (
@@ -74,7 +74,7 @@ export default function SemanticLine({ state, onSearchOriginal, onUseTags, onTog
       announcement = '已按原文搜索';
       break;
     case 'failed':
-      announcement = state.timedOut ? '智能解析超时，已按原内容搜索' : '智能解析暂时不可用，已按原内容搜索';
+      announcement = state.timedOut ? '智能解析超时，已按原文搜索' : '智能解析暂时不可用，已按原文搜索';
       body = <Note icon={<MdWarningAmber size={ICON.control} className="text-warning" />}>{announcement}</Note>;
       if (state.retryable) {
         action = (
@@ -85,11 +85,11 @@ export default function SemanticLine({ state, onSearchOriginal, onUseTags, onTog
       }
       break;
     case 'untagged':
-      announcement = '未能识别出标签，已按原内容搜索';
+      announcement = '未识别到对应标签，已按原文搜索';
       body = <Note icon={<MdInfoOutline size={ICON.control} />}>{announcement}</Note>;
       break;
     case 'disabled':
-      announcement = '智能解析未开启，已按原内容搜索';
+      announcement = '智能解析未开启，已按原文搜索';
       body = <Note icon={<MdInfoOutline size={ICON.control} />}>{announcement}</Note>;
       break;
   }
@@ -149,7 +149,7 @@ function PendingParse({ text, estimateMs }: { text: string; estimateMs: number }
     <p className="flex min-w-0 flex-1 items-center gap-2 text-body-m text-on-surface-variant">
       <MdAutoAwesome size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
       <span className="text-shimmer min-w-0 truncate">
-        {late ? `比预计的久一些，仍在理解「${text}」…` : `正在理解「${text}」，预计 ${seconds} 秒…`}
+        {late ? `解析耗时较长，仍在处理「${text}」…` : `正在解析「${text}」，预计 ${seconds} 秒…`}
       </span>
     </p>
   );

@@ -58,7 +58,7 @@ function RowSkeleton({ label, description }: { label: string; description: strin
 }
 
 const MAINTENANCE_COPY =
-  '开启后，访客和普通用户打开页面时将看到维护提示（含下方的提示文字）；管理人员仍可正常使用网站，页面顶部会显示正在维护。';
+  '开启后，普通用户与访客仅可见维护提示页面；管理员仍可正常访问网站。';
 const TRANSLATE_COPY =
   '控制图片详情中的「一键翻译」。关闭后，用户将无法发起新的图片翻译。';
 
@@ -87,7 +87,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
 
   const current = status.data;
   const message = draft ?? current?.maintenanceMessage ?? '';
-  const messageError = messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 字` : undefined;
+  const messageError = messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 个字符` : undefined;
 
   const commitMaintenance = (enabled: boolean) => {
     if (!current || messageError) return;
@@ -121,6 +121,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
       '确认开启维护模式',
       '确定要开启维护模式吗？访客和普通用户打开页面时将只能看到维护提示，无法使用网站。',
       () => commitMaintenance(true),
+      { tone: 'filled' },
     );
   };
 
@@ -230,7 +231,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
         >
           <span id="admin-site-statistics-heading">全站数据统计</span>
         </SectionHeading>
-        {statistics.error && stats && <ErrorRetry size="inline" {...retryError('全站统计刷新失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />}
+        {statistics.error && stats && <ErrorRetry size="inline" {...retryError('全站统计加载失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />}
         {statistics.error && !stats ? (
           <ErrorRetry size="inline" {...retryError('全站统计加载失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />
         ) : (
@@ -246,17 +247,30 @@ export default function OtherTab({ token }: AdminPanelProps) {
               ))}
             </dl>
             <p className="text-body-s text-on-surface-variant">
-              {stats ? `统计更新于 ${stats.updated_at ? formatDateTime(stats.updated_at) : '暂无记录'}` : ' '}
+              {stats ? (stats.updated_at ? `统计更新于 ${formatDateTime(stats.updated_at)}` : '暂无统计更新时间') : ' '}
             </p>
           </>
         )}
-        <Button variant="tonal" loading={syncMutation.busy} onClick={() => confirmThen('确认同步全站统计', '确定要从 Derpibooru 同步图片、标签和评论总数吗？将按当前全站线路读取三项总数，全部成功后更新本站统计。', () => void syncMutation.run(
-          async (isCurrent) => {
-            const counts = await collectSiteStats(token, isCurrent);
-            return counts && isCurrent() ? adminApi.adminSyncSiteStats(token, counts) : null;
-          },
-          () => showToast('已同步全站统计', 'success'), '全站统计同步失败', { onCommitted: () => statsQuery.invalidate() },
-        ))}>同步全站统计</Button>
+        <Button
+          variant="tonal"
+          loading={syncMutation.busy}
+          onClick={() => confirmThen(
+            '确认同步全站统计',
+            '确定要从 Derpibooru 同步图片、标签与评论总数吗？',
+            () => void syncMutation.run(
+              async (isCurrent) => {
+                const counts = await collectSiteStats(token, isCurrent);
+                return counts && isCurrent() ? adminApi.adminSyncSiteStats(token, counts) : null;
+              },
+              () => showToast('已同步全站统计', 'success'),
+              '全站统计同步失败',
+              { onCommitted: () => statsQuery.invalidate() },
+            ),
+            { tone: 'filled' },
+          )}
+        >
+          同步全站统计
+        </Button>
       </section>
       {confirmDialog}
     </div>

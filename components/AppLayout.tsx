@@ -1061,7 +1061,7 @@ export default function AppLayout({
               onClick={(event) => {
                 if (coveredHomeGallery && reselectCovered()) event.preventDefault();
               }}
-              aria-label="PicPony 主页"
+              aria-label="PicPony 首页"
               /* Visible on a phone too: the brand's only appearance on the majority viewport
                  and the one-tap route home. `touch-size` because the wordmark is 28px tall
                  and an anchor wrapping it inherits that, while every button beside it clears

@@ -54,7 +54,7 @@ export default function FolderSlideshow({ request, onReady, onStarted, onError, 
     if (error) { onError(error); return; }
     if (!ready || !visible) return;
     if (!folders.data?.folders.some(folder => folder.id === request.folderId)) { onError(new Error('未找到该收藏夹')); return; }
-    if (slides.length < 2) { onError(new Error('当前页不足两张可放映的图片，请到收藏夹查看')); return; }
+    if (slides.length < 2) { onError(new Error('不足两张可放映的图片')); return; }
     if (opening.current) return;
     opening.current = true;
     void onReady().then(() => {

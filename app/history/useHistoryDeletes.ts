@@ -94,7 +94,7 @@ export function useHistoryDeletes(
       }
       show([...done, ...failed].map((item) => item.entry.id));
       if (failed.length > 0 && failed.some((item) => item.token === current)) {
-        showToast(`有 ${failed.length} 条浏览记录未能删除：${apiErrorMessage(reason)}`, 'error');
+        showToast(`${failed.length} 条浏览记录删除失败：${apiErrorMessage(reason)}`, 'error');
       }
     })();
     const previous = sending.current;
@@ -124,7 +124,7 @@ export function useHistoryDeletes(
     if (readToken() !== batch.token) return;
     browsingHistory.invalidate();
     const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-    if (failed) showToast(`未能恢复浏览记录：${apiErrorMessage(failed.reason)}`, 'error');
+    if (failed) showToast(`浏览记录恢复失败：${apiErrorMessage(failed.reason)}`, 'error');
     else showToast('已恢复浏览记录', 'success');
   }, [show]);
 

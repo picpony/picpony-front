@@ -47,7 +47,7 @@ export function cleanRenderer(raw: string) {
 
 /** Adreno numbers map one-to-one onto Snapdragon flagships; other GPUs ship in many SoCs. */
 const ADRENO_SOC: Record<string, string> = {
-  '840': '骁龙 8 至尊版 第五代',
+  '840': '骁龙 8 至尊版第五代',
   '830': '骁龙 8 至尊版',
   '750': '骁龙 8 第三代',
   '735': '骁龙 8s 第三代',

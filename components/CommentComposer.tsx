@@ -139,7 +139,7 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
         showToast(outcome.message, 'error');
         return;
       }
-      showToast('评论已发送', 'success');
+      showToast('已发送评论', 'success');
       /* The sent picture's draft is spent wherever the visitor is now; the editor, the reply
          target and the list refresh belong to the picture on screen, so only that one's. */
       writeCommentDraft(sentFor, '');
@@ -171,7 +171,7 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
         className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
       >
         <span className="truncate">
-          {signedIn ? (trimmed ? '继续编辑评论…' : '写下你的评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}
+          {signedIn ? (trimmed ? '继续编辑评论…' : '发表评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}
         </span>
       </button>
     );
@@ -204,7 +204,7 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
         key={`${imageId}:${editorRevision}`}
         value={comment}
         onChange={setComment}
-        placeholder={replyTo ? `回复 ${replyTo.username}…` : '写下你的评论…'}
+        placeholder={replyTo ? `回复 ${replyTo.username}…` : '发表评论…'}
         disabled={isSubmitting}
         size="reply"
         label={replyTo ? `回复 ${replyTo.username}` : '评论'}

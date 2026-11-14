@@ -348,7 +348,7 @@ export default function HistoryPage() {
     if (!token || readToken() !== token || clearing) return;
     if (!(await confirm({
       title: '确认清空',
-      message: '确定要清空所有浏览历史吗？清空后无法恢复。',
+      message: '确定要清空全部浏览历史吗？此操作无法恢复。',
       tone: 'danger',
     }))) return;
     if (readToken() !== token) return;
@@ -408,7 +408,7 @@ export default function HistoryPage() {
   if (!ready || firstLoad) {
     body = <HistorySkeleton />;
   } else if (!token) {
-    body = <SignInRequired description="登录后即可在任意设备上查看看过的图片。" />;
+    body = <SignInRequired description="登录后即可在不同设备上查看浏览记录" />;
   } else if (!data) {
     body = (
       <ErrorRetry
@@ -426,7 +426,7 @@ export default function HistoryPage() {
         entrance={!hadRows}
         icon={<MdHistory size={ICON.display} />}
         title="这一天没有浏览记录"
-        description="换一天，或清除日期筛选查看全部。"
+        description="可选择其他日期，或清除日期筛选查看全部"
         action={<Button variant="tonal" onClick={() => changeDate('')}>清除筛选</Button>}
       />
     ) : page > 1 ? (
@@ -437,7 +437,6 @@ export default function HistoryPage() {
         entrance={!hadRows}
         icon={<MdHistory size={ICON.display} />}
         title="暂无浏览记录"
-        description="看过的图片会出现在这里。"
       />
     );
     body = (
@@ -446,7 +445,7 @@ export default function HistoryPage() {
         {read.isPrevious && read.error !== undefined && (
           <ErrorRetry
             size="inline"
-            title="这一页加载失败"
+            title={`第 ${page} 页加载失败`}
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />

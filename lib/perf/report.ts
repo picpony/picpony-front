@@ -212,8 +212,14 @@ export function overallVerdict(scenarios: PerfScenario[]): Verdict {
     .reduce<Verdict>((worst, scenario) => worseVerdict(worst, scenario.summary.verdict), 'smooth');
 }
 
-const ms = (value: number | null) => (value === null ? '—' : `${value} ms`);
+const LONG_FRAME_LABEL: Record<PerfDevice['longFrameSource'], string> = {
+  'none': '不支持',
+  'longtask': '长任务',
+  'long-animation-frame': '长动画帧',
+};
+
 const pct = (value: number) => `${round(value * 100, 1)}%`;
+const ms = (value: number | null) => (value === null ? '—' : `${value} ms`);
 
 /** The report as a Markdown page: device, a summary table, then every run. */
 export function reportToMarkdown(report: PerfReport) {
@@ -252,7 +258,7 @@ export function reportToMarkdown(report: PerfReport) {
     `| 动画设置 | ${device.motion}${device.reducedMotion ? '（系统要求减弱动态效果）' : ''} |`,
   );
   lines.push(`| 网络 | ${device.connection ?? '未知'} |`);
-  lines.push(`| 长帧数据 | ${device.longFrameSource} |`);
+  lines.push(`| 长帧数据 | ${LONG_FRAME_LABEL[device.longFrameSource]} |`);
   if (device.noCorner) lines.push('| 对照 | 关闭圆角动画 |');
   lines.push(`| 版本 | ${device.build} |`);
   lines.push(`| UA | ${device.userAgent.replace(/\|/g, '/')} |`);
@@ -301,24 +307,6 @@ export function reportToMarkdown(report: PerfReport) {
       for (const [round, detail] of worst) lines.push(`- 第 ${round} 轮最长的长帧：${detail}`);
     }
   }
-  lines.push('');
-  lines.push('## 怎么读');
-  lines.push('');
-  lines.push(
-    '- 帧数据来自 `requestAnimationFrame`，即主线程产出的帧。合成线程上的动画（图片的位移和缩放）在主线程卡住时仍可能继续，所以掉帧不一定都看得见，但手指拖动、圆角和下一次点击一定会受影响。',
-  );
-  lines.push(
-    '- 掉帧：两帧间隔超过 1.5 个刷新周期时，按缺了几帧计数。流畅度 = 实际帧 /（实际帧 + 掉帧）。',
-  );
-  lines.push(
-    '- 响应延迟：从脚本发出输入到第一帧开始的时间。真实触摸还要加上系统把触摸送到浏览器的时间（通常 10–30ms）。',
-  );
-  lines.push(
-    '- 快速连续操作：不等上一个动画结束就点开、关闭、返回。动画中的每一帧都检查图片（飞行中的图或详情页的图）是否还在屏幕上；有一帧不在就算“画面消失”，结论直接记为卡顿。',
-  );
-  lines.push(
-    '- 结论：缺帧不超过 2% 且没有超过 2.5 帧的停顿为流畅；不超过 8% 且没有 100ms 的停顿为轻微卡顿；打开和关闭还要求响应延迟不超过 100ms（流畅）/ 200ms（轻微）。',
-  );
   return lines.join('\n');
 }
 

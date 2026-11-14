@@ -98,6 +98,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
       const discard = await confirm({
         title: '确认放弃修改',
         message: `确定要放弃对${current ? named(current) : '该用户'}的修改吗？`,
+        tone: 'filled',
       });
       if (!discard) return;
     }
@@ -172,7 +173,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
        `deleted-user-{id}`, banned, with its name, email, password, sessions and private data gone. */
     confirmThen(
       '确认抹除用户',
-      `确定要抹除用户${named(user)}吗？该账号将被封禁并改名为 deleted-user-${user.id}，邮箱、密码、登录会话、私信、收藏等个人数据会被永久清除；金币流水等审计记录仍会保留。此操作无法恢复。`,
+      `确定要抹除用户${named(user)}吗？该账号将被封禁并清除个人资料、登录状态与私信等数据（仅保留审计与交易记录）。此操作无法恢复。`,
       () => runRowAction(
         user,
         'delete',

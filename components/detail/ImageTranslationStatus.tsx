@@ -12,7 +12,7 @@ function progressText({ phase, queueAhead }: Pick<ImageTranslation, 'phase' | 'q
     case 'requesting':
       return '正在提交翻译…';
     case 'queued':
-      return queueAhead > 0 ? `正在排队，前面还有 ${queueAhead} 张…` : '正在等待翻译节点领取…';
+      return queueAhead > 0 ? `正在排队，前面还有 ${queueAhead} 张…` : '正在排队等待翻译…';
     case 'translating':
       return '正在翻译…';
     case 'loading':
@@ -50,9 +50,9 @@ export default function ImageTranslationStatus({ translation }: { translation: I
             {busy
               ? progressText(translation)
               : phase === 'failed'
-                ? (message ?? '翻译失败，请稍后重试')
+                ? (message ?? '翻译失败，请稍后再试')
                 : phase === 'stalled'
-                  ? '翻译耗时较长，任务仍在后台处理，请稍后再试'
+                  ? '翻译耗时较长，仍在后台处理，请稍后再试'
                   : '正在显示译图'}
           </p>
           {(phase === 'failed' || phase === 'stalled') && (

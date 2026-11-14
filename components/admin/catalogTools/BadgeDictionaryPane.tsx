@@ -39,7 +39,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
     <AdminForm aria-label="徽章简介" onSubmit={() => {
       /* A blank name belongs on the field. Sent through the mutation it printed 操作未完成 for a
          request that never left the browser, naming nothing. */
-      if (!name.trim()) { setNameError('请填写徽章名称'); return; }
+      if (!name.trim()) { setNameError(read.data?.names.length ? '请选择徽章' : '请输入徽章名称'); return; }
       setNameError('');
       void mutation.run(() => api.saveBadgeDescription(token, name, description), () => showToast('已保存徽章简介', 'success'), committed);
     }}>

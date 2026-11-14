@@ -246,7 +246,7 @@ test('a picture uploads over XHR with progress and the session’s CSRF token, a
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(413, { error: { code: 'FILE_TOO_LARGE', message: '文件超过该用途的上传限制' } });
-  await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片太大，服务器拒绝了这次上传');
+  await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片太大，服务器拒绝了此次上传');
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(400, { error: { code: 'BAD_REQUEST', message: '图片格式不支持' } });
@@ -265,8 +265,8 @@ test('a picture uploads over XHR with progress and the session’s CSRF token, a
 test('a picture is checked before it is sent: kind, size, and a GIF is never redrawn', async () => {
   const file = (type, size) => ({ type, size, name: 'f' });
   await assert.rejects(images.prepareForumImage(file('text/plain', 10)), /请选择图片文件/);
-  await assert.rejects(images.prepareForumImage(file('image/png', 60 * 1024 * 1024)), /50MB/);
-  await assert.rejects(images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)), /动图超过 5MB/);
+  await assert.rejects(images.prepareForumImage(file('image/png', 60 * 1024 * 1024)), /50 MB/);
+  await assert.rejects(images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)), /动图超过 5 MB/);
   const small = file('image/gif', 1024);
   assert.equal(await images.prepareForumImage(small), small, 'a small picture goes as it is');
   globalThis.createImageBitmap = async () => { throw new Error('cannot decode'); };
