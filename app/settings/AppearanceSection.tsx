@@ -61,7 +61,7 @@ export function PaletteSection({ signedIn }: { signedIn: boolean }) {
  * subscription in one place. 入场动画 also follows the account through the synced registry;
  * its local value and first-paint cookie remain the same.
  *
- * **跟随系统 is a switch of its own, and 主题模式 only ever says 浅色 or 深色** (decision 20). The
+ * **跟随系统 is a switch of its own, and 主题模式 only ever says 月之亮面 or 月之暗面** (decision 20). The
  * stored model was always two answers — follow the system or not, and which scheme when not — and
  * one three-way list hid the second behind the first. While the switch is on, the mode is disabled
  * rather than hidden and shows the scheme the system resolves to right now; turning the switch off
@@ -100,8 +100,8 @@ export function ModeAndMotionSection() {
             disabled={followsSystem}
             aria-label="主题模式"
             options={[
-              { value: 'light', label: '浅色' },
-              { value: 'dark', label: '深色' },
+              { value: 'light', label: '月之亮面' },
+              { value: 'dark', label: '月之暗面' },
             ]}
           />
         </div>

@@ -373,7 +373,7 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
   );
 }
 
-const SCHEME_LABEL: Record<ColorScheme, string> = { light: '浅色模式', dark: '深色模式' };
+const SCHEME_LABEL: Record<ColorScheme, string> = { light: '月之亮面', dark: '月之暗面' };
 
 /**
  * The few facts the shell renders from the hero runtime, as one stable snapshot.
