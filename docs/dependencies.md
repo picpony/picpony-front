@@ -11,11 +11,11 @@ Version constraints, Bun patches and dependency verification. Exact installed ve
 
 ## Version constraints
 
-The following constraints were recorded on 2026-11-03; recheck them when upgrading.
+The following constraints were recorded on 2026-11-14; recheck them when upgrading.
 
 | Package | Constraint |
 | --- | --- |
-| `next`, `eslint-config-next` | Upgrade together; pinned to 16.4.4 |
+| `next`, `eslint-config-next` | Upgrade together; pinned to 16.4.6 |
 | ESLint | 9.x, currently 9.39.5; wait for React, JSX accessibility and import plugin support before moving to 10 |
 | `sharp` | Pin and override to 0.35.5, including Next's copy; retain the SVG optimizer mitigation and packaged native libraries |
 | `zod` | Override to 4.6.7 for the React Hooks lint plugin's compatible 4.x dependency |
