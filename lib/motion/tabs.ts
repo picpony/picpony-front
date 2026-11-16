@@ -54,6 +54,11 @@ function shownPane(panel: HTMLElement): HTMLElement | null {
  */
 function holdFloor(panel: HTMLElement, scroller: HTMLElement, staying: HTMLElement) {
   suspendFloor(panel);
+  if (panel.dataset.tabSize === 'largest') {
+    // Every pane still contributes to layout: no departing height needs a scroll floor.
+    panel.style.minHeight = '';
+    return;
+  }
   const offset = scroller.scrollTop;
   /* At the very top there is no offset to keep reachable: every height reaches 0. Measured here
      anyway, a page shorter than its window read `scrollHeight` as the window's height, so the
@@ -310,7 +315,8 @@ function prepareTabRun(
      * now, and `H_in` once the leaving pane is hidden, so `max(0, H_out − H_in)` less —
      * exact, not a bound, and only clamping when the destination is the shorter one. */
     const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const finalMax = Math.max(0, max - Math.max(0, leaving.offsetHeight - entering.offsetHeight));
+    const shrink = panel.dataset.tabSize === 'largest' ? 0 : Math.max(0, leaving.offsetHeight - entering.offsetHeight);
+    const finalMax = Math.max(0, max - shrink);
     next = Math.min(recallTabScroll(panel, to) ?? 0, finalMax);
   }
   /* What the window can show of each pane for the run (`paneClip`), and the lean — both planned

@@ -8,6 +8,8 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
   /** Stagger the shimmer sweep across a group, in ms. */
   delay?: number;
   style?: CSSProperties;
+  /** Overlay keeps retained content visible beneath the shared shimmer. */
+  variant?: 'surface' | 'overlay';
 }
 
 /**
@@ -23,12 +25,13 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
  */
 const HAS_RADIUS = /(?:^|\s)(?:rounded|rounded-(?:none|xs|sm|md|lg|xl|2xl|3xl|full))(?:\s|$)/;
 
-export default function Skeleton({ className = '', delay, style, ...rest }: SkeletonProps) {
+export default function Skeleton({ className = '', delay, style, variant = 'surface', ...rest }: SkeletonProps) {
   return (
     <div
       aria-hidden="true"
       className={cn(
-        'skeleton bg-surface-container-high',
+        'skeleton',
+        variant === 'surface' && 'bg-surface-container-high',
         !HAS_RADIUS.test(className) && 'rounded-sm',
         className,
       )}

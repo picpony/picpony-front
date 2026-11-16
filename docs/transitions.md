@@ -94,6 +94,8 @@ Standard shared-axis movement uses `PAGER_SPRING`. On wide screens, `columnWindo
 
 Do not animate panel height. Both panes naturally hold `max(H_out, H_in)` during the run.
 
+Comparable bounded panels may use `TabPanes size="largest"`, as `/stats` does to keep its shared date controls stationary. All retained panes contribute to the grid's natural maximum and stretch to that shared height; content-sized cards may fill it without an inter-card gap. Inactive panes stay visually hidden, inert and excluded from the accessibility tree. This mode does not need a departing-height scroll floor or a shrink correction. Other screens keep the default content-sized policy.
+
 Shared-chrome screens retain `holdFloor` while needed to keep the current offset reachable. Release it when scrolling no longer needs it. Other screens clamp against the settled height; see [tab offsets](scrolling.md#tab-offsets).
 
 Clip the run vertically with `overflow-y: clip`, leaving horizontal movement to the scroller or marked window. Restore scroll anchoring at settle. Late content changes use normal reflow.

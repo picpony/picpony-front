@@ -62,5 +62,6 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Top loading bar | `layout`, so completion does not wait for a slow progress settle |
 | Indeterminate spinner / loading dots | `--ease-loop`; the off tier keeps only the ring's turn, over a fade instead of a dash |
 | Skeleton shimmer | `--ease-skeleton-sweep` |
+| Statistics line revelation | `defaultEffects` clip reveal; reduced fades and off paints the final line |
 
 The loop and ripple clocks are documented exceptions. A new component reuses a role from this table; verification follows [Motion system](motion-system.md#verification).

@@ -6,6 +6,7 @@ import Card from '@/components/Card';
 import Chip from '@/components/Chip';
 import DateRangeSlider from '@/components/DateRangeSlider';
 import ErrorRetry from '@/components/ErrorRetry';
+import SectionHeading from '@/components/SectionHeading';
 import Skeleton from '@/components/Skeleton';
 import StatChart, { type ChartSeries } from '@/components/StatChart';
 import Tabs, { type TabItem } from '@/components/Tabs';
@@ -15,7 +16,7 @@ import type { SiteStats, StatsGranularity } from '@/lib/api/stats';
 import { formatExactCount } from '@/lib/format';
 import { useResource } from '@/lib/resource';
 import { siteStats } from '@/lib/resources';
-import { shiftDay, type StatsWindow } from '@/lib/statsDates';
+import { formatChineseDay, shiftDay, type StatsWindow } from '@/lib/statsDates';
 import type { StatsSeed } from '@/lib/stats.server';
 
 /**
@@ -88,31 +89,61 @@ function MetricCard({
   children: ReactNode;
 }) {
   return (
-    <Card variant="transparent" padding="lg">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-        <div>
-          <p className="text-label-m text-on-surface-variant">{figureLabel}</p>
-          <p className="text-headline-m text-on-surface tabular-nums">{figure}</p>
-        </div>
-        {note && <p className="text-body-s text-on-surface-variant">{note}</p>}
+    <Card padding="lg" className="min-w-0 h-full">
+      <SectionHeading className="mb-2">{figureLabel}</SectionHeading>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        <p className="text-headline-m text-on-surface tabular-nums">{figure}</p>
+        {note && <p className="text-body-s text-on-surface-variant wrap-anywhere">{note}</p>}
       </div>
-      <div className="mt-5">{children}</div>
+      <div className="mt-6">{children}</div>
     </Card>
   );
 }
 
 function StatsSkeleton() {
   return (
-    <div aria-busy="true" aria-label="正在加载站点统计">
-      <div className="mb-6 flex gap-6">
+    <div data-page-loading="" aria-busy="true" aria-label="正在加载站点统计">
+      <div className="mb-6 flex h-12 items-center gap-6 overflow-hidden border-b border-outline-variant">
         {[0, 1, 2, 3].map((index) => (
-          <Skeleton key={index} className="h-6 w-16" delay={index * 80} />
+          <Skeleton key={index} className="h-4 w-16 shrink-0" delay={index * 80} />
         ))}
       </div>
-      <Card variant="transparent" padding="lg">
-        <Skeleton className="h-8 w-28" />
-        <Skeleton className="mt-5 h-48 w-full" />
+      <Card padding="lg">
+        <Skeleton className="h-6 w-24" />
+        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+          <Skeleton className="h-9 w-32" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <div className="mt-6">
+          <div className="mb-4 flex min-h-8 items-center justify-between gap-4">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-28 pointer-coarse:my-1" />
+          </div>
+          <Skeleton className="h-60 w-full rounded-sm" />
+          <div className="mt-4 border-t border-outline-variant pt-3">
+            <Skeleton className="h-4 w-12" />
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+              {[0, 1, 2, 3].map((index) => (
+                <div key={index}>
+                  <Skeleton className="h-4.5 w-12" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </Card>
+      <Card variant="outlined" padding="lg" className="mt-6">
+        <Skeleton className="h-6 w-24" />
+        <div className="mt-4 flex h-12 items-center px-5">
+          <Skeleton className="h-4 w-full rounded-sm" />
+        </div>
+        <div className="mt-1 flex justify-between gap-4">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+      </Card>
+      <Skeleton className="mt-6 h-4 w-4/5" />
     </div>
   );
 }
@@ -141,9 +172,9 @@ export default function StatsScreen({
       />
 
       {data === undefined && read.error !== undefined && (
-        <Card padding="lg">
+        <Card variant="outlined" padding="lg">
           <ErrorRetry
-            size="inline"
+            size="pane"
             title="站点统计加载失败"
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
@@ -152,7 +183,15 @@ export default function StatsScreen({
       )}
       {/* The previous window's chart stays visible, so a failed turn reports itself in place. */}
       {data !== undefined && read.error !== undefined && (
-        <p className="text-body-s text-error mb-3">{apiErrorMessage(read.error)}</p>
+        <Card variant="outlined" padding="md" className="mb-6" role="status">
+          <ErrorRetry
+            size="inline"
+            title="此时间范围加载失败"
+            message={apiErrorMessage(read.error)}
+            onRetry={isRetryable(read.error) ? read.refresh : undefined}
+            entrance={false}
+          />
+        </Card>
       )}
       {loading && <StatsSkeleton />}
       {data !== undefined && (
@@ -228,14 +267,10 @@ function StatsBody({
     { key: 'badges', label: '徽章', values: points.map((point) => point.total_badges), tone: 'neutral' },
   ];
   const contentNew: ChartSeries[] = [
-    {
-      key: 'new-content',
-      label: `${unit}新增内容`,
-      values: points.map(
-        (point) => point.new_posts + point.new_comments + point.new_favorites + point.new_badges,
-      ),
-      tone: 'tertiary',
-    },
+    { key: 'new-posts', label: '帖子', values: points.map((point) => point.new_posts), tone: 'primary' },
+    { key: 'new-comments', label: '评论', values: points.map((point) => point.new_comments), tone: 'secondary' },
+    { key: 'new-favorites', label: '收藏', values: points.map((point) => point.new_favorites), tone: 'tertiary' },
+    { key: 'new-badges', label: '徽章', values: points.map((point) => point.new_badges), tone: 'neutral' },
   ];
 
   /* The slider's left bound is the first ranked day; fall back to 90 days when the deployed
@@ -246,7 +281,10 @@ function StatsBody({
   const toggle = <ChartViewToggle value={view} onChange={setView} dailyLabel={unit} />;
 
   return (
-    <div>
+    <div data-stats-start={data.start} data-stats-end={data.end}>
+      <p className="sr-only" role="status">
+        {loading ? '正在更新统计数据…' : `当前显示 ${formatChineseDay(data.start)} 至 ${formatChineseDay(data.end)} 的统计数据`}
+      </p>
       <Tabs
         tabs={STAT_TABS}
         value={category}
@@ -254,14 +292,15 @@ function StatsBody({
         label="统计项目"
         className="mb-6"
       />
-      <TabPanes value={category}>
-        <TabPane value="stats-users" className="mb-4">
+      <TabPanes value={category} size="largest">
+        <TabPane value="stats-users">
           <MetricCard
             figureLabel="累计用户"
             figure={formatExactCount(data.totals.users)}
             note={`此期间新增 ${formatExactCount(newUsers)} 人`}
           >
             <StatChart
+              active={category === 'stats-users'}
               series={view === 'total' ? userTotal : userNew}
               labels={labels}
               loading={loading}
@@ -275,13 +314,14 @@ function StatsBody({
           </MetricCard>
         </TabPane>
 
-        <TabPane value="stats-tags" className="mb-4">
+        <TabPane value="stats-tags">
           <MetricCard
             figureLabel="累计中文词条"
             figure={formatExactCount(data.totals.chinese_tags)}
             note={`此期间新增 ${formatExactCount(newChineseTags)} 条`}
           >
             <StatChart
+              active={category === 'stats-tags'}
               series={view === 'total' ? tagTotal : tagNew}
               labels={labels}
               loading={loading}
@@ -295,13 +335,14 @@ function StatsBody({
           </MetricCard>
         </TabPane>
 
-        <TabPane value="stats-visits" className="mb-4">
+        <TabPane value="stats-visits">
           <MetricCard
             figureLabel="此期间独立访客"
             figure={formatExactCount(data.window.visitors)}
             note={`此期间浏览量 ${formatExactCount(data.window.hits)}`}
           >
             <StatChart
+              active={category === 'stats-visits'}
               series={visits}
               labels={labels}
               loading={loading}
@@ -310,7 +351,7 @@ function StatsBody({
           </MetricCard>
         </TabPane>
 
-        <TabPane value="stats-community" className="mb-4">
+        <TabPane value="stats-community">
           <MetricCard
             figureLabel="累计内容"
             figure={formatExactCount(
@@ -319,6 +360,7 @@ function StatsBody({
             note={`帖子 ${formatExactCount(data.totals.posts)} · 评论 ${formatExactCount(data.totals.comments)} · 收藏 ${formatExactCount(data.totals.favorites)} · 徽章 ${formatExactCount(data.totals.badges)}`}
           >
             <StatChart
+              active={category === 'stats-community'}
               series={view === 'total' ? contentTotal : contentNew}
               labels={labels}
               loading={loading}
@@ -333,16 +375,15 @@ function StatsBody({
         </TabPane>
       </TabPanes>
 
-      {/* Directly under the chart, as the one control for its window; its own labels move with
-          the handles. */}
-      <div className="mt-2">
+      <Card variant="outlined" padding="lg" className="mt-6">
+        <SectionHeading>时间范围</SectionHeading>
         <DateRangeSlider
           min={domainStart}
           max={domainEnd}
           value={period}
           onCommit={onPeriodChange}
         />
-      </div>
+      </Card>
 
       <p className="text-body-s text-on-surface-variant mt-6">
         访客为匿名访问计数，仅保留最近 90 天；中文词条按首次获得中文译名的时间计入。

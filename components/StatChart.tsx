@@ -1,24 +1,20 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import EmptyState from '@/components/EmptyState';
+import Skeleton from '@/components/Skeleton';
+import SwapContent from '@/components/SwapContent';
 import { cn } from '@/lib/utils';
 import { formatExactCount } from '@/lib/format';
+import { entranceMotion, scaledMs, useMotionScale, useMotionTier } from '@/lib/appearance';
+import { routeTransitActive } from '@/lib/pageTransit';
+import { HANDOFF_MS } from '@/lib/motionTokens';
+import { springTiming } from '@/lib/springTiming';
 
-/**
- * A time-series line chart for /stats.
- *
- * Deliberately dependency-free SVG: the page draws four small charts, and a charting library
- * would outweigh them. The x axis is time (one point per server bucket) and the y axis is a
- * count; the scale is nicened to 1/2/5 steps so gridlines read as round numbers.
- *
- * Colour comes from the M3 roles through `currentColor`, never a raw value: every series is a
- * `<g>` carrying its tone class, and the strokes, dots and legend swatch inherit it.
- */
-
+/** Small, dependency-free time-series plots. Material roles own all chart ink and surfaces. */
 export type ChartTone = 'primary' | 'secondary' | 'tertiary' | 'neutral';
 
 export interface ChartSeries {
-  /** Stable key for React; not shown. */
   key: string;
   label: string;
   values: number[];
@@ -27,263 +23,291 @@ export interface ChartSeries {
 
 interface StatChartProps {
   series: ChartSeries[];
-  /** One label per value — the bucket's calendar date, already formatted by the caller. */
+  /** One already-formatted calendar label per bucket. */
   labels: string[];
-  /** Read out as the chart's accessible name; it should summarise the direction, not the axes. */
   ariaLabel: string;
-  /** The window is being re-read: a horizontal sweep crosses the plot until it lands. */
   loading?: boolean;
-  /** Trailing controls on the legend row — the daily/cumulative view switch. */
+  /** Only the selected chart plays data feedback; concealed peers retain final paint. */
+  active?: boolean;
+  /** Controls stay outside the plot swap, so a view change preserves focus. */
   actions?: ReactNode;
   className?: string;
 }
 
 const TONE: Record<ChartTone, string> = {
-  primary: 'text-primary',
+  primary: 'text-primary-ink',
   secondary: 'text-secondary',
   tertiary: 'text-tertiary',
   neutral: 'text-on-surface-variant',
 };
+const AREA_TONE: Record<ChartTone, string> = {
+  primary: 'text-primary-container',
+  secondary: 'text-secondary-container',
+  tertiary: 'text-tertiary-container',
+  neutral: 'text-surface-container-low',
+};
 
-const WIDTH = 720;
 const HEIGHT = 240;
 const PAD = { top: 12, right: 12, bottom: 28, left: 48 };
-const PLOT_W = WIDTH - PAD.left - PAD.right;
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom;
 
-/** A round step (1, 2 or 5 × 10ⁿ) at or above `rough`, so four gridlines land on clean values. */
+/** Whole-count axes with round 1/2/5 steps, including when the maximum is only one. */
 function niceStep(rough: number): number {
   if (!(rough > 0)) return 1;
-  /* Counts are whole numbers, so the step never drops below 1 — otherwise four gridlines on a
-     chart whose maximum is one would all read `0` or `1` after rounding. */
   const magnitude = 10 ** Math.max(0, Math.floor(Math.log10(rough)));
   const normalized = rough / magnitude;
   const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
   return multiplier * magnitude;
 }
 
-/** Axis ink stays short: full counts belong to the headline above the chart. */
 function axisValue(value: number): string {
   if (value >= 100_000_000) return `${Math.round(value / 10_000_000) / 10}亿`;
   if (value >= 10_000) return `${Math.round(value / 1_000) / 10}万`;
   return String(Math.round(value));
 }
 
-function pointX(index: number, count: number): number {
-  if (count <= 1) return PAD.left + PLOT_W / 2;
-  return PAD.left + (index / (count - 1)) * PLOT_W;
-}
-
 function pointY(value: number, max: number): number {
   return PAD.top + PLOT_H - (value / max) * PLOT_H;
 }
 
-/** At most six labels, endpoints included, so the row reads as time rather than as confetti. */
-function tickIndexes(count: number): number[] {
-  if (count <= 6) return Array.from({ length: count }, (_, i) => i);
-  const indexes = new Set<number>([0, count - 1]);
-  for (let i = 1; i < 6; i += 1) indexes.add(Math.round((i / 6) * (count - 1)));
-  return [...indexes].sort((a, b) => a - b);
+function tickIndexes(count: number, limit: number): number[] {
+  if (count <= limit) return Array.from({ length: count }, (_, index) => index);
+  return Array.from({ length: limit }, (_, index) => Math.round((index / (limit - 1)) * (count - 1)));
 }
 
-export default function StatChart({ series, labels, ariaLabel, loading = false, actions, className = '' }: StatChartProps) {
-  const [hover, setHover] = useState<number | null>(null);
+const subscribeNothing = () => () => {};
+const onClient = () => true;
+const onServer = () => false;
+
+function StatSeriesPaint({ dataKey, active, children }: {
+  dataKey: string;
+  active: boolean;
+  children: ReactNode;
+}) {
+  const groupRef = useRef<SVGGElement>(null);
+  const clientMounted = useSyncExternalStore(subscribeNothing, onClient, onServer);
+  const canEnter = useRef(clientMounted);
+  const [event, setEvent] = useState({ key: dataKey, category: 'entrance' as 'entrance' | 'feedback' });
+  if (event.key !== dataKey) setEvent({ key: dataKey, category: 'feedback' });
+  const pending = useRef({ event, value: true });
+  const previousMode = useRef<string | null>(null);
+  const entranceTier = useMotionTier('entrance');
+  const entranceScale = useMotionScale('entrance');
+  const feedbackTier = useMotionTier('feedback');
+  const feedbackScale = useMotionScale('feedback');
+  const tier = event.category === 'entrance' ? entranceTier : feedbackTier;
+  const scale = event.category === 'entrance' ? entranceScale : feedbackScale;
+
+  useLayoutEffect(() => {
+    const changed = pending.current.event !== event;
+    const mode = `${active}:${tier}:${scale}`;
+    if (changed) pending.current = { event, value: true };
+    else if (previousMode.current !== null && previousMode.current !== mode) pending.current.value = false;
+    previousMode.current = mode;
+    const current = pending.current;
+    const group = groupRef.current;
+    const plot = group?.ownerSVGElement?.parentElement;
+    const blockedEntrance = event.category === 'entrance' &&
+      (!canEnter.current || !entranceMotion() || (plot && routeTransitActive(plot)));
+    if (!group || !active || group.closest('[inert]') || tier === 'off' || blockedEntrance) {
+      current.value = false;
+      return;
+    }
+    if (!current.value) return;
+
+    // Percent-based clips follow resizing without restarting. Hydration is not an entrance;
+    // StrictMode's setup/cleanup/setup may replay an unfinished event before its first paint.
+    const frames = tier === 'standard'
+      ? [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }]
+      : [{ opacity: 0 }, { opacity: 1 }];
+    const animation = group.animate(frames, {
+      ...springTiming('defaultEffects', event.category),
+      delay: event.category === 'feedback' ? scaledMs(HANDOFF_MS, 'feedback') : 0,
+      fill: 'backwards',
+    });
+    animation.onfinish = () => { current.value = false; };
+    return () => { animation.cancel(); };
+  }, [event, active, tier, scale]);
+
+  return <g ref={groupRef} data-stat-series="">{children}</g>;
+}
+
+export default function StatChart({ series, labels, ariaLabel, loading = false, active: isActive = true, actions, className = '' }: StatChartProps) {
+  const plotRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
+  const [width, setWidth] = useState(720);
+  const [focused, setFocused] = useState(false);
+  const [selection, setSelection] = useState<{ key: string; index: number } | null>(null);
   const count = labels.length;
-  const maxValue = Math.max(0, ...series.flatMap((s) => s.values));
+  const contentKey = `${series.map((item) => item.key).join('|')}:${labels.join('|')}`;
+  const dataKey = `${contentKey}:${series.map((item) => item.values.join(',')).join('|')}`;
+  const hasData = count > 0 && series.length > 0;
+  const plotWidth = Math.max(1, width - PAD.left - PAD.right);
+  const maxValue = Math.max(0, ...series.flatMap((item) => item.values));
   const step = niceStep(maxValue / 4);
   const max = step * 4;
   const yTicks = [0, step, step * 2, step * 3, step * 4];
-  const xTicks = count ? tickIndexes(count) : [];
-  /* The area under a lone series gives the chart a direction; with several, overlapping fills
-     turn the plot into mud, so only the strokes are drawn. */
-  const area = series.length === 1;
+  const xTicks = tickIndexes(count, Math.min(6, Math.max(2, Math.floor(plotWidth / 72))));
+  const active = !loading && selection?.key === contentKey && selection.index < count ? selection.index : null;
+  const shown = active ?? count - 1;
+  const pointX = (index: number) => PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
+  const linePath = (item: ChartSeries) => item.values.map((value, index) =>
+    `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`,
+  ).join(' ');
 
-  if (!count || !series.length) {
-    return (
-      <p className={cn('text-body-s text-on-surface-variant py-12 text-center', className)}>暂无数据</p>
-    );
+  /* Match SVG units to CSS pixels instead of shrinking the type scale with a fixed viewBox.
+     ResizeObserver also follows the docked drawer and a pane becoming visible. */
+  useLayoutEffect(() => {
+    const plot = plotRef.current;
+    if (!plot) return;
+    const measure = () => {
+      const next = Math.round(plot.getBoundingClientRect().width);
+      if (next > 0) setWidth((current) => current === next ? current : next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(plot);
+    return () => observer.disconnect();
+  }, []);
+
+  function selectAt(clientX: number) {
+    if (loading || !hasData) return;
+    const rect = plotRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left - PAD.left) / plotWidth));
+    setSelection({ key: contentKey, index: Math.round(ratio * (count - 1)) });
   }
 
-  /* A bucket is highlighted only while the pointer is over the plot, and never over a stale
-     chart that is being replaced. */
-  const active = !loading && hover !== null && hover < count ? hover : null;
-  const activeX = active === null ? 0 : pointX(active, count);
-  const tooltipLeft = (activeX / WIDTH) * 100;
-  /* Keep the tooltip inside the plot at both ends instead of letting it hang off the card. */
-  const tooltipShift =
-    activeX < PAD.left + PLOT_W * 0.2 ? '0' : activeX > PAD.left + PLOT_W * 0.8 ? '-100%' : '-50%';
-
   return (
-    <figure className={cn('m-0', className)}>
+    <figure className={cn('m-0 min-w-0', className)}>
       <figcaption className="sr-only">{ariaLabel}</figcaption>
-      <div className="text-label-m mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div className="text-label-m mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {series.map((item) => (
-            <span key={item.key} className="flex items-center gap-1.5 text-on-surface-variant">
-              <span className={cn('h-0.5 w-4 rounded-full bg-current', TONE[item.tone])} aria-hidden="true" />
+            <span key={item.key} className="flex items-center gap-2 text-on-surface-variant">
+              <span className={cn('h-1 w-4 rounded-full bg-current forced-mark', TONE[item.tone])} aria-hidden="true" />
               {item.label}
             </span>
           ))}
         </div>
         {actions && <div className="shrink-0">{actions}</div>}
       </div>
-      <div
-        className={cn('relative', !loading && 'cursor-crosshair')}
-        aria-busy={loading || undefined}
-        onPointerMove={(event) => {
-          if (loading || event.pointerType === 'touch') return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (rect.width <= 0) return;
-          const left = rect.left + (PAD.left / WIDTH) * rect.width;
-          const width = ((WIDTH - PAD.left - PAD.right) / WIDTH) * rect.width;
-          const ratio = Math.min(1, Math.max(0, (event.clientX - left) / width));
-          setHover(Math.round(ratio * (count - 1)));
-        }}
-        onPointerLeave={() => setHover(null)}
-      >
-        <svg
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="h-auto w-full"
-          focusable="false"
-          aria-hidden="true"
-        >
-        {yTicks.map((value) => {
-          const y = pointY(value, max);
-          return (
-            <g key={value} className="text-on-surface-variant">
-              <line
-                x1={PAD.left}
-                x2={WIDTH - PAD.right}
-                y1={y}
-                y2={y}
-                stroke="currentColor"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-                className="opacity-20"
-              />
-              <text
-                x={PAD.left - 8}
-                y={y + 4}
-                textAnchor="end"
-                fill="currentColor"
-                className="text-label-s tabular-nums"
-              >
-                {axisValue(value)}
-              </text>
-            </g>
-          );
-        })}
-        {xTicks.map((index) => (
-          <text
-            key={index}
-            x={pointX(index, count)}
-            y={HEIGHT - 8}
-            textAnchor={index === 0 ? 'start' : index === count - 1 ? 'end' : 'middle'}
-            fill="currentColor"
-            className="text-label-s text-on-surface-variant"
-          >
-            {labels[index]}
-          </text>
-        ))}
-        {series.map((item) => {
-          const path = item.values
-            .map((value, index) => {
-              const x = pointX(index, count).toFixed(1);
-              const y = pointY(value, max).toFixed(1);
-              return `${index === 0 ? 'M' : 'L'}${x},${y}`;
-            })
-            .join(' ');
-          const lastX = pointX(count - 1, count);
-          const lastY = pointY(item.values[count - 1] ?? 0, max);
-          const baseY = pointY(0, max);
-          return (
-            <g key={item.key} className={TONE[item.tone]}>
-              {area && (
-                <path
-                  d={`${path} L${lastX.toFixed(1)},${baseY.toFixed(1)} L${pointX(0, count).toFixed(1)},${baseY.toFixed(1)} Z`}
-                  fill="currentColor"
-                  className="opacity-10"
+      <div ref={plotRef} className="min-w-0" aria-busy={loading || undefined}>
+        <SwapContent contentKey={contentKey} active={isActive}>
+          {hasData ? (
+            <div
+              role="group"
+              aria-label={ariaLabel}
+              aria-describedby={hintId}
+              tabIndex={0}
+              className="relative rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+              onPointerMove={(event) => {
+                if (event.pointerType !== 'touch') selectAt(event.clientX);
+              }}
+              onPointerDown={(event) => selectAt(event.clientX)}
+              onPointerCancel={() => setSelection(null)}
+              onPointerLeave={(event) => {
+                // Touch releases implicit capture before focus on some browsers. Keep the
+                // tapped bucket until blur or cancellation, rather than resetting it on leave.
+                if (event.pointerType !== 'touch' && !focused) setSelection(null);
+              }}
+              onFocus={() => {
+                setFocused(true);
+                setSelection((current) => current?.key === contentKey ? current : { key: contentKey, index: count - 1 });
+              }}
+              onBlur={() => {
+                setFocused(false);
+                setSelection(null);
+              }}
+              onKeyDown={(event) => {
+                if (loading) return;
+                let next: number;
+                if (event.key === 'ArrowLeft') next = Math.max(0, shown - 1);
+                else if (event.key === 'ArrowRight') next = Math.min(count - 1, shown + 1);
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = count - 1;
+                else return;
+                event.preventDefault();
+                setSelection({ key: contentKey, index: next });
+              }}
+            >
+              <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" preserveAspectRatio="none" focusable="false" aria-hidden="true">
+                {series.length === 1 && (
+                  <path
+                    d={`${linePath(series[0])} L${pointX(count - 1).toFixed(1)},${pointY(0, max).toFixed(1)} L${pointX(0).toFixed(1)},${pointY(0, max).toFixed(1)} Z`}
+                    fill="currentColor"
+                    className={cn(AREA_TONE[series[0].tone], 'forced-colors:hidden')}
+                  />
+                )}
+                {yTicks.map((value) => {
+                  const y = pointY(value, max);
+                  return (
+                    <g key={value}>
+                      <line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" className="text-outline-variant" />
+                      <text x={PAD.left - 8} y={y + 4} textAnchor="end" fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
+                        {axisValue(value)}
+                      </text>
+                    </g>
+                  );
+                })}
+                {xTicks.map((index) => (
+                  <text key={index} x={pointX(index)} y={HEIGHT - 8} textAnchor={index === 0 ? 'start' : index === count - 1 ? 'end' : 'middle'} fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
+                    {labels[index]}
+                  </text>
+                ))}
+                <StatSeriesPaint dataKey={dataKey} active={isActive}>
+                  {series.map((item) => {
+                    const path = linePath(item);
+                    const lastX = pointX(count - 1);
+                    const lastY = pointY(item.values[count - 1] ?? 0, max);
+                    return (
+                      <g key={item.key} className={TONE[item.tone]}>
+                        <path d={path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                        <circle cx={lastX} cy={lastY} r={2.5} fill="currentColor" />
+                      </g>
+                    );
+                  })}
+                </StatSeriesPaint>
+                {active !== null && (
+                  <>
+                    <line x1={pointX(active)} x2={pointX(active)} y1={PAD.top} y2={HEIGHT - PAD.bottom} stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" className="text-outline" />
+                    {series.map((item) => (
+                      <circle key={item.key} cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={3} fill="currentColor" className={TONE[item.tone]} />
+                    ))}
+                  </>
+                )}
+              </svg>
+              {loading && (
+                <Skeleton
+                  variant="overlay"
+                  className="pointer-events-none absolute rounded-sm"
+                  style={{ left: PAD.left, right: PAD.right, top: PAD.top, bottom: PAD.bottom }}
                 />
               )}
-              <path
-                d={path}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              >
-                <title>
-                  {item.label}：{item.values[count - 1]}（{labels[count - 1]}）
-                </title>
-              </path>
-              <circle cx={lastX} cy={lastY} r={2.5} fill="currentColor" />
-            </g>
-          );
-        })}
-        {active !== null && (
-          <g className="text-outline-variant">
-            <line
-              x1={activeX}
-              x2={activeX}
-              y1={PAD.top}
-              y2={HEIGHT - PAD.bottom}
-              stroke="currentColor"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-              className="opacity-60"
-            />
-          </g>
-        )}
-        {active !== null &&
-          series.map((item) => (
-            <circle
-              key={`hover-${item.key}`}
-              cx={activeX}
-              cy={pointY(item.values[active] ?? 0, max)}
-              r={3}
-              fill="currentColor"
-              className={TONE[item.tone]}
-            />
-          ))}
-      </svg>
-        {active !== null && (
-          <div
-            aria-hidden="true"
-            className="bg-surface-container-highest text-on-surface shadow-e2 pointer-events-none absolute top-1 z-10 min-w-32 rounded-md px-2.5 py-1.5 text-label-s"
-            style={{ left: `${tooltipLeft}%`, transform: `translateX(${tooltipShift})` }}
-          >
-            <p className="text-label-s-emphasized mb-1 tabular-nums">{labels[active]}</p>
-            <ul className="flex flex-col gap-0.5">
+            </div>
+          ) : (
+            <div className="flex h-60 items-center justify-center">
+              <EmptyState size="inline" title="此时间范围暂无数据" description="请选择其他日期范围" entrance={false} />
+            </div>
+          )}
+        </SwapContent>
+      </div>
+      <p id={hintId} className="sr-only">使用左右方向键查看各日期的数据，Home 和 End 跳至首尾。</p>
+      {/* Exact values occupy a stable row, not a pointer-only floating tooltip. Touch, keyboard
+          and mouse all read the same data without covering the plot or animating its numbers. */}
+      <div role="status" aria-live={focused ? 'polite' : 'off'} aria-atomic="true" className="mt-4 min-h-10 border-t border-outline-variant pt-3">
+        {hasData && (
+          <>
+            <p className="text-label-m text-on-surface-variant tabular-nums">{labels[shown]}</p>
+            <dl className="mt-2 grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
               {series.map((item) => (
-                <li key={item.key} className="flex items-center justify-between gap-3 tabular-nums">
-                  <span className="text-on-surface-variant flex items-center gap-1.5">
-                    <span
-                      className={cn('h-0.5 w-3 rounded-full bg-current', TONE[item.tone])}
-                      aria-hidden="true"
-                    />
-                    {item.label}
-                  </span>
-                  <span>{formatExactCount(item.values[active])}</span>
-                </li>
+                <div key={item.key} className="min-w-0">
+                  <dt className="text-body-s text-on-surface-variant">{item.label}</dt>
+                  <dd className="text-label-l text-on-surface tabular-nums wrap-anywhere">{formatExactCount(item.values[shown])}</dd>
+                </div>
               ))}
-            </ul>
-          </div>
-        )}
-        {loading && (
-          <span
-            aria-hidden="true"
-            className="skeleton pointer-events-none absolute rounded-md"
-            /* Only the plotting rectangle: the y tick labels sit left of PAD.left and the x
-               labels below PAD.bottom, so the sweep must stop short of both. */
-            style={{
-              left: `${(PAD.left / WIDTH) * 100}%`,
-              right: `${(PAD.right / WIDTH) * 100}%`,
-              top: `${(PAD.top / HEIGHT) * 100}%`,
-              bottom: `${(PAD.bottom / HEIGHT) * 100}%`,
-            }}
-          />
+            </dl>
+          </>
         )}
       </div>
     </figure>

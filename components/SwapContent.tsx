@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { scaledMs } from '@/lib/appearance';
+import { scaledMs, useMotionScale, useMotionTier } from '@/lib/appearance';
 import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
 import { springTiming, surfaceArrival } from '@/lib/springTiming';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,8 @@ function offsets(side: SwapSide, distance: number) {
 interface SwapContentProps {
   /** What the box is showing. A new key is new content: the old one leaves as the new arrives. */
   contentKey: string;
+  /** Inactive retained panes update directly, without playing hidden feedback. */
+  active?: boolean;
   /**
    * The side the arriving content comes in from; the departing one leaves towards the opposite.
    * `bottom` reads as the content moving up (a row saying something else), `left` as it moving
@@ -66,6 +68,7 @@ interface SwapContentProps {
  */
 export default function SwapContent({
   contentKey,
+  active = true,
   side = 'bottom',
   distance = DEFAULT_DISTANCE,
   className,
@@ -77,6 +80,8 @@ export default function SwapContent({
   const [leaving, setLeaving] = useState<{ key: string; node: ReactNode } | null>(null);
   const leavingRef = useRef<HTMLDivElement>(null);
   const enteringRef = useRef<HTMLDivElement>(null);
+  const tier = useMotionTier('feedback');
+  const scale = useMotionScale('feedback');
 
   /* A change of content is state derived from props, so it is answered during render — React
      re-renders at once and the condition is false on that pass — rather than from an effect, which
@@ -84,30 +89,44 @@ export default function SwapContent({
   if (shown.key !== contentKey) {
     setLeaving(shown);
     setShown({ key: contentKey, node: children });
+  } else if (shown.node !== children) {
+    /* Resize and background refresh update the current picture without starting a swap.
+       Its eventual departure must use that latest picture, not the one from first mount. */
+    setShown({ key: contentKey, node: children });
   }
 
   useLayoutEffect(() => {
     if (!leaving) return;
+    let alive = true;
+    const complete = () => {
+      if (alive) setLeaving((current) => current === leaving ? null : current);
+    };
+    if (!active || tier === 'off') {
+      queueMicrotask(complete);
+      return () => { alive = false; };
+    }
     const { spatial, effects } = surfaceArrival('fast', 'feedback');
-    const exit = springTiming('fastEffects');
+    const exit = springTiming('fastEffects', 'feedback');
     const { arrive, depart } = offsets(side, distance);
-    /* `backwards`, so the arriving content holds its start state through the delay rather than
-       appearing at rest and dropping back. Opacity and travel on their own springs. */
-    const at = { delay: scaledMs(HANDOFF_MS), fill: 'backwards' as const };
-    enteringRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, ...at });
-    enteringRef.current?.animate([{ transform: arrive }, { transform: 'none' }], { ...spatial, ...at });
+    const at = { delay: scaledMs(HANDOFF_MS, 'feedback'), fill: 'backwards' as const };
+    const animations = [
+      enteringRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, ...at }),
+      enteringRef.current?.animate([{ transform: arrive }, { transform: 'none' }], { ...spatial, ...at }),
+    ];
     const run = leavingRef.current?.animate(
-      [
-        { opacity: 1, transform: 'none' },
-        { opacity: 0, transform: depart },
-      ],
+      [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: depart }],
       { ...exit, fill: 'forwards' },
     );
-    /* Only this departure clears the slot: a swap behind it has already replaced `leaving` with a
-       node of its own (and the `key` below gave that one its own element, so this run is animating
-       a node React has dropped). */
-    if (run) run.onfinish = () => setLeaving((current) => (current === leaving ? null : current));
-  }, [leaving, side, distance]);
+    animations.push(run);
+    // The departure is shorter than the arrival. Keep its inert snapshot until the whole
+    // handoff finishes so clearing the slot cannot cancel an incoming spring mid-tail.
+    const running = animations.filter((animation): animation is Animation => animation !== undefined);
+    Promise.all(running.map((animation) => animation.finished)).then(complete, () => {});
+    return () => {
+      alive = false;
+      for (const animation of animations) animation?.cancel();
+    };
+  }, [leaving, active, side, distance, tier, scale]);
 
   return (
     <div className={cn('relative', className)}>

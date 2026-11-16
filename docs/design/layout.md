@@ -119,6 +119,8 @@ Clip the full-width translated paint box to the control's bounds so it cannot wi
 
 Dragging, keyboard input and externally supplied values paint immediately. Pointer movement takes over an unfinished jump, and release does not launch another animation. Cancellation, blur, disabling and unmounting clear unfinished motion. Do not replace the handle with a circular knob or make it lag behind a drag.
 
+`RangeSlider` shares the single slider's native geometry, paint and select-jump spring. Its two labelled native ranges keep ordered values; crossing transfers the active handle without moving the stationary endpoint. `onValueChange` reports a draft, while `onCommit` reports one changed range on pointer release or a native keyboard/assistive-technology step. Cancellation or focus loss discards an unfinished pointer draft without submitting it. External values and bounds synchronize the control. `DateRangeSlider` only converts calendar days and renders the two date labels; it does not own a second gesture or animation implementation.
+
 Run `bun run test:slider` against the production build for press/release, select jump, drag interruption, keyboard input, endpoints, touch cancellation and motion preferences. Follow [CSS verification](../css-traps.md) for emitted selectors and rendered geometry.
 
 ## Navigation geometry

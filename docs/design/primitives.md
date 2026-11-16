@@ -15,7 +15,7 @@ Compose the existing components; do not copy their class strings or interaction 
 | Arbitrary badge colour | `ColorSwatch`; shared `ColorPicker` with `hues="mono"` |
 | Theme selection | `PaletteSwatches`, `ColorPicker`, `ImagePalettePicker` |
 | Checkbox / radio | `Checkbox`, `Radio` |
-| Slider | `Slider` |
+| Slider / ordered range | `Slider` / `RangeSlider`; `DateRangeSlider` adapts calendar dates |
 | One-time code | `CodeInput` |
 | On/off setting | `ToggleSwitch`; `layout="row"` in a settings list |
 | Value dropdown | `Select`; `label` selects the outlined form slot |
@@ -57,6 +57,7 @@ Compose the existing components; do not copy their class strings or interaction 
 | Route fallback | `PageFallback` from `components/ImageDetailSlot.tsx` |
 | Loading shapes | `Skeleton`, `SkeletonCircle`, row/grid-specific skeletons |
 | Progress value | `ProgressBar` |
+| Time-series chart | `StatChart`; token-based SVG with a stable exact-value readout |
 | Action progress | `Spinner` or the button's loading state |
 | Record table | `DataTable` |
 | List entries added/removed | `PresenceList`; one departing block uses `PresenceBlock` |
@@ -163,10 +164,16 @@ The toolbar stays between the search field and results in success, empty and fai
 - `Card interactive` is a button; `Card as="a"` does not receive button-only attributes.
 - Badge is a mark; Chip is a control. An input Chip with only `onRemove` has a text label and one dismiss control named with the operation and item label, following the [copy contract](typography-and-copy.md#copy).
 - Avatar supports 32 / 40 / 48 / 56 and responsive `hero`. Use `unoptimized` for the documented native no-referrer path; `priority` is for the profile's largest paint.
-- `Skeleton` yields its default radius when explicitly supplied. Badge yields its default maximum width.
+- `Skeleton` yields its default radius when explicitly supplied. Its `overlay` variant sweeps retained content without an opaque plate. Badge yields its default maximum width.
 - `ProgressBar` and `Field` yield their full-width default through supported width overrides; a breakpoint-only Field width retains the mobile default.
 
 `cn` is a plain join. Do not rely on class order to resolve two conflicting utilities.
+
+### Statistics charts
+
+`StatChart` keeps legend actions mounted while `SwapContent` replaces only its plot. Inactive retained panes update directly without playing hidden swaps; superseded runs are cancelled, and an active handoff waits for all incoming and outgoing tracks to finish. Category changes remain the enclosing `TabPanes`' responsibility. Data/view changes reveal authentic strokes from left to right on `defaultEffects`; reduced motion only fades, and off paints the final line immediately. First client arrivals use the entrance category, while hydration never re-hides server-painted data; later changes use feedback. Do not interpolate counts into a fictitious trend. Refresh shimmer covers the plotting rectangle without masking axis labels or replacing retained data.
+
+Axes retain the `label-s` role at the measured container width. Theme ink, container and outline roles replace translucent plot colours. Exact values occupy a stable two-/four-column grid below the plot: pointer hover, touch selection and Left/Right/Home/End inspect the same buckets. Community daily and cumulative views retain the same four series, so changing view does not change the readout's row count. An empty plot uses `EmptyState` without removing the view controls.
 
 ## Tabs and entrances
 
@@ -304,6 +311,8 @@ Run `bun run check` and the affected browser suites:
 | Change | Command |
 | --- | --- |
 | Primitive behaviour | `bun run test:primitives` |
+| Single slider | `bun run test:slider` |
+| Statistics chart and date range | `bun run test:stats` |
 | Presence and focus | `bun run test:presence` |
 | Drawer | `bun run test:drawer` |
 | Tab press/cancellation | `bun run test:tab-press` |
