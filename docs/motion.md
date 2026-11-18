@@ -41,7 +41,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 
 | Transition | Roles |
 | --- | --- |
-| Tab strip | `PAGER_SPRING`, launched at half its rate |
+| Tab strip and following controls | `PAGER_SPRING`, launched at half its rate; reduced controls change position through an effects fade |
 | Lightbox swipe / zoom | `PAGER_SPRING` / `layout` |
 | Fullscreen lightbox | Bottom arrival `slowSpatial`, opacity `slowEffects`; exit `defaultEffects`. Shell depth follows `slowSpatial` and returns on `defaultEffects`; see [Fullscreen image viewer](transitions.md#fullscreen-image-viewer) |
 | Route fade through | Exit `fastEffects`, rise `defaultEffects`; arrival `slowEffects` after `HANDOFF_MS` |

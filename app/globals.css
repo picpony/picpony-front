@@ -2571,33 +2571,12 @@ html #nprogress .peg {
 }
 
 @supports not (content-visibility: hidden) {
-  [data-tab-panel]:not([data-tab-size='largest'])
+  [data-tab-panel]
     > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
       [data-tab-pane-entering]
     ),
-  [data-tab-panel]:not([data-tab-size='largest']) > [data-tab-pane][data-tab-pane-done] {
+  [data-tab-panel] > [data-tab-pane][data-tab-pane-done] {
     display: none;
-  }
-}
-
-/* Bounded comparable panes may reserve their natural maximum. Visibility, rather than size
-   containment, conceals inactive peers while all four continue to size the same grid cell. */
-[data-tab-panel][data-tab-size='largest'] {
-  align-items: stretch;
-}
-
-[data-tab-panel][data-tab-size='largest']
-  > [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
-    [data-tab-pane-entering]
-  ):not([data-tab-pane-prerender]),
-[data-tab-panel][data-tab-size='largest'] > [data-tab-pane][data-tab-pane-done] {
-  content-visibility: visible;
-  visibility: hidden;
-  pointer-events: none;
-
-  /* A child with its own visible state must not escape a retained, concealed pane. */
-  & * {
-    visibility: hidden !important;
   }
 }
 

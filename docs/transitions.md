@@ -94,7 +94,7 @@ Standard shared-axis movement uses `PAGER_SPRING`. On wide screens, `columnWindo
 
 Do not animate panel height. Both panes naturally hold `max(H_out, H_in)` during the run.
 
-Comparable bounded panels may use `TabPanes size="largest"`, as `/stats` does to keep its shared date controls stationary. All retained panes contribute to the grid's natural maximum and stretch to that shared height; content-sized cards may fill it without an inter-card gap. Inactive panes stay visually hidden, inert and excluded from the accessibility tree. This mode does not need a departing-height scroll floor or a shrink correction. Other screens keep the default content-sized policy.
+Use `TabPanes following` for shared controls that belong below bounded panes of different heights, as on `/stats`. The controls translate between the panes' natural bottom edges on the shared tab clock; do not stretch the cards or animate height. A press holds the old position until playback starts. Standard motion retargets from the painted position on interruption, reduced motion changes position during a fade, and off cuts. Apply the scroll floor after the controls rather than between the controls and the selected pane. `/stats` uses `TabPane inertWhenInactive` so pressing Tab during a slide enters the selected chart, not a control that is still sliding out.
 
 Shared-chrome screens retain `holdFloor` while needed to keep the current offset reachable. Release it when scrolling no longer needs it. Other screens clamp against the settled height; see [tab offsets](scrolling.md#tab-offsets).
 

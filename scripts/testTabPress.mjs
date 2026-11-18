@@ -45,8 +45,10 @@ const debugPort = await freePort();
 const upstreamPort = await freePort();
 const profileDir = mkdtempSync(path.join(tmpdir(), 'picpony-tabpress-'));
 
+const upstreamOrigin = `http://127.0.0.1:${upstreamPort}`;
 const upstream = createHttpServer((req, res) => {
-  const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`, req.method);
+  const target = req.url?.startsWith('/api/v1/json/') ? 'https://trixiebooru.org' : upstreamOrigin;
+  const stub = stubFor(`${target}${req.url}`, req.method);
   if (!stub) return res.writeHead(404).end();
   res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
@@ -56,7 +58,10 @@ await new Promise((r) => upstream.listen(upstreamPort, '127.0.0.1', r));
 const server = spawn(
   process.execPath,
   [path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start', '-p', String(appPort)],
-  { cwd: ROOT, stdio: 'ignore', env: { ...process.env, PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${upstreamPort}` } },
+  {
+    cwd: ROOT, stdio: 'ignore', env: { ...process.env, PICPONY_UPSTREAM_ORIGIN: upstreamOrigin,
+      PICPONY_DERPI_ORIGIN: `${upstreamOrigin}/api/v1/json` },
+  },
 );
 const edge = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',

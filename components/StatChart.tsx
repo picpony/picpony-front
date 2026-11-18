@@ -19,20 +19,29 @@ export interface ChartSeries {
   label: string;
   values: number[];
   tone: ChartTone;
+  /** The overview value for the same metric and time window as the plotted values. */
+  summary: number | null;
+}
+
+export interface ChartBucket {
+  key: string;
+  tick: string;
+  detail: string;
 }
 
 interface StatChartProps {
   series: ChartSeries[];
-  /** One already-formatted calendar label per bucket. */
-  labels: string[];
+  buckets: ChartBucket[];
+  overviewLabel: string;
+  detailQualifier?: string;
   ariaLabel: string;
   loading?: boolean;
   /** Only the selected chart plays data feedback; concealed peers retain final paint. */
   active?: boolean;
-  /** Controls stay outside the plot swap, so a view change preserves focus. */
-  actions?: ReactNode;
   className?: string;
 }
+
+type Inspection = { key: string; index: number; source: 'hover' | 'select' };
 
 const TONE: Record<ChartTone, string> = {
   primary: 'text-primary-ink',
@@ -132,14 +141,16 @@ function StatSeriesPaint({ dataKey, active, children }: {
   return <g ref={groupRef} data-stat-series="">{children}</g>;
 }
 
-export default function StatChart({ series, labels, ariaLabel, loading = false, active: isActive = true, actions, className = '' }: StatChartProps) {
+export default function StatChart({
+  series, buckets, overviewLabel, detailQualifier, ariaLabel, loading = false, active: isActive = true, className = '',
+}: StatChartProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
   const [width, setWidth] = useState(720);
   const [focused, setFocused] = useState(false);
-  const [selection, setSelection] = useState<{ key: string; index: number } | null>(null);
-  const count = labels.length;
-  const contentKey = `${series.map((item) => item.key).join('|')}:${labels.join('|')}`;
+  const [selection, setSelection] = useState<Inspection | null>(null);
+  const count = buckets.length;
+  const contentKey = `${series.map((item) => item.key).join('|')}:${buckets.map((bucket) => bucket.key).join('|')}`;
   const dataKey = `${contentKey}:${series.map((item) => item.values.join(',')).join('|')}`;
   const hasData = count > 0 && series.length > 0;
   const plotWidth = Math.max(1, width - PAD.left - PAD.right);
@@ -148,50 +159,78 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
   const max = step * 4;
   const yTicks = [0, step, step * 2, step * 3, step * 4];
   const xTicks = tickIndexes(count, Math.min(6, Math.max(2, Math.floor(plotWidth / 72))));
-  const active = !loading && selection?.key === contentKey && selection.index < count ? selection.index : null;
-  const shown = active ?? count - 1;
+  // Never carry a hovered bucket into another view or revive it on returning to a tab.
+  const valid = selection && isActive && !loading && selection.key === contentKey && selection.index < count;
+  if (selection && !valid) setSelection(null);
+  const active = valid ? selection.index : null;
+  const bucket = active === null ? null : buckets[active];
   const pointX = (index: number) => PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
   const linePath = (item: ChartSeries) => item.values.map((value, index) =>
     `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`,
   ).join(' ');
 
-  /* Match SVG units to CSS pixels instead of shrinking the type scale with a fixed viewBox.
-     ResizeObserver also follows the docked drawer and a pane becoming visible. */
+  // Keep axis type at CSS-pixel size without forcing layout in concealed tab panes.
   useLayoutEffect(() => {
     const plot = plotRef.current;
-    if (!plot) return;
-    const measure = () => {
-      const next = Math.round(plot.getBoundingClientRect().width);
+    if (!plot || !isActive) return;
+    const measure = (pixels: number) => {
+      const next = Math.round(pixels);
       if (next > 0) setWidth((current) => current === next ? current : next);
     };
-    measure();
-    const observer = new ResizeObserver(measure);
+    measure(plot.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => measure(entry.contentRect.width));
     observer.observe(plot);
     return () => observer.disconnect();
-  }, []);
+  }, [isActive]);
 
-  function selectAt(clientX: number) {
+  function inspect(index: number, source: Inspection['source'], toggle = false) {
+    setSelection((current) => {
+      if (current?.key === contentKey && current.index === index && current.source === source) return toggle ? null : current;
+      return { key: contentKey, index, source };
+    });
+  }
+
+  function selectAt(clientX: number, source: Inspection['source'], toggle = false) {
     if (loading || !hasData) return;
     const rect = plotRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left - PAD.left) / plotWidth));
-    setSelection({ key: contentKey, index: Math.round(ratio * (count - 1)) });
+    inspect(Math.round(ratio * (count - 1)), source, toggle);
   }
 
   return (
-    <figure className={cn('m-0 min-w-0', className)}>
+    <figure className={cn('@container m-0 min-w-0', className)}>
       <figcaption className="sr-only">{ariaLabel}</figcaption>
-      <div className="text-label-m mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {series.map((item) => (
-            <span key={item.key} className="flex items-center gap-2 text-on-surface-variant">
-              <span className={cn('h-1 w-4 rounded-full bg-current forced-mark', TONE[item.tone])} aria-hidden="true" />
-              {item.label}
-            </span>
-          ))}
+      {hasData && (
+        <div
+          role="status"
+          aria-live={focused && (!selection || selection.source === 'select') ? 'polite' : 'off'}
+          aria-atomic="true"
+          className="mb-4 border-b border-outline-variant pb-3"
+        >
+          <p className="text-label-m text-on-surface-variant tabular-nums">
+            {bucket ? (
+              <><time dateTime={bucket.key}>{bucket.detail}</time>{detailQualifier && ` · ${detailQualifier}`}</>
+            ) : overviewLabel}
+          </p>
+          <dl className={cn(
+            'mt-2 grid gap-x-4 gap-y-2',
+            series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
+          )}>
+            {series.map((item) => (
+              <div key={item.key} className="min-w-0">
+                <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
+                  <span className={cn('h-1 w-4 shrink-0 rounded-full bg-current forced-mark', TONE[item.tone])} aria-hidden="true" />
+                  {item.label}
+                </dt>
+                <dd className="text-headline-s text-on-surface tabular-nums wrap-anywhere">
+                  {formatExactCount(active === null ? item.summary : item.values[active])}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
-        {actions && <div className="shrink-0">{actions}</div>}
-      </div>
+      )}
       <div ref={plotRef} className="min-w-0" aria-busy={loading || undefined}>
         <SwapContent contentKey={contentKey} active={isActive}>
           {hasData ? (
@@ -200,35 +239,36 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
               aria-label={ariaLabel}
               aria-describedby={hintId}
               tabIndex={0}
-              className="relative rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+              className="relative rounded-sm cursor-crosshair focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
               onPointerMove={(event) => {
-                if (event.pointerType !== 'touch') selectAt(event.clientX);
+                if (event.pointerType !== 'touch') selectAt(event.clientX, 'hover');
               }}
-              onPointerDown={(event) => selectAt(event.clientX)}
+              onPointerDown={(event) => {
+                if (event.isPrimary && event.button === 0) selectAt(event.clientX, 'select', event.pointerType === 'touch');
+              }}
               onPointerCancel={() => setSelection(null)}
-              onPointerLeave={(event) => {
-                // Touch releases implicit capture before focus on some browsers. Keep the
-                // tapped bucket until blur or cancellation, rather than resetting it on leave.
-                if (event.pointerType !== 'touch' && !focused) setSelection(null);
-              }}
-              onFocus={() => {
-                setFocused(true);
-                setSelection((current) => current?.key === contentKey ? current : { key: contentKey, index: count - 1 });
-              }}
+              onPointerLeave={() => setSelection((current) => current?.source === 'hover' ? null : current)}
+              onFocus={() => setFocused(true)}
               onBlur={() => {
                 setFocused(false);
                 setSelection(null);
               }}
               onKeyDown={(event) => {
+                if (event.key === 'Escape' && active !== null) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSelection(null);
+                  return;
+                }
                 if (loading) return;
                 let next: number;
-                if (event.key === 'ArrowLeft') next = Math.max(0, shown - 1);
-                else if (event.key === 'ArrowRight') next = Math.min(count - 1, shown + 1);
+                if (event.key === 'ArrowLeft') next = active === null ? count - 1 : Math.max(0, active - 1);
+                else if (event.key === 'ArrowRight') next = active === null ? 0 : Math.min(count - 1, active + 1);
                 else if (event.key === 'Home') next = 0;
                 else if (event.key === 'End') next = count - 1;
                 else return;
                 event.preventDefault();
-                setSelection({ key: contentKey, index: next });
+                inspect(next, 'select');
               }}
             >
               <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" preserveAspectRatio="none" focusable="false" aria-hidden="true">
@@ -252,7 +292,7 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
                 })}
                 {xTicks.map((index) => (
                   <text key={index} x={pointX(index)} y={HEIGHT - 8} textAnchor={index === 0 ? 'start' : index === count - 1 ? 'end' : 'middle'} fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
-                    {labels[index]}
+                    {buckets[index].tick}
                   </text>
                 ))}
                 <StatSeriesPaint dataKey={dataKey} active={isActive}>
@@ -285,6 +325,8 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
                 />
               )}
             </div>
+          ) : loading ? (
+            <Skeleton className="h-60 w-full rounded-sm" />
           ) : (
             <div className="flex h-60 items-center justify-center">
               <EmptyState size="inline" title="此时间范围暂无数据" description="请选择其他日期范围" entrance={false} />
@@ -292,24 +334,7 @@ export default function StatChart({ series, labels, ariaLabel, loading = false, 
           )}
         </SwapContent>
       </div>
-      <p id={hintId} className="sr-only">使用左右方向键查看各日期的数据，Home 和 End 跳至首尾。</p>
-      {/* Exact values occupy a stable row, not a pointer-only floating tooltip. Touch, keyboard
-          and mouse all read the same data without covering the plot or animating its numbers. */}
-      <div role="status" aria-live={focused ? 'polite' : 'off'} aria-atomic="true" className="mt-4 min-h-10 border-t border-outline-variant pt-3">
-        {hasData && (
-          <>
-            <p className="text-label-m text-on-surface-variant tabular-nums">{labels[shown]}</p>
-            <dl className="mt-2 grid min-w-0 grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-              {series.map((item) => (
-                <div key={item.key} className="min-w-0">
-                  <dt className="text-body-s text-on-surface-variant">{item.label}</dt>
-                  <dd className="text-label-l text-on-surface tabular-nums wrap-anywhere">{formatExactCount(item.values[shown])}</dd>
-                </div>
-              ))}
-            </dl>
-          </>
-        )}
-      </div>
+      <p id={hintId} className="sr-only">使用左右方向键查看各时段的数据，Home 和 End 跳至首尾，Esc 返回汇总。</p>
     </figure>
   );
 }

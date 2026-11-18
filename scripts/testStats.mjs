@@ -5,8 +5,69 @@ import path from 'node:path';
 import { test } from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { formatChineseDay } from '../lib/statsDates.ts';
 
 const root = path.resolve(import.meta.dirname, '..');
+
+const metrics = {};
+vm.runInNewContext(ts.transpileModule(readFileSync(path.join(root, 'app/stats/statsMetrics.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { exports: metrics, require: (name) => {
+  assert.equal(name, '@/lib/statsDates');
+  return { formatChineseDay };
+} });
+
+const metricFixture = {
+  granularity: 'day',
+  totals: { users: 990, chinese_tags: 880, posts: 770, comments: 660, favorites: 550, badges: 440 },
+  window: { visitors: 17, hits: 140 },
+  series: [
+    { date: '2025-12-29', total_users: 90, new_users: 7, total_chinese_tags: 49, new_chinese_tags: 0,
+      total_posts: 30, new_posts: 3, total_comments: 45, new_comments: 5,
+      total_favorites: 56, new_favorites: 6, total_badges: 7, new_badges: 0, visitors: 10, hits: 60 },
+    { date: '2026-01-05', total_users: 102, new_users: 12, total_chinese_tags: 51, new_chinese_tags: 2,
+      total_posts: 31, new_posts: 1, total_comments: 53, new_comments: 8,
+      total_favorites: 60, new_favorites: 4, total_badges: 7, new_badges: 0, visitors: 12, hits: 80 },
+  ],
+};
+
+function entries(section, view, data = metricFixture) {
+  const definition = metrics.STATS_SECTIONS.find((item) => item.value === `stats-${section}`);
+  const model = metrics.chartMetrics(definition, data, view);
+  return [model.overviewLabel, Object.fromEntries(model.series.map(({ key, summary }) => [key, summary]))];
+}
+
+test('statistics growth overviews follow the selected buckets rather than the all-time totals', () => {
+  assert.deepEqual(entries('users', 'total'), ['区间末累计', { total_users: 102 }]);
+  assert.deepEqual(entries('users', 'added'), ['区间新增', { new_users: 19 }]);
+  assert.deepEqual(entries('tags', 'total'), ['区间末累计', { total_chinese_tags: 51 }]);
+  assert.deepEqual(entries('tags', 'added'), ['区间新增', { new_chinese_tags: 2 }]);
+  assert.deepEqual(entries('users', 'total', { ...metricFixture, series: [] }), ['区间末累计', { total_users: null }]);
+  assert.deepEqual(entries('users', 'added', { ...metricFixture, series: [] }), ['区间新增', { new_users: null }]);
+});
+
+test('traffic keeps server window counts and community metrics stay separate in both views', () => {
+  for (const view of ['total', 'added']) {
+    assert.deepEqual(entries('visits', view), ['区间合计', { visitors: 17, hits: 140 }]);
+  }
+  assert.deepEqual(entries('community', 'total'), ['区间末累计', {
+    total_posts: 31, total_comments: 53, total_favorites: 60, total_badges: 7,
+  }]);
+  assert.deepEqual(entries('community', 'added'), ['区间新增', {
+    new_posts: 4, new_comments: 13, new_favorites: 10, new_badges: 0,
+  }]);
+});
+
+test('compact tick labels and full inspection labels distinguish days, weeks and months', () => {
+  for (const [granularity, tick, detail] of [
+    ['day', '1/5', '2026年1月5日'], ['week', '1/5', '2026年1月5日当周'], ['month', '2026/1', '2026年1月'],
+  ]) {
+    const [, last] = metrics.chartBuckets({ ...metricFixture, granularity });
+    assert.equal(last.key, '2026-01-05');
+    assert.equal(last.tick, tick);
+    assert.equal(last.detail, detail);
+  }
+});
 
 function fixture() {
   const slots = [];

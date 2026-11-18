@@ -32,20 +32,23 @@ import { isConcealedPane, leanPlan, loadingInView, paneClip, type LeanPlan, type
  */
 const panelFloors = new WeakMap<HTMLElement, () => void>();
 
+function followerOf(panel: HTMLElement): HTMLElement | null {
+  const next = panel.nextElementSibling;
+  return next instanceof HTMLElement && next.hasAttribute('data-tab-follower') ? next : null;
+}
+
+type FollowerPose = { top: number; opacity: number };
+
+function paintedFollower(panel: HTMLElement): FollowerPose | undefined {
+  const node = followerOf(panel);
+  if (!node || motionTier('tabs') === 'off') return;
+  return { top: node.getBoundingClientRect().top, opacity: Number(getComputedStyle(node).opacity) };
+}
+
 /** Stop watching the floor without dropping it — a run is starting and will re-measure it. */
 function suspendFloor(panel: HTMLElement) {
   panelFloors.get(panel)?.();
   panelFloors.delete(panel);
-}
-
-/** The pane on screen once a switch has settled — the one child the stylesheet shows. */
-function shownPane(panel: HTMLElement): HTMLElement | null {
-  for (const child of panel.children) {
-    if (child instanceof HTMLElement && child.hasAttribute('data-tab-pane') && !isConcealedPane(child)) {
-      return child;
-    }
-  }
-  return null;
 }
 
 /**
@@ -54,11 +57,9 @@ function shownPane(panel: HTMLElement): HTMLElement | null {
  */
 function holdFloor(panel: HTMLElement, scroller: HTMLElement, staying: HTMLElement) {
   suspendFloor(panel);
-  if (panel.dataset.tabSize === 'largest') {
-    // Every pane still contributes to layout: no departing height needs a scroll floor.
-    panel.style.minHeight = '';
-    return;
-  }
+  const follower = followerOf(panel);
+  // A scroll floor must not open a gap between a pane and the controls that follow it.
+  const floor = follower?.parentElement ?? panel;
   const offset = scroller.scrollTop;
   /* At the very top there is no offset to keep reachable: every height reaches 0. Measured here
      anyway, a page shorter than its window read `scrollHeight` as the window's height, so the
@@ -66,28 +67,26 @@ function holdFloor(panel: HTMLElement, scroller: HTMLElement, staying: HTMLEleme
      switch's read, it only ever grew: a short /admin section stood at the tallest one visited,
      then dropped by hundreds of pixels on the first scroll. */
   if (offset <= 0) {
-    panel.style.minHeight = '';
+    floor.style.minHeight = '';
     return;
   }
   const view = scroller.clientHeight;
-  /* Everything in the page but the panel. The panel's own height includes any floor it
-     already carries, so this is floor-independent. */
-  const outside = scroller.scrollHeight - panel.offsetHeight;
+  /* Everything outside the box. Subtract its actual height, including any old floor. */
+  const outside = scroller.scrollHeight - floor.offsetHeight;
   const need = offset + view - outside;
-  /* The viewport ends above the panel: no height of the panel's can move the reader. */
   if (need <= 0 || !staying.isConnected) {
-    panel.style.minHeight = '';
+    floor.style.minHeight = '';
     return;
   }
-  panel.style.minHeight = `${Math.ceil(need)}px`;
+  floor.style.minHeight = `${Math.ceil(need)}px`;
   let frame = 0;
   const check = () => {
     frame = 0;
-    if (!panel.isConnected || !panel.style.minHeight) return stop();
-    const rest = scroller.scrollHeight - panel.offsetHeight;
-    const content = shownPane(panel)?.offsetHeight ?? 0;
+    if (!panel.isConnected || !floor.style.minHeight) return stop();
+    const rest = scroller.scrollHeight - floor.offsetHeight;
+    const content = staying.offsetHeight + (follower?.offsetHeight ?? 0);
     if (scroller.scrollTop + scroller.clientHeight <= rest + content + 1) {
-      panel.style.minHeight = '';
+      floor.style.minHeight = '';
       stop();
     }
   };
@@ -208,6 +207,7 @@ function runTabTransition(
   direction: 1 | -1,
   /** The scroll offset before this switch, when the caller read it before React's commit. */
   before?: number,
+  beforeFollower?: FollowerPose,
 ) {
   const leaving = paneOf(panel, from);
   const entering = paneOf(panel, to);
@@ -245,9 +245,12 @@ function runTabTransition(
     if (primed.panel === panel && primed.from === from && primed.to === to && primed.play(before)) return true;
     releasePrimedRun(primed.panel === panel);
   }
+  // A third destination must pick up the following controls where the reader sees them,
+  // before finish() drops the old track and conceals its leaving pane.
+  const follower = beforeFollower ?? (live?.panel === panel ? paintedFollower(panel) : undefined);
   live?.finish();
   suspendFloor(panel);
-  prepareTabRun(panel, leaving, entering, from, to, direction, before, false);
+  prepareTabRun(panel, leaving, entering, from, to, direction, before, false, follower);
   return true;
 }
 
@@ -266,6 +269,7 @@ function prepareTabRun(
   direction: 1 | -1,
   before: number | undefined,
   held: boolean,
+  beforeFollower?: FollowerPose,
 ): PrimedRun | null {
   const instant = motionTier('tabs') === 'off';
   const scroller = getAppScroller();
@@ -295,6 +299,17 @@ function prepareTabRun(
   const stripWindow = panel.closest<HTMLElement>('[data-tab-window]') ?? scroller;
   const view = scroller && !instant ? scroller.getBoundingClientRect() : null;
   const column = panel.getBoundingClientRect();
+  const follower = instant ? null : followerOf(panel);
+  let follow;
+  if (follower) {
+    const out = leaving.getBoundingClientRect().bottom - column.bottom;
+    const into = entering.getBoundingClientRect().bottom - column.bottom;
+    const initial = beforeFollower ? beforeFollower.top - column.bottom : out;
+    const opacity = beforeFollower?.opacity ?? 1;
+    if (Math.abs(out - into) > 0.5 || Math.abs(initial - into) > 0.5 || opacity < 1) {
+      follow = { node: follower, initial, opacity, leaving: out, entering: into };
+    }
+  }
   /* On a wide screen, the column and a faded margin rather than the whole scroller
      (`columnWindow`) — where the scroller is the window and the strip slides (the reduced tier's
      short shift stays inside the column), and where the engine can mask the edges. */
@@ -315,7 +330,7 @@ function prepareTabRun(
      * now, and `H_in` once the leaving pane is hidden, so `max(0, H_out − H_in)` less —
      * exact, not a bound, and only clamping when the destination is the shorter one. */
     const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    const shrink = panel.dataset.tabSize === 'largest' ? 0 : Math.max(0, leaving.offsetHeight - entering.offsetHeight);
+    const shrink = Math.max(0, leaving.offsetHeight - entering.offsetHeight);
     const finalMax = Math.max(0, max - shrink);
     next = Math.min(recallTabScroll(panel, to) ?? 0, finalMax);
   }
@@ -352,7 +367,6 @@ function prepareTabRun(
   /* The settle, for both ends a run can reach. `reversed` means it was played back and
    * `leaving` is the pane that stays. */
   let released = false;
-  let abandoned = false;
   /* The footer rides inside `[data-page-content]` and travels with every route
    * change on its own; a tab switch is the exception — the sliding panes are
    * *inside* the page — so this is the one caller that asks it to step aside. Held from the
@@ -377,7 +391,7 @@ function prepareTabRun(
        same task as the outgoing pane's compensating offset comes off — one pose, two ways
        of writing it. */
     if (reversed && scroller && offsetY !== 0) scroller.scrollTop = origin;
-    if (scroller && !abandoned) holdFloor(panel, scroller, staying);
+    if (scroller) holdFloor(panel, scroller, staying);
     if (staying.hasAttribute('data-tab-pane-active') && !going.hasAttribute('data-tab-pane-active')) {
       /* React already agrees — the commit landed during the run, or the tab was local state
          all along — so the flags have nothing left to hold, and nothing else would clear them:
@@ -431,6 +445,7 @@ function prepareTabRun(
     lean,
     clip,
     edge: edge ? { panel, reach: edge.reach, fade: edge.fade } : undefined,
+    follower: follow,
     onSettle: land,
     held,
   });
@@ -444,8 +459,9 @@ function prepareTabRun(
       release();
     },
     abandon: () => {
-      abandoned = true;
-      record.finish();
+      handle.cancel();
+      release();
+      if (activeTabRun === record) activeTabRun = null;
     },
     reverse: () => {
       if (!handle.reverse()) return false;
@@ -671,6 +687,7 @@ function prerenderPane(pane: HTMLElement) {
 }
 
 type DriverProps = { panelRef: RefObject<HTMLElement | null>; active: string };
+type DriverSnapshot = { scrollTop?: number; follower?: FollowerPose };
 
 /**
  * The reactive half, and the owner of the motion flags' lifetime. Covers every way of
@@ -692,6 +709,9 @@ type DriverProps = { panelRef: RefObject<HTMLElement | null>; active: string };
 export class TabPanesDriver extends Component<DriverProps> {
   /** The value the last commit carried — the fallback `from` for a panel never animated. */
   private previous: string;
+
+  // React can clear the earlier sibling's ref before this driver unmounts.
+  private mountedPanel: HTMLElement | null = null;
 
   /** Cancels the idle slice waiting to render a never-shown pane. */
   private cancelPrerender: (() => void) | null = null;
@@ -741,7 +761,7 @@ export class TabPanesDriver extends Component<DriverProps> {
   };
 
   componentDidMount() {
-    const panel = this.props.panelRef.current;
+    const panel = this.mountedPanel = this.props.panelRef.current;
     if (panel) {
       this.panesObserver = new MutationObserver(() => this.schedulePrerender());
       this.panesObserver.observe(panel, { childList: true });
@@ -766,7 +786,7 @@ export class TabPanesDriver extends Component<DriverProps> {
     return from;
   }
 
-  getSnapshotBeforeUpdate(prev: DriverProps): number | null {
+  getSnapshotBeforeUpdate(prev: DriverProps): DriverSnapshot | null {
     const panel = this.props.panelRef.current;
     if (!panel || prev.active === this.props.active) return null;
     const from = this.leavingFor(panel, this.props.active);
@@ -777,10 +797,12 @@ export class TabPanesDriver extends Component<DriverProps> {
     if (from !== null && activeTabRun?.panel !== panel) {
       setPaneFlags(panel, paneOf(panel, from), paneOf(panel, this.props.active));
     }
-    return getAppScroller()?.scrollTop ?? null;
+    // The next active pane could enlarge the shared grid in the commit itself.
+    const follower = from !== null && activeTabRun?.panel === panel ? paintedFollower(panel) : undefined;
+    return { scrollTop: getAppScroller()?.scrollTop, follower };
   }
 
-  componentDidUpdate(prev: DriverProps, _state: unknown, before: number | null) {
+  componentDidUpdate(prev: DriverProps, _state: unknown, before: DriverSnapshot | null) {
     const panel = this.props.panelRef.current;
     const active = this.props.active;
     if (!panel || prev.active === active) return;
@@ -798,7 +820,7 @@ export class TabPanesDriver extends Component<DriverProps> {
       );
       const direction: 1 | -1 = order.indexOf(active) > order.indexOf(from) ? 1 : -1;
       /* The run keeps the flags placed before the commit (it writes only what differs). */
-      if (runTabTransition(panel, from, active, direction, before ?? undefined)) return;
+      if (runTabTransition(panel, from, active, direction, before?.scrollTop, before?.follower)) return;
     }
     /* No switch: nothing is animating, so React's `data-tab-pane-active` is the only truth and
      * every motion flag is stale — including a hold placed before this commit, and a press's. */
@@ -814,7 +836,8 @@ export class TabPanesDriver extends Component<DriverProps> {
     document.fonts?.removeEventListener?.('loadingdone', this.onFontsLoaded);
     this.cancelPrerender?.();
     this.cancelPrerender = null;
-    const panel = this.props.panelRef.current;
+    const panel = this.mountedPanel;
+    this.mountedPanel = null;
     if (primedRun && primedRun.panel === panel) releasePrimedRun();
     if (activeTabRun && activeTabRun.panel === panel) activeTabRun.abandon();
     if (panel) suspendFloor(panel);

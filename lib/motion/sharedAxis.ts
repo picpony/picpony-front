@@ -161,6 +161,8 @@ export function playSharedAxis(opts: {
    *  on either side for the run and masked to it, fading over `fade` at each edge. The standard
    *  tier on the x axis only — the reduced tier's shift stays inside the column. */
   edge?: { panel: HTMLElement; reach: number; fade: number };
+  /** Vertical offsets from the common layout box to the painted and two settled bottoms. */
+  follower?: { node: HTMLElement; initial: number; opacity: number; leaving: number; entering: number };
   /** `reversed`: the run was sent back to its start (`reverse`), so `leaving` stays. */
   onSettle?: (reversed: boolean) => void;
   /**
@@ -172,7 +174,7 @@ export function playSharedAxis(opts: {
    */
   held?: boolean;
 }): SharedAxisHandle {
-  const { leaving, entering, axis = 'x', direction, onSettle } = opts;
+  const { leaving, entering, axis = 'x', direction, onSettle, follower } = opts;
   let leavingOffsetY = opts.leavingOffsetY ?? 0;
   let held = opts.held === true;
   const tier = motionTier('tabs');
@@ -306,9 +308,10 @@ export function playSharedAxis(opts: {
     animations.push(animation);
     /* Held at its first pose: in effect, so composited and painted, but not running. */
     if (held) animation.pause();
+    return animation;
   };
-  const run = (node: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions) =>
-    adopt(node.animate(keyframes, timing), 'tab-strip');
+  const run = (node: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions, id = 'tab-strip') =>
+    adopt(node.animate(keyframes, timing), id);
   const place = (along: number, y = 0) =>
     axis === 'x' ? `translate3d(${along}px, ${y}px, 0)` : `translate3d(0, ${along + y}px, 0)`;
 
@@ -390,6 +393,36 @@ export function playSharedAxis(opts: {
          tier keeps no overshoot, so the shift needs no spatial clock of its own. */
       { duration: SPRING_MS.defaultEffects * scale, easing: springLinear('defaultEffects'), fill: 'both' },
     );
+    if (follower) {
+      const { node } = follower;
+      const ease = springLinear('defaultEffects');
+      const fade = (start: number, opacity: number, target: number) => {
+        const from = place(0, start);
+        const to = place(0, target);
+        // Cross the layout change only while transparent. No visible long vertical travel.
+        const handoff = Math.abs(start - target) <= 0.5 ? [] : [
+          { offset: 0.5, transform: from, opacity: 0 },
+          { offset: 0.5, transform: to, opacity: 0, easing: ease },
+        ];
+        return run(node, [
+          { offset: 0, transform: from, opacity, easing: ease },
+          ...handoff,
+          { offset: 1, transform: handoff.length ? to : from, opacity: 1 },
+        ], { duration: SPRING_MS.defaultEffects * scale, fill: 'both' }, 'tab-follower');
+      };
+      let followerRun = fade(follower.initial, follower.opacity, follower.entering);
+      const reversePanes = turn;
+      turn = () => {
+        const style = getComputedStyle(node);
+        const y = style.transform === 'none' ? 0 : new DOMMatrixReadOnly(style.transform).m42;
+        const opacity = Number(style.opacity);
+        followerRun.cancel();
+        animations.splice(animations.indexOf(followerRun), 1);
+        reversePanes();
+        // A reversal after a retarget still lands at the pane's own bottom, not its old mixed pose.
+        followerRun = fade(y, opacity, reversed ? follower.leaving : follower.entering);
+      };
+    }
     return handle;
   }
 
@@ -458,7 +491,13 @@ export function playSharedAxis(opts: {
      the lag's easing to 6–12 stops a depth; a block counts as landed at a third of it. */
   const tolerance = 1.5 / distance;
 
-  const startLeg = (next: StripLeg, startTime: number | null, prior: readonly StripSegment[]) => {
+  let followerLeg: { from: number; to: number } | undefined;
+  const startLeg = (
+    next: StripLeg,
+    startTime: number | null,
+    prior: readonly StripSegment[],
+    followFrom = follower?.initial,
+  ) => {
     for (const animation of animations) animation.cancel();
     animations.length = 0;
     leg = next;
@@ -477,6 +516,14 @@ export function playSharedAxis(opts: {
     run(entering, sampledTrack(samples, (p) => ({
       transform: place(direction * distance * (1 - travel(p))),
     })).keyframes, timing);
+    if (follower && followFrom !== undefined) {
+      const followTo = next.to === 1 ? follower.entering : follower.leaving;
+      followerLeg = { from: followFrom, to: followTo };
+      const track = sampledTrack(samples, (p) => ({
+        transform: place(0, followFrom + (followTo - followFrom) * p),
+      }));
+      run(follower.node, track.keyframes, { ...timing, easing: track.easing }, 'tab-follower');
+    }
     /* A block's own transform is its lag behind the pane it sits in, the same on both
        sides, in the direction of travel — sampled once per depth (`lagSampler`, which samples the
        strip once for all of them) and shared by every block at that depth. Linear between
@@ -546,6 +593,7 @@ export function playSharedAxis(opts: {
    * first frame checks, and past a frame and a half it starts the leg again from that frame. */
   turn = () => {
     const previous = leg;
+    const previousFollow = followerLeg;
     const lead = animations[0];
     const began = typeof lead?.startTime === 'number' ? lead.startTime : null;
     /* Nothing has moved while the first leg is still waiting to start. */
@@ -556,9 +604,12 @@ export function playSharedAxis(opts: {
           ? history.map((segment) => ({ leg: segment.leg, start: segment.start + began }))
           : history;
     const launch = (at: number) => {
-      const next = turnStrip(previous, began === null ? 0 : at - began, full);
+      const elapsed = began === null ? 0 : at - began;
+      const next = turnStrip(previous, elapsed, full);
+      const p = previousFollow ? stripProgress(previous.launch)(elapsed / previous.duration) : 0;
+      const from = previousFollow && previousFollow.from + (previousFollow.to - previousFollow.from) * p;
       reversed = next.to === 0;
-      startLeg(next, began === null ? null : at, prior);
+      startLeg(next, began === null ? null : at, prior, from);
       return next;
     };
     const tapped = performance.now();

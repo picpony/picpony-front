@@ -31,7 +31,7 @@ export interface StatsPoint {
   total_badges: number;
 }
 
-/** All-time totals — the headline figures, independent of the selected range. */
+/** All-time totals at the time of the request, independent of the selected range. */
 export interface StatsTotals {
   users: number;
   chinese_tags: number;

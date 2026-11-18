@@ -23,7 +23,14 @@ AXE = (ROOT / 'node_modules/axe-core/axe.min.js').read_text(encoding='utf-8')
 OUTPUT = ROOT / '.workbuddy/stats-regression'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 CACHE = {}
-TABS = ('用户', '中文词条', '访客与浏览量', '社区内容')
+SECTIONS = {
+    '用户': ('用户趋势', (('users', '用户数'),)),
+    '中文词条': ('中文词条趋势', (('chinese_tags', '中文词条数'),)),
+    '访客与浏览量': ('访问趋势', (('visitors', '访客数'), ('hits', '浏览量'))),
+    '社区内容': ('社区内容趋势', (('posts', '帖子'), ('comments', '评论'), ('favorites', '收藏'), ('badges', '徽章'))),
+}
+TABS = tuple(SECTIONS)
+TRAFFIC = '访客与浏览量'
 TOTALS = dict(users=54321, chinese_tags=6543, posts=1234, comments=2345, favorites=3456, badges=456)
 
 
@@ -35,11 +42,6 @@ def origin(raw):
 def day_text(day):
     date = dt.date.fromisoformat(day)
     return f'{date.year}年{date.month}月{date.day}日'
-
-
-def bucket(day):
-    date = dt.date.fromisoformat(day)
-    return f'{date.month}/{date.day}'
 
 
 def requested(raw):
@@ -68,10 +70,11 @@ def site_stats(window, revision=0, empty=False):
                 new_comments=3 + index % 4 + revision, total_comments=2001 + index * 3 + revision * 1000,
                 new_favorites=4 + index % 5 + revision, total_favorites=3001 + index * 4 + revision * 1000,
                 new_badges=1 + index % 2 + revision, total_badges=301 + index + revision * 1000))
+    # Synthetic sentinels check that the overview comes from the API, not the plot.
+    counts = {key: sum(p[key] for p in points) + (offset if points else 0)
+              for key, offset in [('visitors', 17), ('hits', 29)]}
     return dict(timezone='Asia/Shanghai', granularity='day', start=start, end=end,
-                earliest=(first - dt.timedelta(days=90)).isoformat(), totals=totals,
-                window=dict(visitors=sum(p['visitors'] for p in points), hits=sum(p['hits'] for p in points)),
-                series=points)
+                earliest=(first - dt.timedelta(days=90)).isoformat(), totals=totals, window=counts, series=points)
 
 
 class Fixture:
@@ -157,30 +160,21 @@ def slider(page, name):
 
 
 def pane_state(page, expected):
-    # CSS selection deliberately includes concealed panes that role locators/axe skip.
     state = main(page).locator('[data-tab-panel] > [data-tab-pane]').evaluate_all("""nodes=>nodes.map(e=>{
       const c=getComputedStyle(e),active=e.hasAttribute('data-tab-pane-active');
-      return {name:e.getAttribute('data-tab-pane'),
-        active,inert:e.inert,ariaHidden:e.getAttribute('aria-hidden'),visibility:c.visibility,
-        contentVisibility:c.contentVisibility,display:c.display,
-        escapedChildren:[...e.querySelectorAll('figure,[data-slider],button')]
-          .filter(child=>getComputedStyle(child).visibility==='visible').length,
+      return {name:e.getAttribute('data-tab-pane'),active,tabIndex:e.getAttribute('tabindex'),
+        visibility:c.visibility,contentVisibility:c.contentVisibility,display:c.display,
         flags:[...e.attributes].map(a=>a.name).filter(n=>/^data-tab-pane-(leaving|entering|done|prerender)$/.test(n))};
     })""")
-    assert len(state) == len(TABS), json.dumps(state, ensure_ascii=False)
     keys = ('stats-users', 'stats-tags', 'stats-visits', 'stats-community')
     assert [item['name'] for item in state] == list(keys), state
-    expected_key = dict(zip(TABS, keys))[expected]
-    assert [item['name'] for item in state if item['active']] == [expected_key], state
+    assert [item['name'] for item in state if item['active']] == [dict(zip(TABS, keys))[expected]], state
     for item in state:
         assert not item['flags'], 'Settled tab flags must not remain: ' + json.dumps(state, ensure_ascii=False)
         if item['active']:
-            assert item['visibility'] == 'visible' and item['contentVisibility'] != 'hidden' and not item['inert'], state
-            assert item['ariaHidden'] != 'true' and item['display'] != 'none', state
+            assert item['visibility'] == 'visible' and item['contentVisibility'] != 'hidden' and item['display'] != 'none', state
         else:
-            assert item['inert'] and item['ariaHidden'] == 'true', state
-            assert item['visibility'] == 'hidden' and item['contentVisibility'] == 'visible', state
-            assert item['display'] != 'none' and item['escapedChildren'] == 0, state
+            assert item['tabIndex'] is None and (item['contentVisibility'] == 'hidden' or item['display'] == 'none'), state
     return state
 
 
@@ -242,25 +236,33 @@ def chart_window(page, window):
     expect(owner).to_have_attribute('data-stats-end', window[1])
 
 
-def headline(page, data, name='用户'):
-    if name == '用户':
-        value = data['totals']['users']
-    elif name == '中文词条':
-        value = data['totals']['chinese_tags']
-    elif name == '访客与浏览量':
-        value = data['window']['visitors']
+def overview(page, data, name='用户', added=False):
+    panel = pane(page, name)
+    status = panel.get_by_role('status')
+    expect(status).to_have_count(1)
+    points = data['series']
+    keys, labels = zip(*SECTIONS[name][1])
+    if name == TRAFFIC:
+        scope, values = '区间合计', [data['window'][key] for key in keys]
+    elif added:
+        scope, values = '区间新增', [sum(p['new_' + key] for p in points) for key in keys]
     else:
-        value = sum(data['totals'][k] for k in ('posts', 'comments', 'favorites', 'badges'))
-    expect(pane(page, name).get_by_text(f'{value:,}', exact=True).first).to_be_visible()
+        scope, values = '区间末累计', [points[-1]['total_' + key] for key in keys]
+    expect(status).to_be_visible()
+    expect(status.locator('p')).to_have_text(scope)
+    expect(status.locator('time')).to_have_count(0)
+    expect(status.locator('dt')).to_have_text(list(labels))
+    expect(status.locator('dd')).to_have_text([f'{value:,}' for value in values])
+    return status
 
 
 def paths(page):
     return pane(page).locator('figure svg[preserveAspectRatio="none"] path[stroke]').evaluate_all(
-        "nodes=>nodes.filter(e=>e.getClientRects().length).map(e=>e.getAttribute('d'))")
+        "nodes=>nodes.filter(e=>e.getClientRects().length&&!e.closest('[inert]')).map(e=>e.getAttribute('d'))")
 
 
 def retained(page, data, window, plotted):
-    headline(page, data)
+    overview(page, data, added=True)
     chart_window(page, window)
     assert paths(page) == plotted, 'Pending/failed refresh must retain the plotted old answer'
     selected(page, '每日')
@@ -278,8 +280,9 @@ def ready(page, fixture, verify_window=True):
     expect(main(page).get_by_role('tab', name='用户', exact=True)).to_have_attribute('aria-selected', 'true')
     wait_reads(page, fixture, 1)
     assert fixture.data is not None, 'Unexpected SSR seed bypassed the browser stats mock'
-    headline(page, fixture.data)
     if verify_window:
+        if fixture.data['series']:
+            overview(page, fixture.data)
         chart_window(page, last_window(fixture))
         no_range_hints(page)
         pane_state(page, '用户')
@@ -295,11 +298,11 @@ def categories(page, fixture, width):
     expect(main(page).get_by_label('正在加载站点统计', exact=True)).to_be_visible()
     fixture.mode = 'ok'
     fixture.release()
-    headline(page, fixture.data)
+    overview(page, fixture.data)
     selected(page, '累计')
     for name in TABS:
         tab(page, name)
-        headline(page, fixture.data, name)
+        overview(page, fixture.data, name)
         wait_reads(page, fixture, 1, quiet=True)
     tab(page, '用户')
     choice(page, '每日').click()
@@ -339,7 +342,7 @@ def range_commits(page, fixture, width):
         fixture.revision += 1
         fixture.mode = 'ok'
         fixture.release()
-        headline(page, fixture.data)
+        overview(page, fixture.data, added=True)
         chart_window(page, last_window(fixture))
         expect(pane(page).locator('[aria-busy="true"]')).to_have_count(0)
         selected(page, '每日')
@@ -374,7 +377,7 @@ def range_commits(page, fixture, width):
     fixture.revision += 1
     fixture.mode = 'ok'
     fixture.release()
-    headline(page, fixture.data)
+    overview(page, fixture.data, added=True)
     chart_window(page, last_window(fixture))
     selected(page, '每日')
     return dict(keyboard=commits, heldMoves=12, readsWhileHeld=0, readsOnRelease=1)
@@ -530,8 +533,13 @@ def refresh_failure(page, fixture, width):
     failed = last_window(fixture)
     assert failed == chosen_window(page) and failed != window
     retained(page, data, window, plotted)
+    notice = main(page).get_by_text(f'所选日期加载失败，仍显示 {day_text(window[0])} 至 {day_text(window[1])} 的统计数据', exact=True)
+    expect(notice).to_have_count(0)
     fixture.release(message='统计刷新测试失败')
     expect(main(page).get_by_text('统计刷新测试失败', exact=True)).to_be_visible()
+    expect(notice).to_be_in_viewport()
+    caption, panel = notice.bounding_box(), pane(page).bounding_box()
+    assert caption and panel and caption['height'] > 1 and 0 <= panel['y'] - caption['y'] - caption['height'] <= 16, (caption, panel)
     retry = main(page).get_by_role('button', name='重试', exact=True)
     expect(retry).to_be_visible()
     expect(retry).to_be_enabled()
@@ -543,9 +551,10 @@ def refresh_failure(page, fixture, width):
     retained(page, data, window, plotted)
     fixture.revision, fixture.mode = 1, 'ok'
     fixture.release()
-    headline(page, fixture.data)
+    overview(page, fixture.data, added=True)
     chart_window(page, failed)
     expect(main(page).get_by_text('统计刷新测试失败', exact=True)).to_have_count(0)
+    expect(notice).to_have_count(0)
     expect(main(page).get_by_role('button', name='重试', exact=True)).to_have_count(0)
     selected(page, '每日')
     wait_reads(page, fixture, 3, quiet=True)
@@ -566,7 +575,7 @@ def initial_failure(page, fixture, width):
     assert last_window(fixture) == window
     fixture.mode = 'ok'
     fixture.release()
-    headline(page, fixture.data)
+    overview(page, fixture.data)
     expect(main(page).get_by_text('统计初次加载测试失败', exact=True)).to_have_count(0)
     wait_reads(page, fixture, 2, quiet=True)
     return dict(initialWindow=window, retryWindow=last_window(fixture), reads=2)
@@ -586,11 +595,53 @@ def empty_charts(page, fixture, width):
           return false;
         }"""), 'An empty plot must use shared EmptyState/StatusView'
         expect(panel.get_by_text('请选择其他日期范围', exact=True)).to_be_visible()
-        expect(panel.locator('figure svg[preserveAspectRatio="none"] path[stroke]')).to_have_count(0)
+        expect(panel.locator('figure svg[preserveAspectRatio="none"], figure [role="status"], figure dl')).to_have_count(0)
+        expect(panel.get_by_role('heading', name=SECTIONS[name][0], exact=True)).to_be_visible()
+        if name != TRAFFIC:
+            selected(page, '累计', name)
     for name in ('开始日期', '结束日期'):
         expect(slider(page, name)).to_be_visible()
     wait_reads(page, fixture, 1, quiet=True)
     return dict(emptyTabs=TABS, sharedEmptyState=True, reads=1)
+
+
+def keyboard_pane_handoff(page, fixture, width):
+    ready(page, fixture)
+    tab(page, '中文词条')
+    tab(page, '用户')  # Warm the transition driver before exercising keyboard-only navigation.
+    main(page).get_by_role('tab', name='用户', exact=True).focus()
+    page.keyboard.press('ArrowRight')
+    # Hold the real slide so Tab cannot accidentally pass only because the old pane already disappeared.
+    tracks = page.evaluate("""()=>{
+      const tracks=document.getAnimations().filter(a=>a.id==='tab-strip'||a.id==='tab-follower');
+      for(const a of tracks)a.pause();
+      return tracks.length;
+    }""")
+    assert tracks >= 2
+    try:
+        page.keyboard.press('Tab')
+        owner = page.evaluate("()=>document.activeElement?.closest('[data-tab-pane]')?.dataset.tabPane")
+        assert owner == 'stats-tags', f'Tab entered {owner!r} instead of the selected panel during the slide'
+        expect(choice(page, '每日', '中文词条')).to_be_focused()
+    finally:
+        page.evaluate("()=>document.getAnimations().filter(a=>a.id==='tab-strip'||a.id==='tab-follower').forEach(a=>a.play())")
+    settle(page)
+    wait_reads(page, fixture, 1, quiet=True)
+    return dict(focusedPanel=owner, activeTracks=tracks)
+
+
+def centered_range(page, loading=False):
+    card = main(page).get_by_role('heading', name='时间范围', exact=True).locator('..')
+    track = card.locator('.skeleton').first if loading else card.locator('[data-slider-track="active"]')
+    frame, bar = card.bounding_box(), track.bounding_box()
+    assert frame and bar
+    center = frame['y'] + frame['height'] / 2
+    assert abs(bar['y'] + bar['height'] / 2 - center) <= 1, (frame, bar)
+    if not loading:
+        for name in ('开始日期', '结束日期'):
+            hit = slider(page, name).bounding_box()
+            assert hit and hit['height'] >= 48 and abs(hit['y'] + hit['height'] / 2 - center) <= 1, hit
+    return frame['height']
 
 
 def initial_plot_geometry(page, fixture, width):
@@ -603,10 +654,11 @@ def initial_plot_geometry(page, fixture, width):
     placeholder = loading.locator('.skeleton.h-60')
     expect(placeholder).to_have_count(1)
     before = placeholder.bounding_box()
+    range_height = centered_range(page, loading=True)
     assert before and abs(before['height'] - 240) <= 1 and before['width'] > 100, before
     fixture.mode = 'ok'
     fixture.release()
-    headline(page, fixture.data)
+    overview(page, fixture.data)
     svg = pane(page).locator('figure svg[preserveAspectRatio="none"]')
     page.wait_for_function("""()=>{
       const svg=document.querySelector('[data-tab-pane-active] figure svg[preserveAspectRatio="none"]');
@@ -614,6 +666,7 @@ def initial_plot_geometry(page, fixture, width):
     }""", timeout=6000)
     after = svg.bounding_box()
     expect(loading).to_have_count(0)
+    assert abs(centered_range(page) - range_height) <= 1, 'The date card should keep its loading geometry'
     assert after and all(abs(before[key] - after[key]) <= 1 for key in ('x', 'width', 'height')), (
         'Initial chart skeleton must occupy the destination chart width and 240px well: ' + json.dumps(dict(before=before, after=after)))
     chart_window(page, last_window(fixture))
@@ -664,7 +717,8 @@ def plot_skeleton(page, fixture, width):
     assert retained_plot, 'Pending refresh must retain the old fill, curves and axis labels'
     assert actual['background'] == 'rgba(0, 0, 0, 0)', (
         'A retained-chart skeleton must not paint an opaque surface over the old curves: ' + json.dumps(geometry))
-    headline(page, fixture.data)
+    if '--stats-geometry-only' not in sys.argv:
+        overview(page, fixture.data)
     expect(pane(page).locator('figure .skeleton')).to_have_count(0)
     wait_reads(page, fixture, 2, quiet=True)
     return dict(**geometry, retainedCurvesAndAxes=retained_plot)
@@ -680,35 +734,77 @@ READ_RANGE_GEOMETRY = """()=>{
   if(!card)throw new Error('The shared time-range Card could not be located by its heading/inputs');
   const scroll=input.closest('main.app-scroller')||input.closest('main');
   const r=card.getBoundingClientRect(),s=scroll.getBoundingClientRect();
-  return {top:r.top-s.top+scroll.scrollTop,viewportTop:r.top,height:r.height,scrollTop:scroll.scrollTop};
+  const follower=card.closest('[data-tab-follower]'),panel=follower?.previousElementSibling;
+  const active=panel?.querySelector(':scope > [data-tab-pane-active]');
+  const style=follower&&getComputedStyle(follower);
+  const track=follower?.getAnimations().find(a=>a.id==='tab-follower');
+  return {top:r.top-s.top+scroll.scrollTop,viewportTop:r.top,height:r.height,scrollTop:scroll.scrollTop,
+    afterPanel:panel?.hasAttribute('data-tab-panel')??false,
+    gap:active?r.top-active.getBoundingClientRect().bottom:null,
+    panelHeight:panel?.getBoundingClientRect().height,activeHeight:active?.getBoundingClientRect().height,
+    opacity:style?+style.opacity:1,transform:style?.transform??'none',
+    keyframes:track?.effect.getKeyframes()??null};
 }"""
 
 
+def resting_range(page):
+    state = page.evaluate(READ_RANGE_GEOMETRY)
+    assert state['afterPanel'] and abs(state['gap'] - 24) <= 1, state
+    assert abs(state['panelHeight'] - state['activeHeight']) <= 1, state
+    assert state['transform'] == 'none' and state['opacity'] == 1 and state['keyframes'] is None, state
+    return state
+
+
 def range_layout_round(page, label):
-    # Capture before pointerdown, through every transition frame, and after final cleanup.
-    page.evaluate("""()=>{const measure=""" + READ_RANGE_GEOMETRY + """;
-      const capture=window.__statsRange={running:true,frames:[],error:null};
-      const tick=()=>{
-        if(!capture.running)return;
-        try{capture.frames.push(measure());}catch(error){capture.error=String(error);capture.running=false;return;}
-        requestAnimationFrame(tick);
-      };tick();
-    }""")
-    try:
-        for name in ('中文词条', '访客与浏览量', '社区内容', '用户', '社区内容', '用户'):
+    tier = page.locator('html').get_attribute('data-motion')
+    rounds = []
+    for name in ('中文词条', '社区内容', '用户'):
+        before = resting_range(page)
+        # Sample the real compositor track from before pointerdown through final cleanup.
+        page.evaluate("""()=>{const measure=""" + READ_RANGE_GEOMETRY + """;
+          const capture=window.__statsRange={running:true,frames:[]};
+          const tick=()=>{
+            if(!capture.running)return;
+            capture.frames.push({...measure(),at:performance.now()});
+            requestAnimationFrame(tick);
+          };tick();
+        }""")
+        try:
             tab(page, name)
-        page.evaluate('async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame)}')
-    finally:
-        capture = page.evaluate('()=>{window.__statsRange.running=false;return window.__statsRange}')
-    assert capture['error'] is None, capture['error']
-    frames = capture['frames']
-    assert len(frames) >= 3, f'No real range geometry frames: {frames}'
-    spans = {key: max(frame[key] for frame in frames) - min(frame[key] for frame in frames)
-             for key in ('top', 'viewportTop', 'height', 'scrollTop')}
-    evidence = dict(phase=label, frames=len(frames), first=frames[0], last=frames[-1], spans=spans)
-    assert all(value <= 1 for value in spans.values()), (
-        'The shared time range must not move/resize/scroll while changing tabs: ' + json.dumps(evidence))
-    return evidence
+        finally:
+            frames = page.evaluate('()=>{window.__statsRange.running=false;return window.__statsRange.frames}')
+        after = resting_range(page)
+        delta = after['top'] - before['top']
+        assert len(frames) >= 2 and all(frame['afterPanel'] for frame in frames), frames
+        assert abs(delta - (after['activeHeight'] - before['activeHeight'])) <= 1, (before, after)
+        assert all(abs(frame['height'] - before['height']) <= 1 for frame in frames), frames
+        tracks = [frame['keyframes'] for frame in frames if frame['keyframes']]
+        positions = [frame['top'] for frame in frames] + [after['top']]
+        low, high = sorted((before['top'], after['top']))
+        intermediate = [y for y in positions if low + 1 < y < high - 1]
+        evidence = dict(tab=name, delta=round(delta, 2), samples=len(frames), intermediate=len(intermediate))
+        assert all(low - 1 <= y <= high + 1 for y in positions), evidence
+        if tier == 'off' or abs(delta) <= 1:
+            assert not tracks and not intermediate, evidence
+        elif tier == 'standard':
+            assert tracks and len(set(round(y, 1) for y in intermediate)) >= 2, evidence
+            frames = [*frames, {**after, 'at': frames[-1]['at'] + 16}]
+            for a, b in zip(frames, frames[1:]):
+                # The spring is monotone along Y and must not perform the whole move in one ordinary frame.
+                step = (b['top'] - a['top']) * (1 if delta > 0 else -1)
+                assert step >= -1, evidence
+                if b['at'] - a['at'] <= 40:
+                    assert step <= abs(delta) * .7 + 1, evidence
+            assert all(set(key) - {'offset', 'computedOffset', 'easing', 'composite'} == {'transform'}
+                       for track in tracks for key in track), evidence
+        else:
+            assert tracks and not intermediate, evidence
+            for track in tracks:
+                middle = [key for key in track if key['computedOffset'] == .5]
+                assert len(middle) == 2 and all(float(key['opacity']) == 0 for key in middle), track
+        rounds.append(evidence)
+    assert any(item['delta'] > 5 for item in rounds) and any(item['delta'] < -5 for item in rounds), rounds
+    return dict(phase=label, switches=rounds)
 
 
 def range_layout(page, fixture, width):
@@ -738,11 +834,83 @@ def range_layout(page, fixture, width):
     return dict(width=width, rounds=rounds, reads=1)
 
 
+def range_interruption(page, fixture, width):
+    ready(page, fixture)
+    page.evaluate('()=>document.fonts.ready.then(()=>true)')
+    tier = page.locator('html').get_attribute('data-motion')
+    if tier == 'standard':
+        tab(page, '社区内容')
+        tab(page, '用户')
+        before = resting_range(page)
+        selected_tab = main(page).get_by_role('tab', name='社区内容', exact=True)
+        box = selected_tab.bounding_box()
+        assert box
+        cdp = page.context.new_cdp_session(page)
+        try:
+            cdp.send('Input.dispatchTouchEvent', dict(type='touchStart', touchPoints=[
+                dict(x=box['x'] + box['width'] / 2, y=box['y'] + box['height'] / 2, id=1)]))
+            page.wait_for_function("() => document.getAnimations().some(a=>a.id==='tab-follower'&&a.playState==='paused')")
+            held = page.evaluate(READ_RANGE_GEOMETRY)
+            assert abs(held['top'] - before['top']) <= 1 and held['opacity'] == 1, held
+        finally:
+            cdp.send('Input.dispatchTouchEvent', dict(type='touchCancel', touchPoints=[]))
+            cdp.detach()
+        settle(page)
+        assert abs(resting_range(page)['top'] - before['top']) <= 1
+        pane_state(page, '用户')
+
+    def interrupt(first, then):
+        return page.evaluate("""async([first,then])=>{
+          const node=document.querySelector('[data-tab-follower]');
+          const current=()=>node.getAnimations().find(a=>a.id==='tab-follower');
+          const select=value=>document.querySelector(`[role="tab"][data-tab="stats-${value}"]`).click();
+          const until=async(test)=>{
+            for(let i=0;i<90;i++){
+              if(test())return;
+              await new Promise(requestAnimationFrame);
+            }
+            throw new Error('No live range motion');
+          };
+          const y=transform=>transform==='none'?0:new DOMMatrixReadOnly(transform).m42;
+          select(first);
+          await until(()=>typeof current()?.startTime==='number');
+          const old=current();
+          // Seek the same clock used by both panes, then interrupt at a reproducible painted pose.
+          for(const animation of document.getAnimations().filter(a=>['tab-strip','tab-follower'].includes(a.id)))
+            animation.currentTime=animation.effect.getTiming().duration*.2;
+          const before=node.getBoundingClientRect().top,opacity=+getComputedStyle(node).opacity;
+          select(then);
+          await until(()=>current()&&current()!==old);
+          const firstFrame=current().effect.getKeyframes()[0],style=getComputedStyle(node);
+          const from=node.getBoundingClientRect().top-y(style.transform)+y(firstFrame.transform);
+          return {before,from,opacity,fromOpacity:+(firstFrame.opacity??1)};
+        }""", [first, then])
+
+    reversal = interrupt('community', 'users')
+    settle(page)
+    resting_range(page)
+    retarget = interrupt('visits', 'tags')
+    settle(page)
+    resting_range(page)
+    for result in (reversal, retarget):
+        assert abs(result['from'] - result['before']) < 10, result
+        assert abs(result['fromOpacity'] - result['opacity']) <= .15, result
+    # Shrinking near the end of the page may need a scroll floor, but never between the chart and slider.
+    scroll = main(page).evaluate('e=>{e.scrollTop=e.scrollHeight;return e.scrollTop}')
+    main(page).get_by_role('tab', name='用户', exact=True).evaluate('e=>e.click()')
+    expect(pane(page)).to_be_visible()
+    settle(page)
+    assert abs(resting_range(page)['scrollTop'] - scroll) <= 1
+    wait_reads(page, fixture, 1, quiet=True)
+    return dict(tier=tier, reverse=reversal, thirdDestination=retarget, savedScroll=scroll)
+
+
 CAPTURE = """()=>{
   window.__statsMotion={frames:[],done:false};const start=performance.now();
   const tick=()=>{
     const panes=[...document.querySelectorAll('main [role="tabpanel"]')]
-      .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');
+      .filter(e=>{const c=getComputedStyle(e);return e.getClientRects().length&&c.visibility!=='hidden'
+        &&c.contentVisibility!=='hidden';});
     window.__statsMotion.frames.push(panes.map(e=>{
       const c=getComputedStyle(e),m=c.transform==='none'?new DOMMatrix():new DOMMatrix(c.transform);
       return {x:m.e,opacity:+c.opacity};
@@ -774,34 +942,141 @@ def motion_probe(page, tier):
     return dict(frames=len(frames), maxTravel=round(travel, 3), minOpacity=round(opacity, 3))
 
 
+def point_detail(status, point, field, qualifier):
+    date = point['date']
+    expect(status.locator('time')).to_have_attribute('datetime', date)
+    expect(status.locator('p')).to_have_text(f'{day_text(date)} · {qualifier}')
+    expect(status.locator('dd')).to_have_text([f'{point[field]:,}'])
+
+
 def chart_inputs(page, fixture, mobile):
     tab(page, '用户')
     chart = pane(page).get_by_role('group', name=re.compile('折线图'))
     expect(chart).to_have_attribute('tabindex', '0')
-    status = pane(page).get_by_role('status')
+    status = overview(page, fixture.data)
     points = fixture.data['series']
+    at = dict(x=1, y=80)
     if mobile:
-        assert not chart.evaluate('e=>document.activeElement===e'), 'Touch coverage must start without chart focus'
-        chart.tap(position=dict(x=1, y=80))
-        expect(status).to_contain_text(bucket(points[0]['date']))
-        expect(status.locator('dd')).to_have_text(f"{points[0]['total_users']:,}")
-    chart.focus()
-    expect(status).to_have_attribute('aria-live', 'polite')
-    points, before = fixture.data['series'], status.bounding_box()
-    for key, index in [('Home', 0), ('ArrowRight', 1), ('End', len(points) - 1), ('ArrowLeft', len(points) - 2)]:
-        chart.press(key)
-        expect(status).to_contain_text(bucket(points[index]['date']))
-        expect(status.locator('dd')).to_have_text(f"{points[index]['total_users']:,}")
-    after = status.bounding_box()
-    assert before and after and abs(before['y'] - after['y']) <= 1, (before, after)
-    if mobile:
-        chart.tap(position=dict(x=1, y=80))
+        expect(chart).not_to_be_focused()
+        chart.tap(position=at)
+        point_detail(status, points[0], 'total_users', '累计')
+        chart.tap(position=at)
+        overview(page, fixture.data)
+        box = chart.bounding_box()
+        assert box
+        cdp = page.context.new_cdp_session(page)
+        try:
+            cdp.send('Input.dispatchTouchEvent', dict(type='touchStart', touchPoints=[
+                dict(x=box['x'] + box['width'] - 2, y=box['y'] + 80, id=1)]))
+            point_detail(status, points[-1], 'total_users', '累计')
+        finally:
+            cdp.send('Input.dispatchTouchEvent', dict(type='touchCancel', touchPoints=[]))
+            cdp.detach()
+        overview(page, fixture.data)
     else:
-        chart.hover(position=dict(x=1, y=80))
-    expect(status).to_contain_text(bucket(points[0]['date']))
-    expect(status.locator('dd')).to_have_text(f"{points[0]['total_users']:,}")
+        chart.hover(position=at)
+        point_detail(status, points[0], 'total_users', '累计')
+        expect(status).to_have_attribute('aria-live', 'off')
+        choice(page, '累计').hover()
+        overview(page, fixture.data)
+    chart.focus()
+    expect(chart).to_be_focused()
+    expect(status).to_have_attribute('aria-live', 'polite')
+    overview(page, fixture.data)  # Focus alone does not select a bucket.
+    before = status.bounding_box()
+    keys = [('ArrowRight', 0), ('ArrowRight', 1), ('Home', 0),
+            ('End', len(points) - 1), ('ArrowLeft', len(points) - 2)]
+    for key, index in keys:
+        chart.press(key)
+        point_detail(status, points[index], 'total_users', '累计')
+    after = status.bounding_box()
+    assert before and after and all(abs(before[k] - after[k]) <= 1 for k in ('y', 'height')), (before, after)
+    chart.press('Escape')
+    expect(chart).to_be_focused()
+    overview(page, fixture.data)
+    chart.press('End')
+    point_detail(status, points[-1], 'total_users', '累计')
+    choice(page, '累计').focus()
+    overview(page, fixture.data)
     wait_reads(page, fixture, 1, quiet=True)
-    return dict(keyboard=['Home', 'ArrowRight', 'End', 'ArrowLeft'], pointer='tap' if mobile else 'hover', stableReadout=True)
+    return dict(keyboard=[key for key, _ in keys] + ['Escape', 'blur'],
+                pointer='tap, repeat tap, CDP touchCancel' if mobile else 'hover and leave', stableReadout=True)
+
+
+def card_geometry(panel, name):
+    expect(panel.get_by_role('heading', name=SECTIONS[name][0], exact=True)).to_be_visible()
+    expect(panel.locator('figure')).to_have_count(1)
+    expect(panel.locator('dl')).to_have_count(1)
+    layout = panel.evaluate("""pane=>{
+      const card=pane.firstElementChild,heading=card.querySelector('h2'),figure=card.querySelector('figure');
+      const controls=card.querySelector('[role="group"][aria-label="图表视图"]');
+      const status=figure.querySelector('[role="status"]'),svg=figure.querySelector('svg[preserveAspectRatio="none"]');
+      const rect=e=>e.getBoundingClientRect(),css=getComputedStyle(card);
+      const title=rect(heading),note=figure.previousElementSibling.querySelector('p');
+      const chips=[...(controls?.querySelectorAll('button')??[])].map(rect);
+      const precedes=(a,b)=>!b.contains(a)&&!!(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)
+        &&rect(a).bottom<=rect(b).top+1;
+      return {headingBefore:precedes(heading,figure),controls:!!controls,controlsBefore:!controls||precedes(controls,figure),
+        controlsBesideTitle:chips.every(b=>b.left>=title.right-1&&b.top<title.bottom&&b.bottom>title.top),
+        subtitleLines:note?Math.round(rect(note).height/parseFloat(getComputedStyle(note).lineHeight)):0,
+        readoutBefore:precedes(status,svg),series:svg.querySelectorAll('path[stroke]').length,
+        rows:new Set([...status.querySelectorAll('dt')].map(e=>Math.round(rect(e).top))).size,
+        cardHeight:rect(card).height,paneExcess:rect(pane.parentElement).height-rect(card).height,
+        afterPlot:rect(figure).bottom-rect(svg).bottom,
+        afterFigure:rect(card).bottom-rect(figure).bottom-parseFloat(css.paddingBottom)-parseFloat(css.borderBottomWidth)};
+    }""")
+    assert layout['headingBefore'] and layout['controlsBefore'] and layout['controlsBesideTitle'] and layout['readoutBefore'], layout
+    assert layout['controls'] == (name != TRAFFIC) and layout['series'] == len(SECTIONS[name][1]), layout
+    assert all(abs(layout[k]) <= 1 for k in ('paneExcess', 'afterPlot', 'afterFigure')), layout
+    return layout
+
+
+def scoped_layout(page, fixture, width):
+    ready(page, fixture)
+    initial_end = last_window(fixture)[1]
+    slider(page, '结束日期').press('ArrowLeft')
+    wait_reads(page, fixture, 2)
+    window = last_window(fixture)
+    assert window[1] < initial_end and window == chosen_window(page), window
+    chart_window(page, window)
+    page.evaluate('()=>document.fonts.ready.then(()=>true)')
+    data, layouts = fixture.data, {}
+    points = data['series']
+    assert points[-1]['date'] == window[1]
+    assert all(points[-1]['total_' + key] != value for key, value in data['totals'].items())
+    for name in TABS:
+        panel = tab(page, name)
+        status = overview(page, data, name)
+        for value in status.locator('dd').all_text_contents():
+            expect(panel.get_by_text(value, exact=True)).to_have_count(1)
+        layouts[name] = card_geometry(panel, name)
+    centered_range(page)
+    note_lines = layouts['中文词条']['subtitleLines']
+    if width in (320, 390):
+        assert note_lines >= 2, 'On a phone the subtitle must wrap, not the view controls'
+    elif width == 1440:
+        assert note_lines == 1, 'The subtitle should not be forced onto two lines on desktop'
+    short, community = layouts['用户'], layouts['社区内容']
+    back = card_geometry(tab(page, '用户'), '用户')
+    assert short['rows'] == 1 and abs(back['cardHeight'] - short['cardHeight']) <= 1, layouts
+    if width < 500:
+        assert community['rows'] == 2 and community['cardHeight'] > back['cardHeight'] + 8, layouts
+    else:
+        assert community['rows'] == 1, layouts
+    choice(page, '每日').click()
+    status = overview(page, data, added=True)
+    chart = pane(page).get_by_role('group', name=re.compile('折线图'))
+    chart.press('Home')
+    point_detail(status, points[0], 'new_users', '新增')
+    chart.press('Escape')
+    overview(page, data, added=True)
+    for name in TABS[1:]:
+        panel = tab(page, name)
+        overview(page, data, name, added=True)
+        if name == '中文词条':
+            assert card_geometry(panel, name)['subtitleLines'] == note_lines
+    wait_reads(page, fixture, 2, quiet=True)
+    return dict(historicalWindow=window, scopes=['区间末累计', '区间新增', '区间合计'], layouts=layouts, reads=2)
 
 
 def audit(page):
@@ -956,7 +1231,7 @@ def line_drawing(page, fixture, width, tier):
         fixture.revision += 1
         fixture.mode = 'ok'
         fixture.release()
-        headline(page, fixture.data)
+        overview(page, fixture.data, added=True)
         chart_window(page, last_window(fixture))
         rounds.append(series_observation(page, tier, 'new data'))
         page.wait_for_function('()=>!document.querySelector("[data-tab-pane-active] figure [inert]")', timeout=6000)
@@ -1057,7 +1332,7 @@ def profile(page, fixture, width, tier):
     audits = []
     for name in TABS:
         panel = tab(page, name)
-        headline(page, fixture.data, name)
+        overview(page, fixture.data, name)
         expect(panel.get_by_role('heading').first).to_be_visible()
         fonts = panel.locator('figure svg text').evaluate_all("""nodes=>nodes.map(e=>{
           const svg=e.ownerSVGElement,r=svg.getBoundingClientRect(),style=getComputedStyle(e);
@@ -1125,10 +1400,15 @@ def run():
                 for width in (1440, 390):
                     results.append(run_case(browser, base, fixtures, f'{width}px pointer crossing and cancellation', range_pointer_edges, width=width))
                     results.append(run_case(browser, base, fixtures, f'{width}px initial chart skeleton geometry', initial_plot_geometry, width=width))
+                    results.append(run_case(browser, base, fixtures, f'{width}px failed refresh identifies retained window and retries', refresh_failure, width=width))
+                for width in (1440, 390, 320):
+                    results.append(run_case(browser, base, fixtures, f'{width}px window scopes and natural cards', scoped_layout, width=width))
+                results.append(run_case(browser, base, fixtures, 'Tab enters the selected panel during a slide', keyboard_pane_handoff, tier='standard'))
                 results.append(run_case(browser, base, fixtures, 'custom feedback/tab category isolation', custom_isolation, tier='custom'))
+                for tier in ('standard', 'reduced'):
+                    results.append(run_case(browser, base, fixtures, f'390px {tier}: interrupted range motion', range_interruption, tier, 390))
                 for name, action in [('loading and local categories', categories), ('keyboard commits and held drag', range_commits),
-                                     ('failed refresh retains data and retries', refresh_failure), ('initial failure retries', initial_failure),
-                                     ('empty charts use EmptyState', empty_charts)]:
+                                     ('initial failure retries', initial_failure), ('empty charts use EmptyState', empty_charts)]:
                     results.append(run_case(browser, base, fixtures, name, action))
                 for tier in ('standard', 'reduced', 'off'):
                     for width in (1440, 390):
@@ -1137,7 +1417,7 @@ def run():
                         results.append(run_case(browser, base, fixtures, f'dark {width}px {tier}: input motion axe overflow', check, tier, width))
             for tier in (('off',) if geometry_only else ('standard', 'reduced', 'off')):
                 for width in (1440, 390):
-                    for name, action in [('full plot loading skeleton', plot_skeleton), ('stable shared time range', range_layout)]:
+                    for name, action in [('full plot loading skeleton', plot_skeleton), ('time range follows pane', range_layout)]:
                         results.append(run_case(browser, base, fixtures, f'{width}px {tier}: {name}', action, tier, width))
                     if not geometry_only:
                         def draw(page, fixture, current_width, current_tier=tier):

@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils';
  * pane's scroll and form state.
  */
 const ActiveTabContext = createContext<string | null>(null);
-const TabSizeContext = createContext<'content' | 'largest'>('content');
 
 /**
  * True inside a `TabPane`. A block with an entrance of its own (`StatusView`'s
@@ -60,13 +59,13 @@ export function TabPanes<T extends string = string>({
   children,
   className = '',
   lean = false,
-  size = 'content',
+  following,
 }: {
   value: T;
   children: ReactNode;
   className?: string;
-  /** Bounded peers can reserve their natural maximum without animating shared chrome. */
-  size?: 'content' | 'largest';
+  /** Shared content below bounded panes. It follows the change in the pane's natural bottom. */
+  following?: ReactNode;
   /**
    * The layered departure: the blocks on screen follow the strip a little late, top first,
    * so the page leaves on a shear (`playSharedAxis`). Written on the panel as an attribute, so
@@ -88,13 +87,11 @@ export function TabPanes<T extends string = string>({
      arrives the panes still swap, which is the 关闭 tier's own path. */
   const panelRef = useRef<HTMLDivElement>(null);
 
-  return (
+  const panes = (
     <>
       {/* No `key` on this element, ever — see the note above. */}
-      <div ref={panelRef} data-tab-panel data-tab-size={size === 'largest' ? size : undefined} data-tab-lean={lean ? '' : undefined} className={cn(className)}>
-        <TabSizeContext.Provider value={size}>
-          <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
-        </TabSizeContext.Provider>
+      <div ref={panelRef} data-tab-panel data-tab-lean={lean ? '' : undefined} className={cn(className)}>
+        <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
       </div>
       {/* A **sibling after** the panel, not a child of it. React attaches a
           parent's ref only after its children's layout effects have run, so
@@ -103,6 +100,16 @@ export function TabPanes<T extends string = string>({
           the `off`-tier instant scroll. Correct by construction now. */}
       <TabPanesMotion panelRef={panelRef} active={value} />
     </>
+  );
+  if (following == null) return panes;
+
+  return (
+    <div data-tab-window="" className="isolate">
+      {panes}
+      <div data-tab-follower="" className="relative z-[1]">
+        {following}
+      </div>
+    </div>
   );
 }
 
@@ -124,14 +131,17 @@ export function TabPane({
   value,
   children,
   className = '',
+  inertWhenInactive = false,
 }: {
   value: string;
   children: ReactNode;
   className?: string;
+  /** Keep controls in an outgoing pane out of the focus order while it is still painted. */
+  inertWhenInactive?: boolean;
 }) {
   const active = useContext(ActiveTabContext);
-  const largest = useContext(TabSizeContext) === 'largest';
   const isActive = active === value;
+  const inert = inertWhenInactive && !isActive;
   const pane = useRef<HTMLDivElement>(null);
   /* A tab stop only while active **and** only when nothing inside can take focus (APG): every
      tabbed screen here but /policy's prose starts with a control, a row or a card, and a focusable
@@ -158,8 +168,8 @@ export function TabPane({
     <div
       data-tab-pane={value}
       data-tab-pane-active={isActive ? '' : undefined}
-      inert={largest && !isActive ? true : undefined}
-      aria-hidden={largest && !isActive ? true : undefined}
+      inert={inert || undefined}
+      aria-hidden={inert || undefined}
       ref={pane}
       /* The other half of `role="tab"`'s promise. `aria-labelledby` points back at
          the tab, so the panel announces itself by the tab's own label rather than

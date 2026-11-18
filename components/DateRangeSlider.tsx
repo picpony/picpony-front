@@ -39,7 +39,7 @@ export default function DateRangeSlider({ min, max, value, onCommit, className =
       valueText={(index) => formatChineseDay(dayFromIndex(index))}
       className={className}
       renderValue={(shown) => (
-        <div className="text-label-s text-on-surface-variant mt-1 flex items-center justify-between tabular-nums">
+        <div className="text-label-s text-on-surface-variant mt-1 flex min-h-6 items-center justify-between tabular-nums">
           <span>{formatChineseDay(dayFromIndex(shown.start))}</span>
           <span>{formatChineseDay(dayFromIndex(shown.end))}</span>
         </div>
