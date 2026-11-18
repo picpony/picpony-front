@@ -74,6 +74,8 @@ The home gallery/forum pill is the exception:
 
 The selection commit follows the first presented frame through `afterFirstFrame`, or flushes on the next input. The indicator uses cached geometry from ResizeObserver.
 
+Once playback starts, native touch scrolling must leave the strip running, just like wheel scrolling. A touch tap inside a pane settles the strip on release, before a card can open from a moving position. Mouse and pen presses still settle it on pointerdown.
+
 `turnStrip` starts from the displayed pose with the existing launch-speed and remaining-distance rule. Do not replace it with `Animation.reverse()`. A switch to a third tab settles the current run before starting another.
 
 ### Window and lean

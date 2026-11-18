@@ -9,6 +9,8 @@
  * panel shows exactly one pane, that pane is its row's selected tab, no motion flag, transform,
  * clip, widened box, mask or tab animation is left anywhere, the scroller is no longer the strip's
  * window, and the address names the tab (where the screen keeps it there).
+ * During playback, native touch scrolling must advance the page without cutting the strip short;
+ * an intentional activation must still reach the arriving pane's control with settled geometry.
  *
  * Runs `next start` (the last build) on a phone viewport, at the CPU slowdowns given (default
  * `1 4`), then with a mouse on a 1920 desktop, where the strip's window is the column and a faded
@@ -211,9 +213,13 @@ const toTop = async () => {
   await sleep(150);
 };
 
-async function touch(selector, label, { hold = 90, move = null } = {}) {
+async function touch(selector, label, options) {
   const box = await boxOf(selector, label);
   if (!box) throw new Error(`no tab ${label}`);
+  await touchAt(box, options);
+}
+
+async function touchAt(box, { hold = 90, move = null } = {}) {
   const down = send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x, y: box.y }] });
   if (move) {
     await sleep(30);
@@ -228,9 +234,13 @@ async function touch(selector, label, { hold = 90, move = null } = {}) {
   await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 
-async function mouse(selector, label, { hold = 90 } = {}) {
+async function mouse(selector, label, options) {
   const box = await boxOf(selector, label);
   if (!box) throw new Error(`no tab ${label}`);
+  await mouseAt(box, options);
+}
+
+async function mouseAt(box, { hold = 90 } = {}) {
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
   await sleep(hold);
@@ -248,6 +258,79 @@ const VIEWS = '[role="tablist"][aria-label="图库视图"] [role="tab"]';
 
 const scrollTop = () => evaluate(`document.querySelector('.app-scroller')?.scrollTop ?? 0`);
 
+/* Wait for playback, not the pressed tab's paused first pose. Keep these exact animations:
+   replacing or cancelling them and eventually showing the right tab is not a passing swipe. */
+const playingPanel = (button) => `new Promise((resolve) => {
+  const until = performance.now() + 2000;
+  const panel = document.querySelector('[data-page-content] [data-tab-panel]');
+  const scroller = document.querySelector('.app-scroller');
+  const target = ${button ? `panel.querySelector(${JSON.stringify(button)})` : 'panel'};
+  const look = () => {
+    const retry = () => performance.now() < until ? requestAnimationFrame(look) : resolve(null);
+    const strip = panel.getAnimations({ subtree: true }).filter((a) => a.id === 'tab-strip');
+    const playing = () => strip.every((a) => a.playState === 'running' && a.currentTime > 0);
+    if (!target || strip.length !== 2 || !playing()) return retry();
+    const r = target.getBoundingClientRect();
+    const v = scroller.getBoundingClientRect();
+    const x = (r.left + r.right) / 2;
+    const y = (Math.max(r.top, v.top) + Math.min(r.bottom, v.bottom)) / 2;
+    if (target !== panel) {
+      // Hit the actual button and keep the pointer over it when its parent lands.
+      const pane = target.closest('[data-tab-pane]');
+      const dx = new DOMMatrixReadOnly(getComputedStyle(pane).transform).m41;
+      if (Math.abs(dx) > r.width / 4 || !target.contains(document.elementFromPoint(x, y))) return retry();
+    }
+    const top = scroller.scrollTop;
+    const at = strip[0].currentTime;
+    const finished = Promise.all(strip.map((a) => a.finished)).then(() => true, () => false);
+    const listeners = new AbortController();
+    const options = { passive: true, signal: listeners.signal };
+    const events = {};
+    let overlap = 0;
+    for (const type of ['pointerdown', 'pointerup']) target.addEventListener(type, (event) => {
+      const pane = event.target.closest('[data-tab-pane]');
+      if (pane) events[type] = getComputedStyle(pane).transform === 'none' ? 'at rest' : 'moving';
+    }, options);
+    scroller.addEventListener('scroll', () => {
+      if (events.pointerdown && playing() && strip[0].currentTime > at) overlap = Math.max(overlap, scroller.scrollTop - top);
+    }, options);
+    window.__tabInputResult = async () => {
+      listeners.abort();
+      delete window.__tabInputResult;
+      const delta = scroller.scrollTop - top;
+      const landed = await Promise.race([finished, new Promise((done) => setTimeout(() => done(false), 2000))]);
+      return { ...events, overlap, delta, landed };
+    };
+    resolve({ x, y });
+  };
+  look();
+})`;
+
+async function inputDuringSwitch(switchTab, kind) {
+  /* Slow the animation clock only: real input can cross touch slop during even a reduced fade. */
+  await send('Animation.setPlaybackRate', { playbackRate: 0.2 });
+  let point;
+  try {
+    await switchTab();
+    point = await evaluate(playingPanel(kind === 'pan' ? null : `${VIEWS}[data-tab="home-discussed"]`));
+    if (point) {
+      if (kind === 'pan') await touchAt(point, { move: { x: 0, y: -160 } });
+      else if (kind === 'tap') await touchAt(point, { hold: 5 });
+      else await mouseAt(point, { hold: 5 });
+    }
+  } finally {
+    await send('Animation.setPlaybackRate', { playbackRate: 1 });
+  }
+  const result = point && await evaluate('window.__tabInputResult()');
+  const ok = result && (kind === 'pan' ? result.pointerdown === 'moving' && result.overlap > 8 && result.landed
+    : kind === 'tap' ? result.pointerdown === 'moving' && result.pointerup === 'at rest' : result.pointerdown === 'at rest');
+  const label = kind === 'pan' ? 'a vertical touch scroll leaves the playing strip uninterrupted'
+    : `the arriving gallery button receives a ${kind} with its pane at rest`;
+  const detail = result ? JSON.stringify(result) : 'no playing strip with a reachable target';
+  console.log(`${ok ? ' ok ' : 'FAIL'}  ${label} — ${detail}`);
+  if (!ok) failures.push(`${label}: ${detail}`);
+}
+
 const runs = [...CPUS.map((cpu) => ({ cpu, tier: 'standard' })), { cpu: CPUS[0], tier: 'reduced' }, { cpu: CPUS[0], tier: 'off' }];
 let tierScript = null;
 for (const { cpu, tier } of runs) {
@@ -264,9 +347,11 @@ for (const { cpu, tier } of runs) {
   await sleep(8000);
   check('policy at rest', await evaluate(STATE), { selected: 'cookie' });
 
-  await touch(TAB, '服务协议');
+  if (tier === 'off') await touch(TAB, '服务协议');
+  else await inputDuringSwitch(() => touch(TAB, '服务协议'), 'pan');
   check('a tap', await settle(), { selected: 'agreement', url: '/policy?tab=agreement' });
 
+  await toTop();
   await touch(TAB, '隐私政策', { move: { x: 0, y: -160 } });
   check('a press that becomes a scroll switches nothing', await settle(), { selected: 'agreement' });
 
@@ -306,19 +391,23 @@ for (const { cpu, tier } of runs) {
   await touch(PILL, '论坛');
   check('the pill to 论坛', await settle(), { selected: 'forum', url: '/?tab=forum' });
 
-  await touch(PILL, '图库');
-  check('the pill back to 图库', await settle(), { selected: 'gallery', url: '/' });
+  if (tier === 'standard') {
+    await inputDuringSwitch(() => touch(PILL, '图库'), 'tap');
+  } else {
+    await touch(PILL, '图库');
+    await settle();
+    await touch(VIEWS, '本站讨论');
+  }
+  const gallery = await settle(2500);
+  check('the pill back to 图库', gallery, { selected: 'gallery' });
+  check('the gallery views to 本站讨论', gallery, { selected: 'home-discussed', url: '/?view=discussed' });
+  await touch(VIEWS, '全部');
+  check('the gallery views back to 全部', await settle(), { selected: 'home-feed', url: '/' });
 
   await touch(PILL, '论坛');
   await sleep(80);
   await touch(PILL, '图库');
   check('the pill there and straight back', await settle(2000), { selected: 'gallery', url: '/' });
-
-  await touch(VIEWS, '本站讨论');
-  check('the gallery views to 本站讨论', await settle(2500), { selected: 'home-discussed' });
-
-  await touch(VIEWS, '全部');
-  check('the gallery views back to 全部', await settle(), { selected: 'home-feed' });
 
   /* The pill is fixed chrome, so it is pressed from anywhere down the gallery: the forum opens at
      its own top and the gallery comes back to where it was left. */
@@ -406,12 +495,12 @@ await sleep(9000);
 check('wide: home at rest', await evaluate(STATE), { selected: 'gallery' });
 await midRun(PILL, '论坛', 'wide: the pill to 论坛');
 check('wide: the pill to 论坛', await settle(), { selected: 'forum', url: '/?tab=forum' });
-await mouse(PILL, '图库');
-check('wide: the pill back to 图库', await settle(), { selected: 'gallery', url: '/' });
-await mouse(VIEWS, '本站讨论');
-check('wide: the gallery views to 本站讨论', await settle(2500), { selected: 'home-discussed' });
+await inputDuringSwitch(() => mouse(PILL, '图库'), 'click');
+const wideGallery = await settle(2500);
+check('wide: the pill back to 图库', wideGallery, { selected: 'gallery' });
+check('wide: the gallery views to 本站讨论', wideGallery, { selected: 'home-discussed', url: '/?view=discussed' });
 await mouse(VIEWS, '全部');
-check('wide: the gallery views back to 全部', await settle(), { selected: 'home-feed' });
+check('wide: the gallery views back to 全部', await settle(), { selected: 'home-feed', url: '/' });
 
 if (failures.length) {
   console.error(`\n${failures.length} failure(s)`);

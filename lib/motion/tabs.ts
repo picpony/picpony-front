@@ -372,7 +372,16 @@ function prepareTabRun(
    * *inside* the page — so this is the one caller that asks it to step aside. Held from the
    * press, when the arriving pane first takes its place beside the leaving one. */
   const endTransit = instant ? () => {} : beginPageTransit();
-  const onPress = () => activeTabRun?.panel === panel && activeTabRun.finish();
+  /* A native touch pan sends pointercancel instead of pointerup. Wait for an uncancelled
+     lift so scrolling leaves the strip running, but a tap lands it before the card's
+     pointerup handler measures its launch position. Mouse and pen still land on press.
+     See docs/transitions.md#priming-and-interruption. */
+  const onPress = (event: PointerEvent) => {
+    if (event.pointerType !== 'touch') record.finish();
+  };
+  const onLift = (event: PointerEvent) => {
+    if (event.pointerType === 'touch' && event.isPrimary) record.finish();
+  };
   const release = () => {
     if (released) return;
     released = true;
@@ -382,7 +391,8 @@ function prepareTabRun(
     panel.style.overflowY = '';
     if (scroller) scroller.style.overflowAnchor = '';
     endTransit();
-    panel.removeEventListener('pointerdown', onPress, { capture: true });
+    panel.removeEventListener('pointerdown', onPress, true);
+    panel.removeEventListener('pointerup', onLift, true);
   };
   const land = (reversed: boolean) => {
     const staying = reversed ? leaving : entering;
@@ -477,10 +487,8 @@ function prepareTabRun(
   };
   const go = () => {
     if (offsetY !== 0) panel.style.overflowY = 'clip';
-    /* Same reason as the masonry cascade: these panes are ancestors of every gallery
-     * card, and `useHeroLink` measures a card during the click that follows this
-     * press. Snap to rest rather than be measured mid-slide. */
-    panel.addEventListener('pointerdown', onPress, { capture: true });
+    panel.addEventListener('pointerdown', onPress, true);
+    panel.addEventListener('pointerup', onLift, true);
     activeTabRun = record;
   };
 

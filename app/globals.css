@@ -2547,9 +2547,8 @@ html #nprogress .peg {
    See `prerenderPane`. Anything less than the real placement, a size containment or a clip,
    leaves a layout the first real show cannot reuse.) */
 
-/* (No pointer-events rule on the leaving pane. The property is inherited, so the flag restyled
-   the leaving pane's whole subtree at the start of every switch; a press on either pane during
-   a run finishes the run instead — see `runTabTransition`.) */
+/* No inherited pointer-events change across the leaving subtree. Both panes allow native
+   scrolling; the driver settles the strip for activation (docs/transitions.md#priming-and-interruption). */
 
 /* (No transition freeze here. While a switch runs, the nodes it moves carry the freeze inline —
    see `playSharedAxis`. A rule reaching every descendant of both panes, keyed on a flag, cost
