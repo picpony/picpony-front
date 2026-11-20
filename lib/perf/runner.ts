@@ -1029,16 +1029,17 @@ class PerfRun {
     text.className = 'min-w-0 text-label-l wrap-anywhere';
     text.textContent = '准备中…';
     const track = document.createElement('span');
-    track.className = 'relative mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-outline';
+    track.className = 'relative mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-on-surface-variant forced-boundary';
     const bar = document.createElement('span');
-    bar.className = 'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary';
+    bar.className = 'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary forced-mark';
     track.append(bar);
     body.append(head, text, track);
     const cancel = document.createElement('button');
     cancel.type = 'button';
+    cancel.setAttribute('data-ripple', '');
     cancel.textContent = '取消';
     cancel.className =
-      'state-layer shrink-0 rounded-full px-3 py-2 text-label-l text-inverse-primary focus-visible:outline-hidden';
+      'state-layer shrink-0 cursor-pointer rounded-full px-3 py-2 text-label-l text-inverse-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inverse-primary';
     cancel.addEventListener('click', () => this.cancel());
     chip.append(body, cancel);
     document.body.append(chip);

@@ -89,6 +89,10 @@
      Custom themes keep their prior role values. Prose uses on-surface/variant; links use link. */
 
   --md-sys-color-primary-ink: #a93d5c;
+  /* Foreground drawn on a `primary-ink` mark (a checked checkbox tick). Unlike `on-primary`,
+     which stays fixed to the non-flipping `primary` fill, this token flips with `primary-ink` so
+     marks clear 4.5:1 in both schemes across every palette. */
+  --md-sys-color-on-primary-ink: #ffffff;
 
   /* — Links. Navigable text at the brand hue's own text tone (P40 light / P80 dark). It was a
      fixed blue in both schemes; the affordance is now carried by a rest-state underline on prose
@@ -129,6 +133,9 @@
      50 rather than M3's 40 (a warm hue turns brown at 40): white on it is not a text pair.
      Under 单色 both families are the primary's hue, TonalSpot's secondary. */
   --md-sys-color-secondary: #575e74;
+  /* High-chroma ink of the secondary family (default periwinkle), for anticipatory press waves on
+     controls whose destination state is `secondary-container` (sidebar nav, pill/rail tabs, etc.). */
+  --md-sys-color-secondary-ink: #4264c9;
   --md-sys-color-on-secondary: #ffffff;
   --md-sys-color-secondary-container: #dce1fd;
   --md-sys-color-on-secondary-container: #141b2e;
@@ -284,13 +291,6 @@
   --md-sys-color-on-accent-indigo: oklch(0.36 0.095 275);
   --md-sys-color-accent-purple: oklch(0.92 0.055 315);
   --md-sys-color-on-accent-purple: oklch(0.36 0.095 315);
-
-  /* — Legacy aliases — kept until every page has migrated. The background and foreground
-     aliases have consumers (the theme bridge below, two rules further down); the primary
-     alias is kept beside them for symmetry. */
-  --background: var(--md-sys-color-surface);
-  --foreground: var(--md-sys-color-on-surface);
-  --primary: var(--md-sys-color-primary);
 }
 
 .dark {
@@ -311,6 +311,7 @@
      calculation. */
 
   --md-sys-color-primary-ink: #ffadbe;
+  --md-sys-color-on-primary-ink: #65032a;
   /* The brand hue at P80. It was a fixed light blue — 10.1:1 against the surface, 8.9:1
      against the container step, 6.8:1 against the highest step — and the tonal answer
      lands in the same place, 10.92:1 against the surface, so the swap costs nothing here
@@ -321,6 +322,7 @@
   --md-sys-color-focus: #e4bdc3;
 
   --md-sys-color-secondary: #bcc5eb;
+  --md-sys-color-secondary-ink: #aebff8;
   --md-sys-color-on-secondary: #252f4d;
   --md-sys-color-secondary-container: #3c4665;
   --md-sys-color-on-secondary-container: #dbe1ff;
@@ -399,12 +401,15 @@
 
 /* State-layer opacities — M3's own, from the state token set: hover .08, focus .10,
    pressed .10, dragged .16. Focus and pressed are deliberately EQUAL in M3; the focus ring,
-   not tint weight, distinguishes them. */
+   not tint weight, distinguishes them. The expanding press ripple carries its own token
+   (.22, tuned between M3 and Vuetify's .25) so a coloured wave reads clearly over warm and
+   dark surfaces without needing a competing flat `:active` flash behind it. */
 :root {
   --md-sys-state-hover-opacity: 0.08;
   --md-sys-state-focus-opacity: 0.1;
   --md-sys-state-pressed-opacity: 0.1;
   --md-sys-state-dragged-opacity: 0.16;
+  --md-sys-ripple-opacity: 0.22;
 
   /* Elevation. Two-layer shadows per M3, **alpha constant, only the geometry grows** — how
      M3 specifies the ladder; a ramping alpha makes one level indistinguishable from the next.
@@ -806,9 +811,11 @@ body {
   --color-primary-container: var(--md-sys-color-primary-container);
   --color-on-primary-container: var(--md-sys-color-on-primary-container);
   --color-primary-ink: var(--md-sys-color-primary-ink);
+  --color-on-primary-ink: var(--md-sys-color-on-primary-ink);
   --color-link: var(--md-sys-color-link);
   --color-link-hover: var(--md-sys-color-link-hover);
   --color-secondary: var(--md-sys-color-secondary);
+  --color-secondary-ink: var(--md-sys-color-secondary-ink);
   --color-on-secondary: var(--md-sys-color-on-secondary);
   --color-secondary-container: var(--md-sys-color-secondary-container);
   --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
@@ -882,10 +889,6 @@ body {
   --color-on-accent-indigo: var(--md-sys-color-on-accent-indigo);
   --color-accent-purple: var(--md-sys-color-accent-purple);
   --color-on-accent-purple: var(--md-sys-color-on-accent-purple);
-
-  /* Legacy aliases — still referenced until every page has migrated. */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
 
   /* — Type. Latin resolves in Geist; a Han glyph misses there and falls to `--font-han`, the
      one half of the stack that depends on the platform. It is a variable of its own, set
@@ -1655,6 +1658,9 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
     position: relative;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
+    /* Reset any inherited ripple tint on nested controls so a parent's wave colour never bleeds
+       into a child carrying a container pair of its own; `@utility ripple-*` overrides this. */
+    --ripple-color: currentColor;
   }
 
   /* A control whose *hit area* is larger than what it paints (the touch-target utility's
@@ -1686,15 +1692,18 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   }
 }
 
-/* The press wave: its opacity IS the pressed state layer — a ripple is that layer spreading
-   from the point of contact — so the value lives here once, and `spawnRipple` only drives
-   the scale and the fade-out. */
+/* The press wave: single-owner opacity from `--md-sys-ripple-opacity`, while `spawnRipple`
+   drives the fast-launch decelerating transform and eased fade-in / dissolve. Colour defaults
+   to `currentColor` (every filled/tonal/semantic container's paired `on-*` ink) and can be
+   directed by `--ripple-color` (`ripple-*` utilities or a palette tile's own theme hex) when
+   a control's resting text is neutral. */
 .ripple {
   position: absolute;
   border-radius: 9999px;
-  background: currentColor;
-  opacity: var(--md-sys-state-pressed-opacity);
+  background: var(--ripple-color, currentColor);
+  opacity: var(--md-sys-ripple-opacity);
   pointer-events: none;
+  will-change: transform, opacity;
 }
 
 /* Shared micro-interaction keyframes (used via animate-[…] utilities). */
@@ -1937,11 +1946,17 @@ html[data-motion='custom'][data-motion-feedback='off'] .skeleton::after {
   display: none;
 }
 
-/* The wave is created and faded by `spawnRipple` in both other tiers, so only the off tier
-   hides it — under reduced a wave growing from the point of contact *is* basic press
-   feedback. */
+/* The wave is created and faded by `spawnRipple` in both other tiers — under reduced a
+   bounded wave growing from the point of contact *is* basic press feedback — so only the off
+   tier hides it and restores the flat `:active` state-layer fallback on `[data-ripple]`
+   controls. */
 html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) .ripple {
   display: none;
+}
+
+html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
+  .state-layer:not(:disabled):not([aria-disabled='true']):active::before {
+  opacity: var(--md-sys-state-pressed-opacity);
 }
 
 /* Belt and braces. Under the off tier, nothing arms this (a tab switch lands in one task and
@@ -2294,7 +2309,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 }
 
 /* Give every control the M3 icon-button container it was missing: a 48dp circle with a
-   state layer, so hover/focus/press read the same here as everywhere else. */
+   state layer and press wave, so hover/focus/press read the same here as everywhere else. */
 .yarl__button {
   @apply rounded-full state-layer forced-boundary;
   display: inline-flex;
@@ -2302,6 +2317,9 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   justify-content: center;
   min-width: 48px;
   min-height: 48px;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  --ripple-color: var(--md-sys-color-on-media);
   transition:
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     color var(--duration-spring-fast-effects) var(--ease-spring-effects);
@@ -4554,6 +4572,42 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   opacity: 0.38;
 }
 
+/* M3E press-wave ink roles — used only when a control carries its own backdrop/theme colour
+   or anticipates a coloured triggered/selected state (`secondary-container`, `primary`,
+   `tertiary`, severity, media or app bar). Neutral controls with neither an independent colour
+   nor a coloured triggered state stay on the default `currentColor` (neutral surface ink). */
+@utility ripple-primary {
+  --ripple-color: var(--md-sys-color-primary-ink);
+}
+
+@utility ripple-secondary {
+  --ripple-color: var(--md-sys-color-secondary-ink);
+}
+
+@utility ripple-tertiary {
+  --ripple-color: var(--md-sys-color-tertiary);
+}
+
+@utility ripple-error {
+  --ripple-color: var(--md-sys-color-error);
+}
+
+@utility ripple-success {
+  --ripple-color: var(--md-sys-color-success);
+}
+
+@utility ripple-warning {
+  --ripple-color: var(--md-sys-color-warning);
+}
+
+@utility ripple-on-primary {
+  --ripple-color: var(--md-sys-color-on-primary);
+}
+
+@utility ripple-on-media {
+  --ripple-color: var(--md-sys-color-on-media);
+}
+
 /* M3 state layer: a tinted overlay at a fixed alpha, painted from the element's own
    text colour — replacing hand-picked hover tints that had to be written twice (light +
    dark) per call site. */
@@ -4584,7 +4638,10 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     opacity: var(--md-sys-state-focus-opacity);
   }
 
-  &:active::before {
+  /* `[data-ripple]` and lightbox controls let their expanding wave carry press feedback instead
+     of flashing a competing flat full-box tint on pointerdown (and before touch scroll detection
+     clears); the off-motion block above restores the instant `:active` fallback when waves are off. */
+  &:not([data-ripple]):not(.yarl__button):active::before {
     opacity: var(--md-sys-state-pressed-opacity);
   }
 

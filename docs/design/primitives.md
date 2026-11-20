@@ -97,11 +97,11 @@ Do not use browser confirm/prompt, naked clipboard writes, secure-context-only U
 
 ## Buttons, icons and semantics
 
-Button variants are `filled`, `tonal`, `surface`, `accent`, `text`, `on-fill`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
+Button variants are `filled`, `tonal`, `surface`, `accent`, `text`, `on-container`, `on-fill`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
 
 `ButtonLink` shares Button's icon slots, responsive labels, inner ripple host and pressed shape. Pass icons through `icon` / `trailingIcon`; do not copy the button recipe onto navigation links. External links retain their `target` / `rel` and use `prefetch={false}`. Text links in prose keep the prose-link treatment.
 
-`Button variant="on-fill"` supplies snackbar actions with `on-fill` ink and an inset contrasting focus ring. Do not override a text button's colour at the call site.
+`Button variant="on-container"` (and `IconButton variant="on-container"`) inherits the enclosing tinted container's paired `on-*-container` ink (such as `warning-container` or `secondary-container`) for label, glyph, state layer and ripple. `Button variant="on-fill"` supplies snackbar actions with `on-fill` ink and an inset contrasting focus ring. Do not override a text button's colour at the call site.
 
 IconButton owns its glyph size and tooltip:
 

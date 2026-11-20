@@ -72,8 +72,9 @@ const DetailBack = forwardRef<HTMLButtonElement, DetailBackProps>(function Detai
       tabIndex={passive ? -1 : tabIndex}
       aria-label={ariaLabel}
       aria-hidden={passive ? true : ariaHidden}
-      // A copy riding along on a hero flight must not spawn its own wave.
-      data-ripple={passive ? undefined : ''}
+      // A copy riding along on a hero flight must not spawn its own wave; live keeps `inner` so
+      // `IconButton`'s 48px `touch-target` pseudo-element is never clipped.
+      data-ripple={passive ? undefined : 'inner'}
       className={className}
     />
   );

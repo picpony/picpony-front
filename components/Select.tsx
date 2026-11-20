@@ -214,7 +214,9 @@ export default function Select<T extends string = string>({
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : cn(
                   'cursor-pointer',
-                  isSelected ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface',
+                  isSelected
+                    ? 'bg-secondary-container text-on-secondary-container forced-selected'
+                    : 'text-on-surface ripple-secondary',
                   /* The keyboard cursor. `state-layer` paints nothing until a pointer
                      arrives, so arrowing through this list used to show no cursor at
                      all — the scroll moved and the row was announced, and nothing on

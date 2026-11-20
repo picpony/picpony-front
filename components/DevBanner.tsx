@@ -83,6 +83,7 @@ export default function DevBanner({
         网站处于开发阶段，不代表最终品质
       </p>
       <IconButton
+        variant="on-container"
         size="sm"
         dismiss
         onClick={dismiss}

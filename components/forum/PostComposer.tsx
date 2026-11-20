@@ -298,7 +298,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
           <p className="min-w-0 flex-1 text-body-m">
             {editing === null ? '已恢复上次未完成的草稿' : '已恢复上次未保存的修改'}（{formatShortDateTime(restoredAt)}）
           </p>
-          <Button type="button" variant="text" size="xs" onClick={() => void discard()}>
+          <Button type="button" variant="on-container" size="xs" onClick={() => void discard()}>
             {editing === null ? '丢弃草稿' : '放弃修改'}
           </Button>
         </div>

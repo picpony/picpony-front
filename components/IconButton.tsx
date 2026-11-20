@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 export type IconButtonVariant =
   | 'standard'
+  | 'on-container'
   | 'filled'
   | 'tonal'
   | 'quiet'
@@ -88,6 +89,9 @@ export type IconButtonSelectedTone = 'secondary' | 'tertiary';
  */
 const VARIANTS: Record<IconButtonVariant, string> = {
   standard: 'bg-transparent text-on-surface-variant focus-ring',
+  // Unfilled actions inside a tinted container (`warning-container`, `secondary-container`, …)
+  // inherit the container's paired `on-*-container` ink for glyph, state layer and press wave.
+  'on-container': 'bg-transparent text-current focus-ring',
   /* `forced-boundary` wherever there is a container to lose: forced colors flattens it
      to the canvas (the outlined variant's border survives on its own). */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
@@ -102,7 +106,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      Shape is resolved with the other corners below so press state and caller-owned corners
      take precedence over hover; see docs/design/primitives.md#buttons-icons-and-semantics. */
   quiet:
-    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
+    'bg-surface-container-highest text-on-surface ripple-secondary focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
   outlined:
     'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
@@ -121,9 +125,10 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      intent: neutral at rest, the error ink while its row is hovered — the moment `hover-reveal`
      shows it, so a pointer sees what it always saw — or while it has the keyboard's focus. Under
      a finger nothing hovers, and a page of rows was a column of red bins; a removal that 撤销
-     takes back is a trailing action, not a warning (OD-5). */
+     takes back is a trailing action, not a warning (OD-5). The press wave still carries `error`,
+     so a touch tap still gives immediate destructive feedback. */
   'danger-quiet':
-    'bg-transparent text-on-surface-variant enabled:hover:text-error enabled:group-hover:text-error focus-visible:text-error focus-ring',
+    'bg-transparent text-on-surface-variant ripple-error enabled:hover:text-error enabled:group-hover:text-error focus-visible:text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
      hover and press their tint without a second hand-picked value.
      The ring is `focus-ring-on-media`, painted inward: `focus-ring` is
@@ -135,7 +140,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      carries legibility, the blur was never in the measurement, and one treatment per plate
      beats two. */
   media: 'bg-media-plate text-on-media focus-ring-on-media forced-boundary',
-  'on-primary': 'bg-transparent text-on-primary-variant focus-ring-on-primary',
+  'on-primary': 'bg-transparent text-on-primary-variant ripple-on-primary focus-ring-on-primary',
 };
 
 /* The selected state's container pair. Spelled per tone rather than composed, for the reason
@@ -267,6 +272,7 @@ export interface IconButtonClassOptions {
   shape?: IconButtonShape;
   selected?: boolean;
   selectedTone?: IconButtonSelectedTone;
+  toggle?: boolean;
   disabled?: boolean;
   /** Busy controls keep their ink and container while blocking interaction. */
   loading?: boolean;
@@ -287,13 +293,16 @@ export function iconButtonClasses({
   variant = 'standard',
   size = 'md',
   shape = 'round',
-  selected = false,
+  selected,
   selectedTone = 'secondary',
+  toggle = false,
   disabled = false,
   loading = false,
   dismiss = false,
   className = '',
 }: IconButtonClassOptions = {}): string {
+  const isSelected = Boolean(selected);
+  const canSelect = toggle || selected !== undefined;
   const isDisabled = disabled || loading;
   return cn(
     'inline-flex shrink-0 items-center justify-center focus-visible:outline-hidden',
@@ -308,7 +317,7 @@ export function iconButtonClasses({
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
        that ring at `currentcolor` and draw two. `selected` replaces the variant
        string with the ordinary outset ring, so it follows the same branch. */
-    variant === 'media' && !selected
+    variant === 'media' && !isSelected
       ? 'focus-visible:inset-ring-2'
       : 'focus-visible:ring-2',
     !isDisabled && 'state-layer',
@@ -323,7 +332,17 @@ export function iconButtonClasses({
        *selected* icon button lost the ring's colour entirely — `ring-2` then fell
        back to `currentcolor`, i.e. whatever ink happened to surround it. That is
        the exact failure the `focus-ring` utility was added to end. */
-    selected ? cn(SELECTED[selectedTone], 'focus-ring forced-selected') : VARIANTS[variant],
+    isSelected
+      ? cn(SELECTED[selectedTone], 'focus-ring forced-selected')
+      : cn(
+          VARIANTS[variant],
+          /* Unselected selectable toggles anticipate their destination container hue (`tertiary`
+             for favourites/likes, `secondary-ink` for secondary-container toggles); plain neutral
+             standard/outlined actions have no coloured state and keep the default grey wave. */
+          (variant === 'standard' || variant === 'outlined') &&
+            canSelect &&
+            (selectedTone === 'tertiary' ? 'ripple-tertiary' : 'ripple-secondary'),
+        ),
     /* A *selected* icon button is a rounded square, not a circle:
        `SelectedContainerShapeRound` is `CornerMedium` at the small step and
        `CornerLarge` at the medium one. That is M3's shape-as-state, and it is the
@@ -332,10 +351,10 @@ export function iconButtonClasses({
        its own corner outranks all three; see `HAS_RADIUS`. */
     !HAS_RADIUS.test(className) &&
       cn(
-        shape === 'round' && selected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
-        shape === 'round' && !selected && SHAPES.round,
+        shape === 'round' && isSelected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
+        shape === 'round' && !isSelected && SHAPES.round,
         shape === 'square' && SHAPES.square,
-        variant === 'quiet' && shape === 'round' && !selected && 'enabled:hover:not-data-pressed:rounded-md',
+        variant === 'quiet' && shape === 'round' && !isSelected && 'enabled:hover:not-data-pressed:rounded-md',
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */
@@ -366,7 +385,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
     size = 'md',
     shape = 'round',
     loading = false,
-    selected = false,
+    selected,
     selectedTone = 'secondary',
     toggle = false,
     dismiss = false,
@@ -432,6 +451,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
           shape,
           selected,
           selectedTone,
+          toggle,
           disabled: isDisabled,
           loading,
           dismiss,
@@ -448,7 +468,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
         onBlur={combineHandlers(onBlur, anchorProps.onBlur)}
         onContextMenu={combineHandlers(onContextMenu, anchorProps.onContextMenu)}
         onClick={loading ? blockActivation : onClick}
-        aria-pressed={rest['aria-pressed'] ?? (toggle ? selected : undefined)}
+        aria-pressed={rest['aria-pressed'] ?? (toggle ? Boolean(selected) : undefined)}
         aria-disabled={loading || rest['aria-disabled'] || undefined}
         aria-describedby={[describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined}
         aria-busy={loading || rest['aria-busy'] || undefined}

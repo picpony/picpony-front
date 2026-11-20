@@ -171,6 +171,7 @@
     border-radius: calc(var(--editor-tool-size) / 2);
     background: transparent;
     color: var(--md-sys-color-on-surface-variant);
+    --ripple-color: var(--md-sys-color-secondary-ink);
     font: inherit;
     cursor: pointer;
     touch-action: manipulation;
@@ -195,6 +196,7 @@
   .rich-text-editor [data-toolbar-toggle][aria-expanded='true'] {
     background-color: var(--md-sys-color-secondary-container);
     color: var(--md-sys-color-on-secondary-container);
+    --ripple-color: currentColor;
     border-radius: var(--radius-md);
   }
 

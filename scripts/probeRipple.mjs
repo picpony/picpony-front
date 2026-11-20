@@ -1,6 +1,7 @@
-/* Samples a ripple's computed opacity per frame across a press. Peak must be the pressed
-   state-layer token (0.1); a full-strength flash means the fade started from an absolute 1
-   instead of the underlying value. */import { spawn } from 'node:child_process';
+/* Samples a ripple's computed opacity per frame across a press. Peak must match the ripple
+   opacity token (`--md-sys-ripple-opacity`); a full-strength flash means the fade started from
+   an absolute 1 instead of the underlying value. */
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -83,7 +84,7 @@ const out = await evalIn(`(async () => {
   target.dispatchEvent(new PointerEvent('pointerdown', opts));
   /* The token itself, not the wave's opacity at spawn: the wave fades in from 0 to the token
      (lib/ripple.ts), so its computed opacity at that instant is the start of the fade. */
-  const css = getComputedStyle(document.documentElement).getPropertyValue('--md-sys-state-pressed-opacity').trim();
+  const css = getComputedStyle(document.documentElement).getPropertyValue('--md-sys-ripple-opacity').trim();
   const samples = [];
   const t0 = performance.now();
   await new Promise((done) => {
@@ -103,17 +104,21 @@ const out = await evalIn(`(async () => {
 let failed = false;
 if (typeof out === 'string') { console.log(`FAIL: ${out}`); failed = true; }
 else {
-  console.log('pressed state-layer token:', out.cssOpacityAtStart);
+  console.log('ripple opacity token:', out.cssOpacityAtStart);
   console.log('ms:opacity  ' + out.samples.map(([t, o]) => t + ':' + o).join('  '));
   const nums = out.samples.map(([, o]) => (o === 'gone' ? null : Number(o))).filter((n) => n !== null);
   const peak = Math.max(...nums);
+  const token = Number(out.cssOpacityAtStart);
   console.log('peak opacity:', peak);
   if (!nums.length) { console.log('FAIL: no wave was sampled'); failed = true; }
-  else if (!(Number(out.cssOpacityAtStart) > 0)) {
-    console.log(`FAIL: could not read the pressed state-layer token (got ${JSON.stringify(out.cssOpacityAtStart)})`);
+  else if (!(token > 0)) {
+    console.log(`FAIL: could not read the ripple opacity token (got ${JSON.stringify(out.cssOpacityAtStart)})`);
     failed = true;
-  } else if (peak > Number(out.cssOpacityAtStart) + 0.005) {
+  } else if (peak > token + 0.005) {
     console.log(`FAIL: the wave peaked at ${peak}, above its token ${out.cssOpacityAtStart}`);
+    failed = true;
+  } else if (peak < token - 0.02) {
+    console.log(`FAIL: the wave peaked at ${peak}, below its token ${out.cssOpacityAtStart}`);
     failed = true;
   }
 }

@@ -172,10 +172,10 @@ export default function DropZone({
         'spring-fast-effects transition-[background-color,border-color,box-shadow]',
         SIZES[size],
         disabled && 'disabled-content',
-        state === 'idle' && 'border-dashed border-outline',
-        state === 'dragging' && 'border-dashed border-primary-ink bg-primary-container',
-        state === 'invalid' && 'border-dashed border-error',
-        state === 'filled' && 'border-solid border-outline-variant bg-surface-container-high',
+        state === 'idle' && 'border-dashed border-outline text-on-surface',
+        state === 'dragging' && 'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
+        state === 'invalid' && 'border-dashed border-error text-on-surface',
+        state === 'filled' && 'border-solid border-outline-variant bg-surface-container-high text-on-surface',
         className,
       )}
     >
@@ -192,6 +192,7 @@ export default function DropZone({
           'focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           state !== 'dragging' && !disabled && 'state-layer',
+          state === 'invalid' && 'ripple-error',
         )}
       />
       <input

@@ -43,7 +43,7 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
           <MdThumbDown size={ICON.dense} className="text-error" aria-hidden="true" />
         </span>
       </div>
-      <div className="relative h-1 w-full overflow-hidden rounded-full bg-secondary-container">
+      <div className="relative h-1 w-full overflow-hidden rounded-full bg-secondary-container forced-boundary">
         {/* With no votes the bare track shows through. Deliberately not a `ProgressBar`: a
             100%-stacked two-segment ratio with a both-zero state, which `value`/`max` cannot
             express. Two full-width bars anchored at opposite edges and scaled, not two flex
@@ -54,11 +54,11 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
         {total > 0 && (
           <>
             <div
-              className="absolute inset-y-0 left-0 w-full origin-left bg-success-fill transition-transform spring-progress"
+              className="absolute inset-y-0 left-0 w-full origin-left bg-success-fill forced-mark transition-transform spring-progress"
               style={{ transform: `scaleX(${upvotes / total})` }}
             />
             <div
-              className="absolute inset-y-0 left-0 w-full origin-right bg-error-fill transition-transform spring-progress"
+              className="absolute inset-y-0 left-0 w-full origin-right bg-error-fill forced-color-adjust-none forced-colors:bg-[color:CanvasText] transition-transform spring-progress"
               style={{ transform: `scaleX(${downvotes / total})` }}
             />
           </>

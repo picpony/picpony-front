@@ -84,7 +84,9 @@ export default function HistoryDialog({
                   data-ripple=""
                   className={cn(
                     'm3-row state-layer flex w-full cursor-pointer select-none touch-manipulation flex-col gap-0.5 p-4 text-left transition-ui focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
-                    active ? 'bg-secondary-container text-on-secondary-container forced-selected' : 'bg-surface-container-highest text-on-surface',
+                    active
+                      ? 'bg-secondary-container text-on-secondary-container forced-selected'
+                      : 'bg-surface-container-highest text-on-surface ripple-secondary',
                   )}
                 >
                   <span className="text-body-m-emphasized">{historyTime(record.created_at) || '时间未知'}</span>

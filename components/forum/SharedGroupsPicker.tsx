@@ -166,7 +166,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
               size="inline"
               title="暂无可分享的标签组或屏蔽组"
               action={
-                <Link href="/block-groups" scroll={false} className="text-body-m text-link underline underline-offset-2">
+                <Link href="/block-groups" scroll={false} className="prose-link text-body-m focus-visible:ring-2 focus-ring">
                   前往创建屏蔽组
                 </Link>
               }

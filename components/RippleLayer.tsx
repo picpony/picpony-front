@@ -24,9 +24,15 @@ import { rippleHostOf, spawnRipple, trackPress, type RippleHandle } from '@/lib/
  */
 export default function RippleLayer() {
   useEffect(() => {
+    const releasePressMorph = (target: HTMLElement, pressedAt: number) => {
+      if (!pressedAt) return;
+      const left = Math.max(0, scaledMs(HANDOFF_MS) - (performance.now() - pressedAt));
+      window.setTimeout(() => target.removeAttribute('data-pressed'), left);
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
-      const target = (event.target as Element | null)?.closest<HTMLElement>('[data-ripple]');
+      const target = (event.target as Element | null)?.closest<HTMLElement>('[data-ripple], .yarl__button');
       // Native fieldsets can disable a control without adding its own attribute; menu
       // options express the same state through ARIA. Neither should paint a press wave.
       if (!target || target.matches(':disabled, [aria-disabled="true"]')) return;
@@ -58,33 +64,91 @@ export default function RippleLayer() {
       const letGo = (cancelled: boolean) => {
         if (cancelled) wave?.cancel();
         else wave?.release();
-        if (!pressedAt) return;
-        const left = Math.max(0, scaledMs(HANDOFF_MS) - (performance.now() - pressedAt));
-        window.setTimeout(() => target.removeAttribute('data-pressed'), left);
+        releasePressMorph(target, pressedAt);
         pressedAt = 0;
       };
-      /* The wave holds for as long as the press does (Compose's ripple): it is let go when this
-         pointer lifts or is cancelled, whatever the pointer type. A quick tap's wave starts at the
-         lift (`tap`) and is let go at once — it still spreads fully before fading. */
+      /* The wave holds for as long as the press does: it is let go when this pointer lifts, is
+         cancelled, or the window loses focus (e.g. Alt-Tab mid-press). A quick tap's wave starts
+         at the lift (`tap`) and is let go at once — it still completes its sweep before fading. */
       const pointerId = event.pointerId;
-      const end = (e: PointerEvent) => {
-        if (e.pointerId !== pointerId) return;
+      const cleanup = () => {
         window.removeEventListener('pointerup', end, true);
         window.removeEventListener('pointercancel', end, true);
+        window.removeEventListener('blur', onBlur);
+      };
+      const end = (e: PointerEvent) => {
+        if (e.pointerId !== pointerId) return;
+        cleanup();
         released = true;
         letGo(e.type === 'pointercancel');
       };
+      const onBlur = () => {
+        cleanup();
+        released = true;
+        letGo(true);
+      };
       window.addEventListener('pointerup', end, { capture: true, passive: true });
       window.addEventListener('pointercancel', end, { capture: true, passive: true });
+      window.addEventListener('blur', onBlur, { passive: true });
       trackPress(event, {
         press: start,
         tap: start,
-        cancel: () => letGo(true),
+        cancel: () => {
+          cleanup();
+          released = true;
+          letGo(true);
+        },
       });
     };
 
+    /* Keyboard activation (`Enter` / `Space` on a focused control) spawns a centred wave and
+       shares the same press-morph lifecycle, matching Vuetify's keyboard ripple behaviour. */
+    const activeKeyReleases = new Map<HTMLElement, () => void>();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const raw = event.target as Element | null;
+      if (!raw || raw.matches('input, textarea, select, [contenteditable="true"]')) return;
+      const target = raw.closest<HTMLElement>('[data-ripple], .yarl__button');
+      if (!target || target !== raw || target.matches(':disabled, [aria-disabled="true"]')) return;
+      if (event.key === ' ' && target.tagName === 'A') return;
+      if (activeKeyReleases.has(target)) return;
+
+      const host = rippleHostOf(target);
+      const rect = host.getBoundingClientRect();
+      const wave = spawnRipple(host, rect.width / 2, rect.height / 2);
+      let pressedAt = 0;
+      if (motionTier() !== 'off') {
+        target.setAttribute('data-pressed', '');
+        pressedAt = performance.now();
+      }
+      const key = event.key;
+      const release = () => {
+        if (!activeKeyReleases.delete(target)) return;
+        window.removeEventListener('keyup', onKeyUp, true);
+        target.removeEventListener('blur', release);
+        window.removeEventListener('blur', release);
+        wave?.release();
+        releasePressMorph(target, pressedAt);
+        pressedAt = 0;
+      };
+      const onKeyUp = (e: KeyboardEvent) => {
+        if (e.key === key) release();
+      };
+      activeKeyReleases.set(target, release);
+      window.addEventListener('keyup', onKeyUp, { capture: true, passive: true });
+      target.addEventListener('blur', release, { passive: true });
+      window.addEventListener('blur', release, { passive: true });
+    };
+
     document.addEventListener('pointerdown', onPointerDown, { passive: true });
-    return () => document.removeEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown, { passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      for (const release of activeKeyReleases.values()) release();
+      activeKeyReleases.clear();
+    };
   }, []);
 
   return null;

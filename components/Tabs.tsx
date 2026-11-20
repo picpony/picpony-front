@@ -389,10 +389,18 @@ export default function Tabs<T extends string = string>({
           /* The `rail` paints its own container because it has no sliding
              indicator to paint one for it; `pill` gets the fill from the indicator
              behind it and only needs the ink. Both end up on the same pair — and,
-             under forced colors, on the system's selection pair. */
+             under forced colors, on the system's selection pair. `state-layer` sits
+             on both states so hovering or focusing the active tab responds like
+             `SidebarNav` and `Pagination`. */
+          'state-layer',
+          variant === 'underline'
+            ? tone === 'warning'
+              ? 'ripple-warning'
+              : 'ripple-primary'
+            : !selected && 'ripple-secondary',
           selected
             ? cn(variant === 'rail' && 'bg-secondary-container', activeInk, variant !== 'underline' && 'forced-selected')
-            : 'text-on-surface-variant state-layer hover:text-on-surface',
+            : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
         <span data-ripple-host="" aria-hidden="true" />

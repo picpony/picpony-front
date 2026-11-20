@@ -46,7 +46,7 @@ export default function QuotaExchangeDialog({ isOpen, onClose, quota, pending, c
           <div><dt className="text-body-s text-on-surface-variant">获得额度</dt><dd className="text-title-l text-on-surface tabular-nums mt-1">{points === null ? '待核对' : `${formatExactCount(points)} 点`}</dd></div>
         </dl>
       </Card>
-      {busy ? <p className="text-body-s text-on-surface-variant">正在核对兑换结果…</p> : pending ? <p className="text-body-s text-on-surface-variant">上次兑换结果尚未确认，将继续核对。<Link href="/tasks/coins" scroll={false} className="text-link underline underline-offset-2 hover:text-link-hover">查看金币明细</Link></p> : null}
+      {busy ? <p className="text-body-s text-on-surface-variant">正在核对兑换结果…</p> : pending ? <p className="text-body-s text-on-surface-variant">上次兑换结果尚未确认，将继续核对。<Link href="/tasks/coins" scroll={false} className="prose-link focus-visible:ring-2 focus-ring">查看金币明细</Link></p> : null}
       {error !== undefined && <ErrorRetry size="inline" title="兑换未完成" message={apiErrorMessage(error)} />}
     </form>
   </Modal>;

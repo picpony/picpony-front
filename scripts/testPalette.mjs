@@ -452,9 +452,10 @@ test('a delayed custom recovery never overwrites a newer seed, companion or pale
   assert.deepEqual(appearance.currentCustomSpec(), original, 'an unchanged stored choice is recovered');
 });
 
-test('the static offline fallback uses the default palette in both schemes', () => {
+test('the static offline fallback and web manifest use the default palette', () => {
   const globals = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
   const offline = readFileSync(new URL('../public/offline.html', import.meta.url), 'utf8');
+  const manifest = readFileSync(new URL('../app/manifest.ts', import.meta.url), 'utf8');
   const painted = [globals.match(/(?:^|\n):root \{([\s\S]*?)\n\}/)[1], globals.match(/(?:^|\n)\.dark \{([\s\S]*?)\n\}/)[1]];
   const fallback = [...offline.matchAll(/:root \{([\s\S]*?)\}/g)].map((match) => match[1]);
   assert.equal(fallback.length, 2);
@@ -462,6 +463,30 @@ test('the static offline fallback uses the default palette in both schemes', () 
     for (const token of ['surface', 'on-surface', 'on-surface-variant']) {
       const color = (text, prefix) => text.match(new RegExp(`--${prefix}${token}:\\s*(#[0-9a-f]{6});`))[1];
       assert.equal(color(fallback[i], ''), color(painted[i], 'md-sys-color-'), `${token} in ${i ? 'dark' : 'light'}`);
+    }
+  }
+  const lightSurface = painted[0].match(/--md-sys-color-surface:\s*(#[0-9a-f]{6});/)[1];
+  const manifestBg = manifest.match(/background_color:\s*'(#[0-9a-f]{6})'/)[1];
+  assert.equal(manifestBg, lightSurface, 'manifest splash background matches default light surface');
+});
+
+test('on-primary-ink and secondary-ink meet contrast and hue-family invariants across custom seeds', () => {
+  for (const seed of ['#fdcad3', '#f9de84', '#30376c', '#e06c9f', '#118833', '#808080', '#ffffff', '#000000']) {
+    const d = rule.deriveCustomTheme({ seed, accent: null });
+    for (const scheme of ['light', 'dark']) {
+      const ratio = rule.contrast(d[scheme]['on-primary-ink'], d[scheme]['primary-ink']);
+      assert.ok(ratio >= 4.5, `${seed} ${scheme}: ${ratio.toFixed(2)}:1 under 4.5:1`);
+      for (const bg of ['surface', 'secondary-container']) {
+        const secRatio = rule.contrast(d[scheme]['secondary-ink'], d[scheme][bg]);
+        assert.ok(secRatio >= 3, `${seed} ${scheme} secondary-ink/${bg}: ${secRatio.toFixed(2)}:1 under 3:1`);
+      }
+      const cont = rule.hctOf(d[scheme]['secondary-container']);
+      const ink = rule.hctOf(d[scheme]['secondary-ink']);
+      if (cont.chroma >= 12) {
+        assert.ok(Math.abs(rule.norm180(ink.hue - cont.hue)) < 15, `${seed} ${scheme} secondary-ink follows secondary-container hue`);
+      } else {
+        assert.ok(ink.chroma < 6, `${seed} ${scheme} achromatic secondary-ink stays neutral`);
+      }
     }
   }
 });

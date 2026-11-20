@@ -155,8 +155,8 @@ function NavItem({
     active
       ? /* `secondary-container`: M3's own navigation-drawer active fill, and
            the pair this app already uses everywhere it means "selected". */
-        'bg-secondary-container text-on-secondary-container text-label-l-emphasized'
-      : 'text-on-surface-variant text-label-l',
+        'bg-secondary-container text-on-secondary-container text-label-l-emphasized forced-selected'
+      : 'text-on-surface-variant text-label-l ripple-secondary',
   );
 
   if (!href) {

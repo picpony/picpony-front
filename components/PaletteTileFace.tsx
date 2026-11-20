@@ -1,8 +1,34 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import CheckGlyph from '@/components/CheckGlyph';
 import type { FaceScheme, PaletteHues, PaletteTone } from '@/lib/appearance';
 import { cn } from '@/lib/utils';
+
+/**
+ * A palette tile's own press-wave tint (`--ripple-color`):
+ * - 多色: the theme's accent mark (T50 in light, T80 in dark — vivid across both bar and page).
+ * - 单色: the darker of `primary` / `onPrimary` in light and the lighter in dark, so the wave
+ *   keeps the tile's own brand hue while contrasting against its miniature page.
+ */
+export function tileRippleStyle(
+  tone: PaletteTone,
+  face: FaceScheme,
+  scheme: 'light' | 'dark',
+  hues: PaletteHues,
+): CSSProperties {
+  const color =
+    hues === 'multi'
+      ? face.accent
+      : scheme === 'light'
+        ? tone.onPrimary === '#ffffff'
+          ? tone.primary
+          : tone.onPrimary
+        : tone.onPrimary === '#ffffff'
+          ? tone.onPrimary
+          : tone.primary;
+  return { '--ripple-color': color } as CSSProperties;
+}
 
 /**
  * Geometry per size. `tile` fills a 72 × 56 tile (the palette picker in /settings, and

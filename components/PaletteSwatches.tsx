@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MdColorize, MdImage, MdPalette } from 'react-icons/md';
 
 import Button from '@/components/Button';
-import PaletteTileFace from '@/components/PaletteTileFace';
+import PaletteTileFace, { tileRippleStyle } from '@/components/PaletteTileFace';
 import Select from '@/components/Select';
 import { showToast } from '@/components/Toast';
 import {
@@ -288,6 +288,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                 onClick={(event) => pick(palette.id, event.currentTarget)}
                 onKeyDown={(event) => onKeyDown(event, index)}
                 data-ripple
+                style={tileRippleStyle(palette[scheme], THEME_FACES[palette.id][scheme], scheme, hues)}
                 className={cn(TILE_CLASS, 'text-on-surface')}
               >
                 <PaletteTileFace
@@ -318,6 +319,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             onClick={(event) => pick(CUSTOM_PALETTE, event.currentTarget)}
             onKeyDown={(event) => onKeyDown(event, PALETTES.length)}
             data-ripple
+            style={customTones ? tileRippleStyle(customTones[scheme], customTones.face[scheme], scheme, hues) : undefined}
             className={cn(
               TILE_CLASS,
               /* With no colour chosen there is no theme to draw, so the tile takes the tone

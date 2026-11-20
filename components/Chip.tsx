@@ -129,6 +129,12 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   const showsCheck = variant === 'filter' && selected;
   const hasGlyph = showsCheck || Boolean(icon);
   const crossLabel = removeLabel ?? (typeof children === 'string' ? `移除 ${children}` : '移除');
+  /* Coloured chips (selected, semantic, categorical) keep `currentColor` (their paired ink).
+     Unselected `filter` chips anticipate their tinted selection fill (`chip-selected` /
+     `primary-container`); plain neutral `assist` / `input` chips have no coloured state and
+     keep the default grey wave. */
+  const rippleTone =
+    !colors && variant === 'filter' && !isFilled && (tone === 'primary' || tone === 'neutral') && 'ripple-primary';
 
   const inside = (
     <>
@@ -203,6 +209,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
             /* The state layer. A filter chip is a control and it was the only one in
                the app with no hover feedback at all. */
             'state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
+            rippleTone,
           )}
           {...rest}
         >

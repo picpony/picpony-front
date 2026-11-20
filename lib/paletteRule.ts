@@ -288,6 +288,24 @@ export interface BrandTones {
   onPrimaryVariantDark: string;
   inkLight: string;
   inkDark: string;
+  /** `on-primary-ink` per scheme: foreground drawn on a `primary-ink` fill (e.g. a checked box). */
+  onPrimaryInkLight: string;
+  onPrimaryInkDark: string;
+}
+
+/**
+ * Paired foreground for a flipping `primary-ink` mark (e.g. a checkbox tick on a `primary-ink`
+ * fill). Unlike `on-primary` — which stays pinned to the non-flipping `primary` fill — this role
+ * flips with `primary-ink` so the mark clears 4.5:1 in both schemes across built-in and custom
+ * themes alike (M3's T100 on dark marks in light, T20 lowered as needed on bright marks in dark).
+ */
+function onInkTone(p: (tone: number) => string, fill: string): string {
+  const whiteContrast = contrast('#ffffff', fill);
+  if (whiteContrast >= 4.5) return '#ffffff';
+  let tone = 20;
+  while (tone > 0 && contrast(p(tone), fill) < 4.5) tone -= 1;
+  const dark = p(tone);
+  return contrast(dark, fill) >= whiteContrast ? dark : '#ffffff';
 }
 
 /**
@@ -332,14 +350,18 @@ function inkTones(
   }
   const ink = white ? '#ffffff' : p(onTone);
   const inkTone = white ? 100 : onTone;
+  const inkLightHex = p(inkLight);
+  const inkDarkHex = p(inkDark);
   return {
     light,
     dark,
     onPrimary: ink,
     onPrimaryVariantLight: onPrimaryVariant(palettes.primary, ink, inkTone, light),
     onPrimaryVariantDark: onPrimaryVariant(palettes.primary, ink, inkTone, dark),
-    inkLight: p(inkLight),
-    inkDark: p(inkDark),
+    inkLight: inkLightHex,
+    inkDark: inkDarkHex,
+    onPrimaryInkLight: onInkTone(p, inkLightHex),
+    onPrimaryInkDark: onInkTone(p, inkDarkHex),
   };
 }
 
@@ -554,7 +576,11 @@ type ToneSpec =
   | 'on-primary-variant-light'
   | 'on-primary-variant-dark'
   | 'ink-light'
-  | 'ink-dark';
+  | 'ink-dark'
+  | 'on-ink-light'
+  | 'on-ink-dark'
+  | 'secondary-ink-light'
+  | 'secondary-ink-dark';
 export type Role = readonly [token: string, slot: Slot, light: ToneSpec, dark: ToneSpec];
 
 /**
@@ -577,12 +603,18 @@ export const ROLES: readonly Role[] = [
   /* The brand as *ink* — a mark, never lighter than the brand in light, never
      darker in dark. Fill and ink may differ: one is a surface, one a mark. */
   ['primary-ink',               'primary',        'ink-light',       'ink-dark'],
+  /* Paired foreground on a `primary-ink` mark (e.g. a checked checkbox tick): flips with
+     `primary-ink`, clearing 4.5:1 in both schemes where non-flipping `on-primary` does not. */
+  ['on-primary-ink',            'primary',        'on-ink-light',    'on-ink-dark'],
   /* Navigable text: the brand hue at a text tone. Prose links carry a rest-state
      underline so the affordance no longer rests on hue alone. */
   ['link',                      'primary',        40,                80],
   ['link-hover',                'primary',        35,                85],
 
   ['secondary',                 'secondary',      40,                80],
+  /* High-chroma ink of the secondary family, for anticipatory press ripples on controls whose
+     destination state is `secondary-container` (sidebar nav, pill/rail tabs, select options). */
+  ['secondary-ink',             'secondary',      'secondary-ink-light', 'secondary-ink-dark'],
   ['on-secondary',              'secondary',      100,               20],
   ['secondary-container',       'secondary',      90,                30],
   ['on-secondary-container',    'secondary',      10,                90],
@@ -694,6 +726,24 @@ function deriveDarkFill(palettes: Record<PaletteName, TonalPalette>, lightTone: 
 
 type SlotPalettes = Record<Slot, TonalPalette>;
 
+const SECONDARY_INK_TONE = { light: 45, dark: 78 } as const;
+
+/**
+ * High-chroma ink of the secondary family, derived from the active `secondary` slot so 多色 takes
+ * the character's second colour (`secondary-container`'s hue) and 单色 follows TonalSpot's primary
+ * hue. Plain `secondary` sits at C14–18 in light, which cancels to grey at 10% opacity over warm
+ * neutral surfaces; lifting chroma up to `BRAND_CHROMA` (and tapering to zero on achromatic grey
+ * seeds) keeps anticipatory press waves unmistakably in `secondary-container`'s hue family.
+ */
+function secondaryInkTone(palette: TonalPalette, scheme: 'light' | 'dark'): string {
+  const tone = SECONDARY_INK_TONE[scheme];
+  const sample = hctOf(hexFromArgb(palette.tone(scheme === 'light' ? 90 : 30)).toLowerCase());
+  const confidence = Math.max(0, Math.min(1, (sample.chroma - 4) / 8));
+  const ceiling = Math.min(BRAND_CHROMA, maxChroma(sample.hue, tone) * 0.9);
+  const chroma = sample.chroma + (Math.max(sample.chroma, ceiling) - sample.chroma) * confidence;
+  return hexFromHct(sample.hue, chroma, tone);
+}
+
 /** Every role, both schemes, from one filling of the slots per scheme. */
 function resolveRoles(
   slots: { light: SlotPalettes; dark: SlotPalettes },
@@ -708,7 +758,11 @@ function resolveRoles(
       ['dark', darkAt],
     ] as const) {
       out[scheme][token] =
-        typeof raw === 'number' ? hexFromArgb(slots[scheme][slot].tone(raw)).toLowerCase() : named[raw];
+        typeof raw === 'number'
+          ? hexFromArgb(slots[scheme][slot].tone(raw)).toLowerCase()
+          : raw === 'secondary-ink-light' || raw === 'secondary-ink-dark'
+            ? secondaryInkTone(slots[scheme].secondary, scheme)
+            : named[raw];
     }
   }
   return out;
@@ -740,6 +794,8 @@ export function deriveTheme(lightHex: string, darkHex?: string, accents?: Accent
     'on-primary-variant-dark': brand.onPrimaryVariantDark,
     'ink-light': brand.inkLight,
     'ink-dark': brand.inkDark,
+    'on-ink-light': brand.onPrimaryInkLight,
+    'on-ink-dark': brand.onPrimaryInkDark,
   };
 
   const tonalSpot: SlotPalettes = { ...palettes, tertiary: palettes.secondary, selection: palettes.secondary };

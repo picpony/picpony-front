@@ -14,9 +14,10 @@ Palette derivation, token use, focus and forced-colour behaviour. Shape and elev
 | Role | Use |
 | --- | --- |
 | `primary` + `on-primary` | Filled controls and brand containers |
-| `primary-ink` | Brand-coloured marks on a surface |
+| `primary-ink` + `on-primary-ink` | Brand-coloured marks on a surface and foreground drawn on them (such as checked checkboxes) |
 | `on-primary-variant` | App-bar icons and wordmark only |
 | `secondary-container` pair | Tonal controls and committed selections |
+| `secondary-ink` | High-chroma ink in `secondary-container`'s hue family, for anticipatory press ripples |
 | `chip-selected` pair | Selected filter chips |
 | `outline-variant` | Dividers |
 | `outline` | Field boundaries |
@@ -49,6 +50,7 @@ Built-in source hues and guide citations live beside `THEMES`. Use the character
 | --- | --- | --- |
 | `on-primary` | White only if both fills reach 4.5:1; otherwise solve dark ink | Existing white-at-3:1 / P20 rule |
 | `primary-ink` | Target 4.6:1, assert at least 4.5:1 on actual surface/highest/selected containers | Existing page-only 2.9:1 light / 3:1 dark rule |
+| `on-primary-ink` | Solved per scheme against `primary-ink` to clear 4.5:1 (white in light, dark ramp tone in dark) | Same 4.5:1 pairing against `primary-ink` per scheme |
 | `on-primary-variant` | 75% of on-primary contrast, floored at 4.5:1 and capped at on-primary; near-white tint capped at C22 | Same, or unchanged on-primary when already below the floor |
 
 Keep `BRAND_SEED` / `BRAND_SEED_DARK` distinct from `BRAND_RAMP_SEED`. The first pair is the visible fill; the ramp seed retains the mascot's mane and its chroma basis.

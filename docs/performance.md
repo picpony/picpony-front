@@ -43,7 +43,7 @@ Most probes drive Edge over CDP. Browser setup and CI entry points are described
 | `bun run perf:hero-pending` | Input and scrolling while a Hero leg is pending |
 | `bun run perf:hero-gestures` | Hero gesture scenarios |
 | `bun run perf:sw` | Worker control, caches and dead-origin navigation |
-| `bun run perf:ripple` | Per-frame ripple opacity; peak is the pressed token |
+| `bun run perf:ripple` | Per-frame ripple opacity; peak matches `--md-sys-ripple-opacity` |
 | `bun run perf:pageturn` | Scroll and visible-card content during page turns |
 | `bun run perf:tab-latency` | Release-to-first-frame tab latency and travel |
 | `bun run perf:sharpness` | Flight bitmap resolution against painted bounds |

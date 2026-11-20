@@ -903,7 +903,7 @@ const CardSelection = memo(function CardSelection({
         if (!active && event.target === event.currentTarget && event.propertyName === 'opacity') setShownSelected(selected);
       }}
       className={cn(
-        'group absolute inset-0 z-10 block overflow-hidden rounded-lg select-none touch-manipulation',
+        'group ripple-on-media absolute inset-0 z-10 block overflow-hidden rounded-lg select-none touch-manipulation',
         /* The focus ring is the gallery card's own, drawn inward on a pseudo-element
            (`[data-select-card]` in globals.css): over a picture, beside the mat below. */
         'focus-visible:outline-hidden transition-[opacity,box-shadow] spring-fast-effects',

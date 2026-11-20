@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { startCenteredRipple } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 
 interface RadioProps {
@@ -49,8 +50,16 @@ export default function Radio({
   tone = 'neutral',
   'aria-label': ariaLabel,
 }: RadioProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rippleHostRef = useRef<HTMLSpanElement>(null);
+  const rippleTone =
+    tone === 'error' ? 'ripple-error' : tone === 'warning' ? 'ripple-warning' : 'ripple-primary';
   return (
     <label
+      onPointerDown={(event) => {
+        if (disabled) return;
+        startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
+      }}
       className={cn(
         'group/radio flex items-center gap-2 select-none',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
@@ -59,9 +68,10 @@ export default function Radio({
     >
       {/* `touch-target` on the dial, not on the label: when there is a label the
           whole label is already the hit area, and when there is not, this is the
-          only thing to hit. Safe here — no `data-ripple` to clip the overflow. */}
+          only thing to hit. The press wave clips inside its own 40dp sibling circle. */}
       <span className="touch-target relative flex h-5 w-5 shrink-0 items-center justify-center">
         <input
+          ref={inputRef}
           type="radio"
           name={name}
           value={value}
@@ -72,19 +82,24 @@ export default function Radio({
           className="peer sr-only"
         />
         <span
+          ref={rippleHostRef}
           aria-hidden="true"
           className={cn(
-            /* 150ms `standard`, the same clock the `state-layer` utility uses.
-               The three selection controls all paint this 40dp circle by hand
-               (the utility keys on the element's own `:hover` and the circle has
-               to light from a hover anywhere on the label), so they have to
-               agree with it explicitly — one object, one clock. */
-            'pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects',
+            /* The 40dp state-layer and press-wave circle (same structure as `Checkbox` and
+               `ToggleSwitch`), clipped here so `touch-target` on the parent dial stays intact. */
+            'pointer-events-none absolute size-10 overflow-hidden rounded-full',
             checked ? 'text-primary-ink' : 'text-on-surface',
-            !disabled &&
-              'group-hover/radio:opacity-[var(--md-sys-state-hover-opacity)] group-active/radio:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]',
+            rippleTone,
           )}
-        />
+        >
+          <span
+            className={cn(
+              'absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects',
+              !disabled &&
+                'group-hover/radio:opacity-[var(--md-sys-state-hover-opacity)] no-motion:group-active/radio:opacity-[var(--md-sys-state-pressed-opacity)] group-has-[:focus-visible]/radio:opacity-[var(--md-sys-state-focus-opacity)]',
+            )}
+          />
+        </span>
         <span
           aria-hidden="true"
           className={cn(

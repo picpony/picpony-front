@@ -59,7 +59,9 @@ export function GroupRow({
       className={cn(
         'm3-row p-4',
         STATE_TRANSITION,
-        active ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-low text-on-surface',
+        active
+          ? 'bg-secondary-container text-on-secondary-container forced-selected'
+          : 'bg-surface-container-low text-on-surface',
       )}
       aria-busy={busy || undefined}
       data-presence-key={presenceKey}
@@ -90,12 +92,15 @@ export function GroupRow({
 export function GroupMenu({
   label,
   items,
+  active = false,
   busy = false,
   onSelect,
 }: {
   /** Names the button and the menu: 「name」的更多操作. */
   label: string;
   items: MenuAction[];
+  /** Inherits the active row's `on-secondary-container` ink when the group is enabled. */
+  active?: boolean;
   busy?: boolean;
   onSelect: (value: string) => void;
 }) {
@@ -105,6 +110,7 @@ export function GroupMenu({
     <>
       <IconButton
         ref={anchorRef}
+        variant={active ? 'on-container' : 'standard'}
         icon={<MdMoreVert />}
         aria-label={label}
         tooltip="更多操作"

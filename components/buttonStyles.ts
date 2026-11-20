@@ -6,6 +6,7 @@ export type ButtonVariant =
   | 'surface'
   | 'accent'
   | 'text'
+  | 'on-container'
   | 'on-fill'
   | 'danger'
   | 'danger-text'
@@ -50,6 +51,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
   surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
   accent: 'bg-primary-container text-on-primary-container focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
+  // Unfilled actions inside a tinted container (`secondary-container`, `warning-container`, …)
+  // inherit the container's paired `on-*-container` ink for label, state layer and ripple alike.
+  'on-container': 'bg-transparent text-current focus-ring',
   // Actions within a semantic fill keep its ink and draw focus inside that fill.
   'on-fill': 'bg-transparent text-on-fill focus-ring-on-media',
   danger: 'bg-error-fill text-on-fill focus-ring forced-boundary',

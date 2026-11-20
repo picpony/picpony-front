@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { startCenteredRipple } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 
 import { CHECK_SNAP_DELAY_MS } from '@/lib/motionTokens';
@@ -61,6 +62,8 @@ export default function Checkbox({
      documented pattern for reacting to a prop change), not an effect a frame late. */
   const [seen, setSeen] = useState(checked);
   const [justChecked, setJustChecked] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rippleHostRef = useRef<HTMLSpanElement>(null);
   if (checked !== seen) {
     setSeen(checked);
     setJustChecked(checked);
@@ -70,8 +73,12 @@ export default function Checkbox({
        `sr-only` and everything painted is `pointer-events-none`, leaving an 18px
        target on the app's most-used form control. The utility expands the hit
        area without changing the box (keeping the row heights it sits in
-       unchanged) — safe here because there is no `data-ripple` to clip it. */
+       unchanged); the press wave clips inside its own 40dp sibling circle instead. */
     <label
+      onPointerDown={(event) => {
+        if (disabled) return;
+        startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
+      }}
       className={cn(
         'group/checkbox inline-flex items-center gap-2 select-none',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
@@ -80,6 +87,7 @@ export default function Checkbox({
     >
       <span className="touch-target relative flex size-4.5 shrink-0 items-center justify-center">
       <input
+        ref={inputRef}
         type="checkbox"
         checked={checked}
         disabled={disabled}
@@ -89,20 +97,24 @@ export default function Checkbox({
         className="peer sr-only"
       />
 
-      {/* The state layer, painted from the box's own ink — so it takes the brand
-          tint once selected and the neutral one before, which is what the M3
-          overlay does. At the shared state opacities, so a checkbox, a button and
-          a list row all respond by the same amount. */}
+      {/* The 40dp state-layer and press-wave circle (same structure as `ToggleSwitch`): a single
+          clipped host holding the tint layer inside it, so hover/focus/press share one circle
+          without clipping `touch-target` on the parent wrapper. */}
       <span
+        ref={rippleHostRef}
         aria-hidden="true"
-        className={`pointer-events-none absolute size-10 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
+        className={`ripple-primary pointer-events-none absolute size-10 overflow-hidden rounded-full ${
           checked ? 'text-primary-ink' : 'text-on-surface'
-        } ${
-          disabled
-            ? ''
-            : 'group-hover/checkbox:opacity-[var(--md-sys-state-hover-opacity)] group-active/checkbox:opacity-[var(--md-sys-state-pressed-opacity)] peer-focus-visible:opacity-[var(--md-sys-state-focus-opacity)]'
         }`}
-      />
+      >
+        <span
+          className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
+            disabled
+              ? ''
+              : 'group-hover/checkbox:opacity-[var(--md-sys-state-hover-opacity)] no-motion:group-active/checkbox:opacity-[var(--md-sys-state-pressed-opacity)] group-has-[:focus-visible]/checkbox:opacity-[var(--md-sys-state-focus-opacity)]'
+          }`}
+        />
+      </span>
 
       {/* `rounded-xs` (4dp), M3's corner for this control — the card step reads
           as a radio button on an 18px box.
@@ -131,7 +143,7 @@ export default function Checkbox({
         }`}
       />
       <CheckGlyph
-        className="text-on-primary pointer-events-none absolute size-3 forced-color-adjust-none forced-colors:text-[color:HighlightText]"
+        className="text-on-primary-ink pointer-events-none absolute size-3 forced-color-adjust-none forced-colors:text-[color:HighlightText]"
         pathProps={{
           /* Dash L, gap L, then a short dash before the period wraps (L = 10.5, the path is
              10.26): offset L is fully hidden, 0 fully drawn, and a *negative* offset — the

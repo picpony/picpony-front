@@ -349,10 +349,13 @@ const PAIRS = [
   ['primary-ink', 'surface', 4.5, 'floor'],
   ['primary-ink', 'surface-container-highest', 4.5, 'floor'],
   ['primary-ink', 'secondary-container', 4.5, 'floor'],
+  ['on-primary-ink', 'primary-ink', 4.5, 'floor'],
   ['link', 'surface', 4.5, 'spread'],
   ['link-hover', 'surface', 4.5, 'spread'],
   ['secondary', 'surface', 4.5, 'spread'],
   ['secondary', 'surface-container-highest', 4.5, 'spread'],
+  ['secondary-ink', 'surface', 3, 'floor'],
+  ['secondary-ink', 'secondary-container', 3, 'floor'],
   ['secondary', 'primary', 3, 'report'],
   ['on-surface', 'surface', 4.5, 'spread'],
   ['on-surface-variant', 'surface', 4.5, 'spread'],
@@ -1062,13 +1065,25 @@ for (const sweepSeed of sweepSeeds) {
       sweepFailures += 1;
       failures.push(`${where}: the relation landed on H${hue}, inside a guarded band`);
     }
-    /* ASSERTION 19 for the eleventh palette. */
+    /* ASSERTION 19 for the eleventh palette, plus paired foreground on `primary-ink`. */
     for (const scheme of ['light', 'dark']) {
       const full = contrast(d[scheme]['on-primary'], d[scheme].primary);
       const quiet = contrast(d[scheme]['on-primary-variant'], d[scheme].primary);
       if (quiet < Math.min(ON_PRIMARY_VARIANT_FLOOR, full) - BAR_INK_SLACK || quiet > full + BAR_INK_SLACK) {
         sweepFailures += 1;
         failures.push(`${where} ${scheme} on-primary-variant: ${quiet.toFixed(2)}:1 against on-primary's ${full.toFixed(2)}:1`);
+      }
+      const inkOn = contrast(d[scheme]['on-primary-ink'], d[scheme]['primary-ink']);
+      if (inkOn < 4.5) {
+        sweepFailures += 1;
+        failures.push(`${where} ${scheme} on-primary-ink/primary-ink: ${inkOn.toFixed(2)}:1 under 4.5:1`);
+      }
+      for (const target of ['surface', 'secondary-container']) {
+        const secInk = contrast(d[scheme]['secondary-ink'], d[scheme][target]);
+        if (secInk < 3) {
+          sweepFailures += 1;
+          failures.push(`${where} ${scheme} secondary-ink/${target}: ${secInk.toFixed(2)}:1 under 3:1`);
+        }
       }
     }
     const own = hctOf(sweepSeed);

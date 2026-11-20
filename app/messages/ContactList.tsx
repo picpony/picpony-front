@@ -219,8 +219,10 @@ function ContactRow({
            The state layer answers hover and press; the container pair marks the open contact. */
         className={cn(
           'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-3 text-left',
-          'transition-ui focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
-          active ? 'forced-selected bg-secondary-container text-on-secondary-container' : 'state-layer text-on-surface',
+          'state-layer transition-ui focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
+          active
+            ? 'forced-selected bg-secondary-container text-on-secondary-container'
+            : 'ripple-secondary text-on-surface',
         )}
       >
         <span className="relative shrink-0">

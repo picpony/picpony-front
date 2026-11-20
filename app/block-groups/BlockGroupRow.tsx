@@ -66,6 +66,7 @@ function BlockGroupRow({
       menu={
         <GroupMenu
           label={`「${name}」的更多操作`}
+          active={active}
           busy={deleting}
           items={[
             { value: 'edit', label: '编辑屏蔽组', icon: <MdEdit /> },

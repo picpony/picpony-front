@@ -142,6 +142,7 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
             warmDetail('immediate');
           }
         }}
+        data-ripple=""
         className="flex items-center gap-4 rounded-[inherit] p-4 pr-16 transition-ui state-layer focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
       >
         <span className="relative size-14 shrink-0 overflow-hidden rounded-sm bg-surface-container-high">

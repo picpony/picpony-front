@@ -8,13 +8,14 @@ import DropZone from '@/components/DropZone';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Modal from '@/components/Modal';
-import PaletteTileFace from '@/components/PaletteTileFace';
+import PaletteTileFace, { tileRippleStyle } from '@/components/PaletteTileFace';
 import PalettePreview from '@/components/PalettePreview';
 import Spinner from '@/components/Spinner';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { useScheme, type CustomSpec, type PaletteHues } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
 import { ImageDecodeError, imageOptions, usePaletteTools, type ImageOption } from '@/lib/paletteLazy';
+import { cn } from '@/lib/utils';
 
 /**
  * A theme recommended from a picture: direction A ranks readable hue families by area,
@@ -138,25 +139,30 @@ export default function ImagePalettePicker({
           onFile={(file) => void readImage(file)}
           aria-label="选择或拖拽一张图片"
         >
-          {/* One row in every state, 40px tall (the thumbnail's height), so the zone does
-              not change size when a picture is chosen. */}
-          <div className="flex min-h-10 items-center justify-center gap-3">
-            {phase === 'reading' ? (
-              <Spinner tone="inherit" />
-            ) : preview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="size-10 shrink-0 rounded-sm object-cover" />
-            ) : (
-              <MdImage size={ICON.control} className="text-outline" />
-            )}
-            <span className="text-body-s text-on-surface-variant">
-              {phase === 'reading'
-                ? '正在取色…'
-                : preview
-                  ? '点击或拖拽更换图片'
-                  : '点击或拖拽选择图片'}
-            </span>
-          </div>
+          {(dropState) => (
+            /* One row in every state, 40px tall (the thumbnail's height), so the zone does
+               not change size when a picture is chosen. */
+            <div className="flex min-h-10 items-center justify-center gap-3">
+              {phase === 'reading' ? (
+                <Spinner tone="inherit" />
+              ) : preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview} alt="" className="size-10 shrink-0 rounded-sm object-cover" />
+              ) : (
+                <MdImage
+                  size={ICON.control}
+                  className={cn(dropState !== 'dragging' && 'text-on-surface-variant')}
+                />
+              )}
+              <span className={cn('text-body-s', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                {phase === 'reading'
+                  ? '正在取色…'
+                  : preview
+                    ? '点击或拖拽更换图片'
+                    : '点击或拖拽选择图片'}
+              </span>
+            </div>
+          )}
         </DropZone>
 
         {phase === 'done' &&
@@ -195,6 +201,7 @@ export default function ImagePalettePicker({
                       onClick={() => setPicked(option)}
                       onKeyDown={(event) => onKeyDown(event, index)}
                       data-ripple
+                      style={tileRippleStyle(option.tones[scheme], option.tones.face[scheme], scheme, hues)}
                       /* The settings tile's box: 72 × 56 at the card's corner (the grid's column,
                          a little narrower in a phone's dialog), no edge of its own, past the touch
                          floor at every density. */

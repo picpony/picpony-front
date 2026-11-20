@@ -201,11 +201,13 @@ function FilePreview({
   file,
   preview,
   disabled,
+  dragging = false,
   onRemove,
 }: {
   file: File;
   preview: Preview | null;
   disabled: boolean;
+  dragging?: boolean;
   onRemove: () => void;
 }) {
   const video = file.type.startsWith('video/');
@@ -257,7 +259,7 @@ function FilePreview({
           className="absolute -right-3 -top-3"
         />
       </div>
-      <p className="max-w-full text-body-s text-on-surface-variant">
+      <p className={cn('max-w-full text-body-s', !dragging && 'text-on-surface-variant')}>
         <span className="break-all">{file.name || '未命名文件'}</span> · {megabytes(file.size)} MB
         <span className="block">{video ? '点击视频以外区域更换文件' : '点击此区域更换文件'}</span>
       </p>
@@ -279,7 +281,7 @@ function OutcomeNotice({ outcome, live }: { outcome: NoticeOutcome; live: boolea
           href={DERPI_MY_UPLOADS}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-label-l underline underline-offset-2"
+          className="mt-2 inline-flex items-center gap-1 rounded-xs text-label-l underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
         >
           在 Derpibooru 查看我的上传
           <MdOpenInNew size={ICON.dense} aria-hidden="true" />
@@ -633,22 +635,33 @@ export default function UploadPage() {
             filled={zone !== 'prompt'}
             aria-label={zone !== 'prompt' ? '更换文件' : '选择或拖拽要发布的图片或视频'}
           >
-            <SizeSwap contentKey={zone === 'preview' && preview ? `preview:${preview.url}` : zone} className="w-full">
-              {zone !== 'prompt' && formDraft.file ? (
-                <FilePreview
-                  file={zone === 'preview' && preview ? preview.file : formDraft.file}
-                  preview={zone === 'preview' ? preview : null}
-                  disabled={showBusy}
-                  onRemove={() => edit({ file: null }, ['file'])}
-                />
-              ) : (
-                <div>
-                  <MdCloudUpload size={ICON.display} className="mx-auto mb-4 text-on-surface-variant" aria-hidden="true" />
-                  <p className="mb-1 text-body-l-emphasized text-on-surface">点击选择或拖拽文件到此处</p>
-                  <p className="text-body-m text-on-surface-variant">支持 PNG / JPG / GIF / WebP / WebM / MP4，最大 50 MB</p>
-                </div>
-              )}
-            </SizeSwap>
+            {(dropState) => (
+              <SizeSwap contentKey={zone === 'preview' && preview ? `preview:${preview.url}` : zone} className="w-full">
+                {zone !== 'prompt' && formDraft.file ? (
+                  <FilePreview
+                    file={zone === 'preview' && preview ? preview.file : formDraft.file}
+                    preview={zone === 'preview' ? preview : null}
+                    disabled={showBusy}
+                    dragging={dropState === 'dragging'}
+                    onRemove={() => edit({ file: null }, ['file'])}
+                  />
+                ) : (
+                  <div>
+                    <MdCloudUpload
+                      size={ICON.display}
+                      className={cn('mx-auto mb-4', dropState !== 'dragging' && 'text-on-surface-variant')}
+                      aria-hidden="true"
+                    />
+                    <p className={cn('mb-1 text-body-l-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
+                      点击选择或拖拽文件到此处
+                    </p>
+                    <p className={cn('text-body-m', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                      支持 PNG / JPG / GIF / WebP / WebM / MP4，最大 50 MB
+                    </p>
+                  </div>
+                )}
+              </SizeSwap>
+            )}
           </DropZone>
           {errors.file && (
             <p role="alert" className="mt-1.5 px-4 text-body-s text-error">
@@ -769,7 +782,7 @@ export default function UploadPage() {
             </Collapse>
             <p className="text-body-s text-on-surface-variant">
               发布即表示确认拥有作品授权并遵守{' '}
-              <a href={DERPI_RULES} target="_blank" rel="noopener noreferrer" className="text-link underline underline-offset-2">
+              <a href={DERPI_RULES} target="_blank" rel="noopener noreferrer" className="prose-link focus-visible:ring-2 focus-ring">
                 Derpibooru 上传规则
                 <MdOpenInNew size={ICON.dense} className="ml-0.5 inline align-[-0.125em]" aria-hidden="true" />
               </a>

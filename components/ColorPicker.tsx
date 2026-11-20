@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 
 import Button from '@/components/Button';
 import CheckGlyph from '@/components/CheckGlyph';
@@ -560,6 +560,7 @@ function PickerDialog({
                       onClick={() => chooseMode(mode)}
                       onKeyDown={(event) => onModeKey(event, index)}
                       data-ripple
+                      style={!on ? ({ '--ripple-color': tones.face[scheme].accent } as CSSProperties) : undefined}
                       className={cn(
                         'state-layer focus-ring relative flex cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-md px-2 py-2 focus-visible:outline-hidden focus-visible:ring-2',
                         MODE_TILE_HEIGHT,

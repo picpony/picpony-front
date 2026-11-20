@@ -220,7 +220,7 @@ export default function ToggleSwitch({
             <span
               ref={stateLayerRef}
               data-ripple=""
-              className={`grid h-10 w-10 place-items-center rounded-full ${
+              className={`ripple-primary grid h-10 w-10 place-items-center rounded-full ${
                 checked ? 'text-primary-ink' : 'text-on-surface'
               }`}
             >
@@ -236,7 +236,7 @@ export default function ToggleSwitch({
                 className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
                   disabled
                     ? ''
-                    : 'group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]'
+                    : 'group-hover/switch:opacity-[var(--md-sys-state-hover-opacity)] group-has-[:focus-visible]/switch:opacity-[var(--md-sys-state-focus-opacity)] no-motion:group-active/switch:opacity-[var(--md-sys-state-pressed-opacity)]'
                 }`}
               />
 

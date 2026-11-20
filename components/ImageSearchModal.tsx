@@ -6,7 +6,7 @@ import type { PonyImage } from '@/lib/types/image';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { searchImage } from '@/lib/api/picpony';
 import { searchImageByUrl } from '@/lib/api/semantic';
-import { processImageFile } from '@/lib/utils';
+import { cn, processImageFile } from '@/lib/utils';
 import FadeInImage from './FadeInImage';
 import Modal from './Modal';
 import Slider from './Slider';
@@ -180,34 +180,43 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         aria-label="选择或拖拽要搜索的图片"
         className="mb-4"
       >
-        {/* One height for the prompt, the file being read and the picture, so picking a file
-            does not grow the dialog. The way to change the picture is said in words under it: a
-            veil that appeared on hover never appeared on a touch screen. */}
-        <div className="flex h-48 w-full flex-col items-center justify-center">
-          {selectedImage ? (
-            <>
-              <div className="relative min-h-0 w-full flex-1">
-                <FadeInImage
-                  src={selectedImage}
-                  alt="已选择的图片"
-                  fill
-                  /* The dialog's default width (448px) less its own 24px inset each side and
-                     the zone's padding and border. */
-                  sizes="(min-width: 640px) 344px, 100vw"
-                  className="object-contain rounded-md"
+        {(dropState) => (
+          /* One height for the prompt, the file being read and the picture, so picking a file
+             does not grow the dialog. The way to change the picture is said in words under it: a
+             veil that appeared on hover never appeared on a touch screen. */
+          <div className="flex h-48 w-full flex-col items-center justify-center">
+            {selectedImage ? (
+              <>
+                <div className="relative min-h-0 w-full flex-1">
+                  <FadeInImage
+                    src={selectedImage}
+                    alt="已选择的图片"
+                    fill
+                    /* The dialog's default width (448px) less its own 24px inset each side and
+                       the zone's padding and border. */
+                    sizes="(min-width: 640px) 344px, 100vw"
+                    className="object-contain rounded-md"
+                  />
+                </div>
+                <p className={cn('text-body-s mt-3', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                  点击或拖拽以更换图片
+                </p>
+              </>
+            ) : isReading ? (
+              <Spinner size="lg" />
+            ) : (
+              <>
+                <MdCloudUpload
+                  size={ICON.display}
+                  className={cn('mb-3', dropState !== 'dragging' && 'text-on-surface-variant')}
                 />
-              </div>
-              <p className="text-body-s text-on-surface-variant mt-3">点击或拖拽以更换图片</p>
-            </>
-          ) : isReading ? (
-            <Spinner size="lg" />
-          ) : (
-            <>
-              <MdCloudUpload size={ICON.display} className="text-outline mb-3" />
-              <p className="text-body-m-emphasized text-on-surface">点击或拖拽图片到此处</p>
-            </>
-          )}
-        </div>
+                <p className={cn('text-body-m-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
+                  点击或拖拽图片到此处
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </DropZone>
 
       {/* The second source: a picture on the web. Enter searches, like the dialog's own button. */}

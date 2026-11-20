@@ -222,7 +222,7 @@ export default function Pagination({
                    pagination item level 0. */
                 active
                   ? 'bg-primary text-on-primary text-label-l-emphasized state-layer forced-selected'
-                  : 'text-label-l text-on-surface-variant state-layer',
+                  : 'text-label-l text-on-surface-variant state-layer ripple-primary',
                 // A dialog and a column beside the app drawer can both be
                 // narrow on a wide viewport. The pager owns this breakpoint.
                 (page < compactStart || page >= compactStart + compactCount) && '@max-xl/pagination:hidden',
@@ -301,7 +301,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="bg-primary-ink animate-dot-bounce h-1.5 w-1.5 rounded-full forced-mark"
+                className="bg-current animate-dot-bounce h-1.5 w-1.5 rounded-full forced-mark"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}

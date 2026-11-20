@@ -163,7 +163,7 @@ export default function ReplyComposer({
                 回复 <span className="text-label-l-emphasized">{replyTo.username}</span>：
                 <span className="text-body-s">{bbcodeToPlainText(replyTo.content, { maxLength: 80 })}</span>
               </p>
-              <IconButton size="sm" dismiss aria-label="取消回复" icon={<MdClose />} onClick={onCancelReply} />
+              <IconButton variant="on-container" size="sm" dismiss aria-label="取消回复" icon={<MdClose />} onClick={onCancelReply} />
             </div>
           )}
           <RichTextEditor

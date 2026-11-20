@@ -18,7 +18,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: '小马图片浏览与社区',
     start_url: '/',
     display: 'standalone',
-    background_color: '#fff8f8',
+    background_color: '#fff8f6',
     lang: 'zh-CN',
     dir: 'ltr',
     orientation: 'any',
