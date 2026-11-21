@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { MdCampaign } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
@@ -10,6 +10,7 @@ import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatDateTime, formatDayLabel, parseBackendTime } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
+import { useRichTextScrollbars } from '@/lib/overlayScrollbar';
 import { useResource } from '@/lib/resource';
 import { announcementHistory } from '@/lib/resources';
 import { useScreenState } from '@/lib/screenState';
@@ -30,6 +31,8 @@ export default function AnnouncementsPane({ active }: { active: boolean }) {
   const [page, setPage] = useScreenState('messages:announcement-page', 1);
   const read = useResource(announcementHistory, { page }, { keepPrevious: true });
   const now = useNow();
+  const listRef = useRef<HTMLDivElement>(null);
+  useRichTextScrollbars(listRef, read.data?.announcements);
 
   /* Shown again after a while away: re-read underneath if the answer has gone stale. */
   useEffect(() => {
@@ -55,7 +58,7 @@ export default function AnnouncementsPane({ active }: { active: boolean }) {
   }
 
   return (
-    <div data-pagination-anchor aria-busy={read.isLoading || undefined}>
+    <div ref={listRef} data-pagination-anchor aria-busy={read.isLoading || undefined}>
       {read.isPrevious && read.error !== undefined && (
         <ErrorRetry
           size="inline"

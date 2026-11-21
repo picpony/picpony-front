@@ -18,6 +18,7 @@ import { SPRING_MS } from '@/lib/spring';
 import { springTiming } from '@/lib/springTiming';
 import { observeAnchorReflow } from '@/lib/anchorReflow';
 import { OverlayLayerContext, useOverlayLayer, useExitAnimation, useMounted } from '@/lib/overlay';
+import ScrollArea from './ScrollArea';
 
 const MENU_MARGIN = 8;
 const VIEWPORT_PADDING = 12;
@@ -627,9 +628,8 @@ export default function Popover({
         className,
       )}
     >
-      {/* `popover-scrollbar`, not `main-scrollbar`: the latter reserves its gutter
-          permanently, right for a page column and wrong for a short menu, where it
-          leaves every row short of the right edge.
+      {/* `popover-scrollbar` with `ScrollArea` floats over content with zero gutter,
+          keeping short menus flush to the right edge and avoiding width shifts on growth.
 
           `overflow-y: auto` unconditionally, never a conditional hidden — the
           condition it replaced used an *estimated* content height, so a panel a few
@@ -643,18 +643,23 @@ export default function Popover({
           edge that cuts a half-scrolled row is the shape the rows already have, and
           `relative` makes it the rows' offset parent, which is what lets `revealRow`
           place the cursor from layout offsets rather than from a transformed rect. */}
-      <div
-        ref={scrollRef}
-        data-popover-scroller=""
+      <ScrollArea
+        axis="y"
         className={cn(
-          'popover-scrollbar relative min-h-0 overflow-x-hidden overflow-y-auto',
+          'flex min-h-0 flex-col',
+          inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
+        )}
+        viewportRef={scrollRef}
+        viewportProps={{ 'data-popover-scroller': '' }}
+        viewportClassName={cn(
+          'popover-scrollbar relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto',
           inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
         )}
       >
         <div ref={contentRef} role="presentation" className="space-y-0.5">
           {children}
         </div>
-      </div>
+      </ScrollArea>
     </div>
     </OverlayLayerContext.Provider>,
     document.body,

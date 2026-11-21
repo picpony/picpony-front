@@ -10,6 +10,7 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
 } from 'react';
+import { useOverlayScrollbar } from '@/lib/overlayScrollbar';
 import { EMOJI_BY_NAME } from './messageText';
 import {
   createComposerHistory,
@@ -269,7 +270,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   { initialValue, placeholder, label, onChange, onSubmit, onFocus, onEscape, autoFocus = false, id },
   ref,
 ) {
+  const fieldRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  useOverlayScrollbar(rootRef, fieldRef, { axis: 'y', observeInput: true });
   const [empty, setEmpty] = useState(() => initialValue.trim() === '');
   const history = useRef<ComposerHistory | null>(null);
   /** The caret as of the last selection change inside the field, for an insertion made while
@@ -504,10 +507,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   };
 
   return (
-    <div className="m3-field" data-size="sm" data-multiline="">
+    <div ref={fieldRef} className="m3-field" data-size="sm" data-multiline="">
       <div
         ref={rootRef}
         id={id}
+        data-os-axis="y"
         role="textbox"
         aria-multiline="true"
         aria-label={label}

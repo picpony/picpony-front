@@ -61,12 +61,17 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
      the user for up to the whole slow-speed duration. The input is never
      prevented; cancellation just gives the browser its scroller back. */
   let frame = 0;
+  const slot = scroller.parentElement;
+  const onSlotPointerDown = (event: PointerEvent) => {
+    if (event.target instanceof Element && event.target.closest('.os-scrollbar')) stop();
+  };
   const stop = () => {
     cancelAnimationFrame(frame);
     running.delete(scroller);
     scroller.style.overflowAnchor = previousAnchor;
     scroller.removeEventListener('wheel', stop);
     scroller.removeEventListener('pointerdown', stop);
+    slot?.removeEventListener('pointerdown', onSlotPointerDown);
     document.removeEventListener('keydown', onKeyDown, true);
   };
   const onKeyDown = (event: KeyboardEvent) => {
@@ -81,6 +86,7 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
   running.set(scroller, stop);
   scroller.addEventListener('wheel', stop, { passive: true });
   scroller.addEventListener('pointerdown', stop, { passive: true });
+  slot?.addEventListener('pointerdown', onSlotPointerDown, { passive: true });
   document.addEventListener('keydown', onKeyDown, true);
 
   const start = performance.now();

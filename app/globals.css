@@ -590,10 +590,17 @@ body {
 
 /* The table's scroll wrapper carries the table's margin: the auto overflow-x makes the
    wrapper a block formatting context, so a margin on the table inside it cannot collapse
-   out. */
+   out. When Markdown wraps tables and code listings in `ScrollArea` (`.os-rich-block`), the
+   outer slot carries the vertical rhythm so the floating horizontal scrollbar sits flush on
+   the content box's bottom edge rather than floating in the margin below it. */
 .bbcode-content .popover-scrollbar,
-.rich-text-content .popover-scrollbar {
+.rich-text-content .popover-scrollbar,
+.rich-text-content .os-rich-block {
   margin-block: 1em;
+}
+
+.rich-text-content .os-rich-block > :is(pre, .popover-scrollbar) {
+  margin-block: 0;
 }
 
 /* User-supplied media in rendered bodies. Measured on one thread: uploads up to 3000x4500,
@@ -767,9 +774,11 @@ body {
   overflow-x: auto;
 }
 
-/* A listing inside a listing has no second background of its own. */
-.bbcode-content pre > code,
-.rich-text-content pre > code {
+/* A listing inside a listing has no second background of its own. Descendant combinator
+   rather than direct-child so wrapper-mode OverlayScrollbars inside `<pre>` keeps the same
+   reset. */
+.bbcode-content pre code,
+.rich-text-content pre code {
   background: none;
   padding: 0;
   font-size: inherit;
@@ -2959,19 +2968,11 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   }
 }
 
-/* The overlay's scroller (the Stage wears the same class) is the frame its strip measures. */
+/* The overlay's scroller (the Stage wears the same class) is the frame its strip measures.
+ * OverlayScrollbars floats the scrollbar over the frame with zero layout gutter, so both
+ * Stage and routed detail measure the exact full frame width with no gutter reservation. */
 .image-detail-overlay-scroll {
   container: image-detail-frame / inline-size;
-}
-
-/* **The overlay's gutter on both edges, as the page scroller's** (`.app-scroller` below). On the
- * trailing edge only, a classic scrollbar left the column half a gutter left of the frame's centre
- * — off the axis the back affordance and the step arrows are pinned symmetrically about — and
- * 5px left of the same column on a direct load, so a reload of an open detail moved everything
- * sideways. The Stage wears the same classes, so the flight and the handoff measure one frame
- * (`lib/hero/plane.ts` already reads the leading gutter through `clientLeft`). */
-.main-scrollbar.image-detail-overlay-scroll {
-  scrollbar-gutter: stable both-edges;
 }
 
 @container image-detail-frame (min-width: 48rem) {
@@ -3369,75 +3370,553 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 }
 
 /* ---------------------------------------------------------------------------
- * Scrollbars — one appearance for the whole app.
+ * Scrollbars — floating OverlayScrollbars pseudo-scrollbars across the app.
  *
- * The scrollbar-gutter property is the one axis that legitimately differs, and the whole
- * reason there
- * are two classes: the main-scrollbar class reserves the track even when the content fits
- * (anything occupying the page column needs this, or a short route shifts sideways by the
- * bar's width as you navigate to it); the popover-scrollbar class does not — a 160px menu
- * permanently giving up 8px on its right edge just looks mis-padded.
+ * Native scrollbars consume layout width on desktop browsers and shift centred
+ * content or force double-sided gutters. Every scroll container hides its native
+ * scrollbar from first paint and renders an OverlayScrollbars floating track in
+ * a non-scrolling sibling `.os-slot` (or wrapper for HTML-injected rich text),
+ * occupying zero layout width while preserving native scroll physics, touch
+ * momentum, keyboard navigation and `ScrollTimeline` thumb tracking.
+ *
+ * **Why the structural rules live here instead of importing stock
+ * `overlayscrollbars.css`:** stock `overlayscrollbars.css` declares inherited
+ * custom properties (`--os-viewport-overflow-x/y`, `--os-vaw/vah`) and an unused
+ * RTL probe rule (`[data-overlayscrollbars-viewport~=noContent] { font-size: 0;
+ * line-height: 0 }`) on `[data-overlayscrollbars-viewport]`. Blink keys attribute
+ * invalidation by attribute name alone, so those inherited declarations poison
+ * `data-overlayscrollbars-viewport` with whole-subtree style invalidation: every
+ * OverlayScrollbars update on `<main>` restyled all ~1,800 descendants and wiped
+ * `content-visibility: hidden` style caches on concealed tab panes (+700ms on
+ * 4× CPU tab switches). Direct non-inherited `overflow-x/y` rules here keep
+ * updates O(1) on `<main>`. Every instance passes `flowDirectionStyles: () => ({})`
+ * so `noContent` never runs.
  * ------------------------------------------------------------------------ */
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--md-sys-color-outline-variant);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--md-sys-color-outline);
+@layer base {
+  .os-slot {
+    position: relative;
+  }
 }
 
 .main-scrollbar,
-.popover-scrollbar {
-  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
-  scrollbar-width: thin;
+.popover-scrollbar,
+[data-overlayscrollbars-viewport],
+.m3-field > textarea,
+.bbcode-content pre,
+.rich-text-content pre {
+  scrollbar-width: none;
 }
 
-.main-scrollbar {
-  scrollbar-gutter: stable;
+[data-overlayscrollbars-viewport~='scrollbarHidden'] {
+  scrollbar-width: none !important;
 }
 
-/* The page scroller reserves the gutter on **both** edges. On one edge only, every centred
-   page column sat half a gutter left of its section's centre, and a full-bleed band (the
-   /about plate) touched the left edge and stopped a gutter short of the right. Both edges
-   keep what the reservation is for — no sideways shift between a short route and a long one
-   — and make the insets symmetric. A classic scrollbar costs its width twice; an overlay
-   scrollbar (phones, most trackpads) costs nothing either way. */
-.app-scroller {
-  scrollbar-gutter: stable both-edges;
+@supports not (scrollbar-width: none) {
+  .main-scrollbar::-webkit-scrollbar,
+  .main-scrollbar::-webkit-scrollbar-corner,
+  .popover-scrollbar::-webkit-scrollbar,
+  .popover-scrollbar::-webkit-scrollbar-corner,
+  [data-overlayscrollbars-viewport]::-webkit-scrollbar,
+  [data-overlayscrollbars-viewport]::-webkit-scrollbar-corner,
+  .m3-field > textarea::-webkit-scrollbar,
+  .m3-field > textarea::-webkit-scrollbar-corner,
+  .bbcode-content pre::-webkit-scrollbar,
+  .bbcode-content pre::-webkit-scrollbar-corner,
+  .rich-text-content pre::-webkit-scrollbar,
+  .rich-text-content pre::-webkit-scrollbar-corner {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  [data-overlayscrollbars-viewport~='scrollbarHidden']::-webkit-scrollbar,
+  [data-overlayscrollbars-viewport~='scrollbarHidden']::-webkit-scrollbar-corner {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
 }
 
-/* An image-detail overlay brings its own scroller and covers the gallery completely, so the
-   gallery's thumb would otherwise sit behind it — two bars on the same edge, one moving and
-   one frozen. Only the *thumb* is hidden: dropping the scrollbar-width declaration too would
-   collapse the reserved gutter and shift the background page 8px sideways on every open and
-   close. */
-.app-scroller[data-scroll-hidden] {
-  scrollbar-color: transparent transparent;
+/* Structural setup for OverlayScrollbars hosts and wrapped rich-text blocks.
+   Zero inherited properties on `[data-overlayscrollbars]` or `[data-overlayscrollbars-viewport]`. */
+[data-overlayscrollbars] {
+  position: relative;
 }
 
-.app-scroller[data-scroll-hidden]::-webkit-scrollbar-thumb {
-  background: transparent;
+[data-overlayscrollbars~='host'],
+[data-overlayscrollbars-padding] {
+  display: flex;
+  align-items: stretch !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  scroll-behavior: auto !important;
+  overflow: hidden !important;
 }
 
-/* `scrollbar-color` is an inherited property, so flipping it on the scroller used to restyle the
-   whole gallery under it (about 1,250 elements, 190ms at 4× CPU, traced) in the middle of every
-   opening flight, and again on the way back. The scroller's one child pins the value its
-   descendants inherited before, so the change stops at the scroller: Blink compares the child's
-   style, finds it unchanged and does not descend. Zero specificity, so any scroller class
-   inside still wins. */
-:where(.app-scroller) > * {
-  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+[data-overlayscrollbars~='host'][data-overlayscrollbars~='noClipping'],
+[data-overlayscrollbars-padding~='noClipping'] {
+  overflow: visible !important;
+}
+
+[data-overlayscrollbars-padding],
+[data-overlayscrollbars-viewport]:not([data-overlayscrollbars]) {
+  box-sizing: inherit;
+  position: relative;
+  flex: auto;
+  height: auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  z-index: 0;
+}
+
+[data-overlayscrollbars-viewport]:not([data-overlayscrollbars]),
+[data-overlayscrollbars-viewport]:not([data-overlayscrollbars]):focus {
+  outline: none;
+}
+
+[data-overlayscrollbars-content] {
+  box-sizing: inherit;
+}
+
+/* Direct non-inherited viewport overflow states (replaces stock `--os-viewport-overflow-*`). */
+[data-overlayscrollbars-viewport] {
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+[data-overlayscrollbars-viewport~='overflowXVisible'] {
+  overflow-x: visible;
+}
+
+[data-overlayscrollbars-viewport~='overflowXHidden'] {
+  overflow-x: hidden;
+}
+
+[data-overlayscrollbars-viewport~='overflowXScroll'] {
+  overflow-x: scroll;
+}
+
+[data-overlayscrollbars-viewport~='overflowYVisible'] {
+  overflow-y: visible;
+}
+
+[data-overlayscrollbars-viewport~='overflowYHidden'] {
+  overflow-y: hidden;
+}
+
+[data-overlayscrollbars-viewport~='overflowYScroll'] {
+  overflow-y: scroll;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowXVisible'] {
+  overflow-x: visible !important;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowXHidden'] {
+  overflow-x: hidden !important;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowXScroll'] {
+  overflow-x: scroll !important;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowYVisible'] {
+  overflow-y: visible !important;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowYHidden'] {
+  overflow-y: hidden !important;
+}
+
+[data-overlayscrollbars-viewport~='overflowImportant'][data-overlayscrollbars-viewport~='overflowYScroll'] {
+  overflow-y: scroll !important;
+}
+
+[data-overlayscrollbars-viewport~='measuring'],
+[data-overlayscrollbars-viewport~='scrolling'] {
+  scroll-behavior: auto !important;
+  scroll-snap-type: none !important;
+}
+
+[data-overlayscrollbars-viewport~='measuring'][data-overlayscrollbars-viewport~='overflowXVisible'] {
+  overflow-x: hidden !important;
+}
+
+[data-overlayscrollbars-viewport~='measuring'][data-overlayscrollbars-viewport~='overflowYVisible'] {
+  overflow-y: hidden !important;
+}
+
+[data-overlayscrollbars-viewport~='noScrollbars'] > .os-scrollbar,
+[data-overlayscrollbars-viewport~='measuring'] > .os-scrollbar {
+  display: none !important;
+}
+
+/* Slotted viewports keep native `auto` overflow on their enabled axes so scrolling starts
+   immediately on growth (before any debounced observer tick) and computed `overflowY` stays
+   `auto` for geometry/pull checks. Native tracks are already hidden above. */
+[data-overlayscrollbars][data-overlayscrollbars-viewport][data-os-axis='y'],
+[data-overlayscrollbars][data-overlayscrollbars-viewport][data-os-axis='both'] {
+  overflow-y: auto;
+}
+
+[data-overlayscrollbars][data-overlayscrollbars-viewport][data-os-axis='x'],
+[data-overlayscrollbars][data-overlayscrollbars-viewport][data-os-axis='both'] {
+  overflow-x: auto;
+}
+
+/* Horizontal shared-axis tab slide still clips sideways without touching `overflow-y`.
+   Three-attribute specificity matches the `data-os-axis` rules above so `clip` also wins
+   on `axis="both"` overlay scrollers (Modal, Sheet, SidePanel). */
+[data-overlayscrollbars][data-overlayscrollbars-viewport][data-axis-running='x'] {
+  overflow-x: clip;
+}
+
+/* ScrollTimeline custom properties scoped exclusively to `.os-scrollbar` tracks. */
+@property --os-scroll-percent {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --os-viewport-percent {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --os-scroll-direction {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --os-scroll-percent-directional {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.os-scrollbar {
+  --os-viewport-percent: 0;
+  --os-scroll-percent: 0;
+  --os-scroll-direction: 0;
+  --os-scroll-percent-directional: calc(
+    var(--os-scroll-percent) - (var(--os-scroll-percent) + (1 - var(--os-scroll-percent)) * -1) *
+      var(--os-scroll-direction)
+  );
+  --os-size: 0;
+  --os-padding-perpendicular: 0;
+  --os-padding-axis: 0;
+  --os-track-border-radius: 0;
+  --os-track-bg: none;
+  --os-track-bg-hover: none;
+  --os-track-bg-active: none;
+  --os-track-border: none;
+  --os-track-border-hover: none;
+  --os-track-border-active: none;
+  --os-handle-border-radius: 0;
+  --os-handle-bg: none;
+  --os-handle-bg-hover: none;
+  --os-handle-bg-active: none;
+  --os-handle-border: none;
+  --os-handle-border-hover: none;
+  --os-handle-border-active: none;
+  --os-handle-min-size: 33px;
+  --os-handle-max-size: none;
+  --os-handle-perpendicular-size: 100%;
+  --os-handle-perpendicular-size-hover: 100%;
+  --os-handle-perpendicular-size-active: 100%;
+  --os-handle-interactive-area-offset: 0;
+  contain: size layout style;
+  pointer-events: none;
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    visibility var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    top var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    right var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    bottom var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    left var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.os-scrollbar-transitionless {
+  transition: none !important;
+}
+
+.os-scrollbar-track {
+  position: relative;
+  padding: 0 !important;
+  border: var(--os-track-border);
+  border-radius: var(--os-track-border-radius);
+  background: var(--os-track-bg);
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.os-scrollbar-track:hover {
+  border: var(--os-track-border-hover);
+  background: var(--os-track-bg-hover);
+}
+
+.os-scrollbar-track:active {
+  border: var(--os-track-border-active);
+  background: var(--os-track-bg-active);
+}
+
+.os-scrollbar-handle {
+  position: absolute;
+  border: var(--os-handle-border);
+  border-radius: var(--os-handle-border-radius);
+  background: var(--os-handle-bg);
+}
+
+.os-scrollbar-handle:hover {
+  border: var(--os-handle-border-hover);
+  background: var(--os-handle-bg-hover);
+}
+
+.os-scrollbar-handle:active {
+  border: var(--os-handle-border-active);
+  background: var(--os-handle-bg-active);
+}
+
+.os-scrollbar-track,
+.os-scrollbar-handle {
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.os-scrollbar-track::before,
+.os-scrollbar-handle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.os-scrollbar.os-scrollbar-track-interactive .os-scrollbar-track,
+.os-scrollbar.os-scrollbar-handle-interactive .os-scrollbar-handle {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.os-scrollbar-horizontal {
+  bottom: 0;
+  left: 0;
+  padding: var(--os-padding-perpendicular) var(--os-padding-axis);
+  right: var(--os-size);
+  height: var(--os-size);
+}
+
+.os-scrollbar-vertical {
+  top: 0;
+  right: 0;
+  padding: var(--os-padding-axis) var(--os-padding-perpendicular);
+  bottom: var(--os-size);
+  width: var(--os-size);
+}
+
+.os-scrollbar-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.os-scrollbar-auto-hide.os-scrollbar-auto-hide-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.os-scrollbar-interaction.os-scrollbar-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.os-scrollbar-unusable,
+.os-scrollbar-unusable *,
+.os-scrollbar-wheel,
+.os-scrollbar-wheel * {
+  pointer-events: none !important;
+}
+
+.os-scrollbar-unusable .os-scrollbar-handle {
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+.os-scrollbar-horizontal .os-scrollbar-track::before {
+  top: calc(var(--os-padding-perpendicular) * -1);
+  bottom: calc(var(--os-padding-perpendicular) * -1);
+}
+
+.os-scrollbar-horizontal .os-scrollbar-handle {
+  bottom: 0;
+  left: calc(var(--os-scroll-percent-directional) * 100%);
+  transform: translateX(calc(var(--os-scroll-percent-directional) * -100%));
+  width: calc(var(--os-viewport-percent) * 100%);
+  min-width: var(--os-handle-min-size);
+  max-width: var(--os-handle-max-size);
+  height: var(--os-handle-perpendicular-size);
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    height var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.os-scrollbar-horizontal .os-scrollbar-handle::before {
+  top: calc((var(--os-padding-perpendicular) + var(--os-handle-interactive-area-offset)) * -1);
+  bottom: calc(var(--os-padding-perpendicular) * -1);
+}
+
+.os-scrollbar-horizontal:hover .os-scrollbar-handle {
+  height: var(--os-handle-perpendicular-size-hover);
+}
+
+.os-scrollbar-horizontal:active .os-scrollbar-handle {
+  height: var(--os-handle-perpendicular-size-active);
+}
+
+.os-scrollbar-vertical .os-scrollbar-track::before {
+  left: calc(var(--os-padding-perpendicular) * -1);
+  right: calc(var(--os-padding-perpendicular) * -1);
+}
+
+.os-scrollbar-vertical .os-scrollbar-handle {
+  right: 0;
+  top: calc(var(--os-scroll-percent-directional) * 100%);
+  transform: translateY(calc(var(--os-scroll-percent-directional) * -100%));
+  height: calc(var(--os-viewport-percent) * 100%);
+  min-height: var(--os-handle-min-size);
+  max-height: var(--os-handle-max-size);
+  width: var(--os-handle-perpendicular-size);
+  transition:
+    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    width var(--duration-spring-fast-effects) var(--ease-spring-effects);
+}
+
+.os-scrollbar-vertical .os-scrollbar-handle::before {
+  left: calc((var(--os-padding-perpendicular) + var(--os-handle-interactive-area-offset)) * -1);
+  right: calc(var(--os-padding-perpendicular) * -1);
+}
+
+.os-scrollbar-vertical:hover .os-scrollbar-handle {
+  width: var(--os-handle-perpendicular-size-hover);
+}
+
+.os-scrollbar-vertical:active .os-scrollbar-handle {
+  width: var(--os-handle-perpendicular-size-active);
+}
+
+@supports (container-type: size) {
+  .os-scrollbar-track {
+    container-type: size;
+  }
+
+  .os-scrollbar-horizontal .os-scrollbar-handle {
+    left: auto;
+    transform: translateX(
+      calc(var(--os-scroll-percent-directional) * 100cqw + var(--os-scroll-percent-directional) * -100%)
+    );
+  }
+
+  .os-scrollbar-vertical .os-scrollbar-handle {
+    top: auto;
+    transform: translateY(
+      calc(var(--os-scroll-percent-directional) * 100cqh + var(--os-scroll-percent-directional) * -100%)
+    );
+  }
+}
+
+.os-scrollbar.os-scrollbar-horizontal.os-scrollbar-cornerless {
+  left: 0;
+  right: 0;
+}
+
+.os-scrollbar.os-scrollbar-vertical.os-scrollbar-cornerless {
+  top: 0;
+  bottom: 0;
+}
+
+.os-theme-none.os-scrollbar {
+  display: none !important;
+}
+
+@media print {
+  .os-scrollbar {
+    display: none;
+  }
+}
+
+/* Material 3 Expressive overlay pseudo-scrollbar theme. Uses semantic outline tokens,
+   the shared FastEffects spring clock (so speed/off tiers govern fade and hover growth),
+   and a local z-index strictly below `--z-route-crossfade` (20) so page-level overlays,
+   back chrome and Hero flights always paint cleanly above it. */
+.os-scrollbar.os-theme-picpony {
+  box-sizing: border-box;
+  z-index: 15;
+  --os-size: 12px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 2px;
+  --os-track-border-radius: 9999px;
+  --os-handle-border-radius: 9999px;
+  --os-handle-min-size: 32px;
+  --os-handle-perpendicular-size: 6px;
+  --os-handle-perpendicular-size-hover: 8px;
+  --os-handle-perpendicular-size-active: 8px;
+  --os-handle-interactive-area-offset: 4px;
+  --os-track-bg: transparent;
+  --os-track-bg-hover: transparent;
+  --os-track-bg-active: transparent;
+  --os-handle-bg: var(--md-sys-color-outline-variant);
+  --os-handle-bg-hover: var(--md-sys-color-outline);
+  --os-handle-bg-active: var(--md-sys-color-on-surface-variant);
+}
+
+/* Multiline fields (`Textarea`, `ChatComposer`): inset the vertical pseudo-scrollbar inside
+   the field's rounded corners and above a resizable textarea's bottom-right grip. */
+.m3-field[data-multiline] > .os-scrollbar-vertical.os-theme-picpony {
+  --os-padding-axis: 8px;
+}
+
+.m3-field[data-multiline]:has(> textarea.resize-y) > .os-scrollbar-vertical.os-theme-picpony {
+  bottom: 12px;
+}
+
+/* Covered gallery and in-flight Hero overlays hide only their sibling `.os-scrollbar` tracks:
+   zero inherited properties change on `<main>` or its gallery subtree. */
+[data-scroll-hidden] > .os-scrollbar,
+html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
+[data-image-detail-overlay][data-image-hero-leaving] .os-detail-slot > .os-scrollbar {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+
+@media (forced-colors: active) {
+  .os-scrollbar.os-theme-picpony {
+    --os-handle-bg: ButtonText;
+    --os-handle-bg-hover: Highlight;
+    --os-handle-bg-active: Highlight;
+  }
+
+  .os-scrollbar.os-theme-picpony .os-scrollbar-handle {
+    forced-color-adjust: none;
+    background: var(--os-handle-bg);
+  }
 }
 
 /* The app's default transition set — not the all-properties shorthand (it animates layout,

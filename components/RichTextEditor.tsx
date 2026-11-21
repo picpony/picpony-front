@@ -11,6 +11,7 @@ import { useTooltip } from '@/components/Tooltip';
 import RichTextEditorPanels, { type RichTextEditorPanelsHandle, type EditorFormField } from '@/components/RichTextEditorPanels';
 import FollowHeight from '@/components/FollowHeight';
 import { isImageHeroTransitionRunning, waitForImageHeroTransition } from '@/lib/hero/runtime';
+import { mountSlottedScrollbar, type OverlayScrollbarHandle } from '@/lib/overlayScrollbar';
 import { uploadForumPicture } from '@/lib/forumImages';
 import {
   EDITOR_MIN_HEIGHT,
@@ -400,6 +401,27 @@ export default function RichTextEditor({
     let stopPanelControls = () => {};
     let uploading = 0;
     let cancelSelection = () => {};
+    const editorScrollbars = new Map<HTMLElement, OverlayScrollbarHandle>();
+    const syncScrollbars = (shell: HTMLElement) => {
+      shell.querySelectorAll<HTMLElement>('.w-e-scroll, .table-container').forEach((scroller) => {
+        addClasses(scroller, 'popover-scrollbar');
+        if (!scroller.classList.contains('w-e-scroll')) return;
+        const slot = scroller.parentElement;
+        if (!slot || editorScrollbars.has(scroller)) return;
+        addClasses(slot, 'os-slot');
+        scroller.setAttribute('data-os-axis', 'y');
+        editorScrollbars.set(
+          scroller,
+          mountSlottedScrollbar(scroller, slot, { axis: 'y', observeInput: true }),
+        );
+      });
+      for (const [scroller, handle] of editorScrollbars) {
+        if (!scroller.isConnected) {
+          handle.destroy();
+          editorScrollbars.delete(scroller);
+        }
+      }
+    };
     const isCurrent = () => generationRef.current === generation;
     const reportUploading = (delta: number) => {
       const before = uploading > 0;
@@ -721,7 +743,7 @@ export default function RichTextEditor({
           // must not take over the state-layer pseudo-element on a button.
           if (button.classList.contains('w-e-menu-tooltip-v5')) button.classList.remove('w-e-menu-tooltip-v5');
         });
-        shell.querySelectorAll<HTMLElement>('.w-e-scroll, .table-container').forEach((scroller) => addClasses(scroller, 'popover-scrollbar'));
+        if (shellRef.current) syncScrollbars(shellRef.current);
         const nextHints = Array.from(shellRef.current?.querySelectorAll<HTMLElement>('button[data-menu-key]') ?? [])
           .filter((target) => !target.closest('.w-e-hover-bar, .w-e-bar-item-menus-container'))
           .map((target) => ({
@@ -770,6 +792,8 @@ export default function RichTextEditor({
       editorRef.current = null;
       toolbarRef.current = null;
       const destroy = () => {
+        for (const handle of editorScrollbars.values()) handle.destroy();
+        editorScrollbars.clear();
         cancelSelection();
         safely('销毁工具栏失败:', () => toolbar?.destroy());
         safely('销毁编辑器失败:', () => editor?.destroy());

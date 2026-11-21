@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { MdClose, MdExpandMore } from 'react-icons/md';
 import IconButton from '@/components/IconButton';
+import ScrollArea from '@/components/ScrollArea';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import { useMediaQuery, useStoredBoolean } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
@@ -570,7 +571,14 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
               </div>
             ) : (
               <div className="flex items-start gap-1 py-2 pl-4 pr-1">
-                <p className={cn(styles.bubbleBody, 'popover-scrollbar min-w-0 flex-1 py-1.5 text-body-m wrap-anywhere')}>{bubble?.text}</p>
+                <ScrollArea
+                  as="p"
+                  axis="y"
+                  className="flex min-w-0 flex-1"
+                  viewportClassName={cn(styles.bubbleBody, 'popover-scrollbar min-w-0 flex-1 py-1.5 text-body-m wrap-anywhere')}
+                >
+                  {bubble?.text}
+                </ScrollArea>
                 <IconButton dismiss size="sm" aria-label="关闭吉祥物对话" onClick={closeBubble} icon={<MdClose />} />
               </div>
             )}

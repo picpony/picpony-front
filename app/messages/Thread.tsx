@@ -7,6 +7,7 @@ import Button from '@/components/Button';
 import ChatBubble, { ChatRun, markRuns } from '@/components/ChatBubble';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import ScrollArea from '@/components/ScrollArea';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -308,17 +309,21 @@ export default function Thread({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div
-        ref={scrollerRef}
-        role="log"
-        aria-label={label}
-        aria-busy={loadingOlder || undefined}
-        tabIndex={0}
-        onScroll={onScroll}
+      <ScrollArea
+        axis="y"
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        viewportRef={scrollerRef}
         /* The engine's own scroll anchoring would fight the placement above (it shifts the
            view when rows land above, and so does this code); this log positions itself. */
-        style={{ overflowAnchor: 'none' }}
-        className="popover-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
+        viewportStyle={{ overflowAnchor: 'none' }}
+        viewportClassName="popover-scrollbar relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
+        viewportProps={{
+          role: 'log',
+          'aria-label': label,
+          'aria-busy': loadingOlder || undefined,
+          tabIndex: 0,
+          onScroll,
+        }}
       >
         <div ref={contentRef} className="flex min-h-full flex-col p-4">
           {entries.length > 0 && (hasMore || loadingOlder || olderError) && (
@@ -336,7 +341,7 @@ export default function Thread({
           <div className="mt-auto flex flex-col">{body}</div>
           <div ref={endRef} aria-hidden="true" />
         </div>
-      </div>
+      </ScrollArea>
       {unseen > 0 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
           <Button

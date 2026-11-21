@@ -12,7 +12,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const virtual = {
   /* ColorSwatch's dialog (components/Input.tsx) loads on demand and carries the HCT tools; no fixture here opens it. */
   './ColorPicker': `module.exports=()=>null;`,
-  '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;`,
+  '@/lib/appearance': `exports.MOTION_SPEED_SCALE={slow:1};exports.motionTier=()=> 'off';exports.scaledMs=x=>x;exports.useMotionTier=()=>'off';exports.useMotionScale=()=>0;`,
   '@/lib/hero': `exports.isImageHeroTransitionRunning=()=>false;exports.waitForImageHeroTransition=()=>Promise.resolve();`,
   '@/lib/resources': `exports.sessionUser={read:({token})=>window.fixtureUser(token)};`,
   'react-icons/md': `const React=require('react');module.exports=new Proxy({}, {get:()=>props=>React.createElement('svg',props)});`,
@@ -23,7 +23,7 @@ const virtual = {
   './Logo': `module.exports=()=>null;`,
   './FadeInImage': `const React=require('react');module.exports=({src,alt})=>React.createElement('img',{src,alt});`,
   '@/components/Spinner': `const React=require('react');module.exports=()=>React.createElement('span',{'role':'status'},'Loading');`,
-  '@/components/ErrorRetry': `const React=require('react');module.exports=({title,onRetry,retryLabel})=>React.createElement('div',null,title,React.createElement('button',{onClick:onRetry},retryLabel));`,
+  '@/components/ErrorRetry': `const React=require('react');module.exports=({title,message,onRetry,retryLabel})=>React.createElement('div',null,title,message,React.createElement('button',{onClick:onRetry},retryLabel));`,
   './IconButton': `const React=require('react');module.exports=({icon,dismiss,variant,tooltip,...props})=>React.createElement('button',{type:'button',...props},icon);`,
   './Button': `const React=require('react');module.exports=({children,loading,disabled,variant,icon,size,fullWidth,...props})=>React.createElement('button',{type:'button',disabled:disabled||loading,...props},children);`,
   './Toast': `exports.showToast=(message)=>window.toasts.push(message);`,
@@ -44,6 +44,7 @@ const packageFiles = {
   'react-dom': 'react-dom/cjs/react-dom.production.js',
   'react-dom/client': 'react-dom/cjs/react-dom-client.production.js',
   scheduler: 'scheduler/cjs/scheduler.production.js',
+  overlayscrollbars: 'overlayscrollbars/overlayscrollbars.cjs.js',
 };
 const entry = `
 import React, {useState} from 'react';
@@ -256,8 +257,8 @@ with sync_playwright() as p:
   page.evaluate("window.auth.switchView('reset')")
   response(4,'replaced-token')
   page.wait_for_timeout(50)
-  # The dialog is named by its visible heading (R2-029): the reset view's first step reads 忘记密码.
-  expect(page.get_by_role('dialog',name='忘记密码',exact=True)).to_be_visible()
+  # The dialog is named by its visible heading (R2-029): the reset view's first step reads 找回密码.
+  expect(page.get_by_role('dialog',name='找回密码',exact=True)).to_be_visible()
   assert page.evaluate("localStorage.getItem('user_info')")==None
   page.evaluate('window.auth.closeAuth()')
   # Register, then cancel while email verification is pending.
@@ -295,7 +296,8 @@ with sync_playwright() as p:
   assert page.evaluate('window.navigations.length')==0
   page.evaluate('window.openBrokenCrop()')
   crop=page.get_by_role('dialog',name='调整图片',exact=True)
-  expect(crop).to_contain_text('图片无法读取，请选择其他图片')
+  expect(crop).to_contain_text('图片加载失败')
+  expect(crop).to_contain_text('无法读取此图片')
   expect(crop.get_by_role('button',name='确认',exact=True)).to_be_disabled()
   crop.get_by_role('button',name='重新选择',exact=True).click()
   expect(crop).not_to_be_visible()

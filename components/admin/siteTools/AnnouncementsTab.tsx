@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { MdDeleteOutline, MdVisibility } from 'react-icons/md';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -10,6 +10,7 @@ import Modal from '@/components/Modal';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import { formatDateTime } from '@/lib/format';
+import { useRichTextScrollbars } from '@/lib/overlayScrollbar';
 import type { Announcement } from '@/lib/types/message';
 import { announcementPayload, type Values } from '@/lib/adminSiteTools/model';
 import * as adminApi from '@/lib/api/admin';
@@ -31,6 +32,8 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
      title and the body hold through the exit rather than turning into 公告 and an empty panel in
      the commit that closes it (M1-009). The next preview replaces it. */
   const [preview, setPreview] = useState<{ announcement: Announcement; open: boolean } | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  useRichTextScrollbars(previewRef, preview?.open ? preview.announcement.content : null);
   const history = useToolPage(announcementsQuery, token, { page }, 'history');
   if (history.data && !history.isPrevious && !history.isLoading && !history.error && page > history.data.totalPages) setPage(history.data.totalPages);
   const publish = useAdminMutation(token), remove = useAdminMutation(token);
@@ -72,7 +75,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
         i.e. the admin saw something no visitor would. `--rt-quote-surface` comes with it because
         this preview is also inside a `Modal`, the quote's own default step. Already sanitised at
         read (`sanitizeAnnouncements`). */}
-    <Modal isOpen={Boolean(preview?.open)} onClose={() => setPreview((current) => current && { ...current, open: false })} title={preview?.announcement.title ?? '公告'}>{preview && <div className="rich-text-content wrap-anywhere text-body-m text-on-surface-variant" style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties} dangerouslySetInnerHTML={{ __html: preview.announcement.content }} />}</Modal>
+    <Modal isOpen={Boolean(preview?.open)} onClose={() => setPreview((current) => current && { ...current, open: false })} title={preview?.announcement.title ?? '公告'}>{preview && <div ref={previewRef} className="rich-text-content wrap-anywhere text-body-m text-on-surface-variant" style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties} dangerouslySetInnerHTML={{ __html: preview.announcement.content }} />}</Modal>
     {confirmDialog}
   </div>;
 }

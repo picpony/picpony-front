@@ -38,6 +38,7 @@ const packageFiles = {
   'react-dom': 'react-dom/cjs/react-dom.production.js',
   'react-dom/client': 'react-dom/cjs/react-dom-client.production.js',
   scheduler: 'scheduler/cjs/scheduler.production.js',
+  overlayscrollbars: 'overlayscrollbars/overlayscrollbars.cjs.js',
 };
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const entry = `

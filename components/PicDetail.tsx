@@ -38,6 +38,7 @@ import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
 import Menu, { type MenuAction } from '@/components/Menu';
 import PageBack from '@/components/PageBack';
+import ScrollArea from '@/components/ScrollArea';
 import { useShareToContact } from '@/components/ShareToContactDialog';
 import Skeleton from '@/components/Skeleton';
 import TagInfoModal from '@/components/TagInfoModal';
@@ -1319,9 +1320,12 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         <div data-image-detail-clip className="image-detail-clip absolute inset-0">
           <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
             <div ref={overlaySurfaceRef} data-image-detail-surface className="absolute inset-0 bg-surface" />
-            <div
-              ref={overlayScrollerRef}
-              className="image-detail-overlay-scroll main-scrollbar absolute inset-0 z-10 overflow-y-auto overscroll-contain"
+            <ScrollArea
+              axis="y"
+              defer
+              className="os-detail-slot absolute inset-0 z-10 flex"
+              viewportRef={overlayScrollerRef}
+              viewportClassName="image-detail-overlay-scroll main-scrollbar relative h-full w-full min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
               <div
                 ref={overlayContentRef}
@@ -1337,7 +1341,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   here and rides the route's own native scroll (\`HeroController.promoteAdoption\`),
                   as on the Stage's anchor before it. Empty otherwise; the controller owns it. */}
               <div ref={overlayAnchorRef} data-image-hero-route-anchor aria-hidden="true" className="image-hero-stage-anchor" />
-            </div>
+            </ScrollArea>
           </div>
         </div>
       </section>

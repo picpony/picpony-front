@@ -30,7 +30,7 @@ MOTION_RECORDER = """(() => {
 
 
 def settle(panel):
-    panel.evaluate('(el)=>Promise.allSettled(el.getAnimations({subtree:true}).map(a=>a.finished))')
+    panel.evaluate('(el)=>Promise.allSettled(el.getAnimations({subtree:true}).filter(a=>!(a.timeline&&"source" in a.timeline)).map(a=>a.finished))')
 
 
 def open_color(page, editor, name='文字颜色'):

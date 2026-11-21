@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { getAnnouncement } from '@/lib/api/picpony';
 import type { Announcement } from '@/lib/types/message';
 import Modal from './Modal';
@@ -8,6 +8,7 @@ import Button from './Button';
 import SectionHeading from '@/components/SectionHeading';
 import { LS_KEYS } from '@/lib/constants';
 import { isScreenQuiet, subscribeScreenQuiet } from '@/lib/overlay';
+import { useRichTextScrollbars } from '@/lib/overlayScrollbar';
 import { runWhenIdle } from '@/lib/utils';
 
 /**
@@ -22,6 +23,8 @@ export default function AnnouncementModal() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [phase, setPhase] = useState<'waiting' | 'open' | 'closed'>('waiting');
   const quiet = useSyncExternalStore(subscribeScreenQuiet, isScreenQuiet, () => false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useRichTextScrollbars(bodyRef, phase === 'open' ? announcement?.content : null);
 
   /* Latched in render, not in an effect: the dialog's own layer ends the quiet in the
      commit it opens, and an effect would first render one frame closed again. */
@@ -91,6 +94,7 @@ export default function AnnouncementModal() {
           {/* The dialog is surface-container-high, which is the quote's own default step, so a
               quote here takes the next one up (`--rt-quote-surface`) or it vanishes into the panel. */}
           <div
+            ref={bodyRef}
             className="rich-text-content text-body-m text-on-surface-variant"
             style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties}
             dangerouslySetInnerHTML={{ __html: announcement.content }}

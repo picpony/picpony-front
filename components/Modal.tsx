@@ -4,6 +4,7 @@ import { useCallback, useRef, useId, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose } from 'react-icons/md';
 import IconButton from './IconButton';
+import ScrollArea from './ScrollArea';
 import { cn } from '@/lib/utils';
 import {
   useExitAnimation,
@@ -426,17 +427,19 @@ export default function Modal({
             a `Pagination` in a dialog was turning a page and scrolling the *page
             behind the dialog* to the top. The scrollbar is the overlay style: an
             overlay reserves no gutter, or every dialog's text sits off-centre. */}
-        <div
-          ref={bodyRef}
-          data-app-scroll-container
-          className={cn(
+        <ScrollArea
+          axis="both"
+          className="flex min-h-0 flex-1 flex-col"
+          viewportRef={bodyRef}
+          viewportProps={{ 'data-app-scroll-container': '' }}
+          viewportClassName={cn(
             'popover-scrollbar min-h-0 flex-1 overflow-y-auto',
             bodyClassName ||
               cn('px-6', hasHeader ? 'pt-2' : 'pt-6', hasFooter ? 'pb-2' : 'pb-6'),
           )}
         >
           {children}
-        </div>
+        </ScrollArea>
         {/* Keep actions in the wrapping footer; a leading action uses an auto margin.
             See docs/design/primitives.md#overlays-and-history. */}
         {footer && (

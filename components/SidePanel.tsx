@@ -10,6 +10,7 @@ import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 import IconButton from './IconButton';
+import ScrollArea from './ScrollArea';
 import {
   useExitAnimation,
   useOverlayLayer,
@@ -31,6 +32,8 @@ interface SidePanelProps {
   /** Whether the system/browser Back closes the panel (`lib/historyLayers.ts`). On by default. */
   closeOnBack?: boolean;
   bodyClassName?: string;
+  /** Disable scrolling on the panel body when an inner child owns scrolling. */
+  bodyScrollable?: boolean;
   className?: string;
   /** Drops the ✕ — for a panel whose body already carries its dismiss. */
   hideCloseButton?: boolean;
@@ -76,6 +79,7 @@ export default function SidePanel({
   closeOnEscape = true,
   closeOnBack = true,
   bodyClassName = '',
+  bodyScrollable = true,
   className = '',
   hideCloseButton = false,
   onExited,
@@ -210,19 +214,22 @@ export default function SidePanel({
             )}
           </div>
         )}
-        <div
-          ref={bodyRef}
+        <ScrollArea
+          axis="both"
+          enabled={bodyScrollable}
+          className="flex min-h-0 flex-1 flex-col"
+          viewportRef={bodyRef}
           /* `data-app-scroll-container`, like `Modal`'s and `Sheet`'s bodies: this is
              the box that scrolls, so anything inside that wants to scroll to an
              element has to find this rather than the page behind the panel. */
-          data-app-scroll-container
-          className={cn(
+          viewportProps={{ 'data-app-scroll-container': '' }}
+          viewportClassName={cn(
             'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
             bodyClassName || 'px-6 pb-4',
           )}
         >
           {children}
-        </div>
+        </ScrollArea>
         {/* Docked to the screen edge, so the panel owns the home-indicator inset,
             as the bottom sheet's dock does. */}
         <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />

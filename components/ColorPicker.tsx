@@ -8,6 +8,7 @@ import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
 import PalettePreview from '@/components/PalettePreview';
 import PaletteTileFace from '@/components/PaletteTileFace';
+import ScrollArea from '@/components/ScrollArea';
 import Skeleton from '@/components/Skeleton';
 import { useScheme, type AccentChoice, type CustomSpec, type PaletteHues } from '@/lib/appearance';
 import { usePaletteTools, type PaletteTools } from '@/lib/paletteLazy';
@@ -189,7 +190,7 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
         </div>
       </Group>
       <Group label="明度与彩度">
-        <div className="popover-scrollbar overflow-x-auto">
+        <ScrollArea axis="x" viewportClassName="popover-scrollbar overflow-x-auto">
           <div className="grid gap-1 p-1 pointer-coarse:gap-2" style={{ gridTemplateColumns: BOARD_COLUMNS }}>
             <span />
             {CHROMAS.map((x) => <span key={x} className="text-label-s text-center">{Math.round(x * 100)}%</span>)}
@@ -200,7 +201,7 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
               </Row>
             ))}
           </div>
-        </div>
+        </ScrollArea>
       </Group>
       {hues === 'multi' && (
         <Group label="副色相">
@@ -476,7 +477,7 @@ function PickerDialog({
           </Group>
 
           <Group label="明度与彩度" id={boardLabel}>
-            <div className="popover-scrollbar overflow-x-auto">
+            <ScrollArea axis="x" viewportClassName="popover-scrollbar overflow-x-auto">
               <div
                 role="radiogroup"
                 aria-labelledby={boardLabel}
@@ -531,7 +532,7 @@ function PickerDialog({
                   );
                 })}
               </div>
-            </div>
+            </ScrollArea>
           </Group>
 
           {hues === 'multi' && (

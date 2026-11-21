@@ -25,6 +25,7 @@ import { Input } from '@/components/Input';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
+import ScrollArea from '@/components/ScrollArea';
 import SectionHeading from '@/components/SectionHeading';
 import Select from '@/components/Select';
 import { showToast } from '@/components/Toast';
@@ -659,7 +660,11 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
   return (
     <div>
       <p className="mb-2 text-label-m text-on-surface-variant">每一轮</p>
-      <div className="overflow-x-auto rounded-sm bg-surface-container-high main-scrollbar">
+      <ScrollArea
+        axis="x"
+        className="rounded-sm bg-surface-container-high"
+        viewportClassName="overflow-x-auto rounded-sm main-scrollbar"
+      >
         <table className="w-full min-w-136 text-left text-body-s tabular-nums">
           <thead className="text-label-m text-on-surface-variant">
             <tr className="border-b border-outline-variant">
@@ -697,7 +702,7 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </div>
   );
 }

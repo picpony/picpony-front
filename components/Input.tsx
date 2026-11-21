@@ -3,6 +3,7 @@
 import {
   forwardRef,
   useId,
+  useRef,
   useState,
   type InputHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -11,6 +12,7 @@ import {
 import dynamic from 'next/dynamic';
 import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import IconButton from './IconButton';
+import { useOverlayScrollbar } from '@/lib/overlayScrollbar';
 import { cn } from '@/lib/utils';
 
 /**
@@ -414,10 +416,21 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const supportId = helper || error || count ? `${autoId}-support` : undefined;
   const labelled = hasLabel(label);
   const dense = !labelled && size === 'sm';
+  const shellRef = useRef<HTMLDivElement>(null);
+  const localRef = useRef<HTMLTextAreaElement>(null);
+  const refreshKey =
+    typeof rest.value === 'string' || typeof rest.value === 'number' ? rest.value : undefined;
+
+  useOverlayScrollbar(localRef, shellRef, {
+    axis: 'y',
+    observeInput: true,
+    refreshKey,
+  });
 
   return (
     <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
+        ref={shellRef}
         {...shellProps({
           labelled,
           invalid: Boolean(error),
@@ -427,8 +440,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
         })}
       >
         <textarea
-          ref={ref}
+          ref={(node) => {
+            localRef.current = node;
+            if (typeof ref === 'function') ref(node);
+            else if (ref) ref.current = node;
+          }}
           id={areaId}
+          data-os-axis="y"
           aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
           rows={rows}
           aria-invalid={error ? true : undefined}

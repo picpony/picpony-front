@@ -335,7 +335,7 @@ export function captureVisualClone(
     * across the page on the frame the clone appears. Removing it is right rather than
     * merely expedient: the press belongs to the page being left, its wave is 120ms from the
     * fade that erases it, and the live element keeps its own ripple. */
-  clone.querySelectorAll('.ripple').forEach((wave) => wave.remove());
+  clone.querySelectorAll('.ripple, .os-scrollbar').forEach((node) => node.remove());
 
   const walker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
   let node = walker.currentNode as Element | null;

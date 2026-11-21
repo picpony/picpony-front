@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { MdConstruction } from 'react-icons/md';
 import Button from './Button';
+import ScrollArea from './ScrollArea';
 import StatusView from './StatusView';
 import { useAuthModal } from './AuthModal';
 import { COOKIE_KEYS } from '@/lib/constants';
@@ -145,8 +146,12 @@ export default function MaintenanceScreen({ message }: { message: string }) {
   };
 
   return (
-    <main
-      className="main-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+    <ScrollArea
+      as="main"
+      axis="y"
+      defer
+      className="flex min-h-0 flex-1"
+      viewportClassName="main-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-y-auto pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
     >
       {/* The screen answers 200 under whatever URL was asked for (a layout cannot set a status),
           so a crawler visiting during maintenance must not index this text as that page's
@@ -183,7 +188,7 @@ export default function MaintenanceScreen({ message }: { message: string }) {
           </div>
         }
       />
-    </main>
+    </ScrollArea>
   );
 }
 

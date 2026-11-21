@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import { remarkHardBreaks } from '@/lib/markdownBreaks';
 import { inAppHref, isInternalHref } from '@/lib/richTextLinks';
+import ScrollArea from '@/components/ScrollArea';
 
 /**
  * The Markdown renderer itself — remark, micromark and the sanitiser, ~28KB brotli — loaded
@@ -67,9 +68,14 @@ export default function MarkdownDocument({ content }: { content: string }) {
              Everything about how any of this looks is described once in globals.css, alongside
              the BBCode path's, so the two renderers produce one appearance. */
           table: ({ children }) => (
-            <div className="popover-scrollbar overflow-x-auto">
+            <ScrollArea axis="x" className="os-rich-block" viewportClassName="popover-scrollbar overflow-x-auto">
               <table>{children}</table>
-            </div>
+            </ScrollArea>
+          ),
+          pre: ({ children }) => (
+            <ScrollArea as="pre" axis="x" className="os-rich-block" viewportClassName="popover-scrollbar overflow-x-auto">
+              {children}
+            </ScrollArea>
           ),
         }}
       >

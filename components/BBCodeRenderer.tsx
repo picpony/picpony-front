@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { getImageProps } from 'next/image';
 import { useRouter } from 'next/navigation';
 import { bbcodeToSafeHtml, type RichImageAttributes } from '@/lib/bbcode';
+import { useRichTextScrollbars } from '@/lib/overlayScrollbar';
 import { inAppHref, isInternalHref, isPlainActivation } from '@/lib/richTextLinks';
 import { cn } from '@/lib/utils';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
@@ -84,6 +85,7 @@ export default function BBCodeRenderer({ content, className }: BBCodeRendererPro
     [content],
   );
   const ref = useRef<HTMLDivElement>(null);
+  useRichTextScrollbars(ref, html);
   const router = useRouter();
   const [viewer, setViewer] = useState<{ slides: PicLightboxSlide[]; index: number; open: boolean } | null>(null);
 

@@ -22,6 +22,7 @@ import sys
 import urllib.parse
 import urllib.request
 from playwright.sync_api import sync_playwright
+from browserLaunch import browser_options
 
 BASE, FIXTURES = sys.argv[1:3]
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -30,8 +31,10 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 USER = {'id': 1, 'username': 'Review Admin', 'role': 'super_admin', 'token': 'review-fixture-token',
         'api_key': 'review-fixture-key', 'email': 'review@example.test', 'email_verified': True,
         'avatar': '', 'experience': 1350, 'coins': 100}
-# Base durations (ms) at scale 1 — app/globals.css `--motion-base-spring-*` and the state layer.
-FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER, REACTION, SURFACE_ENTER = 108, 137, 166, 150, 221, 400
+# Base durations (ms) at scale 1 — app/globals.css `--motion-base-spring-*` (`lib/spring.ts`).
+FAST_EFFECTS, FAST_SPATIAL = 138, 348
+DEFAULT_EFFECTS, DEFAULT_SPATIAL = 212, 412
+SLOW_EFFECTS, SLOW_SPATIAL, LAYOUT = 300, 569, 321
 TIERS = [('standard', 'default', 1.0), ('standard', 'fast', 0.7), ('standard', 'slow', 1.4),
          ('reduced', 'default', 1.0), ('off', 'default', 0.0)]
 TOLERANCE_MS = 2
@@ -81,10 +84,12 @@ def new_context(browser, motion, speed, width=1440):
     return context
 
 
-# Polls getAnimations() every frame; animations already running when it starts are ignored.
+# Polls getAnimations() every frame; animations already running when it starts (and scroll-driven
+# timelines such as OverlayScrollbars' ScrollTimeline handles) are ignored.
 CAPTURE_START = '''(ms) => { window.__cap = { done: false, list: [] }; const seen = new Set(document.getAnimations());
   const t0 = performance.now();
   const tick = () => { for (const a of document.getAnimations()) if (!seen.has(a)) { seen.add(a);
+      if (a.timeline && 'source' in a.timeline) continue;
       const e = a.effect, el = e && e.target;
       window.__cap.list.push({ name: a.animationName || a.transitionProperty || '', type: a.constructor.name,
         dur: Math.round(e ? e.getComputedTiming().duration : 0), pseudo: (e && e.pseudoElement) || '',
@@ -135,7 +140,9 @@ def durations(items, predicate):
 
 def run_tier(browser, motion, speed, scale):
     tier = f'{motion}/{speed}'
-    fe, fs, de, st, en = (round(v * scale) for v in (FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, STATE_LAYER, SURFACE_ENTER))
+    fe, fs, de, ds, se, ss, ly = (
+        round(v * scale) for v in (FAST_EFFECTS, FAST_SPATIAL, DEFAULT_EFFECTS, DEFAULT_SPATIAL, SLOW_EFFECTS, SLOW_SPATIAL, LAYOUT)
+    )
     context = new_context(browser, motion, speed)
     page = context.new_page()
     errors = []
@@ -152,18 +159,18 @@ def run_tier(browser, motion, speed, scale):
         check(tier, 'transition-ui travel on FastSpatial', all(near(lists.get(p), fs) for p in travel), lists)
     else:
         check(tier, 'transition-ui travel dropped under off', not any(p in lists for p in travel), lists)
-    for selector in ['a[aria-label="PicPony 首页"]', '[role=tab]']:
+    for selector, expected in [('a[aria-label="PicPony 首页"]', fe), ('[role=tab]', de)]:
         lists = page.evaluate(TRANSITIONS, [selector, ''])
-        check(tier, f'focus ring on FastEffects: {selector}', lists and near(lists.get('box-shadow'), fe), lists)
+        check(tier, f'focus ring on spring effects: {selector}', lists and near(lists.get('box-shadow'), expected), lists)
 
     page.mouse.move(5, 890)
     items = capture(page, lambda: page.get_by_role('link', name='图片 #2000').first.hover(), 500)
     got = durations(items, lambda a: 'media-hover-scrim' in a['cls'])
-    check(tier, 'gallery hover scrim on the state layer', got == ([st] if scale else []), got)
+    check(tier, 'gallery hover scrim on FastEffects', got == ([fe] if scale else []), got)
 
     items = capture(page, lambda: page.get_by_role('button', name='收起侧边栏').click(), 900)
     got = durations(items, lambda a: a['id'] == 'app-sidebar' and a['name'] in ('translate', 'margin-right'))
-    check(tier, 'docked drawer on DefaultEffects', got == ([de] if scale else []), got)
+    check(tier, 'docked drawer on layout spring', got == ([ly] if scale else []), got)
     page.wait_for_timeout(500)
 
     page.goto(BASE + '/search?q=pony')
@@ -186,7 +193,7 @@ def run_tier(browser, motion, speed, scale):
     else:
         items = capture(page, lambda: report.click(), 700)
     got = durations(items, lambda a: a['type'] == 'Animation' and 'ripple' not in a['cls'])
-    check(tier, 'modal enters on the emphasized decelerate, 400ms', got == ([en] if scale else []), got)
+    check(tier, 'modal enters on surfaceArrival (DefaultEffects + DefaultSpatial)', got == (sorted({de, ds}) if scale else []), got)
     page.wait_for_timeout(700)
     items = capture(page, lambda: page.keyboard.press('Escape'), 700)
     got = durations(items, lambda a: a['type'] == 'Animation' and 'ripple' not in a['cls'])
@@ -195,7 +202,7 @@ def run_tier(browser, motion, speed, scale):
 
     items = capture(page, lambda: page.locator('main img[alt="图片 #1000"]').first.click(), 1200)
     got = durations(items, lambda a: 'yarl__root' in a['cls'] or a['name'] == 'm3-lightbox-in')
-    check(tier, 'lightbox fades on DefaultEffects, slide enters over 400ms', got == (sorted({de, en}) if scale else []), got)
+    check(tier, 'lightbox enters on SlowEffects + SlowSpatial', got == (sorted({se, ss}) if scale else []), got)
     page.wait_for_timeout(700)
     items = capture(page, lambda: page.keyboard.press('Escape'), 1200)
     got = durations(items, lambda a: 'yarl__root' in a['cls'])
@@ -226,7 +233,7 @@ def run_tier(browser, motion, speed, scale):
     like = page.get_by_role('button', name='点赞').first
     items = capture(page, lambda: like.click(), 900)
     got = durations(items, lambda a: a['name'] == 'reaction-fill')
-    check(tier, 'like press plays the fill once', got == [round(REACTION * scale)], got)
+    check(tier, 'like press plays the fill once', got == [fs], got)
     page.wait_for_timeout(300)
     items = capture(page, lambda: like.click(), 900)  # the un-like fails and the filled thumb comes back
     got = [a for a in items if a['name'] == 'reaction-fill']
@@ -235,25 +242,25 @@ def run_tier(browser, motion, speed, scale):
     check(tier, 'no page errors', not errors, errors[:3])
     context.close()
 
-    # Phone: the modal drawer and its scrim share one clock, the large-surface pair Sheet and
-    # SidePanel run: 400ms emphasized decelerate opening, DefaultEffects closing.
+    # Phone: the modal drawer opens on DefaultSpatial with its scrim on DefaultEffects, and
+    # leaves on FastEffects with its scrim on DefaultEffects.
     context = new_context(browser, motion, speed, width=390)
     page = context.new_page()
     page.goto(BASE + '/')
     page.wait_for_timeout(2500)
     items = capture(page, lambda: page.locator('header button').first.click(), 900)
     got = durations(items, lambda a: a['id'] == 'app-sidebar' or 'z-drawer-scrim' in a['cls'])
-    check(tier, 'phone drawer and scrim open on the surface enter', got == ([en] if scale else []), got)
+    check(tier, 'phone drawer and scrim open on DefaultSpatial + DefaultEffects', got == (sorted({de, ds}) if scale else []), got)
     page.wait_for_timeout(500)
     page.screenshot(path=str(OUTPUT / f'phone-drawer-{motion}-{speed}.png'))
     items = capture(page, lambda: page.keyboard.press('Escape'), 900)
     got = durations(items, lambda a: a['id'] == 'app-sidebar' or 'z-drawer-scrim' in a['cls'])
-    check(tier, 'phone drawer and scrim close on DefaultEffects', got == ([de] if scale else []), got)
+    check(tier, 'phone drawer and scrim close on FastEffects + DefaultEffects', got == (sorted({fe, de}) if scale else []), got)
     context.close()
 
 
 with sync_playwright() as playwright:
-    browser = playwright.chromium.launch()
+    browser = playwright.chromium.launch(**browser_options())
     only = [arg for arg in sys.argv[3:] if '/' in arg]
     for motion, speed, scale in TIERS:
         if only and f'{motion}/{speed}' not in only:

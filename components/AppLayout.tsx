@@ -35,6 +35,7 @@ import OfflineBanner from './OfflineBanner';
 import CompanionHost from './mascot/CompanionHost';
 import { MaintenanceNotice, useStaleStaffHintCleanup } from './MaintenanceScreen';
 import SidebarNav from './SidebarNav';
+import ScrollArea from './ScrollArea';
 import { useAuthModal } from './AuthModal';
 import { useConfirm } from './ConfirmDialog';
 import { BackgroundLocationProvider, useBackgroundSearchParams } from './BackgroundLocation';
@@ -1199,12 +1200,16 @@ export default function AppLayout({
               dockedCollapsed ? 'md:-translate-x-full md:-mr-72' : 'md:translate-x-0 md:mr-0',
             )}
           >
-            {/* `w-full`, not a second width declaration. `popover-scrollbar`: the drawer is not
-                the page column, and reserving a gutter left every row 10px nearer its left edge
-                than its right. `overscroll-y-contain`: the end of the list does not chain into
+            {/* `w-full`, not a second width declaration. Floating pseudo-scrollbar takes zero
+                layout width; `overscroll-y-contain` keeps the end of the list from chaining into
                 the page behind the scrim. The top inset is the modal drawer's own (it covers the
                 status bar area); docked, the chrome above has already paid it. */}
-            <div className="popover-scrollbar flex w-full flex-1 flex-col overflow-y-auto overscroll-y-contain pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pt-0">
+            <ScrollArea
+              axis="y"
+              defer
+              className="flex min-h-0 w-full flex-1"
+              viewportClassName="popover-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-y-contain pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pt-0"
+            >
               <div className="p-3 pb-0">
                 {userInfo ? (
                   <Link
@@ -1276,7 +1281,7 @@ export default function AppLayout({
                 onLogout={() => void handleLogoutClick()}
                 onReselect={isImageDetailOpen ? reselectCovered : undefined}
               />
-            </div>
+            </ScrollArea>
           </aside>
           <section
             data-image-detail-host
@@ -1303,14 +1308,21 @@ export default function AppLayout({
                    portalled into it is a real, focusable control. */
                 className="pointer-events-none absolute inset-0 z-page-chrome"
               />
-              <main
-                ref={mainRef}
-                id="app-main"
-                data-image-detail-background
-                aria-hidden={galleryInert || undefined}
-                data-image-hero-gallery-scroll
-                data-scroll-hidden={detailCovers || undefined}
-                className="app-scroller main-scrollbar absolute inset-0 w-full overflow-y-scroll bg-surface outline-hidden"
+              <ScrollArea
+                as="main"
+                axis="y"
+                defer
+                className="os-slot-page absolute inset-0 flex"
+                slotProps={{ 'data-scroll-hidden': detailCovers ? '' : undefined }}
+                viewportRef={mainRef}
+                viewportClassName="app-scroller main-scrollbar relative h-full w-full min-h-0 flex-1 overflow-y-auto bg-surface outline-hidden"
+                viewportProps={{
+                  id: 'app-main',
+                  'data-image-detail-background': '',
+                  'aria-hidden': galleryInert || undefined,
+                  'data-image-hero-gallery-scroll': '',
+                  'data-scroll-hidden': detailCovers ? '' : undefined,
+                }}
               >
                 <div
                   data-image-detail-background-visual
@@ -1392,7 +1404,7 @@ export default function AppLayout({
                   aria-hidden="true"
                   className="image-hero-gallery-anchor"
                 />
-              </main>
+              </ScrollArea>
               {/* The sibling immediately above `RouteCrossFade`, so the ordering is stated
                   rather than incidental: within one commit phase React runs siblings in
                   render order. See `lib/scrollMemory.ts`. */}

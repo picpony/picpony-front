@@ -10,6 +10,7 @@ import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
+import ScrollArea from './ScrollArea';
 import {
   useExitAnimation,
   useOverlayLayer,
@@ -33,6 +34,8 @@ interface SheetProps {
   /** Whether the system/browser Back closes the sheet (`lib/historyLayers.ts`). On by default. */
   closeOnBack?: boolean;
   bodyClassName?: string;
+  /** Disable scrolling on the sheet body when an inner child owns scrolling. */
+  bodyScrollable?: boolean;
   className?: string;
   /** Hide the drag handle for a sheet that is not draggable (rare). */
   hideHandle?: boolean;
@@ -87,6 +90,7 @@ export default function Sheet({
   closeOnEscape = true,
   closeOnBack = true,
   bodyClassName = '',
+  bodyScrollable = true,
   className = '',
   hideHandle = false,
   onExited,
@@ -408,21 +412,24 @@ export default function Sheet({
             {title}
           </h2>
         )}
-        <div
-          ref={bodyRef}
+        <ScrollArea
+          axis="both"
+          enabled={bodyScrollable}
+          className="flex min-h-0 flex-1 flex-col"
+          viewportRef={bodyRef}
           /* `data-app-scroll-container`, like `Modal`'s body: this is the box that
              scrolls, so anything inside that wants to scroll to an element has to
              find this rather than the page behind the sheet. */
-          data-app-scroll-container
+          viewportProps={{ 'data-app-scroll-container': '' }}
           /* Overscroll is contained: a list that reaches its end keeps the rest of
              the fling rather than handing it to the page (or the browser) beneath. */
-          className={cn(
+          viewportClassName={cn(
             'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
             bodyClassName || 'px-6',
           )}
         >
           {children}
-        </div>
+        </ScrollArea>
         {/* The dock sits against the screen edge, so it owns the home-indicator
             inset. `max()` rather than a flat value: on a device with no inset
             the sheet would otherwise carry 34px of dead space. */}

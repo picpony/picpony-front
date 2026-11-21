@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MdBuild, MdDeleteOutline, MdRefresh, MdSend } from 'react-icons/md';
 import SidePanel from '@/components/SidePanel';
 import Sheet from '@/components/Sheet';
+import ScrollArea from '@/components/ScrollArea';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Card from '@/components/Card';
@@ -195,9 +196,18 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       }}>清空</Button>}
       {quota.data && <span className="ml-auto text-body-s tabular-nums text-on-surface-variant">剩余 {formatExactCount(quota.data.remaining)} 点</span>}
     </div>
-    <div ref={log} className={cn(styles.messages, 'popover-scrollbar pr-1')} onScroll={event => {
-      const node = event.currentTarget; nearEnd.current = node.scrollHeight - node.scrollTop - node.clientHeight < 64;
-    }}>
+    <ScrollArea
+      axis="y"
+      className="flex min-h-0 flex-1 flex-col"
+      viewportRef={log}
+      viewportClassName={cn(styles.messages, 'popover-scrollbar pr-1')}
+      viewportProps={{
+        onScroll: (event) => {
+          const node = event.currentTarget;
+          nearEnd.current = node.scrollHeight - node.scrollTop - node.clientHeight < 64;
+        },
+      }}
+    >
       {/* Pinned to the bottom, as a chat is: a short thread sits just above the field instead of
           leaving the panel's height empty under it. An auto margin, not `justify-content`, so a
           long thread still scrolls to its first message. */}
@@ -254,7 +264,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         {state.task && !state.task.pending_id && !state.busy && <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>核对任务</Button>}
         {state.error && <ErrorRetry size="inline" title="彩彩 AI 操作未完成" message={state.error} onRetry={!state.available && !state.busy ? () => void session.restore() : undefined} />}
       </div>
-    </div>
+    </ScrollArea>
     {/* The wait says "still running" the way the semantic parse line does: the shimmer crosses
         the words themselves (`text-shimmer`), rather than a spinner that would claim a position
         the backend never reported. Only the thinking status sweeps; an operation or a finished
@@ -291,8 +301,8 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   </div>;
   return <>
     {desktop
-      ? <SidePanel isOpen={isOpen} onClose={close} title="彩彩 AI" bodyClassName={styles.sideBody}>{content}</SidePanel>
-      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-4 pb-4`}>{content}</Sheet>}
+      ? <SidePanel isOpen={isOpen} onClose={close} title="彩彩 AI" bodyClassName={styles.sideBody} bodyScrollable={false}>{content}</SidePanel>
+      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-4 pb-4`} bodyScrollable={false}>{content}</Sheet>}
     {confirmDialog}
   </>;
 }

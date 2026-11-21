@@ -28,6 +28,7 @@ Compose the existing components; do not copy their class strings or interaction 
 | Need | Use |
 | --- | --- |
 | Card / section | `Card`; `interactive` renders a button, `as="a"` an anchor |
+| Scrollable region | `ScrollArea` (`components/ScrollArea.tsx`); `useOverlayScrollbar` / `useRichTextScrollbars` in `lib/overlayScrollbar.ts` for existing field shells and HTML rich text |
 | Command menu | `Menu` |
 | Floating panel | `Popover` |
 | Dialog | `Modal`; actions use its `footer` |

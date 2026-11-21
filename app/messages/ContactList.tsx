@@ -7,6 +7,7 @@ import { CountBadge } from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import IconButton from '@/components/IconButton';
+import ScrollArea from '@/components/ScrollArea';
 import { useTooltip } from '@/components/Tooltip';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { useNow } from '@/lib/hooks';
@@ -175,7 +176,14 @@ export default function ContactList({
           />
         )}
       </div>
-      <div className={cn(rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto p-2')}>{rows}</div>
+      <ScrollArea
+        axis="y"
+        enabled={rail}
+        className="flex min-h-0 flex-1 flex-col"
+        viewportClassName={cn(rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto p-2')}
+      >
+        {rows}
+      </ScrollArea>
     </div>
   );
 }

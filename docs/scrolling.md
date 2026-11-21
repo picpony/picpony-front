@@ -8,11 +8,17 @@ The body is `overflow: hidden`. The page scroller is `<main class="app-scroller"
 
 Use `scrollAppToTop` / `scrollAppToElement`, not `window.scrollTo`. Scroller children use `min-h-full`, not `min-h-dvh`.
 
-| Container | Utility |
+Visible scrollbars use `OverlayScrollbars` (`components/ScrollArea.tsx` and `lib/overlayScrollbar.ts`) with the `.os-theme-picpony` Material 3 theme. Native scrollbars are hidden from first paint so tracks float over content without reserving layout gutters or shifting width when overflow changes.
+
+| Container | Mechanism |
 | --- | --- |
-| Page-level scroller | `.main-scrollbar`, reserved gutter |
-| Overlay scroller | `.popover-scrollbar`, no gutter |
-| Horizontal chips or tabs | `.scrollbar-hide` |
+| Page-level scroller and image-detail overlay | `ScrollArea` (`.main-scrollbar`), floating pseudo-scrollbar, no gutter |
+| Overlays, drawers, popovers, panels and tables | `ScrollArea` (`.popover-scrollbar`), floating pseudo-scrollbar, no gutter |
+| Multiline fields (`Textarea`, `ChatComposer`) | `useOverlayScrollbar` mounted onto the enclosing `.m3-field` slot |
+| HTML-injected rich text tables and `<pre>` blocks | `useRichTextScrollbars` (wrapper mode) |
+| Horizontal chips or tabs | `.scrollbar-hide` with `scroll-fade-x` |
+
+`ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`.
 
 ## Scroll ownership
 

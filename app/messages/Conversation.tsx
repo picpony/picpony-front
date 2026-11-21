@@ -15,6 +15,7 @@ import { MdArrowBack, MdOutlineEmojiEmotions, MdRefresh, MdSend } from 'react-ic
 import Avatar from '@/components/Avatar';
 import IconButton from '@/components/IconButton';
 import Popover from '@/components/Popover';
+import ScrollArea from '@/components/ScrollArea';
 import { MEDIA } from '@/lib/constants';
 import { useHistoryLayer, type HistoryLayer } from '@/lib/historyLayers';
 import { useMediaQuery } from '@/lib/hooks';
@@ -390,14 +391,18 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
       </div>
 
       {docked && emojiOpen && (
-        <div
-          id={panelId}
-          role="dialog"
-          aria-label="表情"
-          className="popover-scrollbar h-72 max-h-[45dvh] shrink-0 overflow-y-auto overscroll-contain bg-surface-container px-3 pt-1"
+        <ScrollArea
+          axis="y"
+          className="flex h-72 max-h-[45dvh] shrink-0 flex-col bg-surface-container"
+          viewportClassName="popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-1"
+          viewportProps={{
+            id: panelId,
+            role: 'dialog',
+            'aria-label': '表情',
+          }}
         >
           {picker}
-        </div>
+        </ScrollArea>
       )}
     </div>
   );

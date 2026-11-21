@@ -31,6 +31,7 @@ const packageFiles = {
   'react-dom': 'react-dom/cjs/react-dom.production.js',
   'react-dom/client': 'react-dom/cjs/react-dom-client.production.js',
   scheduler: 'scheduler/cjs/scheduler.production.js',
+  overlayscrollbars: 'overlayscrollbars/overlayscrollbars.cjs.js',
 };
 const entry = `
 import React, {useRef,useState} from 'react';
