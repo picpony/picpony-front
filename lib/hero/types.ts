@@ -86,6 +86,12 @@ export type HeroRouteRegistration = HeroSurfaceNodes & {
    * over before the picture lands. Absent on a page presentation and in older registrations.
    */
   anchor?: HTMLElement | null;
+  /**
+   * Non-scrolling plane inside `[data-image-detail-unclip]` outside the scroller, used when the
+   * media target is `position: sticky` in the split layout so scrolling the right feed mid-flight
+   * never drags the flyer off its stationary landing box.
+   */
+  fixedAnchor?: HTMLElement | null;
   /** The route can paint the same pixels the flyer is showing. */
   previewPaintable: boolean;
   /**
@@ -101,6 +107,8 @@ export type HeroStageNodes = HeroSurfaceNodes & {
   target: HTMLElement;
   /** Positions the flight layer inside the stage scroller's own coordinates. */
   anchor: HTMLElement;
+  /** Positions the flight layer in the overlay's own non-scrolling coordinates for sticky split targets. */
+  fixedAnchor?: HTMLElement | null;
 };
 
 export type HeroNavigation = {

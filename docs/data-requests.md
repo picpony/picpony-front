@@ -139,6 +139,7 @@ Each entry declares storage keys, cloud keys, fallback and scope. Account reads 
 - Scheme, motion tier, speed and custom motion maps stay device-only.
 - Palette sync uses `theme`, `themeCustomSeed`, `themeCustomAccent` and `themeHues`. Write `null` for an automatic custom accent.
 - Entrance mode also syncs, through `introAnimationEnabled` and `introAnimationBlocking`. Its `device` scope controls logout retention, not whether it synchronizes. An enabled-only setting preserves an existing active mode.
+- Image detail layout (`detailLayout`: `stacked` / `split`) uses `device` scope, mirrors into `COOKIE_KEYS.detailLayout` and `html[data-detail-layout]` (reconciled in the pre-paint script and cross-tab `storage` listener) so direct `/pic/[id]` SSR and overlays render the active geometry on first paint.
 - The `spoilers` filter requires a saved age of at least 16 on the Beijing calendar; the `developer` filter requires developer mode. Recheck on logout, account reads and profile saves.
 
 Add a setting through one registry entry. Mirror SSR-visible values into cookies on installation and sync startup.

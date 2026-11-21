@@ -108,17 +108,20 @@ export function followHeroWindowScroll(
 /**
  * @param source  The scroller the input is latched to (the Stage's).
  * @param target  The scroller whose content must look scrolled with it (the route's).
- * @param node    What carries the translate: a child of `target` with no transform of its own for
- *   the duration (the cross-fade block — the pull owns the content node's transform).
+ * @param node    What carries the translate: one or more children of `target` with no transform of
+ *   their own for the duration (the cross-fade block in the stacked layout, or the scrolling
+ *   right-column blocks in the split layout so the sticky media pane stays pinned).
  */
 export function followHeroScroll(
   source: HTMLElement,
   target: HTMLElement,
-  node: HTMLElement,
+  node: HTMLElement | readonly HTMLElement[],
   initial?: HeroScrollFollowStart,
 ): HeroScrollFollow | null {
   const Ctor = scrollTimelineCtor();
   if (!Ctor) return null;
+  const nodes = Array.isArray(node) ? [...node] : [node];
+  if (nodes.length === 0) return null;
   const base = initial?.source ?? source.scrollTop;
   const targetTop = initial?.target ?? target.scrollTop;
   if (targetTop !== base) target.scrollTop = base;
@@ -126,7 +129,7 @@ export function followHeroScroll(
      first frame is off by the clamp. */
   const parked = targetTop === base ? targetTop : target.scrollTop;
   let range = -1;
-  let animation: Animation | null = null;
+  let animations: Animation[] = [];
   let done = false;
 
   const keyframes = (max: number): Keyframe[] => [
@@ -137,9 +140,12 @@ export function followHeroScroll(
   try {
     const timeline = new Ctor({ source, axis: 'block' });
     range = initial?.range ?? Math.max(0, source.scrollHeight - source.clientHeight);
-    animation = node.animate(keyframes(range), { timeline, fill: 'both', easing: 'linear' } as KeyframeAnimationOptions);
+    const frames = keyframes(range);
+    const timing = { timeline, fill: 'both', easing: 'linear' } as KeyframeAnimationOptions;
+    animations = nodes.map((item) => item.animate(frames, timing));
   } catch {
-    animation?.cancel();
+    animations.forEach((animation) => animation.cancel());
+    animations = [];
     target.scrollTop = base;
     return null;
   }
@@ -147,24 +153,29 @@ export function followHeroScroll(
   const stop = () => {
     if (done) return;
     done = true;
-    try {
-      animation?.cancel();
-    } catch {
-      // Already cancelled with its node.
+    for (const animation of animations) {
+      try {
+        animation.cancel();
+      } catch {
+        // Already cancelled with its node.
+      }
     }
-    animation = null;
+    animations = [];
   };
 
   return {
     refresh: () => {
-      if (done || !animation) return;
+      if (done || animations.length === 0) return;
       const next = Math.max(0, source.scrollHeight - source.clientHeight);
       if (next === range) return;
       range = next;
-      try {
-        (animation.effect as KeyframeEffect | null)?.setKeyframes(keyframes(next));
-      } catch {
-        // A detached effect has nothing on screen to keep in step.
+      const frames = keyframes(next);
+      for (const animation of animations) {
+        try {
+          (animation.effect as KeyframeEffect | null)?.setKeyframes(frames);
+        } catch {
+          // A detached effect has nothing on screen to keep in step.
+        }
       }
     },
     commit: (offsets) => {

@@ -133,7 +133,7 @@ export default function DetailHeader({
     <div
       data-image-detail-reveal="header"
       className={cn(
-        'bg-transparent px-4 py-3 sm:px-6',
+        'image-detail-header bg-transparent px-4 py-3 sm:px-6',
         isStage
           ? 'image-detail-header-stage overflow-hidden'
           : layout === 'overlay' && 'image-detail-header-route',

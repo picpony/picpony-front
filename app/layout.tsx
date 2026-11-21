@@ -170,6 +170,7 @@ var k=(f===null||f==='true')?q('(prefers-color-scheme:dark)'):get('darkMode')===
 d.classList.toggle('dark',k);
 var p=get('picpony_palette');if(!C[p])p='default';d.dataset.palette=p;
 if(get('picpony_palette_hues')==='mono')d.dataset.paletteHues='mono';else delete d.dataset.paletteHues;
+if(get('picpony_detail_layout')==='split')d.dataset.detailLayout='split';else delete d.dataset.detailLayout;
 var m=get('picpony_motion');
 if(m!=='off'&&m!=='reduced'&&m!=='standard'&&m!=='custom')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
 d.dataset.motion=m;
@@ -270,6 +271,9 @@ export default async function RootLayout({
   /* 单色 only on an explicit `mono`: a corrupt cookie means 多色, the default and the CSS's own
      attribute-free state. */
   const mono = cookieStore.get(COOKIE_KEYS.paletteHues)?.value === 'mono';
+  /* 左右分栏 only on an explicit `split`: a corrupt cookie means 上下布局, the default and the
+     CSS's own attribute-free state. */
+  const splitDetailLayout = cookieStore.get(COOKIE_KEYS.detailLayout)?.value === 'split';
 
   return (
     <html
@@ -282,6 +286,7 @@ export default async function RootLayout({
       data-palette-accent={custom?.accent}
       data-palette-tones={custom?.tones}
       data-palette-hues={mono ? 'mono' : undefined}
+      data-detail-layout={splitDetailLayout ? 'split' : undefined}
       data-motion={motion}
       data-motion-speed={motionSpeed}
       data-motion-custom={motionCustomCookie ? formatMotionCustom(motionCustom) : undefined}

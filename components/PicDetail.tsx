@@ -378,12 +378,12 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
       data-page-loading={page ? '' : undefined}
       className={cn('image-detail-page mx-auto max-w-5xl', page && 'page-back-room-5xl', gutter)}
     >
-      <div className="flex flex-col rounded-md bg-transparent">
+      <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
         {/* `DetailHeader`'s real shape: a `label-l` byline and a `body-s` caption — stacked and centred
             on a phone, one row edge to edge from `sm`. Each
             row opens with an empty run of its own type — a strut — so it is exactly one line of
             that role tall, as the real rows are; a fixed height would be a guess at the line box. */}
-        <div className="image-detail-header-route px-4 py-3 sm:px-6">
+        <div className="image-detail-header image-detail-header-route px-4 py-3 sm:px-6">
           <div className="image-detail-header-rows">
             <div className="image-detail-header-byline flex items-center justify-center gap-x-2 text-label-l">
               <span aria-hidden="true">{'​'}</span>
@@ -398,12 +398,15 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
             </div>
           </div>
         </div>
-        <div className="relative flex min-h-[32dvh] w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6 md:min-h-[48dvh]">
+        <div
+          data-image-detail-media-pane
+          className="image-detail-media-pane relative flex min-h-[32dvh] w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6 md:min-h-[48dvh]"
+        >
           {/* Inset only: a width or height beside it would replace the computed insets. */}
-          <Skeleton className="absolute inset-4 rounded-lg" delay={90} />
+          <Skeleton className="image-detail-media-skeleton absolute inset-4 rounded-lg" delay={90} />
         </div>
-        <div className="image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+        <div className="image-detail-body image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
+          <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">
             <DetailActions passive center={<DetailVotes image={null} pending />} />
             <DetailTagSkeleton />
           </div>
@@ -615,6 +618,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const composerRef = useRef<HTMLDivElement>(null);
   const overlayContentRef = useRef<HTMLDivElement>(null);
   const overlayAnchorRef = useRef<HTMLDivElement>(null);
+  const overlayFixedAnchorRef = useRef<HTMLDivElement>(null);
   const overlaySurfaceRef = useRef<HTMLDivElement>(null);
   const overlayBackRef = useRef<HTMLButtonElement>(null);
   const detailTargetRef = useRef<HTMLDivElement>(null);
@@ -684,6 +688,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       target: detailTargetRef.current,
       floatingBack: overlayBackRef.current,
       anchor: overlayAnchorRef.current,
+      fixedAnchor: overlayFixedAnchorRef.current,
       previewPaintable: previewSurfaceRef.current === surfaceId,
       resolvedWithoutMedia: false,
     });
@@ -1285,12 +1290,20 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         {/* 上一张 / 下一张 in the list the picture was opened from (decision 19): the
             dialog's trailing actions, pinned opposite the back affordance and wearing what it
             wears — `quiet`, so a disc at rest and the tonal 12dp square only under the pointer.
-            Hidden outright when the picture belongs to no list; at a true end an arrow is
-            unavailable, and it shows the wait while the next page loads. Absent from the
-            hero Stage, so they stand down during a flight (globals.css); the pull fades
-            them with the back affordance (`data-image-detail-chrome`). */}
+            In split mode (`data-image-detail-split-layout`, omitted on full-width empty/error
+            views), they move to the top-right corner of the stationary left media pane so they
+            never float over the scrolling right info feed. Hidden outright when the picture
+            belongs to no list; at a true end an arrow is unavailable, and it shows the wait
+            while the next page loads. Absent from the hero Stage, so they stand down during a
+            flight (globals.css); the pull fades them with the back affordance
+            (`data-image-detail-chrome`). */}
         {stepNeighbours.inSequence && (
-          <div data-image-detail-step data-image-detail-chrome className="image-detail-step">
+          <div
+            data-image-detail-step
+            data-image-detail-chrome
+            data-image-detail-split-layout={!centred ? '' : undefined}
+            className="image-detail-step"
+          >
             <IconButton
               variant="quiet"
               size="md"
@@ -1337,10 +1350,13 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                 </div>
               </div>
               {/* The flight's plane once the route owns an open's scroll: the flyer is planted
-                  here and rides the route's own native scroll (\`HeroController.promoteAdoption\`),
+                  here and rides the route's own native scroll (`HeroController.promoteAdoption`),
                   as on the Stage's anchor before it. Empty otherwise; the controller owns it. */}
               <div ref={overlayAnchorRef} data-image-hero-route-anchor aria-hidden="true" className="image-hero-stage-anchor" />
             </ScrollArea>
+            {/* Non-scrolling plane for sticky split targets — mirrors `HeroStage`'s copy so
+                `promoteAdoption` can replant a mid-flight flyer without leaving sticky space. */}
+            <div ref={overlayFixedAnchorRef} data-image-hero-fixed-anchor aria-hidden="true" className="image-hero-stage-anchor" />
           </div>
         </div>
       </section>
@@ -1416,7 +1432,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
   return renderDetailShell(
     <div className={cn('image-detail-page mx-auto max-w-5xl', presentation === 'page' && 'page-back-room-5xl', overlayGutter)}>
-      <div className="flex flex-col rounded-md bg-transparent">
+      <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
         {/* Title and measurements. The back affordance is `renderDetailShell`'s, both
             presentations — an inline copy would be a second one. */}
         <DetailHeader
@@ -1429,7 +1445,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
         {/* The picture. No minimum height: the box already has the picture's aspect ratio, and a
             floor under a small picture was a band of empty well. The Stage's well matches. */}
-        <div className="relative flex w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6">
+        <div
+          data-image-detail-media-pane
+          className="image-detail-media-pane relative flex w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6"
+        >
           {/* The picture's box, and where a finger pages (decision 19). It takes the hero
               geometry — an in-flow flex item exactly like the Stage's landing target — and the
               media fills it. It leaves `pan-x` out of its touch action, so the browser never
@@ -1493,13 +1512,13 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
             sources, its tags, and the comments — in that order on screen and for the keyboard. */}
         <div
           data-image-detail-reveal="body"
-          className="image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
+          className="image-detail-body image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
           // Ordinary painted content, deliberately: skipping or containing this subtree made
           // the first scroll after a handoff reveal blank space (see the deferred-body rule in
           // globals.css). Stated inline so no utility can reintroduce the isolation.
           style={{ contentVisibility: 'visible', contain: 'none' }}
         >
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+          <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">
             <DetailActions
               imageId={image.id}
               isFaved={isFaved}

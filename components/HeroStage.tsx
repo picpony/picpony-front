@@ -36,6 +36,7 @@ export default function HeroStage() {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
+  const fixedAnchorRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   const sessionId = state.sessionId;
 
@@ -55,6 +56,7 @@ export default function HeroStage() {
       surface,
       target,
       anchor,
+      fixedAnchor: fixedAnchorRef.current,
       floatingBack: backRef.current,
     });
   }, [sessionId]);
@@ -128,14 +130,17 @@ export default function HeroStage() {
                 {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR. */}
                 <div data-image-detail-crossfade className="w-full">
                   <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
-                    <div className="flex flex-col rounded-md bg-transparent">
+                    <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
                       <DetailHeader
                         key={image.id}
                         image={image}
                         layout="stage"
                         pending={record === null}
                       />
-                      <div className="relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6">
+                      <div
+                        data-image-detail-media-pane
+                        className="image-detail-media-pane relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6"
+                      >
                         {/* The landing target is an ordinary in-flow flex item, because
                       the routed `DetailImage` is one too and the two must measure
                       identically — a second box inside an absolutely-positioned
@@ -152,9 +157,9 @@ export default function HeroStage() {
                       </div>
                       <div
                         data-image-detail-reveal="body"
-                        className="image-detail-stage-body bg-transparent p-4 sm:p-6"
+                        className="image-detail-body image-detail-stage-body bg-transparent p-4 sm:p-6"
                       >
-                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+                        <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">
                           <DetailActions
                             imageId={image.id}
                             passive
@@ -175,6 +180,15 @@ export default function HeroStage() {
                 className="image-hero-stage-anchor"
               />
             </div>
+            {/* Non-scrolling plane inside `[data-image-detail-unclip]` for sticky split targets:
+                sits outside the scroller so scrolling the right feed mid-flight never drags the
+                flyer off the stationary left pane. */}
+            <div
+              ref={fixedAnchorRef}
+              data-image-hero-fixed-anchor
+              aria-hidden="true"
+              className="image-hero-stage-anchor"
+            />
           </div>
         </div>
       </section>

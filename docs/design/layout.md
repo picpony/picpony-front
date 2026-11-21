@@ -31,6 +31,8 @@ The shell provides `p-4 sm:p-6` on `data-page-content`. Do not duplicate that gu
 
 Search filters and blocking groups use container queries. Messages need 42 rem for an 18 rem contact pane and a 24 rem conversation. Below that, an open conversation becomes a full-height modal view beside the scroller with its own history layer. Measure the column, not the viewport; retain the contact-collapse preference across resizing.
 
+Image detail supports an optional side-by-side split layout (`html[data-detail-layout='split']`), configured under `个性化` in `/settings`: a 50/50 CSS grid with a sticky left media pane and a scrollable right info feed capped at `max-w-4xl`, keeping one scroll container and identical DOM order across both layouts. It activates at 56 rem on `image-detail-frame` / `image-detail-chrome` (53 rem on `page` inside `[data-page-content]`'s horizontal padding) and falls back to the stacked layout below that threshold. In split mode, overlay step arrows move to the top-right corner of the left pane so they never overlap scrolling comments. Direct `/pic/[id]` loads match the overlay pixel-for-pixel and terminate the centre divider on a bottom hairline above the site footer.
+
 ## Control heights
 
 The enclosure selects the height; pointer type selects the minimum target.

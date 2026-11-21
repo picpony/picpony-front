@@ -192,6 +192,42 @@ test('a measured scroll follower starts without reads and preserves a clamped ta
   scrolled.release();
 });
 
+test('scroll-driven follow animates multiple scrolling blocks on one timeline in split mode', () => {
+  const source = { scrollTop: 0, scrollHeight: 800, clientHeight: 400 };
+  const target = { scrollTop: 0 };
+  const records = [];
+  const makeNode = () => ({
+    animate(frames, timing) {
+      const entry = { frames, timing, cancelled: false };
+      records.push(entry);
+      return {
+        effect: { setKeyframes(next) { entry.frames = next; } },
+        cancel() { entry.cancelled = true; },
+      };
+    },
+  });
+  const header = makeNode();
+  const body = makeNode();
+  const { followHeroScroll } = load('lib/hero/follow.ts', {}, {
+    window: { ScrollTimeline: class { constructor(options) { Object.assign(this, options); } } },
+  });
+  const follow = followHeroScroll(source, target, [header, body], { source: 0, target: 0, range: 400 });
+  assert.equal(records.length, 2);
+  assert.equal(records[0].timing.timeline, records[1].timing.timeline, 'header and body share one ScrollTimeline');
+  assert.equal(records[0].frames[1].transform, 'translate3d(0, -400.000px, 0)');
+  assert.equal(records[1].frames[1].transform, 'translate3d(0, -400.000px, 0)');
+
+  source.scrollHeight = 1000;
+  follow.refresh();
+  assert.equal(records[0].frames[1].transform, 'translate3d(0, -600.000px, 0)');
+  assert.equal(records[1].frames[1].transform, 'translate3d(0, -600.000px, 0)');
+
+  source.scrollTop = 180;
+  follow.commit();
+  assert.equal(target.scrollTop, 180);
+  assert.equal(records.every((entry) => entry.cancelled), true);
+});
+
 test('a returning window follows gallery scroll without moving its content, and releases the fallback', () => {
   const source = new Scroller(340);
   const clip = { style: { translate: '' } };

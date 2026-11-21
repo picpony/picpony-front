@@ -101,6 +101,19 @@ export function getHeroCornerRadius(element: HTMLElement) {
 }
 
 /**
+ * Whether a detail media target rides inside a sticky split pane rather than scrolling with the
+ * detail's scroller. A sticky target stays pinned to the overlay's own box while the right info
+ * feed scrolls, so an opening flyer must mount in the non-scrolling plane (`fixedAnchor`) and
+ * compositor scroll-follow must translate only the scrolling right-column blocks.
+ */
+export function isHeroTargetSticky(target: HTMLElement | null): boolean {
+  if (!target?.isConnected) return false;
+  const pane = target.closest<HTMLElement>('[data-image-detail-media-pane]');
+  if (!pane) return false;
+  return getComputedStyle(pane).position === 'sticky';
+}
+
+/**
  * Measure an element as if a transformed ancestor were at rest.
  *
  * The gallery sinks under an open detail view, so a thumbnail measured during

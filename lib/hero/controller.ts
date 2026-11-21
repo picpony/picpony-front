@@ -10,6 +10,7 @@ import {
   HERO_HANDOFF_SCROLL_QUIET_MS,
   HERO_INPUT_TRANSFER_MAX_MS,
   HERO_INPUT_TRANSFER_QUIET_MS,
+  HERO_REVEAL_SELECTOR,
   HERO_ROUTE_TIMEOUT_MS,
   HERO_VIEWPORT_REBUILD_EPSILON_PX,
   SNAPSHOT_TTL,
@@ -24,6 +25,7 @@ import {
   getHeroRestingDetailRect,
   getHeroRectWithoutAncestorTransform,
   getVisualMedia,
+  isHeroTargetSticky,
   isHeroThumbnailInView,
   leaseAttribute,
   leaseHeroCardChrome,
@@ -139,6 +141,22 @@ function readOpeningScroll(stage: HeroStageNodes, route: HeroRoute): OpeningScro
   };
 }
 
+/**
+ * The opening flight's coordinate plane: the scroller's own plane in the stacked layout (so
+ * native scroll carries the flyer for free), or the non-scrolling overlay plane when the media
+ * target rides inside a sticky split pane (so scrolling the info feed mid-flight never drags
+ * the flyer off its stationary landing box).
+ */
+function getOpeningPlane(
+  surface: Pick<HeroStageNodes, 'overlay' | 'scroller' | 'anchor' | 'fixedAnchor'>,
+  target: HTMLElement | null,
+): HeroScrollPlane {
+  if (surface.fixedAnchor?.isConnected && isHeroTargetSticky(target)) {
+    return getElementScrollPlane(surface.fixedAnchor, surface.overlay, surface.overlay);
+  }
+  return getElementScrollPlane(surface.anchor, surface.scroller, surface.overlay);
+}
+
 /** Keeps the Stage scroller and the routed scroller at the same offset. */
 type OpeningScrollBridge = {
   /** The route as a scroll peer: offsets mirrored from scroll events, on the main thread. */
@@ -151,7 +169,7 @@ type OpeningScrollBridge = {
   follow: (
     scroller: HTMLElement,
     content: HTMLElement,
-    node: HTMLElement,
+    node: HTMLElement | readonly HTMLElement[],
     initial: HeroScrollFollowStart,
   ) => HeroScrollFollow | null;
   sync: () => void;
@@ -1475,7 +1493,7 @@ export class HeroController {
     /* Every read before the flight's first DOM write: `createHeroFlight` inserts the flight
        layer, and a read after it (the card's corner, the overlay's box) forced a whole style and
        layout pass in front of the picture's first frame. */
-    const plane = getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
+    const plane = getOpeningPlane(stage, stage.target);
     const targetRect = getHeroRect(stage.target);
     const sourceRadius = getHeroCornerRadius(source);
     const hostRect = getHeroRect(stage.overlay);
@@ -1683,7 +1701,7 @@ export class HeroController {
     const motion = previous.motion;
     const measured = motion && stage ? {
       destination: getHeroRect(stage.target),
-      plane: getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay),
+      plane: getOpeningPlane(stage, stage.target),
       pose: motion.measurePose(),
       inputs: motion.readReverseInputs(),
     } : null;
@@ -2005,7 +2023,8 @@ export class HeroController {
     const bridge = session.scrollBridge;
     const node = route.content.querySelector<HTMLElement>(HERO_CONTENT_SELECTOR);
     if (!bridge || !node || !route.target) return false;
-    const canOwn = Boolean(route.anchor?.isConnected);
+    const sticky = isHeroTargetSticky(route.target);
+    const canOwn = Boolean(sticky ? route.fixedAnchor?.isConnected : route.anchor?.isConnected);
     const ownNow = canOwn && isHeroInteractionQuiet();
     if (!ownNow && !canFollowHeroScroll()) return false;
     let follow: HeroScrollFollow | null = null;
@@ -2016,7 +2035,14 @@ export class HeroController {
       if (scroll.routeTop !== parked) route.scroller.scrollTop = parked;
       scroll = { ...scroll, routeTop: parked };
     } else {
-      follow = bridge.follow(route.scroller, route.content, node, {
+      /* In split mode the left media pane is sticky, so translating the whole cross-fade block
+         would move the route's picture away from the stationary flyer; follow only the scrolling
+         right-column blocks instead. */
+      const revealNodes = sticky
+        ? [...route.content.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)]
+        : [];
+      const followTarget: HTMLElement | readonly HTMLElement[] = revealNodes.length > 0 ? revealNodes : node;
+      follow = bridge.follow(route.scroller, route.content, followTarget, {
         source: scroll.top, target: scroll.routeTop, range: scroll.range,
       });
       if (!follow) return false;
@@ -2074,8 +2100,12 @@ export class HeroController {
     const adoption = session.adoption;
     if (!adoption || adoption.owned || !this.owns(session)) return false;
     const { route, stage } = adoption;
-    const anchor = route.anchor;
-    if (!anchor?.isConnected) return false;
+    const motion = session.motion;
+    const layerParent = motion?.flight.layer.parentElement ?? null;
+    const onStageFixed = Boolean(stage.fixedAnchor && layerParent === stage.fixedAnchor);
+    const onStageScroll = layerParent === stage.anchor;
+    const targetAnchor = onStageFixed ? route.fixedAnchor : route.anchor;
+    if (!targetAnchor?.isConnected) return false;
     const follow = session.follow;
     const parked = Math.max(0, Math.min(scroll.top, scroll.routeRange));
     if (follow) {
@@ -2085,15 +2115,15 @@ export class HeroController {
     } else if (scroll.routeTop !== parked) {
       route.scroller.scrollTop = parked;
     }
-    const motion = session.motion;
-    if (motion && motion.flight.layer.parentElement === stage.anchor) {
+    if (motion && (onStageFixed || onStageScroll)) {
       const plane = motion.flight.plane;
+      const planeScroller = onStageFixed ? route.overlay : route.scroller;
       // Same host box and origin, the route at the Stage's offset: every keyframe stays true.
       motion.replant({
         ...plane,
-        anchor,
-        scroller: route.scroller,
-        host: { ...plane.host, element: route.scroller },
+        anchor: targetAnchor,
+        scroller: planeScroller,
+        host: { ...plane.host, element: planeScroller },
       });
     }
     session.shared.release(adoption.input);
@@ -2187,14 +2217,21 @@ export class HeroController {
     if (adoption.owned) {
       session.scrollBridge?.disown();
       const motion = session.motion;
-      if (motion && route.anchor && motion.flight.layer.parentElement === route.anchor) {
-        const plane = motion.flight.plane;
-        motion.replant({
-          ...plane,
-          anchor: stage.anchor,
-          scroller: stage.scroller,
-          host: { ...plane.host, element: stage.scroller },
-        });
+      const layerParent = motion?.flight.layer.parentElement ?? null;
+      const onRouteFixed = Boolean(route.fixedAnchor && layerParent === route.fixedAnchor);
+      const onRouteScroll = Boolean(route.anchor && layerParent === route.anchor);
+      if (motion && (onRouteFixed || onRouteScroll)) {
+        const nextAnchor = onRouteFixed ? stage.fixedAnchor : stage.anchor;
+        const nextScroller = onRouteFixed ? stage.overlay : stage.scroller;
+        if (nextAnchor?.isConnected) {
+          const plane = motion.flight.plane;
+          motion.replant({
+            ...plane,
+            anchor: nextAnchor,
+            scroller: nextScroller,
+            host: { ...plane.host, element: nextScroller },
+          });
+        }
       }
       // A reversal ends the pull; anything else keeps it, on the Stage again.
       if (!session.reversing && this.owns(session)) {
@@ -2275,7 +2312,7 @@ export class HeroController {
        the route on the compositor; the route takes the input when the hand pauses
        (`watchPromotion`). The landing waits for that rather than handing a live stream over. */
     const pending = session.adoption;
-    if (pending && !pending.owned && route.anchor) {
+    if (pending && !pending.owned && (route.anchor || route.fixedAnchor)) {
       await waitForSignal(this.events, {
         signal: session.abort.signal,
         timeout: HERO_HANDOFF_FOLLOW_MAX_MS,
@@ -4262,8 +4299,16 @@ export class HeroController {
          re-aim must stay there or it moves the flyer back under a scroller that no longer moves. */
       const owner = session.adoption?.owned ? session.adoption.route : null;
       const plane = owner?.anchor?.isConnected
-        ? getElementScrollPlane(owner.anchor, owner.scroller, owner.overlay)
-        : getElementScrollPlane(stage.anchor, stage.scroller, stage.overlay);
+        ? getOpeningPlane(
+            {
+              overlay: owner.overlay,
+              scroller: owner.scroller,
+              anchor: owner.anchor,
+              fixedAnchor: owner.fixedAnchor,
+            },
+            target,
+          )
+        : getOpeningPlane(stage, target);
       return {
         destination: getHeroRestingDetailRect(target, overlay),
         plane,

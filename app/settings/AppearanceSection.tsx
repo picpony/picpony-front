@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { MdBrightness6, MdPalette, MdTune } from 'react-icons/md';
+import { useId, useRef, useState } from 'react';
+import { MdBrightness6, MdOutlineViewSidebar, MdPalette, MdTune } from 'react-icons/md';
+import CheckGlyph from '@/components/CheckGlyph';
 import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import PaletteSwatches from '@/components/PaletteSwatches';
 import { changeScheme } from '@/lib/motionLazy';
 import { ICON } from '@/lib/icons';
-import { changeSyncedSetting, useSyncedSetting } from '@/lib/settingsSync';
+import { changeSyncedSetting, useSyncedSetting, type DetailLayout } from '@/lib/settingsSync';
+import { cn } from '@/lib/utils';
 import {
   commitMotion,
   useMotionSetting,
@@ -49,6 +51,174 @@ export function PaletteSection({ signedIn }: { signedIn: boolean }) {
     >
       <div className={ROW_STACK_CLASS} data-palette-block="">
         <PaletteSwatches className="w-full" />
+      </div>
+    </SettingsSection>
+  );
+}
+
+const DETAIL_LAYOUT_OPTIONS: readonly {
+  value: DetailLayout;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: 'stacked',
+    label: '上下布局',
+    description: '图片居中展示，向下滚动浏览信息与评论',
+  },
+  {
+    value: 'split',
+    label: '左右分栏',
+    description: '宽屏下左侧固定图片、右侧滚动信息流，窄屏自动切回上下布局',
+  },
+];
+
+/** Schematic preview of one image-detail layout, drawn strictly from surface/container tokens.
+ * Layered at `-z-10` inside the card's isolated stacking context (matching `PaletteTileFace`) so
+ * the `-1` state layer and `ripple-secondary` press wave sweep cleanly across the whole card while
+ * the title and description below remain crisp above the wave. */
+function DetailLayoutPreview({ layout, selected }: { layout: DetailLayout; selected: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative -z-10 h-28 w-full overflow-hidden rounded-sm bg-surface-container-lowest p-2.5 forced-boundary"
+    >
+      {layout === 'stacked' ? (
+        <div className="mx-auto flex h-full max-w-44 flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="h-1.5 w-14 rounded-full bg-surface-container-highest" />
+            <span className="h-1.5 w-10 rounded-full bg-surface-container-highest" />
+          </div>
+          <div className="flex flex-1 items-center justify-center rounded-xs bg-primary-container p-2">
+            <span className="h-6 w-10 rounded-xs bg-primary" />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1">
+              <span className="h-2.5 w-7 rounded-full bg-primary" />
+              <span className="h-2.5 w-6 rounded-full bg-secondary-container" />
+            </div>
+            <span className="h-2.5 w-10 rounded-full bg-surface-container-highest" />
+          </div>
+          <div className="flex gap-1">
+            <span className="h-2 w-8 rounded-xs bg-surface-container-highest" />
+            <span className="h-2 w-10 rounded-xs bg-surface-container-highest" />
+            <span className="h-2 w-6 rounded-xs bg-surface-container-highest" />
+          </div>
+        </div>
+      ) : (
+        <div className="grid h-full grid-cols-2">
+          <div className="relative flex items-center justify-center pr-2.5">
+            <span className="absolute top-0 left-0 size-2 rounded-full bg-surface-container-highest" />
+            <div className="flex h-16 w-full items-center justify-center rounded-xs bg-primary-container p-2">
+              <span className="h-6 w-9 rounded-xs bg-primary" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5 border-l border-outline-variant pl-2.5">
+            <div className="flex flex-col gap-1 border-b border-outline-variant pb-1.5">
+              <span className="h-1.5 w-14 rounded-full bg-surface-container-highest" />
+              <span className="h-1 w-10 rounded-full bg-surface-container-highest" />
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <span className="h-2.5 rounded-full bg-primary" />
+              <span className="h-2.5 rounded-full bg-secondary-container" />
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <span className="h-2 w-6 rounded-xs bg-surface-container-highest" />
+              <span className="h-2 w-8 rounded-xs bg-surface-container-highest" />
+              <span className="h-2 w-5 rounded-xs bg-surface-container-highest" />
+            </div>
+            <div className="mt-auto flex flex-col gap-1">
+              <span className="h-1.5 w-full rounded-full bg-surface-container-highest" />
+              <span className="h-1.5 w-3/4 rounded-full bg-surface-container-highest" />
+            </div>
+          </div>
+        </div>
+      )}
+      {selected && (
+        <span className="forced-selected absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-on-primary">
+          <CheckGlyph className="size-3.5" />
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 图片详情页样式 — visual radio-card selector inside 个性化, matching `PaletteSection`'s
+ * tone-separated selection style and roving-tabindex radiogroup keyboard navigation.
+ */
+export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
+  const layout = useSyncedSetting('detailLayout');
+  const idPrefix = useId();
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    let next: number | null = null;
+    if (step !== undefined) next = (index + step + DETAIL_LAYOUT_OPTIONS.length) % DETAIL_LAYOUT_OPTIONS.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = DETAIL_LAYOUT_OPTIONS.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    refs.current[next]?.focus();
+    changeSyncedSetting('detailLayout', DETAIL_LAYOUT_OPTIONS[next]!.value);
+  };
+
+  return (
+    <SettingsSection
+      title="图片详情页"
+      icon={<MdOutlineViewSidebar size={ICON.control} />}
+      subtitle={signedIn ? '随账号同步到你登录的设备' : undefined}
+    >
+      <div className={ROW_STACK_CLASS}>
+        <div
+          role="radiogroup"
+          aria-label="图片详情页样式"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        >
+          {DETAIL_LAYOUT_OPTIONS.map((option, index) => {
+            const selected = option.value === layout;
+            const titleId = `${idPrefix}-${option.value}-title`;
+            const descId = `${idPrefix}-${option.value}-desc`;
+            return (
+              <button
+                key={option.value}
+                ref={(node) => {
+                  refs.current[index] = node;
+                }}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-labelledby={titleId}
+                aria-describedby={descId}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => changeSyncedSetting('detailLayout', option.value)}
+                onKeyDown={(event) => onKeyDown(event, index)}
+                data-ripple
+                className={cn(
+                  'state-layer focus-ring ripple-secondary flex cursor-pointer flex-col items-start gap-2.5 rounded-md p-3 text-left transition-ui select-none touch-manipulation focus-visible:outline-hidden focus-visible:ring-2',
+                  selected
+                    ? 'forced-selected bg-secondary-container text-on-secondary-container'
+                    : 'forced-boundary bg-surface-container text-on-surface',
+                )}
+              >
+                <DetailLayoutPreview layout={option.value} selected={selected} />
+                <div className="min-w-0 px-0.5">
+                  <p id={titleId} className="text-label-l">{option.label}</p>
+                  <p
+                    id={descId}
+                    className={cn(
+                      'text-body-s mt-0.5',
+                      selected ? 'text-on-secondary-container' : 'text-on-surface-variant',
+                    )}
+                  >
+                    {option.description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </SettingsSection>
   );

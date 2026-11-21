@@ -2958,6 +2958,13 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   padding-top: var(--image-detail-overlay-offset);
 }
 
+/* The overlay section fills the content host to the subpixel, so querying `image-detail-chrome`
+ * at `56rem` agrees with `image-detail-frame` (`56rem`) when repositioning step arrows in split
+ * mode. */
+[data-image-detail-overlay] {
+  container: image-detail-chrome / inline-size;
+}
+
 /* 上一张 / 下一张 on the routed detail: the dialog's trailing actions, pinned opposite the back
  * affordance at the same inset and on the same layer, so the two read as one row of chrome. */
 .image-detail-step {
@@ -2973,6 +2980,16 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   .image-detail-step {
     top: 1rem;
     right: 1rem;
+  }
+}
+
+/* In split mode, move 上一张 / 下一张 to the top-right corner of the stationary left media pane
+ * so they never float over the scrolling right info feed. Only active on views carrying the
+ * split shell (`data-image-detail-split-layout`): full-width empty/error states keep their step
+ * arrows at the dialog's top-right edge. */
+@container image-detail-chrome (min-width: 56rem) {
+  html[data-detail-layout='split'] .image-detail-step[data-image-detail-split-layout] {
+    right: calc(50% + 1rem);
   }
 }
 
@@ -3174,6 +3191,252 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 
   .page-back-room-5xl .image-detail-header-caption > :first-child {
     color: var(--md-sys-color-on-surface);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Image detail — split layout (`左右分栏`: left sticky media pane, right scrollable feed)
+ *
+ * Active only when `html[data-detail-layout='split']` is set AND the detail frame is at least
+ * `56rem` (`896px`; `53rem` inside `[data-page-content]`'s 48px horizontal padding on a direct
+ * load). Narrower frames fall through to the classic stacked layout with zero DOM reparenting.
+ * Both `HeroStage` and the routed overlay share `.image-detail-overlay-content` and the exact
+ * height/header tokens, so the landing box and body scroll reservation stay pixel-identical.
+ * --------------------------------------------------------------------------- */
+@container image-detail-frame (min-width: 56rem) {
+  html[data-detail-layout='split'] .image-detail-overlay-content {
+    --image-detail-split-height: max(15rem, calc(100dvh - var(--app-chrome-bottom, 4rem) - 1.5rem));
+    --image-detail-media-max-height: max(220px, calc(var(--image-detail-split-height) - 6.5rem));
+    --image-detail-header-height: calc(
+      1.875rem + 1px + var(--image-detail-byline-line) + var(--image-detail-caption-line) + 0.25rem
+    );
+    /* Reserve constant scrollable feed height across Stage, handoff and FollowHeight expansion
+     * so native mid-flight wheel/touch streams never clamp backward or drop their relay when
+     * below-fold sections animate in; normal images with tags/comments exceed this naturally. */
+    --image-detail-body-min-height: calc(var(--image-detail-split-height) + 16rem);
+    padding-top: 0;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-page {
+    max-width: none;
+    width: 100%;
+    margin-inline: 0;
+    padding: 0;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    border-radius: 0;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-media-pane {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    height: var(--image-detail-split-height);
+    min-height: 0;
+    padding: 4.5rem 1.5rem 2rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-media-skeleton {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: 100%;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 1rem 1.5rem 0.875rem;
+    border-left: 1px solid var(--md-sys-color-outline-variant);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  /* Override the 48rem single-row stacked rules: inside the 50% right column, return to a compact
+   * left-aligned two-line stack (`label-l` byline over `body-s` caption) whose 72px inner height
+   * levels optically with the left pane's top chrome band (`16px..56px` + `16px` air). */
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-stage,
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-route {
+    --image-detail-header-height: calc(
+      1.875rem + 1px + var(--image-detail-byline-line) + var(--image-detail-caption-line) + 0.25rem
+    );
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-rows {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    row-gap: 0.25rem;
+    column-gap: 0;
+    padding-inline: 0;
+    width: 100%;
+    max-width: 56rem;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-rows > :first-child,
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-rows > :last-child {
+    justify-content: flex-start;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-caption {
+    font-size: var(--text-body-s);
+    line-height: var(--text-body-s--line-height);
+    font-weight: var(--text-body-s--font-weight);
+    letter-spacing: var(--text-body-s--letter-spacing);
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-caption > :first-child {
+    color: inherit;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-body {
+    grid-column: 2;
+    grid-row: 2;
+    padding: 1.5rem 1.5rem 2.5rem;
+    border-left: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-body-inner {
+    margin-inline: 0;
+    max-width: 56rem;
+  }
+}
+
+@container image-detail-frame (min-width: 72rem) {
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-media-pane {
+    padding-inline: 2rem;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header {
+    padding-inline: 2rem;
+  }
+
+  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-body {
+    padding-inline: 2rem;
+  }
+}
+
+/* Direct `/pic/[id]` split layout: cancels `[data-page-content]`'s 24px top and inline gutters so
+ * opening a link and opening from a list are pixel-identical, and closes the vertical divider
+ * cleanly on a bottom hairline above the centred site footer. */
+@container page (min-width: 53rem) {
+  html[data-detail-layout='split'] .page-back-room-5xl.image-detail-page {
+    --image-detail-split-height: max(15rem, calc(100dvh - var(--app-chrome-bottom, 4rem) - 1.5rem));
+    --image-detail-media-max-height: max(220px, calc(var(--image-detail-split-height) - 6.5rem));
+    --image-detail-header-height: calc(
+      1.875rem + 1px + var(--image-detail-byline-line) + var(--image-detail-caption-line) + 0.25rem
+    );
+    --image-detail-body-min-height: max(
+      0px,
+      calc(var(--image-detail-split-height) - var(--image-detail-header-height))
+    );
+    width: calc(100% + 3rem);
+    max-width: none;
+    margin-inline: -1.5rem;
+    margin-top: -1.5rem;
+    padding: 0;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    border-radius: 0;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-media-pane {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: start;
+    position: sticky;
+    top: 0;
+    height: var(--image-detail-split-height);
+    min-height: 0;
+    padding: 4.5rem 1.5rem 2rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-media-skeleton {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: 100%;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 1rem 1.5rem 0.875rem;
+    border-left: 1px solid var(--md-sys-color-outline-variant);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-route {
+    --image-detail-header-height: calc(
+      1.875rem + 1px + var(--image-detail-byline-line) + var(--image-detail-caption-line) + 0.25rem
+    );
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-rows {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    row-gap: 0.25rem;
+    column-gap: 0;
+    padding-inline: 0;
+    width: 100%;
+    max-width: 56rem;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-rows > :first-child,
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-rows > :last-child {
+    justify-content: flex-start;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-caption {
+    font-size: var(--text-body-s);
+    line-height: var(--text-body-s--line-height);
+    font-weight: var(--text-body-s--font-weight);
+    letter-spacing: var(--text-body-s--letter-spacing);
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header-caption > :first-child {
+    color: inherit;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-body {
+    grid-column: 2;
+    grid-row: 2;
+    padding: 1.5rem 1.5rem 2.5rem;
+    border-left: 1px solid var(--md-sys-color-outline-variant);
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-body-inner {
+    margin-inline: 0;
+    max-width: 56rem;
+  }
+}
+
+@container page (min-width: 69rem) {
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-media-pane {
+    padding-inline: 2rem;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-header {
+    padding-inline: 2rem;
+  }
+
+  html[data-detail-layout='split'] .page-back-room-5xl .image-detail-body {
+    padding-inline: 2rem;
   }
 }
 

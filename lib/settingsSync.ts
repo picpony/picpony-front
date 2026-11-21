@@ -501,6 +501,41 @@ const privacyUnlockSetting: SyncedSetting<number> = {
   equals: same,
 };
 
+/** 图片详情页样式: `stacked` (上下布局, default) or `split` (左右分栏). */
+export type DetailLayout = 'stacked' | 'split';
+
+export function parseDetailLayout(raw: unknown): DetailLayout | undefined {
+  return raw === 'stacked' || raw === 'split' ? raw : undefined;
+}
+
+function applyDetailLayoutAttribute(value: DetailLayout) {
+  if (typeof document === 'undefined') return;
+  if (value === 'split') document.documentElement.dataset.detailLayout = 'split';
+  else delete document.documentElement.dataset.detailLayout;
+}
+
+/**
+ * 图片详情页样式: mirrors into `COOKIE_KEYS.detailLayout` and `html[data-detail-layout]` so
+ * direct `/pic/[id]` loads, `HeroStage` and the routed overlay share the exact geometry from
+ * first paint with zero hydration mismatch.
+ */
+const detailLayoutSetting: SyncedSetting<DetailLayout> = {
+  id: 'detailLayout',
+  cloudKeys: ['detailLayout'],
+  fallback: 'stacked',
+  scope: 'device',
+  cookie: COOKIE_KEYS.detailLayout,
+  read: () => parseDetailLayout(readStored(LS_KEYS.detailLayout)) ?? 'stacked',
+  write: (value) => {
+    writeStored(LS_KEYS.detailLayout, value === 'stacked' ? null : value);
+    mirrorCookie(COOKIE_KEYS.detailLayout, value === 'stacked' ? null : value);
+    applyDetailLayoutAttribute(value);
+  },
+  fromCloud: (settings) => parseDetailLayout(settings.detailLayout),
+  toCloud: (value) => ({ detailLayout: value }),
+  equals: same,
+};
+
 /**
  * Every synced setting, including the mascot's device preferences and the original intro
  * preference, which uses the existing entrance-motion store and cookie.
@@ -513,6 +548,7 @@ export const SYNCED_SETTINGS: readonly SyncedSetting<unknown>[] = [
   storedBoolean('onlyPony', LS_KEYS.onlyPony, false, { effects: ['browsing'] }),
   storedBoolean('showTagCounts', LS_KEYS.showTagCounts, false),
   storedBoolean('showChineseTags', LS_KEYS.showChineseTags, true),
+  detailLayoutSetting,
   storedChoice('defaultHomeSort', LS_KEYS.homeSort, 'created_at',
     (raw) => (typeof raw === 'string' && raw ? parseSortField(raw) : undefined), { effects: ['browsing'] }),
   storedChoice('defaultSearchSort', LS_KEYS.searchSort, 'created_at',
@@ -547,6 +583,7 @@ export interface SyncedValues {
   onlyPony: boolean;
   showTagCounts: boolean;
   showChineseTags: boolean;
+  detailLayout: DetailLayout;
   defaultHomeSort: string;
   defaultSearchSort: string;
   useCdn: boolean;
@@ -1060,6 +1097,11 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
   const onStorage = (event: StorageEvent) => {
     if (event.key === null || event.key === LS_KEYS.userInfo) sessionChanged();
     if (event.key === LS_KEYS.settingsSyncPending) pendingChangedElsewhere(event.oldValue, event.newValue);
+    if (event.key === null || event.key === LS_KEYS.detailLayout) {
+      const next = detailLayoutSetting.read();
+      applyDetailLayoutAttribute(next);
+      mirrorCookie(COOKIE_KEYS.detailLayout, next === 'stacked' ? null : next);
+    }
   };
   const onVisible = () => {
     if (document.visibilityState === 'visible') retrySoon();
@@ -1069,6 +1111,7 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
   window.addEventListener('online', retrySoon);
   document.addEventListener('visibilitychange', onVisible);
   rememberAppearance();
+  applyDetailLayoutAttribute(detailLayoutSetting.read());
   /* A device that stored a mirrored setting before its cookie existed gets the cookie now. */
   for (const entry of SYNCED_SETTINGS) {
     if (!entry.cookie) continue;

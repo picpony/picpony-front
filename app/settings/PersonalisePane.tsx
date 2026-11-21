@@ -1,6 +1,6 @@
 'use client';
 
-import { ModeAndMotionSection, PaletteSection } from './AppearanceSection';
+import { DetailLayoutSection, ModeAndMotionSection, PaletteSection } from './AppearanceSection';
 import MascotSettings from '@/components/mascot/MascotSettings';
 import PoniesSettings from '@/components/desktopPonies/PoniesSettings';
 
@@ -13,6 +13,7 @@ export default function PersonalisePane({ signedIn }: { signedIn: boolean }) {
   return (
     <div>
       <PaletteSection signedIn={signedIn} />
+      <DetailLayoutSection signedIn={signedIn} />
       <ModeAndMotionSection />
       <MascotSettings />
       <PoniesSettings />

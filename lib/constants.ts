@@ -83,6 +83,8 @@ export const LS_KEYS = {
   itemsPerPage: 'picpony_items_per_page',
   showTagCounts: 'trixie_show_tag_counts',
   showChineseTags: 'picpony_show_chinese_tags',
+  /** 图片详情页样式: `split` for 左右分栏; anything else, or nothing, is `stacked` (上下布局). */
+  detailLayout: 'picpony_detail_layout',
   showUploads: 'picpony_show_uploads',
   showFaves: 'picpony_show_faves',
   showPosts: 'picpony_show_posts',
@@ -194,6 +196,8 @@ export const COOKIE_KEYS = {
   paletteCustom: 'paletteCustom',
   /** 配色方案 (`multi` / `mono`), so the server can put `data-palette-hues` on `<html>`. */
   paletteHues: 'paletteHues',
+  /** 图片详情页样式 (`stacked` / `split`), so the server can put `data-detail-layout` on `<html>`. */
+  detailLayout: 'detailLayout',
   /**
    * 显示隐私空间, so the server draws /favorites' placeholder tab row with the tabs the screen will
    * have: read through `useSyncedSetting`, whose server value is the fallback, it drew two and the

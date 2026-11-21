@@ -327,3 +327,35 @@ test('a stale revision is read again and the change laid over the newer copy, on
     assert.deepEqual(sync.settingsSyncSnapshot().pending, {});
   } finally { signOut(); globalThis.fetch = fetchBefore; }
 });
+
+test('detailLayout syncs to storage, cookie, html dataset, cloud and cross-tab storage events', async () => {
+  signOut();
+  delete root.dataset.detailLayout;
+  document.cookie = '';
+  sync.changeSyncedSetting('detailLayout', 'split');
+  assert.equal(values.get(LS_KEYS.detailLayout), 'split');
+  assert.equal(root.dataset.detailLayout, 'split');
+  assert.match(document.cookie, /detailLayout=split/);
+
+  /* Switching back to stacked clears storage, cookie and root dataset. */
+  sync.changeSyncedSetting('detailLayout', 'stacked');
+  assert.equal(values.has(LS_KEYS.detailLayout), false);
+  assert.equal(root.dataset.detailLayout, undefined);
+  assert.match(document.cookie, /detailLayout=;.*max-age=0/);
+
+  /* Cloud adoption installs split layout and dataset attribute. */
+  const account = { ...ACCOUNT, id: 92, token: 'token-layout', settings_revision: 1, settings: { detailLayout: 'split' } };
+  signIn(account);
+  serverUser = account;
+  sync.adoptCloudSettings(account.token, structuredClone(account), Date.now() + 1);
+  assert.equal(values.get(LS_KEYS.detailLayout), 'split');
+  assert.equal(root.dataset.detailLayout, 'split');
+
+  /* Cross-tab storage event updates the root dataset and cookie in the background tab. */
+  values.delete(LS_KEYS.detailLayout);
+  const storageEvent = Object.assign(new Event('storage'), { key: LS_KEYS.detailLayout, oldValue: 'split', newValue: null });
+  window.dispatchEvent(storageEvent);
+  assert.equal(root.dataset.detailLayout, undefined);
+  assert.match(document.cookie, /detailLayout=;.*max-age=0/);
+  signOut();
+});

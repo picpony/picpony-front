@@ -16,6 +16,8 @@ Do not reread the landing box while held tracks already transform it. Flight pre
 
 Mid-flight remeasurement uses `getHeroRestingDetailRect` to remove the window/counter-transform pair. Their sampled tracks can drift between keyframes; that drift is not a new layout destination. Real viewport and media-box changes still re-aim the flight.
 
+In the split image-detail layout, the left media pane is `position: sticky` while the right info feed scrolls. `HeroStage` and routed overlays provide a non-scrolling `fixedAnchor` inside `[data-image-detail-unclip]` beside the scroller; when `isHeroTargetSticky` is true, opening flights mount and replant on `fixedAnchor`, `followHeroScroll` translates only the scrolling `[data-image-detail-reveal]` blocks, and both surfaces share `--image-detail-media-max-height` and a constant `--image-detail-body-min-height` reservation so Stage and route land on identical boxes and carry mid-flight wheel/touch streams smoothly through `FollowHeight` expansion.
+
 The Stage subscribes only to the Hero runtime. `AppLayout` observes route commits; router suspension must not replace an in-flight Stage. Clear readiness before cancelling a departing Stage's tracks, and keep it clipped until React removes it. Seal a returning route before resetting its window or pull styles.
 
 ### Input
