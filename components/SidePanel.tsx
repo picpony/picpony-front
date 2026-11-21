@@ -217,7 +217,7 @@ export default function SidePanel({
         <ScrollArea
           axis="both"
           enabled={bodyScrollable}
-          className="flex min-h-0 flex-1 flex-col"
+          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
           viewportRef={bodyRef}
           /* `data-app-scroll-container`, like `Modal`'s and `Sheet`'s bodies: this is
              the box that scrolls, so anything inside that wants to scroll to an

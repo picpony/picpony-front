@@ -3641,6 +3641,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   --os-track-border-active: none;
   --os-handle-border-radius: 0;
   --os-handle-bg: none;
+  --os-handle-bg-track-hover: none;
   --os-handle-bg-hover: none;
   --os-handle-bg-active: none;
   --os-handle-border: none;
@@ -3657,9 +3658,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   position: absolute;
   opacity: 0;
   visibility: hidden;
+  /* Asymmetric effects clocks: crisp FastEffects arrival on hover/scroll, gentle
+     DefaultEffects fade-out on auto-hide. Both collapse to 0 under the off tier. */
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    visibility var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
+    visibility var(--duration-spring-default-effects) var(--ease-spring-effects),
     top var(--duration-spring-fast-effects) var(--ease-spring-effects),
     right var(--duration-spring-fast-effects) var(--ease-spring-effects),
     bottom var(--duration-spring-fast-effects) var(--ease-spring-effects),
@@ -3682,31 +3685,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
     border-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
-.os-scrollbar-track:hover {
-  border: var(--os-track-border-hover);
-  background: var(--os-track-bg-hover);
-}
-
-.os-scrollbar-track:active {
-  border: var(--os-track-border-active);
-  background: var(--os-track-bg-active);
-}
-
 .os-scrollbar-handle {
   position: absolute;
   border: var(--os-handle-border);
   border-radius: var(--os-handle-border-radius);
   background: var(--os-handle-bg);
-}
-
-.os-scrollbar-handle:hover {
-  border: var(--os-handle-border-hover);
-  background: var(--os-handle-bg-hover);
-}
-
-.os-scrollbar-handle:active {
-  border: var(--os-handle-border-active);
-  background: var(--os-handle-bg-active);
 }
 
 .os-scrollbar-track,
@@ -3728,6 +3711,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 .os-scrollbar.os-scrollbar-handle-interactive .os-scrollbar-handle {
   pointer-events: auto;
   touch-action: none;
+  cursor: default;
 }
 
 .os-scrollbar-horizontal {
@@ -3749,16 +3733,19 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 .os-scrollbar-visible {
   opacity: 1;
   visibility: visible;
+  transition-duration: var(--duration-spring-fast-effects);
 }
 
 .os-scrollbar-auto-hide.os-scrollbar-auto-hide-hidden {
   opacity: 0;
   visibility: hidden;
+  transition-duration: var(--duration-spring-default-effects);
 }
 
 .os-scrollbar-interaction.os-scrollbar-visible {
   opacity: 1;
   visibility: visible;
+  transition-duration: var(--duration-spring-fast-effects);
 }
 
 .os-scrollbar-unusable,
@@ -3789,20 +3776,13 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition:
     opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     height var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 .os-scrollbar-horizontal .os-scrollbar-handle::before {
   top: calc((var(--os-padding-perpendicular) + var(--os-handle-interactive-area-offset)) * -1);
   bottom: calc(var(--os-padding-perpendicular) * -1);
-}
-
-.os-scrollbar-horizontal:hover .os-scrollbar-handle {
-  height: var(--os-handle-perpendicular-size-hover);
-}
-
-.os-scrollbar-horizontal:active .os-scrollbar-handle {
-  height: var(--os-handle-perpendicular-size-active);
 }
 
 .os-scrollbar-vertical .os-scrollbar-track::before {
@@ -3821,6 +3801,7 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   transition:
     opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     width var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
@@ -3829,8 +3810,46 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   right: calc(var(--os-padding-perpendicular) * -1);
 }
 
-.os-scrollbar-vertical:hover .os-scrollbar-handle {
-  width: var(--os-handle-perpendicular-size-hover);
+/* Hover widening and rail reveal require `(hover: hover)` so touch taps never leave
+   a sticky expanded bar behind. */
+@media (hover: hover) {
+  .os-scrollbar:is(:hover, .os-scrollbar-interaction) .os-scrollbar-track {
+    border: var(--os-track-border-hover);
+    background: var(--os-track-bg-hover);
+  }
+
+  .os-scrollbar:is(:hover, .os-scrollbar-interaction) .os-scrollbar-handle {
+    background: var(--os-handle-bg-track-hover);
+  }
+
+  .os-scrollbar .os-scrollbar-handle:hover {
+    border: var(--os-handle-border-hover);
+    background: var(--os-handle-bg-hover);
+  }
+
+  .os-scrollbar-horizontal:is(:hover, .os-scrollbar-interaction) .os-scrollbar-handle {
+    height: var(--os-handle-perpendicular-size-hover);
+  }
+
+  .os-scrollbar-vertical:is(:hover, .os-scrollbar-interaction) .os-scrollbar-handle {
+    width: var(--os-handle-perpendicular-size-hover);
+  }
+}
+
+.os-scrollbar:active .os-scrollbar-track,
+.os-scrollbar .os-scrollbar-track:active {
+  border: var(--os-track-border-active);
+  background: var(--os-track-bg-active);
+}
+
+.os-scrollbar:active .os-scrollbar-handle,
+.os-scrollbar .os-scrollbar-handle:active {
+  border: var(--os-handle-border-active);
+  background: var(--os-handle-bg-active);
+}
+
+.os-scrollbar-horizontal:active .os-scrollbar-handle {
+  height: var(--os-handle-perpendicular-size-active);
 }
 
 .os-scrollbar-vertical:active .os-scrollbar-handle {
@@ -3877,39 +3896,181 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   }
 }
 
-/* Material 3 Expressive overlay pseudo-scrollbar theme. Uses semantic outline tokens,
-   the shared FastEffects spring clock (so speed/off tiers govern fade and hover growth),
-   and a local z-index strictly below `--z-route-crossfade` (20) so page-level overlays,
-   back chrome and Hero flights always paint cleanly above it. */
+/* Material 3 Expressive overlay pseudo-scrollbar theme.
+   Uses the owned `--md-sys-color-on-surface-rgb` channels so the thumb maintains clear,
+   proportional contrast across every container elevation (`surface` through
+   `surface-container-highest`) and every palette without muting into the background.
+   Default local `z-index: 5` stays below sticky `z-10` headers (such as `ColorPicker`'s
+   preview dock), while page-level/detail/field tracks step to `15` (still strictly below
+   `--z-route-crossfade: 20`). */
 .os-scrollbar.os-theme-picpony {
   box-sizing: border-box;
-  z-index: 15;
-  --os-size: 12px;
+  z-index: 5;
+  --os-size: 11px;
   --os-padding-perpendicular: 2px;
-  --os-padding-axis: 2px;
+  --os-padding-axis: 4px;
   --os-track-border-radius: 9999px;
   --os-handle-border-radius: 9999px;
-  --os-handle-min-size: 32px;
-  --os-handle-perpendicular-size: 6px;
-  --os-handle-perpendicular-size-hover: 8px;
-  --os-handle-perpendicular-size-active: 8px;
-  --os-handle-interactive-area-offset: 4px;
+  --os-handle-min-size: 28px;
+  --os-handle-perpendicular-size: 4px;
+  --os-handle-perpendicular-size-hover: 7px;
+  --os-handle-perpendicular-size-active: 7px;
+  --os-handle-interactive-area-offset: 5px;
   --os-track-bg: transparent;
-  --os-track-bg-hover: transparent;
-  --os-track-bg-active: transparent;
-  --os-handle-bg: var(--md-sys-color-outline-variant);
-  --os-handle-bg-hover: var(--md-sys-color-outline);
-  --os-handle-bg-active: var(--md-sys-color-on-surface-variant);
+  --os-track-bg-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.06);
+  --os-track-bg-active: rgb(var(--md-sys-color-on-surface-rgb) / 0.1);
+  --os-handle-bg: rgb(var(--md-sys-color-on-surface-rgb) / 0.26);
+  --os-handle-bg-track-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.42);
+  --os-handle-bg-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.52);
+  --os-handle-bg-active: rgb(var(--md-sys-color-on-surface-rgb) / 0.68);
 }
 
-/* Multiline fields (`Textarea`, `ChatComposer`): inset the vertical pseudo-scrollbar inside
-   the field's rounded corners and above a resizable textarea's bottom-right grip. */
+.dark .os-scrollbar.os-theme-picpony {
+  --os-track-bg-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.08);
+  --os-track-bg-active: rgb(var(--md-sys-color-on-surface-rgb) / 0.12);
+  --os-handle-bg: rgb(var(--md-sys-color-on-surface-rgb) / 0.28);
+  --os-handle-bg-track-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.44);
+  --os-handle-bg-hover: rgb(var(--md-sys-color-on-surface-rgb) / 0.56);
+  --os-handle-bg-active: rgb(var(--md-sys-color-on-surface-rgb) / 0.74);
+}
+
+/* Primary page, image-detail and maintenance scrollers: authoritative 5px → 8px pill with
+   generous hit target, safe-area bottom clearance and rounded-corner inset from `sm`. */
+:is(.os-slot-page, .os-detail-slot, .os-slot-maintenance) > .os-scrollbar.os-theme-picpony {
+  z-index: 15;
+  --os-size: 14px;
+  --os-padding-perpendicular: 3px;
+  --os-padding-axis: 4px;
+  --os-handle-min-size: 36px;
+  --os-handle-perpendicular-size: 5px;
+  --os-handle-perpendicular-size-hover: 8px;
+  --os-handle-perpendicular-size-active: 8px;
+  --os-handle-interactive-area-offset: 6px;
+}
+
+:is(.os-slot-page, .os-detail-slot, .os-slot-maintenance) > .os-scrollbar-vertical.os-theme-picpony {
+  padding-bottom: max(var(--os-padding-axis), env(safe-area-inset-bottom, 0px));
+}
+
+.os-slot-maintenance > .os-scrollbar-vertical.os-theme-picpony {
+  right: env(safe-area-inset-right, 0px);
+  padding-top: max(var(--os-padding-axis), env(safe-area-inset-top, 0px));
+}
+
+@media (min-width: 640px) {
+  :is(.os-slot-page, .os-detail-slot) > .os-scrollbar.os-theme-picpony {
+    --os-padding-axis: 10px;
+  }
+}
+
+/* Sidebar drawer: clears mobile `rounded-r-lg` corners and status/home-indicator insets;
+   returns to tight 6px axis rhythm once docked on `md`. */
+.os-slot-drawer > .os-scrollbar-vertical.os-theme-picpony {
+  --os-padding-axis: 6px;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .os-slot-drawer > .os-scrollbar-vertical.os-theme-picpony {
+    padding-top: var(--os-padding-axis);
+    padding-bottom: var(--os-padding-axis);
+  }
+}
+
+/* Dialogs, sheets and side panels: clear hairline dividers and 28dp rounded outer edges
+   when header or footer chrome is omitted. */
+.os-slot-overlay > .os-scrollbar.os-theme-picpony {
+  --os-padding-axis: 6px;
+}
+
+.os-slot-overlay[data-os-round-top] > .os-scrollbar-vertical.os-theme-picpony {
+  padding-top: 18px;
+}
+
+.os-slot-overlay[data-os-round-bottom] > .os-scrollbar-vertical.os-theme-picpony {
+  padding-bottom: 18px;
+}
+
+/* Inset popovers (`Menu`, `Select`, search suggestions): centre the 4px resting thumb
+   inside the outer 8dp frame margin (2px | 4px | 2px; 6px on hover still clears rows) so
+   it never touches selection pills, checkmarks, shortcuts or trailing buttons. */
+.os-slot-popover[data-os-inset] > .os-scrollbar-vertical.os-theme-picpony {
+  right: -8px;
+  --os-size: 10px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 2px;
+  --os-handle-perpendicular-size: 4px;
+  --os-handle-perpendicular-size-hover: 6px;
+  --os-handle-perpendicular-size-active: 6px;
+}
+
+.os-slot-popover[data-os-inset='search'] > .os-scrollbar-vertical.os-theme-picpony {
+  --os-padding-axis: 12px;
+}
+
+/* Multiline fields (`Textarea`, `ChatComposer`): 4px perpendicular inset clears the 2px
+   focus outline; 12px axis inset on outlined fields clears the 20dp corners, and resizable
+   textareas leave room for the bottom-right grip. */
 .m3-field[data-multiline] > .os-scrollbar-vertical.os-theme-picpony {
+  z-index: 15;
+  --os-size: 14px;
+  --os-padding-perpendicular: 4px;
   --os-padding-axis: 8px;
+  --os-handle-perpendicular-size: 4px;
+  --os-handle-perpendicular-size-hover: 6px;
+  --os-handle-perpendicular-size-active: 6px;
+}
+
+.m3-field[data-multiline][data-labelled] > .os-scrollbar-vertical.os-theme-picpony {
+  --os-padding-axis: 12px;
 }
 
 .m3-field[data-multiline]:has(> textarea.resize-y) > .os-scrollbar-vertical.os-theme-picpony {
-  bottom: 12px;
+  bottom: 14px;
+}
+
+/* Rich-text editor body: clears focus outline and the 19dp rounded bottom-right corner. */
+.rich-text-editor .w-e-text-container > .os-scrollbar-vertical.os-theme-picpony {
+  --os-size: 14px;
+  --os-padding-perpendicular: 4px;
+  --os-handle-perpendicular-size: 4px;
+  --os-handle-perpendicular-size-hover: 6px;
+  --os-handle-perpendicular-size-active: 6px;
+  padding-top: 8px;
+  padding-bottom: 14px;
+}
+
+/* Horizontal rich-text code listings and tables: clear `rounded-xs` corners cleanly. */
+:is(.os-rich-block, .bbcode-content [data-overlayscrollbars~='host'], .rich-text-content [data-overlayscrollbars~='host'])
+  > .os-scrollbar-horizontal.os-theme-picpony {
+  --os-padding-axis: 6px;
+}
+
+/* Touch devices render a sleek 4px scroll-position indicator without desktop track chrome. */
+@media (pointer: coarse) {
+  .os-scrollbar.os-theme-picpony,
+  :is(.os-slot-page, .os-detail-slot, .os-slot-maintenance) > .os-scrollbar.os-theme-picpony,
+  .os-slot-popover[data-os-inset] > .os-scrollbar-vertical.os-theme-picpony {
+    --os-size: 8px;
+    --os-padding-perpendicular: 2px;
+    --os-handle-perpendicular-size: 4px;
+    --os-handle-perpendicular-size-hover: 4px;
+    --os-handle-perpendicular-size-active: 4px;
+    --os-track-bg-hover: transparent;
+    --os-track-bg-active: transparent;
+  }
+
+  .m3-field[data-multiline] > .os-scrollbar-vertical.os-theme-picpony,
+  .rich-text-editor .w-e-text-container > .os-scrollbar-vertical.os-theme-picpony {
+    --os-size: 12px;
+    --os-padding-perpendicular: 4px;
+    --os-handle-perpendicular-size: 4px;
+    --os-handle-perpendicular-size-hover: 4px;
+    --os-handle-perpendicular-size-active: 4px;
+    --os-track-bg-hover: transparent;
+    --os-track-bg-active: transparent;
+  }
 }
 
 /* Covered gallery and in-flight Hero overlays hide only their sibling `.os-scrollbar` tracks:
@@ -3924,15 +4085,18 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 
 @media (forced-colors: active) {
-  .os-scrollbar.os-theme-picpony {
+  .os-scrollbar.os-theme-picpony,
+  .dark .os-scrollbar.os-theme-picpony {
+    --os-track-bg-hover: transparent;
+    --os-track-bg-active: transparent;
     --os-handle-bg: ButtonText;
+    --os-handle-bg-track-hover: Highlight;
     --os-handle-bg-hover: Highlight;
     --os-handle-bg-active: Highlight;
   }
 
   .os-scrollbar.os-theme-picpony .os-scrollbar-handle {
     forced-color-adjust: none;
-    background: var(--os-handle-bg);
   }
 }
 

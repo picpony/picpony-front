@@ -30,6 +30,7 @@ import { clearForumReturn, playForumReturn, readForumReturn } from '@/lib/forumT
 import { rememberForumList } from '@/lib/forumCache';
 import { getAppScroller } from '@/lib/appScroller';
 import { scrollAppToElement } from '@/lib/scrollTo';
+import { useScrollFade } from '@/lib/useScrollFade';
 import { ICON } from '@/lib/icons';
 import type { ForumPostsResponse } from '@/lib/types/forum';
 
@@ -70,6 +71,8 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
   const [typed, setTyped] = useState(search);
   const composing = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const categoryRowRef = useRef<HTMLDivElement>(null);
+  useScrollFade(categoryRowRef);
 
   /* A signed-in read waits for the session, except under a seed: the server rendered the
      visitor's list, and the hydrating render must ask for exactly that key to adopt it. The
@@ -331,11 +334,12 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
         <Select size="sm" shape="pill" value={sort} options={[...FORUM_SORTS]} onChange={changeSort} aria-label="排序" />
       </form>
       <div
+        ref={categoryRowRef}
         role="group"
         aria-label="分类"
         /* One row that scrolls on a narrow phone rather than wrapping a chip onto a line of its
            own; edge to edge there, inside the page gutter from `sm`. */
-        className="scrollbar-hide -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        className="scrollbar-hide scroll-fade-x -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0"
       >
         {CATEGORY_FILTERS.map((option) => (
           <Chip

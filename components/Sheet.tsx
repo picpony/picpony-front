@@ -415,7 +415,8 @@ export default function Sheet({
         <ScrollArea
           axis="both"
           enabled={bodyScrollable}
-          className="flex min-h-0 flex-1 flex-col"
+          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
+          slotProps={{ 'data-os-round-top': hideHandle && !title ? '' : undefined }}
           viewportRef={bodyRef}
           /* `data-app-scroll-container`, like `Modal`'s body: this is the box that
              scrolls, so anything inside that wants to scroll to an element has to

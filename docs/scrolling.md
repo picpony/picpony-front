@@ -10,15 +10,17 @@ Use `scrollAppToTop` / `scrollAppToElement`, not `window.scrollTo`. Scroller chi
 
 Visible scrollbars use `OverlayScrollbars` (`components/ScrollArea.tsx` and `lib/overlayScrollbar.ts`) with the `.os-theme-picpony` Material 3 theme. Native scrollbars are hidden from first paint so tracks float over content without reserving layout gutters or shifting width when overflow changes.
 
+Thumb and hover-rail ink derive from the owned `--md-sys-color-on-surface-rgb` channels so contrast scales cleanly across every surface container elevation and palette. Desktop fine pointers use tiered capsule thumbs (5→8 px on primary page/detail scrollers, 4→7 px on compact overlays and panels, 4→6 px inside multiline fields) with `(hover: hover)` rail reveal, crisp `fastEffects` arrival and gentler `defaultEffects` auto-hide fade-out; touch devices render a 4 px scroll indicator with no hover track. Rounded shells, focus outlines, safe areas and inset popovers apply matching track clearances, and `clickScroll` reads `motionTier('scroll')` and `scaledMs(..., 'scroll')` live on every track click.
+
 | Container | Mechanism |
 | --- | --- |
-| Page-level scroller and image-detail overlay | `ScrollArea` (`.main-scrollbar`), floating pseudo-scrollbar, no gutter |
-| Overlays, drawers, popovers, panels and tables | `ScrollArea` (`.popover-scrollbar`), floating pseudo-scrollbar, no gutter |
+| Page-level scroller and image-detail overlay | `ScrollArea` (`.main-scrollbar`, `.os-slot-page` / `.os-detail-slot`), floating pseudo-scrollbar, no gutter |
+| Overlays, drawers, popovers, panels and tables | `ScrollArea` (`.popover-scrollbar`), floating pseudo-scrollbar with `overscroll-contain`, no gutter |
 | Multiline fields (`Textarea`, `ChatComposer`) | `useOverlayScrollbar` mounted onto the enclosing `.m3-field` slot |
 | HTML-injected rich text tables and `<pre>` blocks | `useRichTextScrollbars` (wrapper mode) |
 | Horizontal chips or tabs | `.scrollbar-hide` with `scroll-fade-x` |
 
-`ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`.
+`ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`. Default tracks sit at local `z-index: 5` (below sticky `z-10` headers such as `ColorPicker`'s preview dock), while page, detail and multiline-field tracks sit at `15` (strictly below `--z-route-crossfade`).
 
 ## Scroll ownership
 

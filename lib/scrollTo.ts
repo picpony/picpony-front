@@ -35,12 +35,10 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
 
   const from = scroller.scrollTop;
   const distance = Math.abs(from - to);
-  if (jump) {
-    scroller.scrollTop = to;
+  if (jump || distance < 4) {
+    if (scroller.scrollTop !== to) scroller.scrollTop = to;
     return;
   }
-  // Still cancel an older glide, but do not twitch for an already-reached target.
-  if (distance < 4) return;
 
   /* Duration follows the square root of the distance (distance law): perceived travel speed
      scales sub-linearly, so a linear map makes short hops sluggish and long ones frantic —
@@ -91,6 +89,10 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
 
   const start = performance.now();
   const step = (now: number) => {
+    if (!scroller.isConnected) {
+      stop();
+      return;
+    }
     const p = duration <= 0 ? 1 : Math.min(1, (now - start) / duration);
     scroller.scrollTop = from + (to - from) * glide(p);
     if (p < 1) {
@@ -162,6 +164,7 @@ export function scrollAppToElement(
   }
 
   const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-  const next = Math.max(0, scroller.scrollTop + delta - offset);
+  const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const next = clamp(scroller.scrollTop + delta - offset, 0, max);
   runScroll(scroller, next, jump);
 }

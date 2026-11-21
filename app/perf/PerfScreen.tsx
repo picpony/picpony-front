@@ -663,7 +663,7 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
       <ScrollArea
         axis="x"
         className="rounded-sm bg-surface-container-high"
-        viewportClassName="overflow-x-auto rounded-sm main-scrollbar"
+        viewportClassName="overflow-x-auto rounded-sm popover-scrollbar"
       >
         <table className="w-full min-w-136 text-left text-body-s tabular-nums">
           <thead className="text-label-m text-on-surface-variant">

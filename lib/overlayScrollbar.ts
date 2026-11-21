@@ -6,7 +6,7 @@ import type {
   ScrollbarsAutoHideBehavior,
 } from 'overlayscrollbars';
 import { useEffect, type RefObject } from 'react';
-import { motionTier } from '@/lib/appearance';
+import { motionTier, scaledMs } from '@/lib/appearance';
 import { MEDIA } from '@/lib/constants';
 import { runWhenIdle } from '@/lib/utils';
 
@@ -35,6 +35,8 @@ export type ScrollbarAutoHide = 'auto' | ScrollbarsAutoHideBehavior;
 export interface OverlayScrollbarOptions {
   axis?: ScrollbarAxis;
   autoHide?: ScrollbarAutoHide;
+  /** Override whether auto-hide stays suspended until first scroll on fine pointers. */
+  autoHideSuspend?: boolean;
   defer?: boolean;
   enabled?: boolean;
   observeInput?: boolean;
@@ -85,11 +87,30 @@ const SKIP_FLOW_DIRECTION = () => ({});
 const IGNORE_ALL_MUTATIONS = () => true;
 
 /**
+ * Live click-scroll timing resolved on each track click so motion-tier and
+ * speed changes in `/settings` take effect immediately without rebuilding
+ * mounted scrollbar instances.
+ */
+const resolveClickScroll = () =>
+  motionTier('scroll') === 'off'
+    ? {
+        clickScrollDistance: 0,
+        clickScrollDuration: 0,
+        clickPressDelay: 0,
+        pressDistanceDuration: 0,
+      }
+    : {
+        clickScrollDuration: Math.round(scaledMs(200, 'scroll')),
+        clickPressDelay: 150,
+        pressDistanceDuration: Math.round(scaledMs(90, 'scroll')),
+      };
+
+/**
  * Resolve OverlayScrollbars options from axis, pointer type and motion tier.
  *
  * Fine-pointer devices show overflowing bars on entry (and on initial paint
- * via `autoHideSuspend`) and fade them after leaving; coarse touch devices
- * keep bars hidden until a scroll starts, matching mobile overlay bars.
+ * when `autoHideSuspend` is enabled) and fade them after leaving; coarse touch
+ * devices keep bars hidden until a scroll starts, matching mobile overlay bars.
  *
  * `flowDirectionStyles` skips OverlayScrollbars' repeated `getComputedStyle`
  * RTL/writing-mode checks (PicPony is LTR `horizontal-tb`), and `elementEvents`
@@ -103,11 +124,12 @@ export function buildScrollbarOptions(
   axis: ScrollbarAxis = 'y',
   autoHide: ScrollbarAutoHide = 'auto',
   ignoreMutations = false,
+  autoHideSuspend?: boolean,
 ): PartialOptions {
   const coarse = isCoarsePointer();
   const resolvedAutoHide: ScrollbarsAutoHideBehavior =
     autoHide === 'auto' ? (coarse ? 'scroll' : 'leave') : autoHide;
-  const suspend = autoHide === 'auto' ? !coarse : false;
+  const suspend = coarse ? false : (autoHideSuspend ?? (autoHide === 'auto'));
 
   return {
     paddingAbsolute: false,
@@ -125,10 +147,10 @@ export function buildScrollbarOptions(
       theme: PICPONY_SCROLLBAR_THEME,
       visibility: 'auto',
       autoHide: resolvedAutoHide,
-      autoHideDelay: 800,
+      autoHideDelay: coarse ? 900 : 650,
       autoHideSuspend: suspend,
       dragScroll: true,
-      clickScroll: motionTier('scroll') === 'off' ? 'instant' : true,
+      clickScroll: resolveClickScroll,
       pointers: ['mouse', 'touch', 'pen'],
     },
   };
@@ -173,9 +195,13 @@ export function mountSlottedScrollbar(
   {
     axis = 'y',
     autoHide = 'auto',
+    autoHideSuspend,
     defer = false,
     observeInput = false,
-  }: Pick<OverlayScrollbarOptions, 'axis' | 'autoHide' | 'defer' | 'observeInput'> = {},
+  }: Pick<
+    OverlayScrollbarOptions,
+    'axis' | 'autoHide' | 'autoHideSuspend' | 'defer' | 'observeInput'
+  > = {},
 ): OverlayScrollbarHandle {
   let disposed = false;
   let instance: OverlayScrollbarsInstance | null = null;
@@ -232,7 +258,7 @@ export function mountSlottedScrollbar(
 
   const onMediaChange = () => {
     if (!disposed && instance && !instance.state().destroyed) {
-      instance.options(buildScrollbarOptions(axis, autoHide, ignoreMutations));
+      instance.options(buildScrollbarOptions(axis, autoHide, ignoreMutations, autoHideSuspend));
     }
   };
 
@@ -243,7 +269,7 @@ export function mountSlottedScrollbar(
 
   const attach = (mod: OverlayScrollbarsModule) => {
     if (disposed || !viewport.isConnected || !slot.isConnected) return;
-    const options = buildScrollbarOptions(axis, autoHide, ignoreMutations);
+    const options = buildScrollbarOptions(axis, autoHide, ignoreMutations, autoHideSuspend);
     const existing = mod.OverlayScrollbars(viewport);
     if (existing) {
       existing.options(options);
@@ -272,6 +298,7 @@ export function mountSlottedScrollbar(
     cancelIdle = null;
     viewport.removeEventListener('scroll', start);
     viewport.removeEventListener('pointerenter', start);
+    viewport.removeEventListener('pointermove', start);
     if (loadedModule) {
       attach(loadedModule);
       return;
@@ -289,6 +316,7 @@ export function mountSlottedScrollbar(
   if (defer) {
     viewport.addEventListener('scroll', start, { passive: true, once: true });
     viewport.addEventListener('pointerenter', start, { passive: true, once: true });
+    viewport.addEventListener('pointermove', start, { passive: true, once: true });
     cancelIdle = runWhenIdle(start, 1200);
   } else {
     start();
@@ -308,6 +336,7 @@ export function mountSlottedScrollbar(
       }
       viewport.removeEventListener('scroll', start);
       viewport.removeEventListener('pointerenter', start);
+      viewport.removeEventListener('pointermove', start);
       if (observeInput) viewport.removeEventListener('input', scheduleUpdate);
       cancelChildResize?.();
       cancelChildResize = null;
@@ -330,8 +359,9 @@ export function mountWrappedScrollbar(
   {
     axis = 'x',
     autoHide = 'auto',
+    autoHideSuspend,
     defer = false,
-  }: Pick<OverlayScrollbarOptions, 'axis' | 'autoHide' | 'defer'> = {},
+  }: Pick<OverlayScrollbarOptions, 'axis' | 'autoHide' | 'autoHideSuspend' | 'defer'> = {},
 ): OverlayScrollbarHandle {
   let disposed = false;
   let instance: OverlayScrollbarsInstance | null = null;
@@ -339,12 +369,13 @@ export function mountWrappedScrollbar(
 
   const attach = (mod: OverlayScrollbarsModule) => {
     if (disposed || !host.isConnected) return;
+    const options = buildScrollbarOptions(axis, autoHide, false, autoHideSuspend);
     const existing = mod.OverlayScrollbars(host);
     if (existing) {
-      existing.options(buildScrollbarOptions(axis, autoHide));
+      existing.options(options);
       instance = existing;
     } else {
-      instance = mod.OverlayScrollbars(host, buildScrollbarOptions(axis, autoHide));
+      instance = mod.OverlayScrollbars(host, options);
     }
   };
 
@@ -356,6 +387,7 @@ export function mountWrappedScrollbar(
     cancelIdle = null;
     host.removeEventListener('scroll', start);
     host.removeEventListener('pointerenter', start);
+    host.removeEventListener('pointermove', start);
     if (loadedModule) {
       attach(loadedModule);
       return;
@@ -369,6 +401,7 @@ export function mountWrappedScrollbar(
   if (defer) {
     host.addEventListener('scroll', start, { passive: true, once: true });
     host.addEventListener('pointerenter', start, { passive: true, once: true });
+    host.addEventListener('pointermove', start, { passive: true, once: true });
     cancelIdle = runWhenIdle(start, 1200);
   } else {
     start();
@@ -386,6 +419,7 @@ export function mountWrappedScrollbar(
       cancelIdle = null;
       host.removeEventListener('scroll', start);
       host.removeEventListener('pointerenter', start);
+      host.removeEventListener('pointermove', start);
       if (instance && !instance.state().destroyed) {
         instance.destroy();
       }
@@ -404,6 +438,7 @@ export function useOverlayScrollbar(
   {
     axis = 'y',
     autoHide = 'auto',
+    autoHideSuspend,
     defer = false,
     enabled = true,
     observeInput = false,
@@ -418,11 +453,12 @@ export function useOverlayScrollbar(
     const handle = mountSlottedScrollbar(viewport, slot, {
       axis,
       autoHide,
+      autoHideSuspend,
       defer,
       observeInput,
     });
     return () => handle.destroy();
-  }, [viewportRef, slotRef, axis, autoHide, defer, enabled, observeInput]);
+  }, [viewportRef, slotRef, axis, autoHide, autoHideSuspend, defer, enabled, observeInput]);
 
   useEffect(() => {
     if (!enabled || refreshKey === undefined) return;

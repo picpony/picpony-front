@@ -343,7 +343,7 @@ export default function Thread({
         </div>
       </ScrollArea>
       {unseen > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
           <Button
             variant="tonal"
             size="xs"

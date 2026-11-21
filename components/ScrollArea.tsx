@@ -35,6 +35,8 @@ export interface ScrollAreaProps<T extends ScrollAreaTag = 'div'> {
   axis?: ScrollbarAxis;
   /** Auto-hide mode; `'auto'` uses `'leave'` for fine pointers and `'scroll'` for touch. */
   autoHide?: ScrollbarAutoHide;
+  /** Override whether auto-hide stays suspended until first scroll on fine pointers. */
+  autoHideSuspend?: boolean;
   /** Defer OverlayScrollbars attachment until idle, hover or first scroll. */
   defer?: boolean;
   /** When false, renders only the viewport element without a slot wrapper or pseudo-scrollbar. */
@@ -76,6 +78,7 @@ export default function ScrollArea<T extends ScrollAreaTag = 'div'>({
   as,
   axis = 'y',
   autoHide = 'auto',
+  autoHideSuspend,
   defer = false,
   enabled = true,
   className,
@@ -93,6 +96,7 @@ export default function ScrollArea<T extends ScrollAreaTag = 'div'>({
   useOverlayScrollbar(localViewportRef, slotRef, {
     axis,
     autoHide,
+    autoHideSuspend,
     defer,
     enabled,
   });

@@ -150,7 +150,7 @@ export default function MaintenanceScreen({ message }: { message: string }) {
       as="main"
       axis="y"
       defer
-      className="flex min-h-0 flex-1"
+      className="os-slot-maintenance flex min-h-0 flex-1"
       viewportClassName="main-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-y-auto pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
     >
       {/* The screen answers 200 under whatever URL was asked for (a layout cannot set a status),

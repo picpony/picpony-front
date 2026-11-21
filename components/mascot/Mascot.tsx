@@ -575,7 +575,7 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
                   as="p"
                   axis="y"
                   className="flex min-w-0 flex-1"
-                  viewportClassName={cn(styles.bubbleBody, 'popover-scrollbar min-w-0 flex-1 py-1.5 text-body-m wrap-anywhere')}
+                  viewportClassName={cn(styles.bubbleBody, 'popover-scrollbar min-w-0 flex-1 overscroll-y-contain py-1.5 text-body-m wrap-anywhere')}
                 >
                   {bubble?.text}
                 </ScrollArea>

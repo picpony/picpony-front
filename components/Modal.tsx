@@ -429,11 +429,15 @@ export default function Modal({
             overlay reserves no gutter, or every dialog's text sits off-centre. */}
         <ScrollArea
           axis="both"
-          className="flex min-h-0 flex-1 flex-col"
+          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
+          slotProps={{
+            'data-os-round-top': !hasHeader ? '' : undefined,
+            'data-os-round-bottom': !footer ? '' : undefined,
+          }}
           viewportRef={bodyRef}
           viewportProps={{ 'data-app-scroll-container': '' }}
           viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1 overflow-y-auto',
+            'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain',
             bodyClassName ||
               cn('px-6', hasHeader ? 'pt-2' : 'pt-6', hasFooter ? 'pb-2' : 'pb-6'),
           )}

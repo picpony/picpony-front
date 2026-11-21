@@ -403,9 +403,8 @@ export default function RichTextEditor({
     let cancelSelection = () => {};
     const editorScrollbars = new Map<HTMLElement, OverlayScrollbarHandle>();
     const syncScrollbars = (shell: HTMLElement) => {
-      shell.querySelectorAll<HTMLElement>('.w-e-scroll, .table-container').forEach((scroller) => {
+      shell.querySelectorAll<HTMLElement>('.w-e-scroll').forEach((scroller) => {
         addClasses(scroller, 'popover-scrollbar');
-        if (!scroller.classList.contains('w-e-scroll')) return;
         const slot = scroller.parentElement;
         if (!slot || editorScrollbars.has(scroller)) return;
         addClasses(slot, 'os-slot');

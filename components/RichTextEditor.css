@@ -115,10 +115,14 @@
   }
 
   /* Slate keeps its image selection wrapper; the shared prose stylesheet owns
-     paragraphs, headings, links, lists, quotes, media sizing and table cells. */
+     paragraphs, headings, links, lists, quotes, media sizing and table cells.
+     `.table-container` lives inside Slate's unmanaged `contentEditable` DOM, so it
+     cannot be wrapped by OverlayScrollbars and uses a thin token-coloured native track. */
   .rich-text-editor [data-slate-editor] .table-container {
     border: 0;
     padding: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--md-sys-color-on-surface-rgb) / 0.32) transparent;
   }
 
   .rich-text-editor [data-slate-editor] pre > code {

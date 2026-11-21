@@ -180,7 +180,7 @@ export default function ContactList({
         axis="y"
         enabled={rail}
         className="flex min-h-0 flex-1 flex-col"
-        viewportClassName={cn(rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto p-2')}
+        viewportClassName={cn(rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2')}
       >
         {rows}
       </ScrollArea>

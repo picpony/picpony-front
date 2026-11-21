@@ -1206,8 +1206,9 @@ export default function AppLayout({
                 status bar area); docked, the chrome above has already paid it. */}
             <ScrollArea
               axis="y"
+              autoHideSuspend={false}
               defer
-              className="flex min-h-0 w-full flex-1"
+              className="os-slot-drawer flex min-h-0 w-full flex-1"
               viewportClassName="popover-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-y-contain pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pt-0"
             >
               <div className="p-3 pb-0">

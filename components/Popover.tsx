@@ -646,13 +646,14 @@ export default function Popover({
       <ScrollArea
         axis="y"
         className={cn(
-          'flex min-h-0 flex-col',
+          'os-slot-popover flex min-h-0 flex-col',
           inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
         )}
+        slotProps={{ 'data-os-inset': inset ? variant : undefined }}
         viewportRef={scrollRef}
         viewportProps={{ 'data-popover-scroller': '' }}
         viewportClassName={cn(
-          'popover-scrollbar relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto',
+          'popover-scrollbar relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain',
           inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
         )}
       >
