@@ -95,7 +95,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
   /* `forced-boundary` wherever there is a container to lose: forced colors flattens it
      to the canvas (the outlined variant's border survives on its own). */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
-  tonal: 'bg-secondary-container text-on-secondary-container focus-ring forced-boundary',
+  tonal: 'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
   /* A leading action on a plain page surface keeps its distance until it is reached for. At rest
      it wears the neutral container `Button variant="surface"` wears — one material for a neutral
      surface control across both primitives, round because a circle is what the page's own
@@ -106,7 +106,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      Shape is resolved with the other corners below so press state and caller-owned corners
      take precedence over hover; see docs/design/primitives.md#buttons-icons-and-semantics. */
   quiet:
-    'bg-surface-container-highest text-on-surface ripple-secondary focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container',
+    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container enabled:hover:ripple-secondary',
   outlined:
     'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
@@ -119,14 +119,14 @@ const VARIANTS: Record<IconButtonVariant, string> = {
   danger: 'bg-error-fill text-on-fill focus-ring forced-boundary',
   /* An unfilled destructive action keeps a secondary control's hierarchy.
      A caller's `text-error` would compete with standard's neutral ink because
-     `cn` joins utilities without resolving them. */
+     `cn` joins utilities without resolving them; its press wave follows `error`. */
   'danger-text': 'bg-transparent text-error focus-ring',
   /* The same action repeated down a list, one per row (/history's delete), whose ink waits for
      intent: neutral at rest, the error ink while its row is hovered — the moment `hover-reveal`
      shows it, so a pointer sees what it always saw — or while it has the keyboard's focus. Under
      a finger nothing hovers, and a page of rows was a column of red bins; a removal that 撤销
-     takes back is a trailing action, not a warning (OD-5). The press wave still carries `error`,
-     so a touch tap still gives immediate destructive feedback. */
+     takes back is a trailing action, not a warning (OD-5). The press wave carries `error` so
+     hovered and touch presses alike match its destructive intent. */
   'danger-quiet':
     'bg-transparent text-on-surface-variant ripple-error enabled:hover:text-error enabled:group-hover:text-error focus-visible:text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
@@ -144,10 +144,11 @@ const VARIANTS: Record<IconButtonVariant, string> = {
 };
 
 /* The selected state's container pair. Spelled per tone rather than composed, for the reason
-   `SHAPES` is: `cn` is a plain join. */
+   `SHAPES` is: `cn` is a plain join. High-chroma ripple roles keep the press wave visibly
+   tinted on top of the selected container rather than near-black/white Tone-10/90 text ink. */
 const SELECTED: Record<IconButtonSelectedTone, string> = {
-  secondary: 'bg-secondary-container text-on-secondary-container',
-  tertiary: 'bg-tertiary-container text-on-tertiary-container',
+  secondary: 'bg-secondary-container text-on-secondary-container ripple-secondary',
+  tertiary: 'bg-tertiary-container text-on-tertiary-container ripple-tertiary',
 };
 
 /* The M3 icon-button steps, verbatim: `XSmallIconButtonTokens.ContainerHeight` 32,

@@ -52,8 +52,6 @@ export default function Radio({
 }: RadioProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const rippleHostRef = useRef<HTMLSpanElement>(null);
-  const rippleTone =
-    tone === 'error' ? 'ripple-error' : tone === 'warning' ? 'ripple-warning' : 'ripple-primary';
   return (
     <label
       onPointerDown={(event) => {
@@ -86,10 +84,11 @@ export default function Radio({
           aria-hidden="true"
           className={cn(
             /* The 40dp state-layer and press-wave circle (same structure as `Checkbox` and
-               `ToggleSwitch`), clipped here so `touch-target` on the parent dial stays intact. */
-            'pointer-events-none absolute size-10 overflow-hidden rounded-full',
+               `ToggleSwitch`), clipped and isolated here so `touch-target` on the parent dial
+               stays intact. The dial itself takes `primary-ink` when selected (regardless of
+               label tone), so the centred press wave carries `ripple-primary`. */
+            'ripple-primary pointer-events-none absolute isolate size-10 overflow-hidden rounded-full',
             checked ? 'text-primary-ink' : 'text-on-surface',
-            rippleTone,
           )}
         >
           <span

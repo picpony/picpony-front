@@ -7,7 +7,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Component or property | Arrival / change | Departure | Reference |
 | --- | --- | --- | --- |
 | Hover, focus, state layer, ink | `fastEffects` | `fastEffects` | State layers |
-| Ripple | Fast-launch decelerating wave (`cubic-bezier(0.25, 0.8, 0.5, 1)`), held while pressed | 300 ms eased dissolve after spread (150 ms cancel) | `lib/ripple.ts` |
+| Ripple | 75 ms linear fade-in; soft-feathered fast-launch decelerating wave (`cubic-bezier(0.2, 0.8, 0.4, 1)`), held while pressed | 280 ms standard-eased dissolve (`cubic-bezier(0.4, 0, 0.2, 1)`) after spread (140 ms cancel) | `lib/ripple.ts` |
 | Button / icon-button pressed or selected corner | `defaultEffects` | `defaultEffects` | `Button.kt`, `IconButton.kt` |
 | Switch handle | `fastSpatial` for travel, press and release; colour `fastEffects` | `fastSpatial` | `Switch.kt`; sprung press is a project refinement |
 | Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial`; opacity `fastEffects`; radio ring colour `defaultEffects` | Assigned effects fade | `RadioButton.kt` |

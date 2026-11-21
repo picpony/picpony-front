@@ -46,7 +46,7 @@ Springs settle at 1/512 of their travel. Do not shorten that tail with a call-si
 
 A screen-edge surface keeps its spatial spring and an `edge-skirt-*` for overshoot; it is not a layout follower.
 
-Indeterminate loops, skeleton shimmer and the press ripple are explicit exceptions to spring timing. Ripple owns its held press, fast-launch decelerating spread (260–380 ms) and 300 ms eased release clock (kept under reduced motion, off-tier fallback to the pressed state layer); consumers only use `data-ripple`.
+Indeterminate loops, skeleton shimmer and the press ripple are explicit exceptions to spring timing. Ripple owns its held press, 75 ms linear fade-in, soft-feathered fast-launch decelerating spread (280–420 ms) and 280 ms standard-eased release clock (kept under reduced motion, off-tier fallback to the pressed state layer); consumers only use `data-ripple`.
 
 ### Browser compatibility
 

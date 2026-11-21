@@ -393,11 +393,13 @@ export default function Tabs<T extends string = string>({
              on both states so hovering or focusing the active tab responds like
              `SidebarNav` and `Pagination`. */
           'state-layer',
+          /* Underline tabs carry a coloured indicator bar (brand or warning); pill and rail tabs
+             carry `secondary-container` in both selected and predicted states. */
           variant === 'underline'
             ? tone === 'warning'
               ? 'ripple-warning'
               : 'ripple-primary'
-            : !selected && 'ripple-secondary',
+            : 'ripple-secondary',
           selected
             ? cn(variant === 'rail' && 'bg-secondary-container', activeInk, variant !== 'underline' && 'forced-selected')
             : 'text-on-surface-variant hover:text-on-surface',

@@ -17,7 +17,7 @@ Palette derivation, token use, focus and forced-colour behaviour. Shape and elev
 | `primary-ink` + `on-primary-ink` | Brand-coloured marks on a surface and foreground drawn on them (such as checked checkboxes) |
 | `on-primary-variant` | App-bar icons and wordmark only |
 | `secondary-container` pair | Tonal controls and committed selections |
-| `secondary-ink` | High-chroma ink in `secondary-container`'s hue family, for anticipatory press ripples |
+| `secondary-ink` | High-chroma ink in `secondary-container`'s hue family, for secondary-container and anticipatory press ripples |
 | `chip-selected` pair | Selected filter chips |
 | `outline-variant` | Dividers |
 | `outline` | Field boundaries |

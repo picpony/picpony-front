@@ -22,8 +22,8 @@
   text-align: center;
   /* `Card` transitions its keyline and shadow only; a choice also changes its container, and the
      selection should arrive on the same FastEffects clock rather than in one frame. The duration
-     and curve stay the card's own (`spring-fast-effects`). Unselected presses anticipate the
-     `secondary-container` destination via `secondary-ink`. */
+     and curve stay the card's own (`spring-fast-effects`). Both unselected and selected presses
+     use `secondary-ink` so the wave stays visibly tinted on the card. */
   transition-property: background-color, color, border-color;
   --ripple-color: var(--md-sys-color-secondary-ink);
 }
@@ -31,7 +31,6 @@
 .choice[aria-pressed='true'] {
   background-color: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
-  --ripple-color: var(--md-sys-color-on-secondary-container);
 }
 
 /* The tick: a selection control's mark at the card's corner, concentric with it (12dp card,

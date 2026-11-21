@@ -192,6 +192,7 @@ export default function DropZone({
           'focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           state !== 'dragging' && !disabled && 'state-layer',
+          state === 'dragging' && 'ripple-primary',
           state === 'invalid' && 'ripple-error',
         )}
       />

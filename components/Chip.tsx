@@ -129,12 +129,19 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   const showsCheck = variant === 'filter' && selected;
   const hasGlyph = showsCheck || Boolean(icon);
   const crossLabel = removeLabel ?? (typeof children === 'string' ? `移除 ${children}` : '移除');
-  /* Coloured chips (selected, semantic, categorical) keep `currentColor` (their paired ink).
-     Unselected `filter` chips anticipate their tinted selection fill (`chip-selected` /
-     `primary-container`); plain neutral `assist` / `input` chips have no coloured state and
-     keep the default grey wave. */
-  const rippleTone =
-    !colors && variant === 'filter' && !isFilled && (tone === 'primary' || tone === 'neutral') && 'ripple-primary';
+  /* Categorical chips keep `currentColor` (`on-accent-*`, already saturated in the category hue).
+     Tone-driven chips (selected, filled or filter) use high-chroma role ink (`primary-ink` /
+     `error` / `success` / `warning`) so active/selected containers also ripple visibly in colour
+     rather than low-chroma Tone-10/90 text ink; plain neutral `assist`/`input` chips stay grey. */
+  const rippleTone = colors
+    ? false
+    : tone === 'error'
+      ? 'ripple-error'
+      : tone === 'success'
+        ? 'ripple-success'
+        : tone === 'warning'
+          ? 'ripple-warning'
+          : (variant === 'filter' || isFilled) && 'ripple-primary';
 
   const inside = (
     <>
@@ -238,7 +245,10 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
              it would cover the end of the label, and a tap on a tag's last glyph would
              remove it. Inherit the chip's on-container ink, including semantic and
              categorical fills; its state layer follows the same colour. */
-          className="touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-8 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2"
+          className={cn(
+            'touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-8 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2',
+            rippleTone,
+          )}
         >
           <span data-ripple-host="" aria-hidden="true" />
           <MdClose size={ICON.dense} />

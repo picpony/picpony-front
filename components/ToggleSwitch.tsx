@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useId, useRef, useState } from 'react';
-import { spawnRipple, trackPress, type RippleHandle } from '@/lib/ripple';
+import { startCenteredRipple } from '@/lib/ripple';
 import { cn } from '@/lib/utils';
 
 import CheckGlyph from './CheckGlyph';
@@ -95,6 +95,7 @@ export default function ToggleSwitch({
   layout = 'inline',
   'aria-label': ariaLabel,
 }: ToggleSwitchProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const stateLayerRef = useRef<HTMLSpanElement>(null);
   const isRow = layout === 'row';
   const labelId = useId();
@@ -107,25 +108,23 @@ export default function ToggleSwitch({
    * was the handle still at its 28dp pressed width *after* it had finished
    * travelling — the grip cue outliving the grip. Off a real `pointerup` the shrink
    * and the travel start in the same frame and, both being the same spring, land
-   * together. `pointercancel` and `pointerleave` are part of it, or a press that
-   * turns into a scroll leaves the handle swollen.
-   *
-   * Under a finger the press itself waits for the tap timeout (`trackPress`): a touch
-   * that is the start of a scroll through the settings list must not swell the handle
-   * or pulse a wave. A quick tap still gets its wave, at release.
+   * together. `startCenteredRipple` tracks `pointerup`, `pointercancel`, `blur` and
+   * touch scroll slop on `window`, matching `Checkbox` and `Radio` across the whole label.
    */
   const [pressed, setPressed] = useState(false);
   const isPressed = pressed && !disabled;
-  /* The handle's wave holds while the press does, as every ripple (`spawnRipple`). */
-  const wave = useRef<RippleHandle | null>(null);
-  const release = () => {
-    setPressed(false);
-    wave.current?.release();
-    wave.current = null;
-  };
 
   return (
     <label
+      onPointerDown={(event) => {
+        if (disabled) return;
+        startCenteredRipple(
+          event.nativeEvent,
+          stateLayerRef.current,
+          () => Boolean(inputRef.current?.matches(':disabled')),
+          setPressed,
+        );
+      }}
       /* Reversed flex order, not reordered DOM: the switch stays the first
          focusable node in the label so a click on the text still lands on the
          input it labels, while the eye reads label-then-control like every
@@ -145,6 +144,7 @@ export default function ToggleSwitch({
             input over everything, no press ever lands inside the circle that
             owns the wave. */}
         <input
+          ref={inputRef}
           type="checkbox"
           /* `role="switch"`, which a bare checkbox lacks: a screen reader announces
              "on / off" rather than "checked / not checked" — and the difference is
@@ -165,35 +165,6 @@ export default function ToggleSwitch({
           aria-labelledby={!ariaLabel && label ? labelId : undefined}
           aria-describedby={description ? descriptionId : undefined}
           onChange={(e) => onChange(e.target.checked)}
-          onPointerUp={release}
-          onPointerCancel={release}
-          onPointerLeave={release}
-          onPointerDown={(e) => {
-            // A fieldset can disable this input without setting the component prop.
-            // Match the native state, as the delegated RippleLayer does.
-            if (e.currentTarget.matches(':disabled') || e.button !== 0) return;
-            const host = stateLayerRef.current;
-            // Always from the middle of the circle: the wave reads as the handle
-            // pulsing, wherever along the track you pressed.
-            const pulse = () => {
-              if (!host?.isConnected) return null;
-              const rect = host.getBoundingClientRect();
-              return spawnRipple(host, rect.width / 2, rect.height / 2);
-            };
-            trackPress(e, {
-              press: () => {
-                setPressed(true);
-                wave.current = pulse();
-              },
-              // Too quick to have pressed: the whole wave plays, then fades.
-              tap: () => pulse()?.release(),
-              cancel: () => {
-                setPressed(false);
-                wave.current?.cancel();
-                wave.current = null;
-              },
-            });
-          }}
         />
         {/* Track */}
         {/* Under forced colors the track, handle and check are all painted marks the

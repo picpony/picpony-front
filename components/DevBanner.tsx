@@ -88,7 +88,7 @@ export default function DevBanner({
         dismiss
         onClick={dismiss}
         aria-label="不再显示此提示"
-        className="-mr-1.5"
+        className="-mr-1.5 ripple-warning"
         icon={<MdClose />}
       />
     </div>

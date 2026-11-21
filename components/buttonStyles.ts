@@ -46,10 +46,10 @@ const VARIANTS: Record<ButtonVariant, string> = {
      container to the canvas, and a filled button with no edge is a word. The two text
      variants have no container to lose. */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
-  tonal: 'bg-secondary-container text-on-secondary-container focus-ring forced-boundary',
+  tonal: 'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
   // Neutral commands beside fields and dropdowns share their container material.
   surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
-  accent: 'bg-primary-container text-on-primary-container focus-ring forced-boundary',
+  accent: 'bg-primary-container text-on-primary-container ripple-primary focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
   // Unfilled actions inside a tinted container (`secondary-container`, `warning-container`, …)
   // inherit the container's paired `on-*-container` ink for label, state layer and ripple alike.
@@ -60,7 +60,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   /* A destructive action that is not the primary one on its screen. A variant,
      not `variant="text"` plus a colour at the call site: `cn` is a plain join
      and would emit two colour utilities, letting Tailwind's output order pick.
-     `error`, not `error-fill` — this is ink on a surface. */
+     `error`, not `error-fill` — this is ink on a surface, and its press wave
+     follows the same `error` ink via `currentColor`. */
   'danger-text': 'bg-transparent text-error focus-ring',
   /* The confirm half of a moderation pair (通过/拒绝, 上架/下架). Takes the
      scheme-independent `*-fill` pair like `danger`: the plain text roles flip

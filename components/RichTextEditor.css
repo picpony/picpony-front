@@ -171,11 +171,17 @@
     border-radius: calc(var(--editor-tool-size) / 2);
     background: transparent;
     color: var(--md-sys-color-on-surface-variant);
-    --ripple-color: var(--md-sys-color-secondary-ink);
     font: inherit;
     cursor: pointer;
     touch-action: manipulation;
     user-select: none;
+  }
+
+  /* Only toolbar toggles and panel triggers fill into `secondary-container` when active;
+     one-shot commands (undo, redo, clearStyle) stay neutral grey. */
+  .rich-text-editor .w-e-bar-item button:is([aria-pressed], [aria-haspopup]),
+  .rich-text-editor [data-toolbar-toggle] {
+    --ripple-color: var(--md-sys-color-secondary-ink);
   }
 
   .rich-text-editor .w-e-bar svg,
@@ -196,7 +202,7 @@
   .rich-text-editor [data-toolbar-toggle][aria-expanded='true'] {
     background-color: var(--md-sys-color-secondary-container);
     color: var(--md-sys-color-on-secondary-container);
-    --ripple-color: currentColor;
+    --ripple-color: var(--md-sys-color-secondary-ink);
     border-radius: var(--radius-md);
   }
 

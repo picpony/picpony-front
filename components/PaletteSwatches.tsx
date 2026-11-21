@@ -288,7 +288,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                 onClick={(event) => pick(palette.id, event.currentTarget)}
                 onKeyDown={(event) => onKeyDown(event, index)}
                 data-ripple
-                style={tileRippleStyle(palette[scheme], THEME_FACES[palette.id][scheme], scheme, hues)}
+                style={tileRippleStyle(palette[scheme], scheme)}
                 className={cn(TILE_CLASS, 'text-on-surface')}
               >
                 <PaletteTileFace
@@ -319,7 +319,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             onClick={(event) => pick(CUSTOM_PALETTE, event.currentTarget)}
             onKeyDown={(event) => onKeyDown(event, PALETTES.length)}
             data-ripple
-            style={customTones ? tileRippleStyle(customTones[scheme], customTones.face[scheme], scheme, hues) : undefined}
+            style={customTones ? tileRippleStyle(customTones[scheme], scheme) : undefined}
             className={cn(
               TILE_CLASS,
               /* With no colour chosen there is no theme to draw, so the tile takes the tone

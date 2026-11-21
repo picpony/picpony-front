@@ -111,6 +111,7 @@ export function GroupMenu({
       <IconButton
         ref={anchorRef}
         variant={active ? 'on-container' : 'standard'}
+        className={active ? 'ripple-secondary' : undefined}
         icon={<MdMoreVert />}
         aria-label={label}
         tooltip="更多操作"

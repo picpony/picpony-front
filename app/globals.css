@@ -402,14 +402,14 @@
 /* State-layer opacities — M3's own, from the state token set: hover .08, focus .10,
    pressed .10, dragged .16. Focus and pressed are deliberately EQUAL in M3; the focus ring,
    not tint weight, distinguishes them. The expanding press ripple carries its own token
-   (.22, tuned between M3 and Vuetify's .25) so a coloured wave reads clearly over warm and
-   dark surfaces without needing a competing flat `:active` flash behind it. */
+   (.14 light / .18 dark, calibrated to M3 / AOSP state layers over the .08 hover base) so a
+   soft-feathered wave reads clearly over warm and dark surfaces without muddying the fill. */
 :root {
   --md-sys-state-hover-opacity: 0.08;
   --md-sys-state-focus-opacity: 0.1;
   --md-sys-state-pressed-opacity: 0.1;
   --md-sys-state-dragged-opacity: 0.16;
-  --md-sys-ripple-opacity: 0.22;
+  --md-sys-ripple-opacity: 0.14;
 
   /* Elevation. Two-layer shadows per M3, **alpha constant, only the geometry grows** — how
      M3 specifies the ladder; a ramping alpha makes one level indistinguishable from the next.
@@ -439,6 +439,10 @@
 }
 
 .dark {
+  /* Light ink on dark ground needs slightly more alpha to match light-mode weight (AOSP dark
+     ripple alpha, matching the heavier dark elevation ladder below). */
+  --md-sys-ripple-opacity: 0.18;
+
   /* Deliberate divergence — the dark ladder keeps its own alpha ramp (heavier than light's
      constant 0.15/0.10): on a near-black ground, shadow is almost invisible and *tonal* steps
      carry depth, but a shadow is still what separates a floating panel from content painted
@@ -1665,6 +1669,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 @layer base {
   [data-ripple] {
     position: relative;
+    isolation: isolate;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
     /* Reset any inherited ripple tint on nested controls so a parent's wave colour never bleeds
@@ -1677,7 +1682,9 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
      the clip would cut the hit area out of hit-testing with it. Such a control says so with
      the attribute's inner value and clips the wave in a host span instead: the first child,
      covering the box, taking the control's own corner. `rippleHostOf` in `lib/ripple.ts` is
-     where the wave finds it. */
+     where the wave finds it. Layered at `-1` beside `state-layer::before` so the press wave
+     stays behind labels and glyphs, and isolated so a host carrying its own plate background
+     (the collapsed mascot) still keeps its wave above that fill. */
   [data-ripple='inner'] {
     overflow: visible;
   }
@@ -1685,6 +1692,8 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   [data-ripple-host] {
     position: absolute;
     inset: 0;
+    z-index: -1;
+    isolation: isolate;
     overflow: hidden;
     border-radius: inherit;
     pointer-events: none;
@@ -1701,18 +1710,26 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   }
 }
 
-/* The press wave: single-owner opacity from `--md-sys-ripple-opacity`, while `spawnRipple`
-   drives the fast-launch decelerating transform and eased fade-in / dissolve. Colour defaults
-   to `currentColor` (every filled/tonal/semantic container's paired `on-*` ink) and can be
-   directed by `--ripple-color` (`ripple-*` utilities or a palette tile's own theme hex) when
-   a control's resting text is neutral. */
+/* The press wave: single-owner opacity from `--md-sys-ripple-opacity` and a Google M3 / AOSP
+   soft-feathered radial edge (`--ripple-core` guarantees uniform core coverage of every corner
+   once settled, including M3E press-morphed corners). Sits at `-1` beside `state-layer::before`
+   so labels, glyphs and avatars stay crisp above the wave; inside an already `-1` inner host,
+   `z-index: 0` keeps it above the host's own fill (e.g. the mascot's collapsed plate). Colour
+   defaults to `currentColor` and can be directed by `--ripple-color` (`ripple-*` utilities or a
+   palette tile's own primary hue). */
 .ripple {
   position: absolute;
+  z-index: -1;
   border-radius: 9999px;
-  background: var(--ripple-color, currentColor);
+  color: var(--ripple-color, currentColor);
+  background-image: radial-gradient(closest-side, currentColor var(--ripple-core, 74%), transparent 100%);
   opacity: var(--md-sys-ripple-opacity);
   pointer-events: none;
   will-change: transform, opacity;
+}
+
+[data-ripple-host] > .ripple {
+  z-index: 0;
 }
 
 /* Shared micro-interaction keyframes (used via animate-[…] utilities). */
@@ -5051,10 +5068,10 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
   opacity: 0.38;
 }
 
-/* M3E press-wave ink roles — used only when a control carries its own backdrop/theme colour
-   or anticipates a coloured triggered/selected state (`secondary-container`, `primary`,
-   `tertiary`, severity, media or app bar). Neutral controls with neither an independent colour
-   nor a coloured triggered state stay on the default `currentColor` (neutral surface ink). */
+/* Press-wave ink roles — any control carrying colour (container fill, active/selected
+   state, predicted destination state, border, indicator, or coloured text/glyph) tints
+   its press wave with high-chroma role ink rather than low-chroma Tone-10/90 `on-*-container`
+   text ink; purely neutral controls stay on default `currentColor` (`on-surface`). */
 @utility ripple-primary {
   --ripple-color: var(--md-sys-color-primary-ink);
 }

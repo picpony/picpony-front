@@ -6,43 +6,51 @@ import { motionTier, scaledMs } from '@/lib/appearance';
  * The press wave, on the Web Animations API — here rather than in the GSAP-backed motion module
  * so the root layout's chunk does not pull the animation engine onto every route.
  *
- * **An explicit exception to the spring roles**, tuned from Vuetify's `v-ripple` feel and unified
- * with Material 3 Expressive's colour roles:
+ * **An explicit exception to the spring roles**, synthesizing Google Material 3 (`md-ripple`),
+ * AOSP `RippleForeground` and Vuetify `v-ripple` on the app's own colour and opacity tokens:
  *
- *   - **bounding-box half-diagonal radius**: `hypot(w, h) / 2 + 2px` so controls that morph
- *     their corners inward while pressed (`IconButton` `50% → rounded-sm`, `Button` pill →
- *     `rounded-md`) always have all four pressed corners filled cleanly with no octagonal gap;
- *   - **proportional starting droplet**: `0.15` on compact square/circular controls (≤ 64dp) and
+ *   - **soft-feathered radial wave**: `.ripple` paints a `radial-gradient` whose uniform inner
+ *     core reaches the full bounding half-diagonal (`+ 2px`, covering M3E press-morphed corners
+ *     on `IconButton` and `Button` while held) plus a proportional `12–56px` feathered rim
+ *     (`--ripple-core`) that glides smoothly during expansion without a hard geometric edge;
+ *   - **proportional starting droplet**: `0.18` on compact square/circular controls (≤ 64dp) and
  *     `0.10–0.24` (capped by the shorter side) on wider pills, rows and cards, so even a 264dp
- *     sidebar row launches a crisp droplet under the pointer rather than a half-width slab;
- *   - **fast-launch deceleration**: `cubic-bezier(0.25, 0.8, 0.5, 1)` drives both the unified
- *     `translate + scale` transform (260–380ms, scaled smoothly by radius) and the 100ms fade-in,
- *     so the wave bursts outward immediately on frame 1 and stays locked over the contact point;
- *   - **held press & silky dissolve**: holds at `--md-sys-ripple-opacity` for as long as the press
- *     lasts, then hands smoothly out of the spread tail (85% of spread) into a 300ms eased
- *     fade-out (150ms when cancelled by a scroll). The reduced tier keeps the same bounded wave
+ *     sidebar row launches a crisp droplet right under the contact point;
+ *   - **instant contact & fast-launch deceleration**: a 75ms linear fade-in (AOSP / Compose)
+ *     pairs with `cubic-bezier(0.2, 0.8, 0.4, 1)` on the unified `translate + scale` transform
+ *     (280–420ms by cover radius), launching immediately on frame 1 while staying locked to the
+ *     pointer;
+ *   - **held press & smooth dissolve**: holds at `--md-sys-ripple-opacity` while pressed, then
+ *     hands out of the spread tail (80% of spread) into a 280ms standard-eased fade-out (140ms
+ *     on scroll cancel) instead of snapping out. The reduced tier keeps the same bounded wave
  *     (composited transform and opacity, zero overshoot); under `off`, no wave is spawned and the
  *     pressed state layer takes over.
  */
-const FADE_IN_MS = 100;
-const SPREAD_MIN_MS = 260;
-const SPREAD_MAX_MS = 380;
-const FADE_OUT_MS = 300;
-const FADE_CANCEL_MS = 150;
-/** Vuetify's fast-launch, soft-decelerate ripple curve (spelled out for WAAPI). */
-const RIPPLE_EASE = 'cubic-bezier(0.25, 0.8, 0.5, 1)';
+const FADE_IN_MS = 75;
+const SPREAD_MIN_MS = 280;
+const SPREAD_MAX_MS = 420;
+const FADE_OUT_MS = 280;
+const FADE_CANCEL_MS = 140;
+/** Fast-launch, soft-decelerate spread curve (AOSP LogDecelerate / Vuetify launch with M3 tail). */
+const RIPPLE_SPREAD_EASE = 'cubic-bezier(0.2, 0.8, 0.4, 1)';
+/** Standard M3 / Vuetify dissolve curve so the fade-out melts smoothly without an abrupt drop. */
+const RIPPLE_FADE_OUT_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 /** Starting scale on compact square/circular controls (IconButton, selection circles, FABs). */
-const COMPACT_START_SCALE = 0.15;
+const COMPACT_START_SCALE = 0.18;
 const COMPACT_MAX_EDGE_PX = 64;
 /** Starting scale bounds on wider rectangular / pill / row / card hosts. */
 const RECT_MIN_START_SCALE = 0.1;
 const RECT_MAX_START_SCALE = 0.24;
 /** Cap initial droplet radius relative to the shorter side so wide rows still radiate crisply. */
-const RECT_SHORT_SIDE_SHARE = 0.36;
-/** Small anti-aliasing margin so the settled disc clears all four corners cleanly. */
+const RECT_SHORT_SIDE_SHARE = 0.34;
+/** Small anti-aliasing margin so the uniform core clears all four pressed corners cleanly. */
 const END_RADIUS_PAD_PX = 2;
-/** At 85% of `RIPPLE_EASE`, scale is already >98% complete — dissolve blends right out of the tail. */
-const RELEASE_HOLD_SHARE = 0.85;
+/** Proportional soft-feathered rim width (Google `md-ripple` style), clamped across control sizes. */
+const SOFT_EDGE_MIN_PX = 12;
+const SOFT_EDGE_MAX_PX = 56;
+const SOFT_EDGE_SHARE = 0.3;
+/** At 80% of `RIPPLE_SPREAD_EASE`, scale is already >98% complete — dissolve blends cleanly out. */
+const RELEASE_HOLD_SHARE = 0.8;
 
 /**
  * How long a finger has to stay put before its touch counts as a press rather than the start of
@@ -88,16 +96,18 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   const { width, height } = host.getBoundingClientRect();
   if (width <= 0 || height <= 0) return null;
 
-  /* Full half-diagonal plus a 2px margin: controls with M3E press-morph (`IconButton` 50% → 8dp,
-     `Button` pill → 12dp) expand their visible corners while held, so sizing to the resting
-     border-radius left unfilled corner gaps on long press. */
-  const end = Math.hypot(width, height) / 2 + END_RADIUS_PAD_PX;
+  /* Full half-diagonal plus a 2px margin for the uniform core, extended by a proportional soft
+     rim so the wave feathers while expanding yet covers all four press-morphed corners evenly
+     while held (`IconButton` 50% → 8dp, `Button` pill → 12dp). */
+  const cover = Math.hypot(width, height) / 2 + END_RADIUS_PAD_PX;
+  const feather = Math.min(SOFT_EDGE_MAX_PX, Math.max(SOFT_EDGE_MIN_PX, cover * SOFT_EDGE_SHARE));
+  const end = cover + feather;
   const isCompactSquare = Math.max(width, height) <= COMPACT_MAX_EDGE_PX && Math.abs(width - height) <= 2;
   const startScale = isCompactSquare
     ? COMPACT_START_SCALE
     : Math.max(
         RECT_MIN_START_SCALE,
-        Math.min(RECT_MAX_START_SCALE, (Math.min(width, height) * RECT_SHORT_SIDE_SHARE) / end),
+        Math.min(RECT_MAX_START_SCALE, (Math.min(width, height) * RECT_SHORT_SIDE_SHARE) / cover),
       );
   /* Clamp taps landing in an expanded `touch-target` overhang to the painted edge. */
   const cx = Math.min(width, Math.max(0, x));
@@ -111,27 +121,29 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   ripple.style.height = `${end * 2}px`;
   ripple.style.left = `${width / 2 - end}px`;
   ripple.style.top = `${height / 2 - end}px`;
+  ripple.style.setProperty('--ripple-core', `${((cover / end) * 100).toFixed(2)}%`);
   host.appendChild(ripple);
   /* Freeze the wave's resolved ink at contact time so a quick click that immediately flips the
      control into a selected container (e.g. a pill/rail tab, sidebar nav row or toggle) keeps
-     the colour it launched with instead of snapping mid-spread. */
-  const resolvedColor = window.getComputedStyle(ripple).backgroundColor;
-  if (resolvedColor) ripple.style.backgroundColor = resolvedColor;
+     the colour it launched with instead of snapping mid-spread. `.ripple` paints its gradient
+     from `currentColor`, so freezing `color` locks the whole radial gradient. */
+  const resolvedColor = window.getComputedStyle(ripple).color;
+  if (resolvedColor) ripple.style.color = resolvedColor;
 
   const fadeIn = scaledMs(FADE_IN_MS);
-  const spread = scaledMs(Math.round(Math.min(SPREAD_MAX_MS, Math.max(SPREAD_MIN_MS, 210 + Math.sqrt(end) * 10))));
+  const spread = scaledMs(Math.round(Math.min(SPREAD_MAX_MS, Math.max(SPREAD_MIN_MS, 220 + Math.sqrt(cover) * 10))));
   const fadeOut = scaledMs(FADE_OUT_MS);
   const fadeCancel = scaledMs(FADE_CANCEL_MS);
   const animations: Animation[] = [
     /* One keyframe at offset 0: the end value is the underlying one — the token — so the opacity
        keeps its single owner in globals.css. */
-    ripple.animate([{ opacity: 0, offset: 0 }], { duration: fadeIn, easing: RIPPLE_EASE }),
+    ripple.animate([{ opacity: 0, offset: 0 }], { duration: fadeIn, easing: 'linear' }),
     ripple.animate(
       [
         { transform: `translate(${cx - width / 2}px, ${cy - height / 2}px) scale(${startScale})` },
         { transform: 'translate(0px, 0px) scale(1)' },
       ],
-      { duration: spread, easing: RIPPLE_EASE, fill: 'forwards' },
+      { duration: spread, easing: RIPPLE_SPREAD_EASE, fill: 'forwards' },
     ),
   ];
   const spawnedAt = performance.now();
@@ -150,7 +162,7 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   let out: Animation | null = null;
   const leave = (delay: number, duration: number) => {
     if (out || gone) return;
-    out = ripple.animate([{ opacity: 0 }], { duration, delay, easing: RIPPLE_EASE, fill: 'forwards' });
+    out = ripple.animate([{ opacity: 0 }], { duration, delay, easing: RIPPLE_FADE_OUT_EASE, fill: 'forwards' });
     out.finished.then(remove, remove);
   };
 
@@ -238,22 +250,29 @@ export function trackPress(
 
 /**
  * Runs one centred Material press wave inside `host` for a selection control whose press lands
- * outside its 40dp state-layer circle (a checkbox or radio label). Holds while the pointer is
- * down, waits for the touch tap timeout, and cancels if the touch turns into a scroll.
+ * anywhere on its label (`Checkbox`, `Radio`, `ToggleSwitch`). Holds while the pointer is down,
+ * waits for the touch tap timeout, cancels if the touch turns into a scroll, and optionally
+ * mirrors held press state via `onPressChange` (for `ToggleSwitch`'s pressed handle swell).
  */
 export function startCenteredRipple(
   event: Pick<PointerEvent, 'button' | 'pointerType' | 'pointerId' | 'clientX' | 'clientY'>,
   host: HTMLElement | null,
   isDisabled?: () => boolean,
+  onPressChange?: (pressed: boolean) => void,
 ): void {
   if (event.button !== 0 || !host || isDisabled?.()) return;
   let wave: RippleHandle | null = null;
   let released = false;
-  const start = () => {
-    if (!host.isConnected || isDisabled?.()) return;
+  let active = false;
+  const pulse = () => {
+    if (!host.isConnected || isDisabled?.()) return null;
     const rect = host.getBoundingClientRect();
-    wave = spawnRipple(host, rect.width / 2, rect.height / 2);
-    if (released) wave?.release();
+    return spawnRipple(host, rect.width / 2, rect.height / 2);
+  };
+  const clearPress = () => {
+    if (!active) return;
+    active = false;
+    onPressChange?.(false);
   };
   const pointerId = event.pointerId;
   const cleanup = () => {
@@ -265,23 +284,34 @@ export function startCenteredRipple(
     if (e.pointerId !== pointerId) return;
     cleanup();
     released = true;
+    clearPress();
     if (e.type === 'pointercancel') wave?.cancel();
     else wave?.release();
   };
   const onBlur = () => {
     cleanup();
     released = true;
+    clearPress();
     wave?.cancel();
   };
   window.addEventListener('pointerup', end, { capture: true, passive: true });
   window.addEventListener('pointercancel', end, { capture: true, passive: true });
   window.addEventListener('blur', onBlur, { passive: true });
   trackPress(event, {
-    press: start,
-    tap: start,
+    press: () => {
+      if (released || !host.isConnected || isDisabled?.()) return;
+      active = true;
+      onPressChange?.(true);
+      wave = pulse();
+    },
+    tap: () => {
+      wave = pulse();
+      wave?.release();
+    },
     cancel: () => {
       cleanup();
       released = true;
+      clearPress();
       wave?.cancel();
     },
   });

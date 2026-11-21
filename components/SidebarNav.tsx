@@ -152,11 +152,12 @@ function NavItem({
 
   const className = cn(
     ROW,
+    Boolean(href) && 'ripple-secondary',
     active
       ? /* `secondary-container`: M3's own navigation-drawer active fill, and
            the pair this app already uses everywhere it means "selected". */
         'bg-secondary-container text-on-secondary-container text-label-l-emphasized forced-selected'
-      : 'text-on-surface-variant text-label-l ripple-secondary',
+      : 'text-on-surface-variant text-label-l',
   );
 
   if (!href) {

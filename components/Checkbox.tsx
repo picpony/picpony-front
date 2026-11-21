@@ -98,12 +98,13 @@ export default function Checkbox({
       />
 
       {/* The 40dp state-layer and press-wave circle (same structure as `ToggleSwitch`): a single
-          clipped host holding the tint layer inside it, so hover/focus/press share one circle
-          without clipping `touch-target` on the parent wrapper. */}
+          clipped, isolated host holding the tint layer inside it, so hover/focus/press share one
+          circle without clipping `touch-target` on the parent wrapper. The box itself fills with
+          `primary-ink` when checked, so the centred press wave carries `ripple-primary`. */}
       <span
         ref={rippleHostRef}
         aria-hidden="true"
-        className={`ripple-primary pointer-events-none absolute size-10 overflow-hidden rounded-full ${
+        className={`ripple-primary pointer-events-none absolute isolate size-10 overflow-hidden rounded-full ${
           checked ? 'text-primary-ink' : 'text-on-surface'
         }`}
       >

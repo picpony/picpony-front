@@ -201,7 +201,7 @@ export default function ImagePalettePicker({
                       onClick={() => setPicked(option)}
                       onKeyDown={(event) => onKeyDown(event, index)}
                       data-ripple
-                      style={tileRippleStyle(option.tones[scheme], option.tones.face[scheme], scheme, hues)}
+                      style={tileRippleStyle(option.tones[scheme], scheme)}
                       /* The settings tile's box: 72 × 56 at the card's corner (the grid's column,
                          a little narrower in a phone's dialog), no edge of its own, past the touch
                          floor at every density. */
