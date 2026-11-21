@@ -4,7 +4,7 @@ import { useId, useState, type ComponentType, type ReactNode } from 'react';
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { Input, Textarea } from '@/components/Input';
+import { Field, Input, Textarea } from '@/components/Input';
 import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import Skeleton from '@/components/Skeleton';
@@ -56,7 +56,7 @@ export function SettingsFields({ fields, values, onChange, errors = {}, busy = f
     const multiline = ['textarea', 'ips', 'origins'].includes(f.kind ?? '');
     return <div key={f.key} className={multiline || f.kind === 'boolean' ? '@lg/form:col-span-2' : 'min-w-0'}>
       {f.kind === 'boolean' ? <ToggleSwitch layout="row" label={f.label} description={f.helper} checked={value === true} onChange={set} disabled={busy} />
-        : f.options ? <><Select label={f.label} value={String(value ?? '')} options={f.options} onChange={set} disabled={busy} />{errors[f.key] && <p role="alert" className="text-body-s text-error">{errors[f.key]}</p>}</>
+        : f.options ? <Field helper={f.helper} error={errors[f.key]}><Select label={f.label} value={String(value ?? '')} options={f.options} onChange={set} disabled={busy} /></Field>
           : multiline ? <Textarea label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} rows={f.key === 'system_prompt' ? 7 : 4} helper={f.helper} error={errors[f.key]} maxLength={f.max} />
             : <Input label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} type={f.kind === 'password' ? 'password' : 'text'} inputMode={f.kind === 'number' ? (f.decimal ? 'decimal' : 'numeric') : f.kind === 'url' ? 'url' : 'text'} autoComplete={f.kind === 'password' ? 'new-password' : 'off'} helper={f.helper} error={errors[f.key]} maxLength={f.kind === 'number' ? undefined : f.max} />}
     </div>;

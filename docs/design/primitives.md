@@ -148,6 +148,7 @@ The shared `.m3-field` shell owns geometry. See [Layout](layout.md#control-heigh
 - Password fields use the shared visibility toggle, with the duplicate native eye suppressed.
 - A one-line unlabelled Textarea uses padding derived from the shared line height and 56 dp field height.
 - Select keeps the intrinsic width of its widest option, not only its selected value.
+- Supporting text, field errors and counters sit 4 dp below their control with M3's 16 dp inline inset. Single-line `Input` renders its `count` inline in the trailing slot so counter-only fields do not add an empty supporting row; multiline `Textarea` keeps `count` in `Field`'s supporting row.
 - `useCombobox` owns keyboard handling. Do not preselect the first suggestion and turn Enter into an unintended selection.
 
 Outlined focus thickens the existing boundary; filled focus uses the shared ring. Invalid-state precedence is specified in [Colour / Focus](colour.md#focus).

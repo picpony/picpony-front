@@ -59,6 +59,7 @@ export default function TagWell({
         level="group"
         id={headingId}
         icon={icon}
+        className="px-0"
         aside={
           <span className={cn('tabular-nums', over && 'text-error')}>
             {max !== undefined ? `${tags.length} / ${max}` : `${tags.length} 个`}
@@ -85,7 +86,7 @@ export default function TagWell({
         )}
       </div>
       {error && (
-        <p id={errorId} role="alert" className="mt-1.5 px-4 text-body-s text-error">
+        <p id={errorId} role="alert" className="mt-1 px-4 text-body-s text-error">
           {error}
         </p>
       )}

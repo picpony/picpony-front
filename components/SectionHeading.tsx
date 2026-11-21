@@ -43,6 +43,8 @@ interface SectionHeadingProps extends Omit<HTMLAttributes<HTMLElement>, 'childre
  * genuinely differ, so the default stands down when the call site names its own.
  */
 const HAS_MARGIN_BOTTOM = /(?:^|\s)-?mb-/;
+/* Same guard for `group`'s default 4dp inline inset (`px-1`): form wells pass `px-0` to align flush. */
+const HAS_PADDING_X = /(?:^|\s)(?:p|px|pl|pr|ps|pe)-/;
 
 export default function SectionHeading({
   children,
@@ -56,7 +58,11 @@ export default function SectionHeading({
   ...rest
 }: SectionHeadingProps) {
   const group = level === 'group';
-  const spacing = cn(!HAS_MARGIN_BOTTOM.test(className) && (group ? 'mb-2' : 'mb-4'), group && 'px-1', className);
+  const spacing = cn(
+    !HAS_MARGIN_BOTTOM.test(className) && (group ? 'mb-2' : 'mb-4'),
+    group && !HAS_PADDING_X.test(className) && 'px-1',
+    className,
+  );
   /* With actions or a subtitle there is a wrapper below and it owns the
      spacing; otherwise the heading itself is the outermost element. */
   const wrapped = Boolean(actions || subtitle);

@@ -127,7 +127,7 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
     >
       <form
         noValidate
-        className="space-y-5"
+        className="space-y-4"
         inert={saving}
         onSubmit={(event) => {
           event.preventDefault();

@@ -90,7 +90,7 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
 
   return (
     <section aria-labelledby={headingId}>
-      <SectionHeading as="h3" level="group" id={headingId} icon={<MdInventory2 size={ICON.dense} />}>
+      <SectionHeading as="h3" level="group" id={headingId} icon={<MdInventory2 size={ICON.dense} />} className="px-0">
         待定标签库
       </SectionHeading>
       <div className="rounded-md bg-surface-container-highest p-3 forced-boundary">

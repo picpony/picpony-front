@@ -664,7 +664,7 @@ export default function UploadPage() {
             )}
           </DropZone>
           {errors.file && (
-            <p role="alert" className="mt-1.5 px-4 text-body-s text-error">
+            <p role="alert" className="mt-1 px-4 text-body-s text-error">
               {errors.file}
             </p>
           )}
@@ -679,7 +679,7 @@ export default function UploadPage() {
           }}
         >
           <fieldset ref={ratingRef} aria-describedby={errors.rating ? 'upload-rating-error' : undefined}>
-            <legend className="mb-1 text-label-l text-on-surface">
+            <legend className="mb-2 text-label-l text-on-surface">
               分级<span className="text-on-surface-variant">（必选）</span>
             </legend>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1">

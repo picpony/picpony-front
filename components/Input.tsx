@@ -125,7 +125,7 @@ export function Field({
   const overLimit = count ? count.value > count.max : false;
 
   return (
-    <div className={cn('flex min-w-0 flex-col gap-1.5', !HAS_WIDTH.test(className) && 'w-full', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-1', !HAS_WIDTH.test(className) && 'w-full', className)}>
       {children}
 
       {(error || helper || count) && (
@@ -300,7 +300,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 ) {
   const autoId = useId();
   const inputId = id ?? autoId;
-  const supportId = helper || error || count ? `${autoId}-support` : undefined;
+  const supportId = helper || error ? `${autoId}-support` : undefined;
+  const countId = count ? `${autoId}-count` : undefined;
+  const localRef = useRef<HTMLInputElement>(null);
   const labelled = hasLabel(label);
   const hero = !labelled && size === 'lg';
   /* Both size branches are gated on `!labelled` rather than trusting the call site,
@@ -327,15 +329,43 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       disabled={rest.disabled}
     />
   );
-  const trailingSlot = (trailing || revealToggle) && (
+  /* A single-line input places its character counter in the trailing slot rather than
+     spending a whole supporting row beneath the box — otherwise a counter-only field
+     opens an asymmetric vertical gap above the next form block. Multiline `Textarea`
+     keeps its counter in `Field`'s supporting row so it stays clear of the scrollbar. */
+  const hasTrailingControl = Boolean(trailing || revealToggle);
+  const countNode = count && (
+    <span
+      id={countId}
+      onPointerDown={(event) => {
+        if (rest.disabled || event.pointerType !== 'mouse') return;
+        event.preventDefault();
+        localRef.current?.focus();
+      }}
+      onClick={() => {
+        if (rest.disabled) return;
+        localRef.current?.focus();
+      }}
+      className={cn(
+        'text-body-s shrink-0 select-none tabular-nums',
+        rest.disabled ? 'cursor-not-allowed' : 'cursor-text',
+        !hasTrailingControl && (hero ? 'pe-4' : dense ? 'pe-3' : 'pe-2'),
+        count.value > count.max ? 'text-error' : 'text-on-surface-variant',
+      )}
+    >
+      {count.value} / {count.max}
+    </span>
+  );
+  const trailingSlot = (countNode || hasTrailingControl) && (
     <>
+      {countNode}
       {trailing}
       {revealToggle}
     </>
   );
 
   return (
-    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
+    <Field helper={helper} error={error} className={fieldClassName} supportId={supportId}>
       <div
         {...shellProps({
           labelled,
@@ -353,10 +383,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           </span>
         )}
         <input
-          ref={ref}
+          ref={(node) => {
+            localRef.current = node;
+            if (typeof ref === 'function') ref(node);
+            else if (ref) ref.current = node;
+          }}
           id={inputId}
           type={reveal && revealed ? 'text' : type}
-          aria-describedby={[describedBy, supportId].filter(Boolean).join(' ') || undefined}
+          aria-describedby={[describedBy, supportId, countId].filter(Boolean).join(' ') || undefined}
           aria-invalid={error ? true : undefined}
           required={required}
           /* `:placeholder-shown` is what tells the label whether the field is

@@ -150,7 +150,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
     >
       <form
         noValidate
-        className="space-y-5"
+        className="space-y-4"
         inert={saving}
         onSubmit={(event) => {
           event.preventDefault();
@@ -172,7 +172,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
           }}
         />
         <fieldset>
-          <legend className="mb-1 text-label-l text-on-surface">标签处理方式</legend>
+          <legend className="mb-2 text-label-l text-on-surface">标签处理方式</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
             <Radio
               name="block-group-target"
