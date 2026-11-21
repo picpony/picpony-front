@@ -15,6 +15,8 @@ import { MEDIA } from '@/lib/constants';
 // Modal owns focus, history and closing even while the form chunk is loading. Its body is
 // mounted only when shown, so the shell never loads the forms merely to provide openAuth.
 const AuthForms = lazy(() => import('./AuthForms'));
+/* Module scope: the React Compiler does not lower a dynamic `import()` inside a component. */
+const loadLoginArtwork = () => import('@/lib/lottie/login.json').then((m) => m.default);
 
 export type AuthView = 'login' | 'register' | 'reset';
 
@@ -259,15 +261,18 @@ function AuthModal({
           {artworkVisible && (
             <LottieIcon
               className="w-4/5 max-w-md"
-              load={() => import('@/lib/lottie/login.json').then((m) => m.default)}
+              load={loadLoginArtwork}
               /* 3257×2148, the composition's own box. Reserving it matters more here
                  than on /search: this pane is 60% of a 640px-tall dialog, so an
                  unreserved host let the form column decide the height and then
                  resized it when the chunk landed. */
               aspect={3257 / 2148}
+              /* Keep the login illustration across every motion tier: below `standard`,
+                 hold its final frame statically instead of substituting the wordmark. */
+              staticMode="last-frame"
               /* Explicit width: `LottieIcon` centres its fallback in a shrink-to-fit grid cell,
-                 so a percentage width on `.logo-mask` resolved to 0px while loading or when
-                 ambient motion was reduced/off. */
+                 so a percentage width on `.logo-mask` resolved to 0px while loading or if
+                 loading fails. */
               fallback={<Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />}
             />
           )}

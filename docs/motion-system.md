@@ -79,7 +79,7 @@ Use `motionTier(category)`, `motionScale(category)` and their hooks. Pass the sa
 
 ### Reduced and off behaviour
 
-Reduced motion keeps fades, short travel, state layers, ripple and indicators. It removes Hero/container flights, full-window travel, stagger, overshoot, decorative loops and all Lottie playback.
+Reduced motion keeps fades, short travel, state layers, ripple and indicators. It removes Hero/container flights, full-window travel, stagger, overshoot, decorative loops and all Lottie playback. On `/about` (`logoNonParallel.json`) and in `AuthModal` (`login.json`), the Lottie illustration renders statically on its last frame without playback when ambient motion is below `standard` (and on `/about` when entrance motion is off); other Lottie call sites keep their static fallbacks.
 
 Use `TRAVEL_PX.small` / `--motion-travel-small` for the shared 8 px reduced travel. Standard entrance travel uses `TRAVEL_PX.standard`. Reduced spatial springs retain their duration but use the critically damped shape. Skeleton shimmer continues under reduced motion.
 

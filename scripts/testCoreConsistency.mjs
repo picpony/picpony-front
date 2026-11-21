@@ -800,3 +800,297 @@ test('tag groups keep their distinct navigation actions and independent expansio
   collect(tree, 'Button').forEach((button) => button.props.onClick());
   assert.deepEqual(expanded, ['artists', 'ocs', 'regular']);
 });
+
+function hookHarness() {
+  const slots = [];
+  const cleanups = [];
+  let cursor = 0;
+  let pendingEffects = [];
+  const changed = (previous, next) =>
+    !previous || !next || next.some((value, index) => !Object.is(value, previous[index]));
+  const react = {
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
+      return [
+        slots[index],
+        (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; },
+      ];
+    },
+    useRef(initial) {
+      const index = cursor++;
+      return slots[index] ??= { current: initial };
+    },
+    useEffect(callback, deps) {
+      const index = cursor++;
+      if (changed(slots[index], deps)) {
+        slots[index] = deps;
+        pendingEffects.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
+      }
+    },
+  };
+  const jsx = (type, props) => ({ type, props });
+  return {
+    react,
+    jsxRuntime: { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    render(fn) { cursor = 0; return fn(); },
+    reset() { slots.length = 0; cleanups.length = 0; pendingEffects = []; cursor = 0; },
+    async flushEffects() {
+      const work = pendingEffects;
+      pendingEffects = [];
+      work.forEach((effect) => effect());
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+    dispose() { cleanups.forEach((cleanup) => cleanup?.()); },
+  };
+}
+
+function lottiePlayerMock(totalFrames) {
+  const instances = [];
+  let loads = 0;
+  const loadAnimation = (options) => {
+    loads += 1;
+    const events = [];
+    const instance = {
+      options,
+      totalFrames,
+      frameRate: 60,
+      isLoaded: true,
+      destroyed: false,
+      events,
+      setSpeed: (speed) => events.push(['setSpeed', speed]),
+      goToAndStop: (frame, isFrame) => events.push(['goToAndStop', frame, isFrame]),
+      goToAndPlay: (frame, isFrame) => events.push(['goToAndPlay', frame, isFrame]),
+      addEventListener() {},
+      destroy() { this.destroyed = true; events.push(['destroy']); },
+    };
+    instances.push(instance);
+    return instance;
+  };
+  return {
+    instances,
+    get loads() { return loads; },
+    player: { default: { loadAnimation } },
+  };
+}
+
+test('LottieIcon staticMode="last-frame" holds the final frame under reduced and off motion while default keeps fallback', async () => {
+  for (const tier of ['reduced', 'off']) {
+    const hooks = hookHarness();
+    const mock = lottiePlayerMock(267);
+    const state = { tier, scale: tier === 'off' ? 0 : 1 };
+    let artworkLoads = 0;
+    const { default: LottieIcon } = load('components/LottieIcon.tsx', {
+      react: hooks.react,
+      'react/jsx-runtime': hooks.jsxRuntime,
+      '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+      '@/lib/appearance': {
+        motionTier: () => state.tier,
+        motionScale: () => state.scale,
+        useMotionTier: () => state.tier,
+        useMotionScale: () => state.scale,
+      },
+      '@/lib/lottieAssets': { loadLottiePlayer: async () => mock.player },
+    }, { performance: { now: () => 100 } });
+
+    const fallback = { type: 'Fallback', props: {} };
+    const loadData = async () => { artworkLoads += 1; return { op: 267 }; };
+    const mount = (props) => {
+      const tree = hooks.render(() => LottieIcon(props));
+      tree.props.children[0].props.ref.current = { tagName: 'SPAN' };
+      return tree;
+    };
+
+    // Default staticMode="fallback": never loads the player or artwork below standard.
+    const defaultTree = mount({ load: loadData, fallback, aspect: 1.5 });
+    await hooks.flushEffects();
+    assert.equal(mock.loads, 0, `${tier} default does not instantiate player`);
+    assert.equal(artworkLoads, 0, `${tier} default does not fetch artwork`);
+    assert.equal(defaultTree.props.children[1], fallback);
+    hooks.dispose();
+
+    // staticMode="last-frame": loads and freezes on totalFrames - 1 with no playback.
+    const lastHooks = hookHarness();
+    const lastMock = lottiePlayerMock(267);
+    let lastLoads = 0;
+    const { default: LastFrameIcon } = load('components/LottieIcon.tsx', {
+      react: lastHooks.react,
+      'react/jsx-runtime': lastHooks.jsxRuntime,
+      '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+      '@/lib/appearance': {
+        motionTier: () => state.tier,
+        motionScale: () => state.scale,
+        useMotionTier: () => state.tier,
+        useMotionScale: () => state.scale,
+      },
+      '@/lib/lottieAssets': { loadLottiePlayer: async () => lastMock.player },
+    }, { performance: { now: () => 100 } });
+
+    const renderLast = () => {
+      const tree = lastHooks.render(() => LastFrameIcon({
+        load: async () => { lastLoads += 1; return { op: 267 }; },
+        fallback,
+        aspect: 3257 / 2148,
+        staticMode: 'last-frame',
+      }));
+      tree.props.children[0].props.ref.current = { tagName: 'SPAN' };
+      return tree;
+    };
+    renderLast();
+    await lastHooks.flushEffects();
+    assert.equal(lastLoads, 1, `${tier} last-frame fetches the normal artwork`);
+    assert.equal(lastMock.loads, 1);
+    assert.equal(lastMock.instances[0].options.autoplay, false);
+    assert.deepEqual(lastMock.instances[0].events, [['goToAndStop', 266, true]]);
+    const settled = renderLast();
+    assert.equal(settled.props.children[1], false, `${tier} hides fallback once last frame is ready`);
+    assert.ok(!String(settled.props.children[0].props.className).includes('invisible'));
+
+    // Switching back to standard replays without tearing down, and returning snaps back to the last frame.
+    state.tier = 'standard';
+    state.scale = 1;
+    renderLast();
+    await lastHooks.flushEffects();
+    assert.equal(lastMock.loads, 1, 'tier switch reuses the loaded instance');
+    const playEvents = lastMock.instances[0].events.slice(1);
+    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
+    assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
+
+    state.tier = tier;
+    state.scale = tier === 'off' ? 0 : 1;
+    renderLast();
+    await lastHooks.flushEffects();
+    assert.equal(lastMock.loads, 1);
+    assert.deepEqual(lastMock.instances[0].events.at(-1), ['goToAndStop', 266, true]);
+    lastHooks.dispose();
+  }
+});
+
+test('About page TraceHeader holds logoNonParallel last frame under reduced/off/no-entrance and falls back only on load error', async () => {
+  for (const scenario of [
+    { name: 'reduced', tier: 'reduced', entrance: true },
+    { name: 'off', tier: 'off', entrance: true },
+    { name: 'no-entrance', tier: 'standard', entrance: false },
+  ]) {
+    const hooks = hookHarness();
+    const mock = lottiePlayerMock(140);
+    const state = { tier: scenario.tier, scale: scenario.tier === 'off' ? 0 : 1, entrance: scenario.entrance };
+    const { default: AboutContent } = load('app/about/AboutContent.tsx', {
+      react: hooks.react,
+      'react/jsx-runtime': hooks.jsxRuntime,
+      'next/link': { default: 'Link' },
+      'react-icons/md': { MdChevronRight: 'MdChevronRight', MdOpenInNew: 'MdOpenInNew' },
+      '@/components/FlutedGlass': { default: 'FlutedGlass' },
+      '@/components/DeveloperGuideModal': { default: 'DeveloperGuideModal' },
+      '@/lib/appearance': {
+        entranceMotion: () => state.entrance,
+        motionScale: () => state.scale,
+        motionTier: () => state.tier,
+        useEntranceMotion: () => state.entrance,
+        useMotionScale: () => state.scale,
+        useMotionTier: () => state.tier,
+      },
+      '@/lib/lottieAssets': { loadLottiePlayer: async () => mock.player },
+      '@/lib/lottie/logoNonParallel.json': { default: { op: 140 } },
+      '@/components/EmptyState': { default: 'EmptyState' },
+      '@/components/ErrorRetry': { default: 'ErrorRetry' },
+      '@/lib/api/errors': { apiErrorMessage: () => '', isRetryable: () => false },
+      '@/components/Logo': { default: 'Logo' },
+      '@/lib/resource': { useResource: () => ({ data: [], error: undefined, refresh() {} }) },
+      '@/lib/resources': { teamMembers: {} },
+      '@/lib/hooks': { readToken: () => null },
+      '@/lib/utils': { getAssetUrl: (u) => u },
+      '@/lib/icons': { ICON: { dense: 16 } },
+      '@/components/Avatar': { default: 'Avatar' },
+      './AboutFrame': { default: 'AboutFrame', ROSTER_GRID: '', TeamCard: 'TeamCard', TeamSkeleton: 'TeamSkeleton' },
+    });
+
+    const extractTrace = (Component, targetHooks) => {
+      const aboutTree = targetHooks.render(() => Component({ teamSeed: [] }));
+      targetHooks.reset();
+      return aboutTree.props.children[0].props.plate.props.children[1].props.children;
+    };
+    const traceElement = extractTrace(AboutContent, hooks);
+    const renderTrace = () => {
+      const tree = hooks.render(() => traceElement.type(traceElement.props));
+      if (tree.props.children?.props?.ref) {
+        tree.props.children.props.ref.current = { tagName: 'DIV' };
+      }
+      return tree;
+    };
+
+    const tree = renderTrace();
+    assert.equal(tree.props.children.type, 'div', `${scenario.name} renders the Lottie host instead of monochrome Logo`);
+    await hooks.flushEffects();
+    assert.equal(mock.loads, 1);
+    assert.equal(mock.instances[0].options.autoplay, false);
+    assert.deepEqual(mock.instances[0].events, [['goToAndStop', 139, true]], `${scenario.name} stops on frame 139`);
+
+    // Switching to standard + entrance plays; switching back snaps to the last frame.
+    state.tier = 'standard';
+    state.scale = 1;
+    state.entrance = true;
+    renderTrace();
+    await hooks.flushEffects();
+    assert.equal(mock.loads, 1);
+    const playEvents = mock.instances[0].events.slice(1);
+    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
+    assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
+
+    state.tier = scenario.tier;
+    state.scale = scenario.tier === 'off' ? 0 : 1;
+    state.entrance = scenario.entrance;
+    renderTrace();
+    await hooks.flushEffects();
+    assert.deepEqual(mock.instances[0].events.at(-1), ['goToAndStop', 139, true]);
+    hooks.dispose();
+
+    // Load failure still falls back to Logo.
+    const failHooks = hookHarness();
+    const { default: FailingAbout } = load('app/about/AboutContent.tsx', {
+      react: failHooks.react,
+      'react/jsx-runtime': failHooks.jsxRuntime,
+      'next/link': { default: 'Link' },
+      'react-icons/md': { MdChevronRight: 'MdChevronRight', MdOpenInNew: 'MdOpenInNew' },
+      '@/components/FlutedGlass': { default: 'FlutedGlass' },
+      '@/components/DeveloperGuideModal': { default: 'DeveloperGuideModal' },
+      '@/lib/appearance': {
+        entranceMotion: () => state.entrance,
+        motionScale: () => state.scale,
+        motionTier: () => state.tier,
+        useEntranceMotion: () => state.entrance,
+        useMotionScale: () => state.scale,
+        useMotionTier: () => state.tier,
+      },
+      '@/lib/lottieAssets': { loadLottiePlayer: async () => { throw new Error('chunk failed'); } },
+      '@/lib/lottie/logoNonParallel.json': { default: { op: 140 } },
+      '@/components/EmptyState': { default: 'EmptyState' },
+      '@/components/ErrorRetry': { default: 'ErrorRetry' },
+      '@/lib/api/errors': { apiErrorMessage: () => '', isRetryable: () => false },
+      '@/components/Logo': { default: 'Logo' },
+      '@/lib/resource': { useResource: () => ({ data: [], error: undefined, refresh() {} }) },
+      '@/lib/resources': { teamMembers: {} },
+      '@/lib/hooks': { readToken: () => null },
+      '@/lib/utils': { getAssetUrl: (u) => u },
+      '@/lib/icons': { ICON: { dense: 16 } },
+      '@/components/Avatar': { default: 'Avatar' },
+      './AboutFrame': { default: 'AboutFrame', ROSTER_GRID: '', TeamCard: 'TeamCard', TeamSkeleton: 'TeamSkeleton' },
+    });
+    const failTrace = extractTrace(FailingAbout, failHooks);
+    const renderFail = () => {
+      const node = failHooks.render(() => failTrace.type(failTrace.props));
+      if (node.props.children?.props?.ref) node.props.children.props.ref.current = { tagName: 'DIV' };
+      return node;
+    };
+    renderFail();
+    await failHooks.flushEffects();
+    const fallbackTree = renderFail();
+    assert.equal(fallbackTree.props.children.type, 'Logo', `${scenario.name} falls back to Logo on load error`);
+    failHooks.dispose();
+  }
+
+  // AuthModal uses login.json with staticMode="last-frame".
+  const authSource = readFileSync(new URL('../components/AuthModal.tsx', import.meta.url), 'utf8');
+  assert.match(authSource, /@\/lib\/lottie\/login\.json/);
+  assert.match(authSource, /staticMode="last-frame"/);
+});

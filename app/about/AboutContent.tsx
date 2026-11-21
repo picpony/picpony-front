@@ -47,7 +47,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   const tier = useMotionTier('ambient');
   const speed = useMotionScale('ambient');
   const entrance = useEntranceMotion();
-  const staticMark = tier !== 'standard' || !entrance;
+  const playTrace = tier === 'standard' && entrance;
   const [traceUnavailable, setTraceUnavailable] = useState(false);
 
   // 已登录状态下快速连点 10 次（点击间隔超 1.5s 重置）触发开发者向导
@@ -65,22 +65,35 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
   };
 
   useEffect(() => {
-    if (staticMark) return;
+    if (traceUnavailable) return;
     let animation: AnimationItem | null = null;
     let cancelled = false;
     loadTrace().then(([player, data]) => {
-      if (
-        cancelled || !hostRef.current || motionTier('ambient') !== 'standard' || !entranceMotion()
-      ) return;
-      animation = player.default.loadAnimation({
-        container: hostRef.current,
+      const host = hostRef.current;
+      if (cancelled || !host) return;
+      const instance = player.default.loadAnimation({
+        container: host,
         renderer: 'svg',
         loop: false, // 单次播放
-        autoplay: true,
+        autoplay: false,
         animationData: data as object,
       });
-      animationRef.current = animation;
-      animation.setSpeed(1 / motionScale('ambient'));
+      animation = instance;
+      animationRef.current = instance;
+      const apply = () => {
+        if (cancelled) return;
+        const lastFrame = Math.max(0, instance.totalFrames - 1);
+        if (motionTier('ambient') === 'standard' && entranceMotion()) {
+          instance.setSpeed(1 / motionScale('ambient'));
+          instance.goToAndPlay(0, true);
+        } else {
+          /* Below `standard` (or with entrance motion off), hold the colour wordmark
+             statically on its final frame without playback. */
+          instance.goToAndStop(lastFrame, true);
+        }
+      };
+      if (instance.isLoaded) apply();
+      else instance.addEventListener('DOMLoaded', apply);
     }).catch(() => {
       if (!cancelled) setTraceUnavailable(true);
     });
@@ -89,25 +102,35 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
       animation?.destroy();
       if (animationRef.current === animation) animationRef.current = null;
     };
-  }, [staticMark]);
+  }, [traceUnavailable]);
 
   useEffect(() => {
-    if (motionTier('ambient') === 'standard') animationRef.current?.setSpeed(1 / motionScale('ambient'));
+    const animation = animationRef.current;
+    if (!animation || !animation.isLoaded) return;
+    if (playTrace) {
+      animation.setSpeed(1 / motionScale('ambient'));
+      animation.goToAndPlay(0, true);
+    } else {
+      animation.goToAndStop(Math.max(0, animation.totalFrames - 1), true);
+    }
+  }, [playTrace]);
+
+  useEffect(() => {
+    if (motionTier('ambient') === 'standard' && entranceMotion()) {
+      animationRef.current?.setSpeed(1 / motionScale('ambient'));
+    }
   }, [speed]);
 
-  /* Under the preference an *empty* box used to render: the effect returned before
-     loading anything, leaving a labelled 176px hole where the wordmark belongs. The
-     static mark is the honest fallback — reduced motion asks for less movement, not
-     less content. */
-  if (staticMark || traceUnavailable) {
+  /* Fallback when the player or artwork chunk fails to load: keep the wordmark
+     visible and clickable so the developer guide remains reachable. */
+  if (traceUnavailable) {
     /* The static mark takes the same handler — without it the developer guide would be
-       unreachable for anyone with the preference on. `Logo` renders the mark, not a
+       unreachable if the artwork chunk failed. `Logo` renders the mark, not a
        box, so the handlers go on a wrapper rather than through it.
 
        The width goes on `Logo`, not the wrapper: `Logo`'s root is an inline-block, so a
        full-width mask inside it resolves against a shrink-to-fit box the mask is itself
-       supposed to size — circular, and it collapsed the mark to nothing. Only the
-       reduced-motion branch took this path, which is why it went unseen.
+       supposed to size — circular, and it collapsed the mark to nothing.
 
        The keyline sits on the wrapper so the two colours can differ: the halo is
        `currentColor` of whatever carries the filter, the mask's fill is `currentColor`
@@ -122,7 +145,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleClick}
       >
-        <Logo className={`h-auto text-on-surface ${MARK_WIDTH}`} />
+        <Logo className={`h-auto text-on-surface ${MARK_WIDTH}`} interactive={false} />
       </span>
     );
   }
