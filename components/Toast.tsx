@@ -161,6 +161,7 @@ const COLLAPSE_LAG_MS = HANDOFF_MS;
 function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number) => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const running = useRef<Animation[]>([]);
+  const clipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaving = useRef(false);
   /** The action is hovered or focused: the reading time waits. */
   const [held, setHeld] = useState(false);
@@ -227,10 +228,19 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     });
     /* Closing the gap is the toasts below re-placing, so it is the layout spring — they dock into
        the departed card's slot. It begins a moment into the fade, with the card mostly gone, so
-       the stack closes up behind it rather than under it. */
+       the stack closes up behind it rather than under it. Clip only once collapse starts so
+       resting elevation (`shadow-e3`) and arrival/departure travel are never sheared at the edges. */
+    const collapseDelay = scaledMs(COLLAPSE_LAG_MS, 'overlay');
+    if (collapseDelay > 0) {
+      clipTimer.current = setTimeout(() => {
+        wrap.style.overflow = 'hidden';
+      }, collapseDelay);
+    } else {
+      wrap.style.overflow = 'hidden';
+    }
     const collapse = wrap.animate([{ height: `${wrapHeight}px` }, { height: '0px' }], {
       ...springTiming('layout', 'overlay'),
-      delay: scaledMs(COLLAPSE_LAG_MS, 'overlay'),
+      delay: collapseDelay,
       fill: 'forwards',
     });
     running.current = [exit, fadeOut, collapse];
@@ -252,6 +262,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
 
   useEffect(
     () => () => {
+      if (clipTimer.current !== null) clearTimeout(clipTimer.current);
       for (const animation of running.current) animation.cancel();
     },
     [],
@@ -260,7 +271,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
   const style = severityStyles[toast.type];
 
   return (
-    <div ref={wrapRef} className="max-w-full overflow-hidden">
+    <div ref={wrapRef} className="max-w-full">
       <div
         /* M3's snackbar, by its own tokens: extra-small corner (4dp), `body-medium`
            for the message, elevation level 3, and a cap so a long sentence wraps.
@@ -270,7 +281,7 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
            dark chip or a light one depending on the theme. */
         className={cn(
           style.bg,
-          'text-on-fill mb-3 flex max-w-140 min-h-12 items-center gap-3 rounded-xs py-2 pl-4 shadow-e3',
+          'text-on-fill mb-3 flex max-w-140 min-h-12 items-center gap-3 rounded-xs py-2 pl-4 shadow-e3 forced-boundary',
           toast.action ? 'pr-2' : 'pr-4',
         )}
       >
@@ -282,9 +293,10 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
         </span>
         {toast.action && (
           <Button
+            size="xs"
             variant="on-fill"
             aria-describedby={`toast-${toast.id}`}
-            className="touch-size pointer-events-auto"
+            className="touch-size pointer-events-auto rounded-xs"
             onPointerEnter={() => setHeld(true)}
             onPointerLeave={() => setHeld(false)}
             onFocus={() => setHeld(true)}

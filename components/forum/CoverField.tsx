@@ -142,7 +142,7 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
       <p
         id={helperId}
         role={error ? 'alert' : undefined}
-        className={error ? 'mt-1 px-4 text-body-s text-error' : 'mt-1 px-4 text-body-s text-on-surface-variant'}
+        className={error ? 'mt-1 text-body-s text-error' : 'mt-1 text-body-s text-on-surface-variant'}
       >
         {error ?? '最大 5 MB，超出时将自动压缩'}
       </p>

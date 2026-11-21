@@ -75,7 +75,7 @@ Do not expand inline prose links into surrounding lines. Keep `touch-manipulatio
 | Message contact | 64 dp | 64 dp |
 | Drawer account | 64 dp | 64 dp |
 
-Message contacts use a 40 dp portrait and 12 dp padding. The collapsed rail is 80 dp including its insets.
+Message contacts use a 40 dp portrait with 12 dp leading and 20 dp trailing padding when expanded (12 dp symmetric when collapsed) so trailing timestamps stay clear of the pill's arc. The collapsed rail is 80 dp including its insets.
 
 Menu, Select and one-line menu suggestions share a 40 dp row on mouse and touch. This is a
 PicPony refinement; neither narrow triggers nor pointer density change their row height.
@@ -103,8 +103,8 @@ Avatar/SkeletonCircle take box sizes, not icon roles. Avatar supports 32 / 40 / 
 Keep the M3 Expressive geometry:
 
 - Track: 16 dp.
-- Handle: a fixed 4 × 44 dp box, with ink narrowing to 2 dp on press or keyboard focus.
-- Handle state changes are immediate; releasing does not spring its width or move its centre.
+- Handle: a fixed 4 × 44 dp box, with ink narrowing smoothly to 2 dp on `fastSpatial` under press or keyboard focus.
+- Handle translation during dragging and keyboard input remains immediate; releasing does not move its centre.
 - Reserve a 6 dp gap around the unpressed handle box, including while the ink is narrowed.
 - Track corners: 8 dp at the outer ends, 2 dp towards the handle. The inner corner is a slider-specific shape.
 - The painted track follows handle travel, with the native range's half-thumb inset preserved.

@@ -56,7 +56,7 @@ const CATEGORIES: { id: TaskCategory; label: string; subtitle: string; tasks: Ta
     tasks: [
       { key: 'bind_api', claimId: 'novice_bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, target: 1, href: settingsHref('account') },
       { key: 'verify_api', claimId: 'novice_verify_api', name: '首次核验 API Key', xp: 100, coins: 10, target: 1, href: settingsHref('account') },
-      { key: 'set_bg', claimId: 'novice_set_bg', name: '首次设置背景图', xp: 30, coins: 2, target: 1, href: settingsHref('account') },
+      { key: 'set_bg', claimId: 'novice_set_bg', name: '首次设置主页横幅', xp: 30, coins: 2, target: 1, href: settingsHref('account') },
     ],
   },
   {
@@ -248,7 +248,7 @@ function TaskRow({
     <div className="m3-row flex items-center gap-4 bg-surface-container-low p-4">
       <div className="min-w-0 flex-1">
         <p className="text-label-l text-on-surface">{task.name}</p>
-        <p className="mt-0.5 text-body-s text-on-surface-variant">
+        <p className="mt-0.5 text-body-s tabular-nums text-on-surface-variant">
           经验 +{task.xp} · 金币 +{task.coins}
         </p>
         {/* The count has its own slot at the bar's trailing edge, so it never wraps onto a
@@ -362,7 +362,7 @@ export default function TasksPage() {
     return (
       <div className="mx-auto max-w-4xl">
         {header}
-        <SignInRequired description="登录后即可查看等级、完成任务并领取奖励。" />
+        <SignInRequired description="登录后即可查看等级、完成任务并领取奖励" />
       </div>
     );
   }

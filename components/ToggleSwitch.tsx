@@ -45,7 +45,7 @@ const HANDLE_TRANSITION =
 const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Track and outline recolour together with the handle, on the same short step. */
 const TRACK_TRANSITION =
-  '[transition:background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
+  '[transition:background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 
 /**
  * Material 3 switch, at the spec's own numbers (material-web `md-switch`,
@@ -116,6 +116,7 @@ export default function ToggleSwitch({
 
   return (
     <label
+      data-ripple-own=""
       onPointerDown={(event) => {
         if (disabled) return;
         startCenteredRipple(
@@ -130,12 +131,12 @@ export default function ToggleSwitch({
          input it labels, while the eye reads label-then-control like every
          other row in the list. */
       className={cn(
-        'group flex select-none',
+        'group group/switch flex select-none',
         isRow ? 'w-full flex-row-reverse items-center justify-between gap-4' : 'items-center gap-3',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
       )}
     >
-      <span className="group/switch relative inline-flex shrink-0 items-center">
+      <span className="relative inline-flex shrink-0 items-center">
         {/* The hit target, per the spec: the input itself, stretched over the
             whole control at the 48dp touch size and made transparent.
             Absolutely positioned, so it buys the target without adding row
@@ -186,12 +187,11 @@ export default function ToggleSwitch({
               checked ? 'translate-x-2.5' : '-translate-x-2.5'
             }`}
           >
-            {/* State layer: the 40dp circle that clips the wave. `data-ripple`
-                gives it `position: relative` + `overflow: hidden`. */}
+            {/* State layer: the 40dp circle that clips the centred wave (matching `Checkbox` and
+                `Radio`, pointer-events-none so the 4px overhang never fires a delegated ripple). */}
             <span
               ref={stateLayerRef}
-              data-ripple=""
-              className={`ripple-primary grid h-10 w-10 place-items-center rounded-full ${
+              className={`ripple-primary pointer-events-none relative isolate grid h-10 w-10 place-items-center overflow-hidden rounded-full ${
                 checked ? 'text-primary-ink' : 'text-on-surface'
               }`}
             >

@@ -318,7 +318,7 @@ export default function Tabs<T extends string = string>({
         ? 'text-warning'
         : 'text-on-surface'
       : 'text-on-secondary-container';
-  const indicatorFill = tone === 'warning' ? 'bg-warning-fill' : 'bg-primary-ink';
+  const indicatorFill = tone === 'warning' ? 'bg-warning' : 'bg-primary-ink';
 
   const tabButtons = tabs.map((tab, index) => {
     const selected = value === tab.value;

@@ -162,7 +162,7 @@ export default function TagGroupsPage() {
       return true;
     };
     if (await copyLink() || !current()) return;
-    showToast('分享链接已生成', 'info', {
+    showToast('已生成分享链接', 'info', {
       action: {
         label: '复制',
         onClick: () => {

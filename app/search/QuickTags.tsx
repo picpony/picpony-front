@@ -57,7 +57,7 @@ function QuickTagRow({
         ref={rowRef}
         role="group"
         aria-labelledby={`quick-tags-${group}`}
-        className="scrollbar-hide scroll-fade-x flex min-w-0 flex-1 items-center gap-2 overflow-x-auto"
+        className="scrollbar-hide scroll-fade-x -my-1.5 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1.5"
       >
         {tags.map((tag) => (
           <Chip

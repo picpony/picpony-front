@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { MdPets, MdRefresh } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
@@ -15,7 +15,8 @@ import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import SignInRequired from '@/components/SignInRequired';
 import { showToast } from '@/components/Toast';
-import { SettingsSection, SettingsRow, ROW_CLASS } from '@/app/settings/SettingsRow';
+import { useTooltip } from '@/components/Tooltip';
+import { SettingsSection, SettingsRow, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
 import { useSession, readToken } from '@/lib/hooks';
 import { ponyCatalog, myPonies } from '@/lib/desktopPonies/queries';
 import { filterPonies, PONY_PAGE_SIZE, ponyNameParts, ponyPreview, samePonySelection } from '@/lib/desktopPonies/chooser';
@@ -189,9 +190,15 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
           supporting={<span role="status" aria-atomic="true">{status}</span>}
           action={action}
         >
-          <Lineup names={chosen} ponies={ponies} />
+          <Lineup
+            names={chosen}
+            ponies={ponies}
+            disabled={!canEdit}
+            fallbackFocus={() => search.current}
+            onRemove={(name) => toggle(name, true)}
+          />
         </SettingsRow>
-        <div className={cn(ROW_CLASS, 'flex-col items-stretch gap-3', styles.chooser)} data-pagination-anchor="">
+        <div className={cn(ROW_STACK_CLASS, styles.chooser)} data-pagination-anchor="">
           <div className="flex items-center gap-3">
             <SearchInput ref={search} value={query} placeholder="搜索角色名称…" aria-label="搜索桌面小马" className="min-w-0 flex-1"
               onChange={(value) => { setQuery(value); setPage(1); }} />
@@ -225,41 +232,97 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
   </SettingsSection>;
 }
 
+function LineupSlot({
+  name,
+  keyId,
+  leaving,
+  disabled,
+  column,
+  sprite,
+  onRemove,
+}: {
+  name: string;
+  keyId: string;
+  leaving: boolean;
+  disabled: boolean;
+  column: number | undefined;
+  sprite: ReactNode;
+  onRemove: (name: string) => void;
+}) {
+  const { anchorRef, anchorProps, tooltip } = useTooltip(disabled || leaving ? undefined : `移除 ${name}`);
+  return (
+    <>
+      <button
+        ref={anchorRef as Ref<HTMLButtonElement>}
+        {...anchorProps}
+        type="button"
+        data-presence-key={keyId}
+        data-slot={leaving ? undefined : name}
+        data-leaving={leaving ? name : undefined}
+        data-filled=""
+        data-ripple=""
+        disabled={disabled || leaving}
+        aria-label={`移除 ${name}`}
+        onClick={() => onRemove(name)}
+        className={cn(
+          styles.slot,
+          'state-layer cursor-pointer border-0 p-0 focus-visible:outline-hidden focus-visible:ring-2 focus-ring disabled:cursor-default',
+        )}
+        style={{
+          gridColumn: column,
+          gridRow: leaving ? undefined : 1,
+          zIndex: leaving ? 1 : 2,
+        }}
+      >
+        {sprite}
+      </button>
+      {tooltip}
+    </>
+  );
+}
+
 /**
  * Who is with you: six places, filled in the order the ponies were chosen, so the limit is seen
  * rather than read. A pony that joins lands in its place; when one leaves, the ones after it close
  * the gap rather than jumping into it.
  */
-function Lineup({ names, ponies }: { names: readonly string[]; ponies: readonly PonyChoice[] }) {
+function Lineup({
+  names,
+  ponies,
+  disabled,
+  fallbackFocus,
+  onRemove,
+}: {
+  names: readonly string[];
+  ponies: readonly PonyChoice[];
+  disabled: boolean;
+  fallbackFocus: () => HTMLElement | null;
+  onRemove: (name: string) => void;
+}) {
   const sprite = (name: string) => {
     const pony = ponies.find((item) => item.name === name);
     const src = pony ? ponyPreview(pony) : null;
     /* eslint-disable-next-line @next/next/no-img-element -- the bundled first-frame previews, as in the grid. */
-    return src ? <img src={src} alt="" draggable={false} className={styles.slotSprite} /> : <MdPets size={ICON.standard} className="text-on-surface-variant" />;
+    return src ? <img src={src} alt="" draggable={false} className={styles.slotSprite} /> : <MdPets size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />;
   };
   return (
-    <PresenceList items={names} getKey={(name) => name} variant="grid">
+    <PresenceList items={names} getKey={(name) => name} variant="grid" fallbackFocus={fallbackFocus}>
       {(entries, ref) => (
-        <div ref={ref} className={cn('relative', styles.lineup)} aria-hidden="true">
+        <div ref={ref} className={cn('relative', styles.lineup)} role="group" aria-label="已选桌面小马">
           {Array.from({ length: MAX_PONIES }, (_, index) => (
-            <span key={index} className={styles.slot} style={{ gridColumn: index + 1, gridRow: 1 }} />
+            <span key={index} aria-hidden="true" className={styles.slot} style={{ gridColumn: index + 1, gridRow: 1 }} />
           ))}
           {entries.map(({ item: name, key, leaving }) => (
-            <span
+            <LineupSlot
               key={key}
-              data-presence-key={key}
-              data-slot={leaving ? undefined : name}
-              data-leaving={leaving ? name : undefined}
-              data-filled=""
-              className={styles.slot}
-              style={{
-                gridColumn: leaving ? undefined : names.indexOf(name) + 1,
-                gridRow: leaving ? undefined : 1,
-                zIndex: leaving ? 1 : 2,
-              }}
-            >
-              {sprite(name)}
-            </span>
+              name={name}
+              keyId={key}
+              leaving={leaving}
+              disabled={disabled}
+              column={leaving ? undefined : names.indexOf(name) + 1}
+              sprite={sprite(name)}
+              onRemove={onRemove}
+            />
           ))}
         </div>
       )}
@@ -270,11 +333,11 @@ function Lineup({ names, ponies }: { names: readonly string[]; ponies: readonly 
 /** The loaded rows' shapes: the status row, then the chooser with its toolbar and one page of cards. */
 function ChooserSkeleton() {
   return <div aria-busy="true" aria-label="正在加载桌面小马" data-page-loading="">
-    <div className={cn(ROW_CLASS, 'flex-col items-stretch')}>
+    <div className={ROW_STACK_CLASS}>
       <div className="min-w-0"><Skeleton className="h-5 w-24" /><Skeleton className="mt-1.5 h-4 w-48 max-w-full" /></div>
       <div className={styles.lineup}>{Array.from({ length: MAX_PONIES }, (_, i) => <Skeleton key={i} className="aspect-square w-full rounded-md" />)}</div>
     </div>
-    <div className={cn(ROW_CLASS, 'flex-col items-stretch gap-3', styles.chooser)}>
+    <div className={cn(ROW_STACK_CLASS, styles.chooser)}>
       <div className="flex items-center gap-3"><Skeleton className="h-10 min-w-0 flex-1 rounded-sm" /><Skeleton className="h-8 w-20 rounded-sm" /></div>
       <Skeleton className="h-5 w-16" />
       <div className={styles.grid}>{Array.from({ length: PONY_PAGE_SIZE }, (_, i) => <div key={i} className={cn(styles.choice, 'rounded-md bg-surface-container-highest p-3')}>

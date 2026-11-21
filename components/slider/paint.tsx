@@ -59,8 +59,9 @@ export function SliderTrack({ ref, clip, part, stopIndicator = false }: {
   ref: Ref<HTMLSpanElement>;
   clip: string;
   part: 'active' | 'inactive' | 'inactive-start';
-  stopIndicator?: boolean;
+  stopIndicator?: boolean | 'start' | 'end';
 }) {
+  const stopEdge = stopIndicator === true ? 'end' : stopIndicator || null;
   return (
     <span
       ref={ref}
@@ -71,7 +72,14 @@ export function SliderTrack({ ref, clip, part, stopIndicator = false }: {
       )}
       style={{ clipPath: clip }}
     >
-      {stopIndicator && <span className="bg-primary-ink absolute top-1/2 right-1.5 size-1 -translate-y-1/2 rounded-full" />}
+      {stopEdge && (
+        <span
+          className={cn(
+            'bg-primary-ink forced-mark absolute top-1/2 size-1 -translate-y-1/2 rounded-full',
+            stopEdge === 'start' ? 'left-1.5' : 'right-1.5',
+          )}
+        />
+      )}
     </span>
   );
 }
@@ -89,7 +97,7 @@ export function SliderHandle({ ref, transform, handle, focused = false, pressed 
         <span
           data-slider-ink=""
           className={cn(
-            'bg-primary-ink block size-full rounded-full forced-color-adjust-none forced-colors:bg-[color:CanvasText]',
+            'bg-primary-ink transition-transform spring-fast-spatial block size-full rounded-full forced-color-adjust-none forced-colors:bg-[color:CanvasText]',
             (focused || pressed) && 'scale-x-50',
           )}
         />

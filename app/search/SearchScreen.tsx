@@ -2,9 +2,10 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { MdImageSearch } from 'react-icons/md';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import LottieIcon from '@/components/LottieIcon';
 import { showToast } from '@/components/Toast';
@@ -169,7 +170,6 @@ function unionTags(first: readonly string[], second: readonly string[]): string[
  */
 export default function SearchScreen({ semantic: initialSemantic }: { semantic: SemanticSearchConfig }) {
   const semantic = useSemanticConfig(initialSemantic);
-  const router = useRouter();
   const pathname = usePathname();
   const params = useBackgroundSearchParams();
   const search = params.toString();
@@ -613,7 +613,7 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     const total = read.data?.total ?? 0;
     if (page > 1 && total > 0) {
       return {
-        title: '这一页没有图片',
+        title: '此页没有图片',
         description: `当前结果共 ${pagesFor(total)} 页`,
         action: <Button variant="tonal" onClick={() => refine({})}>回到第一页</Button>,
       };
@@ -623,7 +623,7 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       return {
         title: '没有可显示的图片',
         description: `「${blocked.join('」「')}」已被当前内容筛选设置排除`,
-        action: <Button variant="tonal" onClick={() => router.push('/settings', { scroll: false })}>前往设置</Button>,
+        action: <ButtonLink href="/settings" variant="tonal">前往设置</ButtonLink>,
       };
     }
     if (countSearchFilters(filters) > 0) {

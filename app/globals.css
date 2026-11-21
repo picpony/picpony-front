@@ -240,9 +240,9 @@
   --md-sys-color-success-fill: #218049;
   --md-sys-color-error-fill: #d1414a;
   --md-sys-color-warning-fill: #a3630a;
-  /* Neutral-severity fill, for the "here is what happened" toast. The inverse-surface flips
-     between schemes — the exact flip the three fills above exist to avoid. */
-  --md-sys-color-info-fill: #1f6feb;
+  /* Neutral-severity fill, for the "here is what happened" toast. Warmed slightly from raw
+     cool-blue to harmonize with the HCT semantic fill family while clearing 4.5:1 with white. */
+  --md-sys-color-info-fill: #2468b8;
   /* One ink for all four: each fill is tuned so white clears 4.5:1 on it, which lets a
      destructive button and a confirm button share one rule instead of picking paired inks
      that flip with the scheme. */
@@ -410,6 +410,8 @@
   --md-sys-state-pressed-opacity: 0.1;
   --md-sys-state-dragged-opacity: 0.16;
   --md-sys-ripple-opacity: 0.14;
+  --md-sys-chart-area-opacity: 0.09;
+  --md-sys-chart-halo-opacity: 0.18;
 
   /* Elevation. Two-layer shadows per M3, **alpha constant, only the geometry grows** — how
      M3 specifies the ladder; a ramping alpha makes one level indistinguishable from the next.
@@ -527,7 +529,8 @@ body {
 .rich-text-content a {
   color: var(--md-sys-color-link);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
 .bbcode-content a:hover,
@@ -935,30 +938,32 @@ body {
   --text-headline-l: 2rem;
   --text-headline-l--line-height: 1.25;
   --text-headline-l--letter-spacing: 0;
-  --text-headline-l--font-weight: 400;
+  --text-headline-l--font-weight: 500;
   --text-headline-m: 1.75rem;
   --text-headline-m--line-height: 1.2857;
   --text-headline-m--letter-spacing: 0;
-  --text-headline-m--font-weight: 400;
+  --text-headline-m--font-weight: 500;
   --text-headline-s: 1.5rem;
   --text-headline-s--line-height: 1.3333;
   --text-headline-s--letter-spacing: 0;
-  --text-headline-s--font-weight: 400;
+  --text-headline-s--font-weight: 500;
   --text-title-l: 1.375rem;
   --text-title-l--line-height: 1.2727;
   --text-title-l--letter-spacing: 0;
-  --text-title-l--font-weight: 400;
+  --text-title-l--font-weight: 500;
   --text-title-m: 1rem;
   --text-title-m--line-height: 1.5;
-  --text-title-m--letter-spacing: 0.075px;
+  --text-title-m--letter-spacing: 0;
   --text-title-m--font-weight: 500;
   --text-title-s: 0.875rem;
   --text-title-s--line-height: 1.4286;
-  --text-title-s--letter-spacing: 0.05px;
+  --text-title-s--letter-spacing: 0;
   --text-title-s--font-weight: 500;
   /* **Every role declares its own weight, including the headings.** Utilities sit in a later
      layer than the base layer, so declaring the weight is what makes a role render the same
-     wherever it lands. M3 headings are Regular; the heavier line is the emphasized role. */
+     wherever it lands. In Chinese UI, headline-* and title-l start at 500 (Medium) so page
+     and dialog headings outrank 500/700 controls and section subheadings; emphasized twins step
+     up to 700. */
   /* **The Han-glyph leading divergence, and how far it goes.** M3's body line-heights are set
      for Latin; a Han glyph fills its em box, so body text needs more — but that argument does
      not cover UI chrome, and the body-m/body-s roles are 1.5 (half the divergence). body-l
@@ -971,7 +976,7 @@ body {
   --text-body-l--font-weight: 400;
   --text-body-m: 0.875rem;
   --text-body-m--line-height: 1.5;
-  --text-body-m--letter-spacing: 0.125px;
+  --text-body-m--letter-spacing: 0.1px;
   --text-body-m--font-weight: 400;
   --text-body-s: 0.75rem;
   --text-body-s--line-height: 1.5;
@@ -979,7 +984,7 @@ body {
   --text-body-s--font-weight: 400;
   --text-label-l: 0.875rem;
   --text-label-l--line-height: 1.4286;
-  --text-label-l--letter-spacing: 0.05px;
+  --text-label-l--letter-spacing: 0;
   --text-label-l--font-weight: 500;
   --text-label-m: 0.75rem;
   --text-label-m--line-height: 1.3333;
@@ -990,7 +995,7 @@ body {
   --text-label-s--letter-spacing: 0.25px;
   --text-label-s--font-weight: 500;
 
-  /* The emphasized half of the scale. M3 pairs every role with a heavier twin — roles at 400
+  /* The emphasized half of the scale. Every role pairs with a heavier twin — roles at 400
      emphasize to 500, roles at 500 to 700 — so emphasis is a *role*, not a font-weight patch
      stacked on a role that already defines one. Headings need them like everything else. */
   --text-display-l-emphasized: 3.5625rem;
@@ -1008,26 +1013,26 @@ body {
   --text-headline-l-emphasized: 2rem;
   --text-headline-l-emphasized--line-height: 1.25;
   --text-headline-l-emphasized--letter-spacing: 0;
-  --text-headline-l-emphasized--font-weight: 500;
+  --text-headline-l-emphasized--font-weight: 700;
   --text-headline-m-emphasized: 1.75rem;
   --text-headline-m-emphasized--line-height: 1.2857;
   --text-headline-m-emphasized--letter-spacing: 0;
-  --text-headline-m-emphasized--font-weight: 500;
+  --text-headline-m-emphasized--font-weight: 700;
   --text-headline-s-emphasized: 1.5rem;
   --text-headline-s-emphasized--line-height: 1.3333;
   --text-headline-s-emphasized--letter-spacing: 0;
-  --text-headline-s-emphasized--font-weight: 500;
+  --text-headline-s-emphasized--font-weight: 700;
   --text-title-l-emphasized: 1.375rem;
   --text-title-l-emphasized--line-height: 1.2727;
   --text-title-l-emphasized--letter-spacing: 0;
-  --text-title-l-emphasized--font-weight: 500;
+  --text-title-l-emphasized--font-weight: 700;
   --text-title-m-emphasized: 1rem;
   --text-title-m-emphasized--line-height: 1.5;
-  --text-title-m-emphasized--letter-spacing: 0.075px;
+  --text-title-m-emphasized--letter-spacing: 0;
   --text-title-m-emphasized--font-weight: 700;
   --text-title-s-emphasized: 0.875rem;
   --text-title-s-emphasized--line-height: 1.4286;
-  --text-title-s-emphasized--letter-spacing: 0.05px;
+  --text-title-s-emphasized--letter-spacing: 0;
   --text-title-s-emphasized--font-weight: 700;
   --text-body-l-emphasized: 1rem;
   --text-body-l-emphasized--line-height: 1.75;
@@ -1035,7 +1040,7 @@ body {
   --text-body-l-emphasized--font-weight: 500;
   --text-body-m-emphasized: 0.875rem;
   --text-body-m-emphasized--line-height: 1.5;
-  --text-body-m-emphasized--letter-spacing: 0.125px;
+  --text-body-m-emphasized--letter-spacing: 0.1px;
   --text-body-m-emphasized--font-weight: 500;
   --text-body-s-emphasized: 0.75rem;
   --text-body-s-emphasized--line-height: 1.5;
@@ -1043,7 +1048,7 @@ body {
   --text-body-s-emphasized--font-weight: 500;
   --text-label-l-emphasized: 0.875rem;
   --text-label-l-emphasized--line-height: 1.4286;
-  --text-label-l-emphasized--letter-spacing: 0.05px;
+  --text-label-l-emphasized--letter-spacing: 0;
   --text-label-l-emphasized--font-weight: 700;
   --text-label-m-emphasized: 0.75rem;
   --text-label-m-emphasized--line-height: 1.3333;
@@ -1069,11 +1074,12 @@ body {
         lg     Gallery thumbnail / grid tile, chat row,      (16dp, pinned to
                menu / popover / autocomplete panel,          HERO_TARGET_RADIUS_PX —
                the modal drawer's trailing corners           see above)
-        md     Card, grouped-list block, section surface     (12dp)
+        md     Card, grouped-list block, section surface,    (12dp)
+               outlined text field, code cell, colour swatch
         sm     Chip, small tag, filled text field, dropdown  (8dp)
                field, menu and listbox row
-        xs     Outlined text field, colour swatch, badge,    (4dp)
-               snackbar, tooltip, inline code, list seam
+        xs     Badge, snackbar, tooltip, inline code,        (4dp)
+               list seam
 
      The token files put fields and menus on the extra-small step (the field and menu
      container-shape tokens); the filled field, the dropdown field and the menu family above
@@ -1972,6 +1978,11 @@ html[data-motion='custom'][data-motion-feedback='off'] .skeleton::after {
   display: none;
 }
 
+html[data-motion='custom'][data-motion-feedback='off'] .text-shimmer {
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
+}
+
 /* The wave is created and faded by `spawnRipple` in both other tiers — under reduced a
    bounded wave growing from the point of contact *is* basic press feedback — so only the off
    tier hides it and restores the flat `:active` state-layer fallback on `[data-ripple]`
@@ -2058,7 +2069,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
   );
   transform: translate3d(0, 0, 0);
   will-change: transform;
-  animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale)) linear infinite;
+  animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale-ambient)) linear infinite;
 }
 
 @keyframes scrim-hatch {
@@ -2069,11 +2080,19 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 
 html:is(
   [data-motion='reduced'],
-  [data-motion='custom'][data-motion-feedback='reduced'],
-  [data-motion='off'],
-  [data-motion='custom'][data-motion-feedback='off']
+  [data-motion='custom'][data-motion-ambient='reduced'],
+  [data-motion='custom'][data-motion-overlay='reduced']
 ) .danger-scrim::before {
   animation: none;
+}
+
+/* Under off, remove the decorative hatch altogether while keeping the red veil. */
+html:is(
+  [data-motion='off'],
+  [data-motion='custom'][data-motion-ambient='off'],
+  [data-motion='custom'][data-motion-overlay='off']
+) .danger-scrim::before {
+  display: none;
 }
 
 /* Captions and secondary controls can wait for hover only when the device has
@@ -2092,15 +2111,6 @@ html:is(
       }
     }
   }
-}
-
-/* Caption gradient over a thumbnail, through the scrim token. */
-.media-caption-gradient {
-  background-image: linear-gradient(
-    to top,
-    rgb(var(--md-sys-color-scrim-rgb) / 60%),
-    transparent
-  );
 }
 
 /* Material 3 circular progress indicator.
@@ -2383,6 +2393,10 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 
 /* Fullscreen viewer depth and bottom arrival. See docs/transitions.md#fullscreen-image-viewer.
    The shell includes chrome and image detail. At rest it has no transform or containing block. */
+body[data-lightbox-backdrop] {
+  background-color: var(--md-sys-color-media-stage);
+}
+
 [data-app-root] {
   border-radius: 0;
   opacity: 1;
@@ -2428,6 +2442,7 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][data-motion-image='reduced'], [data-motion='custom'][data-motion-image='off']) [data-app-root][data-lightbox-depth] {
   transform: none;
   border-radius: 0;
+  opacity: 1;
 }
 
 html:is([data-motion='reduced'], [data-motion='custom'][data-motion-image='reduced']) .pic-lightbox.yarl__portal {
@@ -2561,6 +2576,10 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-image='off']) .p
 html #nprogress .bar {
   top: var(--app-chrome-bottom);
   z-index: var(--z-top-loader);
+}
+
+html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) #nprogress .bar {
+  transition-duration: 0ms !important;
 }
 
 html #nprogress .peg {
@@ -2725,14 +2744,12 @@ html #nprogress .peg {
   contain: size layout style;
 }
 
-@media (min-width: 640px) {
+/* Column counts follow the gallery container's own inline width rather than the viewport so
+   opening the 288px docked drawer at 768px keeps two healthy ~200px columns instead of three
+   125px strips, and collapsing it smoothly unlocks the extra column. */
+@container (min-width: 520px) {
   .masonry-grid {
     --masonry-gap: 1rem;
-  }
-}
-
-@media (min-width: 768px) {
-  .masonry-grid {
     --masonry-n: 3;
     height: var(--mh3);
   }
@@ -2744,7 +2761,7 @@ html #nprogress .peg {
   }
 }
 
-@media (min-width: 1024px) {
+@container (min-width: 820px) {
   .masonry-grid {
     --masonry-n: 4;
     height: var(--mh4);
@@ -2895,7 +2912,13 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   }
 }
 
-@container (max-height: 5.5rem) {
+@container (max-height: 6rem) {
+  .card-spoiler-tags {
+    -webkit-line-clamp: 1;
+  }
+}
+
+@container (max-height: 4rem) {
   .card-spoiler-tags {
     display: none;
   }
@@ -3010,6 +3033,19 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 
   .image-detail-header-rows > :last-child {
     justify-content: flex-end;
+  }
+
+  /* On wide single-row layouts, promote the right-side caption to `label-l` so both ends of
+     the strip balance symmetrically; stacked narrow columns keep `body-s` to save space. */
+  .image-detail-header-caption {
+    font-size: var(--text-label-l);
+    line-height: var(--text-label-l--line-height);
+    font-weight: var(--text-label-l--font-weight);
+    letter-spacing: var(--text-label-l--letter-spacing);
+  }
+
+  .image-detail-header-caption > :first-child {
+    color: var(--md-sys-color-on-surface);
   }
 
   /* **The strip joins the chrome's row.** Once it is one line, it sits in the band the back
@@ -3127,6 +3163,17 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 
   .page-back-room-5xl .image-detail-header-rows > :last-child {
     justify-content: flex-end;
+  }
+
+  .page-back-room-5xl .image-detail-header-caption {
+    font-size: var(--text-label-l);
+    line-height: var(--text-label-l--line-height);
+    font-weight: var(--text-label-l--font-weight);
+    letter-spacing: var(--text-label-l--letter-spacing);
+  }
+
+  .page-back-room-5xl .image-detail-header-caption > :first-child {
+    color: var(--md-sys-color-on-surface);
   }
 }
 
@@ -3658,15 +3705,17 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   position: absolute;
   opacity: 0;
   visibility: hidden;
-  /* Asymmetric effects clocks: crisp FastEffects arrival on hover/scroll, gentle
-     DefaultEffects fade-out on auto-hide. Both collapse to 0 under the off tier. */
+  /* Asymmetric effects clocks bound to the scroll category: crisp FastEffects arrival on
+     hover/scroll, gentle DefaultEffects fade-out on auto-hide. */
+  --os-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-scroll));
+  --os-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-scroll));
   transition:
-    opacity var(--duration-spring-default-effects) var(--ease-spring-effects),
-    visibility var(--duration-spring-default-effects) var(--ease-spring-effects),
-    top var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    right var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    bottom var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    left var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    opacity var(--os-default-effects) var(--ease-spring-effects),
+    visibility var(--os-default-effects) var(--ease-spring-effects),
+    top var(--os-fast-effects) var(--ease-spring-effects),
+    right var(--os-fast-effects) var(--ease-spring-effects),
+    bottom var(--os-fast-effects) var(--ease-spring-effects),
+    left var(--os-fast-effects) var(--ease-spring-effects);
 }
 
 .os-scrollbar-transitionless {
@@ -3680,9 +3729,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   border-radius: var(--os-track-border-radius);
   background: var(--os-track-bg);
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    opacity var(--os-fast-effects) var(--ease-spring-effects),
+    background-color var(--os-fast-effects) var(--ease-spring-effects),
+    border-color var(--os-fast-effects) var(--ease-spring-effects);
 }
 
 .os-scrollbar-handle {
@@ -3733,19 +3782,19 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 .os-scrollbar-visible {
   opacity: 1;
   visibility: visible;
-  transition-duration: var(--duration-spring-fast-effects);
+  transition-duration: var(--os-fast-effects);
 }
 
 .os-scrollbar-auto-hide.os-scrollbar-auto-hide-hidden {
   opacity: 0;
   visibility: hidden;
-  transition-duration: var(--duration-spring-default-effects);
+  transition-duration: var(--os-default-effects);
 }
 
 .os-scrollbar-interaction.os-scrollbar-visible {
   opacity: 1;
   visibility: visible;
-  transition-duration: var(--duration-spring-fast-effects);
+  transition-duration: var(--os-fast-effects);
 }
 
 .os-scrollbar-unusable,
@@ -3774,10 +3823,10 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   max-width: var(--os-handle-max-size);
   height: var(--os-handle-perpendicular-size);
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    height var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    opacity var(--os-fast-effects) var(--ease-spring-effects),
+    background-color var(--os-fast-effects) var(--ease-spring-effects),
+    border-color var(--os-fast-effects) var(--ease-spring-effects),
+    height var(--os-fast-effects) var(--ease-spring-effects);
 }
 
 .os-scrollbar-horizontal .os-scrollbar-handle::before {
@@ -3799,10 +3848,10 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   max-height: var(--os-handle-max-size);
   width: var(--os-handle-perpendicular-size);
   transition:
-    opacity var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
-    width var(--duration-spring-fast-effects) var(--ease-spring-effects);
+    opacity var(--os-fast-effects) var(--ease-spring-effects),
+    background-color var(--os-fast-effects) var(--ease-spring-effects),
+    border-color var(--os-fast-effects) var(--ease-spring-effects),
+    width var(--os-fast-effects) var(--ease-spring-effects);
 }
 
 .os-scrollbar-vertical .os-scrollbar-handle::before {
@@ -4633,14 +4682,9 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 
 /* The outline. A min-inline-size floor because a fieldset's UA default is min-content, which
-   would stop it ever being narrower than its legend. The corner is `--radius-xl` (20px), a
-   project divergence from the token files' own step for a text field (`CornerExtraSmall`);
-   the lg size keeps its pill (`CornerFull`), genuinely a different shape.
-   A 20px top-left arc reaches x≈14 before it meets the top edge, and the notch's hole starts
-   at `--field-lead` − 4 = 12 — so where a floated label sits, the arc is cut ~3px short of the
-   top line. The cut lands under the label's own ink and reads as the outline running into the
-   name; raising a labelled field's `--field-lead` to 20px would close it, and would move every
-   labelled value 4px right with it. */
+   would stop it ever being narrower than its legend. Converged to `--radius-md` (12px) so the
+   top-left arc completes at x=12px — the exact tangent point where the `<legend>` notch opens
+   (`--field-lead` 16px − 4px = 12px) — and so inner inputs stay concentric with 12dp Cards. */
 .m3-field > fieldset {
   position: absolute;
   inset: calc(var(--field-notch-h) / -2) 0 0;
@@ -4651,7 +4695,7 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
   padding-inline: calc(var(--field-lead) - 0.25rem - var(--field-outline-width));
   min-inline-size: 0;
   border: var(--field-outline-width) solid var(--md-sys-color-outline);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
   pointer-events: none;
   transition-property: border-color;
   /* FastEffects, the clock every other focus indicator in the app uses — native inputs,
@@ -4680,7 +4724,7 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
  * — search box, admin filter, chat composer — is not a form slot: its placeholder is its
  * whole identity, and dressed as an outlined field it read as a form control with a missing
  * label. So it is *filled*: a tone step, no border, no shadow. Its 8dp corner matches
- * the default Select; the outlined field keeps 20dp. Their ordinary height stays 56dp.
+ * the default Select; the outlined field uses 12dp. Their ordinary height stays 56dp.
  *
  * Two mechanical notes. The inset goes back to 0 — the negative top inset above exists
  * only to cancel the UA drawing the top border through the legend's centre, and there is no
@@ -4883,6 +4927,7 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
   float: none;
   width: auto;
   max-width: 0;
+  overflow: hidden;
   height: var(--field-notch-h);
   padding: 0;
   font-size: calc(var(--field-label-size) * 0.75);
@@ -4912,10 +4957,15 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 /* Floated: focused, or holding a value. The placeholder-shown pseudo-class is the test for
    "empty" and needs a non-empty placeholder to work against (hence the input component's
    single-space fallback). A labelled `Select` has no placeholder to test, so it states the
-   same fact with the filled attribute. */
+   same fact with the filled attribute.
+   When floated into the top notch, a label spans the whole field width (above any trailing
+   controls) and compensates its max-width for the 0.75 scale so the visible label and the
+   `<legend>` notch always match. */
 .m3-field:focus-within > label,
 .m3-field[data-filled] > label,
 .m3-field:has(> :is(input, textarea):not(:placeholder-shown)) > label {
+  grid-column: 1 / -1;
+  max-width: calc((100% - var(--field-lead) - 1rem) / 0.75);
   transform: translateY(-50%) scale(0.75);
 }
 
@@ -5208,7 +5258,8 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 @utility prose-link {
   color: var(--md-sys-color-link);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
   border-radius: var(--radius-xs);
   outline: none;
   /* Its hover colour and focus ring on the same FastEffects as every other link and control;
@@ -5230,6 +5281,13 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
  * Appearance only — pair with a pointer-events utility or a real disabled attribute. */
 @utility disabled-content {
   opacity: 0.38;
+}
+
+/* The paging dim over a retained list whose next page is on its way: one value across every
+   paged screen rather than repeating `pointer-events-none opacity-50`. */
+@utility paging-dim {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* Press-wave ink roles — any control carrying colour (container fill, active/selected

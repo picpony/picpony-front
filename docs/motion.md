@@ -7,12 +7,12 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Component or property | Arrival / change | Departure | Reference |
 | --- | --- | --- | --- |
 | Hover, focus, state layer, ink | `fastEffects` | `fastEffects` | State layers |
-| Ripple | 75 ms linear fade-in; soft-feathered fast-launch decelerating wave (`cubic-bezier(0.2, 0.8, 0.4, 1)`), held while pressed | 280 ms standard-eased dissolve (`cubic-bezier(0.4, 0, 0.2, 1)`) after spread (140 ms cancel) | `lib/ripple.ts` |
+| Ripple | 75 ms linear fade-in; soft-feathered fast-launch decelerating wave (`cubic-bezier(0.2, 0.8, 0.4, 1)`), held while pressed | 220 ms standard-eased dissolve (`cubic-bezier(0.4, 0, 0.2, 1)`) after spread (140 ms cancel) | `lib/ripple.ts` |
 | Button / icon-button pressed or selected corner | `defaultEffects` | `defaultEffects` | `Button.kt`, `IconButton.kt` |
 | Switch handle | `fastSpatial` for travel, press and release; colour `fastEffects` | `fastSpatial` | `Switch.kt`; sprung press is a project refinement |
 | Radio dot, checkbox pop, badge pop, reaction fill, icon swap | `fastSpatial`; opacity `fastEffects`; radio ring colour `defaultEffects` | Assigned effects fade | `RadioButton.kt` |
 | Checkbox mark / box | Mark `defaultSpatial`, box `defaultEffects` | Box `fastEffects`; mark uses `CHECK_SNAP_DELAY_MS` | `Checkbox.kt` |
-| Slider handle ink | Immediate press/focus narrowing inside a fixed box | Immediate restoration | `Slider.kt` (`ThumbContent`) |
+| Slider handle ink | `fastSpatial` press/focus narrowing inside a fixed box | `fastSpatial` restoration | `Slider.kt` (`ThumbContent`) |
 | Slider select jump | `fastSpatial` for handle translation and track clips; drag and keyboard input stay immediate | Release does not restart motion | [Slider](design/layout.md#slider); project addition |
 | Captcha handle reset | `fastSpatial`; refresh after completion with the shared watchdog | No additional puzzle motion | Control feedback |
 | Icon rotation, including dismiss | `fastSpatial` | `fastSpatial` | Project mapping |
@@ -28,7 +28,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Toast | Travel `fastSpatial`, opacity `fastEffects`; stack `layout` | Same split | `SnackbarHost` |
 | `SwapContent` | `surfaceArrival('fast')` after `HANDOFF_MS` | `fastEffects` | `AnimatedContent` |
 | Dialog | `surfaceArrival('default')`; standard tier tilts a card from perspective to front | `defaultEffects`; same perspective pose | Project mapping |
-| Sheet, side panel, modal drawer | `defaultSpatial` with edge skirt; scrim `defaultEffects` | Surface `fastEffects`, scrim `defaultEffects`; drag release `defaultSpatial` | `BottomSheet.kt`, `ModalNavigationDrawer` |
+| Sheet, side panel, modal drawer | `defaultSpatial` with edge skirt; scrim `defaultEffects` | Surface `fastEffects`, scrim `defaultEffects`; drag dismiss `fastEffects`, settle-back `defaultSpatial` | `BottomSheet.kt`, `ModalNavigationDrawer` |
 | Docked drawer / content width | `layout` | `layout` | Project mapping |
 | Search suggestions | Height `slowSpatial`, fade `defaultEffects`; replacement height `layout` | Height `defaultSpatial`, fade `defaultEffects` | `rememberSearchBarState` |
 | Collapsible panel | Bounds `layout`, content `defaultEffects`, both in `list` | Bounds `layout`, content `fastEffects` | `animateContentSize`, `expandVertically` |

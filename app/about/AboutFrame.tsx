@@ -42,11 +42,11 @@ export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: R
             `bg-glass-body` is the plate's own colour, not a surface step: what shows if
             WebGL is unavailable — or before the page has drawn it — is the material at rest,
             not a differently toned rectangle. */}
-        <div className="relative mt-2 flex min-h-72 items-center justify-center overflow-hidden rounded-2xl bg-glass-body sm:min-h-96">
+        <div className="forced-boundary relative mt-2 flex min-h-72 items-center justify-center overflow-hidden rounded-2xl bg-glass-body sm:min-h-96">
           {plate}
         </div>
 
-        <Card variant="filled" padding="lg" className="mt-8">
+        <Card variant="elevated" padding="md" className="mt-6">
           <p className="text-body-m text-on-surface-variant">一个看图的网站<br />其中 114514 行代码由 AK 生成</p>
         </Card>
 

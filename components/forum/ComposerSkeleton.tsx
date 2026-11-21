@@ -18,15 +18,15 @@ export default function ComposerSkeleton() {
           <Skeleton className="h-5 w-24" delay={60} />
           <Skeleton className="h-5 w-28" delay={80} />
         </div>
-        <Skeleton className="mx-4 mt-1 h-3.5 w-48" delay={100} />
+        <Skeleton className="mt-1 h-3.5 w-48" delay={100} />
       </div>
       <div className="space-y-1.5">
-        <Skeleton className="h-14 w-full rounded-xs" delay={120} />
-        <Skeleton className="mx-4 h-3.5 w-24" delay={140} />
+        <Skeleton className="h-14 w-full rounded-md" delay={120} />
+        <Skeleton className="h-3.5 w-24" delay={140} />
       </div>
       <div className="space-y-1.5">
-        <Skeleton className="h-[5.25rem] w-full rounded-xs" delay={160} />
-        <Skeleton className="mx-4 h-3.5 w-56" delay={180} />
+        <Skeleton className="h-[5.25rem] w-full rounded-md" delay={160} />
+        <Skeleton className="h-3.5 w-56" delay={180} />
       </div>
       <div>
         <Skeleton className="mb-2 h-5 w-12" delay={200} />

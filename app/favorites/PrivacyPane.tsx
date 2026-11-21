@@ -36,7 +36,7 @@ function GateSkeleton() {
       <Skeleton className="size-12 rounded-full" />
       <Skeleton className="h-6 w-40" />
       <Skeleton className="h-4 w-56" />
-      <Skeleton className="mt-2 h-14 w-full" />
+      <Skeleton className="mt-2 h-14 w-full rounded-md" />
     </Card>
   );
 }

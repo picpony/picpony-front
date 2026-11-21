@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
  * the section's glyph, and a row's leading slot is for media only (the avatar, the banner).
  */
 export const ROW_CLASS = 'm3-row flex items-center gap-4 bg-surface-container-low p-4';
+export const ROW_STACK_CLASS = 'm3-row flex flex-col items-stretch gap-4 bg-surface-container-low p-4';
 
 export function SettingsRow({
   label,
@@ -36,6 +37,7 @@ export function SettingsRow({
   leading,
   action,
   labelId,
+  surface = 'page',
   children,
   'aria-hidden': ariaHidden,
 }: {
@@ -50,6 +52,8 @@ export function SettingsRow({
   action?: ReactNode;
   /** For a control that names itself after the row (`aria-labelledby`). */
   labelId?: string;
+  /** `'dialog'` steps down to `surface-container` inside `Modal`'s `surface-container-high` so `surface-container-highest` controls stay distinct. */
+  surface?: 'page' | 'dialog';
   /** A block under the row's text that needs the full width (the palette chips). */
   children?: ReactNode;
   /**
@@ -59,6 +63,7 @@ export function SettingsRow({
    */
   'aria-hidden'?: boolean | 'true';
 }) {
+  const surfaceBg = surface === 'dialog' ? 'bg-surface-container' : 'bg-surface-container-low';
   const head = (
     <>
       {leading}
@@ -72,9 +77,15 @@ export function SettingsRow({
       {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
     </>
   );
-  if (!children) return <div className={ROW_CLASS} aria-hidden={ariaHidden || undefined}>{head}</div>;
+  if (!children) {
+    return (
+      <div className={cn('m3-row flex items-center gap-4 p-4', surfaceBg)} aria-hidden={ariaHidden || undefined}>
+        {head}
+      </div>
+    );
+  }
   return (
-    <div className={cn(ROW_CLASS, 'flex-col items-stretch')} aria-hidden={ariaHidden || undefined}>
+    <div className={cn('m3-row flex flex-col items-stretch gap-4 p-4', surfaceBg)} aria-hidden={ariaHidden || undefined}>
       <div className="flex items-center gap-4">{head}</div>
       {children}
     </div>

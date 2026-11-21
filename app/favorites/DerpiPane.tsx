@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { MdCloudUpload, MdKey, MdStarBorder } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { derpiFaves, faveFolders, sessionUser } from '@/lib/resources';
@@ -17,6 +16,7 @@ import { readToken } from '@/lib/hooks';
 import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import FailedTurnHold from '@/components/FailedTurnHold';
@@ -53,7 +53,6 @@ function importSentence(
  * batches, with progress and 停止 (`importFavourites`).
  */
 export default function DerpiPane({ token, active }: { token: string; active: boolean }) {
-  const router = useRouter();
   const session = useResource(sessionUser, { token });
   const key = session.data?.kind === 'ok' ? session.data.user.api_key : undefined;
   const apiKey = session.data ? (typeof key === 'string' && key ? key : null) : undefined;
@@ -183,9 +182,9 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         title="需要绑定 API Key"
         description="绑定后可查看你在 Derpibooru 的收藏"
         action={
-          <Button variant="tonal" onClick={() => router.push(settingsHref('account'), { scroll: false })}>
+          <ButtonLink href={settingsHref('account')} variant="tonal">
             前往设置
-          </Button>
+          </ButtonLink>
         }
       />
     );
@@ -242,7 +241,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         <div
           ref={setRows}
           className={`transition-opacity spring-default-effects ${
-            turning ? 'pointer-events-none opacity-50' : 'opacity-100'
+            turning ? 'paging-dim' : 'opacity-100'
           }`}
         >
           <MasonryGrid images={shown.images} entrance={false} sequence={sequence} listKey={listKey} />

@@ -154,9 +154,13 @@ export default function HeroStage() {
                         data-image-detail-reveal="body"
                         className="image-detail-stage-body bg-transparent p-4 sm:p-6"
                       >
-                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-                          <DetailVotes image={record} pending={record === null} />
-                          <DetailActions imageId={image.id} passive canTranslate={Boolean(image.view_url) && snapshot.mediaType !== 'video'} />
+                        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+                          <DetailActions
+                            imageId={image.id}
+                            passive
+                            canTranslate={Boolean(image.view_url) && snapshot.mediaType !== 'video'}
+                            center={<DetailVotes image={record} pending={record === null} />}
+                          />
                           <DetailTagSkeleton />
                         </div>
                       </div>

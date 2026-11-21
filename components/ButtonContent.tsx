@@ -25,7 +25,7 @@ export default function ButtonContent({
     <>
       <span data-ripple-host="" aria-hidden="true" />
       {icon && (
-        <span aria-hidden="true" className="shrink-0 [&>svg]:block">
+        <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center [&>svg]:block">
           {loading ? busyIcon : icon}
         </span>
       )}

@@ -389,7 +389,7 @@ export default function Modal({
           'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden focus-visible:outline-hidden sm:max-h-[calc(100dvh-3rem)]',
           /* `surface-container-high` is M3's dialog container — tone first,
              shadow second is the whole M3 depth recipe. */
-          'bg-surface-container-high text-on-surface rounded-2xl shadow-e3',
+          'bg-surface-container-high text-on-surface rounded-2xl shadow-e3 forced-boundary',
           MAX_WIDTHS[maxWidth],
           panelClassName,
         )}
@@ -409,9 +409,9 @@ export default function Modal({
                 onClick={handleClose}
                 aria-label="关闭"
                 dismiss
-                /* Centred on the headline's 32dp line, overhanging the row by 4dp
-                   each way, so the ✕ never sets the header's height. */
-                className="-my-1 -mr-2 ml-auto"
+                /* Centred on the headline's 32dp line, overhanging the row by 4dp vertically
+                   and matching the 20dp top clearance on the trailing edge (`24 - 4 = 20`). */
+                className="-my-1 -mr-1 ml-auto"
                 icon={<MdClose />}
               />
             )}

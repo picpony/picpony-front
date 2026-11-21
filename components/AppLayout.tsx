@@ -21,7 +21,9 @@ import {
   MdDarkMode,
   MdLightMode,
   MdPhotoLibrary,
+  MdOutlinePhotoLibrary,
   MdForum,
+  MdOutlineForum,
 } from 'react-icons/md';
 
 import dynamic from 'next/dynamic';
@@ -85,6 +87,7 @@ import {
 import { HANDOFF_MS } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { heroOwnsScreen } from '@/lib/appScroller';
+import { clearBottomChrome, setBottomChrome } from '@/lib/bottomChrome';
 import { clearAllTabScroll } from '@/lib/tabScroll';
 import { holdFooterWhileLoading } from '@/lib/pageLoadingHold';
 import {
@@ -224,14 +227,28 @@ const RETURN_WAIT_MS = LANDING_WAIT_MS * 2;
  * leaves. The pane transition starts on the tap; the URL follows once its first frame is out
  * (at once if another input comes first — see `lib/homeTabs.ts`).
  */
-function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
+function TabNavBar({
+  onHome,
+  hidden,
+  dockedOpen,
+  forumUnread,
+}: {
+  onHome: boolean;
+  hidden: boolean;
+  dockedOpen: boolean;
+  forumUnread: number;
+}) {
   const searchParams = useBackgroundSearchParams();
   const currentTab: HomeTab = homeTabOf(searchParams);
   // Optimistic tab so the pill and label colours respond on the tap, before the URL (and its
   // search params) commit.
   const [pendingTab, setPendingTab] = useState<HomeTab | null>(null);
   const activeTab = pendingTab ?? currentTab;
-  const shown = onHome && !hidden;
+  const routeLive = onHome && !hidden;
+  /* When the docked desktop drawer is expanded, 主页 / 论坛 are already persistent in the left
+     rail; keep the home switcher registered for those rows while suppressing the redundant pill. */
+  const pillActive = onHome && !dockedOpen;
+  const shown = routeLive && !dockedOpen;
 
   /* The panes see only the URL, and `useSearchParams` propagates on the router's own schedule
      — one of our writes is even a traversal, landing a task later. Hand the panes the tab the
@@ -273,12 +290,12 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
     [activeTab],
   );
 
-  /* The drawer's 主页 / 论坛 rows are this control too while the pill is live. */
+  /* The drawer's 主页 / 论坛 rows are this control too while on the home route. */
   useEffect(() => {
-    if (!shown) return;
+    if (!routeLive) return;
     setHomeTabSwitcher(switchTab);
     return () => setHomeTabSwitcher(null);
-  }, [shown, switchTab]);
+  }, [routeLive, switchTab]);
 
   /* **`--app-bottom-chrome`**: the band's height while the pill is live, the bottom-edge twin of
      `--app-chrome-bottom` — so whatever floats at the bottom of the content area (the mascot)
@@ -288,49 +305,46 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
      beside it says which way the band went, so the floating element can take the pill's own leg
      — the arriving page's 80ms + 320ms decelerate, or the leaving page's FastEffects. */
   const band = useRef<HTMLElement | null>(null);
-  /* **The height is keyed on the route, the attribute on the pill's visibility.** The variable is
-     an inherited custom property on <html>, so every write of a new value — removing it included —
-     restyles the whole document. Keyed on `shown`, it was removed when an image detail hid the
-     pill and written back when the detail closed: a full restyle (1,437 elements, 87–116ms on a
-     phone at 4× CPU, traced on dev.picpony.top) inside the very frame the hero flight starts in,
-     and again as the picture flew home — the tap that "does nothing" for a beat. Nothing that
-     reads the height is on screen under a detail (the mascot stands down for it), so the value
-     stays while the pill is merely hidden, and only `data-bottom-chrome` — an attribute Blink
-     narrows to the rules that name it — follows the pill. */
+  const chromeOwner = useRef<object | null>(null);
+  const measuredHeight = useRef(0);
+  const shownRef = useRef(shown);
+  /* **The height is keyed on whether the pill belongs on this view (`onHome && !dockedOpen`), the
+     attribute on the pill's visibility (`shown`).** When the docked sidebar replaces the pill on
+     desktop `/`, `pillActive` is false so `--app-bottom-chrome` clears and the mascot rests at the
+     bottom corner until the sidebar collapses and the pill appears. Keeping the last non-zero
+     height while merely hidden under an image detail avoids restyling the whole document during
+     a hero flight; `lib/bottomChrome.ts` shares the root property safely with `CartBar` and
+     `SelectionBar`. */
   useLayoutEffect(() => {
+    shownRef.current = shown;
+    const owner = chromeOwner.current;
+    if (pillActive && owner && measuredHeight.current > 0) {
+      setBottomChrome(owner, measuredHeight.current, shown);
+    }
+  }, [pillActive, shown]);
+
+  useLayoutEffect(() => {
+    const owner = (chromeOwner.current ??= {});
     const node = band.current;
-    const root = document.documentElement;
-    if (!onHome || !node) {
-      root.style.removeProperty('--app-bottom-chrome');
+    if (!pillActive || !node) {
+      measuredHeight.current = 0;
+      clearBottomChrome(owner);
       return;
     }
-    let written = '';
     const write = () => {
       const height = Math.round(node.offsetHeight);
       // A hidden band measures 0: keep the last real height rather than restyling to it.
-      if (height <= 0) return;
-      const value = `${height}px`;
-      if (value === written) return;
-      written = value;
-      root.style.setProperty('--app-bottom-chrome', value);
+      if (height > 0) measuredHeight.current = height;
+      if (measuredHeight.current > 0) setBottomChrome(owner, measuredHeight.current, shownRef.current);
     };
     write();
     const observer = new ResizeObserver(write);
     observer.observe(node);
     return () => {
       observer.disconnect();
-      root.style.removeProperty('--app-bottom-chrome');
+      clearBottomChrome(owner);
     };
-  }, [onHome]);
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    if (!shown) {
-      root.removeAttribute('data-bottom-chrome');
-      return;
-    }
-    root.setAttribute('data-bottom-chrome', '');
-    return () => root.removeAttribute('data-bottom-chrome');
-  }, [shown]);
+  }, [pillActive]);
 
   return (
     /* **It leaves and arrives with its page, on the page's own clock** — the route cross-fade's:
@@ -366,8 +380,19 @@ function TabNavBar({ onHome, hidden }: { onHome: boolean; hidden: boolean }) {
         onChange={(tab) => switchTab(tab as HomeTab)}
         variant="pill"
         tabs={[
-          { value: 'gallery', label: '图库', icon: <MdPhotoLibrary size={ICON.control} /> },
-          { value: 'forum', label: '论坛', icon: <MdForum size={ICON.control} /> },
+          {
+            value: 'gallery',
+            label: '图库',
+            icon: <MdOutlinePhotoLibrary size={ICON.control} />,
+            activeIcon: <MdPhotoLibrary size={ICON.control} />,
+          },
+          {
+            value: 'forum',
+            label: '论坛',
+            icon: <MdOutlineForum size={ICON.control} />,
+            activeIcon: <MdForum size={ICON.control} />,
+            badge: forumUnread,
+          },
         ]}
       />
     </nav>
@@ -1022,28 +1047,14 @@ export default function AppLayout({
             not each row, takes the app-bar layer. */}
         <div ref={chromeRef} className="relative z-app-bar flex shrink-0 flex-col">
           <DevBanner initiallyVisible={devBannerVisible} inert={chromeInert} />
-          {/* **64dp app bar at every density** (`AppBarSmallTokens.ContainerHeight`) — the
-              bar is the one fixed band, not repeated chrome, so the density step does not
-              apply; the 56dp-feel came from the controls in it, which are 40dp now.
-              Horizontal inset 16px on a phone, 104px from `sm`: deliberate breathing room
-              around the brand — the bar spans drawer and content and belongs to neither,
-              so aligning it to either grid is false precision. Both insets yield to a
-              larger safe-area inset (a notch in landscape), and the bar pays the top inset
-              itself unless the dev banner above it does (`data-app-bar` rule in globals.css).
-              **`--touch-floor: 48px` locally, so the bar opts out of the pointer axis.**
-              These five are the app's most-used controls, alone on a 64dp coloured band;
-              at 40dp with 104px of air either side they read as small glyphs rather than
-              chrome. One declaration on the band rather than five on the controls.
-              `select-none`: chrome, not content — a long-press must not select a label. */}
+          {/* **64dp brand app bar** (`AppBarSmallTokens.ContainerHeight`) on `primary` /
+              `on-primary-variant` with local `--touch-floor: 48px` so app-bar controls hold
+              48dp across densities. */}
           <header
             data-app-bar
             inert={chromeInert || undefined}
             className="box-content flex h-16 shrink-0 select-none items-center bg-primary text-on-primary-variant [--touch-floor:48px] pt-[env(safe-area-inset-top)] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(6.5rem,env(safe-area-inset-left))] sm:pr-[max(6.5rem,env(safe-area-inset-right))]"
           >
-            {/* `IconButton variant="on-primary"`: the primitive's variant whose focus ring
-                survives a pink background. `size="md"` — 40dp, `SmallIconButtonTokens`, what
-                AOSP's own app bar uses; `touch-size` grows the hit region back on a touch
-                device without moving the glyph. */}
             <IconButton
               variant="on-primary"
               size="md"
@@ -1063,16 +1074,8 @@ export default function AppLayout({
                 if (coveredHomeGallery && reselectCovered()) event.preventDefault();
               }}
               aria-label="PicPony 首页"
-              /* Visible on a phone too: the brand's only appearance on the majority viewport
-                 and the one-tap route home. `touch-size` because the wordmark is 28px tall
-                 and an anchor wrapping it inherits that, while every button beside it clears
-                 the floor. The app's own ring on the bar (`focus-ring-on-primary`), not the
-                 browser's outline. Under 360px the mark steps down a size: at 320px the five
-                 48px targets and the full mark overran the bar's right inset. */
               className="relative mr-2 flex shrink-0 touch-size items-center rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-ring-on-primary"
             >
-              {/* One wordmark component for header and footer; `keyline` is the part that is
-                  genuinely header-specific. */}
               <Logo className="h-auto w-20 max-[359px]:w-16 sm:w-25" keyline />
             </Link>
             <IconButton
@@ -1107,7 +1110,7 @@ export default function AppLayout({
             <Suspense fallback={<div className="h-10 w-10 touch-size" aria-hidden="true" />}>
               <SearchBar />
             </Suspense>
-            {/* The count stays outside the anchor's ripple and is included in its accessible name. */}
+            {/* The count stays outside the anchor's ripple and hugs the bell's shoulder. */}
             <span className="relative ml-1 flex shrink-0">
               <Link
                 ref={(node) => { messagesAnchorRef.current = node; }}
@@ -1121,7 +1124,7 @@ export default function AppLayout({
                 <span data-ripple-host="" aria-hidden="true" />
                 <MdNotifications aria-hidden="true" />
               </Link>
-              <span className="pointer-events-none absolute top-0 right-0">
+              <span className="pointer-events-none absolute top-1.5 right-1.5">
                 <CountBadge count={totalUnread} />
               </span>
               {messagesTooltip}
@@ -1441,6 +1444,8 @@ export default function AppLayout({
               <TabNavBar
                 onHome={onHome}
                 hidden={isImageDetailOpen || Boolean(imageHeroRuntime.background)}
+                dockedOpen={!isOverlayDrawer && !dockedCollapsed}
+                forumUnread={forumUnread}
               />
             </Suspense>
           </section>

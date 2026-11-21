@@ -10,8 +10,8 @@ Each role owns its weight, size, tracking and line height. Render exactly one ro
 
 | Role family | Regular → emphasized weight |
 | --- | --- |
-| `label-*`, `title-m`, `title-s` | 500 → 700 |
-| `display-*`, `headline-*`, `title-l`, `body-*` | 400 → 500 |
+| `label-*`, `title-*`, `headline-*` | 500 → 700 |
+| `display-*`, `body-*` | 400 → 500 |
 
 Headings use their role's normal weight unless the call site explicitly chooses its emphasized form. Semantic heading level does not set the visual role.
 
@@ -59,9 +59,10 @@ Do not restore unsupported font size, indent, code-block, image-width or full-wi
 
 Import through `dynamic()` with `EditorPlaceholder` from `RichTextEditorShell`. The public handle is `focus()`; `size` selects the post/reply editing area.
 
-The editor and its placeholder share the outlined field's 20 dp corners, toolbar surface and
+The editor and its placeholder share the outlined field's 12 dp corners, toolbar surface and
 minimum height. Editing uses `body-l` at both sizes; `.rich-text-content` supplies the same
-paragraph, heading, list, link, quote and table treatment as published content.
+paragraph, heading, list, link, quote and table treatment as published content (with a CJK-friendly
+`0.2em` underline offset and `1px` thickness on prose links).
 Adapt the package's flat list rows to that rhythm without replacing Slate's DOM.
 
 `components/RichTextEditor.css` scopes the package adapter to the editor and loads its base

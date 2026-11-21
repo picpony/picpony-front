@@ -106,6 +106,15 @@ if (typeof window !== 'undefined') {
     },
     { capture: true, passive: true },
   );
+  window.addEventListener(
+    'keydown',
+    () => {
+      /* Any keyboard interaction clears stale pointer coordinates so a keyboard-driven
+       * theme change radiates from `document.activeElement` rather than an old click. */
+      lastPointerPoint = null;
+    },
+    { capture: true, passive: true },
+  );
 }
 
 /** The centre of `el`'s box, or null if it has none (unmounted, or `display: none`). */

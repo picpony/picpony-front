@@ -193,7 +193,7 @@ export default function ForumPostList({
         ref={rowsRef}
         className={cn(
           'mb-8 transition-opacity spring-default-effects',
-          busy ? 'pointer-events-none opacity-50' : 'opacity-100',
+          busy ? 'paging-dim' : 'opacity-100',
         )}
       >
         {posts.map((post) => (

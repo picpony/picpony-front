@@ -80,7 +80,7 @@ export default function LinesSection() {
       <SettingsRow
         label="当前线路"
         badge={lines.apiForced || lines.imageForced ? <Badge tone="warning" size="sm">全站强制</Badge> : undefined}
-        supporting={lines.ready ? `API：${lines.api} ｜ 图片：${lines.image}` : '检测中…'}
+        supporting={lines.ready ? `API：${lines.api} · 图片：${lines.image}` : '检测中…'}
       />
       {!lines.imageForced && (
         <>

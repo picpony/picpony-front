@@ -50,7 +50,7 @@ export function getHeroMediaRenderedWidth(
   // measuring against this instead of the DOM places the landing box off.
   const heightCap = Math.min(
     viewport.height * (HERO_MAX_HEIGHT_DVH / 100),
-    viewport.height - HERO_MEDIA_VIEWPORT_CHROME_PX,
+    Math.max(220, viewport.height - HERO_MEDIA_VIEWPORT_CHROME_PX),
   );
   return Math.min(
     width,
@@ -60,9 +60,10 @@ export function getHeroMediaRenderedWidth(
   );
 }
 
-/** The media box's height cap, as one CSS expression both presentations share. */
+/** The media box's height cap, as one CSS expression both presentations share. Floor at 220px
+ *  so landscape phones (`~390px` viewport height) never crush the picture to a 126px postage stamp. */
 const MEDIA_MAX_HEIGHT =
-  `min(${HERO_MAX_HEIGHT_DVH}dvh, calc(100dvh - ${HERO_MEDIA_VIEWPORT_CHROME_PX}px))`;
+  `min(${HERO_MAX_HEIGHT_DVH}dvh, max(220px, calc(100dvh - ${HERO_MEDIA_VIEWPORT_CHROME_PX}px)))`;
 
 export function getHeroMediaStyle(image: HeroMediaDimensions): CSSProperties {
   const { width, height, aspectRatio } = getHeroMediaDimensions(image);

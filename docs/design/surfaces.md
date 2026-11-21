@@ -10,11 +10,10 @@ Use the role's token. The radius scale is 0 / 4 / 8 / 12 / 16 / 20 / 28 / 32 / 4
 | --- | --- | --- |
 | Button, FAB, avatar, circular icon control | `rounded-full` | Capsule/circle |
 | Count badge, navigation row, search field | `rounded-full` | Capsule |
-| Card, section, palette tile, hovered square icon control | `rounded-md` | 12 dp |
+| Card, section, palette tile, outlined field, rich-text editor, code box, colour swatch, hovered square icon control | `rounded-md` | 12 dp |
 | Chip, filled field, ordinary menu/listbox row | `rounded-sm` | 8 dp |
 | Tab state shape, top corners | `rounded-t-md` | 12 dp |
-| Outlined field | `rounded-xl` | 20 dp |
-| Colour swatch, code box, badge, inline code, grouped seam | `rounded-xs` | 4 dp |
+| Badge, inline code, grouped seam | `rounded-xs` | 4 dp |
 | Snackbar and plain tooltip | `rounded-xs` | 4 dp |
 | Menu and ordinary popover | `rounded-lg` | 16 dp |
 | Modal drawer, trailing corners | `rounded-r-lg` | 16 dp |
@@ -48,7 +47,7 @@ Search rows use 12 dp inline padding, a 24 dp leading slot and 12 dp gap to alig
 
 ### Specification and project refinements
 
-Outlined fields at 20 dp, filled fields at 8 dp and menus at 16 dp are deliberate PicPony refinements. Do not describe them as the unmodified M3 component mapping.
+Outlined fields at 12 dp, filled fields at 8 dp and menus at 16 dp are deliberate PicPony refinements. Do not describe them as the unmodified M3 component mapping.
 
 For a specification claim, consult the [Compose Material 3 token sources](https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/) and name the relevant component token. The repository's recorded refinement governs local implementation.
 
@@ -68,8 +67,8 @@ Use `shadow-e1` through `shadow-e5`. Tone provides the first depth cue; ordinary
 
 | Floating surface | Level |
 | --- | --- |
-| Modal bottom sheet, search suggestions | `e1` |
-| Menu, ordinary popover, floating navigation | `e2` |
+| Modal bottom sheet, search suggestions, plain tooltip | `e1` |
+| Menu, ordinary popover, floating navigation, collapsed mascot | `e2` |
 | Dialog, FAB, snackbar | `e3` |
 
 Keyboard rings and crop masks use box-shadow without being elevation; do not remove them as decorative shadows.
@@ -100,13 +99,13 @@ Use `state-layer` with `data-ripple`, not per-control hover colours.
 
 Hover requires `(hover: hover)`; keyboard focus does not. Selection controls (`Checkbox`, `Radio`, `ToggleSwitch`) use named groups and their own 40 dp circular state layers with centred press ripples across the full label. Keep disabled ripple hosts mounted; the delegated gate checks native and ARIA-disabled state. When motion is enabled, `[data-ripple]` controls omit the flat `:active::before` flash so the expanding wave carries pressed feedback cleanly (and touch scroll detection is never pre-empted by a frame-0 tint); the off-motion tier restores the 0.10 flat pressed state layer.
 
-Ripple paints a soft-feathered radial wave (`radial-gradient`, `--ripple-core`) at `z-index: -1` beside `state-layer::before` inside an isolated host (`[data-ripple]` / `[data-ripple-host]`), keeping labels, glyphs and avatars crisp above the wave while preserving `-z-10` miniature faces (`PaletteTileFace`) beneath it. The uniform inner core expands from a proportional droplet (`0.18` on compact square/circular controls, `0.10–0.24` on pills, rows and cards) to the host's bounding half-diagonal (`+ 2 px`, covering M3E press-morphed corners during long press) plus a `12–56 px` feathered rim on a fast-launch decelerating curve (`cubic-bezier(0.2, 0.8, 0.4, 1)`, 280–420 ms by cover radius, 75 ms linear fade-in), holds at `--md-sys-ripple-opacity` while pressed (including keyboard `Enter` / `Space` activation), then dissolves on `cubic-bezier(0.4, 0, 0.2, 1)` over 280 ms (140 ms on scroll cancel), freezing its resolved contact-time `color` so a quick tap that immediately flips into a selected container does not snap mid-spread.
+Ripple paints a soft-feathered radial wave (`radial-gradient`, `--ripple-core`) at `z-index: -1` beside `state-layer::before` inside an isolated host (`[data-ripple]` / `[data-ripple-host]`), keeping labels, glyphs and avatars crisp above the wave while preserving `-z-10` miniature faces (`PaletteTileFace`) beneath it. The uniform inner core expands from a proportional droplet (`0.12–0.20` scaled smoothly by cover radius) to the host's bounding half-diagonal (`+ 2 px`, covering M3E press-morphed corners during long press) plus a `12–56 px` feathered rim on a fast-launch decelerating curve (`cubic-bezier(0.2, 0.8, 0.4, 1)`, 240–380 ms by cover radius, 75 ms linear fade-in), holds at `--md-sys-ripple-opacity` while pressed (including keyboard `Enter` / `Space` activation), then dissolves on `cubic-bezier(0.4, 0, 0.2, 1)` over 220 ms (140 ms on scroll cancel), freezing its resolved contact-time `color` read from the host before insertion so a quick tap neither forces a synchronous reflow nor snaps mid-spread. Selection controls mark `data-ripple-own` so nested containers never double-fire ripples.
 
 Press-wave colour follows one rule: any control carrying colour within its ripple area — whether an active/filled container, a predicted coloured triggered state, a coloured indicator/border, or coloured text/icon — tints its press wave with a vivid role ink (not low-chroma Tone-10/90 `on-*-container` text ink); only purely neutral controls stay on neutral grey (`on-surface` / `on-surface-variant`).
 
 - `primary` / `primary-container` / `chip-selected` / brand indicators: `Button` / `IconButton` `filled`, active `Pagination` pages and `IconButton variant="on-primary"` keep `on-primary` (`ripple-on-primary` on the app bar); `Button variant="accent"`, dragging `DropZone`, inactive `Pagination` pages, default `underline` tabs, `filter` / primary `Chip`s (both selected and unselected) and selection controls (`Checkbox`, `Radio`, `ToggleSwitch`) use `ripple-primary` (`primary-ink`).
 - `secondary-container` (both active/selected and predicted unselected states): `Button` / `IconButton` `tonal`, `IconButton` `secondary` toggles and hovered `quiet`, `SidebarNav` links, `pill` / `rail` tabs, `Select` options, `ContactList` / `HistoryDialog` rows, `PoniesSettings` choices, `ColorPicker` mode tiles, toggle/panel editor toolbar buttons and `on-container` controls inside `secondary-container` use `ripple-secondary` (`secondary-ink`).
-- Accent, semantic, categorical, media and palette tiles: `selectedTone="tertiary"` `IconButton` toggles (both selected and unselected) use `ripple-tertiary`; `danger` / `success` / `warning` / `on-fill` filled buttons keep `on-fill` highlight over saturated fills; `danger-text` / `danger-quiet` controls, destructive `Menu` items, invalid `DropZone`, warning `underline` tabs, semantic `Chip`s and `on-container` controls in `warning-container` use `ripple-error` / `ripple-success` / `ripple-warning` (or `currentColor` where text already carries that role); categorical and badge chips keep their paired `currentColor`; media overlays use `ripple-on-media`; palette tiles use their own primary bar pair via `tileRippleStyle`.
+- Accent, semantic, categorical, media and palette tiles: `Button variant="tertiary"` and `selectedTone="tertiary"` `IconButton` toggles (both selected and unselected) use `ripple-tertiary`; `danger` / `success` / `warning` / `on-fill` filled buttons keep `on-fill` highlight over saturated fills; `danger-text` / `danger-quiet` controls, destructive `Menu` items, invalid `DropZone`, warning `underline` tabs, semantic `Chip`s and `on-container` controls in `warning-container` use `ripple-error` / `ripple-success` / `ripple-warning` (or `currentColor` where text already carries that role); categorical and badge chips keep their paired `currentColor`; media overlays use `ripple-on-media`; palette tiles use their own primary bar pair via `tileRippleStyle`.
 - Purely neutral controls (default neutral grey): `surface` / `text` buttons, non-toggle `standard` / `outlined` and resting/touch `quiet` icon buttons, non-href `SidebarNav` actions, one-shot editor toolbar buttons, neutral unfilled `assist` / `input` chips, normal `Menu` items, `DropZone` (`idle` / `filled`), cards, list/suggestion rows, select triggers, pager arrows and collapsed `Mascot`.
 
 `[data-ripple]` resets `--ripple-color` in `@layer base` so a parent tint never leaks into a nested control.

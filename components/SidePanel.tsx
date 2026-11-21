@@ -99,7 +99,9 @@ export default function SidePanel({
   const placedPanel = useRef<HTMLDivElement | null>(null);
   const enterFrame = useRef(0);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const pressOnScrim = useRef(false);
   const titleId = useId();
 
   useScrollLock(isOpen);
@@ -162,6 +164,16 @@ export default function SidePanel({
   );
   useEffect(() => () => cancelAnimationFrame(enterFrame.current), []);
 
+  useEffect(() => {
+    if (!mounted || !rendering) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const update = () => headerRef.current?.toggleAttribute('data-divided', body.scrollTop > 0);
+    body.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => body.removeEventListener('scroll', update);
+  }, [mounted, rendering, title, hideCloseButton]);
+
   if (!mounted || !rendering) return null;
 
   const hasHeader = Boolean(title) || !hideCloseButton;
@@ -173,6 +185,10 @@ export default function SidePanel({
       /* A side sheet is a dialog docked to the right edge, so it shares the dialog
          layer — see the stacking-order block in globals.css. */
       className={cn('fixed inset-0 flex z-dialog')}
+      /* A drag selection that starts inside the panel and releases on the scrim must not dismiss it. */
+      onPointerDown={(event) => {
+        pressOnScrim.current = event.target === scrimRef.current;
+      }}
       /* `inert` while leaving — the panel outlives its own `isOpen` so the exit
          tween has a target, as on `Modal` and `Sheet`. */
       inert={!isOpen}
@@ -180,7 +196,15 @@ export default function SidePanel({
       <div
         ref={scrimRef}
         className="bg-scrim-veil absolute inset-0"
-        onClick={closeOnOverlayClick ? handleClose : undefined}
+        onClick={
+          closeOnOverlayClick
+            ? () => {
+                const started = pressOnScrim.current;
+                pressOnScrim.current = false;
+                if (started) handleClose();
+              }
+            : undefined
+        }
       />
       <div
         ref={panelRef}
@@ -191,12 +215,15 @@ export default function SidePanel({
         tabIndex={-1}
         className={cn(
           'relative ml-auto flex h-dvh w-full max-w-md flex-col overflow-hidden focus-visible:outline-hidden',
-          'bg-surface-container-low text-on-surface rounded-l-2xl edge-skirt-r',
+          'bg-surface-container-low text-on-surface rounded-l-2xl edge-skirt-r forced-boundary',
           className,
         )}
       >
         {hasHeader && (
-          <div className="flex shrink-0 items-center justify-between gap-4 pr-2 pl-6 pt-3 pb-1">
+          <div
+            ref={headerRef}
+            className="relative flex shrink-0 items-center justify-between gap-4 pr-4 pl-6 pt-5 pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+          >
             {title ? (
               <h2 id={titleId} className="text-title-l min-w-0 wrap-anywhere text-on-surface">
                 {title}

@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom';
 import { Observer, gsap, spring, useGSAP } from '@/lib/motion';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
-import { cn } from '@/lib/utils';
+import { clamp, cn } from '@/lib/utils';
 import ScrollArea from './ScrollArea';
 import {
   useExitAnimation,
@@ -64,8 +64,8 @@ const EXIT_MS = SPRING_MS.defaultEffects;
  *   flush with the screen edge — the shape scale's dialog/sheet step.
  * - **Motion.** Compose's `ModalBottomSheet` pair: it arrives on **DefaultSpatial**
  *   (its overshoot past the bottom edge lands on `edge-skirt-b`, so no gap opens),
- *   leaves on **FastEffects**, and a drag release settles on DefaultSpatial
- *   (`anchoredDraggableMotion`); the scrim fades on DefaultEffects. GSAP owns the transform for the whole
+ *   leaves (and dismisses from drag) on **FastEffects**, and settles back open on
+ *   **DefaultSpatial** (`anchoredDraggableMotion`); the scrim fades on DefaultEffects. GSAP owns the transform for the whole
  *   lifetime rather than CSS keyframes, because the drag below writes the same
  *   property — two owners meant a released drag snapped back to zero before the
  *   exit keyframe could take it down.
@@ -112,7 +112,10 @@ export default function Sheet({
   const placedPanel = useRef<HTMLDivElement | null>(null);
   const enterFrame = useRef(0);
   const scrimRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const pressOnScrim = useRef(false);
+  const swipedClosed = useRef(false);
   const titleId = useId();
 
   useScrollLock(isOpen);
@@ -165,6 +168,9 @@ export default function Sheet({
         return;
       }
       if (!panel) return;
+
+      if (isOpen) swipedClosed.current = false;
+      if (!isOpen && swipedClosed.current) return;
 
       /* Seed only a newly mounted surface. Reopening during its exit keeps the
          current pose; a fromTo here sent it back to the bottom edge first. */
@@ -240,6 +246,12 @@ export default function Sheet({
         if (scrim) gsap.set(scrim, { opacity: height > 0 ? 1 - y / height : 1 });
       });
 
+      const readRenderedY = () => {
+        const matrix = getComputedStyle(panel).transform;
+        if (!matrix || matrix === 'none') return 0;
+        return clamp(new DOMMatrixReadOnly(matrix).m42, 0, height);
+      };
+
       const settle = contextSafe!((dismiss: boolean) => {
         active = false;
         pending = false;
@@ -254,16 +266,14 @@ export default function Sheet({
         if (motionTier('overlay') === 'off') {
           gsap.set(panel, { y: target });
           if (scrim) gsap.set(scrim, { opacity: dismiss ? 0 : 1 });
-          if (dismiss) onCloseRef.current();
+          if (dismiss) {
+            swipedClosed.current = true;
+            onCloseRef.current();
+          }
           return;
         }
 
-        /* **No distance-scaled duration** — a spring already covers a shorter remaining
-           distance in less time, so scaling its clock as well double-counts. Both ways on
-           DefaultSpatial, as Compose settles a released sheet (`anchoredDraggableMotion`): a
-           dismiss overshoots off screen, a settle-back onto the edge skirt. The scrim fades on
-           DefaultEffects. The phone drawer's release takes the same springs. */
-        const release = spring('defaultSpatial', 'overlay');
+        const panelRelease = dismiss ? spring('fastEffects', 'overlay') : spring('defaultSpatial', 'overlay');
         const scrimRelease = spring('defaultEffects', 'overlay');
 
         if (scrim)
@@ -275,13 +285,16 @@ export default function Sheet({
 
         gsap.to(panel, {
           y: target,
-          ...release,
+          ...panelRelease,
           overwrite: true,
           onComplete: () => {
             /* Only tell React once the panel has actually left. Calling it at
                release would flip `isOpen`, and the exit tween above would then
                start a second, competing animation from wherever the finger was. */
-            if (dismiss) onCloseRef.current();
+            if (dismiss) {
+              swipedClosed.current = true;
+              onCloseRef.current();
+            }
           },
         });
       });
@@ -318,12 +331,12 @@ export default function Sheet({
             if (self.axis === 'y') {
               height = panel.offsetHeight;
               if (height <= 0) return;
-              /* The finger takes over from an entrance or a previous release.
-                 Stop those clocks before writing positions, and preserve the
-                 current offset so grabbing a moving sheet does not snap it home. */
-              originY = Number(gsap.getProperty(panel, 'y')) || 0;
+              /* Read the live rendered pixel offset via DOMMatrixReadOnly so grabbing a sheet
+                 mid-entrance (when GSAP holds a percentage y) never returns NaN and snaps to 0. */
+              originY = readRenderedY();
               gsap.killTweensOf(panel);
               if (scrimRef.current) gsap.killTweensOf(scrimRef.current);
+              gsap.set(panel, { yPercent: 0, y: originY });
               active = true;
               pending = false;
             } else if (self.axis === 'x') {
@@ -341,7 +354,7 @@ export default function Sheet({
         onDragEnd: (self) => {
           pending = false;
           if (!active) return;
-          const y = (gsap.getProperty(panel, 'y') as number) || 0;
+          const y = readRenderedY();
           const flick = self.velocityY > FLICK_VELOCITY;
           settle(flick || y / height > COMMIT_RATIO);
         },
@@ -355,6 +368,16 @@ export default function Sheet({
     { dependencies: [rendering], revertOnUpdate: true },
   );
 
+  useEffect(() => {
+    if (!mounted || !rendering) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const update = () => headerRef.current?.toggleAttribute('data-divided', body.scrollTop > 0);
+    body.addEventListener('scroll', update, { passive: true });
+    update();
+    return () => body.removeEventListener('scroll', update);
+  }, [mounted, rendering, hideHandle, title]);
+
   if (!mounted || !rendering) return null;
 
   return createPortal(
@@ -364,6 +387,9 @@ export default function Sheet({
       /* A sheet is a dialog that docks to the bottom edge, so it shares the
          dialog layer — see the stacking-order block in globals.css. */
       className={cn('fixed inset-0 flex flex-col justify-end z-dialog')}
+      onPointerDown={(event) => {
+        pressOnScrim.current = event.target === scrimRef.current;
+      }}
       /* `inert` while leaving — same reason as `Modal`'s: the panel outlives its
          own `isOpen` so the exit tween has a target, and `pointer-events` alone
          would leave a focusable, screen-reader-visible subtree on screen for
@@ -373,7 +399,15 @@ export default function Sheet({
       <div
         ref={scrimRef}
         className="bg-scrim-veil absolute inset-0"
-        onClick={closeOnOverlayClick ? handleClose : undefined}
+        onClick={
+          closeOnOverlayClick
+            ? () => {
+                const started = pressOnScrim.current;
+                pressOnScrim.current = false;
+                if (started) handleClose();
+              }
+            : undefined
+        }
       />
       <div
         ref={panelRef}
@@ -387,7 +421,7 @@ export default function Sheet({
           /* `shadow-e1`, not `e3`: M3 puts the modal bottom sheet at elevation
              level 1. Level 3 is the dialog/FAB/search step — a heavier shadow
              than the thing a sheet is a quieter alternative to. */
-          'bg-surface-container-low text-on-surface rounded-t-2xl edge-skirt-b',
+          'bg-surface-container-low text-on-surface rounded-t-2xl shadow-e1 edge-skirt-b forced-boundary',
           // A sheet on a tablet or a desktop window should not run the whole
           // width of a 1600px screen; it stays a phone-width dock, centred.
           'mx-auto sm:max-w-lg',
@@ -395,22 +429,32 @@ export default function Sheet({
           className,
         )}
       >
-        {!hideHandle && (
-          /* M3's drag handle: a 32×4dp bar in `on-surface-variant`, inside a 48dp
-             touch strip — the spec's unmodified `OnSurfaceVariant` (no alpha) at
-             the touch-target floor, so the one affordance telling a phone user
-             this panel can be pushed back down is at full strength. */
-          /* No browser touch action on the strip or the title: the drag is the
-             sheet's, and a downward pan that reached the browser as well would start
-             its overscroll glow or pull-to-refresh under the finger. */
-          <div className="flex h-12 shrink-0 touch-none items-center justify-center" aria-hidden="true">
-            <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
+        {(!hideHandle || title) && (
+          <div
+            ref={headerRef}
+            className="relative shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+          >
+            {!hideHandle && (
+              /* M3's drag handle: a 32×4dp bar in `on-surface-variant`, inside a 48dp
+                 touch strip — the spec's unmodified `OnSurfaceVariant` (no alpha) at
+                 the touch-target floor, so the one affordance telling a phone user
+                 this panel can be pushed back down is at full strength. */
+              /* No browser touch action on the strip or the title: the drag is the
+                 sheet's, and a downward pan that reached the browser as well would start
+                 its overscroll glow or pull-to-refresh under the finger. */
+              <div className="flex h-12 shrink-0 touch-none items-center justify-center" aria-hidden="true">
+                <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
+              </div>
+            )}
+            {title && (
+              <h2
+                id={titleId}
+                className={cn('text-title-l text-on-surface shrink-0 touch-none px-6 pb-3', hideHandle ? 'pt-6' : 'pt-1')}
+              >
+                {title}
+              </h2>
+            )}
           </div>
-        )}
-        {title && (
-          <h2 id={titleId} className="text-title-l text-on-surface shrink-0 touch-none px-6 pt-1 pb-3">
-            {title}
-          </h2>
         )}
         <ScrollArea
           axis="both"

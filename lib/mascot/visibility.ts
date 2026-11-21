@@ -83,6 +83,13 @@ export function useCompanionPresence(): { present: boolean; away: boolean } {
   const media = useSyncExternalStore(subscribeImageHeroRuntime, () => getImageHeroRuntime().imageId !== null, () => false);
   const lightbox = useSyncExternalStore(subscribeMedia, () => lightboxOpen, () => false);
   const keyboard = useKeyboardInset() > 80;
-  const away = modal || media || lightbox || keyboard || pathname.startsWith('/pic/') || pathname.startsWith('/admin');
+  const away =
+    modal ||
+    media ||
+    lightbox ||
+    keyboard ||
+    pathname.startsWith('/pic/') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/messages');
   return { present, away };
 }

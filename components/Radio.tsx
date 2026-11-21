@@ -54,6 +54,7 @@ export default function Radio({
   const rippleHostRef = useRef<HTMLSpanElement>(null);
   return (
     <label
+      data-ripple-own=""
       onPointerDown={(event) => {
         if (disabled) return;
         startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
@@ -103,9 +104,9 @@ export default function Radio({
           aria-hidden="true"
           className={cn(
             /* The ring's colour on DefaultEffects, as `RadioButton.kt`'s `animateColorAsState`. */
-            'relative h-5 w-5 rounded-full border-2 spring-default-effects transition-[border-color] pointer-events-none',
+            'relative h-5 w-5 rounded-full border-2 spring-default-effects transition-[border-color,box-shadow] pointer-events-none',
             /* The outline half comes back under forced colors, where the ring is not painted. */
-            'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden',
+            'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight]',
             checked ? 'border-primary-ink forced-colors:border-[color:Highlight]' : 'border-on-surface-variant',
           )}
         />

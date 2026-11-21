@@ -14,12 +14,10 @@ export interface ConfirmOptions {
   /** Defaults to 取消. */
   cancelLabel?: string;
   /**
-   * `danger` for anything that destroys or is hard to undo — deleting a row,
-   * blacklisting an image. It is the only tone that tints the scrim red, so a
-   * destructive question must name it; the default keeps the cancel-first focus
-   * without claiming the question is destructive. An action a user can simply undo —
-   * logging out, unbinding a key — is `filled`, not `danger`. `filled` also suits a
-   * step that merely needs acknowledging, which is what an upload's guideline check is.
+   * `danger` (default) for anything that destroys or is hard to undo — deleting a row,
+   * blacklisting an image. Pairs the danger button, cancel-first focus, and the danger
+   * scrim together. An action a user can simply undo — logging out, unbinding a key —
+   * or a step that merely needs acknowledging is `filled`, not `danger`.
    */
   tone?: 'danger' | 'filled';
 }
@@ -94,7 +92,7 @@ export function useConfirm() {
       aria-describedby={messageId}
       hideCloseButton
       maxWidth="sm"
-      danger={options?.tone === 'danger'}
+      danger={tone === 'danger'}
       footer={
         <>
           <Button

@@ -171,6 +171,7 @@ export default function Pagination({
     >
       {known && (
         <button
+          type="button"
           onClick={() => go(1)}
           disabled={!canPrev || disabled}
           aria-label="第一页"
@@ -182,6 +183,7 @@ export default function Pagination({
       )}
 
       <button
+        type="button"
         onClick={() => go(currentPage - 1)}
         {...pageIntent(currentPage - 1)}
         disabled={!canPrev || disabled}
@@ -199,6 +201,7 @@ export default function Pagination({
           return (
             <button
               key={page}
+              type="button"
               onClick={() => go(page)}
               {...pageIntent(page)}
               disabled={disabled}
@@ -208,8 +211,9 @@ export default function Pagination({
               className={cn(
                 /* 40dp with `touch-size`, for the reason on `navBtn` above:
                    most-tapped chrome in the app, and `data-ripple` rules out a
-                   hit-area pseudo-element. */
-                'inline-flex h-10 w-10 touch-size cursor-pointer items-center justify-center rounded-full',
+                   hit-area pseudo-element. Keep the touch floor ahead of 40dp so
+                   `min-w-*` never shrinks coarse targets while 4-digit pages expand. */
+                'inline-flex h-10 px-2 touch-size min-w-[max(2.5rem,var(--touch-floor))] cursor-pointer items-center justify-center rounded-full tabular-nums',
                 /* Chrome: a quick second tap on the next number must not zoom the
                    page, nor a long press select the digit. */
                 'focus-visible:outline-hidden select-none touch-manipulation',
@@ -238,6 +242,7 @@ export default function Pagination({
       </div>
 
       <button
+        type="button"
         onClick={() => go(currentPage + 1)}
         {...pageIntent(currentPage + 1)}
         disabled={!canNext || disabled}
@@ -251,6 +256,7 @@ export default function Pagination({
 
       {known && (
         <button
+          type="button"
           onClick={() => go(totalPages)}
           disabled={!canNext || disabled}
           aria-label="最后一页"

@@ -9,26 +9,42 @@ import FollowHeight from '@/components/FollowHeight';
 import { DETAIL_TAG_SECTIONS, DetailTagPlaceholder, DetailTagSection } from '@/components/detail/DetailTagSections';
 import { useTooltip } from '@/components/Tooltip';
 import { formatCount } from '@/lib/format';
-import { tagCategoryChip } from '@/lib/tagCategories';
+import { ratingTagChip, ratingTagRank, tagCategoryChip } from '@/lib/tagCategories';
 import { tagTranslationKey } from '@/lib/tagTranslations';
 
-const TAG_BATCH_SIZE = 120;
-const RELATION_TAG_BATCH_SIZE = 64;
+const TAG_BATCH_SIZE = 80;
+const RELATION_TAG_BATCH_SIZE = 32;
+
+/** Infer categorical colour for rating and namespaced regular tags so key tags stand out. */
+function regularTagColors(tag: string): string | undefined {
+  const rating = ratingTagChip(tag);
+  if (rating) return rating;
+  const lower = tag.toLowerCase();
+  if (lower.startsWith('origin:')) return tagCategoryChip('origin');
+  if (lower.startsWith('species:')) return tagCategoryChip('species');
+  if (lower.startsWith('character:')) return tagCategoryChip('character');
+  return undefined;
+}
 
 export type TagGroups = { artists: string[]; ocs: string[]; regularTags: string[] };
 export const EMPTY_TAG_GROUPS: TagGroups = { artists: [], ocs: [], regularTags: [] };
 
 export function groupTags(tags: string[] | undefined): TagGroups {
   if (!tags?.length) return EMPTY_TAG_GROUPS;
-  const groups: TagGroups = { artists: [], ocs: [], regularTags: [] };
+  const artists: string[] = [];
+  const ocs: string[] = [];
+  const ratings: string[] = [];
+  const others: string[] = [];
   tags.forEach((tag) => {
-    if (tag.startsWith('artist:')) groups.artists.push(tag.slice(7));
-    else if (tag.startsWith('oc:')) groups.ocs.push(tag.slice(3));
+    if (tag.startsWith('artist:')) artists.push(tag.slice(7));
+    else if (tag.startsWith('oc:')) ocs.push(tag.slice(3));
     else if (!tag.startsWith('spoiler:') && !tag.startsWith('suggestion:')) {
-      groups.regularTags.push(tag);
+      if (ratingTagRank(tag) >= 0) ratings.push(tag);
+      else others.push(tag);
     }
   });
-  return groups;
+  if (ratings.length > 1) ratings.sort((a, b) => ratingTagRank(a) - ratingTagRank(b));
+  return { artists, ocs, regularTags: [...ratings, ...others] };
 }
 
 export type TagSection = 'artists' | 'ocs' | 'regular';
@@ -207,7 +223,7 @@ export default function TagList({
                             tag={tag}
                             label={label(tag)}
                             count={section.key === 'regular' ? applied.counts?.[tag] : undefined}
-                            colors={section.colors}
+                            colors={section.colors ?? regularTagColors(tag)}
                             onClick={() =>
                               section.prefix
                                 ? router.push(`/search?q=${encodeURIComponent(section.prefix + tag)}`, { scroll: false })

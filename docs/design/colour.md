@@ -13,7 +13,7 @@ Palette derivation, token use, focus and forced-colour behaviour. Shape and elev
 
 | Role | Use |
 | --- | --- |
-| `primary` + `on-primary` | Filled controls and brand containers |
+| `primary` + `on-primary` | Filled controls, active pagination, checked switches and brand containers |
 | `primary-ink` + `on-primary-ink` | Brand-coloured marks on a surface and foreground drawn on them (such as checked checkboxes) |
 | `on-primary-variant` | App-bar icons and wordmark only |
 | `secondary-container` pair | Tonal controls and committed selections |
@@ -137,7 +137,7 @@ Arrow keys choose a palette, Home/End choose endpoints. Guard rapid changes agai
 | Component | Container |
 | --- | --- |
 | Filled Card | `surface-container-highest` |
-| Elevated Card | `surface-container-low` |
+| Elevated Card | `surface-container` |
 | Outlined Card | `surface` with `outline-variant` |
 | Dialog | `surface-container-high` |
 | Sheet and drawer | `surface-container-low` |
@@ -159,7 +159,7 @@ Use container tones or add an owned token instead of adding alpha to a colour.
 - Scrims use `bg-scrim-veil`; a destructive confirmation uses `bg-scrim-danger`; cropping uses `--md-sys-color-crop-mask`.
 - Sheet drag handles use full-strength `on-surface-variant`.
 - State opacity comes through `state-layer`, not a copied number.
-- Element opacity is for motion, the shared paging dim or `disabled-content`, not secondary text weight.
+- Element opacity is for motion, `paging-dim` or `disabled-content`, not secondary text weight.
 - Disabled content uses `disabled-content` at 38%; busy controls retain active material.
 
 Owned alpha colours use `rgb(var(--md-sys-color-*-rgb) / alpha)` so Chrome 109 keeps the same opacity. Scrim and on-media channels are scheme-independent. `scripts/palette.mjs` and `paletteBlocksCss` generate on-surface channels beside the source colour for both built-in and custom palettes, including SSR. Keep channel use inside existing tokens and primitives; it does not permit call-site alpha.

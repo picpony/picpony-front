@@ -27,6 +27,7 @@ import { useTextTranslation } from '@/lib/translation';
 import { readToken, useNow, useSession } from '@/lib/hooks';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { ICON } from '@/lib/icons';
+import { cn } from '@/lib/utils';
 import type { Comment } from '@/lib/types/image';
 
 export type { ReplyTarget };
@@ -109,7 +110,7 @@ function CommentRow({
       aria-label={`${comment.username} 的评论`}
       /* A grouped list: `m3-row` is the app's shape for a run of related rows — large outer
          corners, the small step at every cut, a 2px seam between. */
-      className="m3-row bg-surface-container-low flex gap-3 p-3 focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset sm:gap-4 sm:p-4"
+      className="group m3-row bg-surface-container-low flex gap-3 p-3 focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset sm:gap-4 sm:p-4"
     >
       <CommentAvatar comment={comment} />
       <div className="min-w-0 flex-1">
@@ -119,7 +120,12 @@ function CommentRow({
         <div className="flex min-h-8 items-center gap-2">
           <span className="min-w-0 truncate text-label-l-emphasized text-on-surface">{comment.username}</span>
           {level !== null && <Badge className="shrink-0">Lv.{level}</Badge>}
-          <div className="ms-auto flex shrink-0 items-center">
+          <div
+            className={cn(
+              'ms-auto flex shrink-0 items-center gap-1',
+              !translation.busy && !deleting && translation.translation === null && 'hover-reveal',
+            )}
+          >
             <IconButton
               size="sm"
               toggle
@@ -133,7 +139,7 @@ function CommentRow({
             {canDelete && (
               <IconButton
                 size="sm"
-                variant="danger-text"
+                variant="danger-quiet"
                 loading={deleting}
                 aria-label="删除"
                 icon={<MdDeleteOutline />}
@@ -153,7 +159,7 @@ function CommentRow({
         </div>
         {/* `wrap-anywhere` and `min-w-0`: a comment holding one long URL used to keep its
             min-content width and push the detail's scroller sideways, which now clips. */}
-        <div className="mt-1 min-w-0 text-body-m text-on-surface wrap-anywhere">
+        <div className="mt-2 min-w-0 text-body-m text-on-surface wrap-anywhere">
           <RichTextRenderer content={body} />
         </div>
         {translation.translation !== null && (

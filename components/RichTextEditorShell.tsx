@@ -34,8 +34,8 @@ export const EDITOR_MIN_HEIGHT: Record<RichTextEditorSize | 'default', readonly 
 };
 
 /** Shared geometry for the loaded field and its lazy placeholder. */
-export const EDITOR_FRAME_CLASS_NAME = 'rich-text-editor relative w-full min-w-0 rounded-xl border bg-surface';
-export const EDITOR_TOOLBAR_CLASS_NAME = 'flex min-h-[calc(max(40px,var(--touch-floor))+13px)] rounded-t-[calc(var(--radius-xl)-1px)] border-b border-outline-variant bg-surface-container-low';
+export const EDITOR_FRAME_CLASS_NAME = 'rich-text-editor relative w-full min-w-0 rounded-md border bg-surface';
+export const EDITOR_TOOLBAR_CLASS_NAME = 'flex min-h-[calc(max(40px,var(--touch-floor))+13px)] rounded-t-[calc(var(--radius-md)-1px)] border-b border-outline-variant bg-surface-container-low';
 
 /**
  * The editor's footprint while its chunk loads: the one-row toolbar (a 40dp control, or the touch

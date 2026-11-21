@@ -58,7 +58,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
 
   const failedTurn = read.isPrevious && Boolean(read.error);
   return (
-    <div aria-busy={read.isLoading || undefined}>
+    <div className="max-w-4xl" aria-busy={read.isLoading || undefined}>
       {own && hiddenFromVisitors(profile, 'comments') && <OwnerHiddenNote tab="comments" />}
       {failedTurn && (
         <div className="mb-4">
@@ -103,7 +103,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
                     <Badge tone="primary" icon={where.icon}>
                       {where.label}
                     </Badge>
-                    <span className="text-body-s text-on-surface-variant">{when}</span>
+                    <span className="text-body-s tabular-nums text-on-surface-variant">{when}</span>
                   </div>
                   <div className="line-clamp-3 text-body-m text-on-surface wrap-anywhere">
                     <RichTextRenderer content={comment.body} />

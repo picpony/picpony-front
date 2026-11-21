@@ -198,7 +198,7 @@ export default function DetailHeader({
             />
           </div>
         </div>
-        <div className={cn(row, 'shrink-0 text-body-s text-on-surface-variant tabular-nums')}>
+        <div className={cn(row, 'image-detail-header-caption shrink-0 text-body-s text-on-surface-variant tabular-nums')}>
           <span className="min-w-0 truncate">
             <span className="sr-only">尺寸</span>
             {image.width} × {image.height} px

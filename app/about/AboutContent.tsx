@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AnimationItem } from 'lottie-web';
 import Link from 'next/link';
+import { MdChevronRight, MdOpenInNew } from 'react-icons/md';
 import FlutedGlass from '@/components/FlutedGlass';
 import DeveloperGuideModal from '@/components/DeveloperGuideModal';
 import {
@@ -23,6 +24,7 @@ import { teamMembers, type TeamMember } from '@/lib/resources';
 import type { TeamSeed } from '@/lib/team.server';
 import { readToken } from '@/lib/hooks';
 import { getAssetUrl } from '@/lib/utils';
+import { ICON } from '@/lib/icons';
 import Avatar from '@/components/Avatar';
 import AboutFrame, { ROSTER_GRID, TeamCard, TeamSkeleton } from './AboutFrame';
 
@@ -232,7 +234,7 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                   const inner = (
                     <>
                       <Avatar src={avatar} name={m.name} size={48} unoptimized />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         {/* The name is the cell's content: two lines before it is cut (OD-6), its
                             whole text still in `title`. A long Latin handle breaks inside the
                             word rather than overflowing; the grid stretches every cell in a row to
@@ -244,6 +246,11 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                           {m.role}
                         </p>
                       </div>
+                      {link && (
+                        <span className="shrink-0 text-on-surface-variant [&>svg]:block" aria-hidden="true">
+                          {link.external ? <MdOpenInNew size={ICON.dense} /> : <MdChevronRight size={ICON.dense} />}
+                        </span>
+                      )}
                     </>
                   );
                   /* Focus ring and ripple, like every other interactive row in the app — without

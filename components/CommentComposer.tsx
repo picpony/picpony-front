@@ -159,7 +159,7 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
 
   if (!signedIn || !editorOpen) {
     return (
-      /* A real `<button>` shaped as the filled field it opens into: it starts the editor, so it
+      /* A real `<button>` shaped as the 12dp editor shell it opens into: it starts the editor, so it
          has to be reachable by keyboard and announce itself. 56dp, the field's own height — the
          354px box it used to reserve put most of a phone screen of nothing above the thread. */
       <button
@@ -168,7 +168,7 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
         onPointerEnter={signedIn ? warmEditor : undefined}
         onFocus={signedIn ? warmEditor : undefined}
         data-ripple=""
-        className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-sm bg-surface-container-highest px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+        className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-md bg-surface-container-high px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer forced-boundary focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
       >
         <span className="truncate">
           {signedIn ? (trimmed ? '继续编辑评论…' : '发表评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}

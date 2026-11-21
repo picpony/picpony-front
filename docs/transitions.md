@@ -159,7 +159,7 @@ Reloaded orphan ladders collapse to their original list. A cold detail without a
 
 - The complete viewer rises from below the viewport on SlowSpatial and fades in on SlowEffects. A media-stage edge skirt covers spatial overshoot.
 - The complete `data-app-root`, including the app bar, drawer and current detail, recedes to 92% around the viewport centre. Scale uses SlowSpatial. Corners start at zero and gradually reach the existing 28 dp surface shape, using the monotone effects curve over the full depth clock so they do not round ahead of the retreat. Both return on DefaultEffects.
-- Shell opacity eases from 100% to 80% on SlowEffects during arrival and returns to 100% on DefaultEffects during close. Reduced motion retains this fade; off applies it immediately.
+- Shell opacity eases from 100% to 80% on SlowEffects during arrival and returns to 100% on DefaultEffects during close. `body[data-lightbox-backdrop]` holds `media-stage` behind the receding shell through exit so light mode never flashes pale margins. Reduced and off tiers retain `opacity: 1` without shell scaling.
 - The top-right toolbar uses one continuous `media-plate` background with `on-media` ink. Individual buttons and navigation arrows have transparent backgrounds and retain the shared hover, focus and press state layer. Navigation arrows keep their existing anchors.
 - Closing returns the shell while the viewer moves down and fades on DefaultEffects. Transitions continue from their displayed pose when interrupted.
 - Reduced motion keeps an 8 px arrival and fade, without shell scaling. Off applies state immediately. Both use the image motion category, including custom settings.

@@ -98,7 +98,7 @@ Do not use browser confirm/prompt, naked clipboard writes, secure-context-only U
 
 ## Buttons, icons and semantics
 
-Button variants are `filled`, `tonal`, `surface`, `accent`, `text`, `on-container`, `on-fill`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
+Button variants are `filled`, `tonal`, `surface`, `accent`, `tertiary`, `text`, `on-container`, `on-fill`, `danger`, `danger-text`, `success` and `warning`. Semantic fills use the shared `*-fill` pairs. There is no outlined Button variant; secondary actions use the existing tonal/surface/text choices.
 
 `ButtonLink` shares Button's icon slots, responsive labels, inner ripple host and pressed shape. Pass icons through `icon` / `trailingIcon`; do not copy the button recipe onto navigation links. External links retain their `target` / `rel` and use `prefetch={false}`. Text links in prose keep the prose-link treatment.
 
@@ -148,7 +148,7 @@ The shared `.m3-field` shell owns geometry. See [Layout](layout.md#control-heigh
 - Password fields use the shared visibility toggle, with the duplicate native eye suppressed.
 - A one-line unlabelled Textarea uses padding derived from the shared line height and 56 dp field height.
 - Select keeps the intrinsic width of its widest option, not only its selected value.
-- Supporting text, field errors and counters sit 4 dp below their control with M3's 16 dp inline inset. Single-line `Input` renders its `count` inline in the trailing slot so counter-only fields do not add an empty supporting row; multiline `Textarea` keeps `count` in `Field`'s supporting row.
+- Supporting text, field errors and counters sit 4 dp below their control, flush with its horizontal edges. Single-line `Input` renders its `count` inline in the trailing slot so counter-only fields do not add an empty supporting row; multiline `Textarea` keeps `count` in `Field`'s supporting row.
 - `useCombobox` owns keyboard handling. Do not preselect the first suggestion and turn Enter into an unintended selection.
 
 Outlined focus thickens the existing boundary; filled focus uses the shared ring. Invalid-state precedence is specified in [Colour / Focus](colour.md#focus).
@@ -175,7 +175,7 @@ The toolbar stays between the search field and results in success, empty and fai
 
 The chart heading gives the view controls their intrinsic width and wraps the subtitle in the remaining space. In the date-range card, the title and date labels occupy matching rows around the slider's 48 dp hit area, including during loading.
 
-`StatChart` keeps the readout outside `SwapContent`, which replaces only the plot. Inactive retained panes update directly without playing hidden swaps; superseded runs are cancelled, and an active handoff waits for all incoming and outgoing tracks to finish. Category changes remain the enclosing `TabPanes`' responsibility. Data/view changes reveal authentic strokes from left to right on `defaultEffects`; reduced motion only fades, and off paints the final line immediately. First client arrivals use the entrance category, while hydration never re-hides server-painted data; later changes use feedback. Do not interpolate counts into a fictitious trend. Refresh shimmer covers the plotting rectangle without masking axis labels or replacing retained data. If a new window fails to load, identify the retained window beside the chart; do not repeat the dates on a successful read.
+`StatChart` keeps the readout outside `SwapContent`, which replaces only the plot. Inactive retained panes update directly without playing hidden swaps; superseded runs are cancelled, and an active handoff waits for all incoming and outgoing tracks to finish. Category changes remain the enclosing `TabPanes`' responsibility. Data/view changes reveal authentic strokes (and single-series gradient fills inside `StatSeriesPaint`) from left to right on `defaultEffects`; reduced motion only fades, and off paints the final line immediately. Date axis ticks use uniform integer strides (up to 7 labels so a 7-day window never drops a middle day), and multi-series charts pair colours with distinct dash patterns so monochrome harmony stays readable. First client arrivals use the entrance category, while hydration never re-hides server-painted data; later changes use feedback. Do not interpolate counts into a fictitious trend. Refresh shimmer covers the plotting rectangle without masking axis labels or replacing retained data. If a new window fails to load, identify the retained window beside the chart; do not repeat the dates on a successful read.
 
 Axes retain the `label-s` role at the measured container width. Theme ink, container and outline roles replace translucent plot colours. One readout above the plot pairs each series mark with its value. It shows the window overview until the user inspects a bucket by hover, touch, or keyboard; the dated bucket values replace the overview rather than appearing in a second row. Escape, or a second tap on the same bucket, returns to the overview. Cumulative growth uses the final bucket, additions sum the buckets, and traffic uses the API's window counts. Community series remain separate; do not add posts, comments, favourites and badges into one count. An empty plot uses `EmptyState` without removing the view controls.
 
@@ -210,7 +210,7 @@ Use the overlay hooks for focus, scroll locks and dismissal. A normal modal make
 - Modal scrim and panel are siblings so opacity does not multiply.
 - Reverse from the current animated pose; a drag cancels settling before taking over.
 - Only one scrim is visible across a handoff between dialogs.
-- A question that destroys something tints the scrim red: `Modal danger`, or `tone: 'danger'` on `useConfirm`. The veil carries a slow diagonal hatch that the reduced tier stops and the off tier removes; the tint is opt-in, so a delete confirmation names the tone, and every other dialog keeps the neutral veil. An action the user can undo — logging out, unbinding a key — answers with `filled`, never `danger`.
+- A question that destroys something tints the scrim red: `Modal danger`, or `tone: 'danger'` on `useConfirm` (`ConfirmDialog` syncs `danger={tone === 'danger'}`). The veil carries a slow diagonal hatch driven by `ambient`/`overlay` that the reduced tier stops and the off tier removes; the tint is opt-in, so a delete confirmation names the tone, and every other dialog keeps the neutral veil. An action the user can undo — logging out, unbinding a key — answers with `filled`, never `danger`.
 - Keep exiting surfaces mounted but excluded from interaction.
 - A gesture ends on release, cancellation, external state changes, disablement or unmount. Cleanup must restore React's state.
 - Use Modal's wrapping `footer`; `mr-auto` supplies a leading action. Do not duplicate a footer in the scrolling body.
@@ -253,7 +253,7 @@ An image is loaded only when `complete && naturalWidth > 0`. Recompute that bool
 
 ## Lists, grids and presence
 
-MasonryGrid owns aspect ratios, column placement, gaps, image links, list semantics, comment-count reads and image sequence activation.
+MasonryGrid owns aspect ratios (clamped to `[0.45, 2.2]` via `clampedCardAspect` with `object-top` framing for tall strips), `@container` column placement (`520 px` 3-col, `820 px` 4-col), gaps, image links, list semantics, comment-count reads and image sequence activation. `ImageCard` omits redundant static-format badges (`PNG`/`JPG`/`WEBP`) while keeping animated/video/vector marks and a centered play badge on `ImageCardVideo`.
 
 - Reuse it for uploads, favourites and subscription galleries. Profile uploads are a Derpibooru uploader search, not a PicPony uploads action.
 - Use `createPagedSequence` for cross-page previous/next and return reveal.

@@ -225,7 +225,7 @@ export default function SearchToolbar({
           ref={chipRowRef}
           role="list"
           aria-label="已应用的筛选条件"
-          className="scrollbar-hide scroll-fade-x mt-3 flex items-center gap-2 overflow-x-auto"
+          className="scrollbar-hide scroll-fade-x mt-1.5 -mb-1.5 flex items-center gap-2 overflow-x-auto py-1.5"
         >
           {chips.map((chip) => (
             <span role="listitem" key={chip.key} className="shrink-0">
@@ -396,7 +396,7 @@ function ChoiceCondition({
 }) {
   const captionId = useId();
   return (
-    <div>
+    <div role="group" aria-labelledby={captionId}>
       <ConditionCaption id={captionId}>{label}</ConditionCaption>
       <Select value={value} onChange={onChange} size="sm" className="w-full" aria-label={label} options={options} />
     </div>

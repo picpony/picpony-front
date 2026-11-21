@@ -300,9 +300,9 @@ export default function RangeSlider({
         {renderInput('end', endLabel)}
         <SliderPaint>
           <SliderRail ref={railRef}>
-            <SliderTrack ref={inactiveStartRef} part="inactive-start" clip={pose.inactiveStart} />
+            <SliderTrack ref={inactiveStartRef} part="inactive-start" clip={pose.inactiveStart} stopIndicator="start" />
             <SliderTrack ref={activeRef} part="active" clip={pose.active} />
-            <SliderTrack ref={inactiveRef} part="inactive" clip={pose.inactive} stopIndicator />
+            <SliderTrack ref={inactiveRef} part="inactive" clip={pose.inactive} stopIndicator="end" />
             <SliderHandle ref={positionRef} handle="start" transform={pose.transform} focused={focusVisible === 'start'} pressed={dragging === 'start'} />
             <SliderHandle ref={endPositionRef} handle="end" transform={pose.endTransform} focused={focusVisible === 'end'} pressed={dragging === 'end'} />
           </SliderRail>

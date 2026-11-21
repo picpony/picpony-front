@@ -26,8 +26,8 @@ const clean = (raw: string) => raw.replace(/\D/g, '');
  * A one-time-code field.
  *
  * M3 has no component for this, so the thing that matters is that it wears the
- * *text field's* vocabulary rather than inventing a second one: the field's
- * 4dp corner, its `outline` boundary, and its focus indicator (the outline
+ * *text field's* vocabulary rather than inventing a second one: the outlined
+ * field's 12dp corner, its `outline` boundary, and its focus indicator (the outline
  * thickening to 2dp `primary`, with no ring beside it).
  *
  * The parts easy to forget, all handled here:
@@ -192,17 +192,17 @@ export default function CodeInput({
           }}
           onKeyDown={(event) => onKeyDown(event, i)}
           onPaste={(event) => onPaste(event, i)}
-          /* The text field's own language: 4dp corner, 56dp height, an `outline`
-             boundary, and that outline thickening to 2dp `primary` on focus as
-             the only indicator. No container fill — an outlined field has none,
-             and a fill here shows as six pale plates on any darker surface. */
+          /* Outlined field language: 12dp corner (`rounded-md`), 56dp height, an `outline`
+             boundary darkening on hover, and an inset 1px ring + primary-ink border on focus
+             (total 2dp thickness without changing border-width, so the centred digit never shifts). */
           className={cn(
             // Native fields have an intrinsic width floor; release it so all
             // six boxes still fit inside a narrow dialog's content column.
-            'text-title-m-emphasized h-14 w-10 min-w-0 rounded-xs border border-outline text-center tabular-nums sm:w-11',
+            'text-title-m-emphasized h-14 w-10 min-w-0 rounded-md border border-outline text-center tabular-nums sm:w-11',
             'text-on-surface focus-visible:outline-hidden',
-            'spring-fast-effects transition-[border-color]',
-            'focus:border-2 focus:border-primary-ink',
+            'spring-fast-effects transition-[border-color,box-shadow]',
+            'hover:not-focus:not-disabled:border-on-surface',
+            'focus:border-primary-ink focus:ring-1 focus:ring-inset focus:ring-primary-ink',
             'disabled:cursor-not-allowed disabled:disabled-content',
           )}
         />

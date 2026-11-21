@@ -318,6 +318,8 @@ export const HERO_BACKGROUND_SINK_SCALE = 0.97;
  * the transform (see `buildOverlayAnimations`).
  */
 export const REVEAL_CONTENT_DURATION_MS = SPRING_MS.defaultEffects;
+/** Departure fade for floating detail chrome: fast effects, matching `HIDE_EASING`. */
+export const HIDE_CONTENT_DURATION_MS = SPRING_MS.fastEffects;
 
 /**
  * How long a superseded flyer takes to fade out: a leave, so the fast effects spring. A base

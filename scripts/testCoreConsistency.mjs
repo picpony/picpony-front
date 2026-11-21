@@ -761,11 +761,15 @@ test('tag groups keep their distinct navigation actions and independent expansio
     '@/components/detail/DetailTagSections': tagSections,
     '@/components/Tooltip': { useTooltip: (label) => ({ anchorRef: null, anchorProps: { tip: label }, tooltip: null }) },
     '@/lib/format': { formatCount: (value) => String(value) },
-    '@/lib/tagCategories': { tagCategoryChip: (category) => category },
+    '@/lib/tagCategories': {
+      tagCategoryChip: (category) => category,
+      ratingTagRank: (tag) => (tag === 'safe' ? 0 : tag === 'grimdark' ? 5 : -1),
+      ratingTagChip: (tag) => (tag === 'safe' ? 'rating:green' : tag === 'grimdark' ? 'rating:purple' : undefined),
+    },
     '@/lib/tagTranslations': { tagTranslationKey: (name) => name.toLowerCase() },
   });
   const tree = TagList({
-    tags: ['artist:one & two', 'artist:second', 'oc:pony', 'oc:other', 'safe', 'smile', 'spoiler:omit'],
+    tags: ['artist:one & two', 'artist:second', 'oc:pony', 'oc:other', 'smile', 'safe', 'spoiler:omit'],
     visibleTagLimits: { imageId: 4, artists: 1, ocs: 1, regular: 1 },
     translations: { safe: '安全' },
     counts: { safe: 0 },
@@ -791,6 +795,7 @@ test('tag groups keep their distinct navigation actions and independent expansio
   assert.equal(spans.find((span) => span.props.className === 'truncate').props.children, '安全');
   assert.equal(spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children, '0');
   assert.equal(chips[2].props.tip, 'safe');
+  assert.equal(chips[2].props.colors, 'rating:green');
   assert.equal(chips[0].props.tip, undefined);
   collect(tree, 'Button').forEach((button) => button.props.onClick());
   assert.deepEqual(expanded, ['artists', 'ocs', 'regular']);

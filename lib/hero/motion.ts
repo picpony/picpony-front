@@ -13,6 +13,7 @@ import {
   HERO_REVERSE_TRAVEL_RATIO,
   HERO_REVEAL_SELECTOR,
   HERO_UNCLIP_SELECTOR,
+  HIDE_CONTENT_DURATION_MS,
   HIDE_EASING,
   FLIGHT_REBUILD_MIN_MS,
   FLIGHT_RETIRE_MS,
@@ -630,7 +631,7 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
               easing: REVEAL_EASING,
             }
           : {
-              duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
+              duration: Math.min(duration, scaledMs(HIDE_CONTENT_DURATION_MS, 'image')),
               easing: HIDE_EASING,
             },
       ),

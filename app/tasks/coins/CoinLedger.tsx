@@ -123,6 +123,7 @@ export default function CoinLedger() {
         {read.isPrevious && read.error !== undefined && (
           <ErrorRetry
             size="inline"
+            className="mb-4"
             title={`第 ${page} 页加载失败`}
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
@@ -131,7 +132,7 @@ export default function CoinLedger() {
         <div
           className={cn(
             'space-y-6 transition-opacity spring-default-effects',
-            read.isPrevious && read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100',
+            read.isPrevious && read.isLoading ? 'paging-dim' : 'opacity-100',
           )}
           aria-busy={read.isLoading || undefined}
         >
@@ -179,7 +180,7 @@ export default function CoinLedger() {
 
   return (
     <>
-      <PageBack onClick={handleBack} label="返回等级与任务" />
+      <PageBack onClick={handleBack} label="返回" />
       <div className="page-back-room mx-auto max-w-4xl">
         {header}
         {body}

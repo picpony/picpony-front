@@ -88,7 +88,7 @@ export default function SectionHeading({
         )}
         <span className="min-w-0 wrap-anywhere">{children}</span>
       </span>
-      {aside && <span className="text-body-m max-w-full wrap-anywhere text-on-surface-variant">{aside}</span>}
+      {aside && <span className="text-body-m max-w-full wrap-anywhere tabular-nums text-on-surface-variant">{aside}</span>}
     </Tag>
   );
 

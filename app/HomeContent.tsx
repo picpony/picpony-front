@@ -12,7 +12,7 @@ import {
   useState,
 } from 'react';
 import { MdTune } from 'react-icons/md';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { getBrowsingSettings } from '@/lib/api/client';
 import { SKIP, useResource } from '@/lib/resource';
 import { DEFAULT_BROWSING_FINGERPRINT } from '@/lib/searchQuery';
@@ -45,6 +45,8 @@ import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
 import TabPanes, { TabPane, tabId } from '@/components/TabPanes';
 import Tabs from '@/components/Tabs';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
+import Skeleton from '@/components/Skeleton';
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -303,7 +305,7 @@ function PagedImages<T>({
       <div
         ref={setRows}
         className={`transition-opacity spring-default-effects ${
-          busy ? 'pointer-events-none opacity-50' : 'opacity-100'
+          busy ? 'paging-dim' : 'opacity-100'
         }`}
       >
         {/* No entrance of its own: both lists live in swapping panes (全部 / 本站讨论), and a grid
@@ -514,7 +516,6 @@ function FeedList({
     [sort, fp, readPage, reveal],
   );
 
-  const router = useRouter();
   return (
     <PagedImages
       listKey={`home:${sort}:${fp}`}
@@ -536,7 +537,7 @@ function FeedList({
         page > 1 ? (
           <EmptyState
             size="pane"
-            title="这一页没有图片"
+            title="此页没有图片"
             action={<Button variant="tonal" onClick={() => onPageChange(1)}>回到第一页</Button>}
           />
         ) : (
@@ -545,9 +546,9 @@ function FeedList({
             title="暂无图片"
             description="当前内容筛选设置下没有可显示的图片"
             action={
-              <Button variant="tonal" icon={<MdTune />} onClick={() => router.push('/settings', { scroll: false })}>
+              <ButtonLink href="/settings" variant="tonal" icon={<MdTune />}>
                 前往设置
-              </Button>
+              </ButtonLink>
             }
           />
         )
@@ -580,7 +581,6 @@ function DiscussedList({
   onPageChange: (page: number) => void;
   enabled: boolean;
 }) {
-  const router = useRouter();
   /* No server seed for this view, so the read waits for the device's own fingerprint rather
      than starting on the server's default during hydration and being superseded a frame later. */
   const mounted = useMounted();
@@ -608,9 +608,9 @@ function DiscussedList({
   );
 
   const settings = (
-    <Button variant="text" size="xs" icon={<MdTune />} onClick={() => router.push('/settings', { scroll: false })}>
+    <ButtonLink href="/settings" variant="text" size="xs" icon={<MdTune />}>
       前往设置
-    </Button>
+    </ButtonLink>
   );
 
   return (
@@ -646,7 +646,7 @@ function DiscussedList({
         ) : page > 1 ? (
           <EmptyState
             size="pane"
-            title="这一页没有图片"
+            title="此页没有图片"
             action={<Button variant="tonal" onClick={() => onPageChange(1)}>回到第一页</Button>}
           />
         ) : (
@@ -828,14 +828,16 @@ export default function HomeContentRoot({
   forumSeed?: ForumSeed | null;
 }) {
   return (
-    /* The fallback mirrors `HomeContent`'s gallery pane — banner slot, then grid, inside
-       the same page gutters. A bare `<ImageGridSkeleton />` was missing both, so the
-       first paint put the grid at the top of the page against the viewport edge and
-       everything jumped down and inwards when the real tree arrived. */
+    /* The fallback mirrors `HomeContent`'s gallery pane — banner slot, category tabs, then grid,
+       inside the same page gutters — so first paint lands on the real layout without shifting. */
     <Suspense
       fallback={
         <div className="max-w-7xl mx-auto">
           <FeaturedBannerSkeleton />
+          <div className="mb-4 flex gap-3 sm:mb-6" aria-hidden="true">
+            <Skeleton className="h-12 w-16" />
+            <Skeleton className="h-12 w-20" delay={60} />
+          </div>
           <ImageGridSkeleton />
         </div>
       }

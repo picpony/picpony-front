@@ -5,6 +5,7 @@ export type ButtonVariant =
   | 'tonal'
   | 'surface'
   | 'accent'
+  | 'tertiary'
   | 'text'
   | 'on-container'
   | 'on-fill'
@@ -50,6 +51,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   // Neutral commands beside fields and dropdowns share their container material.
   surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
   accent: 'bg-primary-container text-on-primary-container ripple-primary focus-ring forced-boundary',
+  // Theme accent (`tertiary-container`), matching `IconButton` `selectedTone="tertiary"` toggles.
+  tertiary: 'bg-tertiary-container text-on-tertiary-container ripple-tertiary focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
   // Unfilled actions inside a tinted container (`secondary-container`, `warning-container`, …)
   // inherit the container's paired `on-*-container` ink for label, state layer and ripple alike.

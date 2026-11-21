@@ -56,8 +56,8 @@ const VARIANTS: Record<CardVariant, string> = {
      variants take the system edge there (`forced-boundary`); the outlined one keeps
      its own border. */
   filled: 'bg-surface-container-highest forced-boundary',
-  // Retain the quieter tonal variant without lifting a card off the page.
-  elevated: 'bg-surface-container-low forced-boundary',
+  // Distinct quiet tonal plane over `surface` (Tone 94 light / Tone 12 dark) without shadows.
+  elevated: 'bg-surface-container forced-boundary',
   // For dense lists where filled cards would stack into one grey mass.
   outlined: 'bg-surface border border-outline-variant',
   // No surface at all — content lies directly on the page background.

@@ -16,14 +16,13 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
  * The single loading placeholder; `.skeleton` (globals.css) owns the sweep and
  * reads `animation-delay: inherit`, which is what lets `delay` stagger a group.
  *
- * **The radius is conditional — a deliberate divergence, do not fix.** `cn` is a
- * plain join that does not resolve Tailwind conflicts, so a call site passing its
- * own radius emitted both it and the default, leaving the winner to stylesheet
- * order. The placeholder's radius is the one token that legitimately inherits
- * from the thing it stands in for, so detecting the override and standing down
- * is worth the guard.
+ * **Radius and background overrides are conditional.** `cn` is a plain join that
+ * does not resolve Tailwind conflicts, so detecting unconditional `rounded*` or
+ * `bg-*` classes avoids emitting competing defaults while keeping responsive or
+ * state-prefixed classes backed by the base tokens.
  */
-const HAS_RADIUS = /(?:^|\s)(?:rounded|rounded-(?:none|xs|sm|md|lg|xl|2xl|3xl|full))(?:\s|$)/;
+const HAS_RADIUS = /(?:^|\s)rounded(?:-\S+)?/;
+const HAS_BG = /(?:^|\s)bg-\S+/;
 
 export default function Skeleton({ className = '', delay, style, variant = 'surface', ...rest }: SkeletonProps) {
   return (
@@ -31,7 +30,7 @@ export default function Skeleton({ className = '', delay, style, variant = 'surf
       aria-hidden="true"
       className={cn(
         'skeleton',
-        variant === 'surface' && 'bg-surface-container-high',
+        variant === 'surface' && !HAS_BG.test(className) && 'bg-surface-container-high',
         !HAS_RADIUS.test(className) && 'rounded-sm',
         className,
       )}

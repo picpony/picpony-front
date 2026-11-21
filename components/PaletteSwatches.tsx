@@ -142,10 +142,9 @@ const labelClass = (selected: boolean) =>
  * none of this app's tokens, speaks RGB/HSV where the system speaks HCT, and shows a
  * colour where a *theme* is being chosen.
  *
- * **The tile is disabled until a colour exists** — until then there is no eleventh
- * palette to select, so it is a tonal placeholder with a palette glyph. Disabled rather
- * than hidden (a control that vanishes is a control the user has to go looking for); the
- * arrow keys skip it, so the roving cursor never lands on a stop that does nothing.
+ * **Before a custom colour exists**, the eleventh tile shows a tonal placeholder with a palette
+ * glyph and stays reachable inside the radiogroup; activating it opens the colour picker directly
+ * rather than leaving a dead disabled tile.
  */
 export default function PaletteSwatches({ className }: { className?: string }) {
   const active = usePalette();
@@ -162,11 +161,12 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   /* The button each dialog was opened from: its wipe grows out of that one. */
   const triggers = useRef<Record<PickerId, HTMLButtonElement | null>>({ hex: null, image: null });
+  const openedTrigger = useRef<HTMLButtonElement | null>(null);
   /* A confirmed palette waiting for its dialog to finish leaving. The wipe snapshots the
      screen, so starting it at the confirm froze the leaving dialog and its scrim into the
      old theme's picture and dragged them away with it — two exits for one gesture. The
      recipe resolves while the dialog leaves, so nothing is waited for twice. */
-  const pendingPick = useRef<{ install: Promise<CustomPaletteInstall | null>; from: PickerId } | null>(null);
+  const pendingPick = useRef<{ install: Promise<CustomPaletteInstall | null>; from: PickerId; origin: HTMLButtonElement | null } | null>(null);
   /* One counter per dialog, two jobs. Non-zero is the **latch**: each dialog is
      rendered with `isOpen={false}` rather than conditionally, so `dynamic()` alone
      would fetch the chunk at mount — the latch mounts it only once it has ever
@@ -180,8 +180,10 @@ export default function PaletteSwatches({ className }: { className?: string }) {
     open: null,
     opens: { hex: 0, image: 0 },
   });
-  const openPicker = (id: PickerId) =>
+  const openPicker = (id: PickerId, trigger?: HTMLButtonElement | null) => {
+    openedTrigger.current = trigger ?? triggers.current[id];
     setPicker((p) => ({ open: id, opens: { ...p.opens, [id]: p.opens[id] + 1 } }));
+  };
   const closePicker = () => setPicker((p) => ({ ...p, open: null }));
 
   const count = PALETTES.length + 1;
@@ -219,7 +221,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
    * install is resolved now and applied once the dialog has gone (`applyPending`).
    */
   const confirmCustom = (spec: CustomSpec, from: PickerId) => {
-    pendingPick.current = { install: resolveCustomPalette(spec), from };
+    pendingPick.current = { install: resolveCustomPalette(spec), from, origin: openedTrigger.current };
   };
 
   /**
@@ -236,7 +238,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
       showToast('颜色格式无法识别', 'error');
       return;
     }
-    changeCustomPalette(install, originOf(triggers.current[pending.from]));
+    changeCustomPalette(install, originOf(pending.origin ?? triggers.current[pending.from]));
   };
 
   const pick = (id: PaletteId, element: HTMLElement | null) => {
@@ -246,18 +248,20 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   };
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
-    /* The eleventh tile is out of the cycle while it has nothing to select. */
-    const reachable = customSeed ? count : PALETTES.length;
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
     let next: number | null = null;
-    if (step !== undefined) next = (index + step + reachable) % reachable;
+    if (step !== undefined) next = (index + step + count) % count;
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = reachable - 1;
+    else if (event.key === 'End') next = count - 1;
     if (next === null) return;
     event.preventDefault();
     const button = refs.current[next];
     button?.focus();
-    pick(next === PALETTES.length ? CUSTOM_PALETTE : PALETTES[next]!.id, button);
+    if (next === PALETTES.length) {
+      if (customSeed) pick(CUSTOM_PALETTE, button);
+    } else {
+      pick(PALETTES[next]!.id, button);
+    }
   };
 
   return (
@@ -312,19 +316,24 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             }}
             type="button"
             role="radio"
-            aria-checked={customActive}
-            aria-label={customSeed ? `自定义 ${customSeed}` : '自定义，未设置'}
-            disabled={!customSeed}
-            tabIndex={customActive ? 0 : -1}
-            onClick={(event) => pick(CUSTOM_PALETTE, event.currentTarget)}
+            aria-checked={customSeed ? customActive : false}
+            aria-label={customSeed ? `自定义 ${customSeed}` : '自定义颜色，点击选择'}
+            tabIndex={customSeed && customActive ? 0 : -1}
+            onPointerEnter={!customSeed ? () => warmDialog('hex') : undefined}
+            onPointerDown={!customSeed ? () => warmDialog('hex') : undefined}
+            onFocus={!customSeed ? () => warmDialog('hex') : undefined}
+            onClick={(event) => {
+              if (customSeed) pick(CUSTOM_PALETTE, event.currentTarget);
+              else openPicker('hex', event.currentTarget);
+            }}
             onKeyDown={(event) => onKeyDown(event, PALETTES.length)}
             data-ripple
             style={customTones ? tileRippleStyle(customTones[scheme], scheme) : undefined}
             className={cn(
               TILE_CLASS,
               /* With no colour chosen there is no theme to draw, so the tile takes the tone
-                 step every unselected filter control in the app takes rather than inventing
-                 a placeholder colour. */
+                 step every unselected filter control in the app takes and opens the colour
+                 picker directly on activation. */
               customTones ? 'text-on-surface' : 'bg-surface-container-high text-on-surface-variant',
             )}
           >
@@ -374,7 +383,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
         <div className="min-w-0 flex-auto">
           <p className="text-label-l text-on-surface mb-0.5">自定义颜色</p>
           <p className="text-body-m-emphasized text-on-surface">
-            {customSeed ?? '未设置'}
+            {customSeed ? <span className="font-mono tabular-nums">{customSeed}</span> : '未设置'}
             {/* The 副色相 only means something under 多色, and only once a colour exists. */}
             {customSeed && (
               <span className="mono:hidden text-body-m text-on-surface-variant">

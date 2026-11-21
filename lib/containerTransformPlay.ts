@@ -339,7 +339,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
        task, or the building frame's own) was spent in that wait, and the container's first frame
        on screen was 45% of the way along. On the main thread a pending leg reads its first pose
        for those frames; that is not what the display shows, and measuring it per rAF misleads. */
-    for (const animation of list) animation.currentTime = 1000 / 60;
+    const leadMs = Math.min(1000 / 60, leg.duration * 0.08);
+    for (const animation of list) animation.currentTime = leadMs;
     return list;
   };
 

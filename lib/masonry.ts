@@ -46,44 +46,55 @@ export const MASONRY_COLUMN_COUNTS = [2, 3, 4] as const;
 
 const PAGE_GUTTER = { base: 16, sm: 24 } as const;
 const DRAWER_WIDTH = 288;
+const SECTION_INSET_MD = 12;
+const DESKTOP_CHROME = DRAWER_WIDTH + 2 * SECTION_INSET_MD + 2 * PAGE_GUTTER.sm; // 360px
 const GALLERY_MAX_WIDTH = 1280;
-const GAP = { base: 8, sm: 16 } as const;
+const GAP = { base: 8, wide: 16 } as const;
+/** Container inline-size thresholds matching `.masonry` `@container` rules in `globals.css`. */
+const CONTAINER_3_COL_MIN = 520;
+const CONTAINER_4_COL_MIN = 820;
 
-/** The gallery column's width at a viewport width. */
+/** Clamped card height/width bounds: keeps extreme panoramic banners and 1:10 strips legible. */
+export const MASONRY_MIN_RATIO = 0.45;
+export const MASONRY_MAX_RATIO = 2.2;
+
+/** The gallery column's width at a viewport width (assuming the docked drawer from `md`). */
 function galleryWidth(viewport: number): number {
   if (viewport < 640) return viewport - 2 * PAGE_GUTTER.base;
   if (viewport < 768) return viewport - 2 * PAGE_GUTTER.sm;
-  return Math.min(GALLERY_MAX_WIDTH, viewport - DRAWER_WIDTH - 2 * PAGE_GUTTER.sm);
+  return Math.min(GALLERY_MAX_WIDTH, viewport - DESKTOP_CHROME);
 }
 
-/** A masonry card's CSS width at a viewport width. */
+/** A masonry card's CSS width at a viewport width, matching the `@container` column thresholds. */
 export function estimateCardWidth(viewport: number): number {
-  const columns = viewport < 768 ? 2 : viewport < 1024 ? 3 : 4;
-  const gap = viewport < 640 ? GAP.base : GAP.sm;
-  return Math.max(0, (galleryWidth(viewport) - (columns - 1) * gap) / columns);
+  const width = galleryWidth(viewport);
+  const columns = width < CONTAINER_3_COL_MIN ? 2 : width < CONTAINER_4_COL_MIN ? 3 : 4;
+  const gap = width < CONTAINER_3_COL_MIN ? GAP.base : GAP.wide;
+  return Math.max(0, (width - (columns - 1) * gap) / columns);
 }
 
 /** The viewport width from which the gallery column stops growing. */
-const GALLERY_CAPPED_FROM = GALLERY_MAX_WIDTH + DRAWER_WIDTH + 2 * PAGE_GUTTER.sm;
+const GALLERY_CAPPED_FROM = GALLERY_MAX_WIDTH + DESKTOP_CHROME;
 
 /**
- * `sizes` for a masonry card, in the layout's own terms: two columns under `md` (the gap and
- * gutter step at `sm`), three to `lg`, four after — beside the docked drawer — until the column
- * caps at 1280px.
+ * `sizes` for a masonry card, mirroring the `@container` column breakpoints against the docked
+ * shell geometry (32px gutter < 640, 48px < 768, 360px docked drawer + section + gutter >= 768).
  */
 export const MASONRY_CARD_SIZES = [
-  `(max-width: 639px) calc((100vw - ${2 * PAGE_GUTTER.base + GAP.base}px) / 2)`,
-  `(max-width: 767px) calc((100vw - ${2 * PAGE_GUTTER.sm + GAP.sm}px) / 2)`,
-  `(max-width: 1023px) calc((100vw - ${DRAWER_WIDTH + 2 * PAGE_GUTTER.sm + 2 * GAP.sm}px) / 3)`,
-  `(max-width: ${GALLERY_CAPPED_FROM - 1}px) calc((100vw - ${DRAWER_WIDTH + 2 * PAGE_GUTTER.sm + 3 * GAP.sm}px) / 4)`,
-  `${(GALLERY_MAX_WIDTH - 3 * GAP.sm) / 4}px`,
+  `(max-width: ${CONTAINER_3_COL_MIN + 2 * PAGE_GUTTER.base - 1}px) calc((100vw - ${2 * PAGE_GUTTER.base + GAP.base}px) / 2)`,
+  `(max-width: 639px) calc((100vw - ${2 * PAGE_GUTTER.base + 2 * GAP.wide}px) / 3)`,
+  `(max-width: 767px) calc((100vw - ${2 * PAGE_GUTTER.sm + 2 * GAP.wide}px) / 3)`,
+  `(max-width: ${CONTAINER_3_COL_MIN + DESKTOP_CHROME - 1}px) calc((100vw - ${DESKTOP_CHROME + GAP.base}px) / 2)`,
+  `(max-width: ${CONTAINER_4_COL_MIN + DESKTOP_CHROME - 1}px) calc((100vw - ${DESKTOP_CHROME + 2 * GAP.wide}px) / 3)`,
+  `(max-width: ${GALLERY_CAPPED_FROM - 1}px) calc((100vw - ${DESKTOP_CHROME + 3 * GAP.wide}px) / 4)`,
+  `${(GALLERY_MAX_WIDTH - 3 * GAP.wide) / 4}px`,
 ].join(', ');
 
 /** `sizes` for a block as wide as the gallery column (the 近日推荐 banner). */
 export const GALLERY_BLOCK_SIZES = [
   `(max-width: 639px) calc(100vw - ${2 * PAGE_GUTTER.base}px)`,
   `(max-width: 767px) calc(100vw - ${2 * PAGE_GUTTER.sm}px)`,
-  `(max-width: ${GALLERY_CAPPED_FROM - 1}px) calc(100vw - ${DRAWER_WIDTH + 2 * PAGE_GUTTER.sm}px)`,
+  `(max-width: ${GALLERY_CAPPED_FROM - 1}px) calc(100vw - ${DESKTOP_CHROME}px)`,
   `${GALLERY_MAX_WIDTH}px`,
 ].join(', ');
 
@@ -92,11 +103,15 @@ interface Sized {
   height?: number;
 }
 
-/** Height over width, with the same fallback the card itself renders (a square). */
+/** Clamped height-over-width ratio shared by masonry placement and `ImageCard`'s aspect box. */
+export function clampedCardAspect(width?: number, height?: number): number {
+  const w = width || 1;
+  const h = height || 1;
+  return clamp(h / w, MASONRY_MIN_RATIO, MASONRY_MAX_RATIO);
+}
+
 function aspectOf(item: Sized): number {
-  const width = item.width || 1;
-  const height = item.height || 1;
-  return height / width;
+  return clampedCardAspect(item.width, item.height);
 }
 
 /** Four decimals: well under a device pixel at any realistic column width, and a string, so the

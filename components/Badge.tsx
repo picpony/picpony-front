@@ -69,8 +69,8 @@ const TONES: Record<Exclude<BadgeTone, 'custom'>, string> = {
 };
 
 const SIZES: Record<BadgeSize, string> = {
-  sm: 'text-label-s-emphasized gap-1 px-2 py-0.5',
-  md: 'text-label-m-emphasized gap-1 px-2.5 py-1',
+  sm: 'text-label-s-emphasized tabular-nums gap-1 px-2 py-0.5',
+  md: 'text-label-m-emphasized tabular-nums gap-1 px-2.5 py-1',
 };
 
 /* **The glyph size belongs to the badge**, and here it is load-bearing: a badge is
@@ -194,7 +194,7 @@ export function CountBadge({
       className={cn(
         'bg-error-fill text-on-fill text-label-s-emphasized',
         'flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1',
-        'leading-none tabular-nums forced-boundary',
+        'tabular-nums tracking-normal forced-boundary',
         arrived && 'animate-control-pop',
         className,
       )}

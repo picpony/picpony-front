@@ -1,13 +1,15 @@
 'use client';
 
-import type { ComponentProps, ReactNode, Ref } from 'react';
+import { useLayoutEffect, useRef, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { MdDownload, MdFlag, MdLibraryAdd, MdOpenInNew, MdShare, MdStar, MdStarBorder, MdTranslate } from 'react-icons/md';
 import Button from '@/components/Button';
-import ButtonLink from '@/components/ButtonLink';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
+import { useTooltip } from '@/components/Tooltip';
 import { cn } from '@/lib/utils';
 
 const DERPI_LABEL = '在 Derpibooru 查看';
+/** Full 40px capsule height (flush top/bottom) with 20px icons; 40px square on narrow, 32px on wide. */
+const CAPSULE_ICON_BOX = 'h-10 w-10 @3xl:w-8';
 
 /** An inert flight copy needs the primitive's geometry, without tooltip hooks or navigation. */
 function ActionIconCopy(props: ComponentProps<typeof IconButton>) {
@@ -35,6 +37,8 @@ interface DetailActionsProps {
   onShare?: () => void;
   onTranslate?: () => void;
   onReport?: () => void;
+  /** Compact read-only metadata centered between primary and secondary actions on wide rows. */
+  center?: ReactNode;
   children?: ReactNode;
 }
 
@@ -60,75 +64,137 @@ export default function DetailActions({
   onShare,
   onTranslate,
   onReport,
+  center,
   children,
 }: DetailActionsProps) {
   const ActionIcon = passive ? ActionIconCopy : IconButton;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const primaryRef = useRef<HTMLDivElement>(null);
+  const { anchorRef: derpiRef, anchorProps: derpiProps, tooltip: derpiTooltip } = useTooltip(
+    passive ? undefined : DERPI_LABEL,
+  );
+
+  /* Keep the wide-row secondary capsule the exact total width of the primary actions
+     (`下载原图` + `收藏` / `已收藏`) so both ends of the row balance optically, while
+     `@3xl:px-2` (8px ≈ exact 8.26px tangent inset where the 8px pressed-corner apex
+     kisses the 20px semicircular cap) places the outermost 40px-tall buttons cleanly
+     at the optical limit without clipping focus rings. */
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const primary = primaryRef.current;
+    if (!root || !primary) return;
+    let last = '';
+    const sync = () => {
+      const width = primary.offsetWidth;
+      if (width <= 0) return;
+      const next = `${width}px`;
+      if (next === last) return;
+      last = next;
+      root.style.setProperty('--detail-primary-w', next);
+    };
+    sync();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(primary);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
+      ref={rootRef}
       data-image-detail-actions
       inert={passive || undefined}
       aria-hidden={passive || undefined}
-      className="flex flex-wrap items-center gap-x-2 gap-y-3"
+      className="@container w-full"
     >
-      <div className="flex flex-wrap gap-2">
-        <Button variant="filled" icon={<MdDownload />} loading={downloading} onClick={onDownload}>
-          下载原图
-        </Button>
-        {passive ? (
-          <Button variant="tonal" icon={<MdOpenInNew />}>{DERPI_LABEL}</Button>
-        ) : (
-          <ButtonLink
-            href={imageId ? `https://trixiebooru.org/${imageId}` : 'https://trixiebooru.org/'}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="在 Derpibooru 查看（在新标签页打开）"
-            variant="tonal"
-            prefetch={false}
-            icon={<MdOpenInNew />}
+      <div className="flex flex-col gap-3 @3xl:grid @3xl:grid-cols-[1fr_minmax(16rem,26rem)_1fr] @3xl:items-center @3xl:gap-x-4">
+        <div ref={primaryRef} className="grid grid-cols-2 gap-2 @3xl:flex @3xl:items-center @3xl:justify-self-start">
+          <Button
+            variant="filled"
+            icon={<MdDownload />}
+            loading={downloading}
+            onClick={onDownload}
+            className="w-full @3xl:w-auto"
           >
-            {DERPI_LABEL}
-          </ButtonLink>
+            下载原图
+          </Button>
+          <Button
+            ref={faveRef}
+            variant={isFaved ? 'tertiary' : 'tonal'}
+            aria-label={passive ? undefined : '收藏'}
+            aria-pressed={passive ? undefined : isFaved}
+            loading={faveBusy}
+            className={cn('w-full @3xl:w-auto', isFaved && 'rounded-md data-pressed:rounded-sm forced-selected')}
+            icon={isFaved ? <MdStar className={cn(faveFill && 'animate-reaction-fill')} /> : <MdStarBorder />}
+            onClick={onFave}
+          >
+            {isFaved ? '已收藏' : '收藏'}
+          </Button>
+        </div>
+        {center && (
+          <div className="order-last flex w-full justify-center @3xl:order-none @3xl:justify-self-center">
+            {center}
+          </div>
         )}
-      </div>
-      <div className="mx-auto flex items-center gap-1 sm:me-0 sm:ms-auto">
-        <ActionIcon
-          ref={faveRef}
-          toggle
-          selected={isFaved}
-          selectedTone="tertiary"
-          loading={faveBusy}
-          aria-label="收藏"
-          icon={isFaved ? <MdStar className={cn(faveFill && 'animate-reaction-fill')} /> : <MdStarBorder />}
-          onClick={onFave}
-        />
-        <ActionIcon
-          aria-label="收藏到…"
-          aria-haspopup="dialog"
-          aria-expanded={pickerOpen}
-          icon={<MdLibraryAdd />}
-          onClick={onPickFolder}
-        />
-        <ActionIcon
-          ref={shareRef}
-          aria-label="分享"
-          aria-haspopup="menu"
-          aria-expanded={shareOpen}
-          loading={sharing}
-          icon={<MdShare />}
-          onClick={onShare}
-        />
-        {children}
-        {canTranslate && (
+        <div className="flex h-10 w-full items-center justify-evenly rounded-full bg-surface-container-highest @3xl:col-start-3 @3xl:w-[var(--detail-primary-w,13.25rem)] @3xl:min-w-fit @3xl:justify-between @3xl:px-2 @3xl:justify-self-end">
           <ActionIcon
-            toggle
-            selected={translationShown}
-            loading={translationBusy}
-            aria-label="图片翻译"
-            icon={<MdTranslate />}
-            onClick={onTranslate}
+            size="sm"
+            shape="square"
+            className={CAPSULE_ICON_BOX}
+            aria-label="收藏到…"
+            aria-haspopup="dialog"
+            aria-expanded={pickerOpen}
+            icon={<MdLibraryAdd />}
+            onClick={onPickFolder}
           />
-        )}
-        <ActionIcon aria-label="举报" icon={<MdFlag />} onClick={onReport} />
+          <ActionIcon
+            ref={shareRef}
+            size="sm"
+            shape="square"
+            className={CAPSULE_ICON_BOX}
+            aria-label="分享"
+            aria-haspopup="menu"
+            aria-expanded={shareOpen}
+            loading={sharing}
+            icon={<MdShare />}
+            onClick={onShare}
+          />
+          {children}
+          {canTranslate && (
+            <ActionIcon
+              size="sm"
+              shape="square"
+              className={CAPSULE_ICON_BOX}
+              toggle
+              selected={translationShown}
+              loading={translationBusy}
+              aria-label="图片翻译"
+              icon={<MdTranslate />}
+              onClick={onTranslate}
+            />
+          )}
+          {passive ? (
+            <ActionIconCopy size="sm" shape="square" className={CAPSULE_ICON_BOX} aria-label={DERPI_LABEL} icon={<MdOpenInNew />} />
+          ) : (
+            <>
+              <a
+                ref={derpiRef as Ref<HTMLAnchorElement>}
+                {...derpiProps}
+                href={imageId ? `https://trixiebooru.org/${imageId}` : 'https://trixiebooru.org/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="在 Derpibooru 查看（在新标签页打开）"
+                data-ripple="inner"
+                className={iconButtonClasses({ variant: 'standard', size: 'sm', shape: 'square', className: CAPSULE_ICON_BOX })}
+              >
+                <span data-ripple-host="" aria-hidden="true" />
+                <MdOpenInNew aria-hidden="true" />
+              </a>
+              {derpiTooltip}
+            </>
+          )}
+          <ActionIcon size="sm" shape="square" className={CAPSULE_ICON_BOX} aria-label="举报" icon={<MdFlag />} onClick={onReport} />
+        </div>
       </div>
     </div>
   );

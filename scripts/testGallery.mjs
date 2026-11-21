@@ -180,15 +180,20 @@ test('the banner is judged by the feed’s own rules (R4-025)', () => {
 
 // --- sizes -----------------------------------------------------------------------------------
 
-test('a card’s width counts the docked drawer and the gutters (R4-043)', () => {
+test('a card’s width follows the container column thresholds beside the docked drawer', () => {
   assert.equal(masonry.estimateCardWidth(390), 175);
-  assert.equal(Math.round(masonry.estimateCardWidth(768)), 133, 'R4-043 measured ~136px at 768');
-  assert.equal(masonry.estimateCardWidth(1440), 264);
+  // At 768px with the 288px drawer + shell margins (360px chrome), the 408px container stays 2 cols (~200px) instead of collapsing to 125px.
+  assert.equal(Math.round(masonry.estimateCardWidth(768)), 200);
+  assert.equal(Math.round(masonry.estimateCardWidth(1024)), 211);
+  assert.equal(masonry.estimateCardWidth(1440), 258);
   assert.equal(masonry.estimateCardWidth(1920), 308, 'the 1280px column caps it');
-  assert.match(masonry.MASONRY_CARD_SIZES, /^\(max-width: 639px\) calc\(\(100vw - 40px\) \/ 2\)/);
-  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1023px\) calc\(\(100vw - 368px\) \/ 3\)/);
-  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1615px\) calc\(\(100vw - 384px\) \/ 4\), 308px$/);
-  assert.match(masonry.GALLERY_BLOCK_SIZES, /\(max-width: 1615px\) calc\(100vw - 336px\), 1280px$/);
+  assert.match(masonry.MASONRY_CARD_SIZES, /^\(max-width: 551px\) calc\(\(100vw - 40px\) \/ 2\)/);
+  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 879px\) calc\(\(100vw - 368px\) \/ 2\)/);
+  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1179px\) calc\(\(100vw - 392px\) \/ 3\)/);
+  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1639px\) calc\(\(100vw - 408px\) \/ 4\), 308px$/);
+  assert.match(masonry.GALLERY_BLOCK_SIZES, /\(max-width: 1639px\) calc\(100vw - 360px\), 1280px$/);
+  assert.equal(masonry.clampedCardAspect(100, 1000), masonry.MASONRY_MAX_RATIO);
+  assert.equal(masonry.clampedCardAspect(1000, 100), masonry.MASONRY_MIN_RATIO);
 });
 
 // --- keys ------------------------------------------------------------------------------------

@@ -215,9 +215,9 @@ export default function ChatPane({ token, me, active, target, onTargetConsumed, 
         /* `surface-container-low`, the step the column inside it takes, so the search field's
            own tone has something to stand out from. As tall as the window allows between the
            chrome above and the footer's edge, within a readable band. */
-        <div className="flex h-[min(38rem,max(26rem,calc(100dvh-15rem)))] overflow-hidden rounded-md bg-surface-container-low">
+        <div className="forced-boundary flex h-[min(38rem,max(26rem,calc(100dvh-15rem)))] overflow-hidden rounded-md bg-surface-container-low">
           {list}
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col border-l border-outline-variant">
             {selected ? (
               <Conversation key={selected.id} token={token} contact={selected} me={me} layout="pane" active={active} />
             ) : (

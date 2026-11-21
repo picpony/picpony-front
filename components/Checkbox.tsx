@@ -75,6 +75,7 @@ export default function Checkbox({
        area without changing the box (keeping the row heights it sits in
        unchanged); the press wave clips inside its own 40dp sibling circle instead. */
     <label
+      data-ripple-own=""
       onPointerDown={(event) => {
         if (disabled) return;
         startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
@@ -128,11 +129,11 @@ export default function Checkbox({
           the system highlight (and the tick the highlight's own ink). */}
       <span
         aria-hidden="true"
-        className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden ${
+        className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight] ${
           /* `Checkbox.kt`'s `colorAnimationSpecForState`: the box fills on DefaultEffects ("box
              in") and empties on FastEffects ("box out"). */
           checked ? 'spring-default-effects' : 'spring-fast-effects'
-        } transition-[background-color,border-color] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
+        } transition-[background-color,border-color,box-shadow] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
           checked
             ? cn('bg-primary-ink border-primary-ink forced-mark forced-colors:border-[color:Highlight]', justChecked && 'animate-control-pop')
             : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —

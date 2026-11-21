@@ -6,28 +6,28 @@ import { motionTier, scaledMs, subscribeAppearance } from '@/lib/appearance';
 /** A reaction's filled glyph leaves on a press, never on hydration or a cache update. */
 export function useIconToss(identity: string | number) {
   const ref = useRef<HTMLButtonElement>(null);
-  const flights = useRef(new Set<() => void>());
+  const flights = useRef(new Set<(gentle?: boolean) => void>());
 
   useLayoutEffect(() => {
     const active = flights.current;
-    const clear = () => { for (const stop of active) stop(); };
+    const clear = () => { for (const stop of active) stop(false); };
+    const fadeOut = () => { for (const stop of active) stop(true); };
     const unsubscribe = subscribeAppearance(clear);
-    // A viewport-fixed decoration must not outlive its source's position or screen.
-    window.addEventListener('scroll', clear, true);
+    // A viewport-fixed decoration dissolves gently on scroll rather than popping out in one frame.
+    window.addEventListener('scroll', fadeOut, { capture: true, passive: true });
     window.addEventListener('resize', clear);
     return () => {
       clear();
       unsubscribe();
-      window.removeEventListener('scroll', clear, true);
+      window.removeEventListener('scroll', fadeOut, true);
       window.removeEventListener('resize', clear);
     };
   }, [identity]);
 
   const toss = useCallback(() => {
-    const source = ref.current?.querySelector<SVGSVGElement>(':scope > svg');
-    // Reduced motion keeps the button's ordinary state feedback, without the
-    // decorative flight across the viewport. Off likewise creates no decoration.
-    if (!source || motionTier() !== 'standard') return;
+    const source = ref.current?.querySelector<SVGSVGElement>(':scope > svg, :scope > span > svg');
+    // Ambient decorative flight: respects the `ambient` motion category independently of feedback.
+    if (!source || motionTier('ambient') !== 'standard') return;
     const rect = source.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const color = getComputedStyle(source).color;
@@ -46,10 +46,9 @@ export function useIconToss(identity: string | number) {
       width: `${rect.width}px`, height: `${rect.height}px`, color,
     });
     flyer.append(glyph);
-    // Clip at the viewport, never at the button/card, and never grow a scrollbar.
-    // Share the detail's layer, above its content and below app chrome and dialogs.
+    // Clip at the viewport, above the app bar (`z-tooltip`) so high arcs are never decapitated.
     const layer = document.createElement('div');
-    layer.className = 'pointer-events-none fixed inset-0 overflow-hidden z-detail-overlay';
+    layer.className = 'pointer-events-none fixed inset-0 overflow-hidden z-tooltip';
     layer.setAttribute('aria-hidden', 'true');
     layer.append(flyer);
     document.body.append(layer);
@@ -66,8 +65,6 @@ export function useIconToss(identity: string | number) {
     const vx = Math.sin(angle) * impulse;
     const vy = -Math.cos(angle) * impulse;
     const gravity = 1600;
-    // Include the diagonal: even the topmost corner of a rotating glyph must
-    // clear the bottom before removal. There is no fade or shrink at any point.
     const drop = window.innerHeight - rect.top + Math.hypot(rect.width, rect.height);
     const seconds = (-vy + Math.sqrt(vy * vy + 2 * gravity * drop)) / gravity;
     const spin = direction * (160 + Math.random() * 200);
@@ -75,25 +72,46 @@ export function useIconToss(identity: string | number) {
     const frames = Array.from({ length: samples + 1 }, (_, index) => {
       const offset = index / samples;
       const t = seconds * offset;
+      const opacity = offset > 0.72 ? Math.max(0, 1 - (offset - 0.72) / 0.28) : 1;
       return {
         offset,
+        opacity,
         transform: `translate3d(${vx * t}px, ${vy * t + gravity * t * t / 2}px, 0) rotate(${spin * t}deg)`,
       };
     });
-    // The clock comes from the physical flight time, scaled as a whole by the
-    // speed preference. Linear playback preserves the already sampled parabola.
+    // The clock comes from the physical flight time, scaled by the ambient speed preference.
     const travel = flyer.animate(frames, {
-      duration: scaledMs(seconds * 1000), easing: 'linear', fill: 'forwards',
+      duration: scaledMs(seconds * 1000, 'ambient'), easing: 'linear', fill: 'forwards',
     });
-    const stop = () => {
+    let dying = false;
+    const stop = (gentle = false) => {
+      if (gentle) {
+        if (dying) return;
+        dying = true;
+        flights.current.delete(stop);
+        const fade = layer.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: scaledMs(120, 'ambient'),
+          easing: 'ease-out',
+          fill: 'forwards',
+        });
+        void fade.finished.then(() => {
+          layer.remove();
+          travel.cancel();
+        }, () => {
+          layer.remove();
+          travel.cancel();
+        });
+        return;
+      }
+      dying = true;
       flights.current.delete(stop);
       layer.remove();
       travel.cancel();
     };
     flights.current.add(stop);
     // Both completion and cancellation release the DOM and compositor animations.
-    void travel.finished.then(stop, stop);
-    return stop;
+    void travel.finished.then(() => stop(false), () => stop(false));
+    return () => stop(false);
   }, []);
 
   return { ref, toss };

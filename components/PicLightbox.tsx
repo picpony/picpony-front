@@ -44,18 +44,34 @@ export type PicLightboxSlide = Slide;
 // One shell depth lease per viewer, including overlapping viewer departures.
 // See docs/transitions.md#fullscreen-image-viewer.
 const backgroundOwners = new WeakMap<HTMLElement, Set<object>>();
+const backdropOwners = new Set<object>();
 
 function sinkBackground() {
   const root = document.querySelector<HTMLElement>('[data-app-root]');
-  if (!root) return () => {};
+  if (!root) return { acquireDepth: () => {}, releaseDepth: () => {}, releaseBackdrop: () => {} };
   const owners = backgroundOwners.get(root) ?? new Set<object>();
   const owner = {};
   owners.add(owner);
   backgroundOwners.set(root, owners);
+  backdropOwners.add(owner);
   root.setAttribute('data-lightbox-depth', '');
-  return () => {
-    owners.delete(owner);
-    if (!owners.size) root.removeAttribute('data-lightbox-depth');
+  /* Dark stage behind the shrinking shell so light mode recedes into cinema black instead of
+     exposing a pale cream margin around the rounded 92% root. Held through exit until the shell
+     is back to full bleed. */
+  document.body.setAttribute('data-lightbox-backdrop', '');
+  return {
+    acquireDepth: () => {
+      owners.add(owner);
+      root.setAttribute('data-lightbox-depth', '');
+    },
+    releaseDepth: () => {
+      owners.delete(owner);
+      if (!owners.size) root.removeAttribute('data-lightbox-depth');
+    },
+    releaseBackdrop: () => {
+      backdropOwners.delete(owner);
+      if (!backdropOwners.size) document.body.removeAttribute('data-lightbox-backdrop');
+    },
   };
 }
 
@@ -83,14 +99,15 @@ export default function PicLightbox({
 }) {
   const scale = useMotionScale('image');
   const portalId = useId();
-  const releaseBackground = useRef<(() => void) | null>(null);
+  const releaseBackground = useRef<{ acquireDepth: () => void; releaseDepth: () => void; releaseBackdrop: () => void } | null>(null);
   const closeTurn = useRef(0);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
     closeTurn.current += 1;
     if (exitTimer.current !== null) clearTimeout(exitTimer.current);
-    releaseBackground.current?.();
+    releaseBackground.current?.releaseDepth();
+    releaseBackground.current?.releaseBackdrop();
     releaseBackground.current = null;
   }, [open]);
 
@@ -110,7 +127,12 @@ export default function PicLightbox({
       if (exitTimer.current !== null) clearTimeout(exitTimer.current);
       exitTimer.current = null;
     }
-    if (turn === closeTurn.current) close();
+    if (turn === closeTurn.current) {
+      releaseBackground.current?.releaseDepth();
+      releaseBackground.current?.releaseBackdrop();
+      releaseBackground.current = null;
+      close();
+    }
   };
 
   /* Back closes the viewer and nothing under it (docs/transitions.md#fullscreen-image-viewer).
@@ -162,11 +184,11 @@ export default function PicLightbox({
           closeTurn.current += 1;
           if (exitTimer.current !== null) clearTimeout(exitTimer.current);
           if (!releaseBackground.current) releaseBackground.current = sinkBackground();
+          else releaseBackground.current.acquireDepth();
           setExiting(false);
         },
         exiting: () => {
-          releaseBackground.current?.();
-          releaseBackground.current = null;
+          releaseBackground.current?.releaseDepth();
           resumeOnVisible.current = false;
           slideshowController.current?.pause();
           setExiting(true);

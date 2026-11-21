@@ -605,8 +605,8 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             onKeyUp={onKeyUp}
             onBlur={() => { endHold(); endPress('cancel'); }}
           >
-            {/* The plate is the collapsed control's ripple host: a FAB's press. */}
-            <span data-ripple-host="" className={cn(styles.plate, 'bg-surface-container-high text-on-surface shadow-e3')} aria-hidden="true" />
+            {/* The plate is the collapsed control's ripple host: a quiet resting FAB. */}
+            <span data-ripple-host="" className={cn(styles.plate, 'bg-surface-container-high text-on-surface shadow-e2')} aria-hidden="true" />
             <span
               className={styles.hit}
               style={hitPath && !collapsed ? { clipPath: `path('${hitPath}')` } : undefined}

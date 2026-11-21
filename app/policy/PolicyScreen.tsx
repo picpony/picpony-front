@@ -54,7 +54,7 @@ function Revised() {
 }
 
 function UL({ children }: { children: ReactNode }) {
-  return <ul className="mt-2 space-y-2 text-body-m text-on-surface">{children}</ul>;
+  return <ul className="mt-2 list-disc space-y-2 pl-6 text-body-m text-on-surface marker:text-on-surface-variant">{children}</ul>;
 }
 
 function Code({ children }: { children: ReactNode }) {
@@ -187,7 +187,7 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
         <H2>3. 用户行为规范</H2>
         <P>3.1 使用本站须遵守《中华人民共和国网络安全法》等中国法律法规，不得利用本站从事违法违规行为。</P>
         <P>3.2 <strong>内容发布规范：</strong>在评论、发帖、反馈及个人资料等互动功能中，严禁发布、传播包含以下内容的信息：</P>
-        <UL>
+        <ol className="space-y-1.5 text-body-m text-on-surface-variant">
           <li>（1）反对宪法所确定的基本原则的；</li>
           <li>（2）危害国家安全，泄露国家秘密，颠覆国家政权，破坏国家统一的；</li>
           <li>（3）损害国家荣誉和利益的；</li>
@@ -197,7 +197,7 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
           <li>（7）散布淫秽、色情、赌博、暴力、凶杀、恐怖或者教唆犯罪的（包括但不限于违反相关管理规定的成人、血腥等限制级内容）；</li>
           <li>（8）侮辱或者诽谤他人，侵害他人合法权益的；</li>
           <li>（9）含有法律、行政法规禁止的其他内容的。</li>
-        </UL>
+        </ol>
         <P>本站对评论区、论坛及反馈内容配置了自动 HTML 净化过滤（XSS 防护）。严禁尝试注入恶意 JavaScript、HTML 片段或发起 CSRF 攻击。</P>
         <P>3.3 <strong>作品上传规范：</strong>上传作品须为本人原创或已获得原作者明确授权，严禁盗图、恶意篡改他人作品或发布与 MLP 社区无关的内容。</P>
         <H2>4. 内容过滤与安全限制</H2>
@@ -327,8 +327,8 @@ function Faq() {
       a: '本站默认开启「完全安全（Safe）」分级过滤，自动隐藏血腥、色情等限制级内容；如果在「设置」中开启了「隐藏类人生物」或「只看小马（含类马）」开关，也会隐藏不符合条件的图片。',
     },
     {
-      q: '为什么搜索框提示只支持英文标签？',
-      a: '原站底层数据使用英文标签进行分类。本站内置了中英标签词库并持续扩充译名，点击标签上的「词库百科」即可查看解释。如需参与词库补充，可加入官方交流群（QQ 群：1074070030）。',
+      q: '搜索框支持中文还是英文标签？',
+      a: '搜索框既支持输入中文描述进行语义搜索，也支持使用英文标签与高级语法精确检索。原站底层数据以英文标签分类，本站内置了中英标签词库并持续扩充译名，点击标签上的「词库百科」即可查看解释。如需参与词库补充，可加入官方交流群（QQ 群：1074070030）。',
     },
     {
       q: '通过本站上传的作品会提交到哪里？',

@@ -22,7 +22,7 @@ import {
   type MotionSetting,
   type MotionSpeed,
 } from '@/lib/appearance';
-import { ROW_CLASS, RowButton, SettingsRow, SettingsSection } from './SettingsRow';
+import { ROW_STACK_CLASS, RowButton, SettingsRow, SettingsSection } from './SettingsRow';
 import { MOTION_PRESETS, MOTION_EFFECTS } from '@/lib/motionPreferences';
 import { MotionSpeedDialog, MotionEffectsDialog } from './MotionPreferencesDialog';
 
@@ -47,7 +47,7 @@ export function PaletteSection({ signedIn }: { signedIn: boolean }) {
       icon={<MdPalette size={ICON.control} />}
       subtitle={signedIn ? '随账号同步到你登录的设备' : undefined}
     >
-      <div className={`${ROW_CLASS} flex-col items-stretch`} data-palette-block="">
+      <div className={ROW_STACK_CLASS} data-palette-block="">
         <PaletteSwatches className="w-full" />
       </div>
     </SettingsSection>
@@ -88,10 +88,16 @@ export function ModeAndMotionSection() {
 
   return (
     <SettingsSection title="模式与动画" icon={<MdBrightness6 size={ICON.control} />} subtitle="仅保存在本设备">
-      {/* One block: the switch is part of the mode setting, not a neighbour of it, so it sits
-          under the mode behind an inner rule. */}
-      <div className={`${ROW_CLASS} flex-col items-stretch`}>
-        <div className="flex items-center gap-4">
+      {/* One block: 跟随系统 controls whether 主题模式 is active, so it leads the mode selector
+          above an inner rule. */}
+      <div className={ROW_STACK_CLASS}>
+        <ToggleSwitch
+          layout="row"
+          checked={followsSystem}
+          onChange={(on) => changeScheme(on ? 'system' : scheme)}
+          label="跟随系统"
+        />
+        <div className="border-outline-variant flex items-center gap-4 border-t pt-4">
           <p className="text-label-l text-on-surface min-w-0 flex-1">主题模式</p>
           <Select
             size="sm"
@@ -103,14 +109,6 @@ export function ModeAndMotionSection() {
               { value: 'light', label: '月之亮面' },
               { value: 'dark', label: '月之暗面' },
             ]}
-          />
-        </div>
-        <div className="border-outline-variant border-t pt-4">
-          <ToggleSwitch
-            layout="row"
-            checked={followsSystem}
-            onChange={(on) => changeScheme(on ? 'system' : scheme)}
-            label="跟随系统"
           />
         </div>
       </div>

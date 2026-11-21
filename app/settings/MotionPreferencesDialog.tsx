@@ -43,6 +43,7 @@ function MotionOptionsDialog<T extends string>({
     >
       <div className="mb-4">
         <SettingsRow
+          surface="dialog"
           label="预设"
           supporting="选择后覆盖下方全部设置"
           action={
@@ -61,6 +62,7 @@ function MotionOptionsDialog<T extends string>({
         {MOTION_CATEGORIES.map(({ id, label, description }) => (
           <SettingsRow
             key={id}
+            surface="dialog"
             label={label}
             supporting={description}
             action={

@@ -38,8 +38,8 @@ import { getAssetUrl } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import type { ProfileUser } from '@/lib/types/user';
 
-/** The banner's box, with a picture — the detail column's width at every step. */
-const BANNER_BOX = 'h-48 sm:h-64 md:h-80 rounded-2xl sm:rounded-3xl';
+/** The banner's box, with a picture — 4:1 on sm+ (matching the cropper) and 3:1 on phones so wide art stays framed. */
+const BANNER_BOX = 'aspect-[3/1] sm:aspect-[4/1] max-h-80 rounded-2xl sm:rounded-3xl';
 
 /**
  * The banner. With a picture it is the page's largest paint — /user/1's LCP element — so it loads
@@ -55,7 +55,7 @@ function Banner({ profile }: { profile: ProfileUser | undefined }) {
     <div className={`relative w-full overflow-hidden bg-surface-container-high ${BANNER_BOX}`}>
       <FadeInImage
         src={src}
-        alt={`${profile.username} 的个人横幅`}
+        alt={`${profile.username} 的主页横幅`}
         fill
         /* The detail column is 1024px at most; `fill` alone resolved to `100vw`. */
         sizes="(min-width: 1024px) 1024px, 100vw"
@@ -167,7 +167,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
     <div>
       <Banner profile={profile} />
       <div className="relative pt-12 sm:pt-16">
-        <div className="absolute -top-12 left-0 sm:-top-16">
+        <div className="absolute -top-12 left-4 sm:-top-16 sm:left-6">
           {profile ? (
             /* The page's other large paint: eager, at high priority (R1-028). */
             <Avatar src={profile.avatar} name={profile.username} size="hero" priority className="border-4 border-surface" />
@@ -230,7 +230,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
              meter as wide as the column does not read as a divider under the name. */
           <div className="mt-3 max-w-xs">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-label-l text-on-surface">Lv.{level}</span>
+              <span className="text-label-l tabular-nums text-on-surface">Lv.{level}</span>
               <span className="text-label-m tabular-nums text-on-surface-variant">经验：{xpInLevel} / 100</span>
             </div>
             {/* The theme's accent: the level is one of 多色's accent moments. */}
@@ -241,7 +241,7 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
         )}
 
         {profile ? (
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-body-m text-on-surface-variant">
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-body-m tabular-nums text-on-surface-variant">
             {gender && <MetaItem icon={genderIcon(profile.gender)}>{gender}</MetaItem>}
             {race && <MetaItem icon={<MdPets size={ICON.dense} />}>{race}</MetaItem>}
             {birthday && <MetaItem icon={<MdCake size={ICON.dense} />}>{birthday}</MetaItem>}

@@ -12,7 +12,7 @@ import ScrollArea from '@/components/ScrollArea';
 import Skeleton from '@/components/Skeleton';
 import { useScheme, type AccentChoice, type CustomSpec, type PaletteHues } from '@/lib/appearance';
 import { usePaletteTools, type PaletteTools } from '@/lib/paletteLazy';
-import type { AccentPreset } from '@/lib/paletteSpec';
+import { BRAND_SEED, type AccentPreset } from '@/lib/paletteSpec';
 import { cn } from '@/lib/utils';
 
 /**
@@ -183,21 +183,22 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
           <PalettePreview caption={caption} hues={hues} />
         </div>
       )}
-      <Group label="十六进制"><Skeleton className="h-10 w-40 rounded-sm" /></Group>
+      {/* Modal container is `surface-container-high`, so placeholders step up to `highest`. */}
+      <Group label="十六进制"><Skeleton className="h-10 w-40 rounded-sm bg-surface-container-highest" /></Group>
       <Group label="色相">
         <div className={RAIL_CLASS}>
-          {HUE_STOPS.map((hue) => <Skeleton key={hue} className="size-8 rounded-full" />)}
+          {HUE_STOPS.map((hue) => <Skeleton key={hue} className="size-8 rounded-full bg-surface-container-highest" />)}
         </div>
       </Group>
       <Group label="明度与彩度">
         <ScrollArea axis="x" viewportClassName="popover-scrollbar overflow-x-auto">
           <div className="grid gap-1 p-1 pointer-coarse:gap-2" style={{ gridTemplateColumns: BOARD_COLUMNS }}>
             <span />
-            {CHROMAS.map((x) => <span key={x} className="text-label-s text-center">{Math.round(x * 100)}%</span>)}
+            {CHROMAS.map((x) => <span key={x} className="text-label-s text-center tabular-nums">{Math.round(x * 100)}%</span>)}
             {TONES.map((tone) => (
               <Row key={tone}>
-                <span className="text-label-s self-center pr-2 text-right">{tone}</span>
-                {CHROMAS.map((x) => <Skeleton key={x} className="h-10 rounded-xs" />)}
+                <span className="text-label-s self-center pr-2 text-right tabular-nums">{tone}</span>
+                {CHROMAS.map((x) => <Skeleton key={x} className="h-10 rounded-xs bg-surface-container-highest" />)}
               </Row>
             ))}
           </div>
@@ -206,7 +207,7 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
       {hues === 'multi' && (
         <Group label="副色相">
           <div className={MODES_CLASS}>
-            {ACCENT_MODES.map(({ mode }) => <Skeleton key={mode} className={cn(MODE_TILE_HEIGHT, 'rounded-md')} />)}
+            {ACCENT_MODES.map(({ mode }) => <Skeleton key={mode} className={cn(MODE_TILE_HEIGHT, 'rounded-md bg-surface-container-highest')} />)}
           </div>
         </Group>
       )}
@@ -373,7 +374,7 @@ function PickerDialog({
     const value = raw.trim().toLowerCase();
     const withHash = value.startsWith('#') ? value : `#${value}`;
     if (!HEX.test(withHash)) {
-      setError('需要六位十六进制，例如 #e06c9f');
+      setError(`需要六位十六进制，例如 ${BRAND_SEED}`);
       return;
     }
     setPick(pickFrom(tools, withHash, hue));
@@ -421,7 +422,7 @@ function PickerDialog({
             <Input
               size="sm"
               aria-label="十六进制颜色值"
-              placeholder="#e06c9f"
+              placeholder={BRAND_SEED}
               spellCheck={false}
               autoComplete="off"
               autoCapitalize="none"
@@ -430,6 +431,7 @@ function PickerDialog({
               value={draft}
               error={error}
               fieldClassName="max-w-40"
+              className="font-mono tabular-nums"
               onChange={(event) => {
                 setError(undefined);
                 setDraft(event.target.value);
@@ -486,7 +488,7 @@ function PickerDialog({
               >
                 <span />
                 {CHROMAS.map((x) => (
-                  <span key={x} className="text-label-s text-on-surface-variant text-center">
+                  <span key={x} className="text-label-s text-on-surface-variant text-center tabular-nums">
                     {Math.round(x * 100)}%
                   </span>
                 ))}
@@ -494,7 +496,7 @@ function PickerDialog({
                   const ceiling = tools.maxChroma(hue, t);
                   return (
                     <Row key={t}>
-                      <span className="text-label-s text-on-surface-variant self-center pr-2 text-right">
+                      <span className="text-label-s text-on-surface-variant self-center pr-2 text-right tabular-nums">
                         {t}
                       </span>
                       {CHROMAS.map((x) => {
@@ -569,9 +571,8 @@ function PickerDialog({
                           : 'bg-surface-container-highest text-on-surface forced-boundary',
                       )}
                     >
-                      {/* Its own stacking context and clip, as the palette tile's box is; the
-                          corner is the chip step, picked against a 36px box. */}
-                      <span className="forced-boundary relative isolate h-9 w-12 shrink-0 overflow-hidden rounded-sm">
+                      {/* Concentric inside the 12dp tile with 8dp inset: 12 − 8 = 4dp (`rounded-xs`). */}
+                      <span className="forced-boundary relative isolate h-9 w-12 shrink-0 overflow-hidden rounded-xs">
                         <PaletteTileFace size="compact" tone={tones[scheme]} face={tones.face[scheme]} hues="multi" />
                       </span>
                       <span className="text-label-l">{label}</span>

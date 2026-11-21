@@ -19,7 +19,7 @@ import CodeInput from './CodeInput';
  * latch, so the chunk arrives on the first challenge and the element then *stays*
  * mounted — which is what `Modal`'s exit animation needs.
  */
-const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false });
+const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false, loading: () => null });
 import Button from './Button';
 import { Field, Input } from './Input';
 import { showToast } from './Toast';
@@ -606,7 +606,7 @@ function ResendButton({
   onResend: () => void;
 }) {
   return (
-    <Button type="button" variant="text" className="-mr-4 tabular-nums" disabled={seconds > 0} loading={busy} onClick={onResend}>
+    <Button type="button" variant="text" className="tabular-nums" disabled={seconds > 0} loading={busy} onClick={onResend}>
       {seconds > 0 ? `重新发送（${seconds} 秒）` : '重新发送验证码'}
     </Button>
   );
@@ -696,11 +696,11 @@ function VerifyEmail({
     <div ref={viewRef}>
       <BackToLogin onSwitch={onSwitch} />
       <ViewHeading id={headingId} className="mb-2">验证邮箱</ViewHeading>
-      <p className="text-body-m text-on-surface-variant mb-8">
-        验证码已发送至 <span className="text-on-surface wrap-anywhere">{registration.email}</span>，10 分钟内有效。
+      <p className="text-body-m text-on-surface-variant mb-6">
+        验证码已发送至 <span className="text-on-surface wrap-anywhere">{registration.email}</span>，10 分钟内有效
       </p>
       <form
-        className="space-y-6"
+        className="space-y-4"
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
@@ -728,12 +728,11 @@ function VerifyEmail({
           验证并登录
         </Button>
       </form>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2">
+      <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-x-2">
         {/* Starting over is the one way out of the pending sign-up; 返回登录 keeps it. */}
         <Button
           type="button"
           variant="text"
-          className="-ml-4"
           onClick={() => {
             onPendingChange(null);
             cooldown.reset();
@@ -944,7 +943,7 @@ function ResetForm({
           <>
             {/* 「如果」: the backend does not say whether the address has an account, by design. */}
             <p className="text-body-m text-on-surface-variant mb-6">
-              如果 <span className="text-on-surface wrap-anywhere">{account}</span> 已注册，验证码已发送至该邮箱，10 分钟内有效。
+              如果 <span className="text-on-surface wrap-anywhere">{account}</span> 已注册，验证码已发送至该邮箱，10 分钟内有效
             </p>
             <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               {/* Tells a password manager whose password the new one is. */}
@@ -994,11 +993,10 @@ function ResetForm({
                 重置密码
               </Button>
             </form>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2">
+            <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-x-2">
               <Button
                 type="button"
                 variant="text"
-                className="-ml-4"
                 onClick={() => {
                   // Another account starts over; this one's countdown stays under its own key.
                   writePendingReset(null);

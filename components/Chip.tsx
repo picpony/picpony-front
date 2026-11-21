@@ -240,13 +240,11 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           aria-label={crossLabel}
           disabled={disabled}
           data-ripple="inner"
-          /* A 32dp box — the chip's full height — around the 18dp cross (M3's chip icon
-             size), growing to the touch floor on the block axis only: extended sideways
-             it would cover the end of the label, and a tap on a tag's last glyph would
-             remove it. Inherit the chip's on-container ink, including semantic and
-             categorical fills; its state layer follows the same colour. */
+          /* A 28dp box inset inside the 32dp chip with a concentric 4dp corner (`rounded-xs`),
+             growing to the touch floor on the block axis only so its hover layer and focus ring
+             stay cleanly within the chip's 8dp corner. */
           className={cn(
-            'touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-8 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-full focus-visible:outline-hidden focus-visible:ring-2',
+            'touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-7 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xs focus-visible:outline-hidden focus-visible:ring-2',
             rippleTone,
           )}
         >

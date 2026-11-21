@@ -157,7 +157,7 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="text-label-l text-on-surface">#{entry.id}</span>
+            <span className="text-label-l tabular-nums text-on-surface">#{entry.id}</span>
             {entry.uploader && (
               <span className="flex min-w-0 max-w-full items-center gap-1 text-body-s text-on-surface-variant">
                 <MdPerson size={ICON.dense} className="shrink-0" aria-hidden="true" />
@@ -426,13 +426,13 @@ export default function HistoryPage() {
       <EmptyState
         entrance={!hadRows}
         icon={<MdHistory size={ICON.display} />}
-        title="这一天没有浏览记录"
+        title="此日没有浏览记录"
         description="可选择其他日期，或清除日期筛选查看全部"
         action={<Button variant="tonal" onClick={() => changeDate('')}>清除筛选</Button>}
       />
     ) : page > 1 ? (
       /* Its rows deleted, with 撤销 still on offer: the history is not empty, and the pager stays. */
-      <EmptyState entrance={!hadRows} icon={<MdHistory size={ICON.display} />} title="这一页没有浏览记录" />
+      <EmptyState entrance={!hadRows} icon={<MdHistory size={ICON.display} />} title="此页没有浏览记录" />
     ) : (
       <EmptyState
         entrance={!hadRows}
@@ -446,6 +446,7 @@ export default function HistoryPage() {
         {read.isPrevious && read.error !== undefined && (
           <ErrorRetry
             size="inline"
+            className="mb-4"
             title={`第 ${page} 页加载失败`}
             message={apiErrorMessage(read.error)}
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
@@ -465,7 +466,7 @@ export default function HistoryPage() {
                 className={cn(
                   'flex flex-col gap-6 transition-opacity spring-default-effects',
                   /* The paging dim over a list whose next page is on its way: one value, everywhere. */
-                  read.isPrevious && read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100',
+                  read.isPrevious && read.isLoading ? 'paging-dim' : 'opacity-100',
                 )}
                 aria-busy={read.isLoading || undefined}
               >

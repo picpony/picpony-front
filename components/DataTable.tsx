@@ -21,8 +21,8 @@ export interface Column<T> {
   leading?: boolean;
   /** Renders the cell as a button group, pushed to the row's trailing edge. */
   actions?: boolean;
-  /** Extra classes for the cell's value element (e.g. truncation) — on every
-   *  kind of column, the primary one included. */
+  /** Extra layout/formatting classes (e.g. truncation or `tabular-nums`) shared by the
+   *  column's header label and cell value element — avoid colour overrides here. */
   className?: string;
   /**
    * The column's track in the wide layout, as a CSS grid track size. Defaults to
@@ -605,13 +605,13 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             )}
 
             {heading && (
-              <div className={cn('text-title-s text-on-surface min-w-0 break-words', heading.className)}>
+              <div className={cn('text-title-s text-on-surface min-w-0 wrap-anywhere', heading.className)}>
                 {heading.render(row, i)}
               </div>
             )}
 
             {details.map((col) => (
-              <span key={col.key} className={cn('text-body-m text-on-surface min-w-0 break-words', col.className)}>
+              <span key={col.key} className={cn('text-body-m text-on-surface min-w-0 wrap-anywhere', col.className)}>
                 {/* The column's name, beside its value, where there is no header
                     row above to name it. */}
                 <span className="text-on-surface-variant @2xl/table:hidden">
@@ -690,9 +690,9 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
                 ))}
               </div>
             )}
-            {heading && <span className="text-label-l text-on-surface-variant min-w-0">{heading.header}</span>}
+            {heading && <span className={cn('text-label-l text-on-surface-variant min-w-0', heading.className)}>{heading.header}</span>}
             {details.map((col) => (
-              <span key={col.key} className="text-label-l text-on-surface-variant min-w-0">
+              <span key={col.key} className={cn('text-label-l text-on-surface-variant min-w-0', col.className)}>
                 {col.header}
               </span>
             ))}

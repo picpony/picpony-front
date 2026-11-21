@@ -6,11 +6,12 @@ import { useInTabPane } from './TabPanes';
 import { cn } from '@/lib/utils';
 
 export type StatusViewSize = 'page' | 'pane' | 'inline';
-export type StatusIconTone = 'outline' | 'tertiary';
+export type StatusIconTone = 'outline' | 'tertiary' | 'error';
 
 const ICON_TONES: Record<StatusIconTone, string> = {
   outline: 'text-outline',
   tertiary: 'text-tertiary',
+  error: 'text-error',
 };
 
 interface StatusViewProps {
@@ -24,8 +25,8 @@ interface StatusViewProps {
   size?: StatusViewSize;
   /**
    * The glyph's ink. `outline` is neutral; `tertiary` is the theme's accent, for a view that is
-   * one of its accent moments — "nothing here yet" (`EmptyState`). A failure keeps the neutral
-   * glyph: an accent is for the user's own things, not for something that went wrong.
+   * one of its accent moments — "nothing here yet" (`EmptyState`); `error` marks a failure state
+   * (`ErrorRetry`) so errors distinguish themselves from empty states at a glance.
    */
   iconTone?: StatusIconTone;
   /**

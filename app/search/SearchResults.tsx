@@ -5,6 +5,7 @@ import { MdExpandMore, MdSearchOff } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
+import Collapse from '@/components/Collapse';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -85,14 +86,16 @@ function ResultCaption({
   const entryRead = useResource(tagEntry, singleTag ? { tag: singleTag.toLowerCase() } : SKIP);
   const entry = entryRead.data ?? null;
   const [openFor, setOpenFor] = useState<string | null>(null);
+  const [mountedFor, setMountedFor] = useState<string | null>(null);
   const detailsId = useId();
   const hasDetails = Boolean(entry && (entry.description || entry.aliases.length > 0));
   const open = hasDetails && openFor === singleTag;
+  const mountDetails = hasDetails && (open || mountedFor === singleTag);
 
   return (
     <>
       <div className="mb-3 flex min-h-10 items-center gap-3">
-        <div className="min-w-0 flex-1 truncate text-body-m text-on-surface-variant" role="status">
+        <div className="min-w-0 flex-1 truncate text-body-m tabular-nums text-on-surface-variant" role="status">
           {entry && entry.cn && (
             <>
               <span className="text-body-m-emphasized text-on-surface">{entry.cn}</span>
@@ -117,7 +120,10 @@ function ResultCaption({
             className="shrink-0"
             aria-expanded={open}
             aria-controls={detailsId}
-            onClick={() => setOpenFor(open ? null : singleTag)}
+            onClick={() => {
+              if (!open) setMountedFor(singleTag);
+              setOpenFor(open ? null : singleTag);
+            }}
             trailingIcon={
               <MdExpandMore
                 className={`transition-transform spring-fast-spatial ${open ? 'rotate-180' : 'rotate-0'}`}
@@ -129,25 +135,27 @@ function ResultCaption({
         )}
         {action}
       </div>
-      {open && entry && (
-        <Card id={detailsId} variant="filled" className="mb-4 max-w-2xl">
-          {entry.aliases.length > 0 && (
-            <div className={entry.description ? 'mb-3' : undefined}>
-              <p className="mb-1 text-label-m text-on-surface-variant">别名</p>
-              <div className="flex flex-wrap gap-1">
-                {entry.aliases.map((alias) => (
-                  <Badge key={alias}>{alias}</Badge>
-                ))}
+      <Collapse id={detailsId} open={open}>
+        {mountDetails && entry && (
+          <Card variant="filled" className="mb-4 max-w-2xl">
+            {entry.aliases.length > 0 && (
+              <div className={entry.description ? 'mb-3' : undefined}>
+                <p className="mb-1 text-label-m text-on-surface-variant">别名</p>
+                <div className="flex flex-wrap gap-1">
+                  {entry.aliases.map((alias) => (
+                    <Badge key={alias}>{alias}</Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {entry.description && (
-            <div className="text-body-m text-on-surface">
-              <MarkdownRenderer content={entry.description} />
-            </div>
-          )}
-        </Card>
-      )}
+            )}
+            {entry.description && (
+              <div className="text-body-m text-on-surface">
+                <MarkdownRenderer content={entry.description} />
+              </div>
+            )}
+          </Card>
+        )}
+      </Collapse>
     </>
   );
 }
@@ -238,7 +246,7 @@ export default function SearchResults({
         aria-busy={turning || undefined}
         className={cn(
           'transition-opacity spring-default-effects',
-          turning ? 'pointer-events-none opacity-50' : 'opacity-100',
+          turning ? 'paging-dim' : 'opacity-100',
         )}
       >
         <MasonryGrid listKey={gridKey} images={data.images} sequence={sequence} />

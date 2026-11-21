@@ -270,7 +270,7 @@ ${currentPage}`, history.isPrevious);
             />
           </div>
           {errors.audience && (
-            <p id="notifications-audience-error" role="alert" className="px-4 text-body-s text-error">
+            <p id="notifications-audience-error" role="alert" className="text-body-s text-error">
               {errors.audience}
             </p>
           )}

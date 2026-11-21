@@ -223,7 +223,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
         </>
       )}
       {error && (
-        <p id={errorId} role="alert" className="mt-1 px-4 text-body-s text-error">
+        <p id={errorId} role="alert" className="mt-1 text-body-s text-error">
           {error}
         </p>
       )}

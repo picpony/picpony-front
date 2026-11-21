@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 import { MdTune } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { favePictures, useBrowsingFingerprint } from '@/lib/resources';
@@ -18,7 +17,7 @@ import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import FailedTurnHold from '@/components/FailedTurnHold';
-import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 
 /** The device's content settings, now — the rules every search writes into its query (C11). */
 function withholdNow(found: readonly PonyImage[], asked: readonly number[]): FilteredPage {
@@ -259,15 +258,14 @@ export function useLocalFavePage({
 
 /** 本页有 3 张收藏因当前的内容筛选设置未显示 · 前往设置 — nothing disappears silently (C11). */
 export function WithheldNotice({ filtered, missing }: { filtered: number; missing: number }) {
-  const router = useRouter();
   if (filtered === 0 && missing === 0) return null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-s text-on-surface-variant">
       <span>{withheldSentence(filtered, missing)}</span>
       {filtered > 0 && (
-        <Button variant="text" size="xs" icon={<MdTune />} onClick={() => router.push('/settings', { scroll: false })}>
+        <ButtonLink href="/settings" variant="text" size="xs" icon={<MdTune />}>
           前往设置
-        </Button>
+        </ButtonLink>
       )}
     </div>
   );
@@ -352,7 +350,7 @@ export function FaveGridView({
           /* The paging dim, for a turn only (M1-001): dimmed on every read, a removal blinked
              the whole grid while it re-read the page underneath the rows it already showed. */
           className={`transition-opacity spring-default-effects ${
-            turning ? 'pointer-events-none opacity-50' : 'opacity-100'
+            turning ? 'paging-dim' : 'opacity-100'
           }`}
         >
           <MasonryGrid

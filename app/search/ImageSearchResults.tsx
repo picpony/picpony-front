@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { MdClose, MdImageSearch, MdTune } from 'react-icons/md';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import FadeInImage from '@/components/FadeInImage';
 import IconButton from '@/components/IconButton';
@@ -28,7 +28,6 @@ export default function ImageSearchResults({
   onSearchAgain: () => void;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const fp = useBrowsingFingerprint();
 
   if (!result) {
@@ -62,7 +61,7 @@ export default function ImageSearchResults({
           <h2 id="image-search-heading" className="text-title-m-emphasized text-on-surface">
             以图搜图结果
           </h2>
-          <p className="text-body-m text-on-surface-variant" role="status">
+          <p className="text-body-m tabular-nums text-on-surface-variant" role="status">
             找到 {result.found} 张相似图片
             {hidden > 0 ? `，其中 ${hidden} 张因当前内容筛选设置未显示` : ''}
           </p>
@@ -81,9 +80,9 @@ export default function ImageSearchResults({
           title="相似图片都被内容筛选隐藏了"
           description={`找到的 ${result.found} 张相似图片均被当前内容筛选设置隐藏`}
           action={
-            <Button variant="tonal" onClick={() => router.push('/settings', { scroll: false })}>
+            <ButtonLink href="/settings" variant="tonal">
               前往设置
-            </Button>
+            </ButtonLink>
           }
         />
       )}

@@ -186,7 +186,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
         <div
           ref={setRows}
           className={`transition-opacity spring-default-effects ${
-            read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
+            read.isLoading ? 'paging-dim' : 'opacity-100'
           }`}
         >
           <MasonryGrid images={read.data.images} sequence={sequence} listKey={listKey} />

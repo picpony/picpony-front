@@ -5,6 +5,7 @@ import { MdShoppingCart } from 'react-icons/md';
 import Button from '@/components/Button';
 import { CountBadge } from '@/components/Badge';
 import { getAppScroller } from '@/lib/appScroller';
+import { clearBottomChrome, setBottomChrome } from '@/lib/bottomChrome';
 import { motionTier, useMotionTier } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
 import { springTiming } from '@/lib/springTiming';
@@ -55,7 +56,37 @@ export default function CartBar({
   onWarm: () => void;
 }) {
   const tier = useMotionTier('list');
+  const slotRef = useRef<HTMLDivElement>(null);
   const roomRef = useRef<HTMLDivElement>(null);
+  const chromeOwner = useRef<object | null>(null);
+
+  useLayoutEffect(() => {
+    const owner = (chromeOwner.current ??= {});
+    const slot = slotRef.current;
+    if (!active || !slot) {
+      clearBottomChrome(owner);
+      return;
+    }
+    const sync = () => {
+      // `@4xl/shop:hidden` hides the floating bar when the docked cart panel takes over.
+      const visible = slot.offsetParent !== null;
+      if (visible) {
+        const bottom = parseFloat(getComputedStyle(slot).bottom);
+        const clearance = Number.isFinite(bottom) ? Math.max(80, Math.round(bottom - 16)) : 80;
+        setBottomChrome(owner, clearance, true);
+      } else {
+        clearBottomChrome(owner);
+      }
+    };
+    sync();
+    if (typeof ResizeObserver === 'undefined') return () => clearBottomChrome(owner);
+    const observer = new ResizeObserver(sync);
+    observer.observe(slot);
+    return () => {
+      observer.disconnect();
+      clearBottomChrome(owner);
+    };
+  }, [active]);
 
   /* What the bar shows: the live cart while it is up, the last of it while it leaves. */
   const [held, setHeld] = useState({ pieces, summary, label });
@@ -124,7 +155,7 @@ export default function CartBar({
           chrome (G3-026). Sticky 80px higher than the bar's bottom edge, since the bar hangs 24px
           below it: floating, the bar's bottom is 16px above the viewport's; at the page end it
           rests in its room. */}
-      <div className="pointer-events-none sticky bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] z-page-chrome h-0 @4xl/shop:hidden">
+      <div ref={slotRef} className="pointer-events-none sticky bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] z-page-chrome h-0 @4xl/shop:hidden">
         <div className="absolute inset-x-0 top-6 flex justify-center px-2">
           {/* The fade: one opacity, on the effects spring both ways. */}
           <div

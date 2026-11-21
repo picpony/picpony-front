@@ -376,7 +376,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
             onUploadingChange={setEditorBusy}
           />
           {errors.content && (
-            <p id={contentErrorId} role="alert" className="mt-1 px-4 text-body-s text-error">
+            <p id={contentErrorId} role="alert" className="mt-1 text-body-s text-error">
               {errors.content}
             </p>
           )}

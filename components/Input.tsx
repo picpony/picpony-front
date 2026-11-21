@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import IconButton from './IconButton';
 import { useOverlayScrollbar } from '@/lib/overlayScrollbar';
+import { BRAND_SEED } from '@/lib/paletteSpec';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,8 +24,8 @@ import { cn } from '@/lib/utils';
  * outline — an empty field and a filled one stop being different objects. An
  * *unlabelled* field is not a form slot (search box, admin filter, composer); its
  * placeholder is its whole identity, so it gets the filled treatment: a tone
- * step, no border, no shadow. Outlined fields take the 20dp large corner
- * (`--radius-xl`, a project divergence from the token files' text-field step);
+ * step, no border, no shadow. Outlined fields take the 12dp medium corner
+ * (`--radius-md`, matching Cards and completing cleanly at the notch tangent);
  * filled fields use 8dp, matching the default Select shape. The one exception is
  * the *search* field: /search's bar and the dense filter fields are one object at
  * two heights, so its pill corner (`shape="pill"`, implied by `size="lg"`) is a
@@ -111,8 +112,9 @@ const HAS_WIDTH = /(?:^|\s)w-\S+/;
 
 /**
  * The supporting row under a control — helper text or an error, and a counter.
- * Renders no label (the label lives inside the control now). Inset 16dp, where
- * M3 puts supporting text: flush with the field's text, not its outline.
+ * Renders no label (the label lives inside the control now). Sits flush with
+ * the control's horizontal edges now that outlined fields use the tighter 12dp
+ * corner radius.
  */
 export function Field({
   helper,
@@ -129,7 +131,7 @@ export function Field({
       {children}
 
       {(error || helper || count) && (
-        <div id={supportId} className="flex items-start justify-between gap-3 px-4">
+        <div id={supportId} className="flex items-start justify-between gap-3">
           <p
             className={cn('text-body-s min-w-0', error ? 'text-error' : 'text-on-surface-variant')}
             // Errors announce themselves; helper text is static and must not.
@@ -571,17 +573,17 @@ export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(funct
           setOpen(true);
         }}
         className={cn(
-          /* The form family's 56dp height and the swatch's 4dp corner; `p-0.5` insets the fill so
-             the border and its corner stay visible around it. */
-          'h-14 w-14 shrink-0 cursor-pointer rounded-xs border border-outline p-0.5',
-          'focus-visible:outline-hidden transition-ui focus-visible:ring-2 focus-ring',
+          /* The form family's 56dp height and 12dp outlined corner; `p-0.5` insets the fill so
+             the border and concentric inner corner stay crisp around it. */
+          'h-14 w-14 shrink-0 cursor-pointer rounded-md border border-outline p-0.5',
+          'focus-visible:outline-hidden transition-ui hover:not-disabled:border-on-surface focus-visible:ring-2 focus-ring',
           'disabled:cursor-not-allowed disabled:disabled-content',
           className,
         )}
       >
         <span
           aria-hidden="true"
-          className="forced-boundary block size-full rounded-[2px]"
+          className="forced-boundary block size-full rounded-[10px]"
           style={{ background: colour ?? 'transparent' }}
         />
       </button>
@@ -591,7 +593,7 @@ export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(funct
           isOpen={open}
           title={dialogTitle}
           onClose={() => setOpen(false)}
-          initial={{ seed: colour ?? '#e06c9f', accent: null }}
+          initial={{ seed: colour ?? BRAND_SEED, accent: null }}
           hues="mono"
           preview={false}
           onPick={(spec) => onChange(spec.seed.toLowerCase())}

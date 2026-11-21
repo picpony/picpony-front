@@ -167,8 +167,8 @@ function readHeroSessionId() {
  */
 const MEDIA_FILL: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%' };
 
-const INITIAL_TAG_LIMIT = 80;
-const INITIAL_RELATION_TAG_LIMIT = 32;
+const INITIAL_TAG_LIMIT = 24;
+const INITIAL_RELATION_TAG_LIMIT = 16;
 
 /** How long 显示更多 waits for the next batch's names before revealing it anyway. */
 const SHOW_MORE_WAIT_MS = 1200;
@@ -257,7 +257,7 @@ async function copyLink(url: string): Promise<boolean> {
 async function copyImageLink(image: ImagePreview, token: string | null): Promise<void> {
   const url = await imageShareLink(image, token);
   if (await copyLink(url)) return;
-  showToast('分享链接已生成', 'info', {
+  showToast('已生成分享链接', 'info', {
     action: {
       label: '复制',
       onClick: () => {
@@ -282,7 +282,7 @@ async function shareImageNatively(image: ImagePreview, token: string | null): Pr
         if (name === 'AbortError') return;
         /* The gesture was spent waiting for the link: offer the sheet again, from a fresh tap. */
         if (name === 'NotAllowedError') {
-          showToast('分享链接已生成', 'info', { action: { label: '分享', onClick: () => void open() } });
+          showToast('已生成分享链接', 'info', { action: { label: '分享', onClick: () => void open() } });
           return;
         }
         void copyImageLink(image, token);
@@ -390,7 +390,7 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
               <Skeleton className="h-4 w-24" delay={60} />
               <Skeleton className="h-4 w-28" delay={120} />
             </div>
-            <div className="flex items-center justify-center gap-x-2 text-body-s">
+            <div className="image-detail-header-caption flex items-center justify-center gap-x-2 text-body-s">
               <span aria-hidden="true">{'​'}</span>
               <Skeleton className="h-3 w-24" delay={90} />
               <Skeleton className="h-3 w-12" delay={150} />
@@ -403,9 +403,8 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
           <Skeleton className="absolute inset-4 rounded-lg" delay={90} />
         </div>
         <div className="image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-            <DetailVotes image={null} pending />
-            <DetailActions passive />
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+            <DetailActions passive center={<DetailVotes image={null} pending />} />
             <DetailTagSkeleton />
           </div>
         </div>
@@ -1490,8 +1489,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           </div>
         </div>
 
-        {/* The body: votes, the picture's actions, its tags, its description and sources, and
-            the comments — in that order on screen and for the keyboard. */}
+        {/* The body: the picture's actions (with votes centred inside), its description and
+            sources, its tags, and the comments — in that order on screen and for the keyboard. */}
         <div
           data-image-detail-reveal="body"
           className="image-detail-deferred flex min-h-[var(--image-detail-body-min-height)] flex-col bg-transparent p-4 sm:p-6"
@@ -1500,8 +1499,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           // globals.css). Stated inline so no utility can reintroduce the isolation.
           style={{ contentVisibility: 'visible', contain: 'none' }}
         >
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-            <DetailVotes image={record} pending={recordPending} />
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
             <DetailActions
               imageId={image.id}
               isFaved={isFaved}
@@ -1522,6 +1520,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               onShare={() => setShareMenu(shareOpen ? null : { imageId, native: typeof navigator.share === 'function' })}
               onTranslate={handleTranslate}
               onReport={handleReportPress}
+              center={
+                recordPending || (typeof record?.upvotes === 'number' && typeof record?.downvotes === 'number')
+                  ? <DetailVotes image={record} pending={recordPending} />
+                  : undefined
+              }
             >
               <Menu
                 open={shareOpen}
@@ -1533,6 +1536,14 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               />
             </DetailActions>
             {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
+            <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
+              {hasInfo && (
+                <div className="space-y-5">
+                  {hasDescription && <DetailDescription description={image.description} />}
+                  <DetailSources image={image} />
+                </div>
+              )}
+            </FollowHeight>
             <TagList
               key={imageId}
               tags={deferredBodyReady ? image.tags : undefined}
@@ -1545,14 +1556,6 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
               preparing={preparing?.imageId === imageId ? preparing.section : null}
             />
             <div>
-              <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
-                {hasInfo && (
-                  <div className="space-y-6 pb-6">
-                    {hasDescription && <DetailDescription description={image.description} />}
-                    <DetailSources image={image} />
-                  </div>
-                )}
-              </FollowHeight>
               {record === null && offline ? (
                 <ErrorRetry size="inline" title="网络不可用" message="恢复后自动加载图片信息" />
               ) : bodyError !== null ? (

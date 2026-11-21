@@ -444,7 +444,7 @@ function TeamMemberForm({
         />
       </FormGrid>
       {external && (
-        <p className="px-4 text-body-s text-on-surface-variant wrap-anywhere">
+        <p className="text-body-s text-on-surface-variant wrap-anywhere">
           {`当前卡片链接：${external}（关联站内用户后将改链至该用户主页）`}
         </p>
       )}

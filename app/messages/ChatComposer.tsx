@@ -273,7 +273,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   const fieldRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useOverlayScrollbar(rootRef, fieldRef, { axis: 'y', observeInput: true });
-  const [empty, setEmpty] = useState(() => initialValue.trim() === '');
+  const [empty, setEmpty] = useState(() => initialValue === '');
   const history = useRef<ComposerHistory | null>(null);
   /** The caret as of the last selection change inside the field, for an insertion made while
    *  focus is on the emoji picker. */
@@ -546,7 +546,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
       {empty && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-2.5 left-4 z-10 truncate text-body-l text-on-surface-variant"
+          className="pointer-events-none absolute top-2.5 right-4 left-4 z-10 truncate text-body-l text-on-surface-variant"
         >
           {placeholder}
         </span>

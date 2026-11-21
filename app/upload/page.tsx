@@ -182,9 +182,9 @@ function UploadSkeleton() {
     <div data-page-loading aria-hidden="true" className="space-y-6">
       <Skeleton className="h-56 w-full rounded-md" />
       <Skeleton className="h-10 w-3/4" />
-      <Skeleton className="h-14 w-full rounded-xs" />
-      <Skeleton className="h-14 w-full rounded-xs" />
-      <Skeleton className="h-24 w-full rounded-xs" />
+      <Skeleton className="h-14 w-full rounded-md" />
+      <Skeleton className="h-14 w-full rounded-md" />
+      <Skeleton className="h-24 w-full rounded-md" />
       <Skeleton className="h-14 w-full rounded-full" />
     </div>
   );
@@ -664,7 +664,7 @@ export default function UploadPage() {
             )}
           </DropZone>
           {errors.file && (
-            <p role="alert" className="mt-1 px-4 text-body-s text-error">
+            <p role="alert" className="mt-1 text-body-s text-error">
               {errors.file}
             </p>
           )}
@@ -700,7 +700,7 @@ export default function UploadPage() {
               ))}
             </div>
             {errors.rating && (
-              <p id="upload-rating-error" role="alert" className="mt-1 px-4 text-body-s text-error">
+              <p id="upload-rating-error" role="alert" className="mt-1 text-body-s text-error">
                 {errors.rating}
               </p>
             )}

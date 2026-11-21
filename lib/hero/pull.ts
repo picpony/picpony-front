@@ -30,6 +30,8 @@ type PullStyle = { element: HTMLElement; property: 'transform' | 'opacity'; orig
 export type HeroPullSample = {
   /** Downward finger travel past the touch slop, in px. Drives every derived value. */
   raw: number;
+  /** Raw horizontal finger travel past the claim point, before rubber-band scaling. */
+  rawX: number;
   /** Rubber-banded travel actually applied to the surface. */
   distance: number;
   /** Horizontal travel applied once the drag is claimed, at the vertical band's ratio. */
@@ -75,6 +77,7 @@ export function createPullSample(rawDistance: number, x = 0): HeroPullSample {
   const distance = resistedDistance(raw);
   return {
     raw,
+    rawX: x,
     distance,
     x: raw > 0 ? x * (distance / raw) : 0,
     opacity: Math.max(0, 1 - raw / SURFACE_FADE_DISTANCE_PX),
@@ -190,7 +193,9 @@ export class HeroPullSurface {
       return Promise.resolve();
     }
     const start = Math.max(0, sample.raw);
-    const startX = sample.x;
+    // Interpolate raw horizontal travel rather than the already-damped `sample.x`, so `createPullSample`
+    // does not apply the rubber-band factor a second time and jump horizontally on frame 1 of release.
+    const startRawX = sample.rawX;
     if (start < 0.5 || motionTier('image') === 'off') {
       this.reset();
       return Promise.resolve();
@@ -233,7 +238,7 @@ export class HeroPullSurface {
           return;
         }
         const progress = progressAt(model, elapsed / duration);
-        this.write(createPullSample(start * (1 - progress), startX * (1 - progress)));
+        this.write(createPullSample(start * (1 - progress), startRawX * (1 - progress)));
         heroFrameScheduler.request(this.settleOwner, { read: () => undefined, write: step });
       };
       heroFrameScheduler.request(this.settleOwner, { read: () => undefined, write: step });

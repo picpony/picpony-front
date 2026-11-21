@@ -15,7 +15,8 @@ import { useSpoilerMatch } from '@/lib/spoilers';
 import { describeImage } from '@/lib/imageDescription';
 import { openFromSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { pickRendition } from '@/lib/imageLoader';
-import { estimateCardWidth, MASONRY_CARD_SIZES } from '@/lib/masonry';
+import { formatCount } from '@/lib/format';
+import { clampedCardAspect, estimateCardWidth, MASONRY_CARD_SIZES, MASONRY_MAX_RATIO } from '@/lib/masonry';
 import { useMounted } from '@/lib/overlay';
 
 interface ImageCardProps {
@@ -154,9 +155,14 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
 
   const aspectW = image.width || 1;
   const aspectH = image.height || 1;
-  const intrinsicH = Math.round(300 * (aspectH / aspectW));
+  const cardRatio = clampedCardAspect(aspectW, aspectH);
+  const croppedTall = aspectH / aspectW > MASONRY_MAX_RATIO;
+  const intrinsicH = Math.round(300 * cardRatio);
   const comments = typeof image.comment_count === 'number' ? image.comment_count : null;
   const onSite = siteComments && siteComments > 0 ? siteComments : 0;
+  /* Stamp format badge only when the format changes behaviour (video, animation, vector);
+     skip stamping PNG/JPG/JPEG/WEBP on ordinary still cards to keep the artwork clean. */
+  const showFormatBadge = isVideo || animated || format === 'SVG';
 
   return (
     <div
@@ -183,9 +189,9 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
           data-image-hero-id={image.id}
           data-image-hero-source-key={heroSourceKey}
           className="relative w-full overflow-hidden rounded-lg"
-          style={{ aspectRatio: `${aspectW} / ${aspectH}` }}
+          style={{ aspectRatio: `1 / ${cardRatio}` }}
         >
-          {isVideo ? (
+          {covered ? null : isVideo ? (
             <ImageCardVideo key={attemptKey} src={mediaUrl} onGiveUp={markFailed} />
           ) : paintMedia ? (
             <FadeInImage
@@ -198,7 +204,7 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
               width={aspectW}
               height={aspectH}
               quality={82}
-              className="w-full h-auto"
+              className={croppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
               draggable={false}
               sizes={MASONRY_CARD_SIZES}
               /* Below the first row the picture is not what the page is waiting for. */
@@ -223,23 +229,21 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
           aria-hidden="true"
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
-          {/* Same corner marks on profile thumbnails: MediaBadge owns their
-              plate, type size, inset and the corner concentric with the tile. */}
-          <MediaBadge corner="top-right">{format}</MediaBadge>
+          {showFormatBadge && <MediaBadge corner="top-right">{format}</MediaBadge>}
           {/* No `title` on either count. This whole chrome layer is
               `pointer-events-none aria-hidden`, so a native tooltip could never be
               hovered and the name could never be read — two dead attributes. */}
           {typeof image.score === 'number' && (
             <MediaBadge corner="bottom-left" icon={<MdThumbUp />}>
-              {image.score}
+              {formatCount(image.score)}
             </MediaBadge>
           )}
           {(comments !== null || onSite > 0) && (
             /* Derpibooru's count, then PicPony's own as `+n` — the original front end's
                reading, and the one the detail's merged comment list adds up to. */
             <MediaBadge corner="bottom-right" icon={<MdComment />}>
-              {comments ?? 0}
-              {onSite > 0 && `+${onSite}`}
+              {formatCount(comments ?? 0)}
+              {onSite > 0 && `+${formatCount(onSite)}`}
             </MediaBadge>
           )}
         </div>
@@ -268,8 +272,8 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
       {spoilers.length > 0 && (
         /* The spoiler cover (C2): opaque, so nothing of the picture shows through it (a 55%
            tint over a two-pixel blur left every character recognisable, R4-023); it names the
-           tags that caused it; one press or Enter reveals the picture, which has been mounted
-           underneath all along, so the reveal is instant; and focus stays on the card.
+           tags that caused it; one press or Enter mounts and reveals the picture (kept unmounted
+           while covered so hidden media is never fetched early); and focus stays on the card.
 
            A sibling of the link, never a child: interactive content nested inside an `<a>` is
            invalid, and as a `<div onClick>` inside it Enter used to navigate straight to the

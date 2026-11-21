@@ -24,6 +24,7 @@ import { saveDataRequested } from '@/lib/imageLoader';
 import { clearImageSequence } from '@/lib/imageSequence';
 import { GALLERY_BLOCK_SIZES } from '@/lib/masonry';
 import { formatCount } from '@/lib/format';
+import { useTagNames } from '@/components/subscriptions/useTagNames';
 import type { FeaturedSeed } from '@/lib/feed.server';
 import type { PonyImage } from '@/lib/types/image';
 
@@ -34,12 +35,12 @@ const scrim = (alpha: number) =>
   `rgb(var(--md-sys-color-scrim-rgb) / ${alpha})`;
 
 /**
- * The slot's height: a wide picture (over 1.5:1) takes the shorter one. The skeleton takes the
- * common case's, so the rarer wide banner *shrinks* into place rather than every banner growing
- * over the grid (R4-021).
+ * The slot's height: balanced so the gallery grid peeks above the fold on mobile while still
+ * giving desktop featured art a commanding stage (`max(220px, ...)` prevents flat strips on
+ * landscape phones).
  */
-const HEIGHT_NORMAL = 'min(55vh, 500px)';
-const HEIGHT_WIDE = 'min(45vh, 420px)';
+const HEIGHT_NORMAL = 'max(220px, min(42dvh, 460px))';
+const HEIGHT_WIDE = 'max(200px, min(36dvh, 380px))';
 const heightFor = (image: PonyImage) => ((image.width || 1) / (image.height || 1) > 1.5 ? HEIGHT_WIDE : HEIGHT_NORMAL);
 
 /**
@@ -138,6 +139,8 @@ export default function FeaturedBanner({
 
   const spoilers = useSpoilerMatch(featured?.tags);
   const [revealed, setRevealed] = useState<number | null>(null);
+  const bannerTags = useMemo(() => (featured?.tags ?? []).slice(0, 6), [featured?.tags]);
+  const tagName = useTagNames(bannerTags);
   const covered = spoilers.length > 0 && revealed !== featured?.id;
   const tier = useMotionTier('image');
   /* Decorative playback only at the standard tier and without Data Saver (R4-045). Not in the
@@ -276,17 +279,12 @@ export default function FeaturedBanner({
             className="absolute inset-0 rounded-lg"
             style={{
               backgroundImage: [
-                `linear-gradient(to right, ${scrim(0.3)}, transparent)`,
-                `linear-gradient(to top, ${scrim(0.6)}, ${scrim(0.2)}, transparent)`,
+                `linear-gradient(to right, ${scrim(0.18)} 0%, transparent 55%)`,
+                `linear-gradient(to top, ${scrim(0.64)} 0%, ${scrim(0.28)} 42%, transparent 72%)`,
               ].join(', '),
             }}
           />
           <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 md:p-8">
-            {/* `Badge`, not a hand-rolled pill: one shape, one owner for the
-                colour pair. The fill stays `primary`/`on-primary` rather than a
-                media role — those two are documented as not inverting between
-                schemes, so the banner's own mark reads as one constant material
-                over any photograph. */}
             <Badge
               size="md"
               colors="bg-primary text-on-primary"
@@ -306,19 +304,21 @@ export default function FeaturedBanner({
                 {teaser}
               </p>
             )}
-            {featured.tags && featured.tags.length > 0 && (
+            {bannerTags.length > 0 && (
               <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
-                {featured.tags.slice(0, 6).map((tag) => (
-                  /* `tone="media"` — the plate/ink pair, which is what this wrote
-                     out by hand. `max-w-36` caps a long tag on the spacing scale
-                     rather than as an arbitrary value. */
-                  <Badge key={tag} tone="media" className="max-w-36">
-                    {tag}
+                {bannerTags.map((tag, tagIndex) => (
+                  <Badge key={tag} tone="media" className={tagIndex >= 4 ? 'max-w-36 max-sm:hidden' : 'max-w-36'}>
+                    {tagName(tag) || tag}
                   </Badge>
                 ))}
-                {featured.tags.length > 6 && (
-                  <span className="text-body-s text-on-media-variant px-2 py-0.5">
-                    +{featured.tags.length - 6}
+                {(featured.tags?.length ?? 0) > 4 && (
+                  <span className="text-body-s text-on-media-variant px-2 py-0.5 tabular-nums sm:hidden">
+                    +{(featured.tags?.length ?? 0) - 4}
+                  </span>
+                )}
+                {(featured.tags?.length ?? 0) > 6 && (
+                  <span className="text-body-s text-on-media-variant hidden px-2 py-0.5 tabular-nums sm:inline">
+                    +{(featured.tags?.length ?? 0) - 6}
                   </span>
                 )}
               </div>

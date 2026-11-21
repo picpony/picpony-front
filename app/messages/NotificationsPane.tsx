@@ -137,8 +137,8 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
     <li
       /* Unread is carried by the row's own container pair, and by nothing else — the pair this
          app means "this one" with (the sidebar's route, a selected chip, the current contact).
-         The heading and the body name no ink of their own: they inherit the row's, which is the
-         container's `on-` role while unread and `on-surface-variant` once read. */
+         The body inherits the row's ink (`on-secondary-container` while unread, `on-surface-variant`
+         once read), while read titles step up to `on-surface` so titles remain scannable. */
       className={cn(
         'm3-row p-4',
         unread ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-low text-on-surface-variant',
@@ -146,7 +146,7 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
     >
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         {/* The pane's first level under the page's heading: the tab is the section. */}
-        <h2 className="text-title-m-emphasized min-w-0 wrap-anywhere">
+        <h2 className={cn('text-title-m-emphasized min-w-0 wrap-anywhere', !unread && 'text-on-surface')}>
           {unread && <span className="sr-only">未读：</span>}
           {item.title}
         </h2>

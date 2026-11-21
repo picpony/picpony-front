@@ -249,7 +249,7 @@ function AuthModal({
       )}
     >
       {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
-      <div className="flex md:min-h-[640px]">
+      <div className="flex md:min-h-160">
         <div
           aria-hidden="true"
           className="hidden md:flex md:w-3/5 items-center justify-center bg-surface-container-low"
@@ -265,9 +265,10 @@ function AuthModal({
                  unreserved host let the form column decide the height and then
                  resized it when the chunk landed. */
               aspect={3257 / 2148}
-              /* The wordmark, which is what /about already falls back to under
-                 reduced motion — so this pane is never empty. */
-              fallback={<Logo className="h-auto w-2/3" />}
+              /* Explicit width: `LottieIcon` centres its fallback in a shrink-to-fit grid cell,
+                 so a percentage width on `.logo-mask` resolved to 0px while loading or when
+                 ambient motion was reduced/off. */
+              fallback={<Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />}
             />
           )}
         </div>
@@ -295,7 +296,7 @@ function AuthModal({
                   <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
                     {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
                   </h2>
-                  <Spinner label="加载中" className="min-h-80" />
+                  <Spinner label="加载中…" className="min-h-80" />
                 </div>
               }>
                 <AuthForms {...shared} view={view} onSuccess={onClose} />

@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Menu from '@/components/Menu';
 import { getAppScroller } from '@/lib/appScroller';
+import { clearBottomChrome, setBottomChrome } from '@/lib/bottomChrome';
 import { cn } from '@/lib/utils';
 
 export interface SelectionCommand {
@@ -95,8 +96,22 @@ export default function SelectionBar({
   const roomRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const chromeOwner = useRef<object | null>(null);
   const [width, setWidth] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const owner = (chromeOwner.current ??= {});
+    const slot = slotRef.current;
+    if (!active || !slot) {
+      clearBottomChrome(owner);
+      return;
+    }
+    const bottom = parseFloat(getComputedStyle(slot).bottom);
+    const clearance = Number.isFinite(bottom) ? Math.max(80, Math.round(bottom + 64)) : 80;
+    setBottomChrome(owner, clearance, true);
+    return () => clearBottomChrome(owner);
+  }, [active]);
 
   /* What the bar shows: the live count and commands while the mode is on, the last of them while
      it leaves. */

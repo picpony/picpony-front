@@ -364,7 +364,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
               uploadsPage > 1 ? (
                 <EmptyState
                   size="pane"
-                  title="这一页没有图片"
+                  title="此页没有图片"
                   action={<Button variant="tonal" onClick={() => setUploadsPage(1)}>回到第一页</Button>}
                 />
               ) : (
@@ -396,7 +396,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 <div
                   ref={setRows}
                   className={`transition-opacity spring-default-effects ${
-                    uploadsRead.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
+                    uploadsRead.isLoading ? 'paging-dim' : 'opacity-100'
                   }`}
                 >
                   <MasonryGrid images={uploadsRead.data.images} sequence={sequence} listKey={listKey} />

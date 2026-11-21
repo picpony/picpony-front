@@ -5,8 +5,13 @@ import { MdAutoAwesome, MdInfoOutline, MdWarningAmber } from 'react-icons/md';
 import Button from '@/components/Button';
 import Chip from '@/components/Chip';
 import SwapContent from '@/components/SwapContent';
+import NameFade from '@/components/subscriptions/NameFade';
+import { useTagNames } from '@/components/subscriptions/useTagNames';
 import { ICON } from '@/lib/icons';
+import { useMounted } from '@/lib/overlay';
 import { useScrollFade } from '@/lib/useScrollFade';
+
+const EMPTY_TAGS: string[] = [];
 
 export type SemanticLineState =
   | { kind: 'pending'; text: string; estimateMs: number }
@@ -148,7 +153,7 @@ function PendingParse({ text, estimateMs }: { text: string; estimateMs: number }
   return (
     <p className="flex min-w-0 flex-1 items-center gap-2 text-body-m text-on-surface-variant">
       <MdAutoAwesome size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
-      <span className="text-shimmer min-w-0 truncate">
+      <span className="text-shimmer min-w-0 truncate tabular-nums">
         {late ? `解析耗时较长，仍在处理「${text}」…` : `正在解析「${text}」，预计 ${seconds} 秒…`}
       </span>
     </p>
@@ -166,6 +171,8 @@ function ConvertedTags({
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   useScrollFade(rowRef);
+  const mounted = useMounted();
+  const tagName = useTagNames(mounted ? tags : EMPTY_TAGS);
   const kept = new Set(included.map((tag) => tag.toLowerCase()));
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -177,19 +184,24 @@ function ConvertedTags({
         ref={rowRef}
         role="group"
         aria-label="转换得到的标签"
-        className="scrollbar-hide scroll-fade-x flex min-w-0 flex-1 items-center gap-2 overflow-x-auto"
+        className="scrollbar-hide scroll-fade-x -my-1.5 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1.5"
       >
-        {tags.map((tag) => (
-          <Chip
-            key={tag}
-            variant="filter"
-            selected={kept.has(tag.toLowerCase())}
-            onClick={() => onToggle(tag)}
-            className="shrink-0"
-          >
-            {tag}
-          </Chip>
-        ))}
+        {tags.map((tag) => {
+          const cnName = mounted ? tagName(tag) : undefined;
+          const display = cnName || tag;
+          return (
+            <Chip
+              key={tag}
+              variant="filter"
+              selected={kept.has(tag.toLowerCase())}
+              onClick={() => onToggle(tag)}
+              title={cnName ? tag : undefined}
+              className="shrink-0"
+            >
+              <NameFade name={cnName === undefined ? undefined : display}>{display}</NameFade>
+            </Chip>
+          );
+        })}
       </div>
     </div>
   );

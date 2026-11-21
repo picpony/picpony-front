@@ -231,16 +231,17 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        /* `ModalNavigationDrawer`'s release (`anchoredDraggableMotion`): DefaultSpatial both
-         * ways — settling open, its overshoot lands on the left edge skirt; shutting, it
-         * overshoots off screen. The scrim fades on DefaultEffects. No velocity scaling: a
-         * duration scaled by distance double-counts; a spring already covers a shorter
-         * remaining distance in less time. */
-        const spec = spring('defaultSpatial', 'overlay');
+        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         const scrimSpec = spring('defaultEffects', 'overlay');
 
         settling = toOpen;
-        springBoth(d, s, { x: target, ...spec }, { opacity: toOpen ? 1 : 0, ...scrimSpec }, release);
+        springBoth(
+          d,
+          s,
+          { x: target, ...spec },
+          { opacity: toOpen ? 1 : 0, ...scrimSpec },
+          release,
+        );
       });
 
       /* **Opened or closed from elsewhere while the gesture owns the panel** — Back (on a

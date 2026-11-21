@@ -46,7 +46,7 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
 
   const failedTurn = read.isPrevious && Boolean(read.error);
   return (
-    <div aria-busy={read.isLoading || undefined}>
+    <div className="max-w-4xl" aria-busy={read.isLoading || undefined}>
       {own && hiddenFromVisitors(profile, 'posts') && <OwnerHiddenNote tab="posts" />}
       {/* In-flow rows, so scroll anchoring does what the masonry's needs `FailedTurnHold` for:
           at the list's top the tab row is the anchor and the message shows under it; deeper in,
@@ -80,7 +80,7 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
               <div className="min-w-0 flex-1">
                 <h3 className="mb-1.5 line-clamp-2 wrap-anywhere text-title-m-emphasized text-on-surface">{post.title}</h3>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label-m text-on-surface-variant">
-                  <span>{formatCompactDateTime(post.created_at, now)}</span>
+                  <span className="tabular-nums">{formatCompactDateTime(post.created_at, now)}</span>
                   <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                     <MdComment size={ICON.dense} aria-hidden="true" />
                     <span className="sr-only">回复数</span>

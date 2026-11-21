@@ -330,7 +330,7 @@ export default function Thread({
             <div ref={sentinelRef} className="flex h-10 shrink-0 items-center justify-center">
               {olderError ? (
                 <Button variant="text" size="xs" icon={<MdErrorOutline />} onClick={load}>
-                  更早的消息加载失败，点按重试
+                  更早的消息加载失败，重试
                 </Button>
               ) : loadingOlder ? (
                 <Spinner size="sm" label="正在加载更早的消息" />

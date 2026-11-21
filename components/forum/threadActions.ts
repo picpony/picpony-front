@@ -133,7 +133,7 @@ async function copyLink(url: string): Promise<boolean> {
 export async function copyPostLink(post: ForumPost, token: string | null): Promise<void> {
   const url = await postShareLink(post, token);
   if (await copyLink(url)) return;
-  showToast('分享链接已生成', 'info', {
+  showToast('已生成分享链接', 'info', {
     action: {
       label: '复制',
       onClick: () => {
@@ -158,7 +158,7 @@ export async function sharePostNatively(post: ForumPost, token: string | null): 
         if (name === 'AbortError') return;
         /* The gesture was spent waiting for the link: offer the sheet again, from a fresh tap. */
         if (name === 'NotAllowedError') {
-          showToast('分享链接已生成', 'info', { action: { label: '分享', onClick: () => void open() } });
+          showToast('已生成分享链接', 'info', { action: { label: '分享', onClick: () => void open() } });
           return;
         }
         void copyPostLink(post, token);

@@ -144,7 +144,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
             variant="tonal"
             icon={<MdUpload />}
           >
-            上传图片
+            发布图片
           </ButtonLink>
         }
       />
@@ -190,7 +190,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       <div
         ref={setRows}
         className={`transition-opacity spring-default-effects ${
-          read.isLoading ? 'pointer-events-none opacity-50' : 'opacity-100'
+          read.isLoading ? 'paging-dim' : 'opacity-100'
         }`}
       >
         {/* The pane already owns its entrance; the card still owns opening the image. */}

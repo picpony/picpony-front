@@ -315,6 +315,14 @@
   .tools:focus-within {
     transition-delay: 0s;
   }
+
+  /* Active only while the figure is hovered so empty artwork corners never swallow rest clicks. */
+  .expanded:hover .tools::before {
+    content: '';
+    position: absolute;
+    inset: -4px -4px -16px -16px;
+    z-index: -1;
+  }
 }
 
 .collapsed .tools {

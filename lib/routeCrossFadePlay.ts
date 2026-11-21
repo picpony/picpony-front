@@ -150,7 +150,7 @@ export function playRouteCrossFade(
     page.style.animation = 'none';
     settleEntryAnimations(page);
     const edge =
-      move.axis === 'x' && motionTier('tabs') === 'standard' && supportsEdgeMask()
+      move.axis === 'x' && motionTier('page') === 'standard' && supportsEdgeMask()
         ? maskRouteWindow(layer, snapshot.node, page)
         : null;
     const handle = playSharedAxis({
@@ -159,6 +159,7 @@ export function playRouteCrossFade(
       axis: move.axis,
       direction: move.direction,
       distance: edge?.distance,
+      category: 'page',
       /* The page moves as one piece — the only kind of run there is: a route change swaps the
          page's whole subtree the moment its data lands, and only `[data-page-content]` itself
          is guaranteed to survive. */
@@ -350,7 +351,8 @@ function playUnderContainer(
           }),
         );
       }
-      for (const animation of animations) animation.currentTime = 1000 / 60;
+      const leadMs = Math.min(1000 / 60, SPRING_MS.fastEffects * scale * 0.12);
+      for (const animation of animations) animation.currentTime = leadMs;
       void Promise.all(animations.map((animation) => animation.finished)).then(
         () => cancelRouteCrossFade(),
         () => {},

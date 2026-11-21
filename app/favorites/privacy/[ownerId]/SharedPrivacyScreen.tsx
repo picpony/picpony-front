@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import { MdDownload, MdLock, MdLockOpen, MdPersonOff } from 'react-icons/md';
 import { useResource } from '@/lib/resource';
 import { sharedPrivacyFaves, userProfile } from '@/lib/resources';
@@ -20,6 +19,7 @@ import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -109,7 +109,6 @@ export default function SharedPrivacyScreen({ ownerId }: { ownerId: number }) {
 
 /** Your own space's link, followed: it lives on /favorites, behind your own password. */
 function OwnSpace() {
-  const router = useRouter();
   const showPrivacy = useSyncedSetting('showPrivacyFaves');
   return (
     <EmptyState
@@ -118,9 +117,9 @@ function OwnSpace() {
       title="这是你自己的隐私空间"
       description={showPrivacy ? '可在「我的收藏」中查看和管理' : '在设置中开启「显示隐私空间」后即可查看'}
       action={
-        <Button variant="tonal" onClick={() => router.push(showPrivacy ? favoritesHref('privacy') : '/settings', { scroll: false })}>
+        <ButtonLink href={showPrivacy ? favoritesHref('privacy') : '/settings'} variant="tonal">
           {showPrivacy ? '前往我的隐私空间' : '前往设置'}
-        </Button>
+        </ButtonLink>
       }
     />
   );

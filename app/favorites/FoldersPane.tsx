@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { MdChecklist, MdCreateNewFolder, MdDeleteOutline, MdDeselect, MdFolder, MdMerge, MdSelectAll, MdTune } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveFolders, folderCovers, useBrowsingFingerprint } from '@/lib/resources';
@@ -17,6 +16,7 @@ import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import Button from '@/components/Button';
+import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import PresenceList from '@/components/PresenceList';
@@ -37,7 +37,6 @@ import { settingsHref } from '@/app/settings/tabs';
  * A folder page left with Back shrinks back into its card here (`useFolderReturn`).
  */
 export default function FoldersPane({ token, active }: { token: string; active: boolean }) {
-  const router = useRouter();
   const list = useResource(faveFolders, { token });
   const fp = useBrowsingFingerprint();
   const folders = list.data?.folders;
@@ -221,12 +220,12 @@ export default function FoldersPane({ token, active }: { token: string; active: 
       {!commands.showFaves && (
         <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-s text-on-surface-variant">
           <span>公开我的收藏已关闭，个人主页不显示任何收藏夹</span>
-          <Button variant="text" size="xs" icon={<MdTune />} onClick={() => router.push(settingsHref('account'), { scroll: false })}>
+          <ButtonLink href={settingsHref('account')} variant="text" size="xs" icon={<MdTune />}>
             前往设置
-          </Button>
+          </ButtonLink>
         </div>
       )}
-      {Boolean(list.error) && <ErrorRetry size="inline" title="收藏夹更新失败" message={apiErrorMessage(list.error)}
+      {Boolean(list.error) && <ErrorRetry size="inline" className="mb-4" title="收藏夹更新失败" message={apiErrorMessage(list.error)}
         onRetry={isRetryable(list.error) ? list.refresh : undefined} />}
       {folders.length === 0 ? (
         <EmptyState

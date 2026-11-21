@@ -34,6 +34,38 @@ const CATEGORIES: Record<string, TagCategory> = {
 
 const NEUTRAL: TagCategory = { label: '其他', hue: null };
 
+/** Per-rating hues so safe/suggestive/questionable/explicit and dark-content tags read at a glance. */
+const RATING_TAG_HUES: Record<string, AccentHue> = {
+  safe: 'green',
+  suggestive: 'yellow',
+  questionable: 'orange',
+  explicit: 'red',
+  'semi-grimdark': 'indigo',
+  grimdark: 'purple',
+  grotesque: 'red',
+};
+
+const RATING_TAG_RANK: Record<string, number> = {
+  safe: 0,
+  suggestive: 1,
+  questionable: 2,
+  explicit: 3,
+  'semi-grimdark': 4,
+  grimdark: 5,
+  grotesque: 6,
+};
+
+/** Sort rank for content-rating tags (0..6), or -1 for non-rating tags. */
+export function ratingTagRank(tag: string): number {
+  return RATING_TAG_RANK[tag.toLowerCase()] ?? -1;
+}
+
+/** Chip container/ink classes for a specific rating tag, or `undefined` if not a rating tag. */
+export function ratingTagChip(tag: string): string | undefined {
+  const hue = RATING_TAG_HUES[tag.toLowerCase()];
+  return hue ? `bg-accent-${hue} text-on-accent-${hue}` : undefined;
+}
+
 /** Accepts either vocabulary's spelling, plus unknown values. */
 export function tagCategory(name: string | undefined | null): TagCategory {
   if (!name) return NEUTRAL;

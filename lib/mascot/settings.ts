@@ -105,12 +105,12 @@ const introAnimationSetting: SyncedSetting<EntranceMode> = {
 export const mascotSettings: readonly SyncedSetting<unknown>[] = [
   setting('showMascot', true, booleanOf),
   setting('mascotId', 'auto', mascotIdOf, LS_KEYS.legacyMascotId),
-  setting('mascotSizeDesktop', 'large', sizeOf, LS_KEYS.legacyMascotSize),
+  setting('mascotSizeDesktop', 'medium', sizeOf, LS_KEYS.legacyMascotSize),
   setting('mascotSizeMobile', 'medium', sizeOf, LS_KEYS.legacyMascotSize),
   introAnimationSetting as SyncedSetting<unknown>,
 ];
 
 export const MASCOT_PIXELS = {
-  desktop: { small: 120, medium: 180, large: 240, xlarge: 300 },
+  desktop: { small: 120, medium: 160, large: 240, xlarge: 300 },
   mobile: { small: 90, medium: 120, large: 160, xlarge: 200 },
 } as const;

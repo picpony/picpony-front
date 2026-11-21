@@ -278,7 +278,7 @@ function WealthDialog({
           />
         )}
         {errors.form && (
-          <p role="alert" className="px-4 text-body-s text-error">
+          <p role="alert" className="text-body-s text-error">
             {errors.form}
           </p>
         )}

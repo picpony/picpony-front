@@ -1,6 +1,7 @@
 'use client';
 
 import { motionScale, motionTier } from '@/lib/appearance';
+import type { MotionCategory } from '@/lib/motionPreferences';
 import { getAppScroller } from '@/lib/appScroller';
 import { TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRING_MS, springLinear } from '@/lib/spring';
@@ -173,12 +174,14 @@ export function playSharedAxis(opts: {
    * the click that follows has only to start the clock.
    */
   held?: boolean;
+  /** Motion category governing this transition (`tabs` by default; `page` for sibling routes). */
+  category?: MotionCategory;
 }): SharedAxisHandle {
-  const { leaving, entering, axis = 'x', direction, onSettle, follower } = opts;
+  const { leaving, entering, axis = 'x', direction, onSettle, follower, category = 'tabs' } = opts;
   let leavingOffsetY = opts.leavingOffsetY ?? 0;
   let held = opts.held === true;
-  const tier = motionTier('tabs');
-  const scale = motionScale('tabs');
+  const tier = motionTier(category);
+  const scale = motionScale(category);
 
   /* The window the strip slides past is the *scroller*, not the pane: the pane is
    * the centred content column, the scroller runs sidebar edge to screen edge. One

@@ -158,9 +158,37 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         const own = message.role === 'user';
         const startOfRun = index === 0 || messages[index - 1].role !== message.role;
         const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
+        const removeControl = history && message.id ? (
+          <span className="hover-reveal shrink-0">
+            <IconButton
+              size="sm"
+              variant="danger-quiet"
+              aria-label={`删除第 ${index + 1} 条消息`}
+              disabled={state.busy}
+              icon={<MdDeleteOutline />}
+              onClick={async () => {
+                if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？', tone: 'danger' }) && current()) void session.removeMessage(message.id);
+              }}
+            />
+          </span>
+        ) : null;
         return (
-          <li key={message.id || `${message.role}-${index}`} className={cn('group', index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'))}>
-            <ChatBubble own={own} plain={!own} rich={!own} startOfRun={startOfRun} endOfRun={endOfRun}>
+          <li
+            key={message.id || `${message.role}-${index}`}
+            className={cn(
+              'group',
+              removeControl && 'flex items-start gap-1',
+              index > 0 && (startOfRun ? 'mt-3' : 'mt-0.5'),
+            )}
+          >
+            <ChatBubble
+              own={own}
+              plain={!own}
+              rich={!own}
+              startOfRun={startOfRun}
+              endOfRun={endOfRun}
+              className={removeControl ? 'min-w-0 flex-1' : undefined}
+            >
               {own ? message.content.replaceAll('||', '\n\n') : (
                 <>
                   {message.tools?.length ? (
@@ -172,13 +200,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
                 </>
               )}
             </ChatBubble>
-            {history && message.id && (
-              <div className={cn('hover-reveal flex', own ? 'justify-end' : 'justify-start')}>
-                <IconButton size="sm" aria-label={`删除第 ${index + 1} 条消息`} disabled={state.busy} icon={<MdDeleteOutline />} onClick={async () => {
-                  if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？', tone: 'danger' }) && current()) void session.removeMessage(message.id);
-                }} />
-              </div>
-            )}
+            {removeControl}
           </li>
         );
       })}

@@ -71,14 +71,14 @@ export function FormActions({ children, className = '' }: { children: ReactNode;
 /**
  * A panel's explanatory note — one short paragraph on what the section does. `warning` is for the
  * one note that is a caution about the section's own use (the message audit's privacy rule): the
- * same surface with a leading glyph in the error ink, so the caution does not need a second
+ * same surface with a leading glyph in the warning ink, so the caution does not need a second
  * container recipe.
  */
 export function AdminNote({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'warning' }) {
   return (
     <Card variant="filled" padding="sm" className="flex items-start gap-2 text-body-s text-on-surface-variant">
       {tone === 'warning' && (
-        <MdWarning size={ICON.dense} aria-hidden="true" className="mt-0.5 shrink-0 text-error" />
+        <MdWarning size={ICON.dense} aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
       )}
       <p className="min-w-0">{children}</p>
     </Card>

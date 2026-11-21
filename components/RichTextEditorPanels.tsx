@@ -129,7 +129,7 @@ function ColorPanel({ entry, close }: { entry: Entry<EditorColorPanel>; close: (
       role="dialog" aria-label={request.title} className="w-72" estimatedHeight={288}
       onClose={(refocus) => { if (refocus) request.anchor.focus({ preventScroll: true }); close(); }}>
       <div className="flex items-center justify-between gap-2 px-2 pb-2">
-        <span className="text-title-s">{request.title}</span>
+        <span className="text-title-s text-on-surface">{request.title}</span>
         <IconButton size="sm" dismiss aria-label="关闭" icon={<MdClose />} onClick={() => { request.anchor.focus(); close(); }} />
       </div>
       <Button variant="text" fullWidth className="mb-2" icon={<MdFormatColorReset />} onClick={() => pick(null)}>
@@ -141,7 +141,7 @@ function ColorPanel({ entry, close }: { entry: Entry<EditorColorPanel>; close: (
             aria-label={`选择颜色 ${colorLabel(color)}`} toggle selected={color === request.value}
             tabIndex={index === cursor ? 0 : -1} shape="square" className="touch-size justify-self-center"
             onFocus={() => setCursor(index)} onClick={() => pick(color)}
-            icon={<span className="forced-boundary block size-6 rounded-xs" style={{ backgroundColor: color }} />}
+            icon={<span className="forced-boundary block size-6 rounded-xs border border-outline-variant" style={{ backgroundColor: color }} />}
             onKeyDown={(event) => {
               const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -5, ArrowDown: 5 };
               let next = index;

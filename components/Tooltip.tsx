@@ -57,8 +57,8 @@ const EXIT_MS = SPRING_MS.fastEffects;
  * M3 plain tooltip.
  *
  * By its own tokens (`PlainTooltipTokens`): `inverse-surface` container,
- * `inverse-on-surface` text at `body-small`, extra-small corner, and **no
- * elevation** — a plain tooltip is a label, not a surface that floats.
+ * `inverse-on-surface` text at `body-small`, extra-small corner, and a quiet
+ * level-1 shadow (`shadow-e1`) so labels stay lifted over dense dark surfaces.
  *
  * `inverse-surface` here is not the mistake the snackbar's note warns about. That
  * role flips between schemes, which is wrong for a *severity*; a tooltip carries
@@ -177,13 +177,12 @@ export function Tooltip({
         position: 'fixed',
         left: place.left,
         [edge]: place.top,
-        maxWidth: `calc(100vw - ${VIEWPORT_PADDING * 2}px)`,
+        maxWidth: `min(20rem, calc(100vw - ${VIEWPORT_PADDING * 2}px))`,
       }}
       className={cn(
-        /* 4dp corner, 8dp/4dp padding and a 24dp floor — M3's plain tooltip. No
-           shadow: the inverse container is the whole separation — which forced colors
-           flattens, hence the system edge. */
-        'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip forced-boundary',
+        /* 4dp corner, 8dp/4dp padding and a 24dp floor — M3's plain tooltip. Subtle
+           elevation keeps the inverse surface distinct over dark photography in light mode. */
+        'm3-tooltip bg-inverse-surface text-inverse-on-surface text-body-s z-tooltip shadow-e1 forced-boundary',
         'flex min-h-6 items-center rounded-xs px-2 py-1 wrap-anywhere',
         /* Hoverable while open (WCAG 1.4.13): the pointer may move onto the bubble
            without it vanishing. Never while leaving, so a closing bubble cannot catch

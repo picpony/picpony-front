@@ -11,16 +11,16 @@ Runtime rules for the mascot and desktop ponies. Source and licensing details be
 `useCompanionPresence` owns visibility:
 
 - `present`: the document is visible.
-- `away`: a modal layer, open picture, lightbox, on-screen keyboard, standalone picture page or admin console covers the companions.
+- `away`: a modal layer, open picture, lightbox, on-screen keyboard, standalone picture page, `/messages` or admin console covers the companions.
 - Ordinary navigation and Hero flight are not reasons to recreate the companions.
 - Away pauses ponies in place and fades the mascot. `isScreenQuiet` is for interruptions such as announcements, not companion chrome.
 
-The home pill publishes `--app-bottom-chrome` and `data-bottom-chrome`. The mascot follows the pill's arrival with the layout spring after the page handoff, and leaves on FastEffects; it uses the page clock gated by the ambient setting. The pony layer ends above that band.
+Shared bottom chrome (`TabNavBar` when not suppressed by the expanded desktop drawer, `CartBar` and `SelectionBar`) publishes `--app-bottom-chrome` and `data-bottom-chrome` through the ref-counted `lib/bottomChrome.ts` registry. The mascot follows bottom-chrome arrival with the layout spring after the page handoff, and leaves on FastEffects; it uses the page clock gated by the ambient setting. The pony layer ends above that band.
 
 ## Mascot geometry and input
 
-- Keep one stage box in expanded and collapsed states. Animate the plate, figure and collapse control inside it.
-- Collapsed: a 56 dp FAB on `surface-container-high`, elevation 3, inner ripple and state layer.
+- Keep one stage box in expanded and collapsed states. Animate the plate, figure and collapse control inside it. Default desktop size is `medium` (`160 px`).
+- Collapsed: a 56 dp FAB on `surface-container-high`, elevation 2, inner ripple and state layer.
 - Keep the collapse control mounted, fading and inert while collapsed. Expansion greetings wait for the figure's transition, bounded by the motion watchdog.
 - Hit testing follows `clip-path: path()` on the character outline. Transparent margins belong to the page.
 - Outline expansion is 3 px for a mouse and 8 px for touch; use an ellipse while unavailable.
@@ -66,7 +66,7 @@ Do not resize the iframe on each drawer-animation frame. Ponies move with the co
 
 Speech bubbles follow their sprite after rect reads, remain 8 px within the window, and retain their side while it fits. The `theme` message supplies container, text, corner, type and filter-shadow values because application CSS does not reach the frame.
 
-Settings debounce a sequence of selection edits and keep the local draft until the resource publishes the saved selection. `PresenceList` owns lineup arrivals, removals and placement in the `list` category. Cells stay fixed while a departing pony fades beneath its replacement; restored selections reuse their existing entry.
+Settings debounce a sequence of selection edits and keep the local draft until the resource publishes the saved selection. `PresenceList` owns lineup arrivals, removals and placement in the `list` category; each filled lineup slot is an interactive button that removes that pony directly. Cells stay fixed while a departing pony fades beneath its replacement; restored selections reuse their existing entry.
 
 ## Verification
 

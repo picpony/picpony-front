@@ -22,7 +22,7 @@
     --w-e-toolbar-border-color: var(--md-sys-color-outline-variant);
     isolation: isolate;
     outline: 2px solid transparent;
-    outline-offset: -1px;
+    outline-offset: -2px;
     transition:
       border-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
       outline-color var(--duration-spring-fast-effects) var(--ease-spring-effects);
@@ -59,7 +59,7 @@
 
   .rich-text-editor .w-e-text-container {
     height: auto !important;
-    border-radius: 0 0 calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px);
+    border-radius: 0 0 calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px);
   }
 
   .rich-text-editor [data-slate-editor] {
@@ -145,7 +145,7 @@
 
   .rich-text-editor .w-e-bar {
     padding: 6px;
-    border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+    border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
     font-size: var(--text-label-l);
     font-weight: var(--text-label-l--font-weight);
     line-height: var(--text-label-l--line-height);
@@ -207,7 +207,7 @@
     background-color: var(--md-sys-color-secondary-container);
     color: var(--md-sys-color-on-secondary-container);
     --ripple-color: var(--md-sys-color-secondary-ink);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
   }
 
   .rich-text-editor .w-e-bar-item button[data-pressed],

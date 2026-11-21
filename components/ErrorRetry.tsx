@@ -24,6 +24,7 @@ interface ErrorRetryProps {
   fill?: boolean;
   /** Off where the caller animates the swap that brought this block in. See `StatusView`. */
   entrance?: boolean;
+  className?: string;
 }
 
 /**
@@ -45,14 +46,17 @@ export default function ErrorRetry({
   size = 'page',
   fill = false,
   entrance = true,
+  className = '',
 }: ErrorRetryProps) {
   return (
     <StatusView
       size={size}
       fill={fill}
       entrance={entrance}
+      className={className}
       title={title}
       description={message}
+      iconTone="error"
       /* No glyph at `inline`, matching `EmptyState`: the two are presets over one
          `StatusView` with one silhouette, and the default tray-and-gap stood
          taller than the ~120px wells this size serves. The words are the status. */

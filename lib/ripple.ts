@@ -27,20 +27,17 @@ import { motionTier, scaledMs } from '@/lib/appearance';
  *     pressed state layer takes over.
  */
 const FADE_IN_MS = 75;
-const SPREAD_MIN_MS = 280;
-const SPREAD_MAX_MS = 420;
-const FADE_OUT_MS = 280;
+const SPREAD_MIN_MS = 240;
+const SPREAD_MAX_MS = 380;
+const FADE_OUT_MS = 220;
 const FADE_CANCEL_MS = 140;
 /** Fast-launch, soft-decelerate spread curve (AOSP LogDecelerate / Vuetify launch with M3 tail). */
 const RIPPLE_SPREAD_EASE = 'cubic-bezier(0.2, 0.8, 0.4, 1)';
 /** Standard M3 / Vuetify dissolve curve so the fade-out melts smoothly without an abrupt drop. */
 const RIPPLE_FADE_OUT_EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
-/** Starting scale on compact square/circular controls (IconButton, selection circles, FABs). */
-const COMPACT_START_SCALE = 0.18;
-const COMPACT_MAX_EDGE_PX = 64;
-/** Starting scale bounds on wider rectangular / pill / row / card hosts. */
-const RECT_MIN_START_SCALE = 0.1;
-const RECT_MAX_START_SCALE = 0.24;
+/** Continuous starting scale bounds across compact buttons, pills, rows and cards (no 48/52px cliff). */
+const MIN_START_SCALE = 0.12;
+const MAX_START_SCALE = 0.2;
 /** Cap initial droplet radius relative to the shorter side so wide rows still radiate crisply. */
 const RECT_SHORT_SIDE_SHARE = 0.34;
 /** Small anti-aliasing margin so the uniform core clears all four pressed corners cleanly. */
@@ -49,8 +46,8 @@ const END_RADIUS_PAD_PX = 2;
 const SOFT_EDGE_MIN_PX = 12;
 const SOFT_EDGE_MAX_PX = 56;
 const SOFT_EDGE_SHARE = 0.3;
-/** At 80% of `RIPPLE_SPREAD_EASE`, scale is already >98% complete — dissolve blends cleanly out. */
-const RELEASE_HOLD_SHARE = 0.8;
+/** At 62% of `RIPPLE_SPREAD_EASE`, scale is already >94% complete — quick taps stay crisp. */
+const RELEASE_HOLD_SHARE = 0.62;
 
 /**
  * How long a finger has to stay put before its touch counts as a press rather than the start of
@@ -102,16 +99,18 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   const cover = Math.hypot(width, height) / 2 + END_RADIUS_PAD_PX;
   const feather = Math.min(SOFT_EDGE_MAX_PX, Math.max(SOFT_EDGE_MIN_PX, cover * SOFT_EDGE_SHARE));
   const end = cover + feather;
-  const isCompactSquare = Math.max(width, height) <= COMPACT_MAX_EDGE_PX && Math.abs(width - height) <= 2;
-  const startScale = isCompactSquare
-    ? COMPACT_START_SCALE
-    : Math.max(
-        RECT_MIN_START_SCALE,
-        Math.min(RECT_MAX_START_SCALE, (Math.min(width, height) * RECT_SHORT_SIDE_SHARE) / cover),
-      );
+  const startScale = Math.max(
+    MIN_START_SCALE,
+    Math.min(MAX_START_SCALE, (Math.min(width, height) * RECT_SHORT_SIDE_SHARE) / cover),
+  );
   /* Clamp taps landing in an expanded `touch-target` overhang to the painted edge. */
   const cx = Math.min(width, Math.max(0, x));
   const cy = Math.min(height, Math.max(0, y));
+
+  /* Read and freeze the wave's ink from the already-styled host *before* mutating the DOM so
+     pointerdown never forces a synchronous write-then-read style recalculation on the new span. */
+  const hostStyle = window.getComputedStyle(host);
+  const resolvedColor = hostStyle.getPropertyValue('--ripple-color').trim() || hostStyle.color;
 
   /* Centred on the host from the start; a single unified `transform` translates from the contact
      point while scaling up on the same easing curve, so the wave never slips off the pointer. */
@@ -122,13 +121,8 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   ripple.style.left = `${width / 2 - end}px`;
   ripple.style.top = `${height / 2 - end}px`;
   ripple.style.setProperty('--ripple-core', `${((cover / end) * 100).toFixed(2)}%`);
-  host.appendChild(ripple);
-  /* Freeze the wave's resolved ink at contact time so a quick click that immediately flips the
-     control into a selected container (e.g. a pill/rail tab, sidebar nav row or toggle) keeps
-     the colour it launched with instead of snapping mid-spread. `.ripple` paints its gradient
-     from `currentColor`, so freezing `color` locks the whole radial gradient. */
-  const resolvedColor = window.getComputedStyle(ripple).color;
   if (resolvedColor) ripple.style.color = resolvedColor;
+  host.appendChild(ripple);
 
   const fadeIn = scaledMs(FADE_IN_MS);
   const spread = scaledMs(Math.round(Math.min(SPREAD_MAX_MS, Math.max(SPREAD_MIN_MS, 220 + Math.sqrt(cover) * 10))));

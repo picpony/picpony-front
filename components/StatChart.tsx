@@ -49,15 +49,12 @@ const TONE: Record<ChartTone, string> = {
   tertiary: 'text-tertiary',
   neutral: 'text-on-surface-variant',
 };
-const AREA_TONE: Record<ChartTone, string> = {
-  primary: 'text-primary-container',
-  secondary: 'text-secondary-container',
-  tertiary: 'text-tertiary-container',
-  neutral: 'text-surface-container-low',
-};
+/* Multi-series stroke patterns keep lines distinguishable under monochrome palettes
+   (where `secondary` and `tertiary` share one ink) and for colour-vision deficiency. */
+const SERIES_DASH: readonly (string | undefined)[] = [undefined, '6 3', '2 3', '8 3 2 3'];
 
 const HEIGHT = 240;
-const PAD = { top: 12, right: 12, bottom: 28, left: 48 };
+const PAD = { top: 12, right: 12, bottom: 28, left: 56 };
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom;
 
 /** Whole-count axes with round 1/2/5 steps, including when the maximum is only one. */
@@ -79,9 +76,18 @@ function pointY(value: number, max: number): number {
   return PAD.top + PLOT_H - (value / max) * PLOT_H;
 }
 
+/** Uniform integer stride so short ranges never drop a lone middle day (e.g. 11/18 of 7). */
 function tickIndexes(count: number, limit: number): number[] {
   if (count <= limit) return Array.from({ length: count }, (_, index) => index);
-  return Array.from({ length: limit }, (_, index) => Math.round((index / (limit - 1)) * (count - 1)));
+  const stride = Math.ceil((count - 1) / Math.max(1, limit - 1));
+  const indexes: number[] = [];
+  for (let index = 0; index < count; index += stride) indexes.push(index);
+  const last = indexes[indexes.length - 1];
+  if (last !== count - 1) {
+    if (count - 1 - last <= stride / 2 && indexes.length > 1) indexes[indexes.length - 1] = count - 1;
+    else indexes.push(count - 1);
+  }
+  return indexes;
 }
 
 const subscribeNothing = () => () => {};
@@ -146,6 +152,7 @@ export default function StatChart({
 }: StatChartProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
+  const areaGradId = `stat-area-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const [width, setWidth] = useState(720);
   const [focused, setFocused] = useState(false);
   const [selection, setSelection] = useState<Inspection | null>(null);
@@ -158,7 +165,7 @@ export default function StatChart({
   const step = niceStep(maxValue / 4);
   const max = step * 4;
   const yTicks = [0, step, step * 2, step * 3, step * 4];
-  const xTicks = tickIndexes(count, Math.min(6, Math.max(2, Math.floor(plotWidth / 72))));
+  const xTicks = tickIndexes(count, Math.min(7, Math.max(2, Math.floor(plotWidth / 64))));
   // Never carry a hovered bucket into another view or revive it on returning to a tab.
   const valid = selection && isActive && !loading && selection.key === contentKey && selection.index < count;
   if (selection && !valid) setSelection(null);
@@ -217,17 +224,31 @@ export default function StatChart({
             'mt-2 grid gap-x-4 gap-y-2',
             series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
           )}>
-            {series.map((item) => (
-              <div key={item.key} className="min-w-0">
-                <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
-                  <span className={cn('h-1 w-4 shrink-0 rounded-full bg-current forced-mark', TONE[item.tone])} aria-hidden="true" />
-                  {item.label}
-                </dt>
-                <dd className="text-headline-s text-on-surface tabular-nums wrap-anywhere">
-                  {formatExactCount(active === null ? item.summary : item.values[active])}
-                </dd>
-              </div>
-            ))}
+            {series.map((item, seriesIndex) => {
+              const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
+              return (
+                <div key={item.key} className="min-w-0">
+                  <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
+                    <svg width={18} height={6} viewBox="0 0 18 6" className={cn('shrink-0 forced-mark', TONE[item.tone])} aria-hidden="true">
+                      <line
+                        x1={1}
+                        x2={17}
+                        y1={3}
+                        y2={3}
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        strokeDasharray={dash}
+                      />
+                    </svg>
+                    {item.label}
+                  </dt>
+                  <dd className="text-headline-s text-on-surface tabular-nums wrap-anywhere">
+                    {formatExactCount(active === null ? item.summary : item.values[active])}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
         </div>
       )}
@@ -271,19 +292,31 @@ export default function StatChart({
                 inspect(next, 'select');
               }}
             >
-              <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" preserveAspectRatio="none" focusable="false" aria-hidden="true">
+              <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" focusable="false" aria-hidden="true">
                 {series.length === 1 && (
-                  <path
-                    d={`${linePath(series[0])} L${pointX(count - 1).toFixed(1)},${pointY(0, max).toFixed(1)} L${pointX(0).toFixed(1)},${pointY(0, max).toFixed(1)} Z`}
-                    fill="currentColor"
-                    className={cn(AREA_TONE[series[0].tone], 'forced-colors:hidden')}
-                  />
+                  <defs>
+                    <linearGradient id={areaGradId} x1="0" y1="0" x2="0" y2="1" className={TONE[series[0].tone]}>
+                      <stop offset="0%" stopColor="currentColor" style={{ stopOpacity: 'var(--md-sys-chart-area-opacity)' }} />
+                      <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
                 )}
                 {yTicks.map((value) => {
                   const y = pointY(value, max);
+                  const baseline = value === 0;
                   return (
                     <g key={value}>
-                      <line x1={PAD.left} x2={width - PAD.right} y1={y} y2={y} stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" className="text-outline-variant" />
+                      <line
+                        x1={PAD.left}
+                        x2={width - PAD.right}
+                        y1={y}
+                        y2={y}
+                        stroke="currentColor"
+                        strokeWidth={1}
+                        strokeDasharray={baseline ? undefined : '2 3'}
+                        vectorEffect="non-scaling-stroke"
+                        className={baseline ? 'text-outline' : 'text-outline-variant'}
+                      />
                       <text x={PAD.left - 8} y={y + 4} textAnchor="end" fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
                         {axisValue(value)}
                       </text>
@@ -296,13 +329,30 @@ export default function StatChart({
                   </text>
                 ))}
                 <StatSeriesPaint dataKey={dataKey} active={isActive}>
-                  {series.map((item) => {
+                  {series.length === 1 && (
+                    <path
+                      d={`${linePath(series[0])} L${pointX(count - 1).toFixed(1)},${pointY(0, max).toFixed(1)} L${pointX(0).toFixed(1)},${pointY(0, max).toFixed(1)} Z`}
+                      fill={`url(#${areaGradId})`}
+                      className={cn(TONE[series[0].tone], 'forced-colors:hidden')}
+                    />
+                  )}
+                  {series.map((item, seriesIndex) => {
                     const path = linePath(item);
                     const lastX = pointX(count - 1);
                     const lastY = pointY(item.values[count - 1] ?? 0, max);
+                    const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
                     return (
                       <g key={item.key} className={TONE[item.tone]}>
-                        <path d={path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                        <path
+                          d={path}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeDasharray={dash}
+                          vectorEffect="non-scaling-stroke"
+                        />
                         <circle cx={lastX} cy={lastY} r={2.5} fill="currentColor" />
                       </g>
                     );
@@ -312,7 +362,10 @@ export default function StatChart({
                   <>
                     <line x1={pointX(active)} x2={pointX(active)} y1={PAD.top} y2={HEIGHT - PAD.bottom} stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" className="text-outline" />
                     {series.map((item) => (
-                      <circle key={item.key} cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={3} fill="currentColor" className={TONE[item.tone]} />
+                      <g key={item.key} className={TONE[item.tone]}>
+                        <circle cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={7} fill="currentColor" style={{ fillOpacity: 'var(--md-sys-chart-halo-opacity)' }} />
+                        <circle cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={3.5} fill="currentColor" />
+                      </g>
                     ))}
                   </>
                 )}

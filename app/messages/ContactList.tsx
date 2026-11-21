@@ -84,7 +84,7 @@ export default function ContactList({
           <div className="flex justify-center pt-2">
             <IconButton
               onClick={contacts.refresh}
-              aria-label={`联系人加载失败：${apiErrorMessage(error)}，点按重试`}
+              aria-label={`联系人加载失败：${apiErrorMessage(error)}，重试`}
               variant="danger-text"
               icon={<MdErrorOutline />}
             />
@@ -223,10 +223,12 @@ function ContactRow({
         aria-current={active ? 'true' : undefined}
         aria-label={name}
         data-ripple=""
-        /* 64dp at every density: a compact two-line row with a 40dp portrait and 12dp insets.
+        /* 64dp at every density: a compact two-line row with a 40dp portrait (12dp leading, 20dp
+           trailing when expanded so timestamps stay clear of the pill's arc; 12dp symmetric collapsed).
            The state layer answers hover and press; the container pair marks the open contact. */
         className={cn(
-          'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full px-3 text-left',
+          'flex h-16 w-full cursor-pointer items-center gap-3 overflow-hidden rounded-full text-left',
+          collapsed ? 'px-3' : 'pl-3 pr-5',
           'state-layer ripple-secondary transition-ui focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
           active
             ? 'forced-selected bg-secondary-container text-on-secondary-container'

@@ -35,7 +35,7 @@ const sizeConfig = {
   sm: { width: 20, ring: 2.5 },
   md: { width: 24, ring: 3 },
   lg: { width: 36, ring: 4 },
-  xl: { width: 50, ring: 5 },
+  xl: { width: 48, ring: 5 },
 };
 
 /**
@@ -148,7 +148,7 @@ export default function Spinner({
     );
   }
 
-  return <span className={className}>{circle}</span>;
+  return <span className={cn('inline-flex items-center justify-center [&>svg]:block', className)}>{circle}</span>;
 }
 
 /* The linear progress indicator lives in `components/ProgressBar.tsx` — a bar

@@ -158,11 +158,18 @@ const SELECTED: Record<IconButtonSelectedTone, string> = {
    And `lg` was 48dp, which *looks* like a step and is not one: 48 is M3's
    touch-target minimum, a floor on the hit area, and no icon-button token is 48.
    The medium icon button is 56, the same as a text field and a large button. */
-const SIZES: Record<IconButtonSize, string> = {
-  sm: 'h-8 w-8',
-  md: 'h-10 w-10',
-  lg: 'h-14 w-14',
+const HEIGHTS: Record<IconButtonSize, string> = {
+  sm: 'h-8',
+  md: 'h-10',
+  lg: 'h-14',
 };
+const WIDTHS: Record<IconButtonSize, string> = {
+  sm: 'w-8',
+  md: 'w-10',
+  lg: 'w-14',
+};
+const HAS_HEIGHT = /(?:^|\s)(?:h|size)-\S+/;
+const HAS_WIDTH = /(?:^|\s)(?:w|size)-\S+/;
 
 /* The glyph size belongs to the button, not to the call site. `IconSize` is 20 at
    extra-small and 24 at both small and medium, and leaving it to the caller is how
@@ -316,25 +323,25 @@ export function iconButtonClasses({
     'transition-icon-button',
     /* One indicator, and the width has to agree with the colour: `media` sets
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
-       that ring at `currentcolor` and draw two. `selected` replaces the variant
-       string with the ordinary outset ring, so it follows the same branch. */
-    variant === 'media' && !isSelected
+       that ring at `currentcolor` and draw two. */
+    variant === 'media'
       ? 'focus-visible:inset-ring-2'
       : 'focus-visible:ring-2',
     !isDisabled && 'state-layer',
     disabled && !loading && 'disabled-content',
-    dismiss && !isDisabled && 'hover:rotate-90 no-motion:hover:rotate-0',
-    /* A selected toggle takes the container/on-container pair rather than a
-       tinted border plus a third text colour, which is how the favourite
-       button ended up with a 40%-alpha warning border — an alpha on a token, so
-       it had to be eyeballed once per scheme.
-       The focus ring is spelled again inside this branch: it used to replace the
-       whole variant string, and every variant carries its own `focus-ring`, so a
-       *selected* icon button lost the ring's colour entirely — `ring-2` then fell
-       back to `currentcolor`, i.e. whatever ink happened to surround it. That is
-       the exact failure the `focus-ring` utility was added to end. */
+    /* Rotate only the glyph on dismiss (via `group/dismiss`) rather than the whole button, so
+       active press ripples and squircle press corners never spin 90° under the pointer. */
+    dismiss && !isDisabled && 'group/dismiss',
     isSelected
-      ? cn(SELECTED[selectedTone], 'focus-ring forced-selected')
+      ? cn(
+          SELECTED[selectedTone],
+          variant === 'on-primary'
+            ? 'focus-ring-on-primary'
+            : variant === 'media'
+              ? 'focus-ring-inset'
+              : 'focus-ring',
+          'forced-selected',
+        )
       : cn(
           VARIANTS[variant],
           /* Unselected selectable toggles anticipate their destination container hue (`tertiary`
@@ -361,7 +368,8 @@ export function iconButtonClasses({
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */
         size === 'lg' ? 'data-pressed:rounded-md' : 'data-pressed:rounded-sm',
       ),
-    SIZES[size],
+    !HAS_HEIGHT.test(className) && HEIGHTS[size],
+    !HAS_WIDTH.test(className) && WIDTHS[size],
     ICON_SIZES[size],
     className,
   );
@@ -476,8 +484,18 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
       >
         <span data-ripple-host="" aria-hidden="true" />
         {loading ? (
-          <span aria-hidden="true">
+          <span aria-hidden="true" className="inline-flex items-center justify-center">
             <Spinner size={size === 'sm' ? 'sm' : 'md'} tone="inherit" />
+          </span>
+        ) : dismiss ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'grid place-items-center transition-[rotate] spring-fast-spatial group-hover/dismiss:rotate-90 no-motion:group-hover/dismiss:rotate-0 [&>svg]:block',
+              ICON_SIZES[size],
+            )}
+          >
+            {icon}
           </span>
         ) : icon}
       </button>

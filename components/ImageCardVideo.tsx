@@ -1,7 +1,9 @@
 'use client';
 
 import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { MdPlayArrow } from 'react-icons/md';
 import Skeleton from '@/components/Skeleton';
+import { ICON } from '@/lib/icons';
 import { useSsrImageLine } from '@/components/ImageLineProvider';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
@@ -46,6 +48,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   const [near, setNear] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const [placeholderGone, setPlaceholderGone] = useState(false);
+  const [hoverPlaying, setHoverPlaying] = useState(false);
   const preview = useRef<(() => void) | null>(null);
   const ssrLine = useSsrImageLine();
   const rawUrl = getRawImageUrl(src).split('#')[0];
@@ -67,6 +70,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
     window.clearTimeout(timerRef.current);
     setFrameReady(false);
     setPlaceholderGone(false);
+    setHoverPlaying(false);
     if (navigator.onLine === false) {
       setHeldOffline(true);
       return;
@@ -92,6 +96,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   useEffect(() => () => {
     preview.current?.();
     preview.current = null;
+    setHoverPlaying(false);
   }, [displayKey, near]);
 
   /* Attach the source once the card is within a screen of the viewport — the app scroller,
@@ -192,6 +197,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   const stopPreview = () => {
     preview.current?.();
     preview.current = null;
+    setHoverPlaying(false);
   };
 
   return (
@@ -223,6 +229,9 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
         onLoadedData={markFrameReady}
         onCanPlay={markFrameReady}
         onSeeked={markFrameReady}
+        onPlay={() => setHoverPlaying(true)}
+        onPause={() => setHoverPlaying(false)}
+        onEnded={() => setHoverPlaying(false)}
         onError={(event) => { if (event.currentTarget === videoRef.current) fail(); }}
         onPointerEnter={startPreview}
         onPointerLeave={stopPreview}
@@ -230,6 +239,17 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
           frameReady ? 'opacity-100' : 'opacity-0'
         }`}
       />
+      {/* Clear video indicator on touch/rest so WEBM/MP4 tiles never read as an inert dark frame. */}
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity spring-fast-effects ${
+          frameReady && !hoverPlaying ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <span className="flex size-10 items-center justify-center rounded-full bg-media-plate text-on-media">
+          <MdPlayArrow size={ICON.standard} />
+        </span>
+      </span>
     </>
   );
 }

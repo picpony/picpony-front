@@ -190,7 +190,7 @@ export default function Menu({
           /* An 8dp row corner inside the panel's 16dp corner and 8dp inset.
              Menu rows keep the same 40dp height across input types. */
           className={cn(
-            'flex min-h-10 w-full items-center gap-3 rounded-sm px-4 py-1 text-left text-label-l',
+            'flex min-h-10 w-full items-center gap-3 rounded-sm px-2 py-1 text-left text-label-l',
             'focus-visible:outline-hidden select-none touch-manipulation',
             /* The *inset* ring. The panel scrolls, and `overflow-y-auto` clips a
                row's outset ring at the ends of its scroll area. */

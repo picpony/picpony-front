@@ -34,7 +34,8 @@ export function useMounted(): boolean {
 export function useExitAnimation(isOpen: boolean, durationMs: number): boolean {
   const [rendering, setRendering] = useState(isOpen);
   const everOpened = useRef(isOpen);
-  const hold = Math.round(durationMs * MOTION_SPEED_SCALE.slow);
+  // Add one frame of slack so a slow-speed WAAPI exit started on rAF never clips before its final frame.
+  const hold = Math.round(durationMs * MOTION_SPEED_SCALE.slow) + 24;
 
   useEffect(() => {
     if (isOpen) {
