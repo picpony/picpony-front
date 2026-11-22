@@ -26,14 +26,15 @@ export function tileRippleStyle(
 }
 
 /**
- * Geometry per size. `tile` fills a 72 × 56 tile (the palette picker in /settings, and
- * 从图片取色's options); `compact` a 48 × 36 one (`ColorPicker`'s 副色相 tiles). The bar takes a
- * little under half the height at either size — the theme's identity is its bar, so it is the
- * largest area — and the page holds one row: the selection's pill at the leading edge, the
- * accent's dot at the trailing one.
+ * Geometry per size. `tile` fills a responsive 56dp-tall theme preview (the palette cards in
+ * /settings, and 从图片取色's options); `compact` a 48 × 36 one (`ColorPicker`'s 副色相 tiles). The
+ * bar takes a little under half the height at either size — the theme's identity is its bar, so it
+ * is the largest area — and the page holds one row: the selection's pill at the leading edge
+ * (scaled proportionally to the tile's width at `tile` size so wide cards do not leave a hollow
+ * middle and narrow cards never crowd the dot), the accent's dot at the trailing one.
  */
 const SIZES = {
-  tile: { bar: 'h-6', row: 'top-6 px-2', pick: 'h-2.5 w-8', accent: 'size-2.5' },
+  tile: { bar: 'h-6', row: 'top-6 px-2', pick: 'h-2.5 w-1/2 max-w-12', accent: 'size-2.5' },
   compact: { bar: 'h-4', row: 'top-4 px-1.5', pick: 'h-2 w-5', accent: 'size-2' },
 } as const;
 
@@ -54,8 +55,9 @@ const SIZES = {
  * **The selected tile carries a check badge at its top-right**: a disc of the theme's `primary`
  * with its `on-primary` tick — the pair every theme clears. It sits on the bar, so in colour the
  * disc is the bar and the tick is what shows; the disc is there for forced colours, where it takes
- * the system's selection pair (Highlight under HighlightText) while the bar goes to the canvas. It is
- * concentric with the tile's 12dp corner: a 20dp disc 2dp inside it.
+ * the system's selection pair (Highlight under HighlightText) while the bar goes to the canvas. A
+ * 20dp disc 2dp inside the corner is concentric with `ImagePalettePicker`'s 12dp tile and clears
+ * `/settings`'s concentric 8dp preview corner cleanly.
  *
  * Colours are inline for the reason `PalettePreview` gives: every token is the active theme's.
  * Every layer sits at a negative z-index, under the state layer's pseudo-element in the tile's own

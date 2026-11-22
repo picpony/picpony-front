@@ -69,75 +69,176 @@ const DETAIL_LAYOUT_OPTIONS: readonly {
   {
     value: 'split',
     label: '左右分栏',
-    description: '宽屏下左侧固定图片、右侧滚动信息流，窄屏自动切回上下布局',
+    description: '宽屏左侧固定图片、右侧滚动，窄屏自动切回',
   },
 ];
 
+/** Minimal scenic artwork glyph inside a layout preview's media canvas, painted in `primary-ink`
+ * on `primary-container` so it reads clearly as a picture across light, dark and every theme. */
+function MiniatureArtwork() {
+  return (
+    <svg
+      viewBox="0 0 36 24"
+      className="h-6 w-9 text-primary-ink forced-colors:text-[color:CanvasText]"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="9.5" cy="7.5" r="2.5" fill="currentColor" />
+      <path
+        d="M3.5 20.2 11.4 12.6a1.4 1.4 0 0 1 2 0l3 3 5.4-6.4a1.4 1.4 0 0 1 2.1 0l8.6 11A1.4 1.4 0 0 1 31.4 22.5H4.6a1.4 1.4 0 0 1-1.1-2.3Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** Miniature replica of `DetailVotes` — quiet neutral ratio track flanked by count dots. */
+function MiniatureVotes({ className }: { className?: string }) {
+  return (
+    <div className={cn('flex items-center gap-1', className)}>
+      <span className="size-1.5 shrink-0 rounded-full bg-surface-container-highest forced-boundary" />
+      <span className="flex h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-container-high forced-boundary">
+        <span className="h-full w-4/5 rounded-full bg-outline-variant forced-mark" />
+      </span>
+      <span className="size-1.5 shrink-0 rounded-full bg-surface-container-highest forced-boundary" />
+    </div>
+  );
+}
+
+/** Miniature replica of `TagList` chips — scaled 1:4 from real 32dp chips with 8dp corners
+ * (`8px` tall, `rx="2"`), so tags stay visibly shorter than the `10px` pill action buttons above
+ * while reading cleanly as rounded rectangles rather than pills. */
+function MiniatureTags({ widths }: { widths: readonly number[] }) {
+  const gap = 4;
+  const totalWidth = widths.reduce((sum, width, index) => sum + width + (index > 0 ? gap : 0), 0);
+  const rects = widths.reduce<{ x: number; w: number }[]>((acc, w) => {
+    const prev = acc[acc.length - 1];
+    acc.push({ x: prev ? prev.x + prev.w + gap : 0, w });
+    return acc;
+  }, []);
+  return (
+    <svg
+      viewBox={`0 0 ${totalWidth} 8`}
+      width={totalWidth}
+      height={8}
+      className="block h-2 max-w-full shrink-0 text-surface-container-highest"
+      fill="none"
+      aria-hidden="true"
+    >
+      {rects.map(({ x, w }) => (
+        <rect
+          key={x}
+          x={x + 0.5}
+          y={0.5}
+          width={w - 1}
+          height={7}
+          rx={2}
+          fill="currentColor"
+          className="forced-colors:fill-none forced-colors:stroke-[color:CanvasText]"
+        />
+      ))}
+    </svg>
+  );
+}
+
 /** Schematic preview of one image-detail layout, drawn strictly from surface/container tokens.
- * Layered at `-z-10` inside the card's isolated stacking context (matching `PaletteTileFace`) so
- * the `-1` state layer and `ripple-secondary` press wave sweep cleanly across the whole card while
- * the title and description below remain crisp above the wave. */
-function DetailLayoutPreview({ layout, selected }: { layout: DetailLayout; selected: boolean }) {
+ * Mirrors the real `PicDetail` anatomy at ~1:4 scale (header, artwork, primary actions, matched-
+ * width action capsule, quiet vote meter, rounded-rectangle tags and stacked comment rows).
+ * Concentric inside the 12dp card's 4dp bezel (12 − 4 = 8dp, `rounded-sm`). Layered at `-z-10`
+ * inside the card's isolated stacking context (matching `PaletteTileFace`) so the `-1` state layer
+ * and `ripple-secondary` press wave sweep cleanly across the whole card while the text below stays
+ * crisp above the wave. Restores `forced-color-adjust: auto` so a selected card's opt-out never
+ * leaks colour fills into only one preview under forced colours. */
+function DetailLayoutPreview({ layout }: { layout: DetailLayout }) {
   return (
     <div
       aria-hidden="true"
-      className="relative -z-10 h-28 w-full overflow-hidden rounded-sm bg-surface-container-lowest p-2.5 forced-boundary"
+      className="forced-boundary forced-color-adjust-auto forced-colors:text-[color:CanvasText] relative -z-10 h-44 w-full overflow-hidden rounded-sm bg-surface-container-lowest"
     >
       {layout === 'stacked' ? (
-        <div className="mx-auto flex h-full max-w-44 flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="h-1.5 w-14 rounded-full bg-surface-container-highest" />
-            <span className="h-1.5 w-10 rounded-full bg-surface-container-highest" />
+        <div className="relative flex h-full w-full flex-col px-9 pt-2.5 pb-2">
+          <span className="forced-boundary absolute top-2.5 left-2.5 size-2 rounded-full bg-surface-container-highest" />
+          <div className="absolute top-2.5 right-2.5 flex gap-1">
+            <span className="forced-boundary size-2 rounded-full bg-surface-container-highest" />
+            <span className="forced-boundary size-2 rounded-full bg-surface-container-highest" />
           </div>
-          <div className="flex flex-1 items-center justify-center rounded-xs bg-primary-container p-2">
-            <span className="h-6 w-10 rounded-xs bg-primary" />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-1">
-              <span className="h-2.5 w-7 rounded-full bg-primary" />
-              <span className="h-2.5 w-6 rounded-full bg-secondary-container" />
+          <div className="mx-auto flex min-h-0 w-full max-w-56 flex-1 flex-col gap-1.5">
+            <div className="flex h-2 items-center justify-between gap-2">
+              <span className="forced-boundary h-1.5 w-14 rounded-full bg-surface-container-highest" />
+              <span className="forced-boundary h-1.5 w-14 rounded-full bg-surface-container-highest" />
             </div>
-            <span className="h-2.5 w-10 rounded-full bg-surface-container-highest" />
+            <div className="forced-boundary flex min-h-0 flex-1 items-center justify-center rounded-xs bg-primary-container">
+              <MiniatureArtwork />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="forced-mark h-2.5 w-7 rounded-full bg-primary" />
+                <span className="forced-boundary h-2.5 w-6 rounded-full bg-secondary-container" />
+              </div>
+              <MiniatureVotes className="min-w-0 flex-1" />
+              <span className="forced-boundary h-2.5 w-14 shrink-0 rounded-full bg-surface-container-highest" />
+            </div>
+            <MiniatureTags widths={[20, 30, 24, 18]} />
+            <div className="border-t border-outline-variant pt-1.5">
+              <div className="forced-boundary flex items-center gap-1.5 rounded-xs bg-surface-container px-1.5 py-1.5">
+                <span className="forced-boundary size-2.5 shrink-0 rounded-full bg-primary-container" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="forced-mark h-1 w-2/3 rounded-full bg-outline-variant" />
+                  <span className="h-1 w-2/5 rounded-full bg-surface-container-highest" />
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-1">
-            <span className="h-2 w-8 rounded-xs bg-surface-container-highest" />
-            <span className="h-2 w-10 rounded-xs bg-surface-container-highest" />
-            <span className="h-2 w-6 rounded-xs bg-surface-container-highest" />
-          </div>
+          <span className="forced-mark absolute top-8 right-1 h-10 w-0.5 rounded-full bg-outline-variant" />
         </div>
       ) : (
-        <div className="grid h-full grid-cols-2">
-          <div className="relative flex items-center justify-center pr-2.5">
-            <span className="absolute top-0 left-0 size-2 rounded-full bg-surface-container-highest" />
-            <div className="flex h-16 w-full items-center justify-center rounded-xs bg-primary-container p-2">
-              <span className="h-6 w-9 rounded-xs bg-primary" />
+        <div className="relative grid h-full w-full grid-cols-2">
+          <div className="relative flex items-center justify-center px-2.5 pt-7 pb-3">
+            <span className="forced-boundary absolute top-2.5 left-2.5 size-2 rounded-full bg-surface-container-highest" />
+            <div className="absolute top-2.5 right-2.5 flex gap-1">
+              <span className="forced-boundary size-2 rounded-full bg-surface-container-highest" />
+              <span className="forced-boundary size-2 rounded-full bg-surface-container-highest" />
+            </div>
+            <div className="forced-boundary flex h-28 w-full items-center justify-center rounded-xs bg-primary-container">
+              <MiniatureArtwork />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5 border-l border-outline-variant pl-2.5">
-            <div className="flex flex-col gap-1 border-b border-outline-variant pb-1.5">
-              <span className="h-1.5 w-14 rounded-full bg-surface-container-highest" />
-              <span className="h-1 w-10 rounded-full bg-surface-container-highest" />
+          <div className="flex min-w-0 flex-col border-l border-outline-variant">
+            <div className="flex flex-col gap-1 border-b border-outline-variant py-2 pl-2.5 pr-3.5">
+              <span className="forced-boundary h-1.5 w-16 rounded-full bg-surface-container-highest" />
+              <span className="h-1 w-12 rounded-full bg-surface-container-high" />
             </div>
-            <div className="grid grid-cols-2 gap-1">
-              <span className="h-2.5 rounded-full bg-primary" />
-              <span className="h-2.5 rounded-full bg-secondary-container" />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <span className="h-2 w-6 rounded-xs bg-surface-container-highest" />
-              <span className="h-2 w-8 rounded-xs bg-surface-container-highest" />
-              <span className="h-2 w-5 rounded-xs bg-surface-container-highest" />
-            </div>
-            <div className="mt-auto flex flex-col gap-1">
-              <span className="h-1.5 w-full rounded-full bg-surface-container-highest" />
-              <span className="h-1.5 w-3/4 rounded-full bg-surface-container-highest" />
+            <div className="flex min-h-0 flex-1 flex-col gap-2 py-2 pl-2.5 pr-3.5">
+              <div className="flex flex-col gap-1">
+                <div className="grid grid-cols-2 gap-1">
+                  <span className="forced-mark h-2.5 rounded-full bg-primary" />
+                  <span className="forced-boundary h-2.5 rounded-full bg-secondary-container" />
+                </div>
+                <span className="forced-boundary h-2.5 w-full rounded-full bg-surface-container-highest" />
+                <MiniatureVotes />
+              </div>
+              <MiniatureTags widths={[18, 28, 22]} />
+              <div className="flex min-h-0 flex-1 flex-col gap-1 border-t border-outline-variant pt-1.5">
+                <span className="mb-0.5 h-1 w-7 shrink-0 rounded-full bg-outline-variant" />
+                <div className="forced-boundary flex items-center gap-1.5 rounded-xs bg-surface-container px-1.5 py-1.5">
+                  <span className="forced-boundary size-2.5 shrink-0 rounded-full bg-primary-container" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="forced-mark h-1 w-4/5 rounded-full bg-outline-variant" />
+                    <span className="h-1 w-1/2 rounded-full bg-surface-container-highest" />
+                  </div>
+                </div>
+                <div className="forced-boundary flex items-center gap-1.5 rounded-xs bg-surface-container px-1.5 py-1.5">
+                  <span className="forced-boundary size-2.5 shrink-0 rounded-full bg-secondary-container" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="forced-mark h-1 w-3/4 rounded-full bg-outline-variant" />
+                    <span className="h-1 w-2/5 rounded-full bg-surface-container-highest" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+          <span className="forced-mark absolute top-9 right-1 h-10 w-0.5 rounded-full bg-outline-variant" />
         </div>
-      )}
-      {selected && (
-        <span className="forced-selected absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-on-primary">
-          <CheckGlyph className="size-3.5" />
-        </span>
       )}
     </div>
   );
@@ -171,53 +272,64 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
       subtitle={signedIn ? '随账号同步到你登录的设备' : undefined}
     >
       <div className={ROW_STACK_CLASS}>
-        <div
-          role="radiogroup"
-          aria-label="图片详情页样式"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-        >
-          {DETAIL_LAYOUT_OPTIONS.map((option, index) => {
-            const selected = option.value === layout;
-            const titleId = `${idPrefix}-${option.value}-title`;
-            const descId = `${idPrefix}-${option.value}-desc`;
-            return (
-              <button
-                key={option.value}
-                ref={(node) => {
-                  refs.current[index] = node;
-                }}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                aria-labelledby={titleId}
-                aria-describedby={descId}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => changeSyncedSetting('detailLayout', option.value)}
-                onKeyDown={(event) => onKeyDown(event, index)}
-                data-ripple
-                className={cn(
-                  'state-layer focus-ring ripple-secondary flex cursor-pointer flex-col items-start gap-2.5 rounded-md p-3 text-left transition-ui select-none touch-manipulation focus-visible:outline-hidden focus-visible:ring-2',
-                  selected
-                    ? 'forced-selected bg-secondary-container text-on-secondary-container'
-                    : 'forced-boundary bg-surface-container text-on-surface',
-                )}
-              >
-                <DetailLayoutPreview layout={option.value} selected={selected} />
-                <div className="min-w-0 px-0.5">
-                  <p id={titleId} className="text-label-l">{option.label}</p>
-                  <p
-                    id={descId}
-                    className={cn(
-                      'text-body-s mt-0.5',
-                      selected ? 'text-on-secondary-container' : 'text-on-surface-variant',
-                    )}
-                  >
-                    {option.description}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
+        <div className="@container w-full">
+          <div
+            role="radiogroup"
+            aria-label="图片详情页样式"
+            className="grid grid-cols-1 gap-3 @md:grid-cols-2"
+          >
+            {DETAIL_LAYOUT_OPTIONS.map((option, index) => {
+              const selected = option.value === layout;
+              const titleId = `${idPrefix}-${option.value}-title`;
+              const descId = `${idPrefix}-${option.value}-desc`;
+              return (
+                <button
+                  key={option.value}
+                  ref={(node) => {
+                    refs.current[index] = node;
+                  }}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-labelledby={titleId}
+                  aria-describedby={descId}
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => changeSyncedSetting('detailLayout', option.value)}
+                  onKeyDown={(event) => onKeyDown(event, index)}
+                  data-ripple
+                  className={cn(
+                    'state-layer focus-ring ripple-secondary flex min-w-0 cursor-pointer flex-col items-stretch gap-3 rounded-md p-1 pb-3 text-left transition-ui select-none touch-manipulation focus-visible:outline-hidden focus-visible:ring-2',
+                    selected
+                      ? 'forced-selected bg-secondary-container text-on-secondary-container'
+                      : 'forced-boundary bg-surface-container-high text-on-surface',
+                  )}
+                >
+                  <DetailLayoutPreview layout={option.value} />
+                  <div className="my-auto flex items-center justify-between gap-3 px-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <p id={titleId} className={selected ? 'text-label-l-emphasized' : 'text-label-l'}>
+                        {option.label}
+                      </p>
+                      <p id={descId} className={cn('text-body-s', !selected && 'text-on-surface-variant')}>
+                        {option.description}
+                      </p>
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'grid size-5 shrink-0 place-items-center rounded-full transition-ui',
+                        selected
+                          ? 'bg-primary-ink text-on-primary-ink forced-colors:bg-[color:HighlightText] forced-colors:text-[color:Highlight]'
+                          : 'border border-outline forced-colors:border-[color:CanvasText]',
+                      )}
+                    >
+                      {selected && <CheckGlyph className="size-3.5" />}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </SettingsSection>

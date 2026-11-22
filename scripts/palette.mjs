@@ -1109,9 +1109,10 @@ console.log(
 const TILE_SEPARATION = 3.5;
 const TILE_ENCLOSURES = [
   ['surface-container-low', 'the /settings row'],
-  ['surface-container-high', 'a dialog'],
+  ['surface-container', 'a /settings elevated card'],
+  ['surface-container-high', 'a /settings palette card or dialog'],
   ['surface-container-highest', 'a 副色相 tile'],
-  ['secondary-container', 'a chosen 副色相 tile'],
+  ['secondary-container', 'a chosen palette / 副色相 card'],
 ];
 const tileSeparation = {};
 for (const variant of VARIANTS) {

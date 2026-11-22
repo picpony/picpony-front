@@ -128,7 +128,7 @@ Both pickers:
 
 Use `PaletteTileFace`, not colour discs. The tile previews its own page, primary, selection and accent, even when another theme is active.
 
-Built-ins use generated faces; custom uses `data-palette-tones`. Keep the borderless 72 × 56 dp shape, selected check badge and emphasized label. Focus uses the shared ring; forced colours supply a system boundary.
+Built-ins use generated faces; custom uses `data-palette-tones`. In `/settings`, eleven palette cards fill the settings column in a container-responsive grid (`3 / 4 / 6` columns at default / `@sm` / `@xl` so no row leaves a single orphan and phones never squish four across): each card is a 12 dp tonal radio button (`surface-container-high` at rest, `secondary-container` when selected) with a 4 dp bezel wrapping a 56 dp concentric (`8 dp`) `PaletteTileFace` preview at `-z-10`, the selected check badge and an emphasized `label-m` name. `ImagePalettePicker` keeps its 4-column tile grid, and `ColorPicker` uses the compact 48 × 36 dp preview inside its companion-hue tiles. Focus uses the shared ring; forced colours supply a system boundary.
 
 Arrow keys choose a palette, Home/End choose endpoints. Guard rapid changes against the wipe's target palette rather than the root's not-yet-committed value.
 
