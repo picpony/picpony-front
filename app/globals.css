@@ -4275,6 +4275,83 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   }
 }
 
+/* Desktop navigation: bounds and insets share the drawer's overlay layout clock.
+ * Labels use effects springs, so rapid mode changes reverse from the painted pose.
+ * See docs/design/layout.md#navigation-geometry. */
+@media (width >= 48rem) {
+  .app-sidebar {
+    --sidebar-layout-duration: calc(var(--motion-base-spring-layout) * var(--motion-scale-overlay));
+    --sidebar-label-duration: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-overlay));
+  }
+  .sidebar-row-layout {
+    transition:
+      padding-right var(--sidebar-layout-duration) var(--ease-spring-effects),
+      column-gap var(--sidebar-layout-duration) var(--ease-spring-effects);
+  }
+  .sidebar-account {
+    transition:
+      padding-inline var(--sidebar-layout-duration) var(--ease-spring-effects),
+      column-gap var(--sidebar-layout-duration) var(--ease-spring-effects),
+      box-shadow var(--duration-spring-fast-effects) var(--ease-spring-effects);
+  }
+  .sidebar-label {
+    transition: opacity var(--sidebar-label-duration) var(--ease-spring-effects);
+  }
+  .sidebar-row .sidebar-label {
+    padding-right: 1.5rem;
+    transition:
+      opacity var(--sidebar-label-duration) var(--ease-spring-effects),
+      padding-right var(--sidebar-layout-duration) var(--ease-spring-effects);
+  }
+  .sidebar-heading {
+    height: calc(var(--text-title-s) * var(--text-title-s--line-height) + 0.75rem);
+    overflow: hidden;
+    white-space: nowrap;
+    transition:
+      height var(--sidebar-layout-duration) var(--ease-spring-effects),
+      padding-block var(--sidebar-layout-duration) var(--ease-spring-effects),
+      opacity var(--sidebar-label-duration) var(--ease-spring-effects);
+  }
+  .sidebar-trailing {
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    translate: 0 -50%;
+    transition:
+      right var(--sidebar-layout-duration) var(--ease-spring-effects),
+      top var(--sidebar-layout-duration) var(--ease-spring-effects),
+      translate var(--sidebar-layout-duration) var(--ease-spring-effects);
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) {
+    --sidebar-label-duration: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay));
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-row-layout {
+    padding-right: 1rem;
+    column-gap: 0;
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-account {
+    padding-inline: 0.5rem;
+    column-gap: 0;
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-label {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-row .sidebar-label {
+    padding-right: 0;
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-heading {
+    height: 0;
+    padding-block: 0;
+    opacity: 0;
+  }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-trailing {
+    right: 0.75rem;
+    top: 0.375rem;
+    translate: 0 0;
+  }
+}
+
 /* Sidebar drawer: clears mobile `rounded-r-lg` corners and status/home-indicator insets;
    returns to tight 6px axis rhythm once docked on `md`. */
 .os-slot-drawer > .os-scrollbar-vertical.os-theme-picpony {

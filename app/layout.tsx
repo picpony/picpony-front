@@ -17,6 +17,7 @@ import VisitorTracker from '@/components/VisitorTracker';
 import LegacySharedSearch from '@/app/search/LegacySharedSearch';
 import { COOKIE_KEYS } from '@/lib/constants';
 import { SPRING_MS } from '@/lib/spring';
+import { parseSidebarMode } from '@/lib/sidebarMode';
 import {
   MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
   formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
@@ -213,7 +214,7 @@ export default async function RootLayout({
      which also corrects the hint when it is wrong in either direction. */
   const maintenanceLocked =
     maintenance.active && cookieStore.get(COOKIE_KEYS.maintenanceStaff)?.value !== '1';
-  const sidebarCollapsed = cookieStore.get(COOKIE_KEYS.sidebarCollapsed)?.value === 'true';
+  const sidebarMode = parseSidebarMode(cookieStore.get(COOKIE_KEYS.sidebarCollapsed)?.value);
   const darkMode = cookieStore.get(COOKIE_KEYS.darkMode)?.value === 'true';
   /* Only an explicit dismissal hides the banner, so a missing or corrupt cookie shows it —
      the notice is the default state. */
@@ -398,7 +399,7 @@ export default async function RootLayout({
                 <MaintenanceScreen message={maintenance.message} />
               ) : (
                 <AppLayout
-                  initialCollapsed={sidebarCollapsed}
+                  initialSidebarMode={sidebarMode}
                   initialScheme={darkMode ? 'dark' : 'light'}
                   devBannerVisible={devBannerVisible}
                   maintenance={maintenance.active}

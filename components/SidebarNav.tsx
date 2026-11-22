@@ -1,6 +1,9 @@
 'use client';
 
-import { useCallback, type MouseEvent, type ReactNode } from 'react';
+import {
+  createContext, useContext, useCallback,
+  type FocusEvent, type MouseEvent, type PointerEvent, type ReactNode, type Ref,
+} from 'react';
 import Link, { useLinkStatus } from 'next/link';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { prefetchRoute } from '@/lib/prefetchRoute';
@@ -46,6 +49,9 @@ import { cn } from '@/lib/utils';
 import { isPlainActivation } from '@/lib/richTextLinks';
 import { isStaff } from '@/lib/roles';
 import { ICON } from '@/lib/icons';
+import { useTooltip } from './Tooltip';
+
+const CompactSidebar = createContext(false);
 
 export interface SidebarUser {
   id?: number;
@@ -54,6 +60,7 @@ export interface SidebarUser {
 }
 
 interface SidebarNavProps {
+  compact?: boolean;
   user: SidebarUser | null;
   /** Pathname of the page *behind* any image-detail overlay. */
   backgroundPathname: string;
@@ -83,7 +90,7 @@ interface SidebarNavProps {
    `padding(start = 16.dp, end = 24.dp)`), which gives the trailing unread badge
    its air. The pill shape is the spec's (`ActiveIndicatorShape = CornerFull`). */
 const ROW = cn(
-  'flex h-12 pointer-coarse:h-14 w-full items-center gap-3 rounded-full pl-4 pr-6',
+  'sidebar-row relative flex h-12 pointer-coarse:h-14 w-full items-center rounded-full',
   'focus-visible:outline-hidden transition-ui state-layer',
   'focus-visible:ring-2 focus-ring',
 );
@@ -96,8 +103,22 @@ const ROW = cn(
  */
 function RowTrailing({ badge, badgeLabel }: { badge?: number; badgeLabel?: string }) {
   const { pending } = useLinkStatus();
-  if (pending) return <Spinner size="sm" tone="inherit" label="正在打开" />;
+  const compact = useContext(CompactSidebar);
+  if (pending) return compact ? null : <Spinner size="sm" tone="inherit" label="正在打开" />;
   return <CountBadge count={badge ?? 0} label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined} />;
+}
+
+/** Icon-only navigation reports progress in the glyph's existing 24dp cell.
+ * See docs/design/layout.md#navigation-geometry. */
+function RowIcon({ icon }: { icon: ReactNode }) {
+  const { pending } = useLinkStatus();
+  const compact = useContext(CompactSidebar);
+  const loading = compact && pending;
+  return (
+    <span className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block" aria-hidden={loading ? undefined : true}>
+      {loading ? <Spinner size="md" tone="inherit" /> : icon}
+    </span>
+  );
 }
 
 function NavItem({
@@ -130,6 +151,9 @@ function NavItem({
   onClick?: () => void;
   onReselect?: () => boolean;
 }) {
+  const compact = useContext(CompactSidebar);
+  const description = badge ? `${label}，${badgeLabel ?? `${badge} 条未读`}` : label;
+  const { anchorRef, anchorProps, tooltip } = useTooltip(compact ? description : undefined);
   /* Only the rows that navigate. The drawer's two `<button>` rows (sign out,
      sign in) have no destination to warm, and `useIntentPrefetch` is given a
      null warmer rather than being called conditionally — a hook cannot be. */
@@ -139,16 +163,54 @@ function NavItem({
     }, [href]),
   );
 
-  const glyph = (
+  const mark = active && activeIcon ? activeIcon : icon;
+  const glyph = href ? <RowIcon icon={mark} /> : (
     /* A fixed, centred cell rather than a bare span around the glyph: an inline svg sits on
        the text baseline, which left each icon a fraction low and by a different amount per
        glyph. The active row swaps its outlined glyph for the filled one — M3's navigation
        drawer convention, and it repeats the pill's own state without a second cue. */
     <span className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block" aria-hidden="true">
-      {active && activeIcon ? activeIcon : icon}
+      {mark}
     </span>
   );
-  const text = <span className="min-w-0 flex-1 truncate text-left">{label}</span>;
+  const text = <span className="sidebar-label min-w-0 flex-1 truncate text-left">{label}</span>;
+  const content = (
+    <span className="sidebar-row-layout flex h-full w-full min-w-0 items-center gap-3 pl-4 pr-6">
+      {glyph}
+      {text}
+      <span className="sidebar-trailing shrink-0">
+        {href ? <RowTrailing badge={badge} badgeLabel={badgeLabel} /> : (
+          <CountBadge count={badge ?? 0} label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined} />
+        )}
+      </span>
+    </span>
+  );
+
+  // Keep tooltip interaction and the existing data-prefetch intent ladder together.
+  const handlers = {
+    ...anchorProps,
+    ...intent,
+    onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+      intent.onPointerEnter();
+      anchorProps.onPointerEnter?.(event);
+    },
+    onPointerLeave: (event: PointerEvent<HTMLElement>) => {
+      intent.onPointerLeave();
+      anchorProps.onPointerLeave?.(event);
+    },
+    onPointerDown: (event: PointerEvent<HTMLElement>) => {
+      intent.onPointerDown(event);
+      anchorProps.onPointerDown?.(event);
+    },
+    onFocus: (event: FocusEvent<HTMLElement>) => {
+      intent.onFocus();
+      anchorProps.onFocus?.(event);
+    },
+    onBlur: (event: FocusEvent<HTMLElement>) => {
+      intent.onBlur();
+      anchorProps.onBlur?.(event);
+    },
+  };
 
   const className = cn(
     ROW,
@@ -162,16 +224,20 @@ function NavItem({
 
   if (!href) {
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        data-ripple
-        className={cn(className, 'cursor-pointer')}
-      >
-        {glyph}
-        {text}
-        <CountBadge count={badge ?? 0} label={badge ? `${badge} 条未读` : undefined} />
-      </button>
+      <>
+        <button
+          ref={anchorRef as Ref<HTMLButtonElement>}
+          {...handlers}
+          type="button"
+          onClick={onClick}
+          data-ripple
+          aria-label={compact ? description : undefined}
+          className={cn(className, 'cursor-pointer')}
+        >
+          {content}
+        </button>
+        {tooltip}
+      </>
     );
   }
 
@@ -190,23 +256,26 @@ function NavItem({
   };
 
   return (
-    <Link
-      scroll={false}
-      href={href}
-      onClick={handleClick}
-      /* Hover, focus and press each start the destination's *data*, not only its code. Next's own
-         `<Link>` prefetch already warms the RSC payload and the chunk, and on this app that buys
-         less than it looks like: every screen here is a client component that begins its reads in
-         its first effect, so a warm chunk still arrives at an empty page. See `prefetchRoute`. */
-      {...intent}
-      data-ripple
-      aria-current={active ? 'page' : undefined}
-      className={className}
-    >
-      {glyph}
-      {text}
-      <RowTrailing badge={badge} badgeLabel={badgeLabel} />
-    </Link>
+    <>
+      <Link
+        ref={anchorRef as Ref<HTMLAnchorElement>}
+        scroll={false}
+        href={href}
+        onClick={handleClick}
+        /* Hover, focus and press each start the destination's *data*, not only its code. Next's own
+           `<Link>` prefetch already warms the RSC payload and the chunk, and on this app that buys
+           less than it looks like: every screen here is a client component that begins its reads in
+           its first effect, so a warm chunk still arrives at an empty page. See `prefetchRoute`. */
+        {...handlers}
+        data-ripple
+        aria-label={compact ? description : undefined}
+        aria-current={active ? 'page' : undefined}
+        className={className}
+      >
+        {content}
+      </Link>
+      {tooltip}
+    </>
   );
 }
 
@@ -216,7 +285,7 @@ function Section({ label, children }: { label?: string; children: ReactNode }) {
       {/* `pt-2 pb-1` — 8 above and 4 below a 20px `title-s` line box. A heading
           binds to what it introduces, so the space above has to be the larger
           one (the same 2:1 asymmetry the base heading rule uses). */}
-      {label && <h2 className="text-title-s text-on-surface-variant px-4 pt-2 pb-1">{label}</h2>}
+      {label && <h2 className="sidebar-heading text-title-s text-on-surface-variant px-4 pt-2 pb-1">{label}</h2>}
       {children}
     </div>
   );
@@ -229,6 +298,7 @@ function Section({ label, children }: { label?: string; children: ReactNode }) {
  * the account groups appear signed in.
  */
 export default function SidebarNav({
+  compact = false,
   user,
   backgroundPathname,
   unread,
@@ -247,181 +317,183 @@ export default function SidebarNav({
   const subscriptionUpdates = useSubscriptionUpdates();
 
   return (
-    <nav aria-label="主导航" className="flex flex-1 select-none flex-col gap-1 px-3 pb-3">
-      <Section>
-        {/* `scroll={false}` unconditionally: these two are the same control as the tab
-            bar, and the tab machinery owns the scroller (it restores each tab's own offset).
-            `lib/scrollMemory.ts` owns every other case and skips a search-only change. */}
-        <NavItem
-          href="/"
-          icon={<MdOutlineHome size={ICON.standard} />}
-          activeIcon={<MdHome size={ICON.standard} />}
-          label="首页"
-          active={onHome && !forumTab}
-          homeTab="gallery"
-          onClick={onNavigate}
-          onReselect={onReselect}
-        />
-        <NavItem
-          href="/?tab=forum"
-          icon={<MdOutlineForum size={ICON.standard} />}
-          activeIcon={<MdForum size={ICON.standard} />}
-          label="论坛"
-          active={(onHome && forumTab) || inThread}
-          current={onHome && forumTab}
-          homeTab="forum"
-          badge={forumUnread}
-          badgeLabel={`${forumUnread} 个新帖`}
-          onClick={onNavigate}
-          onReselect={onReselect}
-        />
-        {/* Material Icons' magnifier has no filled form — both sets draw the same glyph — so
-            here the active pill alone carries the state. Every other row swaps. */}
-        <NavItem
-          href="/search"
-          icon={<MdOutlineSearch size={ICON.standard} />}
-          activeIcon={<MdSearch size={ICON.standard} />}
-          label="搜索"
-          active={backgroundPathname === '/search'}
-          onClick={onNavigate}
-          onReselect={onReselect}
-        />
-      </Section>
-
-      {user && (
-        <Section label="创作">
+    <CompactSidebar value={compact}>
+      <nav aria-label="主导航" className="flex flex-1 select-none flex-col gap-1 px-3 pb-3">
+        <Section>
+          {/* `scroll={false}` unconditionally: these two are the same control as the tab
+              bar, and the tab machinery owns the scroller (it restores each tab's own offset).
+              `lib/scrollMemory.ts` owns every other case and skips a search-only change. */}
           <NavItem
-            href="/upload"
-            icon={<MdOutlineCloudUpload size={ICON.standard} />}
-            activeIcon={<MdCloudUpload size={ICON.standard} />}
-            label="发布图片"
-            active={backgroundPathname === '/upload'}
+            href="/"
+            icon={<MdOutlineHome size={ICON.standard} />}
+            activeIcon={<MdHome size={ICON.standard} />}
+            label="首页"
+            active={onHome && !forumTab}
+            homeTab="gallery"
             onClick={onNavigate}
             onReselect={onReselect}
           />
           <NavItem
-            href="/forum/create"
-            icon={<MdOutlineNoteAdd size={ICON.standard} />}
-            activeIcon={<MdNoteAdd size={ICON.standard} />}
-            label="发布帖子"
-            active={backgroundPathname === '/forum/create'}
+            href="/?tab=forum"
+            icon={<MdOutlineForum size={ICON.standard} />}
+            activeIcon={<MdForum size={ICON.standard} />}
+            label="论坛"
+            active={(onHome && forumTab) || inThread}
+            current={onHome && forumTab}
+            homeTab="forum"
+            badge={forumUnread}
+            badgeLabel={`${forumUnread} 个新帖`}
+            onClick={onNavigate}
+            onReselect={onReselect}
+          />
+          {/* Material Icons' magnifier has no filled form — both sets draw the same glyph — so
+              here the active pill alone carries the state. Every other row swaps. */}
+          <NavItem
+            href="/search"
+            icon={<MdOutlineSearch size={ICON.standard} />}
+            activeIcon={<MdSearch size={ICON.standard} />}
+            label="搜索"
+            active={backgroundPathname === '/search'}
             onClick={onNavigate}
             onReselect={onReselect}
           />
         </Section>
-      )}
 
-      {user && (
-        <Section label="我的">
-          <NavItem
-            href="/favorites"
-            icon={<MdOutlineCollectionsBookmark size={ICON.standard} />}
-            activeIcon={<MdCollectionsBookmark size={ICON.standard} />}
-            label="我的收藏"
-            active={backgroundPathname === '/favorites'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/subscriptions"
-            icon={<MdOutlineSubscriptions size={ICON.standard} />}
-            activeIcon={<MdSubscriptions size={ICON.standard} />}
-            label="标签订阅"
-            active={backgroundPathname === '/subscriptions' || backgroundPathname.startsWith('/subscriptions/')}
-            current={backgroundPathname === '/subscriptions'}
-            badge={subscriptionUpdates}
-            badgeLabel={`${subscriptionUpdates} 张新图片`}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/messages"
-            icon={<MdOutlineNotifications size={ICON.standard} />}
-            activeIcon={<MdNotifications size={ICON.standard} />}
-            label="消息"
-            active={backgroundPathname === '/messages'}
-            badge={unread}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/history"
-            icon={<MdOutlineHistory size={ICON.standard} />}
-            activeIcon={<MdHistory size={ICON.standard} />}
-            label="浏览历史"
-            active={backgroundPathname === '/history'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/tasks"
-            icon={<MdOutlineEmojiEvents size={ICON.standard} />}
-            activeIcon={<MdEmojiEvents size={ICON.standard} />}
-            label="任务"
-            active={backgroundPathname === '/tasks'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/shop"
-            icon={<MdOutlineStore size={ICON.standard} />}
-            activeIcon={<MdStore size={ICON.standard} />}
-            label="金币商店"
-            active={backgroundPathname === '/shop'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/block-groups"
-            icon={<MdOutlineShield size={ICON.standard} />}
-            activeIcon={<MdShield size={ICON.standard} />}
-            label="屏蔽组"
-            active={backgroundPathname === '/block-groups'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-          <NavItem
-            href="/tag-groups"
-            icon={<MdOutlineBookmarks size={ICON.standard} />}
-            activeIcon={<MdBookmarks size={ICON.standard} />}
-            label="标签组"
-            active={backgroundPathname === '/tag-groups'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
-        </Section>
-      )}
-
-      {/* The rule before the settings group, drawn in every state now that the group is: it
-          separates where you can go from the app's own controls. `shrink-0` for the same
-          reason as the structural rule in `AppLayout`: a 1px flex item in a column absorbs
-          overflow and collapses to nothing. */}
-      <div className="bg-outline-variant mx-4 my-2 h-px shrink-0" />
-
-      <Section>
-        <NavItem
-          href="/settings"
-          icon={<MdOutlineSettings size={ICON.standard} />}
-          activeIcon={<MdSettings size={ICON.standard} />}
-          label="设置"
-          active={backgroundPathname === '/settings'}
-          onClick={onNavigate}
-          onReselect={onReselect}
-        />
-        {staff && (
-          <NavItem
-            href="/admin"
-            icon={<MdOutlineDashboard size={ICON.standard} />}
-            activeIcon={<MdDashboard size={ICON.standard} />}
-            label="管理面板"
-            active={backgroundPathname.startsWith('/admin')}
-            current={backgroundPathname === '/admin'}
-            onClick={onNavigate}
-            onReselect={onReselect}
-          />
+        {user && (
+          <Section label="创作">
+            <NavItem
+              href="/upload"
+              icon={<MdOutlineCloudUpload size={ICON.standard} />}
+              activeIcon={<MdCloudUpload size={ICON.standard} />}
+              label="发布图片"
+              active={backgroundPathname === '/upload'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/forum/create"
+              icon={<MdOutlineNoteAdd size={ICON.standard} />}
+              activeIcon={<MdNoteAdd size={ICON.standard} />}
+              label="发布帖子"
+              active={backgroundPathname === '/forum/create'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+          </Section>
         )}
-        {user && <NavItem icon={<MdOutlineLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
-      </Section>
-    </nav>
+
+        {user && (
+          <Section label="我的">
+            <NavItem
+              href="/favorites"
+              icon={<MdOutlineCollectionsBookmark size={ICON.standard} />}
+              activeIcon={<MdCollectionsBookmark size={ICON.standard} />}
+              label="我的收藏"
+              active={backgroundPathname === '/favorites'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/subscriptions"
+              icon={<MdOutlineSubscriptions size={ICON.standard} />}
+              activeIcon={<MdSubscriptions size={ICON.standard} />}
+              label="标签订阅"
+              active={backgroundPathname === '/subscriptions' || backgroundPathname.startsWith('/subscriptions/')}
+              current={backgroundPathname === '/subscriptions'}
+              badge={subscriptionUpdates}
+              badgeLabel={`${subscriptionUpdates} 张新图片`}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/messages"
+              icon={<MdOutlineNotifications size={ICON.standard} />}
+              activeIcon={<MdNotifications size={ICON.standard} />}
+              label="消息"
+              active={backgroundPathname === '/messages'}
+              badge={unread}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/history"
+              icon={<MdOutlineHistory size={ICON.standard} />}
+              activeIcon={<MdHistory size={ICON.standard} />}
+              label="浏览历史"
+              active={backgroundPathname === '/history'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/tasks"
+              icon={<MdOutlineEmojiEvents size={ICON.standard} />}
+              activeIcon={<MdEmojiEvents size={ICON.standard} />}
+              label="任务"
+              active={backgroundPathname === '/tasks'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/shop"
+              icon={<MdOutlineStore size={ICON.standard} />}
+              activeIcon={<MdStore size={ICON.standard} />}
+              label="金币商店"
+              active={backgroundPathname === '/shop'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/block-groups"
+              icon={<MdOutlineShield size={ICON.standard} />}
+              activeIcon={<MdShield size={ICON.standard} />}
+              label="屏蔽组"
+              active={backgroundPathname === '/block-groups'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+            <NavItem
+              href="/tag-groups"
+              icon={<MdOutlineBookmarks size={ICON.standard} />}
+              activeIcon={<MdBookmarks size={ICON.standard} />}
+              label="标签组"
+              active={backgroundPathname === '/tag-groups'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+          </Section>
+        )}
+
+        {/* The rule before the settings group, drawn in every state now that the group is: it
+            separates where you can go from the app's own controls. `shrink-0` for the same
+            reason as the structural rule in `AppLayout`: a 1px flex item in a column absorbs
+            overflow and collapses to nothing. */}
+        <div className="bg-outline-variant mx-4 my-2 h-px shrink-0" />
+
+        <Section>
+          <NavItem
+            href="/settings"
+            icon={<MdOutlineSettings size={ICON.standard} />}
+            activeIcon={<MdSettings size={ICON.standard} />}
+            label="设置"
+            active={backgroundPathname === '/settings'}
+            onClick={onNavigate}
+            onReselect={onReselect}
+          />
+          {staff && (
+            <NavItem
+              href="/admin"
+              icon={<MdOutlineDashboard size={ICON.standard} />}
+              activeIcon={<MdDashboard size={ICON.standard} />}
+              label="管理面板"
+              active={backgroundPathname.startsWith('/admin')}
+              current={backgroundPathname === '/admin'}
+              onClick={onNavigate}
+              onReselect={onReselect}
+            />
+          )}
+          {user && <NavItem icon={<MdOutlineLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
+        </Section>
+      </nav>
+    </CompactSidebar>
   );
 }

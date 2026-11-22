@@ -110,6 +110,7 @@ import { scrollAppToElement } from '@/lib/scrollTo';
 import { focusLanding } from '@/lib/focusLanding';
 import { useMaintenanceStatus } from '@/lib/useSiteStatus';
 import { coverGallery, uncoverGallery } from '@/lib/galleryCover';
+import { parseSidebarMode, type SidebarMode } from '@/lib/sidebarMode';
 
 /**
  * A prefetch of the whole route, page and all (`lib/routePayload.ts`). The router takes it as the
@@ -188,14 +189,14 @@ const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
 /** Storage and cookies are the device's memory, and both can refuse (a blocked-storage
  *  browser, a sandboxed frame): a refused persist costs the preference, never the page. */
-function persistDockedCollapsed(collapsed: boolean) {
+function persistDockedMode(mode: SidebarMode) {
   try {
-    localStorage.setItem(LS_KEYS.sidebarCollapsed, String(collapsed));
+    localStorage.setItem(LS_KEYS.sidebarCollapsed, mode);
   } catch {
     /* The cookie below still carries it to the next load. */
   }
   try {
-    document.cookie = `${COOKIE_KEYS.sidebarCollapsed}=${collapsed};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
+    document.cookie = `${COOKIE_KEYS.sidebarCollapsed}=${mode};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
   } catch {
     /* Nothing left to carry it; the drawer simply opens expanded next time. */
   }
@@ -445,7 +446,7 @@ function readShellHeroView(): ShellHeroView {
 export default function AppLayout({
   children,
   overlay,
-  initialCollapsed,
+  initialSidebarMode,
   initialScheme,
   devBannerVisible,
   maintenance: initialMaintenance = false,
@@ -453,7 +454,7 @@ export default function AppLayout({
   children: React.ReactNode;
   overlay: React.ReactNode;
   /** The docked drawer's remembered state, from the cookie. */
-  initialCollapsed: boolean;
+  initialSidebarMode: SidebarMode;
   /** The scheme the server painted, from the cookie — the theme glyph's first render. */
   initialScheme: ColorScheme;
   /** Whether the server rendered the dev banner (its dismissal is mirrored into a cookie). */
@@ -462,13 +463,9 @@ export default function AppLayout({
   maintenance?: boolean;
 }) {
   const maintenance = useMaintenanceStatus(initialMaintenance);
-  /* **Two drawer states, not one.** The docked drawer (from `md`) has a remembered
-     preference, known to the server from its cookie. The phone's modal drawer has none: it
-     is closed until someone opens it, and it can never be open on a server render. One
-     `isCollapsed` served both, so a desktop that had expanded its drawer server-rendered
-     every phone with the drawer painted open until hydration closed it — and opening the
-     drawer on a phone persisted itself as the desktop's preference. */
-  const [dockedCollapsed, setDockedCollapsed] = useState(initialCollapsed);
+  // Desktop cycles through three remembered modes; the phone always starts closed.
+  // See docs/design/layout.md#navigation-geometry.
+  const [dockedMode, setDockedMode] = useState(initialSidebarMode);
   const [modalOpen, setModalOpen] = useState(false);
 
   /* The colour scheme is not local state. It is two localStorage keys, a cookie and a class
@@ -691,7 +688,7 @@ export default function AppLayout({
       } catch {
         return;
       }
-      if (saved !== null) setDockedCollapsed(saved === 'true');
+      if (saved !== null) setDockedMode(parseSidebarMode(saved));
     });
     return () => {
       cancelled = true;
@@ -878,7 +875,16 @@ export default function AppLayout({
   if (drawerRoute !== pathname) setDrawerRoute(pathname);
 
   const modalDrawerOpen = isOverlayDrawer && modalOpen;
-  const drawerExpanded = isOverlayDrawer ? modalOpen : !dockedCollapsed;
+  const dockedVisible = dockedMode !== 'hidden';
+  const compactSidebar = !isOverlayDrawer && dockedMode === 'icons';
+  const drawerVisible = isOverlayDrawer ? modalOpen : dockedVisible;
+  const sidebarAction = isOverlayDrawer
+    ? (modalOpen ? '收起侧边栏' : '展开侧边栏')
+    : dockedMode === 'expanded'
+      ? '侧边栏仅显示图标'
+      : dockedMode === 'icons' ? '收起侧边栏' : '展开侧边栏';
+  const { anchorRef: accountRef, anchorProps: accountTooltipProps, tooltip: accountTooltip } =
+    useTooltip(compactSidebar ? (userInfo ? userInfo.username : '点击登录') : undefined);
 
   /* Persisted outside the state updater (an updater runs twice under StrictMode and must be
      pure) and only for the docked drawer: a phone's open drawer is not a desktop preference. */
@@ -887,9 +893,9 @@ export default function AppLayout({
       setModalOpen((open) => !open);
       return;
     }
-    const next = !dockedCollapsed;
-    setDockedCollapsed(next);
-    persistDockedCollapsed(next);
+    const next: SidebarMode = dockedMode === 'expanded' ? 'icons' : dockedMode === 'icons' ? 'hidden' : 'expanded';
+    setDockedMode(next);
+    persistDockedMode(next);
   };
 
   const closeModalDrawer = useCallback(() => setModalOpen(false), []);
@@ -1059,8 +1065,8 @@ export default function AppLayout({
               variant="on-primary"
               size="md"
               onClick={toggleSidebar}
-              aria-label={drawerExpanded ? '收起侧边栏' : '展开侧边栏'}
-              aria-expanded={drawerExpanded}
+              aria-label={sidebarAction}
+              aria-expanded={drawerVisible}
               aria-controls="app-sidebar"
               className="mr-1 touch-size sm:mr-3"
               icon={<MdMenu />}
@@ -1159,6 +1165,7 @@ export default function AppLayout({
           <aside
             ref={sidebarRef}
             data-motion-spring="overlay"
+            data-sidebar-mode={dockedMode}
             id="app-sidebar"
             role={modalDrawerOpen ? 'dialog' : undefined}
             aria-modal={modalDrawerOpen || undefined}
@@ -1166,19 +1173,19 @@ export default function AppLayout({
             tabIndex={-1}
             /* Hidden from assistive tech while closed, so the nav links inside are not
                reachable by Tab from behind the scrim. */
-            aria-hidden={!drawerExpanded ? 'true' : undefined}
-            inert={!drawerExpanded || undefined}
+            aria-hidden={!drawerVisible ? 'true' : undefined}
+            inert={!drawerVisible || undefined}
             /* **288dp, a deliberate divergence** from M3's 360dp navigation drawer: docked from
                `md` up, its width comes out of the content area — on an image gallery those
-               72px are a column of thumbnails. The negative right margin must match it.
+               72px are a column of thumbnails. The icon rail is 80dp.
                On a phone it is the **modal** drawer: full height above the chrome, the
                trailing corners rounded, level-1 elevation (`ModalDrawerElevation`), and never
                wider than the window less 56dp, so a 320px phone keeps a band of scrim to tap.
                Closed, it sits a little past its own width so its shadow is off screen too.
 
-               **The panel slides; it is not clipped.** The whole aside translates and (docked)
-               a negative margin closes the layout behind it: the content travels because it is
-               *inside* the thing that moves, the panel never resizes, `translate` composites.
+               Docked width, slide and negative margin share the layout spring. The hidden
+               state retains the rail's width and moves it left by that same fixed distance,
+               so opening directly into the full drawer follows the page without reversing.
 
                **Modal (phone): `ModalNavigationDrawer`'s pair, as `Sheet` and `SidePanel` run** —
                open = `surface-enter` (DefaultSpatial, `openMotion`; its overshoot lands on the
@@ -1190,9 +1197,9 @@ export default function AppLayout({
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */
             className={cn(
-              'flex flex-col overflow-hidden bg-surface-container-low transition-[margin-right,translate]',
+              'app-sidebar flex flex-col overflow-hidden bg-surface-container-low transition-[width,margin-right,translate]',
               'fixed inset-y-0 left-0 z-drawer w-[min(18rem,calc(100vw-3.5rem))] rounded-r-lg edge-skirt-l',
-              'md:relative md:inset-auto md:z-auto md:h-full md:w-72 md:shrink-0 md:rounded-none md:shadow-none',
+              'md:relative md:inset-auto md:z-auto md:h-full md:shrink-0 md:rounded-none md:shadow-none',
               modalOpen
                 ? 'surface-enter translate-x-0'
                 : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
@@ -1200,7 +1207,11 @@ export default function AppLayout({
                  width, and a page that widens on one curve and narrows on another reads as two
                  different motions. */
               'md:drawer-dock',
-              dockedCollapsed ? 'md:-translate-x-full md:-mr-72' : 'md:translate-x-0 md:mr-0',
+              dockedMode === 'expanded'
+                ? 'md:w-72 md:translate-x-0 md:mr-0'
+                : dockedMode === 'icons'
+                  ? 'md:w-20 md:translate-x-0 md:mr-0'
+                  : 'md:w-20 md:-translate-x-20 md:-mr-20',
             )}
           >
             {/* `w-full`, not a second width declaration. Floating pseudo-scrollbar takes zero
@@ -1217,6 +1228,8 @@ export default function AppLayout({
               <div className="p-3 pb-0">
                 {userInfo ? (
                   <Link
+                    ref={accountRef as React.Ref<HTMLAnchorElement>}
+                    {...accountTooltipProps}
                     scroll={false}
                     href={`/user/${userInfo.id}`}
                     onClick={handleMobileNavigation}
@@ -1228,10 +1241,11 @@ export default function AppLayout({
                        here". The avatar starts on the same 28dp leading column as every nav
                        icon (12dp nav inset + 16dp item inset), which is the part that has to
                        agree. **64dp at every density, with `ListTokens`' own 40dp avatar.** */
-                    className="state-layer flex h-16 w-full items-center gap-3 rounded-lg px-4 focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+                    aria-label={compactSidebar ? userInfo.username : undefined}
+                    className="sidebar-account state-layer flex h-16 w-full items-center gap-3 rounded-lg px-4 focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
                   >
                     <Avatar src={userInfo.avatar} name={userInfo.username} size={40} />
-                    <div className="min-w-0 flex-1">
+                    <div className="sidebar-label min-w-0 flex-1">
                       {/* `title-s` (14px, weight 500), the same size as the links below it,
                           so the drawer reads as one column. */}
                       <p className="text-title-s text-on-surface truncate">{userInfo.username}</p>
@@ -1252,16 +1266,19 @@ export default function AppLayout({
                   </Link>
                 ) : (
                   <button
+                    ref={accountRef as React.Ref<HTMLButtonElement>}
+                    {...accountTooltipProps}
                     type="button"
                     onClick={() => {
                       openAuth('login');
                       handleMobileNavigation();
                     }}
                     data-ripple
-                    className="state-layer group flex h-16 w-full cursor-pointer items-center gap-3 rounded-lg px-4 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+                    aria-label={compactSidebar ? '点击登录' : undefined}
+                    className="sidebar-account state-layer group flex h-16 w-full cursor-pointer items-center gap-3 rounded-lg px-4 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
                   >
                     <Avatar size={40} />
-                    <span className="min-w-0">
+                    <span className="sidebar-label min-w-0 flex-1">
                       <span className="text-title-s text-on-surface block truncate">未登录</span>
                       <span className="text-body-m text-on-surface-variant block truncate">
                         点击登录
@@ -1270,6 +1287,7 @@ export default function AppLayout({
                   </button>
                 )}
               </div>
+              {accountTooltip}
               {/* Always drawn, signed in or out: the division it marks is structural — above
                   it is who you are, below it is where you can go. `shrink-0`, or this 1px flex
                   item absorbs the column's whole overflow and collapses to nothing. On the
@@ -1277,6 +1295,7 @@ export default function AppLayout({
                   16dp — one kind of line, one geometry. */}
               <div className="bg-outline-variant mx-7 my-2 h-px shrink-0" />
               <SidebarNav
+                compact={compactSidebar}
                 user={userInfo}
                 backgroundPathname={backgroundPathname}
                 unread={totalUnread}
@@ -1294,7 +1313,7 @@ export default function AppLayout({
             className={cn(
               'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface pr-[env(safe-area-inset-right)] sm:m-3 sm:rounded-md',
               /* The left inset is the drawer's while it is docked open beside the content. */
-              (isOverlayDrawer || dockedCollapsed) && 'pl-[env(safe-area-inset-left)]',
+              (isOverlayDrawer || !dockedVisible) && 'pl-[env(safe-area-inset-left)]',
             )}
           >
             <div className="relative min-h-0 flex-1">
@@ -1444,7 +1463,7 @@ export default function AppLayout({
               <TabNavBar
                 onHome={onHome}
                 hidden={isImageDetailOpen || Boolean(imageHeroRuntime.background)}
-                dockedOpen={!isOverlayDrawer && !dockedCollapsed}
+                dockedOpen={!isOverlayDrawer && dockedVisible}
                 forumUnread={forumUnread}
               />
             </Suspense>

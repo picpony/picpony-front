@@ -819,9 +819,7 @@ def range_layout(page, fixture, width):
         main(page).evaluate('e=>{e.scrollTop=0}')
         rounds.append(range_layout_round(page, 'after responsive resize'))
         if width >= 500:
-            collapsed = page.get_by_role('button', name='收起侧边栏', exact=True)
-            expanded = page.get_by_role('button', name='展开侧边栏', exact=True)
-            control = collapsed if collapsed.count() and collapsed.is_visible() else expanded
+            control = page.locator('button[aria-controls="app-sidebar"]')
             if control.count() and control.is_visible():
                 control.click()
                 page.wait_for_function("""()=>!document.getAnimations().some(a=>{

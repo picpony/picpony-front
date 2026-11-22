@@ -124,6 +124,7 @@ try {
     : args.includes('--card-video') ? 'testCardVideo.py'
     : args.includes('--editor') ? 'testRichTextEditor.py'
     : args.includes('--motion') ? 'testMotionRegression.py'
+    : args.includes('--sidebar') ? 'testSidebarModes.py'
     : args.includes('--slider') ? 'testSlider.py'
     : args.includes('--stats') ? 'testStats.py'
     : args.includes('--compat') ? 'testBrowserCompatibility.py' : 'reviewBrowser.py';

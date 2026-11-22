@@ -127,7 +127,15 @@ Run `bun run test:slider` against the production build for press/release, select
 
 ## Navigation geometry
 
+From the `md` breakpoint (768 px), the app-bar sidebar button cycles through expanded (288 dp), icons (80 dp) and hidden (0 dp of page space). Width, translation and the page's reclaimed space use the same overlay-category `layout` spring. Labels fade with effects springs; section headings collapse on the layout clock. The icon rail keeps accessible destination names, tooltips, active indicators and unread badges. Both visible modes replace the home page's bottom navigation pill.
+
+Desktop mode is remembered in localStorage (`sidebar_collapsed`) and mirrored in the `sidebarCollapsed` cookie for SSR. Values are `expanded`, `icons` and `hidden`; legacy `false` and `true` restore expanded and hidden. Below `md`, the sidebar remains an independent open/closed modal drawer, starts closed and never writes the desktop preference.
+
 Drawer rows have 16 dp leading and 24 dp trailing padding, 24 dp icons, 12 dp label gaps and 12 dp outer inset. They use the density-dependent heights above and a pill shape.
+
+Icon-only rows retain the leading icon position, use 16 dp trailing padding and omit the label gap. Unread badges sit at the indicator's upper trailing edge. The account block uses 8 dp symmetric padding in the icon rail, keeping its 40 dp avatar centred.
+
+During navigation, an icon-only row replaces its 24 dp glyph with a progress ring and omits the trailing `正在打开` indicator. The original glyph returns when navigation settles. Expanded desktop and phone rows retain the trailing progress ring and text.
 
 The account block is a separate 64 dp surface with 16 dp corners, a 40 dp avatar and `title-s` name. Its leading content aligns with navigation; it does not take the selected-row pill.
 
@@ -137,4 +145,4 @@ Do not add whole-control press scaling. Handle-specific press changes and the pr
 
 ## Verification
 
-Run `bun run check`. Inspect narrow/wide content widths and fine/coarse pointers, including an open drawer. Check both painted bounds and hit regions; follow [CSS verification](../css-traps.md).
+Run `bun run check`. Run `bun run test:sidebar` against a production build after changing sidebar modes; it checks the desktop cycle, layout frames, interrupted transitions, stored preferences and the independent phone drawer. Inspect narrow/wide content widths and fine/coarse pointers, including an open drawer. Check both painted bounds and hit regions; follow [CSS verification](../css-traps.md).

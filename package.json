@@ -27,6 +27,7 @@
     "test:stats": "node scripts/reviewBrowser.mjs --stats",
     "test:presence": "node scripts/testPresenceFocus.mjs",
     "test:drawer": "node scripts/testDrawerSwipe.mjs",
+    "test:sidebar": "node scripts/reviewBrowser.mjs --sidebar",
     "test:tab-press": "node scripts/testTabPress.mjs",
     "test:ui": "node scripts/reviewUiTest.mjs",
     "test:editor": "node scripts/reviewBrowser.mjs --editor",

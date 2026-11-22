@@ -168,8 +168,8 @@ def run_tier(browser, motion, speed, scale):
     got = durations(items, lambda a: 'media-hover-scrim' in a['cls'])
     check(tier, 'gallery hover scrim on FastEffects', got == ([fe] if scale else []), got)
 
-    items = capture(page, lambda: page.get_by_role('button', name='收起侧边栏').click(), 900)
-    got = durations(items, lambda a: a['id'] == 'app-sidebar' and a['name'] in ('translate', 'margin-right'))
+    items = capture(page, lambda: page.get_by_role('button', name='侧边栏仅显示图标').click(), 900)
+    got = durations(items, lambda a: a['id'] == 'app-sidebar' and a['name'] in ('width', 'translate', 'margin-right'))
     check(tier, 'docked drawer on layout spring', got == ([ly] if scale else []), got)
     page.wait_for_timeout(500)
 
