@@ -299,17 +299,6 @@ function prepareTabRun(
   const stripWindow = panel.closest<HTMLElement>('[data-tab-window]') ?? scroller;
   const view = scroller && !instant ? scroller.getBoundingClientRect() : null;
   const column = panel.getBoundingClientRect();
-  const follower = instant ? null : followerOf(panel);
-  let follow;
-  if (follower) {
-    const out = leaving.getBoundingClientRect().bottom - column.bottom;
-    const into = entering.getBoundingClientRect().bottom - column.bottom;
-    const initial = beforeFollower ? beforeFollower.top - column.bottom : out;
-    const opacity = beforeFollower?.opacity ?? 1;
-    if (Math.abs(out - into) > 0.5 || Math.abs(initial - into) > 0.5 || opacity < 1) {
-      follow = { node: follower, initial, opacity, leaving: out, entering: into };
-    }
-  }
   /* On a wide screen, the column and a faded margin rather than the whole scroller
      (`columnWindow`) — where the scroller is the window and the strip slides (the reduced tier's
      short shift stays inside the column), and where the engine can mask the edges. */
@@ -320,6 +309,28 @@ function prepareTabRun(
           right: view.left + scroller.clientLeft + scroller.clientWidth,
         })
       : null;
+  const follower = instant ? null : followerOf(panel);
+  let follow;
+  if (follower) {
+    const out = leaving.getBoundingClientRect().bottom - column.bottom;
+    const into = entering.getBoundingClientRect().bottom - column.bottom;
+    const initial = beforeFollower ? beforeFollower.top - column.bottom : out;
+    const opacity = beforeFollower?.opacity ?? 1;
+    if (Math.abs(out - into) > 0.5 || Math.abs(initial - into) > 0.5 || opacity < 1) {
+      let bleed: { left: number; right: number } | undefined;
+      if (edge) {
+        bleed = { left: edge.reach, right: edge.reach };
+      } else if (stripWindow) {
+        const box = stripWindow === scroller && view ? view : stripWindow.getBoundingClientRect();
+        const innerLeft = box.left + stripWindow.clientLeft;
+        const innerRight = innerLeft + stripWindow.clientWidth;
+        const left = Math.max(0, Math.ceil(column.left - innerLeft));
+        const right = Math.max(0, Math.ceil(innerRight - column.right));
+        if (left > 0 || right > 0) bleed = { left, right };
+      }
+      follow = { node: follower, initial, opacity, leaving: out, entering: into, bleed };
+    }
+  }
   const distance = edge?.width ?? (stripWindow?.clientWidth || column.width) + AXIS_GAP;
   let next = origin;
   if (scroller && mayRestore) {

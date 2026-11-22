@@ -104,9 +104,12 @@ export function TabPanes<T extends string = string>({
   if (following == null) return panes;
 
   return (
-    <div data-tab-window="" className="isolate">
+    /* Do not mark this wrapper `data-tab-window`: panes keep the enclosing strip window
+       (`columnWindow` on wide screens or the scroller), while `data-tab-follower` owns
+       the surface backing that bleeds across that horizontal margin during height changes. */
+    <div className="isolate">
       {panes}
-      <div data-tab-follower="" className="relative z-[1]">
+      <div data-tab-follower="" className="relative z-[1] bg-surface">
         {following}
       </div>
     </div>

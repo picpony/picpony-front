@@ -63,7 +63,9 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
   const ownerKey = 'ownerId' in owner ? `~${owner.ownerId}` : owner.username;
   const own = read.data
     ? Number(user?.id) === read.data.ownerId
-    : typeof user?.username === 'string' && user.username === username;
+    : 'ownerId' in owner
+      ? Number(user?.id) === owner.ownerId
+      : typeof user?.username === 'string' && user.username === username;
   const route = sharedFolderHref(owner, folderId);
   const [page, setPage] = useAddressPage(route, false);
   const listed = folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);

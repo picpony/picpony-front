@@ -210,6 +210,28 @@ export function visibleBox(rect: Box, view: Box): Box | null {
   return { left, top, width: right - left, height: bottom - top };
 }
 
+/**
+ * Where `object-fit: cover` places an image of natural aspect `ratio` (`width / height`) inside a
+ * clipping box of `(width, height)`, relative to that box's top left. `anchorY` is CSS's vertical
+ * `object-position` fraction (`0.5` centred, `0` top-aligned for tall cropped cards).
+ *
+ * Linearly interpolating these four coordinates between two boxes keeps the image isotropic and
+ * covering every edge at every progress `p ∈ [0, 1]` (each edge constraint is affine).
+ */
+export function coverImageRect(width: number, height: number, ratio: number, anchorY = 0.5): Box {
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  const safeHeight = Math.max(height, 1);
+  const wide = width / safeHeight > safeRatio;
+  const imgW = wide ? width : height * safeRatio;
+  const imgH = wide ? width / safeRatio : height;
+  return {
+    left: (width - imgW) * 0.5 + 0,
+    top: (height - imgH) * anchorY + 0,
+    width: imgW,
+    height: imgH,
+  };
+}
+
 /** Whether both ends share a column, so the two-level clip carries the whole transform. */
 export function sameColumn(a: Box, b: Box): boolean {
   return Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;

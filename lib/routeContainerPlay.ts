@@ -80,6 +80,33 @@ export interface Flight {
 
 const flights = new Set<Flight>();
 
+/**
+ * Keeps `@container page (...)` queries inside a route container's visual clones answering as
+ * they do on the live page (`docs/transitions.md#route-ownership`). The layer sits outside
+ * `[data-page-content]` as a sibling of `[data-route-crossfade-layer]`, so without this a cloned
+ * `.page-back-room-7xl` folder column loses the `page` container and reverts from `0` to `3rem`
+ * top padding on wide viewports, landing its header 48px low. Matching the live page's content-box
+ * inline-size with `padding-right` leaves the layer's padding box (the containing block for its
+ * absolutely positioned shutters) identical to `inset: 0`.
+ */
+function mirrorPageContainer(layer: HTMLElement, crossFade: HTMLElement) {
+  const page =
+    document.querySelector<HTMLElement>('[data-page-content]') ??
+    (crossFade.firstElementChild instanceof HTMLElement ? crossFade.firstElementChild : null);
+  if (!page) return;
+  const style = getComputedStyle(page);
+  if (!style.containerType || style.containerType === 'normal') return;
+  const contentWidth =
+    page.getBoundingClientRect().width -
+    (parseFloat(style.paddingLeft) || 0) -
+    (parseFloat(style.paddingRight) || 0);
+  const padRight = Math.max(0, layer.getBoundingClientRect().width - contentWidth);
+  layer.style.boxSizing = 'border-box';
+  layer.style.paddingRight = `${padRight}px`;
+  layer.style.containerType = style.containerType;
+  if (style.containerName && style.containerName !== 'none') layer.style.containerName = style.containerName;
+}
+
 /** Plays a leg above the route cross-fade. Null when it cannot start. */
 export function flyOnRoute(
   run: ContainerRun,
@@ -100,6 +127,7 @@ export function flyOnRoute(
       let anchor: Element = crossFade;
       while (anchor.nextElementSibling?.hasAttribute('data-container-transform')) anchor = anchor.nextElementSibling;
       anchor.after(layer);
+      mirrorPageContainer(layer, crossFade);
       return true;
     },
     zIndex: 'var(--z-route-crossfade)',

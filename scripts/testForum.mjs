@@ -716,3 +716,29 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
   const turned = container.turnContainer(leg, elapsed, full);
   assert.deepEqual(container.containerPose(turned, now, card, 0), now);
 });
+
+test('a shared cover morph stays isotropic and covers every edge of its clipping box at every sample', () => {
+  const cases = [
+    { ratio: 16 / 9, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 173 }, aY: 0.5, bY: 0.5 },
+    { ratio: 3 / 4, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 411 }, aY: 0.5, bY: 0.5 },
+    { ratio: 1, from: { left: 0, top: 0, width: 240, height: 180 }, to: { left: 0, top: 0, width: 308, height: 308 }, aY: 0.5, bY: 0.5 },
+    { ratio: 0.3, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 462 }, aY: 0.5, bY: 0 },
+  ];
+  for (const { ratio, from, to, aY, bY } of cases) {
+    const a = container.coverImageRect(from.width, from.height, ratio, aY);
+    const b = container.coverImageRect(to.width, to.height, ratio, bY);
+    assert.ok(Math.abs(a.width / a.height - ratio) < 1e-9, 'start is isotropic');
+    assert.ok(Math.abs(b.width / b.height - ratio) < 1e-9, 'end is isotropic');
+    if (bY === 0) assert.equal(b.top, 0, 'top-aligned tall card anchors at 0');
+    for (let p = 0; p <= 1.0001; p += 0.05) {
+      const u = Math.min(1, p);
+      const box = container.boxAt(from, to, u);
+      const img = container.boxAt(a, b, u);
+      assert.ok(Math.abs(img.width / img.height - ratio) < 1e-9, `ratio held at ${u}`);
+      assert.ok(img.left <= 1e-6, `covers left at ${u}`);
+      assert.ok(img.top <= 1e-6, `covers top at ${u}`);
+      assert.ok(img.left + img.width >= box.width - 1e-6, `covers right at ${u}`);
+      assert.ok(img.top + img.height >= box.height - 1e-6, `covers bottom at ${u}`);
+    }
+  }
+});

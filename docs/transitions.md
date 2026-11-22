@@ -22,6 +22,7 @@ Paths in the owner column are under `lib/`. Heavy playback code stays behind the
 Forum, folder and flightless detail share `containerTransformPlay.ts`; route containers use `routeContainerPlay.ts`.
 
 - Use `FLIGHT_SPRING` both ways. Copies remain unscaled, anchored to the container; translated clipping boxes keep circular corners.
+- Route container layers mirror `[data-page-content]`'s query container and content-box inline size so `@container page` rules such as `.page-back-room-*` match the live page inside clones.
 - Use the shared content-fade windows sequentially, so outgoing and incoming text do not double.
 - Start the route's compositor fade with the container through `playUnderContainer`.
 - `expectRouteContainer` holds the old page past `data-route-fallback` while the destination arrives, within its existing bound.
@@ -34,7 +35,7 @@ A flight can survive its departing owner long enough for the arriving page to cl
 
 ### Folder and history origins
 
-A folder's target is the visible page column, not just its header. Keep the header stable at mount using the cached own-folder list or public-profile seed. Batch-selection presses do not record an opening origin. `handoffFade` reveals changes that arrived beneath the copy.
+A folder's target is the visible page column, not just its header. Keep the header stable at mount using the cached own-folder list or public-profile seed. Batch-selection presses do not record an opening origin. `handoffFade` reveals changes that arrived beneath the copy. When the folder card carries a decoded `data-folder-cover` picture and its matching grid card (or first grid placeholder on a cold open) is visible, morph that shared picture above the cross-fading text with circular corners and isotropic `object-cover` framing on the same clock, turning it with the flight on reversal; retain visible arriving images (`keepImages`) so cached grids and returning card covers stay painted instead of blank placeholders.
 
 History rows use `data-detail-origin` and `rememberDetailOrigin`. Warm the record and still preview alongside the route; retain loading images in the visual clone so they can complete.
 
@@ -96,7 +97,7 @@ Standard shared-axis movement uses `PAGER_SPRING`. On wide screens, `columnWindo
 
 Do not animate panel height. Both panes naturally hold `max(H_out, H_in)` during the run.
 
-Use `TabPanes following` for shared controls that belong below bounded panes of different heights, as on `/stats`. The controls translate between the panes' natural bottom edges on the shared tab clock; do not stretch the cards or animate height. A press holds the old position until playback starts. Standard motion retargets from the painted position on interruption, reduced motion changes position during a fade, and off cuts. Apply the scroll floor after the controls rather than between the controls and the selected pane. `/stats` uses `TabPane inertWhenInactive` so pressing Tab during a slide enters the selected chart, not a control that is still sliding out.
+Use `TabPanes following` for shared controls that belong below bounded panes of different heights, as on `/stats`. The controls translate between the panes' natural bottom edges on the shared tab clock; do not stretch the cards or animate height. A press holds the old position until playback starts. Standard motion retargets from the painted position on interruption, reduced motion changes position during a fade, and off cuts. Apply the scroll floor after the controls rather than between the controls and the selected pane. `TabPanes following` does not introduce a `data-tab-window` boundary; panes keep the surrounding window (`columnWindow` on wide screens, or the scroller) while the following controls extend their surface backdrop across that horizontal margin for the run. `/stats` uses `TabPane inertWhenInactive` so pressing Tab during a slide enters the selected chart, not a control that is still sliding out.
 
 Shared-chrome screens retain `holdFloor` while needed to keep the current offset reachable. Release it when scrolling no longer needs it. Other screens clamp against the settled height; see [tab offsets](scrolling.md#tab-offsets).
 

@@ -556,3 +556,58 @@ test('rapid series updates cancel obsolete effects; tab/pref changes settle with
   assert.equal(chart.runs[3].options.delay, 70);
   chart.unmount();
 });
+
+test('TabPanes following keeps the enclosing strip window while retaining a surface-backed follower', () => {
+  const hooks = hookRuntime();
+  const jsx = (type, props) => ({ type, props });
+  const exports = {};
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/TabPanes.tsx'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  vm.runInNewContext(source, {
+    exports,
+    require: (name) => {
+      if (name === 'react') {
+        return {
+          ...hooks.react,
+          createContext: (value) => ({ Provider: 'Provider', value }),
+          useContext: (context) => context.value,
+        };
+      }
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' };
+      if (name === '@/lib/motionLazy') return { TabPanesMotion: 'TabPanesMotion' };
+      if (name === '@/lib/utils') return { cn: (...classes) => classes.filter(Boolean).join(' ') };
+      assert.fail(`Unexpected TabPanes dependency: ${name}`);
+    },
+  });
+  const tree = exports.TabPanes({ value: 'stats-users', following: { type: 'RangeCard' }, children: [] });
+  assert.equal(tree.type, 'div');
+  assert.equal(tree.props['data-tab-window'], undefined, 'following must not impose a column-tight data-tab-window clip');
+  assert.equal(tree.props.className, 'isolate');
+  const [panes, follower] = tree.props.children;
+  assert.equal(panes.type, 'Fragment');
+  assert.equal(panes.props.children[0].props['data-tab-panel'], true);
+  assert.equal(follower.props['data-tab-follower'], '');
+  assert.ok(follower.props.className.split(/\s+/).includes('bg-surface'), follower.props.className);
+
+  const tabScroll = {};
+  const scrollSource = ts.transpileModule(readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(scrollSource, {
+    exports: tabScroll,
+    require: (name) => {
+      assert.equal(name, '@/lib/appScroller');
+      return { getAppScroller: () => null };
+    },
+  });
+  const scroller = { scrollTop: 0, getBoundingClientRect: () => ({ top: 0 }) };
+  const panel = (hasWindow, hasFollower) => ({
+    closest: (selector) => (hasWindow && selector === '[data-tab-window]' ? {} : null),
+    nextElementSibling: hasFollower ? { hasAttribute: (attr) => attr === 'data-tab-follower' } : null,
+    getBoundingClientRect: () => ({ top: 24 }),
+  });
+  assert.equal(tabScroll.tabMayRestore(panel(false, false), scroller), true);
+  assert.equal(tabScroll.tabMayRestore(panel(true, false), scroller), false);
+  assert.equal(tabScroll.tabMayRestore(panel(false, true), scroller), false);
+});

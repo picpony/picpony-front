@@ -8,12 +8,15 @@ import { sampleEasing } from '@/lib/sampledAnimation';
 import {
   FORUM_TRANSFORM_EASING,
   FORUM_TRANSFORM_MS,
+  boxAt,
   containerPose,
   colourAt,
+  coverImageRect,
   fadeAt,
   fadeTrack,
   forumTransformProgress,
   freshContainerLeg,
+  legAt,
   sameColumn,
   radiiAt,
   shutterLevels,
@@ -137,6 +140,27 @@ function still(root: HTMLElement) {
   }
 }
 
+/** One endpoint of a shared media element riding the container (viewport coords). */
+export interface SharedMediaEnd {
+  box: Box;
+  radii: Radii;
+  /** Vertical `object-position` fraction: `0.5` centred (default), `0` top-aligned. */
+  anchorY?: number;
+}
+
+/**
+ * A shared picture that stays opaque throughout the container transform — e.g., a folder card's
+ * cover flying into the folder grid's matching picture (and back) — morphing its bounds, circular
+ * corners and `object-cover` crop on the same spring clock without stretching the artwork.
+ */
+export interface SharedMedia {
+  src: string;
+  /** Natural aspect ratio (`naturalWidth / naturalHeight`). */
+  ratio: number;
+  from: SharedMediaEnd;
+  to: SharedMediaEnd;
+}
+
 export interface ContainerRun {
   from: Surface;
   to: Surface;
@@ -148,6 +172,8 @@ export interface ContainerRun {
   /** The incoming content's copy and its own box (viewport), anchored at `to`. */
   incoming: HTMLElement;
   incomingBox: Box;
+  /** Optional shared picture morphing between `from` and `to` above the cross-fading contents. */
+  shared?: SharedMedia | null;
   /** When each content is on screen, as windows on the travel (`FORUM_FADE`). */
   fade: { readonly outgoing: FadeWindow; readonly incoming: FadeWindow };
   /** Live elements hidden for the run, shown again at the handoff. */
@@ -181,6 +207,8 @@ export interface ContainerStage {
 /** Where a turned container goes, and what of the page it lands on stays hidden until it does. */
 export interface ContainerTurn {
   to: Surface;
+  /** Where an active shared picture should turn to; absent or null fades it off in place. */
+  sharedTo?: SharedMediaEnd | null;
   /** Live elements already hidden by the caller — the new destination — shown again at the handoff. */
   hidden: Hidden[];
 }
@@ -286,7 +314,46 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   cover(from);
   cover(to);
   let chain = buildChain(layer, from, to, run.from.radii);
+  chain.elements[0].style.zIndex = '0';
   chain.frame.append(surface, ...(run.outgoing ? [run.outgoing.el] : []), arriving);
+
+  type SharedPose = { box: Box; radii: Radii; img: Box };
+  let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null = null;
+  let sharedEnds: { a: SharedPose; b: SharedPose } | null = null;
+  let sharedRetiring: Animation | null = null;
+  if (run.shared) {
+    const sharedFromBox = local(run.shared.from.box);
+    const sharedToBox = local(run.shared.to.box);
+    const ratio = Number.isFinite(run.shared.ratio) && run.shared.ratio > 0 ? run.shared.ratio : 1;
+    const fromImg = coverImageRect(sharedFromBox.width, sharedFromBox.height, ratio, run.shared.from.anchorY ?? 0.5);
+    const toImg = coverImageRect(sharedToBox.width, sharedToBox.height, ratio, run.shared.to.anchorY ?? 0.5);
+    const baseW = Math.max(fromImg.width, toImg.width, 1);
+    const baseH = baseW / ratio;
+    const sharedChain = buildChain(layer, sharedFromBox, sharedToBox, run.shared.from.radii);
+    sharedChain.elements[0].setAttribute('data-container-shared', '');
+    sharedChain.elements[0].style.zIndex = '1';
+    const img = document.createElement('img');
+    img.src = run.shared.src;
+    img.alt = '';
+    img.decoding = 'async';
+    Object.assign(img.style, {
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      width: `${baseW}px`,
+      height: `${baseH}px`,
+      maxWidth: 'none',
+      maxHeight: 'none',
+      transformOrigin: '0 0',
+      willChange: 'transform',
+    });
+    sharedChain.frame.append(img);
+    sharedState = { chain: sharedChain, img, ratio, baseW };
+    sharedEnds = {
+      a: { box: sharedFromBox, radii: run.shared.from.radii, img: fromImg },
+      b: { box: sharedToBox, radii: run.shared.to.radii, img: toImg },
+    };
+  }
   still(layer);
   /* With no outgoing content the whole container arrives through its fade, surface and all. */
   const fading = run.outgoing ? arriving : layer;
@@ -298,6 +365,30 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   const track = (frame: (progress: number) => Keyframe): Keyframe[] => legacySamples
     ? legacySamples.map(({ offset, progress }) => ({ ...frame(progress), offset }))
     : [frame(0), frame(1)];
+  const animateShutters = (
+    targetChain: Chain,
+    aBox: Box,
+    bBox: Box,
+    aRadii: Radii,
+    bRadii: Radii,
+    timing: KeyframeAnimationOptions,
+    list: Animation[],
+  ) => {
+    targetChain.levels.forEach((level, index) => {
+      const el = targetChain.elements[index];
+      const [x0, y0] = level.translate(aBox);
+      const [x1, y1] = level.translate(bBox);
+      list.push(el.animate(track((p) => ({ transform: `translate(${x0 + (x1 - x0) * p}px, ${y0 + (y1 - y0) * p}px)` })), timing));
+      /* The corners, on an animation of their own so the transform above stays on the compositor. */
+      const corners = level.corners.filter((corner) => aRadii[corner] !== bRadii[corner]);
+      if (corners.length > 0) {
+        const at = (radii: Radii) => Object.fromEntries(corners.map((corner) => [CORNER_PROPS[corner], `${radii[corner]}px`]));
+        list.push(el.animate(track((p) => at(radiiAt(aRadii, bRadii, p))), timing));
+      }
+    });
+  };
+  const sharedImgTransform = (rect: Box, baseW: number) =>
+    `translate(${rect.left}px, ${rect.top}px) scale(${rect.width / baseW})`;
   /**
    * One leg: the clip from `a` to `b`, its corners and its tone, and each content over its own
    * stretch of the travel. Offsets are in progress (the easing), so the fade windows are windows
@@ -307,18 +398,18 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     ends = { a, b };
     const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: legacySamples ? 'linear' : FORUM_TRANSFORM_EASING, fill: 'both' };
     const list: Animation[] = [];
-    chain.levels.forEach((level, index) => {
-      const el = chain.elements[index];
-      const [x0, y0] = level.translate(a.box);
-      const [x1, y1] = level.translate(b.box);
-      list.push(el.animate(track((p) => ({ transform: `translate(${x0 + (x1 - x0) * p}px, ${y0 + (y1 - y0) * p}px)` })), timing));
-      /* The corners, on an animation of their own so the transform above stays on the compositor. */
-      const corners = level.corners.filter((corner) => a.radii[corner] !== b.radii[corner]);
-      if (corners.length > 0) {
-        const at = (radii: Radii) => Object.fromEntries(corners.map((corner) => [CORNER_PROPS[corner], `${radii[corner]}px`]));
-        list.push(el.animate(track((p) => at(radiiAt(a.radii, b.radii, p))), timing));
-      }
-    });
+    animateShutters(chain, a.box, b.box, a.radii, b.radii, timing, list);
+    if (sharedState && sharedEnds) {
+      const { a: sa, b: sb } = sharedEnds;
+      const { baseW } = sharedState;
+      animateShutters(sharedState.chain, sa.box, sb.box, sa.radii, sb.radii, timing, list);
+      list.push(
+        sharedState.img.animate(
+          track((p) => ({ transform: sharedImgTransform(boxAt(sa.img, sb.img, p), baseW) })),
+          timing,
+        ),
+      );
+    }
     if (a.colour !== b.colour) list.push(surface.animate(
       legacySamples ? track((p) => ({ backgroundColor: colourAt(a.colour, b.colour, p) }))
         : [{ backgroundColor: a.colour }, { backgroundColor: b.colour }], timing,
@@ -383,6 +474,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     window.removeEventListener('keydown', finish, true);
     for (const animation of animations) animation.cancel();
     retiring?.cancel();
+    sharedRetiring?.cancel();
     layer.remove();
     reveal(hidden);
     stage.onDone?.();
@@ -451,7 +543,16 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     /* With no outgoing content there is nothing to land on at the far end. */
     if (done || leaving || !run.outgoing) return false;
     const elapsed = elapsedNow();
+    const { progress } = legAt(leg, elapsed);
     const now = containerPose(leg, ends.a, ends.b, elapsed);
+    const nowShared: SharedPose | null =
+      sharedState && sharedEnds
+        ? {
+            box: boxAt(sharedEnds.a.box, sharedEnds.b.box, progress),
+            radii: radiiAt(sharedEnds.a.radii, sharedEnds.b.radii, progress),
+            img: boxAt(sharedEnds.a.img, sharedEnds.b.img, progress),
+          }
+        : null;
     cancelAnimationFrame(poll);
     poll = 0;
     retiring?.cancel();
@@ -472,8 +573,58 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
          they sit at the container's corner in both chains, so nothing they show moves. */
       const old = chain;
       chain = buildChain(layer, now.box, next, now.radii);
+      chain.elements[0].style.zIndex = '0';
       chain.frame.append(...old.frame.childNodes);
       old.elements[0].remove();
+    }
+    if (sharedState && nowShared) {
+      if (target.sharedTo) {
+        const nextBox = local(target.sharedTo.box);
+        const nextColumn = columnOf(nowShared.box, nextBox);
+        if (sameShape(sharedState.chain.column, nextColumn)) {
+          sharedState.chain.levels.forEach((level, index) => {
+            for (const corner of level.corners) {
+              sharedState!.chain.elements[index].style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
+            }
+          });
+        } else {
+          const old = sharedState.chain;
+          sharedState.chain = buildChain(layer, nowShared.box, nextBox, nowShared.radii);
+          sharedState.chain.elements[0].setAttribute('data-container-shared', '');
+          sharedState.chain.elements[0].style.zIndex = '1';
+          sharedState.chain.frame.append(sharedState.img);
+          old.elements[0].remove();
+        }
+        sharedEnds = {
+          a: nowShared,
+          b: {
+            box: nextBox,
+            radii: target.sharedTo.radii,
+            img: coverImageRect(nextBox.width, nextBox.height, sharedState.ratio, target.sharedTo.anchorY ?? 0.5),
+          },
+        };
+      } else {
+        /* No shared target on the destination: pin the flyer at its current pose and fade it out. */
+        const retiringEl = sharedState.chain.elements[0];
+        sharedState.chain.levels.forEach((level, index) => {
+          const el = sharedState!.chain.elements[index];
+          const [tx, ty] = level.translate(nowShared.box);
+          el.style.transform = `translate(${tx}px, ${ty}px)`;
+          for (const corner of level.corners) el.style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
+        });
+        sharedState.img.style.transform = sharedImgTransform(nowShared.img, sharedState.baseW);
+        sharedRetiring?.cancel();
+        sharedRetiring = retiringEl.animate([{ opacity: 1 }, { opacity: 0 }], {
+          ...springTiming('fastEffects', stage.category),
+          fill: 'forwards',
+        });
+        sharedRetiring.finished.then(
+          () => retiringEl.remove(),
+          () => {},
+        );
+        sharedState = null;
+        sharedEnds = null;
+      }
     }
     cover(next);
     leg = turnContainer(leg, elapsed, full);

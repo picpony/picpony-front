@@ -77,6 +77,18 @@ function spacer(rect: { width: number; height: number }) {
   return box;
 }
 
+/** Shows a decoded image inside a `FadeInImage` clone and hides its sibling shimmer immediately. */
+function revealCloneImage(img: HTMLImageElement) {
+  img.style.transition = 'none';
+  img.style.opacity = '1';
+  img.style.visibility = 'visible';
+  const shimmer = img.previousElementSibling;
+  if (shimmer instanceof HTMLElement && shimmer.getAttribute('aria-hidden') === 'true') {
+    shimmer.style.transition = 'none';
+    shimmer.style.opacity = '0';
+  }
+}
+
 /** Index path from `root` to `node`, so the same node can be found in a clone. */
 function pathTo(root: Element, node: Element): number[] | null {
   const path: number[] = [];
@@ -143,11 +155,17 @@ function offscreenPaths(
  * showing, the copy carried an empty well for the whole run; kept, an eager one paints in the copy
  * the moment it lands, on the live picture's own fetch (same address, same document: joined, not
  * repeated). A lazy one, or one that failed, is still disarmed.
+ *
+ * `keepImages` extends that to visible (non-pruned) `FadeInImage` pictures in a newly mounted
+ * route container (folder page grids and folder cards), whose live `<img loading="lazy">` starts
+ * hidden inside `[data-page-content]` during the commit: surviving visible copies switch to eager
+ * so cached pictures paint immediately instead of blank shimmer wells, and reveal themselves on
+ * `load` without React handlers attached; pruned off-screen copies are still disarmed.
  */
 export function captureVisualClone(
   source: HTMLElement,
   host: HTMLElement,
-  { keepLoading = false }: { keepLoading?: boolean } = {},
+  { keepLoading = false, keepImages = false }: { keepLoading?: boolean; keepImages?: boolean } = {},
 ): RouteSnapshot | null {
   /* Which tab panes are concealed, found before the budget below.
     *
@@ -248,8 +266,10 @@ export function captureVisualClone(
       mediaSizeByIndex.set(i, { width: rect.width, height: rect.height });
     } else if (element.tagName === 'IMG') {
       const img = element as HTMLImageElement;
-      if (keepLoading && !img.complete && img.loading !== 'lazy') loadingImgIndices.push(i);
-      else imgSrcByIndex.set(i, img.complete && img.naturalWidth > 0 ? img.currentSrc : null);
+      if (img.complete && img.naturalWidth > 0) imgSrcByIndex.set(i, img.currentSrc);
+      else if (keepImages && (img.hasAttribute('src') || img.hasAttribute('srcset'))) loadingImgIndices.push(i);
+      else if (keepLoading && !img.complete && img.loading !== 'lazy') loadingImgIndices.push(i);
+      else imgSrcByIndex.set(i, null);
     }
   }
 
@@ -326,6 +346,34 @@ export function captureVisualClone(
        leg is a 100ms opacity fade; a first frame that is one image short of complete is
        cheaper than a long task. */
     img.setAttribute('decoding', 'async');
+    if (keepImages) revealCloneImage(img);
+  }
+
+  if (keepImages) {
+    for (const i of loadingImgIndices) {
+      const img = cloneAll[i] as HTMLImageElement;
+      if (!clone.contains(img)) continue;
+      img.setAttribute('loading', 'eager');
+      img.setAttribute('decoding', 'async');
+      if (img.complete && img.naturalWidth > 0) {
+        revealCloneImage(img);
+      } else {
+        img.addEventListener(
+          'load',
+          () => {
+            if (img.naturalWidth > 0) revealCloneImage(img);
+          },
+          { once: true },
+        );
+        img.addEventListener(
+          'error',
+          () => {
+            img.style.visibility = 'hidden';
+          },
+          { once: true },
+        );
+      }
+    }
   }
 
   /* A ripple mid-press must not be carried into the clone: the wave is sized to reach its

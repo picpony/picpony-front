@@ -903,8 +903,12 @@ def range_interruption(page, fixture, width):
     return dict(tier=tier, reverse=reversal, thirdDestination=retarget, savedScroll=scroll)
 
 
-CAPTURE = """()=>{
-  window.__statsMotion={frames:[],done:false};const start=performance.now();
+CAPTURE = r"""()=>{
+  const rangeCard=()=>document.querySelector('main [data-tab-follower] [aria-label="开始日期"]')
+    ?.closest('[data-tab-follower] > div')?.querySelector('h2,h3')?.parentElement??null;
+  const restCard=rangeCard()?.getBoundingClientRect();
+  window.__statsMotion={frames:[],run:null,restCard:restCard?{left:restCard.left,width:restCard.width}:null,done:false};
+  const start=performance.now();
   const tick=()=>{
     const panes=[...document.querySelectorAll('main [role="tabpanel"]')]
       .filter(e=>{const c=getComputedStyle(e);return e.getClientRects().length&&c.visibility!=='hidden'
@@ -913,6 +917,34 @@ CAPTURE = """()=>{
       const c=getComputedStyle(e),m=c.transform==='none'?new DOMMatrix():new DOMMatrix(c.transform);
       return {x:m.e,opacity:+c.opacity};
     }));
+    if(!window.__statsMotion.run){
+      const strip=document.getAnimations().filter(a=>a.id==='tab-strip');
+      if(strip.length>=2){
+        const panel=document.querySelector('main [data-tab-panel]');
+        const follower=panel?.nextElementSibling?.hasAttribute('data-tab-follower')?panel.nextElementSibling:null;
+        const scroller=document.querySelector('main.app-scroller');
+        const active=panel?.querySelector(':scope > [data-tab-pane-active]');
+        const arriving=strip[1].effect.getKeyframes()[0]?.transform??'';
+        const match=/translate3d\(\s*([-\d.]+)px/.exec(arriving);
+        const card=rangeCard()?.getBoundingClientRect();
+        window.__statsMotion.run={
+          hasTabWindow:Boolean(panel?.closest('[data-tab-window]')),
+          scrollerAxis:scroller?.getAttribute('data-axis-running')??null,
+          scrollerWidth:scroller?.clientWidth??0,
+          columnWidth:active?.getBoundingClientRect().width??0,
+          panelWidth:panel?.getBoundingClientRect().width??0,
+          reach:-parseFloat(panel?.style.marginLeft||'0'),
+          padding:parseFloat(panel?.style.paddingLeft||'0'),
+          mask:panel?.style.maskImage||panel?.style.webkitMaskImage||'',
+          keyframeTravel:match?Math.abs(parseFloat(match[1])):0,
+          followerBleedLeft:-parseFloat(follower?.style.marginLeft||'0'),
+          followerBleedRight:-parseFloat(follower?.style.marginRight||'0'),
+          followerPadLeft:parseFloat(follower?.style.paddingLeft||'0'),
+          followerPadRight:parseFloat(follower?.style.paddingRight||'0'),
+          card:card?{left:card.left,width:card.width}:null,
+        };
+      }
+    }
     if(performance.now()-start<1100)requestAnimationFrame(tick);else window.__statsMotion.done=true;
   };tick();
 }"""
@@ -925,19 +957,46 @@ def motion_probe(page, tier):
     page.evaluate(CAPTURE)
     tab(page, '中文词条')
     page.wait_for_function('()=>window.__statsMotion.done', timeout=6000)
-    frames = page.evaluate('()=>window.__statsMotion.frames')
+    captured = page.evaluate('()=>window.__statsMotion')
+    frames, run = captured['frames'], captured['run']
     poses = [pose for frame in frames for pose in frame]
     assert poses
     travel, opacity = max(abs(p['x']) for p in poses), min(p['opacity'] for p in poses)
     assert all(0 <= p['opacity'] <= 1.001 for p in poses)
     if tier == 'standard':
         assert travel > 8.5, f'Standard spatial transition missing: {travel}'
+        assert run and not run['hasTabWindow'], run
+        assert run['scrollerAxis'] == 'x', run
+        if run['scrollerWidth'] >= run['columnWidth'] + 112:
+            assert run['mask'] and run['reach'] > 0 and run['padding'] == run['reach'], run
+            assert abs(run['keyframeTravel'] - run['panelWidth']) <= 1, run
+            assert run['followerBleedLeft'] == run['reach'] and run['followerBleedRight'] == run['reach'], run
+        else:
+            assert run['reach'] == 0 and abs(run['keyframeTravel'] - (run['scrollerWidth'] + 96)) <= 1, run
+            assert run['followerBleedLeft'] > 0 and run['followerBleedRight'] > 0, run
+        assert run['followerPadLeft'] == run['followerBleedLeft'] and run['followerPadRight'] == run['followerBleedRight'], run
+        if captured['restCard'] and run['card']:
+            assert abs(run['card']['left'] - captured['restCard']['left']) <= 1, (captured['restCard'], run['card'])
+            assert abs(run['card']['width'] - captured['restCard']['width']) <= 1, (captured['restCard'], run['card'])
     elif tier == 'reduced':
         assert .01 < travel <= 8.5 and opacity < .99, f'Reduced must keep 8px travel/fade: {travel}, {opacity}'
     else:
         assert travel <= .01 and opacity >= .999, f'Off must cut without travel/fade: {travel}, {opacity}'
     settle(page)
-    return dict(frames=len(frames), maxTravel=round(travel, 3), minOpacity=round(opacity, 3))
+    leftover = page.evaluate("""()=>{
+      const panel=document.querySelector('main [data-tab-panel]');
+      const follower=panel?.nextElementSibling?.hasAttribute('data-tab-follower')?panel.nextElementSibling:null;
+      const scroller=document.querySelector('main.app-scroller');
+      return {
+        axis:scroller?.getAttribute('data-axis-running')??null,
+        panel:[panel?.style.marginLeft,panel?.style.marginRight,panel?.style.paddingLeft,panel?.style.paddingRight,
+          panel?.style.maskImage,panel?.style.webkitMaskImage].filter(Boolean),
+        follower:[follower?.style.marginLeft,follower?.style.marginRight,follower?.style.paddingLeft,
+          follower?.style.paddingRight].filter(Boolean),
+      };
+    }""")
+    assert not leftover['axis'] and not leftover['panel'] and not leftover['follower'], leftover
+    return dict(frames=len(frames), maxTravel=round(travel, 3), minOpacity=round(opacity, 3), run=run)
 
 
 def point_detail(status, point, field, qualifier):

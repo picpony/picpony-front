@@ -140,7 +140,10 @@ export const FolderCard = memo(function FolderCard({
         interactive
         className="overflow-hidden"
       >
-        <span className="relative block aspect-4/3 w-full bg-surface-container-high">
+        <span
+          data-folder-cover={folder.latestImageId ?? undefined}
+          className="relative block aspect-4/3 w-full bg-surface-container-high"
+        >
           {src ? (
             <FadeInImage src={src} alt="" fill sizes={COVER_SIZES} className="object-cover" />
           ) : coverPending ? (

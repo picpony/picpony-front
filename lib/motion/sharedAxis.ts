@@ -162,8 +162,16 @@ export function playSharedAxis(opts: {
    *  on either side for the run and masked to it, fading over `fade` at each edge. The standard
    *  tier on the x axis only — the reduced tier's shift stays inside the column. */
   edge?: { panel: HTMLElement; reach: number; fade: number };
-  /** Vertical offsets from the common layout box to the painted and two settled bottoms. */
-  follower?: { node: HTMLElement; initial: number; opacity: number; leaving: number; entering: number };
+  /** Vertical offsets from the common layout box to the painted and two settled bottoms, plus
+   *  horizontal bleed into the strip's margin/gutter so a taller sliding pane cannot poke out. */
+  follower?: {
+    node: HTMLElement;
+    initial: number;
+    opacity: number;
+    leaving: number;
+    entering: number;
+    bleed?: { left: number; right: number };
+  };
   /** `reversed`: the run was sent back to its start (`reverse`), so `leaving` stays. */
   onSettle?: (reversed: boolean) => void;
   /**
@@ -206,6 +214,8 @@ export function playSharedAxis(opts: {
   let stopClipWatch = () => {};
   /* Gives the panel back the box and mask it had before the window's edges (`edge`). */
   let restoreEdge = () => {};
+  /* Gives the following controls back their margin/padding after horizontal bleed. */
+  let restoreFollowerBleed = () => {};
 
   /* CSS transitions are frozen on the two moved panes, inline, for the length of the run,
      and handed back after the cancel is committed — otherwise a pane's own transform
@@ -241,6 +251,8 @@ export function playSharedAxis(opts: {
     clipped.clear();
     restoreEdge();
     restoreEdge = () => {};
+    restoreFollowerBleed();
+    restoreFollowerBleed = () => {};
     if (frozen.size > 0) {
       void getComputedStyle(leaving).transform;
       for (const [node, previous] of frozen) node.style.transition = previous;
@@ -365,6 +377,23 @@ export function playSharedAxis(opts: {
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
     };
+  }
+
+  /* Extend the following controls' surface across the strip's horizontal margin/gutter while
+     they move over a taller sliding pane, keeping their content box and width unchanged. */
+  if (follower?.bleed && axis === 'x') {
+    const { left, right } = follower.bleed;
+    if (left > 0 || right > 0) {
+      const style = follower.node.style;
+      const before = [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight];
+      style.marginLeft = `${-left}px`;
+      style.marginRight = `${-right}px`;
+      style.paddingLeft = `${left}px`;
+      style.paddingRight = `${right}px`;
+      restoreFollowerBleed = () => {
+        [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight] = before;
+      };
+    }
   }
 
   /* Reduced: the panes cross-fade with a short shift instead of sliding a window's
