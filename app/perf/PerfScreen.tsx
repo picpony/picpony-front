@@ -1,52 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  MdCheckCircle,
-  MdContentCopy,
-  MdDownload,
-  MdErrorOutline,
-  MdExpandMore,
-  MdInsights,
-  MdMemory,
-  MdPlayArrow,
-  MdShare,
-  MdSpeed,
-  MdTune,
-  MdWarningAmber,
-} from 'react-icons/md';
-import Badge, { type BadgeTone } from '@/components/Badge';
+import { MdInsights, MdMemory, MdPlayArrow, MdSpeed, MdTune } from 'react-icons/md';
 import Button from '@/components/Button';
-import Card from '@/components/Card';
 import Collapse from '@/components/Collapse';
 import EmptyState from '@/components/EmptyState';
 import { Input } from '@/components/Input';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
-import ScrollArea from '@/components/ScrollArea';
-import SectionHeading from '@/components/SectionHeading';
 import Select from '@/components/Select';
+import Skeleton from '@/components/Skeleton';
+import Tabs, { type TabItem } from '@/components/Tabs';
+import TabPanes, { TabPane } from '@/components/TabPanes';
 import { showToast } from '@/components/Toast';
-import { SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
-import { ICON } from '@/lib/icons';
+import { ROW_CLASS, ROW_STACK_CLASS, SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
 import { LS_KEYS } from '@/lib/constants';
-import { useMounted } from '@/lib/overlay';
-import { formatDateTime } from '@/lib/format';
 import { useEscapeBack } from '@/lib/hooks';
+import { ICON } from '@/lib/icons';
+import { useMounted } from '@/lib/overlay';
 import { collectHardware, type PerfHardware } from '@/lib/perf/hardware';
-import {
-  loadReport,
-  reportFileName,
-  reportToMarkdown,
-  type PerfReport,
-  type PerfSample,
-  type PerfScenario,
-} from '@/lib/perf/report';
+import { loadReport, reportFileName, reportToMarkdown, type PerfReport } from '@/lib/perf/report';
 import type { PerfRunGroup } from '@/lib/perf/runner';
-import { VERDICT_LABEL, type Verdict } from '@/lib/perf/stats';
-import { cn, copyText } from '@/lib/utils';
+import { useScreenState } from '@/lib/screenState';
+import { copyText } from '@/lib/utils';
+import ReportView from './PerfReport';
+
+/* Module scope: the React Compiler does not lower a dynamic import inside a component. */
+const loadRunner = () => import('@/lib/perf/runner');
+
+type PerfTab = 'perf-setup' | 'perf-report';
+
+const PERF_TABS: TabItem<PerfTab>[] = [
+  { value: 'perf-setup', label: '测试配置' },
+  { value: 'perf-report', label: '测试报告' },
+];
 
 const ROUND_OPTIONS = [
   { value: '1', label: '1 轮' },
@@ -56,16 +45,16 @@ const ROUND_OPTIONS = [
 
 /** What each group of the run does, in the order the run takes them. */
 const GROUPS: Array<{ id: PerfRunGroup; label: string; description: string }> = [
-  { id: 'scroll', label: '列表滚动', description: '上下滚动首页的图片列表' },
+  { id: 'scroll', label: '列表滚动', description: '上下滚动首页图片列表' },
   {
     id: 'hero',
     label: '打开与关闭图片',
-    description: '打开图片，左右切换，再用 Esc、下拉和返回三种方式关闭',
+    description: '打开图片、左右切换，并依次用 Esc、下拉与返回关闭',
   },
   {
     id: 'stress',
     label: '快速连续操作',
-    description: '不等动画结束就连续打开、关闭、返回，检查画面有没有消失或卡住',
+    description: '不等动画结束连续打开、关闭与返回，检查画面是否消失或卡住',
   },
 ];
 
@@ -76,43 +65,116 @@ function runSteps(rounds: number, include: Record<PerfRunGroup, boolean>) {
   );
 }
 
-const VERDICT_BADGE: Record<Verdict, BadgeTone> = {
-  smooth: 'success',
-  minor: 'warning',
-  janky: 'error',
-};
-
-const VERDICT_ICON: Record<Verdict, ReactNode> = {
-  smooth: <MdCheckCircle size={ICON.standard} />,
-  minor: <MdWarningAmber size={ICON.standard} />,
-  janky: <MdErrorOutline size={ICON.standard} />,
-};
-
-const ms = (value: number | null | undefined) =>
-  value === null || value === undefined ? '—' : `${Math.round(value)} ms`;
-const pct = (value: number) => `${Math.round(value * 1000) / 10}%`;
-
 type DeviceFacts = { viewport: string; dpr: number; cores: number | null; pointer: string };
+
+function readDeviceFacts(): DeviceFacts {
+  return {
+    viewport: `${window.innerWidth}×${window.innerHeight}`,
+    dpr: window.devicePixelRatio,
+    cores: navigator.hardwareConcurrency || null,
+    pointer: window.matchMedia('(pointer: coarse)').matches ? '触摸' : '鼠标',
+  };
+}
+
+function readStoredNote() {
+  try {
+    return localStorage.getItem(LS_KEYS.perfNote) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * /perf: 开始测试 hands the app's router to the run (`lib/perf/runner.ts`, loaded on the tap) and
  * the run takes the screen over — it goes to the gallery, opens, steps, pulls and closes pictures,
- * and comes back here, where the last report is shown with its exports. While it runs, its progress
- * is the runner's own status card (it outlives this route).
+ * and comes back here, where the last report is shown with its exports.
+ *
+ * The screen renders once mounted on the client: the server has neither the device's values nor its
+ * stored report, so its render is the screen's own shape — matching `/settings` so tabs and values
+ * land settled on first paint with no post-hydration flip.
  */
 export default function PerfScreen() {
   const router = useRouter();
-  const [rounds, setRounds] = useState('3');
-  const [noCorner, setNoCorner] = useState(false);
-  const [include, setInclude] = useState<Record<PerfRunGroup, boolean>>({
+  const mounted = useMounted();
+
+  /* Back is to 设置, where the entry is — not history: after a run the entry behind this one is the
+     gallery the run drove. */
+  const back = () => router.push('/settings', { scroll: false });
+  useEscapeBack(back);
+
+  return (
+    <>
+      <PageBack onClick={back} label="返回设置" />
+      <div className="mx-auto w-full max-w-4xl page-back-room">
+        {mounted ? <PerfReady /> : <PerfSkeleton />}
+      </div>
+    </>
+  );
+}
+
+/** The screen's shape while waiting for client mount: header, tab strip, grouped rows. */
+function PerfSkeleton() {
+  return (
+    <div data-page-loading aria-busy="true" aria-label="正在加载性能测试">
+      <PageHeader
+        title="性能测试"
+        subtitle={<Skeleton className="h-5 w-72 max-w-full" />}
+        actions={<Skeleton className="h-10 w-28 rounded-full" />}
+      />
+      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
+        {['w-16', 'w-16'].map((width, index) => (
+          <div key={index} className="px-4">
+            <Skeleton className={`h-4 ${width}`} delay={index * 80} />
+          </div>
+        ))}
+      </div>
+      {[3, 2].map((rows, section) => (
+        <section key={section} className="mb-8" aria-hidden="true">
+          <Skeleton className="mb-4 h-6 w-24 rounded-xs" />
+          <div>
+            {Array.from({ length: rows }, (_, row) => (
+              <div key={row} className={ROW_CLASS}>
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-4 w-32 rounded-xs" delay={row * 60} />
+                  <Skeleton className="mt-1.5 h-3.5 w-56 max-w-full rounded-xs" delay={row * 60 + 30} />
+                </div>
+                <Skeleton className="h-8 w-13 shrink-0 rounded-full" delay={row * 60 + 60} />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PerfReady() {
+  const router = useRouter();
+  const [report] = useState<PerfReport | null>(() => loadReport());
+  const [facts, setFacts] = useState<DeviceFacts>(() => readDeviceFacts());
+  /* 设备备注: the CPU and anything else no browser API names. Kept, so a re-run need not retype it. */
+  const [note, setNote] = useState<string>(() => readStoredNote());
+  /* Returning from a run lands straight on the report; first visits open on setup. */
+  const [tab, setTab] = useState<PerfTab>(() => (report ? 'perf-report' : 'perf-setup'));
+
+  /* Remember the tester's run setup across the round trip to the gallery so 重新测试 repeats
+     what was configured rather than snapping back to defaults. */
+  const [rounds, setRounds] = useScreenState('perf:rounds', '3');
+  const [noCorner, setNoCorner] = useScreenState('perf:noCorner', false);
+  const [include, setInclude] = useScreenState<Record<PerfRunGroup, boolean>>('perf:include', {
     scroll: true,
     hero: true,
     stress: true,
   });
   const [starting, setStarting] = useState(false);
-  /* 设备备注: the CPU and anything else no browser API names. Kept, so a re-run need not retype it. */
-  const [edited, setEdited] = useState<string | null>(null);
   const [hardware, setHardware] = useState<PerfHardware | null>(null);
+
+  useEffect(() => {
+    const sync = () => setFacts(readDeviceFacts());
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+
   useEffect(() => {
     let live = true;
     void collectHardware().then((found) => {
@@ -122,44 +184,15 @@ export default function PerfScreen() {
       live = false;
     };
   }, []);
+
   const changeNote = (value: string) => {
-    setEdited(value);
+    setNote(value);
     try {
       localStorage.setItem(LS_KEYS.perfNote, value);
     } catch {
       // Storage blocked: the note still rides this run.
     }
   };
-  /* Read once mounted: the server has neither the device nor its storage. The run comes back to
-     this route, which mounts afresh, so the stored report is current whenever this reads it. */
-  const mounted = useMounted();
-  const storedNote = useMemo(() => {
-    if (!mounted) return '';
-    try {
-      return localStorage.getItem(LS_KEYS.perfNote) ?? '';
-    } catch {
-      return '';
-    }
-  }, [mounted]);
-  const note = edited ?? storedNote;
-  const report = useMemo<PerfReport | null>(() => (mounted ? loadReport() : null), [mounted]);
-  const facts = useMemo<DeviceFacts | null>(
-    () =>
-      mounted
-        ? {
-            viewport: `${window.innerWidth}×${window.innerHeight}`,
-            dpr: window.devicePixelRatio,
-            cores: navigator.hardwareConcurrency || null,
-            pointer: window.matchMedia('(pointer: coarse)').matches ? '触摸' : '鼠标',
-          }
-        : null,
-    [mounted],
-  );
-
-  /* Back is to 设置, where the entry is — not history: after a run the entry behind this one is the
-     gallery the run drove. */
-  const back = () => router.push('/settings', { scroll: false });
-  useEscapeBack(back);
 
   const roundCount = Number(rounds);
   const anyGroup = include.scroll || include.hero || include.stress;
@@ -168,7 +201,7 @@ export default function PerfScreen() {
   const start = () => {
     if (!anyGroup) return;
     setStarting(true);
-    void import('@/lib/perf/runner')
+    void loadRunner()
       .then(({ startPerfRun }) => {
         /* `/perf?gallery=/search?q=…` runs on another grid; only a same-origin path is taken. */
         const gallery = new URLSearchParams(window.location.search).get('gallery');
@@ -219,7 +252,7 @@ export default function PerfScreen() {
     }
   };
 
-  const canShare = mounted && typeof navigator.share === 'function';
+  const canShare = typeof navigator.share === 'function';
   const share = async () => {
     if (!report) return;
     const file = new File([JSON.stringify(report, null, 2)], reportFileName(report, 'json'), {
@@ -236,625 +269,149 @@ export default function PerfScreen() {
     }
   };
 
+  const subtitle = starting
+    ? '即将前往首页运行，进度显示在屏幕底部，可随时取消'
+    : anyGroup
+      ? `共 ${steps} 步 · 每项 ${roundCount} 轮${noCorner ? ' · 关闭圆角动画' : ''} · 在首页自动运行，期间请勿操作`
+      : '请至少选择一项测试内容';
+
   return (
     <>
-      <PageBack onClick={back} />
-      <div className="mx-auto w-full max-w-4xl page-back-room">
-        <PageHeader
-          title="性能测试"
-          subtitle="在这台设备上自动打开、切换、拖动和关闭图片，并滚动列表，测量动画是否流畅、操作是否跟手"
-        />
-
-        <Card variant="filled" padding="lg" className="mb-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <span
-                className="grid size-12 shrink-0 place-items-center rounded-full bg-primary-container text-on-primary-container"
-                aria-hidden="true"
-              >
-                <MdSpeed size={ICON.standard} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-title-m tabular-nums text-on-surface">
-                  {starting
-                    ? '正在启动测试…'
-                    : anyGroup
-                      ? `共 ${steps} 步 · 每项 ${roundCount} 轮${noCorner ? ' · 关闭圆角动画' : ''}`
-                      : '请至少选择一项测试内容'}
-                </p>
-                <p className="mt-1 text-body-m text-on-surface-variant">
-                  {starting
-                    ? '马上会跳到首页开始测试，进度显示在屏幕底部，可以随时取消。'
-                    : '测试在首页进行，期间请不要触碰屏幕或切换应用，结束后自动回到这里显示报告。'}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="filled"
-              icon={<MdPlayArrow />}
-              loading={starting}
-              disabled={!anyGroup}
-              onClick={start}
-              className="shrink-0 max-sm:w-full"
-            >
-              {report ? '重新测试' : '开始测试'}
-            </Button>
-          </div>
-          <Collapse open={starting}>
-            {starting && (
-              <div className="pt-4">
-                <ProgressBar label="正在启动性能测试" />
-              </div>
-            )}
-          </Collapse>
-        </Card>
-
-        <SettingsSection
-          title="测试内容"
-          icon={<MdTune size={ICON.control} />}
-          subtitle="开始前会先测一次刷新率，之后的结论都按这台设备的刷新率来判断"
-        >
-          {GROUPS.map((group) => (
-            <SwitchRow
-              key={group.id}
-              label={group.label}
-              description={group.description}
-              checked={include[group.id]}
-              disabled={starting}
-              onChange={(on) => setInclude((current) => ({ ...current, [group.id]: on }))}
-            />
-          ))}
-          <SettingsRow
-            label="轮数"
-            supporting="每项重复的次数，轮数越多结果越稳定，3 轮全部项目约 1.5 分钟"
-            action={
-              <Select
-                size="sm"
-                value={rounds}
-                onChange={setRounds}
-                options={ROUND_OPTIONS}
-                aria-label="测试轮数"
-                disabled={starting}
-              />
-            }
-          />
-          <SwitchRow
-            label="对照：关闭圆角动画"
-            description="让图片打开和关闭时的圆角保持不变，与正常结果对比圆角动画的开销"
-            checked={noCorner}
-            disabled={starting}
-            onChange={setNoCorner}
-          />
-        </SettingsSection>
-
-        <section className="mb-8" aria-labelledby="perf-device-title">
-          <SectionHeading id="perf-device-title" icon={<MdMemory size={ICON.control} />}>
-            本机
-          </SectionHeading>
-          <Card variant="filled" padding="lg" className="@container">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 @xl:grid-cols-4">
-              <Fact label="视口">{facts?.viewport}</Fact>
-              <Fact label="像素比">{facts && `DPR ${facts.dpr}`}</Fact>
-              <Fact label="CPU 核心">{facts && (facts.cores ? `${facts.cores} 核` : '未知')}</Fact>
-              <Fact label="输入">{facts?.pointer}</Fact>
-              <Fact label="GPU" wide>
-                {hardware ? (hardware.gpu ?? '浏览器未提供') : mounted ? '检测中…' : null}
-              </Fact>
-              {hardware?.socGuess && (
-                <Fact label="芯片" wide>
-                  {hardware.socGuess}
-                </Fact>
-              )}
-              {hardware?.model && (
-                <Fact label="机型代号" wide>
-                  {hardware.model}
-                </Fact>
-              )}
-              {hardware?.os && (
-                <Fact label="系统 / 架构" wide>
-                  {hardware.os}
-                </Fact>
-              )}
-            </dl>
-            <Input
-              fieldClassName="mt-6"
-              label="设备备注"
-              helper="浏览器读不到 CPU 型号，可以写在这里，会一起写进报告，例如「E5-2690 v3 + RX 6500 XT」"
-              value={note}
-              maxLength={120}
-              onChange={(event) => changeNote(event.target.value)}
-            />
-          </Card>
-        </section>
-
-        {report ? (
-          <ReportView
-            report={report}
-            onDownload={download}
-            onCopy={() => void copy()}
-            onShare={canShare ? () => void share() : undefined}
-          />
-        ) : mounted ? (
-          <EmptyState
-            size="pane"
-            icon={<MdInsights size={ICON.display} />}
-            title="暂无测试报告"
-            description="点击「开始测试」即可运行"
-          />
-        ) : (
-          <div className="min-h-60" aria-hidden="true" />
-        )}
-      </div>
-    </>
-  );
-}
-
-/** One fact in the device card: a caption over its value; `wide` takes two columns. */
-function Fact({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
-  return (
-    <div className={cn('min-w-0', wide && 'col-span-2')}>
-      <dt className="text-label-m text-on-surface-variant">{label}</dt>
-      <dd className="mt-0.5 text-body-l tabular-nums wrap-anywhere text-on-surface">{children ?? '—'}</dd>
-    </div>
-  );
-}
-
-function ReportView({
-  report,
-  onDownload,
-  onCopy,
-  onShare,
-}: {
-  report: PerfReport;
-  onDownload: (kind: 'json' | 'md') => void;
-  onCopy: () => void;
-  onShare?: () => void;
-}) {
-  const { device } = report;
-  const counts = { smooth: 0, minor: 0, janky: 0 };
-  for (const scenario of report.scenarios) counts[scenario.summary.verdict] += 1;
-  const meta = [
-    formatDateTime(report.createdAt),
-    `${device.refreshHz} Hz`,
-    `每项 ${report.rounds} 轮`,
-    device.noCorner ? '已关闭圆角动画' : null,
-    device.note ? `备注：${device.note}` : null,
-  ].filter(Boolean);
-
-  return (
-    <section aria-labelledby="perf-report-title" className="mb-8">
-      <SectionHeading
-        icon={<MdInsights size={ICON.control} />}
+      <PageHeader
+        title="性能测试"
+        subtitle={subtitle}
         actions={
-          <>
-            <Button size="xs" variant="tonal" icon={<MdContentCopy />} className="pointer-coarse:my-1" onClick={onCopy}>
-              复制
-            </Button>
-            <Button size="xs" variant="tonal" icon={<MdDownload />} className="pointer-coarse:my-1" onClick={() => onDownload('md')}>
-              Markdown
-            </Button>
-            <Button size="xs" variant="tonal" icon={<MdDownload />} className="pointer-coarse:my-1" onClick={() => onDownload('json')}>
-              JSON
-            </Button>
-            {onShare && (
-              <Button size="xs" variant="tonal" icon={<MdShare />} className="pointer-coarse:my-1" onClick={onShare}>
-                分享
-              </Button>
-            )}
-          </>
-        }
-      >
-        {/* The heading's own id lands on the wrapper when it has actions; the section is named
-            by this span so the export controls are not read out as part of its name. */}
-        <span id="perf-report-title">测试报告</span>
-      </SectionHeading>
-
-      <Card variant="filled" padding="lg">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
-            <span
-              className={cn(
-                'grid size-12 shrink-0 place-items-center rounded-full',
-                report.overall === 'smooth' && 'bg-success-container text-on-success-container',
-                report.overall === 'minor' && 'bg-warning-container text-on-warning-container',
-                report.overall === 'janky' && 'bg-error-container text-on-error-container',
-              )}
-              aria-hidden="true"
-            >
-              {VERDICT_ICON[report.overall]}
-            </span>
-            <div className="min-w-0">
-              <p className="text-label-m text-on-surface-variant">总体结论</p>
-              <p className="text-headline-s-emphasized text-on-surface">
-                {VERDICT_LABEL[report.overall]}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge size="md" tone="success">
-              流畅 {counts.smooth}
-            </Badge>
-            <Badge size="md" tone="warning">
-              轻微卡顿 {counts.minor}
-            </Badge>
-            <Badge size="md" tone="error">
-              卡顿 {counts.janky}
-            </Badge>
-          </div>
-        </div>
-        <p className="mt-4 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">{meta.join(' · ')}</p>
-        {report.aborted && (
-          <p className="mt-3 flex items-start gap-2 rounded-md bg-error-container p-4 text-body-m text-on-error-container">
-            <MdErrorOutline size={ICON.control} className="mt-0.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 wrap-anywhere">测试未完成：{report.aborted}</span>
-          </p>
-        )}
-      </Card>
-
-      {/* One grouped run: `.m3-row` owns the cut corners and the 2px seams. */}
-      <div className="mt-6">
-        {report.scenarios.map((scenario) => (
-          <ScenarioRow key={scenario.id} scenario={scenario} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function VerdictBadge({ verdict, stress }: { verdict: Verdict; stress?: boolean }) {
-  return (
-    <Badge size="md" tone={VERDICT_BADGE[verdict]} icon={VERDICT_ICON[verdict]}>
-      {stress ? (verdict === 'smooth' ? '通过' : '未通过') : VERDICT_LABEL[verdict]}
-    </Badge>
-  );
-}
-
-/**
- * One scenario of the report, a row of its grouped list. The header is the row's control — the
- * `aria-expanded` pair, the state layer and the press wave every list row in the app carries — and
- * the body opens on the layout spring (`Collapse`); the chevron turns on FastSpatial. Every row
- * starts collapsed, so the report reads as one line per scenario and the failing ones are already
- * called out by their badge — opening a row is the reader's move.
- */
-function ScenarioRow({ scenario }: { scenario: PerfScenario }) {
-  const s = scenario.summary;
-  const stress = !!s.glitches;
-  const incomplete = scenario.samples.filter((sample) => !sample.completed).length;
-  const [open, setOpen] = useState(false);
-  const headerId = `perf-scenario-${scenario.id}`;
-  const panelId = `${headerId}-panel`;
-  return (
-    <div className="m3-row bg-surface-container-low">
-      <button
-        type="button"
-        id={headerId}
-        aria-expanded={open}
-        aria-controls={panelId}
-        data-ripple=""
-        onClick={() => setOpen((value) => !value)}
-        /* The row is one control: its tint, wave and ring follow its own corner, and the ring is
-           inset because a grouped list's seams would clip an outset one. */
-        className="state-layer transition-ui flex w-full cursor-pointer flex-wrap touch-manipulation items-center gap-x-3 gap-y-2 rounded-[inherit] p-4 text-left focus-visible:inset-ring-2 focus-visible:outline-hidden focus-visible:focus-ring-inset"
-      >
-        <span className="min-w-0 flex-1 basis-32 text-label-l text-on-surface">{scenario.label}</span>
-        <span className="order-last w-full text-body-s tabular-nums text-on-surface-variant sm:order-none sm:w-auto">
-          {stress
-            ? `${s.glitches?.actions ?? 0} 次操作 · 消失 ${s.glitches?.vanishes ?? 0} · 卡住 ${s.glitches?.stuck ?? 0}`
-            : `${s.fps} fps · 掉帧 ${s.dropped} · 最长帧 ${ms(s.worstFrameMs)}`}
-        </span>
-        <VerdictBadge verdict={s.verdict} stress={stress} />
-        {stress && s.frameVerdict && <VerdictBadge verdict={s.frameVerdict} />}
-        <MdExpandMore
-          size={ICON.standard}
-          className={cn(
-            'shrink-0 text-on-surface-variant transition-transform spring-fast-spatial',
-            open && 'rotate-180',
-          )}
-          aria-hidden="true"
-        />
-      </button>
-
-      <Collapse open={open} id={panelId} role="region" aria-label={scenario.label}>
-        <div className="@container flex flex-col gap-5 px-4 pb-4">
-          {incomplete > 0 && (
-            <p className="text-body-m tabular-nums text-error">
-              {incomplete} 轮没有回到静止状态（未完成）
-            </p>
-          )}
-
-          {stress && s.glitches && <StressChecks scenario={scenario} />}
-
-          <div>
-            {stress && (
-              <p className="mb-2 text-label-m text-on-surface-variant">
-                帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}（不计入总体结论）
-              </p>
-            )}
-            <dl className="grid grid-cols-2 gap-2 @xl:grid-cols-4">
-              <Metric label="响应延迟" value={ms(s.latencyMs)} />
-              <Metric label="完成用时" value={ms(s.settleMs)} />
-              <Metric label="平均帧率" value={`${s.fps} fps`} />
-              <Metric label="流畅度" value={pct(s.smoothness)} />
-              <Metric label="掉帧" value={String(s.dropped)} />
-              <Metric label="最长帧" value={ms(s.worstFrameMs)} />
-              <Metric label="P95 帧" value={ms(s.p95FrameMs)} />
-              <Metric label="长帧 / 阻塞" value={`${s.longFrames} / ${ms(s.blockingMs)}`} />
-            </dl>
-          </div>
-
-          <RoundsTable samples={scenario.samples} />
-
-          <WorstFrames samples={scenario.samples} />
-        </div>
-      </Collapse>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-sm bg-surface-container-high px-3 py-2">
-      <dt className="text-label-m text-on-surface-variant">{label}</dt>
-      <dd className="mt-0.5 text-title-m tabular-nums wrap-anywhere text-on-surface">{value}</dd>
-    </div>
-  );
-}
-
-function StressChecks({ scenario }: { scenario: PerfScenario }) {
-  const g = scenario.summary.glitches;
-  if (!g) return null;
-  const completed = scenario.samples.every((sample) => sample.completed);
-  const checks: Array<{ label: string; ok: boolean; detail: string }> = [
-    { label: '全部跑完', ok: completed, detail: completed ? '每一轮都回到了静止状态' : '有一轮没有回到静止状态' },
-    {
-      label: '画面消失',
-      ok: g.vanishes === 0,
-      detail: g.vanishes === 0 ? '0 次' : `${g.vanishes} 次，共 ${g.vanishedFrames} 帧`,
-    },
-    { label: '卡住', ok: g.stuck === 0, detail: `${g.stuck} 次` },
-    { label: '多退一页', ok: g.leftPage === 0, detail: `${g.leftPage} 次` },
-  ];
-  return (
-    <div>
-      <p className="mb-2 text-label-m tabular-nums text-on-surface-variant">正确性检查 · 共 {g.actions} 次操作</p>
-      <ul className="grid grid-cols-1 gap-2 @lg:grid-cols-2">
-        {checks.map((check) => (
-          <li
-            key={check.label}
-            className="flex items-center gap-3 rounded-sm bg-surface-container-high px-3 py-2"
+          <Button
+            variant="filled"
+            icon={<MdPlayArrow />}
+            loading={starting}
+            disabled={!anyGroup}
+            onClick={start}
           >
-            <span className="min-w-0 flex-1">
-              <span className="block text-label-l text-on-surface">{check.label}</span>
-              <span className="block text-body-s tabular-nums text-on-surface-variant">{check.detail}</span>
-            </span>
-            <Badge
-              size="md"
-              tone={check.ok ? 'success' : 'error'}
-              icon={check.ok ? <MdCheckCircle /> : <MdErrorOutline />}
-            >
-              {check.ok ? '通过' : '未通过'}
-            </Badge>
-          </li>
-        ))}
-        <li className="flex items-center gap-3 rounded-sm bg-surface-container-high px-3 py-2 @lg:col-span-2">
-          <span className="min-w-0 flex-1">
-            <span className="block text-label-l text-on-surface">直接切换</span>
-            <span className="block text-body-s text-on-surface-variant">没有动画、直接跳到结果，不计入结论</span>
-          </span>
-          <Badge size="md" tone="neutral">
-            {g.cuts} 次
-          </Badge>
-        </li>
-      </ul>
-      {g.events.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1 text-label-m text-on-surface-variant">记录到的异常</p>
-          <ul className="flex flex-col gap-1 rounded-sm bg-surface-container-high px-3 py-2 text-body-s tabular-nums wrap-anywhere text-on-surface">
-            {g.events.map((event) => (
-              <li key={event}>{event}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
+            {report ? '重新测试' : '开始测试'}
+          </Button>
+        }
+      />
 
-function RoundsTable({ samples }: { samples: PerfSample[] }) {
-  return (
-    <div>
-      <p className="mb-2 text-label-m text-on-surface-variant">每一轮</p>
-      <ScrollArea
-        axis="x"
-        className="rounded-sm bg-surface-container-high"
-        viewportClassName="overflow-x-auto rounded-sm popover-scrollbar"
-      >
-        <table className="w-full min-w-136 text-left text-body-s tabular-nums">
-          <thead className="text-label-m text-on-surface-variant">
-            <tr className="border-b border-outline-variant">
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">轮</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">响应延迟</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">完成用时</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">帧数</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">掉帧</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">最长帧</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">长帧</th>
-              <th scope="col" className="px-3 py-2 whitespace-nowrap">状态</th>
-            </tr>
-          </thead>
-          <tbody className="text-on-surface">
-            {samples.map((sample, index) => (
-              <tr key={index} className="border-b border-outline-variant last:border-b-0">
-                <td className="px-3 py-2 whitespace-nowrap">{index + 1}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{ms(sample.latencyMs)}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{ms(sample.settleMs)}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{sample.frames.frames}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{sample.frames.dropped}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{ms(sample.frames.worstFrameMs)}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{sample.longFrames.count}</td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <span className="flex items-center gap-2">
-                    {sample.completed ? (
-                      <Badge tone="success">完成</Badge>
-                    ) : (
-                      <Badge tone="error">未完成</Badge>
-                    )}
-                    {sample.note && <span className="text-on-surface-variant">{sample.note}</span>}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </ScrollArea>
-    </div>
-  );
-}
-
-type Breakdown = {
-  totalMs: number;
-  scriptMs: number;
-  callers: string[];
-  forcedMs: number;
-  renderMs: number;
-  styleMs: number;
-};
-
-/** Splits on `+` outside the full-width parentheses (a caller's name could carry a plus). */
-function splitTop(text: string) {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (const char of text) {
-    if (char === '（') depth += 1;
-    if (char === '）') depth = Math.max(0, depth - 1);
-    if (depth === 0 && char === '+') {
-      parts.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  parts.push(current.trim());
-  return parts;
-}
-
-/**
- * The runner's words for a long frame (`describeLongFrame`):
- * `68ms = 脚本 34（a 25 x.js:12；b 9）+ 其中强制布局 3 + 渲染回调 5 + 样式布局 30`, taken back apart
- * for display. Null when it is not in that shape, and the text is shown as written.
- */
-function parseWorst(detail: string): Breakdown | null {
-  const head = /^(\d+(?:\.\d+)?)ms = (.*)$/.exec(detail.trim());
-  if (!head) return null;
-  const result: Breakdown = {
-    totalMs: Number(head[1]),
-    scriptMs: 0,
-    callers: [],
-    forcedMs: 0,
-    renderMs: 0,
-    styleMs: 0,
-  };
-  let known = false;
-  for (const part of splitTop(head[2])) {
-    const match = /^(脚本|其中强制布局|渲染回调|样式布局) (\d+(?:\.\d+)?)(?:（(.*)）)?$/.exec(part.trim());
-    if (!match) return null;
-    known = true;
-    const value = Number(match[2]);
-    if (match[1] === '脚本') {
-      result.scriptMs = value;
-      result.callers = match[3] ? match[3].split('；').map((caller) => caller.trim()).filter(Boolean) : [];
-    } else if (match[1] === '其中强制布局') result.forcedMs = value;
-    else if (match[1] === '渲染回调') result.renderMs = value;
-    else result.styleMs = value;
-  }
-  return known ? result : null;
-}
-
-/* A 100%-stacked composition, like the detail's vote ratio: three parts, which a `ProgressBar`'s
-   single value cannot express. Its geometry is the linear indicator's — 4dp over
-   `secondary-container` — and its fills are the meter's neutral/accent pair, with `outline` for
-   style and layout. */
-const SEGMENTS = [
-  { key: 'scriptMs', label: '脚本', fill: 'bg-secondary' },
-  { key: 'renderMs', label: '渲染回调', fill: 'bg-tertiary' },
-  { key: 'styleMs', label: '样式布局', fill: 'bg-outline' },
-] as const;
-
-function WorstFrames({ samples }: { samples: PerfSample[] }) {
-  const worst = samples
-    .map((sample, index) => ({ round: index + 1, detail: sample.longFrames.worst }))
-    .filter((entry): entry is { round: number; detail: string } => !!entry.detail);
-  if (!worst.length) return null;
-  return (
-    <div>
-      <p className="mb-2 text-label-m text-on-surface-variant">每一轮最长的长帧</p>
-      <ul className="flex flex-col gap-2">
-        {worst.map(({ round, detail }) => (
-          <li key={round} className="rounded-sm bg-surface-container-high px-3 py-3">
-            <WorstFrame round={round} detail={detail} />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function WorstFrame({ round, detail }: { round: number; detail: string }) {
-  const parsed = parseWorst(detail);
-  if (!parsed) {
-    return (
-      <>
-        <p className="text-label-l tabular-nums text-on-surface">第 {round} 轮</p>
-        <p className="mt-1 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">{detail}</p>
-      </>
-    );
-  }
-  const accounted = parsed.scriptMs + parsed.renderMs + parsed.styleMs;
-  const scale = Math.max(parsed.totalMs, accounted, 1);
-  return (
-    <>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-label-l tabular-nums text-on-surface">第 {round} 轮</p>
-        <p className="text-title-s tabular-nums text-on-surface">{Math.round(parsed.totalMs)} ms</p>
-      </div>
-      <div
-        className="mt-2 flex h-1 overflow-hidden rounded-full bg-secondary-container forced-boundary"
-        role="img"
-        aria-label={detail}
-      >
-        {SEGMENTS.map((segment) =>
-          parsed[segment.key] > 0 ? (
-            <span
-              key={segment.key}
-              className={cn('h-full forced-mark', segment.fill)}
-              style={{ width: `${(parsed[segment.key] / scale) * 100}%` }}
-            />
-          ) : null,
+      <Collapse open={starting}>
+        {starting && (
+          <div className="pb-4">
+            <ProgressBar label="正在启动性能测试" />
+          </div>
         )}
-      </div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-body-s tabular-nums text-on-surface-variant">
-        {SEGMENTS.map((segment) => (
-          <li key={segment.key} className="flex items-center gap-1.5">
-            <span className={cn('size-2 shrink-0 rounded-full', segment.fill)} aria-hidden="true" />
-            {segment.label} {Math.round(parsed[segment.key])} ms
-          </li>
-        ))}
-        {parsed.forcedMs > 0 && <li>其中强制布局 {Math.round(parsed.forcedMs)} ms</li>}
-        {parsed.totalMs - accounted >= 1 && <li>其他 {Math.round(parsed.totalMs - accounted)} ms</li>}
-      </ul>
-      {parsed.callers.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1">
-          {parsed.callers.map((caller) => (
-            <li
-              key={caller}
-              className="rounded-xs bg-surface-container-highest px-2 py-1 font-mono text-body-s wrap-anywhere text-on-surface"
-            >
-              {caller}
-            </li>
-          ))}
-        </ul>
-      )}
+      </Collapse>
+
+      <Tabs
+        tabs={PERF_TABS}
+        value={tab}
+        onChange={setTab}
+        label="性能测试视图"
+        className="mb-6"
+      />
+
+      <TabPanes value={tab}>
+        <TabPane value="perf-setup" inertWhenInactive>
+          <SettingsSection
+            title="测试项目"
+            icon={<MdSpeed size={ICON.control} />}
+            subtitle="开始前自动检测屏幕刷新率，所有结论均按本机刷新率判定"
+          >
+            {GROUPS.map((group) => (
+              <SwitchRow
+                key={group.id}
+                label={group.label}
+                description={group.description}
+                checked={include[group.id]}
+                disabled={starting}
+                onChange={(on) => setInclude((current) => ({ ...current, [group.id]: on }))}
+              />
+            ))}
+          </SettingsSection>
+
+          <SettingsSection title="运行设置" icon={<MdTune size={ICON.control} />}>
+            <SettingsRow
+              label="测试轮数"
+              supporting="每项重复的次数，3 轮全部项目约 1.5 分钟"
+              action={
+                <Select
+                  size="sm"
+                  value={rounds}
+                  onChange={setRounds}
+                  options={ROUND_OPTIONS}
+                  aria-label="测试轮数"
+                  disabled={starting}
+                />
+              }
+            />
+            <SwitchRow
+              label="对照：关闭圆角动画"
+              description="保持图片开合过程圆角不变，用于对比圆角动画的开销"
+              checked={noCorner}
+              disabled={starting}
+              onChange={setNoCorner}
+            />
+          </SettingsSection>
+
+          <SettingsSection title="本机信息" icon={<MdMemory size={ICON.control} />}>
+            <div className="m3-row @container/specs bg-surface-container-low p-4">
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 @md/specs:grid-cols-2">
+                <Fact label="GPU">
+                  {hardware ? (hardware.gpu ?? '浏览器未提供') : '检测中…'}
+                </Fact>
+                {hardware?.os && <Fact label="系统 / 架构">{hardware.os}</Fact>}
+                {hardware?.socGuess && <Fact label="芯片">{hardware.socGuess}</Fact>}
+                {hardware?.model && <Fact label="机型代号">{hardware.model}</Fact>}
+              </dl>
+              <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-outline-variant pt-3 @sm/specs:grid-cols-4">
+                <Fact label="视口">{facts.viewport}</Fact>
+                <Fact label="像素比">{`DPR ${facts.dpr}`}</Fact>
+                <Fact label="CPU 核心">{facts.cores ? `${facts.cores} 核` : '未知'}</Fact>
+                <Fact label="输入">{facts.pointer}</Fact>
+              </dl>
+            </div>
+            <div className={ROW_STACK_CLASS}>
+              <Input
+                label="设备备注"
+                helper="浏览器无法获取 CPU 型号，可填写于此并随报告导出，例如「E5-2690 v3 + RX 6500 XT」"
+                value={note}
+                maxLength={120}
+                disabled={starting}
+                onChange={(event) => changeNote(event.target.value)}
+              />
+            </div>
+          </SettingsSection>
+        </TabPane>
+
+        <TabPane value="perf-report" inertWhenInactive>
+          {report ? (
+            <ReportView
+              report={report}
+              onDownload={download}
+              onCopy={() => void copy()}
+              onShare={canShare ? () => void share() : undefined}
+            />
+          ) : (
+            <EmptyState
+              size="pane"
+              icon={<MdInsights size={ICON.display} />}
+              title="暂无测试报告"
+              description="点击「开始测试」后将自动运行并在此生成报告"
+            />
+          )}
+        </TabPane>
+      </TabPanes>
     </>
+  );
+}
+
+/** One fact in the device row: a quiet caption over its tabular value. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-label-m text-on-surface-variant">{label}</dt>
+      <dd className="mt-0.5 text-body-m tabular-nums wrap-anywhere text-on-surface">
+        {children ?? '—'}
+      </dd>
+    </div>
   );
 }
