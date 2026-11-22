@@ -231,6 +231,7 @@ export default function SearchToolbar({
             <span role="listitem" key={chip.key} className="shrink-0">
               <Chip
                 variant="input"
+                className="tabular-nums"
                 onRemove={() => onApplyFilters({ ...filters, [chip.key]: null }, 'chip')}
                 removeLabel={`移除 ${chip.label}`}
               >
@@ -271,7 +272,7 @@ export default function SearchToolbar({
                 onValue={(score) => edit({ score })}
               />
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-4 @xl:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 @md:grid-cols-2">
               <ChoiceCondition
                 label="宽高比"
                 value={draft.aspect}
@@ -293,6 +294,7 @@ export default function SearchToolbar({
               <ChoiceCondition
                 label="上传时间"
                 value={draft.since}
+                className="@md:col-span-2"
                 onChange={(since) => edit({ since: since as Draft['since'] })}
                 options={[
                   { value: '', label: '不限时间' },
@@ -388,15 +390,17 @@ function ChoiceCondition({
   value,
   onChange,
   options,
+  className,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  className?: string;
 }) {
   const captionId = useId();
   return (
-    <div role="group" aria-labelledby={captionId}>
+    <div role="group" aria-labelledby={captionId} className={className}>
       <ConditionCaption id={captionId}>{label}</ConditionCaption>
       <Select value={value} onChange={onChange} size="sm" className="w-full" aria-label={label} options={options} />
     </div>

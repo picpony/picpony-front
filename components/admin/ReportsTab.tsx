@@ -114,6 +114,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       key: 'image',
       header: '图片',
       width: 'auto',
+      className: 'inline-flex items-center gap-1 @2xl/table:block tabular-nums',
       render: (report) => {
         const image = images.data?.get(report.image_id);
         return (
@@ -146,7 +147,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       render: (report) => (
         <span>
           {report.reporter.username}
-          <span className="block text-body-s text-on-surface-variant">{`#${report.id} · ${formatDateTime(report.created_at)}`}</span>
+          <span className="block text-body-s tabular-nums text-on-surface-variant">{`#${report.id} · ${formatDateTime(report.created_at)}`}</span>
         </span>
       ),
     },
@@ -165,7 +166,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       header: '操作',
       actions: true,
       render: (report) => {
-        if (report.status !== 'pending') return <span className="text-on-surface-variant">已归档</span>;
+        if (report.status !== 'pending') return <span className="text-body-m text-on-surface-variant">已归档</span>;
         const busy = mutation.pendingKeys.has(report.id);
         return (
           <>
@@ -202,7 +203,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
         <SearchInput value={search} onChange={setSearch} placeholder="搜索举报单号、图片 ID 或举报人…" />
         <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
           {FILTERS.map((value) => (
-            <Chip key={value} variant="filter" selected={filter === value} onClick={() => setFilter(value)}>
+            <Chip key={value} variant="filter" selected={filter === value} className="tabular-nums" onClick={() => setFilter(value)}>
               {value === 'all' ? `全部（${reports.length}）` : `${STATUS[value].label}（${counts[value]}）`}
             </Chip>
           ))}

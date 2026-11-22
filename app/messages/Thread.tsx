@@ -243,8 +243,8 @@ export default function Thread({
     if (!entries.length) {
       return (
         <EmptyState
-          size="inline"
-          icon={<MdOutlineChatBubbleOutline size={ICON.large} />}
+          size="pane"
+          icon={<MdOutlineChatBubbleOutline size={ICON.display} />}
           title="暂无消息"
         />
       );
@@ -254,6 +254,7 @@ export default function Thread({
       const previous = index > 0 ? groups[index - 1].lead : null;
       const startsDay = !previous || dayKey(previous.message.created_at) !== dayKey(lead.message.created_at);
       const who = own ? me : contact;
+      const rendered = items.map((entry) => ({ ...entry, ...renderMessageBody(entry.item.message.content, own) }));
       return (
         <Fragment key={lead.key}>
           {/* One date per day, where the conversation turns over. `role="separator"`: a break
@@ -262,7 +263,7 @@ export default function Thread({
             <div role="separator" className="text-label-s text-on-surface-variant my-3 flex items-center gap-3 first:mt-0">
               {/* Rules drawn as borders, which forced colors keeps, where a filled 1px box vanishes. */}
               <span className="border-outline-variant flex-1 border-t" />
-              <span className="shrink-0">{now === null ? formatDate(lead.message.created_at) : formatDayLabel(lead.message.created_at, now, { clock: false })}</span>
+              <span className="shrink-0 tabular-nums">{now === null ? formatDate(lead.message.created_at) : formatDayLabel(lead.message.created_at, now, { clock: false })}</span>
               <span className="border-outline-variant flex-1 border-t" />
             </div>
           )}
@@ -272,16 +273,15 @@ export default function Thread({
             label={own ? '我' : contact.name}
             avatar={<Avatar src={who.avatar} name={who.name} size={32} />}
           >
-            {items.map(({ item, startOfRun, endOfRun }) => {
-              const { attachment, node } = renderMessageBody(item.message.content, own);
+            {rendered.map(({ item, startOfRun, endOfRun, attachment, node }, i) => {
               const stamp = parseBackendTime(item.message.created_at);
               return (
                 <div key={item.key} data-entry-key={item.key}>
                   <ChatBubble
                     own={own}
                     attachment={attachment}
-                    startOfRun={startOfRun}
-                    endOfRun={endOfRun}
+                    startOfRun={startOfRun || Boolean(rendered[i - 1]?.attachment)}
+                    endOfRun={endOfRun || Boolean(rendered[i + 1]?.attachment)}
                     timestamp={
                       endOfRun && !item.outgoing ? (
                         <time dateTime={stamp?.toISOString()} title={formatDateTime(item.message.created_at)}>
@@ -337,8 +337,8 @@ export default function Thread({
               ) : null}
             </div>
           )}
-          {/* The rows sit at the bottom of a short conversation, as a conversation does. */}
-          <div className="mt-auto flex flex-col">{body}</div>
+          {/* Short conversations sit at the bottom; empty and error states centre in the pane. */}
+          <div className={cn('flex flex-col', entries.length > 0 || loading ? 'mt-auto' : 'my-auto')}>{body}</div>
           <div ref={endRef} aria-hidden="true" />
         </div>
       </ScrollArea>

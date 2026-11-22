@@ -10,6 +10,7 @@ import { GroupRowsSkeleton } from '@/components/groups/GroupRow';
 import PageHeader from '@/components/PageHeader';
 import PresenceList from '@/components/PresenceList';
 import SignInRequired from '@/components/SignInRequired';
+import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import PresenceBlock from '@/components/PresenceBlock';
 import {
@@ -203,18 +204,26 @@ export default function BlockGroupsPage() {
   };
 
   const signedIn = ready && Boolean(token);
+  const loading = !ready || (Boolean(token) && groups === undefined && read.error === undefined);
   const header = (
     <PageHeader
       title="屏蔽组"
       subtitle={
-        signedIn && groups
-          ? full
+        loading ? (
+          <Skeleton className="h-5 w-40" />
+        ) : signedIn && groups ? (
+          full
             ? `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组（已达上限）`
             : `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组`
-          : undefined
+        ) : undefined
       }
       actions={
-        signedIn && groups ? (
+        loading ? (
+          <div className="flex items-center gap-2" aria-hidden="true">
+            <Skeleton className="h-10 w-10 rounded-full sm:w-40" />
+            <Skeleton className="h-10 w-20 rounded-full" />
+          </div>
+        ) : signedIn && groups ? (
           <>
             <Button variant="tonal" icon={<MdDownload />} responsiveLabel onClick={() => setImportOpen(true)}>
               从 Derpibooru 导入
@@ -232,7 +241,7 @@ export default function BlockGroupsPage() {
   );
 
   let body;
-  if (!ready || (token && groups === undefined && read.error === undefined)) {
+  if (loading) {
     body = <GroupRowsSkeleton control="switch" />;
   } else if (!token) {
     body = <SignInRequired description="登录后即可创建和管理屏蔽组" />;

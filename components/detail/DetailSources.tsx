@@ -28,7 +28,7 @@ export default function DetailSources({ image }: { image: Pick<ImagePreview, 'so
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="prose-link inline-block max-w-full rounded-xs py-1 text-body-m wrap-anywhere focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+              className="prose-link inline-block max-w-full rounded-xs py-1 pointer-coarse:py-3 text-body-m wrap-anywhere focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
             >
               {readableSourceUrl(url)}
             </a>

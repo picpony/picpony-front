@@ -58,9 +58,21 @@ export function AdminForm({
   );
 }
 
-/** Two fields side by side once the form has room for both labels (32rem), one above the other below it. */
-export function FormGrid({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={cn('grid grid-cols-1 gap-4 @lg/form:grid-cols-2', className)}>{children}</div>;
+/** Two fields side by side once the form has room for both labels (`lg` 32rem by default; `sm` 24rem for short paired fields inside narrower dialogs). */
+export function FormGrid({
+  children,
+  from = 'lg',
+  className = '',
+}: {
+  children: ReactNode;
+  from?: 'sm' | 'lg';
+  className?: string;
+}) {
+  return (
+    <div className={cn('grid grid-cols-1 gap-4', from === 'sm' ? '@sm/form:grid-cols-2' : '@lg/form:grid-cols-2', className)}>
+      {children}
+    </div>
+  );
 }
 
 /** The form's action row, at its trailing edge — where a dialog's actions sit. */

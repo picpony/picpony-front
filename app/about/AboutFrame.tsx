@@ -42,11 +42,11 @@ export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: R
             `bg-glass-body` is the plate's own colour, not a surface step: what shows if
             WebGL is unavailable — or before the page has drawn it — is the material at rest,
             not a differently toned rectangle. */}
-        <div className="forced-boundary relative mt-2 flex min-h-72 items-center justify-center overflow-hidden rounded-2xl bg-glass-body sm:min-h-96">
+        <div className="forced-boundary relative flex min-h-72 items-center justify-center overflow-hidden rounded-2xl bg-glass-body sm:min-h-96">
           {plate}
         </div>
 
-        <Card variant="elevated" padding="md" className="mt-6">
+        <Card variant="elevated" padding="lg" className="mt-6">
           <p className="text-body-m text-on-surface-variant">一个看图的网站<br />其中 114514 行代码由 AK 生成</p>
         </Card>
 
@@ -59,7 +59,7 @@ export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: R
 /** 运营团队's surface and heading; the roster, its placeholder or its failure goes inside. */
 export function TeamCard({ children }: { children: ReactNode }) {
   return (
-    <Card variant="filled" padding="lg" className="mt-4">
+    <Card variant="filled" padding="lg" className="@container/roster mt-4">
       <SectionHeading>运营团队</SectionHeading>
       {children}
     </Card>
@@ -67,12 +67,12 @@ export function TeamCard({ children }: { children: ReactNode }) {
 }
 
 /**
- * The roster's cells: a grid that shares the card's width (D1-008). Fixed 176px cells in a
- * wrapping row cut names at 92px of text and left up to a third of the card empty beside them;
- * on a phone they were one person per 92px row. Two columns there, and from `sm` as many 13rem
- * columns as fit, every one as wide as the card allows.
+ * The roster's cells: a grid that shares the card's width (D1-008). Single column below `26rem`
+ * so 320–390px phones never crush member names next to the 48px avatar and trailing chevron;
+ * from `26rem` up, as many `13rem` columns as fit the card's container width.
  */
-export const ROSTER_GRID = 'grid grid-cols-2 gap-x-2 gap-y-1 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] sm:gap-x-4 sm:gap-y-2';
+export const ROSTER_GRID =
+  'grid grid-cols-1 gap-y-1 @[26rem]/roster:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] @[26rem]/roster:gap-x-4 @[26rem]/roster:gap-y-2';
 
 /**
  * The roster's placeholder in the loaded state's own shape: group headings over the same grid of

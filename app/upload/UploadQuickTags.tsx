@@ -56,7 +56,7 @@ export default function UploadQuickTags({
               <div key={group} className="flex flex-wrap items-center gap-2">
                 <Skeleton className="h-4 w-8" delay={row * 90} />
                 {Array.from({ length: 4 }, (_, index) => (
-                  <Skeleton key={index} className="h-8 w-16 rounded-sm" delay={row * 90 + index * 40} />
+                  <Skeleton key={index} className="h-8 w-16 rounded-sm pointer-coarse:my-1" delay={row * 90 + index * 40} />
                 ))}
               </div>
             ))}

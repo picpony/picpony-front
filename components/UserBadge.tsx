@@ -1,7 +1,6 @@
 'use client';
 
 import Badge, { type BadgeSize } from './Badge';
-import { cn } from '@/lib/utils';
 
 interface UserBadgeProps {
   name: string;
@@ -70,9 +69,7 @@ export default function UserBadge({ name, color, size = 'sm', className = '' }: 
     <Badge
       size={size}
       tone="custom"
-      /* The fill is the author's; under forced colors the system edge keeps the mark's
-         bounds (the mode repaints the fill). */
-      className={cn('forced-boundary', className)}
+      className={className}
       style={paint}
     >
       {name}

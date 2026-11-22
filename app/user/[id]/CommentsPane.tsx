@@ -9,7 +9,7 @@ import { hiddenFromVisitors, tabVisible } from '@/lib/profiles';
 import { rememberForumOrigin } from '@/lib/forumTransition';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatCompactDateTime } from '@/lib/format';
-import { getAssetUrl } from '@/lib/utils';
+import { cn, getAssetUrl } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import type { UserComment } from '@/lib/types/user';
 import Badge from '@/components/Badge';
@@ -58,7 +58,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
 
   const failedTurn = read.isPrevious && Boolean(read.error);
   return (
-    <div className="max-w-4xl" aria-busy={read.isLoading || undefined}>
+    <div className="mx-auto max-w-4xl" aria-busy={read.isLoading || undefined}>
       {own && hiddenFromVisitors(profile, 'comments') && <OwnerHiddenNote tab="comments" />}
       {failedTurn && (
         <div className="mb-4">
@@ -70,7 +70,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
           />
         </div>
       )}
-      <div>
+      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
         {data.comments.map((comment, index) => {
           const where = target(comment);
           const when = formatCompactDateTime(comment.created_at, now);
@@ -106,7 +106,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
                     <span className="text-body-s tabular-nums text-on-surface-variant">{when}</span>
                   </div>
                   <div className="line-clamp-3 text-body-m text-on-surface wrap-anywhere">
-                    <RichTextRenderer content={comment.body} />
+                    <RichTextRenderer content={comment.body} format="bbcode" />
                   </div>
                 </div>
               </div>
@@ -121,7 +121,7 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
           onPageChange={setPage}
           onPrefetchPage={(next) => userComments.prefetch({ id, page: next, token })}
           disabled={read.isLoading}
-          className="mt-8 mb-4"
+          className="mt-8"
         />
       )}
     </div>

@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
-import { Input, Textarea } from '@/components/Input';
+import { Field, Input, Textarea } from '@/components/Input';
+import SectionHeading from '@/components/SectionHeading';
 import Select from '@/components/Select';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
@@ -27,8 +28,8 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
   const { confirmThen, confirmDialog } = useConfirm();
   const committed = () => { query.expire(token); badgeDictionary.expire(); };
   const columns: Column<BadgeDescription>[] = [
-    { key: 'name', header: '徽章', primary: true, render: (row) => row.badge_name },
-    { key: 'description', header: '简介', className: 'whitespace-pre-wrap break-words', render: (row) => row.description || '暂无简介' },
+    { key: 'name', header: '徽章', primary: true, width: 'minmax(0, 1fr)', render: (row) => row.badge_name },
+    { key: 'description', header: '简介', width: 'minmax(0, 2.5fr)', className: 'whitespace-pre-wrap wrap-anywhere', render: (row) => row.description || '暂无简介' },
     { key: 'actions', header: '操作', actions: true, render: (row) => <>
       <Button size="xs" variant="text" disabled={mutation.busy} onClick={() => { setName(row.badge_name); setDescription(row.description); }}>编辑</Button>
       <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除简介', `确定要删除徽章「${row.badge_name}」的简介吗？已授予的徽章仍会保留。`, () => void mutation.run(() => api.deleteBadgeDescription(token, row.badge_name), () => showToast('已删除徽章简介', 'success'), committed), { tone: 'danger' })}>删除</Button>
@@ -43,12 +44,15 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
       setNameError('');
       void mutation.run(() => api.saveBadgeDescription(token, name, description), () => showToast('已保存徽章简介', 'success'), committed);
     }}>
-      {read.data?.names.length ? <Select label="选择已有徽章" value={name} options={[{ value: '', label: '选择徽章' }, ...[...new Set([...read.data.names, ...read.data.dicts.map((row) => row.badge_name), ...(name ? [name] : [])])].map((value) => ({ value, label: value }))]} onChange={(value) => { setName(value); setNameError(''); setDescription(read.data?.dicts.find((row) => row.badge_name === value)?.description ?? ''); }} disabled={mutation.busy} /> : <Input label="徽章名称" value={name} readOnly={mutation.busy} error={nameError || undefined} onChange={(event) => { setName(event.target.value); setNameError(''); }} />}
-      <Textarea label="徽章简介" value={description} maxLength={10000} rows={4} readOnly={mutation.busy} onChange={(event) => setDescription(event.target.value)} />
+      {read.data?.names.length ? <Field error={nameError || undefined}><Select label="选择已有徽章" value={name} options={[{ value: '', label: '选择徽章' }, ...[...new Set([...read.data.names, ...read.data.dicts.map((row) => row.badge_name), ...(name ? [name] : [])])].map((value) => ({ value, label: value }))]} onChange={(value) => { setName(value); setNameError(''); setDescription(read.data?.dicts.find((row) => row.badge_name === value)?.description ?? ''); }} disabled={mutation.busy} /></Field> : <Input label="徽章名称" value={name} readOnly={mutation.busy} error={nameError || undefined} onChange={(event) => { setName(event.target.value); setNameError(''); }} />}
+      <Textarea label="徽章简介" className="resize-none" value={description} maxLength={10000} rows={4} readOnly={mutation.busy} onChange={(event) => setDescription(event.target.value)} />
       <MutationResult mutation={mutation} />
-      <FormActions><RefreshButton onClick={read.refresh} label="刷新简介" loading={read.refreshing} /><Button type="submit" loading={mutation.busy} disabled={mutation.uncertain}>保存简介</Button></FormActions>
+      <FormActions><Button type="submit" variant="filled" loading={mutation.busy} disabled={mutation.uncertain}>保存简介</Button></FormActions>
     </AdminForm>
-    <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.badge_name} loading={read.loading} {...tableError('徽章简介加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无徽章简介" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
+    <section aria-labelledby="admin-badge-dict-heading" className="space-y-4">
+      <SectionHeading as="h3" id="admin-badge-dict-heading" actions={<RefreshButton onClick={read.refresh} label="刷新简介" loading={read.refreshing} />}>已有徽章简介</SectionHeading>
+      <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.badge_name} loading={read.loading} {...tableError('徽章简介加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无徽章简介" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
+    </section>
     {confirmDialog}
   </div>;
 }

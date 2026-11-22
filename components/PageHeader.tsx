@@ -36,7 +36,7 @@ export default function PageHeader({ title, subtitle, actions, level = 1, classN
         <Heading className="text-headline-s min-w-0 flex-auto wrap-anywhere text-on-surface">{title}</Heading>
         {actions && <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {subtitle && <p className="text-body-m mt-1 tabular-nums text-on-surface-variant">{subtitle}</p>}
+      {subtitle && <div className="text-body-m mt-1 tabular-nums text-on-surface-variant">{subtitle}</div>}
     </div>
   );
 }

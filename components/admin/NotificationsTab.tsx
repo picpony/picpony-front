@@ -210,7 +210,7 @@ ${currentPage}`, history.isPrevious);
         ) : (
           <span>
             {item.username || '用户'}
-            <span className="text-on-surface-variant">（#{item.recipient_id}）</span>
+            <span className="tabular-nums text-on-surface-variant">（#{item.recipient_id}）</span>
           </span>
         ),
     },
@@ -218,6 +218,7 @@ ${currentPage}`, history.isPrevious);
       key: 'created',
       header: '时间',
       width: 'auto',
+      className: 'tabular-nums',
       render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
     },
     {
@@ -248,7 +249,7 @@ ${currentPage}`, history.isPrevious);
       <AdminForm onSubmit={send} aria-labelledby="notifications-send-heading">
         <SectionHeading as="h3" id="notifications-send-heading">发送通知</SectionHeading>
         <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0" aria-describedby={errors.audience ? 'notifications-audience-error' : undefined}>
-          <legend className="mb-1 text-label-l text-on-surface-variant">发送对象</legend>
+          <legend className="text-label-l text-on-surface-variant">发送对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio
               name="notification-audience"
@@ -322,21 +323,17 @@ ${currentPage}`, history.isPrevious);
       </AdminForm>
 
       <section aria-labelledby="admin-sent-notifications-heading" className="space-y-4">
-        <SectionHeading
-          as="h3"
-          actions={
-            <Select
-              size="sm"
-              value={filter}
-              options={FILTERS}
-              aria-label="通知类型"
-              onChange={(value) => setFilter(value)}
-            />
-          }
-        >
-          <span id="admin-sent-notifications-heading">已发送的通知</span>
-        </SectionHeading>
-        <SearchInput value={search} onChange={setSearch} placeholder="搜索标题、正文或接收者…" />
+        <SectionHeading as="h3" id="admin-sent-notifications-heading">已发送的通知</SectionHeading>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchInput value={search} onChange={setSearch} placeholder="搜索标题、正文或接收者…" className="min-w-0 sm:flex-1" />
+          <Select
+            size="sm"
+            value={filter}
+            options={FILTERS}
+            aria-label="通知类型"
+            onChange={(value) => setFilter(value)}
+          />
+        </div>
         <AdminListAnchor>
           <DataTable<NotificationItem>
             columns={columns}

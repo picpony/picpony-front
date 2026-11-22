@@ -21,6 +21,8 @@ interface DropZoneProps {
   disabled?: boolean;
   /** Padding scale. `lg` for a whole-page upload target, `sm` for a form row. */
   size?: 'sm' | 'md' | 'lg';
+  /** `'dialog'` steps filled tone up to `surface-container-highest` inside `Modal`'s `surface-container-high`. */
+  surface?: 'page' | 'dialog';
   className?: string;
   /**
    * Preview or prompt. Receives the live state so a caller can react to a drag.
@@ -105,6 +107,7 @@ export default function DropZone({
   filled = false,
   disabled = false,
   size = 'md',
+  surface = 'page',
   className = '',
   children,
   'aria-label': ariaLabel = '选择或拖拽文件',
@@ -175,7 +178,10 @@ export default function DropZone({
         state === 'idle' && 'border-dashed border-outline text-on-surface',
         state === 'dragging' && 'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
         state === 'invalid' && 'border-dashed border-error text-on-surface',
-        state === 'filled' && 'border-solid border-outline-variant bg-surface-container-high text-on-surface',
+        state === 'filled' &&
+          (surface === 'dialog'
+            ? 'border-solid border-outline-variant bg-surface-container-highest text-on-surface'
+            : 'border-solid border-outline-variant bg-surface-container-high text-on-surface'),
         className,
       )}
     >
@@ -188,7 +194,7 @@ export default function DropZone({
         onClick={() => inputRef.current?.click()}
         data-ripple=""
         className={cn(
-          'absolute inset-0 rounded-[inherit] touch-manipulation',
+          'absolute inset-0 rounded-[calc(var(--radius-md)-2px)] touch-manipulation',
           'focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
           state !== 'dragging' && !disabled && 'state-layer',

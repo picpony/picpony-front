@@ -259,6 +259,7 @@ export function PrivacyResetDialog({
       onExited={clear}
       title="重置隐私空间"
       maxWidth="sm"
+      danger
       closeOnEscape={!busy}
       closeOnOverlayClick={!busy}
       footer={

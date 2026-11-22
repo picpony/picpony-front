@@ -354,7 +354,7 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
         ))}
       </div>
       {filtered && data && !read.isPrevious && data.total > 0 && (
-        <p className="mb-3 text-body-s text-on-surface-variant" aria-live="polite">
+        <p className="mb-3 text-body-s tabular-nums text-on-surface-variant" aria-live="polite">
           共 {data.total} 个帖子
         </p>
       )}

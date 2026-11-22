@@ -132,7 +132,7 @@ export default function SubscribeButton({
         loading={busy || (!subscribed && (waiting || !ready))}
         onClick={() => void (subscribed ? unsubscribe() : subscribe())}
       >
-        <span className="grid">
+        <span className="grid place-items-center">
           <span aria-hidden={!subscribed || undefined} className={cn('col-start-1 row-start-1', !subscribed && 'invisible')}>
             已订阅
           </span>

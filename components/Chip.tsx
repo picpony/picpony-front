@@ -102,8 +102,8 @@ const CHIP_HEIGHT = 'h-8 pointer-coarse:my-1';
 
 /** 16dp with nothing before the label, 8dp with a glyph there. M3's own pair. */
 const LEAD = { bare: 'pl-4', withGlyph: 'gap-2 pl-2' } as const;
-/** Trailing edge: 16dp to the label; beside a cross, the cross's own box is the space. */
-const TRAIL = { bare: 'pr-4', toCross: 'pr-0.5' } as const;
+/** Trailing edge: 16dp to the label; beside a cross, leave 6dp before the cross button. */
+const TRAIL = { bare: 'pr-4', toCross: 'pr-1.5' } as const;
 
 const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   {
@@ -163,9 +163,11 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
   /* The label: padding, not the span, so the target, state layer and ripple cover the
      chip instead of hugging its text; `self-stretch` for the height. Its own radius,
      matching the box: the ripple host takes it, so a square one would paint into the
-     chip's rounded corner. */
+     chip's rounded corner. Split interactive chips tighten the inner seam so focus rings
+     stay clear of the dismiss button. */
   const labelClasses = cn(
-    'inline-flex min-w-0 items-center self-stretch rounded-sm',
+    'inline-flex min-w-0 items-center self-stretch',
+    isInteractive && onRemove ? 'rounded-l-sm rounded-r-xs' : 'rounded-sm',
     hasGlyph ? LEAD.withGlyph : LEAD.bare,
     onRemove ? TRAIL.toCross : TRAIL.bare,
   );
@@ -179,8 +181,9 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
            the chip's height; `sm` was `label-m`, one step down, so a tag row and
            a filter row set the same words at 12px and 14px. */
         'text-label-l select-none',
-        // The only padding the span keeps: the few px between the cross and the edge.
-        onRemove && 'pr-0.5',
+        // The only padding the span keeps: the few px between the cross and the edge,
+        // plus a 2dp seam when the label itself is also a button.
+        onRemove && (isInteractive ? 'gap-0.5 pr-0.5' : 'pr-0.5'),
         /* Unselected is a *tone step*, not an outline — deliberate, do not restore
          * the keyline. M3 draws an unselected filter chip with a 1dp outline, but
          * a row of them beside a filled button reads as buttons someone forgot to
@@ -195,7 +198,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
             ? TONE_SELECTED[tone]
             : cn('bg-surface-container-high', TONE_TEXT[tone]),
         'forced-boundary',
-        disabled && 'pointer-events-none disabled-content',
+        disabled && 'cursor-not-allowed disabled-content',
         className,
       )}
     >
@@ -211,7 +214,8 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
           data-ripple="inner"
           className={cn(
             labelClasses,
-            'cursor-pointer touch-manipulation',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+            'touch-manipulation',
             onRemove ? 'touch-target-block' : 'touch-target',
             /* The state layer. A filter chip is a control and it was the only one in
                the app with no hover feedback at all. */
@@ -228,7 +232,10 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
            exposed as a button, reachable by a click, and announced as a control that
            does nothing. No state layer either — lighting up under the pointer would
            promise a press. */
-        <span {...(rest as HTMLAttributes<HTMLSpanElement>)} className={cn(labelClasses, 'cursor-default')}>
+        <span
+          {...(rest as HTMLAttributes<HTMLSpanElement>)}
+          className={cn(labelClasses, disabled ? 'cursor-not-allowed' : 'cursor-default')}
+        >
           {inside}
         </span>
       )}
@@ -244,7 +251,8 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
              growing to the touch floor on the block axis only so its hover layer and focus ring
              stay cleanly within the chip's 8dp corner. */
           className={cn(
-            'touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-7 shrink-0 cursor-pointer touch-manipulation items-center justify-center rounded-xs focus-visible:outline-hidden focus-visible:ring-2',
+            'touch-target-block state-layer focus-ring spring-fast-effects transition-[color,box-shadow] inline-flex size-7 shrink-0 touch-manipulation items-center justify-center rounded-xs focus-visible:outline-hidden focus-visible:ring-2',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer',
             rippleTone,
           )}
         >

@@ -223,7 +223,13 @@ function DateFilter({ value, max, now, onChange }: {
   const label = value ? (now !== null ? formatDayLabel(value, now, { clock: false }) : formatDate(value)) : '按日期筛选';
   return (
     <div className="relative flex items-center gap-1">
-      <Button variant="surface" icon={<MdCalendarToday />} onClick={open} aria-label={value ? `按日期筛选：${label}` : undefined}>
+      <Button
+        variant="surface"
+        icon={<MdCalendarToday />}
+        onClick={open}
+        aria-label={value ? `按日期筛选：${label}` : undefined}
+        className="tabular-nums"
+      >
         {label}
       </Button>
       <input
@@ -386,9 +392,14 @@ export default function HistoryPage() {
     <PageHeader
       title="浏览历史"
       actions={
-        token ? (
+        !ready ? (
+          <div className="flex items-center gap-2" aria-hidden="true">
+            <Skeleton className="h-10 w-28 rounded-full" />
+            <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
+          </div>
+        ) : token ? (
           <>
-            {filter}
+            {firstLoad ? <Skeleton className="h-10 w-28 rounded-full" aria-hidden="true" /> : filter}
             <Button
               variant="danger-text"
               onClick={() => void handleClear()}

@@ -9,7 +9,7 @@ import { hiddenFromVisitors, tabVisible } from '@/lib/profiles';
 import { rememberForumOrigin } from '@/lib/forumTransition';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatCompactDateTime } from '@/lib/format';
-import { getAssetUrl } from '@/lib/utils';
+import { cn, getAssetUrl } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import FadeInImage from '@/components/FadeInImage';
 import Pagination from '@/components/Pagination';
@@ -46,7 +46,7 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
 
   const failedTurn = read.isPrevious && Boolean(read.error);
   return (
-    <div className="max-w-4xl" aria-busy={read.isLoading || undefined}>
+    <div className="mx-auto max-w-4xl" aria-busy={read.isLoading || undefined}>
       {own && hiddenFromVisitors(profile, 'posts') && <OwnerHiddenNote tab="posts" />}
       {/* In-flow rows, so scroll anchoring does what the masonry's needs `FailedTurnHold` for:
           at the list's top the tab row is the anchor and the message shows under it; deeper in,
@@ -61,7 +61,7 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
           />
         </div>
       )}
-      <div>
+      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
         {data.posts.map((post) => (
           <Link
             scroll={false}
@@ -104,7 +104,7 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
           onPageChange={setPage}
           onPrefetchPage={(next) => userPosts.prefetch({ id, page: next, token })}
           disabled={read.isLoading}
-          className="mt-8 mb-4"
+          className="mt-8"
         />
       )}
     </div>

@@ -249,7 +249,7 @@ const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function Emo
         /* Sticky at the bottom of whichever surface scrolls it — both are `surface-container`
            (the popover's own tone and the phone panel's), so the caption wears it too. */
         className={cn(
-          'sticky bottom-0 -mx-1 flex min-h-9 shrink-0 items-center gap-2 border-t border-outline-variant bg-surface-container px-2 text-body-m text-on-surface',
+          'sticky bottom-0 flex min-h-9 shrink-0 items-center gap-2 border-t border-outline-variant bg-surface-container px-2 pt-2 text-body-m text-on-surface',
           captionClassName,
         )}
       >

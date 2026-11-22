@@ -95,7 +95,7 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
       </SectionHeading>
       <div className="rounded-md bg-surface-container-highest p-3 forced-boundary">
         {inList > 0 && (
-          <p id={hintId} className="mb-2 text-body-s text-on-surface-variant">
+          <p id={hintId} className="mb-2 text-body-s text-on-surface-variant tabular-nums">
             其中 {inList} 个已在列表中
           </p>
         )}
@@ -121,7 +121,7 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
             a submit — a press on 删除选中 or 清空全部 also saved the group and closed the editor
             under its own question. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" size="xs" variant="tonal" disabled={disabled || selection.length === 0} onClick={add}>
+          <Button type="button" size="xs" variant="tonal" className="tabular-nums" disabled={disabled || selection.length === 0} onClick={add}>
             {selection.length > 0 ? `添加所选（${selection.length}）` : '添加所选'}
           </Button>
           <Button type="button" size="xs" variant="danger-text" disabled={disabled || selection.length === 0} onClick={() => void remove()}>

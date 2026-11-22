@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { MdAutoAwesome, MdRefresh } from 'react-icons/md';
-import { SettingsSection, SettingsRow, SwitchRow, ROW_CLASS } from '@/app/settings/SettingsRow';
+import { SettingsSection, SettingsRow, SwitchRow, ROW_CLASS, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Select from '@/components/Select';
@@ -136,22 +136,33 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
     });
   }
   const problem = quota.error ?? permission.error;
+  const refreshing = quota.isLoading || permission.isLoading;
   const refresh = () => { void quota.refresh(); void permission.refresh(); };
+  const hasRows = Boolean(quota.data && permission.data);
+  const statusNotice = (problem !== undefined || (error !== undefined && !exchangeOpen)) ? (
+    <div className={hasRows ? 'mb-4 space-y-2' : 'space-y-2'}>
+      {problem !== undefined && <ErrorRetry size="inline" title="彩彩 AI 设置加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
+      {error !== undefined && !exchangeOpen && <ErrorRetry size="inline" title="操作未完成" message={apiErrorMessage(error)} />}
+    </div>
+  ) : undefined;
   return <>
     {/* Busy actions retain focus and material while blocking duplicate activation.
         See docs/design/primitives.md#buttons-icons-and-semantics. */}
-    <SettingsSection title="彩彩 AI" icon={<MdAutoAwesome size={ICON.control} />} actions={<IconButton aria-label="刷新彩彩 AI 设置" onClick={refresh} icon={<MdRefresh />} />}>
+    <SettingsSection
+      title="彩彩 AI"
+      icon={<MdAutoAwesome size={ICON.control} />}
+      actions={<IconButton aria-label="刷新彩彩 AI 设置" loading={refreshing} onClick={refresh} icon={<MdRefresh />} />}
+      status={statusNotice}
+    >
       {!quota.data || !permission.data ? !problem && <AssistantSettingsSkeleton /> : <>
         <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'} />
         <SettingsRow label="权限规则" supporting={permission.data === 'full' ? '直接执行指令，不再逐次确认' : '执行写入、发送和删除操作前需确认'}
           action={<Select aria-label="彩彩 AI 权限规则" size="sm" value={permission.data} options={[{ value: 'default', label: '默认模式' }, { value: 'full', label: '完全权限' }]} onChange={mode => void changePermission(mode)} />} />
         <QuotaRow quota={quota.data} />
         <SettingsRow label="兑换额度"
-          supporting={exchange ? '上次兑换结果尚未确认，可点击核对' : <>现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 · 1 金币兑换 {quota.data.points_per_coin} 点</>}
+          supporting={exchange ? '上次兑换结果尚未确认，可点击核对' : <>现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 · <span className="tabular-nums">1 金币兑换 {quota.data.points_per_coin} 点</span></>}
           action={<Button variant="tonal" onClick={() => { if (busy) return; setError(undefined); setCoins('1'); setExchangeOpen(true); }}>{exchange ? '核对兑换' : '兑换'}</Button>} />
       </>}
-      {problem !== undefined && <ErrorRetry size="inline" title="彩彩 AI 设置加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
-      {error !== undefined && !exchangeOpen && <ErrorRetry size="inline" title="操作未完成" message={apiErrorMessage(error)} />}
     </SettingsSection>
     {quota.data && <QuotaExchangeDialog isOpen={exchangeOpen} onClose={() => { if (!lock.current) setExchangeOpen(false); }} quota={quota.data} pending={exchange} coins={coins} onCoinsChange={setCoins} busy={busy} error={error} onSubmit={() => void exchangeCoins()} />}
     {confirmDialog}
@@ -181,7 +192,7 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
         </span>
       }
     >
-      <dl className="mt-3 space-y-3 text-body-s">
+      <dl className="space-y-3 text-body-s">
         {quota.daily_points > 0 ? (
           <div>
             <div className="flex items-baseline justify-between gap-3">
@@ -215,12 +226,36 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
 
 /** The loaded rows' own shapes, in one run, so nothing re-spaces when the data lands. */
 function AssistantSettingsSkeleton() {
-  return <div role="group" aria-label="正在加载彩彩 AI 设置" aria-busy="true">
-    {[0, 1].map(i => <div key={i} className={ROW_CLASS}><div className="flex-1 space-y-2"><Skeleton className="h-5 w-28" /><Skeleton className="h-4 w-44" /></div><Skeleton className={i === 0 ? 'h-8 w-13 rounded-full' : 'h-10 w-28'} /></div>)}
-    <div className={`${ROW_CLASS} flex-col items-stretch`}>
-      <div className="flex items-center gap-4"><div className="flex-1 space-y-2"><Skeleton className="h-5 w-20" /><Skeleton className="h-4 w-48" /></div><Skeleton className="h-6 w-14" /></div>
-      <div className="mt-3 space-y-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-1 w-full rounded-full" /><Skeleton className="h-4 w-full" /></div>
+  return <div role="group" aria-label="正在加载彩彩 AI 设置" aria-busy="true" data-page-loading="">
+    {[0, 1].map(i => (
+      <div key={i} className={ROW_CLASS}>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Skeleton className="h-5 w-28 max-w-full" />
+          <Skeleton className="h-4.5 w-44 max-w-full" />
+        </div>
+        <Skeleton className={i === 0 ? 'h-8 w-13 shrink-0 rounded-full' : 'h-10 w-28 shrink-0'} />
+      </div>
+    ))}
+    <div className={ROW_STACK_CLASS}>
+      <div className="flex items-center gap-4">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <Skeleton className="h-5 w-20 max-w-full" />
+          <Skeleton className="h-4.5 w-48 max-w-full" />
+        </div>
+        <Skeleton className="h-6 w-14 shrink-0" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-1 w-full rounded-full" />
+        <Skeleton className="h-4 w-full" />
+      </div>
     </div>
-    <div className={ROW_CLASS}><div className="flex-1 space-y-2"><Skeleton className="h-5 w-20" /><Skeleton className="h-4 w-40" /></div><Skeleton className="h-10 w-18 rounded-full" /></div>
+    <div className={ROW_CLASS}>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Skeleton className="h-5 w-20 max-w-full" />
+        <Skeleton className="h-4.5 w-40 max-w-full" />
+      </div>
+      <Skeleton className="h-10 w-18 shrink-0 rounded-full" />
+    </div>
   </div>;
 }

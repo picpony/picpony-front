@@ -58,7 +58,7 @@ function ProfileStats({ profile }: { profile: DerpiProfileUser | undefined }) {
           {profile ? (
             <span className="text-title-m tabular-nums text-on-surface">{formatCount(value)}</span>
           ) : (
-            <Skeleton className="h-6 w-[1ch] text-title-m" />
+            <Skeleton className="h-6 w-9" />
           )}
           <span>{label}</span>
         </div>
@@ -80,14 +80,19 @@ function Award({ award }: { award: DerpiProfileAward }) {
   if (!src) return null;
   return (
     <li className="flex">
-      {/* eslint-disable-next-line @next/next/no-img-element -- remote award artwork, an SVG off the optimizer's whitelist */}
-      <img
-        ref={anchorRef as React.RefObject<HTMLImageElement | null>}
+      <span
+        ref={anchorRef as React.RefObject<HTMLSpanElement | null>}
         {...anchorProps}
-        src={src}
-        alt={title}
-        className="h-8 rounded-xs"
-      />
+        tabIndex={0}
+        className="touch-target inline-flex min-w-8 items-center justify-center rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- remote award artwork, an SVG off the optimizer's whitelist */}
+        <img
+          src={src}
+          alt={title}
+          className="h-8 rounded-xs"
+        />
+      </span>
       {tooltip}
     </li>
   );
@@ -249,14 +254,14 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
       <PageBack onClick={handleBack} />
       {/* No entrance animation: the route transition already fades this page in. */}
       <div className="@container mx-auto max-w-5xl" data-page-loading={profile ? undefined : ''}>
-        <div className="pb-8 page-back-room-5xl">
+        <div className="page-back-room-5xl">
           <div className="flex items-center gap-4">
             <div className="shrink-0">
               {profile ? (
                 /* The page's largest early paint: eager, at high priority (R1-028). */
-                <Avatar src={avatarUrl} name={profile.name} size="hero" priority className="border-4 border-surface" />
+                <Avatar src={avatarUrl} name={profile.name} size="hero" priority />
               ) : (
-                <Skeleton className="size-24 rounded-full border-4 border-surface sm:size-32" />
+                <Skeleton className="size-24 rounded-full sm:size-32" />
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -272,7 +277,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 {profile ? (
                   <>
                     <span className="min-w-0 max-w-full wrap-anywhere">{profile.name}</span>
-                    <span className="text-body-m text-on-surface-variant">#{profile.id}</span>
+                    <span className="text-body-m tabular-nums text-on-surface-variant">#{profile.id}</span>
                   </>
                 ) : (
                   'Derpibooru 用户'

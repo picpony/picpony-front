@@ -14,6 +14,8 @@ interface SignInRequiredProps {
   description?: ReactNode;
   /** Match the enclosure, as with `EmptyState` / `ErrorRetry`. */
   size?: StatusViewSize;
+  /** The whole screen is this block — fill the column, centre and own the `<h1>`. */
+  fill?: boolean;
   className?: string;
 }
 
@@ -33,12 +35,14 @@ export default function SignInRequired({
   title = '需要登录',
   description,
   size = 'page',
+  fill = false,
   className = '',
 }: SignInRequiredProps) {
   const { openAuth } = useAuthModal();
   return (
     <StatusView
       size={size}
+      fill={fill}
       className={className}
       title={title}
       description={description}

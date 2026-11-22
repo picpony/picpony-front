@@ -140,7 +140,7 @@ function LevelCard({
           href="/tasks/coins"
           data-ripple=""
           aria-label={coins !== null && !loading ? `金币 ${formatExactCount(coins)}，查看明细` : '金币明细'}
-          className="state-layer -mx-3 -my-2 block touch-manipulation rounded-md px-3 py-2 text-right text-on-surface focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+          className="state-layer -mx-3 -my-2 block touch-manipulation rounded-sm px-3 py-2 text-right text-on-surface focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
         >
           <span className="flex items-center justify-end text-label-l text-on-surface-variant">
             金币
@@ -262,9 +262,9 @@ function TaskRow({
                and on the dark track they all but vanished (1.9:1). */
             <ProgressBar value={(progress / target) * 100} label={`${task.name} 进度`} className="w-auto flex-1" />
           )}
-          <span className="w-10 shrink-0 text-right text-body-s tabular-nums text-on-surface-variant">
-            {loading ? <Skeleton className="ml-auto h-3 w-8" /> : `${progress}/${target}`}
-          </span>
+          <div className="flex h-4.5 w-12 shrink-0 items-center justify-end text-body-s tabular-nums text-on-surface-variant">
+            {loading ? <Skeleton className="h-3 w-8" /> : `${progress} / ${target}`}
+          </div>
         </div>
       </div>
       {/* One footprint for every state, so a claim never reflows the row. 领取 is the only claim
@@ -284,7 +284,7 @@ function TaskRow({
         ) : task.href ? (
           <ButtonLink
             href={task.href}
-            variant="text"
+            variant="tonal"
             size="xs"
             fullWidth
           >

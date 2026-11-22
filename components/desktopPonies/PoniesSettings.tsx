@@ -174,9 +174,10 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
     : chosen.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll([], '已清空桌面小马')}>清空</Button>
     : undefined;
 
+  const refreshing = catalog.isLoading || selection.isLoading;
   return <SettingsSection
     title="桌面小马" icon={<MdPets size={ICON.control} />}
-    actions={token ? <IconButton aria-label="刷新桌面小马" onClick={refresh} icon={<MdRefresh />} /> : undefined}
+    actions={token ? <IconButton aria-label="刷新桌面小马" loading={refreshing} onClick={refresh} icon={<MdRefresh />} /> : undefined}
     status={problem !== undefined && <ErrorRetry size="inline" title="桌面小马加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
   >
     {ready && !token ? <SignInRequired size="inline" description="登录后即可选择并保存桌面小马" />
@@ -186,7 +187,11 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
       : !ponies.length ? <EmptyState title="暂无可选角色" size="inline" />
       : <>
         <SettingsRow
-          label={chosen.length ? (atLimit ? `已选满 ${MAX_PONIES} 个` : `已选 ${chosen.length} / ${MAX_PONIES}`) : '尚未选择角色'}
+          label={
+            <span className="tabular-nums">
+              {chosen.length ? (atLimit ? `已选满 ${MAX_PONIES} 个` : `已选 ${chosen.length} / ${MAX_PONIES}`) : '尚未选择角色'}
+            </span>
+          }
           supporting={<span role="status" aria-atomic="true">{status}</span>}
           action={action}
         >
@@ -206,7 +211,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
           </div>
           {matches.length ? <>
             <p className="flex items-center justify-between gap-3 text-body-s text-on-surface-variant">
-              <span>{query.trim() ? `找到 ${matches.length} 个角色` : onlySelected ? '已选的角色' : '全部角色'}</span>
+              <span className="tabular-nums">{query.trim() ? `找到 ${matches.length} 个角色` : onlySelected ? '已选的角色' : '全部角色'}</span>
               {pages > 1 && <span className="tabular-nums">{`${(currentPage - 1) * PONY_PAGE_SIZE + 1}–${Math.min(currentPage * PONY_PAGE_SIZE, matches.length)} / ${matches.length}`}</span>}
             </p>
             <div className={styles.grid} role="group" aria-label="桌面小马角色">
@@ -237,7 +242,6 @@ function LineupSlot({
   keyId,
   leaving,
   disabled,
-  column,
   sprite,
   onRemove,
 }: {
@@ -245,7 +249,6 @@ function LineupSlot({
   keyId: string;
   leaving: boolean;
   disabled: boolean;
-  column: number | undefined;
   sprite: ReactNode;
   onRemove: (name: string) => void;
 }) {
@@ -269,8 +272,6 @@ function LineupSlot({
           'state-layer cursor-pointer border-0 p-0 focus-visible:outline-hidden focus-visible:ring-2 focus-ring disabled:cursor-default',
         )}
         style={{
-          gridColumn: column,
-          gridRow: leaving ? undefined : 1,
           zIndex: leaving ? 1 : 2,
         }}
       >
@@ -306,27 +307,30 @@ function Lineup({
     return src ? <img src={src} alt="" draggable={false} className={styles.slotSprite} /> : <MdPets size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />;
   };
   return (
-    <PresenceList items={names} getKey={(name) => name} variant="grid" fallbackFocus={fallbackFocus}>
-      {(entries, ref) => (
-        <div ref={ref} className={cn('relative', styles.lineup)} role="group" aria-label="已选桌面小马">
-          {Array.from({ length: MAX_PONIES }, (_, index) => (
-            <span key={index} aria-hidden="true" className={styles.slot} style={{ gridColumn: index + 1, gridRow: 1 }} />
-          ))}
-          {entries.map(({ item: name, key, leaving }) => (
-            <LineupSlot
-              key={key}
-              name={name}
-              keyId={key}
-              leaving={leaving}
-              disabled={disabled}
-              column={leaving ? undefined : names.indexOf(name) + 1}
-              sprite={sprite(name)}
-              onRemove={onRemove}
-            />
-          ))}
-        </div>
-      )}
-    </PresenceList>
+    <div className="relative">
+      <div className={styles.lineup} aria-hidden="true">
+        {Array.from({ length: MAX_PONIES }, (_, index) => (
+          <span key={index} className={styles.slot} />
+        ))}
+      </div>
+      <PresenceList items={names} getKey={(name) => name} variant="grid" fallbackFocus={fallbackFocus}>
+        {(entries, ref) => (
+          <div ref={ref} className={cn('absolute inset-0', styles.lineup)} role="group" aria-label="已选桌面小马">
+            {entries.map(({ item: name, key, leaving }) => (
+              <LineupSlot
+                key={key}
+                name={name}
+                keyId={key}
+                leaving={leaving}
+                disabled={disabled}
+                sprite={sprite(name)}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
+        )}
+      </PresenceList>
+    </div>
   );
 }
 
@@ -338,10 +342,10 @@ function ChooserSkeleton() {
       <div className={styles.lineup}>{Array.from({ length: MAX_PONIES }, (_, i) => <Skeleton key={i} className="aspect-square w-full rounded-md" />)}</div>
     </div>
     <div className={cn(ROW_STACK_CLASS, styles.chooser)}>
-      <div className="flex items-center gap-3"><Skeleton className="h-10 min-w-0 flex-1 rounded-sm" /><Skeleton className="h-8 w-20 rounded-sm" /></div>
+      <div className="flex items-center gap-3"><Skeleton className="h-10 min-w-0 flex-1 rounded-full" /><Skeleton className="h-8 w-20 rounded-sm" /></div>
       <Skeleton className="h-5 w-16" />
       <div className={styles.grid}>{Array.from({ length: PONY_PAGE_SIZE }, (_, i) => <div key={i} className={cn(styles.choice, 'rounded-md bg-surface-container-highest p-3')}>
-        <span className={styles.preview}><Skeleton className="size-16" /></span><Skeleton className="h-5 w-24" /><Skeleton className="mt-1 h-4 w-12" />
+        <div className={styles.preview}><Skeleton className="size-16" /></div><Skeleton className="h-5 w-24 max-w-full" /><Skeleton className="h-4 w-12 max-w-full" />
       </div>)}</div>
     </div>
   </div>;

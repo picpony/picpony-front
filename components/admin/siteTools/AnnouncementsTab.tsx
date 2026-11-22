@@ -50,8 +50,8 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
   };
   const columns: Column<Announcement>[] = [
     { key: 'title', header: '标题', primary: true, render: (r) => r.title },
-    { key: 'version', header: '版本', render: (r) => r.version },
-    { key: 'date', header: '时间', render: (r) => formatDateTime(r.date) },
+    { key: 'version', header: '版本', width: 'auto', className: 'tabular-nums', render: (r) => r.version },
+    { key: 'date', header: '时间', width: 'auto', className: 'tabular-nums', render: (r) => formatDateTime(r.date) },
     { key: 'actions', header: '操作', actions: true, render: (r) => <>
       <IconButton size="sm" icon={<MdVisibility />} aria-label={`查看公告「${r.title}」`} onClick={() => setPreview({ announcement: r, open: true })} />
       <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除公告「${r.title}」`} loading={remove.pendingKeys.has(r.id)} onClick={() => confirmThen('确认删除公告', `确定要删除公告「${r.title}」（#${r.id}）吗？删除后无法恢复。`, () => void remove.run(() => adminApi.adminDeleteAnnouncement(token, Number(r.id)), () => showToast('已删除公告', 'success'), '公告删除失败', { key: r.id, onCommitted: refresh }), { tone: 'danger' })} />
@@ -62,8 +62,8 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
     <AdminNote>正文支持 HTML，换行会保留；发布后将推送至全站用户信箱。</AdminNote>
     <AdminForm aria-label="发布公告" onSubmit={submit}>
       <FormGrid>{['version', 'title'].map((key) => <Input key={key} label={key === 'version' ? '版本' : '标题'} value={String(draft[key])} error={errors[key]} readOnly={publish.busy} onChange={(e) => { setDraft({ ...draft, [key]: e.target.value }); setErrors({}); }} />)}</FormGrid>
-      <Textarea label="公告正文" rows={7} value={String(draft.content)} error={errors.content} readOnly={publish.busy} onChange={(e) => { setDraft({ ...draft, content: e.target.value }); setErrors({}); }} />
-      <FormActions><Button type="submit" loading={publish.busy}>发布公告</Button></FormActions>
+      <Textarea label="公告正文" rows={7} className="resize-none" value={String(draft.content)} error={errors.content} readOnly={publish.busy} onChange={(e) => { setDraft({ ...draft, content: e.target.value }); setErrors({}); }} />
+      <FormActions><Button type="submit" variant="filled" loading={publish.busy}>发布公告</Button></FormActions>
     </AdminForm>
     <AdminListAnchor>
       <DataTable columns={columns} rows={history.data?.announcements ?? []} listKey={history.listKey} rowKey={(r) => r.id} loading={history.loading} {...tableError(history.isPrevious ? `公告记录第 ${page} 页加载失败` : '公告记录加载失败', history.message)} onRetry={history.retry} empty="暂无公告" />
@@ -75,7 +75,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
         i.e. the admin saw something no visitor would. `--rt-quote-surface` comes with it because
         this preview is also inside a `Modal`, the quote's own default step. Already sanitised at
         read (`sanitizeAnnouncements`). */}
-    <Modal isOpen={Boolean(preview?.open)} onClose={() => setPreview((current) => current && { ...current, open: false })} title={preview?.announcement.title ?? '公告'}>{preview && <div ref={previewRef} className="rich-text-content wrap-anywhere text-body-m text-on-surface-variant" style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties} dangerouslySetInnerHTML={{ __html: preview.announcement.content }} />}</Modal>
+    <Modal maxWidth="lg" isOpen={Boolean(preview?.open)} onClose={() => setPreview((current) => current && { ...current, open: false })} title={preview?.announcement.title ?? '公告'}>{preview && <div ref={previewRef} className="rich-text-content wrap-anywhere text-body-m text-on-surface-variant" style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties} dangerouslySetInnerHTML={{ __html: preview.announcement.content }} />}</Modal>
     {confirmDialog}
   </div>;
 }

@@ -728,7 +728,7 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
               size="pane"
               icon={
                 <LottieIcon
-                  className="w-156 max-w-full"
+                  className="w-72 max-w-full sm:w-88"
                   load={loadSearchArtwork}
                   /* 3000×1553, the composition's own box. */
                   aspect={3000 / 1553}

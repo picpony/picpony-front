@@ -146,7 +146,7 @@ Arrow keys choose a palette, Home/End choose endpoints. Guard rapid changes agai
 | Plain tooltip | `inverse-surface` |
 | Progress/slider track | `secondary-container` |
 
-Dialog rows step to `surface-container-highest`. Quote surfaces follow their host; see [rich text](typography-and-copy.md#colour-media-and-links). Elevation levels are owned by [Surfaces](surfaces.md#elevation).
+Dialog rows step to `surface-container-highest`, and filled `DropZone` uses `surface="dialog"` to step to `surface-container-highest` inside dialogs. When a dialog row hosts filled `surface-container-highest` controls (such as `SettingsRow surface="dialog"`), the row steps down to `surface-container` instead so its controls keep a distinct edge. Quote surfaces follow their host; see [rich text](typography-and-copy.md#colour-media-and-links). Elevation levels are owned by [Surfaces](surfaces.md#elevation).
 
 On photographs use `on-media`, `on-media-variant`, `media-outline` and `media-plate`; surface roles do not guarantee contrast there.
 

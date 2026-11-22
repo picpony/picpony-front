@@ -68,6 +68,7 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function Sear
           <IconButton
             size={search ? 'md' : 'sm'}
             dismiss
+            disabled={rest.disabled}
             aria-label="清除"
             icon={<MdClose />}
             onPointerDown={(event) => event.preventDefault()}

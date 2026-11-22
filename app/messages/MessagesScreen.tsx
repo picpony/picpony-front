@@ -238,7 +238,7 @@ export default function MessagesScreen({ token }: { token: string | null }) {
        screen reader's virtual cursor and for a stray tap alike. */
     <div className="mx-auto max-w-4xl" inert={screenOpen || undefined}>
       <PageHeader title="消息" />
-      <Tabs className="mb-3" value={shown} onChange={selectTab} label="消息分类" tabs={tabs} />
+      <Tabs className="mb-6" value={shown} onChange={selectTab} label="消息分类" tabs={tabs} />
       {tab === null ? (
         <ListRowsSkeleton />
       ) : (

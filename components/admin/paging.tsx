@@ -105,7 +105,7 @@ export function AdminPager({
   disabled?: boolean;
 }) {
   if (totalPages <= 1) {
-    return summary ? <p className="text-center text-body-s text-on-surface-variant">{summary}</p> : null;
+    return summary ? <p className="text-center text-body-s tabular-nums text-on-surface-variant">{summary}</p> : null;
   }
   /* The pager is a query container with no intrinsic width of its own, so it takes the full row
      and the summary sits under it. */
@@ -119,7 +119,7 @@ export function AdminPager({
         siblings={1}
         className="mt-0 w-full"
       />
-      {summary && <span className="text-body-s text-on-surface-variant">{summary}</span>}
+      {summary && <span className="text-body-s tabular-nums text-on-surface-variant">{summary}</span>}
     </div>
   );
 }

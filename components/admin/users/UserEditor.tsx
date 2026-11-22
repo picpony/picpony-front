@@ -143,10 +143,10 @@ export default function UserEditor({
       <AdminForm onSubmit={submit}>
           <SectionHeading
             as="h3"
-            subtitle={facts.length > 0 ? facts.join(' · ') : undefined}
+            subtitle={facts.length > 0 ? <span className="tabular-nums">{facts.join(' · ')}</span> : undefined}
             aside={<RoleBadge role={user.role} showUser size="md" />}
           >
-            {`#${user.id} ${user.username}`}
+            <span className="tabular-nums">{`#${user.id} ${user.username}`}</span>
           </SectionHeading>
           <FormGrid>
             <Input
@@ -192,27 +192,29 @@ export default function UserEditor({
                 />
               }
             />
-            <Input
-              id={id('api-key')}
-              label="新的 Derpibooru API Key"
-              name="admin-edit-api-key"
-              autoComplete="off"
-              spellCheck={false}
-              className="font-mono"
-              value={form.apiKey}
-              readOnly={saving || form.clearKey}
-              error={errors.apiKey}
-              helper={`${keyState}；留空则不修改。`}
-              onChange={(event) => set('apiKey', event.target.value)}
-            />
-            {credential.has_key && (
-              <Checkbox
-                label="解除该用户的 API Key 绑定"
-                checked={form.clearKey}
-                disabled={saving}
-                onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+            <div className="min-w-0 space-y-2">
+              <Input
+                id={id('api-key')}
+                label="新的 Derpibooru API Key"
+                name="admin-edit-api-key"
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+                value={form.apiKey}
+                readOnly={saving || form.clearKey}
+                error={errors.apiKey}
+                helper={`${keyState}；留空则不修改。`}
+                onChange={(event) => set('apiKey', event.target.value)}
               />
-            )}
+              {credential.has_key && (
+                <Checkbox
+                  label="解除该用户的 API Key 绑定"
+                  checked={form.clearKey}
+                  disabled={saving}
+                  onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+                />
+              )}
+            </div>
             <Field helper={choice.locked ?? choice.note ?? undefined}>
               <Select
                 label="角色"
@@ -232,7 +234,7 @@ export default function UserEditor({
             <DateInput
               id={id('birthday')}
               label="生日"
-
+              fieldClassName="min-w-0 @lg/form:col-span-2"
               value={form.birthday}
               readOnly={saving}
               onChange={(event) => set('birthday', event.target.value)}
@@ -250,9 +252,9 @@ export default function UserEditor({
           {badges.length > 0 && (
             <section aria-labelledby={badgesHeading} className="space-y-2">
               <h4 id={badgesHeading} className="text-label-l text-on-surface-variant">已获得的徽章</h4>
-              <ul className="flex flex-wrap gap-x-4 gap-y-1">
+              <ul className="flex flex-wrap gap-x-4 gap-y-2 pointer-coarse:gap-y-4">
                 {badges.map((badge) => (
-                  <li key={badge.id} className="flex items-center gap-1">
+                  <li key={badge.id} className="flex items-center gap-1 pointer-coarse:gap-4">
                     <UserBadge name={badge.name} color={badge.color} />
                     <IconButton
                       size="sm"

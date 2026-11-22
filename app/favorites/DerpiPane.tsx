@@ -23,6 +23,7 @@ import FailedTurnHold from '@/components/FailedTurnHold';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import MasonryGrid from '@/components/MasonryGrid';
 import Pagination from '@/components/Pagination';
+import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { WithheldNotice, useDeviceRules } from '@/components/favorites/FaveGrid';
 import ImportDialog from '@/components/favorites/ImportDialog';
@@ -172,7 +173,15 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         />
       );
     }
-    return <ImageGridSkeleton count={PER_PAGE} entrance={false} />;
+    return (
+      <div data-page-loading="">
+        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-10 w-36 rounded-full" />
+        </div>
+        <ImageGridSkeleton count={PER_PAGE} entrance={false} />
+      </div>
+    );
   }
   if (apiKey === null) {
     return (
@@ -200,7 +209,15 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         />
       );
     }
-    return <ImageGridSkeleton count={PER_PAGE} entrance={false} />;
+    return (
+      <div data-page-loading="">
+        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-10 w-36 rounded-full" />
+        </div>
+        <ImageGridSkeleton count={PER_PAGE} entrance={false} />
+      </div>
+    );
   }
 
   const failedTurn = read.isPrevious && Boolean(read.error);
@@ -254,7 +271,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
           onPageChange={setPage}
           onPrefetchPage={(next) => derpiFaves.prefetch({ apiKey, page: next })}
           disabled={turning}
-          className="mt-8 mb-4"
+          className="mt-8"
         />
       )}
       <FailedTurnHold failed={failedTurn} rows={rows} failure={failureRef} />

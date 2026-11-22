@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { MdTimerOff } from 'react-icons/md';
 import Modal from './Modal';
 import Skeleton from './Skeleton';
@@ -30,37 +30,31 @@ const warmDictionary = () => badgeDictionary.prefetch({});
 function BadgeChip({ badge, expired, onOpen }: { badge: HeldBadge; expired: boolean; onOpen: () => void }) {
   const paint = badgePaint(badge.color);
   return (
-    <span
+    <button
+      type="button"
+      onClick={onOpen}
+      onPointerEnter={warmDictionary}
+      onPointerDown={warmDictionary}
+      onFocus={warmDictionary}
+      aria-haspopup="dialog"
+      aria-label={expired ? `${badge.name}（已过期）` : badge.name}
+      data-ripple="inner"
       className={cn(
-        'inline-flex h-8 max-w-full items-center rounded-sm text-label-l select-none pointer-coarse:my-1 forced-boundary',
+        'inline-flex h-8 max-w-full items-center rounded-sm pr-4 text-label-l select-none pointer-coarse:my-1 forced-boundary',
+        'cursor-pointer touch-manipulation touch-target state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
+        expired ? 'gap-2 pl-2' : 'pl-4',
         !paint && 'bg-surface-container-high text-on-surface-variant',
       )}
       style={paint ?? undefined}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        onPointerEnter={warmDictionary}
-        onPointerDown={warmDictionary}
-        onFocus={warmDictionary}
-        aria-haspopup="dialog"
-        aria-label={expired ? `${badge.name}（已过期）` : badge.name}
-        data-ripple="inner"
-        className={cn(
-          'inline-flex min-w-0 items-center self-stretch rounded-sm pr-4 cursor-pointer touch-manipulation touch-target',
-          expired ? 'gap-2 pl-2' : 'pl-4',
-          'state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
-        )}
-      >
-        <span data-ripple-host="" aria-hidden="true" />
-        {expired && (
-          <span className="shrink-0 [&>svg]:block [&>svg]:size-4.5" aria-hidden="true">
-            <MdTimerOff />
-          </span>
-        )}
-        <span className="truncate">{badge.name}</span>
-      </button>
-    </span>
+      <span data-ripple-host="" aria-hidden="true" />
+      {expired && (
+        <span className="shrink-0 [&>svg]:block [&>svg]:size-4.5" aria-hidden="true">
+          <MdTimerOff />
+        </span>
+      )}
+      <span className="truncate">{badge.name}</span>
+    </button>
   );
 }
 
@@ -84,6 +78,7 @@ interface BadgeWallProps {
  * Nothing renders when the user holds no badge: an empty wall is a heading over nothing.
  */
 export default function BadgeWall({ badges, equipped, now, onManage }: BadgeWallProps) {
+  const headingId = useId();
   /* The dialog's badge, kept through the exit animation: closing clears only `open`. */
   const [selected, setSelected] = useState<HeldBadge | null>(null);
   const [open, setOpen] = useState(false);
@@ -98,10 +93,11 @@ export default function BadgeWall({ badges, equipped, now, onManage }: BadgeWall
   const description = selected ? dictionary.data?.[selected.name] : undefined;
 
   return (
-    <section aria-label="徽章墙">
+    <section aria-labelledby={headingId}>
       {/* 40dp for the row whether or not 管理佩戴 is in it: the button arrives with the session,
           after hydration, and must not push the wall down when it does. */}
       <SectionHeading
+        id={headingId}
         className="mb-2 min-h-10"
         aside={badges.length}
         actions={

@@ -39,8 +39,8 @@ export default function CatalogImageInput({ token, kind, disabled, onUploaded, o
     onBusy?.(false);
   }
   return <div className="space-y-3">
-    <DropZone size="sm" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="选择吉祥物图片" disabled={disabled || mutation.busy} filled={Boolean(file)} onFile={select} onReject={select}>
-      <p className="break-words text-body-m">{file ? `${file.name} · ${formatBytes(file.size)}` : `选择或拖入图片（最多 ${IMAGE_LIMIT[kind] / 1024 / 1024} MB）`}</p>
+    <DropZone size="sm" surface="dialog" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="选择吉祥物图片" disabled={disabled || mutation.busy} filled={Boolean(file)} onFile={select} onReject={select}>
+      <p className="wrap-anywhere text-body-m tabular-nums">{file ? `${file.name} · ${formatBytes(file.size)}` : `选择或拖入图片（最多 ${IMAGE_LIMIT[kind] / 1024 / 1024} MB）`}</p>
     </DropZone>
     {refused && <ErrorRetry size="inline" title="未选择文件" message={refused} />}
     {file && <div className="flex flex-wrap gap-2"><Button type="button" variant="tonal" onClick={() => void upload()} loading={mutation.busy} disabled={disabled || mutation.uncertain}>上传图片</Button><Button type="button" variant="text" disabled={disabled || mutation.busy} onClick={() => setFile(null)}>移除文件</Button></div>}

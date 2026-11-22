@@ -231,7 +231,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         </span>
       ),
     },
-    { key: 'id', header: 'ID', width: 'auto', render: (user) => `#${user.id}` },
+    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
     { key: 'role', header: '角色', width: 'auto', render: (user) => <RoleBadge role={user.role} showUser size="md" /> },
     {
       key: 'email',
@@ -319,10 +319,22 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
               onRetry={isRetryable(detail.error) ? detail.refresh : undefined}
             />
           ) : (
-            <div className="space-y-3" aria-label="正在加载用户资料">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
+            <div className="@container/form max-w-2xl space-y-4" aria-label="正在加载用户资料">
+              <div className="space-y-1.5">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4.5 w-72 max-w-full" delay={40} />
+              </div>
+              <div className="grid grid-cols-1 gap-4 @lg/form:grid-cols-2">
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <Skeleton key={index} className="h-14 w-full rounded-md" delay={60 + index * 35} />
+                ))}
+                <Skeleton className="h-14 w-full rounded-md @lg/form:col-span-2" delay={270} />
+              </div>
+              <Skeleton className="h-24 w-full rounded-md" delay={300} />
+              <div className="flex justify-end gap-3">
+                <Skeleton className="h-10 w-16 rounded-full" delay={330} />
+                <Skeleton className="h-10 w-24 rounded-full" delay={360} />
+              </div>
             </div>
           )}
         </InlineEditorPanel>

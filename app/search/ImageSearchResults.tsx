@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { MdClose, MdImageSearch, MdTune } from 'react-icons/md';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
@@ -28,6 +29,7 @@ export default function ImageSearchResults({
   onSearchAgain: () => void;
   onClose: () => void;
 }) {
+  const headingId = useId();
   const fp = useBrowsingFingerprint();
 
   if (!result) {
@@ -50,15 +52,15 @@ export default function ImageSearchResults({
   const hidden = result.found - images.length;
 
   return (
-    <section aria-labelledby="image-search-heading">
-      <div className="mb-6 flex items-center gap-4">
+    <section aria-labelledby={headingId}>
+      <div className="mb-6 flex items-center gap-3 sm:gap-4">
         {result.preview && (
           <div className="relative size-14 shrink-0 overflow-hidden rounded-md bg-surface-container-high">
             <FadeInImage src={result.preview} alt="用于搜索的图片" fill sizes="56px" className="object-cover" />
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h2 id="image-search-heading" className="text-title-m-emphasized text-on-surface">
+          <h2 id={headingId} className="text-title-m-emphasized text-on-surface">
             以图搜图结果
           </h2>
           <p className="text-body-m tabular-nums text-on-surface-variant" role="status">
@@ -66,10 +68,12 @@ export default function ImageSearchResults({
             {hidden > 0 ? `，其中 ${hidden} 张因当前内容筛选设置未显示` : ''}
           </p>
         </div>
-        <Button variant="surface" icon={<MdImageSearch />} responsiveLabel onClick={onSearchAgain}>
-          重新搜图
-        </Button>
-        <IconButton dismiss aria-label="关闭以图搜图结果" icon={<MdClose />} onClick={onClose} />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button variant="surface" icon={<MdImageSearch />} responsiveLabel onClick={onSearchAgain}>
+            重新搜图
+          </Button>
+          <IconButton dismiss aria-label="关闭以图搜图结果" icon={<MdClose />} onClick={onClose} />
+        </div>
       </div>
       {images.length > 0 ? (
         <MasonryGrid images={images} listKey={`image-search:${fp}`} />

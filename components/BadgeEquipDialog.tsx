@@ -157,23 +157,27 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
       {source === null && data === undefined && read.error ? (
         <ErrorRetry
           size="inline"
+          className="mt-4"
           title="徽章加载失败"
           message={apiErrorMessage(read.error)}
           onRetry={isRetryable(read.error) ? read.refresh : undefined}
         />
       ) : source === null ? (
-        /* The rows' own shape: a 40dp checkbox cell, the badge, its validity. */
-        <ul className="mt-4 flex flex-col gap-1" aria-hidden="true">
-          {Array.from({ length: 3 }, (_, index) => (
-            <li key={index} className="flex min-h-12 items-center gap-3 px-1">
-              <Skeleton className="size-5 shrink-0 rounded-xs" delay={index * 80} />
-              <Skeleton className="h-5 w-20 rounded-xs" delay={index * 80 + 40} />
-              <Skeleton className="h-4 w-16" delay={index * 80 + 80} />
-            </li>
-          ))}
-        </ul>
+        /* The rows' own shape: an 18dp checkbox, the 24dp badge, its validity and the footer count. */
+        <div aria-hidden="true">
+          <ul className="mt-4 flex flex-col gap-1">
+            {Array.from({ length: 3 }, (_, index) => (
+              <li key={index} className="flex min-h-12 items-center gap-3">
+                <Skeleton className="size-4.5 shrink-0 rounded-xs" delay={index * 80} />
+                <Skeleton className="h-6 w-20 rounded-xs" delay={index * 80 + 40} />
+                <Skeleton className="h-4 w-16" delay={index * 80 + 80} />
+              </li>
+            ))}
+          </ul>
+          <Skeleton className="mt-3 h-4.5 w-20" delay={240} />
+        </div>
       ) : held.length === 0 ? (
-        <EmptyState size="inline" title="暂无徽章" />
+        <EmptyState size="inline" className="mt-4" title="暂无徽章" />
       ) : (
         <>
           <ul className="mt-4 flex flex-col gap-1">
@@ -183,6 +187,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
               return (
                 <li key={badge.name} className="flex min-h-12 items-center">
                   <Checkbox
+                    className="w-full"
                     checked={checked}
                     onChange={(next) => toggle(badge.name, next)}
                     disabled={validity.expired || (!checked && full)}

@@ -52,7 +52,7 @@ export default function FavoritesSection() {
         label="默认收藏夹"
         supporting={`「${resolved.name}」`}
         action={
-          <RowButton label="选择默认收藏夹" icon={<MdEdit />} onClick={() => setChoosing(true)}>
+          <RowButton label="选择默认收藏夹" icon={<MdEdit />} onClick={() => setChoosing(true)} collapse={false}>
             选择
           </RowButton>
         }

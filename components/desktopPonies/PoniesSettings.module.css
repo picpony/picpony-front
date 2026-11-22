@@ -39,6 +39,7 @@
   position: absolute;
   inset-block-start: 12px;
   inset-inline-end: 12px;
+  z-index: 1;
   display: grid;
   place-items: center;
   width: 20px;
@@ -90,12 +91,18 @@
   min-height: 20px;
 }
 
-/* The six places. Square, up to 56dp, and as many as fit a phone's row in one line: on a 390px
-   screen the row holds 326px, six places and five 8px gaps. */
+/* The six places. Square, up to 56dp, in one row where there is room; on narrow coarse-pointer
+   phones, two rows of three keep every remove button above the 48dp touch floor. */
 .lineup {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 56px));
   gap: 8px;
+}
+
+@media (pointer: coarse) and (max-width: 440px) {
+  .lineup {
+    grid-template-columns: repeat(3, minmax(48px, 56px));
+  }
 }
 
 .slot {

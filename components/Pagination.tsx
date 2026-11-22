@@ -48,8 +48,8 @@ interface PaginationProps {
  * container is a dialog's, where it does nothing rather than scrolling a surface
  * the user is not looking at.
  */
-/** Matches a caller-supplied top margin (`mt-*`, `my-*`, or a breakpoint form). */
-const HAS_TOP_MARGIN = /(?:^|\s|:)(?:mt|my)-/;
+/** Matches an unconditional caller-supplied top margin (`mt-*` or `my-*`). */
+const HAS_TOP_MARGIN = /(?:^|\s)(?:mt|my)-/;
 
 export default function Pagination({
   currentPage,
@@ -153,7 +153,7 @@ export default function Pagination({
     'text-on-surface-variant state-layer focus-visible:outline-hidden select-none touch-manipulation',
     'transition-ui',
     'focus-visible:ring-2 focus-ring',
-    'disabled:pointer-events-none disabled:disabled-content',
+    'disabled:cursor-not-allowed disabled:disabled-content',
   );
 
   return (
@@ -178,7 +178,7 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
-          <MdFirstPage size={ICON.control} />
+          <MdFirstPage size={ICON.control} className="shrink-0" aria-hidden="true" />
         </button>
       )}
 
@@ -189,10 +189,10 @@ export default function Pagination({
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
-        className={cn(navBtn, '@xl/pagination:w-auto')}
+        className={cn(navBtn, '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-3 @xl/pagination:pr-4')}
       >
-        <MdChevronLeft size={ICON.control} />
-        <span className="@max-xl/pagination:hidden text-label-l pr-1">上一页</span>
+        <MdChevronLeft size={ICON.control} className="shrink-0" aria-hidden="true" />
+        <span className="@max-xl/pagination:hidden text-label-l">上一页</span>
       </button>
 
       <div className="flex items-center gap-1">
@@ -219,7 +219,7 @@ export default function Pagination({
                 'focus-visible:outline-hidden select-none touch-manipulation',
                 'transition-ui',
                 'focus-visible:ring-2 focus-ring',
-                'disabled:pointer-events-none disabled:disabled-content',
+                'disabled:cursor-not-allowed disabled:disabled-content',
                 /* One type role per branch, so the active page gets weight
                    contrast and not colour alone. `state-layer` on both branches —
                    the current page is still a button. No elevation: M3 gives a
@@ -230,9 +230,9 @@ export default function Pagination({
                 // A dialog and a column beside the app drawer can both be
                 // narrow on a wide viewport. The pager owns this breakpoint.
                 (page < compactStart || page >= compactStart + compactCount) && '@max-xl/pagination:hidden',
-                // Three numbers plus two 48dp touch targets need 256px.
-                // Below that, keep the current page between the two arrows.
-                !active && '@max-3xs/pagination:hidden',
+                // Three numbers (including 4-5 digit counts) plus two 48dp touch
+                // targets need ~288px. Below that, keep the current page between arrows.
+                !active && '@max-2xs/pagination:hidden',
               )}
             >
               {page}
@@ -248,10 +248,10 @@ export default function Pagination({
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple
-        className={cn(navBtn, '@xl/pagination:w-auto')}
+        className={cn(navBtn, '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-4 @xl/pagination:pr-3')}
       >
-        <span className="@max-xl/pagination:hidden text-label-l pl-1">下一页</span>
-        <MdChevronRight size={ICON.control} />
+        <span className="@max-xl/pagination:hidden text-label-l">下一页</span>
+        <MdChevronRight size={ICON.control} className="shrink-0" aria-hidden="true" />
       </button>
 
       {known && (
@@ -263,7 +263,7 @@ export default function Pagination({
           data-ripple
           className={cn(navBtn, '@max-xl/pagination:hidden')}
         >
-          <MdLastPage size={ICON.control} />
+          <MdLastPage size={ICON.control} className="shrink-0" aria-hidden="true" />
         </button>
       )}
     </nav>
@@ -301,7 +301,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         onClick={onClick}
         loading={isLoading}
         disabled={disabled}
-        className="group"
+        className={!disabled && !isLoading ? 'group/load-more' : undefined}
         busyIcon={
           <span className="flex items-center gap-1">
             {[0, 1, 2].map((i) => (
@@ -315,7 +315,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
         }
         icon={
           <MdRefresh
-            className="transition-[rotate] spring-fast-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
+            className="transition-[rotate] spring-fast-spatial group-hover/load-more:rotate-180 no-motion:group-hover/load-more:rotate-0"
           />
         }
       >

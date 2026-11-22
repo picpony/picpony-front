@@ -418,10 +418,10 @@ export default function Sheet({
         tabIndex={-1}
         className={cn(
           'relative flex w-full flex-col overflow-hidden focus-visible:outline-hidden',
-          /* `shadow-e1`, not `e3`: M3 puts the modal bottom sheet at elevation
-             level 1. Level 3 is the dialog/FAB/search step — a heavier shadow
-             than the thing a sheet is a quieter alternative to. */
-          'bg-surface-container-low text-on-surface rounded-t-2xl shadow-e1 edge-skirt-b forced-boundary',
+          /* M3 puts the modal bottom sheet at elevation level 1 (`edge-skirt-b` carries
+             `--shadow-e1` alongside the bottom skirt). Level 3 is the dialog/FAB/search
+             step — a heavier shadow than the thing a sheet is a quieter alternative to. */
+          'bg-surface-container-low text-on-surface rounded-t-2xl edge-skirt-b forced-boundary',
           // A sheet on a tablet or a desktop window should not run the whole
           // width of a 1600px screen; it stays a phone-width dock, centred.
           'mx-auto sm:max-w-lg',
@@ -449,7 +449,7 @@ export default function Sheet({
             {title && (
               <h2
                 id={titleId}
-                className={cn('text-title-l text-on-surface shrink-0 touch-none px-6 pb-3', hideHandle ? 'pt-6' : 'pt-1')}
+                className={cn('text-title-l text-on-surface min-w-0 shrink-0 touch-none wrap-anywhere px-6 pb-2', hideHandle ? 'pt-6' : 'pt-1')}
               >
                 {title}
               </h2>
@@ -469,8 +469,9 @@ export default function Sheet({
           /* Overscroll is contained: a list that reaches its end keeps the rest of
              the fling rather than handing it to the page (or the browser) beneath. */
           viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
-            bodyClassName || 'px-6',
+            'popover-scrollbar min-h-0 flex-1',
+            bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
+            bodyClassName || cn('px-6', !hideHandle || title ? 'pt-2' : 'pt-6'),
           )}
         >
           {children}

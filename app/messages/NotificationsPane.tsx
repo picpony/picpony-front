@@ -107,6 +107,7 @@ export default function NotificationsPane({ token, type, active, unread }: Notif
       {read.isPrevious && read.error !== undefined && (
         <ErrorRetry
           size="inline"
+          className="mb-4"
           title={copy.failed}
           message={apiErrorMessage(read.error)}
           onRetry={isRetryable(read.error) ? read.refresh : undefined}
@@ -141,7 +142,7 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
          once read), while read titles step up to `on-surface` so titles remain scannable. */
       className={cn(
         'm3-row p-4',
-        unread ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-low text-on-surface-variant',
+        unread ? 'bg-secondary-container text-on-secondary-container forced-selected' : 'bg-surface-container-low text-on-surface-variant',
       )}
     >
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">

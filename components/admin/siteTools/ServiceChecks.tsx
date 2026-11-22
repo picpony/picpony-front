@@ -40,13 +40,13 @@ export default function ServiceChecks({ token }: { token: string }) {
         if (runs.current === id && readToken() === token) setBusy(false);
       });
   };
-  return <div className="space-y-4">
+  return <div className="space-y-6">
     <AdminNote>从当前设备发起匿名检测，每条线路最多等待 5 秒。</AdminNote>
     <div className="flex flex-wrap gap-3"><Button variant="tonal" loading={busy} onClick={() => void run()}>检测线路</Button>{busy && <Button variant="text" onClick={() => { controller.current?.abort(); controller.current = null; setBusy(false); }}>停止检测</Button>}</div>
     <DataTable rows={checks} rowKey={(r) => r.name} loading={busy && !checks.length} {...tableError('线路检测失败', error || undefined)} empty={<EmptyState size="inline" title="按下「检测线路」查看当前状态" />} columns={[
-      { key: 'name', header: '线路', primary: true, render: (r) => r.name },
-      { key: 'status', header: '状态', render: (r) => r.error ?? (r.status === 'decoded' ? '图片可正常加载' : r.status === null ? '已收到响应，状态码不可读' : r.status >= 200 && r.status < 400 ? `连接正常（${r.status}）` : `返回异常（${r.status}）`) },
-      { key: 'latency', header: '耗时', className: 'tabular-nums', render: (r) => `${r.latency} 毫秒` },
+      { key: 'name', header: '线路', primary: true, width: 'minmax(0, 1.2fr)', render: (r) => r.name },
+      { key: 'status', header: '状态', width: 'minmax(0, 2fr)', className: 'tabular-nums', render: (r) => r.error ?? (r.status === 'decoded' ? '图片可正常加载' : r.status === null ? '已收到响应，状态码不可读' : r.status >= 200 && r.status < 400 ? `连接正常（${r.status}）` : `返回异常（${r.status}）`) },
+      { key: 'latency', header: '耗时', width: 'auto', className: 'tabular-nums', render: (r) => `${r.latency} 毫秒` },
     ]} />
   </div>;
 }

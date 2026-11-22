@@ -125,34 +125,36 @@ function ColorPanel({ entry, close }: { entry: Entry<EditorColorPanel>; close: (
     close();
   };
   return (
-    <Popover open={open} anchorRef={anchorRef} matchAnchorWidth={false}
+    <Popover open={open} anchorRef={anchorRef} matchAnchorWidth={false} inset={false}
       role="dialog" aria-label={request.title} className="w-72" estimatedHeight={288}
       onClose={(refocus) => { if (refocus) request.anchor.focus({ preventScroll: true }); close(); }}>
-      <div className="flex items-center justify-between gap-2 px-2 pb-2">
-        <span className="text-title-s text-on-surface">{request.title}</span>
-        <IconButton size="sm" dismiss aria-label="关闭" icon={<MdClose />} onClick={() => { request.anchor.focus(); close(); }} />
-      </div>
-      <Button variant="text" fullWidth className="mb-2" icon={<MdFormatColorReset />} onClick={() => pick(null)}>
-        {request.key === 'bgColor' ? '清除背景颜色' : '默认文字颜色'}
-      </Button>
-      <div className="grid grid-cols-5 gap-1" role="group" aria-label={request.title}>
-        {request.colors.map((color, index) => (
-          <IconButton key={color} ref={(node) => { controls.current[index] = node; }}
-            aria-label={`选择颜色 ${colorLabel(color)}`} toggle selected={color === request.value}
-            tabIndex={index === cursor ? 0 : -1} shape="square" className="touch-size justify-self-center"
-            onFocus={() => setCursor(index)} onClick={() => pick(color)}
-            icon={<span className="forced-boundary block size-6 rounded-xs border border-outline-variant" style={{ backgroundColor: color }} />}
-            onKeyDown={(event) => {
-              const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -5, ArrowDown: 5 };
-              let next = index;
-              if (event.key in offsets) next = Math.max(0, Math.min(request.colors.length - 1, index + offsets[event.key]));
-              else if (event.key === 'Home') next = 0;
-              else if (event.key === 'End') next = request.colors.length - 1;
-              else return;
-              event.preventDefault();
-              controls.current[next]?.focus();
-            }} />
-        ))}
+      <div className="flex flex-col gap-2 p-2">
+        <div className="flex items-center justify-between gap-2 px-2">
+          <span className="text-title-s text-on-surface">{request.title}</span>
+          <IconButton size="sm" dismiss aria-label="关闭" icon={<MdClose />} onClick={() => { request.anchor.focus(); close(); }} />
+        </div>
+        <Button variant="text" fullWidth icon={<MdFormatColorReset />} onClick={() => pick(null)}>
+          {request.key === 'bgColor' ? '清除背景颜色' : '默认文字颜色'}
+        </Button>
+        <div className="grid grid-cols-5 gap-1" role="group" aria-label={request.title}>
+          {request.colors.map((color, index) => (
+            <IconButton key={color} ref={(node) => { controls.current[index] = node; }}
+              aria-label={`选择颜色 ${colorLabel(color)}`} toggle selected={color === request.value}
+              tabIndex={index === cursor ? 0 : -1} shape="square" className="touch-size justify-self-center"
+              onFocus={() => setCursor(index)} onClick={() => pick(color)}
+              icon={<span className="forced-boundary block size-6 rounded-xs border border-outline-variant" style={{ backgroundColor: color }} />}
+              onKeyDown={(event) => {
+                const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -5, ArrowDown: 5 };
+                let next = index;
+                if (event.key in offsets) next = Math.max(0, Math.min(request.colors.length - 1, index + offsets[event.key]));
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = request.colors.length - 1;
+                else return;
+                event.preventDefault();
+                controls.current[next]?.focus();
+              }} />
+          ))}
+        </div>
       </div>
     </Popover>
   );

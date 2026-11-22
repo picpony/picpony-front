@@ -657,7 +657,7 @@ export default function Popover({
           inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
         )}
       >
-        <div ref={contentRef} role="presentation" className="space-y-0.5">
+        <div ref={contentRef} role="presentation" className={inset ? 'flex flex-col gap-0.5' : undefined}>
           {children}
         </div>
       </ScrollArea>

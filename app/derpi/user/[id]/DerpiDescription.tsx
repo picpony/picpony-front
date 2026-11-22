@@ -59,7 +59,7 @@ export default function DerpiDescription({ markdown, id }: { markdown: string; i
         <Button
           variant="text"
           size="xs"
-          className="mt-1 -ml-4"
+          className="mt-1 -ms-3 sm:-ms-4"
           aria-expanded={expanded}
           aria-controls={id}
           onClick={() => setExpanded((open) => !open)}

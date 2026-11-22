@@ -43,7 +43,10 @@ export default function ButtonContent({
         </span>
       )}
       {trailingIcon && (
-        <span aria-hidden="true" className={cn('shrink-0 [&>svg]:block', responsiveLabel && icon && 'max-sm:hidden')}>
+        <span
+          aria-hidden="true"
+          className={cn('inline-flex shrink-0 items-center justify-center [&>svg]:block', responsiveLabel && icon && 'max-sm:hidden')}
+        >
           {loading && !icon ? busyIcon : trailingIcon}
         </span>
       )}

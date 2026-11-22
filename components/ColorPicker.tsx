@@ -86,7 +86,7 @@ const inkOn = (tone: number) => (tone > 55 ? '#000' : '#fff');
  * wrapping row that left two stops alone on a third line.
  */
 const RAIL_CLASS =
-  'grid grid-cols-6 place-items-center gap-y-2 p-1 sm:pointer-fine:grid-cols-12 pointer-coarse:gap-y-4 pointer-coarse:p-2';
+  'grid grid-cols-4 min-[384px]:grid-cols-6 place-items-center gap-y-2 p-1 sm:pointer-fine:grid-cols-12 pointer-coarse:gap-y-4 pointer-coarse:p-2';
 /**
  * The tone × chroma board fills the dialog's width: a fixed label column, then five
  * columns sharing the rest (never under 40px, and the board scrolls sideways before it
@@ -118,7 +118,7 @@ const modeOf = (accent: AccentChoice): AccentMode =>
  * covers — measured, content showed through it otherwise. The same 4px margin back keeps the
  * preview where it always sat at rest.
  */
-const PREVIEW_DOCK = 'sticky -top-1 z-10 -mt-1 bg-surface-container-high pt-1 pb-1';
+const PREVIEW_DOCK = 'sticky top-0 z-10 -mt-2 bg-surface-container-high pt-2 pb-2';
 
 /** The tiles: five across where there is room; two across, in three rows, where there is not. */
 const MODES_CLASS = 'grid grid-cols-2 gap-2 p-1 sm:grid-cols-5';
@@ -194,10 +194,10 @@ function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: Pal
         <ScrollArea axis="x" viewportClassName="popover-scrollbar overflow-x-auto">
           <div className="grid gap-1 p-1 pointer-coarse:gap-2" style={{ gridTemplateColumns: BOARD_COLUMNS }}>
             <span />
-            {CHROMAS.map((x) => <span key={x} className="text-label-s text-center tabular-nums">{Math.round(x * 100)}%</span>)}
+            {CHROMAS.map((x) => <span key={x} className="text-label-s text-on-surface-variant text-center tabular-nums">{Math.round(x * 100)}%</span>)}
             {TONES.map((tone) => (
               <Row key={tone}>
-                <span className="text-label-s self-center pr-2 text-right tabular-nums">{tone}</span>
+                <span className="text-label-s text-on-surface-variant self-center pr-2 text-right tabular-nums">{tone}</span>
                 {CHROMAS.map((x) => <Skeleton key={x} className="h-10 rounded-xs bg-surface-container-highest" />)}
               </Row>
             ))}
@@ -572,7 +572,7 @@ function PickerDialog({
                       )}
                     >
                       {/* Concentric inside the 12dp tile with 8dp inset: 12 − 8 = 4dp (`rounded-xs`). */}
-                      <span className="forced-boundary relative isolate h-9 w-12 shrink-0 overflow-hidden rounded-xs">
+                      <span className="forced-boundary forced-color-adjust-auto relative -z-10 h-9 w-12 shrink-0 overflow-hidden rounded-xs">
                         <PaletteTileFace size="compact" tone={tones[scheme]} face={tones.face[scheme]} hues="multi" />
                       </span>
                       <span className="text-label-l">{label}</span>

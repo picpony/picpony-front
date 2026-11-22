@@ -179,17 +179,17 @@ export default function DetailHeader({
           <Dot />
           <div className="shrink-0 text-on-surface-variant">
             <span className="sr-only">上传日期</span>
-            {/* The date is the widest field. Below `sm` it takes the compact shape — the
-                clock of a day this year, the year of an older one, never a date that reads as
-                this year's when it is not — and the full value is the `title` on it. */}
+            {/* The date is the widest field. Driven off the detail frame's container width
+                (globals.css) so narrow frames beside an open desktop sidebar also switch to
+                the compact shape rather than crowding out the uploader's name. */}
             <MetaValue
               value={
                 created && (
                   <time dateTime={created} title={formatDateTime(created)} className="tabular-nums">
-                    <span className="sm:hidden">
+                    <span className="image-detail-date-compact">
                       {now === null ? formatDate(created) : formatCompactDateTime(created, now)}
                     </span>
-                    <span className="hidden sm:inline">{formatDateTime(created)}</span>
+                    <span className="image-detail-date-full">{formatDateTime(created)}</span>
                   </time>
                 )
               }

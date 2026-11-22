@@ -19,7 +19,7 @@ export default function NotFound() {
     <EmptyState
       fill
       icon={
-        <span aria-hidden="true" className="text-display-l leading-none">
+        <span aria-hidden="true" className="text-display-l">
           404
         </span>
       }

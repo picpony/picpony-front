@@ -56,7 +56,7 @@ function MarkdownLink({ href, children }: { href?: string; children?: ReactNode 
 
 export default function MarkdownDocument({ content }: { content: string }) {
   return (
-    <div className="rich-text-content">
+    <div className="rich-text-content wrap-anywhere">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkHardBreaks]}
         rehypePlugins={[rehypeSanitize]}

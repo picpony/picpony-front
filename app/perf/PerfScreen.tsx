@@ -247,7 +247,7 @@ export default function PerfScreen() {
 
         <Card variant="filled" padding="lg" className="mb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-start gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <span
                 className="grid size-12 shrink-0 place-items-center rounded-full bg-primary-container text-on-primary-container"
                 aria-hidden="true"
@@ -255,7 +255,7 @@ export default function PerfScreen() {
                 <MdSpeed size={ICON.standard} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-title-m text-on-surface">
+                <p className="text-title-m tabular-nums text-on-surface">
                   {starting
                     ? '正在启动测试…'
                     : anyGroup
@@ -331,8 +331,8 @@ export default function PerfScreen() {
           <SectionHeading id="perf-device-title" icon={<MdMemory size={ICON.control} />}>
             本机
           </SectionHeading>
-          <Card variant="filled" padding="lg">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
+          <Card variant="filled" padding="lg" className="@container">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 @xl:grid-cols-4">
               <Fact label="视口">{facts?.viewport}</Fact>
               <Fact label="像素比">{facts && `DPR ${facts.dpr}`}</Fact>
               <Fact label="CPU 核心">{facts && (facts.cores ? `${facts.cores} 核` : '未知')}</Fact>
@@ -345,7 +345,11 @@ export default function PerfScreen() {
                   {hardware.socGuess}
                 </Fact>
               )}
-              {hardware?.model && <Fact label="机型代号">{hardware.model}</Fact>}
+              {hardware?.model && (
+                <Fact label="机型代号" wide>
+                  {hardware.model}
+                </Fact>
+              )}
               {hardware?.os && (
                 <Fact label="系统 / 架构" wide>
                   {hardware.os}
@@ -370,15 +374,15 @@ export default function PerfScreen() {
             onCopy={() => void copy()}
             onShare={canShare ? () => void share() : undefined}
           />
+        ) : mounted ? (
+          <EmptyState
+            size="pane"
+            icon={<MdInsights size={ICON.display} />}
+            title="暂无测试报告"
+            description="点击「开始测试」即可运行"
+          />
         ) : (
-          mounted && (
-            <EmptyState
-              size="pane"
-              icon={<MdInsights size={ICON.display} />}
-              title="暂无测试报告"
-              description="点击「开始测试」即可运行"
-            />
-          )
+          <div className="min-h-60" aria-hidden="true" />
         )}
       </div>
     </>
@@ -390,7 +394,7 @@ function Fact({ label, wide, children }: { label: string; wide?: boolean; childr
   return (
     <div className={cn('min-w-0', wide && 'col-span-2')}>
       <dt className="text-label-m text-on-surface-variant">{label}</dt>
-      <dd className="mt-0.5 text-body-l wrap-anywhere text-on-surface">{children ?? '—'}</dd>
+      <dd className="mt-0.5 text-body-l tabular-nums wrap-anywhere text-on-surface">{children ?? '—'}</dd>
     </div>
   );
 }
@@ -423,17 +427,17 @@ function ReportView({
         icon={<MdInsights size={ICON.control} />}
         actions={
           <>
-            <Button size="xs" variant="tonal" icon={<MdContentCopy />} onClick={onCopy}>
+            <Button size="xs" variant="tonal" icon={<MdContentCopy />} className="pointer-coarse:my-1" onClick={onCopy}>
               复制
             </Button>
-            <Button size="xs" variant="tonal" icon={<MdDownload />} onClick={() => onDownload('md')}>
+            <Button size="xs" variant="tonal" icon={<MdDownload />} className="pointer-coarse:my-1" onClick={() => onDownload('md')}>
               Markdown
             </Button>
-            <Button size="xs" variant="tonal" icon={<MdDownload />} onClick={() => onDownload('json')}>
+            <Button size="xs" variant="tonal" icon={<MdDownload />} className="pointer-coarse:my-1" onClick={() => onDownload('json')}>
               JSON
             </Button>
             {onShare && (
-              <Button size="xs" variant="tonal" icon={<MdShare />} onClick={onShare}>
+              <Button size="xs" variant="tonal" icon={<MdShare />} className="pointer-coarse:my-1" onClick={onShare}>
                 分享
               </Button>
             )}
@@ -478,7 +482,7 @@ function ReportView({
             </Badge>
           </div>
         </div>
-        <p className="mt-4 text-body-s wrap-anywhere text-on-surface-variant">{meta.join(' · ')}</p>
+        <p className="mt-4 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">{meta.join(' · ')}</p>
         {report.aborted && (
           <p className="mt-3 flex items-start gap-2 rounded-md bg-error-container p-4 text-body-m text-on-error-container">
             <MdErrorOutline size={ICON.control} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -551,9 +555,9 @@ function ScenarioRow({ scenario }: { scenario: PerfScenario }) {
       </button>
 
       <Collapse open={open} id={panelId} role="region" aria-label={scenario.label}>
-        <div className="flex flex-col gap-5 px-4 pb-4">
+        <div className="@container flex flex-col gap-5 px-4 pb-4">
           {incomplete > 0 && (
-            <p className="text-body-m text-error">
+            <p className="text-body-m tabular-nums text-error">
               {incomplete} 轮没有回到静止状态（未完成）
             </p>
           )}
@@ -566,7 +570,7 @@ function ScenarioRow({ scenario }: { scenario: PerfScenario }) {
                 帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}（不计入总体结论）
               </p>
             )}
-            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-2 @xl:grid-cols-4">
               <Metric label="响应延迟" value={ms(s.latencyMs)} />
               <Metric label="完成用时" value={ms(s.settleMs)} />
               <Metric label="平均帧率" value={`${s.fps} fps`} />
@@ -612,8 +616,8 @@ function StressChecks({ scenario }: { scenario: PerfScenario }) {
   ];
   return (
     <div>
-      <p className="mb-2 text-label-m text-on-surface-variant">正确性检查 · 共 {g.actions} 次操作</p>
-      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <p className="mb-2 text-label-m tabular-nums text-on-surface-variant">正确性检查 · 共 {g.actions} 次操作</p>
+      <ul className="grid grid-cols-1 gap-2 @lg:grid-cols-2">
         {checks.map((check) => (
           <li
             key={check.label}
@@ -621,7 +625,7 @@ function StressChecks({ scenario }: { scenario: PerfScenario }) {
           >
             <span className="min-w-0 flex-1">
               <span className="block text-label-l text-on-surface">{check.label}</span>
-              <span className="block text-body-s text-on-surface-variant">{check.detail}</span>
+              <span className="block text-body-s tabular-nums text-on-surface-variant">{check.detail}</span>
             </span>
             <Badge
               size="md"
@@ -632,7 +636,7 @@ function StressChecks({ scenario }: { scenario: PerfScenario }) {
             </Badge>
           </li>
         ))}
-        <li className="flex items-center gap-3 rounded-sm bg-surface-container-high px-3 py-2">
+        <li className="flex items-center gap-3 rounded-sm bg-surface-container-high px-3 py-2 @lg:col-span-2">
           <span className="min-w-0 flex-1">
             <span className="block text-label-l text-on-surface">直接切换</span>
             <span className="block text-body-s text-on-surface-variant">没有动画、直接跳到结果，不计入结论</span>
@@ -801,8 +805,8 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
   if (!parsed) {
     return (
       <>
-        <p className="text-label-l text-on-surface">第 {round} 轮</p>
-        <p className="mt-1 text-body-s wrap-anywhere text-on-surface-variant">{detail}</p>
+        <p className="text-label-l tabular-nums text-on-surface">第 {round} 轮</p>
+        <p className="mt-1 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">{detail}</p>
       </>
     );
   }
@@ -811,7 +815,7 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
   return (
     <>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-label-l text-on-surface">第 {round} 轮</p>
+        <p className="text-label-l tabular-nums text-on-surface">第 {round} 轮</p>
         <p className="text-title-s tabular-nums text-on-surface">{Math.round(parsed.totalMs)} ms</p>
       </div>
       <div

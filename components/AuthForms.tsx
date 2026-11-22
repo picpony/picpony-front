@@ -728,7 +728,7 @@ function VerifyEmail({
           验证并登录
         </Button>
       </form>
-      <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-x-2">
+      <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-2">
         {/* Starting over is the one way out of the pending sign-up; 返回登录 keeps it. */}
         <Button
           type="button"
@@ -993,7 +993,7 @@ function ResetForm({
                 重置密码
               </Button>
             </form>
-            <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-x-2">
+            <div className="mt-4 -mx-4 flex flex-wrap items-center justify-between gap-2">
               <Button
                 type="button"
                 variant="text"

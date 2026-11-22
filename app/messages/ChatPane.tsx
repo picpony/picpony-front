@@ -215,7 +215,7 @@ export default function ChatPane({ token, me, active, target, onTargetConsumed, 
         /* `surface-container-low`, the step the column inside it takes, so the search field's
            own tone has something to stand out from. As tall as the window allows between the
            chrome above and the footer's edge, within a readable band. */
-        <div className="forced-boundary flex h-[min(38rem,max(26rem,calc(100dvh-15rem)))] overflow-hidden rounded-md bg-surface-container-low">
+        <div className="forced-boundary flex h-[min(38rem,max(26rem,calc(100dvh-var(--app-chrome-bottom)-16.5rem)))] overflow-hidden rounded-md bg-surface-container-low">
           {list}
           <div className="flex min-w-0 flex-1 flex-col border-l border-outline-variant">
             {selected ? (
@@ -225,7 +225,7 @@ export default function ChatPane({ token, me, active, target, onTargetConsumed, 
                 size="pane"
                 icon={<MdOutlineChatBubbleOutline size={ICON.display} />}
                 title="选择一个联系人开始聊天"
-                className="flex-1"
+                className="min-h-0 flex-1"
               />
             )}
           </div>

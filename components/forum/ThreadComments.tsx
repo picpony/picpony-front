@@ -157,14 +157,16 @@ export default function ThreadComments({
   const failed = error !== undefined && error !== null;
   return (
     <section data-pagination-anchor aria-labelledby={headingId} className="mb-8 scroll-mt-20">
-      <SectionHeading id={headingId}>全部回复（{total}）</SectionHeading>
+      <SectionHeading id={headingId} aside={total}>全部回复</SectionHeading>
       {failed && (
-        <ErrorRetry
-          size="inline"
-          title={comments ? `第 ${page} 页加载失败` : '回复加载失败'}
-          message={apiErrorMessage(error)}
-          onRetry={isRetryable(error) ? onRetry : undefined}
-        />
+        <div className={comments ? 'mb-4' : undefined}>
+          <ErrorRetry
+            size="inline"
+            title={comments ? `第 ${page} 页加载失败` : '回复加载失败'}
+            message={apiErrorMessage(error)}
+            onRetry={isRetryable(error) ? onRetry : undefined}
+          />
+        </div>
       )}
       {comments === undefined ? (
         !failed && <RepliesSkeleton rows={Math.min(Math.max(expected, 1), 5)} />

@@ -20,6 +20,7 @@ import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import PresenceList from '@/components/PresenceList';
+import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import SelectionBar, { type SelectionCommand } from '@/components/favorites/SelectionBar';
@@ -96,7 +97,18 @@ export default function FoldersPane({ token, active }: { token: string; active: 
         />
       );
     }
-    return <FolderGridSkeleton />;
+    return (
+      <div data-page-loading="">
+        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+          <Skeleton className="h-4 w-48 max-w-full" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
+            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
+          </div>
+        </div>
+        <FolderGridSkeleton />
+      </div>
+    );
   }
 
   const chosen = folders.filter((folder) => selection.selected.has(folder.id));
@@ -159,6 +171,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     {
       value: 'all',
       label: allSelected ? '取消全选' : '全选',
+      maxLabel: '取消全选',
       icon: allSelected ? <MdDeselect /> : <MdSelectAll />,
       onSelect: () => selection.setMany(order, !allSelected),
       disabled: order.length === 0,
@@ -186,7 +199,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
           column, and below `sm` the actions are their glyphs. Wrapped onto a row of their own on a
           phone, they left a blank band a button tall while the mode hid them (D1-014). */}
       <div className="mb-4 flex min-h-10 items-center gap-4">
-        <p className="min-w-0 flex-1 text-body-m text-on-surface-variant tabular-nums">
+        <p className="min-w-0 flex-1 wrap-anywhere text-body-m text-on-surface-variant tabular-nums">
           共 {formatCount(folders.length)} 个收藏夹 · 默认收藏到「{defaultFolder.name}」
         </p>
         {/* Out of the mode's way on the effects spring, on the bar's own clock — never in one
@@ -237,49 +250,51 @@ export default function FoldersPane({ token, active }: { token: string; active: 
         /* A folder deleted or merged away fades where it was while the cards after it glide into
            their new cells, and a new one grows into its own — the grid never reflows in a frame
            (M1-006). */
-        <PresenceList
-          ref={presence}
-          items={folders}
-          getKey={(folder: FaveFolder) => folder.id}
-          variant="grid"
-          /* The main folder cannot be deleted, so a card is always left; should none be, 新建. */
-          fallbackFocus={() => createRef.current}
-        >
-          {(entries, ref) => (
-            <ul ref={ref} className={FOLDER_GRID}>
-              {entries.map(({ item: folder, key }) => (
-                <li key={key} data-presence-key={key} className="min-w-0">
-                  <FolderCard
-                    folder={folder}
-                    href={faveFolderHref(folder.id)}
-                    cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
-                    coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
-                    badges={
-                      <FolderBadges
-                        isDefault={folder.id === defaultFolder.id}
-                        isPublic={commands.showFaves && isFolderPublic(folder.id, commands.publicIds)}
-                      />
-                    }
-                    menu={
-                      <FolderMenuButton
-                        folder={folder}
-                        items={commands.itemsFor(folder)}
-                        onSelect={(command) => void commands.run(folder, command)}
-                      />
-                    }
-                    selection={{
-                      active: selection.active,
-                      selected: selection.selected.has(folder.id),
-                      selectable: !folder.isMain,
-                      onToggle: selection.toggle,
-                      onLongPress: selection.enter,
-                    }}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </PresenceList>
+        <div className="@container/folders">
+          <PresenceList
+            ref={presence}
+            items={folders}
+            getKey={(folder: FaveFolder) => folder.id}
+            variant="grid"
+            /* The main folder cannot be deleted, so a card is always left; should none be, 新建. */
+            fallbackFocus={() => createRef.current}
+          >
+            {(entries, ref) => (
+              <ul ref={ref} className={FOLDER_GRID}>
+                {entries.map(({ item: folder, key }) => (
+                  <li key={key} data-presence-key={key} className="grid min-w-0">
+                    <FolderCard
+                      folder={folder}
+                      href={faveFolderHref(folder.id)}
+                      cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
+                      coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
+                      badges={
+                        <FolderBadges
+                          isDefault={folder.id === defaultFolder.id}
+                          isPublic={commands.showFaves && isFolderPublic(folder.id, commands.publicIds)}
+                        />
+                      }
+                      menu={
+                        <FolderMenuButton
+                          folder={folder}
+                          items={commands.itemsFor(folder)}
+                          onSelect={(command) => void commands.run(folder, command)}
+                        />
+                      }
+                      selection={{
+                        active: selection.active,
+                        selected: selection.selected.has(folder.id),
+                        selectable: !folder.isMain,
+                        onToggle: selection.toggle,
+                        onLongPress: selection.enter,
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </PresenceList>
+        </div>
       )}
       <SelectionBar
         active={selection.active}

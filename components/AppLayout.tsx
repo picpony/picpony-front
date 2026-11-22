@@ -1255,7 +1255,7 @@ export default function AppLayout({
                         </Badge>
                         {userInfo.derpi_username && (
                           <span
-                            className="text-label-s text-success max-w-[100px] truncate"
+                            className="text-label-s text-success min-w-0 flex-1 truncate"
                             title={userInfo.derpi_username}
                           >
                             ✓ {userInfo.derpi_username}
@@ -1280,7 +1280,7 @@ export default function AppLayout({
                     <Avatar size={40} />
                     <span className="sidebar-label min-w-0 flex-1">
                       <span className="text-title-s text-on-surface block truncate">未登录</span>
-                      <span className="text-body-m text-on-surface-variant block truncate">
+                      <span className="text-body-s text-on-surface-variant block truncate">
                         点击登录
                       </span>
                     </span>

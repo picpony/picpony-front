@@ -95,7 +95,11 @@ export default function DetailDescription({ description }: { description?: strin
   const bodyStyle: CSSProperties = {
     maxHeight: open ? contentHeight || 'none' : COLLAPSED_MAX_HEIGHT,
   };
-  if (overflowing || open) bodyStyle.maskImage = fadeMask(open);
+  if (overflowing || open) {
+    const mask = fadeMask(open);
+    bodyStyle.maskImage = mask;
+    bodyStyle.WebkitMaskImage = mask;
+  }
 
   return (
     <section aria-labelledby={headingId}>
@@ -119,7 +123,7 @@ export default function DetailDescription({ description }: { description?: strin
               /* Clipped in both states: the fold travels as `max-height`, and unclipped content
                  would paint past the moving edge. The layout spring (`animateContentSize`): a
                  box following its content, critically damped, so the fold never overshoots. */
-              className="text-body-m text-on-surface wrap-anywhere overflow-hidden transition-[max-height,mask-image] spring-layout"
+              className="text-body-m text-on-surface wrap-anywhere overflow-hidden transition-[max-height,mask-image,-webkit-mask-image] spring-layout"
               style={bodyStyle}
             >
               <RichTextRenderer content={derpiMarkdown(text)} />
@@ -128,7 +132,7 @@ export default function DetailDescription({ description }: { description?: strin
               <Button
                 variant="text"
                 size="xs"
-                className="mt-2"
+                className="-ms-3 mt-2 sm:-ms-4"
                 aria-expanded={open}
                 aria-controls={bodyId}
                 onClick={() => setExpanded(open ? null : text)}

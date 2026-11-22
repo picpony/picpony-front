@@ -272,7 +272,7 @@ export default function FeaturedBanner({
         {/* Labels stay in the original card slot and simply fade via CSS. */}
         <div
           data-image-hero-chrome
-          className="pointer-events-none absolute inset-0 z-20 rounded-lg"
+          className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-lg"
           aria-hidden="true"
         >
           <div
@@ -300,41 +300,41 @@ export default function FeaturedBanner({
             {teaser && (
               /* A plain-text pass over the description's markup (R4-054): the first readable
                  paragraph, spoilers dropped, cut at 150 characters. */
-              <p className="text-body-m text-on-media-variant sm:text-body-l mb-2 line-clamp-2 max-w-2xl sm:mb-3">
+              <p className="text-body-m text-on-media-variant sm:text-body-l mb-2 line-clamp-1 max-w-2xl sm:mb-3 sm:line-clamp-2">
                 {teaser}
               </p>
             )}
             {bannerTags.length > 0 && (
-              <div className="mb-2 flex max-w-2xl flex-wrap gap-1.5 sm:mb-3">
+              <div className="mb-2 flex max-w-2xl flex-nowrap items-center gap-1.5 overflow-hidden sm:mb-3">
                 {bannerTags.map((tag, tagIndex) => (
-                  <Badge key={tag} tone="media" className={tagIndex >= 4 ? 'max-w-36 max-sm:hidden' : 'max-w-36'}>
+                  <Badge key={tag} tone="media" className={tagIndex >= 4 ? 'max-w-36 shrink-0 max-sm:hidden' : 'max-w-36 shrink-0'}>
                     {tagName(tag) || tag}
                   </Badge>
                 ))}
                 {(featured.tags?.length ?? 0) > 4 && (
-                  <span className="text-body-s text-on-media-variant px-2 py-0.5 tabular-nums sm:hidden">
+                  <span className="text-body-s text-on-media-variant shrink-0 px-2 py-0.5 tabular-nums sm:hidden">
                     +{(featured.tags?.length ?? 0) - 4}
                   </span>
                 )}
                 {(featured.tags?.length ?? 0) > 6 && (
-                  <span className="text-body-s text-on-media-variant hidden px-2 py-0.5 tabular-nums sm:inline">
+                  <span className="text-body-s text-on-media-variant hidden shrink-0 px-2 py-0.5 tabular-nums sm:inline">
                     +{(featured.tags?.length ?? 0) - 6}
                   </span>
                 )}
               </div>
             )}
-            <div className="text-body-s text-on-media-variant sm:text-body-m flex items-center gap-3 sm:gap-4">
-              <div className="flex items-center gap-1">
-                <MdThumbUp size={ICON.dense} />
+            <div className="text-body-s text-on-media-variant sm:text-body-m flex items-center gap-3 tabular-nums sm:gap-4">
+              <div className="flex shrink-0 items-center gap-1">
+                <MdThumbUp size={ICON.dense} className="shrink-0" />
                 <span>{formatCount(featured.score ?? 0)}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <MdComment size={ICON.dense} />
+              <div className="flex shrink-0 items-center gap-1">
+                <MdComment size={ICON.dense} className="shrink-0" />
                 <span>{formatCount(featured.comment_count ?? 0)}</span>
               </div>
               {featured.uploader && (
                 <div className="flex min-w-0 items-center gap-1">
-                  <MdPerson size={ICON.dense} />
+                  <MdPerson size={ICON.dense} className="shrink-0" />
                   <span className="truncate">{featured.uploader}</span>
                 </div>
               )}

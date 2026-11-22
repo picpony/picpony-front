@@ -95,24 +95,28 @@ function ResultCaption({
   return (
     <>
       <div className="mb-3 flex min-h-10 items-center gap-3">
-        <div className="min-w-0 flex-1 truncate text-body-m tabular-nums text-on-surface-variant" role="status">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-body-m tabular-nums text-on-surface-variant" role="status">
           {entry && entry.cn && (
             <>
-              <span className="text-body-m-emphasized text-on-surface">{entry.cn}</span>
-              {' · '}
-              {tagCategory(entry.category).label}
-              {' · '}
+              <span className="min-w-0 truncate">
+                <span className="text-body-m-emphasized text-on-surface">{entry.cn}</span>
+                {' · '}
+                {tagCategory(entry.category).label}
+              </span>
+              <span aria-hidden="true" className="shrink-0">·</span>
             </>
           )}
-          {total === null ? (
-            /* The count's own box while the answer is on its way. */
-            <Skeleton className="inline-block h-4 w-24 align-middle" />
-          ) : (
-            <>
-              共 {formatCount(total)} 张
-              {shownPage > 1 ? ` · 第 ${shownPage} 页` : ''}
-            </>
-          )}
+          <div className="shrink-0">
+            {total === null ? (
+              /* The count's own box while the answer is on its way. */
+              <Skeleton className="inline-block h-4 w-24 align-middle" />
+            ) : (
+              <>
+                共 {formatCount(total)} 张
+                {shownPage > 1 ? ` · 第 ${shownPage} 页` : ''}
+              </>
+            )}
+          </div>
         </div>
         {hasDetails && (
           <Button
@@ -149,7 +153,7 @@ function ResultCaption({
               </div>
             )}
             {entry.description && (
-              <div className="text-body-m text-on-surface">
+              <div className="text-body-m text-on-surface wrap-anywhere">
                 <MarkdownRenderer content={entry.description} />
               </div>
             )}

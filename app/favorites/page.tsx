@@ -48,7 +48,7 @@ function FavoritesSession() {
     return (
       <div className="mx-auto max-w-7xl">
         <PageHeader title="我的收藏" />
-        <SignInRequired size="pane" description="登录后即可查看和管理你的收藏" />
+        <SignInRequired description="登录后即可查看和管理你的收藏" />
       </div>
     );
   }
@@ -76,10 +76,17 @@ function FavoritesSkeleton() {
       </div>
       <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
         {TAB_LABEL_WIDTHS.slice(0, favoritesTabs(showPrivacy).length).map((width) => (
-          <span key={width} className="px-4">
+          <div key={width} className="px-4">
             <Skeleton className={`h-4 ${width}`} />
-          </span>
+          </div>
         ))}
+      </div>
+      <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+        <Skeleton className="h-4 w-48 max-w-full" />
+        <div className="flex shrink-0 items-center gap-2">
+          <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
+          <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
+        </div>
       </div>
       <FolderGridSkeleton />
     </div>

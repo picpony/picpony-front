@@ -44,32 +44,34 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
   };
   return <div className="space-y-6">
     <SectionHeader section="rate-management" onRefresh={read.refresh} isLoading={read.refreshing} />
-    <ReadState title="频率规则加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
+    <ReadState variant="table" title="频率规则加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
       {read.data && <>
         <AdminForm aria-labelledby="admin-rate-rules-heading" onSubmit={submit} className="max-w-none">
           <SectionHeading as="h3" id="admin-rate-rules-heading">频率规则</SectionHeading>
           <AdminNote>{superAdmin ? '展开一项规则进行编辑，完成后按「保存频率规则」统一提交。' : '仅创始人可修改频率规则与解除临时封禁。'}</AdminNote>
           <AdminListAnchor>
             <DataTable rows={paged.rows} listKey={paged.listKey} rowKey={(r) => r.action} empty="暂无可配置的接口" expandedRow={(r) => editing?.action === r.action ? <InlineEditorPanel id={`rate-editor-${r.action}`} label={`编辑${r.label}`} isClosing={editing.closing} onEscape={closeEditor} onExitComplete={() => setEditing((current) => current?.action === r.action && current.closing ? null : current)}>
-              <div className="max-w-2xl space-y-4">
+              <div className="@container/form max-w-2xl space-y-4">
                 <FormGrid>
                   <Input label="最多次数" inputMode="numeric" value={r.max} readOnly={save.busy} onChange={(e) => change(r.action, 'max', e.target.value)} />
                   <Input label="时间窗口（秒）" inputMode="numeric" value={r.window} readOnly={save.busy} onChange={(e) => change(r.action, 'window', e.target.value)} />
-                  <Select label="计数对象" value={r.key_type} options={[{ value: 'ip', label: 'IP 地址' }, { value: 'user', label: '用户' }]} disabled={save.busy} onChange={(v) => change(r.action, 'key_type', v)} />
+                  <div className="min-w-0 @lg/form:col-span-2">
+                    <Select label="计数对象" value={r.key_type} options={[{ value: 'ip', label: 'IP 地址' }, { value: 'user', label: '用户' }]} disabled={save.busy} onChange={(v) => change(r.action, 'key_type', v)} />
+                  </div>
                 </FormGrid>
                 <FormActions><Button type="button" variant="text" onClick={closeEditor}>收起</Button></FormActions>
               </div>
             </InlineEditorPanel> : null} columns={[
               { key: 'name', header: '用途', primary: true, render: (r) => r.label },
-              { key: 'max', header: '最多次数', render: (r) => r.max },
-              { key: 'window', header: '时间窗口', render: (r) => `${r.window} 秒` },
-              { key: 'key', header: '计数对象', render: (r) => r.key_type === 'ip' ? 'IP 地址' : '用户' },
+              { key: 'max', header: '最多次数', width: 'auto', className: 'tabular-nums', render: (r) => r.max },
+              { key: 'window', header: '时间窗口', width: 'auto', className: 'tabular-nums', render: (r) => `${r.window} 秒` },
+              { key: 'key', header: '计数对象', width: 'auto', render: (r) => r.key_type === 'ip' ? 'IP 地址' : '用户' },
               { key: 'actions', header: '操作', actions: true, render: (r) => <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑${r.label}规则`} aria-controls={`rate-editor-${r.action}`} aria-expanded={editing?.action === r.action && !editing.closing} disabled={save.busy || !superAdmin} onClick={(event) => { captureInlineEditorLayout(event.currentTarget); setEditing({ action: r.action, closing: false }); }} /> },
             ]} />
             <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
           </AdminListAnchor>
           {Object.values(errors).map((error) => <p key={error} role="alert" className="text-body-s text-error">{error}</p>)}
-          {superAdmin && <FormActions><Button type="submit" loading={save.busy} disabled={!rules.length}>保存频率规则</Button></FormActions>}
+          {superAdmin && <FormActions><Button type="submit" variant="filled" loading={save.busy} disabled={!rules.length}>保存频率规则</Button></FormActions>}
         </AdminForm>
         <section className="space-y-4" aria-labelledby="admin-temporary-locks-heading">
           <SectionHeading as="h3" id="admin-temporary-locks-heading">临时封禁</SectionHeading>
@@ -78,9 +80,9 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
                 above already prints its failure — passing it again drew the same failure twice,
                 under two different nouns. */}
             <DataTable rows={locks.rows} listKey={locks.listKey} rowKey={(r) => r.id} empty="当前没有临时封禁用户" columns={[
-              { key: 'name', header: '用户', primary: true, render: (r) => `${r.username}（#${r.id}）` },
-              { key: 'attempts', header: '尝试次数', render: (r) => r.attempts },
-              { key: 'until', header: '解除时间', render: (r) => r.until ? formatDateTime(r.until) : '—' },
+              { key: 'name', header: '用户', primary: true, className: 'tabular-nums', render: (r) => `${r.username}（#${r.id}）` },
+              { key: 'attempts', header: '尝试次数', width: 'auto', className: 'tabular-nums', render: (r) => r.attempts },
+              { key: 'until', header: '解除时间', width: 'auto', className: 'tabular-nums', render: (r) => r.until ? formatDateTime(r.until) : '—' },
               { key: 'actions', header: '操作', actions: true, render: (r) => <IconButton size="sm" icon={<MdLockOpen />} aria-label={`解除 ${r.username} 的临时封禁`} disabled={!superAdmin} loading={release.pendingKeys.has(r.id)} onClick={() => confirmThen('确认解除临时封禁', `确定要解除「${r.username}」（#${r.id}）的临时封禁吗？`, () => void release.run(() => api.releaseLock(token, r.id), () => showToast('已解除临时封禁', 'success'), '临时封禁解除失败', { key: r.id, onCommitted: () => rateQuery.invalidate() }), { tone: 'filled' })} /> },
             ]} />
             <AdminPager page={locks.page} totalPages={locks.totalPages} onPageChange={locks.setPage} />

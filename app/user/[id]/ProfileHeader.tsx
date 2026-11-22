@@ -237,7 +237,15 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
             <ProgressBar value={xpInLevel} tone="tertiary" label={`等级 ${level} 经验进度`} className="mt-1.5" />
           </div>
         ) : (
-          !profile && <Skeleton className="mt-3 h-9 w-full max-w-xs" />
+          !profile && (
+            <div className="mt-3 max-w-xs" aria-hidden="true">
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-5 w-12" />
+                <Skeleton className="h-4 w-20" delay={60} />
+              </div>
+              <Skeleton className="mt-1.5 h-1 w-full rounded-full" delay={90} />
+            </div>
+          )
         )}
 
         {profile ? (

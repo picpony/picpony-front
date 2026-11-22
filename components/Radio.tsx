@@ -60,15 +60,15 @@ export default function Radio({
         startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
       }}
       className={cn(
-        'group/radio flex items-center gap-2 select-none',
+        'group/radio inline-flex min-w-0 max-w-full items-center gap-3 select-none touch-manipulation',
+        Boolean(label) && 'touch-target pointer-coarse:min-h-12',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         className,
       )}
     >
-      {/* `touch-target` on the dial, not on the label: when there is a label the
-          whole label is already the hit area, and when there is not, this is the
-          only thing to hit. The press wave clips inside its own 40dp sibling circle. */}
-      <span className="touch-target relative flex h-5 w-5 shrink-0 items-center justify-center">
+      {/* `touch-target` on the dial when bare; with a label the label itself holds the
+          coarse-pointer 48dp floor so wrapped rows never overlap hit boxes. */}
+      <span className={cn('relative flex h-5 w-5 shrink-0 items-center justify-center', !label && 'touch-target')}>
         <input
           ref={inputRef}
           type="radio"

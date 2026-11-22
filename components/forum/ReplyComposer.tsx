@@ -151,7 +151,12 @@ export default function ReplyComposer({
     >
       <SectionHeading id={headingId}>发表回复</SectionHeading>
       {!ready ? (
-        <Skeleton className="h-24 w-full rounded-md" />
+        <div className="space-y-3" aria-hidden="true">
+          <EditorPlaceholder size="reply" />
+          <div className="flex justify-end">
+            <Skeleton className="h-10 w-24 rounded-full" />
+          </div>
+        </div>
       ) : !token ? (
         <SignInRequired size="inline" title="登录后即可回复" />
       ) : (

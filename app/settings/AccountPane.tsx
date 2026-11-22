@@ -306,6 +306,7 @@ function AccountSections({ account }: { account: Account }) {
         <SettingsRow
           label="主页横幅"
           supporting="宽高比 4:1，不超过 10 MB"
+          wrap="sm"
           leading={
             <div className="bg-surface-container-high text-on-surface-variant relative grid aspect-[4/1] w-28 shrink-0 place-items-center overflow-hidden rounded-sm sm:w-32">
               {!banner && <MdImage size={ICON.control} aria-hidden="true" />}
@@ -336,7 +337,6 @@ function AccountSections({ account }: { account: Account }) {
               icon={<MdImage />}
               onClick={() => bannerInput.current?.click()}
               loading={uploading === 'banner'}
-              collapse={false}
             >
               更换
             </RowButton>
@@ -378,6 +378,7 @@ function AccountSections({ account }: { account: Account }) {
         />
         <SettingsRow
           label="邮箱"
+          wrap={emailChange ? 'md' : undefined}
           badge={
             email ? (
               <Badge tone={verified ? 'success' : 'warning'} size="sm">
@@ -427,6 +428,7 @@ function AccountSections({ account }: { account: Account }) {
       <SettingsSection title="Derpibooru 账号" icon={<MdLink size={ICON.control} />}>
         <SettingsRow
           label="API Key"
+          wrap={bound ? 'lg' : undefined}
           badge={
             bound ? (
               <Badge tone={identified ? 'success' : 'warning'} size="sm">

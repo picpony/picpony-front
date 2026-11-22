@@ -181,11 +181,49 @@ function UploadSkeleton() {
   return (
     <div data-page-loading aria-hidden="true" className="space-y-6">
       <Skeleton className="h-56 w-full rounded-md" />
-      <Skeleton className="h-10 w-3/4" />
-      <Skeleton className="h-14 w-full rounded-md" />
-      <Skeleton className="h-14 w-full rounded-md" />
-      <Skeleton className="h-24 w-full rounded-md" />
-      <Skeleton className="h-14 w-full rounded-full" />
+      <div>
+        <Skeleton className="mb-2 h-5 w-24" delay={40} />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-0.5 pointer-coarse:min-h-12">
+          {[24, 28, 28, 24].map((w, i) => (
+            <Skeleton key={i} className="h-5" style={{ width: `${w * 4}px` }} delay={60 + i * 20} />
+          ))}
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <Skeleton className="h-14 w-full rounded-md" delay={120} />
+          <Skeleton className="h-4 w-72 max-w-full" delay={140} />
+        </div>
+        <div>
+          <Skeleton className="mb-2 h-5 w-24" delay={160} />
+          <Skeleton className="h-14 w-full rounded-md" delay={180} />
+        </div>
+        <div>
+          <Skeleton className="mb-2 h-5 w-16" delay={200} />
+          <div className="space-y-3">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-4 w-8 shrink-0" delay={220 + row * 40} />
+                {Array.from({ length: 4 }, (_, i) => (
+                  <Skeleton key={i} className="h-8 w-16 rounded-sm pointer-coarse:my-1" delay={240 + row * 40 + i * 20} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Skeleton className="h-14 w-full rounded-md" delay={300} />
+        <Skeleton className="h-4 w-44 max-w-full" delay={320} />
+      </div>
+      <div className="space-y-1">
+        <Skeleton className="h-28 w-full rounded-md" delay={340} />
+        <Skeleton className="h-4 w-12" delay={360} />
+      </div>
+      <div>
+        <Skeleton className="h-4 w-80 max-w-full" delay={380} />
+        <Skeleton className="mt-6 h-14 w-full rounded-full" delay={400} />
+      </div>
     </div>
   );
 }
@@ -259,7 +297,7 @@ function FilePreview({
           className="absolute -right-3 -top-3"
         />
       </div>
-      <p className={cn('max-w-full text-body-s', !dragging && 'text-on-surface-variant')}>
+      <p className={cn('max-w-full text-body-s tabular-nums', !dragging && 'text-on-surface-variant')}>
         <span className="break-all">{file.name || '未命名文件'}</span> · {megabytes(file.size)} MB
         <span className="block">{video ? '点击视频以外区域更换文件' : '点击此区域更换文件'}</span>
       </p>
@@ -281,7 +319,7 @@ function OutcomeNotice({ outcome, live }: { outcome: NoticeOutcome; live: boolea
           href={DERPI_MY_UPLOADS}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-1 rounded-xs text-label-l underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+          className="touch-target mt-2 inline-flex items-center gap-1 rounded-xs text-label-l underline underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
         >
           在 Derpibooru 查看我的上传
           <MdOpenInNew size={ICON.dense} aria-hidden="true" />
@@ -682,7 +720,7 @@ export default function UploadPage() {
             <legend className="mb-2 text-label-l text-on-surface">
               分级<span className="text-on-surface-variant">（必选）</span>
             </legend>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {RATING_TAGS.map((rating) => (
                 <Radio
                   key={rating.tag}

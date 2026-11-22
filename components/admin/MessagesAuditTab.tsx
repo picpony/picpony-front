@@ -38,7 +38,7 @@ const messagesQuery = defineResource<AuditQuery & { before?: number }, { rows: A
 const person = (name: string | undefined, id: number | undefined) => (
   <span>
     {name || '用户'}
-    {id ? <span className="text-on-surface-variant">{`（#${id}）`}</span> : null}
+    {id ? <span className="tabular-nums text-on-surface-variant">{`（#${id}）`}</span> : null}
   </span>
 );
 
@@ -67,6 +67,7 @@ const COLUMNS: Column<AuditMessage>[] = [
     key: 'created',
     header: '时间',
     width: 'auto',
+    className: 'tabular-nums',
     render: (message) => <span className="text-on-surface-variant">{formatDateTime(message.created_at)}</span>,
   },
 ];
@@ -107,7 +108,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
   const scope = activeQuery ? (activeQuery.userId ? `用户 #${activeQuery.userId} 收发的私信` : '全站私信') : null;
 
   return (
-    <div className="space-y-6">
+    <div className="@container space-y-6">
       <SectionHeader section="messages"
         onRefresh={activeQuery ? read.refresh : undefined}
         isLoading={read.isLoading && read.data !== undefined}
@@ -119,7 +120,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
         role="search"
         aria-label="检索私信"
         noValidate
-        className="flex flex-col gap-3 sm:flex-row sm:items-start"
+        className="flex flex-col gap-3 @lg:flex-row @lg:items-start"
         onSubmit={(event) => {
           event.preventDefault();
           search();
@@ -133,13 +134,13 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
           placeholder="输入用户 ID，查看该用户收发的私信"
           value={draft}
           error={draftError ?? undefined}
-          fieldClassName="min-w-0 sm:flex-1"
+          fieldClassName="min-w-0 @lg:flex-1"
           onChange={(event) => {
             setDraft(event.target.value);
             setDraftError(null);
           }}
         />
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button type="submit" variant="filled" icon={<MdSearch />}>
             检索
           </Button>
@@ -159,7 +160,7 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
       </form>
       <AdminListAnchor>
         {scope && read.data !== undefined && (
-          <p className="text-body-m text-on-surface-variant">{`${scope}：第 ${pages.page} 页`}</p>
+          <p className="text-body-m tabular-nums text-on-surface-variant">{`${scope}：第 ${pages.page} 页`}</p>
         )}
         <DataTable<AuditMessage>
           columns={COLUMNS}

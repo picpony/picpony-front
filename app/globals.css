@@ -554,6 +554,7 @@ body {
 .bbcode-content :is(h1, h2, h3, h4, h5, h6),
 .rich-text-content :is(h1, h2, h3, h4, h5, h6) {
   margin-block: 1.25em 0.5em;
+  font-weight: var(--text-headline-s--font-weight);
 }
 
 .bbcode-content :is(ul, ol),
@@ -2387,8 +2388,27 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 
 .yarl__counter {
   font-size: var(--text-label-m);
+  line-height: var(--text-label-m--line-height);
   font-weight: var(--text-label-m--font-weight);
   letter-spacing: var(--text-label-m--letter-spacing);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Narrow phone viewports: tighten toolbar inset and button box so 5-6 controls stay clear of
+   the top-left counter without overlapping on 320-390px screens. */
+@media (max-width: 479px) {
+  .pic-lightbox.yarl__portal {
+    --yarl__toolbar_padding: 8px;
+    --yarl__button_padding: 6px;
+    --yarl__button_margin: 0px;
+    --yarl__icon_size: 20px;
+    --yarl__counter_padding: 6px 10px;
+  }
+
+  .pic-lightbox .yarl__toolbar .yarl__button {
+    min-width: 40px;
+    min-height: 44px;
+  }
 }
 
 /* Fullscreen viewer depth and bottom arrival. See docs/transitions.md#fullscreen-image-viewer.
@@ -2557,16 +2577,28 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-image='off']) .p
   padding-top: 0;
 }
 
-/* The home route's floating 图库/论坛 pill covers the bottom of the content. The route reserves
- * the pill's footprint at the end of its content, so the footer's last line ends above it, and
- * uses it as the scroller's bottom scroll padding, so a row reached by Tab is scrolled clear of
- * it rather than to the very bottom edge, underneath it. */
-[data-home-bar] .app-scroller {
-  scroll-padding-bottom: var(--home-bar-footprint);
+/* The home route's floating 图库/论坛 pill covers the bottom of the content whenever it is
+ * shown (below `md`, or on desktop when the docked sidebar is hidden). Reserve its footprint
+ * only in those states so desktop sessions with an open docked sidebar do not carry 48px of
+ * phantom bottom padding. Gated in CSS so SSR and hydration agree without viewport branching. */
+@media (width < 48rem) {
+  [data-home-bar] .app-scroller {
+    scroll-padding-bottom: var(--home-bar-footprint);
+  }
+
+  [data-home-bar] [data-page-content] {
+    padding-bottom: var(--home-bar-footprint);
+  }
 }
 
-[data-home-bar] [data-page-content] {
-  padding-bottom: var(--home-bar-footprint);
+@media (width >= 48rem) {
+  .app-sidebar[data-sidebar-mode='hidden'] + [data-home-bar] .app-scroller {
+    scroll-padding-bottom: var(--home-bar-footprint);
+  }
+
+  .app-sidebar[data-sidebar-mode='hidden'] + [data-home-bar] [data-page-content] {
+    padding-bottom: var(--home-bar-footprint);
+  }
 }
 
 /* The navigation progress line (nextjs-toploader), on the chrome's bottom edge — the dev
@@ -2916,11 +2948,21 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   .card-spoiler-tags {
     -webkit-line-clamp: 1;
   }
+
+  .card-video-play {
+    width: 2rem;
+    height: 2rem;
+  }
 }
 
-@container (max-height: 4rem) {
+@container (max-height: 5.5rem) {
   .card-spoiler-tags {
     display: none;
+  }
+
+  .card-failure-body {
+    flex-direction: row;
+    gap: 0.5rem;
   }
 }
 
@@ -3088,16 +3130,37 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   }
 }
 
-/* **A narrow column on a wide screen** — a laptop beside the docked navigation drawer leaves the
- * overlay's frame under 48rem, so the strip stays two stacked rows — **joins the chrome's row as
- * well**: the stack (byline 20 + gap 4 + caption 18) is centred on the buttons' 40dp, its top
- * 3px below the scroller (16 + 20 − 21 − the strip's 12px), and both rows keep clear of the back
- * affordance and the step arrows by reserving their footprint (16px inset + 88dp + 16px of air),
- * less the overlay gutter and the strip's padding the column already insets by. Only from `sm`:
- * on a phone the strip stays below the chrome and keeps its full width. The Stage wears the same
- * classes, so the handoff lands on the same pixels. */
+/* **A medium column** — beside a docked drawer on a laptop, or a tablet — stays two stacked rows
+ * and **joins the chrome's row** only while the container still clears both the back affordance
+ * and step arrows with room for the byline (`>= 36rem` frame / `>= 33rem` page). Narrower frames
+ * (phones, or 768px windows with the 288px sidebar open) keep the strip below the chrome at full
+ * width so uploader names and metadata are never squeezed between the buttons. */
+.image-detail-date-full {
+  display: none;
+}
+
+@container image-detail-frame (min-width: 36rem) {
+  .image-detail-date-compact {
+    display: none;
+  }
+
+  .image-detail-date-full {
+    display: inline;
+  }
+}
+
+@container page (min-width: 33rem) {
+  .page-back-room-5xl .image-detail-date-compact {
+    display: none;
+  }
+
+  .page-back-room-5xl .image-detail-date-full {
+    display: inline;
+  }
+}
+
 @media (min-width: 640px) {
-  @container image-detail-frame (width < 48rem) {
+  @container image-detail-frame (min-width: 36rem) and (width < 48rem) {
     .image-detail-overlay-content {
       padding-top: 0;
     }
@@ -3113,7 +3176,7 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 
   /* The same on a direct load: the page gutter (24px) less 21px puts the strip 3px below the
    * scroller, and the reserve is the overlay's — the column now has the overlay's insets. */
-  @container page (width < 45rem) {
+  @container page (min-width: 33rem) and (width < 45rem) {
     .page-back-room-5xl.image-detail-page {
       padding-top: 0;
       margin-top: -1.3125rem;
@@ -4303,13 +4366,18 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
       opacity var(--sidebar-label-duration) var(--ease-spring-effects),
       padding-right var(--sidebar-layout-duration) var(--ease-spring-effects);
   }
+  .sidebar-nav {
+    transition: row-gap var(--sidebar-layout-duration) var(--ease-spring-effects);
+  }
   .sidebar-heading {
     height: calc(var(--text-title-s) * var(--text-title-s--line-height) + 0.75rem);
+    margin-bottom: 0;
     overflow: hidden;
     white-space: nowrap;
     transition:
       height var(--sidebar-layout-duration) var(--ease-spring-effects),
       padding-block var(--sidebar-layout-duration) var(--ease-spring-effects),
+      margin-bottom var(--sidebar-layout-duration) var(--ease-spring-effects),
       opacity var(--sidebar-label-duration) var(--ease-spring-effects);
   }
   .sidebar-trailing {
@@ -4340,9 +4408,13 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-row .sidebar-label {
     padding-right: 0;
   }
+  .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-nav {
+    row-gap: 0.125rem;
+  }
   .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-heading {
     height: 0;
     padding-block: 0;
+    margin-bottom: -0.125rem;
     opacity: 0;
   }
   .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-trailing {
@@ -4876,9 +4948,10 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 
 /* An adornment moves the text, the resting label and the notch together — all three read
-   the same property. */
+   the same property. 12dp leading inset + 24dp standard glyph + 12dp gap = 48dp (`3rem`);
+   dense `sm` overrides back to `2.5rem` below. */
 .m3-field[data-lead] {
-  --field-lead: 2.5rem;
+  --field-lead: 3rem;
 }
 
 /* The trailing slot sits in the flow (see below), so this is not a reserve for it — it is
@@ -5256,10 +5329,11 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
   padding-inline-end: 0.5rem;
 }
 
-/* A composer grows downward, so its buttons belong at the bottom of the box. */
+/* A composer grows downward, so its buttons belong at the bottom of the box,
+   matching the 8dp trailing edge inset symmetrically. */
 .m3-field[data-multiline] > .m3-field-trail {
   align-self: flex-end;
-  padding-block-end: 0.25rem;
+  padding-block-end: 0.5rem;
 }
 
 .m3-field > fieldset > legend {
@@ -5456,7 +5530,7 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
  * primitive its boundary and selection marks back live at the end of this file.
  * --------------------------------------------------------------------------- */
 @media (forced-colors: active) {
-  :focus-visible:not(.m3-field > *) {
+  :focus-visible:not(.m3-field > *):not(input[role='switch'].peer) {
     outline: 2px solid Highlight !important;
     outline-offset: 2px !important;
   }

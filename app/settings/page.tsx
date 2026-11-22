@@ -149,10 +149,16 @@ function SettingsSkeleton() {
   return (
     <div className="max-w-4xl mx-auto" data-page-loading>
       <PageHeader title="设置" />
-      <Skeleton className="mb-6 h-12 w-full rounded-sm" />
-      {[4, 4].map((rows, section) => (
+      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
+        {['w-8', 'w-8', 'w-12'].map((width, index) => (
+          <div key={index} className="px-4">
+            <Skeleton className={`h-4 ${width}`} />
+          </div>
+        ))}
+      </div>
+      {[5, 4].map((rows, section) => (
         <section key={section} className="mb-8">
-          <Skeleton className="mb-4 h-7 w-28 rounded-xs" />
+          <Skeleton className="mb-4 h-6 w-28 rounded-xs" />
           <div>
             {Array.from({ length: rows }, (_, row) => (
               <div key={row} className={ROW_CLASS}>

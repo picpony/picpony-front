@@ -131,7 +131,7 @@ export default function ToggleSwitch({
          input it labels, while the eye reads label-then-control like every
          other row in the list. */
       className={cn(
-        'group group/switch flex select-none',
+        'group/switch flex select-none touch-manipulation',
         isRow ? 'w-full flex-row-reverse items-center justify-between gap-4' : 'items-center gap-3',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
       )}
@@ -170,10 +170,10 @@ export default function ToggleSwitch({
         {/* Track */}
         {/* Under forced colors the track, handle and check are all painted marks the
             mode would flatten; the selected track takes the system highlight and the
-            parts on it the highlight's own ink. Focus there is the input's outline. */}
+            parts on it the highlight's own ink. Focus draws around the visible 32×52 track. */}
         <span
           aria-hidden="true"
-          className={`flex h-8 w-13 items-center justify-center rounded-full border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring ${TRACK_TRANSITION} ${
+          className={`flex h-8 w-13 items-center justify-center rounded-full border-2 peer-focus-visible:ring-2 peer-focus-visible:focus-ring forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight] ${TRACK_TRANSITION} ${
             checked
               ? 'border-primary-ink bg-primary forced-mark forced-colors:border-[color:Highlight]'
               : 'border-outline bg-surface-container-highest'
@@ -244,7 +244,7 @@ export default function ToggleSwitch({
         </span>
       </span>
       {label && (
-        <div className={isRow ? 'min-w-0 flex-1' : undefined}>
+        <div className={cn('min-w-0', isRow && 'flex-1')}>
           {/* No ink prop: if a label ever needs a semantic it takes a `tone`
               union like `Radio` does, not an arbitrary string. A block, so the line box
               is the label role's own: inline, it sat in the div's inherited body line,

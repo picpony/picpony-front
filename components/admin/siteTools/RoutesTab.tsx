@@ -32,28 +32,26 @@ function RoutesTab({ token }: AdminPanelProps) {
   const data = routes.data;
   return <div className="space-y-6">
     <SectionHeader section="routes" onRefresh={routes.refresh} isLoading={routes.refreshing} />
-    <div className="space-y-4">
-      <AdminNote>所有访客与用户按此线路访问图库与图片；原站异常时将自动切换至可用的第三方候选地址，恢复后切回原线路。</AdminNote>
-      <ReadState title="全站线路加载失败" loading={routes.loading} error={routes.error} retry={routes.retryable ? routes.refresh : undefined}>
-        {data && <>
-          <ConfigEditor title="API 线路" token={token} initial={data.api} fields={apiRouteFields} validate={routePayload} save={(v) => api.saveApiRoute(token, v)} refresh={applied}
-            confirmation={(v) => `确定要修改全站 API 线路吗？所有访客与用户都会受此规则影响。${v.third_party_pass_api_key ? '用户的 API Key 将会传给所配置的第三方服务。' : ''}`}>
-            {(data.currentUrl || data.previousPolicy) && <AdminNote>
-              {data.currentUrl ? `当前使用的第三方地址：${data.currentUrl}。` : ''}
-              {data.previousPolicy ? `原站恢复后将切回「${POLICY_LABELS[data.previousPolicy] ?? data.previousPolicy}」。` : ''}
-            </AdminNote>}
-          </ConfigEditor>
-          <ConfigEditor title="图片线路" token={token} initial={data.image} fields={imageRouteFields} validate={(v) => fieldsPayload(imageRouteFields, v)} save={(v) => api.saveImageRoute(token, v)} refresh={applied}
-            confirmation={() => '确定要修改全站图片线路吗？所有访客与用户都会受此规则影响。'} />
-          {data.history.length > 0 && <section className="space-y-2" aria-labelledby="admin-route-history-heading">
-            <SectionHeading as="h3" id="admin-route-history-heading">自动切换记录</SectionHeading>
-            <ul className="space-y-1 text-body-s text-on-surface-variant">
-              {data.history.slice(-HISTORY_SHOWN).reverse().map((h, i) => <li key={`${h.time}:${i}`} className="wrap-anywhere">{h.time ? `${h.time}（北京时间）` : '时间未记录'} · {h.url || '未记录地址'}{h.reason ? ` · ${h.reason}` : ''}</li>)}
-            </ul>
-          </section>}
-        </>}
-      </ReadState>
-    </div>
+    <AdminNote>所有访客与用户按此线路访问图库与图片；原站异常时将自动切换至可用的第三方候选地址，恢复后切回原线路。</AdminNote>
+    <ReadState title="全站线路加载失败" loading={routes.loading} error={routes.error} retry={routes.retryable ? routes.refresh : undefined}>
+      {data && <>
+        <ConfigEditor title="API 线路" token={token} initial={data.api} fields={apiRouteFields} validate={routePayload} save={(v) => api.saveApiRoute(token, v)} refresh={applied}
+          confirmation={(v) => `确定要修改全站 API 线路吗？所有访客与用户都会受此规则影响。${v.third_party_pass_api_key ? '用户的 API Key 将会传给所配置的第三方服务。' : ''}`}>
+          {(data.currentUrl || data.previousPolicy) && <AdminNote>
+            {data.currentUrl ? `当前使用的第三方地址：${data.currentUrl}。` : ''}
+            {data.previousPolicy ? `原站恢复后将切回「${POLICY_LABELS[data.previousPolicy] ?? data.previousPolicy}」。` : ''}
+          </AdminNote>}
+        </ConfigEditor>
+        <ConfigEditor title="图片线路" token={token} initial={data.image} fields={imageRouteFields} validate={(v) => fieldsPayload(imageRouteFields, v)} save={(v) => api.saveImageRoute(token, v)} refresh={applied}
+          confirmation={() => '确定要修改全站图片线路吗？所有访客与用户都会受此规则影响。'} />
+        {data.history.length > 0 && <section className="space-y-4" aria-labelledby="admin-route-history-heading">
+          <SectionHeading as="h3" id="admin-route-history-heading">自动切换记录</SectionHeading>
+          <ul className="space-y-1 text-body-s tabular-nums text-on-surface-variant">
+            {data.history.slice(-HISTORY_SHOWN).reverse().map((h, i) => <li key={`${h.time}:${i}`} className="wrap-anywhere">{h.time ? `${h.time}（北京时间）` : '时间未记录'} · {h.url || '未记录地址'}{h.reason ? ` · ${h.reason}` : ''}</li>)}
+          </ul>
+        </section>}
+      </>}
+    </ReadState>
   </div>;
 }
 export default protectedPanel(RoutesTab);

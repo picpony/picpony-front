@@ -19,10 +19,10 @@ export function ForumPaneSkeleton() {
         <Skeleton className="h-10 w-24 rounded-full" />
       </div>
       <div className="mb-3 flex items-center gap-2">
-        <Skeleton className="h-10 min-w-0 flex-1 rounded-sm" />
+        <Skeleton className="h-10 min-w-0 flex-1 rounded-full" />
         <Skeleton className="h-10 w-28 rounded-full" />
       </div>
-      <div className="mb-4 flex gap-2 overflow-hidden">
+      <div className="-mx-4 mb-4 flex gap-2 overflow-hidden px-4 sm:mx-0 sm:px-0">
         {[16, 22, 22, 26].map((width, i) => (
           <Skeleton key={i} className="h-8 shrink-0 rounded-sm pointer-coarse:my-1" style={{ width: `${width * 4}px` }} />
         ))}

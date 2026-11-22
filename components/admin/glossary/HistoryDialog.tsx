@@ -60,13 +60,31 @@ export default function HistoryDialog({
           onRetry={isRetryable(read.error) ? read.refresh : undefined}
         />
       ) : read.data === undefined ? (
-        <div aria-hidden="true">
-          {[0, 1, 2].map((index) => (
-            <div key={index} className="m3-row flex flex-col gap-2 bg-surface-container-highest p-4">
-              <Skeleton className="h-4 w-1/3" delay={index * 80} />
-              <Skeleton className="h-4 w-1/2" delay={index * 80 + 60} />
+        <div className="space-y-4" aria-hidden="true">
+          <div>
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="m3-row flex flex-col gap-0.5 bg-surface-container-highest p-4">
+                <Skeleton className="h-5 w-40" delay={index * 80} />
+                <Skeleton className="h-4.5 w-24" delay={index * 80 + 60} />
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-x-6 gap-y-3 rounded-md bg-surface-container-highest p-4 sm:grid-cols-2">
+            <div className="space-y-1 sm:col-span-2">
+              <Skeleton className="h-4.5 w-16" delay={240} />
+              <Skeleton className="h-5 w-44" delay={270} />
             </div>
-          ))}
+            {[0, 1, 2, 3].map((index) => (
+              <div key={index} className="space-y-1">
+                <Skeleton className="h-4.5 w-16" delay={300 + index * 30} />
+                <Skeleton className="h-5 w-28" delay={320 + index * 30} />
+              </div>
+            ))}
+            <div className="space-y-1 sm:col-span-2">
+              <Skeleton className="h-4.5 w-12" delay={440} />
+              <Skeleton className="h-10 w-full" delay={470} />
+            </div>
+          </div>
         </div>
       ) : records.length === 0 ? (
         <EmptyState size="inline" title="暂无编辑记录" />
@@ -89,7 +107,7 @@ export default function HistoryDialog({
                       : 'bg-surface-container-highest text-on-surface',
                   )}
                 >
-                  <span className="text-body-m-emphasized">{historyTime(record.created_at) || '时间未知'}</span>
+                  <span className="text-body-m-emphasized tabular-nums">{historyTime(record.created_at) || '时间未知'}</span>
                   <span className={cn('text-body-s', !active && 'text-on-surface-variant')}>
                     {record.editor_username || '未知用户'}
                   </span>

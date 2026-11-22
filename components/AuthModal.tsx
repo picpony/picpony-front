@@ -7,7 +7,7 @@ import Modal from './Modal';
 import LottieIcon from './LottieIcon';
 import Logo from './Logo';
 import FollowHeight from './FollowHeight';
-import Spinner from '@/components/Spinner';
+import Skeleton from '@/components/Skeleton';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
@@ -251,7 +251,7 @@ function AuthModal({
       )}
     >
       {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
-      <div className="flex md:min-h-160">
+      <div className="flex md:min-h-[min(40rem,calc(100dvh-3rem))]">
         <div
           aria-hidden="true"
           className="hidden md:flex md:w-3/5 items-center justify-center bg-surface-container-low"
@@ -281,15 +281,15 @@ function AuthModal({
             pretty wrapping reaches every helper line under the fields, so no rule
             ends on a lone character. */}
         <div className="relative flex w-full flex-col p-6 text-pretty sm:p-8 md:w-2/5">
-          <IconButton
-            onClick={onClose}
-            aria-label="关闭"
-            dismiss
-            /* Where every dialog's ✕ sits: 16dp from the trailing edge, centred on the
-               first 32dp line (the same place `Modal`'s own header puts it). */
-            className="absolute right-4 top-5 z-10"
-            icon={<MdClose />}
-          />
+          <div className="pointer-events-none sticky top-5 z-10 -mt-1 -mr-2 -mb-9 flex justify-end sm:top-7">
+            <IconButton
+              onClick={onClose}
+              aria-label="关闭"
+              dismiss
+              className="pointer-events-auto"
+              icon={<MdClose />}
+            />
+          </div>
           <FollowHeight className="my-auto">
             <div
               key={`${view}:${flow}`}
@@ -297,11 +297,20 @@ function AuthModal({
               className={cn(switched && 'animate-page-transition')}
             >
               <Suspense fallback={
-                <div>
+                <div role="status" aria-label="加载中…">
                   <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
                     {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
                   </h2>
-                  <Spinner label="加载中…" className="min-h-80" />
+                  <div aria-hidden="true" className="space-y-4">
+                    <Skeleton className="mb-8 h-8 w-24" />
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-full" />
+                    <div className="flex justify-between pt-2">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  </div>
                 </div>
               }>
                 <AuthForms {...shared} view={view} onSuccess={onClose} />

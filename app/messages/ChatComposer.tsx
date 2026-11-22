@@ -541,7 +541,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         /* The field's own control: the shell's fieldset draws its ring and, under forced
            colors, its boundary, exactly as for the native inputs — so the element itself
            shows no outline in either mode. */
-        className="popover-scrollbar relative z-10 max-h-40 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-2.5 text-body-l text-on-surface outline-hidden wrap-anywhere"
+        className="popover-scrollbar relative z-10 min-h-12 max-h-40 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-2.5 text-body-l text-on-surface outline-hidden wrap-anywhere"
       />
       {empty && (
         <span

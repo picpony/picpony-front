@@ -65,11 +65,11 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
   }
 
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} className="@container/folders">
       {own && hiddenFromVisitors(profile, 'faves') && <OwnerHiddenNote tab="faves" />}
       <ul className={FOLDER_GRID}>
         {folders.map((folder) => (
-          <li key={folder.id} className="min-w-0">
+          <li key={folder.id} className="grid min-w-0">
             <FolderCard
               folder={folder}
               href={sharedFolderHref(ownerId, folder.id)}

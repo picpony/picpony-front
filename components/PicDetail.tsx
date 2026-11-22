@@ -379,22 +379,18 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
       className={cn('image-detail-page mx-auto max-w-5xl', page && 'page-back-room-5xl', gutter)}
     >
       <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
-        {/* `DetailHeader`'s real shape: a `label-l` byline and a `body-s` caption — stacked and centred
-            on a phone, one row edge to edge from `sm`. Each
-            row opens with an empty run of its own type — a strut — so it is exactly one line of
-            that role tall, as the real rows are; a fixed height would be a guess at the line box. */}
+        {/* `DetailHeader`'s real shape: a `label-l` byline (20px line box) and a `body-s` caption
+            (18px line box) — stacked and centred on a narrow frame, one row edge to edge from 48rem. */}
         <div className="image-detail-header image-detail-header-route px-4 py-3 sm:px-6">
           <div className="image-detail-header-rows">
-            <div className="image-detail-header-byline flex items-center justify-center gap-x-2 text-label-l">
-              <span aria-hidden="true">{'​'}</span>
-              <Skeleton className="h-4 w-24" delay={60} />
-              <Skeleton className="h-4 w-28" delay={120} />
+            <div className="image-detail-header-byline flex min-h-5 min-w-0 max-w-full items-center justify-center gap-x-2 text-label-l">
+              <Skeleton className="h-4 w-24 max-w-full" delay={60} />
+              <Skeleton className="h-4 w-28 max-w-full" delay={120} />
             </div>
-            <div className="image-detail-header-caption flex items-center justify-center gap-x-2 text-body-s">
-              <span aria-hidden="true">{'​'}</span>
-              <Skeleton className="h-3 w-24" delay={90} />
-              <Skeleton className="h-3 w-12" delay={150} />
-              <Skeleton className="h-3 w-8" delay={210} />
+            <div className="image-detail-header-caption flex min-h-[18px] min-w-0 max-w-full items-center justify-center gap-x-2 text-body-s">
+              <Skeleton className="h-3 w-24 max-w-full" delay={90} />
+              <Skeleton className="h-3 w-12 max-w-full" delay={150} />
+              <Skeleton className="h-3 w-8 max-w-full" delay={210} />
             </div>
           </div>
         </div>
@@ -402,8 +398,8 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
           data-image-detail-media-pane
           className="image-detail-media-pane relative flex min-h-[32dvh] w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6 md:min-h-[48dvh]"
         >
-          {/* Inset only: a width or height beside it would replace the computed insets. */}
-          <Skeleton className="image-detail-media-skeleton absolute inset-4 rounded-lg" delay={90} />
+          {/* Inset matches the pane's own `px-4 pt-2 pb-4 sm:px-6` padding. */}
+          <Skeleton className="image-detail-media-skeleton absolute inset-x-4 top-2 bottom-4 rounded-lg sm:inset-x-6" delay={90} />
         </div>
         <div className="image-detail-body image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
           <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">
@@ -1519,50 +1515,54 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           style={{ contentVisibility: 'visible', contain: 'none' }}
         >
           <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">
-            <DetailActions
-              imageId={image.id}
-              isFaved={isFaved}
-              faveFill={faveFillFor === imageId}
-              faveBusy={faveBusy}
-              downloading={downloadingId === image.id}
-              sharing={sharingId === image.id}
-              pickerOpen={pickerOpen}
-              shareOpen={shareOpen}
-              canTranslate={canTranslate}
-              translationShown={imageTranslation.shown}
-              translationBusy={translationBusy}
-              faveRef={faveButtonRef}
-              shareRef={shareButtonRef}
-              onDownload={handleDownload}
-              onFave={handleToggleFave}
-              onPickFolder={handleOpenFolderPicker}
-              onShare={() => setShareMenu(shareOpen ? null : { imageId, native: typeof navigator.share === 'function' })}
-              onTranslate={handleTranslate}
-              onReport={handleReportPress}
-              center={
-                recordPending || (typeof record?.upvotes === 'number' && typeof record?.downvotes === 'number')
-                  ? <DetailVotes image={record} pending={recordPending} />
-                  : undefined
-              }
-            >
-              <Menu
-                open={shareOpen}
-                onClose={() => setShareMenu(null)}
-                anchorRef={shareButtonRef}
-                aria-label="分享"
-                items={shareItems}
-                onSelect={handleShareSelect}
-              />
-            </DetailActions>
-            {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
-            <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
-              {hasInfo && (
-                <div className="space-y-5">
-                  {hasDescription && <DetailDescription description={image.description} />}
-                  <DetailSources image={image} />
-                </div>
-              )}
-            </FollowHeight>
+            {/* Actions, optional translation status and collapsible info share one wrapper so an
+                empty `<FollowHeight>` never consumes an extra flex gap between actions and tags. */}
+            <div>
+              <DetailActions
+                imageId={image.id}
+                isFaved={isFaved}
+                faveFill={faveFillFor === imageId}
+                faveBusy={faveBusy}
+                downloading={downloadingId === image.id}
+                sharing={sharingId === image.id}
+                pickerOpen={pickerOpen}
+                shareOpen={shareOpen}
+                canTranslate={canTranslate}
+                translationShown={imageTranslation.shown}
+                translationBusy={translationBusy}
+                faveRef={faveButtonRef}
+                shareRef={shareButtonRef}
+                onDownload={handleDownload}
+                onFave={handleToggleFave}
+                onPickFolder={handleOpenFolderPicker}
+                onShare={() => setShareMenu(shareOpen ? null : { imageId, native: typeof navigator.share === 'function' })}
+                onTranslate={handleTranslate}
+                onReport={handleReportPress}
+                center={
+                  recordPending || (typeof record?.upvotes === 'number' && typeof record?.downvotes === 'number')
+                    ? <DetailVotes image={record} pending={recordPending} />
+                    : undefined
+                }
+              >
+                <Menu
+                  open={shareOpen}
+                  onClose={() => setShareMenu(null)}
+                  anchorRef={shareButtonRef}
+                  aria-label="分享"
+                  items={shareItems}
+                  onSelect={handleShareSelect}
+                />
+              </DetailActions>
+              {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
+              <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
+                {hasInfo && (
+                  <div className="space-y-5 pt-5">
+                    {hasDescription && <DetailDescription description={image.description} />}
+                    <DetailSources image={image} />
+                  </div>
+                )}
+              </FollowHeight>
+            </div>
             <TagList
               key={imageId}
               tags={deferredBodyReady ? image.tags : undefined}
@@ -1586,7 +1586,7 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                 />
               ) : (deferredBodyReady || bodyPrerender) && (
                 <Activity mode={bodyTailReady ? 'visible' : 'hidden'}>
-                  <div ref={bodyContentRef} className="space-y-6">
+                  <div ref={bodyContentRef}>
                     <CommentSection
                       imageId={imageId}
                       derpiCount={record?.comment_count}

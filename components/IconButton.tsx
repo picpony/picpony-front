@@ -106,9 +106,9 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      Shape is resolved with the other corners below so press state and caller-owned corners
      take precedence over hover; see docs/design/primitives.md#buttons-icons-and-semantics. */
   quiet:
-    'bg-surface-container-highest text-on-surface focus-ring forced-boundary enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container enabled:hover:ripple-secondary',
+    'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
   outlined:
-    'border border-outline bg-transparent text-on-surface-variant enabled:hover:border-primary-ink focus-ring',
+    'border border-outline bg-transparent text-on-surface-variant focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
      than a `className` at the call site is that `cn` is a plain join: the upload
      page's remove badge was passing `bg-error-fill text-on-fill shadow-e3`, so
@@ -128,7 +128,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      takes back is a trailing action, not a warning (OD-5). The press wave carries `error` so
      hovered and touch presses alike match its destructive intent. */
   'danger-quiet':
-    'bg-transparent text-on-surface-variant ripple-error enabled:hover:text-error enabled:group-hover:text-error focus-visible:text-error focus-ring',
+    'bg-transparent text-on-surface-variant ripple-error focus-visible:text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
      hover and press their tint without a second hand-picked value.
      The ring is `focus-ring-on-media`, painted inward: `focus-ring` is
@@ -141,6 +141,14 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      beats two. */
   media: 'bg-media-plate text-on-media focus-ring-on-media forced-boundary',
   'on-primary': 'bg-transparent text-on-primary-variant ripple-on-primary focus-ring-on-primary',
+};
+
+/* Interactive hover styles kept separate from `VARIANTS` so `loading` buttons
+   (which stay natively `:enabled` to hold focus) never recolour on hover. */
+const VARIANT_HOVER: Partial<Record<IconButtonVariant, string>> = {
+  quiet: 'enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container enabled:hover:ripple-secondary',
+  outlined: 'enabled:hover:border-primary-ink',
+  'danger-quiet': 'enabled:hover:text-error enabled:group-hover:text-error',
 };
 
 /* The selected state's container pair. Spelled per tone rather than composed, for the reason
@@ -211,7 +219,7 @@ const SHAPES: Record<IconButtonShape, string> = {
    field takes the 4dp step while the outer end takes 16dp, which is `.m3-row`'s own
    rule for a run. That cannot come from a `shape` union without inventing a value per
    position. */
-const HAS_RADIUS = /(?:^|\s)(?:\S+:)?rounded(?:-\S+)?/;
+const HAS_RADIUS = /(?:^|\s)rounded(?:-\S+)?/;
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** The glyph. Sized by `size` via `ICON_SIZES`, not by the caller. */
@@ -344,6 +352,7 @@ export function iconButtonClasses({
         )
       : cn(
           VARIANTS[variant],
+          !isDisabled && VARIANT_HOVER[variant],
           /* Unselected selectable toggles anticipate their destination container hue (`tertiary`
              for favourites/likes, `secondary-ink` for secondary-container toggles); plain neutral
              standard/outlined actions have no coloured state and keep the default grey wave. */
@@ -362,11 +371,11 @@ export function iconButtonClasses({
         shape === 'round' && isSelected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
         shape === 'round' && !isSelected && SHAPES.round,
         shape === 'square' && SHAPES.square,
-        variant === 'quiet' && shape === 'round' && !isSelected && 'enabled:hover:not-data-pressed:rounded-md',
+        variant === 'quiet' && shape === 'round' && !isSelected && !isDisabled && 'enabled:hover:not-data-pressed:rounded-md',
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */
-        size === 'lg' ? 'data-pressed:rounded-md' : 'data-pressed:rounded-sm',
+        !isDisabled && (size === 'lg' ? 'data-pressed:rounded-md' : 'data-pressed:rounded-sm'),
       ),
     !HAS_HEIGHT.test(className) && HEIGHTS[size],
     !HAS_WIDTH.test(className) && WIDTHS[size],

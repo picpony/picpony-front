@@ -34,7 +34,7 @@ function RowsSkeleton() {
   return (
     <ul data-page-loading aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => (
-        <li key={index} className={`${ROW} gap-4 px-4 py-3`}>
+        <li key={index} className={`${ROW} gap-4 py-3 pr-2 pl-4`}>
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className="h-5 w-1/3" delay={index * 60} />
             <Skeleton className="h-3.5 w-1/2" delay={index * 60} />
@@ -216,7 +216,11 @@ export default function SubscriptionsScreen() {
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader title="标签订阅" />
       {/* Keyed on the session: a field typed into under one account starts empty under the next. */}
-      {token && <SubscribeField key={token} token={token} />}
+      {!ready ? (
+        <Skeleton className="mb-6 h-14 w-full rounded-full" aria-hidden="true" />
+      ) : (
+        token && <SubscribeField key={token} token={token} />
+      )}
       {body}
       {confirmDialog}
     </div>

@@ -89,6 +89,8 @@ export default function UserSearchField({
     resetKey: keyword,
   });
 
+  const hasGroupHeader = options.some((option, i) => i > 0 && options[i - 1].kind !== option.kind && option.kind !== 'status');
+
   return (
     <>
       <div ref={wrapRef} className="min-w-0 flex-1">
@@ -118,7 +120,7 @@ export default function UserSearchField({
         anchorRef={wrapRef}
         {...box.listboxProps}
         aria-label="搜索结果"
-        estimatedHeight={estimateMenuHeight(options.length, ROW.height)}
+        estimatedHeight={estimateMenuHeight(options.length, ROW.height) + (hasGroupHeader ? 30 : 0)}
       >
         {options.map((option, index) => {
           const kindChanged = index > 0 && options[index - 1].kind !== option.kind && option.kind !== 'status';
@@ -140,9 +142,11 @@ export default function UserSearchField({
               >
                 {option.kind === 'status' ? (
                   <>
-                    <span className="grid size-10 shrink-0 place-items-center" aria-hidden="true">
-                      {option.busy && <Spinner size="sm" />}
-                    </span>
+                    {option.busy && (
+                      <span className="grid size-10 shrink-0 place-items-center" aria-hidden="true">
+                        <Spinner size="sm" />
+                      </span>
+                    )}
                     <span className="min-w-0 flex-1 wrap-anywhere">{option.text}</span>
                   </>
                 ) : (

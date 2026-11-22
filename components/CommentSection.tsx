@@ -119,10 +119,10 @@ function CommentRow({
             comment, which made a one-line comment 125px tall. */}
         <div className="flex min-h-8 items-center gap-2">
           <span className="min-w-0 truncate text-label-l-emphasized text-on-surface">{comment.username}</span>
-          {level !== null && <Badge className="shrink-0">Lv.{level}</Badge>}
+          {level !== null && <Badge className="hidden shrink-0 sm:inline-flex">Lv.{level}</Badge>}
           <div
             className={cn(
-              'ms-auto flex shrink-0 items-center gap-1',
+              'ms-auto flex shrink-0 items-center gap-1 pointer-coarse:gap-4',
               !translation.busy && !deleting && translation.translation === null && 'hover-reveal',
             )}
           >
@@ -149,6 +149,7 @@ function CommentRow({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-s text-on-surface-variant">
+          {level !== null && <Badge className="shrink-0 sm:hidden">Lv.{level}</Badge>}
           <time dateTime={comment.created_at} title={formatDateTime(comment.created_at)} className="tabular-nums">
             {now === null ? formatDate(comment.created_at) : formatCompactDateTime(comment.created_at, now)}
           </time>
@@ -186,7 +187,7 @@ function CommentRowsSkeleton() {
             <div className="flex min-h-8 items-center gap-2">
               <Skeleton className="h-3.5 w-28" delay={i * 120 + 60} />
             </div>
-            <Skeleton className="h-3 w-20" delay={i * 120 + 90} />
+            <Skeleton className="my-0.5 h-3.5 w-20" delay={i * 120 + 90} />
             <SkeletonText lines={2} className="mt-1 py-1" delay={i * 120 + 120} />
           </div>
         </div>
@@ -320,9 +321,15 @@ export default function CommentSection({
   const loading = !enabled || !thread.shown;
 
   return (
-    <section ref={observe} aria-labelledby={headingId} className="mt-8 border-t border-outline-variant pt-8">
-      <SectionHeading as="h2" id={headingId} icon={<MdChatBubbleOutline size={ICON.standard} />} className="mb-6">
-        {known === null ? '评论' : `评论（${formatCount(known)}）`}
+    <section ref={observe} aria-labelledby={headingId} className="mt-3 border-t border-outline-variant pt-8">
+      <SectionHeading
+        as="h2"
+        id={headingId}
+        icon={<MdChatBubbleOutline size={ICON.standard} />}
+        aside={known !== null ? formatCount(known) : undefined}
+        className="mb-6"
+      >
+        评论
       </SectionHeading>
 
       <div ref={composerRef} className="mb-6">

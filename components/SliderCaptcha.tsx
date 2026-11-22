@@ -138,13 +138,15 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   const measureLayout = useCallback(() => {
     const imageWidth = imageRef.current?.clientWidth || containerRef.current?.clientWidth || puzzleWidth;
     const barWidth = trackRefElement.current?.clientWidth || puzzleWidth;
+    const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const barButtonWidth = Math.min(barWidth, Math.max((barWidth * pieceSize) / puzzleWidth, coarse ? 48 : 0));
     const nextLayout = {
       imageWidth,
       imagePieceSize: (imageWidth * pieceSize) / puzzleWidth,
       imageMaxX: (imageWidth * maxSliderX) / puzzleWidth,
       barWidth,
-      barButtonWidth: (barWidth * pieceSize) / puzzleWidth,
-      barMaxX: (barWidth * maxSliderX) / puzzleWidth,
+      barButtonWidth,
+      barMaxX: Math.max(1, barWidth - barButtonWidth),
     };
 
     setLayout((previous) => {
@@ -533,7 +535,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
            the knob still hides the fill under it — a translucent knob showed the fill
            through it as a stray green disc. */
         className={cn(
-          'relative w-full h-10 bg-surface-container-high rounded-full border border-outline-variant mt-2 touch-none',
+          'relative w-full h-10 pointer-coarse:h-12 bg-surface-container-highest rounded-full border border-outline-variant touch-none',
           !ready && 'disabled-content',
         )}
       >
@@ -554,7 +556,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
              solve (loading, checking, or failed) the track wears the disabled
              treatment once, rather than blinking between attempts. */
           className={cn(
-            'state-layer absolute -top-px left-0 z-10 flex h-10 items-center justify-center rounded-full border touch-none select-none transition-[color,background-color,border-color] spring-fast-effects',
+            'state-layer absolute -top-px -left-px z-10 flex h-10 pointer-coarse:h-12 items-center justify-center rounded-full border touch-none select-none transition-[color,background-color,border-color] spring-fast-effects',
             isDragging
               ? 'cursor-grabbing bg-success-fill text-on-fill border-success-fill'
               : 'cursor-grab bg-surface-raised text-on-surface-variant border-outline',

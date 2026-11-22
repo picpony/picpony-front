@@ -183,7 +183,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
         if (!sending) onClose();
       }}
       title={heading ? <span key={view} className={cn(swap)}>{heading}</span> : undefined}
-      maxWidth="md"
+      maxWidth="lg"
       closeOnOverlayClick={!sending}
       footer={
         /* One wrapper for the row so it can fade and change height as one block; the row inside

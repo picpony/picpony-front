@@ -399,12 +399,12 @@ export default function PaletteSwatches({ className }: { className?: string }) {
           set, and is drawn in every state. */}
       <div className="border-outline-variant flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t pt-4">
         <div className="min-w-0 flex-auto">
-          <p className="text-label-l text-on-surface mb-0.5">自定义颜色</p>
-          <p className="text-body-m-emphasized text-on-surface">
+          <p className="text-label-l text-on-surface">自定义颜色</p>
+          <p className="text-body-s text-on-surface-variant mt-0.5">
             {customSeed ? <span className="font-mono tabular-nums">{customSeed}</span> : '未设置'}
             {/* The 副色相 only means something under 多色, and only once a colour exists. */}
             {customSeed && (
-              <span className="mono:hidden text-body-m text-on-surface-variant">
+              <span className="mono:hidden">
                 {` · 副色相 ${accentName(customAccent)}`}
               </span>
             )}

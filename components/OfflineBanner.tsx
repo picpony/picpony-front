@@ -76,8 +76,8 @@ export default function OfflineBanner({ inert }: { inert?: boolean }) {
         className="shrink-0"
       >
         <div className="bg-warning-fill text-on-fill text-label-l flex select-none items-center justify-center gap-2 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-          <MdWifiOff size={ICON.dense} aria-hidden="true" />
-          {MESSAGE}
+          <MdWifiOff size={ICON.dense} className="shrink-0" aria-hidden="true" />
+          <span className="min-w-0 text-center">{MESSAGE}</span>
         </div>
       </Collapse>
     </>

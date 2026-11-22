@@ -40,11 +40,11 @@ export default function MascotsTab({ token }: AdminPanelProps) {
      answers 409 and the operator refreshes. */
   const revision = read.data?.revision ?? 0;
   const columns: Column<Mascot>[] = [
-    { key: 'name', header: '吉祥物', primary: true, render: (row) => <span className="flex min-w-0 items-center gap-3"><span className="relative block size-14 shrink-0"><FadeInImage src={getAssetUrl(row.image_url)} alt="" unoptimized fill sizes="56px" className="object-contain" /></span><span className="min-w-0 break-words">{row.name}</span></span> },
-    { key: 'tips', header: '台词', width: 'auto', render: (row) => `${tipCount(row.tips)} 条` },
+    { key: 'name', header: '吉祥物', primary: true, render: (row) => <span className="flex min-w-0 items-center gap-3"><span className="relative block size-14 shrink-0"><FadeInImage src={getAssetUrl(row.image_url)} alt="" unoptimized fill sizes="56px" className="object-contain" /></span><span className="min-w-0 wrap-anywhere">{row.name}</span></span> },
+    { key: 'tips', header: '台词', width: 'auto', className: 'tabular-nums', render: (row) => `${tipCount(row.tips)} 条` },
     /* The column header supplies the visible label. Keep the toggle's accessible name stable;
        aria-checked reports its state (docs/design/primitives.md#buttons-icons-and-semantics). */
-    { key: 'active', header: '展示', render: (row) => <ToggleSwitch checked={row.is_active} aria-label={`展示 ${row.name}`} disabled={mutation.busy || mutation.uncertain} onChange={(enabled) => void mutation.run(() => api.toggleMascot(token, revision, row.id, enabled), () => showToast('已更新展示状态', 'success'), () => committed(token))} /> },
+    { key: 'active', header: '展示', width: 'auto', render: (row) => <ToggleSwitch checked={row.is_active} aria-label={`展示 ${row.name}`} disabled={mutation.busy || mutation.uncertain} onChange={(enabled) => void mutation.run(() => api.toggleMascot(token, revision, row.id, enabled), () => showToast('已更新展示状态', 'success'), () => committed(token))} /> },
     { key: 'actions', header: '操作', actions: true, render: (row) => <><Button size="xs" variant="text" disabled={mutation.busy} onClick={() => open(row)}>编辑</Button><Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除吉祥物', `确定要删除吉祥物「${row.name}」及其 ${tipCount(row.tips)} 条台词吗？此操作无法恢复。`, () => void mutation.run(() => api.deleteMascot(token, revision, row.id), () => showToast('已删除吉祥物', 'success'), () => committed(token)), { tone: 'danger' })}>删除</Button></> },
   ];
   return <div className="space-y-6">
@@ -75,12 +75,12 @@ function MascotEditor({ isOpen, token, revision, item, onClose, onSaved }: { isO
     if (Object.keys(found).length) return;
     void mutation.run(() => api.saveMascot(token, revision, mascotPayload(name, image, tips), item?.id), () => { showToast('已保存吉祥物', 'success'); onSaved(); }, () => committed(token));
   };
-  return <Modal isOpen={isOpen} title={item ? `编辑吉祥物 · ${item.name}` : '添加吉祥物'} onClose={() => { if (!busy) onClose(); }} closeOnEscape={!busy} footer={<><Button variant="text" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" form="mascot-editor" loading={mutation.busy} disabled={uploading || mutation.uncertain}>保存吉祥物</Button></>}>
-    <AdminForm id="mascot-editor" aria-label="吉祥物资料" onSubmit={submit}>
+  return <Modal isOpen={isOpen} title={item ? `编辑吉祥物 · ${item.name}` : '添加吉祥物'} onClose={() => { if (!busy) onClose(); }} closeOnEscape={!busy} footer={<><Button variant="text" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" form="mascot-editor" variant="filled" loading={mutation.busy} disabled={uploading || mutation.uncertain}>保存吉祥物</Button></>}>
+    <AdminForm id="mascot-editor" className="max-w-none" aria-label="吉祥物资料" onSubmit={submit}>
       <Input label="吉祥物名称" value={name} maxLength={200} readOnly={busy} error={problems.name} onChange={(event) => { setName(event.target.value); setProblems({ ...problems, name: undefined }); }} />
       <Input label="图片链接" value={image} maxLength={2048} readOnly={busy} error={problems.image} onChange={(event) => { setImage(event.target.value); setProblems({ ...problems, image: undefined }); }} />
       <CatalogImageInput token={token} kind="mascot" disabled={mutation.busy} onBusy={setUploading} onUploaded={(url) => { setImage(url); setProblems({ ...problems, image: undefined }); }} />
-      <Textarea label="角色台词" helper="每行一条，合计最多 500 个字符" rows={6} value={tips} readOnly={busy} error={problems.tips} onChange={(event) => { setTips(event.target.value); setProblems({ ...problems, tips: undefined }); }} />
+      <Textarea label="角色台词" helper="每行一条，合计最多 500 个字符" rows={6} className="resize-none" count={{ value: Array.from(tips).length, max: 500 }} value={tips} readOnly={busy} error={problems.tips} onChange={(event) => { setTips(event.target.value); setProblems({ ...problems, tips: undefined }); }} />
       <MutationResult mutation={mutation} />
     </AdminForm>
   </Modal>;

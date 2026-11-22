@@ -93,7 +93,7 @@ export function PaneFailure({ error, title, onRetry }: { error: unknown; title: 
  */
 export function ListRowsSkeleton({ rows = 5, badge = false }: { rows?: number; badge?: boolean }) {
   return (
-    <div data-page-loading="" className="max-w-4xl">
+    <div data-page-loading="" className="mx-auto max-w-4xl">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="m3-row bg-surface-container-low p-4">
           <div className="flex items-start gap-3">

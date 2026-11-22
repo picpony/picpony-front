@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
 import Skeleton from '@/components/Skeleton';
+import { QuickTagsSkeleton } from './QuickTags';
 import SearchScreen from './SearchScreen';
 import { readSemanticConfig } from './semantic.server';
 
@@ -22,14 +23,40 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
  * does not rearrange when it arrives. `data-page-loading` holds the footer back while it is up,
  * with or without the grid under it.
  */
-function SearchFallback({ hasQuery }: { hasQuery: boolean }) {
+function SearchFallback({ hasQuery, hasImage, hasFrom }: { hasQuery: boolean; hasImage: boolean; hasFrom: boolean }) {
   return (
     <div className="mx-auto max-w-7xl" aria-busy="true" data-page-loading>
       <div className="mx-auto mb-6 max-w-2xl">
         <Skeleton className="h-14 w-full rounded-full" />
         {hasQuery && <Skeleton className="mx-auto mt-4 h-10 w-80 max-w-full rounded-full" />}
       </div>
-      {hasQuery ? <ImageGridSkeleton /> : null}
+      {hasImage ? (
+        <>
+          <div className="mb-6 flex items-center gap-3 sm:gap-4" aria-hidden="true">
+            <Skeleton className="size-14 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-4 w-44" delay={60} />
+            </div>
+          </div>
+          <ImageGridSkeleton />
+        </>
+      ) : hasQuery ? (
+        <>
+          {hasFrom && <Skeleton className="mb-3 h-10 w-full max-w-2xl rounded-md" />}
+          <div className="mb-3 flex h-10 items-center" aria-hidden="true">
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <ImageGridSkeleton />
+        </>
+      ) : (
+        <div className="mx-auto max-w-2xl" aria-hidden="true">
+          <div className="mb-8">
+            <Skeleton className="mb-2 h-6 w-20" />
+            <QuickTagsSkeleton />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -43,7 +70,15 @@ function SearchFallback({ hasQuery }: { hasQuery: boolean }) {
 export default async function SearchPage({ searchParams }: { searchParams: SearchParams }) {
   const [semantic, params] = await Promise.all([readSemanticConfig(), searchParams]);
   return (
-    <Suspense fallback={<SearchFallback hasQuery={Boolean(first(params.q))} />}>
+    <Suspense
+      fallback={
+        <SearchFallback
+          hasQuery={Boolean(first(params.q).trim())}
+          hasImage={Boolean(first(params.image))}
+          hasFrom={Boolean(first(params.from))}
+        />
+      }
+    >
       <SearchScreen semantic={semantic} />
     </Suspense>
   );

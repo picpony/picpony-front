@@ -274,7 +274,13 @@ export default function SearchField({
                   onClick={clear}
                 />
               )}
-              <IconButton variant="standard" onClick={onImageSearch} aria-label="以图搜图" icon={<MdImageSearch />} />
+              <IconButton
+                variant="standard"
+                onClick={onImageSearch}
+                aria-label="以图搜图"
+                icon={<MdImageSearch />}
+                className={value ? 'max-sm:hidden' : undefined}
+              />
               <Button type="submit" variant="filled" icon={<MdSearch />} responsiveLabel>
                 搜索
               </Button>

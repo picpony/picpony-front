@@ -71,6 +71,11 @@ const PADDINGS: Record<CardPadding, string> = {
   lg: 'p-4 sm:p-6',
 };
 
+/* Unconditional overrides stand down the control defaults so `cn` never emits competing
+   display/width utilities (e.g. `ShareCard`'s fixed width or `WelcomeTab`'s flex column). */
+const HAS_WIDTH = /(?:^|\s)w-\S+/;
+const HAS_DISPLAY = /(?:^|\s)(?:block|inline-block|inline|flex|inline-flex|grid|inline-grid|table|contents|hidden)(?=\s|$)/;
+
 const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   const {
     variant = 'filled',
@@ -96,7 +101,12 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
       /* A card that is a button still reads as a card: no pill, no label role,
          and the text stays left-aligned — a button centres its content by
          default, which would re-set every paragraph inside it. */
-      isControl && 'block w-full touch-manipulation text-left focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
+      isControl &&
+        cn(
+          !HAS_DISPLAY.test(className) && 'block',
+          !HAS_WIDTH.test(className) && 'w-full',
+          'touch-manipulation text-left focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
+        ),
       /* `disabled` is typed and forwarded, so it has to *look* disabled:
          `disabled-content` is the app's one weight (38%, M3's figure), and the
          state layer comes off with it. The ripple host stays positioned while

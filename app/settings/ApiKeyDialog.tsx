@@ -121,16 +121,18 @@ export default function ApiKeyDialog({
       }
     >
       <form id="apikey-form" onSubmit={submit} noValidate className="space-y-4">
-        <p className="text-body-m text-on-surface-variant">{INTRO}</p>
-        <a
-          href={ACCOUNT_SETTINGS_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="prose-link text-body-m touch-target inline-flex items-center gap-1 focus-visible:ring-2 focus-ring"
-        >
-          打开 Derpibooru 账户设置
-          <MdOpenInNew size={ICON.dense} aria-hidden="true" />
-        </a>
+        <div className="space-y-2">
+          <p className="text-body-m text-on-surface-variant">{INTRO}</p>
+          <a
+            href={ACCOUNT_SETTINGS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="prose-link text-body-m touch-target inline-flex items-center gap-1 focus-visible:ring-2 focus-ring"
+          >
+            打开 Derpibooru 账户设置
+            <MdOpenInNew size={ICON.dense} aria-hidden="true" />
+          </a>
+        </div>
         <Input
           {...form.field('key')}
           label="API Key"

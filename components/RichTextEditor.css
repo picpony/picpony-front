@@ -119,13 +119,17 @@
      `.table-container` lives inside Slate's unmanaged `contentEditable` DOM, so it
      cannot be wrapped by OverlayScrollbars and uses a thin token-coloured native track. */
   .rich-text-editor [data-slate-editor] .table-container {
+    margin-block: 1em;
     border: 0;
+    border-radius: 0;
     padding: 0;
     scrollbar-width: thin;
     scrollbar-color: rgb(var(--md-sys-color-on-surface-rgb) / 0.32) transparent;
   }
 
   .rich-text-editor [data-slate-editor] pre > code {
+    border: 0;
+    margin: 0;
     text-shadow: none;
     font-family: var(--font-mono);
   }

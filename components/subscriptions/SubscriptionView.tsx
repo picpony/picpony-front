@@ -208,7 +208,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
   return (
     <>
       <PageBack onClick={back} />
-      <div className="@container mx-auto w-full max-w-7xl page-back-room-7xl">
+      <div className="mx-auto w-full max-w-7xl page-back-room-7xl">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           {/* The heading always holds text (it names the page), so while the dictionary is asked
               it is the tag itself, and the line under it — where the tag goes once a Chinese name
@@ -236,7 +236,7 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
             {/* A block rather than a paragraph: while the list loads it holds a placeholder. */}
             <div className="mt-1 text-body-m text-on-surface-variant tabular-nums">{status}</div>
           </FollowHeight>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
             <ButtonLink
               href={`/search?q=${encodeURIComponent(tagName)}`}
               variant="text"

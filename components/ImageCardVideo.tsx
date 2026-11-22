@@ -242,11 +242,11 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
       {/* Clear video indicator on touch/rest so WEBM/MP4 tiles never read as an inert dark frame. */}
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity spring-fast-effects ${
+        className={`pointer-events-none absolute inset-0 flex [container-type:size] items-center justify-center transition-opacity spring-fast-effects ${
           frameReady && !hoverPlaying ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <span className="flex size-10 items-center justify-center rounded-full bg-media-plate text-on-media">
+        <span className="card-video-play flex size-10 items-center justify-center rounded-full bg-media-plate text-on-media">
           <MdPlayArrow size={ICON.standard} />
         </span>
       </span>

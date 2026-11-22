@@ -187,7 +187,7 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
         <H2>3. 用户行为规范</H2>
         <P>3.1 使用本站须遵守《中华人民共和国网络安全法》等中国法律法规，不得利用本站从事违法违规行为。</P>
         <P>3.2 <strong>内容发布规范：</strong>在评论、发帖、反馈及个人资料等互动功能中，严禁发布、传播包含以下内容的信息：</P>
-        <ol className="space-y-1.5 text-body-m text-on-surface-variant">
+        <ol className="space-y-2 pl-4 text-body-m text-on-surface">
           <li>（1）反对宪法所确定的基本原则的；</li>
           <li>（2）危害国家安全，泄露国家秘密，颠覆国家政权，破坏国家统一的；</li>
           <li>（3）损害国家荣誉和利益的；</li>
@@ -380,7 +380,7 @@ function Faq() {
     <dl className="space-y-5">
       {items.map((item, i) => (
         <div key={i}>
-          <dt className="text-title-s text-on-surface">
+          <dt className="text-title-m text-on-surface">
             Q：{item.q}
           </dt>
           <dd className="mt-1 text-body-m text-on-surface">A：{item.a}</dd>

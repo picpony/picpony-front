@@ -69,14 +69,20 @@ function PostSkeleton() {
   return (
     <div data-page-loading="" aria-hidden="true">
       <Skeleton className="mb-4 h-8 w-3/4" />
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex items-start gap-3">
         <SkeletonCircle size={40} />
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" delay={60} />
-          <Skeleton className="h-3 w-44" delay={90} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-h-8 items-center">
+            <Skeleton className="h-4 w-32" delay={60} />
+          </div>
+          <Skeleton className="my-0.5 h-3.5 w-44 max-w-full" delay={90} />
         </div>
       </div>
       <SkeletonText lines={4} delay={120} />
+      <div className="mt-6 flex items-center gap-2 border-t border-outline-variant pt-4">
+        <Skeleton className="h-10 w-20 rounded-full" delay={160} />
+        <Skeleton className="h-10 w-20 rounded-full" delay={200} />
+      </div>
     </div>
   );
 }

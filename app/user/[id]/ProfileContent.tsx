@@ -94,7 +94,7 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
           the media form of the back affordance's room. No entrance of its own: the route
           transition already fades the page in. */}
       <div className="page-back-room-media" data-page-loading={profile ? undefined : ''}>
-        <div className="mx-auto max-w-5xl pb-8">
+        <div className="mx-auto max-w-5xl">
           <ProfileHeader
             profile={shown}
             own={own}
@@ -130,7 +130,15 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
             /* The tab row's own height, then the landing pane's grid, so nothing moves when the
                record lands. */
             <div className="mt-8" aria-hidden="true">
-              <Skeleton className="mb-6 h-12 w-full max-w-md" />
+              <div className="mb-6 flex h-12 items-center gap-6 border-b border-outline-variant">
+                {[16, 12, 10, 10].map((width, index) => (
+                  <Skeleton key={index} className="h-4 shrink-0" style={{ width: `${width * 4}px` }} delay={index * 60} />
+                ))}
+              </div>
+              <div className="mb-4 flex h-10 items-center justify-between gap-4">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-28 rounded-full" delay={60} />
+              </div>
               <ImageGridSkeleton count={12} entrance={false} />
             </div>
           )}

@@ -160,6 +160,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
       key: 'account',
       header: '关联用户',
       width: 'auto',
+      className: 'tabular-nums',
       render: (member) => {
         const uid = boundUser(member.user_id);
         return uid ? `#${uid}` : <span className="text-on-surface-variant">未关联</span>;

@@ -38,10 +38,47 @@ export function protectedPanel(Content: ComponentType<AdminPanelProps>) {
  * refresh must not also pass the same error to a `tableError` — that is one failure drawn twice,
  * under two different nouns.
  */
-export function ReadState({ title, loading, error, retry, children }: { title: string; loading: boolean; error?: string; retry?: () => void; children?: ReactNode }) {
+export function ReadState({
+  title,
+  loading,
+  error,
+  retry,
+  variant = 'form',
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  error?: string;
+  retry?: () => void;
+  variant?: 'form' | 'table';
+  children?: ReactNode;
+}) {
   return <>
     {error && <ErrorRetry size="inline" {...retryError(title, error)} onRetry={retry} />}
-    {loading ? <div data-page-loading className="max-w-2xl space-y-4" aria-label="正在加载设置"><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /><Skeleton className="h-12 w-32" /></div> : children}
+    {loading ? (
+      variant === 'table' ? (
+        <div data-page-loading="" className="space-y-4" aria-label="正在加载列表">
+          <Skeleton className="h-6 w-36" />
+          <div>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container p-4">
+                <Skeleton className="h-4.5 w-2/5" delay={i * 70} />
+                <Skeleton className="h-4 w-3/4" delay={i * 70 + 40} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div data-page-loading="" className="max-w-2xl space-y-4" aria-label="正在加载设置">
+          <Skeleton className="h-6 w-36" />
+          <Skeleton className="h-14 w-full rounded-md" delay={60} />
+          <Skeleton className="h-14 w-full rounded-md" delay={120} />
+          <div className="flex justify-end">
+            <Skeleton className="h-10 w-28 rounded-full" delay={180} />
+          </div>
+        </div>
+      )
+    ) : children}
   </>;
 }
 export function fieldErrors(error: unknown): Record<string, string> {
@@ -50,22 +87,36 @@ export function fieldErrors(error: unknown): Record<string, string> {
 export function SettingsFields({ fields, values, onChange, errors = {}, busy = false }: {
   fields: FieldSpec[]; values: Values; onChange: (next: Values) => void; errors?: Record<string, string>; busy?: boolean;
 }) {
-  return <FormGrid>{fields.map((f) => {
+  /* Full-width for multiline/toggle fields and for any trailing odd half-width field in a run so
+     no single field sits alone in a 50% orphan column. */
+  const fullSpan = fields.map((f) => ['textarea', 'ips', 'origins'].includes(f.kind ?? '') || f.kind === 'boolean');
+  let run = 0;
+  for (let i = 0; i < fields.length; i++) {
+    if (fullSpan[i]) {
+      if (run % 2 === 1) fullSpan[i - 1] = true;
+      run = 0;
+    } else {
+      run += 1;
+    }
+  }
+  if (run % 2 === 1) fullSpan[fields.length - 1] = true;
+
+  return <FormGrid>{fields.map((f, index) => {
     const value = values[f.key];
     const set = (v: string | boolean) => onChange({ ...values, [f.key]: v });
     const multiline = ['textarea', 'ips', 'origins'].includes(f.kind ?? '');
-    return <div key={f.key} className={multiline || f.kind === 'boolean' ? '@lg/form:col-span-2' : 'min-w-0'}>
+    return <div key={f.key} className={fullSpan[index] ? '@lg/form:col-span-2 min-w-0' : 'min-w-0'}>
       {f.kind === 'boolean' ? <ToggleSwitch layout="row" label={f.label} description={f.helper} checked={value === true} onChange={set} disabled={busy} />
         : f.options ? <Field helper={f.helper} error={errors[f.key]}><Select label={f.label} value={String(value ?? '')} options={f.options} onChange={set} disabled={busy} /></Field>
-          : multiline ? <Textarea label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} rows={f.key === 'system_prompt' ? 7 : 4} helper={f.helper} error={errors[f.key]} maxLength={f.max} />
+          : multiline ? <Textarea label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} rows={f.key === 'system_prompt' ? 7 : 4} className="resize-none" helper={f.helper} error={errors[f.key]} maxLength={f.max} />
             : <Input label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} type={f.kind === 'password' ? 'password' : 'text'} inputMode={f.kind === 'number' ? (f.decimal ? 'decimal' : 'numeric') : f.kind === 'url' ? 'url' : 'text'} autoComplete={f.kind === 'password' ? 'new-password' : 'off'} helper={f.helper} error={errors[f.key]} maxLength={f.kind === 'number' ? undefined : f.max} />}
     </div>;
   })}</FormGrid>;
 }
 
-export function ConfigEditor({ title, token, initial, fields, validate, save, refresh, confirmation, children, saved = '已保存设置', readOnly = false }: {
+export function ConfigEditor({ title, token, initial, fields, validate, save, refresh, confirmation, headerActions, children, saved = '已保存设置', readOnly = false }: {
   title: string; token: string; initial: Values; fields: FieldSpec[]; validate: (v: Values) => unknown;
-  save: (v: Values) => Promise<object>; refresh: (data: Record<string, unknown>, values: Values) => void; confirmation?: (v: Values) => string; children?: ReactNode; saved?: string;
+  save: (v: Values) => Promise<object>; refresh: (data: Record<string, unknown>, values: Values) => void; confirmation?: (v: Values) => string; headerActions?: ReactNode; children?: ReactNode; saved?: string;
   /** Shown but not editable (a setting this role may read and not write). */
   readOnly?: boolean;
 }) {
@@ -94,11 +145,11 @@ export function ConfigEditor({ title, token, initial, fields, validate, save, re
   };
   return <>
     <AdminForm onSubmit={submit} aria-labelledby={heading}>
-      <SectionHeading as="h3" id={heading}>{title}</SectionHeading>
+      <SectionHeading as="h3" id={heading} actions={headerActions}>{title}</SectionHeading>
       {children}
       <SettingsFields fields={fields} values={values} busy={mutation.busy || readOnly} errors={errors} onChange={(v) => { setDraft({ values: v }); setErrors({}); }} />
       {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
-      {!readOnly && <FormActions><Button type="submit" loading={mutation.busy}>{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button></FormActions>}
+      {!readOnly && <FormActions><Button type="submit" variant="filled" loading={mutation.busy}>{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button></FormActions>}
     </AdminForm>
     {confirmDialog}
   </>;

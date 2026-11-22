@@ -41,7 +41,7 @@ function ChartViewToggle({ value, onChange, intervalLabel }: {
 function RangeCard({ children }: { children: ReactNode }) {
   return (
     <div className="bg-surface pt-6">
-      <Card variant="outlined">
+      <Card variant="outlined" padding="lg">
         <SectionHeading className="mb-1">时间范围</SectionHeading>
         {children}
       </Card>
@@ -150,7 +150,7 @@ function StatsBody({ data, period, maxDay, onPeriodChange, loading, failure }: {
   return (
     <div data-stats-start={data.start} data-stats-end={data.end}>
       <Tabs tabs={STAT_TABS} value={category} onChange={setCategory} label="统计项目" className="mb-6" />
-      <p role="status" className={failedRangeChange ? 'mb-3 text-body-s text-on-surface-variant' : 'sr-only'}>
+      <p role="status" className={failedRangeChange ? 'mb-3 text-body-s tabular-nums text-on-surface-variant' : 'sr-only'}>
         {rangeStatus}
       </p>
       <TabPanes

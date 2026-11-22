@@ -8,8 +8,8 @@ import { useTooltip } from '@/components/Tooltip';
 import { cn } from '@/lib/utils';
 
 const DERPI_LABEL = '在 Derpibooru 查看';
-/** Full 40px capsule height (flush top/bottom) with 20px icons; 40px square on narrow, 32px on wide. */
-const CAPSULE_ICON_BOX = 'h-10 w-10 @3xl:w-8';
+/** Full 40px capsule height (flush top/bottom) with 20px icons; narrow to 32px on wide fine pointers only. */
+const CAPSULE_ICON_BOX = 'h-10 w-10 pointer-fine:@3xl:w-8';
 
 /** An inert flight copy needs the primitive's geometry, without tooltip hooks or navigation. */
 function ActionIconCopy(props: ComponentProps<typeof IconButton>) {
@@ -75,10 +75,12 @@ export default function DetailActions({
   );
 
   /* Keep the wide-row secondary capsule the exact total width of the primary actions
-     (`下载原图` + `收藏` / `已收藏`) so both ends of the row balance optically, while
-     `@3xl:px-2` (8px ≈ exact 8.26px tangent inset where the 8px pressed-corner apex
-     kisses the 20px semicircular cap) places the outermost 40px-tall buttons cleanly
-     at the optical limit without clipping focus rings. */
+     (`下载原图` + `已收藏`) so both ends of the row balance optically, while `@3xl:px-2`
+     (8px ≈ exact 8.26px tangent inset where the 8px pressed-corner apex kisses the 20px
+     semicircular cap) places the outermost 40px-tall buttons cleanly at the optical limit
+     without clipping focus rings. Both labels of the favourite button share one grid cell
+     (`SubscribeButton`'s technique), so toggling `收藏` / `已收藏` never changes the
+     primary footprint, the secondary capsule width or the centred votes bar. */
   useLayoutEffect(() => {
     const root = rootRef.current;
     const primary = primaryRef.current;
@@ -128,7 +130,14 @@ export default function DetailActions({
             icon={isFaved ? <MdStar className={cn(faveFill && 'animate-reaction-fill')} /> : <MdStarBorder />}
             onClick={onFave}
           >
-            {isFaved ? '已收藏' : '收藏'}
+            <span className="grid place-items-center">
+              <span aria-hidden={!isFaved || undefined} className={cn('col-start-1 row-start-1', !isFaved && 'invisible')}>
+                已收藏
+              </span>
+              <span aria-hidden={isFaved || undefined} className={cn('col-start-1 row-start-1', isFaved && 'invisible')}>
+                收藏
+              </span>
+            </span>
           </Button>
         </div>
         {center && (
@@ -136,7 +145,7 @@ export default function DetailActions({
             {center}
           </div>
         )}
-        <div className="flex h-10 w-full items-center justify-evenly rounded-full bg-surface-container-highest @3xl:col-start-3 @3xl:w-[var(--detail-primary-w,13.25rem)] @3xl:min-w-fit @3xl:justify-between @3xl:px-2 @3xl:justify-self-end">
+        <div className="flex h-10 w-full items-center justify-evenly rounded-full bg-surface-container-highest @3xl:col-start-3 @3xl:w-[var(--detail-primary-w,14.125rem)] @3xl:min-w-fit @3xl:justify-between @3xl:px-2 @3xl:justify-self-end pointer-coarse:@3xl:gap-2">
           <ActionIcon
             size="sm"
             shape="square"

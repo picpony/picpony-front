@@ -133,7 +133,7 @@ export function Field({
       {(error || helper || count) && (
         <div id={supportId} className="flex items-start justify-between gap-3">
           <p
-            className={cn('text-body-s min-w-0', error ? 'text-error' : 'text-on-surface-variant')}
+            className={cn('text-body-s min-w-0 wrap-anywhere', error ? 'text-error' : 'text-on-surface-variant')}
             // Errors announce themselves; helper text is static and must not.
             role={error ? 'alert' : undefined}
           >
@@ -575,7 +575,7 @@ export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(funct
         className={cn(
           /* The form family's 56dp height and 12dp outlined corner; `p-0.5` insets the fill so
              the border and concentric inner corner stay crisp around it. */
-          'h-14 w-14 shrink-0 cursor-pointer rounded-md border border-outline p-0.5',
+          'h-14 w-14 shrink-0 cursor-pointer select-none touch-manipulation rounded-md border border-outline p-0.5',
           'focus-visible:outline-hidden transition-ui hover:not-disabled:border-on-surface focus-visible:ring-2 focus-ring',
           'disabled:cursor-not-allowed disabled:disabled-content',
           className,
@@ -583,7 +583,7 @@ export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(funct
       >
         <span
           aria-hidden="true"
-          className="forced-boundary block size-full rounded-[10px]"
+          className="forced-boundary block size-full rounded-[9px]"
           style={{ background: colour ?? 'transparent' }}
         />
       </button>

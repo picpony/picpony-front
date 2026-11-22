@@ -170,113 +170,115 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         </>
       }
     >
-      {/* `DropZone` owns the three states; the zone previously gave no feedback at all while a
-          file was held over it. */}
-      <DropZone
-        disabled={isUploading}
-        accept="image/*"
-        onFile={handleFileSelect}
-        filled={Boolean(selectedImage)}
-        aria-label="选择或拖拽要搜索的图片"
-        className="mb-4"
-      >
-        {(dropState) => (
-          /* One height for the prompt, the file being read and the picture, so picking a file
-             does not grow the dialog. The way to change the picture is said in words under it: a
-             veil that appeared on hover never appeared on a touch screen. */
-          <div className="flex h-48 w-full flex-col items-center justify-center">
-            {selectedImage ? (
-              <>
-                <div className="relative min-h-0 w-full flex-1">
-                  <FadeInImage
-                    src={selectedImage}
-                    alt="已选择的图片"
-                    fill
-                    /* The dialog's default width (448px) less its own 24px inset each side and
-                       the zone's padding and border. */
-                    sizes="(min-width: 640px) 344px, 100vw"
-                    className="object-contain rounded-md"
+      <div className="flex flex-col gap-4">
+        {/* `DropZone` owns the three states; the zone previously gave no feedback at all while a
+            file was held over it. */}
+        <DropZone
+          disabled={isUploading}
+          accept="image/*"
+          surface="dialog"
+          onFile={handleFileSelect}
+          filled={Boolean(selectedImage)}
+          aria-label="选择或拖拽要搜索的图片"
+        >
+          {(dropState) => (
+            /* One height for the prompt, the file being read and the picture, so picking a file
+               does not grow the dialog. The way to change the picture is said in words under it: a
+               veil that appeared on hover never appeared on a touch screen. */
+            <div className="flex h-48 w-full flex-col items-center justify-center">
+              {selectedImage ? (
+                <>
+                  <div className="relative min-h-0 w-full flex-1">
+                    <FadeInImage
+                      src={selectedImage}
+                      alt="已选择的图片"
+                      fill
+                      /* The dialog's default width (448px) less its own 24px inset each side and
+                         the zone's padding and border. */
+                      sizes="(min-width: 640px) 344px, 100vw"
+                      className="object-contain rounded-md"
+                    />
+                  </div>
+                  <p className={cn('text-body-s mt-3', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                    点击或拖拽以更换图片
+                  </p>
+                </>
+              ) : isReading ? (
+                <Spinner size="lg" />
+              ) : (
+                <>
+                  <MdCloudUpload
+                    size={ICON.display}
+                    className={cn('mb-3', dropState !== 'dragging' && 'text-on-surface-variant')}
                   />
-                </div>
-                <p className={cn('text-body-s mt-3', dropState !== 'dragging' && 'text-on-surface-variant')}>
-                  点击或拖拽以更换图片
-                </p>
-              </>
-            ) : isReading ? (
-              <Spinner size="lg" />
-            ) : (
-              <>
-                <MdCloudUpload
-                  size={ICON.display}
-                  className={cn('mb-3', dropState !== 'dragging' && 'text-on-surface-variant')}
-                />
-                <p className={cn('text-body-m-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
-                  点击或拖拽图片到此处
-                </p>
-              </>
-            )}
+                  <p className={cn('text-body-m-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
+                    点击或拖拽图片到此处
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </DropZone>
+
+        {/* The second source: a picture on the web. Enter searches, like the dialog's own button. */}
+        <form onSubmit={(event) => void handleSubmit(event)} noValidate>
+          <Input
+            type="url"
+            inputMode="url"
+            label="或粘贴图片链接"
+            value={link}
+            onChange={(event) => {
+              setLink(event.target.value);
+              setStatus({ kind: 'idle' });
+              if (event.target.value.trim()) {
+                fileRead.current += 1;
+                setIsReading(false);
+                setSelectedFile(null);
+                setSelectedImage(null);
+              }
+            }}
+            disabled={isUploading}
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            error={linkInvalid ? '请输入以 http:// 或 https:// 开头的图片链接' : undefined}
+          />
+        </form>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-label-l text-on-surface">容差</p>
+            {/* A value is text: `on-surface`, not the brand ink (2.5:1 at this size). */}
+            <span className="text-label-l-emphasized text-on-surface tabular-nums">{distance.toFixed(2)}</span>
           </div>
-        )}
-      </DropZone>
-
-      {/* The second source: a picture on the web. Enter searches, like the dialog's own button. */}
-      <form className="mb-6" onSubmit={(event) => void handleSubmit(event)} noValidate>
-        <Input
-          type="url"
-          inputMode="url"
-          label="或粘贴图片链接"
-          value={link}
-          onChange={(event) => {
-            setLink(event.target.value);
-            setStatus({ kind: 'idle' });
-            if (event.target.value.trim()) {
-              fileRead.current += 1;
-              setIsReading(false);
-              setSelectedFile(null);
-              setSelectedImage(null);
-            }
-          }}
-          disabled={isUploading}
-          enterKeyHint="search"
-          autoComplete="off"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          error={linkInvalid ? '请输入以 http:// 或 https:// 开头的图片链接' : undefined}
-        />
-      </form>
-
-      <div className="mb-2 px-2">
-        <div className="flex justify-between items-center mb-2">
-          <p className="text-label-l text-on-surface">容差</p>
-          {/* A value is text: `on-surface`, not the brand ink (2.5:1 at this size). */}
-          <span className="text-label-l-emphasized text-on-surface tabular-nums">{distance.toFixed(2)}</span>
+          <Slider
+            min={0.01}
+            max={1.0}
+            step={0.01}
+            value={distance}
+            disabled={isUploading}
+            onValueChange={(value) => {
+              setDistance(value);
+              if (status.kind === 'empty') setStatus({ kind: 'idle' });
+            }}
+            aria-label="搜索容差"
+            valueText={(v) => `容差 ${v.toFixed(2)}`}
+          />
+          <div className="mt-1 flex justify-between text-body-s text-on-surface-variant">
+            <span>精确匹配</span>
+            <span>模糊匹配</span>
+          </div>
+          {/* Always in the tree, so the sentence is announced when it arrives; empty, it takes
+              no space. A failure is an alert, "nothing found" a status. */}
+          <p role="status" className="text-body-m text-on-surface-variant mt-4 empty:mt-0">
+            {status.kind === 'empty' ? '未找到相似图片，可尝试调大容差' : ''}
+          </p>
+          <p role="alert" className="text-body-m text-error mt-4 empty:mt-0">
+            {status.kind === 'error' ? status.message : ''}
+          </p>
         </div>
-        <Slider
-          min={0.01}
-          max={1.0}
-          step={0.01}
-          value={distance}
-          disabled={isUploading}
-          onValueChange={(value) => {
-            setDistance(value);
-            if (status.kind === 'empty') setStatus({ kind: 'idle' });
-          }}
-          aria-label="搜索容差"
-          valueText={(v) => `容差 ${v.toFixed(2)}`}
-        />
-        <div className="flex justify-between text-body-s text-on-surface-variant mt-1">
-          <span>精确匹配</span>
-          <span>模糊匹配</span>
-        </div>
-        {/* Always in the tree, so the sentence is announced when it arrives; empty, it takes
-            no space. A failure is an alert, "nothing found" a status. */}
-        <p role="status" className="text-body-m text-on-surface-variant mt-4 empty:mt-0">
-          {status.kind === 'empty' ? '未找到相似图片，可尝试调大容差' : ''}
-        </p>
-        <p role="alert" className="text-body-m text-error mt-4 empty:mt-0">
-          {status.kind === 'error' ? status.message : ''}
-        </p>
       </div>
     </Modal>
   );

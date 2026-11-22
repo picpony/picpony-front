@@ -38,8 +38,9 @@ export function SliderPaint({ children, nativeFeedback = false, disabled = false
     <div
       aria-hidden="true"
       className={cn(
-        'pointer-events-none absolute inset-0 flex items-center overflow-clip',
-        nativeFeedback && 'peer-focus-visible:[&_[data-slider-thumb]]:ring-2 peer-focus-visible:[&_[data-slider-thumb]]:focus-ring',
+        'pointer-events-none absolute inset-0 flex items-center overflow-x-clip',
+        nativeFeedback &&
+          'peer-focus-visible:[&_[data-slider-thumb]]:ring-2 peer-focus-visible:[&_[data-slider-thumb]]:focus-ring peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-solid peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-2 peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-offset-2 peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-[color:Highlight]',
         nativeFeedback && !disabled && 'peer-active:[&_[data-slider-ink]]:scale-x-50 peer-focus-visible:[&_[data-slider-ink]]:scale-x-50',
       )}
     >
@@ -93,7 +94,13 @@ export function SliderHandle({ ref, transform, handle, focused = false, pressed 
 }) {
   return (
     <span ref={ref} data-slider-position="" data-slider-handle={handle} className="absolute inset-0" style={{ transform }}>
-      <span data-slider-thumb="" className={cn('absolute left-0 h-11 w-1 -translate-x-1/2 rounded-full', focused && 'ring-2 focus-ring')}>
+      <span
+        data-slider-thumb=""
+        className={cn(
+          'absolute left-0 h-11 w-1 -translate-x-1/2 rounded-full',
+          focused && 'ring-2 focus-ring forced-colors:outline-solid forced-colors:outline-2 forced-colors:outline-offset-2 forced-colors:outline-[color:Highlight]',
+        )}
+      >
         <span
           data-slider-ink=""
           className={cn(

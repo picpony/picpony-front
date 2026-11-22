@@ -20,15 +20,17 @@ const GROUP_LABELS: Record<QuickTagGroup, string> = {
 };
 
 /** The rows' own geometry while they load: four one-line rows of chips. */
-function QuickTagsSkeleton() {
+export function QuickTagsSkeleton() {
   return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
+    <div className="flex flex-col gap-2 pointer-coarse:gap-3" aria-hidden="true">
       {QUICK_TAG_GROUPS.map((group, row) => (
-        <div key={group} className="flex h-10 items-center gap-3">
-          <Skeleton className="h-4 w-8" delay={row * 90} />
-          {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className="h-8 w-16" delay={row * 90 + index * 40} />
-          ))}
+        <div key={group} className="flex h-10 min-w-0 items-center gap-3">
+          <Skeleton className="h-4 w-8 shrink-0" delay={row * 90} />
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} className="h-8 w-16 shrink-0" delay={row * 90 + index * 40} />
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -67,7 +69,7 @@ function QuickTagRow({
             onClick={() => onToggle(tag.en)}
             /* The Chinese name is the label; the tag it adds is the supplement. */
             title={tag.cn ? tag.en : undefined}
-            className="shrink-0"
+            className="shrink-0 pointer-coarse:my-0"
           >
             {tag.cn || tag.en}
           </Chip>
@@ -123,7 +125,7 @@ export default function QuickTags({
           <QuickTagsSkeleton />
         )
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 pointer-coarse:gap-3">
           {groups.map(({ group, tags }) => (
             <QuickTagRow key={group} group={group} tags={tags} value={value} onToggle={onToggle} />
           ))}

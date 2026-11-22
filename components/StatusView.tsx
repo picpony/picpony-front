@@ -136,21 +136,29 @@ export default function StatusView({
           a geometrically centred block then reads as sitting high. 24 is the grid
           step that keeps the glyph reading as part of the same object. */}
       {icon && (
-        <span className={cn(ICON_TONES[iconTone], 'mb-6 flex w-full min-w-0 justify-center [&>svg]:block')}>{icon}</span>
+        <span className={cn(ICON_TONES[iconTone], inline ? 'mb-3' : 'mb-6', 'flex w-full min-w-0 justify-center [&>svg]:block')}>
+          {icon}
+        </span>
       )}
       {inline ? (
-        <p className="text-body-m text-on-surface-variant">{title}</p>
+        <p className={cn('wrap-anywhere', description ? 'text-label-l text-on-surface' : 'text-body-m text-on-surface-variant')}>
+          {title}
+        </p>
       ) : (
-        <Title className="text-title-l text-on-surface">{title}</Title>
+        <Title className="text-title-l text-on-surface wrap-anywhere text-pretty">{title}</Title>
       )}
       {/* `text-pretty`: a wrapped description ended on a lone glyph (隐私空间's empty
           state, 「片」 by itself on the second line). */}
-      {description && <p className={cn('text-body-m max-w-md text-pretty', !inline && 'mt-2')}>{description}</p>}
+      {description && (
+        <p className={cn('max-w-md wrap-anywhere text-pretty', inline ? 'mt-1 text-body-s text-on-surface-variant' : 'mt-2 text-body-m')}>
+          {description}
+        </p>
+      )}
+      {children}
       {/* Margin on the action rather than on the description above it: the
           description is optional, and hanging the gap off it left an action with
           no description sitting flush against the title. */}
-      {action && <div className="mt-6">{action}</div>}
-      {children}
+      {action && <div className={inline ? 'mt-3' : 'mt-6'}>{action}</div>}
     </>
   );
 

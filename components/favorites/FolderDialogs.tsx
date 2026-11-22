@@ -305,7 +305,15 @@ export function TransferDialog({
       }
     >
       {error ? <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} /> : loading ? (
-        <div aria-hidden="true" className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+        <ul className="flex flex-col" aria-hidden="true">
+          {Array.from({ length: 3 }, (_, row) => (
+            <li key={row} className="flex min-h-12 items-center gap-3">
+              <Skeleton className="size-4.5 rounded-xs" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-3.5 w-10" />
+            </li>
+          ))}
+        </ul>
       ) : folders.length === 0 ? (
         <EmptyState size="inline" title="暂无其他收藏夹" />
       ) : (
@@ -437,7 +445,7 @@ export function FolderChoiceDialog({
       {error ? <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} /> : loading ? (
         <ul className="flex flex-col" aria-hidden="true">
           {Array.from({ length: 3 }, (_, row) => (
-            <li key={row} className="flex min-h-12 items-center gap-4">
+            <li key={row} className="flex min-h-12 items-center gap-3">
               <Skeleton className="size-5 rounded-full" />
               <Skeleton className="h-4 flex-1" />
               <Skeleton className="h-3.5 w-10" />

@@ -174,7 +174,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
         </span>
       ),
     },
-    { key: 'id', header: 'ID', width: 'auto', render: (item) => `#${item.id}` },
+    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (item) => `#${item.id}` },
     {
       key: 'price',
       header: '价格',

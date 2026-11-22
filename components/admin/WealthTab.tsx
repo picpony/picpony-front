@@ -75,7 +75,7 @@ export default function WealthTab({ token }: AdminPanelProps) {
       primary: true,
       render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
     },
-    { key: 'id', header: 'ID', width: 'auto', render: (user) => `#${user.id}` },
+    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
     { key: 'exp', header: '经验', render: (user) => <span className="tabular-nums">{figureText(user.experience)}</span> },
     {
       key: 'coins',
@@ -248,7 +248,7 @@ function WealthDialog({
           />
         )}
         <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>金币</SectionHeading>
-        <FormGrid>
+        <FormGrid from="sm">
           <Select
             label="操作"
             value={form.coinsOp}

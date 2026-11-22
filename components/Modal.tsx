@@ -346,7 +346,9 @@ export default function Modal({
       // which of two nested dialogs paints above the other.
       style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
       className={cn(
-        'fixed inset-0 flex items-center justify-center p-4 sm:p-6',
+        'fixed inset-0 flex items-center justify-center',
+        'pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]',
+        'sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]',
         /* The shared dialog layer, unless the caller names one — see the
            stacking-order block in globals.css. */
         'z-dialog',
@@ -386,7 +388,7 @@ export default function Modal({
         aria-describedby={describedBy}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden focus-visible:outline-hidden sm:max-h-[calc(100dvh-3rem)]',
+          'relative flex max-h-full w-full flex-col overflow-hidden focus-visible:outline-hidden',
           /* `surface-container-high` is M3's dialog container — tone first,
              shadow second is the whole M3 depth recipe. */
           'bg-surface-container-high text-on-surface rounded-2xl shadow-e3 forced-boundary',

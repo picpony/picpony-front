@@ -37,7 +37,7 @@ Menus form one family:
 | Panel inset | 8 dp | 8 dp |
 | Row radius | 8 dp | 20 dp |
 | Row gap | 2 dp | 2 dp |
-| Row height | 40 / 48 dp by pointer | 56 dp |
+| Row height | 40 dp | 56 dp |
 
 `Popover` owns inset and gap. Use `inset={false}` only for content that supplies its own geometry. `suggestionRow` supplies both classes and height for `estimateMenuHeight`; its variant matches the panel. Two-line ordinary suggestions use 56 dp.
 

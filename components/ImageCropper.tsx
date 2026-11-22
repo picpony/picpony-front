@@ -412,7 +412,7 @@ export default function ImageCropper({
         onPointerCancel={ready ? onPointerUp : undefined}
         /* The stage is a photograph's plate and clips its content, so its focus ring is
            drawn inward, in the media ring. */
-        className="relative h-[46vh] min-h-[260px] touch-none overflow-hidden bg-media-stage select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-on-media"
+        className="relative h-[min(46dvh,24rem)] min-h-44 touch-none overflow-hidden bg-media-stage select-none focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-on-media"
         style={{ cursor: ready ? 'grab' : 'default' }}
       >
         {src && (
@@ -481,7 +481,7 @@ export default function ImageCropper({
         )}
       </div>
 
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 px-6 pt-4 pb-2 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           {/* `IconButton`, not a hand-rolled box: a padding-sized box changes
               the control's size whenever the glyph changes. */}

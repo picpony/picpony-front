@@ -113,9 +113,18 @@ export default function FeedbackDialog({
           <div className="space-y-3" aria-hidden="true">
             {[0, 1, 2].map((index) => (
               <Card key={index} variant="filled" className="space-y-3">
-                <Skeleton className="h-5 w-2/5" delay={index * 90} />
-                <Skeleton className="h-4 w-1/3" delay={index * 90 + 40} />
-                <Skeleton className="h-12 w-full rounded-sm" delay={index * 90 + 80} />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <Skeleton className="h-5 w-2/5" delay={index * 90} />
+                    <Skeleton className="h-4.5 w-1/2" delay={index * 90 + 30} />
+                  </div>
+                  <Skeleton className="h-6 w-14 shrink-0 rounded-xs" delay={index * 90 + 45} />
+                </div>
+                <Skeleton className="h-14 w-full rounded-sm" delay={index * 90 + 75} />
+                <div className="flex justify-end gap-2">
+                  <Skeleton className="h-8 w-14 rounded-full" delay={index * 90 + 100} />
+                  <Skeleton className="h-8 w-28 rounded-full" delay={index * 90 + 120} />
+                </div>
               </Card>
             ))}
           </div>
@@ -133,7 +142,7 @@ export default function FeedbackDialog({
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">{feedback.tag}</p>
-                        <p className="text-body-s text-on-surface-variant">
+                        <p className="text-body-s tabular-nums text-on-surface-variant">
                           {`来自：${feedback.username || '访客'} · ${formatDateTime(feedback.created_at)}`}
                         </p>
                       </div>
@@ -149,7 +158,7 @@ export default function FeedbackDialog({
                       <blockquote className="whitespace-pre-wrap wrap-anywhere">{feedback.content}</blockquote>
                     </div>
                     {feedback.status !== 'pending' && (
-                      <p className="text-body-s text-on-surface-variant">
+                      <p className="text-body-s tabular-nums text-on-surface-variant">
                         {[
                           `由 ${feedback.handler_username || '管理员'} 处理`,
                           feedback.handled_at ? formatDateTime(feedback.handled_at) : null,

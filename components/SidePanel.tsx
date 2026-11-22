@@ -222,7 +222,7 @@ export default function SidePanel({
         {hasHeader && (
           <div
             ref={headerRef}
-            className="relative flex shrink-0 items-center justify-between gap-4 pr-4 pl-6 pt-5 pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+            className="relative flex shrink-0 items-center justify-between gap-4 pl-6 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
           >
             {title ? (
               <h2 id={titleId} className="text-title-l min-w-0 wrap-anywhere text-on-surface">
@@ -251,8 +251,13 @@ export default function SidePanel({
              element has to find this rather than the page behind the panel. */
           viewportProps={{ 'data-app-scroll-container': '' }}
           viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
-            bodyClassName || 'px-6 pb-4',
+            'popover-scrollbar min-h-0 flex-1',
+            bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
+            bodyClassName ||
+              cn(
+                'pb-4 pl-6 pr-[max(1.5rem,env(safe-area-inset-right))]',
+                hasHeader ? 'pt-2' : 'pt-[max(1.5rem,env(safe-area-inset-top))]',
+              ),
           )}
         >
           {children}

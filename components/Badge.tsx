@@ -108,7 +108,7 @@ export default function Badge({
       title={title}
       style={style}
       className={cn(
-        'inline-flex min-w-0 items-center rounded-xs align-middle',
+        'inline-flex min-w-0 items-center rounded-xs align-middle forced-boundary',
         !HAS_MAX_WIDTH.test(className) && 'max-w-full',
         SIZES[size],
         // `colors` outranks `tone` so a categorical pair can be passed straight
@@ -193,7 +193,7 @@ export function CountBadge({
     <span
       className={cn(
         'bg-error-fill text-on-fill text-label-s-emphasized',
-        'flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1',
+        'inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1',
         'tabular-nums tracking-normal forced-boundary',
         arrived && 'animate-control-pop',
         className,

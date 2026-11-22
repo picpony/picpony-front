@@ -67,12 +67,14 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
     );
   };
   const preset = () => change({ ...values, name: values.name || '绘云彩彩中转站', base_url: GATEWAY, models_url: '' });
-  return <AdminForm aria-label={provider ? `编辑模型配置 ${provider.name}` : '添加模型配置'} onSubmit={submit}>
-    <SectionHeading as="h3">{provider ? `编辑 · ${provider.name}` : '添加模型配置'}</SectionHeading>
-    <AdminNote>{provider?.has_key ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}` : '尚未保存密钥。'}</AdminNote>
-    <Button type="button" variant="tonal" onClick={preset} disabled={busy}>使用绘云彩彩中转站</Button>
-    <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
-    {provider && <>
+  return <AdminForm aria-label={provider ? `编辑模型配置 ${provider.name}` : '添加模型配置'} onSubmit={submit} className="max-w-none space-y-6">
+    <div className="@container/form max-w-2xl space-y-4">
+      <SectionHeading as="h3">{provider ? `编辑 · ${provider.name}` : '添加模型配置'}</SectionHeading>
+      <AdminNote>{provider?.has_key ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}` : '尚未保存密钥。'}</AdminNote>
+      <Button type="button" variant="tonal" onClick={preset} disabled={busy}>使用绘云彩彩中转站</Button>
+      <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
+    </div>
+    {provider && <div className="space-y-4">
       <SectionHeading as="h3">候选模型</SectionHeading>
       <AdminNote>自动选择模式下，将在所选候选中选用延迟最低的模型；未勾选候选则在全部测速成功的模型中选择。</AdminNote>
       <div className="flex flex-wrap gap-3">
@@ -83,19 +85,19 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
       <AdminListAnchor>
         <DataTable rows={modelRows.rows} listKey={modelRows.listKey} rowKey={(r) => r.name} empty="尚未获取模型列表" columns={[
           { key: 'select', header: '选择', leading: true, render: (r) => <Checkbox aria-label={`选择模型 ${r.name}`} checked={candidates.includes(r.name)} disabled={busy} onChange={(checked) => change({ ...values, model_candidates: checked ? [...candidates, r.name] : candidates.filter((x) => x !== r.name) })} /> },
-          { key: 'name', header: '模型', primary: true, className: 'wrap-anywhere', render: (r) => <>{r.name}{provider.selected_model === r.name && <> <Badge tone="success">使用中</Badge></>}</> },
+          { key: 'name', header: '模型', primary: true, className: 'wrap-anywhere', render: (r) => <span className="inline-flex flex-wrap items-center gap-2"><span>{r.name}</span>{provider.selected_model === r.name && <Badge tone="success" size="sm">使用中</Badge>}</span> },
           /* Three states: untested, a duration, and 可用 for a success that reported none (G2-003). */
-          { key: 'latency', header: '测试结果', render: (r) => r.result ? <Badge tone={r.result.ok ? 'success' : 'error'}>{r.result.ok ? (r.result.latency === null ? '可用' : `${r.result.latency} 毫秒`) : (r.result.failure ?? '不可用')}</Badge> : '未测速' },
+          { key: 'latency', header: '测试结果', width: 'auto', className: 'tabular-nums', render: (r) => r.result ? <Badge size="md" tone={r.result.ok ? 'success' : 'error'}>{r.result.ok ? (r.result.latency === null ? '可用' : `${r.result.latency} 毫秒`) : (r.result.failure ?? '不可用')}</Badge> : <span className="text-on-surface-variant">未测速</span> },
           { key: 'actions', header: '操作', actions: true, render: (r) => <Button type="button" size="xs" variant="text" loading={probe.pendingKeys.has(r.name)} disabled={busy || unsaved || !provider.has_key} onClick={() => confirmThen('确认测速', `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`, () => run('benchmark', r.name), { tone: 'filled' })}>测速</Button> },
         ]} />
         <AdminPager page={modelRows.page} totalPages={modelRows.totalPages} onPageChange={modelRows.setPage} />
       </AdminListAnchor>
-    </>}
+    </div>}
     {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
-    {notice && <p role="status" className="text-body-m">{notice}</p>}
-    <FormActions>
+    {notice && <p role="status" className="text-body-m tabular-nums">{notice}</p>}
+    <FormActions className={!provider ? 'max-w-2xl' : ''}>
       <Button type="button" variant="text" disabled={busy} onClick={onDone}>收起</Button>
-      <Button type="submit" loading={save.busy} disabled={probe.busy}>保存模型配置</Button>
+      <Button type="submit" variant="filled" loading={save.busy} disabled={probe.busy}>保存模型配置</Button>
     </FormActions>
     {confirmDialog}
   </AdminForm>;
@@ -108,15 +110,15 @@ function Providers({ token }: { token: string }) {
   const { confirmThen, confirmDialog } = useConfirm();
   const config = read.data;
   const editingProvider = config && editing && editing !== 'new' ? config.providers.find((p) => p.id === editing) ?? null : null;
-  return <ReadState title="助手模型加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
+  return <ReadState variant="table" title="助手模型加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
     {config && <section className="space-y-4" aria-labelledby="admin-assistant-providers-heading">
       <SectionHeading as="h3" id="admin-assistant-providers-heading">助手模型</SectionHeading>
       <AdminNote>{`主模型不可用时按备用顺序依次尝试。最多 ${api.PROVIDER_LIMIT} 个配置；启用的配置须已保存密钥。`}</AdminNote>
       <DataTable rows={config.providers} rowKey={(p) => p.id} empty="尚未添加模型配置" columns={[
         { key: 'name', header: '配置', primary: true, className: 'wrap-anywhere', render: (p) => <>{p.name}<br /><span className="text-body-s text-on-surface-variant">{p.selected_model || '未选择模型'}</span></> },
-        { key: 'role', header: '角色', render: (p) => p.is_primary ? <Badge tone="success">主模型</Badge> : `备用 #${p.fallback_rank}` },
-        { key: 'state', header: '状态', render: (p) => <Badge tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}>{p.enabled ? (p.key_available ? '已启用' : '密钥不可用') : '未启用'}</Badge> },
-        { key: 'updated', header: '更新时间', render: (p) => formatDateTime(p.updated_at) },
+        { key: 'role', header: '角色', width: 'auto', className: 'tabular-nums', render: (p) => p.is_primary ? <Badge tone="success" size="md">主模型</Badge> : `备用 #${p.fallback_rank}` },
+        { key: 'state', header: '状态', width: 'auto', render: (p) => <Badge size="md" tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}>{p.enabled ? (p.key_available ? '已启用' : '密钥不可用') : '未启用'}</Badge> },
+        { key: 'updated', header: '更新时间', width: 'auto', className: 'tabular-nums', render: (p) => formatDateTime(p.updated_at) },
         { key: 'actions', header: '操作', actions: true, render: (p) => <>
           <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑 ${p.name}`} disabled={remove.busy} onClick={() => setEditing(p.id)} />
           <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除 ${p.name}`} loading={remove.pendingKeys.has(p.id)} onClick={() => confirmThen('确认删除模型配置', `确定要删除「${p.name}」吗？此配置的密钥将一并清除，此操作无法恢复。`, () => void remove.run(

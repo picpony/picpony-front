@@ -13,6 +13,7 @@ import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import MasonryGrid from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import Skeleton from '@/components/Skeleton';
 import Pagination from '@/components/Pagination';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -26,6 +27,18 @@ import { OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneP
 
 /** A page of the grid — also `lib/prefetchRoute.ts`'s `PROFILE_PER_PAGE`, which warms page 1. */
 export const UPLOADS_PER_PAGE = 12;
+
+function UploadsSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="mb-4 flex h-10 items-center justify-between gap-4">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-8 w-28 rounded-full" delay={60} />
+      </div>
+      <ImageGridSkeleton count={UPLOADS_PER_PAGE} entrance={false} />
+    </div>
+  );
+}
 
 /**
  * 上传记录 — the bound Derpibooru account's uploads (decision 8: PicPony has no uploads action; the
@@ -85,13 +98,13 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
     [uploads, dataPage, totalPages, listKey, id, token, fp, reveal],
   );
 
-  if (!ready) return <ImageGridSkeleton count={UPLOADS_PER_PAGE} entrance={false} />;
+  if (!ready) return <UploadsSkeleton />;
   if (!visible) return <PaneHidden />;
 
   const data = read.data;
   if (data === undefined) {
     if (read.error) return <PaneFailure error={read.error} title="上传记录加载失败" onRetry={read.refresh} />;
-    return <ImageGridSkeleton count={UPLOADS_PER_PAGE} entrance={false} />;
+    return <UploadsSkeleton />;
   }
   if (data.binding === 'hidden') return <PaneHidden />;
   if (data.binding === 'unbound') {
@@ -203,7 +216,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
           onPageChange={setPage}
           onPrefetchPage={(next) => userUploads.prefetch({ id, page: next, perPage: UPLOADS_PER_PAGE, token, fp })}
           disabled={read.isLoading}
-          className="mt-8 mb-4"
+          className="mt-8"
         />
       )}
       <FailedTurnHold failed={failedTurn} rows={rows} failure={failureRef} />

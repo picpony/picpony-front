@@ -48,12 +48,12 @@ function LedgerSkeleton() {
     <div data-page-loading aria-hidden="true">
       <Skeleton className="mb-2 ml-1 h-5 w-12" />
       {Array.from({ length: 12 }, (_, i) => (
-        <div key={i} className="m3-row flex items-center gap-4 bg-surface-container-low px-4 py-3">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-40" delay={Math.min(i, 8) * 70} />
-            <Skeleton className="h-3 w-12" delay={Math.min(i, 8) * 70 + 40} />
+        <div key={i} className="m3-row flex min-h-16 items-center gap-4 bg-surface-container-low px-4 py-3">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Skeleton className="h-4.5 w-40 max-w-full" delay={Math.min(i, 8) * 70} />
+            <Skeleton className="h-3.5 w-12" delay={Math.min(i, 8) * 70 + 40} />
           </div>
-          <Skeleton className="h-5 w-12" delay={Math.min(i, 8) * 70 + 80} />
+          <Skeleton className="h-5 w-12 shrink-0" delay={Math.min(i, 8) * 70 + 80} />
         </div>
       ))}
     </div>
@@ -93,7 +93,13 @@ export default function CoinLedger() {
   const header = (
     <PageHeader
       title="金币明细"
-      subtitle={token && Number.isFinite(balance) ? `当前余额 ${formatExactCount(Math.max(0, balance))} 金币` : undefined}
+      subtitle={
+        !ready ? (
+          <Skeleton className="inline-block h-4 w-32 align-middle" aria-hidden="true" />
+        ) : token && Number.isFinite(balance) ? (
+          `当前余额 ${formatExactCount(Math.max(0, balance))} 金币`
+        ) : undefined
+      }
     />
   );
 
@@ -131,7 +137,7 @@ export default function CoinLedger() {
         )}
         <div
           className={cn(
-            'space-y-6 transition-opacity spring-default-effects',
+            'flex flex-col gap-6 transition-opacity spring-default-effects',
             read.isPrevious && read.isLoading ? 'paging-dim' : 'opacity-100',
           )}
           aria-busy={read.isLoading || undefined}

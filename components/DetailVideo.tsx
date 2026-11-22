@@ -500,7 +500,7 @@ export default function DetailVideo({
         />
       )}
       {showFailure && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-auto p-2">
           <ErrorRetry size="inline" title="视频加载失败" onRetry={retryFinal} />
         </div>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { MdFilterList, MdNotifications, MdSpeed, MdVisibility } from 'react-icons/md';
+import { MdFilterList, MdNotifications, MdTroubleshoot, MdVisibility } from 'react-icons/md';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
 import Select from '@/components/Select';
@@ -67,14 +67,15 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
       <SettingsSection title="内容筛选" icon={<MdFilterList size={ICON.control} />}>
         <SettingsRow
           label="内容分级"
+          wrap="md"
           supporting={
             <>
               <span className="block">{FILTER_DESCRIPTIONS[filter] ?? FILTER_DESCRIPTIONS.safe}</span>
               {blocked && (
-                <span className="mt-0.5 flex flex-wrap items-center gap-x-2">
+                <span className="mt-0.5 flex flex-wrap items-center gap-x-3">
                   {SPOILERS_BLOCKED[blocked]}
                   {blocked === 'no-birthday' && (
-                    <Button variant="text" size="xs" onClick={onOpenAccount} className="-my-1.5">
+                    <Button variant="text" size="xs" onClick={onOpenAccount} className="-ms-3 -my-1.5">
                       前往账户
                     </Button>
                   )}
@@ -204,7 +205,7 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
 
       {/* The on-device performance run (/perf): the same scripted opens, pulls, steps and scrolls
           on whatever device this is, with a report to export and compare. */}
-      <SettingsSection title="诊断" icon={<MdSpeed size={ICON.control} />}>
+      <SettingsSection title="诊断" icon={<MdTroubleshoot size={ICON.control} />}>
         <SettingsRow
           label="性能测试"
           supporting="检测交互与滚动流畅度，并生成测试报告"

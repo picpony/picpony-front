@@ -27,8 +27,14 @@ import { cn } from '@/lib/utils';
  * **No leading glyphs.** Six rows carried one and the rest did not; the section headings carry
  * the section's glyph, and a row's leading slot is for media only (the avatar, the banner).
  */
-export const ROW_CLASS = 'm3-row flex items-center gap-4 bg-surface-container-low p-4';
-export const ROW_STACK_CLASS = 'm3-row flex flex-col items-stretch gap-4 bg-surface-container-low p-4';
+export const ROW_CLASS = 'm3-row @container/row flex min-h-18 items-center gap-4 bg-surface-container-low p-4';
+export const ROW_STACK_CLASS = 'm3-row @container/row flex min-h-18 flex-col items-stretch gap-4 bg-surface-container-low p-4';
+
+const ACTION_WRAP = {
+  sm: { row: '@max-sm/row:flex-wrap', action: '@max-sm/row:basis-full @max-sm/row:justify-end' },
+  md: { row: '@max-md/row:flex-wrap', action: '@max-md/row:basis-full @max-md/row:justify-end' },
+  lg: { row: '@max-lg/row:flex-wrap', action: '@max-lg/row:basis-full @max-lg/row:justify-end' },
+} as const;
 
 export function SettingsRow({
   label,
@@ -38,6 +44,7 @@ export function SettingsRow({
   action,
   labelId,
   surface = 'page',
+  wrap,
   children,
   'aria-hidden': ariaHidden,
 }: {
@@ -54,6 +61,8 @@ export function SettingsRow({
   labelId?: string;
   /** `'dialog'` steps down to `surface-container` inside `Modal`'s `surface-container-high` so `surface-container-highest` controls stay distinct. */
   surface?: 'page' | 'dialog';
+  /** Below this row container width, wrap a wide trailing control group onto its own aligned line. */
+  wrap?: keyof typeof ACTION_WRAP;
   /** A block under the row's text that needs the full width (the palette chips). */
   children?: ReactNode;
   /**
@@ -64,6 +73,7 @@ export function SettingsRow({
   'aria-hidden'?: boolean | 'true';
 }) {
   const surfaceBg = surface === 'dialog' ? 'bg-surface-container' : 'bg-surface-container-low';
+  const wrapClasses = wrap ? ACTION_WRAP[wrap] : undefined;
   const head = (
     <>
       {leading}
@@ -74,19 +84,29 @@ export function SettingsRow({
         </p>
         {supporting && <div className="text-body-s text-on-surface-variant mt-0.5 wrap-anywhere">{supporting}</div>}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {action && (
+        <div className={cn('flex max-w-full shrink-0 flex-wrap items-center gap-2', wrapClasses?.action)}>
+          {action}
+        </div>
+      )}
     </>
   );
   if (!children) {
     return (
-      <div className={cn('m3-row flex items-center gap-4 p-4', surfaceBg)} aria-hidden={ariaHidden || undefined}>
+      <div
+        className={cn('m3-row @container/row flex min-h-18 items-center gap-x-4 gap-y-3 p-4', wrapClasses?.row, surfaceBg)}
+        aria-hidden={ariaHidden || undefined}
+      >
         {head}
       </div>
     );
   }
   return (
-    <div className={cn('m3-row flex flex-col items-stretch gap-4 p-4', surfaceBg)} aria-hidden={ariaHidden || undefined}>
-      <div className="flex items-center gap-4">{head}</div>
+    <div
+      className={cn('m3-row @container/row flex min-h-18 flex-col items-stretch gap-4 p-4', surfaceBg)}
+      aria-hidden={ariaHidden || undefined}
+    >
+      <div className={cn('flex items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
       {children}
     </div>
   );

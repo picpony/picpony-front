@@ -25,7 +25,7 @@ export default function CaptchaModal({ isOpen, onClose, onVerify }: CaptchaModal
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="fit" hideCloseButton title="安全验证"
-      footer={<Button variant="tonal" onClick={onClose}>取消</Button>}
+      footer={<Button variant="text" onClick={onClose}>取消</Button>}
     >
       <SliderCaptcha onVerify={onVerify} active={isOpen} />
     </Modal>

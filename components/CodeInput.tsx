@@ -198,11 +198,11 @@ export default function CodeInput({
           className={cn(
             // Native fields have an intrinsic width floor; release it so all
             // six boxes still fit inside a narrow dialog's content column.
-            'text-title-m-emphasized h-14 w-10 min-w-0 rounded-md border border-outline text-center tabular-nums sm:w-11',
+            'text-title-m-emphasized h-14 w-10 min-w-0 touch-manipulation rounded-md border border-outline text-center tabular-nums sm:w-11',
             'text-on-surface focus-visible:outline-hidden',
             'spring-fast-effects transition-[border-color,box-shadow]',
             'hover:not-focus:not-disabled:border-on-surface',
-            'focus:border-primary-ink focus:ring-1 focus:ring-inset focus:ring-primary-ink',
+            'focus:border-primary-ink focus:inset-ring-1 focus:inset-ring-primary-ink',
             'disabled:cursor-not-allowed disabled:disabled-content',
           )}
         />

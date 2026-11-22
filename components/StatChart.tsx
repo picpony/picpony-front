@@ -84,7 +84,7 @@ function tickIndexes(count: number, limit: number): number[] {
   for (let index = 0; index < count; index += stride) indexes.push(index);
   const last = indexes[indexes.length - 1];
   if (last !== count - 1) {
-    if (count - 1 - last <= stride / 2 && indexes.length > 1) indexes[indexes.length - 1] = count - 1;
+    if (count - 1 - last <= stride * 0.75 && indexes.length > 1) indexes[indexes.length - 1] = count - 1;
     else indexes.push(count - 1);
   }
   return indexes;
@@ -165,7 +165,7 @@ export default function StatChart({
   const step = niceStep(maxValue / 4);
   const max = step * 4;
   const yTicks = [0, step, step * 2, step * 3, step * 4];
-  const xTicks = tickIndexes(count, Math.min(7, Math.max(2, Math.floor(plotWidth / 64))));
+  const xTicks = tickIndexes(count, Math.min(7, Math.max(2, Math.floor(plotWidth / 72))));
   // Never carry a hovered bucket into another view or revive it on returning to a tab.
   const valid = selection && isActive && !loading && selection.key === contentKey && selection.index < count;
   if (selection && !valid) setSelection(null);
@@ -208,7 +208,7 @@ export default function StatChart({
   return (
     <figure className={cn('@container m-0 min-w-0', className)}>
       <figcaption className="sr-only">{ariaLabel}</figcaption>
-      {hasData && (
+      {hasData ? (
         <div
           role="status"
           aria-live={focused && (!selection || selection.source === 'select') ? 'polite' : 'off'}
@@ -229,7 +229,7 @@ export default function StatChart({
               return (
                 <div key={item.key} className="min-w-0">
                   <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
-                    <svg width={18} height={6} viewBox="0 0 18 6" className={cn('shrink-0 forced-mark', TONE[item.tone])} aria-hidden="true">
+                    <svg width={18} height={6} viewBox="0 0 18 6" className={cn('shrink-0 forced-colors:text-[color:CanvasText]', TONE[item.tone])} aria-hidden="true">
                       <line
                         x1={1}
                         x2={17}
@@ -251,7 +251,22 @@ export default function StatChart({
             })}
           </dl>
         </div>
-      )}
+      ) : loading ? (
+        <div aria-hidden="true" className="mb-4 border-b border-outline-variant pb-3">
+          <Skeleton className="h-4 w-24" />
+          <div className={cn(
+            'mt-2 grid gap-x-4 gap-y-2',
+            series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
+          )}>
+            {(series.length > 0 ? series : [{ key: 'placeholder' }]).map((item, idx) => (
+              <div key={item.key} className="min-w-0">
+                <Skeleton className="h-4 w-16" delay={idx * 40} />
+                <Skeleton className="mt-1 h-7 w-24" delay={idx * 40 + 40} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div ref={plotRef} className="min-w-0" aria-busy={loading || undefined}>
         <SwapContent contentKey={contentKey} active={isActive}>
           {hasData ? (
@@ -260,7 +275,7 @@ export default function StatChart({
               aria-label={ariaLabel}
               aria-describedby={hintId}
               tabIndex={0}
-              className="relative rounded-sm cursor-crosshair focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+              className="relative select-none touch-manipulation rounded-sm cursor-crosshair focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
               onPointerMove={(event) => {
                 if (event.pointerType !== 'touch') selectAt(event.clientX, 'hover');
               }}

@@ -605,7 +605,13 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             )}
 
             {heading && (
-              <div className={cn('text-title-s text-on-surface min-w-0 wrap-anywhere', heading.className)}>
+              <div
+                className={cn(
+                  'text-title-s text-on-surface min-w-0 wrap-anywhere',
+                  !leading.length && details.length > 0 && 'basis-full @2xl/table:basis-auto',
+                  heading.className,
+                )}
+              >
                 {heading.render(row, i)}
               </div>
             )}
@@ -623,7 +629,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             ))}
 
             {actions.length > 0 && (
-              <div className="ml-auto flex flex-wrap items-center justify-end gap-2 @2xl/table:ml-0 @2xl/table:justify-self-end">
+              <div className="text-body-m ml-auto flex flex-wrap items-center justify-end gap-2 @2xl/table:ml-0 @2xl/table:justify-self-end">
                 {actions.map((col) => (
                   <div key={col.key} className={cn('flex flex-wrap items-center gap-2', col.className)}>
                     {col.render(row, i)}
@@ -720,14 +726,14 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
                   </div>
                 )}
                 {heading && (
-                  <div className="min-w-0">
+                  <div className={cn('min-w-0', !leading.length && details.length > 0 && 'basis-full @2xl/table:basis-auto')}>
                     <Skeleton className="h-5 w-32 max-w-full" delay={i * 80} />
                   </div>
                 )}
                 {details.map((col, j) => (
-                  <span key={col.key} className="min-w-0">
-                    <Skeleton className="h-4 w-20 max-w-full" delay={i * 80 + 40 + j * 20} />
-                  </span>
+                  <div key={col.key} className="min-w-0">
+                    <Skeleton className="h-5 w-20 max-w-full" delay={i * 80 + 40 + j * 20} />
+                  </div>
                 ))}
                 {actions.length > 0 && (
                   <div className="ml-auto flex items-center justify-end gap-2 @2xl/table:ml-0 @2xl/table:justify-self-end">

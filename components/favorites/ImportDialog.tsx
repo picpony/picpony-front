@@ -106,13 +106,13 @@ export default function ImportDialog({
           aria-hidden={running || undefined}
           className={cn('col-start-1 row-start-1 transition-opacity spring-fast-effects', running && 'opacity-0')}
         >
-          <p className="mb-4 text-body-m text-on-surface-variant">
+          <p className="mb-4 text-body-m text-on-surface-variant tabular-nums">
             本页有 {shownCount} 张图片尚未收藏到云端
           </p>
           {error ? (
             <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
           ) : loading ? (
-            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full rounded-md" />
           ) : folders.length === 0 ? (
             <EmptyState size="inline" title="暂无收藏夹" />
           ) : (

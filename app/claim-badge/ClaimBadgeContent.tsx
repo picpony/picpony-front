@@ -41,9 +41,8 @@ function ClaimSkeleton() {
       <div role="status" className="sr-only">正在读取登录状态…</div>
       <div data-page-loading aria-hidden="true" className={statusViewBox('pane')}>
         <SkeletonCircle size={48} className="mb-6" />
-        <Skeleton className="h-7 w-48 max-w-full" />
-        <Skeleton className="mt-2 h-5 w-56 max-w-full" delay={60} />
-        <Skeleton className="mt-6 h-10 w-32 rounded-full" delay={120} />
+        <Skeleton className="h-7 w-40 max-w-full" />
+        <Skeleton className="mt-6 h-10 w-32 rounded-full" delay={80} />
       </div>
     </Card>
   );
@@ -81,15 +80,20 @@ export default function ClaimBadgeContent({ claimToken }: { claimToken: string }
       <div className="page-back-room-2xl mx-auto max-w-2xl">
         <PageHeader title="领取徽章" />
         {!claimToken ? (
-          <ErrorRetry
-            title="领取链接无效"
-            message="链接中缺少领取凭证，请使用完整的徽章领取链接。"
-            action={<ExitLink profileHref={profileHref} emphasized />}
-          />
+          <Card variant="filled" padding="lg">
+            <ErrorRetry
+              size="pane"
+              title="领取链接无效"
+              message="链接中缺少领取凭证，请使用完整的徽章领取链接。"
+              action={<ExitLink profileHref={profileHref} emphasized />}
+            />
+          </Card>
         ) : !ready ? (
           <ClaimSkeleton />
         ) : !token ? (
-          <SignInRequired description="登录后即可领取此徽章" />
+          <Card variant="filled" padding="lg">
+            <SignInRequired size="pane" description="登录后即可领取此徽章" />
+          </Card>
         ) : (
           <ClaimForm key={`${token}:${claimToken}`} token={token} claimToken={claimToken} profileHref={profileHref} />
         )}

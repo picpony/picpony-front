@@ -142,11 +142,11 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
       {read.data === undefined && !read.error && !kept ? (
         <div aria-hidden="true">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="m3-row flex items-center gap-3 bg-surface-container-low p-3">
-              <Skeleton className="size-5 rounded-xs" delay={i * 60} />
+            <div key={i} className="m3-row flex items-start gap-3 bg-surface-container-low p-3">
+              <Skeleton className="mt-0.5 size-4.5 shrink-0 rounded-xs" delay={i * 60} />
               <div className="min-w-0 flex-1 space-y-2">
                 <Skeleton className="h-4 w-32" delay={i * 60 + 30} />
-                <Skeleton className="h-3 w-48" delay={i * 60 + 60} />
+                <Skeleton className="h-4 w-48 max-w-full" delay={i * 60 + 60} />
               </div>
             </div>
           ))}
@@ -185,7 +185,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
                       if ((event.target as HTMLElement).closest('label')) return;
                       toggle(option.key, !chosen.has(option.key));
                     }}
-                    className="m3-row flex cursor-pointer items-start gap-3 bg-surface-container-low p-3"
+                    className="m3-row state-layer transition-ui flex cursor-pointer items-start gap-3 bg-surface-container-low p-3"
                   >
                     <Checkbox
                       checked={chosen.has(option.key)}
@@ -210,7 +210,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
                           </Badge>
                         ))}
                         {option.tags.length > TAG_PREVIEW && (
-                          <span className="text-body-s text-on-surface-variant">+{option.tags.length - TAG_PREVIEW}</span>
+                          <span className="text-body-s tabular-nums text-on-surface-variant">+{option.tags.length - TAG_PREVIEW}</span>
                         )}
                         {option.tags.length === 0 && <span className="text-body-s text-on-surface-variant">暂无标签</span>}
                       </p>

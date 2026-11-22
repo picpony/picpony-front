@@ -7,6 +7,7 @@ import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
 import FollowHeight from '@/components/FollowHeight';
 import SignInRequired from '@/components/SignInRequired';
+import Skeleton from '@/components/Skeleton';
 import ButtonLink from '@/components/ButtonLink';
 import { ICON } from '@/lib/icons';
 import { useSession } from '@/lib/hooks';
@@ -43,7 +44,7 @@ export default function AdminPage() {
   return (
     /* `useSearchParams` needs a boundary above it; the fallback is the console's own arrival
        state, so the shell does not jump. */
-    <Suspense fallback={<ConsoleColumn><AdminPaneSkeleton /></ConsoleColumn>}>
+    <Suspense fallback={<ConsoleColumn><ConsoleSkeleton /></ConsoleColumn>}>
       <AdminGate />
     </Suspense>
   );
@@ -56,16 +57,34 @@ export default function AdminPage() {
  */
 function ConsoleColumn({ children, ref }: { children: React.ReactNode; ref?: React.Ref<HTMLDivElement> }) {
   return (
-    <div ref={ref} className="mx-auto max-w-6xl">
+    <div ref={ref} className="@container mx-auto max-w-6xl">
       <h1 className="sr-only">管理面板</h1>
       {children}
     </div>
   );
 }
 
+/** Matches `AdminConsole`'s card surface, split at `SPLIT_MIN_REM` (48rem), rail and panel insets. */
+function ConsoleSkeleton() {
+  return (
+    <div className="flex flex-col rounded-md bg-surface-container-low @[48rem]:flex-row" aria-hidden="true">
+      <div className="min-w-0 border-b border-outline-variant p-2 @[48rem]:w-48 @[48rem]:shrink-0 @[48rem]:border-b-0">
+        <div className="flex gap-1 overflow-hidden @[48rem]:flex-col">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10 w-24 shrink-0 rounded-full @[48rem]:w-full" delay={i * 40} />
+          ))}
+        </div>
+      </div>
+      <div className="min-h-96 min-w-0 flex-1 p-4 sm:p-6 @[48rem]:min-h-150">
+        <AdminPaneSkeleton />
+      </div>
+    </div>
+  );
+}
+
 function AdminGate() {
   const { user, token, ready } = useSession();
-  if (!ready) return <ConsoleColumn><AdminPaneSkeleton /></ConsoleColumn>;
+  if (!ready) return <ConsoleColumn><ConsoleSkeleton /></ConsoleColumn>;
   if (!token) {
     return (
       <ConsoleColumn>

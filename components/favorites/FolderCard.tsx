@@ -18,10 +18,10 @@ import CheckGlyph from '@/components/CheckGlyph';
 import FadeInImage from '@/components/FadeInImage';
 import Skeleton from '@/components/Skeleton';
 
-/* Two columns on a phone, three from `sm`, four from `lg` — the gallery's own steps and its
-   8/16px gaps, as the profile's 收藏夹 tab lays its folders out. */
-export const FOLDER_GRID = 'grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4';
-const COVER_SIZES = '(min-width: 1024px) 248px, (min-width: 640px) 33vw, 50vw';
+/* Two columns on a narrow container, three from 520px, four from 820px — matching `MasonryGrid`'s
+   container thresholds so the docked desktop drawer never squeezes cards into narrow strips. */
+export const FOLDER_GRID = 'grid grid-cols-2 gap-2 @[520px]/folders:grid-cols-3 @[520px]/folders:gap-4 @[820px]/folders:grid-cols-4';
+const COVER_SIZES = '(min-width: 1024px) 308px, (min-width: 640px) 33vw, 50vw';
 
 /**
  * A folder's cover: its newest picture, or `null` for the plain face. Nothing the viewer's
@@ -129,7 +129,7 @@ export const FolderCard = memo(function FolderCard({
   }, [selecting]);
 
   return (
-    <div {...longPress} data-folder-card={href} className="relative">
+    <div {...longPress} data-folder-card={href} className="relative flex h-full flex-col">
       <Card
         ref={linkRef}
         as="a"
@@ -138,7 +138,7 @@ export const FolderCard = memo(function FolderCard({
         variant="filled"
         padding="none"
         interactive
-        className="overflow-hidden"
+        className="flex flex-1 flex-col overflow-hidden"
       >
         <span
           data-folder-cover={folder.latestImageId ?? undefined}
@@ -154,11 +154,11 @@ export const FolderCard = memo(function FolderCard({
             </span>
           )}
         </span>
-        <span className={cn('flex flex-col gap-0.5 py-2.5 pl-3', menu ? 'pr-12' : 'pr-3')}>
+        <span className={cn('flex flex-1 flex-col gap-0.5 py-2.5 pl-3', menu ? 'pr-12' : 'pr-3')}>
           <span className="truncate text-title-s text-on-surface" title={name}>
             {name}
           </span>
-          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-body-s text-on-surface-variant">
+          <span className="flex min-h-5 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-body-s text-on-surface-variant">
             <span className="tabular-nums">{formatCount(folder.itemCount)} 张</span>
             {badges}
           </span>
@@ -249,16 +249,18 @@ export function FolderBadges({ isDefault, isPublic }: { isDefault: boolean; isPu
 /** The cards' own shape while the list loads: a 4:3 cover and two lines. */
 export function FolderGridSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <ul className={FOLDER_GRID} data-page-loading="" aria-hidden="true">
-      {Array.from({ length: count }, (_, index) => (
-        <li key={index} className="overflow-hidden rounded-md bg-surface-container-highest">
-          <Skeleton className="aspect-4/3 w-full rounded-none" delay={index * 80} />
-          <div className="flex flex-col gap-1.5 px-3 py-3">
-            <Skeleton className="h-4 w-3/5" delay={index * 80 + 40} />
-            <Skeleton className="h-3.5 w-2/5" delay={index * 80 + 80} />
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="@container/folders" data-page-loading="" aria-hidden="true">
+      <ul className={FOLDER_GRID}>
+        {Array.from({ length: count }, (_, index) => (
+          <li key={index} className="overflow-hidden rounded-md bg-surface-container-highest">
+            <Skeleton className="aspect-4/3 w-full rounded-none" delay={index * 80} />
+            <div className="flex flex-col gap-1.5 px-3 py-3">
+              <Skeleton className="h-4 w-3/5" delay={index * 80 + 40} />
+              <Skeleton className="h-4 w-2/5" delay={index * 80 + 80} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

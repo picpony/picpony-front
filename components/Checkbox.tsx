@@ -81,12 +81,13 @@ export default function Checkbox({
         startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
       }}
       className={cn(
-        'group/checkbox inline-flex items-center gap-2 select-none',
+        'group/checkbox inline-flex min-w-0 max-w-full items-center gap-3 select-none touch-manipulation',
+        Boolean(label) && 'touch-target pointer-coarse:min-h-12',
         disabled ? 'cursor-not-allowed disabled-content' : 'cursor-pointer',
         className,
       )}
     >
-      <span className="touch-target relative flex size-4.5 shrink-0 items-center justify-center">
+      <span className={cn('relative flex size-4.5 shrink-0 items-center justify-center', !label && 'touch-target')}>
       <input
         ref={inputRef}
         type="checkbox"

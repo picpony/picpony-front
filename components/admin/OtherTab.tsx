@@ -223,7 +223,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
         </Card>
       </section>
 
-      <section aria-labelledby="admin-site-statistics-heading" className="space-y-4">
+      <section aria-labelledby="admin-site-statistics-heading" className="@container space-y-4">
         <SectionHeading
           as="h3"
           icon={<MdBarChart size={ICON.control} />}
@@ -236,19 +236,23 @@ export default function OtherTab({ token }: AdminPanelProps) {
           <ErrorRetry size="inline" {...retryError('全站统计加载失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />
         ) : (
           <>
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <dl className="grid grid-cols-1 gap-3 @md:grid-cols-3">
               {STAT_FIELDS.map(({ key, label }) => (
                 <Card key={key} variant="filled" padding="sm" className="space-y-1">
                   <dt className="text-body-s text-on-surface-variant">{label}</dt>
                   <dd className="text-title-l tabular-nums text-on-surface">
-                    {stats ? formatCount(stats[key]) : <Skeleton className="h-8 w-24" />}
+                    {stats ? formatCount(stats[key]) : <Skeleton className="h-7 w-24" />}
                   </dd>
                 </Card>
               ))}
             </dl>
-            <p className="text-body-s text-on-surface-variant">
-              {stats ? (stats.updated_at ? `统计更新于 ${formatDateTime(stats.updated_at)}` : '暂无统计更新时间') : ' '}
-            </p>
+            {stats ? (
+              <p className="text-body-s tabular-nums text-on-surface-variant">
+                {stats.updated_at ? `统计更新于 ${formatDateTime(stats.updated_at)}` : '暂无统计更新时间'}
+              </p>
+            ) : (
+              <Skeleton className="h-4.5 w-44" />
+            )}
           </>
         )}
         <Button

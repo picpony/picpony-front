@@ -62,6 +62,7 @@ export default function AnnouncementsPane({ active }: { active: boolean }) {
       {read.isPrevious && read.error !== undefined && (
         <ErrorRetry
           size="inline"
+          className="mb-4"
           title="公告加载失败"
           message={apiErrorMessage(read.error)}
           onRetry={isRetryable(read.error) ? read.refresh : undefined}

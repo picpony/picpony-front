@@ -45,12 +45,12 @@ export function shopImageProps(imageUrl: string): { src: string; unoptimized: bo
 }
 
 /** The item's picture in the card's square, or the gift glyph the original shop drew without one. */
-function ItemPicture({ item, sizes }: { item: ShopItem; sizes: string }) {
+function ItemPicture({ item, sizes, iconSize = ICON.display }: { item: ShopItem; sizes: string; iconSize?: number }) {
   const picture = shopImageProps(item.imageUrl);
   if (!picture) {
     return (
       <div className="grid h-full w-full place-items-center text-on-surface-variant" aria-hidden="true">
-        <MdCardGiftcard size={ICON.display} />
+        <MdCardGiftcard size={iconSize} />
       </div>
     );
   }
@@ -60,8 +60,8 @@ function ItemPicture({ item, sizes }: { item: ShopItem; sizes: string }) {
 /** The item's picture at a cart line's 48dp. */
 export function ItemThumb({ item }: { item: ShopItem }) {
   return (
-    <div className="relative size-12 shrink-0 overflow-hidden rounded-sm bg-surface-container-highest">
-      <ItemPicture item={item} sizes="48px" />
+    <div className="relative size-12 shrink-0 overflow-hidden rounded-sm bg-surface-container-high">
+      <ItemPicture item={item} sizes="48px" iconSize={ICON.standard} />
     </div>
   );
 }
@@ -172,7 +172,7 @@ export function ShopItemCardSkeleton({ index }: { index: number }) {
           <Skeleton className="h-3 w-full" delay={delay} />
           <Skeleton className="h-3 w-2/3" delay={delay} />
         </div>
-        <div className="pt-3">
+        <div className="mt-auto pt-3">
           <div className="flex h-6 items-center">
             <Skeleton className="h-5 w-16" delay={delay} />
           </div>

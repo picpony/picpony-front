@@ -35,8 +35,9 @@ function GateSkeleton() {
     <Card variant="filled" padding="lg" className="mx-auto flex w-full max-w-md flex-col items-center gap-3" data-page-loading="">
       <Skeleton className="size-12 rounded-full" />
       <Skeleton className="h-6 w-40" />
-      <Skeleton className="h-4 w-56" />
+      <Skeleton className="h-4 w-56 max-w-full" />
       <Skeleton className="mt-2 h-14 w-full rounded-md" />
+      <Skeleton className="mt-1 h-10 w-24 self-end rounded-full" />
     </Card>
   );
 }
@@ -92,8 +93,21 @@ export default function PrivacyPane({ token, active }: { token: string; active: 
   } else if (view === 'create') face = <PrivacyCreateForm token={token} username={username} />;
   else if (view === 'locked') {
     face = <PrivacyUnlockForm token={token} username={username} autoLocked={space.autoLocked} onForgot={() => setResetOpen(true)} />;
-  } else if (!space.images) face = <ImageGridSkeleton count={FAVE_PAGE_SIZE} entrance={false} />;
-  else {
+  } else if (!space.images) {
+    face = (
+      <div data-page-loading="">
+        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+          <Skeleton className="h-4 w-20" />
+          <div className="flex shrink-0 items-center gap-2">
+            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
+            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
+            <Skeleton className="size-10 rounded-full" />
+          </div>
+        </div>
+        <ImageGridSkeleton count={FAVE_PAGE_SIZE} entrance={false} />
+      </div>
+    );
+  } else {
     face = <OpenPrivacy token={token} username={username} ownerId={ownerId} active={viewing}
       images={space.images} error={space.error} />;
   }
@@ -144,7 +158,7 @@ function OpenPrivacy({ token, username, ownerId, active, images, error }: {
   const allSelected = pageOrder.length > 0 && pageOrder.every((id) => selection.selected.has(id));
   const unavailable = selected.length === 0 || batch.busy;
   const barCommands: SelectionCommand[] = [
-    { value: 'all', label: allSelected ? '取消全选' : '全选', icon: allSelected ? <MdDeselect /> : <MdSelectAll />,
+    { value: 'all', label: allSelected ? '取消全选' : '全选', maxLabel: '取消全选', icon: allSelected ? <MdDeselect /> : <MdSelectAll />,
       onSelect: () => selection.setMany(pageOrder, !allSelected), disabled: pageOrder.length === 0 || batch.busy },
     { value: 'move', label: '移动到…', icon: <MdDriveFileMove />, onSelect: () => batch.openTransfer('move', selected), disabled: unavailable },
     { value: 'copy', label: '复制到…', icon: <MdFileCopy />, onSelect: () => batch.openTransfer('copy', selected), disabled: unavailable },
@@ -189,7 +203,7 @@ function OpenPrivacy({ token, username, ownerId, active, images, error }: {
             aria-label="隐私空间的更多操作" items={menuItems} onSelect={onMenu} />
         </div>
       </div>
-      {error != null && <ErrorRetry size="inline" title="隐私空间更新失败" message={apiErrorMessage(error)}
+      {error != null && <ErrorRetry size="inline" className="mb-4" title="隐私空间更新失败" message={apiErrorMessage(error)}
         onRetry={isRetryable(error) ? () => void reloadPrivacy(token) : undefined} />}
       <FaveGridView state={state} page={page} setPage={setPage} listKey={listKey} selection={gridSelection}
         entrance={false} failureTitle="隐私空间加载失败" empty={

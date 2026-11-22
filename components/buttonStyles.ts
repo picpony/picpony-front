@@ -117,7 +117,7 @@ const SHAPES: Record<ButtonSize, string> = {
   md: 'rounded-xl data-pressed:rounded-md',
   lg: 'rounded-2xl data-pressed:rounded-lg',
 };
-const HAS_RADIUS = /(?:^|\s)(?:\S+:)?rounded(?:-\S+)?/;
+const HAS_RADIUS = /(?:^|\s)rounded(?:-\S+)?/;
 
 export interface ButtonClassOptions {
   variant?: ButtonVariant;

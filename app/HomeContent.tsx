@@ -629,7 +629,7 @@ function DiscussedList({
       notice={(data) =>
         data.filtered > 0 || data.missing > 0 ? (
           /* Nothing disappears silently (C11): a page that came back short says why. */
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-s text-on-surface-variant">
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-s tabular-nums text-on-surface-variant">
             <span>{withheldSentence(data.filtered, data.missing)}</span>
             {data.filtered > 0 && settings}
           </div>
@@ -834,9 +834,9 @@ export default function HomeContentRoot({
       fallback={
         <div className="max-w-7xl mx-auto">
           <FeaturedBannerSkeleton />
-          <div className="mb-4 flex gap-3 sm:mb-6" aria-hidden="true">
-            <Skeleton className="h-12 w-16" />
-            <Skeleton className="h-12 w-20" delay={60} />
+          <div className="mb-4 flex h-12 items-center gap-6 border-b border-outline-variant sm:mb-6" aria-hidden="true">
+            <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-4 w-16" delay={60} />
           </div>
           <ImageGridSkeleton />
         </div>

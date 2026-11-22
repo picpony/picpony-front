@@ -38,7 +38,7 @@ export default function ImageTranslationStatus({ translation }: { translation: I
   return (
     <div role="status" className="empty:hidden">
       {visible && (
-        <div className="flex min-h-10 min-w-0 items-center gap-2 text-body-m text-on-surface-variant">
+        <div className="flex min-h-10 min-w-0 items-center gap-2 pt-5 text-body-m text-on-surface-variant">
           {busy ? (
             <Spinner size="sm" />
           ) : phase === 'failed' ? (
@@ -46,7 +46,7 @@ export default function ImageTranslationStatus({ translation }: { translation: I
           ) : (
             <MdTranslate size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
           )}
-          <p className="min-w-0 flex-1">
+          <p className="min-w-0 flex-1 tabular-nums">
             {busy
               ? progressText(translation)
               : phase === 'failed'

@@ -565,12 +565,12 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             {bubble?.kind === 'hold' ? (
               <div className="w-56 max-w-full px-4 py-3">
                 <p className="text-body-m">{bubble.text}</p>
-                <div className={cn(styles.holdTrack, 'mt-2.5 bg-secondary-container')}>
+                <div className={cn(styles.holdTrack, 'mt-2 bg-secondary-container')}>
                   <div ref={holdFill} className={cn(styles.holdFill, 'bg-secondary')} />
                 </div>
               </div>
             ) : (
-              <div className="flex items-start gap-1 py-2 pl-4 pr-1">
+              <div className="flex items-start gap-1 py-2 pl-4 pr-2">
                 <ScrollArea
                   as="p"
                   axis="y"

@@ -28,7 +28,7 @@ import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 import { badgeDateProblems, grantPayload, parseUserIds, type GrantForm } from './badges';
 import BadgeDictionaryPane from './catalogTools/BadgeDictionaryPane';
-import DeleteBadgeLinkAction from './catalogTools/DeleteBadgeLinkAction';
+import DeleteBadgeLinkAction, { BadgeLinkDeleteScope } from './catalogTools/DeleteBadgeLinkAction';
 
 type BadgeLink = adminApi.AdminBadgeLink;
 
@@ -163,7 +163,7 @@ function GrantPane({ token }: { token: string }) {
           />
         </FormGrid>
         <fieldset className="m-0 min-w-0 space-y-3 border-0 p-0">
-          <legend className="mb-1 text-label-l text-on-surface-variant">授予对象</legend>
+          <legend className="text-label-l text-on-surface-variant">授予对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio name="badge-target" value="users" label="指定用户" checked={form.target === 'users'} disabled={busy} onChange={() => set('target', 'users')} />
             <Radio name="badge-target" value="dates" label="按注册日期" checked={form.target === 'dates'} disabled={busy} onChange={() => set('target', 'dates')} />
@@ -201,7 +201,7 @@ function GrantPane({ token }: { token: string }) {
           )}
         </fieldset>
         <fieldset className="m-0 min-w-0 space-y-3 border-0 p-0">
-          <legend className="mb-1 text-label-l text-on-surface-variant">有效期</legend>
+          <legend className="text-label-l text-on-surface-variant">有效期</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio name="badge-duration" value="permanent" label="永久有效" checked={form.permanent} disabled={busy} onChange={() => set('permanent', true)} />
             <Radio name="badge-duration" value="expiring" label="设定到期日期" checked={!form.permanent} disabled={busy} onChange={() => set('permanent', false)} />
@@ -354,6 +354,7 @@ function LinksPane({
       key: 'badge',
       header: '徽章',
       primary: true,
+      width: 'minmax(0, 1fr)',
       render: (link) => <UserBadge name={link.name} color={link.color} size="md" />,
     },
     {
@@ -366,10 +367,11 @@ function LinksPane({
         </Badge>
       ),
     },
-    { key: 'expiry', header: '有效期', render: (link) => <span className="text-on-surface-variant">{expiry(link)}</span> },
+    { key: 'expiry', header: '有效期', width: 'minmax(0, 2fr)', className: 'tabular-nums', render: (link) => <span className="text-on-surface-variant">{expiry(link)}</span> },
     {
       key: 'location',
       header: '地区限制',
+      width: 'minmax(0, 1fr)',
       render: (link) => (
         <span className="text-on-surface-variant">{link.required_location ? `仅限 ${link.required_location}` : '不限'}</span>
       ),
@@ -455,20 +457,22 @@ function LinksPane({
       </AdminForm>
       <section aria-labelledby="admin-badge-links-heading" className="space-y-4">
         <SectionHeading as="h3" id="admin-badge-links-heading">已生成的链接</SectionHeading>
-        <AdminListAnchor>
-          <DataTable<BadgeLink>
-            columns={columns}
-            rows={paged.rows}
-            listKey={paged.listKey}
-            rowKey={(link) => link.id}
-            loading={!asked || links.loading}
-            skeletonRows={4}
-            {...tableError('领取链接加载失败', links.error)}
-            onRetry={links.retryable ? links.refresh : undefined}
-            empty="暂无领取链接"
-          />
-          <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
-        </AdminListAnchor>
+        <BadgeLinkDeleteScope token={token} onDeleted={links.refresh}>
+          <AdminListAnchor>
+            <DataTable<BadgeLink>
+              columns={columns}
+              rows={paged.rows}
+              listKey={paged.listKey}
+              rowKey={(link) => link.id}
+              loading={!asked || links.loading}
+              skeletonRows={4}
+              {...tableError('领取链接加载失败', links.error)}
+              onRetry={links.retryable ? links.refresh : undefined}
+              empty="暂无领取链接"
+            />
+            <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
+          </AdminListAnchor>
+        </BadgeLinkDeleteScope>
       </section>
       {confirmDialog}
       {promptDialog}

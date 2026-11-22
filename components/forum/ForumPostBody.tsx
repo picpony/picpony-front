@@ -72,7 +72,7 @@ function TagList({ label, tags }: { label?: string; tags: string[] }) {
         </Badge>
       ))}
       {tags.length > TAG_PREVIEW && (
-        <span className="text-body-s text-on-surface-variant">+{tags.length - TAG_PREVIEW}</span>
+        <span className="text-body-s tabular-nums text-on-surface-variant">+{tags.length - TAG_PREVIEW}</span>
       )}
     </div>
   );
@@ -106,7 +106,7 @@ function GroupRow({
   onImport: () => void;
 }) {
   return (
-    <li className="m3-row flex flex-col gap-3 bg-surface-container p-4 sm:flex-row sm:items-start">
+    <li className="m3-row flex flex-col gap-3 bg-surface-container-high p-4 sm:flex-row sm:items-start">
       <div className="min-w-0 flex-1 space-y-2">
         <p className="flex min-w-0 items-center gap-2 text-title-s text-on-surface">
           <span className="shrink-0 text-on-surface-variant [&>svg]:block" aria-hidden="true">

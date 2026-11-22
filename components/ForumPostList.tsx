@@ -99,10 +99,19 @@ function ForumRow({ post, token, now }: { post: ForumPost; token: string | null;
       <span className="row-span-3 self-start">
         <Avatar src={post.avatar} name={post.username} size={40} />
       </span>
-      <span className="col-start-2 flex min-w-0 items-center gap-1.5">
-        {post.is_pinned && <PinnedBadge />}
-        {post.category !== 'discussion' && <CategoryBadge category={post.category} />}
-        <span className="min-w-0 truncate text-title-m text-on-surface">{post.title}</span>
+      <span className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 sm:flex-nowrap">
+        {(post.is_pinned || post.category !== 'discussion') && (
+          <span
+            className={cn(
+              'flex shrink-0 items-center gap-1.5',
+              post.is_pinned && post.category !== 'discussion' && 'max-sm:basis-full',
+            )}
+          >
+            {post.is_pinned && <PinnedBadge />}
+            {post.category !== 'discussion' && <CategoryBadge category={post.category} />}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 truncate text-title-m text-on-surface">{post.title}</span>
       </span>
       {post.cover_image && (
         <span className="col-start-3 row-span-2 row-start-1">
@@ -124,10 +133,10 @@ function ForumRow({ post, token, now }: { post: ForumPost; token: string | null;
         <span className="line-clamp-1 text-body-m text-on-surface-variant">{teaser}</span>
       </span>
       <span className="col-span-2 col-start-2 mt-1 flex min-w-0 items-center gap-3 text-body-s text-on-surface-variant">
-        <span className="min-w-0 truncate">
-          {post.username}
-          <span aria-hidden="true"> · </span>
-          <time dateTime={post.created_at} title={formatDateTime(post.created_at)} className="tabular-nums">
+        <span className="flex min-w-0 flex-1 items-center gap-1">
+          <span className="min-w-0 truncate">{post.username}</span>
+          <span aria-hidden="true" className="shrink-0">·</span>
+          <time dateTime={post.created_at} title={formatDateTime(post.created_at)} className="shrink-0 tabular-nums">
             {now === null ? formatDate(post.created_at) : formatCompactDate(post.created_at, now)}
           </time>
         </span>
@@ -231,24 +240,24 @@ export function ForumListSkeleton() {
         const covered = i % 3 === 1;
         return (
           <div key={i} className={cn('m3-row bg-surface-container-low', ROW_GRID)}>
-            <span className="row-span-3 self-start">
+            <div className="row-span-3 self-start">
               <SkeletonCircle size={40} delay={delay} />
-            </span>
-            <span className="col-start-2 flex h-6 items-center">
+            </div>
+            <div className="col-start-2 flex h-6 items-center">
               <Skeleton className="h-4 w-3/5" delay={delay + 40} />
-            </span>
+            </div>
             {covered && (
-              <span className="col-start-3 row-span-2 row-start-1">
+              <div className="col-start-3 row-span-2 row-start-1">
                 <Skeleton className="size-14 rounded-sm" delay={delay + 40} />
-              </span>
+              </div>
             )}
-            <span className={cn('col-start-2 flex items-start pt-1', TEASER_HEIGHT)}>
+            <div className={cn('col-start-2 flex items-start pt-1', TEASER_HEIGHT)}>
               <Skeleton className="h-3.5 w-11/12" delay={delay + 80} />
-            </span>
-            <span className="col-span-2 col-start-2 mt-1 flex h-[18px] items-center gap-3">
+            </div>
+            <div className="col-span-2 col-start-2 mt-1 flex h-[18px] items-center gap-3">
               <Skeleton className="h-3 w-28" delay={delay + 120} />
               <Skeleton className="ms-auto h-3 w-24" delay={delay + 120} />
-            </span>
+            </div>
           </div>
         );
       })}

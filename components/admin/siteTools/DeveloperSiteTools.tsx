@@ -53,13 +53,13 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
       <SectionHeading as="h3" id="admin-acceleration-heading">API 加速权限</SectionHeading>
       <AdminNote>状态来自 API 加速禁用名单；可按行重新查询。</AdminNote>
       {bans.error && <ErrorRetry size="inline" {...retryError('API 加速禁用名单加载失败', bans.error)} onRetry={bans.retryable ? bans.refresh : undefined} />}
-      <SearchInput value={search} onChange={setSearch} placeholder="查找用户…" className="sm:w-80" />
+      <SearchInput value={search} onChange={setSearch} placeholder="查找用户…" />
       <AdminListAnchor>
         <DataTable rows={paged.rows} listKey={paged.listKey} rowKey={(r) => r.id} loading={users.loading} {...tableError('用户列表加载失败', users.error)} onRetry={users.retryable ? users.refresh : undefined} empty="没有匹配的用户" columns={[
-          { key: 'name', header: '用户', primary: true, render: (r) => `${r.username}（#${r.id}）` },
-          { key: 'state', header: 'API 加速', render: (r) => {
+          { key: 'name', header: '用户', primary: true, className: 'tabular-nums', render: (r) => `${r.username}（#${r.id}）` },
+          { key: 'state', header: 'API 加速', width: 'auto', render: (r) => {
             const banned = bannedOf(r.id);
-            return banned === undefined ? <Badge tone="neutral">状态未知</Badge> : <Badge tone={banned ? 'error' : 'neutral'}>{banned ? '已禁用' : '可使用'}</Badge>;
+            return banned === undefined ? <Badge tone="neutral" size="md">状态未知</Badge> : <Badge tone={banned ? 'error' : 'success'} size="md">{banned ? '已禁用' : '可使用'}</Badge>;
           } },
           { key: 'actions', header: '操作', actions: true, render: (r) => {
             const locked = r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');

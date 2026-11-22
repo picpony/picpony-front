@@ -122,6 +122,8 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       key: 'image',
       header: '图片',
       primary: true,
+      width: 'auto',
+      className: 'tabular-nums',
       render: (item) => (
         <a
           href={`/pic/${item.image_id}`}
@@ -137,7 +139,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
     {
       key: 'reason',
       header: '屏蔽原因',
-      width: 'minmax(0, 2fr)',
+      width: 'minmax(0, 3fr)',
       className: 'whitespace-pre-wrap wrap-anywhere',
       render: (item) => <span className="text-on-surface-variant">{item.reason || '未填写'}</span>,
     },
@@ -145,6 +147,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       key: 'created',
       header: '时间',
       width: 'auto',
+      className: 'tabular-nums',
       render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
     },
     {
@@ -170,7 +173,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
     <div className="space-y-6">
       <SectionHeader section="blacklist" onRefresh={read.refresh} isLoading={read.refreshing} />
       <AdminForm onSubmit={add} aria-label="屏蔽图片">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-3 @lg/form:flex-row @lg/form:items-start">
           <Input
             label="图片 ID"
             inputMode="numeric"
@@ -179,7 +182,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
             value={imageId}
             readOnly={addMutation.busy}
             error={idError ?? undefined}
-            fieldClassName="sm:w-48"
+            fieldClassName="@lg/form:w-48"
             onChange={(event) => {
               setImageId(event.target.value);
               setIdError(null);
@@ -192,7 +195,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
             helper="仅后台可见"
             value={reason}
             readOnly={addMutation.busy}
-            fieldClassName="min-w-0 sm:flex-1"
+            fieldClassName="min-w-0 @lg/form:flex-1"
             onChange={(event) => setReason(event.target.value)}
           />
           <Button type="submit" size="lg" variant="danger" icon={<MdBlock />} loading={addMutation.busy}>

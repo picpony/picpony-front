@@ -12,29 +12,35 @@ export default function ComposerSkeleton() {
   return (
     <div data-page-loading="" aria-hidden="true" className="space-y-6">
       <div>
-        <Skeleton className="mb-2 h-5 w-20" />
-        <div className="flex h-12 items-center gap-6">
-          <Skeleton className="h-5 w-24" delay={40} />
+        <Skeleton className="mb-2 h-5 w-12" />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-0.5 pointer-coarse:min-h-12">
+          <Skeleton className="h-5 w-20" delay={40} />
           <Skeleton className="h-5 w-24" delay={60} />
           <Skeleton className="h-5 w-28" delay={80} />
         </div>
-        <Skeleton className="mt-1 h-3.5 w-48" delay={100} />
       </div>
       <div className="space-y-1.5">
         <Skeleton className="h-14 w-full rounded-md" delay={120} />
-        <Skeleton className="h-3.5 w-24" delay={140} />
+        <Skeleton className="h-4 w-24" delay={140} />
       </div>
       <div className="space-y-1.5">
         <Skeleton className="h-[5.25rem] w-full rounded-md" delay={160} />
-        <Skeleton className="h-3.5 w-56" delay={180} />
+        <Skeleton className="h-4 w-56 max-w-full" delay={180} />
       </div>
       <div>
         <Skeleton className="mb-2 h-5 w-12" delay={200} />
         <EditorPlaceholder size="post" />
       </div>
-      <div>
-        <Skeleton className="mb-2 h-5 w-24" delay={220} />
-        <Skeleton className="h-12 w-full rounded-md" delay={240} />
+      <div className="space-y-2">
+        <div>
+          <Skeleton className="mb-2 h-5 w-24" delay={220} />
+          <Skeleton className="h-12 w-full rounded-md" delay={240} />
+          <Skeleton className="mt-1.5 h-4 w-48 max-w-full" delay={250} />
+        </div>
+        <div className="flex min-h-12 items-center justify-between gap-4">
+          <Skeleton className="h-5 w-44 max-w-full" delay={255} />
+          <Skeleton className="h-8 w-13 shrink-0 rounded-full" delay={255} />
+        </div>
       </div>
       <div className="flex justify-end gap-3 border-t border-outline-variant pt-4">
         <Skeleton className="h-10 w-16 rounded-full" delay={260} />

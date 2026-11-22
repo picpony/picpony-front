@@ -48,9 +48,15 @@ import { useAddressPage } from '@/components/favorites/useAddressPage';
 function FolderSkeleton() {
   return (
     <div className="mx-auto max-w-7xl page-back-room-7xl" data-page-loading="">
-      <div className="mb-6 flex flex-col gap-2">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-24" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-8 w-48 max-w-full" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
+          <Skeleton className="size-10 rounded-full" />
+        </div>
       </div>
       <ImageGridSkeleton count={FAVE_PAGE_SIZE} />
     </div>
@@ -88,7 +94,7 @@ export default function FolderScreen({ folderId }: { folderId: number }) {
       <>
         <PageBack onClick={back} />
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col page-back-room-7xl">
-          <SignInRequired description="登录后即可查看你的收藏夹" />
+          <SignInRequired fill description="登录后即可查看你的收藏夹" />
         </div>
       </>
     );
@@ -223,6 +229,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
     {
       value: 'all',
       label: allSelected ? '取消全选' : '全选',
+      maxLabel: '取消全选',
       icon: allSelected ? <MdDeselect /> : <MdSelectAll />,
       onSelect: () => selection.setMany(pageIds, !allSelected),
       disabled: pageIds.length === 0,
@@ -278,7 +285,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
               inert={selection.active}
               className={cn('flex items-center gap-2 transition-opacity spring-fast-effects', selection.active && 'opacity-0')}
             >
-              <Button ref={selectRef} variant="text" icon={<MdChecklist />} onClick={() => enter()} disabled={count === 0}>
+              <Button ref={selectRef} variant="text" icon={<MdChecklist />} onClick={() => enter()} disabled={count === 0} responsiveLabel>
                 选择
               </Button>
               <FolderMenuButton
@@ -289,7 +296,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             </div>
           }
         />
-        {Boolean(index.error) && ids !== undefined && <ErrorRetry size="inline" title="收藏夹更新失败" message={apiErrorMessage(index.error)}
+        {Boolean(index.error) && ids !== undefined && <ErrorRetry size="inline" className="mb-4" title="收藏夹更新失败" message={apiErrorMessage(index.error)}
           onRetry={isRetryable(index.error) ? index.refresh : undefined} />}
         {index.error && ids === undefined ? (
           <ErrorRetry

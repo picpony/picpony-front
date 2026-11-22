@@ -347,7 +347,7 @@ export default function ShopScreen() {
           /* Docked beside the items on a wide column; below the step it is the sheet's. The card
              follows its content as lines come and go (`CartPanel`'s own box). */
           <aside aria-labelledby={dockedHeadingId} className="sticky top-6 hidden w-80 shrink-0 @4xl/shop:block">
-            <Card variant="filled" padding="md">
+            <Card variant="filled" padding="md" className="flex max-h-[calc(100dvh-var(--app-chrome-bottom)-3rem)] flex-col">
               <CartPanel
                 summary={summary}
                 itemsFailed={itemsFailed}
@@ -360,7 +360,7 @@ export default function ShopScreen() {
                   <h2
                     ref={dockedHeadingRef}
                     id={dockedHeadingId}
-                    className="mb-1 flex items-center gap-2 text-title-m text-on-surface"
+                    className="mb-1 flex shrink-0 items-center gap-2 text-title-m text-on-surface"
                   >
                     <MdShoppingCart size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />
                     购物车

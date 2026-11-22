@@ -45,7 +45,7 @@ import * as adminApi from '@/lib/api/admin';
 import SectionHeader from '../SectionHeader';
 import { useAdminMutation } from '../useAdminMutation';
 import { useSettled } from '../useSettled';
-import { AdminPager, usePagedRows, useShownListKey } from '../paging';
+import { AdminListAnchor, AdminPager, usePagedRows, useShownListKey } from '../paging';
 import { tableError } from '../queries';
 import type { AdminPanelProps } from '../registry';
 import {
@@ -485,6 +485,7 @@ ${duplicatePage.listKey}` : pageKey;
       key: 'cn',
       header: '中文翻译',
       primary: true,
+      width: 'minmax(0, 1.5fr)',
       render: (tag) =>
         isUntranslated(tag.cn) ? (
           <Badge tone="warning" size="md">未翻译</Badge>
@@ -500,6 +501,7 @@ ${duplicatePage.listKey}` : pageKey;
     {
       key: 'en',
       header: '英文标签',
+      width: 'minmax(0, 1.8fr)',
       render: (tag) => (
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Badge colors={tagCategoryChip(tag.cat)}>{tag.cat || 'general'}</Badge>
@@ -520,6 +522,7 @@ ${duplicatePage.listKey}` : pageKey;
     {
       key: 'description',
       header: '标签简介',
+      width: 'minmax(0, 1.5fr)',
       render: (tag) =>
         tag.description ? (
           <span className="line-clamp-2 text-on-surface-variant" title={tag.description}>{tag.description}</span>
@@ -603,7 +606,7 @@ ${duplicatePage.listKey}` : pageKey;
       />
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-3 @lg/glossary:flex-row">
+        <div className="flex flex-col gap-3 @lg/glossary:flex-row @lg/glossary:items-center">
           <div className="min-w-0 @lg/glossary:flex-1">
             <SearchInput value={search} onChange={setSearch} placeholder="搜索英文标签或中文翻译…" aria-label="搜索标签" />
           </div>
@@ -648,7 +651,7 @@ ${duplicatePage.listKey}` : pageKey;
           </Chip>
           {selected.size > 0 && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <span className="text-body-m text-on-surface-variant">{`已选择 ${selected.size} 个`}</span>
+              <span className="text-body-m tabular-nums text-on-surface-variant">{`已选择 ${selected.size} 个`}</span>
               <Button type="button" variant="text" size="xs" onClick={() => setSelected(new Set())}>
                 取消选择
               </Button>
@@ -667,7 +670,7 @@ ${duplicatePage.listKey}` : pageKey;
         </div>
       </div>
 
-      <div data-pagination-anchor="" className="space-y-4">
+      <AdminListAnchor>
         {turnFailed && (
           <ErrorRetry size="inline" title={`词库第 ${currentPage} 页加载失败`} message={apiErrorMessage(list.error)} onRetry={isRetryable(list.error) ? list.refresh : undefined} />
         )}
@@ -678,7 +681,7 @@ ${duplicatePage.listKey}` : pageKey;
           rowKey={(tag) => tag.id}
           expandedRow={renderEditor}
           loading={Boolean(token) && read.data === undefined && !read.error}
-          skeletonRows={perPage}
+          skeletonRows={Math.min(perPage, 8)}
           {...(read.data === undefined ? tableError(duplicates ? '查重结果加载失败' : '词库加载失败', failure) : {})}
           onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
           empty={
@@ -725,7 +728,7 @@ ${duplicatePage.listKey}` : pageKey;
             )}
           </div>
         )}
-      </div>
+      </AdminListAnchor>
 
       {share !== null && stats && (
         <Card variant="filled" className="space-y-3">

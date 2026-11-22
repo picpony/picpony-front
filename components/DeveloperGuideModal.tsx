@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
+import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
 import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -31,9 +32,9 @@ function PreqRow({ label, met }: { label: string; met: boolean }) {
   return (
     <div className="flex items-center gap-2 text-body-m">
       {met ? (
-        <MdCheckCircle className="text-success" size={ICON.dense} />
+        <MdCheckCircle className="shrink-0 text-success" size={ICON.dense} aria-hidden="true" />
       ) : (
-        <MdCancel className="text-error" size={ICON.dense} />
+        <MdCancel className="shrink-0 text-error" size={ICON.dense} aria-hidden="true" />
       )}
       {/* `on-surface-variant`, not `outline`: this is a label, and `outline` is
           the boundary role — 4.3:1 on the light surface, under the AA floor for
@@ -185,91 +186,95 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
         ) : null
       )}
     >
-      <div className="space-y-4">
-        {/* The destination's own shape — three prerequisite rows — rather than
-            a centred spinner: three bars say "a checklist is arriving here",
-            in the geometry it arrives in. */}
-        {status === 'loading' && (
-          <div className="space-y-2" aria-hidden="true">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex items-center gap-2">
-                <SkeletonCircle size={18} delay={i * 90} />
-                <Skeleton className="h-4 w-40" delay={i * 90 + 45} />
+      <FollowHeight>
+        <div className="space-y-4">
+          {/* The destination's own shape — three prerequisite rows plus the guidance line — rather than
+              a centred spinner, in the geometry it arrives in. */}
+          {status === 'loading' && (
+            <div className="space-y-4" aria-hidden="true">
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex min-h-[21px] items-center gap-2">
+                    <SkeletonCircle size={18} delay={i * 90} />
+                    <Skeleton className="h-4 w-40 max-w-full" delay={i * 90 + 45} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+              <Skeleton className="h-4.5 w-56 max-w-full" delay={270} />
+            </div>
+          )}
 
-        {status === 'banned' && (
-          <p className="text-body-m text-error">你的开发者权限已被封禁，请联系管理员</p>
-        )}
+          {status === 'banned' && (
+            <p className="text-body-m text-error">你的开发者权限已被封禁，请联系管理员</p>
+          )}
 
-        {status === 'error' && (
-          <ErrorRetry
-            size="inline"
-            title="开发者状态加载失败"
-            message={loadError || undefined}
-            onRetry={() => setAttempt((value) => value + 1)}
-          />
-        )}
+          {status === 'error' && (
+            <ErrorRetry
+              size="inline"
+              title="开发者状态加载失败"
+              message={loadError || undefined}
+              onRetry={() => setAttempt((value) => value + 1)}
+            />
+          )}
 
-        {status === 'ready' && (
-          <>
-            {isDeveloper ? (
-              <div className="space-y-4">
-                {/* The sentence is text on the surface; the brand ink is for the mark. */}
-                <div className="flex items-center gap-2 text-body-m text-on-surface">
-                  <MdConstruction size={ICON.control} className="text-primary-ink" aria-hidden="true" />
-                  当前已处于开发者模式
+          {status === 'ready' && (
+            <>
+              {isDeveloper ? (
+                <div className="space-y-4">
+                  {/* The sentence is text on the surface; the brand ink is for the mark. */}
+                  <div className="flex items-center gap-2 text-body-m text-on-surface">
+                    <MdConstruction size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
+                    当前已处于开发者模式
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <PreqRow label="用户已登录" met={!!prerequisites.logged_in} />
-                  <PreqRow label="已绑定 Derpibooru API Key" met={!!prerequisites.api_bound} />
-                  <PreqRow label="账号等级高于 3 级" met={!!prerequisites.level_gt_3} />
-                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <PreqRow label="用户已登录" met={!!prerequisites.logged_in} />
+                    <PreqRow label="已绑定 Derpibooru API Key" met={!!prerequisites.api_bound} />
+                    <PreqRow label="账号等级高于 3 级" met={!!prerequisites.level_gt_3} />
+                  </div>
 
-                {allMet ? (
-                  <form onSubmit={handleSubmit} noValidate>
-                    {/* A code shared by the maintainers, not this user's password: a password
-                        manager offered to save it over the account's real credential. Every
-                        manager's own opt-out is spelled out, since each reads only its own.
-                        No length cap either — a pasted string cut to eight characters is a
-                        different, wrong code that looks right; the button waits for eight. */}
-                    <Input
-                      label="维护密码"
-                      type="password"
-                      name="maintenance-code"
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setError('');
-                      }}
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      enterKeyHint="done"
-                      data-1p-ignore=""
-                      data-lpignore="true"
-                      data-bwignore=""
-                      data-form-type="other"
-                      helper="向管理员获取的 8 位数字密码"
-                      error={error || undefined}
-                    />
-                  </form>
-                ) : (
-                  <p className="text-body-s text-on-surface-variant">
-                    满足以上条件后可开启开发者模式（不过滤标签内容）
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+                  {allMet ? (
+                    <form onSubmit={handleSubmit} noValidate>
+                      {/* A code shared by the maintainers, not this user's password: a password
+                          manager offered to save it over the account's real credential. Every
+                          manager's own opt-out is spelled out, since each reads only its own.
+                          No length cap either — a pasted string cut to eight characters is a
+                          different, wrong code that looks right; the button waits for eight. */}
+                      <Input
+                        label="维护密码"
+                        type="password"
+                        name="maintenance-code"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setError('');
+                        }}
+                        autoComplete="off"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        enterKeyHint="done"
+                        data-1p-ignore=""
+                        data-lpignore="true"
+                        data-bwignore=""
+                        data-form-type="other"
+                        helper="向管理员获取的 8 位数字密码"
+                        error={error || undefined}
+                      />
+                    </form>
+                  ) : (
+                    <p className="text-body-s text-on-surface-variant">
+                      满足以上条件后可开启开发者模式（不过滤标签内容）
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </FollowHeight>
     </Modal>
   );
 }

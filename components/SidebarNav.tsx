@@ -318,7 +318,7 @@ export default function SidebarNav({
 
   return (
     <CompactSidebar value={compact}>
-      <nav aria-label="主导航" className="flex flex-1 select-none flex-col gap-1 px-3 pb-3">
+      <nav aria-label="主导航" className="sidebar-nav flex flex-1 select-none flex-col gap-1 px-3 pb-3">
         <Section>
           {/* `scroll={false}` unconditionally: these two are the same control as the tab
               bar, and the tab machinery owns the scroller (it restores each tab's own offset).

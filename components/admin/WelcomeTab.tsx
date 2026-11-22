@@ -42,11 +42,11 @@ function Tile({
   return (
     <Card as="a" interactive variant="filled" href={adminHref(tab)} onClick={open} className="flex flex-col gap-1">
       <span className="text-label-l text-on-surface-variant">{label}</span>
-      <span className="text-headline-s tabular-nums text-on-surface">
+      <div className="text-headline-s tabular-nums text-on-surface">
         {value === undefined ? <Skeleton className="my-1 h-7 w-20" /> : value}
-      </span>
+      </div>
       {children}
-      <span className="text-body-s text-on-surface-variant">{caption}</span>
+      <span className="mt-auto text-body-s tabular-nums text-on-surface-variant">{caption}</span>
     </Card>
   );
 }
@@ -76,11 +76,11 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
   const failed = '加载失败';
 
   return (
-    <div className="space-y-6">
+    <div className="@container space-y-6">
       <SectionHeader section="welcome"
         subtitle="待处理的事项与站点状态"
       />
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="待办事项">
+      <ul className="grid grid-cols-1 gap-3 @md:grid-cols-2" aria-label="待办事项">
         {admin && (
           <li className="grid">
             <Tile

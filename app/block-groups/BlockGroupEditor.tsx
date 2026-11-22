@@ -173,7 +173,7 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
         />
         <fieldset>
           <legend className="mb-2 text-label-l text-on-surface">标签处理方式</legend>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio
               name="block-group-target"
               value="hide"

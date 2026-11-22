@@ -112,7 +112,7 @@ export function useConfirm() {
         </>
       }
     >
-      <div id={messageId} className="text-body-m text-on-surface-variant whitespace-pre-line">
+      <div id={messageId} className="text-body-m text-on-surface-variant whitespace-pre-line wrap-anywhere">
         {options?.message}
       </div>
     </Modal>
@@ -176,6 +176,7 @@ export function usePrompt() {
       isOpen={isOpen}
       onClose={() => settle(null)}
       title={options?.title ?? ''}
+      hideCloseButton
       maxWidth="sm"
       footer={
         <>
@@ -193,7 +194,7 @@ export function usePrompt() {
       }
     >
       {options?.message && (
-        <p className="text-body-m text-on-surface-variant mb-4">{options.message}</p>
+        <p className="text-body-m text-on-surface-variant mb-4 wrap-anywhere">{options.message}</p>
       )}
       {/* A one-line answer (a name, a link to copy) is a one-line field, where Enter
           confirms — a resizable textarea for a folder's name read as unfinished. Enter

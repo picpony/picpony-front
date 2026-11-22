@@ -67,10 +67,10 @@ export default function ErrorRetry({
           <Button
             onClick={onRetry}
             variant="filled"
-            className="group"
+            className="group/retry"
             icon={
               <MdRefresh
-                className="transition-[rotate] spring-fast-spatial group-hover:rotate-180 no-motion:group-hover:rotate-0"
+                className="transition-[rotate] spring-fast-spatial group-hover/retry:rotate-180 no-motion:group-hover/retry:rotate-0"
               />
             }
           >

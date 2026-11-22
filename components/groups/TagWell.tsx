@@ -74,10 +74,10 @@ export default function TagWell({
         className="flex min-h-14 flex-wrap content-start items-center gap-2 rounded-md bg-surface-container-highest p-3 forced-boundary"
       >
         {tags.length === 0 ? (
-          <EmptyState size="inline" title={empty} />
+          <EmptyState size="inline" className="py-0" title={empty} />
         ) : (
           tags.map((tag) => (
-            <span role="listitem" key={tag} className="max-w-full">
+            <span role="listitem" key={tag} className="flex max-w-full">
               <Chip variant="input" onRemove={() => onRemove(tag)} disabled={disabled} title={tag}>
                 {tag}
               </Chip>

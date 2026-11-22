@@ -295,7 +295,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       {restoredAt !== null && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md bg-secondary-container py-2 ps-4 pe-2 text-on-secondary-container">
           <MdHistory size={ICON.control} aria-hidden="true" className="shrink-0" />
-          <p className="min-w-0 flex-1 text-body-m">
+          <p className="min-w-0 flex-1 text-body-m tabular-nums">
             {editing === null ? '已恢复上次未完成的草稿' : '已恢复上次未保存的修改'}（{formatShortDateTime(restoredAt)}）
           </p>
           <Button type="button" variant="on-container" size="xs" className="ripple-secondary" onClick={() => void discard()}>
@@ -308,7 +308,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
         <p id={categoryId} className="mb-2 text-title-s text-on-surface">
           分类
         </p>
-        <div className="flex flex-wrap gap-x-6 gap-y-1">
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
           {FORUM_CATEGORIES.map((entry) => (
             <Radio
               key={entry.value}
@@ -440,7 +440,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       )}
 
       {failure && (
-        <p role="alert" className="rounded-sm bg-error-container px-4 py-3 text-body-m text-on-error-container">
+        <p role="alert" className="rounded-md bg-error-container p-4 text-body-m text-on-error-container">
           {failure}
         </p>
       )}

@@ -210,7 +210,7 @@ export default function TagList({
         return (
           <FollowHeight key={section.key} watch={layoutKey}>
             {show && (
-              <div className={section.key !== 'regular' ? 'pb-6' : undefined}>
+              <div className={section.key !== 'regular' ? 'pb-5' : undefined}>
                 <DetailTagSection section={section}>
                   {pending ? <DetailTagPlaceholder /> : visible.length === 0 ? (
                     <EmptyState size="inline" title="暂无标签" entrance={false} />
@@ -236,7 +236,7 @@ export default function TagList({
                         <Button
                           variant="text"
                           size="xs"
-                          className="mt-3"
+                          className="-ms-3 mt-3 tabular-nums sm:-ms-4"
                           loading={preparing === section.key}
                           onClick={() => onShowMore(section.key)}
                         >

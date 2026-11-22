@@ -87,8 +87,10 @@ export default function DerpiSearchDialog({
           <div aria-hidden="true">
             {[0, 1, 2, 3].map((index) => (
               <div key={index} className="m3-row flex items-center gap-3 bg-surface-container-highest p-3">
-                <Skeleton className="h-5 w-16 rounded-xs" delay={index * 80} />
-                <Skeleton className="h-5 w-40" delay={index * 80 + 40} />
+                <Skeleton className="h-5 w-16 shrink-0 rounded-xs" delay={index * 80} />
+                <Skeleton className="h-5 w-40 max-w-full flex-1" delay={index * 80 + 40} />
+                <Skeleton className="h-4.5 w-16 shrink-0" delay={index * 80 + 60} />
+                <Skeleton className="h-8 w-18 shrink-0 rounded-full" delay={index * 80 + 80} />
               </div>
             ))}
           </div>

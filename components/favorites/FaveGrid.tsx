@@ -261,7 +261,7 @@ export function WithheldNotice({ filtered, missing }: { filtered: number; missin
   if (filtered === 0 && missing === 0) return null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-s text-on-surface-variant">
-      <span>{withheldSentence(filtered, missing)}</span>
+      <span className="tabular-nums">{withheldSentence(filtered, missing)}</span>
       {filtered > 0 && (
         <ButtonLink href="/settings" variant="text" size="xs" icon={<MdTune />}>
           前往设置
@@ -369,7 +369,7 @@ export function FaveGridView({
           onPageChange={setPage}
           onPrefetchPage={state.prefetchPage}
           disabled={turning}
-          className="mt-8 mb-4"
+          className="mt-8"
         />
       )}
       <FailedTurnHold failed={failed} rows={rows} failure={failureRef} />

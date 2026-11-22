@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { MdClose, MdNotificationAdd } from 'react-icons/md';
+import { MdClose, MdNotificationAdd, MdSearch } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
@@ -10,6 +10,7 @@ import { showToast } from '@/components/Toast';
 import type { TagSuggestion } from '@/lib/api/semantic';
 import { formatCount } from '@/lib/format';
 import { readToken } from '@/lib/hooks';
+import { ICON } from '@/lib/icons';
 import { SKIP, useResource } from '@/lib/resource';
 import { tagSuggestions } from '@/lib/resources';
 import { hasCjk } from '@/lib/searchQuery';
@@ -124,6 +125,7 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
           type="text"
           size="lg"
           shape="pill"
+          icon={<MdSearch size={ICON.standard} />}
           value={value}
           onChange={handleChange}
           placeholder="输入标签以订阅，例如 暮光闪闪 / rainbow dash"
@@ -183,7 +185,10 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
                 </span>
               </span>
               {option.count > 0 && (
-                <span className="shrink-0 text-label-m text-on-surface-variant tabular-nums">{formatCount(option.count)}</span>
+                <span className="shrink-0 text-label-m text-on-surface-variant tabular-nums">
+                  {formatCount(option.count)}
+                  <span className="sr-only"> 张</span>
+                </span>
               )}
             </div>
           );

@@ -144,18 +144,22 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       key: 'name',
       header: '用户名',
       primary: true,
+      width: 'minmax(0, 1.2fr)',
       render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
     },
-    { key: 'id', header: 'ID', width: 'auto', render: (user) => `#${user.id}` },
+    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
     {
       key: 'email',
       header: '邮箱',
+      width: 'minmax(0, 1.6fr)',
       className: 'wrap-anywhere',
       render: (user) => <span className="text-on-surface-variant">{user.email || '未绑定'}</span>,
     },
     {
       key: 'derpi',
       header: 'Derpibooru 身份',
+      width: 'minmax(0, 1.8fr)',
+      className: 'wrap-anywhere',
       render: (user) => (
         <span className="text-on-surface-variant">
           {[user.upstream_identity?.name || '未核验', user.key_hint ? `API Key 已绑定（${user.key_hint}）` : 'API Key 未绑定'].join(' · ')}
@@ -165,7 +169,8 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
     {
       key: 'created',
       header: '注册时间',
-      width: 'auto',
+      width: 'minmax(0, 1.1fr)',
+      className: 'tabular-nums',
       render: (user) => <span className="text-on-surface-variant">{user.created_at ? formatDateTime(user.created_at) : '—'}</span>,
     },
     {
@@ -245,7 +250,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
             {password.data ? (
               <>
                 {/* Code is 4dp in the Shape table, inline or displayed (G4-032), as /policy's is. */}
-                <code className="rounded-xs bg-surface-container-highest px-4 py-2 font-mono text-title-l tracking-widest text-on-surface">
+                <code className="rounded-xs bg-surface-container-highest px-4 py-2 font-mono text-title-l tracking-widest tabular-nums text-on-surface">
                   {password.data.password}
                 </code>
                 <IconButton
@@ -271,7 +276,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
           </div>
         )}
         {password.data && (
-          <p className="text-body-s text-on-surface-variant">
+          <p className="text-body-s tabular-nums text-on-surface-variant">
             {[password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成', password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null].filter(Boolean).join(' · ')}
           </p>
         )}
@@ -291,7 +296,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
               readOnly={enableMutation.busy}
               error={targetError ?? undefined}
               helper="直接为该用户开启开发者模式"
-              fieldClassName="sm:w-80"
+              fieldClassName="@md/form:w-80"
               onChange={(event) => {
                 setTarget(event.target.value);
                 setTargetError(null);

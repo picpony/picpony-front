@@ -39,7 +39,7 @@ function MotionOptionsDialog<T extends string>({
       isOpen={isOpen}
       onClose={onClose}
       title={`自定义动画${kind}`}
-      footer={<Button onClick={onClose}>完成</Button>}
+      footer={<Button variant="filled" onClick={onClose}>完成</Button>}
     >
       <div className="mb-4">
         <SettingsRow

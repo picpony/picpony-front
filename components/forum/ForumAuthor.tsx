@@ -75,7 +75,7 @@ export default function ForumAuthor({
               <UserBadge key={badge.badge_name} name={badge.badge_name} color={badge.badge_color} />
             ))}
           </div>
-          {actions && <div className="-me-1.5 flex shrink-0 items-center">{actions}</div>}
+          {actions && <div className="-me-1.5 flex shrink-0 items-center gap-1 pointer-coarse:gap-4">{actions}</div>}
         </div>
         {meta && (
           <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-body-s text-on-surface-variant">{meta}</div>

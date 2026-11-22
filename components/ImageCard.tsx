@@ -10,7 +10,7 @@ import Skeleton from './Skeleton';
 import type { ImagePreview } from '@/lib/types/image';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
-import { MediaBadge } from './Badge';
+import Badge, { MediaBadge } from './Badge';
 import { useSpoilerMatch } from '@/lib/spoilers';
 import { describeImage } from '@/lib/imageDescription';
 import { openFromSequence, type ImageSequenceSource } from '@/lib/imageSequence';
@@ -230,21 +230,24 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
         >
           <div className="media-hover-scrim absolute inset-0 rounded-lg" />
           {showFormatBadge && <MediaBadge corner="top-right">{format}</MediaBadge>}
-          {/* No `title` on either count. This whole chrome layer is
-              `pointer-events-none aria-hidden`, so a native tooltip could never be
-              hovered and the name could never be read — two dead attributes. */}
-          {typeof image.score === 'number' && (
-            <MediaBadge corner="bottom-left" icon={<MdThumbUp />}>
-              {formatCount(image.score)}
-            </MediaBadge>
-          )}
-          {(comments !== null || onSite > 0) && (
-            /* Derpibooru's count, then PicPony's own as `+n` — the original front end's
-               reading, and the one the detail's merged comment list adds up to. */
-            <MediaBadge corner="bottom-right" icon={<MdComment />}>
-              {formatCount(comments ?? 0)}
-              {onSite > 0 && `+${formatCount(onSite)}`}
-            </MediaBadge>
+          {/* Both bottom counts share one row so narrow cards (140-162px) truncate rather than
+              overlapping each other, while keeping their concentric outer 8dp corners. */}
+          {(typeof image.score === 'number' || comments !== null || onSite > 0) && (
+            <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-1.5">
+              {typeof image.score === 'number' && (
+                <Badge tone="media" size="sm" icon={<MdThumbUp />} className="rounded-bl-sm">
+                  {formatCount(image.score)}
+                </Badge>
+              )}
+              {(comments !== null || onSite > 0) && (
+                /* Derpibooru's count, then PicPony's own as `+n` — the original front end's
+                   reading, and the one the detail's merged comment list adds up to. */
+                <Badge tone="media" size="sm" icon={<MdComment />} className="ms-auto rounded-br-sm">
+                  {formatCount(comments ?? 0)}
+                  {onSite > 0 && `+${formatCount(onSite)}`}
+                </Badge>
+              )}
+            </div>
           )}
         </div>
       </Link>
@@ -253,19 +256,21 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
         /* The give-up plate is drawn here rather than inside the image: a 重试 control inside
            the card's link would be a button nested in an anchor. The plate itself passes the
            pointer through, so a press anywhere else still opens the picture. */
-        <div className="card-failure pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-container-high px-2 text-center text-on-surface-variant">
-          <MdBrokenImage size={ICON.standard} aria-hidden="true" />
-          <span className="card-failure-caption text-label-m">图片加载失败</span>
-          <Button
-            variant="tonal"
-            size="xs"
-            icon={<MdRefresh />}
-            onClick={retry}
-            aria-label="重新加载图片"
-            className="pointer-events-auto"
-          >
-            重试
-          </Button>
+        <div className="card-failure pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-surface-container-high px-2 text-center text-on-surface-variant">
+          <div className="card-failure-body flex flex-col items-center justify-center gap-2">
+            <MdBrokenImage size={ICON.standard} className="shrink-0" aria-hidden="true" />
+            <span className="card-failure-caption text-label-m">图片加载失败</span>
+            <Button
+              variant="tonal"
+              size="xs"
+              icon={<MdRefresh />}
+              onClick={retry}
+              aria-label="重新加载图片"
+              className="pointer-events-auto"
+            >
+              重试
+            </Button>
+          </div>
         </div>
       )}
 

@@ -7,6 +7,7 @@ import EmptyState from '@/components/EmptyState';
 import IconButton from '@/components/IconButton';
 import PresenceBlock from '@/components/PresenceBlock';
 import PresenceList from '@/components/PresenceList';
+import ScrollArea from '@/components/ScrollArea';
 import Skeleton from '@/components/Skeleton';
 import { statusViewBox } from '@/components/StatusView';
 import ButtonLink from '@/components/ButtonLink';
@@ -103,7 +104,7 @@ function EntryRow({
   return (
     <li data-presence-key={presenceKey} className="flex items-start gap-3 py-3">
       {entry.kind === 'gone' ? (
-        <div className="size-12 shrink-0 rounded-sm bg-surface-container-highest" aria-hidden="true" />
+        <div className="size-12 shrink-0 rounded-sm bg-surface-container-high" aria-hidden="true" />
       ) : (
         <ItemThumb item={entry.item} />
       )}
@@ -113,7 +114,7 @@ function EntryRow({
             <p className="line-clamp-2 wrap-anywhere text-body-m text-on-surface">{name}</p>
             <p
               className={cn(
-                'text-body-s',
+                'text-body-s tabular-nums',
                 note.tone === 'error' ? 'text-error' : note.tone === 'warning' ? 'text-warning' : 'text-on-surface-variant',
               )}
             >
@@ -178,8 +179,8 @@ function CartFooter({
               return (
                 <dl key={key} data-presence-key={key} className="space-y-1">
                   <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-body-m text-on-surface-variant">合计（{summary.pieces} 件）</dt>
-                    <dd className="inline-flex items-center gap-1 text-title-m-emphasized whitespace-nowrap text-on-surface tabular-nums">
+                    <dt className="text-body-m text-on-surface-variant tabular-nums">合计（{summary.pieces} 件）</dt>
+                    <dd className="inline-flex items-baseline gap-1 text-title-m-emphasized whitespace-nowrap text-on-surface tabular-nums">
                       <MdToll size={ICON.dense} className="self-center text-primary-ink" aria-hidden="true" />
                       {formatExactCount(summary.total)} 金币
                     </dd>
@@ -197,7 +198,7 @@ function CartFooter({
               return (
                 <div key={key} data-presence-key={key} className="pt-2">
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <p className="text-body-s text-error" role="status">
+                    <p className="text-body-s text-error tabular-nums" role="status">
                       金币不足，还差 {formatExactCount(part.short)} 金币
                     </p>
                     <ButtonLink href="/tasks" variant="text" size="xs">
@@ -378,12 +379,25 @@ export default function CartPanel({
     );
   }
 
+  const docked = surface === 'docked';
+  const content = <div className="relative">{body}</div>;
+
   return (
-    <FollowHeight>
-      <div ref={rootRef} className="flex min-h-0 flex-col">
+    <FollowHeight className={docked ? 'flex min-h-0 flex-col' : undefined}>
+      <div ref={rootRef} className={cn('flex min-h-0 flex-col', docked && 'flex-1')}>
         {heading}
         {/* Positioned: a face on its way out leaves where it stood, out of the flow. */}
-        <div className="relative">{body}</div>
+        {docked ? (
+          <ScrollArea
+            axis="y"
+            className="-mx-4 flex min-h-0 flex-1 flex-col"
+            viewportClassName="popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4"
+          >
+            {content}
+          </ScrollArea>
+        ) : (
+          content
+        )}
       </div>
     </FollowHeight>
   );

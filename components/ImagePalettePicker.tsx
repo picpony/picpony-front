@@ -134,6 +134,7 @@ export default function ImagePalettePicker({
       <div className="flex flex-col gap-5">
         <DropZone
           accept="image/*"
+          surface="dialog"
           disabled={phase === 'reading'}
           filled={Boolean(preview)}
           onFile={(file) => void readImage(file)}

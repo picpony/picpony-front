@@ -580,6 +580,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
     'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     '@/components/Modal': { default: 'Modal' },
     '@/components/Button': { default: 'Button' },
+    '@/components/FollowHeight': { default: 'FollowHeight' },
     '@/components/Input': { Input: 'Input' },
     '@/components/Skeleton': { default: 'Skeleton', SkeletonCircle: 'SkeletonCircle' },
     '@/components/ErrorRetry': { default: 'ErrorRetry' },

@@ -76,7 +76,7 @@ export default function DevBanner({
       aria-label="开发提示"
       data-dev-banner
       inert={inert || undefined}
-      className="bg-warning-container text-on-warning-container flex shrink-0 select-none items-center gap-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+      className="bg-warning-container text-on-warning-container flex shrink-0 select-none items-center gap-2 pb-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
     >
       <MdConstruction size={ICON.dense} className="shrink-0" aria-hidden="true" />
       <p className="text-body-s-emphasized min-w-0 flex-1 text-center">

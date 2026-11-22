@@ -55,7 +55,7 @@ export default function CreateTagDialog({
       onClose={onClose}
       closeOnEscape={!saving}
       title="添加新标签"
-      maxWidth="lg"
+      maxWidth="xl"
       footer={
         <>
           <Button type="button" variant="text" onClick={onClose} disabled={saving}>

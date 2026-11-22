@@ -209,7 +209,7 @@ export default function Select<T extends string = string>({
              it, which is where every open starts. It used to take neither, so the
              row the cursor opened on showed no cursor and no hover. */
           className={cn(
-            'flex min-h-10 items-center gap-2 rounded-sm px-2 py-1 text-label-l spring-fast-effects transition-[color,background-color,opacity]',
+            'flex min-h-10 select-none touch-manipulation items-center gap-2 rounded-sm px-2 py-1 text-label-l spring-fast-effects transition-[color,background-color,opacity]',
             option.disabled
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : cn(
@@ -250,11 +250,16 @@ export default function Select<T extends string = string>({
         <span
           key={o.value}
           aria-hidden="true"
-          className="col-start-1 row-start-1 invisible truncate pr-2"
+          className="col-start-1 row-start-1 invisible truncate"
         >
           {o.label}
         </span>
       ))}
+      {placeholder && (
+        <span aria-hidden="true" className="col-start-1 row-start-1 invisible truncate">
+          {placeholder}
+        </span>
+      )}
       {/* `on-surface-variant`, not `outline`. A placeholder is text, and
           `outline` is a boundary role specified to the 3:1 a *non-text*
           element needs — under the 4.5:1 AA bar for body text on this app's

@@ -14,6 +14,8 @@ export interface SelectionCommand {
   value: string;
   /** The command's whole name — 移动到…, 移出收藏夹 — the label, the tooltip and the menu row. */
   label: string;
+  /** Widest label when the command toggles text (e.g. 取消全选 for 全选), keeping the bar form stable. */
+  maxLabel?: string;
   icon: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
@@ -21,12 +23,12 @@ export interface SelectionCommand {
 }
 
 /* What a command costs in each form, in px — the button anatomy's own numbers: a 40dp icon
-   button; a text button's 12dp sides, 20dp glyph, 8dp gap and the label at 14px a character. */
+   button; a text button's 16dp sides, 20dp glyph, 8dp gap and the label at 14px a character. */
 const ICON_WIDTH = 40;
-const LABELLED_BASE = 12 + 20 + 8 + 12;
+const LABELLED_BASE = 16 + 20 + 8 + 16;
 const CHARACTER = 14;
-/* The bar's own: its 8dp inset either side, the dismiss control, the count and the 4dp gaps. */
-const CHROME = 16 + ICON_WIDTH + 8;
+/* The bar's own: outer and inner 8dp insets either side, the dismiss control, and the 4dp gaps. */
+const CHROME = 32 + ICON_WIDTH + 8;
 const GAP = 4;
 
 type Fit = { form: 'labelled' } | { form: 'icons' } | { form: 'compact'; shown: number };
@@ -46,7 +48,10 @@ const widestCount = (unit: string) => `已选择 888 ${unit}`;
 /** The roomiest form the commands fit in at this width. */
 function fitFor(width: number, commands: readonly SelectionCommand[], countText: string): Fit {
   const room = width - CHROME - countWidth(countText);
-  const labelled = commands.reduce((sum, command) => sum + LABELLED_BASE + Array.from(command.label).length * CHARACTER + GAP, 0);
+  const labelled = commands.reduce(
+    (sum, command) => sum + LABELLED_BASE + Array.from(command.maxLabel ?? command.label).length * CHARACTER + GAP,
+    0,
+  );
   if (room >= labelled) return { form: 'labelled' };
   if (room >= commands.length * (ICON_WIDTH + GAP)) return { form: 'icons' };
   /* As many as fit beside the 更多 control, which holds the rest. */
@@ -187,7 +192,11 @@ export default function SelectionBar({
 
   return (
     <>
-    {room && <div ref={roomRef} className="h-20 shrink-0" aria-hidden="true" />}
+    <div
+      ref={roomRef}
+      className={cn('shrink-0 transition-[height]', room ? 'h-20 spring-layout' : 'h-0 spring-fast-effects')}
+      aria-hidden="true"
+    />
     {/* `z-page-chrome`: the page's own floating chrome, as the home pill is — a stated step of the
         app's order rather than a number that agrees with the shop's bar by luck (G3-026). */}
     <div ref={slotRef} className="pointer-events-none sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-page-chrome h-0">

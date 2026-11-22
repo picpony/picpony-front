@@ -164,12 +164,12 @@ export default function SyncDialog({
         {running ? (
           <div className="space-y-2" aria-live="polite">
             <ProgressBar value={(progress.done / progress.total) * 100} label="同步进度" />
-            <p className="text-body-m text-on-surface-variant">
+            <p className="text-body-m tabular-nums text-on-surface-variant">
               {stopping ? '正在停止…' : `正在同步第 ${progress.page} 页 · 已完成 ${progress.done} / ${progress.total} 页`}
             </p>
           </div>
         ) : (
-          <FormGrid>
+          <FormGrid from="sm">
             <Input
               label="起始页"
               inputMode="numeric"

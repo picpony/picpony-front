@@ -135,9 +135,16 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   const text = state.pending?.message ?? state.draft;
   const thread = state.loading && !state.messages.length ? (
     <div role="status" aria-label="正在加载对话" className="flex flex-col gap-3">
-      <Skeleton className="h-16 w-4/5 rounded-lg" />
-      <Skeleton className="ml-auto h-12 w-3/5 rounded-lg" />
-      <Skeleton className="h-20 w-4/5 rounded-lg" />
+      <div className="space-y-1.5" aria-hidden="true">
+        <Skeleton className="h-4 w-4/5" />
+        <Skeleton className="h-4 w-3/5" />
+      </div>
+      <Skeleton className="ml-auto h-10 w-3/5 rounded-lg" />
+      <div className="space-y-1.5" aria-hidden="true">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
     </div>
   ) : state.ready && !state.available ? (
     <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在设置的账户页签中查看开关与额度" size="inline" />
@@ -222,7 +229,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       axis="y"
       className="flex min-h-0 flex-1 flex-col"
       viewportRef={log}
-      viewportClassName={cn(styles.messages, 'popover-scrollbar pr-1')}
+      viewportClassName={cn(styles.messages, 'popover-scrollbar')}
       viewportProps={{
         onScroll: (event) => {
           const node = event.currentTarget;
@@ -247,7 +254,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
           <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
           {!state.busy && <div className="flex flex-col items-end gap-1.5">
             <p className="text-body-s text-on-surface-variant text-end">此条消息的执行状态尚未确认，草稿已保留</p>
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="-me-4 flex flex-wrap justify-end gap-2">
               <Button variant="text" onClick={() => void session.restore()}>核对记录</Button>
               <Button variant="text" onClick={async () => {
                 if (await confirm({ title: '确认保留草稿', message: '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。', tone: 'filled' }) && current()) session.discardPending();
@@ -324,7 +331,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   return <>
     {desktop
       ? <SidePanel isOpen={isOpen} onClose={close} title="彩彩 AI" bodyClassName={styles.sideBody} bodyScrollable={false}>{content}</SidePanel>
-      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-4 pb-4`} bodyScrollable={false}>{content}</Sheet>}
+      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-6 pt-2`} bodyScrollable={false}>{content}</Sheet>}
     {confirmDialog}
   </>;
 }

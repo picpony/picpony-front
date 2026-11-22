@@ -642,51 +642,53 @@ export default function DetailImage({
         />
       )}
       {failedWithNothing && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 z-20 flex items-center justify-center overflow-auto p-2">
           <ErrorRetry size="inline" title="图片加载失败" onRetry={retryFinal} />
         </div>
       )}
       {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
           the press the media box below it is listening for. */}
       {!failedWithNothing && <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />}
-      {finalGivenUp && isPainted && (
-        /* The full-size file failed on every line, but a softer version is on screen: say so,
-           and offer it again, without taking the picture away. */
-        <IconButton
-          variant="media"
-          icon={<MdRefresh />}
-          aria-label="原图加载失败，重新加载"
-          onClick={(event) => {
-            event.stopPropagation();
-            retryFinal();
-          }}
-          className="absolute bottom-3 left-3 z-30"
-        />
-      )}
-      {/* The zoom affordance is a real control on the media plate, in the corner
-          rather than over the picture, present on compact and touch screens and
-          hover-revealed on desktop — the same rule the gallery captions follow. The box click
-          stays as a pointer convenience; this button is what makes the action
-          reachable from a keyboard (and present on touch, where there is no
-          hover). */}
       {!failedWithNothing && (
-        <IconButton
-          variant="media"
-          icon={<MdFullscreen />}
-          aria-label="放大查看原图"
-          /* Stops the press reaching the media box's own handler underneath, which
-             would open the lightbox a second time in the same tick. */
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          /* Hidden for the length of a hero flight — see the rule in globals.css. On touch
-             this control stays visible, and `HeroStage`'s
-             landing target renders no children at all, so on a phone the handoff frame was
-             conjuring a 40dp button into the picture's corner out of nothing. */
-          data-image-detail-zoom
-          className="hover-reveal absolute right-3 bottom-3 z-30 cursor-zoom-in"
-        />
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
+          {finalGivenUp && isPainted ? (
+            /* The full-size file failed on every line, but a softer version is on screen: say so,
+               and offer it again, without taking the picture away. */
+            <IconButton
+              variant="media"
+              icon={<MdRefresh />}
+              aria-label="原图加载失败，重新加载"
+              onClick={(event) => {
+                event.stopPropagation();
+                retryFinal();
+              }}
+              className="pointer-events-auto"
+            />
+          ) : <span />}
+          {/* The zoom affordance is a real control on the media plate, in the corner
+              rather than over the picture, present on compact and touch screens and
+              hover-revealed on desktop — the same rule the gallery captions follow. The box click
+              stays as a pointer convenience; this button is what makes the action
+              reachable from a keyboard (and present on touch, where there is no
+              hover). */}
+          <IconButton
+            variant="media"
+            icon={<MdFullscreen />}
+            aria-label="放大查看原图"
+            /* Stops the press reaching the media box's own handler underneath, which
+               would open the lightbox a second time in the same tick. */
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            /* Hidden for the length of a hero flight — see the rule in globals.css. On touch
+               this control stays visible, and `HeroStage`'s
+               landing target renders no children at all, so on a phone the handoff frame was
+               conjuring a 40dp button into the picture's corner out of nothing. */
+            data-image-detail-zoom
+            className="hover-reveal pointer-events-auto cursor-zoom-in"
+          />
+        </div>
       )}
     </div>
   );

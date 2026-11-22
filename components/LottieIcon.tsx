@@ -149,11 +149,10 @@ export default function LottieIcon({
 
   return (
     <span
-      className={cn('relative grid place-items-center', className)}
-      /* The box is reserved from the caller's width and the composition's ratio,
-         so the fallback, the player's SVG and the empty pre-load state all occupy
-         exactly the same space. */
-      style={{ aspectRatio: aspect }}
+      className={cn('relative grid place-items-center', shouldLoad && className)}
+      /* The box is reserved from the caller's width and the composition's ratio while an
+         animation will load; in static fallback mode the 48px glyph sizes itself directly. */
+      style={shouldLoad ? { aspectRatio: aspect } : undefined}
       // Labelled only when the caller gives it meaning; otherwise it is
       // decoration and must not be announced at all.
       {...(ariaLabel ? { role: 'img', 'aria-label': ariaLabel } : { 'aria-hidden': true })}

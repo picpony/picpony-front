@@ -47,12 +47,14 @@ function GateSkeleton() {
   return (
     <div className={COLUMN} data-page-loading="">
       <div className="mb-6 flex flex-col gap-2">
-        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-8 w-48 max-w-full" />
       </div>
       <Card variant="filled" padding="lg" className="mx-auto flex w-full max-w-md flex-col items-center gap-3">
         <Skeleton className="size-12 rounded-full" />
         <Skeleton className="h-6 w-40" />
-        <Skeleton className="mt-2 h-14 w-full" />
+        <Skeleton className="h-4 w-56 max-w-full" />
+        <Skeleton className="mt-2 h-14 w-full rounded-md" />
+        <Skeleton className="mt-1 h-10 w-24 self-end rounded-full" />
       </Card>
     </div>
   );
@@ -89,7 +91,7 @@ export default function SharedPrivacyScreen({ ownerId }: { ownerId: number }) {
       <>
         {pageBack}
         <div className={COLUMN}>
-          <SignInRequired description="登录后即可查看对方分享给你的隐私空间" />
+          <SignInRequired fill description="登录后即可查看对方分享给你的隐私空间" />
         </div>
       </>
     );

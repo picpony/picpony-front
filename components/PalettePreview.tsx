@@ -43,7 +43,7 @@ export default function PalettePreview({
     >
       {loading && (
         <div className="absolute inset-0">
-          <Skeleton className="h-full rounded-none" />
+          <Skeleton className="h-full rounded-none bg-surface-container-highest" />
         </div>
       )}
       <div

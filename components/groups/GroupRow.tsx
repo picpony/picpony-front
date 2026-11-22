@@ -72,7 +72,7 @@ export function GroupRow({
           <h2 className="line-clamp-2 text-title-m wrap-anywhere" title={name}>
             {name}
           </h2>
-          <p className={cn('text-body-s', STATE_TRANSITION, !active && 'text-on-surface-variant')}>{summary}</p>
+          <p className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>{summary}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {control}
@@ -155,12 +155,12 @@ export function TagMarks({
       )}
       <ul className="flex min-w-0 flex-wrap items-center gap-1.5" aria-label={label}>
         {tags.slice(0, preview).map((tag) => (
-          <li key={tag} className="max-w-full">
+          <li key={tag} className="flex max-w-full">
             <Badge title={tag}>{tag}</Badge>
           </li>
         ))}
         {rest > 0 && (
-          <li className={cn('text-body-s', STATE_TRANSITION, !active && 'text-on-surface-variant')}>+{rest}</li>
+          <li className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>+{rest}</li>
         )}
       </ul>
     </div>

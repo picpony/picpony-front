@@ -20,7 +20,7 @@ import { semanticQuery } from '@/lib/resources';
 import { publishSavedSiteStatus } from '@/lib/siteStatus';
 import { savedSemanticTiming } from '@/lib/adminSiteTools/propagation';
 import SectionHeader from '../SectionHeader';
-import { AdminForm, AdminNote } from '../AdminForm';
+import { AdminNote } from '../AdminForm';
 import { useAdminQuery, tableError } from '../queries';
 import { useAdminMutation } from '../useAdminMutation';
 import { AdminListAnchor, AdminPager, useCursorPages } from '../paging';
@@ -53,8 +53,8 @@ function Feedback({ token }: { token: string }) {
   const columns: Column<api.Feedback>[] = [
     { key: 'select', header: '选择', leading: true, render: (r) => <Checkbox aria-label={`选择反馈 #${r.id}`} checked={selected.includes(r.id)} disabled={locked} onChange={(v) => change(r.id, v)} /> },
     { key: 'query', header: '搜索原句', primary: true, className: 'whitespace-pre-wrap wrap-anywhere', render: (r) => r.query },
-    { key: 'result', header: '模型结果', className: 'whitespace-pre-wrap wrap-anywhere', render: (r) => r.result || '无结果' },
-    { key: 'who', header: '提交信息', render: (r) => <span>{r.user || '访客'} · {r.engine || '未记录模型'}<br />{formatDateTime(r.date)}<br /><Badge>{r.status === 'archived' ? '已归档' : '待处理'}</Badge></span> },
+    { key: 'result', header: '模型结果', width: 'minmax(0, 2fr)', className: 'whitespace-pre-wrap wrap-anywhere', render: (r) => r.result || '无结果' },
+    { key: 'who', header: '提交信息', width: 'minmax(0, 1.5fr)', className: 'tabular-nums', render: (r) => <span className="inline-flex flex-col items-start gap-1"><span>{r.user || '访客'} · {r.engine || '未记录模型'}</span><span className="text-body-s text-on-surface-variant">{formatDateTime(r.date)}</span><Badge size="md" tone={r.status === 'archived' ? 'neutral' : 'warning'}>{r.status === 'archived' ? '已归档' : '待处理'}</Badge></span> },
     { key: 'actions', header: '操作', actions: true, render: (r) => <>
       <IconButton size="sm" icon={r.status === 'archived' ? <MdUnarchive /> : <MdArchive />} aria-label={`${r.status === 'archived' ? '恢复' : '归档'}反馈 #${r.id}`} disabled={read.isPrevious || remove.busy} loading={archive.pendingKeys.has(r.id)} onClick={() => void archive.run(() => api.archiveFeedback(token, r.id, r.status !== 'archived'), () => showToast(r.status === 'archived' ? '已恢复反馈' : '已归档反馈', 'success'), '反馈归档失败', { key: r.id, onCommitted: refresh })} />
       <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除反馈 #${r.id}`} disabled={locked} onClick={() => deleteIds([r.id])} />
@@ -62,16 +62,23 @@ function Feedback({ token }: { token: string }) {
   ];
   return <section aria-labelledby="admin-search-feedback-heading" className="space-y-4">
     <SectionHeading as="h3" id="admin-search-feedback-heading">搜索反馈</SectionHeading>
-    <AdminForm aria-label="筛选搜索反馈" onSubmit={() => setFilter({ ...filter, q: search.trim() })}>
-      <div className="flex flex-wrap items-start gap-3">
-        <Select size="sm" aria-label="反馈状态" value={filter.status} options={[{ value: 'new', label: '待处理' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部' }]} onChange={(status) => setFilter({ ...filter, status: status as api.FeedbackStatus })} />
-        <SearchInput value={search} onChange={setSearch} placeholder="搜索反馈…" className="sm:w-64" />
-        <Button type="submit" variant="surface">搜索</Button>
-      </div>
-    </AdminForm>
+    <form
+      role="search"
+      aria-label="筛选搜索反馈"
+      noValidate
+      className="flex flex-col gap-3 sm:flex-row sm:items-center"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setFilter({ ...filter, q: search.trim() });
+      }}
+    >
+      <Select size="sm" aria-label="反馈状态" value={filter.status} options={[{ value: 'new', label: '待处理' }, { value: 'archived', label: '已归档' }, { value: 'all', label: '全部' }]} onChange={(status) => setFilter({ ...filter, status: status as api.FeedbackStatus })} />
+      <SearchInput value={search} onChange={setSearch} placeholder="搜索反馈…" className="min-w-0 sm:flex-1" />
+      <Button type="submit" variant="filled">搜索</Button>
+    </form>
     <div className="flex flex-wrap items-center gap-4">
       <Checkbox label="选择本页全部反馈" checked={ids.length > 0 && ids.every((id) => selected.includes(id))} disabled={locked || !ids.length} onChange={(checked) => setSelection({ scope, ids: checked ? ids : [] })} />
-      <Button variant="danger-text" disabled={!selected.length || read.isPrevious || archive.busy} loading={remove.busy} onClick={() => deleteIds(selected)}>删除所选（{selected.length}）</Button>
+      <Button variant="danger-text" className="tabular-nums" disabled={!selected.length || read.isPrevious || archive.busy} loading={remove.busy} onClick={() => deleteIds(selected)}>删除所选（{selected.length}）</Button>
     </div>
     <AdminListAnchor>
       <DataTable columns={columns} rows={read.data?.rows ?? []} listKey={read.listKey} rowKey={(r) => r.id} loading={read.loading} {...tableError(read.isPrevious ? `搜索反馈第 ${pages.page} 页加载失败` : '搜索反馈加载失败', read.message)} onRetry={read.retry} empty="暂无搜索反馈" />
@@ -109,7 +116,7 @@ function SemanticTab({ token }: AdminPanelProps) {
         }} confirmation={(v) => `确定要保存云端模型设置吗？${v.semantic_cloud_clear_key ? '已保存的模型密钥将被清除。' : '设置将用于全站智能搜索。'}`}>
           <AdminNote>{keyNote(read.data)}</AdminNote>
         </ConfigEditor>
-        <div className="space-y-3"><Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testSemanticCloud(token), (d) => setResult(d), '测试失败'), { tone: 'filled' })}>测试云端连接</Button>{result && <Card variant="filled" padding="sm" className="max-w-2xl space-y-2"><p role="status" className="text-body-m">{result.ok ? `连接正常：${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒` : `模型服务返回 HTTP ${result.http_status}（${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒）`}</p></Card>}</div>
+        <div className="space-y-3"><Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testSemanticCloud(token), (d) => setResult(d), '测试失败'), { tone: 'filled' })}>测试云端连接</Button>{result && <Card variant="filled" padding="sm" className="max-w-2xl space-y-2"><p role="status" className="text-body-m tabular-nums">{result.ok ? `连接正常：${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒` : `模型服务返回 HTTP ${result.http_status}（${result.model || '已保存的模型'}，耗时 ${result.latency_ms} 毫秒）`}</p></Card>}</div>
       </>}
     </ReadState>
     <Feedback token={token} />

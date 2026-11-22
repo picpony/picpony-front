@@ -95,7 +95,7 @@ export function WorkOrderNote({ workOrder, onUse }: { workOrder: Feedback; onUse
   return (
     <Card variant="filled" padding="sm" className="flex flex-wrap items-start gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-label-l text-on-surface">
+        <p className="text-label-l tabular-nums text-on-surface">
           {`正在处理反馈 #${workOrder.id} · ${workOrder.username || '访客'}`}
         </p>
         <p className="mt-0.5 whitespace-pre-wrap wrap-anywhere text-body-m text-on-surface-variant">{workOrder.content}</p>

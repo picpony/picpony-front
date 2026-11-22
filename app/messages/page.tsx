@@ -31,7 +31,13 @@ export default function MessagesPage() {
     return (
       <div className="mx-auto max-w-4xl">
         <PageHeader title="消息" />
-        <Skeleton aria-hidden="true" className="mb-3 h-12 w-full rounded-sm" />
+        <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="px-4">
+              <Skeleton className="h-4 w-8" />
+            </div>
+          ))}
+        </div>
         <ListRowsSkeleton />
       </div>
     );

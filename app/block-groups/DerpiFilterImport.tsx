@@ -146,7 +146,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
               <div className="flex items-center gap-4">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-label-l text-on-surface" title={filter.name}>{filter.name}</p>
-                  <p className="mt-0.5 line-clamp-2 text-body-s text-on-surface-variant">
+                  <p className="mt-0.5 line-clamp-2 wrap-anywhere text-body-s text-on-surface-variant">
                     {filter.description || '暂无简介'}
                   </p>
                 </div>

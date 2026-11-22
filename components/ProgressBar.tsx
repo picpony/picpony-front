@@ -50,8 +50,8 @@ const ACCENT_TRACK = 'bg-tertiary-container';
  * `Slider` keeps its own stop indicator — its track is 16dp with an 8dp cap, so the
  * dot reads as part of the track, and it marks a *draggable* value. */
 
-/** Matches any width utility a call site might name, including a responsive one. */
-const HAS_WIDTH = /(?:^|\s)(?:\S+:)?w-\S+/;
+/** Matches an unconditional width utility so breakpoint-only overrides keep mobile `w-full`. */
+const HAS_WIDTH = /(?:^|\s)w-\S+/;
 
 /**
  * The linear progress indicator, determinate and indeterminate.

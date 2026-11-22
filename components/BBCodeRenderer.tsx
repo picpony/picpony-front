@@ -137,7 +137,7 @@ export default function BBCodeRenderer({ content, className }: BBCodeRendererPro
           picture buttons inside it, each a real element with its own role and keyboard path. */}
       <div
         ref={ref}
-        className={cn('bbcode-content break-words', className)}
+        className={cn('bbcode-content wrap-anywhere', className)}
         onClick={onClick}
         dangerouslySetInnerHTML={{ __html: html }}
       />

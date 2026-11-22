@@ -227,7 +227,7 @@ function SharePreview({ target }: { target: ShareTarget }) {
         : `${target.ownerName} 的隐私空间`;
   const kind = target.kind === 'image' ? '图片卡片' : target.kind === 'fave-folder' ? '收藏夹卡片' : '隐私空间卡片';
   return (
-    <div className="flex items-center gap-3 rounded-md bg-surface-container-highest p-3">
+    <div className="flex items-center gap-3 rounded-lg bg-surface-container-highest p-2">
       <span
         aria-hidden="true"
         className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-secondary-container text-on-secondary-container"
@@ -324,6 +324,7 @@ function PersonRowsSkeleton() {
         <div key={i} className="flex min-h-14 items-center gap-3 px-3 py-2">
           <SkeletonCircle size={40} delay={i * 80} />
           <Skeleton className="h-4 w-1/2" delay={i * 80 + 40} />
+          <SkeletonCircle size={20} className="ms-auto" delay={i * 80 + 80} />
         </div>
       ))}
     </div>
