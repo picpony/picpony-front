@@ -1,19 +1,24 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MdClose, MdReply, MdSend } from 'react-icons/md';
 import Button from '@/components/Button';
+import Collapse from '@/components/Collapse';
 import IconButton from '@/components/IconButton';
-import { EditorPlaceholder } from '@/components/RichTextEditorShell';
+import { EditorPlaceholder, type RichTextEditorHandle } from '@/components/RichTextEditorShell';
 import { useAuthModal } from '@/components/AuthModal';
 import { showToast } from '@/components/Toast';
 import { postComment, requestId } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
+import { motionTier, scaledMs } from '@/lib/appearance';
 import { plainTextOf } from '@/lib/derpiMarkup';
 import { readCommentDraft, replyReference, writeCommentDraft } from '@/lib/imageComments';
 import { readToken, useSession } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
+import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
+import { springTiming } from '@/lib/springTiming';
+import { cn } from '@/lib/utils';
 
 /**
  * A comment is a reply, so the editor takes the shorter `reply` box. While its chunk loads, the
@@ -87,10 +92,25 @@ async function send(token: string, imageId: number, text: string, replyTo: Reply
   }
 }
 
+type TransitionPhase = 'idle' | 'opening' | 'closing';
+
+interface ComposerPose {
+  height: number;
+  triggerOpacity: number;
+  editorOpacity: number;
+  editorTranslate: string;
+}
+
 /**
  * Writing a comment: a one-line field until you go to write (the rich-text editor is the app's
  * largest chunk, and most readers never write), then the editor, a reply's quote above it, and
  * 发送.
+ *
+ * Expanding and collapsing animate the box height on the critically damped `layout` spring (list
+ * category, so the comment thread underneath glides without bouncing) while cross-fading the
+ * 56dp trigger and the editor on `fastEffects` / `defaultEffects`. The editor mounts only when
+ * opened and stays mounted until a collapse finishes, keeping both directions interruptible and
+ * free of eager chunk loading or blank collapse gaps.
  *
  * **Signed out it asks you to sign in, and only that** — one piece of feedback (it used to toast
  * 请先登录 *and* open the dialog), and before anything can be typed. **Nothing typed is thrown
@@ -108,15 +128,203 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
      than synced from `replyTo` by an effect. */
   const [pressedWrite, setPressedWrite] = useState<number | null>(null);
   const editorOpen = signedIn && (pressedWrite === imageId || replyTo !== null);
+  /* Keep the departing editor mounted under its old key while collapsing after a post, so the
+     collapse animation never flashes a fresh placeholder; reopening adopts the new revision. */
+  const [mountedRevision, setMountedRevision] = useState(editorRevision);
+  if (editorOpen && mountedRevision !== editorRevision) setMountedRevision(editorRevision);
+  /* Hold the reply quote bar's open state across a composer collapse so canceling reply on close
+     never collapses the inner quote bar simultaneously with the departing editor snapshot. */
+  const [mountedReplyOpen, setMountedReplyOpen] = useState(Boolean(replyTo));
+  if (editorOpen && mountedReplyOpen !== Boolean(replyTo)) setMountedReplyOpen(Boolean(replyTo));
+  /* Track open/close transitions per picture; switching pictures resets immediately without motion. */
+  const [transition, setTransition] = useState<{ imageId: number; open: boolean; phase: TransitionPhase }>({
+    imageId,
+    open: editorOpen,
+    phase: 'idle',
+  });
+  if (transition.imageId !== imageId) {
+    setTransition({ imageId, open: editorOpen, phase: 'idle' });
+  } else if (transition.open !== editorOpen) {
+    setTransition({ imageId, open: editorOpen, phase: editorOpen ? 'opening' : 'closing' });
+  }
+  /* Hold the last reply target while the quote bar collapses inside an open editor. */
+  const [lastReply, setLastReply] = useState<{ imageId: number; target: ReplyTarget | null }>({ imageId, target: replyTo });
+  if (lastReply.imageId !== imageId) {
+    setLastReply({ imageId, target: replyTo });
+  } else if (replyTo && lastReply.target !== replyTo) {
+    setLastReply({ imageId, target: replyTo });
+  }
+  const shownReply = replyTo ?? (lastReply.imageId === imageId ? lastReply.target : null);
+
   /* Which picture's comment is on its way (review P3-O5). A plain flag kept the next picture's
      发送 disabled until the previous picture's request ended, and the success path then cleared
      the reply target the visitor had just picked on the new picture. */
   const [submittingFor, setSubmittingFor] = useState<number | null>(null);
   const isSubmitting = submittingFor === imageId;
   const shownImage = useRef(imageId);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const triggerWrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const editorWrapRef = useRef<HTMLDivElement>(null);
+  const editorHandleRef = useRef<RichTextEditorHandle | null>(null);
+  const wantFocusRef = useRef(false);
+  const poseRef = useRef<ComposerPose | null>(null);
+
   useEffect(() => {
     shownImage.current = imageId;
   }, [imageId]);
+
+  const attachEditor = useCallback((handle: RichTextEditorHandle | null) => {
+    editorHandleRef.current = handle;
+    if (handle && wantFocusRef.current) {
+      wantFocusRef.current = false;
+      handle.focus();
+    }
+  }, []);
+
+  const phase = transition.imageId === imageId ? transition.phase : 'idle';
+
+  useLayoutEffect(() => {
+    if (phase === 'idle') {
+      poseRef.current = null;
+      return;
+    }
+    const box = boxRef.current;
+    const triggerWrap = triggerWrapRef.current;
+    const editorWrap = editorWrapRef.current;
+    const opening = phase === 'opening';
+
+    if (opening) {
+      wantFocusRef.current = true;
+      if (editorHandleRef.current) {
+        wantFocusRef.current = false;
+        editorHandleRef.current.focus();
+      }
+    } else {
+      wantFocusRef.current = false;
+      if (editorWrap?.contains(document.activeElement)) {
+        triggerRef.current?.focus({ preventScroll: true });
+      }
+    }
+
+    const interrupted = poseRef.current;
+    poseRef.current = null;
+    const tier = motionTier('list');
+
+    if (!box || tier === 'off') {
+      let alive = true;
+      queueMicrotask(() => {
+        if (alive) {
+          setTransition((current) =>
+            current.imageId === imageId && current.phase === phase ? { ...current, phase: 'idle' } : current,
+          );
+        }
+      });
+      return () => {
+        alive = false;
+      };
+    }
+
+    const from =
+      interrupted?.height ??
+      (opening ? triggerWrap?.getBoundingClientRect().height : editorWrap?.getBoundingClientRect().height) ??
+      box.getBoundingClientRect().height;
+    const to = box.getBoundingClientRect().height;
+
+    const layoutTiming = springTiming('layout', 'list');
+    const enterFade = springTiming('defaultEffects', 'list');
+    const exitFade = springTiming('fastEffects', 'list');
+    const handoff = interrupted ? 0 : scaledMs(HANDOFF_MS, 'list');
+    const travel = tier === 'standard' ? TRAVEL_PX.small : 0;
+    const animations: Animation[] = [];
+
+    if (Math.abs(to - from) >= 0.5) {
+      /* Clip only the moving bottom edge so focus rings on the other three sides stay intact. */
+      box.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
+      animations.push(box.animate([{ height: `${from}px` }, { height: `${to}px` }], layoutTiming));
+    }
+
+    if (opening) {
+      if (triggerWrap) {
+        animations.push(
+          triggerWrap.animate(
+            [{ opacity: interrupted?.triggerOpacity ?? 1 }, { opacity: 0 }],
+            { ...exitFade, fill: 'forwards' },
+          ),
+        );
+      }
+      if (editorWrap) {
+        animations.push(
+          editorWrap.animate(
+            [{ opacity: interrupted?.editorOpacity ?? 0 }, { opacity: 1 }],
+            { ...enterFade, delay: handoff, fill: 'backwards' },
+          ),
+        );
+        if (travel > 0) {
+          animations.push(
+            editorWrap.animate(
+              [{ translate: interrupted?.editorTranslate ?? `0 ${-travel}px` }, { translate: 'none' }],
+              { ...layoutTiming, delay: handoff, fill: 'backwards' },
+            ),
+          );
+        }
+      }
+    } else {
+      if (editorWrap) {
+        animations.push(
+          editorWrap.animate(
+            [{ opacity: interrupted?.editorOpacity ?? 1 }, { opacity: 0 }],
+            { ...exitFade, fill: 'forwards' },
+          ),
+        );
+        if (travel > 0) {
+          animations.push(
+            editorWrap.animate(
+              [{ translate: interrupted?.editorTranslate ?? 'none' }, { translate: `0 ${-travel}px` }],
+              { ...layoutTiming, fill: 'forwards' },
+            ),
+          );
+        }
+      }
+      if (triggerWrap) {
+        animations.push(
+          triggerWrap.animate(
+            [{ opacity: interrupted?.triggerOpacity ?? 0 }, { opacity: 1 }],
+            { ...enterFade, delay: handoff, fill: 'backwards' },
+          ),
+        );
+      }
+    }
+
+    let alive = true;
+    const settle = () => {
+      if (!alive) return;
+      box.style.clipPath = '';
+      setTransition((current) =>
+        current.imageId === imageId && current.phase === phase ? { ...current, phase: 'idle' } : current,
+      );
+    };
+    if (animations.length === 0) {
+      queueMicrotask(settle);
+    } else {
+      Promise.all(animations.map((animation) => animation.finished)).then(settle, () => {});
+    }
+
+    return () => {
+      alive = false;
+      if (animations.some((animation) => animation.playState === 'running')) {
+        poseRef.current = {
+          height: box.getBoundingClientRect().height,
+          triggerOpacity: triggerWrap ? Number(getComputedStyle(triggerWrap).opacity) : opening ? 0 : 1,
+          editorOpacity: editorWrap ? Number(getComputedStyle(editorWrap).opacity) : opening ? 1 : 0,
+          editorTranslate: editorWrap ? getComputedStyle(editorWrap).translate || 'none' : 'none',
+        };
+      }
+      for (const animation of animations) animation.cancel();
+      box.style.clipPath = '';
+    };
+  }, [phase, imageId]);
+
   const trimmed = comment.trim();
 
   const setComment = (text: string) => {
@@ -157,73 +365,99 @@ export default function CommentComposer({ imageId, replyTo, onCancelReply, onPos
     onCancelReply();
   };
 
-  if (!signedIn || !editorOpen) {
-    return (
-      /* A real `<button>` shaped as the 12dp editor shell it opens into: it starts the editor, so it
-         has to be reachable by keyboard and announce itself. 56dp, the field's own height — the
-         354px box it used to reserve put most of a phone screen of nothing above the thread. */
-      <button
-        type="button"
-        onClick={() => signedIn ? setPressedWrite(imageId) : openAuth('login')}
-        onPointerEnter={signedIn ? warmEditor : undefined}
-        onFocus={signedIn ? warmEditor : undefined}
-        data-ripple=""
-        className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-md bg-surface-container-high px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer forced-boundary focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
-      >
-        <span className="truncate">
-          {signedIn ? (trimmed ? '继续编辑评论…' : '发表评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}
-        </span>
-      </button>
-    );
-  }
+  const showTrigger = !editorOpen || phase !== 'idle';
+  const showEditor = editorOpen || phase === 'closing';
 
   return (
-    <div className="flex flex-col gap-2">
-      {replyTo && (
-        <div className="flex min-w-0 items-center gap-2 rounded-sm bg-surface-container px-3 py-1 text-body-m text-on-surface-variant">
-          <MdReply size={ICON.dense} className="shrink-0" aria-hidden="true" />
-          <span className="shrink-0">
-            回复 <span className="text-body-m-emphasized text-on-surface">{replyTo.username}</span>：
-          </span>
-          {/* Its words, not its markup: a Derpibooru comment opens with a link in Markdown, and
-              the bar used to print `[@name](/images/…` raw. */}
-          <span className="min-w-0 flex-1 truncate text-body-s">
-            {plainTextOf(replyTo.body, { keepQuotes: false, max: 80 })}
-          </span>
-          <IconButton
-            size="sm"
-            dismiss
-            onClick={onCancelReply}
-            aria-label="取消回复"
-            className="-me-1.5 shrink-0"
-            icon={<MdClose />}
-          />
+    <div ref={boxRef} className="relative">
+      {showTrigger && (
+        <div
+          ref={triggerWrapRef}
+          inert={editorOpen || undefined}
+          aria-hidden={editorOpen || undefined}
+          className={cn(editorOpen && 'pointer-events-none absolute inset-x-0 top-0')}
+        >
+          {/* A real `<button>` shaped as the 12dp editor shell it opens into: it starts the editor, so it
+              has to be reachable by keyboard and announce itself. 56dp, the field's own height — the
+              354px box it used to reserve put most of a phone screen of nothing above the thread. */}
+          <button
+            ref={triggerRef}
+            type="button"
+            onClick={() => (signedIn ? setPressedWrite(imageId) : openAuth('login'))}
+            onPointerEnter={signedIn ? warmEditor : undefined}
+            onFocus={signedIn ? warmEditor : undefined}
+            data-ripple=""
+            className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-md bg-surface-container-high px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer forced-boundary focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+          >
+            <span className="truncate">
+              {signedIn ? (trimmed ? '继续编辑评论…' : '发表评论…') : (trimmed ? '登录后继续编辑评论' : '登录后发表评论')}
+            </span>
+          </button>
         </div>
       )}
-      <RichTextEditor
-        key={`${imageId}:${editorRevision}`}
-        value={comment}
-        onChange={setComment}
-        placeholder={replyTo ? `回复 ${replyTo.username}…` : '发表评论…'}
-        disabled={isSubmitting}
-        size="reply"
-        label={replyTo ? `回复 ${replyTo.username}` : '评论'}
-      />
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="text" onClick={collapse} disabled={isSubmitting}>
-          收起
-        </Button>
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          variant="filled"
-          loading={isSubmitting}
-          disabled={!trimmed}
-          icon={<MdSend />}
+      {showEditor && (
+        <div
+          ref={editorWrapRef}
+          inert={!editorOpen || undefined}
+          aria-hidden={!editorOpen || undefined}
+          className={cn(!editorOpen && 'pointer-events-none absolute inset-x-0 top-0')}
         >
-          {replyTo ? '发送回复' : '发送评论'}
-        </Button>
-      </div>
+          <Collapse open={editorOpen ? Boolean(replyTo) : mountedReplyOpen}>
+            {shownReply && (
+              <div className="pb-2">
+                <div className="flex min-w-0 items-center gap-2 rounded-sm bg-surface-container px-3 py-1 text-body-m text-on-surface-variant">
+                  <MdReply size={ICON.dense} className="shrink-0" aria-hidden="true" />
+                  <span className="flex min-w-0 max-w-[60%] shrink items-center">
+                    <span className="shrink-0">回复&nbsp;</span>
+                    <span className="min-w-0 truncate text-body-m-emphasized text-on-surface">{shownReply.username}</span>
+                    <span className="shrink-0">：</span>
+                  </span>
+                  {/* Its words, not its markup: a Derpibooru comment opens with a link in Markdown, and
+                      the bar used to print `[@name](/images/…` raw. */}
+                  <span className="min-w-0 flex-1 truncate text-body-s">
+                    {plainTextOf(shownReply.body, { keepQuotes: false, max: 80 })}
+                  </span>
+                  <IconButton
+                    size="sm"
+                    dismiss
+                    onClick={onCancelReply}
+                    aria-label="取消回复"
+                    className="-me-2 shrink-0"
+                    icon={<MdClose />}
+                  />
+                </div>
+              </div>
+            )}
+          </Collapse>
+          <div className="flex flex-col gap-2">
+            <RichTextEditor
+              key={`${imageId}:${mountedRevision}`}
+              value={comment}
+              onChange={setComment}
+              placeholder={replyTo ? `回复 ${replyTo.username}…` : '发表评论…'}
+              disabled={isSubmitting}
+              size="reply"
+              label={replyTo ? `回复 ${replyTo.username}` : '评论'}
+              handleRef={attachEditor}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="text" onClick={collapse} disabled={isSubmitting}>
+                收起
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                variant="filled"
+                loading={isSubmitting}
+                disabled={!trimmed}
+                icon={<MdSend />}
+              >
+                {replyTo ? '发送回复' : '发送评论'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
