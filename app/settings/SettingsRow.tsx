@@ -94,10 +94,11 @@ export function SettingsRow({
   if (!children) {
     return (
       <div
-        className={cn('m3-row @container/row flex min-h-18 items-center gap-x-4 gap-y-3 p-4', wrapClasses?.row, surfaceBg)}
+        className={cn('m3-row @container/row flex min-h-18 items-center p-4', surfaceBg)}
         aria-hidden={ariaHidden || undefined}
       >
-        {head}
+        {/* Wrap classes query `@container/row`, so they must sit on a descendant rather than the container itself. */}
+        <div className={cn('flex min-w-0 flex-1 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
       </div>
     );
   }
@@ -106,7 +107,7 @@ export function SettingsRow({
       className={cn('m3-row @container/row flex min-h-18 flex-col items-stretch gap-4 p-4', surfaceBg)}
       aria-hidden={ariaHidden || undefined}
     >
-      <div className={cn('flex items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
+      <div className={cn('flex min-w-0 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
       {children}
     </div>
   );

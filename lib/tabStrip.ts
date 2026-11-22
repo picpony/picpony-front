@@ -180,6 +180,11 @@ export function stripAt(history: readonly StripSegment[], t: number): number {
 /** The step the strip is sampled at, ms. Smoothing is solved exactly over each step, the strip
  *  taken as straight between samples, so the step is only how finely the strip is read. */
 const LEAN_STEP_MS = 1;
+/** Reference depths that choose the shared knot schedule: 0.1 captures the fast initial rise of
+ *  shallow blocks, 0.35 the mid-screen knee, and 1 the full peak and settle tail. */
+const LEAN_KNOT_DEPTHS = [0.1, 0.35, 1] as const;
+
+type LagTrace = { lags: Float64Array; n: number };
 
 /**
  * **How far behind its pane a block at each depth is**, in windows, from `from` until it has
@@ -189,6 +194,14 @@ const LEAN_STEP_MS = 1;
  * it meets from where it is, so a lean that reverses does so top first, as a wave. `scale` is the
  * motion speed's, which stretches the smoothing with every other duration. The strip is sampled
  * once for every depth.
+ *
+ * **All depths in `(0, 1]` share one knot schedule per `tolerance`.** Simplifying each depth
+ * independently let a shallower block keep one coarse chord across the convex landing tail while
+ * the deeper block directly below it crossed `tolerance` and split — placing the upper block's
+ * lag chord above the lower block's curve by up to `tolerance` (so it trailed behind the block
+ * below it by several physical pixels on a phone) for the entire last third of the switch.
+ * Sampling every depth on the same knots makes linear interpolation preserve the exact
+ * top-to-bottom ordering at every instant.
  */
 export function lagSampler(
   history: readonly StripSegment[],
@@ -206,13 +219,11 @@ export function lagSampler(
   for (let i = 0; i <= count; i += 1) place[i] = stripAt(history, start + i * LEAN_STEP_MS);
   const rest = place[count];
 
-  return (depth, tolerance) => {
-    if (!(depth > 0)) return [[from, 0]];
+  const trace = (depth: number, landed: number): LagTrace => {
     const lagMs = LEAN_LAG_MS * depth * Math.max(scale, 1e-3);
     const decay = Math.exp(-LEAN_STEP_MS / lagMs);
-    /* Landed at a third of the tolerance: half a pixel, for the pixel and a half the run samples at. */
-    const landed = tolerance / 3;
-    const limit = count + Math.ceil((lagMs * Math.log(1 / landed)) / LEAN_STEP_MS);
+    const tail = landed < 1 ? Math.ceil((lagMs * Math.log(1 / landed)) / LEAN_STEP_MS) : 0;
+    const limit = count + Math.max(0, tail);
     const lags = new Float64Array(limit - before + 1);
     let n = 0;
     let position = place[0];
@@ -230,16 +241,47 @@ export function lagSampler(
       position = next - behind + (position - here + behind) * decay;
     }
     lags[n - 1] = 0;
-    return simplify(lags, n, tolerance).map(
-      (i) => [from + i * LEAN_STEP_MS, lags[i]] as [number, number],
+    return { lags, n };
+  };
+
+  const knotCache = new Map<number, number[]>();
+  const sharedKnots = (tolerance: number): number[] => {
+    const cached = knotCache.get(tolerance);
+    if (cached) return cached;
+    /* Landed at a third of the tolerance: half a pixel, for the pixel and a half the run samples at. */
+    const landed = tolerance / 3;
+    const knots = simplifyJoint(
+      LEAN_KNOT_DEPTHS.map((ref) => trace(ref, landed)),
+      tolerance,
     );
+    knotCache.set(tolerance, knots);
+    return knots;
+  };
+
+  return (depth, tolerance) => {
+    if (!(depth > 0)) return [[from, 0]];
+    const landed = tolerance / 3;
+    const own = trace(depth, landed);
+    const knots = depth <= 1 ? sharedKnots(tolerance) : simplifyJoint([own], tolerance);
+    const out: Array<[number, number]> = [];
+    for (const i of knots) {
+      if (i >= own.n - 1) {
+        out.push([from + i * LEAN_STEP_MS, 0]);
+        break;
+      }
+      out.push([from + i * LEAN_STEP_MS, own.lags[i]]);
+    }
+    if (out[out.length - 1][1] !== 0) out.push([from + (own.n - 1) * LEAN_STEP_MS, 0]);
+    return out;
   };
 }
 
-/** The fewest of `n` evenly spaced points whose straight segments stay within `tolerance` of the
- *  rest (Ramer–Douglas–Peucker, vertical distance), as indices. */
-function simplify(values: Float64Array, n: number, tolerance: number): number[] {
+/** The fewest evenly spaced indices whose straight segments stay within `tolerance` across every
+ *  trace simultaneously (joint Ramer–Douglas–Peucker, vertical distance). */
+function simplifyJoint(traces: readonly LagTrace[], tolerance: number): number[] {
+  const n = Math.max(...traces.map((trace) => trace.n));
   if (n <= 2) return n === 2 ? [0, 1] : [0];
+  const at = (trace: LagTrace, i: number) => (i < trace.n - 1 ? trace.lags[i] : 0);
   const keep = new Uint8Array(n);
   keep[0] = 1;
   keep[n - 1] = 1;
@@ -247,14 +289,17 @@ function simplify(values: Float64Array, n: number, tolerance: number): number[] 
   while (stack.length > 0) {
     const b = stack.pop()!;
     const a = stack.pop()!;
-    const slope = (values[b] - values[a]) / (b - a);
     let worst = -1;
     let far = tolerance;
-    for (let i = a + 1; i < b; i += 1) {
-      const off = Math.abs(values[i] - (values[a] + slope * (i - a)));
-      if (off > far) {
-        far = off;
-        worst = i;
+    for (const trace of traces) {
+      const va = at(trace, a);
+      const slope = (at(trace, b) - va) / (b - a);
+      for (let i = a + 1; i < b; i += 1) {
+        const off = Math.abs(at(trace, i) - (va + slope * (i - a)));
+        if (off > far) {
+          far = off;
+          worst = i;
+        }
       }
     }
     if (worst >= 0) {

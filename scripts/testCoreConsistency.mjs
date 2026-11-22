@@ -1095,3 +1095,26 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
   assert.match(authSource, /@\/lib\/lottie\/login\.json/);
   assert.match(authSource, /staticMode="last-frame"/);
 });
+
+test('SettingsRow keeps @max-*/row wrap utilities on a descendant of @container/row', () => {
+  const jsx = (type, props) => ({ type, props });
+  const { SettingsRow } = load('app/settings/SettingsRow.tsx', {
+    react: { forwardRef: (fn) => fn },
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    '@/components/Button': { default: 'Button' },
+    '@/components/ToggleSwitch': { default: 'ToggleSwitch' },
+    '@/components/SectionHeading': { default: 'SectionHeading' },
+    '@/components/Tooltip': { useTooltip: () => ({ anchorRef: { current: null }, anchorProps: {}, tooltip: null }) },
+    '@/lib/hooks': { useMediaQuery: () => true },
+    '@/lib/constants': { MEDIA: { sm: '(min-width: 640px)' } },
+    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
+  });
+  for (const children of [undefined, { type: 'div', props: {} }]) {
+    const tree = SettingsRow({ label: '内容分级', supporting: '说明', action: 'control', wrap: 'md', children });
+    const outerClass = String(tree.props.className ?? '');
+    assert.match(outerClass, /@container\/row/, 'outer row establishes @container/row');
+    assert.doesNotMatch(outerClass, /@max-md\/row:flex-wrap/, 'container must not query itself');
+    const inner = Array.isArray(tree.props.children) ? tree.props.children[0] : tree.props.children;
+    assert.match(String(inner.props.className ?? ''), /@max-md\/row:flex-wrap/, 'inner flex row wraps below breakpoint');
+  }
+});

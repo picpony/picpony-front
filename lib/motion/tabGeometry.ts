@@ -87,10 +87,12 @@ function boxChildren(node: Element, inView: (rect: DOMRect) => boolean): { kids:
   for (const child of node.children) {
     if (!(child instanceof HTMLElement) || isConcealedPane(child)) continue;
     const rect = child.getBoundingClientRect();
-    if (rect.width > 0 || rect.height > 0) {
+    /* Skip zero-area nodes (collapsed spacers, zero-height sticky bar slots) so an empty box
+       neither takes a compositor layer nor makes `anyOverlap` block a tall sibling grid. */
+    if (rect.width > 0 && rect.height > 0) {
       boxes += 1;
       if (inView(rect)) kids.push({ el: child, rect, style: getComputedStyle(child) });
-    } else if (getComputedStyle(child).display === 'contents') {
+    } else if (rect.width === 0 && rect.height === 0 && getComputedStyle(child).display === 'contents') {
       const inner = boxChildren(child, inView);
       kids.push(...inner.kids);
       boxes += inner.boxes;

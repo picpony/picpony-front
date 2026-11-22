@@ -491,6 +491,30 @@ test('a leaning block eases after its pane: it moves at once, leans, and lands f
   assert.ok(previous.end >= lag(0.25, 1.5 * px).at(-1)[0], 'the lowest lands last');
 });
 
+test('sampled lean stays monotonic top-to-bottom at every frame on phone widths too', () => {
+  const strip = loadStrip();
+  const full = strip.STRIP_DURATION_MS;
+  const history = [{ leg: strip.freshStripLeg(full), start: 0 }];
+  for (const distance of [450, 486, 1136]) {
+    const lag = strip.lagSampler(history, 0);
+    const tolerance = 1.5 / distance;
+    const depths = [0.08, 0.16, 0.25, 0.33, 0.41, 0.57, 0.74, 1];
+    const curves = depths.map((depth) => lag(depth, tolerance));
+    const end = Math.max(...curves.map((samples) => samples.at(-1)[0]));
+    for (let t = 0; t <= end; t += 2) {
+      let previous = -Infinity;
+      for (let i = 0; i < curves.length; i += 1) {
+        const value = lagOf(curves[i], t);
+        assert.ok(
+          value + 1e-12 >= previous,
+          `depth ${depths[i]} fell ahead of ${depths[i - 1]} at t=${t}ms (dist=${distance}): ${(value * distance).toFixed(2)}px < ${(previous * distance).toFixed(2)}px`,
+        );
+        previous = value;
+      }
+    }
+  }
+});
+
 test('a turn carries every leaning block on from where it is, top first', () => {
   const strip = loadStrip();
   const full = strip.STRIP_DURATION_MS;
@@ -516,6 +540,60 @@ test('a turn carries every leaning block on from where it is, top first', () => 
       }
     }
   }
+});
+
+test('leanPlan ignores zero-height sticky slots while still descending through display:contents', () => {
+  const strip = loadStrip();
+  class FakeElement {
+    constructor(name, rect, style = {}, children = []) {
+      this.name = name;
+      this.rect = rect;
+      this.style = {
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        backgroundImage: 'none',
+        boxShadow: 'none',
+        borderTopWidth: '0px',
+        borderRightWidth: '0px',
+        borderBottomWidth: '0px',
+        borderLeftWidth: '0px',
+        overflowX: 'visible',
+        overflowY: 'visible',
+        contain: 'none',
+        position: 'static',
+        zIndex: 'auto',
+        opacity: '1',
+        transform: 'none',
+        filter: 'none',
+        isolation: 'auto',
+        mixBlendMode: 'normal',
+        display: 'block',
+        ...style,
+      };
+      this.children = children;
+    }
+    hasAttribute() { return false; }
+    getBoundingClientRect() { return this.rect; }
+  }
+  const rect = (top, height, width = 358) => ({ left: 16, right: 16 + width, top, bottom: top + height, width, height });
+  const surface = { backgroundColor: 'rgb(245, 240, 240)' };
+  const row1 = new FakeElement('row1', rect(200, 120), surface);
+  const row2 = new FakeElement('row2', rect(330, 120), surface);
+  const row3 = new FakeElement('row3', rect(460, 120), surface);
+  const contentsWrap = new FakeElement('contents', rect(0, 0, 0), { display: 'contents' }, [row2, row3]);
+  const grid = new FakeElement('grid', rect(200, 900), {}, [row1, contentsWrap]);
+  const stickySlot = new FakeElement('sticky-slot', rect(700, 0), { position: 'sticky', zIndex: '20' });
+  const header = new FakeElement('header', rect(120, 40), surface);
+  const root = new FakeElement('root', rect(120, 1000), {}, [header, grid, stickySlot]);
+  const pane = new FakeElement('pane', rect(120, 1000), {}, [root]);
+
+  const { leanPlan } = load(
+    'lib/motion/tabGeometry.ts',
+    { '@/lib/tabStrip': strip },
+    { HTMLElement: FakeElement, getComputedStyle: (el) => el.style },
+  );
+  const plan = leanPlan(pane, 64, 844, 0, 120);
+  assert.deepEqual(Array.from(plan.blocks, (block) => block.el.name), ['row1', 'row2', 'row3']);
+  assert.ok(plan.blocks[0].depth < plan.blocks[1].depth && plan.blocks[1].depth < plan.blocks[2].depth);
 });
 
 // --- lib/maintenance.server.ts ------------------------------------------------------------
