@@ -317,10 +317,9 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
                     <span
                       aria-hidden="true"
                       className={cn(
-                        'grid size-5 shrink-0 place-items-center rounded-full transition-ui',
-                        selected
-                          ? 'bg-primary-ink text-on-primary-ink forced-colors:bg-[color:HighlightText] forced-colors:text-[color:Highlight]'
-                          : 'border border-outline forced-colors:border-[color:CanvasText]',
+                        'grid size-5 shrink-0 place-items-center rounded-full',
+                        selected &&
+                          'bg-primary-ink text-on-primary-ink forced-colors:bg-[color:HighlightText] forced-colors:text-[color:Highlight]',
                       )}
                     >
                       {selected && <CheckGlyph className="size-3.5" />}
