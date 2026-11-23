@@ -37,6 +37,7 @@ import OfflineBanner from './OfflineBanner';
 import CompanionHost from './mascot/CompanionHost';
 import { MaintenanceNotice, useStaleStaffHintCleanup } from './MaintenanceScreen';
 import SidebarNav from './SidebarNav';
+import { useSidebarResize } from './useSidebarResize';
 import ScrollArea from './ScrollArea';
 import { useAuthModal } from './AuthModal';
 import { useConfirm } from './ConfirmDialog';
@@ -866,6 +867,7 @@ export default function AppLayout({
   // Below `md` the drawer overlays the content; at and above it is docked, and the swipe
   // gesture and close-on-navigate both switch off.
   const isOverlayDrawer = !useMediaQuery(MEDIA.md, true);
+  useSidebarResize(sidebarRef, mainRef, dockedMode, isOverlayDrawer);
 
   /* The phone's drawer does not survive leaving phone territory (widening past `md` docks it),
      nor a route change, however that change was started. Adjusted during render: an effect
@@ -1191,8 +1193,10 @@ export default function AppLayout({
                open = `surface-enter` (DefaultSpatial, `openMotion`; its overshoot lands on the
                left edge skirt), close = FastEffects (`closeMotion`, critically damped, so a
                panel leaving never overshoots back into view). **Docked: the layout spring** (`drawer-dock`): docked, the motion is not the
-               panel but the page beside it re-laying out wider or narrower — bounds following a
-               layout change, one clock the same both ways, never overshooting.
+               panel but the page beside it becoming wider or narrower — bounds following a
+               layout change, one clock the same both ways, never overshooting. Page content
+               reflows once, then visible cards move between their old and new bounds on the
+               same clock, without reflowing the gallery each frame.
                Applied per branch and per breakpoint, because a transition is governed by the
                *after-change* style — the class the element is gaining is the one whose timing
                runs, and the phone's state and the docked state move independently. */

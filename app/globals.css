@@ -4697,7 +4697,7 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 /* The docked navigation drawer's open and close, and so the content area's change of width:
  * one clock and one shape both ways, never overshooting (an overshoot would push the whole page
- * past its width and back). The page re-lays out to follow the drawer, so it is the **layout**
+ * past its width and back). The page bounds follow the drawer, so it is the **layout**
  * spring — Compose's own for anything whose bounds follow a layout change. Rides the aside's
  * `data-motion-spring='overlay'` scale; `off` snaps it. */
 @utility drawer-dock {

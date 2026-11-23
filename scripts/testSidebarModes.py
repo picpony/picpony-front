@@ -4,6 +4,7 @@ Run against a production build with bun run test:sidebar. All API/media use fixt
 import base64
 import json
 import pathlib
+import statistics
 import sys
 import urllib.parse
 import urllib.request
@@ -20,8 +21,13 @@ CONTROL = 'button[aria-controls="app-sidebar"]'
 POSE = """() => {
   const side = document.querySelector('#app-sidebar'), box = side.getBoundingClientRect();
   const host = document.querySelector('[data-image-detail-host]').getBoundingClientRect();
+  const page = document.querySelector('.app-scroller');
+  const card = page.querySelector('[data-masonry-id]')?.getBoundingClientRect();
   const label = side.querySelector('.sidebar-row .sidebar-label');
   return {width: box.width, right: box.right, page: host.left,
+    contentWidth: page.getBoundingClientRect().width, heldWidth: page.style.minWidth,
+    layoutWidth: page.querySelector('[data-image-detail-background-visual]').getBoundingClientRect().width,
+    card: card ? {left: card.left - host.left, top: card.top, width: card.width, height: card.height} : null,
     mode: side.dataset.sidebarMode, inert: side.inert,
     label: Number(getComputedStyle(label).opacity)};
 }"""
@@ -29,7 +35,7 @@ SETTLED = """() => !document.getAnimations().some(a => {
   const el = a.effect?.target;
   return el instanceof Element && el.closest('#app-sidebar') &&
     a instanceof CSSTransition && a.playState === 'running';
-})"""
+}) && !document.querySelector('.app-scroller').hasAttribute('data-sidebar-resizing')"""
 
 
 def intercepted(route):
@@ -88,6 +94,7 @@ def assert_mode(page, mode):
     assert abs(pose['page'] - (dict(expanded=288, icons=80, hidden=0)[mode] + 12)) < 1, pose
     assert pose['inert'] == (mode == 'hidden'), pose
     assert pose['label'] == (1 if mode == 'expanded' else 0), pose
+    assert pose['heldWidth'] == '', pose
     return pose
 
 
@@ -113,6 +120,28 @@ def cycle(page, target, animated=True):
     if animated:
         assert any(min(before['page'], after['page']) + 1 < p < max(before['page'], after['page']) - 1
                    for p in positions), positions
+        # The shell follows the drawer, but its content must not reflow every frame.
+        moving = [f for f in frames if min(before['page'], after['page']) + 1 < f['page'] <
+                  max(before['page'], after['page']) - 1]
+        wider = max(before['contentWidth'], after['contentWidth'])
+        assert all(abs(f['contentWidth'] - wider) < 1 for f in moving), moving
+        assert all(abs(f['layoutWidth'] - after['layoutWidth']) < 1 for f in moving), moving
+        if before['card'] and after['card']:
+            low, high = sorted([before['card']['width'], after['card']['width']])
+            if high - low > 2:
+                assert any(low + .5 < f['card']['width'] < high - .5 for f in moving), moving
+                assert all(abs(
+                    (f['card']['width'] - before['card']['width']) /
+                    (after['card']['width'] - before['card']['width']) -
+                    (f['page'] - before['page']) / (after['page'] - before['page'])
+                ) < .05 for f in moving), moving
+                # The image keeps its aspect ratio as its position and size interpolate.
+                ratio = before['card']['width'] / before['card']['height']
+                assert all(abs(f['card']['width'] / f['card']['height'] - ratio) < .01
+                           for f in moving), moving
+            low, high = sorted([before['card']['left'], after['card']['left']])
+            if high - low > 2:
+                assert any(low + .5 < f['card']['left'] < high - .5 for f in moving), moving
     else:
         assert not any(min(before['page'], after['page']) + 1 < p < max(before['page'], after['page']) - 1
                        for p in positions), positions
@@ -174,6 +203,24 @@ with sync_playwright() as p:
         assert not errors, errors
         context.close()
         print(f'PASS: sidebar {tier}/{speed}: cycle, layout, tooltip, badge, reload, interruption, resize')
+
+    # Releasing a width hold must not depend on a normal transitionend event.
+    context = context_for(browser, signed_in=False)
+    page = ready(context)
+    page.locator(CONTROL).click()
+    page.wait_for_function('document.querySelector(".app-scroller").style.minWidth !== ""')
+    page.set_viewport_size(dict(width=1000, height=900))
+    page.wait_for_function('document.querySelector(".app-scroller").style.minWidth === ""')
+    page.wait_for_function(SETTLED)
+    assert abs(page.evaluate(POSE)['contentWidth'] - 896) < 1
+    page.set_viewport_size(dict(width=1440, height=900))
+    cycle(page, 'hidden')
+    cycle(page, 'expanded')
+    page.locator(CONTROL).click()
+    page.wait_for_function('document.querySelector(".app-scroller").style.minWidth !== ""')
+    page.evaluate('document.documentElement.dataset.motion = "off"')
+    assert_mode(page, 'icons')
+    context.close()
 
     for saved, expected in [('true', 'hidden'), ('false', 'expanded'), ('invalid', 'expanded')]:
         context = context_for(browser, mode=saved, signed_in=False)
@@ -252,3 +299,39 @@ with sync_playwright() as p:
         context.close()
     browser.close()
     print('PASS: legacy preferences, phone cycle, icon loading and custom motion isolation')
+
+    if '--performance' in sys.argv:
+        browser = p.chromium.launch(**browser_options(), headless=True)
+        context = context_for(browser, signed_in=False)
+        page = ready(context)
+        page.wait_for_timeout(1200)
+        cdp = context.new_cdp_session(page)
+        cdp.send('Performance.enable')
+        cdp.send('Emulation.setCPUThrottlingRate', {'rate': 4})
+        keys = ['LayoutDuration', 'RecalcStyleDuration', 'ScriptDuration', 'TaskDuration']
+
+        def metrics():
+            return {m['name']: m['value'] for m in cdp.send('Performance.getMetrics')['metrics']}
+
+        samples = []
+        for _ in range(9):
+            before = metrics()
+            gaps = page.evaluate("""() => new Promise(resolve => {
+              let last = performance.now(), start = last, gaps = [];
+              document.querySelector('""" + CONTROL + """').click();
+              function tick(now) {
+                gaps.push(now - last); last = now;
+                if (now - start < 850) requestAnimationFrame(tick); else resolve(gaps);
+              }
+              requestAnimationFrame(tick);
+            })""")
+            page.wait_for_function(SETTLED)
+            after = metrics()
+            samples.append({**{k: round((after[k] - before[k]) * 1000, 2) for k in keys},
+                            'p95FrameMs': round(sorted(gaps)[int(len(gaps) * .95)], 2),
+                            'maxFrameMs': round(max(gaps), 2)})
+        print(json.dumps({'build': 'production', 'viewport': '1440x900', 'DPR': 1, 'CPU': 4,
+                          'scenario': 'expanded -> icons -> hidden -> expanded', 'samples': samples,
+                          'median': {k: statistics.median(s[k] for s in samples) for k in samples[0]}}))
+        context.close()
+        browser.close()
