@@ -7,6 +7,7 @@ import Modal from './Modal';
 import Button from './Button';
 import SectionHeading from '@/components/SectionHeading';
 import { LS_KEYS } from '@/lib/constants';
+import { formatDateTime, parseBackendTime } from '@/lib/format';
 import { isScreenQuiet, subscribeScreenQuiet } from '@/lib/overlay';
 import { useRichTextScrollbars } from '@/lib/overlayScrollbar';
 import { runWhenIdle } from '@/lib/utils';
@@ -71,6 +72,8 @@ export default function AnnouncementModal() {
     setPhase('closed');
   };
 
+  const stamp = announcement ? parseBackendTime(announcement.date) : null;
+
   return (
     <Modal
       isOpen={phase === 'open'}
@@ -88,7 +91,12 @@ export default function AnnouncementModal() {
           <SectionHeading as="h3" className="mb-2">
             {announcement.title}
           </SectionHeading>
-          <p className="text-label-m text-on-surface-variant mb-4">发布日期：{announcement.date}</p>
+          {announcement.date && (
+            <p className="text-label-m text-on-surface-variant mb-4 tabular-nums">
+              发布时间：
+              <time dateTime={stamp?.toISOString()}>{formatDateTime(announcement.date)}</time>
+            </p>
+          )}
           {/* The shared rich-text rhythm — links, lists and paragraphs as everywhere else
               prose is rendered — at the dialog's supporting-text role. Sanitised by the adapter. */}
           {/* The dialog is surface-container-high, which is the quote's own default step, so a

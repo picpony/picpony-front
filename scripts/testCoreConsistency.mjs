@@ -301,7 +301,9 @@ test('all date shapes accept backend timestamps and ISO offsets without corrupti
   assert.equal(format.parseBackendTime('2026-09-14').toISOString(), '2026-09-13T16:00:00.000Z');
   assert.equal(format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(), '2026-09-14T01:26:00.000Z');
   assert.equal(format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-11-23T14:29:37.837878+00:00').toISOString(), '2026-11-23T14:29:37.837Z');
   assert.equal(format.formatDateTime('2026-09-14T01:26:00Z'), '2026/09/14 09:26');
+  assert.equal(format.formatDateTime('2026-11-23T14:29:37.837878+00:00'), '2026/11/23 22:29');
   assert.equal(format.parseBackendTime(''), null);
   assert.equal(format.parseBackendTime('not a date'), null);
   assert.ok(format.backendTimeValue('2026-09-14 09:26:00') < format.backendTimeValue('2026-09-14T01:27:00Z'),
@@ -1117,4 +1119,80 @@ test('SettingsRow keeps @max-*/row wrap utilities on a descendant of @container/
     const inner = Array.isArray(tree.props.children) ? tree.props.children[0] : tree.props.children;
     assert.match(String(inner.props.className ?? ''), /@max-md\/row:flex-wrap/, 'inner flex row wraps below breakpoint');
   }
+});
+
+test('AnnouncementModal formats RFC3339 announcement timestamps instead of printing raw ISO strings', async () => {
+  const format = load('lib/format.ts', {}, { Date, Intl });
+  const jsx = (type, props) => ({ type, props });
+  const states = [];
+  let cursor = 0;
+  const effects = [];
+  const react = {
+    useState(initial) {
+      const i = cursor++;
+      if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+    },
+    useRef(initial) { return { current: initial }; },
+    useEffect(fn) { effects.push(fn); },
+    useSyncExternalStore: (_sub, read) => read(),
+  };
+  const { default: AnnouncementModal } = load('components/AnnouncementModal.tsx', {
+    react,
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    '@/lib/api/picpony': {
+      getAnnouncement: async () => ({
+        success: true,
+        announcement: {
+          id: 9,
+          version: 'v2.4.0',
+          title: '系统更新',
+          content: '<p>正文</p>',
+          date: '2026-11-23T14:29:37.837878+00:00',
+        },
+      }),
+    },
+    './Modal': { default: 'Modal' },
+    './Button': { default: 'Button' },
+    '@/components/SectionHeading': { default: 'SectionHeading' },
+    '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
+    '@/lib/format': format,
+    '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
+    '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
+    '@/lib/utils': { runWhenIdle: (fn) => { fn(); return () => {}; } },
+  }, {
+    localStorage: { getItem: () => null, setItem() {} },
+  });
+
+  const render = () => { cursor = 0; return AnnouncementModal(); };
+  render();
+  for (const fn of effects.splice(0)) fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  render();
+  const opened = render();
+  assert.equal(opened.props.isOpen, true);
+
+  const flattenText = (node) => {
+    if (node == null || typeof node === 'boolean') return '';
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(flattenText).join('');
+    return flattenText(node.props?.children);
+  };
+  const findTag = (node, tag) => {
+    if (!node || typeof node !== 'object') return null;
+    if (Array.isArray(node)) {
+      for (const child of node) { const hit = findTag(child, tag); if (hit) return hit; }
+      return null;
+    }
+    if (node.type === tag) return node;
+    return findTag(node.props?.children, tag);
+  };
+
+  const renderedText = flattenText(opened.props.children);
+  assert.match(renderedText, /发布时间：2026\/11\/23 22:29/);
+  assert.doesNotMatch(renderedText, /2026-11-23T14:29:37/);
+  const timeEl = findTag(opened.props.children, 'time');
+  assert.ok(timeEl, 'announcement timestamp renders inside a <time> element');
+  assert.equal(timeEl.props.dateTime, '2026-11-23T14:29:37.837Z');
+  assert.equal(flattenText(timeEl), '2026/11/23 22:29');
 });
