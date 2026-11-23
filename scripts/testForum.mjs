@@ -742,3 +742,40 @@ test('a shared cover morph stays isotropic and covers every edge of its clipping
     }
   }
 });
+
+test('shared content alignment keeps the slot locked onto the flying picture and clears the header at every sample', () => {
+  const page = { left: 312, top: 116, width: 1096, height: 784 };
+  const slot0 = { left: 312, top: 244, width: 262, height: 147 };
+  const inOffset = { x: slot0.left - page.left, y: slot0.top - page.top };
+  const cards = [
+    { left: 312, top: 336, width: 262, height: 250 },
+    { left: 590, top: 336, width: 262, height: 250 },
+    { left: 1146, top: 580, width: 262, height: 250 },
+    { left: 590, top: 96, width: 262, height: 250 },
+  ];
+  for (const card of cards) {
+    const cover = { left: card.left, top: card.top, width: card.width, height: 196 };
+    const outOffset = { x: cover.left - card.left, y: cover.top - card.top };
+    const outA = container.sharedContentShift(card, cover, outOffset);
+    const outB = container.sharedContentShift(page, slot0, outOffset);
+    const inA = container.sharedContentShift(card, cover, inOffset);
+    const inB = container.sharedContentShift(page, slot0, inOffset);
+    assert.deepEqual(outA, { x: 0, y: 0 }, 'outgoing starts aligned at rest');
+    assert.deepEqual(inB, { x: 0, y: 0 }, 'incoming ends aligned at rest');
+    for (let p = 0; p <= 1.0001; p += 0.1) {
+      const u = Math.min(1, p);
+      const box = container.boxAt(card, page, u);
+      const shared = container.boxAt(cover, slot0, u);
+      const outShift = { x: container.lerp(outA.x, outB.x, u), y: container.lerp(outA.y, outB.y, u) };
+      const inShift = { x: container.lerp(inA.x, inB.x, u), y: container.lerp(inA.y, inB.y, u) };
+      const exactIn = container.sharedContentShift(box, shared, inOffset);
+      assert.ok(Math.abs(inShift.x - exactIn.x) < 1e-9 && Math.abs(inShift.y - exactIn.y) < 1e-9, `affine inShift at ${u}`);
+      /* Incoming slot #0 sits at `box + inOffset + inShift`, matching the flying picture exactly. */
+      assert.ok(Math.abs(box.left + inOffset.x + inShift.x - shared.left) < 1e-9, `slot x at ${u}`);
+      assert.ok(Math.abs(box.top + inOffset.y + inShift.y - shared.top) < 1e-9, `slot y at ${u}`);
+      /* Outgoing cover slot sits at `box + outOffset + outShift`, matching the flying picture too. */
+      assert.ok(Math.abs(box.left + outOffset.x + outShift.x - shared.left) < 1e-9, `out x at ${u}`);
+      assert.ok(Math.abs(box.top + outOffset.y + outShift.y - shared.top) < 1e-9, `out y at ${u}`);
+    }
+  }
+});

@@ -250,6 +250,13 @@ test('a press on a card, and the page left for its list, tell that one route cha
     } finally {
       performance.now = realNow;
     }
+
+    const cover = { id: 3002, src: 'https://derpicdn.net/3002/medium.png', width: 1600, height: 900, animated: false };
+    transit.rememberFolderOrigin('/favorites/folder/2', card, cover);
+    assert.deepEqual(transit.readFolderSeedCover('/favorites/folder/2', 3002), cover, 'seed cover matches latestImageId');
+    assert.equal(transit.readFolderSeedCover('/favorites/folder/2', 9999), undefined, 'stale latestImageId does not match');
+    transit.rememberFolderOrigin('/favorites/folder/2', card);
+    assert.equal(transit.readFolderSeedCover('/favorites/folder/2', 3002), undefined, 'a coverless press clears any old seed');
   } finally {
     delete window.location;
     transit.clearFolderReturn();

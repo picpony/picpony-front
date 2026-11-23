@@ -19,6 +19,7 @@ import {
   legAt,
   sameColumn,
   radiiAt,
+  sharedContentShift,
   shutterLevels,
   turnContainer,
   type Box,
@@ -305,21 +306,36 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     reach.height = Math.max(reach.height, box.height);
     Object.assign(surface.style, { width: `${reach.width}px`, height: `${reach.height}px` });
   };
+  const leavingShift = run.outgoing ? document.createElement('div') : null;
+  if (leavingShift) {
+    Object.assign(leavingShift.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
+  }
+  const arrivingShift = document.createElement('div');
+  Object.assign(arrivingShift.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
   const arriving = document.createElement('div');
   Object.assign(arriving.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
   /* Both contents are laid out at their own width, so their words wrap exactly as on the page. */
-  if (run.outgoing) place(run.outgoing.el, run.outgoing.box, run.from.box, run.from.radii);
+  if (run.outgoing && leavingShift) {
+    place(run.outgoing.el, run.outgoing.box, run.from.box, run.from.radii);
+    leavingShift.append(run.outgoing.el);
+  }
   place(run.incoming, run.incomingBox, run.to.box, run.to.radii);
   arriving.append(run.incoming);
+  arrivingShift.append(arriving);
   cover(from);
   cover(to);
   let chain = buildChain(layer, from, to, run.from.radii);
   chain.elements[0].style.zIndex = '0';
-  chain.frame.append(surface, ...(run.outgoing ? [run.outgoing.el] : []), arriving);
+  chain.frame.append(surface, ...(leavingShift ? [leavingShift] : []), arrivingShift);
 
+  type Shift = { x: number; y: number };
   type SharedPose = { box: Box; radii: Radii; img: Box };
   let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null = null;
   let sharedEnds: { a: SharedPose; b: SharedPose } | null = null;
+  let outSlotOffset: Shift | null = null;
+  let inSlotOffset: Shift | null = null;
+  let outShiftEnds: { a: Shift; b: Shift } | null = null;
+  let inShiftEnds: { a: Shift; b: Shift } | null = null;
   let sharedRetiring: Animation | null = null;
   if (run.shared) {
     const sharedFromBox = local(run.shared.from.box);
@@ -352,6 +368,22 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     sharedEnds = {
       a: { box: sharedFromBox, radii: run.shared.from.radii, img: fromImg },
       b: { box: sharedToBox, radii: run.shared.to.radii, img: toImg },
+    };
+    /* Keep outgoing and incoming contents aligned to the flying shared slot so headers unfold
+       cleanly above the cover and neighbouring grid cards glide in lockstep beside it. */
+    outSlotOffset = { x: sharedFromBox.left - from.left, y: sharedFromBox.top - from.top };
+    inSlotOffset = { x: sharedToBox.left - to.left, y: sharedToBox.top - to.top };
+    if (leavingShift) {
+      leavingShift.style.willChange = 'transform';
+      outShiftEnds = {
+        a: sharedContentShift(from, sharedFromBox, outSlotOffset),
+        b: sharedContentShift(to, sharedToBox, outSlotOffset),
+      };
+    }
+    arrivingShift.style.willChange = 'transform';
+    inShiftEnds = {
+      a: sharedContentShift(from, sharedFromBox, inSlotOffset),
+      b: sharedContentShift(to, sharedToBox, inSlotOffset),
     };
   }
   still(layer);
@@ -389,6 +421,25 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
   const sharedImgTransform = (rect: Box, baseW: number) =>
     `translate(${rect.left}px, ${rect.top}px) scale(${rect.width / baseW})`;
+  const shiftAt = (a: Shift, b: Shift, p: number): Shift => ({
+    x: a.x + (b.x - a.x) * p,
+    y: a.y + (b.y - a.y) * p,
+  });
+  const animateShift = (el: HTMLElement, a: Shift, b: Shift, timing: KeyframeAnimationOptions, list: Animation[]) => {
+    if (Math.abs(a.x) <= 0.01 && Math.abs(a.y) <= 0.01 && Math.abs(b.x) <= 0.01 && Math.abs(b.y) <= 0.01) {
+      el.style.transform = '';
+      return;
+    }
+    list.push(
+      el.animate(
+        track((p) => {
+          const s = shiftAt(a, b, p);
+          return { transform: `translate(${s.x}px, ${s.y}px)` };
+        }),
+        timing,
+      ),
+    );
+  };
   /**
    * One leg: the clip from `a` to `b`, its corners and its tone, and each content over its own
    * stretch of the travel. Offsets are in progress (the easing), so the fade windows are windows
@@ -399,6 +450,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: legacySamples ? 'linear' : FORUM_TRANSFORM_EASING, fill: 'both' };
     const list: Animation[] = [];
     animateShutters(chain, a.box, b.box, a.radii, b.radii, timing, list);
+    if (leavingShift && outShiftEnds) animateShift(leavingShift, outShiftEnds.a, outShiftEnds.b, timing, list);
+    if (inShiftEnds) animateShift(arrivingShift, inShiftEnds.a, inShiftEnds.b, timing, list);
     if (sharedState && sharedEnds) {
       const { a: sa, b: sb } = sharedEnds;
       const { baseW } = sharedState;
@@ -553,6 +606,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
             img: boxAt(sharedEnds.a.img, sharedEnds.b.img, progress),
           }
         : null;
+    const nowOutShift = outShiftEnds ? shiftAt(outShiftEnds.a, outShiftEnds.b, progress) : null;
+    const nowInShift = inShiftEnds ? shiftAt(inShiftEnds.a, inShiftEnds.b, progress) : null;
     cancelAnimationFrame(poll);
     poll = 0;
     retiring?.cancel();
@@ -603,6 +658,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
             img: coverImageRect(nextBox.width, nextBox.height, sharedState.ratio, target.sharedTo.anchorY ?? 0.5),
           },
         };
+        if (nowOutShift && outSlotOffset) {
+          outShiftEnds = { a: nowOutShift, b: sharedContentShift(next, nextBox, outSlotOffset) };
+        }
+        if (nowInShift && inSlotOffset) {
+          inShiftEnds = { a: nowInShift, b: sharedContentShift(next, nextBox, inSlotOffset) };
+        }
       } else {
         /* No shared target on the destination: pin the flyer at its current pose and fade it out. */
         const retiringEl = sharedState.chain.elements[0];
@@ -624,7 +685,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
         );
         sharedState = null;
         sharedEnds = null;
+        if (nowOutShift) outShiftEnds = { a: nowOutShift, b: { x: 0, y: 0 } };
+        if (nowInShift) inShiftEnds = { a: nowInShift, b: { x: 0, y: 0 } };
       }
+    } else {
+      if (nowOutShift) outShiftEnds = { a: nowOutShift, b: { x: 0, y: 0 } };
+      if (nowInShift) inShiftEnds = { a: nowInShift, b: { x: 0, y: 0 } };
     }
     cover(next);
     leg = turnContainer(leg, elapsed, full);

@@ -2,8 +2,16 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
-import { masonryLayout, noteSkeletonReplaced } from '@/lib/masonry';
+import {
+  clampedCardAspect,
+  MASONRY_CARD_SIZES,
+  MASONRY_MAX_RATIO,
+  masonryLayout,
+  noteSkeletonReplaced,
+} from '@/lib/masonry';
+import type { FolderSeedCover } from '@/lib/folderTransit';
 import { getAppScroller } from '@/lib/appScroller';
+import FadeInImage from '@/components/FadeInImage';
 import Skeleton from '@/components/Skeleton';
 
 /**
@@ -33,17 +41,28 @@ const PAUSED_SWEEP = 'after:[animation-play-state:paused]';
 export default function ImageGridSkeleton({
   count = 50,
   entrance = true,
+  seedCover,
 }: {
   count?: number;
   entrance?: boolean;
+  /** Known cover for slot #0 (carried from a pressed folder card) so a cold folder open lands on
+      its exact aspect ratio and keeps the picture painted until the real grid arrives. */
+  seedCover?: FolderSeedCover;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const seedW = seedCover ? seedCover.width || 1 : 1;
+  const seedH = seedCover ? seedCover.height || 1 : 1;
+  const seedRatio = seedCover ? clampedCardAspect(seedW, seedH) : null;
+  const seedCroppedTall = seedCover ? seedH / seedW > MASONRY_MAX_RATIO : false;
   const layout = useMemo(
     () =>
       masonryLayout(
-        Array.from({ length: count }, (_, id) => ({ width: 1, height: RATIOS[id % RATIOS.length] })),
+        Array.from({ length: count }, (_, id) => ({
+          width: 1,
+          height: id === 0 && seedRatio !== null ? seedRatio : RATIOS[id % RATIOS.length],
+        })),
       ),
-    [count],
+    [count, seedRatio],
   );
 
   /* Reported on the way out, so the grid mounting in the same commit knows it is taking over
@@ -77,20 +96,42 @@ export default function ImageGridSkeleton({
           /* The slot is its own box, as it is for a card: the placeholder's own class positions
              it relatively for the sweep, and the slot must be the absolutely placed one. */
           <div key={index} className="masonry-item" style={placement as CSSProperties}>
-            <Skeleton
-              data-grid-placeholder
-              className={cn('w-full rounded-lg', PAUSED_SWEEP)}
-              style={{
-                aspectRatio: `1 / ${RATIOS[index % RATIOS.length]}`,
-                /* Diagonal stagger so the shimmer sweeps the grid as one wave; capped — a slow
-                   tail reads as broken, not loading. Column and row come from the phone
-                   layout, the one where the eye takes the grid in as a single wave. */
-                animationDelay: `${Math.min(
-                  (Number(placement['--mc2']) + Number(placement['--mk2'])) * 90,
-                  900,
-                )}ms`,
-              }}
-            />
+            {index === 0 && seedCover && seedRatio !== null ? (
+              <div
+                data-folder-seed-cover={seedCover.id}
+                className="relative w-full overflow-hidden rounded-lg bg-surface-container-high"
+                style={{ aspectRatio: `1 / ${seedRatio}` }}
+              >
+                <FadeInImage
+                  src={seedCover.src}
+                  alt=""
+                  width={seedW}
+                  height={seedH}
+                  quality={82}
+                  sizes={MASONRY_CARD_SIZES}
+                  unoptimized={Boolean(seedCover.animated)}
+                  proxyThumb
+                  eager
+                  shimmer={false}
+                  className={seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
+                />
+              </div>
+            ) : (
+              <Skeleton
+                data-grid-placeholder
+                className={cn('w-full rounded-lg', PAUSED_SWEEP)}
+                style={{
+                  aspectRatio: `1 / ${RATIOS[index % RATIOS.length]}`,
+                  /* Diagonal stagger so the shimmer sweeps the grid as one wave; capped — a slow
+                     tail reads as broken, not loading. Column and row come from the phone
+                     layout, the one where the eye takes the grid in as a single wave. */
+                  animationDelay: `${Math.min(
+                    (Number(placement['--mc2']) + Number(placement['--mk2'])) * 90,
+                    900,
+                  )}ms`,
+                }}
+              />
+            )}
           </div>
         ))}
       </div>

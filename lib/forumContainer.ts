@@ -232,6 +232,26 @@ export function coverImageRect(width: number, height: number, ratio: number, anc
   };
 }
 
+/**
+ * The translation a container's content needs inside the clip frame so its shared picture slot
+ * stays locked onto the flying `shared` box at every frame: `(shared - container) - slotOffset`,
+ * where `slotOffset` is the shared slot's offset inside the content's own home container.
+ *
+ * Affine in `(container, shared)`, so linear interpolation between a leg's endpoints holds zero
+ * drift between the shared picture, its neighbouring grid cards and any header above it throughout
+ * the flight and across mid-flight reversals.
+ */
+export function sharedContentShift(
+  container: Box,
+  shared: Box,
+  slotOffset: { readonly x: number; readonly y: number },
+): { x: number; y: number } {
+  return {
+    x: shared.left - container.left - slotOffset.x + 0,
+    y: shared.top - container.top - slotOffset.y + 0,
+  };
+}
+
 /** Whether both ends share a column, so the two-level clip carries the whole transform. */
 export function sameColumn(a: Box, b: Box): boolean {
   return Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;

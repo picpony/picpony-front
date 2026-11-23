@@ -7,7 +7,7 @@ import { profileFaveFolders, sharedFaveIds } from '@/lib/resources';
 import { apiErrorMessage, isApiError, isNotFound, isRetryable } from '@/lib/api/errors';
 import { FAVE_PAGE_SIZE, faveFolderHref, favoritesHref, folderLabel, sharedFolderHref, type FaveOwner } from '@/lib/favorites';
 import { useBackOrParent } from '@/lib/backNavigation';
-import { useFolderPage } from '@/lib/folderTransit';
+import { readFolderSeedCover, useFolderPage } from '@/lib/folderTransit';
 import { useEscapeBack, useSession } from '@/lib/hooks';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { formatCount } from '@/lib/format';
@@ -173,6 +173,8 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
             setPage={setPage}
             listKey={`fave-shared:${ownerKey}:${folderId}`}
             failureTitle="收藏夹加载失败"
+            seedCover={entry ? readFolderSeedCover(route, entry.latestImageId) : undefined}
+            placeholderCount={read.data?.ids.length ?? entry?.itemCount}
             empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="暂无图片" />}
           />
         </div>

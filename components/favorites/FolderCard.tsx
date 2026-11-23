@@ -9,6 +9,7 @@ import { ICON } from '@/lib/icons';
 import { folderLabel } from '@/lib/favorites';
 import { useFolderLongPress } from '@/lib/favoritesSelection';
 import { rememberFolderOrigin } from '@/lib/folderTransit';
+import { MASONRY_CARD_SIZES } from '@/lib/masonry';
 import { cn } from '@/lib/utils';
 import type { PonyImage } from '@/lib/types/image';
 import type { ProfileFaveFolder } from '@/lib/types/user';
@@ -21,7 +22,6 @@ import Skeleton from '@/components/Skeleton';
 /* Two columns on a narrow container, three from 520px, four from 820px — matching `MasonryGrid`'s
    container thresholds so the docked desktop drawer never squeezes cards into narrow strips. */
 export const FOLDER_GRID = 'grid grid-cols-2 gap-2 @[520px]/folders:grid-cols-3 @[520px]/folders:gap-4 @[820px]/folders:grid-cols-4';
-const COVER_SIZES = '(min-width: 1024px) 308px, (min-width: 640px) 33vw, 50vw';
 
 /**
  * A folder's cover: its newest picture, or `null` for the plain face. Nothing the viewer's
@@ -88,6 +88,9 @@ export const FolderCard = memo(function FolderCard({
   const router = useRouter();
   const spoilers = useSpoilerMatch(cover?.tags);
   const src = folderCoverSource(cover, spoilers.length > 0);
+  const animated =
+    Boolean(cover) &&
+    ((cover as { animated?: unknown }).animated === true || (cover?.format || '').toUpperCase() === 'GIF');
   const name = folderLabel(folder);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const checkboxRef = useRef<HTMLButtonElement>(null);
@@ -112,7 +115,11 @@ export const FolderCard = memo(function FolderCard({
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     const card = event.currentTarget.closest<HTMLElement>('[data-folder-card]');
-    if (card) rememberFolderOrigin(href, card);
+    const seed =
+      cover && src
+        ? { id: cover.id, src, width: cover.width || 1, height: cover.height || 1, animated }
+        : undefined;
+    if (card) rememberFolderOrigin(href, card, seed);
     router.push(href, { scroll: false });
   };
 
@@ -145,7 +152,16 @@ export const FolderCard = memo(function FolderCard({
           className="relative block aspect-4/3 w-full bg-surface-container-high"
         >
           {src ? (
-            <FadeInImage src={src} alt="" fill sizes={COVER_SIZES} className="object-cover" />
+            <FadeInImage
+              src={src}
+              alt=""
+              fill
+              sizes={MASONRY_CARD_SIZES}
+              quality={82}
+              unoptimized={animated}
+              proxyThumb
+              className="object-cover"
+            />
           ) : coverPending ? (
             <Skeleton className="absolute inset-0 rounded-none" />
           ) : (

@@ -65,11 +65,17 @@ function cardSurface(card: HTMLElement, box: Box): Surface {
 /** The cover's top corners come from the card's `overflow-hidden` face; its bottom edge is flat. */
 const coverTopRadii = (cardRadii: Radii): Radii => [cardRadii[0], cardRadii[1], 0, 0];
 
-/** Hides every element child inside a cloned wrapper while leaving its quiet surface box behind. */
-function hideCloneChildren(el: HTMLElement | null) {
+/** Hides a cloned slot via opacity so descendant `visibility: visible` image reveals cannot bleed through. */
+function hideCloneSlot(el: HTMLElement | null) {
   if (!el) return;
-  for (const child of el.children) {
-    if (child instanceof HTMLElement) child.style.visibility = 'hidden';
+  el.style.opacity = '0';
+}
+
+/** Hides every `ImageCard` badge overlay inside an opening folder clone so badges fade in cleanly at handoff. */
+function hideCloneCardBadges(root: HTMLElement) {
+  for (const link of root.querySelectorAll<HTMLElement>('.image-hero-card-link')) {
+    const chrome = link.children[1];
+    if (chrome instanceof HTMLElement) hideCloneSlot(chrome);
   }
 }
 
@@ -101,7 +107,7 @@ function cardCoverEnd(
   return { el, id: el.dataset.folderCover || null, end: { box, radii: coverTopRadii(cardRadii), anchorY: 0.5 } };
 }
 
-/** Where a folder card's cover lands on the folder page: its matching picture card, or slot #0 on a cold open. */
+/** Where a folder card's cover lands on the folder page: its matching card, seeded cover slot, or fallback placeholder #0. */
 function pageCoverTarget(
   page: HTMLElement,
   coverId: string | null,
@@ -111,14 +117,27 @@ function pageCoverTarget(
     const selector = `[data-masonry-id="${CSS.escape(coverId)}"]`;
     const slot = page.querySelector<HTMLElement>(selector);
     const spoilered = slot?.querySelector('.card-spoiler:not([inert])') !== null;
-    const thumb = !spoilered ? (slot?.querySelector<HTMLElement>('.image-hero-card-link > div') ?? null) : null;
+    const link = !spoilered ? (slot?.querySelector<HTMLElement>('.image-hero-card-link') ?? null) : null;
+    const thumb = link?.firstElementChild instanceof HTMLElement ? link.firstElementChild : null;
     if (thumb) {
       const box = rectOf(thumb);
       if (visibleBox(box, view)) {
         const anchorY = thumb.querySelector('img')?.classList.contains('object-top') ? 0 : 0.5;
         return {
           end: { box, radii: radiiOf(getComputedStyle(thumb)), anchorY },
-          hideInClone: (clone) => hideCloneChildren(clone.querySelector<HTMLElement>(`${selector} .image-hero-card-link > div`)),
+          hideInClone: (clone) => hideCloneSlot(clone.querySelector<HTMLElement>(selector)),
+        };
+      }
+    }
+    const seedSelector = `[data-folder-seed-cover="${CSS.escape(coverId)}"]`;
+    const seed = page.querySelector<HTMLElement>(seedSelector);
+    if (seed) {
+      const box = rectOf(seed);
+      if (visibleBox(box, view)) {
+        const anchorY = seed.querySelector('img')?.classList.contains('object-top') ? 0 : 0.5;
+        return {
+          end: { box, radii: radiiOf(getComputedStyle(seed)), anchorY },
+          hideInClone: (clone) => hideCloneSlot(clone.querySelector<HTMLElement>(seedSelector)),
         };
       }
     }
@@ -129,10 +148,7 @@ function pageCoverTarget(
     if (visibleBox(box, view)) {
       return {
         end: { box, radii: radiiOf(getComputedStyle(placeholder)), anchorY: 0.5 },
-        hideInClone: (clone) => {
-          const tile = clone.querySelector<HTMLElement>('[data-grid-placeholder]');
-          if (tile) tile.style.visibility = 'hidden';
-        },
+        hideInClone: (clone) => hideCloneSlot(clone.querySelector<HTMLElement>('[data-grid-placeholder]')),
       };
     }
   }
@@ -148,20 +164,41 @@ function pageCoverSource(
   if (!coverId) return null;
   const selector = `[data-masonry-id="${CSS.escape(coverId)}"]`;
   const slot = pageCopy.querySelector<HTMLElement>(selector);
-  if (!slot || slot.querySelector('.card-spoiler:not([inert])') !== null) return null;
-  const link = slot.querySelector<HTMLElement>('.image-hero-card-link');
-  const thumb = link?.firstElementChild instanceof HTMLElement ? link.firstElementChild : null;
-  if (!thumb) return null;
-  const box = rectOf(thumb);
-  if (!visibleBox(box, view)) return null;
-  const media = readVisibleImg(thumb);
-  if (!media) return null;
-  return {
-    src: media.src,
-    ratio: media.ratio,
-    end: { box, radii: radiiOf(getComputedStyle(thumb)), anchorY: media.anchorY },
-    selector,
-  };
+  if (slot && slot.querySelector('.card-spoiler:not([inert])') === null) {
+    const link = slot.querySelector<HTMLElement>('.image-hero-card-link');
+    const thumb = link?.firstElementChild instanceof HTMLElement ? link.firstElementChild : null;
+    if (thumb) {
+      const box = rectOf(thumb);
+      if (visibleBox(box, view)) {
+        const media = readVisibleImg(thumb);
+        if (media) {
+          return {
+            src: media.src,
+            ratio: media.ratio,
+            end: { box, radii: radiiOf(getComputedStyle(thumb)), anchorY: media.anchorY },
+            selector,
+          };
+        }
+      }
+    }
+  }
+  const seedSelector = `[data-folder-seed-cover="${CSS.escape(coverId)}"]`;
+  const seed = pageCopy.querySelector<HTMLElement>(seedSelector);
+  if (seed) {
+    const box = rectOf(seed);
+    if (visibleBox(box, view)) {
+      const media = readVisibleImg(seed);
+      if (media) {
+        return {
+          src: media.src,
+          ratio: media.ratio,
+          end: { box, radii: radiiOf(getComputedStyle(seed)), anchorY: media.anchorY },
+          selector: seedSelector,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 /** Points a freshly cloned card cover at its cached `currentSrc` when no shared cover flies to it. */
@@ -242,11 +279,17 @@ export function playFolderOpen(page: HTMLElement, href: string, fresh: boolean):
     const fromCover = cardCoverEnd(cardCopy, fromSurface.radii, view);
     const coverMedia = fromCover ? readVisibleImg(fromCover.el) : null;
     if (fromCover?.id && coverMedia) lastCover.set(href, { id: fromCover.id, src: coverMedia.src });
+    hideCloneCardBadges(incoming.node);
     if (outgoing && fromCover && coverMedia) {
       const target = pageCoverTarget(page, fromCover.id, view);
       if (target) {
-        shared = { src: coverMedia.src, ratio: coverMedia.ratio, from: fromCover.end, to: target.end };
-        hideCloneChildren(outgoing.el.querySelector<HTMLElement>('[data-folder-cover]'));
+        shared = {
+          src: coverMedia.src,
+          ratio: coverMedia.ratio,
+          from: fromCover.end,
+          to: target.end,
+        };
+        hideCloneSlot(outgoing.el.querySelector<HTMLElement>('[data-folder-cover]'));
         target.hideInClone(incoming.node);
       }
     }
@@ -320,9 +363,14 @@ export function playFolderReturn(card: HTMLElement, href: string): () => void {
   if (cardCover) {
     const source = pageCoverSource(pageCopy, cardCover.id, view);
     if (source) {
-      shared = { src: source.src, ratio: source.ratio, from: source.end, to: cardCover.end };
-      hideCloneChildren(outgoing.querySelector<HTMLElement>(`${source.selector} .image-hero-card-link`));
-      hideCloneChildren(incoming.node.querySelector<HTMLElement>('[data-folder-cover]'));
+      shared = {
+        src: source.src,
+        ratio: source.ratio,
+        from: source.end,
+        to: cardCover.end,
+      };
+      hideCloneSlot(outgoing.querySelector<HTMLElement>(source.selector));
+      hideCloneSlot(incoming.node.querySelector<HTMLElement>('[data-folder-cover]'));
     } else {
       warmCardCoverClone(incoming.node, cardCover.id, href);
     }

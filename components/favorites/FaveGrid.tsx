@@ -10,6 +10,7 @@ import { clearImageSequence, createPagedSequence, type ImageSequenceSource } fro
 import { useListReveal } from '@/lib/listReveal';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { FAVE_PAGE_SIZE, withheldSentence, withholdFromDevice, type FilteredPage } from '@/lib/favorites';
+import type { FolderSeedCover } from '@/lib/folderTransit';
 import type { PonyImage } from '@/lib/types/image';
 import MasonryGrid, { type GridSelection } from '@/components/MasonryGrid';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
@@ -287,6 +288,8 @@ export function FaveGridView({
   failureTitle,
   entrance = true,
   footer,
+  seedCover,
+  placeholderCount,
 }: {
   state: FavePageState;
   page: number;
@@ -300,6 +303,10 @@ export function FaveGridView({
   entrance?: boolean;
   /** Under the pager: the room a selection bar needs, for one. */
   footer?: ReactNode;
+  /** Pressed folder card's cover for slot #0 while page 1 is loading. */
+  seedCover?: FolderSeedCover;
+  /** Known item count for the loading skeleton, bounded to one page. */
+  placeholderCount?: number;
 }) {
   const fp = useBrowsingFingerprint();
   const [rows, setRows] = useState<HTMLDivElement | null>(null);
@@ -317,7 +324,9 @@ export function FaveGridView({
         />
       );
     }
-    return <ImageGridSkeleton count={FAVE_PAGE_SIZE} entrance={entrance} />;
+    const count =
+      placeholderCount && placeholderCount > 0 ? Math.min(FAVE_PAGE_SIZE, placeholderCount) : FAVE_PAGE_SIZE;
+    return <ImageGridSkeleton count={count} entrance={entrance} seedCover={page === 1 ? seedCover : undefined} />;
   }
 
   /* A failed read the screen owes an answer for: a turn whose rows are still another page's, or a

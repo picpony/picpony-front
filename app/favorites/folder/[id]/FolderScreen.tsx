@@ -20,7 +20,7 @@ import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { FAVE_PAGE_SIZE, faveFolderHref, favoritesHref, folderLabel } from '@/lib/favorites';
 import { useSelectionMode } from '@/lib/favoritesSelection';
 import { useDefaultFaveFolder } from '@/lib/favoritesSettings';
-import { useFolderPage } from '@/lib/folderTransit';
+import { readFolderSeedCover, useFolderPage } from '@/lib/folderTransit';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useEscapeBack, useSession } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
@@ -314,6 +314,8 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
               listKey={listKey}
               selection={gridSelection}
               failureTitle="收藏夹加载失败"
+              seedCover={readFolderSeedCover(route, folder.latestImageId)}
+              placeholderCount={count}
               empty={
                 <EmptyState
                   size="pane"

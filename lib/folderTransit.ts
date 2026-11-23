@@ -35,6 +35,19 @@ export interface FolderOrigin {
   at: number;
 }
 
+/**
+ * The clicked card's already-decoded cover picture, passed to the folder page's loading state so
+ * a cold open morphs into slot #0's true aspect ratio and keeps the picture painted until the full
+ * grid arrives.
+ */
+export interface FolderSeedCover {
+  id: number;
+  src: string;
+  width: number;
+  height: number;
+  animated?: boolean;
+}
+
 /** How long a press stays the reason for the next open: the navigation, with room (the forum's). */
 const ORIGIN_TTL_MS = 3000;
 
@@ -42,6 +55,8 @@ let pending: FolderOrigin | null = null;
 let returning: FolderOrigin | null = null;
 /** The list each folder page was last opened from (its pathname), for the way back to it. */
 const openedFrom = new Map<string, string>();
+/** The latest cover picture carried from a pressed folder card, keyed by folder href. */
+const seedCovers = new Map<string, FolderSeedCover>();
 /** The folder page last left, on every tier: its card takes the focus back (`useFolderReturn`). */
 let left: FolderOrigin | null = null;
 
@@ -55,10 +70,21 @@ function fresh(origin: FolderOrigin | null, key: string): FolderOrigin | null {
 
 /**
  * Call on a plain press of a folder card, before the route is pushed; `href` is the folder page's
- * address, which is also the key both ends find each other by. Nothing is recorded below the
- * standard tier.
+ * address, which is also the key both ends find each other by. `seedCover`, when present, lets the
+ * folder page preserve slot #0's exact aspect ratio and artwork while its list loads. Nothing
+ * animates below the standard tier.
  */
-export function rememberFolderOrigin(href: string, card: HTMLElement) {
+export function rememberFolderOrigin(href: string, card: HTMLElement, seedCover?: FolderSeedCover) {
+  if (seedCover) {
+    seedCovers.delete(href);
+    seedCovers.set(href, seedCover);
+    if (seedCovers.size > 64) {
+      const oldest = seedCovers.keys().next().value;
+      if (oldest !== undefined) seedCovers.delete(oldest);
+    }
+  } else {
+    seedCovers.delete(href);
+  }
   if (motionTier('page') !== 'standard') return;
   const rect = card.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
@@ -69,6 +95,14 @@ export function rememberFolderOrigin(href: string, card: HTMLElement) {
      fallback, so the card is still there to grow out of. */
   expectRouteContainer(new URL(href, window.location.origin).pathname, ORIGIN_TTL_MS);
   openedFrom.set(href, window.location.pathname);
+}
+
+/** The pressed card's cover picture for `href`, when it still matches `latestImageId`. */
+export function readFolderSeedCover(href: string, latestImageId?: number | null): FolderSeedCover | undefined {
+  const cover = seedCovers.get(href);
+  if (!cover) return undefined;
+  if (latestImageId !== undefined && cover.id !== latestImageId) return undefined;
+  return cover;
 }
 
 /**
