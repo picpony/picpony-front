@@ -2,8 +2,7 @@
 
 import { playSharedAxis, supportsEdgeMask } from '@/lib/motion/sharedAxis';
 import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
-import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
-import { SPRING_MS, springLinear } from '@/lib/spring';
+import { motionTier, scaledMs } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
 import { getAppScroller } from '@/lib/appScroller';
 import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransit';
@@ -174,18 +173,27 @@ export function playRouteCrossFade(
        rather than letting cards sit pressable-but-offset; `arm()` covers the rest. No removal:
        `handle.finish` is idempotent and the node is discarded at the next navigation. */
     page.addEventListener('pointerdown', () => handle.finish(), { capture: true });
-    backLeaves?.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: SPRING_MS.fastEffects * motionScale('page'),
-      easing: LEAVE_EASING,
-      fill: 'forwards',
+    const fast = springTiming('fastEffects', 'page');
+    const slow = springTiming('slowEffects', 'page');
+    const backAnimations: Animation[] = [];
+    if (backLeaves) {
+      backAnimations.push(
+        backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
+      );
+    }
+    if (backArrives) {
+      backAnimations.push(
+        backArrives.animate([{ opacity: 0 }, { opacity: 1 }], {
+          ...slow,
+          delay: scaledMs(HANDOFF_MS, 'page'),
+          fill: 'backwards',
+        }),
+      );
+    }
+    arm(layer, () => {
+      for (const animation of backAnimations) animation.cancel();
+      handle.finish();
     });
-    backArrives?.animate([{ opacity: 0 }, { opacity: 1 }], {
-      delay: HANDOFF_MS * motionScale('page'),
-      duration: SPRING_MS.slowEffects * motionScale('page'),
-      easing: ARRIVE_EASING,
-      fill: 'backwards',
-    });
-    arm(layer, handle.finish);
     return;
   }
 
@@ -275,10 +283,6 @@ export function playRouteCrossFade(
   });
 }
 
-/** The leaving half of every page fade: the FastEffects shape, as a WAAPI easing. */
-const LEAVE_EASING = springLinear('fastEffects');
-const ARRIVE_EASING = springLinear('slowEffects');
-
 /**
  * **The fade a container transform rides, on the container's clock** — a forum post or a folder
  * opening from its list and closing back into it (`takeRouteContainerExpectation`).
@@ -340,12 +344,13 @@ function playUnderContainer(
       }
       /* The same fade through as every route change, on the page's springs: the container lands
          on the layout spring a moment after the page has arrived around it. */
-      const scale = motionScale('page');
+      const fast = springTiming('fastEffects', 'page');
+      const slow = springTiming('slowEffects', 'page');
+      const handoff = scaledMs(HANDOFF_MS, 'page');
       for (const el of leaving) {
         animations.push(
           el.animate([{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }], {
-            duration: SPRING_MS.fastEffects * scale,
-            easing: LEAVE_EASING,
+            ...fast,
             fill: 'forwards',
           }),
         );
@@ -353,16 +358,15 @@ function playUnderContainer(
       for (const el of arriving) {
         animations.push(
           el.animate([{ opacity: 0 }, { opacity: 1 }], {
-            delay: HANDOFF_MS * scale,
-            duration: SPRING_MS.slowEffects * scale,
-            easing: ARRIVE_EASING,
+            ...slow,
+            delay: handoff,
             /* Held at its end too, until the stop below clears the inline 0 it was hidden with:
                otherwise the frame between its end and that stop shows the page hidden again. */
             fill: 'both',
           }),
         );
       }
-      const leadMs = Math.min(1000 / 60, SPRING_MS.fastEffects * scale * 0.12);
+      const leadMs = Math.min(1000 / 60, fast.duration * 0.12);
       for (const animation of animations) animation.currentTime = leadMs;
       void Promise.all(animations.map((animation) => animation.finished)).then(
         () => cancelRouteCrossFade(),

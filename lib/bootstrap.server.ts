@@ -32,6 +32,7 @@ import type { InlineRoutePolicy } from '@/lib/route.server';
 const BOOTSTRAP_TIMEOUT_MS = 1500;
 const BOOTSTRAP_REVALIDATE_S = 30;
 const MAX_MESSAGE_LENGTH = 500;
+const MAX_BLACKLIST_PAGES = 50;
 const DEV_PREVIEW_COOKIE = 'devMaintenancePreview';
 const UPSTREAM_ORIGIN = upstreamOrigin();
 
@@ -82,6 +83,33 @@ async function readDevMaintenanceOverride(): Promise<MaintenanceState | null> {
   return { active: true, message: message.slice(0, MAX_MESSAGE_LENGTH) };
 }
 
+/** Re-reads the public image blocklist from page 1 with `cache: 'no-store'` when a cached
+ *  bootstrap revision collides with a newer snapshot (`409`). Bounded to `MAX_BLACKLIST_PAGES`. */
+async function readFreshBlacklist(signal: AbortSignal): Promise<number[] | null> {
+  const ids = new Set<number>();
+  let revision: number | undefined;
+  for (let page = 1; page <= MAX_BLACKLIST_PAGES; page += 1) {
+    const revParam =
+      page > 1 && typeof revision === 'number' && Number.isSafeInteger(revision)
+        ? `&revision=${revision}`
+        : '';
+    const response = await fetch(
+      `${UPSTREAM_ORIGIN}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}${revParam}`,
+      { signal, cache: 'no-store' },
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as Partial<PublicBlacklistPage>;
+    const blocks = parsePublicBlacklist(body);
+    if (!blocks) return null;
+    if (page === 1 && typeof body.revision === 'number' && Number.isSafeInteger(body.revision)) {
+      revision = body.revision;
+    }
+    for (const id of blocks) ids.add(id);
+    if (!body.has_more) break;
+  }
+  return [...ids].sort((a, b) => a - b);
+}
+
 async function readRemainingBlacklistPages(
   firstPage: number[],
   revision: number | undefined,
@@ -89,7 +117,7 @@ async function readRemainingBlacklistPages(
 ): Promise<number[] | null> {
   const ids = new Set<number>(firstPage);
   const revParam = typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
-  for (let page = 2; ; page += 1) {
+  for (let page = 2; page <= MAX_BLACKLIST_PAGES; page += 1) {
     const response = await fetch(
       `${UPSTREAM_ORIGIN}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}${revParam}`,
       {
@@ -97,6 +125,9 @@ async function readRemainingBlacklistPages(
         next: { revalidate: cacheSeconds(BOOTSTRAP_REVALIDATE_S), tags: [PUBLIC_BLACKLIST_CACHE_TAG] },
       },
     );
+    if (response.status === 409) {
+      return readFreshBlacklist(signal);
+    }
     if (!response.ok) return null;
     const body = (await response.json()) as Partial<PublicBlacklistPage>;
     const blocks = parsePublicBlacklist(body);
@@ -135,9 +166,14 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     if (!page1) return null;
     let blacklist: number[] = [...new Set(page1)].sort((a, b) => a - b);
     if (raw.image_blocklist?.has_more) {
-      const whole = await readRemainingBlacklistPages(blacklist, raw.image_blocklist.revision, signal);
-      if (!whole) return null;
-      blacklist = whole;
+      try {
+        const whole = await readRemainingBlacklistPages(blacklist, raw.image_blocklist.revision, signal);
+        /* Preserve valid maintenance, routing policy, block filters and page-1 blacklist even if
+           a later blacklist page fails or times out. */
+        if (whole) blacklist = whole;
+      } catch {
+        /* Keep page-1 blacklist rather than dropping the entire bootstrap snapshot. */
+      }
     }
     const maintenance: MaintenanceState = maint.maintenance_mode
       ? {

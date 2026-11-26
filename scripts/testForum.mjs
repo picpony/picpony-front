@@ -812,3 +812,118 @@ test('forum list always requests summary=1 and renders taggroup counts in teaser
   await assert.rejects(() => forum.getForumPosts({ page: 1, search: 'x'.repeat(200) }));
   assert.equal(calls.length, 1);
 });
+
+test('truncated summary rows strip unclosed BBCode tags, trailing partial tags and split entities', () => {
+  const truncatedPost = model.postOf(wirePost({
+    id: 56,
+    excerpt: '',
+    content_summary: true,
+    content: {
+      type: 'discussion',
+      html: '[p][center][b]欢迎来到小马&amp;同人论坛[quote="alice"]这段引用被截断没有闭合',
+    },
+  }));
+  assert.equal(truncatedPost.summary, true);
+  assert.equal(text.forumTeaser(truncatedPost), '欢迎来到小马&同人论坛');
+
+  const splitTail = model.postOf(wirePost({
+    id: 57,
+    excerpt: '',
+    content_summary: true,
+    content: {
+      type: 'discussion',
+      html: '[p]长文开头[img]/api/v1/media/abcdef012345',
+    },
+  }));
+  assert.equal(text.forumTeaser(splitTail), '长文开头');
+
+  const partialTagAndEntity = model.postOf(wirePost({
+    id: 58,
+    excerpt: '',
+    content_summary: true,
+    content: {
+      type: 'discussion',
+      html: '[p]测试正文 A &amp',
+    },
+  }));
+  assert.equal(text.forumTeaser(partialTagAndEntity), '测试正文 A');
+
+  const partialTagOnly = model.postOf(wirePost({
+    id: 59,
+    excerpt: '',
+    content_summary: true,
+    content: {
+      type: 'discussion',
+      html: '[p]链接测试[url=https://example.test/very-long',
+    },
+  }));
+  assert.equal(text.forumTeaser(partialTagOnly), '链接测试');
+
+  const literalBracket = model.postOf(wirePost({
+    id: 60,
+    excerpt: '',
+    content_summary: true,
+    content: {
+      type: 'discussion',
+      html: '[p][原创] 作品分享',
+    },
+  }));
+  assert.equal(text.forumTeaser(literalBracket), '[原创] 作品分享');
+});
+
+test('edit page ignores summary previews and waits for the full forumThread payload', () => {
+  const summaryPreview = model.postOf(wirePost({
+    id: 77,
+    user_id: 3,
+    content_summary: true,
+    content: { type: 'discussion', html: '' },
+  }));
+  const fullPost = model.postOf(wirePost({
+    id: 77,
+    user_id: 3,
+    content: { type: 'discussion', html: '[p]完整正文内容[/p]' },
+  }));
+
+  const makePage = (cachedPreview, readData) => {
+    const hooks = harness();
+    const { default: EditForumPostPage } = load('app/forum/[id]/edit/page.tsx', {
+      ...hooks.dependencies,
+      'next/navigation': { useParams: () => ({ id: '77' }) },
+      '@/components/Button': { default: 'Button' },
+      '@/components/EmptyState': { default: 'EmptyState' },
+      '@/components/ErrorRetry': { default: 'ErrorRetry' },
+      '@/components/PageBack': { default: 'PageBack' },
+      '@/components/PageHeader': { default: 'PageHeader' },
+      '@/components/SignInRequired': { default: 'SignInRequired' },
+      '@/components/forum/ComposerSkeleton': { default: 'ComposerSkeleton' },
+      '@/components/forum/PostComposer': { default: 'PostComposer' },
+      '@/lib/api/errors': { apiErrorMessage: () => 'err', isNotFound: () => false, isRetryable: () => true },
+      '@/lib/backNavigation': { useBackOrParent: () => () => {} },
+      '@/lib/useDocumentTitle': { useDocumentTitle: () => {} },
+      '@/lib/forumCache': { patchListedPost: () => {}, patchThreadPage: () => {} },
+      '@/lib/forumTransition': { readForumPreview: () => cachedPreview, rememberForumPreview: () => {} },
+      '@/lib/hooks': { useEscapeBack: () => {}, useSession: () => ({ user: { id: 3 }, token: 'T', ready: true }) },
+      '@/lib/resource': { useResource: () => ({ data: readData, error: undefined, refresh: () => {} }), SKIP: Symbol('SKIP') },
+      '@/lib/resources': { forumThread: { invalidate: () => {} } },
+    });
+    return hooks.render(() => EditForumPostPage());
+  };
+
+  // While full thread is still loading, a summary preview MUST NOT open PostComposer.
+  const waitingTree = makePage(summaryPreview, undefined);
+  assert.equal(byType(waitingTree, 'PostComposer'), undefined);
+  assert.ok(byType(waitingTree, 'ComposerSkeleton'));
+
+  // Once the full thread arrives, PostComposer mounts with the full non-summary post.
+  const loadedTree = makePage(summaryPreview, { post: fullPost });
+  const composer = byType(loadedTree, 'PostComposer');
+  assert.ok(composer);
+  assert.equal(composer.props.post.content, '[p]完整正文内容[/p]');
+  assert.equal(composer.props.post.summary, undefined);
+
+  // A non-summary cached preview (e.g. visited thread first) still opens immediately.
+  const immediateTree = makePage(fullPost, undefined);
+  const immediateComposer = byType(immediateTree, 'PostComposer');
+  assert.ok(immediateComposer);
+  assert.equal(immediateComposer.props.post.content, '[p]完整正文内容[/p]');
+});

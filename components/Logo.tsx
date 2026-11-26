@@ -262,6 +262,21 @@ export default function Logo({
     hostRef.current?.removeAttribute('data-shown');
   }, []);
 
+  /* The wordmark itself is a non-focusable `<span>` nested inside a `<Link>` (or button); listen
+     on the nearest enclosing focusable ancestor so keyboard focus triggers the trace too. */
+  useEffect(() => {
+    if (!interactive) return;
+    const root = rootRef.current;
+    const host = root?.closest('a,button,[tabindex]');
+    if (!host || host === root) return;
+    host.addEventListener('focus', onEnter);
+    host.addEventListener('blur', onLeave);
+    return () => {
+      host.removeEventListener('focus', onEnter);
+      host.removeEventListener('blur', onLeave);
+    };
+  }, [interactive, onEnter, onLeave]);
+
   return (
     <span
       ref={rootRef}

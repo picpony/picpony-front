@@ -146,9 +146,11 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
     const settle = () => {
       for (const animation of running) animation.cancel();
     };
-    root.addEventListener('pointerdown', settle, { capture: true });
+    const cleanupListener = () => root.removeEventListener('pointerdown', settle, { capture: true });
+    root.addEventListener('pointerdown', settle, { capture: true, once: true });
+    void Promise.all(running.map((animation) => animation.finished)).then(cleanupListener, cleanupListener);
     return () => {
-      root.removeEventListener('pointerdown', settle, { capture: true });
+      cleanupListener();
       settle();
     };
   }, [ref, selector, tier, entrances, depKey]);

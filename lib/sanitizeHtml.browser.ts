@@ -12,7 +12,7 @@
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 
 /** Elements whose entire subtree (tags and text/children) is discarded. */
-const STRIP_TAGS = new Set([
+export const ANNOUNCEMENT_STRIP_TAGS = new Set([
   'script',
   'style',
   'iframe',
@@ -43,7 +43,7 @@ const DROP_VOID_TAGS = new Set([
   'keygen',
 ]);
 
-const ALLOWED_TAGS = new Set([
+export const ANNOUNCEMENT_ALLOWED_TAGS = new Set([
   'p',
   'br',
   'hr',
@@ -112,7 +112,7 @@ const VOID_TAGS = new Set(['br', 'hr', 'img', 'wbr', 'col']);
 const TITLE_ONLY = new Set(['title']);
 const TABLE_CELL_ATTRS = new Set(['colspan', 'rowspan', 'align', 'valign', 'scope']);
 
-const TAG_ATTRS: Record<string, Set<string>> = {
+export const ANNOUNCEMENT_TAG_ATTRS: Record<string, Set<string>> = {
   a: new Set(['href', 'title']),
   img: new Set(['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding']),
   td: TABLE_CELL_ATTRS,
@@ -159,10 +159,19 @@ const nextSiblingOf = typeof Node !== 'undefined' ? Object.getOwnPropertyDescrip
 const localNameOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'localName')?.get : undefined;
 const namespaceOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'namespaceURI')?.get : undefined;
 const attributesOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'attributes')?.get : undefined;
+const bodyOf =
+  typeof Document !== 'undefined'
+    ? (Object.getOwnPropertyDescriptor(Document.prototype, 'body')?.get ??
+      (typeof HTMLDocument !== 'undefined'
+        ? Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'body')?.get
+        : undefined))
+    : undefined;
 
-/** Validates a URL attribute (`href`: http/https/mailto or safe relative; `src`: http/https or safe relative). */
+/** Validates a URL attribute (`href`: http/https/mailto or safe relative; `src`: http/https or safe relative).
+ *  Strips ASCII/C1 control characters and trims outer whitespace while preserving internal spaces
+ *  (e.g. `mailto:hi@picpony.top?subject=Hello World`), matching `picpony-rust/src/sanitize.rs`. */
 export function sanitizeAnnouncementUrl(attr: 'href' | 'src', raw: string): string | null {
-  const cleaned = raw.replace(/[\u0000-\u0020\u007f-\u009f\s]+/g, '');
+  const cleaned = raw.replace(/[\u0000-\u001f\u007f-\u009f]+/g, '').trim();
   if (attr === 'src' && !cleaned) return null;
   if (cleaned.startsWith('//') || cleaned.startsWith('\\') || cleaned.startsWith('/\\')) return null;
   const authorityPrefix = cleaned.split(/[/?#]/, 1)[0];
@@ -180,7 +189,7 @@ export function sanitizeAnnouncementUrl(attr: 'href' | 'src', raw: string): stri
 
 /** Validates a single attribute for an allowlisted element. Returns `null` to drop it. */
 export function sanitizeAnnouncementAttr(tag: string, name: string, value: string): string | null {
-  const allowed = TAG_ATTRS[tag];
+  const allowed = ANNOUNCEMENT_TAG_ATTRS[tag];
   if (!allowed || !allowed.has(name)) return null;
   if (name === 'href' || name === 'src') return sanitizeAnnouncementUrl(name, value);
   if (name === 'colspan' || name === 'rowspan' || name === 'span') {
@@ -262,8 +271,8 @@ function serializeNode(node: Node): string {
   if (ns !== HTML_NS) return '';
 
   const tag = (localNameOf ? (localNameOf.call(el) as string) : el.localName).toLowerCase();
-  if (STRIP_TAGS.has(tag) || DROP_VOID_TAGS.has(tag)) return '';
-  if (!ALLOWED_TAGS.has(tag)) return serializeChildren(el);
+  if (ANNOUNCEMENT_STRIP_TAGS.has(tag) || DROP_VOID_TAGS.has(tag)) return '';
+  if (!ANNOUNCEMENT_ALLOWED_TAGS.has(tag)) return serializeChildren(el);
 
   const attrs = attributesOf ? (attributesOf.call(el) as NamedNodeMap) : el.attributes;
   let attrText = '';
@@ -291,5 +300,6 @@ export function sanitizeHtml(html: string): string {
   }
   cachedParser ??= new DOMParser();
   const doc = cachedParser.parseFromString(html, 'text/html');
-  return doc.body ? serializeChildren(doc.body) : '';
+  const body = bodyOf ? (bodyOf.call(doc) as HTMLElement | null) : doc.body;
+  return body ? serializeChildren(body) : '';
 }

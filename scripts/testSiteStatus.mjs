@@ -339,6 +339,77 @@ test('readSiteBootstrap consolidates SSR startup into one tagged request and fai
   assert.deepEqual(failedBoot.routePolicy.blacklist, []);
   assert.deepEqual(failedBoot.maintenance, { active: false, message: '' });
   assert.deepEqual(seen, ['/api/v1/bootstrap']);
+
+  // On 409 revision conflict during page 2+, re-reads fresh from page 1 with cache: 'no-store'.
+  const retrySeen = [];
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(url);
+    retrySeen.push({ pathname: u.pathname, page: u.searchParams.get('page'), rev: u.searchParams.get('revision'), cache: init?.cache });
+    if (u.pathname === '/api/v1/bootstrap') {
+      return Response.json({
+        routing_policy: { policy: { api_policy: 'direct', media_policy: 'cdn', third_party_url: null, third_party_pass_api_key: false }, revision: 1 },
+        maintenance: { maintenance_mode: true, maintenance_message: '维护公告' },
+        block_tags: { tags: [], filters: { safe: [], spoilers: [], banAnthro: [], banDiscomfort: [], onlyPony: [] } },
+        image_blocklist: { revision: 2, blocks: [10], page: 1, limit: 1000, total_count: 2, total_pages: 2, has_more: true },
+      });
+    }
+    if (u.pathname === '/api/v1/image-blocklist' && u.searchParams.get('revision') === '2') {
+      return Response.json({ error: { code: 'SNAPSHOT_STALE', message: 'stale' } }, { status: 409 });
+    }
+    if (u.pathname === '/api/v1/image-blocklist' && u.searchParams.get('page') === '1') {
+      return Response.json({ revision: 3, blocks: [10, 20], page: 1, limit: 1000, total_count: 3, total_pages: 2, has_more: true });
+    }
+    if (u.pathname === '/api/v1/image-blocklist' && u.searchParams.get('page') === '2' && u.searchParams.get('revision') === '3') {
+      return Response.json({ revision: 3, blocks: [30], page: 2, limit: 1000, total_count: 3, total_pages: 2, has_more: false });
+    }
+    return new Response('unexpected', { status: 500 });
+  };
+  const recovered = await readSiteBootstrap();
+  assert.deepEqual(recovered.maintenance, { active: true, message: '维护公告' });
+  assert.deepEqual(recovered.routePolicy.blacklist, [10, 20, 30]);
+  assert.equal(retrySeen[2].page, '1');
+  assert.equal(retrySeen[2].rev, null);
+  assert.equal(retrySeen[2].cache, 'no-store');
+  assert.equal(retrySeen[3].page, '2');
+  assert.equal(retrySeen[3].rev, '3');
+
+  // If page 2+ fails outright, preserve maintenance, routing policy, block filters and page-1 blacklist.
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/api/v1/bootstrap') {
+      return Response.json({
+        routing_policy: { policy: { api_policy: 'third_party', media_policy: 'cdn', third_party_url: 'https://r.test', third_party_pass_api_key: false }, revision: 1 },
+        maintenance: { maintenance_mode: true, maintenance_message: '停机维护' },
+        block_tags: { tags: [], filters: { safe: ['explicit'], spoilers: [], banAnthro: [], banDiscomfort: [], onlyPony: [] } },
+        image_blocklist: { revision: 2, blocks: [11, 22], page: 1, limit: 1000, total_count: 3, total_pages: 2, has_more: true },
+      });
+    }
+    return new Response('unavailable', { status: 503 });
+  };
+  const partial = await readSiteBootstrap();
+  assert.deepEqual(partial.maintenance, { active: true, message: '停机维护' });
+  assert.equal(partial.routePolicy.api, 'third_party');
+  assert.deepEqual(partial.routePolicy.blockFilters.safe, ['explicit']);
+  assert.deepEqual(partial.routePolicy.blacklist, [11, 22]);
+
+  // Pagination is strictly bounded even if an upstream misbehaves with `has_more: true` forever.
+  let pageCount = 0;
+  globalThis.fetch = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/api/v1/bootstrap') {
+      return Response.json({
+        routing_policy: { policy: { api_policy: 'direct', media_policy: 'direct', third_party_url: null, third_party_pass_api_key: false }, revision: 1 },
+        maintenance: { maintenance_mode: false, maintenance_message: '' },
+        block_tags: { tags: [], filters: { safe: [], spoilers: [], banAnthro: [], banDiscomfort: [], onlyPony: [] } },
+        image_blocklist: { revision: 1, blocks: [1], page: 1, limit: 1000, total_count: 999999, total_pages: 999, has_more: true },
+      });
+    }
+    pageCount += 1;
+    return Response.json({ revision: 1, blocks: [pageCount + 1], page: pageCount + 1, limit: 1000, total_count: 999999, total_pages: 999, has_more: true });
+  };
+  const capped = await readSiteBootstrap();
+  assert.equal(pageCount, 49, 'stops at MAX_BLACKLIST_PAGES (50 total including page 1)');
+  assert.equal(capped.routePolicy.blacklist.length, 50);
   void readBlockFilters;
   void readPublicBlacklist;
   void readRoutePolicyOnce;

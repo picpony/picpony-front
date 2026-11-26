@@ -10,7 +10,7 @@ import EmptyState from './EmptyState';
 import UserBadge from './UserBadge';
 import { showToast } from './Toast';
 import { SKIP, useResource } from '@/lib/resource';
-import { myBadges, tasks, userProfile } from '@/lib/resources';
+import { myBadges, sessionUser, tasks, userProfile } from '@/lib/resources';
 import { equipBadges } from '@/lib/api/picpony';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { readToken, updateUserInfo } from '@/lib/hooks';
@@ -127,6 +127,12 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
     const wire = list.map((badge) => ({ id: badge.id, name: badge.badge_name, color: badge.badge_color }));
     const shown = userProfile.peek({ id: profileId }).data;
     if (shown) userProfile.write({ id: profileId }, { ...shown, equipped_badges: wire });
+    const cachedSession = sessionUser.peek({ token }).data;
+    if (cachedSession?.kind === 'ok') {
+      sessionUser.write({ token }, { ...cachedSession, user: { ...cachedSession.user, equipped_badges: wire } });
+    } else {
+      sessionUser.expire({ token });
+    }
     tasks.expire({ token });
     updateUserInfo(token, { equipped_badges: wire });
     showToast(list.length > 0 ? '已更新佩戴的徽章' : '已取下全部徽章', 'success');

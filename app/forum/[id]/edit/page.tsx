@@ -29,7 +29,13 @@ export default function EditForumPostPage() {
   const { id } = useParams<{ id: string }>();
   const { user, token, ready } = useSession();
   const back = useBackOrParent(`/forum/${id}`);
-  const [preview] = useState(() => readForumPreview(id));
+  const [preview] = useState(() => {
+    const cached = readForumPreview(id);
+    /* A list row carries only a summary projection (`summary: true`, 600-char prefix or empty
+       body when an excerpt exists, no shared tag-group payloads). Never seed the editor from it,
+       or saving would permanently overwrite the post with truncated content. */
+    return cached && !cached.summary ? cached : null;
+  });
   const read = useResource(forumThread, ready && token ? { id, page: 1, token } : SKIP);
   const post = read.data?.post ?? preview;
   const myId = Number(user?.id);
@@ -86,13 +92,13 @@ export default function EditForumPostPage() {
             revision: post.revision + 1,
           };
           patchListedPost(postId, patch);
-          rememberForumPreview({ ...post, ...patch });
+          rememberForumPreview({ ...post, ...patch, summary: undefined });
           /* Corrected before the re-read: this page holds the thread's first page mounted, so
              invalidating keeps that answer on screen while it re-reads — and the thread, going
              back to it, showed the old title until the re-read landed. */
           patchThreadPage({ id, page: 1, token }, (previous) => ({
             ...previous,
-            post: { ...previous.post, ...patch },
+            post: { ...previous.post, ...patch, summary: undefined },
           }));
           forumThread.invalidate();
           back();

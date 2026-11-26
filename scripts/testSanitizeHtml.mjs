@@ -25,19 +25,29 @@ const attacks = [
   '<style>body{display:none}</style><script>globalThis.__reviewExecuted=1</script><noscript><img src=x onerror="globalThis.__reviewExecuted=1"></noscript><p>visible</p>',
   '<video src=x onerror=alert(1)><source src=x onerror=alert(1)></video>',
   '<template><img src=x onerror=alert(1)></template>',
+  '<title>secret-title</title><textarea>secret-textarea</textarea><xmp>secret-xmp</xmp><p>visible</p>',
 ];
-const article = '<h2>公告</h2><p>正文 <strong>重点</strong> <em>强调</em> <a href="https://example.test/?a=1&amp;b=2">链接</a></p><ul><li>一</li><li>二</li></ul><blockquote>引用</blockquote><table><tr><th>列</th><td>值</td></tr></table>';
+const article = '<h2>公告</h2><p>正文 <strong>重点</strong> <em>强调</em> <a href="https://example.test/?a=1&amp;b=2">链接</a> <a href=" mailto:hi@picpony.top?subject=Hello World ">邮件</a></p><ul><li>一</li><li>二</li></ul><blockquote>引用</blockquote><table><tr><th colspan="+2">列</th><td colspan=" 2 ">值</td></tr></table>';
 assert.equal(sanitizeHtml(''), '');
 assert.match(sanitizeHtml(article), /<h2>公告<\/h2>/);
 assert.match(sanitizeHtml(article), /<strong>重点<\/strong>/);
 assert.match(sanitizeHtml(article), /<table>/);
+assert.match(sanitizeHtml(article), /rel="noopener noreferrer"/);
+assert.match(sanitizeHtml(article), /href="mailto:hi@picpony\.top\?subject=Hello World"/);
+assert.match(sanitizeHtml(article), /colspan="2"/);
+assert.doesNotMatch(sanitizeHtml(article), /\+2/);
 assert.equal(sanitizeHtml('<script>bad()</script><p>visible</p>'), '<p>visible</p>');
+assert.equal(sanitizeHtml('<title>a</title><textarea>b</textarea><xmp>c</xmp><p>ok</p>'), '<p>ok</p>');
+assert.doesNotMatch(sanitizeHtml('<a href="//evil.test/x">a</a><a href="/\\evil.test/x">b</a>'), /evil\.test/);
+assert.doesNotMatch(sanitizeHtml('<a id="location" name="document" href="https://example.test">link</a>'), /\b(?:id|name)=/i);
 
 // Verify the browser sanitizer's URL & attribute validators in Node as well.
 assert.equal(sanitizeAnnouncementUrl('href', 'https://example.test/?a=1&b=2'), 'https://example.test/?a=1&b=2');
 assert.equal(sanitizeAnnouncementUrl('href', 'mailto:hi@picpony.top'), 'mailto:hi@picpony.top');
+assert.equal(sanitizeAnnouncementUrl('href', ' mailto:hi@picpony.top?subject=Hello World '), 'mailto:hi@picpony.top?subject=Hello World');
 assert.equal(sanitizeAnnouncementUrl('href', 'tel:12345'), null);
 assert.equal(sanitizeAnnouncementUrl('href', 'java\tscript:alert(1)'), null);
+assert.equal(sanitizeAnnouncementUrl('href', 'java script:alert(1)'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '//evil.test/x'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '/\\evil.test/x'), null);
 assert.equal(sanitizeAnnouncementUrl('src', 'https://picpony.top/a.png'), 'https://picpony.top/a.png');
@@ -50,6 +60,8 @@ assert.equal(sanitizeAnnouncementAttr('a', 'name', 'document'), null);
 assert.equal(sanitizeAnnouncementAttr('p', 'style', 'color:red'), null);
 assert.equal(sanitizeAnnouncementAttr('img', 'onerror', 'alert(1)'), null);
 assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '02'), '2');
+assert.equal(sanitizeAnnouncementAttr('td', 'colspan', ' 2 '), '2');
+assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '+2'), null);
 assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '0'), null);
 assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '1001'), null);
 
@@ -83,23 +95,27 @@ with sync_playwright() as p:
           for(const attr of el.attributes){
             if(/^on/i.test(attr.name)||['style','srcdoc'].includes(attr.name))throw new Error(label+' Active attribute survived: '+input);
             if(attr.name==='href'){
-              const protocol=new URL(attr.value,'https://picpony.test/').protocol;
-              if(!['https:','http:','mailto:'].includes(protocol))throw new Error(label+' Active href protocol survived: '+input);
+              if(/^(\/\/|\\|\/\\)/.test(attr.value))throw new Error(label+' Protocol-relative href survived: '+input);
+              const parsed=new URL(attr.value,'https://picpony.test/');
+              if(!['https:','http:','mailto:'].includes(parsed.protocol)||parsed.hostname==='evil.test')throw new Error(label+' Active href protocol survived: '+input);
+              if(el.tagName==='A'&&el.getAttribute('rel')!=='noopener noreferrer')throw new Error(label+' Missing rel on link: '+input);
             }
             if(attr.name==='src'){
-              const protocol=new URL(attr.value,'https://picpony.test/').protocol;
-              if(!['https:','http:'].includes(protocol))throw new Error(label+' Active src protocol survived: '+input);
+              if(/^(\/\/|\\|\/\\)/.test(attr.value))throw new Error(label+' Protocol-relative src survived: '+input);
+              const parsed=new URL(attr.value,'https://picpony.test/');
+              if(!['https:','http:'].includes(parsed.protocol)||parsed.hostname==='evil.test')throw new Error(label+' Active src protocol survived: '+input);
             }
-            if(['id','name'].includes(attr.name)&&!attr.value.startsWith('user-content-'))throw new Error(label+' Clobbering name survived: '+input);
+            if(['id','name'].includes(attr.name))throw new Error(label+' Clobbering name survived: '+input);
           }
         }
+        if(/secret-(?:title|textarea|xmp)/.test(root.textContent||''))throw new Error(label+' Stripped tag text survived: '+input);
       }
       root.remove();
     };
     checkList(outputs,'node');
     checkList(browserOutputs,'browser');
     const cleanArticle=browserSanitize(article);
-    if(!/<h2>公告<\/h2>/.test(cleanArticle)||!/<strong>重点<\/strong>/.test(cleanArticle)||!/<table>/.test(cleanArticle)||!/rel="noopener noreferrer"/.test(cleanArticle)){
+    if(!/<h2>公告<\/h2>/.test(cleanArticle)||!/<strong>重点<\/strong>/.test(cleanArticle)||!/<table>/.test(cleanArticle)||!/rel="noopener noreferrer"/.test(cleanArticle)||!/href="mailto:hi@picpony\.top\?subject=Hello World"/.test(cleanArticle)||!/colspan="2"/.test(cleanArticle)||/\+2/.test(cleanArticle)){
       throw new Error('Browser sanitizer dropped valid article markup: '+cleanArticle);
     }
     if(browserSanitize('<script>bad()</script><p>visible</p>')!=='<p>visible</p>'){

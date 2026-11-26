@@ -154,17 +154,19 @@ export function badgesOf(badges: readonly WireBadge[]): EquippedBadge[] {
    sees the characters the author wrote. */
 function bodyOf(
   content: WireContent,
+  truncated: boolean,
 ): Pick<ForumPostDetail, 'content' | 'commission_link' | 'shared_groups' | 'shared_group_counts'> {
+  const decode = (text: string) => decodeSanitizedText(text, { truncated });
   switch (content.type) {
     case 'discussion':
-      return { content: decodeSanitizedText(content.html), commission_link: '', shared_groups: null };
+      return { content: decode(content.html), commission_link: '', shared_groups: null };
     case 'commission':
-      return { content: decodeSanitizedText(content.description), commission_link: content.commission_link, shared_groups: null };
+      return { content: decode(content.description), commission_link: content.commission_link, shared_groups: null };
     case 'taggroups': {
       const hasFullGroups = Array.isArray(content.tag_groups) && Array.isArray(content.block_groups);
       if (!hasFullGroups) {
         return {
-          content: decodeSanitizedText(content.description),
+          content: decode(content.description),
           commission_link: '',
           shared_groups: null,
           shared_group_counts: {
@@ -174,7 +176,7 @@ function bodyOf(
         };
       }
       return {
-        content: decodeSanitizedText(content.description),
+        content: decode(content.description),
         commission_link: '',
         shared_groups: {
           tagGroups: content.tag_groups!,
@@ -186,12 +188,13 @@ function bodyOf(
 }
 
 export function postOf(raw: WirePost): ForumPostDetail {
+  const truncated = Boolean(raw.content_summary);
   return {
     id: raw.id,
     user_id: raw.user_id,
     title: raw.title,
-    ...bodyOf(raw.content),
-    ...(raw.content_summary ? { summary: true } : {}),
+    ...bodyOf(raw.content, truncated),
+    ...(truncated ? { summary: true } : {}),
     revision: raw.revision,
     excerpt: decodeSanitizedText(raw.excerpt.trim()),
     category: raw.category,

@@ -43,7 +43,7 @@ import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { useIconToss } from '@/lib/useIconToss';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
 import { forumTeaser } from '@/lib/forumText';
-import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumReturn } from '@/lib/forumTransition';
+import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumPreview, rememberForumReturn } from '@/lib/forumTransition';
 import { formatCount, formatDateTime } from '@/lib/format';
 import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
 import { useResource, SKIP } from '@/lib/resource';
@@ -122,6 +122,12 @@ export default function ForumThreadPage() {
   const post: ForumPost | null = data?.post ?? preview;
   const failed = read.error !== undefined;
   const notFound = failed && isNotFound(read.error);
+
+  /* Once the full thread lands, replace any summary list preview so navigating to `/edit` opens
+     the composer immediately with the complete body and shared groups. */
+  useEffect(() => {
+    if (data?.post && !data.post.summary) rememberForumPreview(data.post);
+  }, [data?.post]);
 
   const myId = Number(user?.id);
   const staff = typeof user?.role === 'string' && FORUM_STAFF_ROLES.has(user.role);
@@ -389,7 +395,14 @@ export default function ForumThreadPage() {
     );
   }
 
-  const coverShown = post?.cover_image && !post.content.includes(post.cover_image) ? post.cover_image : null;
+  /* While only a summary preview is on screen, do not render a separate cover banner: the cover
+     may already appear inside the full body once it arrives, which would otherwise flash twice. */
+  const coverShown =
+    !data?.post && post?.summary
+      ? null
+      : post?.cover_image && !post.content.includes(post.cover_image)
+        ? post.cover_image
+        : null;
   const total = data?.total_comments ?? post?.reply_count ?? 0;
 
   return (

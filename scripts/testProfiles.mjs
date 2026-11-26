@@ -342,3 +342,78 @@ test('folder covers are one search inside the viewer’s exclusions, mapped by i
   assert.match(query, /^\(id:1 OR id:2\), /, 'the ids are grouped before the device filters apply');
   assert.match(query, /-explicit/, 'the safe filter’s exclusions ride in the query');
 });
+
+test('BadgeEquipDialog updates sessionUser cache after equipping badges', async () => {
+  const { readFileSync } = await import('node:fs');
+  const path = await import('node:path');
+  const vm = await import('node:vm');
+  const ts = (await import('typescript')).default;
+  const code = ts.transpileModule(
+    readFileSync(path.resolve(import.meta.dirname, '..', 'components/BadgeEquipDialog.tsx'), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } },
+  ).outputText;
+
+  const states = [];
+  let cursor = 0;
+  const react = {
+    useState(initial) {
+      const i = cursor++;
+      if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+    },
+  };
+  const jsx = (type, props) => ({ type, props });
+  const written = { myBadges: null, userProfile: null, sessionUser: null, tasksExpired: false, userInfo: null };
+  const held = [{ id: 1, name: '星辰', color: '#6750a4', expiresAt: null }];
+  const sessionData = { kind: 'ok', user: { id: 5, username: 'pony', equipped_badges: [] } };
+  const deps = {
+    react,
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    './Modal': { default: 'Modal' },
+    './Button': { default: 'Button' },
+    './Checkbox': { default: 'Checkbox' },
+    './Skeleton': { default: 'Skeleton' },
+    './ErrorRetry': { default: 'ErrorRetry' },
+    './EmptyState': { default: 'EmptyState' },
+    './UserBadge': { default: 'UserBadge' },
+    './Toast': { showToast: () => {} },
+    '@/lib/resource': {
+      SKIP: Symbol('SKIP'),
+      useResource: () => ({ data: { badges: held, equipped: [] }, error: undefined, refresh: () => {} }),
+    },
+    '@/lib/resources': {
+      myBadges: { write: (_k, fn) => { written.myBadges = fn({ badges: held, equipped: [] }); } },
+      userProfile: { peek: () => ({ data: { id: '5', equipped_badges: [] } }), write: (_k, v) => { written.userProfile = v; } },
+      sessionUser: { peek: () => ({ data: sessionData }), write: (_k, v) => { written.sessionUser = v; }, expire: () => {} },
+      tasks: { expire: () => { written.tasksExpired = true; } },
+    },
+    '@/lib/api/picpony': { equipBadges: async () => {} },
+    '@/lib/api/errors': { apiErrorMessage: () => 'err', isRetryable: () => true },
+    '@/lib/hooks': { readToken: () => 'tok-1', updateUserInfo: (_t, patch) => { written.userInfo = patch; } },
+    '@/lib/userBadges': badges,
+  };
+  const exports = {};
+  vm.runInNewContext(code, { exports, require: (name) => deps[name], Set, Array, Object, Promise }, { filename: 'BadgeEquipDialog.tsx' });
+  const Dialog = exports.default;
+  const findAll = (node, pred, acc = []) => {
+    if (!node || typeof node !== 'object') return acc;
+    if (Array.isArray(node)) { node.forEach((n) => findAll(n, pred, acc)); return acc; }
+    if (pred(node)) acc.push(node);
+    Object.values(node.props ?? {}).forEach((v) => findAll(v, pred, acc));
+    return acc;
+  };
+  const render = () => { cursor = 0; return Dialog({ open: true, onClose: () => {}, token: 'tok-1', profileId: '5', now: NOW }); };
+  // First render seeds draft from read.data; second renders with seeded draft.
+  render();
+  let tree = render();
+  const checkbox = findAll(tree, (n) => n.type === 'Checkbox')[0];
+  checkbox.props.onChange(true);
+  tree = render();
+  const saveBtn = findAll(tree, (n) => n.type === 'Button' && n.props?.variant === 'filled')[0];
+  await saveBtn.props.onClick();
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+  assert.deepEqual(plain(written.sessionUser.user.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
+  assert.deepEqual(plain(written.userProfile.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
+  assert.deepEqual(plain(written.userInfo.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
+  assert.equal(written.tasksExpired, true);
+});

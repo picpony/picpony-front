@@ -557,9 +557,34 @@ export interface PlainTextOptions {
   quotes?: boolean;
   /** One line (the default): every run of whitespace becomes one space. */
   singleLine?: boolean;
+  /** Input was cut at a fixed character budget (e.g. a 600-char list summary), so unclosed known
+   *  tags and a trailing partial tag fragment are stripped instead of emitted verbatim. */
+  truncated?: boolean;
 }
 
 export const IMAGE_MARKER = '[图片]';
+
+/** Drops a cut-off BBCode tag fragment at the end of a fixed-length summary prefix (e.g.
+ *  `[url=https://…`, `[/cen`, `[`), leaving literal brackets such as `[原创` intact. */
+function stripTrailingPartialTag(source: string): string {
+  const open = source.lastIndexOf('[');
+  if (open === -1 || source.indexOf(']', open) !== -1) return source;
+  const tail = source.slice(open);
+  if (tail === '[' || tail === '[/') return source.slice(0, open);
+  const match = /^\[(\/?)([a-z][a-z0-9]*|\*)(?:=([^\]\r\n]*))?$/i.exec(tail);
+  if (!match) return source;
+  const [, closing, name, param] = match;
+  const lower = name.toLowerCase();
+  if (param !== undefined) {
+    return !closing && PARAMETERISED.has(lower) ? source.slice(0, open) : source;
+  }
+  if (lower === '*' || lower === 'br' || TAGS.has(lower)) return source.slice(0, open);
+  for (const known of TAGS) {
+    if (known.startsWith(lower)) return source.slice(0, open);
+  }
+  if ('br'.startsWith(lower)) return source.slice(0, open);
+  return source;
+}
 
 function plainNodes(nodes: BBNode[], options: PlainTextOptions): string {
   let text = '';
@@ -568,7 +593,7 @@ function plainNodes(nodes: BBNode[], options: PlainTextOptions): string {
       text += node;
       continue;
     }
-    if (!node.closed) {
+    if (!node.closed && !options.truncated) {
       text += node.opening + plainNodes(node.children, options);
       continue;
     }
@@ -624,8 +649,10 @@ function plainNodes(nodes: BBNode[], options: PlainTextOptions): string {
  */
 export function bbcodeToPlainText(bbcode: string | null | undefined, options: PlainTextOptions = {}): string {
   if (!bbcode) return '';
-  const { maxLength, singleLine = true } = options;
-  let text = plainNodes(parseBBCode(bbcode.replace(/\r\n?/g, '\n')), options);
+  const { maxLength, singleLine = true, truncated = false } = options;
+  const normalized = bbcode.replace(/\r\n?/g, '\n');
+  const source = truncated ? stripTrailingPartialTag(normalized) : normalized;
+  let text = plainNodes(parseBBCode(source), options);
   text = singleLine
     ? text.replace(/\s+/g, ' ').trim()
     : text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();

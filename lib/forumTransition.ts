@@ -9,10 +9,10 @@
  * from its still frame, so the two are registered to the pixel.
  *
  * **The card opens on the row's own data** (`rememberForumOrigin`'s `preview`). A list row carries
- * the whole post — title, author, body — so the thread renders its card complete in the frame it
- * mounts, and the transform lands on the card's real size. It used to land on the loading card,
- * which then jumped to the post's height in one frame when the thread arrived (R6-037); only the
- * replies wait for the network now.
+ * the post's header and summary projection — title, author, badges, metadata and teaser — so the
+ * thread renders its card immediately with the teaser and body skeleton while the full body and
+ * replies arrive. Once the full thread lands, `rememberForumPreview` upgrades the cached entry so
+ * `/forum/[id]/edit` opens complete and never edits a summary projection.
  */
 
 import { heroOwnsScreen } from '@/lib/appScroller';

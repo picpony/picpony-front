@@ -18,11 +18,12 @@ import type { DrawerSwipeOptions } from '@/lib/motion/drawer';
 /**
  * The shell's motion operations behind independent dynamic imports:
  *
- * - `lib/motion/tabs.ts` (WAAPI shared-axis tabs) and `lib/motion/theme.ts` (View Transition
- *   theme wipes) carry **zero GSAP dependency** and warm on idle via `warmMotion()`.
- * - `lib/motion/drawer.ts` (phone-only swipe-to-close) and `lib/motion/grid.ts` (GSAP grid
- *   stagger) isolate GSAP + Observer behind their own boundaries so desktop homepage hydration,
- *   idle warmup, tab switching and theme wipes download zero GSAP bytes.
+ * - `lib/motion/tabs.ts` (WAAPI shared-axis tabs), `lib/motion/theme.ts` (View Transition
+ *   theme wipes) and `lib/motion/grid.ts` (WAAPI grid stagger) carry **zero GSAP dependency** and
+ *   warm on idle via `warmMotion()`.
+ * - `lib/motion/drawer.ts` (phone-only swipe-to-close) isolates GSAP + Observer behind its own
+ *   on-open boundary so desktop homepage hydration, idle warmup, tab switching, theme wipes and
+ *   grid cascades download zero GSAP bytes.
  *
  * **GSAP boundary:** routes may import this facade; their static graphs must never reach
  * `lib/motion.ts` or its implementation modules.
@@ -40,50 +41,70 @@ type DrawerModule = typeof import('@/lib/motion/drawer');
 type GridModule = typeof import('@/lib/motion/grid');
 
 let tabsModule: TabsModule | null = null;
-let tabsLoading: Promise<TabsModule> | null = null;
+let tabsLoading: Promise<TabsModule | null> | null = null;
 
-function loadTabs(): Promise<TabsModule> {
+function loadTabs(): Promise<TabsModule | null> {
   if (tabsLoading) return tabsLoading;
-  tabsLoading = import('@/lib/motion/tabs').then((module) => {
-    tabsModule = module;
-    return module;
-  });
+  tabsLoading = import('@/lib/motion/tabs')
+    .then((module) => {
+      tabsModule = module;
+      return module;
+    })
+    .catch(() => {
+      tabsLoading = null;
+      return null;
+    });
   return tabsLoading;
 }
 
 let themeModule: ThemeModule | null = null;
-let themeLoading: Promise<ThemeModule> | null = null;
+let themeLoading: Promise<ThemeModule | null> | null = null;
 
-function loadTheme(): Promise<ThemeModule> {
+function loadTheme(): Promise<ThemeModule | null> {
   if (themeLoading) return themeLoading;
-  themeLoading = import('@/lib/motion/theme').then((module) => {
-    themeModule = module;
-    return module;
-  });
+  themeLoading = import('@/lib/motion/theme')
+    .then((module) => {
+      themeModule = module;
+      return module;
+    })
+    .catch(() => {
+      themeLoading = null;
+      return null;
+    });
   return themeLoading;
 }
 
 let drawerModule: DrawerModule | null = null;
-let drawerLoading: Promise<DrawerModule> | null = null;
+let drawerLoading: Promise<DrawerModule | null> | null = null;
 
-function loadDrawer(): Promise<DrawerModule> {
+function loadDrawer(): Promise<DrawerModule | null> {
   if (drawerLoading) return drawerLoading;
-  drawerLoading = import('@/lib/motion/drawer').then((module) => {
-    drawerModule = module;
-    return module;
-  });
+  drawerLoading = import('@/lib/motion/drawer')
+    .then((module) => {
+      drawerModule = module;
+      return module;
+    })
+    .catch(() => {
+      drawerLoading = null;
+      return null;
+    });
   return drawerLoading;
 }
 
 let gridModule: GridModule | null = null;
-let gridLoading: Promise<GridModule> | null = null;
+let gridLoading: Promise<GridModule | null> | null = null;
 
-function loadGrid(): Promise<GridModule> {
+function loadGrid(): Promise<GridModule | null> {
   if (gridLoading) return gridLoading;
-  gridLoading = import('@/lib/motion/grid').then((module) => {
-    gridModule = module;
-    return module;
-  });
+  gridLoading = import('@/lib/motion/grid')
+    .then((module) => {
+      gridModule = module;
+      return module;
+    })
+    .catch(() => {
+      gridLoading = null;
+      return null;
+    });
   return gridLoading;
 }
 
@@ -206,8 +227,8 @@ export function DrawerSwipe(options: DrawerSwipeOptions) {
   useEffect(() => {
     if (!shouldLoad || ready) return;
     let live = true;
-    void loadDrawer().then(() => {
-      if (live) setReady(true);
+    void loadDrawer().then((mod) => {
+      if (live && mod) setReady(true);
     });
     return () => {
       live = false;
@@ -246,8 +267,8 @@ export function TabPanesMotion({
   useEffect(() => {
     if (ready) return;
     let live = true;
-    void loadTabs().then(() => {
-      if (live) setReady(true);
+    void loadTabs().then((mod) => {
+      if (live && mod) setReady(true);
     });
     return () => {
       live = false;

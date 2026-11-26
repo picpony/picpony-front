@@ -136,7 +136,8 @@ function scheduleDetailCodeWarm(href: string) {
   const next = () => {
     const step = steps.shift();
     if (!step) return;
-    void Promise.resolve(step()).finally(() => later(next));
+    const advance = () => later(next);
+    void Promise.resolve().then(step).then(advance, advance);
   };
   later(next);
 }
@@ -221,9 +222,12 @@ export function useHeroLink<T extends HTMLElement>({
           immediate: priority === 'immediate',
         });
       } else {
-        cancelFrameWarmRef.current = null;
+        let cancelled = false;
+        cancelFrameWarmRef.current = () => {
+          cancelled = true;
+        };
         void warmHeroEngine().then((engine) => {
-          void engine?.warmImageHero(image.id, priority);
+          if (!cancelled && engine) void engine.warmImageHero(image.id, priority);
         });
       }
     },
