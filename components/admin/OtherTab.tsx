@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { MdBarChart, MdSave, MdTranslate, MdWarning } from 'react-icons/md';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
@@ -45,12 +45,14 @@ const messageLength = (text: string) => Array.from(text).length;
  * description are the row's real words, and hiding the whole row left a screen reader with nothing
  * where the two switches are (G4-021).
  */
-function RowSkeleton({ label, description }: { label: string; description: string }) {
+function RowSkeleton({ icon, label, description }: { icon: ReactNode; label: string; description: string }) {
   return (
     <div className="flex items-center gap-4">
       <div className="min-w-0 flex-1">
-        <p className="text-label-l text-on-surface">{label}</p>
-        <p className="text-body-s text-on-surface-variant">{description}</p>
+        <p className="flex items-center gap-2 text-label-l text-on-surface">
+          {icon} {label}
+        </p>
+        <p className="mt-0.5 text-body-s text-on-surface-variant">{description}</p>
       </div>
       <Skeleton className="h-8 w-13 shrink-0 rounded-full" />
     </div>
@@ -164,9 +166,13 @@ export default function OtherTab({ token }: AdminPanelProps) {
               description={MAINTENANCE_COPY}
             />
           ) : (
-            <RowSkeleton label="维护模式" description={MAINTENANCE_COPY} />
+            <RowSkeleton
+              icon={<MdWarning size={ICON.control} aria-hidden="true" />}
+              label="维护模式"
+              description={MAINTENANCE_COPY}
+            />
           )}
-          {current && (
+          {current ? (
             <div className="space-y-3">
               <Textarea
                 id="other-maintenance-message"
@@ -194,7 +200,14 @@ export default function OtherTab({ token }: AdminPanelProps) {
                 </Button>
               </div>
             </div>
-          )}
+          ) : !status.error ? (
+            <div className="space-y-3" aria-hidden="true">
+              <Skeleton className="h-24 w-full rounded-md" delay={40} />
+              <div className="flex justify-end">
+                <Skeleton className="h-10 w-32 rounded-full" delay={80} />
+              </div>
+            </div>
+          ) : null}
         </Card>
         <Card variant="filled">
           {translateEnabled !== null ? (
@@ -213,13 +226,19 @@ export default function OtherTab({ token }: AdminPanelProps) {
           ) : translation.error ? (
             <ErrorRetry size="inline" {...retryError('图片翻译状态加载失败', translation.error)} onRetry={translation.retryable ? translation.refresh : undefined} />
           ) : (
-            <RowSkeleton label="图片翻译" description={TRANSLATE_COPY} />
+            <RowSkeleton
+              icon={<MdTranslate size={ICON.control} aria-hidden="true" />}
+              label="图片翻译"
+              description={TRANSLATE_COPY}
+            />
           )}
-          {queue && (
+          {queue ? (
             <p className="mt-3 text-body-s text-on-surface-variant tabular-nums">
               {`翻译队列：排队 ${formatCount(queue.pending)} · 翻译中 ${formatCount(queue.translating)} · 已完成 ${formatCount(queue.completed)} · 失败 ${formatCount(queue.failed)}`}
             </p>
-          )}
+          ) : !translation.error ? (
+            <Skeleton className="mt-3 h-4.5 w-72 max-w-full" delay={40} />
+          ) : null}
         </Card>
       </section>
 

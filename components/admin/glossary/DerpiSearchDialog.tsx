@@ -6,6 +6,7 @@ import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
 import Skeleton from '@/components/Skeleton';
@@ -74,42 +75,44 @@ export default function DerpiSearchDialog({
             搜索
           </Button>
         </form>
-        {!query ? (
-          <EmptyState size="inline" title="输入标签名后搜索原站标签" />
-        ) : read.data === undefined && read.error ? (
-          <ErrorRetry
-            size="inline"
-            title="原站标签搜索失败"
-            message={apiErrorMessage(read.error)}
-            onRetry={isRetryable(read.error) ? read.refresh : undefined}
-          />
-        ) : read.data === undefined ? (
-          <div aria-hidden="true">
-            {[0, 1, 2, 3].map((index) => (
-              <div key={index} className="m3-row flex items-center gap-3 bg-surface-container-highest p-3">
-                <Skeleton className="h-5 w-16 shrink-0 rounded-xs" delay={index * 80} />
-                <Skeleton className="h-5 w-40 max-w-full flex-1" delay={index * 80 + 40} />
-                <Skeleton className="h-4.5 w-16 shrink-0" delay={index * 80 + 60} />
-                <Skeleton className="h-8 w-18 shrink-0 rounded-full" delay={index * 80 + 80} />
-              </div>
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <EmptyState size="inline" title="原站没有匹配的标签" />
-        ) : (
-          <ul aria-label="原站标签">
-            {rows.map((tag) => (
-              <li key={tag.name} className="m3-row flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface-container-highest p-3">
-                <Badge colors={tagCategoryChip(tag.category)}>{tag.category || 'general'}</Badge>
-                <span className="min-w-0 flex-1 font-mono text-body-m text-on-surface wrap-anywhere">{tag.name}</span>
-                <span className="text-body-s tabular-nums text-on-surface-variant">{`（${formatCount(tag.images)} 张）`}</span>
-                <Button type="button" variant="tonal" size="xs" icon={<MdAdd />} onClick={() => onImport(tag)}>
-                  导入
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <FollowHeight watch={`${query}:${read.data ? rows.length : read.error ? 'err' : 'loading'}`}>
+          {!query ? (
+            <EmptyState size="inline" title="输入标签名后搜索原站标签" />
+          ) : read.data === undefined && read.error ? (
+            <ErrorRetry
+              size="inline"
+              title="原站标签搜索失败"
+              message={apiErrorMessage(read.error)}
+              onRetry={isRetryable(read.error) ? read.refresh : undefined}
+            />
+          ) : read.data === undefined ? (
+            <div aria-hidden="true">
+              {[0, 1, 2, 3].map((index) => (
+                <div key={index} className="m3-row flex items-center gap-3 bg-surface-container-highest p-3">
+                  <Skeleton className="h-5 w-16 shrink-0 rounded-xs" delay={index * 80} />
+                  <Skeleton className="h-5 w-40 max-w-full flex-1" delay={index * 80 + 40} />
+                  <Skeleton className="h-4.5 w-16 shrink-0" delay={index * 80 + 60} />
+                  <Skeleton className="h-8 w-18 shrink-0 rounded-full" delay={index * 80 + 80} />
+                </div>
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <EmptyState size="inline" title="原站没有匹配的标签" />
+          ) : (
+            <ul aria-label="原站标签">
+              {rows.map((tag) => (
+                <li key={tag.name} className="m3-row flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface-container-highest p-3">
+                  <Badge colors={tagCategoryChip(tag.category)}>{tag.category || 'general'}</Badge>
+                  <span className="min-w-0 flex-1 font-mono text-body-m text-on-surface wrap-anywhere">{tag.name}</span>
+                  <span className="text-body-s tabular-nums text-on-surface-variant">{`（${formatCount(tag.images)} 张）`}</span>
+                  <Button type="button" variant="tonal" size="xs" icon={<MdAdd />} onClick={() => onImport(tag)}>
+                    导入
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </FollowHeight>
       </div>
     </Modal>
   );

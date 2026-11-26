@@ -136,6 +136,7 @@ const paneOf = (panel: HTMLElement, name: string) =>
 const MOTION_FLAGS = ['data-tab-pane-leaving', 'data-tab-pane-entering', 'data-tab-pane-done'];
 
 function clearPaneFlags(panel: HTMLElement) {
+  panel.removeAttribute('data-tab-primed');
   setPaneFlags(panel, null, null);
 }
 
@@ -170,8 +171,9 @@ type PrimedRun = {
   from: string;
   to: string;
   /** Start it, from the offset the switch read before React's commit (when it did). False when
-   *  the page moved under the press: it has then been let go, flags kept, for a fresh run. */
-  play(before?: number): boolean;
+   *  the page moved under the press: released (keeping flags only when `keepFlagsOnStale` is set
+   *  for an immediate fresh run). */
+  play(before?: number, keepFlagsOnStale?: boolean): boolean;
   /** Undo it. `keepFlags` when a switch on the same panel is about to write its own. */
   release(keepFlags?: boolean): void;
 };
@@ -242,7 +244,7 @@ function runTabTransition(
   }
   /* The press that led here primed this very switch. */
   if (primed) {
-    if (primed.panel === panel && primed.from === from && primed.to === to && primed.play(before)) return true;
+    if (primed.panel === panel && primed.from === from && primed.to === to && primed.play(before, true)) return true;
     releasePrimedRun(primed.panel === panel);
   }
   // A third destination must pick up the following controls where the reader sees them,
@@ -276,7 +278,10 @@ function prepareTabRun(
 
   /* The one write before the reads: both panes get a box. They share one grid cell, so
    * the panel is as tall as the taller of the two for the run. `-entering` survives until
-   * the route commit lands. */
+   * the route commit lands. Mark a held prime on the panel before unhiding the entering pane
+   * so an enclosing `FollowHeight track` holds the outgoing height silently until playback. */
+  if (held) panel.setAttribute('data-tab-primed', '');
+  else panel.removeAttribute('data-tab-primed');
   setPaneFlags(panel, leaving, entering);
   renderedPanes.add(entering);
 
@@ -511,16 +516,17 @@ function prepareTabRun(
     panel,
     from,
     to,
-    play: (after) => {
+    play: (after, keepFlagsOnStale = false) => {
       if (primedRun !== primed) return false;
       const now = after ?? scroller?.scrollTop ?? 0;
       /* The page moved under the press (a fling still settling, a wheel): the reads are stale. */
       if (Math.abs(now - origin) > 1 || heroOwnsScreen()) {
-        releasePrimedRun(true);
+        releasePrimedRun(keepFlagsOnStale);
         return false;
       }
       primedRun = null;
       primeWatch?.();
+      panel.removeAttribute('data-tab-primed');
       suspendFloor(panel);
       commit();
       go();
@@ -531,6 +537,7 @@ function prepareTabRun(
       handle.cancel();
       released = true;
       endTransit();
+      panel.removeAttribute('data-tab-primed');
       if (!keepFlags) clearPaneFlags(panel);
     },
   };

@@ -190,6 +190,23 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
   private claims = new Map<string, symbol>();
   /** The entry and control that last took a focus inside the list — what a claimed removal had. */
   private lastFocus: { key: string; slot: number } | null = null;
+  private ownedFrame = 0;
+
+  /**
+   * Tell an enclosing `FollowHeight track` that this FLIP pass already animates followers across
+   * the height change, preventing a competing height tween from double-shifting what follows.
+   */
+  private markOwned(container: HTMLElement) {
+    if (typeof requestAnimationFrame !== 'function') return;
+    container.setAttribute('data-layout-owned', '');
+    if (this.ownedFrame) cancelAnimationFrame(this.ownedFrame);
+    this.ownedFrame = requestAnimationFrame(() => {
+      this.ownedFrame = requestAnimationFrame(() => {
+        this.ownedFrame = 0;
+        container.removeAttribute('data-layout-owned');
+      });
+    });
+  }
 
   constructor(props: Props<T>) {
     super(props);
@@ -235,6 +252,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
   componentWillUnmount() {
     this.unmounted = true;
     window.removeEventListener('pointerdown', this.landMoves, true);
+    if (this.ownedFrame) cancelAnimationFrame(this.ownedFrame);
+    this.ownedFrame = 0;
+    this.container?.removeAttribute('data-layout-owned');
     for (const animation of this.running) animation.cancel();
     this.running.clear();
     this.claims.clear();
@@ -311,6 +331,7 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       }
       return;
     }
+    this.markOwned(container);
     const grid = this.props.variant === 'grid';
 
     /* Read every leaving row's corners before taking any row out of the grouped run. Interleaved

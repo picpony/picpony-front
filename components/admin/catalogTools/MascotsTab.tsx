@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
+import { MdAdd } from 'react-icons/md';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
 import FadeInImage from '@/components/FadeInImage';
 import { Input, Textarea } from '@/components/Input';
 import Modal from '@/components/Modal';
+import Skeleton from '@/components/Skeleton';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
@@ -48,11 +50,21 @@ export default function MascotsTab({ token }: AdminPanelProps) {
     { key: 'actions', header: '操作', actions: true, render: (row) => <><Button size="xs" variant="text" disabled={mutation.busy} onClick={() => open(row)}>编辑</Button><Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认删除吉祥物', `确定要删除吉祥物「${row.name}」及其 ${tipCount(row.tips)} 条台词吗？此操作无法恢复。`, () => void mutation.run(() => api.deleteMascot(token, revision, row.id), () => showToast('已删除吉祥物', 'success'), () => committed(token)), { tone: 'danger' })}>删除</Button></> },
   ];
   return <div className="space-y-6">
-    <SectionHeader section="mascots" onRefresh={read.refresh} isLoading={read.refreshing} />
+    <SectionHeader
+      section="mascots"
+      onRefresh={read.refresh}
+      isLoading={read.refreshing}
+      actions={<Button type="button" variant="filled" icon={<MdAdd />} onClick={() => open('new')}>添加吉祥物</Button>}
+    />
     <AdminNote>全局关闭后，全站将不再展示吉祥物。</AdminNote>
+    {read.loading && !read.data && (
+      <div className="flex h-8 items-center justify-between gap-4" aria-hidden="true">
+        <Skeleton className="h-5 w-28" />
+        <Skeleton className="h-8 w-13 shrink-0 rounded-full" />
+      </div>
+    )}
     {read.data && <ToggleSwitch layout="row" label="全局展示吉祥物" checked={read.data.enabled} disabled={globalMutation.busy || globalMutation.uncertain} onChange={(enabled) => confirmThen(enabled ? '确认开启吉祥物' : '确认关闭吉祥物', `确定要${enabled ? '开启' : '关闭'}全站吉祥物展示吗？`, () => void globalMutation.run(() => api.saveMascotSwitch(token, revision, enabled), () => showToast('已保存吉祥物设置', 'success'), () => committed(token)), { tone: 'filled' })} />}
     <MutationResult mutation={globalMutation} /><MutationResult mutation={mutation} />
-    <Button variant="tonal" onClick={() => open('new')}>添加吉祥物</Button>
     <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.id} loading={read.loading} {...tableError('吉祥物加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无吉祥物" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
     {shown && <MascotEditor key={shown === 'new' ? 'new' : shown.id} isOpen={editing !== null} token={token} revision={revision} item={shown === 'new' ? undefined : shown} onClose={() => setEditing(null)} onSaved={() => setEditing(null)} />}
     {confirmDialog}

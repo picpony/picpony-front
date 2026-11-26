@@ -159,6 +159,14 @@ export function buildScrollbarOptions(
 const SKIP_OBSERVE_SELECTOR =
   '[data-image-hero-gallery-anchor],[data-image-hero-route-anchor],[data-image-hero-stage-anchor]';
 
+/**
+ * Descendant scroll containers whose offsets must survive OverlayScrollbars' initial
+ * `appendChildren(viewport, children)` re-insertion (re-appending children resets nested
+ * `scrollLeft`/`scrollTop` to 0 without firing a `scroll` event).
+ */
+const DESCENDANT_SCROLLER_SELECTOR =
+  '[role="tablist"], .main-scrollbar, .popover-scrollbar, .scrollbar-hide, .overflow-x-auto, .overflow-y-auto, [data-app-scroll-container]';
+
 function observeDirectChildren(viewport: HTMLElement, onResize: () => void): () => void {
   if (typeof ResizeObserver === 'undefined') return () => {};
   const resize = new ResizeObserver(onResize);
@@ -275,6 +283,12 @@ export function mountSlottedScrollbar(
       existing.options(options);
       instance = existing;
     } else {
+      const savedDescendantScrolls: Array<[HTMLElement, number, number]> = [];
+      for (const el of viewport.querySelectorAll<HTMLElement>(DESCENDANT_SCROLLER_SELECTOR)) {
+        if (el.scrollLeft || el.scrollTop) {
+          savedDescendantScrolls.push([el, el.scrollLeft, el.scrollTop]);
+        }
+      }
       instance = mod.OverlayScrollbars(
         {
           target: viewport,
@@ -283,6 +297,11 @@ export function mountSlottedScrollbar(
         },
         options,
       );
+      for (const [el, left, top] of savedDescendantScrolls) {
+        if (!el.isConnected) continue;
+        if (el.scrollLeft !== left) el.scrollLeft = left;
+        if (el.scrollTop !== top) el.scrollTop = top;
+      }
     }
     if (viewport.tagName !== 'TEXTAREA') {
       cancelChildResize = observeDirectChildren(viewport, scheduleUpdate);

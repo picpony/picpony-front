@@ -43,7 +43,7 @@ function Tile({
     <Card as="a" interactive variant="filled" href={adminHref(tab)} onClick={open} className="flex flex-col gap-1">
       <span className="text-label-l text-on-surface-variant">{label}</span>
       <div className="text-headline-s tabular-nums text-on-surface">
-        {value === undefined ? <Skeleton className="my-1 h-7 w-20" /> : value}
+        {value === undefined ? <Skeleton className="h-8 w-20" /> : value}
       </div>
       {children}
       <span className="mt-auto text-body-s tabular-nums text-on-surface-variant">{caption}</span>
@@ -115,7 +115,11 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
             caption={stats ? `已翻译 ${formatCount(stats.translated)} / 共 ${formatCount(stats.total)} 个标签` : '前往词库编辑'}
             openTab={openTab}
           >
-            {share !== null && <ProgressBar value={share} label="词库翻译进度" className="my-1" />}
+            {dictionary.data === undefined && !dictionary.error ? (
+              <Skeleton className="my-1 h-1 w-full rounded-full" />
+            ) : share !== null ? (
+              <ProgressBar value={share} label="词库翻译进度" className="my-1" />
+            ) : null}
           </Tile>
         </li>
         {admin && (

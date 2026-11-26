@@ -1,17 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MdAdd } from 'react-icons/md';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Chip from '@/components/Chip';
+import Collapse from '@/components/Collapse';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
+import PresenceList from '@/components/PresenceList';
 import SectionHeading from '@/components/SectionHeading';
 import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
+import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import * as adminApi from '@/lib/api/admin';
 import { BLOCK_FILTER_KEYS, installBlockFilters, type BlockFilterKey, type BlockFilters } from '@/lib/blockFilters';
 import SectionHeader from './SectionHeader';
@@ -66,6 +69,8 @@ function blockTagName(text: string): string {
  * confirm and named neither the tag nor the rule); a new tag is lower-cased and trimmed, and one
  * the rule already has is refused on the field.
  */
+const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
+
 export default function BlockTagsTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(blockTagsQuery, token);
   const groups = read.data ?? {};
@@ -73,8 +78,30 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
   const removeMutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const [adding, setAdding] = useState<BlockFilterKey | null>(null);
+  const [closing, setClosing] = useState<{ key: BlockFilterKey; draft: string } | null>(null);
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState<string | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!adding) return;
+    addInputRef.current?.focus({ preventScroll: true });
+  }, [adding]);
+
+  useEffect(() => {
+    if (!closing) return;
+    if (motionTier('list') === 'off') {
+      const frame = requestAnimationFrame(() => setClosing(null));
+      return () => cancelAnimationFrame(frame);
+    }
+    const timer = setTimeout(() => setClosing(null), COLLAPSE_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+  }, [closing]);
+
+  const closeAdding = (key: BlockFilterKey) => {
+    if (motionTier('list') !== 'off') setClosing({ key, draft });
+    setAdding(null);
+  };
 
   const add = (key: BlockFilterKey) => {
     if (addMutation.isPending()) return;
@@ -100,7 +127,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
       () => {
         showToast(`已将 ${name} 加入「${RULES[key].name}」`, 'success');
         setDraft('');
-        setAdding(null);
+        closeAdding(key);
       },
       '添加失败',
       { onCommitted: read.refresh },
@@ -126,9 +153,17 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
       ), { tone: 'danger' });
 
   const toggleAdding = (key: BlockFilterKey) => {
+    if (adding === key) {
+      closeAdding(key);
+      setDraft('');
+      setDraftError(null);
+      return;
+    }
+    if (adding && motionTier('list') !== 'off') setClosing({ key: adding, draft });
+    else if (closing?.key === key) setClosing(null);
     setDraft('');
     setDraftError(null);
-    setAdding((current) => (current === key ? null : key));
+    setAdding(key);
   };
 
   return (
@@ -144,82 +179,103 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
           {BLOCK_FILTER_KEYS.map((key, index) => {
             const tags = groups[key] ?? [];
             const open = adding === key;
+            const mounted = open || closing?.key === key;
+            const collapseId = `block-tag-add-${key}`;
             return (
               <Card key={key} variant="filled" className="space-y-3">
-                <SectionHeading
-                  as="h3"
-                  className="mb-3"
-                  subtitle={RULES[key].role}
-                  actions={
-                    <Button
-                      type="button"
-                      variant="tonal"
-                      size="xs"
-                      icon={<MdAdd />}
-                      aria-expanded={open}
-                      disabled={!read.data}
-                      onClick={() => toggleAdding(key)}
-                    >
-                      添加标签
-                    </Button>
-                  }
-                >
-                  {RULES[key].name}
-                </SectionHeading>
-                {open && (
-                  <form
-                    noValidate
-                    aria-label={`向「${RULES[key].name}」添加标签`}
-                    className="flex items-start gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      add(key);
+                <div>
+                  <SectionHeading
+                    as="h3"
+                    className="mb-0"
+                    subtitle={RULES[key].role}
+                    actions={
+                      <Button
+                        type="button"
+                        variant="tonal"
+                        size="xs"
+                        icon={<MdAdd />}
+                        aria-expanded={open}
+                        aria-controls={collapseId}
+                        disabled={!read.data}
+                        onClick={() => toggleAdding(key)}
+                      >
+                        添加标签
+                      </Button>
+                    }
+                  >
+                    {RULES[key].name}
+                  </SectionHeading>
+                  <Collapse
+                    id={collapseId}
+                    open={open}
+                    onTransitionEnd={(event) => {
+                      if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !open) {
+                        setClosing((current) => (current?.key === key ? null : current));
+                      }
                     }}
                   >
-                    <Input
-                      size="sm"
-                      aria-label="标签名"
-                      placeholder="输入英文标签名，例如：grimdark"
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      autoFocus
-                      value={draft}
-                      readOnly={addMutation.busy}
-                      error={draftError ?? undefined}
-                      fieldClassName="min-w-0 flex-1"
-                      onChange={(event) => {
-                        setDraft(event.target.value);
-                        setDraftError(null);
-                      }}
-                    />
-                    <Button type="submit" variant="filled" loading={addMutation.busy}>
-                      添加
-                    </Button>
-                  </form>
-                )}
+                    {mounted && (
+                      <form
+                        noValidate
+                        aria-label={`向「${RULES[key].name}」添加标签`}
+                        className="flex items-start gap-2 pt-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          add(key);
+                        }}
+                      >
+                        <Input
+                          ref={open ? addInputRef : undefined}
+                          size="sm"
+                          aria-label="标签名"
+                          placeholder="输入英文标签名，例如：grimdark"
+                          autoComplete="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          value={open ? draft : (closing?.draft ?? '')}
+                          readOnly={addMutation.busy || !open}
+                          error={open ? (draftError ?? undefined) : undefined}
+                          fieldClassName="min-w-0 flex-1"
+                          onChange={(event) => {
+                            setDraft(event.target.value);
+                            setDraftError(null);
+                          }}
+                        />
+                        <Button type="submit" variant="filled" loading={open && addMutation.busy}>
+                          添加
+                        </Button>
+                      </form>
+                    )}
+                  </Collapse>
+                </div>
                 {!read.data ? (
                   <div className="flex flex-wrap gap-2" aria-hidden="true">
                     {[64, 88, 72, 96, 56].map((width, chip) => (
                       <Skeleton key={chip} className="h-8 rounded-sm" style={{ width }} delay={index * 90 + chip * 40} />
                     ))}
                   </div>
-                ) : tags.length === 0 ? (
-                  <EmptyState size="inline" title="暂无标签" />
                 ) : (
-                  <ul className="flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
-                    {tags.map((tag) => (
-                      <li key={tag.id}>
-                        <Chip
-                          disabled={removeMutation.pendingKeys.has(tag.id)}
-                          onRemove={() => remove(key, tag)}
-                          removeLabel={`从「${RULES[key].name}」中移除 ${tag.tag_name}`}
-                        >
-                          {tag.tag_name}
-                        </Chip>
-                      </li>
-                    ))}
-                  </ul>
+                  <PresenceList items={tags} getKey={(tag) => tag.id} variant="grid">
+                    {(entries, ref) =>
+                      entries.length === 0 ? (
+                        <EmptyState size="inline" title="暂无标签" />
+                      ) : (
+                        <ul ref={ref} className="relative flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
+                          {entries.map(({ item: tag, key: entryKey, leaving }) => (
+                            <li key={entryKey} data-presence-key={entryKey}>
+                              <Chip
+                                disabled={leaving || removeMutation.pendingKeys.has(tag.id)}
+                                onRemove={() => remove(key, tag)}
+                                removeLabel={`从「${RULES[key].name}」中移除 ${tag.tag_name}`}
+                              >
+                                {tag.tag_name}
+                              </Chip>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    }
+                  </PresenceList>
                 )}
               </Card>
             );

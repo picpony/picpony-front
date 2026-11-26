@@ -13,6 +13,30 @@ import { insideConcealedPane } from '@/lib/tabPaneVisibility';
 
 /** One running move per element, across the table's presence and the inline editor. */
 const moves = new WeakMap<Element, Animation>();
+/** Pending cleanup frame for `data-layout-owned` markers (`markLayoutOwned`). */
+const ownedFrames = new WeakMap<Element, number>();
+
+/**
+ * Signals an enclosing `FollowHeight track` that a table or inline editor already owns this
+ * commit's height transition via compositor FLIP. Kept across two animation frames so it covers
+ * the same-frame `ResizeObserver` delivery without outliving the gesture.
+ */
+export function markLayoutOwned(el: Element | null | undefined) {
+  if (!el || typeof el.setAttribute !== 'function') return;
+  const previous = ownedFrames.get(el);
+  if (previous !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(previous);
+  el.setAttribute('data-layout-owned', '');
+  if (typeof requestAnimationFrame !== 'function') return;
+  const clear = () => {
+    ownedFrames.delete(el);
+    el.removeAttribute('data-layout-owned');
+  };
+  const first = requestAnimationFrame(() => {
+    const second = requestAnimationFrame(clear);
+    ownedFrames.set(el, second);
+  });
+  ownedFrames.set(el, first);
+}
 
 /** The move running on `el`, if any. */
 export function runningMove(el: Element): Animation | undefined {
@@ -47,17 +71,22 @@ export function dropMove(el: Element, animation?: Animation) {
   current.cancel();
 }
 
+/** Stops at the page column or an overlay's scroll body so modal tables never move dialog chrome. */
+function isMotionBoundary(el: Element): boolean {
+  return el.hasAttribute('data-page-content') || el.hasAttribute('data-app-scroll-container');
+}
+
 /**
- * What follows `node` in the page column and lies within `band` (viewport coordinates): the later
- * siblings of `node` and of each of its ancestors, up to the page content — rows after a row,
- * the pager after a table, the sections after a panel, the shell's footer. A block that grows or
- * shrinks moves all of it; animated, it travels with the block instead of jumping to where the
- * block will end. A concealed tab pane, a box out of the flow and a box with no height are left
- * out.
+ * What follows `node` in its scroll column and lies within `band` (viewport coordinates): the later
+ * siblings of `node` and of each of its ancestors, up to the page content or overlay scroller —
+ * rows after a row, the pager after a table, the sections after a panel, the shell's footer. A
+ * block that grows or shrinks moves all of it; animated, it travels with the block instead of
+ * jumping to where the block will end. A concealed tab pane, a box out of the flow and a box with
+ * no height are left out.
  */
 export function followersOf(node: Element, band: { top: number; bottom: number }): HTMLElement[] {
   const result: HTMLElement[] = [];
-  for (let current: Element | null = node; current && !current.hasAttribute('data-page-content'); current = current.parentElement) {
+  for (let current: Element | null = node; current && !isMotionBoundary(current); current = current.parentElement) {
     for (let sibling = current.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
       if (!(sibling instanceof HTMLElement)) continue;
       if (sibling.hasAttribute('data-tab-pane') && insideConcealedPane(sibling)) continue;
@@ -72,15 +101,15 @@ export function followersOf(node: Element, band: { top: number; bottom: number }
 }
 
 /**
- * What precedes `node` in the page column and lies within `band`: the earlier siblings of `node` and
- * of each of its ancestors, up to the page content — the rows above a row, the heading and forms
- * above a table, the console's rail. They move when a shrinking block makes the browser clamp the
- * scroll offset (the page scrolled to its end): everything above it drops by the clamp. A sticky
- * box is left out with the rest, since it does not move with the page.
+ * What precedes `node` in its scroll column and lies within `band`: the earlier siblings of `node`
+ * and of each of its ancestors, up to the page content or overlay scroller — the rows above a row,
+ * the heading and forms above a table, the console's rail. They move when a shrinking block makes
+ * the browser clamp the scroll offset (the page scrolled to its end): everything above it drops by
+ * the clamp. A sticky box is left out with the rest, since it does not move with the page.
  */
 export function precedersOf(node: Element, band: { top: number; bottom: number }): HTMLElement[] {
   const result: HTMLElement[] = [];
-  for (let current: Element | null = node; current && !current.hasAttribute('data-page-content'); current = current.parentElement) {
+  for (let current: Element | null = node; current && !isMotionBoundary(current); current = current.parentElement) {
     for (let sibling = current.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
       if (!(sibling instanceof HTMLElement)) continue;
       if (sibling.hasAttribute('data-tab-pane') && insideConcealedPane(sibling)) continue;

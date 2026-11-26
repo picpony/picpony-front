@@ -288,7 +288,7 @@ PresenceList snapshots focus before the removal commit on every tier.
 - Preserve newer user focus over later dialog restoration.
 - PresenceBlock also accepts a fallback. Last-row removal, clear and undo must provide their landing in the relevant commit.
 
-DataTable owns its subgrid presence. It shares one column grid, switches to labelled pairs by container width, keeps departing rows in flow and holds an auto-track width until list replacement. Pass `listKey` from `usePagedRows` / `useShownListKey` so paging replaces rows rather than treating them as individual deletions.
+DataTable owns its subgrid presence. It shares one column grid, switches to labelled pairs by container width, keeps departing rows in flow and holds an auto-track width until list replacement. Pass `listKey` from `usePagedRows` / `useShownListKey` so paging replaces rows rather than treating them as individual deletions, and pass `surface="dialog"` when hosted inside a modal.
 
 ## Tooltips and action feedback
 

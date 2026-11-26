@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Button from '@/components/Button';
+import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
 import ProgressBar from '@/components/ProgressBar';
+import SwapContent from '@/components/SwapContent';
 import { showToast } from '@/components/Toast';
 import { readToken } from '@/lib/hooks';
 import { apiErrorMessage } from '@/lib/api/errors';
@@ -161,40 +163,44 @@ export default function SyncDialog({
     >
       <AdminForm id={FORM_ID} onSubmit={() => void submit()} className="max-w-none" aria-label="同步原站热门标签">
         <AdminNote>按原站图片数量从高到低拉取标签，每页 50 个；词库中已有的标签会跳过，新标签记为未翻译。</AdminNote>
-        {running ? (
-          <div className="space-y-2" aria-live="polite">
-            <ProgressBar value={(progress.done / progress.total) * 100} label="同步进度" />
-            <p className="text-body-m tabular-nums text-on-surface-variant">
-              {stopping ? '正在停止…' : `正在同步第 ${progress.page} 页 · 已完成 ${progress.done} / ${progress.total} 页`}
-            </p>
-          </div>
-        ) : (
-          <FormGrid from="sm">
-            <Input
-              label="起始页"
-              inputMode="numeric"
-              autoComplete="off"
-              value={start}
-              error={errors.start}
-              onChange={(event) => {
-                setStart(event.target.value);
-                setErrors({});
-              }}
-            />
-            <Input
-              label="结束页"
-              inputMode="numeric"
-              autoComplete="off"
-              value={end}
-              error={errors.end}
-              helper="一次最多 100 页"
-              onChange={(event) => {
-                setEnd(event.target.value);
-                setErrors({});
-              }}
-            />
-          </FormGrid>
-        )}
+        <FollowHeight watch={running}>
+          <SwapContent contentKey={running ? 'running' : 'idle'}>
+            {running ? (
+              <div className="space-y-2" aria-live="polite">
+                <ProgressBar value={(progress.done / progress.total) * 100} label="同步进度" />
+                <p className="text-body-m tabular-nums text-on-surface-variant">
+                  {stopping ? '正在停止…' : `正在同步第 ${progress.page} 页 · 已完成 ${progress.done} / ${progress.total} 页`}
+                </p>
+              </div>
+            ) : (
+              <FormGrid from="sm">
+                <Input
+                  label="起始页"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={start}
+                  error={errors.start}
+                  onChange={(event) => {
+                    setStart(event.target.value);
+                    setErrors({});
+                  }}
+                />
+                <Input
+                  label="结束页"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={end}
+                  error={errors.end}
+                  helper="一次最多 100 页"
+                  onChange={(event) => {
+                    setEnd(event.target.value);
+                    setErrors({});
+                  }}
+                />
+              </FormGrid>
+            )}
+          </SwapContent>
+        </FollowHeight>
       </AdminForm>
     </Modal>
   );

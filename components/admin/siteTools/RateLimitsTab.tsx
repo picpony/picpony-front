@@ -66,9 +66,12 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
               { key: 'max', header: '最多次数', width: 'auto', className: 'tabular-nums', render: (r) => r.max },
               { key: 'window', header: '时间窗口', width: 'auto', className: 'tabular-nums', render: (r) => `${r.window} 秒` },
               { key: 'key', header: '计数对象', width: 'auto', render: (r) => r.key_type === 'ip' ? 'IP 地址' : '用户' },
-              { key: 'actions', header: '操作', actions: true, render: (r) => <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑${r.label}规则`} aria-controls={`rate-editor-${r.action}`} aria-expanded={editing?.action === r.action && !editing.closing} disabled={save.busy || !superAdmin} onClick={(event) => { captureInlineEditorLayout(event.currentTarget); setEditing({ action: r.action, closing: false }); }} /> },
+              { key: 'actions', header: '操作', actions: true, render: (r) => {
+                const open = editing?.action === r.action && !editing.closing;
+                return <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑${r.label}规则`} aria-controls={`rate-editor-${r.action}`} aria-expanded={open} disabled={save.busy || !superAdmin} onClick={(event) => { if (open) closeEditor(); else { captureInlineEditorLayout(event.currentTarget); setEditing({ action: r.action, closing: false }); } }} />;
+              } },
             ]} />
-            <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
+            <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={(page) => { setEditing(null); paged.setPage(page); }} />
           </AdminListAnchor>
           {Object.values(errors).map((error) => <p key={error} role="alert" className="text-body-s text-error">{error}</p>)}
           {superAdmin && <FormActions><Button type="submit" variant="filled" loading={save.busy} disabled={!rules.length}>保存频率规则</Button></FormActions>}

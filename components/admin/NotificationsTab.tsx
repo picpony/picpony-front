@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MdDeleteOutline, MdSend } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Collapse from '@/components/Collapse';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
 import { Input, Textarea } from '@/components/Input';
@@ -243,13 +244,13 @@ ${currentPage}`, history.isPrevious);
     : {};
 
   return (
-    <div className="space-y-6">
+    <div className="@container space-y-6">
       <SectionHeader section="notifications" />
 
       <AdminForm onSubmit={send} aria-labelledby="notifications-send-heading">
         <SectionHeading as="h3" id="notifications-send-heading">发送通知</SectionHeading>
-        <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0" aria-describedby={errors.audience ? 'notifications-audience-error' : undefined}>
-          <legend className="text-label-l text-on-surface-variant">发送对象</legend>
+        <fieldset className="min-w-0 border-0 p-0" aria-describedby={errors.audience ? 'notifications-audience-error' : undefined}>
+          <legend className="mb-2 text-label-l text-on-surface-variant">发送对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio
               name="notification-audience"
@@ -271,24 +272,26 @@ ${currentPage}`, history.isPrevious);
             />
           </div>
           {errors.audience && (
-            <p id="notifications-audience-error" role="alert" className="text-body-s text-error">
+            <p id="notifications-audience-error" role="alert" className="mt-2 text-body-s text-error">
               {errors.audience}
             </p>
           )}
+          <Collapse open={audience === 'user'}>
+            <div className="pt-4">
+              <Input
+                label="接收用户 ID"
+                inputMode="numeric"
+                autoComplete="off"
+                value={recipient}
+                readOnly={sending}
+                error={errors.recipient}
+                helper={recipientHelper}
+                fieldClassName="@sm/form:w-80"
+                onChange={(event) => { setRecipient(event.target.value); clear('recipient'); }}
+              />
+            </div>
+          </Collapse>
         </fieldset>
-        {audience === 'user' && (
-          <Input
-            label="接收用户 ID"
-            inputMode="numeric"
-            autoComplete="off"
-            value={recipient}
-            readOnly={sending}
-            error={errors.recipient}
-            helper={recipientHelper}
-            fieldClassName="sm:w-80"
-            onChange={(event) => { setRecipient(event.target.value); clear('recipient'); }}
-          />
-        )}
         <Input
           label="通知标题"
           value={title}
@@ -324,8 +327,8 @@ ${currentPage}`, history.isPrevious);
 
       <section aria-labelledby="admin-sent-notifications-heading" className="space-y-4">
         <SectionHeading as="h3" id="admin-sent-notifications-heading">已发送的通知</SectionHeading>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput value={search} onChange={setSearch} placeholder="搜索标题、正文或接收者…" className="min-w-0 sm:flex-1" />
+        <div className="flex flex-col gap-3 @md:flex-row @md:items-center">
+          <SearchInput value={search} onChange={setSearch} placeholder="搜索标题、正文或接收者…" className="min-w-0 @md:flex-1" />
           <Select
             size="sm"
             value={filter}

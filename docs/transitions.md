@@ -71,7 +71,7 @@ The home gallery/forum pill is the exception:
 
 ### Priming and interruption
 
-`primeTabTransition` prepares the held first pose on press. Release starts playback; cancelled scrolls and long presses release the prime. Mouse priming follows its ripple frame.
+`primeTabTransition` prepares the held first pose on press and marks the panel `data-tab-primed` until playback or cancellation so an enclosing `FollowHeight track` holds the outgoing height without bouncing on press. Release starts playback; cancelled scrolls and long presses release the prime. Mouse priming follows its ripple frame. Pointer focus on an edge tab does not scroll the tab list before click; keyboard focus reveals immediately and selection reveals once `value` commits.
 
 The selection commit follows the first presented frame through `afterFirstFrame`, or flushes on the next input. The indicator uses cached geometry from ResizeObserver.
 
@@ -107,11 +107,11 @@ The footer travels with its page during route changes. Tabs alone hold it with `
 
 ## Admin panes and inline editors
 
-`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts.
+`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts. On wide layouts the vertical rail stays sticky inside an inner `ScrollArea` so long tables keep navigation reachable without stretching short panes.
 
 `sections.ts` owns section names and icons; `SectionHeader` consumes them. Shared reads use `sharedQueries.ts` and `useAdminSelect`, preserving derived-view identity.
 
-Inline editors use `InlineEditorPanel`. Capture with `captureInlineEditorLayout` before opening and retain through `onExitComplete`. The translated clip and surface share layout motion with `DataTable`; do not animate `clip-path` or restart on a StrictMode remount.
+Inline editors use `InlineEditorPanel`. Capture with `captureInlineEditorLayout` before opening and retain through `onExitComplete`. The translated clip and surface share layout motion with `DataTable`; do not animate `clip-path` or restart on a StrictMode remount. `DataTable`, `InlineEditorPanel` and `PresenceList` mark `data-layout-owned` while running FLIP moves so an enclosing `FollowHeight track` updates its settled height without competing, and `tableMotion` stops at `[data-app-scroll-container]` so modal tables stay inside the dialog body. Pass `surface="dialog"` on `DataTable` and `InlineEditorPanel` inside modals.
 
 ## Back and focus
 

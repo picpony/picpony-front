@@ -30,13 +30,12 @@ interface FollowHeightProps {
    * ever paints at the new height first. The commit path (`getSnapshotBeforeUpdate`) stands down,
    * since the observer already covers every commit.
    *
-   * **It moves once, when the content has settled.** While a switch is in flight (a pane flagged
-   * `data-tab-pane-leaving`, both panes stacked in one cell) or a placeholder is on screen
-   * (`data-page-loading`), the content's height is not the height it will end at: followed, the box
-   * grew to the two panes stacked or to a skeleton's length and then shrank back to the section a
-   * moment later — up, then down, on every switch. So the box holds the height it had, the content
-   * clipped at its bottom edge, and springs once to where the content lands. A hold never outlasts
-   * `HOLD_MAX_MS`: a section still loading after that is followed as it is.
+   * **It moves once when shrinking, and never slices growing content.** While a tab switch is only
+   * primed on press (`data-tab-primed`, arriving pane held off-screen), the box stays at its
+   * outgoing height so a cancelled press never bounces height. Once a switch or load is actually
+   * visible, a shrink during an unsettled phase (`data-tab-pane-leaving` or `data-page-loading`)
+   * holds the taller height until settled (at most `HOLD_MAX_MS`) so the card does not dip to a
+   * skeleton and jump back up; a growth expands immediately rather than clipping arriving content.
    */
   track?: boolean;
 }
@@ -70,14 +69,57 @@ interface FollowHeightProps {
 /** The longest the box keeps its height for content that has not settled (`track`). */
 const HOLD_MAX_MS = 1200;
 
-/** A switch in flight, or a placeholder on screen, inside `root`. */
-function unsettled(root: HTMLElement): boolean {
-  if (root.querySelector('[data-tab-pane-leaving]')) return true;
+/** A visible placeholder on screen inside `root`. */
+function hasVisibleLoading(root: HTMLElement): boolean {
   for (const node of root.querySelectorAll<HTMLElement>('[data-page-loading]')) {
     /* A concealed pane keeps its subtree, placeholders included; only one on screen counts. */
     if (typeof node.checkVisibility !== 'function' || node.checkVisibility()) return true;
   }
   return false;
+}
+
+/** A tab press has un-concealed a destination pane off-screen, before the switch starts. */
+function hasPrimedTab(root: HTMLElement): boolean {
+  return Boolean(root.querySelector('[data-tab-primed]'));
+}
+
+/** A switch in flight, or a placeholder on screen, inside `root`. */
+function unsettled(root: HTMLElement): boolean {
+  return Boolean(root.querySelector('[data-tab-pane-leaving]')) || hasVisibleLoading(root);
+}
+
+/**
+ * A child inside `root` already animates this height change on its own clock (`DataTable` row
+ * presence, `InlineEditorPanel`, or a CSS `Collapse` transition). Following it here would double-move
+ * the shell's footer, clip rows mid-glide, or restart a WAAPI height tween on every frame of a
+ * `grid-template-rows` transition.
+ */
+function hasOwnedLayoutMotion(root: HTMLElement): boolean {
+  if (root.querySelector('[data-layout-owned]')) return true;
+  for (const node of root.querySelectorAll<HTMLElement>('.m3-collapse')) {
+    if (typeof node.getAnimations !== 'function') continue;
+    if (node.getAnimations().some((animation) =>
+      animation.playState === 'running' && (animation as CSSTransition).transitionProperty === 'grid-template-rows')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The minimum content height the parent container already reserves (for example the admin panel's
+ * `min-h-150` / `min-h-96` less its vertical padding). Clamping tracked endpoints against this
+ * floor prevents slicing an arriving taller pane inside space the card already occupies, and skips
+ * dead-zone animations between two short panes whose enclosing card never changes height.
+ */
+function parentFloorHeight(node: HTMLElement): number {
+  const parent = node.parentElement;
+  if (!parent || typeof getComputedStyle !== 'function') return 0;
+  const style = getComputedStyle(parent);
+  const min = parseFloat(style.minHeight) || 0;
+  if (min <= 0) return 0;
+  const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  return Math.max(0, min - pad);
 }
 
 export default class FollowHeight extends Component<FollowHeightProps> {
@@ -95,12 +137,27 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   private settled: number | null = null;
   /** `track`: the box is holding its height for content that has not settled. */
   private holding = false;
+  /** The height held while `holding` is true, so taller arriving content releases immediately. */
+  private heldHeight = 0;
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
   private holdFrame = 0;
   private mutations: MutationObserver | null = null;
 
   componentDidMount() {
     if (this.props.track) this.observe();
+  }
+
+  /**
+   * Release a hold as soon as the press is no longer merely primed AND either the content has
+   * settled or visible content has grown taller than the held height (never slice arriving pages).
+   */
+  private shouldReleaseHold(inner: HTMLDivElement, currentTo?: number): boolean {
+    if (hasPrimedTab(inner)) return false;
+    if (!unsettled(inner)) return true;
+    const node = this.node;
+    const floor = node ? parentFloorHeight(node) : 0;
+    const to = currentTo ?? inner.getBoundingClientRect().height;
+    return Math.max(to, floor) > this.heldHeight + 0.5;
   }
 
   /**
@@ -117,54 +174,77 @@ export default class FollowHeight extends Component<FollowHeightProps> {
       const node = this.node;
       if (!entry || !node) return;
       const to = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
-      if (motionTier('list') === 'off') {
+      if (motionTier('list') === 'off' || hasOwnedLayoutMotion(inner)) {
         this.settled = to;
         this.endHold();
         return this.stop();
       }
       if (this.holding) {
-        if (!unsettled(inner)) this.release();
+        if (this.shouldReleaseHold(inner, to)) this.release();
         return;
       }
       const from = this.run ? node.getBoundingClientRect().height : this.settled;
       this.settled = to;
       if (from === null) return this.stop();
-      if (Math.abs(to - from) < 0.5) return;
-      if (unsettled(inner)) return this.hold(node, inner, from);
+      const floor = parentFloorHeight(node);
+      const start = Math.max(from, floor);
+      const end = Math.max(to, floor);
+      if (Math.abs(end - start) < 0.5) return this.stop();
+      if (hasPrimedTab(inner) || (unsettled(inner) && end <= start)) {
+        return this.hold(node, inner, start);
+      }
       this.stop();
       /* Pinned inline as well as animated: the observer's own re-layout then lays the page out at
          the old height in this frame, whatever the engine does with an animation created this late. */
-      node.style.height = `${from}px`;
-      this.animate(node, from, to);
+      node.style.height = `${start}px`;
+      this.animate(node, start, end);
     });
     observer.observe(inner);
     this.observer = observer;
   }
 
   /**
-   * Keep the box at `height` until the content settles. The end of a switch and a placeholder's
-   * replacement usually resize the content, which the resize observer reports; one that lands at
-   * the same height does not, so the flags and the placeholders are watched as well.
+   * Keep the box at `height` until the content settles (or a primed press starts/cancels). The end
+   * of a switch and a placeholder's replacement usually resize the content, which the resize
+   * observer reports; one that lands at the same height — or a primed press whose `data-tab-primed`
+   * flag comes off on click — does not, so those attributes are watched as well.
    */
   private hold(node: HTMLDivElement, inner: HTMLDivElement, height: number) {
     this.stop();
     this.holding = true;
+    this.heldHeight = height;
     node.style.height = `${height}px`;
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-    this.holdTimer = setTimeout(() => this.release(), HOLD_MAX_MS);
+    const armTimer = () => {
+      if (this.holdTimer) clearTimeout(this.holdTimer);
+      this.holdTimer = setTimeout(() => {
+        this.holdTimer = null;
+        if (!this.holding || !this.inner) return;
+        /* A primed press is still waiting on release (`PRIME_MAX_MS` caps it); stay held so a long
+           press never grows the box before a switch starts. */
+        if (hasPrimedTab(this.inner)) return;
+        this.release();
+      }, HOLD_MAX_MS);
+    };
+    armTimer();
     if (typeof MutationObserver === 'undefined') return;
     const mutations = new MutationObserver(() => {
       if (this.holdFrame) return;
       this.holdFrame = requestAnimationFrame(() => {
         this.holdFrame = 0;
-        if (this.holding && !unsettled(inner)) this.release();
+        if (!this.holding) return;
+        if (this.shouldReleaseHold(inner)) {
+          this.release();
+        } else if (!hasPrimedTab(inner) && !this.holdTimer) {
+          armTimer();
+        }
       });
     });
     mutations.observe(inner, {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ['data-tab-pane-leaving', 'data-page-loading'],
+      attributeFilter: ['data-tab-primed', 'data-tab-pane-leaving', 'data-page-loading'],
     });
     this.mutations = mutations;
   }
@@ -176,20 +256,23 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     const wasHolding = this.holding;
     this.endHold();
     if (!wasHolding || !node || !inner) return;
-    const from = node.getBoundingClientRect().height;
+    const floor = parentFloorHeight(node);
+    const from = Math.max(node.getBoundingClientRect().height, floor);
     node.style.height = '';
     const to = inner.getBoundingClientRect().height;
     this.settled = to;
-    if (Math.abs(to - from) < 0.5) {
+    const end = Math.max(to, floor);
+    if (Math.abs(end - from) < 0.5) {
       node.style.clipPath = '';
       return;
     }
     node.style.height = `${from}px`;
-    this.animate(node, from, to);
+    this.animate(node, from, end);
   }
 
   private endHold() {
     this.holding = false;
+    this.heldHeight = 0;
     if (this.holdTimer) clearTimeout(this.holdTimer);
     this.holdTimer = null;
     if (this.holdFrame) cancelAnimationFrame(this.holdFrame);
@@ -219,11 +302,13 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   }
 
   private animate(node: HTMLDivElement, from: number, to: number) {
+    node.setAttribute('data-layout-owned', '');
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
     const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'layout', 'list'));
     const release = () => {
       if (this.run !== run) return;
       this.run = null;
+      node.removeAttribute('data-layout-owned');
       node.style.clipPath = '';
       if (this.props.track) node.style.height = '';
     };
@@ -243,6 +328,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     this.run = null;
     run?.cancel();
     if (this.node) {
+      this.node.removeAttribute('data-layout-owned');
       this.node.style.clipPath = '';
       if (this.props.track) this.node.style.height = '';
     }

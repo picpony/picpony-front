@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { motionTier } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
 import { insideConcealedPane } from '@/lib/tabPaneVisibility';
-import { dropMove, followersOf, precedersOf, startMove } from '@/components/admin/tableMotion';
+import { dropMove, followersOf, markLayoutOwned, precedersOf, startMove } from '@/components/admin/tableMotion';
 import Skeleton from './Skeleton';
 import EmptyState from './EmptyState';
 import ErrorRetry from './ErrorRetry';
@@ -62,6 +62,8 @@ interface DataTableProps<T> {
    * way without it.
    */
   listKey?: unknown;
+  /** `dialog` steps tones cleanly above a `Modal` (`surface-container-high`) instead of matching it. */
+  surface?: 'panel' | 'dialog';
 }
 
 type EntryKind = 'row' | 'error' | 'empty';
@@ -336,6 +338,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
       this.fitFirstRow();
       return;
     }
+    markLayoutOwned(this.root);
     const wasLeaving = new Set(previous.entries.filter((entry) => entry.leaving).map((entry) => entry.key));
     const before = new Set(previous.entries.map((entry) => entry.key));
     const groups = this.groups();
@@ -557,7 +560,9 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
   }
 
   render() {
-    const { columns, loading = false, error, errorDetail, onRetry, empty, skeletonRows = 6, className = '' } = this.props;
+    const { columns, loading = false, error, errorDetail, onRetry, empty, skeletonRows = 6, className = '', surface = 'panel' } = this.props;
+    const rowTone = surface === 'dialog' ? 'bg-surface-container-highest' : 'bg-surface-container';
+    const headerTone = surface === 'dialog' ? 'bg-surface-container' : 'bg-surface-container-high';
     const leading = columns.filter(isLeading);
     const heading = columns.find((c) => c.primary && !isLeading(c)) ?? null;
     const details = columns.filter((c) => !c.primary && !c.actions && !isLeading(c));
@@ -591,7 +596,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
               /* The tone is flat and stays flat: this row is not a control.
                  Nothing hovers here except the buttons in the `actions`
                  column, which carry their own state layer. */
-              'bg-surface-container',
+              rowTone,
             )}
           >
             {leading.length > 0 && (
@@ -629,9 +634,9 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             ))}
 
             {actions.length > 0 && (
-              <div className="text-body-m ml-auto flex flex-wrap items-center justify-end gap-2 @2xl/table:ml-0 @2xl/table:justify-self-end">
+              <div className="text-body-m ml-auto flex flex-wrap items-center justify-end gap-2 pointer-coarse:gap-4 @2xl/table:ml-0 @2xl/table:justify-self-end">
                 {actions.map((col) => (
-                  <div key={col.key} className={cn('flex flex-wrap items-center gap-2', col.className)}>
+                  <div key={col.key} className={cn('flex flex-wrap items-center gap-2 pointer-coarse:gap-4', col.className)}>
                     {col.render(row, i)}
                   </div>
                 ))}
@@ -648,7 +653,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
       if (entry.kind === 'error') {
         const failure = entry.leaving ? entry.failure : { title: error ?? '', detail: errorDetail };
         return (
-          <div key={entry.key} data-presence-key={entry.key} className="m3-row bg-surface-container">
+          <div key={entry.key} data-presence-key={entry.key} className={cn('m3-row', rowTone)}>
             <ErrorRetry size="inline" title={failure?.title ?? ''} message={failure?.detail} onRetry={entry.leaving ? undefined : onRetry} />
           </div>
         );
@@ -662,7 +667,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
           key={entry.key}
           data-presence-key={entry.key}
           tabIndex={-1}
-          className="m3-row bg-surface-container focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+          className={cn('m3-row focus-visible:outline-hidden focus-visible:ring-2 focus-ring', rowTone)}
         >
           {typeof empty === 'string' || empty == null ? <EmptyState size="inline" title={empty ?? '暂无数据'} /> : empty}
         </div>
@@ -687,7 +692,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
                narrow, each value carries its own label. ---- */}
           <div
             data-table-header=""
-            className="m3-row hidden bg-surface-container-high px-4 py-3 @2xl/table:grid @2xl/table:grid-cols-subgrid @2xl/table:items-center"
+            className={cn('m3-row hidden px-4 py-3 @2xl/table:grid @2xl/table:grid-cols-subgrid @2xl/table:items-center', headerTone)}
           >
             {leading.length > 0 && (
               <div className="flex items-center gap-2">
@@ -718,7 +723,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
               <div
                 key={`skeleton-${i}`}
                 aria-hidden="true"
-                className={cn('m3-row p-4 @2xl/table:items-center', rowLayout, 'bg-surface-container')}
+                className={cn('m3-row p-4 @2xl/table:items-center', rowLayout, rowTone)}
               >
                 {leading.length > 0 && (
                   <div className="flex shrink-0 items-center gap-2">

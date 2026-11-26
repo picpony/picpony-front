@@ -7,7 +7,7 @@ import { getAppScroller } from '@/lib/appScroller';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { springTiming } from '@/lib/springTiming';
 import { TRAVEL_PX } from '@/lib/motionTokens';
-import { dropMove, drawnOffsetY, followersOf, precedersOf, startMove } from '@/components/admin/tableMotion';
+import { dropMove, drawnOffsetY, followersOf, markLayoutOwned, precedersOf, startMove } from '@/components/admin/tableMotion';
 
 interface InlineEditorPanelProps {
   id: string;
@@ -16,6 +16,8 @@ interface InlineEditorPanelProps {
   onExitComplete: () => void;
   /** Escape inside the panel (when nothing inside it took the key) — the editor's 取消. */
   onEscape?: () => void;
+  /** `dialog` steps up to `surface-container-highest` inside a `Modal` (`surface-container-high`). */
+  surface?: 'panel' | 'dialog';
   children: ReactNode;
 }
 
@@ -75,6 +77,11 @@ function takeCapture(panel: HTMLElement): Capture | null {
   return performance.now() - capture.at <= CAPTURE_TTL_MS ? capture : null;
 }
 
+/** Nearest scroll container: the dialog/sheet body when nested inside one, else the app scroller. */
+function scrollerOf(el: Element): HTMLElement | null {
+  return (typeof el.closest === 'function' ? el.closest<HTMLElement>('[data-app-scroll-container]') : null) ?? getAppScroller();
+}
+
 /**
  * Keep the pressed row where the user pressed it. Measured after the commit's layout — so a scroll
  * anchor the browser already applied reads as no movement — and corrected by the movement that
@@ -84,7 +91,7 @@ function takeCapture(panel: HTMLElement): Capture | null {
 function holdAnchor(capture: Capture | null, panel: HTMLElement) {
   const row = panel.previousElementSibling;
   if (!capture || !row) return;
-  const scroller = getAppScroller();
+  const scroller = scrollerOf(panel);
   if (!scroller) return;
   const moved = row.getBoundingClientRect().top - capture.rowTop;
   if (Math.abs(moved) >= 1) scroller.scrollTop += moved;
@@ -92,12 +99,12 @@ function holdAnchor(capture: Capture | null, panel: HTMLElement) {
 
 /** A panel that opened below the fold scrolls its row to the top of the view, the editor under it. */
 function revealPanel(panel: HTMLElement) {
-  const scroller = getAppScroller();
+  const scroller = scrollerOf(panel);
   if (!scroller) return;
   const view = scroller.getBoundingClientRect();
   if (panel.getBoundingClientRect().top <= view.bottom - REVEAL_MARGIN) return;
   const row = panel.previousElementSibling;
-  scrollAppToElement(row instanceof HTMLElement ? row : panel, { offset: REVEAL_OFFSET });
+  scrollAppToElement(row instanceof HTMLElement ? row : panel, { offset: REVEAL_OFFSET, scroller });
 }
 
 /** One opening or closing: the panel's own tracks, and the moves it gave what follows. */
@@ -178,6 +185,7 @@ export default function InlineEditorPanel({
   isClosing,
   onExitComplete,
   onEscape,
+  surface = 'panel',
   children,
 }: InlineEditorPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
@@ -209,6 +217,7 @@ export default function InlineEditorPanel({
 
     const tier = motionTier('list');
     if (!previous && !isClosing) {
+      markLayoutOwned(panel.parentElement ?? panel);
       const capture = takeCapture(panel);
       holdAnchor(capture, panel);
       revealPanel(panel);
@@ -224,6 +233,7 @@ export default function InlineEditorPanel({
       runs.set(panel, run);
       const finish = () => {
         if (runs.get(panel) !== run) return;
+        markLayoutOwned(panel.parentElement);
         for (const [el, animation] of run.moved) dropMove(el, animation);
         /* The moves land and the panel goes in one task: the layout shift replaces each translate
            exactly, so nothing moves in the frame between. The row's corners are held at the run's
@@ -234,9 +244,13 @@ export default function InlineEditorPanel({
       };
       if (run.own.length) run.own[0].finished.then(finish, () => {});
       else queueMicrotask(() => {
-        if (runs.get(panel) === run) onExitCompleteRef.current();
+        if (runs.get(panel) === run) {
+          markLayoutOwned(panel.parentElement);
+          onExitCompleteRef.current();
+        }
       });
     } else {
+      markLayoutOwned(panel.parentElement ?? panel);
       runs.set(panel, turn(panel, surface, tier, previous ?? null, 'open'));
     }
     return () => release(panel);
@@ -264,7 +278,10 @@ export default function InlineEditorPanel({
       className="m3-row pointer-events-none overflow-clip forced-colors:outline-none!"
       aria-label={label}
     >
-      <div ref={surfaceRef} className="pointer-events-auto rounded-[inherit] bg-surface-container px-4 py-5 forced-boundary">
+      <div
+        ref={surfaceRef}
+        className={`pointer-events-auto rounded-[inherit] ${surface === 'dialog' ? 'bg-surface-container-highest' : 'bg-surface-container'} px-4 py-5 forced-boundary`}
+      >
         {children}
       </div>
     </section>
@@ -289,7 +306,7 @@ function footprint(panel: HTMLElement) {
  * box, so it keeps focus — and the scroll offset the read clamped is put back.
  */
 function layoutWithout(panel: HTMLElement, targets: HTMLElement[]): { tops: number[]; shift: number } {
-  const scroller = getAppScroller();
+  const scroller = scrollerOf(panel);
   const scrollTop = scroller?.scrollTop ?? 0;
   const { height, marginTop } = panel.style;
   panel.style.height = '0px';

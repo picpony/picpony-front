@@ -30,6 +30,7 @@ import ProgressBar from '@/components/ProgressBar';
 import SearchInput from '@/components/SearchInput';
 import SectionHeading from '@/components/SectionHeading';
 import Select from '@/components/Select';
+import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { SKIP, useResource } from '@/lib/resource';
@@ -571,7 +572,11 @@ ${duplicatePage.listKey}` : pageKey;
   return (
     <div className="@container/glossary space-y-6">
       <SectionHeader section="glossary"
-        subtitle={read.data !== undefined ? (duplicates ? `${total} 个重复的英文标签` : `共 ${total} 条`) : undefined}
+        subtitle={
+          read.data !== undefined
+            ? (duplicates ? `${total} 个重复的英文标签` : `共 ${total} 条`)
+            : (token && !read.error ? <Skeleton className="my-0.5 inline-block h-4 w-20 align-middle" /> : undefined)
+        }
         onRefresh={read.refresh}
         isLoading={read.isLoading && read.data !== undefined}
         actions={
@@ -610,22 +615,24 @@ ${duplicatePage.listKey}` : pageKey;
           <div className="min-w-0 @lg/glossary:flex-1">
             <SearchInput value={search} onChange={setSearch} placeholder="搜索英文标签或中文翻译…" aria-label="搜索标签" />
           </div>
-          <Select
-            size="sm"
-            value={sort}
-            options={SORTS}
-            disabled={duplicates}
-            aria-label="排序方式"
-            onChange={setSort}
-          />
-          <Select
-            size="sm"
-            value={category}
-            options={CATEGORY_FILTERS}
-            disabled={duplicates}
-            aria-label="分类筛选"
-            onChange={setCategory}
-          />
+          <div className="grid grid-cols-2 gap-3 @lg/glossary:flex @lg/glossary:shrink-0 @lg/glossary:items-center">
+            <Select
+              size="sm"
+              value={sort}
+              options={SORTS}
+              disabled={duplicates}
+              aria-label="排序方式"
+              onChange={setSort}
+            />
+            <Select
+              size="sm"
+              value={category}
+              options={CATEGORY_FILTERS}
+              disabled={duplicates}
+              aria-label="分类筛选"
+              onChange={setCategory}
+            />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Chip

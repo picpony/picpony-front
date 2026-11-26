@@ -5,26 +5,32 @@ import DateInput from '../DateInput';
 import { useEffect, useId, useState } from 'react';
 import { MdDeleteOutline, MdEdit, MdPassword } from 'react-icons/md';
 import Button from '@/components/Button';
+import ErrorRetry from '@/components/ErrorRetry';
+import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
 import InlineEditorPanel from '@/components/InlineEditorPanel';
 import { Field, Input, Textarea } from '@/components/Input';
 import RoleBadge from '@/components/RoleBadge';
 import SectionHeading from '@/components/SectionHeading';
 import Select from '@/components/Select';
+import Skeleton from '@/components/Skeleton';
 import UserBadge from '@/components/UserBadge';
 import { showToast } from '@/components/Toast';
+import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { GENDER_OPTIONS, optionsWith } from '@/lib/profileFields';
 import type { Role } from '@/lib/roles';
 import { copyText } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
 import { validateApiKey, validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
 import { AdminForm, FormActions, FormGrid } from '../AdminForm';
+import { retryError } from '../queries';
 import Checkbox from '@/components/Checkbox';
 import type { AdminUserChanges, AdminUserDetail, AdminUserRow } from '@/lib/api/admin';
 import {
   initialUserForm,
   randomPassword,
   roleChoice,
+  userBadges,
   userUpdatePayload,
   type AdminUserBadge,
   type UserFormValues,
@@ -51,11 +57,13 @@ export function userEditorId(userId: number) {
  * (and `off` on the account fields) stops that; 生成随机密码 makes a strong one and copies it.
  */
 export default function UserEditor({
-  user,
+  row,
+  account,
+  detailError,
+  onRetryDetail,
   viewer,
   closing,
   saving,
-  badges,
   badgeBusy,
   onSave,
   onCancel,
@@ -64,38 +72,67 @@ export default function UserEditor({
   onEditBadge,
   onDeleteBadge,
 }: {
-  user: AdminUserDetail;
+  row: AdminUser;
+  account: AdminUserDetail | null;
+  detailError?: unknown;
+  onRetryDetail: () => void;
   viewer: { id: number; role: Role };
   closing: boolean;
   saving: boolean;
-  badges: AdminUserBadge[];
   badgeBusy: (badgeId: number) => boolean;
-  onSave: (changes: AdminUserChanges | null) => void;
+  onSave: (account: AdminUserDetail, changes: AdminUserChanges | null) => void;
   onCancel: () => void;
   onExitComplete: () => void;
   onDirtyChange: (dirty: boolean) => void;
-  onEditBadge: (badge: AdminUserBadge) => void;
-  onDeleteBadge: (badge: AdminUserBadge) => void;
+  onEditBadge: (account: AdminUserDetail, badge: AdminUserBadge) => void;
+  onDeleteBadge: (account: AdminUserDetail, badge: AdminUserBadge) => void;
 }) {
-  const [baseline] = useState(() => user);
-  const [form, setForm] = useState<UserFormValues>(() => initialUserForm(baseline));
+  /* Keep one `InlineEditorPanel` mounted across loading → loaded → revision updates so opening
+     a row never plays the inline reveal twice; `FollowHeight` glides the height change in place. */
+  const accountKey = account ? `${account.id}:${account.account_revision}:${account.upstream_credential.revision}` : null;
+  const [state, setState] = useState<{
+    key: string | null;
+    baseline: AdminUserDetail | null;
+    form: UserFormValues | null;
+    errors: Partial<Record<FieldName, string>>;
+  }>(() => (account
+    ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
+    : { key: null, baseline: null, form: null, errors: {} }));
   const badgesHeading = useId();
-  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
-  const choice = roleChoice(viewer, user);
-  const id = (field: string) => `users-inline-${user.id}-${field}`;
 
-  const dirty = userUpdatePayload(baseline, form, choice.locked === null) !== null;
+  /* Hold the last loaded snapshot while closing so an invalidated detail read cannot flash back
+     to a loading skeleton mid-exit. */
+  const synced = state.key === accountKey || (!account && closing && state.baseline)
+    ? state
+    : (account
+      ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
+      : { key: null, baseline: null, form: null, errors: {} });
+  if (synced !== state) setState(synced);
+
+  const activeAccount = account ?? (closing ? synced.baseline : null);
+  const baseline = synced.baseline;
+  const form = synced.form;
+  const errors = synced.errors;
+  const choice = activeAccount ? roleChoice(viewer, activeAccount) : null;
+  const id = (field: string) => `users-inline-${row.id}-${field}`;
+
+  const dirty = Boolean(baseline && form && choice && userUpdatePayload(baseline, form, choice.locked === null) !== null);
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
 
   const set = <K extends keyof UserFormValues>(field: K, value: UserFormValues[K]) => {
-    setForm((previous) => ({ ...previous, [field]: value }));
-    if (field in errors) setErrors((previous) => ({ ...previous, [field]: undefined }));
+    setState((previous) => {
+      if (!previous.form) return previous;
+      const nextErrors = field in previous.errors
+        ? { ...previous.errors, [field]: undefined }
+        : previous.errors;
+      return { ...previous, form: { ...previous.form, [field]: value }, errors: nextErrors };
+    });
   };
 
   const submit = () => {
-    if (saving) return;
+    if (saving || !activeAccount || !baseline || !form || !choice) return;
     const before = initialUserForm(baseline);
     const next: Partial<Record<FieldName, string>> = {};
     /* An unchanged name or address is not re-validated: an account older than a rule must still
@@ -107,12 +144,12 @@ export default function UserEditor({
        P6-F4); clearing it (an unbind) and an unchanged legacy key are not re-validated. */
     if (form.apiKey.trim() && form.apiKey.trim() !== before.apiKey) next.apiKey = validateApiKey(form.apiKey) ?? undefined;
     if (Object.values(next).some(Boolean)) {
-      setErrors(next);
+      setState((previous) => ({ ...previous, errors: next }));
       const first = (['username', 'email', 'password', 'apiKey'] as const).find((field) => next[field]);
       if (first) document.getElementById(id(first === 'apiKey' ? 'api-key' : first))?.focus();
       return;
     }
-    onSave(userUpdatePayload(baseline, form, choice.locked === null));
+    onSave(activeAccount, userUpdatePayload(baseline, form, choice.locked === null));
   };
 
   const generate = async () => {
@@ -121,171 +158,206 @@ export default function UserEditor({
     showToast((await copyText(password)) ? '已生成随机密码并复制' : '已生成随机密码', 'success');
   };
 
-  const facts = [
-    user.created_at ? `注册于 ${formatDateTime(user.created_at)}` : null,
-    user.last_online ? `最近在线 ${formatDateTime(user.last_online)}` : null,
-    user.ip_location ? `IP 属地 ${user.ip_location}` : null,
-    user.upstream_credential.upstream_name ? `Derpibooru：${user.upstream_credential.upstream_name}` : null,
-    user.active_sessions > 0 ? `${user.active_sessions} 个登录会话` : null,
-  ].filter(Boolean);
-  const credential = user.upstream_credential;
-  const keyState = credential.has_key ? `当前已绑定${credential.key_hint ? `（${credential.key_hint}）` : ''}` : '当前未绑定';
+  const contentState = activeAccount && form && choice ? 'ready' : detailError ? 'error' : 'loading';
+  const badges = activeAccount ? userBadges(activeAccount.badges) : [];
+  const facts = activeAccount
+    ? [
+        activeAccount.created_at ? `注册于 ${formatDateTime(activeAccount.created_at)}` : null,
+        activeAccount.last_online ? `最近在线 ${formatDateTime(activeAccount.last_online)}` : null,
+        activeAccount.ip_location ? `IP 属地 ${activeAccount.ip_location}` : null,
+        activeAccount.upstream_credential.upstream_name ? `Derpibooru：${activeAccount.upstream_credential.upstream_name}` : null,
+        activeAccount.active_sessions > 0 ? `${activeAccount.active_sessions} 个登录会话` : null,
+      ].filter(Boolean)
+    : [];
+  const credential = activeAccount?.upstream_credential;
+  const keyState = credential?.has_key ? `当前已绑定${credential.key_hint ? `（${credential.key_hint}）` : ''}` : '当前未绑定';
 
   return (
     <InlineEditorPanel
-      id={userEditorId(user.id)}
-      label={`编辑用户 ${user.username}`}
+      id={userEditorId(row.id)}
+      label={`编辑用户 ${activeAccount?.username ?? row.username}`}
       isClosing={closing}
       onExitComplete={onExitComplete}
       onEscape={saving ? undefined : onCancel}
     >
-      {/* The panel is the named region (编辑用户 …); the form inside it is not a second one (G4-031). */}
-      <AdminForm onSubmit={submit}>
-          <SectionHeading
-            as="h3"
-            subtitle={facts.length > 0 ? <span className="tabular-nums">{facts.join(' · ')}</span> : undefined}
-            aside={<RoleBadge role={user.role} showUser size="md" />}
-          >
-            <span className="tabular-nums">{`#${user.id} ${user.username}`}</span>
-          </SectionHeading>
-          <FormGrid>
-            <Input
-              id={id('username')}
-              label="用户名"
-              name="admin-edit-username"
-              autoComplete="off"
-              spellCheck={false}
-              value={form.username}
-              readOnly={saving}
-              error={errors.username}
-              onChange={(event) => set('username', event.target.value)}
-            />
-            <Input
-              id={id('email')}
-              label="邮箱"
-              type="email"
-              name="admin-edit-email"
-              autoComplete="off"
-              spellCheck={false}
-              value={form.email}
-              readOnly={saving}
-              error={errors.email}
-              onChange={(event) => set('email', event.target.value)}
-            />
-            <Input
-              id={id('password')}
-              label="新密码"
-              type="password"
-              name="new-password"
-              autoComplete="new-password"
-              value={form.password}
-              readOnly={saving}
-              error={errors.password}
-              helper={`留空则不修改；修改后该用户需在所有设备上重新登录。${PASSWORD_HINT}`}
-              onChange={(event) => set('password', event.target.value)}
-              trailing={
-                <IconButton
-                  aria-label="生成随机密码"
-                  icon={<MdPassword />}
-                  disabled={saving}
-                  onClick={() => void generate()}
-                />
-              }
-            />
-            <div className="min-w-0 space-y-2">
+      <FollowHeight watch={contentState}>
+        {activeAccount && form && choice && credential ? (
+          /* The panel is the named region (编辑用户 …); the form inside it is not a second one (G4-031). */
+          <AdminForm onSubmit={submit}>
+            <SectionHeading
+              as="h3"
+              subtitle={facts.length > 0 ? <span className="tabular-nums">{facts.join(' · ')}</span> : undefined}
+              aside={<RoleBadge role={activeAccount.role} showUser size="md" />}
+            >
+              <span className="tabular-nums">{`#${activeAccount.id} ${activeAccount.username}`}</span>
+            </SectionHeading>
+            <FormGrid>
               <Input
-                id={id('api-key')}
-                label="新的 Derpibooru API Key"
-                name="admin-edit-api-key"
+                id={id('username')}
+                label="用户名"
+                name="admin-edit-username"
                 autoComplete="off"
                 spellCheck={false}
-                className="font-mono"
-                value={form.apiKey}
-                readOnly={saving || form.clearKey}
-                error={errors.apiKey}
-                helper={`${keyState}；留空则不修改。`}
-                onChange={(event) => set('apiKey', event.target.value)}
+                value={form.username}
+                readOnly={saving}
+                error={errors.username}
+                onChange={(event) => set('username', event.target.value)}
               />
-              {credential.has_key && (
-                <Checkbox
-                  label="解除该用户的 API Key 绑定"
-                  checked={form.clearKey}
-                  disabled={saving}
-                  onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+              <Input
+                id={id('email')}
+                label="邮箱"
+                type="email"
+                name="admin-edit-email"
+                autoComplete="off"
+                spellCheck={false}
+                value={form.email}
+                readOnly={saving}
+                error={errors.email}
+                onChange={(event) => set('email', event.target.value)}
+              />
+              <Input
+                id={id('password')}
+                label="新密码"
+                type="password"
+                name="new-password"
+                autoComplete="new-password"
+                value={form.password}
+                readOnly={saving}
+                error={errors.password}
+                helper={`留空则不修改；修改后该用户需在所有设备上重新登录。${PASSWORD_HINT}`}
+                onChange={(event) => set('password', event.target.value)}
+                trailing={
+                  <IconButton
+                    aria-label="生成随机密码"
+                    icon={<MdPassword />}
+                    disabled={saving}
+                    onClick={() => void generate()}
+                  />
+                }
+              />
+              <div className="min-w-0 space-y-2">
+                <Input
+                  id={id('api-key')}
+                  label="新的 Derpibooru API Key"
+                  name="admin-edit-api-key"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="font-mono"
+                  value={form.apiKey}
+                  readOnly={saving || form.clearKey}
+                  error={errors.apiKey}
+                  helper={`${keyState}；留空则不修改。`}
+                  onChange={(event) => set('apiKey', event.target.value)}
                 />
-              )}
-            </div>
-            <Field helper={choice.locked ?? choice.note ?? undefined}>
+                {credential.has_key && (
+                  <Checkbox
+                    label="解除该用户的 API Key 绑定"
+                    checked={form.clearKey}
+                    disabled={saving}
+                    onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+                  />
+                )}
+              </div>
+              <Field helper={choice.locked ?? choice.note ?? undefined}>
+                <Select
+                  label="角色"
+                  value={form.role}
+                  options={choice.options}
+                  disabled={saving || choice.locked !== null}
+                  onChange={(value) => set('role', value)}
+                />
+              </Field>
               <Select
-                label="角色"
-                value={form.role}
-                options={choice.options}
-                disabled={saving || choice.locked !== null}
-                onChange={(value) => set('role', value)}
+                label="性别"
+                value={form.gender}
+                options={optionsWith(GENDER_OPTIONS, form.gender)}
+                disabled={saving}
+                onChange={(value) => set('gender', value)}
               />
-            </Field>
-            <Select
-              label="性别"
-              value={form.gender}
-              options={optionsWith(GENDER_OPTIONS, form.gender)}
-              disabled={saving}
-              onChange={(value) => set('gender', value)}
-            />
-            <DateInput
-              id={id('birthday')}
-              label="生日"
-              fieldClassName="min-w-0 @lg/form:col-span-2"
-              value={form.birthday}
+              <DateInput
+                id={id('birthday')}
+                label="生日"
+                fieldClassName="min-w-0 @lg/form:col-span-2"
+                value={form.birthday}
+                readOnly={saving}
+                onChange={(event) => set('birthday', event.target.value)}
+              />
+            </FormGrid>
+            <Textarea
+              id={id('bio')}
+              label="个人简介"
+              rows={3}
+              className="resize-none"
+              value={form.bio}
               readOnly={saving}
-              onChange={(event) => set('birthday', event.target.value)}
+              onChange={(event) => set('bio', event.target.value)}
             />
-          </FormGrid>
-          <Textarea
-            id={id('bio')}
-            label="个人简介"
-            rows={3}
-            className="resize-none"
-            value={form.bio}
-            readOnly={saving}
-            onChange={(event) => set('bio', event.target.value)}
+            {badges.length > 0 && (
+              <section aria-labelledby={badgesHeading} className="space-y-2">
+                <h4 id={badgesHeading} className="text-label-l text-on-surface-variant">已获得的徽章</h4>
+                <ul className="flex flex-wrap gap-x-4 gap-y-2 pointer-coarse:gap-y-4">
+                  {badges.map((badge) => (
+                    <li key={badge.id} className="flex items-center gap-1 pointer-coarse:gap-4">
+                      <UserBadge name={badge.name} color={badge.color} />
+                      <IconButton
+                        size="sm"
+                        aria-label={`编辑徽章 ${badge.name}`}
+                        icon={<MdEdit />}
+                        disabled={saving || badgeBusy(badge.id)}
+                        onClick={() => onEditBadge(activeAccount, badge)}
+                      />
+                      <IconButton
+                        size="sm"
+                        variant="danger-text"
+                        aria-label={`删除徽章 ${badge.name}`}
+                        icon={<MdDeleteOutline />}
+                        loading={badgeBusy(badge.id)}
+                        disabled={saving}
+                        onClick={() => onDeleteBadge(activeAccount, badge)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <FormActions>
+              <Button type="button" variant="text" onClick={onCancel} disabled={saving}>
+                取消
+              </Button>
+              <Button type="submit" variant="filled" loading={saving}>
+                保存修改
+              </Button>
+            </FormActions>
+          </AdminForm>
+        ) : detailError ? (
+          <ErrorRetry
+            size="inline"
+            {...retryError('用户资料加载失败', apiErrorMessage(detailError))}
+            onRetry={isRetryable(detailError) ? onRetryDetail : undefined}
           />
-          {badges.length > 0 && (
-            <section aria-labelledby={badgesHeading} className="space-y-2">
-              <h4 id={badgesHeading} className="text-label-l text-on-surface-variant">已获得的徽章</h4>
-              <ul className="flex flex-wrap gap-x-4 gap-y-2 pointer-coarse:gap-y-4">
-                {badges.map((badge) => (
-                  <li key={badge.id} className="flex items-center gap-1 pointer-coarse:gap-4">
-                    <UserBadge name={badge.name} color={badge.color} />
-                    <IconButton
-                      size="sm"
-                      aria-label={`编辑徽章 ${badge.name}`}
-                      icon={<MdEdit />}
-                      disabled={saving || badgeBusy(badge.id)}
-                      onClick={() => onEditBadge(badge)}
-                    />
-                    <IconButton
-                      size="sm"
-                      variant="danger-text"
-                      aria-label={`删除徽章 ${badge.name}`}
-                      icon={<MdDeleteOutline />}
-                      loading={badgeBusy(badge.id)}
-                      disabled={saving}
-                      onClick={() => onDeleteBadge(badge)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <FormActions>
-            <Button type="button" variant="text" onClick={onCancel} disabled={saving}>
-              取消
-            </Button>
-            <Button type="submit" variant="filled" loading={saving}>
-              保存修改
-            </Button>
-          </FormActions>
-      </AdminForm>
+        ) : (
+          <div className="@container/form max-w-2xl space-y-4" aria-label="正在加载用户资料">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4.5 w-72 max-w-full" delay={40} />
+              </div>
+              <Skeleton className="h-6 w-16 shrink-0 rounded-full" delay={40} />
+            </div>
+            <div className="grid grid-cols-1 gap-4 @lg/form:grid-cols-2">
+              {[0, 1, 2, 3, 4, 5].map((index) => (
+                <Skeleton key={index} className="h-14 w-full rounded-md" delay={60 + index * 35} />
+              ))}
+              <Skeleton className="h-14 w-full rounded-md @lg/form:col-span-2" delay={270} />
+            </div>
+            <Skeleton className="h-24 w-full rounded-md" delay={300} />
+            <div className="flex justify-end gap-3">
+              <Skeleton className="h-10 w-16 rounded-full" delay={330} />
+              <Skeleton className="h-10 w-24 rounded-full" delay={360} />
+            </div>
+          </div>
+        )}
+      </FollowHeight>
     </InlineEditorPanel>
   );
 }

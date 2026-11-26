@@ -210,7 +210,7 @@ function loadDataTable(tier = 'standard') {
     '@/lib/appearance': { motionTier: () => tier },
     '@/lib/springTiming': { springTiming: () => ({ duration: 100, easing: 'linear' }) },
     '@/lib/tabPaneVisibility': { insideConcealedPane: () => false },
-    '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], precedersOf: () => [], startMove: stub },
+    '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], markLayoutOwned: stub, precedersOf: () => [], startMove: stub },
     './Skeleton': stub, './EmptyState': stub, './ErrorRetry': stub,
   };
   vm.runInNewContext(code, { exports, document: {}, require: (name) => {
@@ -316,4 +316,212 @@ test('a dropped leaver\'s columns are held through the merges that follow, and l
     const replaced = step({ ...state, held: [1, 2, 3, 4] }, props);
     assert.equal(replaced.held, null, `${label} sizes its own tracks`);
   }
+});
+
+test('tableMotion stops at modal scroll containers and marks FLIP layout ownership across two frames', () => {
+  const frames = [];
+  class FakeElement {
+    constructor(name, attrs = []) {
+      this.name = name;
+      this.attrs = new Set(attrs);
+      this.parentElement = null;
+      this.previousElementSibling = null;
+      this.nextElementSibling = null;
+    }
+    hasAttribute(name) { return this.attrs.has(name); }
+    setAttribute(name) { this.attrs.add(name); }
+    removeAttribute(name) { this.attrs.delete(name); }
+    getBoundingClientRect() { return { top: 100, bottom: 160, height: 60 }; }
+  }
+  const source = readFileSync(path.join(root, 'components/admin/tableMotion.ts'), 'utf8');
+  const code = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const exports = {};
+  vm.runInNewContext(code, {
+    exports,
+    HTMLElement: FakeElement,
+    getComputedStyle: () => ({ position: 'static', transform: 'none' }),
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
+    cancelAnimationFrame: (id) => { frames[id - 1] = null; },
+    require: (name) => {
+      assert.equal(name, '@/lib/tabPaneVisibility');
+      return { insideConcealedPane: () => false };
+    },
+  }, { filename: 'tableMotion.ts' });
+
+  const link = (parent, children) => {
+    children.forEach((child, i) => {
+      child.parentElement = parent;
+      child.previousElementSibling = children[i - 1] ?? null;
+      child.nextElementSibling = children[i + 1] ?? null;
+    });
+  };
+  const modal = new FakeElement('modal');
+  const header = new FakeElement('dialog-header');
+  const body = new FakeElement('dialog-body', ['data-app-scroll-container']);
+  const footer = new FakeElement('dialog-footer');
+  link(modal, [header, body, footer]);
+
+  const intro = new FakeElement('intro');
+  const table = new FakeElement('table');
+  const row = new FakeElement('row');
+  const nextRow = new FakeElement('next-row');
+  const note = new FakeElement('after-table');
+  link(body, [intro, table, note]);
+  link(table, [row, nextRow]);
+
+  const band = { top: 0, bottom: 900 };
+  assert.deepEqual(plain(exports.followersOf(row, band).map((el) => el.name)), ['next-row', 'after-table'],
+    'modal table followers stay inside the dialog scroll body and never move dialog footer');
+  assert.deepEqual(plain(exports.precedersOf(row, band).map((el) => el.name)), ['intro'],
+    'modal table preceders stop at the dialog scroll body and never move dialog header');
+
+  exports.markLayoutOwned(table);
+  assert.equal(table.hasAttribute('data-layout-owned'), true);
+  frames.shift()();
+  assert.equal(table.hasAttribute('data-layout-owned'), true, 'still marked through the first paint frame');
+  frames.shift()();
+  assert.equal(table.hasAttribute('data-layout-owned'), false, 'cleared after two animation frames');
+});
+
+test('FollowHeight track never clips growing loading panes and holds primed presses silently', async () => {
+  const resizeCallbacks = [];
+  const mutationCallbacks = [];
+  const frames = [];
+  const timers = [];
+  const animations = [];
+  class FakeResizeObserver {
+    constructor(cb) { this.cb = cb; resizeCallbacks.push(cb); }
+    observe() {}
+    disconnect() {}
+  }
+  class FakeMutationObserver {
+    constructor(cb) { this.cb = cb; mutationCallbacks.push(cb); }
+    observe() {}
+    disconnect() {}
+  }
+  const makeNode = (height, attrs = {}) => ({
+    _height: height,
+    _attrs: new Set(Object.entries(attrs).filter(([, v]) => v).map(([k]) => k)),
+    style: { height: '', clipPath: '' },
+    parentElement: { _minHeight: 552, _pad: 0 },
+    getBoundingClientRect() {
+      const parsed = parseFloat(this.style.height);
+      return { height: Number.isFinite(parsed) ? parsed : this._height };
+    },
+    setAttribute(name) { this._attrs.add(name); },
+    removeAttribute(name) { this._attrs.delete(name); },
+    hasAttribute(name) { return this._attrs.has(name); },
+    querySelector(sel) {
+      if (sel === '[data-tab-primed]') return this._attrs.has('data-tab-primed') ? this : null;
+      if (sel === '[data-tab-pane-leaving]') return this._attrs.has('data-tab-pane-leaving') ? this : null;
+      if (sel === '[data-layout-owned]') return null;
+      return null;
+    },
+    querySelectorAll(sel) {
+      if (sel === '[data-page-loading]') return this._attrs.has('data-page-loading') ? [{ checkVisibility: () => true }] : [];
+      return [];
+    },
+    animate(keyframes) {
+      let resolveFinish;
+      const finished = new Promise((r) => { resolveFinish = r; });
+      const anim = { keyframes, cancelled: false, cancel() { this.cancelled = true; resolveFinish(); }, finish() { resolveFinish(); }, finished };
+      animations.push(anim);
+      return anim;
+    },
+  });
+  const source = readFileSync(path.join(root, 'components/FollowHeight.tsx'), 'utf8');
+  const code = ts.transpileModule(source, {
+    fileName: 'FollowHeight.tsx',
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const exports = {};
+  const stub = () => null;
+  const modules = {
+    react: { Component: class { constructor(props) { this.props = props; } } },
+    'react/jsx-runtime': { jsx: stub, jsxs: stub },
+    '@/lib/appearance': { motionTier: () => 'standard' },
+    '@/lib/springTiming': { springTiming: () => ({ duration: 200, easing: 'linear' }) },
+  };
+  vm.runInNewContext(code, {
+    exports,
+    ResizeObserver: FakeResizeObserver,
+    MutationObserver: FakeMutationObserver,
+    getComputedStyle: (el) => ({ minHeight: `${el._minHeight ?? 0}px`, paddingTop: '0px', paddingBottom: '0px' }),
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
+    cancelAnimationFrame: (id) => { frames[id - 1] = null; },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeout: (id) => { timers[id - 1] = null; },
+    require: (name) => {
+      assert.ok(name in modules, `unmocked dependency: ${name}`);
+      return modules[name];
+    },
+  }, { filename: 'FollowHeight.tsx' });
+
+  const FollowHeight = exports.default;
+  const fh = new FollowHeight({ track: true, children: null });
+  const outer = makeNode(320);
+  const inner = makeNode(320);
+  fh.setNode(outer);
+  fh.setInner(inner);
+  fh.componentDidMount();
+  const resize = (h) => {
+    inner._height = h;
+    outer._height = h;
+    resizeCallbacks[0]([{ borderBoxSize: [{ blockSize: h }], contentRect: { height: h } }]);
+  };
+
+  /* 1. Growing into an unvisited loading pane expands immediately instead of holding & slicing. */
+  inner.setAttribute('data-tab-pane-leaving');
+  inner.setAttribute('data-page-loading');
+  resize(900);
+  assert.equal(animations.length, 1, 'growing loading pane animates instead of holding');
+  assert.deepEqual(plain(animations[0].keyframes), [{ height: '552px' }, { height: '900px' }]);
+  animations[0].finish();
+  await Promise.resolve();
+
+  /* 2. Shrinking into a shorter loading placeholder holds at 900 without clipping, then expands if chunk grows past 900. */
+  inner.removeAttribute('data-tab-pane-leaving');
+  resize(650);
+  assert.equal(animations.length, 1, 'shrinking loading pane holds at 900');
+  assert.equal(outer.style.height, '900px');
+  resize(1100);
+  assert.equal(animations.length, 2, 'growing past the held height releases and animates immediately');
+  assert.deepEqual(plain(animations[1].keyframes), [{ height: '900px' }, { height: '1100px' }]);
+  animations[1].finish();
+  await Promise.resolve();
+
+  /* 3. Settling back to 320, then priming a taller visited tab (1100) holds silently with zero animation on press & cancel. */
+  inner.removeAttribute('data-page-loading');
+  resize(320);
+  animations[2].finish();
+  await Promise.resolve();
+  const beforePrime = animations.length;
+  inner.setAttribute('data-tab-primed');
+  inner.setAttribute('data-tab-pane-leaving');
+  resize(1100);
+  assert.equal(animations.length, beforePrime, 'primed press does not animate height before click');
+  assert.equal(outer.style.height, '552px', 'primed press holds outgoing floor height');
+  /* Cancelling the press clears flags and returns to 320 with zero bounce. */
+  inner.removeAttribute('data-tab-primed');
+  inner.removeAttribute('data-tab-pane-leaving');
+  inner._height = 320;
+  outer._height = 320;
+  mutationCallbacks.at(-1)();
+  while (frames.length) frames.shift()?.();
+  assert.equal(animations.length, beforePrime, 'cancelled prime releases silently with no height animation');
+  assert.equal(outer.style.height, '');
+  assert.equal(outer.style.clipPath, '');
+
+  /* 4. Clicking a primed taller tab removes data-tab-primed and expands smoothly in sync with playback. */
+  inner.setAttribute('data-tab-primed');
+  inner.setAttribute('data-tab-pane-leaving');
+  resize(1100);
+  assert.equal(animations.length, beforePrime);
+  inner.removeAttribute('data-tab-primed');
+  mutationCallbacks.at(-1)();
+  while (frames.length) frames.shift()?.();
+  assert.equal(animations.length, beforePrime + 1, 'playing a primed taller tab expands immediately');
+  assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '552px' }, { height: '1100px' }]);
 });

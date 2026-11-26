@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MdAdd, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import Checkbox from '@/components/Checkbox';
+import Collapse from '@/components/Collapse';
 import DataTable from '@/components/DataTable';
+import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
 import SectionHeading from '@/components/SectionHeading';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
+import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { formatDateTime } from '@/lib/format';
 import { fieldsPayload, providerFields, providerPayload, providerValues, quotaFields, GATEWAY, type Values } from '@/lib/adminSiteTools/model';
 import * as api from '@/lib/api/adminSiteTools';
@@ -103,13 +106,47 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
   </AdminForm>;
 }
 
+const PROVIDER_EDITOR_ID = 'admin-assistant-provider-editor';
+const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
+
 function Providers({ token }: { token: string }) {
   const read = useAdminQuery(assistantQuery, token);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
+  /* Hold the last edited target while `Collapse` glides closed so its height contracts smoothly. */
+  const [shownEditing, setShownEditing] = useState<string | 'new' | null>(null);
   const remove = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const config = read.data;
-  const editingProvider = config && editing && editing !== 'new' ? config.providers.find((p) => p.id === editing) ?? null : null;
+  const shownProvider = config && shownEditing && shownEditing !== 'new'
+    ? config.providers.find((p) => p.id === shownEditing) ?? null
+    : null;
+  const editorOpen = Boolean(config && editing && (editing === 'new' || config.providers.some((p) => p.id === editing)));
+
+  const openOrToggle = (target: string | 'new') => {
+    if (editing === target) {
+      setEditing(null);
+      if (motionTier('list') === 'off') setShownEditing(null);
+      return;
+    }
+    setShownEditing(target);
+    setEditing(target);
+  };
+
+  const closeEditor = () => {
+    setEditing(null);
+    if (motionTier('list') === 'off') setShownEditing(null);
+  };
+
+  useEffect(() => {
+    if (editorOpen || !shownEditing) return;
+    if (motionTier('list') === 'off') {
+      const frame = requestAnimationFrame(() => setShownEditing(null));
+      return () => cancelAnimationFrame(frame);
+    }
+    const timer = setTimeout(() => setShownEditing(null), COLLAPSE_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+  }, [editorOpen, shownEditing]);
+
   return <ReadState variant="table" title="助手模型加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
     {config && <section className="space-y-4" aria-labelledby="admin-assistant-providers-heading">
       <SectionHeading as="h3" id="admin-assistant-providers-heading">助手模型</SectionHeading>
@@ -120,17 +157,35 @@ function Providers({ token }: { token: string }) {
         { key: 'state', header: '状态', width: 'auto', render: (p) => <Badge size="md" tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}>{p.enabled ? (p.key_available ? '已启用' : '密钥不可用') : '未启用'}</Badge> },
         { key: 'updated', header: '更新时间', width: 'auto', className: 'tabular-nums', render: (p) => formatDateTime(p.updated_at) },
         { key: 'actions', header: '操作', actions: true, render: (p) => <>
-          <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑 ${p.name}`} disabled={remove.busy} onClick={() => setEditing(p.id)} />
+          <IconButton size="sm" icon={<MdEdit />} aria-label={`编辑 ${p.name}`} aria-expanded={editing === p.id} aria-controls={PROVIDER_EDITOR_ID} disabled={remove.busy} onClick={() => openOrToggle(p.id)} />
           <IconButton size="sm" variant="danger-text" icon={<MdDeleteOutline />} aria-label={`删除 ${p.name}`} loading={remove.pendingKeys.has(p.id)} onClick={() => confirmThen('确认删除模型配置', `确定要删除「${p.name}」吗？此配置的密钥将一并清除，此操作无法恢复。`, () => void remove.run(
             () => api.removeAssistantProvider(token, config.revision, p.id),
-            () => { showToast('已删除模型配置', 'success'); if (editing === p.id) setEditing(null); },
+            () => { showToast('已删除模型配置', 'success'); if (editing === p.id) closeEditor(); },
             '模型配置删除失败',
             { key: p.id, onCommitted: (d) => { assistantQuery.write(token, d); assistantQuota.invalidate({ token }); } },
           ), { tone: 'danger' })} />
         </> },
       ]} />
-      {!editing && <Button variant="tonal" icon={<MdAdd />} disabled={config.providers.length >= api.PROVIDER_LIMIT} onClick={() => setEditing('new')}>添加模型配置</Button>}
-      {editing && (editing === 'new' || editingProvider) && <ProviderEditor key={editing} token={token} config={config} provider={editingProvider} onDone={() => setEditing(null)} />}
+      <div>
+        <Button variant="tonal" icon={<MdAdd />} aria-expanded={editing === 'new'} aria-controls={PROVIDER_EDITOR_ID} disabled={config.providers.length >= api.PROVIDER_LIMIT && editing !== 'new'} onClick={() => openOrToggle('new')}>添加模型配置</Button>
+        <Collapse
+          id={PROVIDER_EDITOR_ID}
+          open={editorOpen}
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !editorOpen) {
+              setShownEditing(null);
+            }
+          }}
+        >
+          {shownEditing && (shownEditing === 'new' || shownProvider) && (
+            <div className="pt-4">
+              <FollowHeight watch={shownEditing}>
+                <ProviderEditor key={shownEditing} token={token} config={config} provider={shownProvider} onDone={closeEditor} />
+              </FollowHeight>
+            </div>
+          )}
+        </Collapse>
+      </div>
     </section>}
     {confirmDialog}
   </ReadState>;

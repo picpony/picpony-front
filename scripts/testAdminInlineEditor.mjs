@@ -87,7 +87,7 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
       return animation;
     }
   }
-  const motion = { started: [], dropped: [], list: [], above: [] };
+  const motion = { started: [], dropped: [], owned: [], list: [], above: [] };
   Object.defineProperty(motion, 'followers', {
     get: () => motion.list,
     set: (list) => { motion.list = list; for (const el of list) el.follows = true; },
@@ -108,6 +108,7 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
       followersOf: () => motion.followers,
       precedersOf: () => motion.above,
       drawnOffsetY: (el) => el.drawnY ?? 0,
+      markLayoutOwned: (el) => { motion.owned.push(el); },
       startMove: (el, keyframes, timing) => {
         const animation = fakeAnimation(el, keyframes, timing, log);
         motion.started.push(animation);
@@ -400,4 +401,33 @@ test('under the last row, the row\'s bottom corners move with the panel instead 
   m.panel.previousElementSibling = middle;
   m.render({}).commit();
   assert.equal(middle.animations.length, 0);
+});
+
+test('inline editors mark FLIP ownership on open/close and anchor against a modal scroll body when inside one', async () => {
+  const h = harness();
+  const modalScroller = new h.Element('modal-body', 120, 560);
+  modalScroller.scrollTop = 300;
+  modalScroller.getBoundingClientRect = () => ({ top: 120, bottom: 680, height: 560 });
+  const row = new h.Element('row', 2450);
+  row.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
+  h.panel.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
+  h.panel.previousElementSibling = row;
+  h.exports.captureInlineEditorLayout({
+    closest: (selector) => (selector === '.m3-row' ? row : null),
+    getAttribute: () => h.panel.id,
+  });
+  row.top = 2000;
+  const cleanup = h.render({}).commit();
+  assert.equal(modalScroller.scrollTop, 300 - 450, 'the modal scroll body absorbs the row shift instead of the background page');
+  assert.equal(h.scroller.scrollTop, 2000, 'the page scroller behind the modal is untouched');
+  assert.equal(h.motion.owned.length, 1, 'opening signals layout ownership to an enclosing FollowHeight');
+
+  const { commit } = h.render({ isClosing: true, onExitComplete() {} });
+  cleanup();
+  commit();
+  const clip = h.panel.animations.at(-1);
+  clip.finish();
+  await clip.finished;
+  await Promise.resolve();
+  assert.equal(h.motion.owned.length, 2, 'closing signals layout ownership right before unmounting the panel');
 });

@@ -6,6 +6,7 @@ import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
 import FollowHeight from '@/components/FollowHeight';
+import ScrollArea from '@/components/ScrollArea';
 import SignInRequired from '@/components/SignInRequired';
 import Skeleton from '@/components/Skeleton';
 import ButtonLink from '@/components/ButtonLink';
@@ -68,10 +69,10 @@ function ConsoleColumn({ children, ref }: { children: React.ReactNode; ref?: Rea
 function ConsoleSkeleton() {
   return (
     <div className="flex flex-col rounded-md bg-surface-container-low @[48rem]:flex-row" aria-hidden="true">
-      <div className="min-w-0 border-b border-outline-variant p-2 @[48rem]:w-48 @[48rem]:shrink-0 @[48rem]:border-b-0">
+      <div className="min-w-0 border-b border-outline-variant p-2 @[48rem]:w-48 @[48rem]:shrink-0 @[48rem]:border-r @[48rem]:border-b-0">
         <div className="flex gap-1 overflow-hidden @[48rem]:flex-col">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-10 w-24 shrink-0 rounded-full @[48rem]:w-full" delay={i * 40} />
+            <Skeleton key={i} className="h-12 w-24 shrink-0 rounded-full @[48rem]:w-full" delay={i * 40} />
           ))}
         </div>
       </div>
@@ -126,11 +127,21 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
   const requested = isAdminTab(tabParam) ? tabParam : null;
 
   const [tab, setTab] = useState<AdminTabId>(() => landingAdminTab(requested, role));
+  /* Our own `replaceAdminAddress` writes echo back through `useSearchParams` asynchronously;
+     tracking them in order stops an earlier echo during rapid clicks from reverting a newer tab. */
+  const [ownWrites, setOwnWrites] = useState<readonly AdminTabId[]>([]);
   /* A link followed while the console is up selects its section. */
   const [seen, setSeen] = useState(requested);
   if (seen !== requested) {
     setSeen(requested);
-    setTab(landingAdminTab(requested, role));
+    const landed = landingAdminTab(requested, role);
+    const echo = ownWrites.indexOf(landed);
+    if (echo !== -1) {
+      setOwnWrites(ownWrites.slice(echo + 1));
+    } else {
+      if (ownWrites.length > 0) setOwnWrites([]);
+      setTab(landed);
+    }
   }
   /* Never a section the role is not offered: a bookmarked `?tab=wealth` kept by someone who has
      since lost 创始人 lands on the overview. */
@@ -147,10 +158,18 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
     if (requested === shown) return;
     replaceAdminAddress(shown);
   }, [shown, requested, tabParam]);
+  /* Drop any coalesced own-write echo once the address already matches the shown section. */
+  useEffect(() => {
+    if (ownWrites.length === 0 || landingAdminTab(requested, role) !== shown) return;
+    const timer = window.setTimeout(() => setOwnWrites([]), 500);
+    return () => window.clearTimeout(timer);
+  }, [ownWrites.length, requested, role, shown]);
   useEffect(() => dropQueuedAdminAddress, []);
 
   const select = (next: AdminTabId) => {
+    if (next === shown) return;
     setTab(next);
+    setOwnWrites((prev) => (prev[prev.length - 1] === next ? prev : [...prev.slice(-7), next]));
     replaceAdminAddress(next);
   };
 
@@ -172,28 +191,45 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
     return () => observer.disconnect();
   }, []);
 
+  const railTabs = (
+    <Tabs
+      variant="rail"
+      orientation={wide ? 'vertical' : 'horizontal'}
+      activation="manual"
+      label="管理面板分区"
+      className="p-2"
+      value={shown}
+      onChange={select}
+      tabs={offered.map((item) => ({
+        value: item.id,
+        label: item.label,
+        icon: item.icon,
+        activeIcon: item.activeIcon,
+      }))}
+    />
+  );
+
   return (
     <ConsoleColumn ref={columnRef}>
       {/* `surface-container-low`, not `surface`: the app scroller behind this is itself
           `bg-surface`, so a panel of the same tone was a card the colour of the page it sits on.
-          Nothing inside needs clipping at rest — the horizontal rail scrolls its own row. */}
+          Nothing inside needs clipping at rest — the horizontal rail scrolls its own row, and
+          wide, the vertical rail sticks inside the viewport so 25 sections never stretch a short
+          panel into blank space or scroll away while working down a long table. */}
       <div className={`bg-surface-container-low rounded-md flex ${wide ? 'flex-row' : 'flex-col'}`}>
-        <div className={wide ? 'w-48 shrink-0' : 'min-w-0 border-b border-outline-variant'}>
-          <Tabs
-            variant="rail"
-            orientation={wide ? 'vertical' : 'horizontal'}
-            activation="manual"
-            label="管理面板分区"
-            className="p-2"
-            value={shown}
-            onChange={select}
-            tabs={offered.map((item) => ({
-              value: item.id,
-              label: item.label,
-              icon: item.icon,
-              activeIcon: item.activeIcon,
-            }))}
-          />
+        <div className={wide ? 'w-48 shrink-0 border-r border-outline-variant' : 'min-w-0 border-b border-outline-variant'}>
+          {wide ? (
+            <div className="sticky top-4 sm:top-6">
+              <ScrollArea
+                axis="y"
+                viewportClassName="popover-scrollbar max-h-[calc(100dvh-var(--app-chrome-bottom,4rem)-2rem)] overflow-y-auto overscroll-contain sm:max-h-[calc(100dvh-var(--app-chrome-bottom,4rem)-3rem)]"
+              >
+                {railTabs}
+              </ScrollArea>
+            </div>
+          ) : (
+            railTabs
+          )}
         </div>
         {/* The window a section switch slides past (`data-tab-window`): the panel's own region,
             not the scroller — sliding the scroller's width swept the panes across the rail and out

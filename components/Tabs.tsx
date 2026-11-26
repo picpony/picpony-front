@@ -87,12 +87,43 @@ const LONG_PRESS_MS = 400;
  *  itself: the click follows the lift by a task or two. */
 const LIFT_CLICK_GRACE_MS = 400;
 
+/** Room kept above/below a revealed tab in a vertically scrolling rail. */
+const VERTICAL_EDGE_ROOM = 16;
+
+/** Whether focus arrived from keyboard navigation rather than a pointer press. */
+function isKeyboardFocus(target: HTMLElement): boolean {
+  try {
+    return target.matches(':focus-visible');
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Scroll `list` along its inline axis just enough to show `tab` with `EDGE_ROOM` to
- * spare. Its own scroll position only — `scrollIntoView` would also scroll every
- * ancestor, the page included, to a tab row the user may have scrolled past.
+ * Scroll `list` (or its vertically scrolling rail host) just enough to show `tab` with room to
+ * spare. Its own scroll position only — `scrollIntoView` would also scroll every ancestor, the
+ * page included, to a tab row the user may have scrolled past.
  */
-function revealTab(list: HTMLElement, tab: HTMLElement, smooth: boolean) {
+function revealTab(list: HTMLElement, tab: HTMLElement, smooth: boolean, vertical = false) {
+  if (vertical) {
+    const scroller =
+      list.scrollHeight > list.clientHeight + 1
+        ? list
+        : list.closest<HTMLElement>('.popover-scrollbar');
+    if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return;
+    const scrollerBox = scroller.getBoundingClientRect();
+    const tabBox = tab.getBoundingClientRect();
+    const start = tabBox.top - scrollerBox.top - scroller.clientTop + scroller.scrollTop;
+    const end = start + tabBox.height;
+    let top: number | null = null;
+    if (start - VERTICAL_EDGE_ROOM < scroller.scrollTop) top = start - VERTICAL_EDGE_ROOM;
+    else if (end + VERTICAL_EDGE_ROOM > scroller.scrollTop + scroller.clientHeight) {
+      top = end + VERTICAL_EDGE_ROOM - scroller.clientHeight;
+    }
+    if (top === null) return;
+    scroller.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'instant' });
+    return;
+  }
   if (list.scrollWidth <= list.clientWidth + 1) return;
   const listBox = list.getBoundingClientRect();
   const tabBox = tab.getBoundingClientRect();
@@ -173,7 +204,7 @@ export default function Tabs<T extends string = string>({
     const tab = list.querySelector<HTMLElement>(`[data-tab="${CSS.escape(value)}"]`);
     /* A pill row never scrolls, and asking would lay it out inside the switch's commit. */
     if (tab && variant !== 'pill') {
-      revealTab(list, tab, revealed.current && motionTier('tabs') !== 'off');
+      revealTab(list, tab, revealed.current && motionTier('tabs') !== 'off', vertical);
       revealed.current = true;
     }
     for (const button of list.querySelectorAll<HTMLElement>('[role="tab"]')) {
@@ -182,9 +213,9 @@ export default function Tabs<T extends string = string>({
     }
   }, [containerRef, value, vertical, tabSet, variant]);
 
-  /* Which edges hide tabs, as two attributes the `scroll-fade-x` mask reads. A pill row never
-     scrolls. */
-  useScrollFade(containerRef, variant !== 'pill');
+  /* Which edges hide tabs, as two attributes the `scroll-fade-x` mask reads. A pill row or a
+     vertical rail never scrolls horizontally. */
+  useScrollFade(containerRef, variant !== 'pill' && !vertical);
 
   /* **A tap's switch is moving before its selection renders.** The press primes it
      (`primeTabTransition`): the arriving pane is restyled, laid out and painted while the finger is
@@ -204,6 +235,9 @@ export default function Tabs<T extends string = string>({
      selects the tab itself. Located through the arriving pane, the one `aria-controls` will name,
      so a row primes only the panel it drives. */
   const pressed = useRef<{ to: T; pointerId: number; at: number } | null>(null);
+  /** True between pointerdown and pointerup/cancel on any tab, so mousedown focus never scrolls the button away before click. */
+  const pointerActive = useRef(false);
+  const clearPointer = useRef<(() => void) | null>(null);
   /** A switch already moving for `to`, and the selection still to make: `cancel` drops the wait. */
   const started = useRef<{ to: T; cancel: () => void } | null>(null);
   const panelFor = (to: T) => {
@@ -214,7 +248,23 @@ export default function Tabs<T extends string = string>({
     started.current?.cancel();
     started.current = { to, cancel };
   };
+  const beginPointer = () => {
+    clearPointer.current?.();
+    pointerActive.current = true;
+    const end = () => {
+      pointerActive.current = false;
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+      window.removeEventListener('blur', end);
+      clearPointer.current = null;
+    };
+    clearPointer.current = end;
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+    window.addEventListener('blur', end);
+  };
   const onPress = (event: React.PointerEvent<HTMLButtonElement>, to: T) => {
+    if (event.button === 0 && event.isPrimary) beginPointer();
     pressed.current = null;
     if (to === value || event.button !== 0 || !event.isPrimary) return;
     const panel = panelFor(to);
@@ -228,6 +278,7 @@ export default function Tabs<T extends string = string>({
     });
   };
   const onLift = (event: React.PointerEvent<HTMLButtonElement>, to: T) => {
+    clearPointer.current?.();
     const press = pressed.current;
     pressed.current = null;
     if (event.pointerType !== 'touch' || !press || press.to !== to || press.pointerId !== event.pointerId) return;
@@ -242,6 +293,7 @@ export default function Tabs<T extends string = string>({
     wait(to, () => window.clearTimeout(timer));
   };
   const select = (to: T) => {
+    clearPointer.current?.();
     const pending = started.current;
     started.current = null;
     pending?.cancel();
@@ -262,6 +314,7 @@ export default function Tabs<T extends string = string>({
   };
   useEffect(
     () => () => {
+      clearPointer.current?.();
       started.current?.cancel();
       started.current = null;
     },
@@ -273,7 +326,7 @@ export default function Tabs<T extends string = string>({
     if (!tab) return;
     tab.focus();
     const list = containerRef.current;
-    if (list) revealTab(list, tab, motionTier('tabs') !== 'off');
+    if (list) revealTab(list, tab, motionTier('tabs') !== 'off', vertical);
   };
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -350,8 +403,12 @@ export default function Tabs<T extends string = string>({
         onClick={() => select(tab.value)}
         onKeyDown={(event) => onKeyDown(event, index)}
         onFocus={(event) => {
+          /* Clicking a tab near the rail's edge focuses on mousedown; scrolling the rail there
+             moves the button out from under the cursor before pointerup, dropping the click.
+             Keyboard focus reveals immediately; pointer clicks reveal once `value` commits. */
+          if (pointerActive.current || !isKeyboardFocus(event.currentTarget)) return;
           const list = containerRef.current;
-          if (list) revealTab(list, event.currentTarget, motionTier('tabs') !== 'off');
+          if (list) revealTab(list, event.currentTarget, motionTier('tabs') !== 'off', vertical);
         }}
         className={cn(
           'relative flex shrink-0 cursor-pointer items-center gap-2 transition-[color,background-color,box-shadow]',
@@ -440,8 +497,12 @@ export default function Tabs<T extends string = string>({
         aria-label={label}
         aria-orientation={vertical ? 'vertical' : 'horizontal'}
         className={cn(
-          'flex gap-1 overflow-x-auto scrollbar-hide scroll-fade-x',
-          orientation ? vertical && 'flex-col' : 'md:flex-col',
+          'flex gap-1',
+          orientation
+            ? vertical
+              ? 'flex-col'
+              : 'overflow-x-auto scrollbar-hide scroll-fade-x'
+            : 'overflow-x-auto scrollbar-hide scroll-fade-x md:flex-col md:overflow-x-visible',
           className,
         )}
       >

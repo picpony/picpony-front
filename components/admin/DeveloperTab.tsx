@@ -237,7 +237,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         isLoading={password.refreshing || users.refreshing}
       />
 
-      <section aria-labelledby="admin-maintenance-password-heading" className="space-y-4">
+      <section aria-labelledby="admin-maintenance-password-heading" className="@container space-y-4">
         <SectionHeading as="h3" id="admin-maintenance-password-heading">维护密码</SectionHeading>
         <AdminNote>
           系统随机生成的 8 位数字，每 3 天（北京时间早上 8 点）自动更新一次。用户开启开发者模式时需要输入此密码。
@@ -260,13 +260,16 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
                 />
               </>
             ) : (
-              <Skeleton className="h-11 w-44 rounded-xs" />
+              <>
+                <Skeleton className="h-11 w-44 rounded-xs" />
+                <Skeleton className="size-10 shrink-0 rounded-full" delay={40} />
+              </>
             )}
             <Button
               type="button"
               variant="tonal"
               icon={<MdRefresh />}
-              className="sm:ml-auto"
+              className="@md:ml-auto"
               disabled={!password.data}
               loading={rotateMutation.busy}
               onClick={rotate}
@@ -275,11 +278,13 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
             </Button>
           </div>
         )}
-        {password.data && (
+        {password.data ? (
           <p className="text-body-s tabular-nums text-on-surface-variant">
             {[password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成', password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null].filter(Boolean).join(' · ')}
           </p>
-        )}
+        ) : !password.error ? (
+          <Skeleton className="h-4.5 w-64 max-w-full" delay={80} />
+        ) : null}
       </section>
 
       <section aria-labelledby="admin-developer-users-heading" className="space-y-4">
@@ -296,7 +301,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
               readOnly={enableMutation.busy}
               error={targetError ?? undefined}
               helper="直接为该用户开启开发者模式"
-              fieldClassName="@md/form:w-80"
+              fieldClassName="@lg/form:w-80"
               onChange={(event) => {
                 setTarget(event.target.value);
                 setTargetError(null);

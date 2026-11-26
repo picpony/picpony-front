@@ -5,26 +5,23 @@ import { MdBlock, MdCheckCircle, MdDeleteOutline, MdEdit } from 'react-icons/md'
 import Badge from '@/components/Badge';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
-import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
+import { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import RoleBadge from '@/components/RoleBadge';
 import SearchInput from '@/components/SearchInput';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
-import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
 import * as adminApi from '@/lib/api/admin';
-import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
 import { defineResource, SKIP, useResource } from '@/lib/resource';
 import SectionHeader from './SectionHeader';
 import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
-import { useAdminQuery, tableError, retryError } from './queries';
+import { useAdminQuery, tableError } from './queries';
 import { usersQuery } from './sharedQueries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
 import UserEditor, { userEditorId, type AdminUser } from './users/UserEditor';
 import BadgeEditDialog from './users/BadgeEditDialog';
-import { userBadges, type AdminUserBadge } from './users/rules';
+import type { AdminUserBadge } from './users/rules';
 
 const EMPTY: AdminUser[] = [];
 
@@ -303,59 +300,24 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
   const renderEditor = (user: AdminUser) => {
     if (editing?.id !== user.id || !editingUser) return null;
     const account = detail.data && detail.data.id === user.id ? detail.data : null;
-    if (!account) {
-      return (
-        <InlineEditorPanel
-          id={userEditorId(user.id)}
-          label={`编辑用户 ${user.username}`}
-          isClosing={editing.closing}
-          onExitComplete={() => setEditing((current) => (current?.id === user.id && current.closing ? null : current))}
-          onEscape={closeEditor}
-        >
-          {detail.error ? (
-            <ErrorRetry
-              size="inline"
-              {...retryError('用户资料加载失败', apiErrorMessage(detail.error))}
-              onRetry={isRetryable(detail.error) ? detail.refresh : undefined}
-            />
-          ) : (
-            <div className="@container/form max-w-2xl space-y-4" aria-label="正在加载用户资料">
-              <div className="space-y-1.5">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-4.5 w-72 max-w-full" delay={40} />
-              </div>
-              <div className="grid grid-cols-1 gap-4 @lg/form:grid-cols-2">
-                {[0, 1, 2, 3, 4, 5].map((index) => (
-                  <Skeleton key={index} className="h-14 w-full rounded-md" delay={60 + index * 35} />
-                ))}
-                <Skeleton className="h-14 w-full rounded-md @lg/form:col-span-2" delay={270} />
-              </div>
-              <Skeleton className="h-24 w-full rounded-md" delay={300} />
-              <div className="flex justify-end gap-3">
-                <Skeleton className="h-10 w-16 rounded-full" delay={330} />
-                <Skeleton className="h-10 w-24 rounded-full" delay={360} />
-              </div>
-            </div>
-          )}
-        </InlineEditorPanel>
-      );
-    }
     return (
       <UserEditor
-        key={`${user.id}:${account.account_revision}:${account.upstream_credential.revision}`}
-        user={account}
+        key={user.id}
+        row={editingUser}
+        account={account}
+        detailError={account ? undefined : detail.error}
+        onRetryDetail={detail.refresh}
         viewer={{ id: viewerId, role }}
         closing={editing.closing}
         saving={saveMutation.pendingKeys.has(user.id)}
-        badges={userBadges(account.badges)}
         badgeBusy={(badgeId) => badgeMutation.pendingKeys.has(badgeId)}
-        onSave={(changes) => save(account, changes)}
+        onSave={save}
         onCancel={closeEditor}
         onExitComplete={() => setEditing((current) => (current?.id === user.id && current.closing ? null : current))}
         onDirtyChange={setDirty}
-        onEditBadge={(badge) =>
-          setBadgeEdit((current) => ({ badge, owner: account, open: true, session: (current?.session ?? 0) + 1 }))}
-        onDeleteBadge={(badge) => deleteBadge(account, badge)}
+        onEditBadge={(target, badge) =>
+          setBadgeEdit((current) => ({ badge, owner: target, open: true, session: (current?.session ?? 0) + 1 }))}
+        onDeleteBadge={deleteBadge}
       />
     );
   };

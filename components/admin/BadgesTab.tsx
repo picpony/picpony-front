@@ -6,11 +6,14 @@ import { useState } from 'react';
 import { MdContentCopy, MdEmojiEvents, MdLink } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Collapse from '@/components/Collapse';
 import DataTable, { type Column } from '@/components/DataTable';
+import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
 import Radio from '@/components/Radio';
 import SectionHeading from '@/components/SectionHeading';
+import SwapContent from '@/components/SwapContent';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import UserBadge from '@/components/UserBadge';
@@ -162,61 +165,64 @@ function GrantPane({ token }: { token: string }) {
             onChange={(value) => set('color', value)}
           />
         </FormGrid>
-        <fieldset className="m-0 min-w-0 space-y-3 border-0 p-0">
+        <fieldset className="min-w-0 space-y-3 border-0 p-0">
           <legend className="text-label-l text-on-surface-variant">授予对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio name="badge-target" value="users" label="指定用户" checked={form.target === 'users'} disabled={busy} onChange={() => set('target', 'users')} />
             <Radio name="badge-target" value="dates" label="按注册日期" checked={form.target === 'dates'} disabled={busy} onChange={() => set('target', 'dates')} />
           </div>
-          {form.target === 'users' ? (
-            <Input
-              label="用户 ID"
-              autoComplete="off"
-              value={form.userIds}
-              readOnly={busy}
-              error={errors.userIds}
-              helper="多个 ID 用逗号分隔"
-              placeholder="例如：1，2，5"
-              onChange={(event) => set('userIds', event.target.value)}
-            />
-          ) : (
-            <FormGrid>
-              <DateInput
-                label="注册起始日期"
-
-                value={form.startDate}
-                readOnly={busy}
-                error={errors.startDate}
-                onChange={(event) => set('startDate', event.target.value)}
-              />
-              <DateInput
-                label="注册截止日期"
-
-                value={form.endDate}
-                readOnly={busy}
-                error={errors.endDate}
-                onChange={(event) => set('endDate', event.target.value)}
-              />
-            </FormGrid>
-          )}
+          <FollowHeight watch={form.target}>
+            <SwapContent contentKey={form.target} side="left">
+              {form.target === 'users' ? (
+                <Input
+                  label="用户 ID"
+                  autoComplete="off"
+                  value={form.userIds}
+                  readOnly={busy}
+                  error={errors.userIds}
+                  helper="多个 ID 用逗号分隔"
+                  placeholder="例如：1，2，5"
+                  onChange={(event) => set('userIds', event.target.value)}
+                />
+              ) : (
+                <FormGrid>
+                  <DateInput
+                    label="注册起始日期"
+                    value={form.startDate}
+                    readOnly={busy}
+                    error={errors.startDate}
+                    onChange={(event) => set('startDate', event.target.value)}
+                  />
+                  <DateInput
+                    label="注册截止日期"
+                    value={form.endDate}
+                    readOnly={busy}
+                    error={errors.endDate}
+                    onChange={(event) => set('endDate', event.target.value)}
+                  />
+                </FormGrid>
+              )}
+            </SwapContent>
+          </FollowHeight>
         </fieldset>
-        <fieldset className="m-0 min-w-0 space-y-3 border-0 p-0">
-          <legend className="text-label-l text-on-surface-variant">有效期</legend>
+        <fieldset className="min-w-0 border-0 p-0">
+          <legend className="mb-3 text-label-l text-on-surface-variant">有效期</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio name="badge-duration" value="permanent" label="永久有效" checked={form.permanent} disabled={busy} onChange={() => set('permanent', true)} />
             <Radio name="badge-duration" value="expiring" label="设定到期日期" checked={!form.permanent} disabled={busy} onChange={() => set('permanent', false)} />
           </div>
-          {!form.permanent && (
-            <DateInput
-              label="到期日期"
-
-              value={form.expiresAt}
-              readOnly={busy}
-              error={errors.expiresAt}
-              fieldClassName="sm:w-72"
-              onChange={(event) => set('expiresAt', event.target.value)}
-            />
-          )}
+          <Collapse open={!form.permanent}>
+            <div className="pt-3">
+              <DateInput
+                label="到期日期"
+                value={form.expiresAt}
+                readOnly={busy}
+                error={errors.expiresAt}
+                fieldClassName="@sm/form:w-72"
+                onChange={(event) => set('expiresAt', event.target.value)}
+              />
+            </div>
+          </Collapse>
         </fieldset>
         <FormActions>
           <Button type="submit" variant="filled" icon={<MdEmojiEvents />} loading={busy}>

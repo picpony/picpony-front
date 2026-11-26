@@ -6,6 +6,7 @@ import DataTable, { type Column } from '@/components/DataTable';
 import InlineEditorPanel, { captureInlineEditorLayout } from '@/components/InlineEditorPanel';
 import { Input, Textarea } from '@/components/Input';
 import SearchInput from '@/components/SearchInput';
+import Skeleton from '@/components/Skeleton';
 import Modal from '@/components/Modal';
 import ToggleSwitch from '@/components/ToggleSwitch';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -57,16 +58,28 @@ export default function PoniesTab({ token }: AdminPanelProps) {
     { key: 'actions', header: '操作', actions: true, render: (row) => <Button size="xs" variant="text" disabled={busy} onClick={() => { setShownRow(row); setSelected(row); }}>名称与台词</Button> },
   ];
   function scan() { if (config) void discovery.run(() => api.scanPonies(token), (found) => { setDraft({ ...config, ponies: mergeDiscovery(config.ponies, found) }); showToast(`已发现 ${found.length} 个角色`, 'success'); }); }
-  return <div className="space-y-6">
+  return <div className="@container space-y-6">
     <SectionHeader section="ponies" onRefresh={() => { if (!draft) read.refresh(); else confirmThen('确认重新读取', '确定要放弃尚未保存的展示设置并重新读取吗？', () => { setDraft(null); read.refresh(); }, { tone: 'filled' }); }} isLoading={read.refreshing} />
     <AdminNote>角色名称与台词单独保存。</AdminNote>
+    {read.loading && !config && (
+      <div className="max-w-2xl space-y-4" aria-hidden="true">
+        <div className="flex h-8 items-center justify-between gap-4">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-8 w-13 rounded-full" />
+        </div>
+        <div className="flex justify-end gap-3">
+          <Skeleton className="h-10 w-24 rounded-full" delay={40} />
+          <Skeleton className="h-10 w-28 rounded-full" delay={80} />
+        </div>
+      </div>
+    )}
     {config && <AdminForm aria-label="桌面小马设置" onSubmit={() => confirmThen('确认保存展示设置', `确定要${config.enabled ? '开启' : '关闭'}桌面小马并保存 ${config.ponies.length} 个角色的设置吗？其中 ${config.ponies.filter((row) => row.enabled).length} 个角色已勾选。`, () => void mutation.run(() => api.savePonies(token, revision, config.enabled, config.ponies), () => { setDraft(null); showToast('已保存桌面小马设置', 'success'); }, () => { query.write(token, { enabled: config.enabled, ponies: config.ponies, revision }); committed(token); }), { tone: 'filled' })}>
       <ToggleSwitch layout="row" checked={config.enabled} label="全局展示桌面小马" disabled={busy} onChange={(enabled) => setDraft({ ...config, enabled })} />
       <FormActions><Button type="button" variant="text" loading={discovery.busy} disabled={mutation.busy || discovery.uncertain} onClick={scan}>扫描资源库</Button><Button type="submit" variant="filled" loading={mutation.busy} disabled={discovery.busy || mutation.uncertain}>保存展示设置</Button></FormActions>
     </AdminForm>}
     <MutationResult mutation={mutation} /><MutationResult mutation={discovery} />
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <SearchInput value={filter} onChange={setFilter} placeholder="筛选角色…" className="min-w-0 sm:flex-1" />
+    <div className="flex flex-col gap-3 @md:flex-row @md:items-center">
+      <SearchInput value={filter} onChange={setFilter} placeholder="筛选角色…" className="min-w-0 @md:flex-1" />
       {config && <div className="flex flex-wrap items-center gap-2">{[true, false].map((enabled) => <Button key={String(enabled)} variant="text" size="xs" disabled={busy} onClick={() => confirmThen('确认批量选择', `确定要将全部 ${config.ponies.length} 个角色${enabled ? '勾选' : '取消勾选'}吗？保存后生效。`, () => setDraft({ ...config, ponies: config.ponies.map((row) => ({ ...row, enabled })) }), { tone: 'filled' })}>{enabled ? '全选角色' : '取消全选'}</Button>)}</div>}
     </div>
     <AdminListAnchor><DataTable columns={columns} rows={paged.rows} listKey={paged.listKey} rowKey={(row) => row.path} loading={read.loading} {...tableError('角色加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} empty="暂无角色，可扫描资源库" /><AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} /></AdminListAnchor>
@@ -113,6 +126,7 @@ function PonyEditor({ isOpen, token, revision, pony, onClose, onRenamed }: { isO
       <InlineEditorPanel
         id={speechId(row.name)}
         label={`编辑台词 ${row.name}`}
+        surface="dialog"
         isClosing={editing.closing}
         onEscape={busy ? undefined : closeSpeech}
         onExitComplete={() => setEditing((current) => (current?.name === row.name && current.closing ? null : current))}
@@ -131,7 +145,7 @@ function PonyEditor({ isOpen, token, revision, pony, onClose, onRenamed }: { isO
     <div className="space-y-6">
       <AdminForm className="max-w-none" aria-label="修改角色名称" onSubmit={() => void rename.run(() => api.savePonyName(token, revision, pony.path, pony.name, name), (data) => { const saved = data.new_name; onRenamed(saved); setName(saved); showToast('已保存角色名称', 'success'); }, () => committed(token))}><Input label="角色名称" value={name} maxLength={200} readOnly={busy} onChange={(event) => setName(event.target.value)} /><FormActions><Button type="submit" variant="filled" loading={rename.busy} disabled={save.busy || rename.uncertain}>保存名称</Button></FormActions><MutationResult mutation={rename} /></AdminForm>
       <MutationResult mutation={save} />
-      <DataTable columns={columns} rows={read.data ?? []} rowKey={(row) => row.name} expandedRow={renderSpeechEditor} loading={read.data === undefined && !read.error} {...tableError('台词加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty="暂无台词" />
+      <DataTable surface="dialog" columns={columns} rows={read.data ?? []} rowKey={(row) => row.name} expandedRow={renderSpeechEditor} loading={read.data === undefined && !read.error} {...tableError('台词加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty="暂无台词" />
     </div>
   </Modal>;
 }

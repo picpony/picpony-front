@@ -48,20 +48,20 @@ export default function PurchasesPane({ token, legacy = false }: { token: string
     { key: 'status', header: '状态', width: 'auto', render: (row) => <Badge size="md" tone={'status' in row ? (row.status === 'completed' ? 'success' : row.status === 'refunded' ? 'neutral' : 'warning') : 'neutral'}>{'status' in row ? row.status === 'completed' ? '已完成' : row.status === 'refunded' ? '已退款' : '待核对' : '旧版流水'}</Badge> },
     ...(!legacy ? [{ key: 'actions', header: '操作', actions: true, render: (row: Row) => 'status' in row && row.status === 'completed' ? <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认退款', `确定要将订单 #${row.id}「${row.item_name}」的 ${row.total_amount} 金币退还给 ${row.username || '用户'}（#${row.user_id}）吗？将恢复 ${row.quantity} 件库存，此操作无法恢复。`, () => void mutation.run(() => api.refundShopPurchase(token, row.id), () => showToast(`已退还 ${row.total_amount} 金币`, 'success'), committed), { tone: 'danger' })}>退款</Button> : <span className="text-body-m text-on-surface-variant">—</span> }] : []),
   ];
-  return <div className="space-y-6">
+  return <div className="@container space-y-6">
     {legacy && <AdminNote>旧版流水仅供人工核对，不提供自动退款。</AdminNote>}
     <form
       role="search"
       aria-label={legacy ? '查询旧版流水' : '查询消费记录'}
       noValidate
-      className="flex flex-col gap-3 sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 @md:flex-row @md:items-center"
       onSubmit={(event) => {
         event.preventDefault();
         setFilter(keyword.trim());
         if (filter === keyword.trim()) read.refresh();
       }}
     >
-      <SearchInput value={keyword} maxLength={200} onChange={setKeyword} placeholder={legacy ? '用户或原因关键词…' : '用户或商品关键词…'} className="min-w-0 sm:flex-1" />
+      <SearchInput value={keyword} maxLength={200} onChange={setKeyword} placeholder={legacy ? '用户或原因关键词…' : '用户或商品关键词…'} className="min-w-0 @md:flex-1" />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" variant="filled">查询</Button>
         <RefreshButton onClick={read.refresh} label="刷新记录" loading={read.isLoading && read.data !== undefined} />

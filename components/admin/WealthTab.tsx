@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { MdToll } from 'react-icons/md';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
+import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
 import SearchInput from '@/components/SearchInput';
@@ -225,64 +226,66 @@ function WealthDialog({
         </>
       }
     >
-      <AdminForm id={formId} onSubmit={submit} className="max-w-none" aria-label={`修改 ${user.username} 的资产`}>
-        <SectionHeading as="h3" aside={`当前 ${figureText(user.experience)}`}>经验值</SectionHeading>
-        <Input
-          label="设为"
-          inputMode="numeric"
-          autoComplete="off"
-          value={form.experience}
-          readOnly={busy}
-          error={errors.experience}
-          helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : undefined}
-          onChange={(event) => set('experience', event.target.value)}
-          data-autofocus=""
-        />
-        {expChanged && (
+      <FollowHeight>
+        <AdminForm id={formId} onSubmit={submit} className="max-w-none" aria-label={`修改 ${user.username} 的资产`}>
+          <SectionHeading as="h3" aside={`当前 ${figureText(user.experience)}`}>经验值</SectionHeading>
           <Input
-            label="经验值变动的原因"
-            value={form.experienceReason}
-            readOnly={busy}
-            error={errors.experienceReason}
-            onChange={(event) => set('experienceReason', event.target.value)}
-          />
-        )}
-        <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>金币</SectionHeading>
-        <FormGrid from="sm">
-          <Select
-            label="操作"
-            value={form.coinsOp}
-            options={COINS_OPS}
-            disabled={busy}
-            onChange={(value) => set('coinsOp', value)}
-          />
-          <Input
-            label="数值"
+            label="设为"
             inputMode="numeric"
             autoComplete="off"
-            value={form.coinsValue}
+            value={form.experience}
             readOnly={busy}
-            error={errors.coinsValue}
-            helper={coinsResult !== null && coinsResult >= 0 ? `当前 ${figureText(user.coins)} → 修改后 ${figureText(coinsResult)}` : '留空则不变动金币'}
-            onChange={(event) => set('coinsValue', event.target.value)}
+            error={errors.experience}
+            helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : undefined}
+            onChange={(event) => set('experience', event.target.value)}
+            data-autofocus=""
           />
-        </FormGrid>
-        {coins !== null && (
-          <Input
-            label={REASON_LABEL[form.coinsOp]}
-            value={form.coinsReason}
-            readOnly={busy}
-            error={errors.coinsReason}
-            helper="会显示在该用户的金币账单中"
-            onChange={(event) => set('coinsReason', event.target.value)}
-          />
-        )}
-        {errors.form && (
-          <p role="alert" className="text-body-s text-error">
-            {errors.form}
-          </p>
-        )}
-      </AdminForm>
+          {expChanged && (
+            <Input
+              label="经验值变动的原因"
+              value={form.experienceReason}
+              readOnly={busy}
+              error={errors.experienceReason}
+              onChange={(event) => set('experienceReason', event.target.value)}
+            />
+          )}
+          <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>金币</SectionHeading>
+          <FormGrid from="sm">
+            <Select
+              label="操作"
+              value={form.coinsOp}
+              options={COINS_OPS}
+              disabled={busy}
+              onChange={(value) => set('coinsOp', value)}
+            />
+            <Input
+              label="数值"
+              inputMode="numeric"
+              autoComplete="off"
+              value={form.coinsValue}
+              readOnly={busy}
+              error={errors.coinsValue}
+              helper={coinsResult !== null && coinsResult >= 0 ? `当前 ${figureText(user.coins)} → 修改后 ${figureText(coinsResult)}` : '留空则不变动金币'}
+              onChange={(event) => set('coinsValue', event.target.value)}
+            />
+          </FormGrid>
+          {coins !== null && (
+            <Input
+              label={REASON_LABEL[form.coinsOp]}
+              value={form.coinsReason}
+              readOnly={busy}
+              error={errors.coinsReason}
+              helper="会显示在该用户的金币账单中"
+              onChange={(event) => set('coinsReason', event.target.value)}
+            />
+          )}
+          {errors.form && (
+            <p role="alert" className="text-body-s text-error">
+              {errors.form}
+            </p>
+          )}
+        </AdminForm>
+      </FollowHeight>
     </Modal>
   );
 }
