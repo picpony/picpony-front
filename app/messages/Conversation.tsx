@@ -11,7 +11,8 @@ import {
   useState,
   type RefObject,
 } from 'react';
-import { MdArrowBack, MdOutlineEmojiEmotions, MdRefresh, MdSend } from 'react-icons/md';
+import { MdArrowBack, MdRefresh } from '@/components/icons/common';
+import { MdOutlineEmojiEmotions, MdSend } from '@/components/icons/messages';
 import Avatar from '@/components/Avatar';
 import IconButton from '@/components/IconButton';
 import Popover from '@/components/Popover';

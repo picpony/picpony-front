@@ -28,7 +28,9 @@ Shared bottom chrome (`TabNavBar` when not suppressed by the expanded desktop dr
 - Hover exit uses `HOVER_GRACE_MS` so gaps within the outline do not restart the greeting.
 - The collapse control remains visible for touch and steps aside while the bubble supplies its own close action.
 
-`app/mascot-shape/route.ts` reads the outline server-side because the asset host cannot supply a CORS-safe canvas. Only the run-length outline leaves the handler. Pin the host and image path; reject queries, credentials and redirects, and bound bytes and pixels. Memoize successful answers only. `shapeHead` supplies the bubble anchor.
+`GET /api/v1/mascots` returns a precomputed run-length `shape` (`{ w, h, rows }`, 96-cell grid, alpha ≥ 48, EXIF-oriented, first animation frame) for backend-hosted mascot uploads. `lib/api/mascot.ts` validates it with `parseMascotShape`, and `Mascot` skips `app/mascot-shape/route.ts` whenever the config carries a valid shape.
+
+`app/mascot-shape/route.ts` remains the server-side fallback when the configuration omits `shape` (external asset-host URLs or older backends) because the asset host cannot supply a CORS-safe canvas. Only the run-length outline leaves the handler. Pin the host and image path; reject queries, credentials and redirects, and bound bytes and pixels. Memoize successful answers only. `shapeHead` supplies the bubble anchor.
 
 ## Mascot motion and speech
 

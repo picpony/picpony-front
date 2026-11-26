@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { MdOutlineChatBubbleOutline } from 'react-icons/md';
+import { MdOutlineChatBubbleOutline } from '@/components/icons/messages';
 import EmptyState from '@/components/EmptyState';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage, isNotFound } from '@/lib/api/errors';

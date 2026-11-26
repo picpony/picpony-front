@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdEdit, MdForum, MdSearchOff } from 'react-icons/md';
+import { MdForum } from '@/components/icons/shell';
+import { MdEdit, MdSearchOff } from '@/components/icons/common';
 import PageHeader from '@/components/PageHeader';
 import Button from '@/components/Button';
 import Chip from '@/components/Chip';

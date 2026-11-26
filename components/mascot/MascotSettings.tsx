@@ -1,6 +1,6 @@
 'use client';
 
-import { MdEmojiEmotions } from 'react-icons/md';
+import { MdEmojiEmotions } from '@/components/icons/settings';
 import Select from '@/components/Select';
 import Skeleton from '@/components/Skeleton';
 import ErrorRetry from '@/components/ErrorRetry';

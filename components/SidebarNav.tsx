@@ -40,7 +40,7 @@ import {
   MdOutlineLogout,
   MdOutlineSubscriptions,
   MdOutlineStore,
-} from 'react-icons/md';
+} from '@/components/icons/shell';
 import { useBackgroundSearchParams } from './BackgroundLocation';
 import { useSubscriptionUpdates } from './subscriptions/actions';
 import { CountBadge } from './Badge';

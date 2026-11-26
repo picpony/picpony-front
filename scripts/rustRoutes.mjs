@@ -343,6 +343,7 @@ const ROUTES = [
   ["assistant_api_receipt", "POST", "/api/v1/me/assistant/receipts"],
   ["assistant_action_result", "POST", "/api/v1/me/assistant/action-results"],
   ["get_public_maintenance_status", "GET", "/api/v1/maintenance-status"],
+  ["get_site_bootstrap", "GET", "/api/v1/bootstrap"],
   ["track_visitor", "POST", "/api/v1/site-visits"],
   ["admin_get_visitor_stats", "GET", "/api/v1/admin/metrics/visitors"],
   ["get_user_by_username", "GET", "/api/v1/users/by-username/{username}"],

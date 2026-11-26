@@ -8,16 +8,20 @@ import type { ForumPost } from '@/lib/types/forum';
  * original front end derived them.
  */
 export function forumTeaser(
-  post: Pick<ForumPost, 'excerpt' | 'content' | 'category' | 'title' | 'commission_link' | 'shared_groups'>,
+  post: Pick<
+    ForumPost,
+    'excerpt' | 'content' | 'category' | 'title' | 'commission_link' | 'shared_groups' | 'shared_group_counts'
+  >,
   maxLength = 120,
 ): string {
   const excerpt = post.excerpt.trim();
   if (excerpt) return bbcodeToPlainText(excerpt, { maxLength });
   if (post.category === 'taggroups') {
-    const shared = post.shared_groups;
+    const tagCount = post.shared_group_counts?.tagGroups ?? post.shared_groups?.tagGroups.length ?? 0;
+    const blockCount = post.shared_group_counts?.blockGroups ?? post.shared_groups?.blockGroups.length ?? 0;
     const parts = [
-      shared && shared.tagGroups.length > 0 ? `${shared.tagGroups.length} 个标签组` : '',
-      shared && shared.blockGroups.length > 0 ? `${shared.blockGroups.length} 个屏蔽组` : '',
+      tagCount > 0 ? `${tagCount} 个标签组` : '',
+      blockCount > 0 ? `${blockCount} 个屏蔽组` : '',
     ].filter(Boolean);
     const lead = post.content.trim().replace(/\s+/g, ' ');
     const summary = parts.length > 0 ? `分享了 ${parts.join('、')}` : '';

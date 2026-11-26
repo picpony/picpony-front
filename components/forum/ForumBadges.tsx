@@ -1,6 +1,7 @@
 'use client';
 
-import { MdBookmarks, MdForum, MdPalette, MdPushPin } from 'react-icons/md';
+import { MdBookmarks, MdForum } from '@/components/icons/shell';
+import { MdPalette, MdPushPin } from '@/components/icons/common';
 import Badge, { type BadgeSize } from '@/components/Badge';
 import { categoryLabel } from '@/lib/forumModel';
 import type { ForumCategory } from '@/lib/types/forum';

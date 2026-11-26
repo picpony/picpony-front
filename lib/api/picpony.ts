@@ -168,6 +168,7 @@ export function sessionRecordFromMe(user: MeUser): Record<string, unknown> {
     derpi_username: identity ? identity.name : '',
     is_developer: user.developer_access.active === true,
     developer_access: user.developer_access,
+    ...(Array.isArray(user.equipped_badges) ? { equipped_badges: user.equipped_badges } : {}),
   };
 }
 
@@ -192,6 +193,7 @@ export interface MeUser {
   settings_revision: number;
   upstream_identity: { id: number; name: string } | null;
   developer_access: DeveloperState;
+  equipped_badges?: unknown[];
 }
 
 /**
@@ -434,12 +436,20 @@ export async function sanitizeAnnouncements(list: Announcement[]): Promise<Annou
   return list.map((item) => ({ ...item, content: sanitizeHtml(item.content) }));
 }
 
-/** `GET /announcements/latest` — `{announcement: null}` when nothing has been published. */
-export async function getAnnouncement(signal?: AbortSignal): Promise<{ success: true; announcement?: Announcement }> {
+/** `GET /announcements/latest` — `{announcement: null}` when nothing has been published.
+ *  When `skipVersion` matches the server's version (the visitor already dismissed it), return
+ *  without loading the HTML sanitiser chunk or exposing unsanitised HTML. */
+export async function getAnnouncement(
+  signal?: AbortSignal,
+  options?: { skipVersion?: string | null },
+): Promise<{ success: true; announcement?: Announcement }> {
   const data = await api<{
     announcement: { id: number; version: string; title: string; content: string; created_at: string } | null;
   }>('GET', '/announcements/latest', { signal });
   if (!data.announcement) return { success: true };
+  if (options?.skipVersion != null && data.announcement.version === options.skipVersion) {
+    return { success: true };
+  }
   const { created_at, ...rest } = data.announcement;
   const [announcement] = await sanitizeAnnouncements([{ ...rest, date: created_at }]);
   return { success: true, announcement };

@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, useRef, type InputHTMLAttributes } from 'react';
-import { MdClose, MdSearch } from 'react-icons/md';
+import { MdClose, MdSearch } from '@/components/icons/shell';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';

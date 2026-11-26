@@ -78,6 +78,7 @@ export interface HeroEngineBinding {
   interrupt(navigationHandled?: boolean): boolean;
   isRunning(): boolean;
   waitForIdle(signal?: AbortSignal): Promise<unknown>;
+  isDetailDataPublishable(imageId: number): boolean;
 }
 
 let engine: HeroEngineBinding | null = null;
@@ -131,6 +132,28 @@ export function isImageHeroTransitionRunning() {
 
 export function waitForImageHeroTransition(signal?: AbortSignal) {
   return engine ? engine.waitForIdle(signal).then(() => undefined) : Promise.resolve();
+}
+
+/** True when `imageId`'s detail data may publish without disturbing an active flight. */
+export function isImageHeroDetailDataPublishable(imageId: number) {
+  return engine ? engine.isDetailDataPublishable(imageId) : true;
+}
+
+/* The Stage's active renderer lives behind a dynamic import in `components/HeroStage.tsx` so
+   routes that never open a picture do not ship detail-stage components in their first document.
+   The Stage registers its chunk warmer here at shell mount so gallery hooks can warm it without
+   creating a `lib/ -> components/` edge. */
+let stageWarmer: (() => Promise<unknown>) | null = null;
+
+export function registerImageHeroStageWarmer(warmer: () => Promise<unknown>) {
+  stageWarmer = warmer;
+  return () => {
+    if (stageWarmer === warmer) stageWarmer = null;
+  };
+}
+
+export function warmImageHeroStage(): Promise<unknown> {
+  return stageWarmer ? stageWarmer() : Promise.resolve();
 }
 
 /* The open overlay's own 返回, for chrome that asks the same thing: the drawer row of the very

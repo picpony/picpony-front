@@ -2,7 +2,8 @@
 
 import { memo, useCallback, useDeferredValue, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
-import { MdThumbUp, MdComment, MdVisibilityOff, MdBrokenImage, MdRefresh } from 'react-icons/md';
+import { MdVisibilityOff, MdBrokenImage } from '@/components/icons/shell';
+import { MdThumbUp, MdComment, MdRefresh } from '@/components/icons/common';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
 import Button from './Button';

@@ -100,11 +100,18 @@ interface WireBlockGroup {
   spoilered_tags: string[];
 }
 
-/** A post's body: a typed document, by kind. */
+/** A post's body: a typed document, by kind (full or summary list projection). */
 export type WireContent =
   | { type: 'discussion'; html: string }
   | { type: 'commission'; description: string; commission_link: string }
-  | { type: 'taggroups'; description: string; tag_groups: WireGroup[]; block_groups: WireBlockGroup[] };
+  | {
+      type: 'taggroups';
+      description: string;
+      tag_groups?: WireGroup[];
+      block_groups?: WireBlockGroup[];
+      tag_group_count?: number;
+      block_group_count?: number;
+    };
 
 /** A row of `GET /forum/posts`, the `post` of `GET /forum/posts/{id}`. */
 export interface WirePost {
@@ -113,6 +120,7 @@ export interface WirePost {
   title: string;
   excerpt: string;
   content: WireContent;
+  content_summary?: boolean;
   cover_image: string | null;
   category: ForumCategory;
   is_pinned: boolean;
@@ -144,21 +152,36 @@ export function badgesOf(badges: readonly WireBadge[]): EquippedBadge[] {
    (`decodeSanitizedText`); decoded once here, so every reader — the body, the list's teaser, the
    reply quote and the edit form, which would otherwise send `&amp;` back to be escaped again —
    sees the characters the author wrote. */
-function bodyOf(content: WireContent): Pick<ForumPostDetail, 'content' | 'commission_link' | 'shared_groups'> {
+function bodyOf(
+  content: WireContent,
+): Pick<ForumPostDetail, 'content' | 'commission_link' | 'shared_groups' | 'shared_group_counts'> {
   switch (content.type) {
     case 'discussion':
       return { content: decodeSanitizedText(content.html), commission_link: '', shared_groups: null };
     case 'commission':
       return { content: decodeSanitizedText(content.description), commission_link: content.commission_link, shared_groups: null };
-    case 'taggroups':
+    case 'taggroups': {
+      const hasFullGroups = Array.isArray(content.tag_groups) && Array.isArray(content.block_groups);
+      if (!hasFullGroups) {
+        return {
+          content: decodeSanitizedText(content.description),
+          commission_link: '',
+          shared_groups: null,
+          shared_group_counts: {
+            tagGroups: Number(content.tag_group_count) || 0,
+            blockGroups: Number(content.block_group_count) || 0,
+          },
+        };
+      }
       return {
         content: decodeSanitizedText(content.description),
         commission_link: '',
         shared_groups: {
-          tagGroups: content.tag_groups,
-          blockGroups: content.block_groups.map(({ name, hidden_tags, spoilered_tags }): SharedBlockGroup => ({ name, hidden_tags, spoilered_tags })),
+          tagGroups: content.tag_groups!,
+          blockGroups: content.block_groups!.map(({ name, hidden_tags, spoilered_tags }): SharedBlockGroup => ({ name, hidden_tags, spoilered_tags })),
         },
       };
+    }
   }
 }
 
@@ -168,6 +191,7 @@ export function postOf(raw: WirePost): ForumPostDetail {
     user_id: raw.user_id,
     title: raw.title,
     ...bodyOf(raw.content),
+    ...(raw.content_summary ? { summary: true } : {}),
     revision: raw.revision,
     excerpt: decodeSanitizedText(raw.excerpt.trim()),
     category: raw.category,
@@ -196,13 +220,20 @@ export interface WirePostPage {
 }
 
 /** The list query as the backend takes it — the client's and the server seed's. */
-export function forumListParams(query: { page: number; category?: ForumCategoryFilter; sort?: ForumSort; search?: string }) {
+export function forumListParams(query: {
+  page: number;
+  category?: ForumCategoryFilter;
+  sort?: ForumSort;
+  search?: string;
+  summary?: boolean;
+}) {
   const search = query.search?.trim();
   return {
     page: query.page,
     category: query.category && query.category !== 'all' ? query.category : undefined,
     sort: query.sort ?? 'updated_at',
     search: search || undefined,
+    summary: query.summary ? 1 : undefined,
   };
 }
 

@@ -2,7 +2,7 @@ import { PONY_EMOJI, type PonyEmoji } from '@/lib/generated/emoji';
 import { parseShare, shareSummary } from '@/lib/api/messages';
 import { subscriptionHref } from '@/lib/subscriptionHref';
 import { getRawImageUrl } from '@/lib/imageLoader';
-import { decodeSanitizedText } from '@/lib/sanitizedText';
+import { decodeSanitizedText, stripTruncatedSanitizedEntity } from '@/lib/sanitizedText';
 
 /*
  * What a message's text *is*, as tokens — pure, so it can be tested without a DOM.
@@ -291,8 +291,7 @@ export function contactPreview(preview: string, truncated = false): string {
   const start = preview.trimStart();
   const card = SHARE_OPENINGS.find(([opening]) => start.startsWith(opening));
   if (card) return card[1];
-  const text = preview
-    .replace(/&[#A-Za-z0-9]{0,6}$/, '')
+  const text = stripTruncatedSanitizedEntity(preview)
     .replace(/\$emoji_[^$\s]*$/, '')
     .replace(/\[img\](?![\s\S]*\[\/img\])[\s\S]*$/i, '[图片]')
     .replace(/\[[^\]]*$/, '');

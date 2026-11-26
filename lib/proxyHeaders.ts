@@ -85,3 +85,93 @@ export function clientAddressHeaders(incoming: Headers): { forwardedFor: string;
   if (realIp && chain.at(-1) !== realIp) chain.push(realIp);
   return { forwardedFor: chain.join(', '), realIp };
 }
+
+/**
+ * True iff `Cache-Control` explicitly carries the standalone `public` directive
+ * (case-insensitive) and does not carry `private` or `no-store`.
+ */
+export function isPublicCacheControl(value: string | null | undefined): boolean {
+  if (!value) return false;
+  let hasPublic = false;
+  for (const part of value.split(',')) {
+    const eq = part.indexOf('=');
+    const token = (eq === -1 ? part : part.slice(0, eq)).trim().toLowerCase();
+    if (!token) continue;
+    if (token === 'private' || token === 'no-store') return false;
+    if (token === 'public') hasPublic = true;
+  }
+  return hasPublic;
+}
+
+/**
+ * Merge header names into a `Vary` value without duplicates (case-insensitive),
+ * preserving `*` when already present.
+ */
+export function mergeVary(existing: string | null | undefined, ...tokens: string[]): string {
+  const parts: string[] = [];
+  const seen = new Set<string>();
+  if (existing) {
+    for (const raw of existing.split(',')) {
+      const name = raw.trim();
+      if (!name) continue;
+      if (name === '*') return '*';
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      parts.push(name);
+    }
+  }
+  for (const raw of tokens) {
+    const name = raw.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(name);
+  }
+  return parts.join(', ');
+}
+
+export interface PublicCachePolicyInput {
+  method: string;
+  hasAuthorization: boolean;
+  hasBackendCookie: boolean;
+  hasSetCookie: boolean;
+  upstreamStatus: number;
+  upstreamCacheControl: string | null;
+}
+
+/**
+ * Security gate for forwarding upstream `Cache-Control` from `/api/v1/[...path]`:
+ * - Anonymous `GET`/`HEAD` (no `Authorization`, no backend cookie, no `Set-Cookie`, `200`/`304`,
+ *   explicit upstream `public` without `private`/`no-store`) keeps the upstream `Cache-Control`.
+ * - Cookie-only `GET`/`HEAD` (e.g. a signed-in browser's same-origin `<img>` carrying `auth_bind`
+ *   without `Authorization`) downgrades `public` to `private` and strips `s-maxage`, so the user's
+ *   browser still caches public assets while shared proxies/CDNs never store a credentialed answer.
+ * - Everything else (including any `Authorization` header or non-`public` upstream) returns `null`,
+ *   which the route handler writes as `private, no-store`.
+ */
+export function resolveProxyCacheControl(input: PublicCachePolicyInput): string | null {
+  const method = input.method.toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return null;
+  if (input.hasAuthorization || input.hasSetCookie) return null;
+  if (input.upstreamStatus !== 200 && input.upstreamStatus !== 304) return null;
+  if (!isPublicCacheControl(input.upstreamCacheControl)) return null;
+  const raw = input.upstreamCacheControl!.trim();
+  if (!input.hasBackendCookie) return raw;
+  const directives: string[] = [];
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const eq = trimmed.indexOf('=');
+    const token = (eq === -1 ? trimmed : trimmed.slice(0, eq)).trim().toLowerCase();
+    if (token === 'public' || token === 's-maxage') continue;
+    directives.push(trimmed);
+  }
+  return ['private', ...directives].join(', ');
+}
+
+/** True iff the request qualifies for un-downgraded `public` caching (anonymous, no credentials). */
+export function canForwardPublicCache(input: PublicCachePolicyInput): boolean {
+  return !input.hasBackendCookie && resolveProxyCacheControl(input) !== null;
+}

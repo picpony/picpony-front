@@ -1,6 +1,6 @@
 import { cache } from 'react';
 import type { ImageLine } from '@/lib/route';
-import { readRoutePolicy } from '@/lib/route.server';
+import { readRoutePolicy, type InlineRoutePolicy } from '@/lib/route.server';
 
 /**
  * The image line a server render puts its `<img>` and `<video>` URLs on — the one answer the
@@ -21,12 +21,30 @@ const IMAGE_LINES: readonly ImageLine[] = ['direct', 'cdn', 'picpony'];
 const asLine = (value: string | null | undefined): ImageLine | null =>
   IMAGE_LINES.includes(value as ImageLine) ? (value as ImageLine) : null;
 
+interface RequestRoutePolicySlot {
+  promise: Promise<InlineRoutePolicy | null> | null;
+}
+
+const requestRoutePolicy = cache((): RequestRoutePolicySlot => ({ promise: null }));
+
+/** Share an in-flight `/api/v1/bootstrap` route policy across this request's server tree. */
+export function setRequestRoutePolicy(promise: Promise<InlineRoutePolicy | null>): void {
+  requestRoutePolicy().promise = promise;
+}
+
 /**
  * The route policy, read once per request however many server components ask. The read opts
  * out of `fetch` memoisation (it carries an abort signal for its timeout), so the layout and a
  * page each calling it would send it twice on a cache miss.
  */
-export const readRoutePolicyOnce = cache(readRoutePolicy);
+export const readRoutePolicyOnce = cache(async (): Promise<InlineRoutePolicy> => {
+  const boot = requestRoutePolicy().promise;
+  if (boot) {
+    const seeded = await boot;
+    if (seeded) return seeded;
+  }
+  return readRoutePolicy();
+});
 
 export function ssrImageLine(
   policy: { image: string } | null,

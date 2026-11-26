@@ -3,7 +3,7 @@
 import { getImage } from '@/lib/api/derpi';
 import type { ImagePreview, PonyImage } from '@/lib/types/image';
 import { promoteLaneJob, scheduleLaneJob, unscheduleLaneJob } from '@/lib/resource';
-import { imageHeroController } from './hero/controller';
+import { isImageHeroDetailDataPublishable, subscribeImageHeroRuntime } from './hero/runtime';
 import { completeDetailRow } from './detailRow';
 
 export { completeDetailRow };
@@ -112,7 +112,7 @@ function flushDetailNotifications() {
     return;
   }
   const imageIds = Array.from(pendingNotifications).filter((imageId) =>
-    imageHeroController.isDetailDataPublishable(imageId),
+    isImageHeroDetailDataPublishable(imageId),
   );
   imageIds.forEach((imageId) => {
     pendingNotifications.delete(imageId);
@@ -133,7 +133,7 @@ function ensureNotificationVisibilityListener() {
   });
   // Publication is a controller milestone (isDetailDataPublishable), not a DOM/data-attribute
   // convention: the opening route may get data mid-gesture; unrelated responses wait for their owner.
-  imageHeroController.subscribeRuntime(() => {
+  subscribeImageHeroRuntime(() => {
     if (pendingNotifications.size > 0) scheduleDetailNotifications();
   });
 }

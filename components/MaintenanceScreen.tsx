@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdConstruction } from 'react-icons/md';
+import { MdConstruction } from '@/components/icons/shell';
 import Button from './Button';
 import ScrollArea from './ScrollArea';
 import StatusView from './StatusView';

@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import type { MouseEvent } from 'react';
-import { MdChevronRight, MdFolderShared, MdImage, MdLock } from 'react-icons/md';
+import { MdChevronRight, MdImage, MdLock } from '@/components/icons/common';
+import { MdFolderShared } from '@/components/icons/messages';
 import Card from '@/components/Card';
 import FadeInImage from '@/components/FadeInImage';
 import { shareHref, type ShareTarget } from '@/lib/api/messages';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MdRotateRight, MdZoomIn, MdZoomOut, MdRestartAlt } from 'react-icons/md';
+import { MdRotateRight, MdZoomIn, MdZoomOut, MdRestartAlt } from '@/components/icons/settings';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';

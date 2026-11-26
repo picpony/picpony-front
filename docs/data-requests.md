@@ -38,8 +38,8 @@ PicPony reads default to a 15-second deadline, overridable by `timeoutMs`. Write
 
 | Route | Server data |
 | --- | --- |
-| `/` | Addressed gallery page up to page 20 and anonymous featured image |
-| `/?tab=forum` | Initial default forum list |
+| `/` | Addressed gallery page up to page 20 and anonymous featured image; layout startup reads `GET /api/v1/bootstrap` once and shares policy, maintenance, filter definitions and blacklist across the request |
+| `/?tab=forum` | Initial default forum list (`summary=1` with legacy fallback) |
 | `/about` | Team roster |
 | `/stats` | Default seven-day statistics; other date windows read on the client |
 | `/user/[id]` | Profile header; missing users call `notFound()` |

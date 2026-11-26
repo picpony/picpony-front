@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { MdCampaign } from 'react-icons/md';
+import { MdCampaign } from '@/components/icons/messages';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';

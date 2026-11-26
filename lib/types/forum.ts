@@ -42,8 +42,12 @@ export interface ForumPost {
   content: string;
   /** A commission's http(s) link to the artist's page; `''` for none and for the other kinds. */
   commission_link: string;
-  /** A tag-group share's groups; `null` for the other kinds. */
+  /** A tag-group share's groups; `null` for the other kinds or summary list rows. */
   shared_groups: SharedGroups | null;
+  /** Group counts present on summary list rows for `taggroups` posts when full group arrays are omitted. */
+  shared_group_counts?: { tagGroups: number; blockGroups: number } | null;
+  /** True when the row came from `GET /forum/posts?summary=1` and omits the full body. */
+  summary?: boolean;
   /** The post's edit revision — an edit sends it back as `expected_revision`. */
   revision: number;
   /** The optional 简介; empty when the author wrote none. */

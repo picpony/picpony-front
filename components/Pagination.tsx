@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
-import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from 'react-icons/md';
+import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from '@/components/icons/common';
 import Button from './Button';
 import { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
 import { clamp, cn } from '@/lib/utils';

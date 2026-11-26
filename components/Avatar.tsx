@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MdPerson } from 'react-icons/md';
+import { MdPerson } from '@/components/icons/shell';
 import FadeInImage from './FadeInImage';
 import { getAvatarUrl, cn } from '@/lib/utils';
 

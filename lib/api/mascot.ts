@@ -8,12 +8,14 @@ export interface MascotConfig {
   id: string;
   name: string;
   image: string;
+  /** Precomputed silhouette from `GET /mascots` when available; `null` triggers the `/mascot-shape` fallback. */
+  shape: MascotShape | null;
   tips: string[];
   mascots: { id: string; name: string }[];
 }
 
 /** One row of `GET /mascots`: active mascots only, ordered by id. `tips` is the admin's text, one line each. */
-interface MascotRow { id: number; name: string; image_url: string; tips: string }
+interface MascotRow { id: number; name: string; image_url: string; tips: string; shape?: unknown }
 
 /**
  * Admin-uploaded media still has to be a media URL, never a navigation/code scheme. The backend's
@@ -34,11 +36,12 @@ export function mascotAsset(value: unknown): string {
 const lines = (text: string) => text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
 
 /**
- * `GET /mascots` — public `{enabled, revision, tips, mascots:[{id,name,image_url,tips}]}`. The
+ * `GET /mascots` — public `{enabled, revision, tips, mascots:[{id,name,image_url,tips,shape?}]}`. The
  * signed-in `GET /me/mascot-config` only echoes one selected row and the shared tips, and refuses
  * a visitor, so the public list serves both: `auto` (自动 / 随机) picks one of the active mascots
  * here, an explicit id that is no longer active falls back the same way. A mascot's own lines win;
- * the site-wide `tips` (a JSON array) are the fallback.
+ * the site-wide `tips` (a JSON array) are the fallback. Backend-hosted uploads include a precomputed
+ * `shape`, validated here via `parseMascotShape` so `Mascot` skips `/mascot-shape`.
  */
 export async function getMascotConfig(selected = 'auto', signal?: AbortSignal): Promise<MascotConfig> {
   const data = await api<{ enabled: boolean; tips: unknown; mascots: MascotRow[] }>('GET', '/mascots', { signal });
@@ -46,9 +49,11 @@ export async function getMascotConfig(selected = 'auto', signal?: AbortSignal): 
     ?? data.mascots[Math.floor(Math.random() * data.mascots.length)];
   const shared = Array.isArray(data.tips) ? data.tips.filter((v): v is string => typeof v === 'string' && !!v.trim()) : [];
   const own = chosen ? lines(chosen.tips) : [];
+  const image = mascotAsset(chosen?.image_url);
   return {
     enabled: data.enabled, id: chosen ? String(chosen.id) : '', name: chosen?.name ?? '绘云彩彩',
-    image: mascotAsset(chosen?.image_url), mascots: data.mascots.map(row => ({ id: String(row.id), name: row.name })),
+    image, shape: image ? parseMascotShape(chosen?.shape) : null,
+    mascots: data.mascots.map(row => ({ id: String(row.id), name: row.name })),
     tips: own.length ? own : shared,
   };
 }

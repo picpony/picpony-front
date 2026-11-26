@@ -1,25 +1,23 @@
 'use client';
-/* useGSAP owns dependency cleanup; preserve its existing compiler boundary. */
-'use no memo';
 
-import { useRef, type RefObject } from 'react';
-import { motionRatio, useEntranceMotion, useMotionTier } from '@/lib/appearance';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { scaledMs, useEntranceMotion, useMotionTier } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { STAGGER, TRAVEL_PX } from '@/lib/motionTokens';
 import { routeTransitActive } from '@/lib/pageTransit';
 import { replacedSkeleton } from '@/lib/masonry';
-import { gsap, surfaceArrival, useGSAP } from './engine';
+import { surfaceArrival } from '@/lib/springTiming';
 
 /* ---------------------------------------------------------------------------
  * Entrance / list motion
  *
- * `useStaggerGrid` here and `<Reveal>` (components/Reveal.tsx) are the two, both
- * playing on mount; there is no scroll-driven reveal. If one is ever wanted, an
- * `IntersectionObserver` with the app scroller as `root` suffices (see
- * `components/PicDetail.tsx`) under two constraints: never wrap a gallery card
- * (it parks targets at a `y` offset, and the hero flight reads
- * `getBoundingClientRect` on press) and never sit inside a tab pane whose content
- * swaps (the pane transition already animates the same nodes' `autoAlpha` and `y`).
+ * `useStaggerGridOn` here and `<Reveal>` (components/Reveal.tsx) are the two, both
+ * playing on mount on Web Animations (zero GSAP dependency); there is no scroll-driven
+ * reveal. If one is ever wanted, an `IntersectionObserver` with the app scroller as
+ * `root` suffices (see `components/PicDetail.tsx`) under two constraints: never wrap a
+ * gallery card (it parks targets at a `y` offset, and the hero flight reads
+ * `getBoundingClientRect` on press) and never sit inside a tab pane whose content swaps
+ * (the pane transition already animates the same nodes' `autoAlpha` and `y`).
  * ------------------------------------------------------------------------ */
 
 /** Distance an entering element travels, px, on the 4dp grid. Small on purpose: a long
@@ -46,10 +44,10 @@ const STAGGER_NEAR_MARGIN = 240;
  * be a *sibling after* the ref'd element, never a child of it**: React attaches a
  * parent's ref only after its children's layout effects have run, so a component
  * rendered *inside* the grid reads `ref.current === null` on the mounting commit —
- * and once `warmMotion()` has made the engine resident before first paint, nothing
+ * and once `warmMotion()` has made the module resident before first paint, nothing
  * re-runs the mount pass, so the gallery silently gets no entrance on load. The
  * caller owns the `useRef`; this owns the animation (`lib/motionLazy.tsx` mounts it
- * from a child that only exists once GSAP has arrived).
+ * from a child that only exists once the module has arrived).
  */
 export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
   ref: RefObject<T | null>,
@@ -62,7 +60,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
   const entrances = useEntranceMotion();
   /**
    * Once per mounted grid, not once per page of results. The cascade parks every
-   * card at `autoAlpha: 0` and reveals them over up to 0.25s of stagger — right for a
+   * card at `opacity: 0` and reveals them over up to 0.25s of stagger — right for a
    * grid *arriving*, wrong for a page turn, twice over: `Pagination` glides the
    * scroller to the top, so the viewport starts at the **bottom** of the grid where
    * cards are *last* in cascade order (looked-at content held invisible for the full
@@ -74,80 +72,86 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
    * rows land, so the latch is set after the `items.length` check.
    */
   const played = useRef(false);
+  const depKey = deps.map((value) => String(value ?? '')).join('\u0000');
 
-  useGSAP(
-    () => {
-      const root = ref.current;
-      if (!root || !entrances || tier === 'off') return;
-      const items = gsap.utils.toArray<HTMLElement>(root.querySelectorAll(selector));
-      if (items.length === 0) return;
-      if (played.current) return;
-      played.current = true;
-      /* The route's pre-commit marker is already present when this grid mounts.
-         Its page is entering as one surface; a child cascade here adds a second
-         clock and a transform per card during the most expensive first paint.
-         Latch the skipped entrance too, so a later update cannot replay it. */
-      if (routeTransitActive(root)) return;
-      /* The grid took over from its own skeleton in this commit: the placeholder has been
-         saying "arriving" for as long as it was up, and a cascade on top of it is the same
-         news twice (the judgement a page turn gets). This is also every unseeded cold load
-         of `/`, where the cascade used to park fifty cards and spend a second and a half of
-         a slow phone's main thread revealing them. */
-      if (replacedSkeleton()) return;
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root || !entrances || tier === 'off') return;
+    const items = Array.from(root.querySelectorAll<HTMLElement>(selector));
+    if (items.length === 0) return;
+    if (played.current) return;
+    played.current = true;
+    /* The route's pre-commit marker is already present when this grid mounts.
+       Its page is entering as one surface; a child cascade here adds a second
+       clock and a transform per card during the most expensive first paint.
+       Latch the skipped entrance too, so a later update cannot replay it. */
+    if (routeTransitActive(root)) return;
+    /* The grid took over from its own skeleton in this commit: the placeholder has been
+       saying "arriving" for as long as it was up, and a cascade on top of it is the same
+       news twice (the judgement a page turn gets). This is also every unseeded cold load
+       of `/`, where the cascade used to park fifty cards and spend a second and a half of
+       a slow phone's main thread revealing them. */
+    if (replacedSkeleton()) return;
 
-      /* Only what can be seen, plus the next row. Cards below the fold are revealed long
-         before anyone scrolls to them, so tweening them was pure cost — 45 of 50 on a phone
-         — and it held them at zero opacity through the stagger for nothing. The rest
-         are left exactly as they are, which is visible. */
-      const scroller = getAppScroller();
-      const view = scroller?.getBoundingClientRect();
-      const viewTop = view?.top ?? 0;
-      const viewBottom = view?.bottom ?? window.innerHeight;
-      const rootTop = root.getBoundingClientRect().top;
-      const ordered = items
-        .map((el) => {
-          const r = el.getBoundingClientRect();
-          return { el, r, band: Math.round((r.top - rootTop) / ROW_BAND_PX), x: r.left };
-        })
-        .filter(({ r }) => r.bottom > viewTop && r.top < viewBottom + STAGGER_NEAR_MARGIN)
-        .sort((a, b) => a.band - b.band || a.x - b.x)
-        .map((m) => m.el);
-      if (ordered.length === 0) return;
+    /* Only what can be seen, plus the next row. Cards below the fold are revealed long
+       before anyone scrolls to them, so animating them was pure cost — 45 of 50 on a phone
+       — and it held them at zero opacity through the stagger for nothing. The rest
+       are left exactly as they are, which is visible. */
+    const scroller = getAppScroller();
+    const view = scroller?.getBoundingClientRect();
+    const viewTop = view?.top ?? 0;
+    const viewBottom = view?.bottom ?? window.innerHeight;
+    const rootTop = root.getBoundingClientRect().top;
+    const ordered = items
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, r, band: Math.round((r.top - rootTop) / ROW_BAND_PX), x: r.left };
+      })
+      .filter(({ r }) => r.bottom > viewTop && r.top < viewBottom + STAGGER_NEAR_MARGIN)
+      .sort((a, b) => a.band - b.band || a.x - b.x)
+      .map((m) => m.el);
+    if (ordered.length === 0) return;
 
-      /* Reduced halves the rise and drops the cascade: the cascade is a tween per
-       * card on a device that cannot afford 100 of them, the rise says "arriving".
-       * No scale at either tier — the same fade-and-rise `Reveal` plays, so the app
-       * has one entrance cascade; the 0.985 it carried was a flourish no one could
-       * see, and a card mid-tween carried a transform the hero flight measures. */
-      const reduced = tier === 'reduced';
-      /* Each card arrives as a surface does (`surfaceArrival`): the rise on the default spatial
-         spring, the fade on the default effects one, so a card is visible before its crest and
-         lands with the scheme's soft settle rather than the emphasized decelerate's hard stop.
-         `spring()` already carries the entrance category's speed; the stagger is scaled to match. */
-      const ratio = motionRatio('entrance');
-      const { spatial, effects } = surfaceArrival('default', 'entrance');
-      // Capped (`STAGGER`): however many cards are on screen, the spread never passes 250ms.
-      const stagger = reduced
-        ? 0
-        : { each: STAGGER.step * ratio, from: 'start' as const, amount: Math.min((ordered.length - 1) * STAGGER.step, STAGGER.max) * ratio };
-      const tween = gsap
-        .timeline({ onComplete: () => gsap.set(ordered, { clearProps: 'opacity,visibility,transform' }) })
-        .fromTo(ordered, { autoAlpha: 0 }, { autoAlpha: 1, ...effects, stagger }, 0)
-        .fromTo(ordered, { y: reduced ? TRAVEL_PX.small : REVEAL_SHIFT }, { y: 0, ...spatial, stagger }, 0);
+    /* Reduced halves the rise and drops the cascade: the cascade is a track per
+     * card on a device that cannot afford 100 of them, the rise says "arriving".
+     * No scale at either tier — the same fade-and-rise `Reveal` plays, so the app
+     * has one entrance cascade. */
+    const reduced = tier === 'reduced';
+    const rise = reduced ? TRAVEL_PX.small : REVEAL_SHIFT;
+    /* Each card arrives as a surface does (`surfaceArrival`): the rise on the default spatial
+       spring, the fade on the default effects one, on Web Animations so the cascade leaves
+       no inline style residue once settled. */
+    const { spatial, effects } = surfaceArrival('default', 'entrance');
+    // Capped (`STAGGER`): however many cards are on screen, the spread never passes 250ms.
+    const stepSeconds =
+      reduced || ordered.length <= 1 ? 0 : Math.min(STAGGER.step, STAGGER.max / (ordered.length - 1));
+    const running = ordered.flatMap((el, index) => {
+      const at = { delay: scaledMs(index * stepSeconds * 1000, 'entrance'), fill: 'backwards' as const };
+      return [
+        el.animate(
+          [
+            { opacity: 0, visibility: 'hidden' },
+            { opacity: 1, visibility: 'visible' },
+          ],
+          { ...effects, ...at },
+        ),
+        el.animate([{ transform: `translateY(${rise}px)` }, { transform: 'none' }], { ...spatial, ...at }),
+      ];
+    });
 
-      // A transform on an ancestor shifts `getBoundingClientRect` for everything
-      // under it, and the hero flight reads exactly that off a card the moment you
-      // press it. Snapping to the end state on pointerdown means a card can never
-      // be measured mid-cascade — a press during the cascade feels answered.
-      const settle = () => tween.progress(1);
-      root.addEventListener('pointerdown', settle, { capture: true });
-      return () => root.removeEventListener('pointerdown', settle, { capture: true });
-    },
-    // `revertOnUpdate`: the `pointerdown` listener is removed by the returned
-    // cleanup, which useGSAP otherwise defers to unmount — every page turn was
-    // leaving another capture-phase listener calling `progress(1)` on a dead tween.
-    { scope: ref, dependencies: [selector, tier, entrances, ...deps], revertOnUpdate: true },
-  );
+    // A transform on an ancestor shifts `getBoundingClientRect` for everything
+    // under it, and the hero flight reads exactly that off a card the moment you
+    // press it. Cancelling to rest on pointerdown means a card can never be
+    // measured mid-cascade — a press during the cascade feels answered.
+    const settle = () => {
+      for (const animation of running) animation.cancel();
+    };
+    root.addEventListener('pointerdown', settle, { capture: true });
+    return () => {
+      root.removeEventListener('pointerdown', settle, { capture: true });
+      settle();
+    };
+  }, [ref, selector, tier, entrances, depKey]);
 }
 
 /** `useStaggerGridOn` as a component that renders nothing, for `lib/motionLazy.tsx` — see

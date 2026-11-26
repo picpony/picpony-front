@@ -88,7 +88,7 @@ PicPony refinement; neither narrow triggers nor pointer density change their row
 
 ## Icon sizes
 
-Use `ICON` from `lib/icons.ts`; do not choose a literal at the call site.
+Use `ICON` from `lib/icons.ts`; do not choose a literal at the call site. Shared shell and core routes (`/`, `/messages`, `/settings`) import exact 24×24 Material inline SVG glyphs from `components/icons/` (`shell.tsx`, `common.tsx`, `messages.tsx`, `settings.tsx`) rather than `react-icons/md` so low-frequency route glyphs stay out of initial document chunks.
 
 | Name | Size | Use |
 | --- | --- | --- |

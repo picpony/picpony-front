@@ -1,6 +1,7 @@
 'use client';
 
-import { MdFilterList, MdNotifications, MdTroubleshoot, MdVisibility } from 'react-icons/md';
+import { MdNotifications, MdVisibility } from '@/components/icons/shell';
+import { MdFilterList, MdTroubleshoot } from '@/components/icons/settings';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
 import Select from '@/components/Select';

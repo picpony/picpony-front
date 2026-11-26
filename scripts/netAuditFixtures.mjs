@@ -135,6 +135,7 @@ const me = () => ({
   },
   settings_revision: 1,
   upstream_identity: null,
+  equipped_badges: [],
   developer_access: {
     user_id: 1, revision: 1, enabled: false, active: false, banned: false, source: null,
     maintenance_generation: 0, maintenance_expires_at: null, inactive_reason: null, attempts: 0,
@@ -191,6 +192,15 @@ const PICPONY = {
     revision: 1,
   }),
   get_public_maintenance_status: () => ({ maintenance_mode: false, maintenance_message: '' }),
+  get_site_bootstrap: () => ({
+    routing_policy: {
+      policy: { api_policy: 'auto', media_policy: 'auto', third_party_url: null, third_party_pass_api_key: false },
+      revision: 1,
+    },
+    maintenance: { maintenance_mode: false, maintenance_message: '' },
+    block_tags: blockFiltersEnvelope(),
+    image_blocklist: publicBlacklistPage([]),
+  }),
   get_maintenance_status: () => ({ maintenance_mode: false, maintenance_message: '' }),
   get_translation_settings: () => ({ translate_enabled: true }),
   get_semantic_search_settings: () => ({

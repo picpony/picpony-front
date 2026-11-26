@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useOffline } from 'next/offline';
-import { MdWifiOff } from 'react-icons/md';
+import { MdWifiOff } from '@/components/icons/shell';
 import { ICON } from '@/lib/icons';
 import Collapse from './Collapse';
 

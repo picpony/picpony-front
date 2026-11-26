@@ -110,7 +110,7 @@ Do not add a second global duration multiplier for entrance: some keyframes serv
 | `blocking` | Signature completes and holds for its defined pause |
 | `off` | No entrance or splash |
 
-The server includes the splash only when preferences permit; pre-paint attributes must agree before it shows. Reduced/off tiers do not run Lottie or hold the page behind an empty splash.
+The server includes the splash only when preferences permit; pre-paint attributes must agree before it shows. Reduced/off tiers do not run Lottie or hold the page behind an empty splash. `SplashScreen` does not prefetch Lottie at module evaluation: `blocking` loads `lottie_light` and `logoNonParallel.json` immediately on layout takeover, whereas `non-blocking` delays loading briefly so fast loads dismiss on the static `.logo-mask` with zero Lottie traffic. `Logo`'s hover trace (`logoTrace.json`) loads strictly on pointer hover or keyboard focus intent, never during idle.
 
 Keep the CSS deadline, `INTRO_LATEST_START_MS`, late-takeover handling and `noscript` escape. While covered, the splash blocks pointer input; it stops blocking as soon as it leaves and remains decorative to assistive technology.
 

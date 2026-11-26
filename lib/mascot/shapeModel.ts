@@ -1,9 +1,10 @@
 /**
- * The mascot's silhouette: where in its artwork the character actually is. The server reads it
- * from the artwork's alpha (`app/mascot-shape/route.ts`); the figure turns it into its hit region,
- * where its speech bubble points and where its collapse control can stand clear of it
- * (`components/mascot/Mascot.tsx`). Plain and import-free, so both sides — and the Node tests —
- * share one copy.
+ * The mascot's silhouette: where in its artwork the character actually is. The backend precomputes
+ * it for uploaded mascot images and returns it in `GET /api/v1/mascots`, while
+ * `app/mascot-shape/route.ts` reads it on demand when the configuration omits `shape`; the figure
+ * turns it into its hit region, where its speech bubble points and where its collapse control can
+ * stand clear of it (`components/mascot/Mascot.tsx`). Plain and import-free, so both sides — and
+ * the Node tests — share one copy.
  */
 
 /** Cells along the artwork's longer side: about 3px at the largest figure (300px), finer than any

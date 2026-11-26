@@ -26,7 +26,7 @@ After a compiler or Next upgrade:
 Known boundaries:
 
 - Render-phase writes in resources and shell state must remain guarded by identity comparisons.
-- `useGSAP` dependency identities control context disposal. Preserve `'use no memo'`, dependency lists and cleanup in the drawer, grid and sheet until each is verified.
+- `useGSAP` dependency identities control context disposal. Preserve `'use no memo'`, dependency lists and cleanup in the drawer and sheet until each is verified.
 - `RouteCrossFade` is a class component and is not transformed by React Compiler.
 
 ## Measurement tools

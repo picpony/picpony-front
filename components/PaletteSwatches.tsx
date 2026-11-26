@@ -2,7 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
-import { MdColorize, MdImage, MdPalette } from 'react-icons/md';
+import { MdImage, MdPalette } from '@/components/icons/common';
+import { MdColorize } from '@/components/icons/settings';
 
 import Button from '@/components/Button';
 import PaletteTileFace, { tileRippleStyle } from '@/components/PaletteTileFace';

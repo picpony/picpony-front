@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MdImageNotSupported } from 'react-icons/md';
+import { MdImageNotSupported } from '@/components/icons/settings';
 import Skeleton from '@/components/Skeleton';
 import { ICON } from '@/lib/icons';
 import type { PonyChoice } from '@/lib/api/desktopPonies';

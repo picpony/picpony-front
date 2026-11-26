@@ -23,6 +23,26 @@ export const PUBLIC_BLACKLIST_CACHE_TAG = 'picpony-public-blacklist';
 let generation = 0;
 let blacklistGeneration = 0;
 
+export interface RequestBlockData {
+  blockFilters: BlockFilters;
+  blacklist: PublicBlacklist;
+}
+
+interface RequestBootstrapSlot {
+  promise: Promise<RequestBlockData | null> | null;
+}
+
+const requestBootstrap = cache((): RequestBootstrapSlot => ({ promise: null }));
+
+/**
+ * Share an in-flight `/api/v1/bootstrap` read across server components in this single request so
+ * `readBlockFilters` and `readPublicBlacklist` never fire duplicate upstream fetches while the
+ * layout's bootstrap read is already in flight. Scoped to React's per-request `cache()`.
+ */
+export function setRequestBootstrap(promise: Promise<RequestBlockData | null>): void {
+  requestBootstrap().promise = promise;
+}
+
 /** Public definitions shared by the layout policy and home feed. In-flight coalescing is
  * essential: the layout and page render concurrently, and both need the same rule version. */
 const read = createServerMemo({
@@ -43,6 +63,11 @@ const read = createServerMemo({
 });
 
 async function readBlockFiltersFresh(): Promise<BlockFilters> {
+  const boot = requestBootstrap().promise;
+  if (boot) {
+    const seeded = await boot;
+    if (seeded) return seeded.blockFilters;
+  }
   const started = generation;
   const result = await read();
   /* A read begun before a successful edit cannot seed the old rules after the edit. The retry
@@ -92,6 +117,11 @@ const readBlacklist = createServerMemo({
 });
 
 async function readPublicBlacklistFresh(): Promise<PublicBlacklist> {
+  const boot = requestBootstrap().promise;
+  if (boot) {
+    const seeded = await boot;
+    if (seeded) return seeded.blacklist;
+  }
   const started = blacklistGeneration;
   const result = await readBlacklist();
   return started === blacklistGeneration ? result ?? [] : readPublicBlacklistFresh();

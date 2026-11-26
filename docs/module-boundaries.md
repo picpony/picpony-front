@@ -20,21 +20,23 @@ Dependency directions, lazy loading and shared state ownership. Start with the [
 | Module | Responsibility |
 | --- | --- |
 | `engine.ts` | GSAP registration, curves, springs and speed |
-| `theme.ts`, `drawer.ts`, `grid.ts` | Their respective interaction lifecycles |
+| `drawer.ts` | Phone swipe-to-close drawer lifecycle (GSAP + Observer) |
+| `theme.ts`, `grid.ts` | GSAP-free View Transition wipes and WAAPI grid entrances |
 | `tabGeometry.ts` | Geometry reads and motion planning |
 | `sharedAxis.ts` | Web Animations playback and style restoration |
-| `tabs.ts` | React state, scroll and pane coordination |
+| `tabs.ts` | React state, scroll and pane coordination (GSAP-free) |
 
-GSAP-free helpers stay outside the engine: `appScroller.ts`, `motionTokens.ts`, `pageTransit.ts`, `tabIntent.ts`, `tabScroll.ts`, `springTiming.ts`, `slidingIndicator.ts` and `scrollTo.ts`.
+GSAP-free helpers stay outside the engine: `appScroller.ts`, `motionTokens.ts`, `pageTransit.ts`, `tabIntent.ts`, `tabScroll.ts`, `springTiming.ts`, `slidingIndicator.ts` and `scrollTo.ts`. `routeCrossFadePlay.ts` also uses Web Animations directly and must not pull GSAP.
 
 ## Initial document and lazy boundaries
 
-GSAP, the Hero engine, Markdown, auth forms, the palette engine and admin API must stay out of the shell's initial static graph.
+GSAP, the Hero engine, the active Hero Stage, `react-icons/md`, Markdown, auth forms, the palette engine and admin API must stay out of the shell's initial static graph.
 
 | Feature | Boundary |
 | --- | --- |
-| General motion | `lib/motionLazy.tsx` |
-| Hero | Shell imports `lib/hero/runtime.ts` or `lib/hero/input.ts`; image features load the engine |
+| General motion | `lib/motionLazy.tsx` (`tabs`, `theme`, `grid` are GSAP-free; `drawer` loads GSAP only when the phone modal drawer opens) |
+| Hero | Shell imports `lib/hero/runtime.ts`, `lib/hero/input.ts` and the idle `HeroStage` shell; `HeroStageActive` and `@/lib/hero` load dynamically after first gallery paint and on card intent |
+| Icons | Shell and core routes (`/`, `/messages`, `/settings`) import lightweight inline SVG modules under `components/icons/`; low-frequency routes keep `react-icons/md` in their own chunks |
 | Markdown | `MarkdownRenderer` lazily loads `MarkdownDocument` |
 | Rich-text editor | `dynamic()` with `EditorPlaceholder` |
 | Authentication | `AuthModal` owns the live dialog; only `AuthForms` is lazy |
@@ -44,7 +46,7 @@ GSAP, the Hero engine, Markdown, auth forms, the palette engine and admin API mu
 
 A component mounted with `isOpen={false}` still loads its dynamic chunk. Use a latch when it must wait for first use, and keep the component mounted through its exit.
 
-The Hero engine binds to the runtime through `bindImageHeroEngine`; before binding, forwarded calls return the no-flight result. Guard browser binding and teardown on `window`, because module evaluation also happens during SSR.
+The Hero engine binds to the runtime through `bindImageHeroEngine`; before binding, forwarded calls return the no-flight result (`isImageHeroDetailDataPublishable` returns `true` for `gallery-idle`). `HeroStage` registers its active-chunk warmer via `registerImageHeroStageWarmer` so gallery hooks warm `HeroStageActive` without creating a `lib/` → `components/` edge. Guard browser binding and teardown on `window`, because module evaluation also happens during SSR.
 
 Auth loading must preserve Close, Escape, Back and focus handling before form code arrives. Only the currently owned flow may focus the new form; an already chosen control wins.
 
@@ -61,7 +63,7 @@ An event handler must not await a lazy chunk before `preventDefault()` or its st
 | `DrawerSwipe` | Button, scrim and Escape still work |
 | Route cross-fade | `captureRouteSnapshot` returns `null` |
 
-The shell warms common motion through `runWhenIdle`. Hooks remain unconditional inside loaded child components; do not pass hooks as props. The caller owns refs from its first render.
+The shell warms GSAP-free tab, theme, grid and route cross-fade code through `runWhenIdle`, leaving GSAP (`DrawerSwipe`, `Sheet`, `SidePanel`, `SliderCaptcha`) unloaded on desktop homepage hydration and tab switches. Hooks remain unconditional inside loaded child components; do not pass hooks as props. The caller owns refs from its first render.
 
 `routeCrossFade.ts` owns capture; `routeCrossFadePlay.ts` owns playback. Gate capture before cloning when playback is unavailable. Forum transitions use the same split and warm on post intent.
 

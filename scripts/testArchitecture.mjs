@@ -97,7 +97,7 @@ test('motion implementations depend only on their owned collaborators, never the
     ['lib/motion/engine.ts', []],
     ['lib/motion/theme.ts', ['lib/motion/tabs.ts']],
     ['lib/motion/drawer.ts', ['lib/motion/engine.ts']],
-    ['lib/motion/grid.ts', ['lib/motion/engine.ts']],
+    ['lib/motion/grid.ts', []],
     ['lib/motion/sharedAxis.ts', ['lib/motion/tabGeometry.ts']],
     ['lib/motion/tabGeometry.ts', []],
     ['lib/motion/tabs.ts', ['lib/motion/sharedAxis.ts', 'lib/motion/tabGeometry.ts']],
@@ -115,16 +115,47 @@ test('motion implementations depend only on their owned collaborators, never the
   assert.deepEqual(violations, []);
 });
 
-test('the shared shell keeps motion, hero, Markdown, palette and admin code behind their boundaries', () => {
+test('WAAPI motion modules and route cross-fade never reach GSAP', () => {
+  const gsapTarget = (file) => file === 'lib/motion/engine.ts' || file === 'lib/motion.ts' ||
+    /^(?:gsap|@gsap\/react)(?:\/|$)/.test(file);
+  const gsapFree = [
+    'lib/motion/tabs.ts',
+    'lib/motion/sharedAxis.ts',
+    'lib/motion/tabGeometry.ts',
+    'lib/motion/theme.ts',
+    'lib/motion/grid.ts',
+    'lib/routeCrossFade.ts',
+    'lib/routeCrossFadePlay.ts',
+  ];
+  const violations = gsapFree.map((file) => findPath(graph, file, gsapTarget, true)).filter(Boolean);
+  assert.equal(violations.length, 0, explain(violations));
+});
+
+test('the shared shell keeps motion, hero, detail stage, icons, Markdown, palette and admin code behind their boundaries', () => {
   const deferred = new Set([
     'lib/motion.ts', 'lib/hero/index.ts', 'lib/hero/controller.ts',
+    'components/HeroStageActive.tsx', 'components/DetailHeader.tsx', 'components/detail/DetailActions.tsx',
     'components/MarkdownDocument.tsx', 'components/AuthForms.tsx', 'lib/paletteRule.ts',
   ]);
   const heavy = (file) => deferred.has(file) || file.startsWith('lib/motion/') || /^lib\/api\/admin/.test(file) ||
-    /^(?:gsap|@gsap\/react|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(file);
+    /^(?:gsap|@gsap\/react|react-icons|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(file);
   // All client roots installed by the server layout, not the server-only palette derivation.
   const shell = graph.get('app/layout.tsx').edges.filter((edge) => graph.get(edge.target)?.client);
   assert.ok(shell.length > 0, 'the shell scan must inspect actual client entry points');
   const violations = shell.map(({ target }) => findPath(graph, target, heavy)).filter(Boolean);
   assert.equal(violations.length, 0, explain(violations));
+});
+
+test('gallery and core routes keep the Hero engine and react-icons/md out of their initial static graphs', () => {
+  const heroEngine = (file) => file === 'lib/hero/index.ts' || file === 'lib/hero/controller.ts';
+  const heroViolations = ['lib/detail.ts', 'lib/useHero.ts', 'app/page.tsx', 'app/messages/page.tsx', 'app/settings/page.tsx']
+    .map((entry) => findPath(graph, entry, heroEngine))
+    .filter(Boolean);
+  assert.equal(heroViolations.length, 0, explain(heroViolations));
+
+  const reactIcons = (file) => /^react-icons(?:\/|$)/.test(file);
+  const iconViolations = ['app/page.tsx', 'app/messages/page.tsx', 'app/settings/page.tsx']
+    .map((entry) => findPath(graph, entry, reactIcons))
+    .filter(Boolean);
+  assert.equal(iconViolations.length, 0, explain(iconViolations));
 });

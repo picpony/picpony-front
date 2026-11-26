@@ -2,7 +2,8 @@
 
 import { memo, useLayoutEffect, useRef, type MouseEvent } from 'react';
 import Link from 'next/link';
-import { MdComment, MdThumbUp, MdVisibility } from 'react-icons/md';
+import { MdVisibility } from '@/components/icons/shell';
+import { MdComment, MdThumbUp } from '@/components/icons/common';
 import type { ForumPost } from '@/lib/types/forum';
 import FadeInImage from '@/components/FadeInImage';
 import Pagination from '@/components/Pagination';

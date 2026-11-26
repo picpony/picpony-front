@@ -48,17 +48,24 @@ export const readForumFirstPage = createServerMemo({
   keyOf: () => 'default',
   load: async (): Promise<ForumListSeed | null> => {
     try {
-      const params = forumListParams({
-        page: DEFAULT_FORUM_LIST.page,
-        category: 'all',
-        sort: sortOf(DEFAULT_FORUM_LIST.sort),
-      });
-      const query = new URLSearchParams();
-      for (const [name, value] of Object.entries(params)) if (value !== undefined) query.set(name, String(value));
-      const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/forum/posts?${query}`, {
-        next: { revalidate: cacheSeconds(REVALIDATE_S) },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      const fetchList = async (summary: boolean) => {
+        const params = forumListParams({
+          page: DEFAULT_FORUM_LIST.page,
+          category: 'all',
+          sort: sortOf(DEFAULT_FORUM_LIST.sort),
+          summary,
+        });
+        const query = new URLSearchParams();
+        for (const [name, value] of Object.entries(params)) if (value !== undefined) query.set(name, String(value));
+        return fetch(`${UPSTREAM_ORIGIN}/api/v1/forum/posts?${query}`, {
+          next: { revalidate: cacheSeconds(REVALIDATE_S) },
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+      };
+      let res = await fetchList(true);
+      if (res.status === 400) {
+        res = await fetchList(false);
+      }
       if (!res.ok) return null;
       const data = (await res.json()) as WirePostPage;
       return {

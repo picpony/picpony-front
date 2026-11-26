@@ -7,7 +7,12 @@ import {
   clearPublicBlacklistMemo,
 } from '@/lib/blockFilters.server';
 import { COOKIE_KEYS, SITE_STATUS_CACHE_TAG } from '@/lib/constants';
-import { clientAddressHeaders, forwardableResponseHeaders } from '@/lib/proxyHeaders';
+import {
+  clientAddressHeaders,
+  forwardableResponseHeaders,
+  mergeVary,
+  resolveProxyCacheControl,
+} from '@/lib/proxyHeaders';
 import { upstreamOrigin } from '@/lib/upstream.server';
 
 /**
@@ -65,6 +70,7 @@ const BODY_TOO_LARGE = 'request body too large';
 
 /** Admin writes that change what the public site status (`get_site_status`) answers. */
 const STATUS_RESOURCES = new Set([
+  '/admin/routing-policy',
   '/admin/api-route-policy',
   '/admin/image-route-policy',
   '/admin/maintenance',
@@ -269,11 +275,15 @@ async function proxy(
   const connectionHeaders = new Set(
     request.headers.get('connection')?.toLowerCase().split(',').map((value) => value.trim()) ?? [],
   );
+  let hasBackendCookie = false;
   request.headers.forEach((value, key) => {
     if (SKIP_REQUEST_HEADERS.has(key) || connectionHeaders.has(key)) return;
     if (key === 'cookie') {
       const forwarded = backendCookies(value);
-      if (forwarded) headers.set(key, forwarded);
+      if (forwarded) {
+        hasBackendCookie = true;
+        headers.set(key, forwarded);
+      }
       return;
     }
     headers.set(key, value);
@@ -404,12 +414,30 @@ async function proxy(
   /* The shared hop-by-hop rules (`lib/proxyHeaders.ts`); Set-Cookie can repeat, so it is copied
      separately via getSetCookie(). */
   const responseHeaders = forwardableResponseHeaders(upstream.headers);
-  for (const cookie of upstream.headers.getSetCookie()) {
+  const setCookies = upstream.headers.getSetCookie();
+  for (const cookie of setCookies) {
     responseHeaders.append('set-cookie', secure ? cookie : downgradeCookie(cookie));
   }
-  /* Responses can contain an account or a session. Next's internal no-store does not
-     control browser/CDN caches; make the same boundary explicit on the outgoing response. */
-  responseHeaders.set('Cache-Control', 'private, no-store');
+  /* Only reviewed public resources (GET/HEAD, no Authorization, no Set-Cookie, explicit upstream
+     `public` Cache-Control without `private`/`no-store`, 200 or 304) may opt into caching:
+     anonymous requests keep `public`, while cookie-only browser reads (such as signed-in `<img>`
+     tags carrying `auth_bind`) downgrade `public` to `private` so browsers still cache public
+     media while shared proxies cannot store credentialed responses. Every other answer stays
+     `private, no-store`. */
+  const cacheControl = resolveProxyCacheControl({
+    method: request.method,
+    hasAuthorization: request.headers.has('authorization'),
+    hasBackendCookie,
+    hasSetCookie: setCookies.length > 0,
+    upstreamStatus: upstream.status,
+    upstreamCacheControl: upstream.headers.get('cache-control'),
+  });
+  if (cacheControl) {
+    responseHeaders.set('Cache-Control', cacheControl);
+    responseHeaders.set('Vary', mergeVary(responseHeaders.get('vary'), 'Authorization', 'Cookie'));
+  } else {
+    responseHeaders.set('Cache-Control', 'private, no-store');
+  }
   responseHeaders.set('X-Content-Type-Options', 'nosniff');
   responseHeaders.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
   if (eventStream && upstream.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) {
@@ -420,7 +448,16 @@ async function proxy(
     responseHeaders.delete('content-encoding');
   }
 
-  return new Response(request.method === 'HEAD' ? null : upstream.body, {
+  const nullBody =
+    request.method === 'HEAD' ||
+    upstream.status === 204 ||
+    upstream.status === 205 ||
+    upstream.status === 304;
+  if (nullBody && upstream.body) {
+    void upstream.body.cancel().catch(() => {});
+  }
+
+  return new Response(nullBody ? null : upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,

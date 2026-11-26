@@ -13,12 +13,16 @@ import {
 } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { applyInstantTabScroll, rememberTabScroll } from '@/lib/tabScroll';
-import type { DrawerSwipeOptions } from '@/lib/motion';
+import type { DrawerSwipeOptions } from '@/lib/motion/drawer';
 
 /**
- * The shell's motion operations behind a dynamic import. `lib/motion.ts` exports the owned
- * implementations from `lib/motion/`; loading it registers the GSAP engine once and installs
- * the theme, drawer, grid and tab behaviours together, at the existing idle boundary.
+ * The shell's motion operations behind independent dynamic imports:
+ *
+ * - `lib/motion/tabs.ts` (WAAPI shared-axis tabs) and `lib/motion/theme.ts` (View Transition
+ *   theme wipes) carry **zero GSAP dependency** and warm on idle via `warmMotion()`.
+ * - `lib/motion/drawer.ts` (phone-only swipe-to-close) and `lib/motion/grid.ts` (GSAP grid
+ *   stagger) isolate GSAP + Observer behind their own boundaries so desktop homepage hydration,
+ *   idle warmup, tab switching and theme wipes download zero GSAP bytes.
  *
  * **GSAP boundary:** routes may import this facade; their static graphs must never reach
  * `lib/motion.ts` or its implementation modules.
@@ -30,46 +34,87 @@ import type { DrawerSwipeOptions } from '@/lib/motion';
  * animation, never the interaction. `warmMotion()` is called from the shell in runWhenIdle.
  */
 
-type Motion = typeof import('@/lib/motion');
+type TabsModule = typeof import('@/lib/motion/tabs');
+type ThemeModule = typeof import('@/lib/motion/theme');
+type DrawerModule = typeof import('@/lib/motion/drawer');
+type GridModule = typeof import('@/lib/motion/grid');
 
-let motion: Motion | null = null;
-let loading: Promise<Motion> | null = null;
+let tabsModule: TabsModule | null = null;
+let tabsLoading: Promise<TabsModule> | null = null;
 
-function load(): Promise<Motion> {
-  if (loading) return loading;
-  loading = import('@/lib/motion').then((module) => {
-    motion = module;
+function loadTabs(): Promise<TabsModule> {
+  if (tabsLoading) return tabsLoading;
+  tabsLoading = import('@/lib/motion/tabs').then((module) => {
+    tabsModule = module;
     return module;
   });
-  return loading;
+  return tabsLoading;
 }
 
-/** Pull the engine in after first paint. Idempotent. */
+let themeModule: ThemeModule | null = null;
+let themeLoading: Promise<ThemeModule> | null = null;
+
+function loadTheme(): Promise<ThemeModule> {
+  if (themeLoading) return themeLoading;
+  themeLoading = import('@/lib/motion/theme').then((module) => {
+    themeModule = module;
+    return module;
+  });
+  return themeLoading;
+}
+
+let drawerModule: DrawerModule | null = null;
+let drawerLoading: Promise<DrawerModule> | null = null;
+
+function loadDrawer(): Promise<DrawerModule> {
+  if (drawerLoading) return drawerLoading;
+  drawerLoading = import('@/lib/motion/drawer').then((module) => {
+    drawerModule = module;
+    return module;
+  });
+  return drawerLoading;
+}
+
+let gridModule: GridModule | null = null;
+let gridLoading: Promise<GridModule> | null = null;
+
+function loadGrid(): Promise<GridModule> {
+  if (gridLoading) return gridLoading;
+  gridLoading = import('@/lib/motion/grid').then((module) => {
+    gridModule = module;
+    return module;
+  });
+  return gridLoading;
+}
+
+/** Pull the GSAP-free tab, theme and grid modules in after first paint. Idempotent. */
 export function warmMotion(): void {
-  void load();
+  void loadTabs();
+  void loadTheme();
+  void loadGrid();
 }
 
-/** A colour-scheme change as a circular wipe; without the engine the preference is still
+/** A colour-scheme change as a circular wipe; without the module the preference is still
  *  written and the scheme flips — it arrives as a cut, what the 关闭 tier does today. */
 export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: number }): void {
-  if (motion) {
-    motion.changeScheme(setting, origin);
+  if (themeModule) {
+    themeModule.changeScheme(setting, origin);
     return;
   }
   commitScheme(setting);
-  void load();
+  void loadTheme();
 }
 
-/** A palette change as a circular wipe, same shape as `changeScheme`: without the engine the
+/** A palette change as a circular wipe, same shape as `changeScheme`: without the module the
  *  palette still changes, it just does not wipe. On `/settings` — the only screen with this
  *  control — a first click before the chunk is exactly where a cut is acceptable. */
 export function changePalette(id: PaletteId, origin?: { x: number; y: number }): void {
-  if (motion) {
-    motion.changePalette(id, origin);
+  if (themeModule) {
+    themeModule.changePalette(id, origin);
     return;
   }
   commitPalette(id);
-  void load();
+  void loadTheme();
 }
 
 /** The eleventh palette, as a wipe — same contract as `changePalette`. The install is resolved
@@ -79,37 +124,37 @@ export function changeCustomPalette(
   install: CustomPaletteInstall,
   origin?: { x: number; y: number },
 ): void {
-  if (motion) {
-    motion.changeCustomPalette(install, origin);
+  if (themeModule) {
+    themeModule.changeCustomPalette(install, origin);
     return;
   }
   commitCustomPalette(install);
-  void load();
+  void loadTheme();
 }
 
 /** 配色方案, as a wipe — same contract as `changePalette`. */
 export function changePaletteHues(hues: PaletteHues, origin?: { x: number; y: number }): void {
-  if (motion) {
-    motion.changePaletteHues(hues, origin);
+  if (themeModule) {
+    themeModule.changePaletteHues(hues, origin);
     return;
   }
   commitPaletteHues(hues);
-  void load();
+  void loadTheme();
 }
 
 /** The optimistic tab, while the URL catches up. No engine involved — it lives in
  *  `lib/tabIntent.ts`; re-exported so the shell's motion imports stay one import. */
 export { setTabIntent } from '@/lib/tabIntent';
 
-/** Starts a tab switch on the tap, ahead of the route push. Without the engine the fallback is
+/** Starts a tab switch on the tap, ahead of the route push. Without the tab module the fallback is
  *  the 关闭 branch, line for line: record the outgoing offset against the panel and return; the
  *  switch then happens when the URL commits, without animating. */
 export function startTabTransition(from: string, to: string, direction: 1 | -1): void {
-  if (motion) {
-    motion.startTabTransition(from, to, direction);
+  if (tabsModule) {
+    tabsModule.startTabTransition(from, to, direction);
     return;
   }
-  void load();
+  void loadTabs();
   if (from === to) return;
   const panel = document.querySelector<HTMLElement>('[data-tab-panel]');
   if (!panel) return;
@@ -118,7 +163,7 @@ export function startTabTransition(from: string, to: string, direction: 1 | -1):
 }
 
 /** The press on a tab primes its switch, for its release to start (`primeTabTransition` in
- *  `lib/motion/tabs.ts`). Without the engine there is no run to prime: the click takes the
+ *  `lib/motion/tabs.ts`). Without the tab module there is no run to prime: the click takes the
  *  fallback above. */
 export function primeTabTransition(
   panel: HTMLElement,
@@ -127,47 +172,50 @@ export function primeTabTransition(
   direction: 1 | -1,
   press: { pointerId: number; deferred: boolean },
 ): void {
-  if (motion) {
-    motion.primeTabTransition(panel, from, to, direction, press);
+  if (tabsModule) {
+    tabsModule.primeTabTransition(panel, from, to, direction, press);
     return;
   }
-  void load();
+  void loadTabs();
 }
 
 /** A finger's lift starts the switch its press primed (`playPrimedTabTransition`). False without
- *  the engine: nothing was primed, and the click does the switch. */
+ *  the tab module: nothing was primed, and the click does the switch. */
 export function playPrimedTabTransition(panel: HTMLElement, to: string): boolean {
-  return motion ? motion.playPrimedTabTransition(panel, to) : false;
+  return tabsModule ? tabsModule.playPrimedTabTransition(panel, to) : false;
 }
 
 /**
- * The drawer's edge-swipe, on a phone.
+ * The drawer's swipe-to-close, on a phone.
  *
- * A hook cannot live behind an `import()`, so this renders the engine's own **component**
- * (`DrawerSwipeHost`, rendering nothing) once the engine has arrived — the hook call stays
- * unconditional for its whole life, and it is called by name inside the engine rather than
- * handed down as a value, which the React Compiler refuses to compile. The load is gated on
- * `enabled`: above 768px the drawer is docked, so a desktop never fetches the chunk. What is lost
- * while it arrives is one swipe; the drawer's button, scrim and Escape key are untouched, because
- * none of them is this hook's.
+ * A hook cannot live behind an `import()`, so this renders the drawer module's own **component**
+ * (`DrawerSwipeHost`, rendering nothing) once loaded — the hook call stays unconditional for its
+ * whole life, and it is called by name inside the module rather than handed down as a value, which
+ * the React Compiler refuses to compile.
+ *
+ * The load is gated on `enabled && open`: above 768px the drawer is docked, and even on a phone
+ * swipe only closes an already-open drawer (left-edge open is reserved for OS Back). Waiting until
+ * the drawer opens keeps GSAP + Observer completely out of mobile cold-load hydration too; once
+ * loaded, `DrawerSwipeHost` remains mounted so interruptions and disables clean up identically.
  */
 export function DrawerSwipe(options: DrawerSwipeOptions) {
-  const [ready, setReady] = useState(motion !== null);
+  const [ready, setReady] = useState(drawerModule !== null);
   const enabled = options.enabled ?? true;
+  const shouldLoad = enabled && options.open;
 
   useEffect(() => {
-    if (!enabled || ready) return;
+    if (!shouldLoad || ready) return;
     let live = true;
-    void load().then(() => {
+    void loadDrawer().then(() => {
       if (live) setReady(true);
     });
     return () => {
       live = false;
     };
-  }, [enabled, ready]);
+  }, [shouldLoad, ready]);
 
-  if (!ready || !motion) return null;
-  const Host = motion.DrawerSwipeHost;
+  if (!ready || !drawerModule) return null;
+  const Host = drawerModule.DrawerSwipeHost;
   return <Host {...options} />;
 }
 
@@ -175,16 +223,17 @@ export function DrawerSwipe(options: DrawerSwipeOptions) {
  * The two that gate most of the app's routes
  *
  * The caller keeps the `useRef` and hands it down — the ref must exist in the caller's first
- * render, before the engine does — while the motion runs inside a child mounted only once the
+ * render, before the module does — while the motion runs inside a child mounted only once the
  * module has arrived (as in `DrawerSwipe`), the only arrangement that keeps a hook's call order
- * unconditional. The children are the engine's own components, read off the module once it is
- * resident. The tab switch's is a class (`TabPanesDriver`): it needs the one lifecycle that runs
- * before React's DOM mutations.
+ * unconditional. The children are the modules' own components, read off the module once resident.
+ * The tab switch's is a class (`TabPanesDriver`): it needs the one lifecycle that runs before
+ * React's DOM mutations.
  * ------------------------------------------------------------------------ */
 
-/** The shared-axis tab switch, once the engine is resident. Until then the fallback applies an
- *  instant tab scroll — panes swap in React's commit and the scroller lands on the destination's
- *  remembered offset; no pane is left mid-flight, because nothing was flying. */
+/** The shared-axis tab switch, once `lib/motion/tabs.ts` (GSAP-free WAAPI) is resident. Until
+ *  then the fallback applies an instant tab scroll — panes swap in React's commit and the scroller
+ *  lands on the destination's remembered offset; no pane is left mid-flight, because nothing was
+ *  flying. */
 export function TabPanesMotion({
   panelRef,
   active,
@@ -192,12 +241,12 @@ export function TabPanesMotion({
   panelRef: RefObject<HTMLElement | null>;
   active: string;
 }) {
-  const [ready, setReady] = useState(motion !== null);
+  const [ready, setReady] = useState(tabsModule !== null);
 
   useEffect(() => {
     if (ready) return;
     let live = true;
-    void load().then(() => {
+    void loadTabs().then(() => {
       if (live) setReady(true);
     });
     return () => {
@@ -205,8 +254,8 @@ export function TabPanesMotion({
     };
   }, [ready]);
 
-  if (!ready || !motion) return <TabPanesFallback panelRef={panelRef} active={active} />;
-  const Driver = motion.TabPanesDriver;
+  if (!ready || !tabsModule) return <TabPanesFallback panelRef={panelRef} active={active} />;
+  const Driver = tabsModule.TabPanesDriver;
   return <Driver panelRef={panelRef} active={active} />;
 }
 
@@ -226,8 +275,9 @@ function TabPanesFallback({
   return null;
 }
 
-/** The gallery's entrance cascade, once the engine is resident. No fallback, deliberately: an
- *  *entrance*'s absent form is the cards simply being there — nothing is left half-animated. */
+/** The gallery's entrance cascade, once `lib/motion/grid.ts` is resident. No fallback,
+ *  deliberately: an *entrance*'s absent form is the cards simply being there — nothing is left
+ *  half-animated, and cold loads never pull GSAP for a cascade that would blink painted cards. */
 export function StaggerGrid({
   gridRef,
   selector,
@@ -239,12 +289,10 @@ export function StaggerGrid({
 }) {
   /* Decided once, at mount, never subscribed to the load. An entrance that begins after its
      content has arrived is worse than no entrance: `/` server-renders the first feed page, so
-     gating the cascade on the chunk made painted cards blink out and cascade back in. Engine
-     resident at mount → cascade before those cards' first paint; absent → this grid instance
-     never cascades. `warmMotion()` still loads the engine for every other consumer. */
-  const [ready] = useState(motion !== null);
+     gating the cascade on the chunk made painted cards blink out and cascade back in. */
+  const [ready] = useState(gridModule !== null);
 
-  if (!ready || !motion) return null;
-  const Host = motion.StaggerGridHost;
+  if (!ready || !gridModule) return null;
+  const Host = gridModule.StaggerGridHost;
   return <Host gridRef={gridRef} selector={selector} deps={deps} />;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { cn, runWhenIdle } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { motionScale, motionTier, useMotionScale, useMotionTier } from '@/lib/appearance';
 import { loadLottiePlayer } from '@/lib/lottieAssets';
 
@@ -90,19 +90,13 @@ export function sinceFirstByte(): number {
 }
 
 /**
- * Fetch the player and the boot cut ahead of the mark that plays them — the splash's, while the
- * rest of the app's script is still evaluating and hydrating — so the trace can start the moment
- * the splash takes over. Chunks only; the player is built by the mark.
+ * Fetch the player and the boot cut ahead of the mark that plays them — called by `SplashScreen`
+ * only once takeover confirms the splash will render the Lottie trace. Chunks only; the player is
+ * built by the mark.
  */
 export function warmIntro() {
   void loadTrace('intro').catch(() => {});
 }
-
-/** A pointer that can hover — the only device on which a hover trace can ever be seen. */
-const canHover = () =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
 /**
  * The wordmark.
@@ -113,10 +107,9 @@ const canHover = () =>
  * in which the logo is missing and no fade gap on the way out.
  *
  * The trace is a Lottie: six layers with nine trim paths, 140 frames at 60fps, exactly the
- * file the mark was drawn in. Player and artwork are a dynamic import so neither is in the
- * first-load bundle. Only a device that can hover warms them (on an idle callback, so the
- * first hover is not the one that pays) — a phone never can, so it never paid for a trace it
- * could not show — and the player is instantiated on the first hover, not while warming.
+ * file the mark was drawn in. Player and artwork are dynamically imported on first hover/focus
+ * intent (never preloaded on idle, so visitors who never hover the brand mark pay zero bytes for
+ * `lottie_light` and `logoTrace.json`).
  *
  * The boot cut writes the mark on once per cold load, and only on the splash's mark (`intro`).
  *
@@ -239,27 +232,26 @@ export default function Logo({
     };
   }, [ensure, intro]);
 
-  /* Warm the hover cut on idle — only where a hover can happen. The player is a 60KB chunk and
-     the first hover would otherwise wait on the network for it: the one moment the animation
-     has to be instant, because the pointer is already there. Chunks only; the player is built
-     on the first hover. */
-  useEffect(() => {
-    if (!interactive || motionTier('ambient') !== 'standard' || !canHover()) return;
-    return runWhenIdle(() => void loadTrace('hover').catch(() => {}));
-  }, [interactive, tier]);
-
   const onEnter = useCallback(() => {
-    /* Standard only. The trace needs a 60KB player and six layers of trim paths rasterised
-       per frame — exactly what the reduced tier's rule names. */
+    /* Standard only. The trace needs a ~40KB Brotli player and 27KB artwork with six layers of
+       trim paths rasterised per frame — loaded strictly on hover/focus intent. */
     if (!interactive || motionTier('ambient') !== 'standard') return;
     wantedRef.current = true;
-    hostRef.current?.setAttribute('data-shown', '');
+    const loaded = animationRef.current;
+    if (loaded?.kind === 'hover') {
+      hostRef.current?.setAttribute('data-shown', '');
+      loaded.animation.goToAndPlay(0, true);
+      return;
+    }
     void ensure('hover').then((animation) => {
       // The pointer may have left while the chunk was in flight.
       if (
         animation && animationRef.current?.animation === animation && wantedRef.current &&
         motionTier('ambient') === 'standard'
-      ) animation.goToAndPlay(0, true);
+      ) {
+        hostRef.current?.setAttribute('data-shown', '');
+        animation.goToAndPlay(0, true);
+      }
     }).catch(() => {
       hostRef.current?.removeAttribute('data-shown');
     });

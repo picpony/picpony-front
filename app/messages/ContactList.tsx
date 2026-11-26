@@ -1,7 +1,8 @@
 'use client';
 
 import { type RefObject } from 'react';
-import { MdChevronLeft, MdChevronRight, MdErrorOutline, MdOutlineChatBubbleOutline } from 'react-icons/md';
+import { MdChevronLeft, MdChevronRight, MdErrorOutline } from '@/components/icons/common';
+import { MdOutlineChatBubbleOutline } from '@/components/icons/messages';
 import Avatar from '@/components/Avatar';
 import { CountBadge } from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';

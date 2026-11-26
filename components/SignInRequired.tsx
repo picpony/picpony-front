@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { MdLockPerson } from 'react-icons/md';
+import { MdLockPerson } from '@/components/icons/messages';
 import Button from './Button';
 import StatusView, { type StatusViewSize } from './StatusView';
 import { useAuthModal } from './AuthModal';

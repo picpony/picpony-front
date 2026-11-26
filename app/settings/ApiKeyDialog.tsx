@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MdOpenInNew } from 'react-icons/md';
+import { MdOpenInNew } from '@/components/icons/settings';
 import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import { Input } from '@/components/Input';

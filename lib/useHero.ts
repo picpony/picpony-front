@@ -11,23 +11,54 @@ import {
 } from 'react';
 import type Link from 'next/link';
 import type { ImagePreview } from '@/lib/types/image';
+import { afterFirstFrame } from '@/lib/afterFirstFrame';
 import { cancelImageDetailPrefetch, primeImageDetailFromRow } from '@/lib/detail';
 import { warmDetailFinal } from '@/lib/hero/finalWarm';
+import { isScrollLikelyActive, isScrollMoving } from '@/lib/hero/input';
+import { getImageHeroNavigation, warmImageHeroStage } from '@/lib/hero/runtime';
+import type { HeroNavigation, ImageHeroSnapshot } from '@/lib/hero/types';
 import { prefetchRoutePayload } from '@/lib/routePayload';
-import {
-  armImageHeroOpen,
-  canAnimateImageHero,
-  disarmImageHeroOpen,
-  getImageHeroNavigation,
-  isScrollLikelyActive,
-  isScrollMoving,
-  prepareImageHero,
-  requestImageHeroOpen,
-  warmImageHero,
-  warmImageHeroFrame,
-  type HeroNavigation,
-  type ImageHeroSnapshot,
-} from '@/lib/hero';
+
+type HeroEngine = typeof import('@/lib/hero');
+
+let heroEngine: HeroEngine | null = null;
+let heroEngineLoading: Promise<HeroEngine | null> | null = null;
+
+/**
+ * Load the Hero engine behind a dynamic import so gallery pages keep the controller, motion
+ * solver and frame cache out of their initial document `<script>` tags. Once resolved, every
+ * gesture and activation path below executes synchronously with zero extra ticks.
+ */
+export function warmHeroEngine(): Promise<HeroEngine | null> {
+  if (heroEngine) return Promise.resolve(heroEngine);
+  if (!heroEngineLoading) {
+    heroEngineLoading = import('@/lib/hero')
+      .then((module) => {
+        heroEngine = module;
+        return module;
+      })
+      .catch(() => {
+        heroEngineLoading = null;
+        return null;
+      });
+  }
+  return heroEngineLoading;
+}
+
+let heroEngineWarmScheduled = false;
+/**
+ * Pull both the Hero engine and the active Stage chunk right after the gallery's first painted
+ * frame (or ahead of the first pointer/key input), so neither blocks initial hydration while both
+ * are already resident before a visitor taps a card. Once per document.
+ */
+function scheduleHeroEngineWarm() {
+  if (heroEngineWarmScheduled || typeof window === 'undefined') return;
+  heroEngineWarmScheduled = true;
+  afterFirstFrame(() => {
+    void warmHeroEngine();
+    void warmImageHeroStage();
+  });
+}
 
 type HeroLinkKind = 'card' | 'featured';
 type NavigateHandler = NonNullable<ComponentProps<typeof Link>['onNavigate']>;
@@ -88,12 +119,15 @@ function scheduleDetailCodeWarm(href: string) {
     else setTimeout(run, 1500);
   };
   const steps: Array<() => unknown> = [
-    () => warmImageHero(),
+    () => warmHeroEngine().then((engine) => engine?.warmImageHero()),
+    () => warmImageHeroStage(),
     () => prefetchRoutePayload(href),
     () =>
-      warmImageHero().then((detail) =>
-        (detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined)?.warmDetailDeferredCode?.(),
-      ),
+      warmHeroEngine()
+        .then((engine) => engine?.warmImageHero())
+        .then((detail) =>
+          (detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined)?.warmDetailDeferredCode?.(),
+        ),
     () => {
       const family = getComputedStyle(document.body).fontFamily;
       return document.fonts?.load(`400 16px ${family}`, DETAIL_GLYPHS).catch(() => undefined);
@@ -173,23 +207,33 @@ export function useHeroLink<T extends HTMLElement>({
          flight and the detail render it at once, and the read below only refreshes it. */
       primeImageDetailFromRow(image);
       getImageHeroNavigation()?.prefetch?.(href);
-      void warmImageHero(image.id, priority);
+      void warmImageHeroStage();
       /* The press (or a keyboard click) commits to this picture: its full-size file starts now
          rather than when the detail route commits (`warmDetailFinal`). Hover stays cheap. */
       if (priority === 'immediate') warmDetailFinal(image);
       cancelFrameWarmRef.current?.();
-      /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
-         without it the tapped card's capture always lands synchronously in the click
-         handler — see `warmImageHeroFrame`. */
-      cancelFrameWarmRef.current = warmImageHeroFrame(sourceRef.current, {
-        immediate: priority === 'immediate',
-      });
+      if (heroEngine) {
+        void heroEngine.warmImageHero(image.id, priority);
+        /* `immediate` on the press path. Hover warming cannot reach a touch screen, so
+           without it the tapped card's capture always lands synchronously in the click
+           handler — see `warmImageHeroFrame`. */
+        cancelFrameWarmRef.current = heroEngine.warmImageHeroFrame(sourceRef.current, {
+          immediate: priority === 'immediate',
+        });
+      } else {
+        cancelFrameWarmRef.current = null;
+        void warmHeroEngine().then((engine) => {
+          void engine?.warmImageHero(image.id, priority);
+        });
+      }
     },
     [href, image, sourceRef],
   );
 
   const scheduleIntent = useCallback(
     (delay: number) => {
+      void warmHeroEngine();
+      void warmImageHeroStage();
       if (!image || intentTimerRef.current || isScrollLikelyActive()) return;
       intentTimerRef.current = window.setTimeout(() => {
         intentTimerRef.current = 0;
@@ -200,13 +244,13 @@ export function useHeroLink<T extends HTMLElement>({
   );
 
   const prepare = useCallback(() => {
-    if (!image || !sourceRef.current) return null;
+    if (!image || !sourceRef.current || !heroEngine) return null;
     const cached = preparedRef.current;
     if (cached && Date.now() - cached.createdAt < SNAPSHOT_REUSE_MS) return cached;
     clearPrepared();
     cancelFrameWarmRef.current?.();
     cancelFrameWarmRef.current = null;
-    const snapshot = prepareImageHero(image, sourceRef.current, canAnimate, previewSrc);
+    const snapshot = heroEngine.prepareImageHero(image, sourceRef.current, canAnimate, previewSrc);
     preparedRef.current = snapshot;
     if (snapshot) {
       expiryTimerRef.current = window.setTimeout(() => {
@@ -224,15 +268,15 @@ export function useHeroLink<T extends HTMLElement>({
   }, [clearPrepared, prepare]);
 
   const activateHero = useCallback(() => {
-    if (!image) return;
+    if (!image || !heroEngine) return false;
     const source = sourceRef.current;
     const snapshot = takePrepared();
-    if (!source || !snapshot || !canAnimateImageHero(snapshot)) return false;
+    if (!source || !snapshot || !heroEngine.canAnimateImageHero(snapshot)) return false;
     const background = {
       pathname: window.location.pathname,
       search: window.location.search,
     };
-    return requestImageHeroOpen({
+    return heroEngine.requestImageHeroOpen({
       snapshot,
       source,
       detailHref: href,
@@ -309,7 +353,9 @@ export function useHeroLink<T extends HTMLElement>({
   );
 
   useEffect(() => {
-    if (image) scheduleDetailCodeWarm(`/pic/${image.id}`);
+    if (!image) return;
+    scheduleHeroEngineWarm();
+    scheduleDetailCodeWarm(`/pic/${image.id}`);
   }, [image]);
 
   return {
@@ -337,12 +383,12 @@ export function useHeroLink<T extends HTMLElement>({
       const source = sourceRef.current;
       tapRef.current = null;
       releaseOpenedAtRef.current = -Infinity;
-      if (source && !isScrollMoving()) {
+      if (source && heroEngine && !isScrollMoving()) {
         const snapshot = prepare();
         if (
           snapshot &&
-          canAnimateImageHero(snapshot) &&
-          armImageHeroOpen(snapshot, source, event.pointerType) &&
+          heroEngine.canAnimateImageHero(snapshot) &&
+          heroEngine.armImageHeroOpen(snapshot, source, event.pointerType) &&
           event.pointerType !== 'mouse' &&
           event.isPrimary
         ) {
@@ -389,7 +435,7 @@ export function useHeroLink<T extends HTMLElement>({
     onPointerCancel: (event: PointerEvent<HTMLAnchorElement>) => {
       // The press became a scroll (or the system took it): the click is not coming.
       tapRef.current = null;
-      disarmImageHeroOpen();
+      heroEngine?.disarmImageHeroOpen();
       if (capturedPointerRef.current !== event.pointerId) return;
       capturedPointerRef.current = null;
     },

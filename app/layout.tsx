@@ -26,8 +26,8 @@ import { CUSTOM_PALETTE, PALETTES } from '@/lib/generated/themeColors';
 import { deriveCustomThemeCached, paletteBlocksCss, paletteTones } from '@/lib/paletteRule';
 import { packTones, parseCustomSpec } from '@/lib/paletteSpec';
 import { inlineRoutePolicyScript } from '@/lib/route.server';
-import { readRoutePolicyOnce, ssrImageLine } from '@/lib/imageLine.server';
-import { readMaintenance } from '@/lib/maintenance.server';
+import { ssrImageLine } from '@/lib/imageLine.server';
+import { readSiteBootstrapOnce } from '@/lib/bootstrap.server';
 
 /* Validation lists for the cookie reads below. Spelled out, not imported from
    `lib/appearance` — that module is client-only (it holds hooks), this is a server
@@ -191,15 +191,16 @@ export default async function RootLayout({
   children: React.ReactNode;
   imageDetail: React.ReactNode;
 }>) {
-  /* Awaited together: the two status reads are timeout-bounded and cached across visitors
-     (one document, one Data Cache entry), and `cookies()` already makes this route dynamic,
-     so overlapping costs nothing while serialising puts the latencies end to end. */
-  const [cookieStore, headerStore, routePolicy, maintenance] = await Promise.all([
+  /* Awaited together: the consolidated public bootstrap read is timeout-bounded and cached across
+     visitors (one Data Cache entry tagged with status, filter and blacklist tags), and `cookies()`
+     already makes this route dynamic, so overlapping costs nothing while serialising puts the
+     latencies end to end. */
+  const [cookieStore, headerStore, bootstrap] = await Promise.all([
     cookies(),
     headers(),
-    readRoutePolicyOnce(),
-    readMaintenance(),
+    readSiteBootstrapOnce(),
   ]);
+  const { routePolicy, maintenance } = bootstrap;
   /* Windows takes a different Chinese face (see the note above `--font-han` in globals.css),
      so the first byte has to know. Chromium states the platform in a default client hint;
      other engines only in the User-Agent. The pre-paint script repeats the test in the

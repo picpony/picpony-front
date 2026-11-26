@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { MdEdit, MdStar } from 'react-icons/md';
+import { MdEdit } from '@/components/icons/common';
+import { MdStar } from '@/components/icons/settings';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveFolders } from '@/lib/resources';
 import { folderLabel } from '@/lib/favorites';

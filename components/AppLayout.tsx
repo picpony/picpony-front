@@ -24,7 +24,7 @@ import {
   MdOutlinePhotoLibrary,
   MdForum,
   MdOutlineForum,
-} from 'react-icons/md';
+} from '@/components/icons/shell';
 
 import dynamic from 'next/dynamic';
 import { ICON } from '@/lib/icons';

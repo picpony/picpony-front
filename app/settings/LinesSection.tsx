@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MdRefresh, MdSpeed } from 'react-icons/md';
+import { MdRefresh } from '@/components/icons/common';
+import { MdSpeed } from '@/components/icons/settings';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import { ICON } from '@/lib/icons';

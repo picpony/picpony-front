@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { MdAutoAwesome, MdRefresh } from 'react-icons/md';
+import { MdRefresh } from '@/components/icons/common';
+import { MdAutoAwesome } from '@/components/icons/settings';
 import { SettingsSection, SettingsRow, SwitchRow, ROW_CLASS, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';

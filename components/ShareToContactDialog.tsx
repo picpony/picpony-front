@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { MdCheck, MdFolderShared, MdImage, MdLock, MdSend } from 'react-icons/md';
+import { MdCheck, MdImage, MdLock } from '@/components/icons/common';
+import { MdFolderShared, MdSend } from '@/components/icons/messages';
 import Avatar from './Avatar';
 import Button from './Button';
 import EmptyState from './EmptyState';

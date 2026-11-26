@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import dynamic from 'next/dynamic';
-import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import { MdVisibility, MdVisibilityOff } from '@/components/icons/shell';
 import IconButton from './IconButton';
 import { useOverlayScrollbar } from '@/lib/overlayScrollbar';
 import { BRAND_SEED } from '@/lib/paletteSpec';

@@ -1,9 +1,10 @@
 'use client';
 
-import { gsap, playSharedAxis, SPRING, supportsEdgeMask } from '@/lib/motion';
+import { playSharedAxis, supportsEdgeMask } from '@/lib/motion/sharedAxis';
 import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
-import { motionRatio, motionScale, motionTier } from '@/lib/appearance';
+import { motionScale, motionTier, scaledMs } from '@/lib/appearance';
 import { SPRING_MS, springLinear } from '@/lib/spring';
+import { springTiming } from '@/lib/springTiming';
 import { getAppScroller } from '@/lib/appScroller';
 import { setRouteTransit, takeRouteContainerExpectation } from '@/lib/pageTransit';
 import { arm, cancelRouteCrossFade, routeMove, settleEntryAnimations } from '@/lib/routeCrossFade';
@@ -93,12 +94,11 @@ function whenPageArrives(page: HTMLElement, arrived: () => void, bound: number):
 }
 
 /**
- * The animated half of the route cross-fade, loaded on demand — the sanctioned GSAP half. The
- * split is about *when*: the front half is mounted on every route, so a static `gsap` import
- * here would put the engine and its plugins into the root shell of every route's first
- * document, and nothing on a cold document has navigated yet. `warmRouteCrossFade()` pulls it
- * in after first paint; if it is absent, `captureRouteSnapshot` declines to clone and the
- * navigation is a cut.
+ * The animated half of the route cross-fade, loaded on demand on Web Animations (zero GSAP). The
+ * split is about *when*: the front half is mounted on every route, so keeping playback, shared-axis
+ * and container-fade choreography here keeps them out of every route's first document, since
+ * nothing on a cold document has navigated yet. `warmRouteCrossFade()` pulls it in after first
+ * paint; if it is absent, `captureRouteSnapshot` declines to clone and the navigation is a cut.
  */
 export function playRouteCrossFade(
   layer: HTMLElement,
@@ -194,73 +194,84 @@ export function playRouteCrossFade(
     return;
   }
 
-  /* Paused until the first frame after the commit (below). */
-  const timeline = gsap.timeline({ paused: true, onComplete: () => cancelRouteCrossFade() });
-  /* On the page tier's own speed. GSAP's global clock carries only feedback's, so without this
-     a custom page speed reached the WAAPI legs of this fade (the back affordance, the container
-     path) and not the page itself — the two halves of one navigation on two clocks. */
-  const pageRatio = motionRatio('page');
-  if (pageRatio > 0) timeline.timeScale(1 / pageRatio);
   /* Reduced halves the outgoing leg's rise rather than removing it — the travel was never the
      performative part (the clone is), and a screen that leaves without moving at all reads as
      a cut with a fade on it. The shared entrance travel, mirrored: 16px, 8px reduced. */
   const rise = -(motionTier('page') === 'reduced' ? TRAVEL_PX.small : TRAVEL_PX.standard);
-  timeline
-    .set(snapshot.node, { willChange: 'transform, opacity' })
-    /* The outgoing leg is the mirror of `pageIn`, and a departure: everything on effects springs
-       (rule 4, `lib/spring.ts`). Its fade is FastEffects, so by the hand-off the incoming page
-       waits it is ~90% gone and the two pages never show through each other; its rise runs on
-       DefaultEffects, carrying on under the incoming page. The back affordance's copy fades with
-       it and does not rise: chrome is where it is. */
-    .to(backLeaves ? [snapshot.node, backLeaves] : snapshot.node, { opacity: 0, duration: SPRING.fastEffects, ease: 'spring-effects' }, 0)
-    .to(snapshot.node, { y: rise, duration: SPRING.defaultEffects, ease: 'spring-effects' }, 0);
-  if (backArrives) {
-    timeline.fromTo(
-      backArrives,
-      { autoAlpha: 0 },
-      { autoAlpha: 1, duration: SPRING.slowEffects, ease: 'spring-effects', clearProps: 'opacity,visibility' },
-      HANDOFF_MS / 1000,
-    );
-  }
+  const handoff = scaledMs(HANDOFF_MS, 'page');
+  const fast = springTiming('fastEffects', 'page');
+  const def = springTiming('defaultEffects', 'page');
+  const slow = springTiming('slowEffects', 'page');
 
   /* The incoming page's entrance is driven here, on opacity alone, instead of `pageIn`, so
      it runs on the same clock as the outgoing leg. It must never carry a transform:
      `[data-page-content]` is an ancestor of every gallery card, and the hero flight measures
      the pressed card with a plain `getBoundingClientRect`, so a residual offset there launches
      the flyer from a box above the thumbnail (the reason `pageIn` itself is opacity-only).
-     Settle uses clearProps, never a zero translate. */
+     Hold incoming nodes hidden from the commit through `handoff` so focus and clicks cannot
+     reach an invisible page; inline styles are cleared when animations finish or cancel. */
   if (page) {
     page.style.animation = 'none';
     settleEntryAnimations(page);
-    timeline.fromTo(
-      page,
-      { autoAlpha: 0 },
-      {
-        autoAlpha: 1,
-        /* A full-screen fade: SlowEffects, after the hand-off — Material's fade through. */
-        duration: SPRING.slowEffects,
-        ease: 'spring-effects',
-        clearProps: 'opacity,visibility',
-      },
-      HANDOFF_MS / 1000,
-    );
   }
+  const incoming = [page, backArrives].filter((el): el is HTMLElement => el !== null);
+  for (const el of incoming) {
+    el.style.opacity = '0';
+    el.style.visibility = 'hidden';
+  }
+  snapshot.node.style.willChange = 'transform, opacity';
 
+  const animations: Animation[] = [];
   /* **Played from the first frame after the commit, not from the commit.** The commit is a
      long task, and a clock started inside it spent that task before anything was painted: on a
      development build the page being left was most of the way gone in the first frame that
      showed it leaving, and a transform started with that frame ran a beat behind the page around
-     it. The from-states are already applied — `fromTo` renders immediately. */
-  const start = requestAnimationFrame(() => timeline.play());
+     it. Pure WAAPI keeps the fade on the compositor without pulling GSAP into idle warmup. */
+  const start = requestAnimationFrame(() => {
+    /* Outgoing leg: fade on FastEffects so by `HANDOFF_MS` the outgoing screen is ~90% gone and
+       never shows through the arriving one; rise on DefaultEffects underneath it. The back
+       affordance's copy fades in place without rising. */
+    animations.push(
+      snapshot.node.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
+      snapshot.node.animate(
+        [{ transform: 'translate3d(0, 0px, 0)' }, { transform: `translate3d(0, ${rise}px, 0)` }],
+        { ...def, fill: 'forwards' },
+      ),
+    );
+    if (backLeaves) {
+      animations.push(
+        backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
+      );
+    }
+    /* Incoming leg: `fill: 'forwards'` leaves the inline hidden state in effect during `delay`,
+       then reveals and fades `0 -> 1` on SlowEffects after the handoff. */
+    for (const el of incoming) {
+      animations.push(
+        el.animate(
+          [
+            { opacity: 0, visibility: 'visible' },
+            { opacity: 1, visibility: 'visible' },
+          ],
+          { ...slow, delay: handoff, fill: 'forwards' },
+        ),
+      );
+    }
+    void Promise.all(animations.map((animation) => animation.finished)).then(
+      () => cancelRouteCrossFade(),
+      () => {},
+    );
+  });
   arm(layer, () => {
     cancelAnimationFrame(start);
-    timeline.kill();
+    for (const animation of animations) animation.cancel();
+    snapshot.node.style.willChange = '';
     /* A theme wipe or hero press can cancel before the incoming leg completes.
-       Its clearProps callback never runs after kill(), leaving the live page
-       dimmed — or hidden during the overlap delay. Land it on the same clean
-       state as a completed fade before releasing the transition. */
-    if (page) gsap.set(page, { clearProps: 'opacity,visibility' });
-    if (backArrives) gsap.set(backArrives, { clearProps: 'opacity,visibility' });
+       Land the live page and back affordance on the same clean state as a completed fade
+       before releasing the transition. */
+    for (const el of incoming) {
+      el.style.opacity = '';
+      el.style.visibility = '';
+    }
   });
 }
 

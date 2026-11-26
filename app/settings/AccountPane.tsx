@@ -1,18 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import {
-  MdEdit,
-  MdImage,
-  MdLink,
-  MdLinkOff,
-  MdLock,
-  MdMarkEmailRead,
-  MdPerson,
-  MdPhotoCamera,
-  MdShield,
-  MdVerifiedUser,
-} from 'react-icons/md';
+import { MdPerson, MdShield } from '@/components/icons/shell';
+import { MdEdit, MdImage, MdLock } from '@/components/icons/common';
+import { MdLink, MdLinkOff, MdMarkEmailRead, MdPhotoCamera, MdVerifiedUser } from '@/components/icons/settings';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import ErrorRetry from '@/components/ErrorRetry';

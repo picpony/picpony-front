@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, type ReactNode, type ButtonHTMLAttributes, type HTMLAttributes } from 'react';
-import { MdClose } from 'react-icons/md';
+import { MdClose } from '@/components/icons/shell';
 import { cn } from '@/lib/utils';
 import { ICON } from '@/lib/icons';
 import CheckGlyph from './CheckGlyph';

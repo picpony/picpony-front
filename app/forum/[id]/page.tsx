@@ -42,6 +42,7 @@ import { useBackOrParent } from '@/lib/backNavigation';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { useIconToss } from '@/lib/useIconToss';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
+import { forumTeaser } from '@/lib/forumText';
 import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumReturn } from '@/lib/forumTransition';
 import { formatCount, formatDateTime } from '@/lib/format';
 import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
@@ -474,9 +475,26 @@ export default function ForumThreadPage() {
                     />
                   </div>
                 )}
-                {/* An article: `body-l`, and the rich-text rhythm follows in `em`. */}
+                {/* An article: `body-l`, and the rich-text rhythm follows in `em`. When opening
+                    from a summary list row, show the plain-text teaser and body skeleton until
+                    the full thread payload arrives (or retry chrome if that read fails). */}
                 <div className="min-w-0 text-body-l text-on-surface wrap-anywhere">
-                  <ForumPostBody post={post} />
+                  {!data?.post && post.summary ? (
+                    failed && read.error ? (
+                      <ErrorRetry
+                        title="正文加载失败"
+                        message={apiErrorMessage(read.error)}
+                        onRetry={isRetryable(read.error) ? read.refresh : undefined}
+                      />
+                    ) : (
+                      <div className="space-y-3" aria-busy="true">
+                        {forumTeaser(post) && <p className="text-on-surface-variant">{forumTeaser(post)}</p>}
+                        <SkeletonText lines={3} />
+                      </div>
+                    )
+                  ) : (
+                    <ForumPostBody post={post} />
+                  )}
                 </div>
                 <div className="mt-6 flex items-center gap-1 border-t border-outline-variant pt-4">
                   <IconButton

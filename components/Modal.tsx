@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useId, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MdClose } from 'react-icons/md';
+import { MdClose } from '@/components/icons/shell';
 import IconButton from './IconButton';
 import ScrollArea from './ScrollArea';
 import { cn } from '@/lib/utils';

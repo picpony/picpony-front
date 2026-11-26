@@ -11,7 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { MdTune } from 'react-icons/md';
+import { MdTune } from '@/components/icons/common';
 import { usePathname } from 'next/navigation';
 import { getBrowsingSettings } from '@/lib/api/client';
 import { SKIP, useResource } from '@/lib/resource';

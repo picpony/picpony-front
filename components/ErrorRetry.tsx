@@ -1,6 +1,6 @@
 'use client';
 
-import { MdErrorOutline, MdRefresh } from 'react-icons/md';
+import { MdErrorOutline, MdRefresh } from '@/components/icons/common';
 import Button from '@/components/Button';
 import StatusView, { type StatusViewSize } from './StatusView';
 import { ICON } from '@/lib/icons';

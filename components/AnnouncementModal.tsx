@@ -31,22 +31,23 @@ export default function AnnouncementModal() {
      commit it opens, and an effect would first render one frame closed again. */
   if (announcement && phase === 'waiting' && quiet) setPhase('open');
 
-  /* On idle, not on mount: this request must not race the feed the visitor came for,
-   * and it cannot be gated on the stored version — the version to compare against is
-   * what this request returns. */
+  /* On idle, not on mount: this request must not race the feed the visitor came for.
+   * Pass the locally dismissed version into `getAnnouncement` so returning visitors who
+   * already read the latest announcement never load or run the HTML sanitiser chunk. */
   useEffect(() => {
     let cancelled = false;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const cancelIdle = runWhenIdle(() => {
       void (async () => {
         try {
-          const data = await getAnnouncement();
-          if (!data.success || !data.announcement) return;
           let savedVersion: string | null = null;
           try {
             savedVersion = localStorage.getItem(LS_KEYS.readAnnouncementVersion);
           } catch {
             /* Storage can be disabled. */
           }
+          const data = await getAnnouncement(controller?.signal, { skipVersion: savedVersion });
+          if (!data.success || !data.announcement) return;
           if (savedVersion === data.announcement.version || cancelled) return;
           // Already sanitised by the adapter (`lib/api/picpony.ts`), once for every consumer.
           setAnnouncement(data.announcement);
@@ -58,6 +59,7 @@ export default function AnnouncementModal() {
     return () => {
       cancelled = true;
       cancelIdle();
+      controller?.abort();
     };
   }, []);
 

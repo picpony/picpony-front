@@ -80,11 +80,13 @@ const dwellFor = (text: string) => Math.min(12_000, Math.max(4_500, 3_000 + text
  * box, a countdown that shows the hold is working, rising above the route's bottom navigation, one
  * live region for screen readers, and leaving and returning with an animation instead of a cut.
  *
- * **The character's outline comes from the server** (`app/mascot-shape/route.ts`): the artwork's
- * host sends no CORS headers, so the page cannot read its alpha. It is the hit region — a
- * `clip-path`, which clips hit-testing with the paint, so the artwork's transparent margins and the
- * gaps between wing and tail are the page's — and it says where the head is, which is where the
- * speech bubble's tail points. Until it lands, or if it never does, an ellipse over the art stands in.
+ * **The character's outline comes with `GET /api/v1/mascots`** for backend-hosted uploads (precomputed
+ * in Rust when uploaded), falling back to `app/mascot-shape/route.ts` only when the config omits
+ * `shape` (legacy/external asset-host URLs or older backends): the artwork's host sends no CORS
+ * headers, so the page cannot read its alpha. It is the hit region — a `clip-path`, which clips
+ * hit-testing with the paint, so the artwork's transparent margins and the gaps between wing and
+ * tail are the page's — and it says where the head is, which is where the speech bubble's tail
+ * points. Until it lands, or if it never does, an ellipse over the art stands in.
  */
 export default function Mascot({ onChat, active = true }: { onChat: () => void; active?: boolean }) {
   const selected = useSyncedSetting('mascotId');
@@ -95,7 +97,8 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
   const coarse = useMediaQuery(MEDIA.pointerCoarse);
   const collapsed = useStoredBoolean(MASCOT_KEYS.collapsed);
   const src = config.data?.enabled ? config.data.image : '';
-  const shape = useResource(mascotShape, src ? { src } : SKIP);
+  const embeddedShape = config.data?.enabled ? config.data.shape : null;
+  const shape = useResource(mascotShape, src && !embeddedShape ? { src } : SKIP);
 
   const [art, setArt] = useState<{ src: string; w: number; h: number } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -150,8 +153,9 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
   const peekY = -(PLATE_PX - artH * peek) / 2;
   const visible = active && ready;
   const open = bubbleOpen && shown && !collapsed;
+  const resolvedShape = embeddedShape ?? shape.data ?? null;
   /* An outline of another shape is another picture's (a stale answer, a rotated file): not used. */
-  const outline = ready && art && shape.data && Math.abs(shape.data.w / shape.data.h - aspect) < 0.05 ? shape.data : null;
+  const outline = ready && art && resolvedShape && Math.abs(resolvedShape.w / resolvedShape.h - aspect) < 0.05 ? resolvedShape : null;
   const hitPath = outline ? shapePath(outline, artW, artH, coarse ? HIT_PAD.coarse : HIT_PAD.fine) : null;
   const head = outline ? shapeHead(outline) : null;
   const reach = Math.max(0, ((coarse ? TOUCH_FLOOR.coarse : TOUCH_FLOOR.fine) - TOOLS_PX) / 2);

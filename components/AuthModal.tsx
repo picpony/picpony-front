@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, lazy, Suspense, useCallback, useContext, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { MdClose } from 'react-icons/md';
+import { MdClose } from '@/components/icons/shell';
 import IconButton from './IconButton';
 import Modal from './Modal';
 import LottieIcon from './LottieIcon';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { MdCreateNewFolder } from 'react-icons/md';
+import { MdCreateNewFolder } from '@/components/icons/settings';
 import Modal from '@/components/Modal';
 import dynamic from 'next/dynamic';
 import Button from '@/components/Button';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { MdNotificationsNone } from 'react-icons/md';
+import { MdNotificationsNone } from '@/components/icons/messages';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Pagination from '@/components/Pagination';

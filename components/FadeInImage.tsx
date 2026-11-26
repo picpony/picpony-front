@@ -2,7 +2,7 @@
 
 import Image, { type ImageProps } from 'next/image';
 import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
-import { MdBrokenImage } from 'react-icons/md';
+import { MdBrokenImage } from '@/components/icons/shell';
 import {
   createInitialAttempt,
   getRawImageUrl,

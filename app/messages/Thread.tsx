@@ -1,7 +1,8 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MdArrowDownward, MdErrorOutline, MdOutlineChatBubbleOutline } from 'react-icons/md';
+import { MdErrorOutline } from '@/components/icons/common';
+import { MdArrowDownward, MdOutlineChatBubbleOutline } from '@/components/icons/messages';
 import Avatar from '@/components/Avatar';
 import Button from '@/components/Button';
 import ChatBubble, { ChatRun, markRuns } from '@/components/ChatBubble';

@@ -876,7 +876,9 @@ try {
       serverReads.length = 0;
       const result = await runStep(cdp, step, origin, LIVE ? null : serverReads);
       if (!LIVE) {
-        const filterReads = serverReads.filter((name) => name === 'get_block_tags').length;
+        const filterReads = serverReads.filter(
+          (name) => name === 'get_block_tags' || name === 'get_site_bootstrap',
+        ).length;
         if (filterReads > 1) fail(journey.name, `${result.label} duplicated the public filter-definition read`);
         if (step.navigate && filterReads === 0) {
           fail(journey.name, `${result.label} did not read the public filter definitions`);

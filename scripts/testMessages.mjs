@@ -17,6 +17,7 @@ const originalWindow = globalThis.window;
 globalThis.window = { __picponyRoutePolicy: { api: 'direct', image: 'direct' } };
 
 const text = await import('../app/messages/messageText.ts');
+const sanitized = await import('../lib/sanitizedText.ts');
 const composer = await import('../app/messages/composerModel.ts');
 const model = await import('../app/messages/threadModel.ts');
 const messaging = await import('../lib/api/messages.ts');
@@ -103,10 +104,32 @@ test('a cut contact preview (/me/contacts sends 120 characters) never shows half
   assert.equal(text.contactPreview('[fave_folder_share:alice:3:%E6%94%B6', true), '[收藏夹]');
   assert.equal(text.contactPreview('[privacy_space_share:7:ali', true), '[隐私空间]');
   assert.equal(text.contactPreview('猫 &am', true), '猫…');
+  assert.equal(text.contactPreview('猫 &amp;', true), '猫 &…', 'a complete entity right at the cut decodes normally');
+  assert.equal(text.contactPreview('猫 &#x2', true), '猫…', 'a truncated hex entity tail is dropped');
+  assert.equal(text.contactPreview('R&D 讨论', true), 'R&D 讨论…', 'non-entity ampersand text survives intact');
   assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name.slice(0, 2)}`, true), '看…');
   assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name}$然后`, true), `看[${PONY_EMOJI[0].label}]然后…`);
   assert.equal(text.contactPreview('[p]看图[img]https://derpicdn.net/img/2026/1/1', true), '看图[图片]…');
   assert.equal(text.contactPreview('说到 [url=https://exa', true), '说到…');
+});
+
+test('decodeSanitizedText decodes serializer entities once and strips only incomplete trailing entities when truncated', () => {
+  assert.equal(
+    sanitized.decodeSanitizedText('&amp;&lt;&gt;&quot;&nbsp;&#39;&#x27;'),
+    '&<>"\u00a0\'\'',
+  );
+  assert.equal(
+    sanitized.decodeSanitizedText('&amp;lt; &amp;amp; &amp;#39; &amp;#x27;'),
+    '&lt; &amp; &#39; &#x27;',
+    'single-pass decode never double-decodes literal entity text',
+  );
+  for (const tail of ['&', '&a', '&am', '&amp', '&l', '&lt', '&g', '&gt', '&q', '&qu', '&quo', '&quot', '&n', '&nb', '&nbs', '&nbsp', '&#', '&#3', '&#39', '&#x', '&#x2', '&#x27']) {
+    assert.equal(sanitized.stripTruncatedSanitizedEntity(`hi ${tail}`), 'hi ', `strips truncated ${tail}`);
+    assert.equal(sanitized.decodeSanitizedText(`A &amp; B ${tail}`, { truncated: true }), 'A & B ');
+  }
+  assert.equal(sanitized.decodeSanitizedText('A &amp;', { truncated: true }), 'A &');
+  assert.equal(sanitized.decodeSanitizedText('R&D', { truncated: true }), 'R&D');
+  assert.equal(sanitized.decodeSanitizedText('hi &am'), 'hi &am', 'untruncated text keeps incomplete tails intact');
 });
 
 test('notification link markers become links, the tag-subscription marker its subscription', () => {

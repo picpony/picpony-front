@@ -27,20 +27,17 @@ const EXIT_HOLD_MS = Math.round(SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.sl
  */
 const STALE_AFTER_MS = INTRO_LATEST_START_MS + 5000;
 
+/**
+ * Delay before a `non-blocking` splash loads the Lottie player and boot trace. Normal hydrated
+ * loads present within two animation frames (~32ms) and dismiss via `whenPagePresented` without
+ * ever fetching `lottie_light` or `logoNonParallel.json`; genuinely slow loads that still hold
+ * the splash past this delay pull in the trace mid-flight.
+ */
+const NON_BLOCKING_LOTTIE_DELAY_MS = 120;
+
 /** Once per document, whatever remounts. A property, not a reassigned binding, so the compiler
  *  can see the write is a callback's and not the render's. */
 const splash = { ended: false };
-
-/* The player and the boot cut, fetched while the rest of the app's script evaluates and hydrates —
-   only when this document is going to show the splash — so the trace can start the moment the
-   splash takes over instead of a round trip later. */
-if (
-  typeof document !== 'undefined' &&
-  document.documentElement.dataset.entrance !== 'off' &&
-  motionTier('entrance') === 'standard'
-) {
-  warmIntro();
-}
 
 /**
  * `done`, once the hydrated page has been presented — called from the hydrating commit, so two
@@ -87,12 +84,16 @@ function whenPagePresented(done: () => void): () => void {
 export default function SplashScreen() {
   const ref = useRef<HTMLDivElement>(null);
   const [gone, setGone] = useState(splash.ended);
-  /* Whether the mark writes itself on: under either mode that plays, at the standard tier. The
-     server's defaults are exactly that, so the hydrating render agrees with the first byte. */
+  /* Only activated once the layout takeover confirms this splash will stay on screen long enough
+     to draw the Lottie signature (immediately in `blocking`, after `NON_BLOCKING_LOTTIE_DELAY_MS`
+     if a `non-blocking` load is still held). Keeps `lottie_light` and `logoNonParallel.json` off
+     the network for `reduced`/`off`, stale mounts and fast `non-blocking` loads. */
+  const [introActive, setIntroActive] = useState(false);
   const mode = useEntranceMode();
   const tier = useMotionTier('entrance');
-  const play = mode !== 'off' && tier === 'standard';
+  const play = introActive && mode !== 'off' && tier === 'standard';
   const timers = useRef<number[]>([]);
+  const introTimer = useRef(0);
   const leaving = useRef(false);
 
   const later = useCallback((task: () => void, ms: number) => {
@@ -109,6 +110,10 @@ export default function SplashScreen() {
     (delay: number) => {
       if (leaving.current) return;
       leaving.current = true;
+      if (introTimer.current) {
+        window.clearTimeout(introTimer.current);
+        introTimer.current = 0;
+      }
       later(() => {
         ref.current?.setAttribute('data-leaving', '');
         later(finish, EXIT_HOLD_MS);
@@ -123,6 +128,7 @@ export default function SplashScreen() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let cancelled = false;
     const now = sinceFirstByte();
     const current = entranceMode();
     let cancelLoad = () => {};
@@ -146,11 +152,29 @@ export default function SplashScreen() {
         () => leave(0),
         INTRO_LATEST_START_MS - now + INTRO_DURATION_MS * MOTION_SPEED_SCALE.slow + HOLD_MS,
       );
-      if (current === 'non-blocking') cancelLoad = whenPagePresented(() => leave(0));
+      if (current === 'blocking') {
+        warmIntro();
+        queueMicrotask(() => {
+          if (!cancelled && !leaving.current) setIntroActive(true);
+        });
+      } else {
+        cancelLoad = whenPagePresented(() => leave(0));
+        introTimer.current = window.setTimeout(() => {
+          introTimer.current = 0;
+          if (cancelled || leaving.current || document.visibilityState !== 'visible') return;
+          warmIntro();
+          setIntroActive(true);
+        }, NON_BLOCKING_LOTTIE_DELAY_MS);
+      }
     }
     const pending = timers.current;
     return () => {
+      cancelled = true;
       cancelLoad();
+      if (introTimer.current) {
+        window.clearTimeout(introTimer.current);
+        introTimer.current = 0;
+      }
       for (const id of pending.splice(0)) window.clearTimeout(id);
       leaving.current = false;
     };

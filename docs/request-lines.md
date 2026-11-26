@@ -10,7 +10,7 @@ A forced server policy overrides local switches. Settings show the named line wi
 
 `app/layout.tsx` renders `MaintenanceScreen` before route reads when maintenance is enabled. Staff retain the shell with a notice. `COOKIE_KEYS.maintenanceStaff` is an SSR hint corrected from the backend's `is_admin` answer in both directions, not authorization.
 
-`lib/maintenance.server.ts` shares the policy read's URL and options and fails open. The development-only `devMaintenancePreview` cookie previews the screen without changing the backend switch.
+`lib/bootstrap.server.ts` consolidates cold SSR reads for routing policy, maintenance, system block tags and the public image blocklist into one `GET /api/v1/bootstrap` request tagged with all three invalidation tags, falling back to `lib/route.server.ts`, `lib/maintenance.server.ts` and `lib/blockFilters.server.ts` on older backends. `lib/maintenance.server.ts` shares the policy read's URL and options and fails open. The development-only `devMaintenancePreview` cookie previews the screen without changing the backend switch.
 
 ## Line mapping
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MdClose, MdConstruction } from 'react-icons/md';
+import { MdClose, MdConstruction } from '@/components/icons/shell';
 import { COOKIE_KEYS, LS_KEYS } from '@/lib/constants';
 import IconButton from './IconButton';
 import { ICON } from '@/lib/icons';

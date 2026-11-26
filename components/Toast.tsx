@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { MdCheckCircle, MdError, MdInfo, MdWarning } from 'react-icons/md';
+import { MdCheckCircle, MdError, MdInfo, MdWarning } from '@/components/icons/shell';
 import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { motionTier, scaledMs } from '@/lib/appearance';

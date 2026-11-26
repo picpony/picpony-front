@@ -1,14 +1,18 @@
 /** The mascot's silhouette: the runs read off its artwork, the hit region drawn from them, where its
     bubble points, and the route that reads them — with the upstream stubbed, never a live read. */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test, afterEach } from 'node:test';
+import vm from 'node:vm';
 import sharp from 'sharp';
+import ts from 'typescript';
 import { requireTypeStripping } from './tsResolve.mjs';
 
 requireTypeStripping('testMascotShape');
 
 const { shapeRows, parseMascotShape, shapePath, shapeHead, shapeLift, MASCOT_SHAPE_GRID, MASCOT_SHAPE_ALPHA } = await import('../lib/mascot/shapeModel.ts');
 const { GET } = await import('../app/mascot-shape/route.ts');
+const { getMascotConfig } = await import('../lib/api/mascot.ts');
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -23,7 +27,7 @@ let imageFetch = originalFetch;
 Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   get: () => async (url, init) => {
-    const address = new URL(String(url));
+    const address = new URL(String(url), 'https://app.invalid');
     if (address.pathname === '/api/v1/mascots') {
       configReads.push(address.pathname);
       return mascotConfig ? Response.json(mascotConfig) : new Response('down', { status: 503 });
@@ -316,4 +320,137 @@ test('P1-F8: with the configuration readable, only a configured mascot is read',
   assert.equal((await call('https://picpony.top/uploads/another.png')).status, 400);
   assert.equal(reads.length, before);
   assert.deepEqual(configReads, ['/api/v1/mascots'], 'one forced re-read for the two misses');
+});
+
+/* ---- Precomputed backend shape vs /mascot-shape fallback ---- */
+
+test('getMascotConfig parses valid embedded shape and rejects malformed or absent shapes', async () => {
+  const validShape = { w: 4, h: 2, rows: [[0, 2], [1, 4]] };
+  mascotConfig = {
+    enabled: true,
+    revision: 2,
+    tips: ['默认提示'],
+    mascots: [
+      { id: 10, name: '有轮廓', image_url: `/api/v1/mascots/images/${'b'.repeat(64)}`, tips: '你好', shape: validShape },
+      { id: 11, name: '旧后端无轮廓', image_url: 'https://picpony.top/uploads/legacy.png', tips: '' },
+      { id: 12, name: '非法轮廓', image_url: `/api/v1/mascots/images/${'c'.repeat(64)}`, tips: '', shape: { w: 4, h: 1, rows: [[3, 1]] } },
+    ],
+  };
+  const originalWindow = globalThis.window;
+  globalThis.window = { __picponyRoutePolicy: { api: 'direct', image: 'direct' } };
+  try {
+    const withShape = await getMascotConfig('10');
+    assert.deepEqual(withShape.shape, validShape);
+    assert.equal(withShape.image, `/api/v1/mascots/images/${'b'.repeat(64)}`);
+
+    const withoutShape = await getMascotConfig('11');
+    assert.equal(withoutShape.shape, null);
+    assert.equal(withoutShape.image, 'https://picpony.top/uploads/legacy.png');
+
+    const malformedShape = await getMascotConfig('12');
+    assert.equal(malformedShape.shape, null);
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test('Mascot skips /mascot-shape when config carries a valid shape and falls back when absent', () => {
+  const SKIP = Symbol('SKIP');
+  const mascotConfigToken = { name: 'mascot-config' };
+  const mascotShapeToken = { name: 'mascot-shape' };
+  const shapeArgs = [];
+  let currentConfig = null;
+  let fallbackShape = null;
+
+  const jsx = (type, props) => ({ type, props });
+  const source = ts.transpileModule(
+    readFileSync(new URL('../components/mascot/Mascot.tsx', import.meta.url), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } },
+  ).outputText;
+
+  const states = [];
+  let stateCursor = 0;
+  const react = {
+    useState(initial) {
+      const i = stateCursor++;
+      if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+    },
+    useRef(initial) { return { current: initial }; },
+    useEffect() {},
+    useLayoutEffect() {},
+  };
+
+  const exports = {};
+  vm.runInNewContext(source, {
+    exports,
+    require(name) {
+      switch (name) {
+        case 'react': return react;
+        case 'react/jsx-runtime': return { jsx, jsxs: jsx, Fragment: 'Fragment' };
+        case 'react-icons/md': return { MdClose: 'MdClose', MdExpandMore: 'MdExpandMore' };
+        case '@/components/IconButton': return { default: 'IconButton' };
+        case '@/components/ScrollArea': return { default: 'ScrollArea' };
+        case '@/lib/settingsSync': return { useSyncedSetting: (k) => (k === 'mascotId' ? '10' : 'medium') };
+        case '@/lib/hooks': return { useMediaQuery: () => false, useStoredBoolean: () => false };
+        case '@/lib/constants': return { MEDIA: { md: '(min-width:768px)', pointerCoarse: '(pointer:coarse)', pointerFine: '(pointer:fine)' } };
+        case '@/lib/mascot/settings': return { MASCOT_KEYS: { collapsed: 'c' }, MASCOT_PIXELS: { desktop: { medium: 160 }, mobile: { medium: 120 } }, writeStored() {} };
+        case '@/lib/resource': return {
+          SKIP,
+          useResource(res, args) {
+            if (res === mascotConfigToken) return { data: currentConfig };
+            if (res === mascotShapeToken) {
+              shapeArgs.push(args);
+              return { data: args === SKIP ? undefined : fallbackShape };
+            }
+            return { data: undefined };
+          },
+        };
+        case '@/lib/mascot/queries': return { mascotConfig: mascotConfigToken, mascotShape: mascotShapeToken };
+        case '@/lib/mascot/shapeModel': return { shapeHead, shapeLift, shapePath };
+        case '@/lib/appearance': return { MOTION_SPEED_SCALE: { slow: 1.5 }, entranceMotion: () => false, motionTier: () => 'standard', scaledMs: (ms) => ms };
+        case '@/lib/appScroller': return { getAppScroller: () => null };
+        case '@/lib/ripple': return { TOUCH_PRESS_DELAY_MS: 80, TOUCH_SLOP_PX: 10 };
+        case '@/lib/spring': return { SPRING_MS: { fastEffects: 150, defaultSpatial: 500 } };
+        case '@/lib/springTiming': return { springTiming: () => ({ duration: 200, easing: 'linear' }) };
+        case '@/lib/utils': return { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), cn: (...xs) => xs.filter(Boolean).join(' ') };
+        case './Mascot.module.css': return { default: new Proxy({}, { get: (_t, prop) => String(prop) }) };
+        default: throw new Error(`Unexpected import: ${name}`);
+      }
+    },
+  });
+
+  const Mascot = exports.default;
+  const findByClass = (node, cls) => {
+    if (!node || typeof node !== 'object') return null;
+    if (Array.isArray(node)) {
+      for (const child of node) { const hit = findByClass(child, cls); if (hit) return hit; }
+      return null;
+    }
+    if (node.props?.className === cls) return node;
+    return findByClass(node.props?.children, cls);
+  };
+
+  // Case 1: Backend provides valid precomputed shape -> /mascot-shape is SKIPped and clip-path renders immediately.
+  const embedded = { w: 4, h: 4, rows: [[1, 3], [1, 3], [1, 3], [1, 3]] };
+  const imgUrl = `/api/v1/mascots/images/${'d'.repeat(64)}`;
+  currentConfig = { enabled: true, id: '10', name: '云宝', image: imgUrl, shape: embedded, tips: [], mascots: [] };
+  states[0] = { src: imgUrl, w: 120, h: 120 };
+  stateCursor = 0;
+  const treeWithShape = Mascot({ onChat() {} });
+  assert.equal(shapeArgs.at(-1), SKIP, 'embedded shape must skip /mascot-shape fetch');
+  const hitWithShape = findByClass(treeWithShape, 'hit');
+  assert.match(String(hitWithShape?.props?.style?.clipPath ?? ''), /^path\('M/);
+
+  // Case 2: Config omits shape (external/legacy image) -> falls back to querying mascotShape resource.
+  const legacyUrl = 'https://picpony.top/uploads/legacy.png';
+  currentConfig = { enabled: true, id: '11', name: '旧图', image: legacyUrl, shape: null, tips: [], mascots: [] };
+  fallbackShape = embedded;
+  states[0] = { src: legacyUrl, w: 120, h: 120 };
+  stateCursor = 0;
+  const treeFallback = Mascot({ onChat() {} });
+  assert.equal(shapeArgs.at(-1)?.src, legacyUrl, 'absent shape must query /mascot-shape fallback');
+  const hitFallback = findByClass(treeFallback, 'hit');
+  assert.match(String(hitFallback?.props?.style?.clipPath ?? ''), /^path\('M/);
 });

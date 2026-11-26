@@ -4,9 +4,9 @@ Current contracts for `lib/hero/`. Read [Transitions](transitions.md) for route 
 
 ## Opening
 
-`useHero` arms through `armImageHeroOpen` on card pointerdown, except while scrolling.
+`useHero` keeps `@/lib/hero` and `HeroStageActive` out of initial gallery `<script>` tags and warms both immediately after the gallery's first painted frame (`afterFirstFrame`) and on card hover/focus/press intent. Once resident, arming through `armImageHeroOpen` on card pointerdown (except while scrolling) and activation execute synchronously; an ultra-early press before the engine arrives falls through cleanly to normal `<Link>` navigation.
 
-1. `HeroController.armOpen` mounts a Stage with the future session ID and `stage.phase === 'armed'`.
+1. `HeroController.armOpen` mounts `HeroStageActive` (synchronously once warmed) with the future session ID and `stage.phase === 'armed'`.
 2. Keep the Stage and its back copy behind an empty clip until `data-image-hero-stage-ready` is set. Arming or entering `opening` alone must not reveal them.
 3. `prepareArmedFlight` creates the plane, flyer and tracks in `holdHeroMotion`, paused at the first frame.
 4. Activation adopts that ID, validates card/viewport geometry through `takePreparedFlight`, installs the tracks and leases, marks the Stage ready and releases motion.

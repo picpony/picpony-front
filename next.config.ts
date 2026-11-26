@@ -57,7 +57,15 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Dependencies and source live in this checkout; unrelated parent lockfiles must
   // not change Turbopack's resolution or its file-watching boundary.
-  turbopack: { root: __dirname },
+  // In browser bundles, swap `@/lib/sanitizeHtml` to the native `DOMParser`
+  // implementation so `unified`/`rehype-parse`/`parse5` (~228 KB raw / ~59 KB br)
+  // never ship to clients; Node/SSR and Node unit tests keep `lib/sanitizeHtml.ts`.
+  turbopack: {
+    root: __dirname,
+    resolveAlias: {
+      '@/lib/sanitizeHtml': { browser: './lib/sanitizeHtml.browser.ts' },
+    },
+  },
   /**
    * Automatic memoisation. Enabled last on purpose, so anything it breaks is attributable to it.
    *

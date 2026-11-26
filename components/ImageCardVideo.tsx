@@ -1,7 +1,7 @@
 'use client';
 
 import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
-import { MdPlayArrow } from 'react-icons/md';
+import { MdPlayArrow } from '@/components/icons/common';
 import Skeleton from '@/components/Skeleton';
 import { ICON } from '@/lib/icons';
 import { useSsrImageLine } from '@/components/ImageLineProvider';

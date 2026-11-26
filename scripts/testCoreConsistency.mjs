@@ -1196,3 +1196,51 @@ test('AnnouncementModal formats RFC3339 announcement timestamps instead of print
   assert.equal(timeEl.props.dateTime, '2026-11-23T14:29:37.837Z');
   assert.equal(flattenText(timeEl), '2026/11/23 22:29');
 });
+
+test('AnnouncementModal forwards saved readAnnouncementVersion as skipVersion to avoid sanitising dismissed notices', async () => {
+  const format = load('lib/format.ts', {}, { Date, Intl });
+  const jsx = (type, props) => ({ type, props });
+  const states = [];
+  let cursor = 0;
+  const effects = [];
+  const calls = [];
+  const react = {
+    useState(initial) {
+      const i = cursor++;
+      if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+    },
+    useRef(initial) { return { current: initial }; },
+    useEffect(fn) { effects.push(fn); },
+    useSyncExternalStore: (_sub, read) => read(),
+  };
+  const { default: AnnouncementModal } = load('components/AnnouncementModal.tsx', {
+    react,
+    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+    '@/lib/api/picpony': {
+      getAnnouncement: async (signal, options) => {
+        calls.push({ signal, options });
+        return { success: true };
+      },
+    },
+    './Modal': { default: 'Modal' },
+    './Button': { default: 'Button' },
+    '@/components/SectionHeading': { default: 'SectionHeading' },
+    '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
+    '@/lib/format': format,
+    '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
+    '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
+    '@/lib/utils': { runWhenIdle: (fn) => { fn(); return () => {}; } },
+  }, {
+    localStorage: { getItem: (k) => (k === 'read_announcement_version' ? 'v2.4.0' : null), setItem() {} },
+  });
+
+  const render = () => { cursor = 0; return AnnouncementModal(); };
+  render();
+  for (const fn of effects.splice(0)) fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  const after = render();
+  assert.equal(after.props.isOpen, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options?.skipVersion, 'v2.4.0');
+});

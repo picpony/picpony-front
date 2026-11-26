@@ -7,7 +7,8 @@ Protocol and transport rules for the Rust backend at [api.picpony.top](https://a
 - The API surface is `/api/v1/...`. The path ID is authoritative; a conflicting body ID returns 400. GET requests have no body.
 - A successful response is a bare JSON DTO, or 204 without a body. There is no `success` envelope.
 - A failure is non-2xx with `{"error":{"code","message"}}`.
-- Login and registration return `{ token, csrf_token, expires_in }`. Read the profile with `GET /me`.
+- Login and registration return `{ token, csrf_token, expires_in }`. Read the profile with `GET /me`, which embeds active `equipped_badges` (falling back to `GET /me/badges` on older backends that omit the field).
+- `GET /forum/posts` supports `summary=1` for lightweight list rows (full content remains the default; clients fall back when an older backend rejects the query parameter).
 - A session needs both `Authorization: Bearer <token>` and the backend's `HttpOnly` `auth_bind` cookie. Writes also send `X-CSRF-Token`.
 - Retryable UI operations such as posting, replying and messaging carry an `Idempotency-Key`. Never automatically retry a write whose outcome is unknown.
 
@@ -35,7 +36,9 @@ The browser uses the same-origin [API proxy](../app/api/v1/[...path]/route.ts). 
 - Removes `Secure` from the returned `auth_bind` cookie when the incoming request is plain HTTP.
 - Bounds bodyless requests at 30 seconds; upload bodies use the `BODY_IDLE_MS` pacing rule.
 - Passes `Accept: text/event-stream` through unbuffered and without the total deadline, so the AI turn's live reply may outlast the ordinary read bound; `X-Accel-Buffering: no` keeps a front proxy from collecting it.
-- Expires public filter, blacklist and site-status caches after accepted admin writes.
+- Forwards conditional validators (`If-None-Match`, `If-Modified-Since`) and passes `ETag`, `Last-Modified`, and null-body `304` answers through cleanly.
+- Forwards upstream `Cache-Control` (with `Vary: Authorization, Cookie`) only for `GET`/`HEAD` `200`/`304` responses without `Authorization` or `Set-Cookie` whose upstream `Cache-Control` carries `public` without `private` or `no-store`: anonymous requests keep `public`, while cookie-only browser reads (such as signed-in same-origin `<img>` tags carrying `auth_bind`) downgrade `public` to `private` and strip `s-maxage` so the browser caches public assets without allowing shared caches to store credentialed responses; every other response stays `private, no-store`.
+- Expires public filter, blacklist and site-status caches (including the SSR bootstrap snapshot) after accepted admin writes.
 
 Server readers and route handlers use `upstreamOrigin()` from [lib/upstream.server.ts](../lib/upstream.server.ts) and append `/api/v1/...`; they do not fetch the relative browser proxy URL. `PICPONY_API_ORIGIN` is the public asset origin, not the backend origin.
 

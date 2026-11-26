@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
-import { MdPets, MdRefresh } from 'react-icons/md';
+import { MdRefresh } from '@/components/icons/common';
+import { MdPets } from '@/components/icons/settings';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import SearchInput from '@/components/SearchInput';

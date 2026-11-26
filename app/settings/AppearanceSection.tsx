@@ -1,7 +1,8 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { MdBrightness6, MdOutlineViewSidebar, MdPalette, MdTune } from 'react-icons/md';
+import { MdPalette, MdTune } from '@/components/icons/common';
+import { MdBrightness6, MdOutlineViewSidebar } from '@/components/icons/settings';
 import CheckGlyph from '@/components/CheckGlyph';
 import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';

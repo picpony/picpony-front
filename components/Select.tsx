@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { MdExpandMore } from 'react-icons/md';
+import { MdExpandMore } from '@/components/icons/common';
 import CheckGlyph from './CheckGlyph';
 import { FieldLabel } from './Input';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';

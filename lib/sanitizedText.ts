@@ -18,6 +18,21 @@ const CHARACTER: Record<string, string> = {
   '#x27': "'",
 };
 
-export function decodeSanitizedText(text: string): string {
-  return text.includes('&') ? text.replace(ENTITY, (whole, name: string) => CHARACTER[name] ?? whole) : text;
+/**
+ * Matches a sanitizer entity cut off mid-token at the end of a fixed-length preview (such as
+ * `/me/contacts`'s 120-character `preview` when `truncated` is true): `&`, `&a`, `&am`, `&amp`,
+ * `&lt`, `&gt`, `&quo`, `&nbs`, `&#3`, `&#x2`, etc., without touching complete `;`-terminated
+ * entities or non-entity tails like `R&D`.
+ */
+const TRUNCATED_ENTITY_TAIL =
+  /&(?:a(?:m(?:p)?)?|l(?:t)?|g(?:t)?|q(?:u(?:o(?:t)?)?)?|n(?:b(?:s(?:p)?)?)?|#(?:3(?:9)?|x(?:2(?:7)?)?)?)?$/;
+
+/** Drops an incomplete trailing sanitizer entity from a fixed-length truncated preview. */
+export function stripTruncatedSanitizedEntity(text: string): string {
+  return text.includes('&') ? text.replace(TRUNCATED_ENTITY_TAIL, '') : text;
+}
+
+export function decodeSanitizedText(text: string, options?: { truncated?: boolean }): string {
+  const input = options?.truncated ? stripTruncatedSanitizedEntity(text) : text;
+  return input.includes('&') ? input.replace(ENTITY, (whole, name: string) => CHARACTER[name] ?? whole) : input;
 }

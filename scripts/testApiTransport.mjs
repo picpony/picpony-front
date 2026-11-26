@@ -279,7 +279,9 @@ test('announcement HTML is sanitised inside the adapter for every consumer', asy
   assert.doesNotMatch(safe, /onerror|javascript:/i);
   assert.match(safe, /<b>保留<\/b>/);
   respond = () => Response.json({ announcement: { id: 2, version: 'V2', title: '标题', content, created_at: '2026-09-18T00:00:00Z' } });
-  const latest = await picpony.getAnnouncement();
+  assert.equal((await picpony.getAnnouncement(undefined, { skipVersion: 'V2' })).announcement, undefined,
+    'a dismissed version returns empty before loading or running the HTML sanitiser');
+  const latest = await picpony.getAnnouncement(undefined, { skipVersion: 'V1' });
   assert.doesNotMatch(latest.announcement.content, /onerror|javascript:/i);
   assert.equal(latest.announcement.date, '2026-09-18T00:00:00Z');
   respond = () => Response.json({ announcement: null });

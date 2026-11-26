@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { MdInbox } from 'react-icons/md';
+import { MdInbox } from '@/components/icons/common';
 import StatusView, { type StatusViewSize } from './StatusView';
 import { ICON } from '@/lib/icons';
 
