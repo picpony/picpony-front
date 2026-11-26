@@ -592,16 +592,6 @@ export async function addBrowsingHistory(
 }
 
 /**
- * `GET /me/badges`' worn set as the backend spells it (`{id, name, color, expires_at, position}`,
- * in order) — what the session record keeps as `equipped_badges`, read by `parseEquippedBadges`
- * (the level card). `GET /me` carries no badges, so the session read asks for this beside it.
- */
-export async function getMyEquippedBadges(token: string, signal?: AbortSignal): Promise<unknown[]> {
-  const data = await api<{ equipped: unknown[] }>('GET', '/me/badges', { token, signal, cache: 'no-store' });
-  return data.equipped;
-}
-
-/**
  * The signed-in user's own badges and the set they wear — what the profile's 管理佩戴 dialog edits
  * (`GET /me/badges`: `{badges, equipped}`, each row `{id, name, color, expires_at}`).
  */

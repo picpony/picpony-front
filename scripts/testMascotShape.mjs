@@ -332,7 +332,7 @@ test('getMascotConfig parses valid embedded shape and rejects malformed or absen
     tips: ['默认提示'],
     mascots: [
       { id: 10, name: '有轮廓', image_url: `/api/v1/mascots/images/${'b'.repeat(64)}`, tips: '你好', shape: validShape },
-      { id: 11, name: '旧后端无轮廓', image_url: 'https://picpony.top/uploads/legacy.png', tips: '' },
+      { id: 11, name: '外链无预计算轮廓', image_url: 'https://picpony.top/uploads/external.png', tips: '' },
       { id: 12, name: '非法轮廓', image_url: `/api/v1/mascots/images/${'c'.repeat(64)}`, tips: '', shape: { w: 4, h: 1, rows: [[3, 1]] } },
     ],
   };
@@ -345,7 +345,7 @@ test('getMascotConfig parses valid embedded shape and rejects malformed or absen
 
     const withoutShape = await getMascotConfig('11');
     assert.equal(withoutShape.shape, null);
-    assert.equal(withoutShape.image, 'https://picpony.top/uploads/legacy.png');
+    assert.equal(withoutShape.image, 'https://picpony.top/uploads/external.png');
 
     const malformedShape = await getMascotConfig('12');
     assert.equal(malformedShape.shape, null);
@@ -443,14 +443,14 @@ test('Mascot skips /mascot-shape when config carries a valid shape and falls bac
   const hitWithShape = findByClass(treeWithShape, 'hit');
   assert.match(String(hitWithShape?.props?.style?.clipPath ?? ''), /^path\('M/);
 
-  // Case 2: Config omits shape (external/legacy image) -> falls back to querying mascotShape resource.
-  const legacyUrl = 'https://picpony.top/uploads/legacy.png';
-  currentConfig = { enabled: true, id: '11', name: '旧图', image: legacyUrl, shape: null, tips: [], mascots: [] };
+  // Case 2: Config omits shape (external asset-host URL) -> falls back to querying mascotShape resource.
+  const externalUrl = 'https://picpony.top/uploads/external.png';
+  currentConfig = { enabled: true, id: '11', name: '外链图', image: externalUrl, shape: null, tips: [], mascots: [] };
   fallbackShape = embedded;
-  states[0] = { src: legacyUrl, w: 120, h: 120 };
+  states[0] = { src: externalUrl, w: 120, h: 120 };
   stateCursor = 0;
   const treeFallback = Mascot({ onChat() {} });
-  assert.equal(shapeArgs.at(-1)?.src, legacyUrl, 'absent shape must query /mascot-shape fallback');
+  assert.equal(shapeArgs.at(-1)?.src, externalUrl, 'absent shape must query /mascot-shape fallback');
   const hitFallback = findByClass(treeFallback, 'hit');
   assert.match(String(hitFallback?.props?.style?.clipPath ?? ''), /^path\('M/);
 });

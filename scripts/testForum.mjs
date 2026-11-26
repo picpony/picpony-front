@@ -780,8 +780,7 @@ test('shared content alignment keeps the slot locked onto the flying picture and
   }
 });
 
-test('forum list uses summary mode, renders taggroup counts in teasers, and falls back on legacy 400', async () => {
-  forum.resetForumSummarySupport();
+test('forum list always requests summary=1 and renders taggroup counts in teasers', async () => {
   const summaryShare = model.postOf(wirePost({
     id: 55,
     excerpt: '',
@@ -794,7 +793,8 @@ test('forum list uses summary mode, renders taggroup counts in teasers, and fall
   assert.deepEqual(summaryShare.shared_group_counts, { tagGroups: 2, blockGroups: 3 });
   assert.equal(text.forumTeaser(summaryShare), '推荐合集 · 分享了 2 个标签组、3 个屏蔽组');
 
-  // Sends summary=1 by default.
+  // Sends summary=1 directly with no legacy retry.
+  calls.length = 0;
   respond = () => Response.json({
     posts: [wirePost({ id: 55, content_summary: true, content: { type: 'discussion', html: '' } })],
     total: 1,
@@ -802,33 +802,13 @@ test('forum list uses summary mode, renders taggroup counts in teasers, and fall
     total_pages: 1,
   });
   const slim = await forum.getForumPosts({ page: 1 });
+  assert.equal(calls.length, 1);
   assert.equal(calls[0].url.searchParams.get('summary'), '1');
   assert.equal(slim.posts[0].summary, true);
 
-  // Ordinary 400 validation errors (where retrying without `summary` also fails 400) must NOT disable summary=1.
+  // 400 validation errors propagate directly without a fallback retry.
   calls.length = 0;
   respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '搜索词过长' } }, { status: 400 });
   await assert.rejects(() => forum.getForumPosts({ page: 1, search: 'x'.repeat(200) }));
-  calls.length = 0;
-  respond = () => Response.json({ posts: [wirePost({ id: 55, content_summary: true })], total: 1, page: 1, total_pages: 1 });
-  await forum.getForumPosts({ page: 1 });
-  assert.equal(calls[0].url.searchParams.get('summary'), '1', 'ordinary 400 validation error keeps summary=1 enabled');
-
-  // Older backend rejecting unknown `summary` param with 400 triggers one fallback and remembers it.
-  calls.length = 0;
-  respond = ({ url }) => url.searchParams.has('summary')
-    ? Response.json({ error: { code: 'BAD_REQUEST', message: 'unknown field summary' } }, { status: 400 })
-    : Response.json({ posts: [wirePost({ id: 56 })], total: 1, page: 1, total_pages: 1 });
-  const legacy = await forum.getForumPosts({ page: 1 });
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].url.searchParams.get('summary'), '1');
-  assert.equal(calls[1].url.searchParams.has('summary'), false);
-  assert.equal(legacy.posts[0].id, 56);
-  assert.equal(legacy.posts[0].summary, undefined);
-
-  calls.length = 0;
-  await forum.getForumPosts({ page: 2 });
-  assert.equal(calls.length, 1, 'remembers legacy backend without sending summary=1 again');
-  assert.equal(calls[0].url.searchParams.has('summary'), false);
-  forum.resetForumSummarySupport();
+  assert.equal(calls.length, 1);
 });

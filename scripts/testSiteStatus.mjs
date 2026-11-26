@@ -293,7 +293,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
   }
 });
 
-test('readSiteBootstrap consolidates SSR startup into one tagged request and falls back on older backends', async () => {
+test('readSiteBootstrap consolidates SSR startup into one tagged request and fails open on error without legacy fan-out', async () => {
   const seen = [];
   globalThis.fetch = async (url, init) => {
     const u = new URL(url);
@@ -326,39 +326,25 @@ test('readSiteBootstrap consolidates SSR startup into one tagged request and fal
   assert.deepEqual(seen[0].tags, [SITE_STATUS_CACHE_TAG, BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG]);
   assert.equal(seen.length, 2, 'one bootstrap call plus overflow blacklist page 2');
 
-  // Calling per-request readers outside React render still uses standalone endpoints cleanly;
-  // fallback path when /bootstrap returns 404 uses legacy endpoints.
+  // When /bootstrap fails, fail open immediately without cascading to legacy endpoints.
   seen.length = 0;
   globalThis.fetch = async (url) => {
     const { pathname } = new URL(url);
     seen.push(pathname);
-    if (pathname === '/api/v1/bootstrap') return new Response('not found', { status: 404 });
-    if (pathname === '/api/v1/routing-policy') {
-      return Response.json({ policy: { api_policy: 'auto', media_policy: 'auto', third_party_url: null, third_party_pass_api_key: false }, revision: 1 });
-    }
-    if (pathname === '/api/v1/maintenance-status') {
-      return Response.json({ maintenance_mode: false, maintenance_message: '' });
-    }
-    if (pathname === '/api/v1/filters/block-tags') {
-      return Response.json({ tags: [], filters: { safe: [], spoilers: [], banAnthro: [], banDiscomfort: [], onlyPony: [] } });
-    }
-    if (pathname === '/api/v1/image-blocklist') {
-      return Response.json({ revision: 1, blocks: [], page: 1, limit: 1000, total_count: 0, total_pages: 0, has_more: false });
-    }
-    return new Response('err', { status: 503 });
+    return new Response('unavailable', { status: 503 });
   };
-  const fallbackBoot = await readSiteBootstrap();
-  assert.equal(fallbackBoot.routePolicy.api, 'auto');
-  assert.deepEqual(fallbackBoot.maintenance, { active: false, message: '' });
-  assert.ok(seen.includes('/api/v1/bootstrap'));
-  assert.ok(seen.includes('/api/v1/routing-policy'));
-  assert.ok(seen.includes('/api/v1/maintenance-status'));
+  const failedBoot = await readSiteBootstrap();
+  assert.equal(failedBoot.routePolicy.api, '');
+  assert.equal(failedBoot.routePolicy.image, 'auto');
+  assert.deepEqual(failedBoot.routePolicy.blacklist, []);
+  assert.deepEqual(failedBoot.maintenance, { active: false, message: '' });
+  assert.deepEqual(seen, ['/api/v1/bootstrap']);
   void readBlockFilters;
   void readPublicBlacklist;
   void readRoutePolicyOnce;
 });
 
-test('sessionUser consumes embedded equipped_badges in one request and falls back to /me/badges for legacy backends', async () => {
+test('sessionUser consumes embedded equipped_badges in a single GET /me request', async () => {
   const { sessionUser } = await import('../lib/resources.ts');
   const { clearAllResources } = await import('../lib/resource.ts');
   const baseMe = {
@@ -370,7 +356,6 @@ test('sessionUser consumes embedded equipped_badges in one request and falls bac
   };
   const badge = { id: 1, name: '星辰', color: '#6750a4', expires_at: null, position: 1 };
 
-  // 1. New backend embeds equipped_badges: only GET /me is sent.
   let paths = [];
   globalThis.fetch = async (url) => {
     const pathname = new URL(String(url), 'https://app.invalid').pathname;
@@ -384,22 +369,7 @@ test('sessionUser consumes embedded equipped_badges in one request and falls bac
   assert.deepEqual(modern.user.equipped_badges, [badge]);
   assert.deepEqual(paths, ['/api/v1/me']);
 
-  // 2. Legacy backend omits equipped_badges: falls back to GET /me/badges.
-  paths = [];
-  globalThis.fetch = async (url) => {
-    const pathname = new URL(String(url), 'https://app.invalid').pathname;
-    paths.push(pathname);
-    if (pathname === '/api/v1/me') return Response.json({ user: baseMe });
-    if (pathname === '/api/v1/me/badges') return Response.json({ badges: [badge], equipped: [badge] });
-    return new Response('unexpected', { status: 500 });
-  };
-  clearAllResources();
-  const legacy = await sessionUser.read({ token: 'tok-legacy' });
-  assert.equal(legacy.kind, 'ok');
-  assert.deepEqual(legacy.user.equipped_badges, [badge]);
-  assert.deepEqual(paths, ['/api/v1/me', '/api/v1/me/badges']);
-
-  // 3. Expired session (401) short-circuits without requesting /me/badges.
+  // Expired session (401) short-circuits cleanly.
   paths = [];
   globalThis.fetch = async (url) => {
     const pathname = new URL(String(url), 'https://app.invalid').pathname;

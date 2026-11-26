@@ -7,8 +7,8 @@ Protocol and transport rules for the Rust backend at [api.picpony.top](https://a
 - The API surface is `/api/v1/...`. The path ID is authoritative; a conflicting body ID returns 400. GET requests have no body.
 - A successful response is a bare JSON DTO, or 204 without a body. There is no `success` envelope.
 - A failure is non-2xx with `{"error":{"code","message"}}`.
-- Login and registration return `{ token, csrf_token, expires_in }`. Read the profile with `GET /me`, which embeds active `equipped_badges` (falling back to `GET /me/badges` on older backends that omit the field).
-- `GET /forum/posts` supports `summary=1` for lightweight list rows (full content remains the default; clients fall back when an older backend rejects the query parameter).
+- Login and registration return `{ token, csrf_token, expires_in }`. Read the profile with `GET /me`, which embeds active `equipped_badges`.
+- `GET /forum/posts` supports `summary=1` for lightweight list rows; the frontend always requests summary rows for forum lists.
 - A session needs both `Authorization: Bearer <token>` and the backend's `HttpOnly` `auth_bind` cookie. Writes also send `X-CSRF-Token`.
 - Retryable UI operations such as posting, replying and messaging carry an `Idempotency-Key`. Never automatically retry a write whose outcome is unknown.
 

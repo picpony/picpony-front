@@ -245,20 +245,14 @@ export type SessionResult =
  */
 async function readSession(token: string, signal: AbortSignal): Promise<SessionResult> {
   const startedAt = Date.now();
-  /* `GET /me` now embeds active `equipped_badges`, saving the extra `/me/badges` call on every
-     signed-in boot and return-to-tab. When talking to an older backend that omits the field, fall
-     back to `GET /me/badges` once; a failed fallback leaves the stored set untouched. */
+  /* `GET /me` embeds active `equipped_badges`, avoiding a separate `/me/badges` request on every
+     signed-in boot and return-to-tab. */
   const res = await picpony.getUser(token, signal);
   if (res.status === 401) {
     void res.body?.cancel().catch(() => {});
     return { kind: 'unauthorized' };
   }
-  const me = await picpony.readSessionUser(res);
-  let data = me;
-  if (me && !Array.isArray(me.equipped_badges)) {
-    const equipped = await picpony.getMyEquippedBadges(token, signal).catch(() => null);
-    if (equipped) data = { ...me, equipped_badges: equipped };
-  }
+  const data = await picpony.readSessionUser(res);
   if (data && !signal.aborted) {
     adoptCloudSettings(token, data, startedAt);
   }

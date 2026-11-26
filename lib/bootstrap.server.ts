@@ -4,6 +4,7 @@ import { SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import { cacheSeconds } from '@/lib/serverMemo';
 import { upstreamOrigin } from '@/lib/upstream.server';
 import {
+  DEFAULT_BLOCK_FILTERS,
   parseBlockFilters,
   parsePublicBlacklist,
   PUBLIC_BLACKLIST_PAGE_LIMIT,
@@ -16,16 +17,16 @@ import {
   PUBLIC_BLACKLIST_CACHE_TAG,
   setRequestBootstrap,
 } from '@/lib/blockFilters.server';
-import { readRoutePolicyOnce, setRequestRoutePolicy } from '@/lib/imageLine.server';
-import { readMaintenance, type MaintenanceState } from '@/lib/maintenance.server';
+import { setRequestRoutePolicy } from '@/lib/imageLine.server';
+import type { MaintenanceState } from '@/lib/maintenance.server';
 import type { InlineRoutePolicy } from '@/lib/route.server';
 
 /**
  * Consolidated SSR public startup read (`GET /api/v1/bootstrap`, `site::bootstrap`): fetches
  * routing policy, maintenance status, system block-tag definitions and page 1 of the public image
  * blocklist in one round-trip, tagged with all three invalidation tags so any admin write through
- * `/api/v1/[...path]` expires it immediately. Falls back transparently to the individual endpoints
- * when talking to an older backend that lacks `/api/v1/bootstrap`.
+ * `/api/v1/[...path]` expires it immediately. Fails open with safe defaults when the backend is
+ * unreachable instead of cascading into separate legacy endpoint reads.
  */
 
 const BOOTSTRAP_TIMEOUT_MS = 1500;
@@ -33,6 +34,16 @@ const BOOTSTRAP_REVALIDATE_S = 30;
 const MAX_MESSAGE_LENGTH = 500;
 const DEV_PREVIEW_COOKIE = 'devMaintenancePreview';
 const UPSTREAM_ORIGIN = upstreamOrigin();
+
+const OPEN_MAINTENANCE: MaintenanceState = { active: false, message: '' };
+const FALLBACK_ROUTE_POLICY: InlineRoutePolicy = {
+  api: '',
+  image: 'auto',
+  thirdPartyUrl: '',
+  thirdPartyPassApiKey: false,
+  blockFilters: DEFAULT_BLOCK_FILTERS,
+  blacklist: [],
+};
 
 export interface SiteBootstrap {
   routePolicy: InlineRoutePolicy;
@@ -154,12 +165,16 @@ export async function readSiteBootstrap(): Promise<{
 }> {
   /* Register the shared promises synchronously before awaiting so parallel server children
      (`readRoutePolicyOnce`, `readBlockFilters`, `readPublicBlacklist`) attach to this single read
-     instead of launching separate requests. */
+     instead of launching separate requests, including fail-open defaults on upstream outage. */
   const rawPromise = fetchSiteBootstrapRaw();
   setRequestBootstrap(
-    rawPromise.then((boot) => (boot ? { blockFilters: boot.blockFilters, blacklist: boot.blacklist } : null)),
+    rawPromise.then((boot) =>
+      boot
+        ? { blockFilters: boot.blockFilters, blacklist: boot.blacklist }
+        : { blockFilters: DEFAULT_BLOCK_FILTERS, blacklist: [] },
+    ),
   );
-  setRequestRoutePolicy(rawPromise.then((boot) => (boot ? boot.routePolicy : null)));
+  setRequestRoutePolicy(rawPromise.then((boot) => boot?.routePolicy ?? FALLBACK_ROUTE_POLICY));
 
   const [devOverride, boot] = await Promise.all([readDevMaintenanceOverride(), rawPromise]);
   if (boot) {
@@ -168,10 +183,10 @@ export async function readSiteBootstrap(): Promise<{
       maintenance: devOverride ?? boot.maintenance,
     };
   }
-  /* Legacy backend fallback (or transient `/bootstrap` error): use the original per-resource
-     readers without duplicating any request. */
-  const [routePolicy, maintenance] = await Promise.all([readRoutePolicyOnce(), readMaintenance()]);
-  return { routePolicy, maintenance: devOverride ?? maintenance };
+  return {
+    routePolicy: FALLBACK_ROUTE_POLICY,
+    maintenance: devOverride ?? OPEN_MAINTENANCE,
+  };
 }
 
 /** Once per SSR request. */

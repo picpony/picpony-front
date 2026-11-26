@@ -1,5 +1,4 @@
 import type { ForumCategory, ForumPostDetailResponse, ForumPostsResponse } from '@/lib/types/forum';
-import { ApiError } from './errors';
 import { api, seg } from './http';
 import { uploadMedia } from './upload';
 import {
@@ -44,39 +43,13 @@ export interface ForumListQuery {
   token?: string | null;
 }
 
-let forumListSummarySupported = true;
-
-/** Reset cached summary-flag capability (for unit tests). */
-export function resetForumSummarySupport(): void {
-  forumListSummarySupported = true;
-}
-
 export async function getForumPosts(query: ForumListQuery, signal?: AbortSignal): Promise<ForumPostsResponse> {
-  const run = (summary: boolean) =>
-    api<WirePostPage>('GET', '/forum/posts', {
-      query: forumListParams({ ...query, summary }),
-      token: query.token ?? undefined,
-      cache: 'no-store',
-      signal,
-    });
-  let data: WirePostPage;
-  if (forumListSummarySupported) {
-    try {
-      data = await run(true);
-    } catch (error) {
-      /* Older backends reject unknown query keys with 400 (`deny_unknown_fields`): retry without
-         `summary` and remember the fallback only if that retry succeeds, so ordinary 400 validation
-         errors (e.g. an oversized search term) never disable `summary=1` on a current backend. */
-      if (error instanceof ApiError && error.status === 400) {
-        data = await run(false);
-        forumListSummarySupported = false;
-      } else {
-        throw error;
-      }
-    }
-  } else {
-    data = await run(false);
-  }
+  const data = await api<WirePostPage>('GET', '/forum/posts', {
+    query: forumListParams({ ...query, summary: true }),
+    token: query.token ?? undefined,
+    cache: 'no-store',
+    signal,
+  });
   return forumPostsOf(data, Boolean(query.token));
 }
 

@@ -82,11 +82,11 @@ const dwellFor = (text: string) => Math.min(12_000, Math.max(4_500, 3_000 + text
  *
  * **The character's outline comes with `GET /api/v1/mascots`** for backend-hosted uploads (precomputed
  * in Rust when uploaded), falling back to `app/mascot-shape/route.ts` only when the config omits
- * `shape` (legacy/external asset-host URLs or older backends): the artwork's host sends no CORS
- * headers, so the page cannot read its alpha. It is the hit region — a `clip-path`, which clips
- * hit-testing with the paint, so the artwork's transparent margins and the gaps between wing and
- * tail are the page's — and it says where the head is, which is where the speech bubble's tail
- * points. Until it lands, or if it never does, an ellipse over the art stands in.
+ * `shape` (external asset-host URLs that the backend intentionally does not fetch): the artwork's
+ * host sends no CORS headers, so the page cannot read its alpha. It is the hit region — a
+ * `clip-path`, which clips hit-testing with the paint, so the artwork's transparent margins and the
+ * gaps between wing and tail are the page's — and it says where the head is, which is where the
+ * speech bubble's tail points. Until it lands, or if it never does, an ellipse over the art stands in.
  */
 export default function Mascot({ onChat, active = true }: { onChat: () => void; active?: boolean }) {
   const selected = useSyncedSetting('mascotId');
