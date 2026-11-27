@@ -9,7 +9,7 @@ Use the role's token. The radius scale is 0 / 4 / 8 / 12 / 16 / 20 / 28 / 32 / 4
 | Role | Utility | Radius |
 | --- | --- | --- |
 | Button, FAB, avatar, circular icon control | `rounded-full` | Capsule/circle |
-| Count badge, navigation row, search field | `rounded-full` | Capsule |
+| Count badge, search field | `rounded-full` | Capsule |
 | Card, section, palette tile, outlined field, rich-text editor, code box, colour swatch, hovered square icon control | `rounded-md` | 12 dp |
 | Chip, filled field, ordinary menu/listbox row | `rounded-sm` | 8 dp |
 | Tab state shape, top corners | `rounded-t-md` | 12 dp |
@@ -22,6 +22,8 @@ Use the role's token. The radius scale is 0 / 4 / 8 / 12 / 16 / 20 / 28 / 32 / 4
 | Profile banner from `sm` | `rounded-3xl` | 32 dp |
 
 A docked drawer has no rounded docking edge. Use explicit steps rather than bare `rounded`. Skeletons inherit the replaced object's radius. Keep the Hero target radius consistent with `HERO_TARGET_RADIUS_PX`.
+
+A grouped run — a list's rows, a drawer section's rows — takes `rounded-lg` on its own outer ends and `rounded-xs` on every seam inside. It is one block of material cut apart, not a stack of capsules: `.m3-row` for lists, `.sidebar-run` for the drawer.
 
 ### Nested surfaces
 

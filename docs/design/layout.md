@@ -135,13 +135,13 @@ During docked resizing, content lays out once at the destination width. Up to 32
 
 Desktop mode is remembered in localStorage (`sidebar_collapsed`) and mirrored in the `sidebarCollapsed` cookie for SSR. Values are `expanded`, `icons` and `hidden`; legacy `false` and `true` restore expanded and hidden. Below `md`, the sidebar remains an independent open/closed modal drawer, starts closed and never writes the desktop preference.
 
-Drawer rows have 16 dp leading and 24 dp trailing padding, 24 dp icons, 12 dp label gaps and 12 dp outer inset. They use the density-dependent heights above and a pill shape.
+Drawer rows have 16 dp leading and 24 dp trailing padding, 24 dp icons, 12 dp label gaps and 12 dp outer inset. They use the density-dependent heights above and the grouped-list shape: a section's rows are one run, 2 dp apart, with 16 dp on the run's outer ends and 4 dp on the seams inside.
 
 Icon-only rows retain the leading icon position, use 16 dp trailing padding and omit the label gap. Unread badges sit at the indicator's upper trailing edge. The account block uses 8 dp symmetric padding in the icon rail, keeping its 40 dp avatar centred.
 
 During navigation, an icon-only row replaces its 24 dp glyph with a progress ring and omits the trailing `正在打开` indicator. The original glyph returns when navigation settles. Expanded desktop and phone rows retain the trailing progress ring and text.
 
-The account block is a separate 64 dp surface with 16 dp corners, a 40 dp avatar and `title-s` name. Its leading content aligns with navigation; it does not take the selected-row pill.
+The account block is a separate 64 dp surface with 16 dp corners, a 40 dp avatar and `title-s` name. Its leading content aligns with navigation; it does not take the selected row's fill.
 
 The app bar uses `px-4 sm:px-26` independently of drawer columns. Its band remains 64 dp.
 

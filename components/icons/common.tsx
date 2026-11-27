@@ -2,6 +2,7 @@
 import { pathIcon, SvgIcon, type IconProps } from './SvgIcon';
 
 export const MdArrowBack = /*#__PURE__*/ pathIcon("M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z");
+export const MdArrowUpward = /*#__PURE__*/ pathIcon("m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8z");
 export const MdCheck = /*#__PURE__*/ pathIcon("M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
 export const MdChevronLeft = /*#__PURE__*/ pathIcon("M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z");
 export const MdChevronRight = /*#__PURE__*/ pathIcon("M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z");

@@ -88,11 +88,12 @@ interface SidebarNavProps {
 
    The padding is **asymmetric, and that is the spec's** (`NavigationDrawer.kt`:
    `padding(start = 16.dp, end = 24.dp)`), which gives the trailing unread badge
-   its air. The pill shape is the spec's (`ActiveIndicatorShape = CornerFull`). */
+   its air. The shape is not the spec's `CornerFull` pill: a section's rows are one
+   run, cut the way a list cuts one (`.sidebar-run`, `app/globals.css`). */
 const ROW = cn(
-  'sidebar-row relative flex h-12 pointer-coarse:h-14 w-full items-center rounded-full',
+  'sidebar-row relative flex h-12 pointer-coarse:h-14 w-full items-center',
   'focus-visible:outline-hidden transition-ui state-layer',
-  'focus-visible:ring-2 focus-ring',
+  'focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
 );
 
 /**
@@ -281,7 +282,7 @@ function NavItem({
 
 function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="sidebar-run flex flex-col gap-0.5">
       {/* `pt-2 pb-1` — 8 above and 4 below a 20px `title-s` line box. A heading
           binds to what it introduces, so the space above has to be the larger
           one (the same 2:1 asymmetry the base heading rule uses). */}

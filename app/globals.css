@@ -4910,6 +4910,22 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
   }
 }
 
+/* The drawer's rows are one run per section, cut the way a list is. Not `.m3-row` itself: the
+   icon rail keeps a tooltip element between rows, and the positional `of` selectors ignore it. */
+.sidebar-run > .sidebar-row {
+  border-radius: var(--radius-xs);
+}
+
+.sidebar-run > .sidebar-row:nth-child(1 of .sidebar-row) {
+  border-start-start-radius: var(--radius-lg);
+  border-start-end-radius: var(--radius-lg);
+}
+
+.sidebar-run > .sidebar-row:nth-last-child(1 of .sidebar-row) {
+  border-end-start-radius: var(--radius-lg);
+  border-end-end-radius: var(--radius-lg);
+}
+
 /* ---------------------------------------------------------------------------
  * M3 outlined text field, with a notched floating label. CSS rather than call-site
  * classes because the whole thing turns on focus-within / placeholder-shown on a

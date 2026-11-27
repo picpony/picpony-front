@@ -1,6 +1,6 @@
 'use client';
 
-import { MdThumbDown, MdThumbUp } from 'react-icons/md';
+import { MdArrowDownward, MdArrowUpward } from 'react-icons/md';
 import Skeleton from '@/components/Skeleton';
 import { formatCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
@@ -29,7 +29,7 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
   return (
     <div className="flex min-h-5 w-full max-w-md items-center gap-3 text-body-s text-on-surface-variant tabular-nums">
       <span className="inline-flex shrink-0 items-center gap-1 text-on-surface">
-        <MdThumbUp size={ICON.dense} className="text-on-surface-variant" aria-hidden="true" />
+        <MdArrowUpward size={ICON.dense} className="text-on-surface-variant" aria-hidden="true" />
         <span className="sr-only">赞</span>
         {formatCount(upvotes)}
       </span>
@@ -48,7 +48,7 @@ export default function DetailVotes({ image, pending }: { image: PonyImage | nul
         )}
       </div>
       <span className="inline-flex shrink-0 items-center gap-1">
-        <MdThumbDown size={ICON.dense} className="text-on-surface-variant" aria-hidden="true" />
+        <MdArrowDownward size={ICON.dense} className="text-on-surface-variant" aria-hidden="true" />
         <span className="sr-only">踩</span>
         {formatCount(downvotes)}
       </span>

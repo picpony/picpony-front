@@ -3,7 +3,7 @@
 import { memo, useCallback, useDeferredValue, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { MdVisibilityOff, MdBrokenImage } from '@/components/icons/shell';
-import { MdThumbUp, MdComment, MdRefresh } from '@/components/icons/common';
+import { MdArrowUpward, MdComment, MdRefresh } from '@/components/icons/common';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
 import Button from './Button';
@@ -236,7 +236,7 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
           {(typeof image.score === 'number' || comments !== null || onSite > 0) && (
             <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-1.5">
               {typeof image.score === 'number' && (
-                <Badge tone="media" size="sm" icon={<MdThumbUp />} className="rounded-bl-sm">
+                <Badge tone="media" size="sm" icon={<MdArrowUpward />} className="rounded-bl-sm">
                   {formatCount(image.score)}
                 </Badge>
               )}
