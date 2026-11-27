@@ -172,6 +172,7 @@ d.classList.toggle('dark',k);
 var p=get('picpony_palette');if(!C[p])p='default';d.dataset.palette=p;
 if(get('picpony_palette_hues')==='mono')d.dataset.paletteHues='mono';else delete d.dataset.paletteHues;
 if(get('picpony_detail_layout')==='split')d.dataset.detailLayout='split';else delete d.dataset.detailLayout;
+if(get('picpony_detail_mobile_step_buttons')==='false')d.dataset.detailMobileStep='off';else delete d.dataset.detailMobileStep;
 var m=get('picpony_motion');
 if(m!=='off'&&m!=='reduced'&&m!=='standard'&&m!=='custom')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
 d.dataset.motion=m;
@@ -276,6 +277,9 @@ export default async function RootLayout({
   /* 左右分栏 only on an explicit `split`: a corrupt cookie means 上下布局, the default and the
      CSS's own attribute-free state. */
   const splitDetailLayout = cookieStore.get(COOKIE_KEYS.detailLayout)?.value === 'split';
+  /* 窄屏详情页左右切换按钮: hidden only on an explicit `false`, so a missing or corrupt cookie
+     keeps the default shown state. */
+  const hideMobileDetailStep = cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
 
   return (
     <html
@@ -289,6 +293,7 @@ export default async function RootLayout({
       data-palette-tones={custom?.tones}
       data-palette-hues={mono ? 'mono' : undefined}
       data-detail-layout={splitDetailLayout ? 'split' : undefined}
+      data-detail-mobile-step={hideMobileDetailStep ? 'off' : undefined}
       data-motion={motion}
       data-motion-speed={motionSpeed}
       data-motion-custom={motionCustomCookie ? formatMotionCustom(motionCustom) : undefined}

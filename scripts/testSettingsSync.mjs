@@ -359,3 +359,59 @@ test('detailLayout syncs to storage, cookie, html dataset, cloud and cross-tab s
   assert.match(document.cookie, /detailLayout=;.*max-age=0/);
   signOut();
 });
+
+test('mobile detail gestures and step buttons sync to storage, cookie, html dataset, cloud and cross-tab events', async () => {
+  signOut();
+  delete root.dataset.detailMobileStep;
+  document.cookie = '';
+
+  /* Gestures default to enabled and persist false/true in localStorage. */
+  sync.changeSyncedSetting('detailMobilePullDismiss', false);
+  sync.changeSyncedSetting('detailMobileSwipeStep', false);
+  assert.equal(values.get(LS_KEYS.detailMobilePullDismiss), 'false');
+  assert.equal(values.get(LS_KEYS.detailMobileSwipeStep), 'false');
+
+  /* Disabling mobile step buttons writes storage, cookie and html[data-detail-mobile-step="off"]. */
+  sync.changeSyncedSetting('detailMobileStepButtons', false);
+  assert.equal(values.get(LS_KEYS.detailMobileStepButtons), 'false');
+  assert.equal(root.dataset.detailMobileStep, 'off');
+  assert.match(document.cookie, /detailMobileStepButtons=false/);
+
+  /* Re-enabling clears storage, cookie and root dataset back to default. */
+  sync.changeSyncedSetting('detailMobileStepButtons', true);
+  assert.equal(values.has(LS_KEYS.detailMobileStepButtons), false);
+  assert.equal(root.dataset.detailMobileStep, undefined);
+  assert.match(document.cookie, /detailMobileStepButtons=;.*max-age=0/);
+
+  /* Cloud adoption installs mobile detail preferences and root attribute. */
+  const account = {
+    ...ACCOUNT,
+    id: 93,
+    token: 'token-mobile-detail',
+    settings_revision: 1,
+    settings: {
+      detailMobilePullDismiss: true,
+      detailMobileSwipeStep: true,
+      detailMobileStepButtons: false,
+    },
+  };
+  signIn(account);
+  serverUser = account;
+  sync.adoptCloudSettings(account.token, structuredClone(account), Date.now() + 1);
+  assert.equal(values.get(LS_KEYS.detailMobilePullDismiss), 'true');
+  assert.equal(values.get(LS_KEYS.detailMobileSwipeStep), 'true');
+  assert.equal(values.get(LS_KEYS.detailMobileStepButtons), 'false');
+  assert.equal(root.dataset.detailMobileStep, 'off');
+
+  /* Cross-tab storage event updates the root dataset and cookie in the background tab. */
+  values.delete(LS_KEYS.detailMobileStepButtons);
+  const storageEvent = Object.assign(new Event('storage'), {
+    key: LS_KEYS.detailMobileStepButtons,
+    oldValue: 'false',
+    newValue: null,
+  });
+  window.dispatchEvent(storageEvent);
+  assert.equal(root.dataset.detailMobileStep, undefined);
+  assert.match(document.cookie, /detailMobileStepButtons=;.*max-age=0/);
+  signOut();
+});

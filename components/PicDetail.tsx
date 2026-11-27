@@ -578,6 +578,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const defaultFolder = useSyncedSetting('defaultFaveFolder');
   const autoPrivacy = useSyncedSetting('autoPrivacyFaves');
   const showPrivacySpace = useSyncedSetting('showPrivacyFaves');
+  const mobilePullDismiss = useSyncedSetting('detailMobilePullDismiss');
+  const mobileSwipeStep = useSyncedSetting('detailMobileSwipeStep');
   /* 收藏到…, per picture: stepping to the next one closes it. */
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const pickerOpen = pickerFor === imageId && session.token !== null;
@@ -996,9 +998,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   }, [isStepping, layered]);
 
   useEffect(() => {
-    if (presentation !== 'overlay') return;
+    if (presentation !== 'overlay' || !mobilePullDismiss) return;
     return bindImageHeroDismissGesture(surfaceId, () => dismissCanStartRef.current(), heroNavigation);
-  }, [heroNavigation, presentation, surfaceId]);
+  }, [heroNavigation, mobilePullDismiss, presentation, surfaceId]);
 
   /* Escape leaves the screen — unless something is layered over it, which owns the key and
      closes itself first; a reply in progress is dropped before the screen is left. */
@@ -1445,15 +1447,17 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           data-image-detail-media-pane
           className="image-detail-media-pane relative flex w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6"
         >
-          {/* The picture's box, and where a finger pages (decision 19). It takes the hero
-              geometry — an in-flow flex item exactly like the Stage's landing target — and the
-              media fills it. It leaves `pan-x` out of its touch action, so the browser never
-              claims a horizontal drag (the pull-down and pinch keep theirs). A video pages too,
-              except from the band along its bottom edge, where its own controls take the drag. */}
+          {/* The picture's box, and where a finger pages (decision 19) when mobile swipe is enabled.
+              It takes the hero geometry — an in-flow flex item exactly like the Stage's landing
+              target — and the media fills it. While swipe stepping is on, it leaves `pan-x` out of
+              its touch action so the browser never claims a horizontal drag (pull-down and pinch
+              keep theirs); when disabled, the browser keeps native horizontal panning. A video
+              pages too, except from the band along its bottom edge, where its own controls take
+              the drag. */}
           <div
-            ref={bindSwipe}
+            ref={mobileSwipeStep ? bindSwipe : undefined}
             data-image-detail-media
-            className="relative flex-none touch-pan-y touch-pinch-zoom"
+            className={cn('relative flex-none', mobileSwipeStep && 'touch-pan-y touch-pinch-zoom')}
             style={detailHeroStyle}
             onPointerEnter={warmLightbox}
             onPointerDown={warmLightbox}

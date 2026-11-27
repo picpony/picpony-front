@@ -536,6 +536,34 @@ const detailLayoutSetting: SyncedSetting<DetailLayout> = {
   equals: same,
 };
 
+function applyDetailMobileStepAttribute(enabled: boolean) {
+  if (typeof document === 'undefined') return;
+  if (!enabled) document.documentElement.dataset.detailMobileStep = 'off';
+  else delete document.documentElement.dataset.detailMobileStep;
+}
+
+/**
+ * 窄屏详情页左右切换按钮: mirrors into `COOKIE_KEYS.detailMobileStepButtons` and
+ * `html[data-detail-mobile-step='off']` so `HeroStage` and the routed overlay share the same
+ * shifted-up narrow-screen geometry from first paint with zero hydration mismatch.
+ */
+const detailMobileStepButtonsSetting: SyncedSetting<boolean> = {
+  id: 'detailMobileStepButtons',
+  cloudKeys: ['detailMobileStepButtons'],
+  fallback: true,
+  scope: 'device',
+  cookie: COOKIE_KEYS.detailMobileStepButtons,
+  read: () => readStored(LS_KEYS.detailMobileStepButtons) !== 'false',
+  write: (value) => {
+    writeStored(LS_KEYS.detailMobileStepButtons, value ? null : 'false');
+    mirrorCookie(COOKIE_KEYS.detailMobileStepButtons, value ? null : 'false');
+    applyDetailMobileStepAttribute(value);
+  },
+  fromCloud: (settings) => cloudBoolean(settings.detailMobileStepButtons),
+  toCloud: (value) => ({ detailMobileStepButtons: value }),
+  equals: same,
+};
+
 /**
  * Every synced setting, including the mascot's device preferences and the original intro
  * preference, which uses the existing entrance-motion store and cookie.
@@ -549,6 +577,9 @@ export const SYNCED_SETTINGS: readonly SyncedSetting<unknown>[] = [
   storedBoolean('showTagCounts', LS_KEYS.showTagCounts, false),
   storedBoolean('showChineseTags', LS_KEYS.showChineseTags, true),
   detailLayoutSetting,
+  storedBoolean('detailMobilePullDismiss', LS_KEYS.detailMobilePullDismiss, true),
+  storedBoolean('detailMobileSwipeStep', LS_KEYS.detailMobileSwipeStep, true),
+  detailMobileStepButtonsSetting,
   storedChoice('defaultHomeSort', LS_KEYS.homeSort, 'created_at',
     (raw) => (typeof raw === 'string' && raw ? parseSortField(raw) : undefined), { effects: ['browsing'] }),
   storedChoice('defaultSearchSort', LS_KEYS.searchSort, 'created_at',
@@ -584,6 +615,9 @@ export interface SyncedValues {
   showTagCounts: boolean;
   showChineseTags: boolean;
   detailLayout: DetailLayout;
+  detailMobilePullDismiss: boolean;
+  detailMobileSwipeStep: boolean;
+  detailMobileStepButtons: boolean;
   defaultHomeSort: string;
   defaultSearchSort: string;
   useCdn: boolean;
@@ -1102,6 +1136,11 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
       applyDetailLayoutAttribute(next);
       mirrorCookie(COOKIE_KEYS.detailLayout, next === 'stacked' ? null : next);
     }
+    if (event.key === null || event.key === LS_KEYS.detailMobileStepButtons) {
+      const next = detailMobileStepButtonsSetting.read();
+      applyDetailMobileStepAttribute(next);
+      mirrorCookie(COOKIE_KEYS.detailMobileStepButtons, next ? null : 'false');
+    }
   };
   const onVisible = () => {
     if (document.visibilityState === 'visible') retrySoon();
@@ -1112,6 +1151,7 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
   document.addEventListener('visibilitychange', onVisible);
   rememberAppearance();
   applyDetailLayoutAttribute(detailLayoutSetting.read());
+  applyDetailMobileStepAttribute(detailMobileStepButtonsSetting.read());
   /* A device that stored a mirrored setting before its cookie existed gets the cookie now. */
   for (const entry of SYNCED_SETTINGS) {
     if (!entry.cookie) continue;

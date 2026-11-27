@@ -142,11 +142,11 @@ A sequence records activation through `openFromSequence`; the viewer reads `useI
 - Step in one existing tree; never call the router or remount the detail for a step.
 - `useDetailStep` owns the shown image. Reset per-image state at the swap, not from a lagging URL.
 - The shared axis fades out, performs one swap, then arrives. Reset the overlay scroller at the swap.
-- Horizontal swipe follows the finger, rubber-bands at an end and uses release velocity. A video accepts paging outside its controls band.
+- Horizontal swipe follows the finger, rubber-bands at an end and uses release velocity (gated by `detailMobileSwipeStep`). A video accepts paging outside its controls band.
 - If the next page is pending, join that read and advance once when it arrives.
 - Arrow keys ignore modifiers, IME, fields and controls that own those keys.
 - A second press or flick takes over the current step. Teardown must never leave a pinned pose after the finger is gone.
-- Step buttons remain pinned as dialog chrome, unavailable at a true end and busy while the next page loads.
+- Step buttons remain pinned as dialog chrome (hidden below `md` when `detailMobileStepButtons` is disabled), unavailable at a true end and busy while the next page loads.
 
 `imageHeroHistory.retarget` replaces the detail base URL and restores its guard without growing history. Wait for the swap and idle, or flush for close. A traversal that overtakes the rewrite cancels it; never write the detail URL onto the list's entry.
 

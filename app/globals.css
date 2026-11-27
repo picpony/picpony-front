@@ -3035,6 +3035,29 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
   }
 }
 
+/* When narrow-screen step buttons are turned off (`html[data-detail-mobile-step='off']`), hide the
+ * top-right step arrows below `md` (`768px`). Below `sm`, drop only the extra `--image-detail-
+ * overlay-offset` (`1.75rem`) while keeping `.image-detail-page`'s own `1rem` top padding so the
+ * detail shifts up moderately by 28px: the byline (`28px..48px`) sits comfortably inside the back
+ * button's band (`12px..52px`) with symmetric 2.5rem clearance (`64px` from each edge), and the
+ * caption (`52px..70px`) starts right below the button at full width. Both Stage and routed
+ * overlay match these rules so Hero landings stay pixel-identical. */
+@media (max-width: 767.98px) {
+  html[data-detail-mobile-step='off'] .image-detail-step {
+    display: none;
+  }
+}
+
+@media (max-width: 639.98px) {
+  html[data-detail-mobile-step='off'] .image-detail-overlay-content {
+    padding-top: 0;
+  }
+
+  html[data-detail-mobile-step='off'] .image-detail-overlay-content .image-detail-header-byline {
+    padding-inline: 2.5rem;
+  }
+}
+
 .image-detail-page {
   padding-top: var(--image-detail-page-padding);
   padding-bottom: var(--image-detail-page-padding);
@@ -3184,6 +3207,14 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
 
     .page-back-room-5xl .image-detail-header-rows {
       padding-inline: 5rem;
+    }
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767.98px) {
+  @container image-detail-frame (min-width: 36rem) and (width < 48rem) {
+    html[data-detail-mobile-step='off'] .image-detail-overlay-content .image-detail-header-rows {
+      padding-inline: 2rem;
     }
   }
 }

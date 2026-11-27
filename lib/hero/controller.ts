@@ -33,9 +33,19 @@ import {
   leaseInlineStyles,
   type DomLease,
 } from './dom';
+import { LS_KEYS } from '@/lib/constants';
 import { revealInImageSequence } from '@/lib/imageSequence';
 import { captureHeroFrame, isHeroFrameAlive, type FrameAsset } from './frameCache';
 import { heroRectsEqual, releaseSpeedAlong, type HeroRect } from './geometry';
+
+function isDetailMobilePullDismissEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return localStorage.getItem(LS_KEYS.detailMobilePullDismiss) !== 'false';
+  } catch {
+    return true;
+  }
+}
 
 function unionHeroRects(a: HeroRect, b: HeroRect): HeroRect {
   const top = Math.min(a.top, b.top);
@@ -1195,6 +1205,7 @@ export class HeroController {
   }
 
   private bindOpeningDismiss(session: OpeningSession, stage: HeroStageNodes) {
+    if (!isDetailMobilePullDismissEnabled()) return;
     const pull = new HeroPullSurface(
       { overlay: stage.overlay, floatingBack: stage.floatingBack },
       {
@@ -1241,7 +1252,7 @@ export class HeroController {
     scrollTop?: number,
   ) {
     const pull = session.pull;
-    if (!pull) return;
+    if (!pull || !isDetailMobilePullDismissEnabled()) return;
     session.pullRecognizer?.();
     session.pullRecognizer = bindHeroDismissGesture({
       target,

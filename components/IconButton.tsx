@@ -371,7 +371,11 @@ export function iconButtonClasses({
         shape === 'round' && isSelected && (size === 'lg' ? 'rounded-lg' : 'rounded-md'),
         shape === 'round' && !isSelected && SHAPES.round,
         shape === 'square' && SHAPES.square,
-        variant === 'quiet' && shape === 'round' && !isSelected && !isDisabled && 'enabled:hover:not-data-pressed:rounded-md',
+        variant === 'quiet' &&
+          shape === 'round' &&
+          !isSelected &&
+          !isDisabled &&
+          (size === 'lg' ? 'enabled:hover:not-data-pressed:rounded-lg' : 'enabled:hover:not-data-pressed:rounded-md'),
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */

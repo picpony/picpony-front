@@ -85,6 +85,12 @@ export const LS_KEYS = {
   showChineseTags: 'picpony_show_chinese_tags',
   /** 图片详情页样式: `split` for 左右分栏; anything else, or nothing, is `stacked` (上下布局). */
   detailLayout: 'picpony_detail_layout',
+  /** 详情页触控下拉关闭手势: `false` disables pull-to-dismiss; absent or `true` enables it. */
+  detailMobilePullDismiss: 'picpony_detail_mobile_pull_dismiss',
+  /** 详情页触控左右滑动切图手势: `false` disables horizontal swipe stepping; absent or `true` enables it. */
+  detailMobileSwipeStep: 'picpony_detail_mobile_swipe_step',
+  /** 窄屏详情页顶部左右切换按钮: `false` hides narrow-screen step arrows and shifts the detail up; absent or `true` shows them. */
+  detailMobileStepButtons: 'picpony_detail_mobile_step_buttons',
   showUploads: 'picpony_show_uploads',
   showFaves: 'picpony_show_faves',
   showPosts: 'picpony_show_posts',
@@ -198,6 +204,8 @@ export const COOKIE_KEYS = {
   paletteHues: 'paletteHues',
   /** 图片详情页样式 (`stacked` / `split`), so the server can put `data-detail-layout` on `<html>`. */
   detailLayout: 'detailLayout',
+  /** 窄屏详情页左右切换按钮 (`false` when hidden), so the server can put `data-detail-mobile-step="off"` on `<html>`. */
+  detailMobileStepButtons: 'detailMobileStepButtons',
   /**
    * 显示隐私空间, so the server draws /favorites' placeholder tab row with the tabs the screen will
    * have: read through `useSyncedSetting`, whose server value is the fallback, it drew two and the

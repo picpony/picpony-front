@@ -14,6 +14,7 @@ const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
 const { getHeroRestingDetailRect } = await import('../lib/hero/dom.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
 const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
+const { LS_KEYS } = await import('../lib/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
 const utils = { clamp, clamp01 };
 const sampling = await import('../lib/sampledAnimation.ts');
@@ -765,6 +766,7 @@ function inputTransferHarness(t, history = {}) {
     './scroll': { HeroScrollContinuity },
     './follow': { canFollowHeroScroll: () => false, followHeroScroll: () => null },
     '@/lib/appearance': { motionTier: () => 'standard' },
+    '@/lib/constants': { LS_KEYS },
     './session': sessionHelpers,
     '@/lib/imageSequence': { revealInImageSequence: async () => false },
   });

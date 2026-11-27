@@ -20,8 +20,8 @@ Shared bottom chrome (`TabNavBar` when not suppressed by the expanded desktop dr
 ## Mascot geometry and input
 
 - Keep one stage box in expanded and collapsed states. Animate the plate, figure and collapse control inside it. Default desktop size is `medium` (`160 px`).
-- Collapsed: a 56 dp FAB on `surface-container-high`, elevation 2, inner ripple and state layer.
-- Keep the collapse control mounted, fading and inert while collapsed. Expansion greetings wait for the figure's transition, bounded by the motion watchdog.
+- Collapsed: a 56 dp container aligned with `IconButton variant="quiet"` — neutral circle (`50%`) on `surface-container-highest` with `forced-boundary`, elevation 2, inner ripple and state layer at rest; morphing to a 16 dp `secondary-container` rounded square with `ripple-secondary` under hover and a 12 dp rounded square on press (`data-pressed`).
+- Keep the collapse control (`IconButton variant="quiet" size="sm"`) mounted, fading and inert while collapsed. Expansion greetings wait for the figure's transition, bounded by the motion watchdog.
 - Hit testing follows `clip-path: path()` on the character outline. Transparent margins belong to the page.
 - Outline expansion is 3 px for a mouse and 8 px for touch; use an ellipse while unavailable.
 - Keep the collapse control's touch target 4 px clear of the character using `shapeLift`; the hit box has priority where they overlap.

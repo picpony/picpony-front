@@ -91,6 +91,7 @@
   position: absolute;
   inset: 0;
   display: block;
+  isolation: isolate;
   padding: 0;
   border: 0;
   background: none;
@@ -122,11 +123,13 @@
   clip-path: ellipse(47% 47% at 50% 52%);
 }
 
-/* Collapsed, the plate is the target and the ring follows it: round, both of them, and the plate's
-   size at the stage's bottom-right corner. The stage itself keeps the art's box in both states —
-   it used to switch to the plate's in one frame, which dropped an open bubble 184px onto the
-   figure and showed the plate as a disc the art's size for a frame on the way back. A rounded
-   border box is also a rounded hit-test region, so the plate's corners pass taps through. */
+/* Collapsed, the plate is the target and the ring follows it: aligned with `IconButton
+   variant="quiet"` at the 56dp step — a 50% circle at rest that morphs into a 16dp tonal rounded
+   square under a pointer and draws in to 12dp on press. A percentage reaches the circle without
+   clamping the corner transition. The stage itself keeps the art's box in both states — it used to
+   switch to the plate's in one frame, which dropped an open bubble 184px onto the figure and
+   showed the plate as a disc the art's size for a frame on the way back. A rounded border box is
+   also a rounded hit-test region, so the plate's corners pass taps through. */
 .collapsed .control {
   inset: auto 0 0 auto;
   width: var(--plate);
@@ -135,7 +138,8 @@
 
 .collapsed .control,
 .collapsed .hit {
-  border-radius: 9999px;
+  border-radius: 50%;
+  transition: border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 .figure {
@@ -160,23 +164,26 @@
   transition: transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
-/* The plate: M3's FAB shape and elevation, on the quiet surface tone rather than a container
-   colour — it is a resting companion, not the screen's primary action. Behind the figure, so the
-   character's own silhouette shadow stays on top of it. Collapsed it is a FAB in behaviour too:
-   the control's ripple paints into it (`data-ripple-host`, which clips it), and `::before` is its
-   state layer, lit by the control's hover, focus and press. */
+/* The plate: 56dp container aligned with `IconButton variant="quiet"`'s shape and material
+   semantics (neutral `surface-container-highest` circle at rest, tonal `secondary-container` 16dp
+   square under a pointer with `ripple-secondary`, 12dp pressed square) while keeping floating
+   `e2` elevation over scrolling content. Behind the figure (`z-index: -1` inside `.control`'s
+   isolated stacking context), so the character's own silhouette shadow stays on top of it. */
 .plate {
   position: absolute;
   inset: auto 0 0 auto;
   width: var(--plate);
   height: var(--plate);
-  border-radius: 9999px;
+  border-radius: 50%;
   transform-origin: 50% 50%;
   opacity: 0;
   transform: scale(0.6);
   transition:
     opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 .plate::before {
@@ -186,7 +193,7 @@
   border-radius: inherit;
   background: currentColor;
   opacity: 0;
-  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
+  transition: opacity var(--duration-spring-fast-effects) var(--ease-spring-effects);
 }
 
 .collapsed .plate {
@@ -194,12 +201,27 @@
   transform: none;
   transition:
     opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial);
+    transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient)) var(--ease-spring-default-spatial),
+    background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    color var(--duration-spring-fast-effects) var(--ease-spring-effects),
+    border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
 }
 
 @media (hover: hover) {
+  .collapsed .control:hover .plate {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    --ripple-color: var(--md-sys-color-secondary-ink);
+  }
+
   .collapsed .control:hover .plate::before {
     opacity: var(--md-sys-state-hover-opacity);
+  }
+
+  .collapsed .control:hover:not([data-pressed]),
+  .collapsed .control:hover:not([data-pressed]) .plate,
+  .collapsed .control:hover:not([data-pressed]) .hit {
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -207,8 +229,19 @@
   opacity: var(--md-sys-state-focus-opacity);
 }
 
-/* Last, at the hover rule's specificity: a mouse is always over what it presses. */
-.collapsed[data-pressed] .control .plate::before {
+/* Pressed corners take precedence over hover and hold while the pointer stays down, matching
+   `IconButton`'s M3 Expressive press morph (`data-pressed` comes from `RippleLayer`). */
+.collapsed .control[data-pressed],
+.collapsed .control[data-pressed] .plate,
+.collapsed .control[data-pressed] .hit {
+  border-radius: var(--radius-md);
+}
+
+/* Restore the flat pressed state layer when press waves are disabled, matching `state-layer`. */
+:global(html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']))
+  .collapsed
+  .control:active
+  .plate::before {
   opacity: var(--md-sys-state-pressed-opacity);
 }
 
@@ -246,10 +279,6 @@
     transform: translateY(-3px) scale(1.035);
     filter: drop-shadow(var(--md-sys-elevation-drop-3));
     transition-delay: 0s;
-  }
-
-  .collapsed .control:hover .pose {
-    transform: translateY(-2px) scale(1.06);
   }
 
   /* A press puts the lifted figure back on the ground for the squash below to push into. The rule

@@ -25,7 +25,7 @@ import {
   type MotionSetting,
   type MotionSpeed,
 } from '@/lib/appearance';
-import { ROW_STACK_CLASS, RowButton, SettingsRow, SettingsSection } from './SettingsRow';
+import { ROW_STACK_CLASS, RowButton, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
 import { MOTION_PRESETS, MOTION_EFFECTS } from '@/lib/motionPreferences';
 import { MotionSpeedDialog, MotionEffectsDialog } from './MotionPreferencesDialog';
 
@@ -251,6 +251,9 @@ function DetailLayoutPreview({ layout }: { layout: DetailLayout }) {
  */
 export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
   const layout = useSyncedSetting('detailLayout');
+  const mobilePullDismiss = useSyncedSetting('detailMobilePullDismiss');
+  const mobileSwipeStep = useSyncedSetting('detailMobileSwipeStep');
+  const mobileStepButtons = useSyncedSetting('detailMobileStepButtons');
   const idPrefix = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -332,6 +335,24 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
           </div>
         </div>
       </div>
+      <SwitchRow
+        label="下拉关闭"
+        description="触控时在详情页顶部向下拖动以返回图片列表"
+        checked={mobilePullDismiss}
+        onChange={(on) => changeSyncedSetting('detailMobilePullDismiss', on)}
+      />
+      <SwitchRow
+        label="左右滑动切换"
+        description="触控时在图片上左右滑动以切换上一张或下一张"
+        checked={mobileSwipeStep}
+        onChange={(on) => changeSyncedSetting('detailMobileSwipeStep', on)}
+      />
+      <SwitchRow
+        label="左右切换按钮"
+        description="在窄屏详情页顶部显示上一张与下一张按钮，关闭后内容将上移"
+        checked={mobileStepButtons}
+        onChange={(on) => changeSyncedSetting('detailMobileStepButtons', on)}
+      />
     </SettingsSection>
   );
 }

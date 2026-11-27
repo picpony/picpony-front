@@ -609,8 +609,13 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             onKeyUp={onKeyUp}
             onBlur={() => { endHold(); endPress('cancel'); }}
           >
-            {/* The plate is the collapsed control's ripple host: a quiet resting FAB. */}
-            <span data-ripple-host="" className={cn(styles.plate, 'bg-surface-container-high text-on-surface shadow-e2')} aria-hidden="true" />
+            {/* The plate is the collapsed control's ripple host, aligned with `IconButton variant="quiet"`:
+                neutral circle at rest, tonal rounded square under a pointer, tighter corners on press. */}
+            <span
+              data-ripple-host=""
+              className={cn(styles.plate, 'bg-surface-container-highest text-on-surface forced-boundary shadow-e2')}
+              aria-hidden="true"
+            />
             <span
               className={styles.hit}
               style={hitPath && !collapsed ? { clipPath: `path('${hitPath}')` } : undefined}
@@ -649,10 +654,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             </span>
           </button>
 
-          {/* Tucks the figure into its plate: the chevron that collapses a docked player into its mini
-              form, on the tonal container an action sitting over content takes. */}
+          {/* Tucks the figure into its plate: aligned with the detail page's pinned page actions
+              (`quiet`, neutral disc at rest becoming the tonal rounded square under a pointer). */}
           <div className={cn(styles.tools, 'hover-reveal')} inert={collapsed || undefined}>
-            <IconButton variant="tonal" size="sm" aria-label="收起吉祥物" onClick={collapse} icon={<MdExpandMore />} />
+            <IconButton variant="quiet" size="sm" aria-label="收起吉祥物" onClick={collapse} icon={<MdExpandMore />} />
           </div>
 
           <p className="sr-only" role="status" aria-live="polite">{announcement}</p>

@@ -55,7 +55,7 @@ A close launches in the requesting task, with rect reads before the shell's micr
 - Cancelling movement does not end a held touch. The shared input monitor keeps the original target's state listener until its real end/cancel, window reset or existing touch-safety timeout. The ending retains any other active touches and leaves no listener or pending relay frame behind.
 - Quiet, expiry and abort are distinct outcomes. A still-owned transfer can finish on budget expiry.
 
-Pull uses the existing `DRAG_RESISTANCE_PX` rubber band and subtracts axis-lock slop at claim time. Horizontal picture stepping uses the same slop rule.
+Pull uses the existing `DRAG_RESISTANCE_PX` rubber band and subtracts axis-lock slop at claim time; both opening and settled pull-to-dismiss bindings are gated by `detailMobilePullDismiss`. Horizontal picture stepping uses the same slop rule and is gated by `detailMobileSwipeStep`.
 
 `HeroVelocityTracker` uses a 100 ms horizon, a 40 ms stop rule and a least-squares quadratic fit. A pointerup at the same position updates stopping, not velocity. A release reversing by at least 0.25 px/ms cancels dismissal/stepping regardless of distance.
 
