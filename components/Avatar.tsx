@@ -118,6 +118,7 @@ export default function Avatar({
             fill
             sizes={inline ? `${size}px` : '(min-width: 640px) 128px, 96px'}
             eager={priority}
+            shimmer={false}
             fetchPriority={priority ? 'high' : undefined}
             className="object-cover"
           />

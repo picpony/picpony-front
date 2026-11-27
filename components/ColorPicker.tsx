@@ -9,7 +9,7 @@ import Modal from '@/components/Modal';
 import PalettePreview from '@/components/PalettePreview';
 import PaletteTileFace from '@/components/PaletteTileFace';
 import ScrollArea from '@/components/ScrollArea';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { useScheme, type AccentChoice, type CustomSpec, type PaletteHues } from '@/lib/appearance';
 import { usePaletteTools, type PaletteTools } from '@/lib/paletteLazy';
 import { BRAND_SEED, type AccentPreset } from '@/lib/paletteSpec';
@@ -170,49 +170,11 @@ export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, on
 }
 
 /**
- * The dialog's own placeholder, in the shape of the thing it is waiting for —
- * not a `Spinner`, which is for an action in flight, while a destination whose
- * shape is known loads as that shape. The shape is known to the pixel: the chunk
- * decides the *colours*, not the layout.
+ * Centred M3E loading indicator while the lazy HCT palette chunk arrives, replacing
+ * 70+ individual swatch skeletons inside the modal.
  */
-function PickerSkeleton({ caption, hues, preview }: { caption: string; hues: PaletteHues; preview: boolean }) {
-  return (
-    <div className="flex flex-col gap-5" aria-hidden="true">
-      {preview && (
-        <div className={PREVIEW_DOCK}>
-          <PalettePreview caption={caption} hues={hues} />
-        </div>
-      )}
-      {/* Modal container is `surface-container-high`, so placeholders step up to `highest`. */}
-      <Group label="十六进制"><Skeleton className="h-10 w-40 rounded-sm bg-surface-container-highest" /></Group>
-      <Group label="色相">
-        <div className={RAIL_CLASS}>
-          {HUE_STOPS.map((hue) => <Skeleton key={hue} className="size-8 rounded-full bg-surface-container-highest" />)}
-        </div>
-      </Group>
-      <Group label="明度与彩度">
-        <ScrollArea axis="x" viewportClassName="popover-scrollbar overflow-x-auto">
-          <div className="grid gap-1 p-1 pointer-coarse:gap-2" style={{ gridTemplateColumns: BOARD_COLUMNS }}>
-            <span />
-            {CHROMAS.map((x) => <span key={x} className="text-label-s text-on-surface-variant text-center tabular-nums">{Math.round(x * 100)}%</span>)}
-            {TONES.map((tone) => (
-              <Row key={tone}>
-                <span className="text-label-s text-on-surface-variant self-center pr-2 text-right tabular-nums">{tone}</span>
-                {CHROMAS.map((x) => <Skeleton key={x} className="h-10 rounded-xs bg-surface-container-highest" />)}
-              </Row>
-            ))}
-          </div>
-        </ScrollArea>
-      </Group>
-      {hues === 'multi' && (
-        <Group label="副色相">
-          <div className={MODES_CLASS}>
-            {ACCENT_MODES.map(({ mode }) => <Skeleton key={mode} className={cn(MODE_TILE_HEIGHT, 'rounded-md bg-surface-container-highest')} />)}
-          </div>
-        </Group>
-      )}
-    </div>
-  );
+function PickerSkeleton({ paused }: { paused: boolean }) {
+  return <PageLoadingIndicator size="pane" paused={paused} delay={120} label="正在加载取色器…" className="min-h-80" />;
 }
 
 /**
@@ -614,7 +576,7 @@ function PickerDialog({
           )}
         </div>
       ) : (
-        <PickerSkeleton caption={initialSeed} hues={hues} preview={preview} />
+        <PickerSkeleton paused={!isOpen} />
       )}
     </Modal>
   );

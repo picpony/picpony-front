@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
 import { MdPlayArrow } from '@/components/icons/common';
-import Skeleton from '@/components/Skeleton';
+import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import { ICON } from '@/lib/icons';
 import { useSsrImageLine } from '@/components/ImageLineProvider';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
@@ -126,7 +126,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
     const video = videoRef.current;
     const ready = Boolean(near && video && video.readyState >= 2 && !video.error);
     setFrameReady(ready);
-    if (!ready) setPlaceholderGone(false);
+    setPlaceholderGone(ready);
   }, [near, displayKey]);
 
   const onLoadTimeout = useEffectEvent(() => {
@@ -202,14 +202,16 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
 
   return (
     <>
-      {!placeholderGone && (
-        /* `Skeleton`, not a hand-built shimmer span: one owner for the app's loading
-           language. Square-cornered — the media container already clips this to its own
-           corner. Cross-fades with the frame rather than unmounting on it, so the first
-           frames of an arriving still are never a blank card. */
-        <Skeleton
-          className={`absolute inset-0 block rounded-none transition-opacity spring-default-effects ${
-            frameReady ? 'opacity-0 after:animate-none' : near ? 'opacity-100' : 'opacity-100 after:[animation-play-state:paused]'
+      {!placeholderGone && !attempt.giveUp && (
+        /* Quiet surface well with a centred M3E loading indicator while the still frame
+           decodes; cross-fades with the video frame so arriving tiles are never blank. */
+        <MediaLoadingPlaceholder
+          paused={frameReady || heldOffline}
+          settled={frameReady}
+          instantHide
+          quiet={heldOffline}
+          className={`transition-opacity spring-default-effects ${
+            frameReady ? 'opacity-0' : 'opacity-100'
           }`}
         />
       )}

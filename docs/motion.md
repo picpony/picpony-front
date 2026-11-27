@@ -61,6 +61,7 @@ Role assignments for shared components. Selection rules and preferences are defi
 | Determinate meter, vote ratio | `PROGRESS_SPRING`; tone `fastEffects`; waiters use `COMPONENT_SPRING_MS.progress` |
 | Top loading bar | `layout`, so completion does not wait for a slow progress settle |
 | Indeterminate spinner / loading dots | `--ease-loop`; the off tier keeps only the ring's turn, over a fade instead of a dash |
+| M3E morphing `LoadingIndicator` | 7-shape polygon morph (`650 ms` cadence, `ζ = 0.6, k = 200` spring + `50°` linear / `90°` spring dual rotation) on one shared rAF clock; reduced uses critically damped `ζ = 1.0`; off (and `custom` with `data-motion-feedback="off"`) freezes on `SoftBurst` with a slow `4 s` CSS turn; concealed tab panes and `inert` overlays suspend both rAF and CSS rotation |
 | Skeleton shimmer | `--ease-skeleton-sweep` |
 | Statistics line revelation | `defaultEffects` clip reveal; reduced fades and off paints the final line |
 

@@ -187,7 +187,7 @@ const out = await evalIn(`(async () => {
         }
         continue;
       }
-      if (c.querySelector('.skeleton, [class*="skeleton"]')) { shimmering++; continue; }
+      if (c.querySelector('.skeleton, [class*="skeleton"], [data-loading-placeholder]')) { shimmering++; continue; }
       const img = c.querySelector('img');
       /* No <img> at all means FadeInImage took its give-up branch and is painting the "failed"
          plate — a placeholder, not a blank. Locally every remote image 400s (the documented

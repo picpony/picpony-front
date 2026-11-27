@@ -1,51 +1,12 @@
 'use client';
 
-import Skeleton from '@/components/Skeleton';
-import { EditorPlaceholder } from '@/components/RichTextEditorShell';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 
 /**
- * The post form before the session is known, in the form's own geometry — the kind of post, the
- * two fields with their supporting lines, the editor, the cover and the action row — so the
- * signed-in form lands without moving anything, and the footer waits below it.
+ * Loading placeholder before the post composer resolves (session or full thread read).
+ * Holds the footer (`data-page-loading`) while avoiding an overly intricate form skeleton
+ * that would vanish immediately when the visitor is signed out or unauthorised.
  */
-export default function ComposerSkeleton() {
-  return (
-    <div data-page-loading="" aria-hidden="true" className="space-y-6">
-      <div>
-        <Skeleton className="mb-2 h-5 w-12" />
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-0.5 pointer-coarse:min-h-12">
-          <Skeleton className="h-5 w-20" delay={40} />
-          <Skeleton className="h-5 w-24" delay={60} />
-          <Skeleton className="h-5 w-28" delay={80} />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Skeleton className="h-14 w-full rounded-md" delay={120} />
-        <Skeleton className="h-4 w-24" delay={140} />
-      </div>
-      <div className="space-y-1.5">
-        <Skeleton className="h-[5.25rem] w-full rounded-md" delay={160} />
-        <Skeleton className="h-4 w-56 max-w-full" delay={180} />
-      </div>
-      <div>
-        <Skeleton className="mb-2 h-5 w-12" delay={200} />
-        <EditorPlaceholder size="post" />
-      </div>
-      <div className="space-y-2">
-        <div>
-          <Skeleton className="mb-2 h-5 w-24" delay={220} />
-          <Skeleton className="h-12 w-full rounded-md" delay={240} />
-          <Skeleton className="mt-1.5 h-4 w-48 max-w-full" delay={250} />
-        </div>
-        <div className="flex min-h-12 items-center justify-between gap-4">
-          <Skeleton className="h-5 w-44 max-w-full" delay={255} />
-          <Skeleton className="h-8 w-13 shrink-0 rounded-full" delay={255} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-3 border-t border-outline-variant pt-4">
-        <Skeleton className="h-10 w-16 rounded-full" delay={260} />
-        <Skeleton className="h-10 w-28 rounded-full" delay={280} />
-      </div>
-    </div>
-  );
+export default function ComposerSkeleton({ delay = 0 }: { delay?: number }) {
+  return <PageLoadingIndicator size="page" holdFooter delay={delay} label="正在加载编辑器…" />;
 }

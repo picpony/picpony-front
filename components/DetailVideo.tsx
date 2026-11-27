@@ -11,7 +11,7 @@ import {
   type CSSProperties,
   type SyntheticEvent,
 } from 'react';
-import Skeleton from './Skeleton';
+import { MediaLoadingPlaceholder } from './LoadingIndicator';
 import ErrorRetry from './ErrorRetry';
 import { getHeroMediaPreviewSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
@@ -115,6 +115,7 @@ export default function DetailVideo({
 }: DetailVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewImgRef = useRef<HTMLImageElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
   const sourceRef = useRef({ previewSrc, finalSrc });
   const surfaceIdRef = useRef(surfaceId);
@@ -139,10 +140,24 @@ export default function DetailVideo({
   const [reload, setReload] = useState(0);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const finalFailed = failedSrc === finalSrc;
-  /* Whether a frame is on screen — the placeholder shimmers until then (see `DetailImage`). */
+  /* Whether a frame is on screen — the placeholder holds until then (see `DetailImage`). */
   const [paintedSrc, setPaintedSrc] = useState<string | null>(null);
   const isPainted = paintedSrc === finalSrc;
   const [placeholderGone, setPlaceholderGone] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const finalEl = videoRef.current;
+    const previewVid = previewVideoRef.current;
+    const previewImg = previewImgRef.current;
+    const ready = Boolean(
+      (finalEl && finalEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !finalEl.error) ||
+        (previewVid && previewVid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !previewVid.error) ||
+        (previewImg && previewImg.complete && previewImg.naturalWidth > 0),
+    );
+    if (ready) {
+      setPaintedSrc(finalSrc);
+      setPlaceholderGone(finalSrc);
+    }
+  }, [finalSrc, previewSrc, previewKind, mountFinal, reload]);
   useEffect(() => {
     if (!isPainted) return;
     const timer = window.setTimeout(
@@ -152,6 +167,7 @@ export default function DetailVideo({
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);
   const showFailure = finalFailed;
+  const showPlaceholder = placeholderGone !== finalSrc && !finalFailed && !(heroActive && hasPreview);
 
   const cancelFinalReady = useCallback((owner?: HTMLVideoElement) => {
     const lease = finalFrameLeaseRef.current;
@@ -470,8 +486,17 @@ export default function DetailVideo({
       className="group relative flex-none cursor-default overflow-hidden rounded-lg bg-surface-container-low"
       style={style}
     >
-      {placeholderGone !== finalSrc && !finalFailed && (
-        <Skeleton aria-hidden="true" className="absolute inset-0 rounded-lg" />
+      {showPlaceholder && (
+        <MediaLoadingPlaceholder
+          variant="contained"
+          size="md"
+          paused={isPainted}
+          settled={isPainted}
+          className={cn(
+            'rounded-lg bg-surface-container-low transition-opacity spring-default-effects',
+            isPainted ? 'opacity-0' : 'opacity-100',
+          )}
+        />
       )}
       {finalSrc && mountFinal && !finalFailed && (
         /* **Muted, on every entry path.** It played with sound after a hero flight (the tap is
@@ -520,6 +545,7 @@ export default function DetailVideo({
           />
         ) : (
           <Image
+            ref={previewImgRef}
             src={previewSrc}
             alt=""
             aria-hidden="true"

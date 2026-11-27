@@ -7,7 +7,7 @@ import Modal from './Modal';
 import LottieIcon from './LottieIcon';
 import Logo from './Logo';
 import FollowHeight from './FollowHeight';
-import Skeleton from '@/components/Skeleton';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
@@ -297,20 +297,11 @@ function AuthModal({
               className={cn(switched && 'animate-page-transition')}
             >
               <Suspense fallback={
-                <div role="status" aria-label="加载中…">
+                <div className="flex min-h-72 items-center justify-center">
                   <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
                     {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
                   </h2>
-                  <div aria-hidden="true" className="space-y-4">
-                    <Skeleton className="mb-8 h-8 w-24" />
-                    <Skeleton className="h-14 w-full rounded-md" />
-                    <Skeleton className="h-14 w-full rounded-md" />
-                    <Skeleton className="h-14 w-full rounded-full" />
-                    <div className="flex justify-between pt-2">
-                      <Skeleton className="h-4 w-20" />
-                      <Skeleton className="h-4 w-24" />
-                    </div>
-                  </div>
+                  <LoadingIndicator variant="contained" size="md" label="加载中" paused={!isOpen} />
                 </div>
               }>
                 <AuthForms {...shared} view={view} onSuccess={onClose} />

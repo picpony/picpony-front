@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { MdFullscreen, MdRefresh } from 'react-icons/md';
 import IconButton from './IconButton';
-import Skeleton from './Skeleton';
+import { MediaLoadingPlaceholder } from './LoadingIndicator';
 import ErrorRetry from './ErrorRetry';
 import { getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
@@ -158,6 +158,8 @@ export default function DetailImage({
   onTranslationError,
 }: DetailImageProps) {
   const targetRef = useRef<HTMLDivElement>(null);
+  const finalImgRef = useRef<HTMLImageElement>(null);
+  const previewImgRef = useRef<HTMLImageElement>(null);
   const prefetchLeaseRef = useRef<ImagePrefetchLease | null>(null);
   const sourceRef = useRef({ previewSrc, finalSrc });
   const surfaceIdRef = useRef(surfaceId);
@@ -185,14 +187,30 @@ export default function DetailImage({
   if (ladder.src !== finalSrc) setLadder(current);
   const finalGivenUp = current.attempt.giveUp;
   /* A failure while the device is offline says nothing about the picture: the attempt is held
-     and re-issued when the connection returns, instead of walking the ladder into the plate. */
-  const [heldOffline, setHeldOffline] = useState(false);
+     and re-issued when the connection returns, instead of walking the ladder into the plate.
+     Keyed on `finalSrc` so stepping or a fresh URL never inherits a stale offline hold. */
+  const [heldOfflineSrc, setHeldOfflineSrc] = useState<string | null>(null);
+  const heldOffline = heldOfflineSrc === finalSrc;
 
-  /* Whether anything is on screen yet — the placeholder shimmers until then, and leaves one
+  /* Whether anything is on screen yet — the placeholder holds until then, and leaves one
      fade later (the wall-clock rule: a timer bounding a motion takes the slowest speed). */
   const [painted, setPainted] = useState<{ src: string; at: 'preview' | 'final' } | null>(null);
   const isPainted = painted?.src === finalSrc;
   const [placeholderGone, setPlaceholderGone] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    /* Synchronously suppress the loading placeholder before first paint when either layer is
+       already decoded in browser cache (Hero handoff, revisit, or cached step). Hero readiness
+       callbacks still wait for `decode()` + `rAF` in `markPreviewDecoded`/`markFinalDecoded`. */
+    const finalEl = finalImgRef.current;
+    const previewEl = previewImgRef.current;
+    if (finalEl && decodedIn(finalEl)) {
+      setPainted({ src: finalSrc, at: 'final' });
+      setPlaceholderGone(finalSrc);
+    } else if (previewEl && decodedIn(previewEl)) {
+      setPainted((state) => (state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' }));
+      setPlaceholderGone(finalSrc);
+    }
+  }, [finalSrc, previewSrc, current.generation, current.shown.url, mountFinal]);
   useEffect(() => {
     if (!isPainted) return;
     const timer = window.setTimeout(
@@ -201,7 +219,9 @@ export default function DetailImage({
     );
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);
-  const showPlaceholder = placeholderGone !== finalSrc && !finalGivenUp;
+  /* While a Hero flight carries the card's preview (`heroActive && hasPreview`), the flyer and
+     cached preview own the pixels — never paint a contained disc behind a transparent vector. */
+  const showPlaceholder = placeholderGone !== finalSrc && !finalGivenUp && !(heroActive && hasPreview);
 
   /* The translation layer: decoded before it is shown, so the swap is a fade, not a load. */
   const [translationDecoded, setTranslationDecoded] = useState<string | null>(null);
@@ -458,7 +478,7 @@ export default function DetailImage({
   useEffect(() => {
     if (!heldOffline && !finalGivenUp) return;
     const onOnline = () => {
-      setHeldOffline(false);
+      setHeldOfflineSrc(null);
       finalFailedRef.current = false;
       setLadder((state) => (state.attempt.giveUp ? freshLadder(state.src, state.generation + 1) : { ...state, generation: state.generation + 1 }));
     };
@@ -468,7 +488,7 @@ export default function DetailImage({
 
   const handleFinalError = useCallback(() => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      setHeldOffline(true);
+      setHeldOfflineSrc(finalSrc);
       return;
     }
     setLadder((state) => {
@@ -573,12 +593,23 @@ export default function DetailImage({
       onClick={failedWithNothing ? undefined : onOpen}
     >
       {showPlaceholder && (
-        /* The destination's own shape while nothing is on screen — the box is already at the
-           picture's aspect ratio — rather than a flat plate that pops into a picture. */
-        <Skeleton aria-hidden="true" className="absolute inset-0 rounded-lg" />
+        /* Contained M3E loading indicator in the detail media well while the picture decodes. */
+        <MediaLoadingPlaceholder
+          variant="contained"
+          size="md"
+          paused={isPainted || heldOffline}
+          settled={isPainted}
+          instantHide={hasPreview}
+          quiet={heldOffline}
+          className={cn(
+            'rounded-lg bg-surface-container-low transition-opacity spring-default-effects',
+            isPainted ? 'opacity-0' : 'opacity-100',
+          )}
+        />
       )}
       {finalSrc && mountFinal && !finalGivenUp && (
         <Image
+          ref={finalImgRef}
           key={`${current.generation}:${shown.url}`}
           src={shown.url}
           alt={alt}
@@ -608,6 +639,7 @@ export default function DetailImage({
       )}
       {previewSrc && (
         <Image
+          ref={previewImgRef}
           src={previewSrc}
           alt=""
           aria-hidden="true"

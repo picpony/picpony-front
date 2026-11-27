@@ -17,6 +17,7 @@ import Badge from '@/components/Badge';
 import Card from '@/components/Card';
 import CheckGlyph from '@/components/CheckGlyph';
 import FadeInImage from '@/components/FadeInImage';
+import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import Skeleton from '@/components/Skeleton';
 
 /* Two columns on a narrow container, three from 520px, four from 820px — matching `MasonryGrid`'s
@@ -163,7 +164,7 @@ export const FolderCard = memo(function FolderCard({
               className="object-cover"
             />
           ) : coverPending ? (
-            <Skeleton className="absolute inset-0 rounded-none" />
+            <MediaLoadingPlaceholder />
           ) : (
             <span className="flex h-full items-center justify-center text-on-surface-variant" aria-hidden="true">
               {folder.isMain ? <MdFolderSpecial size={ICON.large} /> : <MdFolder size={ICON.large} />}

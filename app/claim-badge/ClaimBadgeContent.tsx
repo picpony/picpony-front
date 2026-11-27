@@ -9,8 +9,9 @@ import ErrorRetry from '@/components/ErrorRetry';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import SignInRequired from '@/components/SignInRequired';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
-import StatusView, { statusViewBox } from '@/components/StatusView';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
+import Skeleton from '@/components/Skeleton';
+import StatusView from '@/components/StatusView';
 import UserBadge from '@/components/UserBadge';
 import { claimBadge } from '@/lib/api/badges';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -31,19 +32,13 @@ import { cn } from '@/lib/utils';
 const EARNED_BADGE_WAIT_MS = 1500;
 
 /**
- * The card's own shape while the session is read — `StatusView`'s `pane` block, which every state
- * of the card is: its floor and padding, the glyph, the title, the sentence and the button. A
- * status in words for a screen reader (G4-022): the shape itself is hidden from it.
+ * The card while the session is read: a centred M3E loading indicator in `StatusView`'s
+ * `pane` box, holding the footer until the offer or sign-in prompt lands.
  */
 function ClaimSkeleton() {
   return (
     <Card variant="filled" padding="lg">
-      <div role="status" className="sr-only">正在读取登录状态…</div>
-      <div data-page-loading aria-hidden="true" className={statusViewBox('pane')}>
-        <SkeletonCircle size={48} className="mb-6" />
-        <Skeleton className="h-7 w-40 max-w-full" />
-        <Skeleton className="mt-6 h-10 w-32 rounded-full" delay={80} />
-      </div>
+      <PageLoadingIndicator size="pane" holdFooter delay={160} label="正在读取登录状态…" />
     </Card>
   );
 }

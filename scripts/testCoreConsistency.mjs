@@ -584,7 +584,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
     '@/components/Button': { default: 'Button' },
     '@/components/FollowHeight': { default: 'FollowHeight' },
     '@/components/Input': { Input: 'Input' },
-    '@/components/Skeleton': { default: 'Skeleton', SkeletonCircle: 'SkeletonCircle' },
+    '@/components/LoadingIndicator': { PageLoadingIndicator: 'PageLoadingIndicator' },
     '@/components/ErrorRetry': { default: 'ErrorRetry' },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
     // One realm for both modules, so `instanceof Error` holds across them as in the browser.
@@ -671,7 +671,7 @@ for (const kind of ['Image', 'Video']) {
         'next/image': { default: 'Image' },
         'react-icons/md': {},
         './IconButton': { default: 'IconButton' },
-        './Skeleton': { default: 'Skeleton' },
+        './LoadingIndicator': { MediaLoadingPlaceholder: 'MediaLoadingPlaceholder' },
         './ErrorRetry': { default: 'ErrorRetry' },
         '@/lib/hero/geometry': { getHeroMediaResponsiveSizes: () => '', getHeroMediaPreviewSizes: () => '' },
         '@/lib/hero/constants': { HERO_PREVIEW_FALLBACK_MS: 1000 },

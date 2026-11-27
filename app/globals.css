@@ -2189,7 +2189,7 @@ html:is(
    (see the spin note above). The bar and the dots slow, so they still report progress without
    drawing attention.
 
-   **Off only.** The reduced tier leaves all four at their own speed: they carry information
+   **Off only.** The reduced tier leaves all five at their own speed: they carry information
    rather than polish, and slowing them is a concession to "no motion", not to "simple motion". */
 html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off']) {
   /* The ring is the exception. With the dash frozen the arc cannot grow, so it becomes one
@@ -2214,6 +2214,87 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   /* The "加载更多" dots. Slowed rather than stopped, on the same argument. */
   & .animate-dot-bounce {
     animation-duration: 2s;
+  }
+
+  /* Material 3 Expressive morphing indicator: the JS spring morph stands down under `off`,
+     leaving the static SoftBurst shape turning gently so loading still reads as in progress. */
+  & .m3e-loading-shape {
+    animation: m3-progress-rotate 4s linear infinite;
+    transform-origin: center;
+  }
+}
+
+.m3e-loading-paused .m3e-loading-shape,
+[data-m3e-offscreen] .m3e-loading-shape,
+[inert] .m3e-loading-shape,
+[hidden] .m3e-loading-shape,
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+  .m3e-loading-shape,
+[data-tab-pane][data-tab-pane-done] .m3e-loading-shape {
+  animation-play-state: paused !important;
+}
+
+/* 2D container-query sizing for `MediaLoadingPlaceholder`: requires both axes to meet each
+   threshold so tiny thumbnails and thin panoramic strips stay quiet without vertical clipping.
+   Kept inside `@layer components` so explicit size utilities still win when a caller names one. */
+@layer components {
+  .media-loading-placeholder {
+    container-type: size;
+  }
+
+  .media-loading-responsive {
+    display: none;
+  }
+
+  @container (min-width: 3rem) and (min-height: 3rem) {
+    .media-loading-responsive[data-indicator-responsive='default'] {
+      display: inline-flex;
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+  }
+
+  @container (min-width: 7rem) and (min-height: 7rem) {
+    .media-loading-responsive[data-indicator-responsive='default'] {
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+
+  @container (min-width: 14rem) and (min-height: 14rem) {
+    .media-loading-responsive[data-indicator-responsive='default'] {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+  }
+
+  @container (min-width: 24rem) and (min-height: 24rem) {
+    .media-loading-responsive[data-indicator-responsive='default'] {
+      width: 3rem;
+      height: 3rem;
+    }
+  }
+
+  @container (min-width: 3.5rem) and (min-height: 3.5rem) {
+    .media-loading-responsive[data-indicator-responsive='contained'] {
+      display: inline-flex;
+      width: 2rem;
+      height: 2rem;
+    }
+  }
+
+  @container (min-width: 8rem) and (min-height: 8rem) {
+    .media-loading-responsive[data-indicator-responsive='contained'] {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
+  }
+
+  @container (min-width: 20rem) and (min-height: 20rem) {
+    .media-loading-responsive[data-indicator-responsive='contained'] {
+      width: 3rem;
+      height: 3rem;
+    }
   }
 }
 

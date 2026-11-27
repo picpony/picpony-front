@@ -9,7 +9,7 @@ import { MdThumbUp, MdComment, MdRefresh } from '@/components/icons/common';
 import FadeInImage from '@/components/FadeInImage';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
-import Skeleton from '@/components/Skeleton';
+import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
 import { useSession } from '@/lib/hooks';
@@ -53,11 +53,11 @@ const heightFor = (image: PonyImage) => ((image.width || 1) / (image.height || 1
  * slot missing, then grew by ~400px and pushed the whole grid down the moment
  * the real banner arrived.
  */
-export function FeaturedBannerSkeleton() {
+export function FeaturedBannerSkeleton({ paused = false }: { paused?: boolean }) {
   return (
     <div className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
       <div className="relative w-full" style={{ paddingBottom: HEIGHT_NORMAL }}>
-        <Skeleton className="absolute inset-0 rounded-lg" />
+        <MediaLoadingPlaceholder variant="contained" size="md" paused={paused} className="rounded-lg" />
       </div>
     </div>
   );
@@ -172,7 +172,7 @@ export default function FeaturedBanner({
     onActivate: () => clearImageSequence(),
   });
 
-  if (!enabled && !featured) return <FeaturedBannerSkeleton />;
+  if (!enabled && !featured) return <FeaturedBannerSkeleton paused />;
   if (loading) return <FeaturedBannerSkeleton />;
   if (failed) return <FeaturedFailure onRetry={read.refresh} />;
   if (!featured) return null;
@@ -258,6 +258,9 @@ export default function FeaturedBanner({
                    renders inside a streamed boundary cannot put one in the head; the preload
                    scanner finds the eager `<img>` in the HTML anyway.) */
                 eager
+                shimmer={!covered}
+                placeholderVariant="contained"
+                placeholderSize="md"
                 fetchPriority="high"
                 width={featured.width || 1}
                 height={featured.height || 1}

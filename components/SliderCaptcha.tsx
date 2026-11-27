@@ -10,7 +10,7 @@ import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { ICON } from '@/lib/icons';
 import Spinner from './Spinner';
-import Skeleton from './Skeleton';
+import { MediaLoadingPlaceholder } from './LoadingIndicator';
 import ErrorRetry from './ErrorRetry';
 
 interface SliderCaptchaProps {
@@ -481,6 +481,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     <div className="flex w-78 max-w-full flex-col items-center gap-4">
       <div
         ref={containerRef}
+        aria-busy={loading || verifying || undefined}
         className="relative w-full"
         style={{ aspectRatio: `${puzzleWidth} / ${puzzleHeight}` }}
       >
@@ -522,10 +523,13 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
             />
           </div>
         ) : (
-          /* A `Skeleton` in the puzzle's own box, not a `Spinner` inside it: the
-             box is already reserved at the exact aspect ratio, so there is a
-             destination shape to load into. */
-          <Skeleton className="h-full w-full rounded-md" />
+          /* Reserved at the exact puzzle aspect ratio with a centred M3E loading indicator. */
+          <MediaLoadingPlaceholder
+            variant="contained"
+            size="md"
+            paused={!active}
+            className="rounded-md bg-surface-container-highest"
+          />
         )}
       </div>
 

@@ -6,7 +6,7 @@ import Button from '@/components/Button';
 import ErrorRetry from '@/components/ErrorRetry';
 import { useAuthModal } from '@/components/AuthModal';
 import PageHeader from '@/components/PageHeader';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { useSession } from '@/lib/hooks';
@@ -15,7 +15,6 @@ import { retrySettingsSync, useSettingsSyncState } from '@/lib/settingsSync';
 import AccountPane from './AccountPane';
 import PersonalisePane from './PersonalisePane';
 import PreferencesPane from './PreferencesPane';
-import { ROW_CLASS } from './SettingsRow';
 import {
   dropQueuedSettingsAddress,
   isSettingsTab,
@@ -144,34 +143,12 @@ function SettingsScreen() {
   );
 }
 
-/** The screen's own shape while the session is unknown: header, tab row, rows. */
+/** Header plus a centred M3E loading indicator while the session resolves. */
 function SettingsSkeleton() {
   return (
-    <div className="max-w-4xl mx-auto" data-page-loading>
+    <div className="max-w-4xl mx-auto">
       <PageHeader title="设置" />
-      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
-        {['w-8', 'w-8', 'w-12'].map((width, index) => (
-          <div key={index} className="px-4">
-            <Skeleton className={`h-4 ${width}`} />
-          </div>
-        ))}
-      </div>
-      {[5, 4].map((rows, section) => (
-        <section key={section} className="mb-8">
-          <Skeleton className="mb-4 h-6 w-28 rounded-xs" />
-          <div>
-            {Array.from({ length: rows }, (_, row) => (
-              <div key={row} className={ROW_CLASS}>
-                <div className="min-w-0 flex-1">
-                  <Skeleton className="h-4 w-32 rounded-xs" />
-                  <Skeleton className="mt-1.5 h-3.5 w-48 max-w-full rounded-xs" />
-                </div>
-                <Skeleton className="h-8 w-13 shrink-0 rounded-full" />
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+      <PageLoadingIndicator size="pane" holdFooter delay={160} label="正在加载设置…" />
     </div>
   );
 }

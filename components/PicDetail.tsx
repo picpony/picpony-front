@@ -41,6 +41,7 @@ import PageBack from '@/components/PageBack';
 import ScrollArea from '@/components/ScrollArea';
 import { useShareToContact } from '@/components/ShareToContactDialog';
 import Skeleton from '@/components/Skeleton';
+import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import TagInfoModal from '@/components/TagInfoModal';
 import TagList, {
   BATCH_SIZES,
@@ -399,7 +400,11 @@ function DetailSkeleton({ gutter = '', page = false }: { gutter?: string; page?:
           className="image-detail-media-pane relative flex min-h-[32dvh] w-full items-start justify-center px-4 pt-2 pb-4 sm:px-6 md:min-h-[48dvh]"
         >
           {/* Inset matches the pane's own `px-4 pt-2 pb-4 sm:px-6` padding. */}
-          <Skeleton className="image-detail-media-skeleton absolute inset-x-4 top-2 bottom-4 rounded-lg sm:inset-x-6" delay={90} />
+          <MediaLoadingPlaceholder
+            variant="contained"
+            size="md"
+            className="image-detail-media-skeleton absolute inset-x-4 top-2 bottom-4 rounded-lg bg-surface-container-low sm:inset-x-6"
+          />
         </div>
         <div className="image-detail-body image-detail-stage-body flex flex-col bg-transparent p-4 sm:p-6">
           <div className="image-detail-body-inner mx-auto flex w-full max-w-5xl flex-col gap-5">

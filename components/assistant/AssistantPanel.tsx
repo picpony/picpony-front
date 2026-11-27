@@ -15,7 +15,7 @@ import MarkdownRenderer, { warmMarkdownDocument } from '@/components/MarkdownRen
 import { Textarea } from '@/components/Input';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useSession, useMediaQuery, readToken } from '@/lib/hooks';
 import { MEDIA } from '@/lib/constants';
@@ -133,19 +133,25 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   const messages = history ? state.messages : state.messages.slice(-6);
   const canSend = state.available && !state.loading && !state.busy && !state.task?.pending_id && quota.data?.user_enabled !== false && (state.pending !== null || quota.data?.remaining !== 0);
   const text = state.pending?.message ?? state.draft;
-  const thread = state.loading && !state.messages.length ? (
-    <div role="status" aria-label="正在加载对话" className="flex flex-col gap-3">
-      <div className="space-y-1.5" aria-hidden="true">
-        <Skeleton className="h-4 w-4/5" />
-        <Skeleton className="h-4 w-3/5" />
-      </div>
-      <Skeleton className="ml-auto h-10 w-3/5 rounded-lg" />
-      <div className="space-y-1.5" aria-hidden="true">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-2/3" />
-      </div>
-    </div>
+  /* Treat `!state.ready` as initial loading too so the opening render before `restore()` never
+     flashes the empty-conversation prompt for one frame. */
+  const isThreadLoading =
+    (state.loading || !state.ready) &&
+    !state.error &&
+    !state.messages.length &&
+    !state.pending &&
+    !state.live.length &&
+    !state.streaming;
+  const hasTrailing = Boolean(
+    state.pending ||
+    state.live.length > 0 ||
+    state.streaming ||
+    state.task ||
+    state.receipts.length > 0 ||
+    state.error,
+  );
+  const thread = isThreadLoading ? (
+    <PageLoadingIndicator size="inline" indicatorSize="md" paused={!isOpen} delay={120} label="正在加载对话…" />
   ) : state.ready && !state.available ? (
     <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在设置的账户页签中查看开关与额度" size="inline" />
   ) : !messages.length && !state.pending ? (
@@ -241,7 +247,7 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
           leaving the panel's height empty under it. An auto margin, not `justify-content`, so a
           long thread still scrolls to its first message. */}
       <div className="flex min-h-full flex-col gap-3">
-        <div className="mt-auto">{thread}</div>
+        <div className={isThreadLoading && !hasTrailing ? 'my-auto' : 'mt-auto'}>{thread}</div>
         {/* **The message you just sent is a message, not a status card.** Until the request
             returns, the text exists only as `pending` — it is not in `messages` — so this is the
             one row that has to stand in for it. It takes the tail of the thread as your own

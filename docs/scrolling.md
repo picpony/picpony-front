@@ -57,7 +57,7 @@ Programmatic scrolling follows the square root of travel over the shared 360–1
 
 A cold load must not hide already painted SSR cards when the motion engine arrives. Decide engine availability once at mount and skip cascade when the route already owns entrance.
 
-`FadeInImage` cross-fades its placeholder on the image's clock and removes it only after the slowest-speed watchdog. No visible card may become blank during a page turn.
+`FadeInImage` cross-fades its M3E loading placeholder (`MediaLoadingPlaceholder`) on the image's clock and removes it only after the slowest-speed watchdog, pausing its morph clock while off-screen or fading out. No visible card may become blank during a page turn.
 
 ## Tab offsets
 

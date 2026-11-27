@@ -12,7 +12,11 @@ import {
   resolveNextAttempt,
   type LoadAttempt,
 } from '@/lib/imageLoader';
-import Skeleton from '@/components/Skeleton';
+import {
+  MediaLoadingPlaceholder,
+  type LoadingIndicatorSize,
+  type LoadingIndicatorVariant,
+} from '@/components/LoadingIndicator';
 import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { useSsrImageLine } from '@/components/ImageLineProvider';
@@ -63,14 +67,18 @@ function whenNear(target: Element, root: Element | null, onNear: () => void): ()
 interface FadeInImageProps extends ImageProps {
   eager?: boolean;
   /**
-   * Draw the shimmer underneath while the image decodes. On by default; turn it
+   * Draw the loading placeholder underneath while the image decodes. On by default; turn it
    * off where the parent already paints something meaningful behind the image
-   * (an avatar ring, a cropper stage).
+   * (an avatar ring, a cropper stage, or an opaque spoiler cover).
    *
    * Not named `placeholder` — `next/image` owns that prop name for its own
    * blur/empty modes, and shadowing it makes the interface unassignable.
    */
   shimmer?: boolean;
+  /** Override the inner M3E indicator style (e.g. `contained` on focal banners). */
+  placeholderVariant?: LoadingIndicatorVariant;
+  /** Override the inner M3E indicator size (omit for 2D `@container` responsive sizing). */
+  placeholderSize?: LoadingIndicatorSize;
   /**
    * The layered ladder for a Derpibooru-family URL (derpicdn / trixiebooru, or one already
    * wrapped by the worker or the CDN): the optimizer on the raw URL, then the visitor's image
@@ -143,6 +151,8 @@ function FadeInImageInner({
   onLoad,
   eager = false,
   shimmer = true,
+  placeholderVariant = 'default',
+  placeholderSize,
   useLayers,
   proxyThumb = false,
   onGiveUp,
@@ -313,9 +323,9 @@ function FadeInImageInner({
     const img = imgRef.current;
     const loaded = Boolean(img?.complete && img.naturalWidth > 0);
     setIsLoaded(loaded);
-    /* The placeholder's own latch resets here rather than in an effect of its own:
-       it is the same fact as `isLoaded`. */
-    if (!loaded) setPlaceholderGone(false);
+    /* Mirror `loaded` directly: a cached picture skips mounting the placeholder altogether
+       instead of holding a hidden one for a full fade, while a new attempt restores it. */
+    setPlaceholderGone(loaded);
   }, [displayKey]);
 
   /* **The cosmetic updates are transitions** — a picture's fade starting, its placeholder leaving,
@@ -340,22 +350,22 @@ function FadeInImageInner({
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden contain-paint">
       {shimmer && !placeholderGone && (
-        /* `Skeleton`, not a hand-built span: one owner for the app's loading
-           language. `rounded-none` because the media container already clips
-           this to its own corner.
+        /* Quiet surface well with a centred M3E morphing indicator instead of a scanning
+           shimmer beam. Kept as `img`'s immediate `aria-hidden="true"` sibling so route
+           snapshots (`lib/pageSnapshot.ts`) hide it immediately on decoded clones.
 
-           It **cross-fades with the image rather than unmounting on
-           `isLoaded`** — unmounting it in the same commit that flips the image
-           to full opacity left the fade starting from 0 with nothing behind it,
-           so the first frames of an arriving image were a blank card. */
-        <Skeleton
-          /* The sweep runs only while it can be seen. Far from the viewport (not yet `armed`)
-             the compositor will not take an animation it cannot see, so each one ticked on the
-             main thread instead — a style pass per frame for every placeholder of a page still
-             loading, forty-odd on a phone (R12-010); and once the picture is in, the sweep
-             under it is stopped rather than left running through the fade. */
-          className={`absolute inset-0 block rounded-none transition-opacity spring-default-effects ${
-            isLoaded ? 'opacity-0 after:animate-none' : armed ? 'opacity-100' : 'opacity-100 after:[animation-play-state:paused]'
+           It **cross-fades with the image rather than unmounting on `isLoaded`** — unmounting
+           it in the same commit that flips the image to full opacity left the fade starting
+           from 0 with nothing behind it, so the first frames of an arriving image were blank. */
+        <MediaLoadingPlaceholder
+          variant={placeholderVariant}
+          size={placeholderSize}
+          paused={isLoaded || heldOffline}
+          settled={isLoaded}
+          instantHide={paintAsServed}
+          quiet={heldOffline}
+          className={`transition-opacity spring-default-effects ${
+            isLoaded ? 'opacity-0' : 'opacity-100'
           }`}
         />
       )}
