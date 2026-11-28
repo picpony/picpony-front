@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { MdAdd, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
-import Checkbox from '@/components/Checkbox';
 import Collapse from '@/components/Collapse';
 import DataTable from '@/components/DataTable';
 import FollowHeight from '@/components/FollowHeight';
@@ -16,12 +15,15 @@ import { showToast } from '@/components/Toast';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { formatDateTime } from '@/lib/format';
 import {
+  coerceThinkingForProvider,
   fieldsPayload,
-  providerFields,
+  GATEWAY,
+  GEMINI_API_BASE,
+  normalizeProviderType,
+  providerFieldsFor,
   providerPayload,
   providerValues,
   quotaFields,
-  GATEWAY,
   type Values,
 } from '@/lib/adminSiteTools/model';
 import * as api from '@/lib/api/adminSiteTools';
@@ -60,22 +62,26 @@ function ProviderEditor({
     probe = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const busy = save.busy || probe.busy;
-  const candidates = Array.isArray(values.model_candidates) ? values.model_candidates : [];
-  /* The saved row's catalogue and results (the list is re-read after every probe). */
+  const providerType = normalizeProviderType(values.provider_type);
+  const fields = providerFieldsFor(providerType);
+  /* The saved row's discovered catalogue (re-read after discovery). */
   const catalog = provider ? provider.model_catalog : [];
   const modelRows = usePagedRows(
-    catalog.map((name) => ({ name, result: provider?.benchmarks[name] })),
+    catalog.map((name) => ({ name })),
     provider?.id ?? 'new',
     20,
   );
   const unsaved =
     !provider ||
+    providerType !== provider.provider_type ||
     values.base_url !== provider.base_url ||
-    values.models_url !== provider.models_url ||
     Boolean(values.api_key) ||
     values.clear_key === true;
   const change = (next: Values) => {
-    setValues(next);
+    const nextType = normalizeProviderType(next.provider_type);
+    const adjusted =
+      nextType !== providerType ? { ...next, thinking: coerceThinkingForProvider(nextType, next.thinking) } : next;
+    setValues(adjusted);
     setErrors({});
     setNotice('');
   };
@@ -119,15 +125,30 @@ function ProviderEditor({
           d.ok
             ? kind === 'discover'
               ? `已获取 ${d.result.models?.length ?? 0} 个模型`
-              : `${model} 可用，耗时 ${d.result.latency_ms} 毫秒`
-            : `${kind === 'discover' ? '获取模型列表' : `测速 ${model} `}失败：${d.failure}`,
+              : `${model} 连接正常，耗时 ${d.result.latency_ms} 毫秒`
+            : `${kind === 'discover' ? '获取模型列表' : `测试 ${model} `}失败：${d.failure}`,
         ),
-      kind === 'discover' ? '模型列表获取失败' : '模型测速失败',
+      kind === 'discover' ? '模型列表获取失败' : '模型连接测试失败',
       /* Every finished probe changes the global revision; the next one names the new list's. */
       { key: model ?? kind, onCommitted: () => assistantQuery.invalidate(token) },
     );
   };
-  const preset = () => change({ ...values, name: values.name || '绘云彩彩中转站', base_url: GATEWAY, models_url: '' });
+  const presetGateway = () =>
+    change({
+      ...values,
+      name: values.name || '绘云彩彩中转站',
+      provider_type: 'openai_compatible',
+      base_url: GATEWAY,
+      thinking: coerceThinkingForProvider('openai_compatible', values.thinking),
+    });
+  const presetGemini = () =>
+    change({
+      ...values,
+      name: values.name || 'Google Gemini',
+      provider_type: 'gemini',
+      base_url: GEMINI_API_BASE,
+      thinking: coerceThinkingForProvider('gemini', values.thinking),
+    });
   return (
     <AdminForm
       aria-label={provider ? `编辑模型配置 ${provider.name}` : '添加模型配置'}
@@ -141,17 +162,20 @@ function ProviderEditor({
             ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}`
             : '尚未保存密钥。'}
         </AdminNote>
-        <Button type="button" variant="tonal" onClick={preset} disabled={busy}>
-          使用绘云彩彩中转站
-        </Button>
-        <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="tonal" onClick={presetGateway} disabled={busy}>
+            使用绘云彩彩中转站
+          </Button>
+          <Button type="button" variant="tonal" onClick={presetGemini} disabled={busy}>
+            使用 Gemini 官方接口
+          </Button>
+        </div>
+        <SettingsFields fields={fields} values={values} onChange={change} busy={busy} errors={errors} />
       </div>
       {provider && (
         <div className="space-y-4">
-          <SectionHeading as="h3">候选模型</SectionHeading>
-          <AdminNote>
-            自动选择模式下，将在所选候选中选用延迟最低的模型；未勾选候选则在全部测速成功的模型中选择。
-          </AdminNote>
+          <SectionHeading as="h3">可用模型列表</SectionHeading>
+          <AdminNote>获取模型列表后可直接点「选用」填入上方模型名称，或点「测试」检查单个模型的连通性。</AdminNote>
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -166,16 +190,29 @@ function ProviderEditor({
             >
               获取模型列表
             </Button>
-            <Button
-              type="button"
-              variant="text"
-              disabled={busy || !candidates.length}
-              onClick={() => change({ ...values, model_candidates: [] })}
-            >
-              清空选择
-            </Button>
+            {typeof values.model === 'string' && values.model.trim() && (
+              <Button
+                type="button"
+                variant="surface"
+                loading={probe.pendingKeys.has(values.model.trim())}
+                disabled={busy || unsaved || !provider.has_key}
+                onClick={() => {
+                  const target = String(values.model).trim();
+                  confirmThen(
+                    '确认测试模型',
+                    `确定要向「${target}」发送一次测试请求吗？测试可能消耗服务额度。`,
+                    () => run('benchmark', target),
+                    { tone: 'filled' },
+                  );
+                }}
+              >
+                测试当前模型
+              </Button>
+            )}
           </div>
-          {unsaved && <p className="text-body-s text-on-surface-variant">请先保存当前地址与密钥，再获取模型或测速。</p>}
+          {unsaved && (
+            <p className="text-body-s text-on-surface-variant">请先保存当前接口协议、地址与密钥，再获取模型或测试。</p>
+          )}
           <AdminListAnchor>
             <DataTable
               rows={modelRows.rows}
@@ -184,24 +221,6 @@ function ProviderEditor({
               empty="尚未获取模型列表"
               columns={[
                 {
-                  key: 'select',
-                  header: '选择',
-                  leading: true,
-                  render: (r) => (
-                    <Checkbox
-                      aria-label={`选择模型 ${r.name}`}
-                      checked={candidates.includes(r.name)}
-                      disabled={busy}
-                      onChange={(checked) =>
-                        change({
-                          ...values,
-                          model_candidates: checked ? [...candidates, r.name] : candidates.filter((x) => x !== r.name),
-                        })
-                      }
-                    />
-                  ),
-                },
-                {
                   key: 'name',
                   header: '模型',
                   primary: true,
@@ -209,55 +228,47 @@ function ProviderEditor({
                   render: (r) => (
                     <span className="inline-flex flex-wrap items-center gap-2">
                       <span>{r.name}</span>
-                      {provider.selected_model === r.name && (
+                      {values.model === r.name && (
                         <Badge tone="success" size="sm">
-                          使用中
+                          当前选用
                         </Badge>
                       )}
                     </span>
                   ),
-                },
-                /* Three states: untested, a duration, and 可用 for a success that reported none (G2-003). */
-                {
-                  key: 'latency',
-                  header: '测试结果',
-                  width: 'auto',
-                  className: 'tabular-nums',
-                  render: (r) =>
-                    r.result ? (
-                      <Badge size="md" tone={r.result.ok ? 'success' : 'error'}>
-                        {r.result.ok
-                          ? r.result.latency === null
-                            ? '可用'
-                            : `${r.result.latency} 毫秒`
-                          : (r.result.failure ?? '不可用')}
-                      </Badge>
-                    ) : (
-                      <span className="text-on-surface-variant">未测速</span>
-                    ),
                 },
                 {
                   key: 'actions',
                   header: '操作',
                   actions: true,
                   render: (r) => (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="text"
-                      loading={probe.pendingKeys.has(r.name)}
-                      disabled={busy || unsaved || !provider.has_key}
-                      onClick={() =>
-                        confirmThen(
-                          '确认测速',
-                          `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`,
-                          () => run('benchmark', r.name),
-                          { tone: 'filled' },
-                        )
-                      }
-                    >
-                      测速
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant={values.model === r.name ? 'text' : 'tonal'}
+                        disabled={busy || values.model === r.name}
+                        onClick={() => change({ ...values, model: r.name })}
+                      >
+                        {values.model === r.name ? '已选用' : '选用'}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="text"
+                        loading={probe.pendingKeys.has(r.name)}
+                        disabled={busy || unsaved || !provider.has_key}
+                        onClick={() =>
+                          confirmThen(
+                            '确认测试模型',
+                            `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`,
+                            () => run('benchmark', r.name),
+                            { tone: 'filled' },
+                          )
+                        }
+                      >
+                        测试
+                      </Button>
+                    </>
                   ),
                 },
               ]}
@@ -357,11 +368,15 @@ function Providers({ token, read }: { token: string; read: ReturnType<typeof use
                 primary: true,
                 className: 'wrap-anywhere',
                 render: (p) => (
-                  <>
-                    {p.name}
-                    <br />
-                    <span className="text-body-s text-on-surface-variant">{p.selected_model || '未选择模型'}</span>
-                  </>
+                  <span className="inline-flex flex-col items-start gap-1">
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <span>{p.name}</span>
+                      <Badge tone="neutral" size="sm">
+                        {p.provider_type === 'gemini' ? 'Gemini' : 'OpenAI'}
+                      </Badge>
+                    </span>
+                    <span className="text-body-s text-on-surface-variant">{p.model || '未选择模型'}</span>
+                  </span>
                 ),
               },
               {

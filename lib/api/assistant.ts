@@ -4,8 +4,10 @@ import { ApiError } from './errors';
 import { api, apiRequest, seg, type ApiOptions } from './http';
 import { parseSemanticQuery } from './semantic';
 import {
+  MAX_THINKING,
   obj,
   parseState,
+  str,
   uuid,
   type AssistantClientCall,
   type AssistantPending,
@@ -141,7 +143,7 @@ export async function pollAssistantTask(
     task: {
       id: string;
       status: string;
-      result: { reply: string; ok: boolean };
+      result: { reply: string; thinking?: string; ok: boolean };
       client_calls: AssistantClientCall[];
     };
   }>('POST', '/me/assistant/state', token, {
@@ -154,6 +156,7 @@ export async function pollAssistantTask(
     id: task.id,
     status: task.status,
     reply: task.result.reply,
+    thinking: str(task.result.thinking, MAX_THINKING),
     ok: task.result.ok,
     client_calls: task.client_calls,
   };
@@ -254,6 +257,8 @@ function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
   switch (event.type) {
     case 'reset':
       return { type: 'reset' };
+    case 'thinking':
+      return typeof event.text === 'string' ? { type: 'thinking', text: event.text } : null;
     case 'delta':
       return typeof event.text === 'string' ? { type: 'delta', text: event.text } : null;
     case 'tool':
@@ -263,7 +268,11 @@ function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
     case 'paused':
       return { type: 'paused' };
     case 'done':
-      return { type: 'done', reply: typeof event.reply === 'string' ? event.reply : '' };
+      return {
+        type: 'done',
+        reply: typeof event.reply === 'string' ? event.reply : '',
+        thinking: typeof event.thinking === 'string' ? event.thinking : '',
+      };
     case 'failed':
       return { type: 'failed' };
     default:

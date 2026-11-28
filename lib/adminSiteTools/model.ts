@@ -137,6 +137,10 @@ export function fieldsPayload(fields: FieldSpec[], values: Values): Row {
     }
     const s = typeof value === 'string' ? value.trim() : '';
     if (f.kind === 'number') {
+      if (!s && f.optional) {
+        result[f.key] = null;
+        continue;
+      }
       const n = f.decimal
         ? /^\d+(\.\d+)?$/.test(s)
           ? Number(s)
@@ -338,18 +342,73 @@ export interface AssistantConfig<P> {
   defaultPrompt: string;
   providers: P[];
 }
+
+export type ProviderType = 'openai_compatible' | 'gemini';
+export type OpenAiThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type ThinkingLevel = OpenAiThinkingLevel | GeminiThinkingLevel;
+
+export const PROVIDER_TYPE_OPTIONS: { value: ProviderType; label: string }[] = [
+  { value: 'openai_compatible', label: 'OpenAI 兼容' },
+  { value: 'gemini', label: 'Gemini 原生 API' },
+];
+
+export const OPENAI_THINKING_OPTIONS: { value: OpenAiThinkingLevel; label: string }[] = [
+  { value: 'off', label: '关闭' },
+  { value: 'minimal', label: '极低（minimal）' },
+  { value: 'low', label: '低（low）' },
+  { value: 'medium', label: '中（medium）' },
+  { value: 'high', label: '高（high）' },
+  { value: 'xhigh', label: '超高（xhigh）' },
+  { value: 'max', label: '最高（max）' },
+];
+
+export const GEMINI_THINKING_OPTIONS: { value: GeminiThinkingLevel; label: string }[] = [
+  { value: 'minimal', label: '最低（minimum）' },
+  { value: 'low', label: '低（low）' },
+  { value: 'medium', label: '中（medium）' },
+  { value: 'high', label: '高（high）' },
+  { value: 'xhigh', label: '超高（xhigh）' },
+];
+
+export const MAX_OUTPUT_K = 512;
+export const TOKENS_PER_K = 1024;
+export const MAX_TIMEOUT_SECONDS = 180;
+
+export function normalizeProviderType(raw: unknown): ProviderType {
+  return raw === 'gemini' ? 'gemini' : 'openai_compatible';
+}
+
+export function thinkingOptionsFor(providerType: ProviderType): { value: ThinkingLevel; label: string }[] {
+  return providerType === 'gemini' ? GEMINI_THINKING_OPTIONS : OPENAI_THINKING_OPTIONS;
+}
+
+export function normalizeThinking(providerType: ProviderType, raw: unknown): ThinkingLevel {
+  const s = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  const canonical = s === 'minimum' ? 'minimal' : s;
+  const options = thinkingOptionsFor(providerType);
+  if (options.some((o) => o.value === canonical)) return canonical as ThinkingLevel;
+  if (providerType === 'gemini') {
+    if (canonical === 'max') return 'xhigh';
+    return 'minimal';
+  }
+  return 'off';
+}
+
+export function coerceThinkingForProvider(providerType: ProviderType, current: unknown): ThinkingLevel {
+  return normalizeThinking(providerType, current);
+}
+
 /** One provider's form (`assistant_providers::Fields`), and the key as a replacement or a clear. */
 export interface ProviderDraft {
   name: string;
+  provider_type: ProviderType;
   base_url: string;
-  models_url: string;
   model: string;
-  model_selection: 'auto' | 'manual';
-  model_candidates: string[];
   timeout_ms: number;
   max_tokens: number;
-  temperature: number;
-  thinking: 'off' | 'low';
+  temperature: number | null;
+  thinking: ThinkingLevel;
   system_prompt: string;
   enabled: boolean;
   is_primary: boolean;
@@ -357,99 +416,132 @@ export interface ProviderDraft {
   api_key: string;
   clear_key: boolean;
 }
-export const providerFields: FieldSpec[] = [
-  { key: 'name', label: '配置名称', max: 80 },
-  { key: 'base_url', label: '模型服务地址', kind: 'url', helper: '须为 HTTPS 地址' },
-  {
-    key: 'models_url',
-    label: '模型列表地址',
-    kind: 'url',
-    optional: true,
-    helper: '留空时由服务推导列表地址',
-  },
-  {
-    key: 'model_selection',
-    label: '模型选择',
-    options: [
-      { value: 'auto', label: '自动（候选中延迟最低）' },
-      { value: 'manual', label: '固定模型' },
-    ],
-  },
-  { key: 'model', label: '固定模型', optional: true, max: 160, helper: '「固定模型」时必填' },
-  {
-    key: 'api_key',
-    label: '助手模型密钥',
-    kind: 'password',
-    optional: true,
-    max: 400,
-    helper: '留空保留已保存的密钥',
-  },
-  { key: 'timeout_ms', label: '请求超时（毫秒）', kind: 'number', min: 1000, max: 30000 },
-  { key: 'max_tokens', label: '最大输出长度（Token）', kind: 'number', min: 64, max: 4096 },
-  { key: 'temperature', label: '随机程度', kind: 'number', min: 0, max: 2, decimal: true },
-  {
-    key: 'thinking',
-    label: '思考模式',
-    options: [
-      { value: 'off', label: '关闭' },
-      { value: 'low', label: '轻度' },
-    ],
-  },
-  {
-    key: 'fallback_rank',
-    label: '备用顺序',
-    kind: 'number',
-    min: 0,
-    max: 100,
-    helper: '数字越小越优先',
-  },
-  {
-    key: 'system_prompt',
-    label: '角色提示词',
-    kind: 'textarea',
-    optional: true,
-    max: 12000,
-    helper: '留空使用默认角色词',
-  },
-  { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '启用前须已保存密钥' },
-  {
-    key: 'is_primary',
-    label: '设为主模型',
-    kind: 'boolean',
-    helper: '已有主模型时，原主模型改为备用',
-  },
-  { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
-];
+
+export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
+  return [
+    { key: 'name', label: '配置名称', max: 80 },
+    {
+      key: 'provider_type',
+      label: '接口协议',
+      options: PROVIDER_TYPE_OPTIONS,
+      helper:
+        providerType === 'gemini'
+          ? '原生 Gemini REST API（使用 x-goog-api-key 认证与 thinkingConfig）'
+          : 'OpenAI Chat Completions 兼容接口（使用 Bearer 认证）',
+    },
+    {
+      key: 'base_url',
+      label: '模型服务地址',
+      kind: 'url',
+      helper:
+        providerType === 'gemini'
+          ? '须为 HTTPS 地址，例如 https://generativelanguage.googleapis.com/v1beta'
+          : '须为 HTTPS 地址，模型列表地址将由服务自动推导',
+    },
+    {
+      key: 'model',
+      label: '模型名称',
+      optional: true,
+      max: 160,
+      helper: '启用配置时必填；也可先保存地址与密钥后点击「获取模型列表」直接选用',
+    },
+    {
+      key: 'api_key',
+      label: '助手模型密钥',
+      kind: 'password',
+      optional: true,
+      max: 400,
+      helper: '留空保留已保存的密钥',
+    },
+    {
+      key: 'timeout_seconds',
+      label: '请求超时（秒）',
+      kind: 'number',
+      min: 1,
+      max: MAX_TIMEOUT_SECONDS,
+      helper: `1～${MAX_TIMEOUT_SECONDS} 秒`,
+    },
+    {
+      key: 'max_tokens_k',
+      label: '最大输出长度（K）',
+      kind: 'number',
+      min: 1,
+      max: MAX_OUTPUT_K,
+      helper: `单位为 K（1K = ${TOKENS_PER_K} Token），最大 ${MAX_OUTPUT_K}K；思考内容会占用输出额度`,
+    },
+    {
+      key: 'temperature',
+      label: '温度',
+      kind: 'number',
+      min: 0,
+      max: 2,
+      decimal: true,
+      optional: true,
+      helper: '留空则不传递温度参数，使用模型默认值',
+    },
+    {
+      key: 'thinking',
+      label: '思考等级',
+      options: thinkingOptionsFor(providerType),
+    },
+    {
+      key: 'fallback_rank',
+      label: '备用顺序',
+      kind: 'number',
+      min: 0,
+      max: 100,
+      helper: '数字越小越优先',
+    },
+    {
+      key: 'system_prompt',
+      label: '角色提示词',
+      kind: 'textarea',
+      optional: true,
+      max: 12000,
+      helper: '留空使用默认角色词',
+    },
+    { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '启用前须填写模型名称并已保存密钥' },
+    {
+      key: 'is_primary',
+      label: '设为主模型',
+      kind: 'boolean',
+      helper: '已有主模型时，原主模型改为备用',
+    },
+    { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
+  ];
+}
+export const providerFields: FieldSpec[] = providerFieldsFor('openai_compatible');
 export const GATEWAY = 'https://ai.picpony.top:10443/v1';
-/** The form's values for a provider (or a new one), the candidates kept beside them. */
+export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+/** The form's values for a provider (or a new one), using seconds for timeout and K for max tokens. */
 export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_key'> | null): Values {
   const p = source ?? {
     name: '',
+    provider_type: 'openai_compatible' as ProviderType,
     base_url: '',
-    models_url: '',
     model: '',
-    model_selection: 'auto',
-    model_candidates: [],
-    timeout_ms: 15000,
-    max_tokens: 800,
-    temperature: 0.7,
-    thinking: 'off',
+    timeout_ms: 30_000,
+    max_tokens: 8 * TOKENS_PER_K,
+    temperature: null,
+    thinking: 'off' as ThinkingLevel,
     system_prompt: '',
     enabled: false,
     is_primary: false,
     fallback_rank: 0,
   };
+  const providerType = normalizeProviderType(p.provider_type);
+  const timeoutSeconds = Math.max(1, Math.min(MAX_TIMEOUT_SECONDS, Math.round(p.timeout_ms / 1000)));
+  const maxTokensK = Math.max(1, Math.min(MAX_OUTPUT_K, Math.round(p.max_tokens / TOKENS_PER_K)));
   return {
     name: p.name,
+    provider_type: providerType,
     base_url: p.base_url,
-    models_url: p.models_url,
     model: p.model,
-    model_selection: p.model_selection,
-    model_candidates: [...p.model_candidates],
-    timeout_ms: String(p.timeout_ms),
-    max_tokens: String(p.max_tokens),
-    temperature: String(p.temperature),
-    thinking: p.thinking,
+    timeout_seconds: String(timeoutSeconds),
+    max_tokens_k: String(maxTokensK),
+    temperature: p.temperature === null || p.temperature === undefined ? '' : String(p.temperature),
+    thinking: normalizeThinking(providerType, p.thinking),
     system_prompt: p.system_prompt,
     enabled: p.enabled,
     is_primary: p.is_primary,
@@ -458,27 +550,28 @@ export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_ke
     clear_key: false,
   };
 }
+
 export function providerPayload(values: Values): ProviderDraft {
-  const body = fieldsPayload(providerFields, values);
-  const candidates = [...new Set(strings(values.model_candidates ?? []))];
+  const providerType = normalizeProviderType(values.provider_type);
+  const body = fieldsPayload(providerFieldsFor(providerType), values);
   const problems: Record<string, string> = {};
-  if (candidates.some((m) => !m.trim() || m.length > 160)) problems.model = '候选模型名称无效';
-  if (body.model_selection === 'manual' && !text(body.model)) problems.model = '固定模型时请填写模型名称';
+  const model = text(body.model);
+  if (body.enabled === true && !model) problems.model = '启用配置前请填写模型名称';
+  if (providerType === 'gemini' && model && (!/^[A-Za-z0-9._-]+$/.test(model) || model.includes('..'))) {
+    problems.model = 'Gemini 模型名称只能包含字母、数字、点、短横线或下划线';
+  }
   if (text(body.base_url) && !text(body.base_url).startsWith('https://')) problems.base_url = '请填写 HTTPS 地址';
-  if (text(body.models_url) && !text(body.models_url).startsWith('https://')) problems.models_url = '请填写 HTTPS 地址';
   if (body.clear_key && body.api_key) problems.api_key = '清除密钥时请先清空新密钥';
   if (Object.keys(problems).length) throw new FormProblem(problems);
   return {
     name: text(body.name),
+    provider_type: providerType,
     base_url: text(body.base_url),
-    models_url: text(body.models_url),
-    model: text(body.model),
-    model_selection: body.model_selection === 'manual' ? 'manual' : 'auto',
-    model_candidates: candidates,
-    timeout_ms: Number(body.timeout_ms),
-    max_tokens: Number(body.max_tokens),
-    temperature: Number(body.temperature),
-    thinking: body.thinking === 'low' ? 'low' : 'off',
+    model,
+    timeout_ms: Number(body.timeout_seconds) * 1000,
+    max_tokens: Number(body.max_tokens_k) * TOKENS_PER_K,
+    temperature: body.temperature === null ? null : Number(body.temperature),
+    thinking: normalizeThinking(providerType, body.thinking),
     system_prompt: text(body.system_prompt),
     enabled: body.enabled === true,
     is_primary: body.is_primary === true,

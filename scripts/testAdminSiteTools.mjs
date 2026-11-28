@@ -54,14 +54,12 @@ const cloud = {
 };
 const provider = {
   name: '彩彩',
+  provider_type: 'openai_compatible',
   base_url: 'https://models.example.test/v1',
-  models_url: '',
   model: 'pony',
-  model_selection: 'auto',
-  model_candidates: ['pony'],
   api_key: '',
-  timeout_ms: '15000',
-  max_tokens: '800',
+  timeout_seconds: '15',
+  max_tokens_k: '8',
   temperature: '0',
   thinking: 'off',
   system_prompt: '温柔地回答',
@@ -169,12 +167,57 @@ test('numeric settings reject blank, fractions, exponent notation and unsafe val
     0,
   );
   assert.equal(model.providerPayload(provider).temperature, 0);
+  assert.equal(model.providerPayload({ ...provider, temperature: '' }).temperature, null);
+  assert.equal(model.providerPayload({ ...provider, timeout_seconds: '180' }).timeout_ms, 180_000);
+  assert.equal(model.providerPayload({ ...provider, max_tokens_k: '512' }).max_tokens, 524_288);
+  assert.equal(model.providerPayload({ ...provider, enabled: false, model: '' }).model, '');
+  assert.throws(() => model.providerPayload({ ...provider, enabled: true, model: '' }));
+  assert.equal(model.providerPayload({ ...provider, thinking: 'max' }).thinking, 'max');
+  const geminiDraft = model.providerPayload({
+    ...provider,
+    provider_type: 'gemini',
+    base_url: 'https://generativelanguage.googleapis.com/v1beta',
+    model: 'gemini-2.5-pro',
+    thinking: 'xhigh',
+    temperature: '',
+  });
+  assert.equal(geminiDraft.provider_type, 'gemini');
+  assert.equal(geminiDraft.thinking, 'xhigh');
+  assert.equal(geminiDraft.temperature, null);
+  assert.equal(model.normalizeThinking('gemini', 'minimum'), 'minimal');
+  assert.equal(model.coerceThinkingForProvider('gemini', 'off'), 'minimal');
+  assert.equal(model.coerceThinkingForProvider('gemini', 'max'), 'xhigh');
+  assert.throws(() =>
+    model.providerPayload({ ...provider, provider_type: 'gemini', model: 'bad/model', thinking: 'minimal' }),
+  );
+  assert.throws(() => model.providerPayload({ ...provider, provider_type: 'gemini', thinking: 'off' }));
+  assert.throws(() => model.providerPayload({ ...provider, provider_type: 'gemini', thinking: 'max' }));
   for (const [key, val] of [
-    ['timeout_ms', '999'],
-    ['max_tokens', '4097'],
+    ['timeout_seconds', '0'],
+    ['timeout_seconds', '181'],
+    ['max_tokens_k', '0'],
+    ['max_tokens_k', '513'],
     ['temperature', '2.1'],
   ])
     assert.throws(() => model.providerPayload({ ...provider, [key]: val }));
+  const roundtrip = model.providerValues({
+    name: 'Gemini',
+    provider_type: 'gemini',
+    base_url: 'https://generativelanguage.googleapis.com/v1beta',
+    model: 'gemini-2.5-flash',
+    timeout_ms: 180_000,
+    max_tokens: 524_288,
+    temperature: null,
+    thinking: 'minimal',
+    system_prompt: '',
+    enabled: true,
+    is_primary: false,
+    fallback_rank: 1,
+  });
+  assert.equal(roundtrip.timeout_seconds, '180');
+  assert.equal(roundtrip.max_tokens_k, '512');
+  assert.equal(roundtrip.temperature, '');
+  assert.equal(roundtrip.thinking, 'minimal');
 });
 test('URL, origin, IP and date validation fails before submitting any setting', () => {
   for (const s of [
@@ -287,7 +330,13 @@ test('announcement preserves original HTML/newline contract and rejects incomple
   assert.throws(() => model.announcementPayload({ version: '', title: '更新', content: '内容' }));
 });
 test('config secrets never become form defaults, clear and replace are mutually exclusive', () => {
-  assert.equal(model.providerValues({ ...provider, api_key: 'server-secret' }).api_key, '');
+  assert.equal(
+    model.providerValues({
+      ...model.providerPayload(provider),
+      api_key: 'server-secret',
+    }).api_key,
+    '',
+  );
   assert.throws(() => model.providerPayload({ ...provider, api_key: 'fixture-secret', clear_key: true }));
   assert.throws(() =>
     model.cloudPayload({
@@ -672,26 +721,22 @@ test('typed reads map the handler DTOs without fallbacks', async () => {
   assert.deepEqual(plain(rates.rules), [{ action: 'search', label: 'search', max: '3', window: '60', key_type: 'ip' }]);
   assert.deepEqual(plain(rates.locks), [{ id: 4, username: 'u', attempts: 5, until: null }]);
 });
-test('model benchmarks accept fractional milliseconds and a failure carries its static code', async () => {
+test('provider models read returns discovered catalogue and model while probeFailure formats error codes', async () => {
   const f = fixture(() => ({
     revision: 3,
     models: ['a', 'b'],
-    benchmarks: {
-      a: { ok: true, latency_ms: 10.25 },
-      b: { ok: false, failure: { code: 'MODEL_TIMEOUT', upstream_status: null } },
-      c: { ok: true },
-    },
-    selected_model: 'a',
-    catalog_checked_at: null,
+    model: 'a',
+    catalog_checked_at: '2026-11-28T00:00:00Z',
   }));
   const result = await f.api.readProviderModels('fixture-token', 'p1');
   assert.equal(f.calls[0].path, '/admin/assistant/providers/p1/models');
-  assert.equal(result.benchmarks.a.latency, 10.25);
-  assert.equal(result.benchmarks.b.ok, false);
-  assert.equal(result.benchmarks.b.failure, '请求超时');
-  /* G2-003: a working model that did not report its duration is still a working model. */
-  assert.equal(result.benchmarks.c.ok, true);
-  assert.equal(result.benchmarks.c.latency, null);
+  assert.deepEqual(plain(result), {
+    revision: 3,
+    models: ['a', 'b'],
+    model: 'a',
+    checkedAt: '2026-11-28T00:00:00Z',
+  });
+  assert.equal(f.api.probeFailure({ code: 'MODEL_TIMEOUT', upstream_status: null }), '请求超时');
   assert.equal(f.api.probeFailure({ code: 'MODEL_RATE_LIMIT', upstream_status: 429 }), '模型服务限流（HTTP 429）');
   assert.equal(f.api.probeFailure({ code: 'SOMETHING_NEW' }), '检查失败（SOMETHING_NEW）');
 });

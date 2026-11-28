@@ -306,7 +306,7 @@ test('a confirmation names every destructive target accepted by dispatch', () =>
 });
 
 /* --- Issued client calls (`state` / turn `client_calls`, `assistant_actions::issued_calls`) --- */
-const { clientCallAction, parseState } = await import('../lib/assistant/protocol.ts');
+const { clientCallAction, parseState, MAX_REPLY, MAX_THINKING } = await import('../lib/assistant/protocol.ts');
 const { CLIENT_CALLS } = await import('../lib/assistant/runner.ts');
 const issued = (fields = {}) => ({
   id: '11111111-2222-4333-8444-555555555555',
@@ -426,4 +426,19 @@ test("interact_page reads its control from the claim's request ({control: the mo
     request: { control },
   });
   assert.equal(otherPage.error, 'manual_control');
+});
+
+test('assistant state parses persisted thinking traces and raises reply/thinking caps for 512K models', () => {
+  assert.equal(MAX_REPLY, 131_072);
+  assert.equal(MAX_THINKING, 131_072);
+  const state = parseState({
+    messages: [
+      { id: 'm1', role: 'user', content: '帮我查任务', thinking: '   ' },
+      { id: 'm2', role: 'assistant', content: '已经查好了', thinking: '先读取任务列表，再汇总奖励' },
+    ],
+    tasks: [],
+    client_calls: [],
+  });
+  assert.equal('thinking' in state.messages[0], false, 'blank thinking is omitted');
+  assert.equal(state.messages[1].thinking, '先读取任务列表，再汇总奖励');
 });

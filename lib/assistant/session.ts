@@ -49,7 +49,8 @@ import {
 } from './protocol';
 
 /** One piece of the live reply, in the order the turn produced it. */
-export type AssistantLiveBlock = { type: 'text'; text: string } | { type: 'tool'; tool: AssistantLiveTool };
+export type AssistantLiveBlock =
+  { type: 'thinking'; text: string } | { type: 'text'; text: string } | { type: 'tool'; tool: AssistantLiveTool };
 
 export interface AssistantSnapshot {
   ready: boolean;
@@ -92,8 +93,8 @@ const INITIAL: AssistantSnapshot = {
 
 /** One status request at a time, no faster than the backend asks (≥ 500ms). */
 const POLL_MS = 900;
-/** Past the backend's own budget (90s run, +120s after a dispatch) the panel stops waiting and offers 核对任务. */
-const POLL_LIMIT_MS = 150_000;
+/** Past the backend's own budget (up to 180s per model call / 360s turn) the panel stops waiting and offers 核对任务. */
+const POLL_LIMIT_MS = 360_000;
 const ENDED: Record<string, string> = {
   failed: '彩彩 AI 未能完成此次请求，请稍后再试',
   cancelled: '已取消此操作',
@@ -164,9 +165,16 @@ export function createAssistantSession(
     snapshot = { ...snapshot, ...next };
     listeners.forEach((listener) => listener());
   };
-  const add = (role: AssistantMessage['role'], content: string, id = '', tools?: AssistantLiveTool[]) => {
+  const add = (
+    role: AssistantMessage['role'],
+    content: string,
+    id = '',
+    tools?: AssistantLiveTool[],
+    thinking?: string,
+  ) => {
     if ((!content && !tools?.length) || (id && snapshot.messages.some((message) => message.id === id))) return;
     const message: AssistantMessage = { role, content, id };
+    if (thinking?.trim()) message.thinking = thinking.trim();
     if (tools?.length) message.tools = tools;
     publish({ messages: [...snapshot.messages, message].slice(-MAX_HISTORY) });
   };
@@ -209,6 +217,16 @@ export function createAssistantSession(
     return tools.map((tool, at) => (at === index ? { ...tool, ...event, ok: event.ok ?? tool.ok } : tool));
   }
 
+  /** Append a thinking delta to the trailing thinking block, starting a new block after text or tools. */
+  function appendThinking(live: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
+    if (!text) return live;
+    const last = live[live.length - 1];
+    if (last?.type === 'thinking') {
+      return [...live.slice(0, -1), { type: 'thinking', text: last.text + text }];
+    }
+    return [...live, { type: 'thinking', text }];
+  }
+
   /** Append a delta to the text run it belongs to, starting a new run after a tool call. */
   function appendText(live: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
     if (!text) return live;
@@ -243,7 +261,9 @@ export function createAssistantSession(
       taskId,
       (event) => {
         if (stream.signal.aborted || disposed) return;
-        if (event.type === 'delta') {
+        if (event.type === 'thinking') {
+          publish({ live: appendThinking(snapshot.live, event.text) });
+        } else if (event.type === 'delta') {
           publish({
             streaming: snapshot.streaming + event.text,
             live: appendText(snapshot.live, event.text),
@@ -264,13 +284,13 @@ export function createAssistantSession(
             ),
           });
         } else if (event.type === 'reset') {
-          /* A new model round (or a fallback attempt) starts. The trailing partial text belongs
-           to the round that just ended; text before a tool call and every tool call stay, so a
-           tool no longer disappears when the next round begins. */
-          const last = snapshot.live[snapshot.live.length - 1];
+          /* A new model round (or a fallback attempt) starts. Any trailing partial thinking/text
+           belongs to the attempt that just reset; earlier tool calls and content before them stay. */
+          let end = snapshot.live.length;
+          while (end > 0 && snapshot.live[end - 1].type !== 'tool') end -= 1;
           publish({
             streaming: '',
-            live: last?.type === 'text' ? snapshot.live.slice(0, -1) : snapshot.live,
+            live: end === snapshot.live.length ? snapshot.live : snapshot.live.slice(0, end),
           });
         }
         /* The turn is over or parked: stop reading rather than hold a keep-alive connection open.
@@ -347,8 +367,13 @@ export function createAssistantSession(
       }
       const finished = turn.status === 'done';
       const text = finished ? usableReply(turn.reply) : '';
+      const liveThinking = snapshot.live
+        .flatMap((block) => (block.type === 'thinking' ? [block.text] : []))
+        .join('\n\n')
+        .trim();
+      const thinking = finished ? turn.thinking.trim() || liveThinking : '';
       const tools = snapshot.live.flatMap((block) => (block.type === 'tool' ? [block.tool] : []));
-      if (text || tools.length) add('assistant', text, '', tools);
+      if (text || tools.length) add('assistant', text, '', tools, thinking || undefined);
       publish({
         task: null,
         streaming: '',

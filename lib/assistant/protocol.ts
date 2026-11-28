@@ -44,6 +44,8 @@ export interface AssistantMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  /** Optional model reasoning/thinking trace shown in a collapsible disclosure above the reply. */
+  thinking?: string;
   /** Tool calls this page saw for the reply; the persisted history does not carry them. */
   tools?: AssistantLiveTool[];
 }
@@ -74,6 +76,7 @@ export interface AssistantTaskPoll {
   id: string;
   status: string;
   reply: string;
+  thinking: string;
   ok: boolean;
   client_calls: AssistantClientCall[];
 }
@@ -91,11 +94,12 @@ export interface AssistantLiveTool {
  */
 export type AssistantStreamEvent =
   | { type: 'reset' }
+  | { type: 'thinking'; text: string }
   | { type: 'delta'; text: string }
   | { type: 'tool'; id: string; name: string; arguments: JsonObject }
   | { type: 'tool_result'; id: string; name: string; ok: boolean }
   | { type: 'paused' }
-  | { type: 'done'; reply: string }
+  | { type: 'done'; reply: string; thinking?: string }
   | { type: 'failed' };
 /** The turn the panel is following. `pending_id` names the confirmation the card decides. */
 export interface AssistantTask {
@@ -113,7 +117,8 @@ export interface AssistantState {
 
 /** The legacy chat bridge's limit (`assistant_legacy::chat`). */
 export const MAX_MESSAGE = 2000;
-export const MAX_REPLY = 12000;
+export const MAX_REPLY = 131_072;
+export const MAX_THINKING = 131_072;
 export const MAX_HISTORY = 40;
 /** Turn states that are still moving on the server. */
 export const ACTIVE_STATES: readonly string[] = ['queued', 'running', 'waiting_confirmation'];
@@ -160,15 +165,17 @@ export function clientCallAction(call: AssistantClientCall): AssistantAction {
   };
 }
 
-/** `state {}`: `{messages:[{id,role,content,created_at}], tasks:[{id,status}], client_calls}` — ordered by the backend. */
+/** `state {}`: `{messages:[{id,role,content,thinking,created_at}], tasks:[{id,status}], client_calls}` — ordered by the backend. */
 export function parseState(raw: JsonObject): AssistantState {
-  const messages = (raw.messages as { id: string; role: string; content: string }[])
+  const messages = (raw.messages as { id: string; role: string; content: string; thinking?: unknown }[])
     .slice(-MAX_HISTORY)
-    .flatMap((m) =>
-      m.role === 'user' || m.role === 'assistant'
-        ? [{ id: m.id, role: m.role, content: m.content } satisfies AssistantMessage]
-        : [],
-    );
+    .flatMap((m) => {
+      if (m.role !== 'user' && m.role !== 'assistant') return [];
+      const thinking = typeof m.thinking === 'string' && m.thinking.trim() ? m.thinking.slice(0, MAX_THINKING) : '';
+      const entry: AssistantMessage = { id: m.id, role: m.role, content: m.content };
+      if (thinking) entry.thinking = thinking;
+      return [entry];
+    });
   const tasks = (raw.tasks as { id: string; status: string }[]).map((t) => ({
     id: t.id,
     status: t.status,

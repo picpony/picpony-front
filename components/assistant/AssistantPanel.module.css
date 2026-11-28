@@ -2,40 +2,53 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  height: min(64dvh, 560px);
-  gap: 16px;
+  height: min(72dvh, 640px);
 }
+
 .messages {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
 .sheet {
   margin-bottom: var(--picpony-assistant-keyboard, 0px);
-  max-height: min(85dvh, var(--picpony-assistant-height, 85dvh));
+  max-height: min(88dvh, var(--picpony-assistant-height, 88dvh));
 }
+
 .sheetBody {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 0;
 }
+
 .sheet .conversation {
   height: auto;
-  flex: 1 1 64dvh;
+  flex: 1 1 70dvh;
   min-height: 0;
   max-height: 100%;
 }
-/* The desktop side panel is full-height, so the conversation stretches instead of the
-   dialog's capped height; the keyboard insets below are a phone's concern. */
+
+/* The desktop side panel is full-height, so the conversation stretches edge-to-edge
+   and owns its own header, stream and composer gutters. */
 .sideBody {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 8px 24px 16px;
+  padding: 0;
 }
+
 .sideBody .conversation {
   height: auto;
   flex: 1;
   min-height: 0;
+}
+
+@media (forced-colors: active) {
+  .composerFocused {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }

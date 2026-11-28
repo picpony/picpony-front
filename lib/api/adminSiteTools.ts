@@ -40,9 +40,13 @@ import {
   ratePayload,
   optionalCount,
   epochStamp,
+  normalizeProviderType,
+  normalizeThinking,
   type Row,
   type Values,
   type RateRule,
+  type ProviderType,
+  type ThinkingLevel,
   type AssistantConfig,
   type ProviderDraft,
 } from '@/lib/adminSiteTools/model';
@@ -612,26 +616,17 @@ export const saveAiQuota = (token: string, revision: number, values: Values) =>
 
 // ---- 彩彩 AI：模型配置（主备，最多 8 个） -------------------------------------------
 
-export interface Benchmark {
-  ok: boolean;
-  latency: number | null;
-  failure: string | null;
-}
 export interface Provider {
   id: string;
   name: string;
+  provider_type: ProviderType;
   base_url: string;
-  models_url: string;
   model: string;
-  selected_model: string;
-  model_selection: 'auto' | 'manual';
-  model_candidates: string[];
   model_catalog: string[];
-  benchmarks: Record<string, Benchmark>;
   timeout_ms: number;
   max_tokens: number;
-  temperature: number;
-  thinking: 'off' | 'low';
+  temperature: number | null;
+  thinking: ThinkingLevel;
   system_prompt: string;
   enabled: boolean;
   is_primary: boolean;
@@ -643,17 +638,10 @@ export interface Provider {
   updated_at: string;
 }
 export const PROVIDER_LIMIT = 8;
-interface WireProvider extends Omit<Provider, 'benchmarks' | 'model_selection' | 'thinking'> {
-  model_selection: string;
-  thinking: string;
-  model_benchmarks: Record<
-    string,
-    {
-      ok: boolean;
-      latency_ms?: number | null;
-      failure?: { code: string; upstream_status: number | null } | null;
-    }
-  >;
+interface WireProvider extends Omit<Provider, 'provider_type' | 'thinking' | 'temperature'> {
+  provider_type?: string;
+  thinking?: string;
+  temperature?: number | null;
 }
 
 /** A failed probe's static code as a sentence: the backend never forwards the upstream's body. */
@@ -668,7 +656,6 @@ const FAILURES: Record<string, string> = {
   MODEL_RATE_LIMIT: '模型服务限流',
   MODEL_UNAVAILABLE: '模型服务暂不可用',
   MODEL_ENDPOINT: '接口地址无法使用',
-  MODEL_CATALOG_URL_REQUIRED: '请填写模型列表地址',
   MODEL_INVALID_CATALOG: '模型列表格式无法识别',
   MODEL_CATALOG_TOO_LARGE: '模型列表过大',
   MODEL_EMPTY_COMPLETION: '模型返回空回复',
@@ -689,22 +676,13 @@ export function probeFailure(failure: { code: string; upstream_status?: number |
   return failure.upstream_status ? `${sentence}（HTTP ${failure.upstream_status}）` : sentence;
 }
 function provider(row: WireProvider): Provider {
-  const { model_benchmarks, ...rest } = row;
+  const providerType = normalizeProviderType(row.provider_type);
+  const temperature = typeof row.temperature === 'number' && Number.isFinite(row.temperature) ? row.temperature : null;
   return {
-    ...rest,
-    model_selection: row.model_selection === 'manual' ? 'manual' : 'auto',
-    thinking: row.thinking === 'low' ? 'low' : 'off',
-    benchmarks: Object.fromEntries(
-      Object.entries(model_benchmarks).map(([name, b]) => [
-        name,
-        {
-          ok: b.ok,
-          /* A working model that did not report its duration is still a working model (G2-003). */
-          latency: b.ok && typeof b.latency_ms === 'number' ? b.latency_ms : null,
-          failure: b.ok ? null : probeFailure(b.failure),
-        },
-      ]),
-    ),
+    ...row,
+    provider_type: providerType,
+    temperature,
+    thinking: normalizeThinking(providerType, row.thinking),
   };
 }
 function assistantConfig(d: {
@@ -764,20 +742,18 @@ export async function removeAssistantProvider(token: string, revision: number, p
   );
 }
 
-/** `GET …/models`: the last successful catalogue and benchmarks, read without contacting the model. */
+/** `GET …/models`: the last successful catalogue, read without contacting the model. */
 export async function readProviderModels(token: string, providerId: string, signal?: AbortSignal) {
   const d = await api<{
     revision: number;
     models: string[];
-    benchmarks: WireProvider['model_benchmarks'];
-    selected_model: string;
+    model?: string;
     catalog_checked_at: string | null;
   }>('GET', `/admin/assistant/providers/${seg(providerId)}/models`, { token, signal, ...READ });
   return {
     revision: d.revision,
     models: d.models,
-    benchmarks: provider({ model_benchmarks: d.benchmarks } as WireProvider).benchmarks,
-    selected: d.selected_model,
+    model: typeof d.model === 'string' ? d.model : '',
     checkedAt: d.catalog_checked_at,
   };
 }
