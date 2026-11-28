@@ -13,11 +13,7 @@ import type { ImageLine } from '@/lib/route';
 import { buildImageUrl, getRawImageUrl } from '@/lib/imageLoader';
 import { createServerMemo } from '@/lib/serverMemo';
 import { readBlockFilters, readPublicBlacklist } from '@/lib/blockFilters.server';
-import {
-  withBlockFiltersFingerprint,
-  type BlockFilters,
-  type PublicBlacklist,
-} from '@/lib/blockFilters';
+import { withBlockFiltersFingerprint, type BlockFilters, type PublicBlacklist } from '@/lib/blockFilters';
 import { isWithheldBy } from '@/lib/imageFilters';
 
 /**
@@ -148,8 +144,7 @@ const read = createServerMemo<[string, string, number, BlockFilters, PublicBlack
         headers: { 'User-Agent': 'PicPony/1.0' },
       });
       if (!res.ok) {
-        if (res.status === 429 || res.status >= 500)
-          upstreamBackoffUntil = Date.now() + backoffFrom(res);
+        if (res.status === 429 || res.status >= 500) upstreamBackoffUntil = Date.now() + backoffFrom(res);
         void res.body?.cancel().catch(() => {});
         return null;
       }
@@ -214,16 +209,14 @@ const readFeaturedMemo = createServerMemo<[string], Omit<FeaturedSeed, 'hidden'>
         headers: { 'User-Agent': 'PicPony/1.0' },
       });
       if (!res.ok) {
-        if (res.status === 429 || res.status >= 500)
-          upstreamBackoffUntil = Date.now() + backoffFrom(res);
+        if (res.status === 429 || res.status >= 500) upstreamBackoffUntil = Date.now() + backoffFrom(res);
         void res.body?.cancel().catch(() => {});
         return null;
       }
       const body = (await res.json()) as { image?: unknown };
       const image = body?.image;
       const key = featuredKey(undefined, contentFilter);
-      if (image === null || image === undefined)
-        return { key, data: null, generatedAt: Date.now(), contentFilter };
+      if (image === null || image === undefined) return { key, data: null, generatedAt: Date.now(), contentFilter };
       const row = image as PonyImage;
       if (typeof row !== 'object' || !Number.isSafeInteger(row.id)) return null;
       return { key, data: row, generatedAt: Date.now(), contentFilter };
@@ -242,15 +235,11 @@ const readFeaturedMemo = createServerMemo<[string], Omit<FeaturedSeed, 'hidden'>
 export async function readFeatured(fp: string): Promise<FeaturedSeed | null> {
   const unknownDevice = fp === UNMIRRORABLE_FINGERPRINT;
   const settings = parseBrowsingFingerprint(unknownDevice ? undefined : fp);
-  const [seed, filters] = await Promise.all([
-    readFeaturedMemo(settings.contentFilter),
-    readBlockFilters(),
-  ]);
+  const [seed, filters] = await Promise.all([readFeaturedMemo(settings.contentFilter), readBlockFilters()]);
   if (!seed) return null;
   /* An unmirrorable fingerprint means this device's hidden tags are unknown here: render no
      picture rather than one the user may have hidden, and let the browser decide. */
-  const hidden =
-    unknownDevice || (seed.data ? isWithheldBy(seed.data.tags, settings, filters) : false);
+  const hidden = unknownDevice || (seed.data ? isWithheldBy(seed.data.tags, settings, filters) : false);
   return { ...seed, hidden };
 }
 
@@ -307,20 +296,14 @@ function rowOnLine(image: PonyImage, tier: 0 | 1 | 2): PonyImage {
   return {
     ...trimRow(image),
     representations: Object.fromEntries(
-      Object.entries(image.representations ?? {}).map(([name, url]) => [
-        name,
-        onLine(url as string, tier),
-      ]),
+      Object.entries(image.representations ?? {}).map(([name, url]) => [name, onLine(url as string, tier)]),
     ) as unknown as PonyImage['representations'],
     view_url: onLine(image.view_url, tier),
   };
 }
 
 /** The featured seed with its row on the document's image line — see `seedOnImageLine`. */
-export function featuredOnImageLine(
-  seed: FeaturedSeed | null,
-  line: ImageLine | null,
-): FeaturedSeed | null {
+export function featuredOnImageLine(seed: FeaturedSeed | null, line: ImageLine | null): FeaturedSeed | null {
   if (!seed?.data) return seed;
   return { ...seed, data: rowOnLine(seed.data, TIER_OF[line ?? 'picpony']) };
 }

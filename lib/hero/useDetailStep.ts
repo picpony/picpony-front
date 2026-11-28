@@ -194,9 +194,7 @@ export function useDetailStep({
       pendingSwapRef.current = null;
       const element = contentRef.current;
       const active = document.activeElement;
-      const focusWasInside = Boolean(
-        element && active instanceof HTMLElement && element.contains(active),
-      );
+      const focusWasInside = Boolean(element && active instanceof HTMLElement && element.contains(active));
       flushSync(() => {
         setView((current) => ({ ...current, id: swap.id }));
       });
@@ -305,11 +303,7 @@ export function useDetailStep({
       const outcome = begin(fromId, toId, direction, preview, speed);
       if (outcome !== 'busy') return outcome === 'started';
       await imageHeroController.waitForFlightIdle();
-      if (
-        !mountedRef.current ||
-        viewRef.current.target !== fromId ||
-        optionsRef.current.isBlocked()
-      ) {
+      if (!mountedRef.current || viewRef.current.target !== fromId || optionsRef.current.isBlocked()) {
         return false;
       }
       return begin(fromId, toId, direction, preview, 0) === 'started';
@@ -337,11 +331,7 @@ export function useDetailStep({
       } finally {
         if (mountedRef.current) setLoading(null);
       }
-      if (
-        !mountedRef.current ||
-        viewRef.current.target !== fromId ||
-        optionsRef.current.isBlocked()
-      ) {
+      if (!mountedRef.current || viewRef.current.target !== fromId || optionsRef.current.isBlocked()) {
         return false;
       }
       return start(fromId, toId, direction, preview, 0);
@@ -357,8 +347,7 @@ export function useDetailStep({
       const around = imageNeighbours(fromId, source);
       if (!around.inSequence) return Promise.resolve(false);
       const toId = direction === 1 ? around.next : around.previous;
-      const preview =
-        toId === null ? undefined : (source?.preview?.(toId) ?? peekImageDetail(toId)?.image);
+      const preview = toId === null ? undefined : (source?.preview?.(toId) ?? peekImageDetail(toId)?.image);
       if (toId !== null && preview) return start(fromId, toId, direction, preview, speed);
 
       /* Something must be read first. The page returns to rest under the finger while the arrow
@@ -372,9 +361,7 @@ export function useDetailStep({
         /* Already reading this way from this picture: this is the step that read will make — one
            picture, however often it is asked for while the page is on its way. It used to refuse,
            so every swipe during a slow page read did nothing at all. */
-        return pending.direction === direction && pending.fromId === fromId
-          ? pending.step
-          : Promise.resolve(false);
+        return pending.direction === direction && pending.fromId === fromId ? pending.step : Promise.resolve(false);
       }
       if (toId === null && !(direction === 1 ? around.canLoadNext : around.canLoadPrevious)) {
         return Promise.resolve(false);
@@ -516,8 +503,7 @@ export function useDetailStep({
     return () => {
       cancelWarm();
       for (const id of ids) {
-        if (id !== viewRef.current.target && id !== viewRef.current.id)
-          cancelImageDetailPrefetch(id);
+        if (id !== viewRef.current.target && id !== viewRef.current.id) cancelImageDetailPrefetch(id);
       }
     };
   }, [settledNext, settledPrevious, view.stepping]);

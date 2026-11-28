@@ -31,11 +31,7 @@ export default function PicPage({ params }: { params: Params }) {
 
 async function SeededPicDetail({ params }: { params: Params }) {
   const { id } = await params;
-  const [jar, policy, seed] = await Promise.all([
-    cookies(),
-    readRoutePolicyOnce(),
-    readImageDetailSeed(id),
-  ]);
+  const [jar, policy, seed] = await Promise.all([cookies(), readRoutePolicyOnce(), readImageDetailSeed(id)]);
   /* On the line this document renders with — a forced policy, else the device's cookie — so the
      server's `<img src>` and the hydrating render name the same URL. */
   const line = ssrImageLine(policy, jar.get(COOKIE_KEYS.imageLine)?.value);

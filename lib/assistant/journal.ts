@@ -78,9 +78,7 @@ export function parseExchange(text: string | null): PendingExchange | null {
 export function parsePendingChat(text: string | null): PendingChat | null {
   try {
     const value = obj(JSON.parse(text || 'null'));
-    return typeof value.message === 'string' &&
-      value.message.length <= MAX_MESSAGE &&
-      str(value.requestId, 100)
+    return typeof value.message === 'string' && value.message.length <= MAX_MESSAGE && str(value.requestId, 100)
       ? { message: value.message, requestId: str(value.requestId, 100) }
       : null;
   } catch {
@@ -112,8 +110,7 @@ export function createReceiptJournal(storage: JournalStorage, accountId: string)
   return {
     get: (taskId: string, callId: string) => read()[`${taskId}:${callId}`],
     start: (taskId: string, callId: string) => put(`${taskId}:${callId}`, { state: 'started' }),
-    save: (receipt: AssistantReceipt) =>
-      put(`${receipt.task_id}:${receipt.call_id}`, { state: 'receipt', receipt }),
+    save: (receipt: AssistantReceipt) => put(`${receipt.task_id}:${receipt.call_id}`, { state: 'receipt', receipt }),
     acknowledge: (taskId: string, callId: string) => {
       const id = `${taskId}:${callId}`,
         entry = read()[id];

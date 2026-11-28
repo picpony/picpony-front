@@ -106,10 +106,7 @@ function isKeyboardFocus(target: HTMLElement): boolean {
  */
 function revealTab(list: HTMLElement, tab: HTMLElement, smooth: boolean, vertical = false) {
   if (vertical) {
-    const scroller =
-      list.scrollHeight > list.clientHeight + 1
-        ? list
-        : list.closest<HTMLElement>('.popover-scrollbar');
+    const scroller = list.scrollHeight > list.clientHeight + 1 ? list : list.closest<HTMLElement>('.popover-scrollbar');
     if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 1) return;
     const scrollerBox = scroller.getBoundingClientRect();
     const tabBox = tab.getBoundingClientRect();
@@ -131,8 +128,7 @@ function revealTab(list: HTMLElement, tab: HTMLElement, smooth: boolean, vertica
   const end = start + tabBox.width;
   let left: number | null = null;
   if (start - EDGE_ROOM < list.scrollLeft) left = start - EDGE_ROOM;
-  else if (end + EDGE_ROOM > list.scrollLeft + list.clientWidth)
-    left = end + EDGE_ROOM - list.clientWidth;
+  else if (end + EDGE_ROOM > list.scrollLeft + list.clientWidth) left = end + EDGE_ROOM - list.clientWidth;
   if (left === null) return;
   list.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'instant' });
 }
@@ -174,10 +170,7 @@ export default function Tabs<T extends string = string>({
   label = '标签页',
   panelId,
 }: TabsProps<T>) {
-  const { containerRef, indicatorRef, glideTo } = useSlidingIndicator<
-    HTMLDivElement,
-    HTMLSpanElement
-  >(value);
+  const { containerRef, indicatorRef, glideTo } = useSlidingIndicator<HTMLDivElement, HTMLSpanElement>(value);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const revealed = useRef(false);
   /* The rail's active state is its own container fill, so it has nothing to
@@ -285,13 +278,7 @@ export default function Tabs<T extends string = string>({
     clearPointer.current?.();
     const press = pressed.current;
     pressed.current = null;
-    if (
-      event.pointerType !== 'touch' ||
-      !press ||
-      press.to !== to ||
-      press.pointerId !== event.pointerId
-    )
-      return;
+    if (event.pointerType !== 'touch' || !press || press.to !== to || press.pointerId !== event.pointerId) return;
     if (event.timeStamp - press.at >= LONG_PRESS_MS) return;
     const panel = panelFor(to);
     if (!panel || !playPrimedTabTransition(panel, to)) return;
@@ -376,11 +363,7 @@ export default function Tabs<T extends string = string>({
      here. `tone="warning"` keeps an accent on the underline set because it marks
      a tab group that is *about* a warning (/tasks) — a deliberate divergence. */
   const activeInk =
-    variant === 'underline'
-      ? tone === 'warning'
-        ? 'text-warning'
-        : 'text-on-surface'
-      : 'text-on-secondary-container';
+    variant === 'underline' ? (tone === 'warning' ? 'text-warning' : 'text-on-surface') : 'text-on-secondary-container';
   const indicatorFill = tone === 'warning' ? 'bg-warning' : 'bg-primary-ink';
 
   const tabButtons = tabs.map((tab, index) => {
@@ -462,11 +445,7 @@ export default function Tabs<T extends string = string>({
           'state-layer',
           /* Underline tabs carry a coloured indicator bar (brand or warning); pill and rail tabs
              carry `secondary-container` in both selected and predicted states. */
-          variant === 'underline'
-            ? tone === 'warning'
-              ? 'ripple-warning'
-              : 'ripple-primary'
-            : 'ripple-secondary',
+          variant === 'underline' ? (tone === 'warning' ? 'ripple-warning' : 'ripple-primary') : 'ripple-secondary',
           selected
             ? cn(
                 variant === 'rail' && 'bg-secondary-container',
@@ -489,19 +468,13 @@ export default function Tabs<T extends string = string>({
         <span className={cn('grid min-w-0', variant === 'rail' && 'flex-1')}>
           {/* Reserve the emphasized label's width in both states, so selecting
               a tab cannot shove its neighbours or the moving indicator. */}
-          <span
-            aria-hidden="true"
-            className="invisible col-start-1 row-start-1 truncate text-title-s-emphasized"
-          >
+          <span aria-hidden="true" className="invisible col-start-1 row-start-1 truncate text-title-s-emphasized">
             {tab.label}
           </span>
           <span className="col-start-1 row-start-1 truncate">{tab.label}</span>
         </span>
         {/* `CountBadge`, not a fourth copy of the `99+` clamp; its meaning is read out. */}
-        <CountBadge
-          count={tab.badge ?? 0}
-          label={tab.badgeLabel ?? (tab.badge ? `${tab.badge} 条未读` : undefined)}
-        />
+        <CountBadge count={tab.badge ?? 0} label={tab.badgeLabel ?? (tab.badge ? `${tab.badge} 条未读` : undefined)} />
       </button>
     );
   });

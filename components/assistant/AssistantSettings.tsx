@@ -3,13 +3,7 @@
 import { useRef, useState } from 'react';
 import { MdRefresh } from '@/components/icons/common';
 import { MdAutoAwesome } from '@/components/icons/settings';
-import {
-  SettingsSection,
-  SettingsRow,
-  SwitchRow,
-  ROW_CLASS,
-  ROW_STACK_CLASS,
-} from '@/app/settings/SettingsRow';
+import { SettingsSection, SettingsRow, SwitchRow, ROW_CLASS, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Select from '@/components/Select';
@@ -144,8 +138,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
     const amount = exchange?.coins ?? Number(coins);
     /* The dialog already refuses these on its field and disables 确认兑换, so reaching here with one
        is a race rather than a user error — there is nothing to announce. */
-    if (busy || !quota.data || !Number.isSafeInteger(amount) || amount < 1 || amount > 100000)
-      return;
+    if (busy || !quota.data || !Number.isSafeInteger(amount) || amount < 1 || amount > 100000) return;
     if (!exchange && amount > quota.data.coins) return;
     if (!current()) return;
     await mutate(async () => {
@@ -161,8 +154,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
       if (!outcome.ok) {
         /* A refusal is the server's answer, so nothing is left to check; anything else keeps the
            journal for 核对兑换. Thrown on, for `mutate` to show. */
-        if (current() && outcome.error instanceof AssistantRefusal)
-          writeJournalText(accountId, 'exchange', null);
+        if (current() && outcome.error instanceof AssistantRefusal) writeJournalText(accountId, 'exchange', null);
         throw outcome.error;
       }
       if (!current()) return;
@@ -205,12 +197,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
         title="彩彩 AI"
         icon={<MdAutoAwesome size={ICON.control} />}
         actions={
-          <IconButton
-            aria-label="刷新彩彩 AI 设置"
-            loading={refreshing}
-            onClick={refresh}
-            icon={<MdRefresh />}
-          />
+          <IconButton aria-label="刷新彩彩 AI 设置" loading={refreshing} onClick={refresh} icon={<MdRefresh />} />
         }
         status={statusNotice}
       >
@@ -222,16 +209,12 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
               label="启用彩彩 AI"
               checked={enabledShown ?? quota.data.user_enabled}
               onChange={(enabled) => void changeEnabled(enabled)}
-              description={
-                !quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'
-              }
+              description={!quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'}
             />
             <SettingsRow
               label="权限规则"
               supporting={
-                permission.data === 'full'
-                  ? '直接执行指令，不再逐次确认'
-                  : '执行写入、发送和删除操作前需确认'
+                permission.data === 'full' ? '直接执行指令，不再逐次确认' : '执行写入、发送和删除操作前需确认'
               }
               action={
                 <Select
@@ -254,8 +237,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
                   '上次兑换结果尚未确认，可点击核对'
                 ) : (
                   <>
-                    现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span>{' '}
-                    金币 ·{' '}
+                    现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 ·{' '}
                     <span className="tabular-nums">1 金币兑换 {quota.data.points_per_coin} 点</span>
                   </>
                 )
@@ -308,8 +290,7 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
  * body-s footnote under itself — four type treatments for one number.
  */
 function QuotaRow({ quota }: { quota: AssistantQuota }) {
-  const gift =
-    quota.daily_points > 0 ? Math.round((quota.daily_remaining / quota.daily_points) * 100) : 0;
+  const gift = quota.daily_points > 0 ? Math.round((quota.daily_remaining / quota.daily_points) * 100) : 0;
   return (
     <SettingsRow
       label="可用额度"
@@ -346,16 +327,12 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
         )}
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-on-surface-variant">兑换余额 · 不会清零</dt>
-          <dd className="shrink-0 tabular-nums text-on-surface">
-            {formatExactCount(quota.purchased_remaining)}
-          </dd>
+          <dd className="shrink-0 tabular-nums text-on-surface">{formatExactCount(quota.purchased_remaining)}</dd>
         </div>
         {quota.reserved > 0 && (
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-on-surface-variant">执行中预留</dt>
-            <dd className="shrink-0 tabular-nums text-on-surface">
-              {formatExactCount(quota.reserved)}
-            </dd>
+            <dd className="shrink-0 tabular-nums text-on-surface">{formatExactCount(quota.reserved)}</dd>
           </div>
         )}
       </dl>

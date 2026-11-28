@@ -34,7 +34,5 @@ export function stripTruncatedSanitizedEntity(text: string): string {
 
 export function decodeSanitizedText(text: string, options?: { truncated?: boolean }): string {
   const input = options?.truncated ? stripTruncatedSanitizedEntity(text) : text;
-  return input.includes('&')
-    ? input.replace(ENTITY, (whole, name: string) => CHARACTER[name] ?? whole)
-    : input;
+  return input.includes('&') ? input.replace(ENTITY, (whole, name: string) => CHARACTER[name] ?? whole) : input;
 }

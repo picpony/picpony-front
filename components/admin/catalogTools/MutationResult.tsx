@@ -12,12 +12,7 @@ import type { useCatalogMutation } from './useCatalogMutation';
  */
 function focusIsLost(): boolean {
   const active = document.activeElement;
-  return (
-    !active ||
-    active === document.body ||
-    active.matches(':disabled') ||
-    Boolean(active.closest('[inert]'))
-  );
+  return !active || active === document.body || active.matches(':disabled') || Boolean(active.closest('[inert]'));
 }
 
 /**
@@ -44,8 +39,7 @@ export default function MutationResult({
   useLayoutEffect(() => {
     /* A layout effect: the press's `disabled` flips in this same commit, so this runs after focus
        has fallen and before the frame shows it fallen. */
-    if (mutation.uncertain && !held.current && focusIsLost())
-      acknowledge.current?.focus({ preventScroll: true });
+    if (mutation.uncertain && !held.current && focusIsLost()) acknowledge.current?.focus({ preventScroll: true });
     if (!mutation.uncertain && held.current && focusIsLost()) {
       const target = returnFocus?.() ?? mutation.origin.current;
       if (target?.isConnected && !target.matches(':disabled') && !target.closest('[inert]'))

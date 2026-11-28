@@ -32,10 +32,7 @@ function load(file, dependencies, expose = '') {
       require: (name) => {
         if (name in dependencies) return dependencies[name];
         if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
-        return new Proxy(
-          {},
-          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
-        );
+        return new Proxy({}, { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) });
       },
       URLSearchParams,
       URL,
@@ -55,8 +52,7 @@ function harness() {
   const cleanups = [];
   let cursor = 0;
   let pendingEffects = [];
-  const changed = (previous, next) =>
-    !previous || next.some((value, index) => !Object.is(value, previous[index]));
+  const changed = (previous, next) => !previous || next.some((value, index) => !Object.is(value, previous[index]));
   const react = {
     useState(initial) {
       const index = cursor++;
@@ -74,8 +70,7 @@ function harness() {
     },
     useMemo(create, deps) {
       const index = cursor++;
-      if (!slots[index] || changed(slots[index].deps, deps))
-        slots[index] = { deps, value: create() };
+      if (!slots[index] || changed(slots[index].deps, deps)) slots[index] = { deps, value: create() };
       return slots[index].value;
     },
     useCallback(callback, deps) {
@@ -268,10 +263,7 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
     coins: 0,
     progress: {
       novice: Object.fromEntries(
-        ['bind_api', 'verify_api', 'set_bg'].map((id) => [
-          id,
-          { progress: 1, required: 1, claimed: false },
-        ]),
+        ['bind_api', 'verify_api', 'set_bg'].map((id) => [id, { progress: 1, required: 1, claimed: false }]),
       ),
       daily: null,
       weekly: null,
@@ -371,9 +363,5 @@ test('Undo during a navigation-triggered history delete waits for the verdict an
   response.resolve();
   await flush();
   await flush();
-  assert.deepEqual(
-    restored,
-    [['A', 7]],
-    'the offered Undo is not lost while the delete is pending',
-  );
+  assert.deepEqual(restored, [['A', 7]], 'the offered Undo is not lost while the delete is pending');
 });

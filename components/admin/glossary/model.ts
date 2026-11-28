@@ -172,9 +172,7 @@ export interface TagSave {
  */
 export function tagSavePayload(form: TagForm, tag?: GlossaryTag | null): TagSave {
   const untouched = tag && !isUntranslated(tag.cn) && form.translations === translationsText(tag);
-  const { cn, aliases } = untouched
-    ? { cn: tag.cn, aliases: [...tag.aliases] }
-    : parseTranslations(form.translations);
+  const { cn, aliases } = untouched ? { cn: tag.cn, aliases: [...tag.aliases] } : parseTranslations(form.translations);
   const payload: TagSave = {
     en: tag ? tag.en : form.en.trim().toLowerCase(),
     /* The backend refuses an empty `cn` (`bounded_text(.., false)`) and reads `未翻译` as "no
@@ -286,8 +284,7 @@ export function syncRange(
   if (!/^\d+$/.test(end.trim()) || !Number.isSafeInteger(to) || to < 1)
     return { error: '结束页须为正整数', field: 'end' };
   if (to < from) return { error: '结束页不能小于起始页', field: 'end' };
-  if (to - from + 1 > SYNC_MAX_PAGES)
-    return { error: `一次最多同步 ${SYNC_MAX_PAGES} 页`, field: 'end' };
+  if (to - from + 1 > SYNC_MAX_PAGES) return { error: `一次最多同步 ${SYNC_MAX_PAGES} 页`, field: 'end' };
   return { from, to };
 }
 
@@ -300,8 +297,7 @@ export function historyTime(value: unknown): string {
 
 /** A history row's aliases, whichever wire spelling it came in. */
 export function historyAliases(value: unknown): string {
-  if (Array.isArray(value))
-    return value.filter((alias) => typeof alias === 'string' && alias).join('、');
+  if (Array.isArray(value)) return value.filter((alias) => typeof alias === 'string' && alias).join('、');
   if (typeof value === 'string') {
     const text = value.trim();
     if (text.startsWith('[')) {
@@ -335,9 +331,7 @@ export function withSuggestion(translations: string, content: string): string {
 }
 
 /** The percentage of the dictionary translated, to two places, or `null` with nothing counted. */
-export function translatedShare(
-  stats: { total: number; translated: number } | null | undefined,
-): number | null {
+export function translatedShare(stats: { total: number; translated: number } | null | undefined): number | null {
   if (!stats || !(stats.total > 0)) return null;
   return Math.round((stats.translated / stats.total) * 10000) / 100;
 }

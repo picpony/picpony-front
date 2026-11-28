@@ -47,11 +47,7 @@ export type HeroScrollPlane = {
  * the handoff. Layout values, so the offset holds for the Stage's overlay host too. The host
  * box is the padding box — the region the anchor's content is painted and clipped in.
  */
-function createPlane(
-  anchor: HTMLElement,
-  scroller: HTMLElement,
-  host: HTMLElement = scroller,
-): HeroScrollPlane {
+function createPlane(anchor: HTMLElement, scroller: HTMLElement, host: HTMLElement = scroller): HeroScrollPlane {
   const rect = host.getBoundingClientRect();
   const scrollLeft = scroller.scrollLeft;
   const scrollTop = scroller.scrollTop;
@@ -84,11 +80,7 @@ export function getGalleryScrollPlane(): HeroScrollPlane | null {
   return anchor && scroller ? createPlane(anchor, scroller) : null;
 }
 
-export function getElementScrollPlane(
-  anchor: HTMLElement,
-  scroller: HTMLElement,
-  host?: HTMLElement,
-) {
+export function getElementScrollPlane(anchor: HTMLElement, scroller: HTMLElement, host?: HTMLElement) {
   return createPlane(anchor, scroller, host);
 }
 

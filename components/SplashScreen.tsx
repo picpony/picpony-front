@@ -2,13 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import Logo, { INTRO_DURATION_MS, INTRO_LATEST_START_MS, sinceFirstByte, warmIntro } from './Logo';
-import {
-  MOTION_SPEED_SCALE,
-  entranceMode,
-  motionTier,
-  useEntranceMode,
-  useMotionTier,
-} from '@/lib/appearance';
+import { MOTION_SPEED_SCALE, entranceMode, motionTier, useEntranceMode, useMotionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 
 /** How long the finished mark holds before the splash leaves. */
@@ -148,10 +142,7 @@ export default function SplashScreen() {
       el.setAttribute('data-held', '');
       /* The mark answers when it lands or gives up; this is for an answer that never comes (a
          background tab draws no frames, so the player never completes). */
-      later(
-        () => leave(0),
-        INTRO_LATEST_START_MS - now + INTRO_DURATION_MS * MOTION_SPEED_SCALE.slow + HOLD_MS,
-      );
+      later(() => leave(0), INTRO_LATEST_START_MS - now + INTRO_DURATION_MS * MOTION_SPEED_SCALE.slow + HOLD_MS);
       if (current === 'blocking') {
         warmIntro();
         queueMicrotask(() => {

@@ -10,8 +10,7 @@
  * largest, so colouring it would tint most of every tag cloud and leave the genuinely
  * distinct categories with nothing to stand out against.
  */
-export type AccentHue =
-  'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple';
+export type AccentHue = 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple';
 
 export interface TagCategory {
   label: string;
@@ -79,9 +78,7 @@ export function tagCategory(name: string | undefined | null): TagCategory {
  */
 export function tagCategoryChip(name: string | undefined | null): string {
   const { hue } = tagCategory(name);
-  return hue
-    ? `bg-accent-${hue} text-on-accent-${hue}`
-    : 'bg-surface-container-high text-on-surface-variant';
+  return hue ? `bg-accent-${hue} text-on-accent-${hue}` : 'bg-surface-container-high text-on-surface-variant';
 }
 
 /**

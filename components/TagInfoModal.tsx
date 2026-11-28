@@ -25,12 +25,7 @@ import { cn } from '@/lib/utils';
 
 type SendOutcome = { ok: true } | { ok: false; message: string };
 
-async function sendFeedback(
-  token: string,
-  tagName: string,
-  reason: string,
-  translation: string,
-): Promise<SendOutcome> {
+async function sendFeedback(token: string, tagName: string, reason: string, translation: string): Promise<SendOutcome> {
   try {
     await submitTagFeedback(token, { tagName, reason, translation });
     return { ok: true };
@@ -44,15 +39,7 @@ async function sendFeedback(
  * smoothly adapts the dialog height once the entry (or empty state) arrives.
  */
 function EntrySkeleton({ paused }: { paused: boolean }) {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      paused={paused}
-      delay={120}
-      label="正在查询词库…"
-      className="min-h-24"
-    />
-  );
+  return <PageLoadingIndicator size="inline" paused={paused} delay={120} label="正在查询词库…" className="min-h-24" />;
 }
 
 /**
@@ -81,13 +68,7 @@ function EntrySkeleton({ paused }: { paused: boolean }) {
  * The tag it shows is held through the close animation: `tag` goes null the moment the dialog is
  * asked to close, and reading it directly blanked the heading for the whole fade.
  */
-export default function TagInfoModal({
-  tag,
-  onClose,
-}: {
-  tag: string | null;
-  onClose: () => void;
-}) {
+export default function TagInfoModal({ tag, onClose }: { tag: string | null; onClose: () => void }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const session = useSession();
@@ -168,9 +149,7 @@ export default function TagInfoModal({
     });
   };
 
-  const chineseNames = entry
-    ? [entry.cn, ...entry.aliases.filter((alias) => alias !== entry.cn)].filter(Boolean)
-    : [];
+  const chineseNames = entry ? [entry.cn, ...entry.aliases.filter((alias) => alias !== entry.cn)].filter(Boolean) : [];
   const swap = switched && 'animate-page-transition';
   /* The headline swaps with the view, on the body's clock — keyed, so the arriving words fade in
      rather than replacing the leaving ones in a frame. Empty, there is no headline at all, and the
@@ -202,23 +181,13 @@ export default function TagInfoModal({
                 <Button variant="text" onClick={() => switchTo('entry')} disabled={sending}>
                   返回
                 </Button>
-                <Button
-                  variant="filled"
-                  onClick={submit}
-                  loading={sending}
-                  disabled={!reason.trim()}
-                >
+                <Button variant="filled" onClick={submit} loading={sending} disabled={!reason.trim()}>
                   提交反馈
                 </Button>
               </>
             ) : (
               <>
-                <Button
-                  ref={feedbackButtonRef}
-                  variant="text"
-                  className="mr-auto"
-                  onClick={openFeedback}
-                >
+                <Button ref={feedbackButtonRef} variant="text" className="mr-auto" onClick={openFeedback}>
                   反馈错误
                 </Button>
                 <Button
@@ -229,10 +198,7 @@ export default function TagInfoModal({
                     if (outcome === 'added') showToast('已添加到待定标签库', 'success');
                     else if (outcome === 'exists') showToast('此标签已在待定标签库中', 'info');
                     else if (outcome === 'full')
-                      showToast(
-                        `待定标签库已满（最多 ${MAX_PENDING} 个），请先整理后再添加`,
-                        'error',
-                      );
+                      showToast(`待定标签库已满（最多 ${MAX_PENDING} 个），请先整理后再添加`, 'error');
                     else showToast('保存失败，请检查浏览器本地存储权限', 'error');
                   }}
                 >
@@ -262,9 +228,7 @@ export default function TagInfoModal({
             <div className="space-y-4">
               <p className="text-body-m text-on-surface-variant">
                 标签：
-                <span className="text-body-m-emphasized text-on-surface wrap-anywhere">
-                  {shown}
-                </span>
+                <span className="text-body-m-emphasized text-on-surface wrap-anywhere">{shown}</span>
               </p>
               <Textarea
                 ref={reasonRef}
@@ -304,10 +268,7 @@ export default function TagInfoModal({
                     {/* One tone step above the dialog's own container, so the marks separate from
                         it by tone rather than vanishing into it. */}
                     {chineseNames.map((name) => (
-                      <Badge
-                        key={name}
-                        colors="bg-surface-container-highest text-on-surface-variant"
-                      >
+                      <Badge key={name} colors="bg-surface-container-highest text-on-surface-variant">
                         {name}
                       </Badge>
                     ))}
@@ -325,9 +286,7 @@ export default function TagInfoModal({
               {entry.category && (
                 <div>
                   <p className="text-label-m text-on-surface-variant">分类</p>
-                  <p className="mt-1 text-body-m text-on-surface">
-                    {tagCategory(entry.category).label}
-                  </p>
+                  <p className="mt-1 text-body-m text-on-surface">{tagCategory(entry.category).label}</p>
                 </div>
               )}
             </div>

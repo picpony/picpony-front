@@ -78,17 +78,14 @@ export default function ReportsTab({ token }: AdminPanelProps) {
           .map((report, index) => ({ report, index }))
           .sort(
             (a, b) =>
-              Number(b.report.status === 'pending') - Number(a.report.status === 'pending') ||
-              a.index - b.index,
+              Number(b.report.status === 'pending') - Number(a.report.status === 'pending') || a.index - b.index,
           )
           .map(({ report }) => report)
       : rows;
   }, [reports, filter, search, running]);
   const paged = usePagedRows(shown, `${filter}\n${search.trim()}`);
 
-  const ids = paged.rows
-    .map((report) => report.image_id)
-    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  const ids = paged.rows.map((report) => report.image_id).filter((id) => Number.isSafeInteger(id) && id > 0);
   const images = useResource(
     reportedImages,
     ids.length ? { ids: [...new Set(ids)].sort((a, b) => a - b).join(',') } : SKIP,
@@ -101,23 +98,15 @@ export default function ReportsTab({ token }: AdminPanelProps) {
     return mutation
       .run(
         () => adminApi.adminHandleReport(token, report, status),
-        () =>
-          showToast(
-            status === 'processed' ? `已处理举报 #${report.id}` : `已驳回举报 #${report.id}`,
-            'success',
-          ),
+        () => showToast(status === 'processed' ? `已处理举报 #${report.id}` : `已驳回举报 #${report.id}`, 'success'),
         '处理失败',
         {
           key: report.id,
           onCommitted: (data) => {
-            const revision =
-              typeof data.applied_revision === 'number' ? data.applied_revision : report.revision;
+            const revision = typeof data.applied_revision === 'number' ? data.applied_revision : report.revision;
             reportsQuery.write(
               token,
-              (previous) =>
-                previous?.map((row) =>
-                  row.id === report.id ? { ...row, status, revision } : row,
-                ) ?? [],
+              (previous) => previous?.map((row) => (row.id === report.id ? { ...row, status, revision } : row)) ?? [],
             );
             read.refresh();
           },
@@ -197,8 +186,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
       header: '操作',
       actions: true,
       render: (report) => {
-        if (report.status !== 'pending')
-          return <span className="text-body-m text-on-surface-variant">已归档</span>;
+        if (report.status !== 'pending') return <span className="text-body-m text-on-surface-variant">已归档</span>;
         const busy = mutation.pendingKeys.has(report.id);
         return (
           <>
@@ -232,11 +220,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
     <div className="space-y-6">
       <SectionHeader section="reports" onRefresh={read.refresh} isLoading={read.refreshing} />
       <div className="space-y-3">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="搜索举报单号、图片 ID 或举报人…"
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder="搜索举报单号、图片 ID 或举报人…" />
         <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
           {FILTERS.map((value) => (
             <Chip
@@ -246,9 +230,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
               className="tabular-nums"
               onClick={() => setFilter(value)}
             >
-              {value === 'all'
-                ? `全部（${reports.length}）`
-                : `${STATUS[value].label}（${counts[value]}）`}
+              {value === 'all' ? `全部（${reports.length}）` : `${STATUS[value].label}（${counts[value]}）`}
             </Chip>
           ))}
         </div>
@@ -263,13 +245,7 @@ export default function ReportsTab({ token }: AdminPanelProps) {
           skeletonRows={6}
           {...tableError('举报加载失败', read.error)}
           onRetry={read.retryable ? read.refresh : undefined}
-          empty={
-            search.trim()
-              ? '没有匹配的举报'
-              : filter === 'pending'
-                ? '没有待处理的举报'
-                : '暂无举报'
-          }
+          empty={search.trim() ? '没有匹配的举报' : filter === 'pending' ? '没有待处理的举报' : '暂无举报'}
         />
         <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
       </AdminListAnchor>

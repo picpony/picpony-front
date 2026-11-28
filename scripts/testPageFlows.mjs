@@ -32,10 +32,7 @@ function load(file, dependencies = {}, globals = {}, expose = '') {
       require: (name) => {
         if (name in dependencies) return dependencies[name];
         if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
-        return new Proxy(
-          {},
-          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
-        );
+        return new Proxy({}, { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) });
       },
       URLSearchParams,
       URL,
@@ -142,18 +139,10 @@ assert.equal(searchState.searchSort('score&filter_id=0'), 'created_at');
 /* Legacy values: `relevance` always meant `_score`; `hotness` was never a field. */
 assert.equal(searchState.searchSort('relevance'), '_score');
 assert.equal(searchState.searchSort('hotness'), 'created_at');
-assert.equal(
-  searchState.defaultSearchSort('relevance'),
-  'created_at',
-  'a default cannot rank a query it has not seen',
-);
+assert.equal(searchState.defaultSearchSort('relevance'), 'created_at', 'a default cannot rank a query it has not seen');
 /* 相关性 only where the query gives something to rank by. */
 assert.equal(searchState.queryHasRanking('fluttershy, safe'), false);
-assert.equal(
-  searchState.queryHasRanking('orange, colored'),
-  false,
-  'lower-case or inside a tag is not an operator',
-);
+assert.equal(searchState.queryHasRanking('orange, colored'), false, 'lower-case or inside a tag is not an operator');
 for (const ranked of [
   'fluttershy OR rarity',
   'pony || zebra',
@@ -164,15 +153,9 @@ for (const ranked of [
   assert.equal(searchState.queryHasRanking(ranked), true, ranked);
 }
 assert.equal(searchState.effectiveSearchSort('_score', 'created_at', 'fluttershy'), 'created_at');
-assert.equal(
-  searchState.effectiveSearchSort('_score', 'created_at', 'fluttershy OR rarity'),
-  '_score',
-);
+assert.equal(searchState.effectiveSearchSort('_score', 'created_at', 'fluttershy OR rarity'), '_score');
 assert.equal(searchState.effectiveSearchSort('', '_score', 'fluttershy OR rarity'), 'created_at');
-const encoded = new URL(
-  searchState.searchHref('小马, safe & pony', 'random', 'asc', 3),
-  'https://example.test',
-);
+const encoded = new URL(searchState.searchHref('小马, safe & pony', 'random', 'asc', 3), 'https://example.test');
 assert.equal(encoded.searchParams.get('q'), '小马, safe & pony');
 assert.equal(encoded.searchParams.get('sort'), 'random');
 assert.equal(encoded.searchParams.get('page'), '3');
@@ -288,8 +271,7 @@ const { default: SearchScreen } = load(
       SKIP: 'SKIP',
       useResource: (resource, args) => {
         reads[resource.name] = args;
-        if (resource.name === 'semantic')
-          return { ...semanticAnswer, isPrevious: false, refresh: () => {} };
+        if (resource.name === 'semantic') return { ...semanticAnswer, isPrevious: false, refresh: () => {} };
         return {
           data: args === 'SKIP' ? undefined : { images: [{ id: 1 }], total: 1 },
           error: undefined,
@@ -348,11 +330,7 @@ url = new URL('https://example.test/pic/123');
 browsingFp = 'safe|-|-|-|';
 renderSearch();
 await searchHooks.effects();
-assert.equal(
-  url.pathname,
-  '/pic/123',
-  'background updates do not overwrite an image overlay route',
-);
+assert.equal(url.pathname, '/pic/123', 'background updates do not overwrite an image overlay route');
 
 url = new URL('https://example.test/search?q=fluttershy&sort=width&dir=desc&page=2');
 tree = renderSearch();
@@ -364,11 +342,7 @@ assert.deepEqual(remembered, ['rarity'], 'the query joins the recent searches');
 const writes = historyWrites.length;
 byType(renderSearch(), './SearchField:default').props.onSubmit('');
 byType(renderSearch(), './SearchField:default').props.onSubmit('rarity');
-assert.equal(
-  historyWrites.length,
-  writes,
-  'an empty submit and the same query again write nothing',
-);
+assert.equal(historyWrites.length, writes, 'an empty submit and the same query again write nothing');
 byType(renderSearch(), './SearchToolbar:default').props.onSort('score');
 assert.equal(lastWrite().mode, 'replace', 'a sort refines the search on screen (C1)');
 assert.equal(lastWrite().params.get('sort'), 'score');
@@ -387,20 +361,11 @@ assert.equal(
   'the panel reflects the committed query',
 );
 toolbar.props.onApplyFilters({ ...toolbar.props.filters, upvotes: null }, 'chip');
-assert.equal(
-  lastWrite().params.get('q'),
-  'pony, animated:true',
-  'a removed condition leaves the query',
-);
-byType(renderSearch(), './SearchToolbar:default').props.onApplyFilters(
-  searchQuery.NO_SEARCH_FILTERS,
-  'chip',
-);
+assert.equal(lastWrite().params.get('q'), 'pony, animated:true', 'a removed condition leaves the query');
+byType(renderSearch(), './SearchToolbar:default').props.onApplyFilters(searchQuery.NO_SEARCH_FILTERS, 'chip');
 assert.equal(lastWrite().params.get('q'), 'pony', 'clearing the conditions removes every one');
 
-url = new URL(
-  `https://example.test/search?q=${encodeURIComponent('在下雨天撑伞的小蝶')}&sort=created_at&dir=desc`,
-);
+url = new URL(`https://example.test/search?q=${encodeURIComponent('在下雨天撑伞的小蝶')}&sort=created_at&dir=desc`);
 semanticAnswer = { data: undefined, error: undefined };
 tree = renderSearch();
 assert.equal(reads.semantic.text, '在下雨天撑伞的小蝶', 'Chinese words go to the semantic parse');
@@ -425,11 +390,7 @@ assert.ok(
 );
 await searchHooks.effects();
 await later(10);
-assert.equal(
-  lastWrite().params.get('tags'),
-  'fluttershy,umbrella',
-  'the conversion is pinned into the URL',
-);
+assert.equal(lastWrite().params.get('tags'), 'fluttershy,umbrella', 'the conversion is pinned into the URL');
 assert.equal(lastWrite().params.get('q'), '在下雨天撑伞的小蝶', 'the original words survive in it');
 assert.equal(lastWrite().mode, 'replace');
 tree = renderSearch();
@@ -440,9 +401,7 @@ assert.equal(lastWrite().params.get('raw'), '1');
 renderSearch();
 assert.equal(reads.semantic, 'SKIP', 'searching the words as typed asks no model');
 assert.equal(reads.feed.query, '在下雨天撑伞的小蝶');
-url = new URL(
-  `https://example.test/search?q=${encodeURIComponent('雨天')}&sort=created_at&dir=desc`,
-);
+url = new URL(`https://example.test/search?q=${encodeURIComponent('雨天')}&sort=created_at&dir=desc`);
 semanticAnswer = { data: undefined, error: new apiErrors.ApiError('timeout') };
 tree = renderSearch();
 assert.equal(reads.feed.query, '雨天', 'a failed parse searches the words as typed');
@@ -526,22 +485,14 @@ input().props.onChange({ target: { value: 'pony, b', selectionStart: 7 } });
 input().props.onChange({ target: { value: 'pony, bi', selectionStart: 8 } });
 await later(330);
 fieldHooks.render(Field);
-assert.equal(
-  JSON.stringify(keyword()),
-  JSON.stringify({ keyword: 'pony' }),
-  'pinyin fragments are never looked up',
-);
+assert.equal(JSON.stringify(keyword()), JSON.stringify({ keyword: 'pony' }), 'pinyin fragments are never looked up');
 assert.equal(popover().props.open, true, 'and the list is kept while the IME composes');
 /* Chrome delivers the committed text as the last input event of the composition, then compositionend. */
 input().props.onChange({ target: { value: 'pony, 碧琪', selectionStart: 8 } });
 input().props.onCompositionEnd({ currentTarget: { value: 'pony, 碧琪', selectionStart: 8 } });
 await later(330);
 fieldHooks.render(Field);
-assert.equal(
-  JSON.stringify(keyword()),
-  JSON.stringify({ keyword: '碧琪' }),
-  'the committed text is looked up',
-);
+assert.equal(JSON.stringify(keyword()), JSON.stringify({ keyword: '碧琪' }), 'the committed text is looked up');
 byType(fieldHooks.render(Field), 'form').props.onSubmit({ preventDefault: () => {} });
 assert.deepEqual(submitted, ['pony, 碧琪'], 'Enter with no active row searches what was typed');
 input().props.onChange({ target: { value: '', selectionStart: 0 } });
@@ -588,23 +539,20 @@ const toolbarTree = toolbarHooks.render(() =>
    primitive owns the closed state. Its own contract is checked just above. */
 const collapsedPanel = find(
   toolbarTree,
-  (node) =>
-    node.type === '@/components/Collapse:default' && node.props?.['aria-label'] === '高级筛选条件',
+  (node) => node.type === '@/components/Collapse:default' && node.props?.['aria-label'] === '高级筛选条件',
 );
 assert.equal(collapsedPanel?.props.open, false, 'collapsed advanced controls are closed');
 assert.ok(
   find(
     toolbarTree,
-    (node) =>
-      node.props?.label === '点赞数' && node.props?.value === '100' && node.props?.op === 'gte',
+    (node) => node.props?.label === '点赞数' && node.props?.value === '100' && node.props?.op === 'gte',
   ),
   'the panel opens on the query conditions',
 );
 assert.equal(
   find(
     toolbarTree,
-    (node) =>
-      node.type === '@/components/Select:default' && node.props?.['aria-label'] === '排序方式',
+    (node) => node.type === '@/components/Select:default' && node.props?.['aria-label'] === '排序方式',
   ).props.options.some((option) => option.value === '_score'),
   false,
   'relevance only where the query can be ranked',
@@ -676,15 +624,9 @@ browsingFp = 'safe:four';
 windowMock.dispatchEvent({ type: 'settings_updated' });
 homeHooks.render(renderHome);
 assert.equal(homeArgs.at(-1).fp, 'safe:four');
-assert.deepEqual(
-  homePageChanges,
-  [1],
-  'a live filter change turns the list back to its first page',
-);
+assert.deepEqual(homePageChanges, [1], 'a live filter change turns the list back to its first page');
 assert.equal(homeArgs.at(-1).page, 1);
-homeHooks.render(() =>
-  FeedList({ seed: null, page: 1, onPageChange: onHomePageChange, enabled: false, onRetry() {} }),
-);
+homeHooks.render(() => FeedList({ seed: null, page: 1, onPageChange: onHomePageChange, enabled: false, onRetry() {} }));
 assert.equal(homeArgs.at(-1), 'SKIP', 'a gallery waiting behind the forum reads nothing (R12-006)');
 homeHooks.dispose();
 
@@ -772,9 +714,7 @@ function syncFixture({ importTags } = {}) {
       '@/lib/api/admin': {
         batchImportDictionaryTags: (token, tasks) => {
           imports.push(tasks);
-          return importTags
-            ? importTags(tasks)
-            : Promise.resolve({ created: tasks.length, skipped: 0, failed: 0 });
+          return importTags ? importTags(tasks) : Promise.resolve({ created: tasks.length, skipped: 0, failed: 0 });
         },
       },
       './model': glossaryModel,
@@ -809,16 +749,8 @@ tree = invalidSync.render();
 syncForm(tree).props.onSubmit();
 await flush();
 tree = invalidSync.render();
-assert.equal(
-  invalidSync.derpiReads.length + invalidSync.imports.length,
-  0,
-  'a bad range sends nothing',
-);
-assert.equal(
-  syncField(tree, '起始页').props.error,
-  '起始页须为正整数',
-  'and is said on its own field',
-);
+assert.equal(invalidSync.derpiReads.length + invalidSync.imports.length, 0, 'a bad range sends nothing');
+assert.equal(syncField(tree, '起始页').props.error, '起始页须为正整数', 'and is said on its own field');
 
 /* The adapter answers counts, or throws the backend's refusal (`403 {error:{code,message}}`). */
 const rejectedSync = syncFixture({
@@ -860,24 +792,13 @@ syncForm(tree).props.onSubmit();
 for (let i = 0; i < 4; i++) await flush();
 assert.equal(stoppedSync.imports.length, 1);
 tree = stoppedSync.render();
-find(
-  tree,
-  (node) => node.type === '@/components/Button:default' && node.props.children === '停止同步',
-).props.onClick();
+find(tree, (node) => node.type === '@/components/Button:default' && node.props.children === '停止同步').props.onClick();
 writing.resolve({ created: 2, skipped: 0, failed: 0 });
 for (let i = 0; i < 10; i++) await flush();
-assert.equal(
-  stoppedSync.imports.length,
-  1,
-  'Stop lets the write in flight settle and sends no next page',
-);
+assert.equal(stoppedSync.imports.length, 1, 'Stop lets the write in flight settle and sends no next page');
 assert.equal(stoppedSync.derpiReads.length, 1);
 assert.equal(stoppedSync.finished[0].stopped, true);
-assert.equal(
-  stoppedSync.finished[0].created,
-  2,
-  'an acknowledged write that was in flight when stopped still counts',
-);
+assert.equal(stoppedSync.finished[0].created, 2, 'an acknowledged write that was in flight when stopped still counts');
 stoppedSync.hooks.dispose();
 console.log(
   'Page flows passed: URL state, denied storage, autocomplete cancellation, tab navigation, serial settings and cancellable glossary jobs.',

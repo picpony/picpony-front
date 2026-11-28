@@ -103,12 +103,7 @@ export function getRawImageUrl(url: string): string {
 }
 
 // 按层级构建图片 URL；bust 时追加防缓存参数
-export function buildImageUrl(
-  rawUrl: string,
-  tier: ImageTier,
-  bust = false,
-  thumb = false,
-): string {
+export function buildImageUrl(rawUrl: string, tier: ImageTier, bust = false, thumb = false): string {
   let url: string;
   if (tier === 0) {
     url = `${IMAGE_WORKER_BASE}${encodeURIComponent(rawUrl)}${thumb ? '&_thumb=1' : ''}`;
@@ -176,10 +171,7 @@ export interface InitialAttemptOptions {
  * The first attempt: the optimizer on the raw URL when it is live (the same URL on the server
  * and in the browser, so it cannot mismatch at hydration), else the resolved line.
  */
-export function createInitialAttempt(
-  rawUrl: string,
-  options: InitialAttemptOptions = {},
-): LoadAttempt {
+export function createInitialAttempt(rawUrl: string, options: InitialAttemptOptions = {}): LoadAttempt {
   const { thumb = false, line, optimize = true } = options;
   const tier = TIER_OF[line ?? resolveImageLine()];
   if (optimize && OPTIMIZER_ACTIVE) {
@@ -199,11 +191,7 @@ export function createInitialAttempt(
  *   (the worker's failure also races the other two lines, so the next picture starts on the one
  *   that works); the direct rung backs off exponentially, then gives up.
  */
-export function resolveNextAttempt(
-  rawUrl: string,
-  attempt: LoadAttempt,
-  thumb = false,
-): LoadAttempt {
+export function resolveNextAttempt(rawUrl: string, attempt: LoadAttempt, thumb = false): LoadAttempt {
   if (attempt.giveUp) return attempt;
 
   if (attempt.optimized) {

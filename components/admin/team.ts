@@ -38,9 +38,7 @@ export interface TeamFormValues {
 export type TeamFormErrors = Partial<Record<'name' | 'userId' | 'order', string>>;
 
 function category(value: unknown): TeamCategory {
-  return TEAM_CATEGORIES.some((option) => option.value === value)
-    ? (value as TeamCategory)
-    : 'special';
+  return TEAM_CATEGORIES.some((option) => option.value === value) ? (value as TeamCategory) : 'special';
 }
 
 /** A positive account id, or 0 for none. */
@@ -50,8 +48,7 @@ export function boundUser(value: unknown): number {
 }
 
 export function teamForm(member?: TeamMemberRow | null): TeamFormValues {
-  if (!member)
-    return { name: '', title: '', category: 'developer', userId: '', avatarUrl: '', order: '0' };
+  if (!member) return { name: '', title: '', category: 'developer', userId: '', avatarUrl: '', order: '0' };
   const uid = boundUser(member.user_id);
   return {
     name: member.name ?? '',
@@ -82,9 +79,7 @@ const INT32_MAX = 2147483647;
 export function teamPayload(
   values: TeamFormValues,
   member?: TeamMemberRow | null,
-):
-  | { payload: TeamMemberBody; errors?: undefined }
-  | { payload?: undefined; errors: TeamFormErrors } {
+): { payload: TeamMemberBody; errors?: undefined } | { payload?: undefined; errors: TeamFormErrors } {
   const errors: TeamFormErrors = {};
   const name = values.name.trim();
   if (!name) errors.name = '请填写成员姓名';
@@ -93,10 +88,7 @@ export function teamPayload(
   if (uidText && (!/^\d+$/.test(uidText) || !userId)) errors.userId = '站内用户 ID 须为正整数';
   const orderText = values.order.trim();
   /* And one the column holds (review P6-O10): the backend stores a 32-bit integer. */
-  if (
-    orderText &&
-    (!/^-?\d+$/.test(orderText) || Number(orderText) < INT32_MIN || Number(orderText) > INT32_MAX)
-  )
+  if (orderText && (!/^-?\d+$/.test(orderText) || Number(orderText) < INT32_MIN || Number(orderText) > INT32_MAX))
     errors.order = '排序号须为 -2147483648～2147483647 的整数';
   if (Object.keys(errors).length > 0) return { errors };
   const payload: TeamMemberBody = {
@@ -115,8 +107,7 @@ export function teamPayload(
 export function suggestion(role: unknown): { title: string; category: TeamCategory } {
   const value = typeof role === 'string' ? role : '';
   if (value === 'super_admin' || value === 'admin' || value === 'editor') {
-    const category: TeamCategory =
-      value === 'super_admin' ? 'developer' : value === 'admin' ? 'manager' : 'editor';
+    const category: TeamCategory = value === 'super_admin' ? 'developer' : value === 'admin' ? 'manager' : 'editor';
     return { title: roleInfo(value as Role).label, category };
   }
   return { title: '社区成员', category: 'special' };

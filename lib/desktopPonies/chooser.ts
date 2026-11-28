@@ -35,9 +35,7 @@ export function filterPonies(
     .filter(
       (pony) =>
         (!onlySelected || selected.includes(pony.name)) &&
-        terms.every((term) =>
-          `${pony.name} ${pony.path}`.toLocaleLowerCase('en-US').includes(term),
-        ),
+        terms.every((term) => `${pony.name} ${pony.path}`.toLocaleLowerCase('en-US').includes(term)),
     )
     .sort((a, b) => rank(a.path) - rank(b.path));
 }

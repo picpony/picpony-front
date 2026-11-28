@@ -66,11 +66,9 @@ export default function FeedbackDialog({
   const current = pages.page;
   const [live, setLive] = useState(open);
   if (open && !live) setLive(true);
-  const read = useResource(
-    tagFeedback,
-    live && token ? { token, status, before: pages.cursor, keyword } : SKIP,
-    { keepPrevious: scope },
-  );
+  const read = useResource(tagFeedback, live && token ? { token, status, before: pages.cursor, keyword } : SKIP, {
+    keepPrevious: scope,
+  });
   if (read.data && !read.isPrevious && !read.error) {
     /* A page emptied by handling its last feedback steps back to the one before it, rather than
        sitting on an empty page with its pager gone (review P6-F5). */
@@ -92,36 +90,18 @@ export default function FeedbackDialog({
   const rows = read.data?.rows ?? [];
   /* Handling the last feedback on a later page leaves a page the queue no longer has: move back one
      rather than show 暂无反馈 with the pager gone (review P6-F5). */
-  if (
-    read.data &&
-    !read.isPrevious &&
-    !read.isLoading &&
-    !read.error &&
-    !rows.length &&
-    current > 1
-  ) {
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && !rows.length && current > 1) {
     pages.setPage(current - 1);
   }
 
   return (
     <>
-      <Modal
-        isOpen={open}
-        onClose={onClose}
-        onExited={() => setLive(false)}
-        title="用户反馈与翻译申请"
-        maxWidth="xl"
-      >
+      <Modal isOpen={open} onClose={onClose} onExited={() => setLive(false)} title="用户反馈与翻译申请" maxWidth="xl">
         <div className="space-y-4">
           <SearchInput value={search} onChange={setSearch} placeholder="搜索标签名或用户名…" />
           <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
             {FILTERS.map((value) => (
-              <Chip
-                key={value}
-                variant="filter"
-                selected={status === value}
-                onClick={() => setStatus(value)}
-              >
+              <Chip key={value} variant="filter" selected={status === value} onClick={() => setStatus(value)}>
                 {value === 'all' ? '全部' : STATUS_LABEL[value]}
               </Chip>
             ))}
@@ -134,12 +114,7 @@ export default function FeedbackDialog({
                 onRetry={isRetryable(read.error) ? read.refresh : undefined}
               />
             ) : read.data === undefined ? (
-              <PageLoadingIndicator
-                size="inline"
-                indicatorSize="md"
-                label="正在加载反馈…"
-                className="min-h-36"
-              />
+              <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载反馈…" className="min-h-36" />
             ) : rows.length === 0 ? (
               <EmptyState size="inline" title={keyword ? '没有匹配的反馈' : '暂无反馈'} />
             ) : (
@@ -174,9 +149,7 @@ export default function FeedbackDialog({
                           dialog's top step, so the step is the one below it; on the card's own tone the
                           block had no edge at all, 1.00:1 (G4-008). */}
                         <div className="rich-text-content text-body-m">
-                          <blockquote className="whitespace-pre-wrap wrap-anywhere">
-                            {feedback.content}
-                          </blockquote>
+                          <blockquote className="whitespace-pre-wrap wrap-anywhere">{feedback.content}</blockquote>
                         </div>
                         {feedback.status !== 'pending' && (
                           <p className="text-body-s tabular-nums text-on-surface-variant">

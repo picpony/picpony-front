@@ -6,12 +6,7 @@ import { MdSpeed } from '@/components/icons/settings';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import { ICON } from '@/lib/icons';
-import {
-  currentLineLabels,
-  raceImageLines,
-  refreshRoutePolicy,
-  subscribeRouteState,
-} from '@/lib/route';
+import { currentLineLabels, raceImageLines, refreshRoutePolicy, subscribeRouteState } from '@/lib/route';
 import { changeSyncedSetting, useSyncedSetting } from '@/lib/settingsSync';
 import { SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
 
@@ -77,13 +72,7 @@ export default function LinesSection() {
       icon={<MdSpeed size={ICON.control} />}
       subtitle={forced}
       actions={
-        <Button
-          size="xs"
-          variant="tonal"
-          icon={<MdRefresh />}
-          loading={refreshing}
-          onClick={refresh}
-        >
+        <Button size="xs" variant="tonal" icon={<MdRefresh />} loading={refreshing} onClick={refresh}>
           重新检测
         </Button>
       }
@@ -133,9 +122,7 @@ export default function LinesSection() {
               gate (a divergence from the original front end): the accel line needs no credential. */}
           <SwitchRow
             label="启用 API 加速"
-            description={
-              relay ? '已优先使用 PicPony API，关闭后此项可选' : '通过备用 API 代理提升请求稳定性'
-            }
+            description={relay ? '已优先使用 PicPony API，关闭后此项可选' : '通过备用 API 代理提升请求稳定性'}
             checked={apiAccel}
             onChange={(on) => changeSyncedSetting('useApiAccel', on)}
             disabled={relay}

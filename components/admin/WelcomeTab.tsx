@@ -35,20 +35,12 @@ function Tile({
   children?: ReactNode;
 }) {
   const open = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
-      return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
     openTab(tab);
   };
   return (
-    <Card
-      as="a"
-      interactive
-      variant="filled"
-      href={adminHref(tab)}
-      onClick={open}
-      className="flex flex-col gap-1"
-    >
+    <Card as="a" interactive variant="filled" href={adminHref(tab)} onClick={open} className="flex flex-col gap-1">
       <span className="text-label-l text-on-surface-variant">{label}</span>
       <div className="text-headline-s tabular-nums text-on-surface">
         {value === undefined ? <Skeleton className="h-8 w-20" /> : value}
@@ -71,10 +63,7 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
   const status = useAdminQuery(siteStatusQuery, admin ? token : '');
   /* The glossary feedback queue's own first page — the same key the feedback dialog opens on. The
      backend counts nothing, so a full first page with a next one reads 「40+」. */
-  const feedback = useResource(
-    tagFeedback,
-    token ? { token, status: 'pending', keyword: '' } : SKIP,
-  );
+  const feedback = useResource(tagFeedback, token ? { token, status: 'pending', keyword: '' } : SKIP);
   /* A one-row page: the statistics ride on any dictionary read. */
   const dictionary = useResource(
     dictionaryPage,
@@ -105,13 +94,7 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
             <Tile
               tab="reports"
               label="待处理的举报"
-              value={
-                reports.error
-                  ? failed
-                  : pendingReports === undefined
-                    ? undefined
-                    : formatCount(pendingReports)
-              }
+              value={reports.error ? failed : pendingReports === undefined ? undefined : formatCount(pendingReports)}
               caption="前往举报处理"
               openTab={openTab}
             />
@@ -146,9 +129,7 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
                   : undefined
             }
             caption={
-              stats
-                ? `已翻译 ${formatCount(stats.translated)} / 共 ${formatCount(stats.total)} 个标签`
-                : '前往词库编辑'
+              stats ? `已翻译 ${formatCount(stats.translated)} / 共 ${formatCount(stats.total)} 个标签` : '前往词库编辑'
             }
             openTab={openTab}
           >

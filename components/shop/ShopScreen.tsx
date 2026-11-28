@@ -220,10 +220,7 @@ export default function ShopScreen() {
     }
     if (readToken() !== token) return;
     if (outcome.kind !== 'done') {
-      showToast(
-        outcome.kind === 'refused' ? `结算失败：${outcome.message}` : outcome.message,
-        'error',
-      );
+      showToast(outcome.kind === 'refused' ? `结算失败：${outcome.message}` : outcome.message, 'error');
       return;
     }
     showToast(outcome.message, 'success');
@@ -249,9 +246,7 @@ export default function ShopScreen() {
     const lost =
       !(active instanceof HTMLElement) ||
       active === document.body ||
-      Boolean(
-        panel?.contains(active) && (active.closest('[inert]') || active.matches(':disabled')),
-      );
+      Boolean(panel?.contains(active) && (active.closest('[inert]') || active.matches(':disabled')));
     if (!lost && busy) return;
     landing.current = null;
     if (heading && lost) focusLanding(heading);
@@ -260,8 +255,7 @@ export default function ShopScreen() {
   /* A write storage refuses changes nothing and says why, as 加入购物车 does (G3-006). */
   const handlers = {
     onQuantity: (id: number, quantity: number, limit: number) => {
-      if (account && !setCartQuantity(account, id, quantity, limit))
-        showToast(CART_STORAGE_REFUSED, 'error');
+      if (account && !setCartQuantity(account, id, quantity, limit)) showToast(CART_STORAGE_REFUSED, 'error');
     },
     onRemove: (id: number) => {
       if (account && !removeFromCart(account, [id])) showToast(CART_STORAGE_REFUSED, 'error');
@@ -290,9 +284,7 @@ export default function ShopScreen() {
       />
     );
   } else if (items.length === 0) {
-    content = (
-      <EmptyState size="pane" icon={<MdStorefront size={ICON.display} />} title="暂无在售商品" />
-    );
+    content = <EmptyState size="pane" icon={<MdStorefront size={ICON.display} />} title="暂无在售商品" />;
   } else {
     content = (
       /* Named by the section's heading, not twice. */
@@ -366,10 +358,7 @@ export default function ShopScreen() {
         {account && (
           /* Docked beside the items on a wide column; below the step it is the sheet's. The card
              follows its content as lines come and go (`CartPanel`'s own box). */
-          <aside
-            aria-labelledby={dockedHeadingId}
-            className="sticky top-6 hidden w-80 shrink-0 @4xl/shop:block"
-          >
+          <aside aria-labelledby={dockedHeadingId} className="sticky top-6 hidden w-80 shrink-0 @4xl/shop:block">
             <Card
               variant="filled"
               padding="md"
@@ -389,11 +378,7 @@ export default function ShopScreen() {
                     id={dockedHeadingId}
                     className="mb-1 flex shrink-0 items-center gap-2 text-title-m text-on-surface"
                   >
-                    <MdShoppingCart
-                      size={ICON.standard}
-                      className="text-on-surface-variant"
-                      aria-hidden="true"
-                    />
+                    <MdShoppingCart size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />
                     购物车
                   </h2>
                 }

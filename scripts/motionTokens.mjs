@@ -30,6 +30,7 @@ const shapeNote = {
 };
 for (const [shape, spec] of Object.entries(spring.SHAPE_SPEC)) {
   lines.push(`  /* ${shapeNote[shape]} */`);
+  lines.push('  /* prettier-ignore */');
   lines.push(`  --motion-shape-${shapeName[shape]}: ${wrap(spring.springToLinear(spec))};`);
 }
 for (const [shape, easing] of Object.entries(spring.SPRING_BEZIER)) {

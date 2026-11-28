@@ -49,10 +49,7 @@ export function connectionTokens(headers: Headers): Set<string> {
  * the upstream's own `Connection` names, and the hop's `extra` refusals. `set-cookie` is never
  * copied here — it can repeat, so a hop that forwards cookies appends `getSetCookie()` itself.
  */
-export function forwardableResponseHeaders(
-  upstream: Headers,
-  extra: ReadonlySet<string> = new Set(),
-): Headers {
+export function forwardableResponseHeaders(upstream: Headers, extra: ReadonlySet<string> = new Set()): Headers {
   const named = connectionTokens(upstream);
   const out = new Headers();
   upstream.forEach((value, key) => {
@@ -66,8 +63,7 @@ export function forwardableResponseHeaders(
 /** One IP literal (v4 or v6, no port, no zone), or `''` — a header entry is never trusted as text. */
 function ipLiteral(value: string): string {
   const text = value.trim();
-  if (/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(text))
-    return text;
+  if (/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(text)) return text;
   if (!text.includes(':') || !/^[0-9A-Fa-f:.]{2,45}$/.test(text)) return '';
   try {
     /* The URL parser is a complete IPv6 grammar; anything it rejects is not an address. */

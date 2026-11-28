@@ -149,12 +149,7 @@ export function boxAt(from: Box, to: Box, p: number): Box {
 }
 
 export function radiiAt(from: Radii, to: Radii, p: number): Radii {
-  return [
-    lerp(from[0], to[0], p),
-    lerp(from[1], to[1], p),
-    lerp(from[2], to[2], p),
-    lerp(from[3], to[3], p),
-  ];
+  return [lerp(from[0], to[0], p), lerp(from[1], to[1], p), lerp(from[2], to[2], p), lerp(from[3], to[3], p)];
 }
 
 const channels = (colour: string): number[] | null => {
@@ -312,10 +307,7 @@ export function shutterLevels(column: { left: number; width: number } | null): S
  * What the chain clips to and where the content frame's origin lands, for a container box — the
  * check that the construction is the container (the tests run it at every sample).
  */
-export function resolveShutter(
-  levels: readonly ShutterLevel[],
-  box: Box,
-): { clip: Box; origin: [number, number] } {
+export function resolveShutter(levels: readonly ShutterLevel[], box: Box): { clip: Box; origin: [number, number] } {
   let ox = 0;
   let oy = 0;
   let clip = { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity };
@@ -344,8 +336,7 @@ export function resolveShutter(
 
 /** A content's opacity at travel `p` for a fade window: coming in across it, or going out. */
 export function fadeAt(window: FadeWindow, p: number, out = false): number {
-  const shown =
-    p <= window.start ? 0 : p >= window.end ? 1 : (p - window.start) / (window.end - window.start);
+  const shown = p <= window.start ? 0 : p >= window.end ? 1 : (p - window.start) / (window.end - window.start);
   return out ? 1 - shown : shown;
 }
 

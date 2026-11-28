@@ -16,11 +16,7 @@ export function BackgroundLocationProvider({
   frozenSearch: string | null;
   children: React.ReactNode;
 }) {
-  return (
-    <FrozenSearchParamsContext.Provider value={frozenSearch}>
-      {children}
-    </FrozenSearchParamsContext.Provider>
-  );
+  return <FrozenSearchParamsContext.Provider value={frozenSearch}>{children}</FrozenSearchParamsContext.Provider>;
 }
 
 export function useBackgroundSearchParams() {

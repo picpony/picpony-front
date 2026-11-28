@@ -21,9 +21,7 @@ export const useDocumentVisible = () =>
    that mount the detail route. */
 function viewportBottom() {
   const viewport = window.visualViewport;
-  return viewport
-    ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
-    : 0;
+  return viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop)) : 0;
 }
 let keyboardInset = 0;
 const viewportListeners = new Set<() => void>();

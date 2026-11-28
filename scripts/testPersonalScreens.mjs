@@ -34,10 +34,7 @@ test('history reads the backend’s rows and its UTC stamps, versions every writ
     viewedAt: '2026-10-01T12:00:00Z',
   });
   globalThis.fetch = async () =>
-    Response.json(
-      { error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } },
-      { status: 503 },
-    );
+    Response.json({ error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } }, { status: 503 });
   await assert.rejects(history.getBrowsingHistory('fixture'), (error) => error.status === 503);
   /* The list's revision is what the delete names; a conflict reads it again and sends once more, under a new key. */
   const sent = [];
@@ -105,12 +102,7 @@ test('the task document is the backend’s, by category; a category it does not 
     reward: { coins: 1, experience: 1 },
   });
   const doc = tasks.taskDocumentOf({
-    tasks: [
-      task('login', 1, 1, true),
-      task('weekly_upload', 2, 5),
-      task('novice_set_bg', 0, 1),
-      task('unknown', 9, 9),
-    ],
+    tasks: [task('login', 1, 1, true), task('weekly_upload', 2, 5), task('novice_set_bg', 0, 1), task('unknown', 9, 9)],
     coins: 7,
     experience: 250,
     level: 3,
@@ -123,10 +115,11 @@ test('the task document is the backend’s, by category; a category it does not 
     'the server’s own weekly count',
   );
   assert.deepEqual(doc.progress.novice, { set_bg: { progress: 0, required: 1, claimed: false } });
-  assert.deepEqual(
-    tasks.taskDocumentOf({ tasks: [], coins: 0, experience: 0, level: 1 }).progress,
-    { novice: null, daily: null, weekly: null },
-  );
+  assert.deepEqual(tasks.taskDocumentOf({ tasks: [], coins: 0, experience: 0, level: 1 }).progress, {
+    novice: null,
+    daily: null,
+    weekly: null,
+  });
 });
 test('block and tag groups read the backend’s rows; a Derpibooru tag list is normalised; queries keep their syntax', async () => {
   globalThis.fetch = async () =>
@@ -154,19 +147,12 @@ test('block and tag groups read the backend’s rows; a Derpibooru tag list is n
     },
   ]);
   assert.deepEqual(groups.tagList('Pony, cute, pony'), ['pony', 'cute']);
-  assert.equal(
-    tags.tagGroupQuery(['pony', 'princess luna (season 1)']),
-    'pony, "princess luna (season 1)"',
-  );
+  assert.equal(tags.tagGroupQuery(['pony', 'princess luna (season 1)']), 'pony, "princess luna (season 1)"');
 });
 test('group saves: a new one is a POST, an edit a PUT with its revision; a block edit keeps its switch', async () => {
   const sent = [];
   globalThis.fetch = async (url, init) => {
-    sent.push([
-      init.method,
-      new URL(url, 'https://fixture.invalid').pathname,
-      JSON.parse(init.body),
-    ]);
+    sent.push([init.method, new URL(url, 'https://fixture.invalid').pathname, JSON.parse(init.body)]);
     return Response.json(
       { id: 8, revision: init.method === 'POST' ? 0 : 3 },
       { status: init.method === 'POST' ? 201 : 200 },
@@ -176,10 +162,10 @@ test('group saves: a new one is a POST, an edit a PUT with its revision; a block
     id: 8,
     revision: 0,
   });
-  assert.deepEqual(
-    await tags.saveTagGroup('fixture', { id: 8, revision: 2, name: '组合', tags: ['pony'] }),
-    { id: 8, revision: 3 },
-  );
+  assert.deepEqual(await tags.saveTagGroup('fixture', { id: 8, revision: 2, name: '组合', tags: ['pony'] }), {
+    id: 8,
+    revision: 3,
+  });
   await groups.saveBlockGroup('fixture', {
     id: 8,
     revision: 2,
@@ -252,10 +238,9 @@ test('invalid upload input sends nothing, and lost success is unconfirmed', asyn
   assert.equal(count, 1);
 });
 test('upload field errors map to the form without claiming success', () => {
-  assert.deepEqual(
-    upload.uploadErrorsOf({ errors: { tag_input: ['must contain a rating tag'] } }),
-    { tags: '需要且只能有一个分级标签' },
-  );
+  assert.deepEqual(upload.uploadErrorsOf({ errors: { tag_input: ['must contain a rating tag'] } }), {
+    tags: '需要且只能有一个分级标签',
+  });
 });
 test('an empty trail does no work; a stroke decays to a stable resting texture', () => {
   const trail = new FlutedGlassTrail();
@@ -301,11 +286,7 @@ test('pending-tag removal and clearing report a refused write and leave the libr
     refuse = true;
     assert.equal(pending.removePendingTags(['cute']), false);
     assert.equal(pending.clearPendingTags(), false);
-    assert.deepEqual(
-      [...pending.readPendingTags()],
-      ['pony', 'cute', 'oc'],
-      'a refused write changes nothing',
-    );
+    assert.deepEqual([...pending.readPendingTags()], ['pony', 'cute', 'oc'], 'a refused write changes nothing');
     refuse = false;
     assert.equal(pending.removePendingTags(['cute']), true);
     assert.deepEqual([...pending.readPendingTags()], ['pony', 'oc']);
@@ -321,16 +302,13 @@ test('the coin ledger is paged by the backend: the remembered page is the page r
   const { readFileSync } = await import('node:fs');
   const vm = await import('node:vm');
   const ts = (await import('typescript')).default;
-  const code = ts.transpileModule(
-    readFileSync(new URL('../app/tasks/coins/CoinLedger.tsx', import.meta.url), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const code = ts.transpileModule(readFileSync(new URL('../app/tasks/coins/CoinLedger.tsx', import.meta.url), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   const reads = [];
   const exports = {};
   const jsx = (type, props) => ({ type, props });
@@ -366,10 +344,7 @@ test('the coin ledger is paged by the backend: the remembered page is the page r
       exports,
       require: (name) =>
         dependencies[name] ??
-        new Proxy(
-          {},
-          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
-        ),
+        new Proxy({}, { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) }),
     },
     { filename: 'app/tasks/coins/CoinLedger.tsx' },
   );
@@ -464,13 +439,7 @@ test('upload submit bounds streamed UTF-8 bytes before contacting upstream', asy
 });
 
 test('filter imports reject negated or compound expressions instead of reversing their meaning', () => {
-  for (const expression of [
-    'NOT "safe"',
-    '-"rainbow dash"',
-    'NOT (safe OR cute)',
-    'safe AND cute',
-    'score.lt:0',
-  ]) {
+  for (const expression of ['NOT "safe"', '-"rainbow dash"', 'NOT (safe OR cute)', 'safe AND cute', 'score.lt:0']) {
     assert.throws(() => groups.complexTerms(expression), /无法转换/);
   }
   assert.deepEqual(groups.complexTerms('safe OR "rainbow dash"'), ['safe', 'rainbow dash']);

@@ -140,13 +140,8 @@ const MEDIA_CORNERS: Record<MediaBadgeCorner, string> = {
 };
 
 /** A thumbnail's corner mark: one size, plate, inset and concentric corner. */
-export function MediaBadge({
-  corner,
-  ...props
-}: Pick<BadgeProps, 'children' | 'icon'> & { corner: MediaBadgeCorner }) {
-  return (
-    <Badge {...props} tone="media" size="sm" className={cn('absolute', MEDIA_CORNERS[corner])} />
-  );
+export function MediaBadge({ corner, ...props }: Pick<BadgeProps, 'children' | 'icon'> & { corner: MediaBadgeCorner }) {
+  return <Badge {...props} tone="media" size="sm" className={cn('absolute', MEDIA_CORNERS[corner])} />;
 }
 
 /**

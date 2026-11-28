@@ -47,12 +47,7 @@ export function ProfileFailure({ error, onRetry }: { error: unknown; onRetry?: (
   return (
     <>
       <ProfileBack />
-      <ErrorRetry
-        fill
-        title="用户资料加载失败"
-        message={apiErrorMessage(error)}
-        onRetry={onRetry}
-      />
+      <ErrorRetry fill title="用户资料加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
     </>
   );
 }

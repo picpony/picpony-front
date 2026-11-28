@@ -65,8 +65,7 @@ const UNCONTAINED_TONE: Record<LoadingIndicatorTone, string> = {
 };
 
 const HAS_SIZE = /(?:^|\s)(?:size|w|h)-\S+/;
-const HAS_DISPLAY =
-  /(?:^|\s)(?:hidden|block|flex|inline-flex|grid|inline-grid|inline|inline-block)(?:\s|$)/;
+const HAS_DISPLAY = /(?:^|\s)(?:hidden|block|flex|inline-flex|grid|inline-grid|inline|inline-block)(?:\s|$)/;
 
 /**
  * Delays showing an indicator past fast hydration/cache gates without synchronous `setState`
@@ -138,9 +137,7 @@ export default function LoadingIndicator({
         'm3e-loading-indicator shrink-0 items-center justify-center',
         responsive ? 'media-loading-responsive' : !HAS_DISPLAY.test(className) && 'inline-flex',
         contained && 'rounded-full',
-        !responsive &&
-          !HAS_SIZE.test(className) &&
-          (contained ? CONTAINER_SIZE[size] : DEFAULT_SHAPE_SIZE[size]),
+        !responsive && !HAS_SIZE.test(className) && (contained ? CONTAINER_SIZE[size] : DEFAULT_SHAPE_SIZE[size]),
         contained ? CONTAINED_TONE[tone] : UNCONTAINED_TONE[tone],
         delay > 0 && 'm3e-loading-reveal',
         delay > 0 && (shown ? 'opacity-100 scale-100' : 'opacity-0 scale-90'),
@@ -317,23 +314,16 @@ export function PageLoadingIndicator({
         decorative
         paused={paused || !shown}
         className={
-          delay > 0
-            ? cn('m3e-loading-reveal', shown ? 'opacity-100 scale-100' : 'opacity-0 scale-90')
-            : undefined
+          delay > 0 ? cn('m3e-loading-reveal', shown ? 'opacity-100 scale-100' : 'opacity-0 scale-90') : undefined
         }
       />
       {showLabel ? (
         shown ? (
-          <p className={cn('text-body-m text-on-surface-variant', delay > 0 && 'animate-fade-in')}>
-            {label}
-          </p>
+          <p className={cn('text-body-m text-on-surface-variant', delay > 0 && 'animate-fade-in')}>{label}</p>
         ) : (
           /* Hold the remark's exact single-line height during a delayed grace period without
              emitting premature live-region text, so revealing the caption never shifts the disc. */
-          <p
-            aria-hidden="true"
-            className="select-none text-body-m text-on-surface-variant opacity-0"
-          >
+          <p aria-hidden="true" className="select-none text-body-m text-on-surface-variant opacity-0">
             &nbsp;
           </p>
         )

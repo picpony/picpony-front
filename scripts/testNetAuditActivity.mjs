@@ -24,11 +24,7 @@ test('a late profile prefetch stays in the favorites step after its browser APIs
   now = 200;
   activity.finish('faves');
   now = 1101;
-  assert.equal(
-    activity.isQuiet(),
-    false,
-    'the old API-only idle test would already start the next step',
-  );
+  assert.equal(activity.isQuiet(), false, 'the old API-only idle test would already start the next step');
   now = 1400;
   activity.touch(); // the route payload starts get_user_profile on the server
   now = 1600;

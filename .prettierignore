@@ -1,0 +1,16 @@
+# Generated outputs verified by exact-match scripts (colors / emoji / net:audit)
+lib/generated/
+app/theme-palettes.css
+scripts/netAudit.baseline.json
+
+# Vendored, minified, provenance and lock/patch artifacts
+public/companions/browserponies.js
+public/companions/previews/provenance.json
+lib/lottie/*.json
+patches/
+bun.lock
+
+# Markdown: avoids table-padding churn and protects the Next.js managed block in AGENTS.md,
+# import-only CLAUDE.md, and raw HTML artwork in README.md.
+# Trailing whitespace and final newline remain enforced by `bun run format:whitespace`.
+*.md

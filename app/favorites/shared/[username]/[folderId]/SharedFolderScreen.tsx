@@ -59,13 +59,7 @@ function SharedSkeleton() {
  * mounts, rather than from a placeholder that changed shape under the landing when the folder's
  * read came in. The count is then the read's own (the list counts a repeated id twice).
  */
-export default function SharedFolderScreen({
-  owner,
-  folderId,
-}: {
-  owner: FaveOwner;
-  folderId: number;
-}) {
+export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwner; folderId: number }) {
   const router = useRouter();
   const back = useBackOrParent('/');
   useEscapeBack(back);
@@ -81,23 +75,19 @@ export default function SharedFolderScreen({
       : typeof user?.username === 'string' && user.username === username;
   const route = sharedFolderHref(owner, folderId);
   const [page, setPage] = useAddressPage(route, false);
-  const listed =
-    folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
+  const listed = folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
   const ids = listed ? read.data?.ids : undefined;
   const state = useFavePage({ ids, page, setPage, listKey: `fave-shared:${ownerKey}:${folderId}` });
   if (ids && page > state.totalPages) setPage(state.totalPages);
 
   /* The folder as the public list has it — the card's own name, so the header and the card that
      opened it agree, and what the header is drawn from while the folder's read is on its way. */
-  const entry =
-    folderId > 0 ? publicList.data?.find((folder) => folder.id === folderId) : undefined;
+  const entry = folderId > 0 ? publicList.data?.find((folder) => folder.id === folderId) : undefined;
   const seeded = read.data === undefined && !read.error && entry !== undefined;
   const name = entry ? folderLabel(entry) : folderId === 0 ? '公开收藏' : null;
   const pageRef = useFolderPage(route);
   useDocumentTitle(
-    read.data && listed
-      ? `${name ?? '收藏夹'} - ${username ? `${username} 的` : ''}收藏 - PicPony`
-      : null,
+    read.data && listed ? `${name ?? '收藏夹'} - ${username ? `${username} 的` : ''}收藏 - PicPony` : null,
   );
   const folderMissing = isApiError(read.error) && read.error.code === 'FOLDER_NOT_FOUND';
 
@@ -170,10 +160,7 @@ export default function SharedFolderScreen({
             description={username ? `${username} 未公开此收藏夹` : undefined}
             action={
               own ? (
-                <Button
-                  variant="tonal"
-                  onClick={() => router.push(favoritesHref(), { scroll: false })}
-                >
+                <Button variant="tonal" onClick={() => router.push(favoritesHref(), { scroll: false })}>
                   管理我的收藏
                 </Button>
               ) : undefined
@@ -220,13 +207,7 @@ export default function SharedFolderScreen({
             failureTitle="收藏夹加载失败"
             seedCover={entry ? readFolderSeedCover(route, entry.latestImageId) : undefined}
             placeholderCount={read.data?.ids.length ?? entry?.itemCount}
-            empty={
-              <EmptyState
-                size="pane"
-                icon={<MdPhotoLibrary size={ICON.display} />}
-                title="暂无图片"
-              />
-            }
+            empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="暂无图片" />}
           />
         </div>
       </div>

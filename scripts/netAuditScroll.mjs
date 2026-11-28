@@ -127,8 +127,7 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }));
   });
 const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result
-    ?.value;
+  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
 await send('Page.enable');
 socket.addEventListener('message', async (e) => {
@@ -175,9 +174,7 @@ const before = await evaluate(`(() => {
   s.scrollTop = 1200;
   return { cards: ${cardCount}, height: s.scrollHeight, top: s.scrollTop };
 })()`);
-console.log(
-  `before  cards ${before.cards}  scrollHeight ${before.height}  scrollTop ${before.top}`,
-);
+console.log(`before  cards ${before.cards}  scrollHeight ${before.height}  scrollTop ${before.top}`);
 
 /* Sampled every frame across the turn — one empty frame is enough to clamp the offset. */
 await evaluate(`(() => {

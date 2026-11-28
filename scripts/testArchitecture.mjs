@@ -90,10 +90,7 @@ test('domain libraries do not import route implementations or the retired API ag
   const violations = [];
   for (const [file, { edges }] of graph) {
     for (const { target, line } of edges) {
-      if (
-        /^lib\/api(?:\.[cm]?[jt]s)?$/.test(target) ||
-        (file.startsWith('lib/') && target.startsWith('app/'))
-      ) {
+      if (/^lib\/api(?:\.[cm]?[jt]s)?$/.test(target) || (file.startsWith('lib/') && target.startsWith('app/'))) {
         violations.push(`${file}:${line} -> ${target}`);
       }
     }
@@ -110,12 +107,7 @@ test('libraries do not depend on components except the viewer code warmup', () =
       // This import deliberately preloads the destination's code on gallery intent.
       // It never renders a component; replacing it with registration would add a
       // mount-order requirement to the first press. Keep the exception exact.
-      if (
-        file === 'lib/hero/media.ts' &&
-        edge.target === 'components/PicDetail.tsx' &&
-        edge.dynamic
-      )
-        continue;
+      if (file === 'lib/hero/media.ts' && edge.target === 'components/PicDetail.tsx' && edge.dynamic) continue;
       violations.push(`${file}:${edge.line} -> ${edge.target}`);
     }
   }
@@ -137,10 +129,7 @@ test('motion implementations depend only on their owned collaborators, never the
     if (!file.startsWith('lib/motion/')) continue;
     assert.ok(allowed.has(file), `declare the collaborators of ${file}`);
     for (const { target, line } of edges) {
-      if (
-        (target === 'lib/motion.ts' || target.startsWith('lib/motion/')) &&
-        !allowed.get(file).includes(target)
-      ) {
+      if ((target === 'lib/motion.ts' || target.startsWith('lib/motion/')) && !allowed.get(file).includes(target)) {
         violations.push(`${file}:${line} -> ${target}`);
       }
     }
@@ -150,9 +139,7 @@ test('motion implementations depend only on their owned collaborators, never the
 
 test('WAAPI motion modules and route cross-fade never reach GSAP', () => {
   const gsapTarget = (file) =>
-    file === 'lib/motion/engine.ts' ||
-    file === 'lib/motion.ts' ||
-    /^(?:gsap|@gsap\/react)(?:\/|$)/.test(file);
+    file === 'lib/motion/engine.ts' || file === 'lib/motion.ts' || /^(?:gsap|@gsap\/react)(?:\/|$)/.test(file);
   const gsapFree = [
     'lib/motion/tabs.ts',
     'lib/motion/sharedAxis.ts',
@@ -162,9 +149,7 @@ test('WAAPI motion modules and route cross-fade never reach GSAP', () => {
     'lib/routeCrossFade.ts',
     'lib/routeCrossFadePlay.ts',
   ];
-  const violations = gsapFree
-    .map((file) => findPath(graph, file, gsapTarget, true))
-    .filter(Boolean);
+  const violations = gsapFree.map((file) => findPath(graph, file, gsapTarget, true)).filter(Boolean);
   assert.equal(violations.length, 0, explain(violations));
 });
 
@@ -184,9 +169,7 @@ test('the shared shell keeps motion, hero, detail stage, icons, Markdown, palett
     deferred.has(file) ||
     file.startsWith('lib/motion/') ||
     /^lib\/api\/admin/.test(file) ||
-    /^(?:gsap|@gsap\/react|react-icons|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(
-      file,
-    );
+    /^(?:gsap|@gsap\/react|react-icons|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(file);
   // All client roots installed by the server layout, not the server-only palette derivation.
   const shell = graph.get('app/layout.tsx').edges.filter((edge) => graph.get(edge.target)?.client);
   assert.ok(shell.length > 0, 'the shell scan must inspect actual client entry points');

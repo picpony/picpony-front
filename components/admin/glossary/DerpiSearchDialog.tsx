@@ -71,17 +71,11 @@ export default function DerpiSearchDialog({
             fieldClassName="min-w-0 flex-1"
             data-autofocus=""
           />
-          <Button
-            type="submit"
-            variant="filled"
-            loading={Boolean(query) && read.isLoading && read.data === undefined}
-          >
+          <Button type="submit" variant="filled" loading={Boolean(query) && read.isLoading && read.data === undefined}>
             搜索
           </Button>
         </form>
-        <FollowHeight
-          watch={`${query}:${read.data ? rows.length : read.error ? 'err' : 'loading'}`}
-        >
+        <FollowHeight watch={`${query}:${read.data ? rows.length : read.error ? 'err' : 'loading'}`}>
           {!query ? (
             <EmptyState size="inline" title="输入标签名后搜索原站标签" />
           ) : read.data === undefined && read.error ? (
@@ -92,12 +86,7 @@ export default function DerpiSearchDialog({
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
           ) : read.data === undefined ? (
-            <PageLoadingIndicator
-              size="inline"
-              indicatorSize="md"
-              label="正在搜索原站标签…"
-              className="min-h-36"
-            />
+            <PageLoadingIndicator size="inline" indicatorSize="md" label="正在搜索原站标签…" className="min-h-36" />
           ) : rows.length === 0 ? (
             <EmptyState size="inline" title="原站没有匹配的标签" />
           ) : (
@@ -108,17 +97,9 @@ export default function DerpiSearchDialog({
                   className="m3-row flex flex-wrap items-center gap-x-3 gap-y-2 bg-surface-container-highest p-3"
                 >
                   <Badge colors={tagCategoryChip(tag.category)}>{tag.category || 'general'}</Badge>
-                  <span className="min-w-0 flex-1 font-mono text-body-m text-on-surface wrap-anywhere">
-                    {tag.name}
-                  </span>
+                  <span className="min-w-0 flex-1 font-mono text-body-m text-on-surface wrap-anywhere">{tag.name}</span>
                   <span className="text-body-s tabular-nums text-on-surface-variant">{`（${formatCount(tag.images)} 张）`}</span>
-                  <Button
-                    type="button"
-                    variant="tonal"
-                    size="xs"
-                    icon={<MdAdd />}
-                    onClick={() => onImport(tag)}
-                  >
+                  <Button type="button" variant="tonal" size="xs" icon={<MdAdd />} onClick={() => onImport(tag)}>
                     导入
                   </Button>
                 </li>

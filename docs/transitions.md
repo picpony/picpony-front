@@ -4,16 +4,16 @@ Navigation, tabs, container transforms and picture stepping. Spring selection be
 
 ## Transition selection
 
-| Change                           | Mechanism                                      | Owner                                             |
-| -------------------------------- | ---------------------------------------------- | ------------------------------------------------- |
-| Open/close an image from a card  | Shared-element flight                          | `lib/hero/`                                       |
-| Open/close a forum thread        | Row ↔ post container transform                 | `forumContainer.ts`, `forumTransitionPlay.ts`     |
-| Open/close a folder              | Card ↔ visible page-column container transform | `folderTransit.ts`, `folderTransitPlay.ts`        |
-| Open an image from a history row | Row ↔ overlay container transform              | `detailTransit.ts`, `detailTransitPlay.ts`        |
-| Image with no usable origin      | Surface arrival/fade                           | Detail transit                                    |
-| Previous/next picture            | Shared axis X in the existing viewer           | `hero/useDetailStep.ts`, `hero/step.ts`           |
-| Tabs and mapped top-level routes | Shared axis X                                  | `playSharedAxis`, `TabPanesDriver`, `tabStrip.ts` |
-| Other routes                     | Fade through over an inert clone               | `routeCrossFade.ts`                               |
+| Change | Mechanism | Owner |
+| --- | --- | --- |
+| Open/close an image from a card | Shared-element flight | `lib/hero/` |
+| Open/close a forum thread | Row ↔ post container transform | `forumContainer.ts`, `forumTransitionPlay.ts` |
+| Open/close a folder | Card ↔ visible page-column container transform | `folderTransit.ts`, `folderTransitPlay.ts` |
+| Open an image from a history row | Row ↔ overlay container transform | `detailTransit.ts`, `detailTransitPlay.ts` |
+| Image with no usable origin | Surface arrival/fade | Detail transit |
+| Previous/next picture | Shared axis X in the existing viewer | `hero/useDetailStep.ts`, `hero/step.ts` |
+| Tabs and mapped top-level routes | Shared axis X | `playSharedAxis`, `TabPanesDriver`, `tabStrip.ts` |
+| Other routes | Fade through over an inert clone | `routeCrossFade.ts` |
 
 Paths in the owner column are under `lib/`. Heavy playback code stays behind the existing [lazy boundaries](module-boundaries.md#initial-document-and-lazy-boundaries).
 

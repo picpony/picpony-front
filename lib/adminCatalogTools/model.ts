@@ -10,8 +10,7 @@ export function text(value: unknown, max = 10000): string {
   return value;
 }
 export function integer(value: unknown, min = 0): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || !/^-?\d+$/.test(value)))
-    throw new ApiError('invalid');
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^-?\d+$/.test(value))) throw new ApiError('invalid');
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < min) throw new ApiError('invalid');
   return number;

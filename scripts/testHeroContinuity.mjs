@@ -13,8 +13,7 @@ const { buildFlightKeyframes, createHeroLeg, evaluateLeg } = await import('../li
 const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
 const { getHeroRestingDetailRect } = await import('../lib/hero/dom.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
-const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } =
-  await import('../lib/hero/constants.ts');
+const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
 const { LS_KEYS } = await import('../lib/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
 const utils = { clamp, clamp01 };
@@ -66,11 +65,7 @@ class Scroller extends EventTarget {
 
   removeEventListener(type, listener, options) {
     // Node 24 does not normalize the boolean capture shorthand like browser EventTarget.
-    super.removeEventListener(
-      type,
-      listener,
-      typeof options === 'boolean' ? { capture: options } : options,
-    );
+    super.removeEventListener(type, listener, typeof options === 'boolean' ? { capture: options } : options);
   }
 
   scrollTo(top) {
@@ -313,11 +308,7 @@ test('scroll-driven follow animates multiple scrolling blocks on one timeline in
     range: 400,
   });
   assert.equal(records.length, 2);
-  assert.equal(
-    records[0].timing.timeline,
-    records[1].timing.timeline,
-    'header and body share one ScrollTimeline',
-  );
+  assert.equal(records[0].timing.timeline, records[1].timing.timeline, 'header and body share one ScrollTimeline');
   assert.equal(records[0].frames[1].transform, 'translate3d(0, -400.000px, 0)');
   assert.equal(records[1].frames[1].transform, 'translate3d(0, -400.000px, 0)');
 
@@ -341,11 +332,7 @@ test('a returning window follows gallery scroll without moving its content, and 
   const content = { style: { translate: '' } };
   const { followHeroWindowScroll } = load('lib/hero/follow.ts', {}, { window: {} });
   const follow = followHeroWindowScroll(source, clip, content, { top: 200, range: 5200 });
-  assert.equal(
-    clip.style.translate,
-    '0 -140px',
-    'a remounted window adopts scroll that already happened',
-  );
+  assert.equal(clip.style.translate, '0 -140px', 'a remounted window adopts scroll that already happened');
   assert.equal(content.style.translate, '0 140px');
   assert.equal(follow.offset(), -140, 'a reversal must capture the scrolled position');
   source.scrollTo(400);
@@ -391,11 +378,7 @@ test('a returning window uses one native scroll timeline and leaves no scroll an
   assert.equal(calls.length, 2);
   assert.equal(calls[0].timing.timeline, calls[1].timing.timeline);
   assert.equal(calls[0].timing.timeline.source, source);
-  assert.equal(
-    getEventListeners(source, 'scroll').length,
-    0,
-    'native scroll must stay on the compositor',
-  );
+  assert.equal(getEventListeners(source, 'scroll').length, 0, 'native scroll must stay on the compositor');
   follow.release();
   follow.release();
   assert.equal(cancelled, 2, 'each track is released exactly once');
@@ -419,27 +402,15 @@ for (const input of ['wheel', 'pointerdown', 'touchstart']) {
     assert.equal(await transferred, true);
     assert.equal(getEventListeners(abort.signal, 'abort').length, 0);
     drain();
-    assert.equal(
-      destination.scrollTop,
-      beforeInput,
-      'no queued write may precede native scrolling',
-    );
+    assert.equal(destination.scrollTop, beforeInput, 'no queued write may precede native scrolling');
 
     destination.scrollTo(beforeInput + 60);
     const staleWheel = new TestWheelEvent();
     outgoing.dispatchEvent(staleWheel);
     outgoing.scrollTo(1100);
     drain();
-    assert.equal(
-      destination.scrollTop,
-      beforeInput + 60,
-      'old momentum cannot overwrite new input',
-    );
-    assert.equal(
-      staleWheel.defaultPrevented,
-      false,
-      'the old receiver no longer captures wheel input',
-    );
+    assert.equal(destination.scrollTop, beforeInput + 60, 'old momentum cannot overwrite new input');
+    assert.equal(staleWheel.defaultPrevented, false, 'the old receiver no longer captures wheel input');
     assertNoScrollerListeners(outgoing);
   });
 }
@@ -455,11 +426,7 @@ test('ctrl-wheel zoom does not claim native scrolling or cancel a live handoff',
   assert.equal(continuity.hasNativeInput, false);
   assert.equal(zoom.defaultPrevented, false);
   drain();
-  assert.equal(
-    destination.scrollTop,
-    280,
-    'the existing wheel stream still reaches its destination',
-  );
+  assert.equal(destination.scrollTop, 280, 'the existing wheel stream still reaches its destination');
 });
 
 test('route can claim input after Stage scrolls between addPeer and setInputTarget', async (t) => {
@@ -711,11 +678,7 @@ test('one wheel flow survives route removal and 200ms gaps without mistaking its
   await h.clock.advanceTo(h.clock.now + 400);
   assert.equal(released, 1);
   assert.equal(h.clock.frames.size, 0);
-  assert.equal(
-    getEventListeners(h.window, 'wheel').length,
-    1,
-    'only the shared input monitor remains',
-  );
+  assert.equal(getEventListeners(h.window, 'wheel').length, 1, 'only the shared input monitor remains');
   assert.equal(getEventListeners(h.leaf, 'wheel').length, 0);
   assertNoScrollerListeners(h.destination);
 });
@@ -726,11 +689,7 @@ test('an opening handoff can acquire a wheel stream after its active flag clears
   await h.clock.advanceTo(h.clock.now + 200);
   assert.equal(h.input.isHeroInteractionQuiet(), true);
   h.begin();
-  assert.equal(
-    h.continuity.canCompleteReturn,
-    true,
-    'quiet input can still belong to the outgoing scroller',
-  );
+  assert.equal(h.continuity.canCompleteReturn, true, 'quiet input can still belong to the outgoing scroller');
   h.source.isConnected = h.leaf.isConnected = false;
   h.continuity.retire(() => {});
   h.wheel(h.destination, { deltaY: 80 });
@@ -774,8 +733,7 @@ for (const takeover of ['pointer', 'ctrl-wheel', 'native-scroll', 'native-before
     h.wheel(h.destination, { deltaY: 100 });
     if (takeover === 'pointer')
       h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'mouse' }));
-    else if (takeover === 'ctrl-wheel')
-      assert.equal(h.wheel(h.destination, { ctrlKey: true }).defaultPrevented, false);
+    else if (takeover === 'ctrl-wheel') assert.equal(h.wheel(h.destination, { ctrlKey: true }).defaultPrevented, false);
     else {
       h.destination.scrollTop += 30;
       if (takeover === 'native-scroll') h.destination.dispatchEvent(new Event('scroll'));
@@ -790,10 +748,7 @@ for (const takeover of ['pointer', 'ctrl-wheel', 'native-scroll', 'native-before
 
 test('a detached touch target keeps direct drag input alive beyond the safety window and clears all input on end', async (t) => {
   const h = returnInputHarness(t);
-  h.dispatch(
-    h.leaf,
-    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }),
-  );
+  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
   h.touch('touchstart', 600);
   h.begin();
   let released = false;
@@ -889,15 +844,9 @@ test('blurring the departing detail control does not cancel its ongoing wheel fl
 });
 
 function beginDetachedTouch(h) {
-  h.dispatch(
-    h.leaf,
-    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }),
-  );
+  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
   h.touch('touchstart', 600);
-  h.dispatch(
-    h.leaf,
-    Object.assign(new Event('pointercancel'), { pointerType: 'touch', pointerId: 9 }),
-  );
+  h.dispatch(h.leaf, Object.assign(new Event('pointercancel'), { pointerType: 'touch', pointerId: 9 }));
   h.begin();
   h.continuity.retire(() => {});
   h.source.isConnected = h.leaf.isConnected = false;
@@ -943,19 +892,11 @@ for (const end of ['touchend', 'touchcancel']) {
     const top = h.destination.scrollTop;
     h.touch('touchmove', 570);
     await h.frame();
-    assert.equal(
-      h.destination.scrollTop,
-      top,
-      'the cancelled relay must not keep moving the gallery',
-    );
+    assert.equal(h.destination.scrollTop, top, 'the cancelled relay must not keep moving the gallery');
     assert.equal(h.input.hasActiveHeroInput(), true, 'the original finger is still held');
     assert.equal(h.input.readHeroScrollInput().touches[0].clientY, 570);
     h.touch(end, 570, true);
-    assert.equal(
-      h.input.hasActiveHeroInput(),
-      false,
-      'the real ending must not wait for the safety timer',
-    );
+    assert.equal(h.input.hasActiveHeroInput(), false, 'the real ending must not wait for the safety timer');
     assert.equal(h.input.readHeroScrollInput().touches.length, 0);
     assertNoTouchTargetListeners(h);
     assert.equal(h.clock.frames.size, 0);
@@ -967,10 +908,7 @@ test('an ended detached touch does not clear the new touch that superseded its r
   beginDetachedTouch(h);
   const oldTouch = { identifier: 5, clientX: 10, clientY: 600, target: h.leaf };
   const newTouch = { identifier: 6, clientX: 30, clientY: 40, target: h.destination };
-  h.dispatch(
-    h.destination,
-    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 10 }),
-  );
+  h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 10 }));
   h.dispatch(
     h.destination,
     Object.assign(new Event('touchstart'), {
@@ -978,20 +916,14 @@ test('an ended detached touch does not clear the new touch that superseded its r
       changedTouches: [newTouch],
     }),
   );
-  h.dispatch(
-    h.leaf,
-    Object.assign(new Event('touchend'), { touches: [newTouch], changedTouches: [oldTouch] }),
-  );
+  h.dispatch(h.leaf, Object.assign(new Event('touchend'), { touches: [newTouch], changedTouches: [oldTouch] }));
   assert.equal(h.input.hasActiveHeroInput(), true);
   assert.deepEqual(
     Array.from(h.input.readHeroScrollInput().touches, (touch) => touch.identifier),
     [6],
   );
   assertNoTouchTargetListeners(h);
-  h.dispatch(
-    h.destination,
-    Object.assign(new Event('touchend'), { touches: [], changedTouches: [newTouch] }),
-  );
+  h.dispatch(h.destination, Object.assign(new Event('touchend'), { touches: [], changedTouches: [newTouch] }));
   assert.equal(h.input.hasActiveHeroInput(), false);
   assert.equal(h.clock.frames.size, 0);
 });
@@ -1012,11 +944,7 @@ for (const releaseFirst of [false, true]) {
       assertNoScrollerListeners(h.destination);
       // Cancelling one owner leaves the shared scheduler's already-requested empty flush.
       await h.frame();
-      assert.equal(
-        h.destination.scrollTop,
-        top,
-        'cancelled movement must not run in the pending frame',
-      );
+      assert.equal(h.destination.scrollTop, top, 'cancelled movement must not run in the pending frame');
       assert.equal(h.clock.frames.size, 0);
     });
   }
@@ -1125,11 +1053,7 @@ function inputTransferHarness(t, history = {}) {
     window.dispatchEvent(event); // A held touch keeps the quiet wait pending beyond its budget.
   };
   const assertClean = () => {
-    assert.equal(
-      getEventListeners(session.abort.signal, 'abort').length,
-      0,
-      'session abort listener leaked',
-    );
+    assert.equal(getEventListeners(session.abort.signal, 'abort').length, 0, 'session abort listener leaked');
     assert.equal(
       getEventListeners(controller.lifecycleAbort.signal, 'abort').length,
       0,
@@ -1137,8 +1061,7 @@ function inputTransferHarness(t, history = {}) {
     );
     for (const wait of quietWaits) {
       assert.equal(getEventListeners(wait.signal, 'abort').length, 0, 'losing race waiter leaked');
-      for (const id of wait.timerIds)
-        assert.equal(clock.timers.has(id), false, 'quiet timer leaked');
+      for (const id of wait.timerIds) assert.equal(clock.timers.has(id), false, 'quiet timer leaked');
     }
   };
   t.after(() => {
@@ -1226,10 +1149,7 @@ test('a failed reopening disposes its flight and scroll owner before collapsing 
       [...h.calls].sort(),
       ['seal', 'pull', 'motion', 'scroll', 'shared', 'visual', 'background'].sort(),
     );
-    assert.ok(
-      h.calls.indexOf('seal') < h.calls.indexOf('motion'),
-      'seal the route before cancelling its window',
-    );
+    assert.ok(h.calls.indexOf('seal') < h.calls.indexOf('motion'), 'seal the route before cancelling its window');
     return true;
   });
   await h.controller.abandonToCollapse(h.session);
@@ -1297,9 +1217,7 @@ test('quiet wait reports quiet, expired and aborted separately and cleans up eac
 
   const quiet = new AbortController();
   const pending = h.input.waitForHeroInteractionQuiet(quiet.signal, 100, 500.9);
-  h.window.dispatchEvent(
-    Object.assign(new Event('pointerup'), { pointerType: 'touch', pointerId: 1 }),
-  );
+  h.window.dispatchEvent(Object.assign(new Event('pointerup'), { pointerType: 'touch', pointerId: 1 }));
   await h.clock.advanceTo(h.clock.now + 110);
   assert.equal(await pending, 'quiet');
   assert.equal(getEventListeners(quiet.signal, 'abort').length, 0);
@@ -1313,9 +1231,7 @@ test('controller completes a fractional budget even when its timer fires before 
   const pending = h.wait();
   const deadline = h.clock.reads[0] + HERO_INPUT_TRANSFER_MAX_MS;
   const wait = h.quietWaits[0];
-  const expiry = wait.timerIds
-    .map((id) => h.clock.timers.get(id))
-    .find((timer) => timer.delay === wait.budget);
+  const expiry = wait.timerIds.map((id) => h.clock.timers.get(id)).find((timer) => timer.delay === wait.budget);
   assert.notEqual(wait.budget, Math.trunc(wait.budget), 'the regression needs a fractional budget');
   assert.ok(expiry.at < deadline, 'the browser timer truncates the delay before this deadline');
   await h.clock.advanceTo(expiry.at);
@@ -1346,9 +1262,7 @@ test('a released native receiver waits on the existing quiet budget without retr
   assert.equal(nativeWaits, 1);
   assert.equal(h.quietWaits.length, 1, 'keep the original budget rather than creating a busy loop');
   const wait = h.quietWaits[0];
-  const expiry = wait.timerIds
-    .map((id) => h.clock.timers.get(id))
-    .find((timer) => timer.delay === wait.budget);
+  const expiry = wait.timerIds.map((id) => h.clock.timers.get(id)).find((timer) => timer.delay === wait.budget);
   await h.clock.advanceTo(expiry.at);
   assert.equal(await pending, true);
   assert.equal(nativeWaits, 1);
@@ -1383,18 +1297,12 @@ for (const owner of ['session', 'lifecycle']) {
         abort.abort();
       } else {
         const wait = h.quietWaits[0];
-        const expiry = wait.timerIds
-          .map((id) => h.clock.timers.get(id))
-          .find((timer) => timer.delay === wait.budget);
+        const expiry = wait.timerIds.map((id) => h.clock.timers.get(id)).find((timer) => timer.delay === wait.budget);
         await h.clock.advanceTo(expiry.at, (timer) => {
           if (timer.id === expiry.id) abort.abort();
         });
       }
-      assert.equal(
-        await pending,
-        false,
-        'an abort remains authoritative while owns() is still true',
-      );
+      assert.equal(await pending, false, 'an abort remains authoritative while owns() is still true');
       assert.equal(h.controller.foreground, h.session);
       h.assertClean();
     });
@@ -1417,9 +1325,7 @@ test('a suspended confirmation frame expires without abandoning a live handoff',
   const pending = h.wait();
   await h.clock.flush();
   assert.equal(h.clock.frames.size, 1);
-  const expiry = [...h.clock.timers.values()].find(
-    (timer) => timer.delay === HERO_ROUTE_TIMEOUT_MS,
-  );
+  const expiry = [...h.clock.timers.values()].find((timer) => timer.delay === HERO_ROUTE_TIMEOUT_MS);
   assert.ok(expiry, 'the frame confirmation is bounded independently of rAF');
   await h.clock.advanceTo(expiry.at); // Simulate a hidden tab: timers advance, rAF does not.
   assert.equal(await pending, true);
@@ -1470,11 +1376,7 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
   /* A fresh flight is moving in the frame after the press — not `fastOutSlowIn`'s hang-back — and
      builds to one crest early in the leg, not at the press, then only slows, landing at rest. */
   const launch = evaluateLeg(leg, 1000).speed;
-  close(
-    launch,
-    (distance * velocityAt(leg.progress, 0)) / HERO_DURATIONS.forward,
-    'pose speed at the press',
-  );
+  close(launch, (distance * velocityAt(leg.progress, 0)) / HERO_DURATIONS.forward, 'pose speed at the press');
   const speeds = [];
   for (let step = 0; step <= 100; step += 1)
     speeds.push(evaluateLeg(leg, 1000 + (HERO_DURATIONS.forward * step) / 100).speed);
@@ -1482,8 +1384,7 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
   const crestAt = speeds.indexOf(crest);
   /* A spring from rest: no speed at the instant of release but its greatest acceleration, so it is
      visibly on its way in the first frame (Compose's shared-element spring). */
-  const firstFrame =
-    heroRectCenterDistance(from, evaluateLeg(leg, 1000 + 1000 / 60).rect) / distance;
+  const firstFrame = heroRectCenterDistance(from, evaluateLeg(leg, 1000 + 1000 / 60).rect) / distance;
   assert.ok(
     launch >= 0 && firstFrame > 0.02,
     `a fresh flight leaves at once (${(firstFrame * 100).toFixed(1)}% in the first frame, crest ${crest.toFixed(2)})`,
@@ -1525,15 +1426,8 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
       speed: pose.speed,
     });
     const kept = evaluateLeg(rebuilt, at).speed / pose.speed;
-    assert.ok(
-      Math.abs(kept - 1) < 0.01,
-      `a rebuild ${share * 100}% in keeps its speed (${(kept * 100).toFixed(1)}%)`,
-    );
-    assertRectClose(
-      evaluateLeg(rebuilt, 1000 + HERO_DURATIONS.forward).rect,
-      to,
-      `and lands (${share * 100}%)`,
-    );
+    assert.ok(Math.abs(kept - 1) < 0.01, `a rebuild ${share * 100}% in keeps its speed (${(kept * 100).toFixed(1)}%)`);
+    assertRectClose(evaluateLeg(rebuilt, 1000 + HERO_DURATIONS.forward).rect, to, `and lands (${share * 100}%)`);
   }
 });
 
@@ -1598,11 +1492,7 @@ test('a reversal leaves at the speed it was caught at, and carries on before it 
       launch < 0 && -launch >= 0.98 * floor && -launch <= 1.05 * caught.speed,
       `launch ${launch} continues the caught ${-caught.speed} (floor ${-floor}) at ${at}ms`,
     );
-    assertRectClose(
-      evaluateLeg(back, at).rect,
-      caught.rect,
-      `the reversal starts where it was caught (${at}ms)`,
-    );
+    assertRectClose(evaluateLeg(back, at).rect, caught.rect, `the reversal starts where it was caught (${at}ms)`);
     /* The dip: for a few ms the flyer is still travelling the way it was heading (toward `to`),
        and it turns within a frame — measured, because its depth goes as the caught speed and a
        faster flight now leaves less of it. */
@@ -1634,13 +1524,10 @@ function waapiFlyerRect(flight, keyframes, offset) {
   const left = Math.max(0, right - 1);
   const a = keyframes[left];
   const b = keyframes[right];
-  const fraction =
-    left === right ? 0 : Math.max(0, Math.min(1, (offset - a.offset) / (b.offset - a.offset)));
+  const fraction = left === right ? 0 : Math.max(0, Math.min(1, (offset - a.offset) / (b.offset - a.offset)));
   const start = transform(a.transform);
   const finish = transform(b.transform);
-  const [x, y, scaleX, scaleY] = start.map(
-    (value, index) => value + (finish[index] - value) * fraction,
-  );
+  const [x, y, scaleX, scaleY] = start.map((value, index) => value + (finish[index] - value) * fraction);
   return {
     left: x,
     top: y,
@@ -1651,10 +1538,7 @@ function waapiFlyerRect(flight, keyframes, offset) {
 
 function assertRectClose(actual, expected, label) {
   for (const axis of ['left', 'top', 'width', 'height']) {
-    assert.ok(
-      Math.abs(actual[axis] - expected[axis]) < 1e-7,
-      `${label} ${axis}: ${actual[axis]} vs ${expected[axis]}`,
-    );
+    assert.ok(Math.abs(actual[axis] - expected[axis]) < 1e-7, `${label} ${axis}: ${actual[axis]} vs ${expected[axis]}`);
   }
 }
 
@@ -1688,18 +1572,11 @@ test('settled spring legs stay at rest and do not lend residual velocity to a re
       const { leg, flight } = interruptionFixture(duration, speed);
       assert.equal(leg.progress.kind, 'spring');
       const landedAt = leg.startedAt + duration;
-      assert.ok(
-        evaluateLeg(leg, landedAt - 0.01).speed > 0,
-        'the spring is moving just before landing',
-      );
+      assert.ok(evaluateLeg(leg, landedAt - 0.01).speed > 0, 'the spring is moving just before landing');
       for (const at of [landedAt, landedAt + 0.001, landedAt + 1000]) {
         const pose = evaluateLeg(leg, at);
         assertRectClose(pose.rect, leg.to, `spring endpoint ${duration}ms/${speed} at ${at}`);
-        assert.equal(
-          pose.speed,
-          0,
-          'a filled endpoint is stationary even when the normalized spring has a tail',
-        );
+        assert.equal(pose.speed, 0, 'a filled endpoint is stationary even when the normalized spring has a tail');
         const reversed = createHeroLeg({
           from: pose.rect,
           to: leg.from,
@@ -1711,11 +1588,7 @@ test('settled spring legs stay at rest and do not lend residual velocity to a re
           baseAspect: flight.base.width / flight.base.height,
           speed: -pose.speed,
         });
-        assert.equal(
-          evaluateLeg(reversed, at).speed,
-          0,
-          'a late reverse must not manufacture a catch/overshoot',
-        );
+        assert.equal(evaluateLeg(reversed, at).speed, 0, 'a late reverse must not manufacture a catch/overshoot');
       }
     }
   }
@@ -1727,15 +1600,9 @@ test('negative launch is caught at the presented box before analytic progress be
   // the continuous negative spring progress still clamps the analytic corner arc to p=0.
   const elapsed = 8.975;
   const expected = waapiFlyerRect(flight, keyframes, elapsed / leg.duration);
-  assert.ok(
-    Math.abs(expected.left - interruptionFrom.left) > 1,
-    'the regression point is already moving',
-  );
+  assert.ok(Math.abs(expected.left - interruptionFrom.left) > 1, 'the regression point is already moving');
   assertRectClose(evaluateLeg(leg, leg.startedAt + elapsed).rect, expected, 'negative launch');
-  assert.ok(
-    evaluateLeg(leg, leg.startedAt).speed < 0,
-    'the signed interruption model is preserved',
-  );
+  assert.ok(evaluateLeg(leg, leg.startedAt).speed < 0, 'the signed interruption model is preserved');
 });
 
 test('interruption boxes match emitted WAAPI tracks at 120Hz and 144Hz across speed tiers', () => {
@@ -1757,11 +1624,7 @@ test('interruption boxes match emitted WAAPI tracks at 120Hz and 144Hz across sp
           }
         }
         assertRectClose(evaluateLeg(leg, leg.startedAt - 30).rect, leg.from, 'before launch');
-        assertRectClose(
-          evaluateLeg(leg, leg.startedAt + duration + 30).rect,
-          leg.to,
-          'after landing',
-        );
+        assertRectClose(evaluateLeg(leg, leg.startedAt + duration + 30).rect, leg.to, 'after landing');
       }
     }
   }
@@ -1811,16 +1674,9 @@ test('a finger moving back up reports a negative release speed', () => {
 // --- Display clock ---------------------------------------------------------------------------
 test('a pending first frame cannot spend the flight while the main thread is busy', () => {
   const dependencies = Object.fromEntries(
-    [
-      './constants',
-      './geometry',
-      './plane',
-      './progress',
-      './spring',
-      './probe',
-      './follow',
-      '@/lib/appearance',
-    ].map((name) => [name, {}]),
+    ['./constants', './geometry', './plane', './progress', './spring', './probe', './follow', '@/lib/appearance'].map(
+      (name) => [name, {}],
+    ),
   );
   dependencies['./flight'] = { evaluateLeg };
   dependencies['@/lib/utils'] = utils;
@@ -1887,10 +1743,7 @@ test('a dismiss released towards the card leaves at the finger speed; away from 
     startedAt: 0,
     baseAspect: 1,
   });
-  assert.ok(
-    velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0),
-    'a throw leaves faster than a let-go',
-  );
+  assert.ok(velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0), 'a throw leaves faster than a let-go');
 });
 
 function historyHarness() {
@@ -1947,12 +1800,7 @@ function historyHarness() {
     { window, URL, MessageChannel: undefined },
   );
   history.initialize(() => {});
-  const record = history.createRecord(
-    { image: { id: 7 } },
-    { pathname: '/user/1', search: '' },
-    '/pic/7',
-    1,
-  );
+  const record = history.createRecord({ image: { id: 7 } }, { pathname: '/user/1', search: '' }, '/pic/7', 1);
   assert.equal(history.claim(record), true);
   window.history.pushState(window.history.state, '', '/pic/7');
   assert.equal(history.install(record), true);
@@ -2024,12 +1872,7 @@ test('reopening from the provisional rung restores the original guard without ad
 test('an unfinished opening cannot restore a guard that has not been installed', async () => {
   const h = historyHarness();
   await h.history.ensureBackground(h.record);
-  const pending = h.history.createRecord(
-    { image: { id: 8 } },
-    { pathname: '/user/1', search: '' },
-    '/pic/8',
-    2,
-  );
+  const pending = h.history.createRecord({ image: { id: 8 } }, { pathname: '/user/1', search: '' }, '/pic/8', 2);
   assert.equal(h.history.claim(pending), true);
   assert.equal(await h.history.restoreGuard(pending), false);
   assert.deepEqual(h.traversals, [-3]);

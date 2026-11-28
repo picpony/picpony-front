@@ -1,18 +1,7 @@
 'use client';
 
-import {
-  HERO_FRAME_CACHE_LIMIT,
-  HERO_FRAME_MAX_DIMENSION,
-  HERO_FRAME_MAX_DPR,
-  HERO_MAX_HEIGHT_DVH,
-} from './constants';
-import {
-  getMediaPixelSize,
-  getVisualMedia,
-  getVisualMediaSrc,
-  isVolatileVisualMedia,
-  type VisualMedia,
-} from './dom';
+import { HERO_FRAME_CACHE_LIMIT, HERO_FRAME_MAX_DIMENSION, HERO_FRAME_MAX_DPR, HERO_MAX_HEIGHT_DVH } from './constants';
+import { getMediaPixelSize, getVisualMedia, getVisualMediaSrc, isVolatileVisualMedia, type VisualMedia } from './dom';
 import { initializeHeroInput, isHeroInteractionQuiet, subscribeHeroInteraction } from './input';
 import { clamp } from '@/lib/utils';
 
@@ -73,11 +62,9 @@ function getHeroFrameCapture(media: VisualMedia): HeroFrameCapture | null {
 }
 
 function getHeroFrameCacheKey(capture: HeroFrameCapture) {
-  return [
-    capture.source,
-    `${capture.sourceWidth}x${capture.sourceHeight}`,
-    `${capture.width}x${capture.height}`,
-  ].join('\n');
+  return [capture.source, `${capture.sourceWidth}x${capture.sourceHeight}`, `${capture.width}x${capture.height}`].join(
+    '\n',
+  );
 }
 
 /**
@@ -108,8 +95,7 @@ function watchContextLoss(canvas: HTMLCanvasElement) {
 
 function isCanvasLost(canvas: HTMLCanvasElement) {
   if (lostPrimaries.has(canvas)) return true;
-  const context = canvas.getContext('2d') as
-    (CanvasRenderingContext2D & { isContextLost?: () => boolean }) | null;
+  const context = canvas.getContext('2d') as (CanvasRenderingContext2D & { isContextLost?: () => boolean }) | null;
   return !context || context.isContextLost?.() === true;
 }
 
@@ -313,10 +299,7 @@ export function repaintHeroFrame(canvas: HTMLCanvasElement, media: VisualMedia):
  * scroll therefore pays one `drawImage` it did not need — bounded by the viewport check
  * and the LRU, and one capture against the alternative of paying it at the worst moment.
  */
-export function warmImageHeroFrame(
-  source: HTMLElement | null,
-  { immediate = false }: { immediate?: boolean } = {},
-) {
+export function warmImageHeroFrame(source: HTMLElement | null, { immediate = false }: { immediate?: boolean } = {}) {
   if (!source || typeof window === 'undefined') return () => {};
   initializeHeroInput();
   const initialMedia = getVisualMedia(source);

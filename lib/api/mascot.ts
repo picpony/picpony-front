@@ -31,8 +31,7 @@ interface MascotRow {
 export function mascotAsset(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) return '';
   const asset = getAssetUrl(value.trim());
-  if (asset.startsWith('/api/v1/'))
-    return /^\/api\/v1\/[\w\-./%]+$/.test(asset) && !asset.includes('..') ? asset : '';
+  if (asset.startsWith('/api/v1/')) return /^\/api\/v1\/[\w\-./%]+$/.test(asset) && !asset.includes('..') ? asset : '';
   try {
     const url = new URL(asset);
     if (url.protocol !== 'https:' || url.username || url.password) return '';
@@ -56,15 +55,8 @@ const lines = (text: string) =>
  * the site-wide `tips` (a JSON array) are the fallback. Backend-hosted uploads include a precomputed
  * `shape`, validated here via `parseMascotShape` so `Mascot` skips `/mascot-shape`.
  */
-export async function getMascotConfig(
-  selected = 'auto',
-  signal?: AbortSignal,
-): Promise<MascotConfig> {
-  const data = await api<{ enabled: boolean; tips: unknown; mascots: MascotRow[] }>(
-    'GET',
-    '/mascots',
-    { signal },
-  );
+export async function getMascotConfig(selected = 'auto', signal?: AbortSignal): Promise<MascotConfig> {
+  const data = await api<{ enabled: boolean; tips: unknown; mascots: MascotRow[] }>('GET', '/mascots', { signal });
   const chosen =
     data.mascots.find((row) => String(row.id) === selected) ??
     data.mascots[Math.floor(Math.random() * data.mascots.length)];

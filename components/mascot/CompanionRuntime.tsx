@@ -76,9 +76,7 @@ export default function CompanionRuntime() {
   const prepareViewer = useCallback(async () => {
     if (job.current) job.current.preparing = false;
     setChat((previous) => (previous ? { ...previous, open: false } : null));
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     await settleHistoryLayers();
   }, []);
   const closeSlideshow = useCallback(() => {
@@ -110,8 +108,7 @@ export default function CompanionRuntime() {
                   job.current = null;
                   setSlideshow(null);
                 }
-                if (!isAborted(error) && readToken() === request.token)
-                  showToast(apiErrorMessage(error), 'warning');
+                if (!isAborted(error) && readToken() === request.token) showToast(apiErrorMessage(error), 'warning');
               },
             };
             job.current = next;
@@ -126,9 +123,7 @@ export default function CompanionRuntime() {
   }, [token]);
   return createPortal(
     <>
-      {poniesAllowed && token && poniesFor === token && (
-        <PoniesRuntime key={token} token={token} paused={away} />
-      )}
+      {poniesAllowed && token && poniesFor === token && <PoniesRuntime key={token} token={token} paused={away} />}
       {shown && <Mascot onChat={onChat} active={present && !away} />}
       {chat && chat.token === token && <AssistantPanel isOpen={chat.open} onClose={close} />}
       {slideshow && slideshow.request.token === token && (

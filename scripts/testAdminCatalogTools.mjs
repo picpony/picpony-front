@@ -153,9 +153,7 @@ test('purchase pages read by cursor with keyword and signal; a refund is one POS
   assert.equal(requests.at(-1).path, '/admin/shop/legacy-purchases');
   response({ purchase_id: 2, refunded: 40, balance: 40 });
   await api.refundShopPurchase('admin', 2);
-  assert.deepEqual(shape([requests.at(-1)]), [
-    { method: 'POST', path: '/admin/shop/purchases/2/refunds' },
-  ]);
+  assert.deepEqual(shape([requests.at(-1)]), [{ method: 'POST', path: '/admin/shop/purchases/2/refunds' }]);
 });
 test('mascot and pony writes name the revision; 台词 is one text of at most 500 characters', async () => {
   const { api, requests } = fixtureApi();
@@ -165,9 +163,7 @@ test('mascot and pony writes name the revision; 台词 is one text of at most 50
   await api.toggleMascot('t', 6, 9, false);
   await api.deleteMascot('t', 7, 9);
   await api.saveMascotSwitch('t', 8, true);
-  await api.savePonies('t', 3, true, [
-    { name: '紫悦', path: 'ponies/twilight/', preview: '', enabled: false },
-  ]);
+  await api.savePonies('t', 3, true, [{ name: '紫悦', path: 'ponies/twilight/', preview: '', enabled: false }]);
   await api.savePonyName('t', 3, 'ponies/twilight/', 'Twilight', ' 紫悦 ');
   await api.savePonySpeech('t', 3, 'ponies/twilight/', 'hello', '友谊');
   assert.deepEqual(shape(requests), [

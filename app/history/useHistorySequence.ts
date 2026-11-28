@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { findDetailOriginLink, findDetailOriginRow } from '@/lib/detailTransit';
-import {
-  clearImageSequence,
-  createPagedSequence,
-  type ImageSequenceSource,
-} from '@/lib/imageSequence';
+import { clearImageSequence, createPagedSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { scrollCardIntoView } from '@/lib/masonry';
 import type { HistoryEntry } from '@/lib/api/history';
 import { browsingHistory } from '@/lib/resources';
@@ -100,18 +96,15 @@ function useHistoryReaders(values: LiveList) {
   /* One page of the list as the screen would show it: in reading order, and without the rows
      whose delete is held for 撤销. Through the list's own resource, so a page the walk reads is
      the page the list then turns to, with no second request. */
-  const readPage = useCallback(
-    async (target: number): Promise<{ ids: number[]; totalPages: number }> => {
-      const { token, date, hidden } = live.current;
-      if (!token) return { ids: [], totalPages: 1 };
-      const result = await browsingHistory.read({ token, page: target, date: date || null });
-      return {
-        ids: readingOrder(result.entries).filter((id) => !hidden.has(id)),
-        totalPages: result.totalPages,
-      };
-    },
-    [],
-  );
+  const readPage = useCallback(async (target: number): Promise<{ ids: number[]; totalPages: number }> => {
+    const { token, date, hidden } = live.current;
+    if (!token) return { ids: [], totalPages: 1 };
+    const result = await browsingHistory.read({ token, page: target, date: date || null });
+    return {
+      ids: readingOrder(result.entries).filter((id) => !hidden.has(id)),
+      totalPages: result.totalPages,
+    };
+  }, []);
 
   /**
    * Turns the list to the picture's page and puts its row on screen. **In the close's own task**:

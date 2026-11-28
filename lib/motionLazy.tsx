@@ -143,10 +143,7 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }):
 /** The eleventh palette, as a wipe — same contract as `changePalette`. The install is resolved
  *  by the caller through `lib/paletteLazy.ts`, so this stays synchronous and the two chunks stay
  *  independent. */
-export function changeCustomPalette(
-  install: CustomPaletteInstall,
-  origin?: { x: number; y: number },
-): void {
+export function changeCustomPalette(install: CustomPaletteInstall, origin?: { x: number; y: number }): void {
   if (themeModule) {
     themeModule.changeCustomPalette(install, origin);
     return;
@@ -267,13 +264,7 @@ export function DrawerSwipe(options: DrawerSwipeOptions) {
  *  then the fallback applies an instant tab scroll — panes swap in React's commit and the scroller
  *  lands on the destination's remembered offset; no pane is left mid-flight, because nothing was
  *  flying. */
-export function TabPanesMotion({
-  panelRef,
-  active,
-}: {
-  panelRef: RefObject<HTMLElement | null>;
-  active: string;
-}) {
+export function TabPanesMotion({ panelRef, active }: { panelRef: RefObject<HTMLElement | null>; active: string }) {
   const [ready, setReady] = useState(tabsModule !== null);
 
   useEffect(() => {
@@ -292,13 +283,7 @@ export function TabPanesMotion({
   return <Driver panelRef={panelRef} active={active} />;
 }
 
-function TabPanesFallback({
-  panelRef,
-  active,
-}: {
-  panelRef: RefObject<HTMLElement | null>;
-  active: string;
-}) {
+function TabPanesFallback({ panelRef, active }: { panelRef: RefObject<HTMLElement | null>; active: string }) {
   /* Layout effect, so the offset lands in the frame the arriving pane first paints — a passive
      effect would show it at the outgoing tab's scroll position for one frame. */
   useLayoutEffect(() => {

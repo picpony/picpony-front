@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage } from '@/lib/api/errors';
-import {
-  deleteBrowsingHistoryItem,
-  restoreBrowsingHistoryItem,
-  type HistoryEntry,
-} from '@/lib/api/history';
+import { deleteBrowsingHistoryItem, restoreBrowsingHistoryItem, type HistoryEntry } from '@/lib/api/history';
 import { readToken } from '@/lib/hooks';
 import { browsingHistory } from '@/lib/resources';
 
@@ -139,9 +135,7 @@ export function useHistoryDeletes(
     );
     if (readToken() !== batch.token) return;
     browsingHistory.invalidate();
-    const failed = results.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    );
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
     if (failed) showToast(`浏览记录恢复失败：${apiErrorMessage(failed.reason)}`, 'error');
     else showToast('已恢复浏览记录', 'success');
   }, [show]);

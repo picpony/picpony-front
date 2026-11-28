@@ -74,16 +74,8 @@ test('a flight let go of while its element stays carries on: React’s developme
   const target = element();
   const flight = route.trackFlight(handle, { key: 'folder:/a', leg: 'open', target });
   route.release(flight);
-  assert.deepEqual(
-    calls,
-    ['suspend'],
-    'stops landing on a scroll at once, before a route change restores one',
-  );
-  assert.equal(
-    route.flightOn(target),
-    flight,
-    'a second attach adopts it rather than starting another',
-  );
+  assert.deepEqual(calls, ['suspend'], 'stops landing on a scroll at once, before a route change restores one');
+  assert.equal(route.flightOn(target), flight, 'a second attach adopts it rather than starting another');
   await microtask();
   assert.deepEqual(calls, ['suspend', 'resume']);
   frame();
@@ -128,11 +120,7 @@ test('the page coming in claims it, turns it onto its own element, and it stops 
   assert.equal(route.turnFlight(flight, 'back', card, turn), true);
   assert.deepEqual(calls.at(-1), ['turn', turn]);
   assert.equal(flight.leg, 'back');
-  assert.equal(
-    route.flightOn(card),
-    flight,
-    'it now lands on the card, and the card’s own attach adopts it',
-  );
+  assert.equal(route.flightOn(card), flight, 'it now lands on the card, and the card’s own attach adopts it');
   frame();
   frame();
   frame();
@@ -147,11 +135,7 @@ test('a claim in the same commit, before the release’s microtask, holds', asyn
   page.isConnected = false;
   route.release(flight);
   const row = element();
-  assert.equal(
-    route.claimable('forum:7', 'back'),
-    flight,
-    'an element removed in this commit is gone already',
-  );
+  assert.equal(route.claimable('forum:7', 'back'), flight, 'an element removed in this commit is gone already');
   route.turnFlight(flight, 'back', row, {
     to: { box: { left: 0, top: 0, width: 1, height: 1 }, radii: [0, 0, 0, 0], colour: '' },
     hidden: [],
@@ -220,22 +204,14 @@ test('a folder page left on screen is remembered for its card, under the standar
   for (const tier of ['reduced', 'off']) {
     root.dataset.motion = tier;
     transit.rememberFolderReturn('/favorites/folder/3', page);
-    assert.equal(
-      transit.readFolderReturn(),
-      null,
-      `${tier}: the route's own fade is the whole transition`,
-    );
+    assert.equal(transit.readFolderReturn(), null, `${tier}: the route's own fade is the whole transition`);
   }
   root.dataset.motion = 'standard';
 
   transit.rememberFolderReturn('/favorites/folder/3', {
     getBoundingClientRect: () => ({ top: -900, bottom: 0 }),
   });
-  assert.equal(
-    transit.readFolderReturn(),
-    null,
-    'a page scrolled off screen has nothing to carry back',
-  );
+  assert.equal(transit.readFolderReturn(), null, 'a page scrolled off screen has nothing to carry back');
 });
 
 test('a remembered page goes stale with its navigation, and stands down while a flight owns the screen', () => {
@@ -251,11 +227,7 @@ test('a remembered page goes stale with its navigation, and stands down while a 
     assert.equal(transit.readFolderReturn(), null, 'a picture flying owns those pixels');
     setHeroBusyCheck(null);
     now += 200;
-    assert.equal(
-      transit.readFolderReturn(),
-      null,
-      'three seconds: a Back much later replays nothing',
-    );
+    assert.equal(transit.readFolderReturn(), null, 'three seconds: a Back much later replays nothing');
   } finally {
     performance.now = realNow;
   }
@@ -267,23 +239,11 @@ test('a press on a card, and the page left for its list, tell that one route cha
   const card = { getBoundingClientRect: () => ({ width: 240, height: 220 }) };
   try {
     transit.rememberFolderOrigin('/favorites/folder/3', card);
-    assert.equal(
-      takeRouteContainerExpectation('/favorites/folder/3'),
-      true,
-      'the change to the page it opens',
-    );
-    assert.equal(
-      takeRouteContainerExpectation('/favorites/folder/3'),
-      false,
-      'read once, by that change',
-    );
+    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), true, 'the change to the page it opens');
+    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'read once, by that change');
 
     transit.rememberFolderOrigin('/favorites/folder/3', card);
-    assert.equal(
-      takeRouteContainerExpectation('/search'),
-      false,
-      'a change elsewhere rides nothing',
-    );
+    assert.equal(takeRouteContainerExpectation('/search'), false, 'a change elsewhere rides nothing');
     assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'and spends it');
 
     /* Leaving the page expects the list it was opened from. */
@@ -296,11 +256,7 @@ test('a press on a card, and the page left for its list, tell that one route cha
     for (const tier of ['reduced', 'off']) {
       root.dataset.motion = tier;
       transit.rememberFolderOrigin('/favorites/folder/3', card);
-      assert.equal(
-        takeRouteContainerExpectation('/favorites/folder/3'),
-        false,
-        `${tier}: the route's own fade`,
-      );
+      assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, `${tier}: the route's own fade`);
     }
     root.dataset.motion = 'standard';
 

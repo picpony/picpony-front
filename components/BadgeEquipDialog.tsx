@@ -14,13 +14,7 @@ import { myBadges, sessionUser, tasks, userProfile } from '@/lib/resources';
 import { equipBadges } from '@/lib/api/picpony';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { readToken, updateUserInfo } from '@/lib/hooks';
-import {
-  MAX_EQUIPPED_BADGES,
-  badgeValidity,
-  sameEquipped,
-  type EquippedBadge,
-  type HeldBadge,
-} from '@/lib/userBadges';
+import { MAX_EQUIPPED_BADGES, badgeValidity, sameEquipped, type EquippedBadge, type HeldBadge } from '@/lib/userBadges';
 
 interface BadgeEquipDialogProps {
   open: boolean;
@@ -48,13 +42,7 @@ interface Draft {
  * profile header (`userProfile`), this list (`myBadges`), the session, and /tasks' level card
  * (expired, so it re-reads) — only after the backend has accepted it.
  */
-export default function BadgeEquipDialog({
-  open,
-  onClose,
-  token,
-  profileId,
-  now,
-}: BadgeEquipDialogProps) {
+export default function BadgeEquipDialog({ open, onClose, token, profileId, now }: BadgeEquipDialogProps) {
   const [draft, setDraft] = useState<Draft>({ seededFrom: null, chosen: new Set() });
   const [saving, setSaving] = useState(false);
   /* Each opening starts from the server's set. Reset on the way *in*, not out: the dialog keeps
@@ -73,15 +61,11 @@ export default function BadgeEquipDialog({
   const data = read.data;
   if (open && data && draft.seededFrom === null) {
     const current = new Set(
-      data.badges
-        .filter((badge) => !badgeValidity(badge.expiresAt, now).expired)
-        .map((badge) => badge.name),
+      data.badges.filter((badge) => !badgeValidity(badge.expiresAt, now).expired).map((badge) => badge.name),
     );
     setDraft({
       seededFrom: data,
-      chosen: new Set(
-        data.equipped.map((badge) => badge.badge_name).filter((name) => current.has(name)),
-      ),
+      chosen: new Set(data.equipped.map((badge) => badge.badge_name).filter((name) => current.has(name))),
     });
   }
 
@@ -143,10 +127,7 @@ export default function BadgeEquipDialog({
     if (shown) userProfile.write({ id: profileId }, { ...shown, equipped_badges: wire });
     const cachedSession = sessionUser.peek({ token }).data;
     if (cachedSession?.kind === 'ok') {
-      sessionUser.write(
-        { token },
-        { ...cachedSession, user: { ...cachedSession.user, equipped_badges: wire } },
-      );
+      sessionUser.write({ token }, { ...cachedSession, user: { ...cachedSession.user, equipped_badges: wire } });
     } else {
       sessionUser.expire({ token });
     }
@@ -174,9 +155,7 @@ export default function BadgeEquipDialog({
         </>
       }
     >
-      <p className="text-body-m text-on-surface-variant">
-        最多可佩戴 {MAX_EQUIPPED_BADGES} 个徽章，将显示在你的名称旁
-      </p>
+      <p className="text-body-m text-on-surface-variant">最多可佩戴 {MAX_EQUIPPED_BADGES} 个徽章，将显示在你的名称旁</p>
       {source === null && data === undefined && read.error ? (
         <ErrorRetry
           size="inline"
@@ -186,12 +165,7 @@ export default function BadgeEquipDialog({
           onRetry={isRetryable(read.error) ? read.refresh : undefined}
         />
       ) : source === null ? (
-        <PageLoadingIndicator
-          size="inline"
-          indicatorSize="md"
-          label="正在加载徽章…"
-          className="mt-4 min-h-32"
-        />
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载徽章…" className="mt-4 min-h-32" />
       ) : held.length === 0 ? (
         <EmptyState size="inline" className="mt-4" title="暂无徽章" />
       ) : (

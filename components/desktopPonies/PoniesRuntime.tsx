@@ -122,10 +122,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   const stage = useRef<{ width: number; height: number } | null>(null);
 
   function send(type: string, payload: Record<string, unknown> = {}) {
-    frame.current?.contentWindow?.postMessage(
-      { source: 'picpony-companions', channel, type, ...payload },
-      '*',
-    );
+    frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type, ...payload }, '*');
   }
   function pointer(type: string, name: string, x: number, y: number) {
     const bounds = layer.current?.getBoundingClientRect();
@@ -225,8 +222,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
       const x = last.x - bounds.x,
         y = last.y - bounds.y;
       for (const [name, rect] of rects.current) {
-        const over =
-          x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        const over = x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
         const held = gesture.current?.name === name || focused.current === name;
         if (over && !tracked.current.has(name)) track(name, true);
         else if (!over && !held && tracked.current.has(name)) track(name, false);
@@ -258,10 +254,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
     }
     if (!initialized.current || key === sent.current) return;
     sent.current = key;
-    frame.current?.contentWindow?.postMessage(
-      { source: 'picpony-companions', channel, type: 'configs', configs },
-      '*',
-    );
+    frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'configs', configs }, '*');
   }, [configs, channel]);
 
   useEffect(() => {
@@ -290,10 +283,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
       };
     };
     const sendToFrame = (type: string, payload: Record<string, unknown> = {}) =>
-      target?.contentWindow?.postMessage(
-        { source: 'picpony-companions', channel, type, ...payload },
-        '*',
-      );
+      target?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type, ...payload }, '*');
     const receive = (event: MessageEvent) => {
       if (event.source !== target?.contentWindow || event.data?.source !== 'picpony-ponies') return;
       if (event.data.type === 'ready') {
@@ -424,9 +414,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
               send('nudge', { name: config.name, dx: direction[0], dy: direction[1] });
             }
           }}
-          onPointerEnter={(event) =>
-            pointer('mouseover', config.name, event.clientX, event.clientY)
-          }
+          onPointerEnter={(event) => pointer('mouseover', config.name, event.clientX, event.clientY)}
           onPointerLeave={(event) => {
             if (!gesture.current) pointer('mouseout', config.name, event.clientX, event.clientY);
           }}
@@ -445,9 +433,7 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
           }}
           onPointerMove={(event) => {
             if (gesture.current?.pointerId === event.pointerId) {
-              if (
-                Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 8
-              )
+              if (Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 8)
                 gesture.current.moved = true;
               pointer('mousemove', config.name, event.clientX, event.clientY);
             }

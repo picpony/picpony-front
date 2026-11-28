@@ -87,11 +87,7 @@ const MAX_WARMED_DETAIL_FRAMES = 4;
  */
 function previewRungFor(image: ImagePreview): string {
   return (
-    image.representations?.medium ||
-    image.representations?.large ||
-    image.representations?.full ||
-    image.view_url ||
-    ''
+    image.representations?.medium || image.representations?.large || image.representations?.full || image.view_url || ''
   );
 }
 
@@ -160,10 +156,7 @@ export function warmImageHero(imageId?: number, priority: DetailRequestPriority 
   });
   if (imageId === undefined) return detailComponentWarmup;
   if (priority === 'immediate') cancelOtherBackgroundImageDetailPrefetch(imageId);
-  return Promise.all([
-    detailComponentWarmup,
-    prefetchImageDetail(imageId, { priority }).catch(() => undefined),
-  ]);
+  return Promise.all([detailComponentWarmup, prefetchImageDetail(imageId, { priority }).catch(() => undefined)]);
 }
 
 export function prepareImageHero(
@@ -201,8 +194,7 @@ export function prepareImageHero(
       image.view_url ||
       '',
   );
-  if (captured && mediaType === 'image' && previewSrc)
-    rememberPressFrame(image.id, previewSrc, captured);
+  if (captured && mediaType === 'image' && previewSrc) rememberPressFrame(image.id, previewSrc, captured);
   const rect = getHeroRect(source);
   return {
     image,
@@ -230,9 +222,7 @@ export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
   if (warmedEntry && !warmed) warmedDetailFrames.delete(image.id);
   const cardFrame = visual ? captureHeroFrame(visual) : null;
   const usedWarmed = Boolean(
-    warmed &&
-    (!visual || !isVolatileVisualMedia(visual)) &&
-    (!cardFrame || warmed.asset.pixels > cardFrame.pixels),
+    warmed && (!visual || !isVolatileVisualMedia(visual)) && (!cardFrame || warmed.asset.pixels > cardFrame.pixels),
   );
   const previewFrame = usedWarmed ? warmed!.asset : cardFrame;
   /* With nothing decoded to show, the smallest rung that reads at the detail's size: `medium` for
@@ -244,10 +234,7 @@ export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
       : previewRungFor(image) || image.representations?.small || '',
   );
   const previewSrc = normalizeHeroSrc(
-    (usedWarmed ? warmed!.src : undefined) ||
-      visual?.currentSrc ||
-      visual?.getAttribute('src') ||
-      fallback,
+    (usedWarmed ? warmed!.src : undefined) || visual?.currentSrc || visual?.getAttribute('src') || fallback,
   );
   return {
     image,

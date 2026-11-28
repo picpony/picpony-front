@@ -17,13 +17,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import { formatDateTime } from '@/lib/format';
-import {
-  cloudFields,
-  cloudPayload,
-  modeFields,
-  fieldsPayload,
-  text,
-} from '@/lib/adminSiteTools/model';
+import { cloudFields, cloudPayload, modeFields, fieldsPayload, text } from '@/lib/adminSiteTools/model';
 import * as api from '@/lib/api/adminSiteTools';
 import { semanticQuery } from '@/lib/resources';
 import { publishSavedSiteStatus } from '@/lib/siteStatus';
@@ -51,28 +45,15 @@ function useFeedbackState(token: string) {
   /* A cursor list (`before` → `next_cursor`): the pager offers the pages reached so far and the next. */
   const pages = useCursorPages(pageScope);
   const scope = `${pageScope}:${pages.page}`;
-  const read = useToolPage(
-    feedbackQuery,
-    token,
-    { ...filter, before: pages.cursor },
-    `${filter.status}:${filter.q}`,
-  );
+  const read = useToolPage(feedbackQuery, token, { ...filter, before: pages.cursor }, `${filter.status}:${filter.q}`);
   if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
-  if (
-    read.data &&
-    !read.isPrevious &&
-    !read.isLoading &&
-    !read.error &&
-    !read.data.rows.length &&
-    pages.page > 1
-  )
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && !read.data.rows.length && pages.page > 1)
     pages.setPage(pages.page - 1);
   return { filter, setFilter, search, setSearch, selection, setSelection, pages, scope, read };
 }
 
 function Feedback({ token, state }: { token: string; state: ReturnType<typeof useFeedbackState> }) {
-  const { filter, setFilter, search, setSearch, selection, setSelection, pages, scope, read } =
-    state;
+  const { filter, setFilter, search, setSearch, selection, setSelection, pages, scope, read } = state;
   const archive = useAdminMutation(token),
     remove = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
@@ -204,12 +185,7 @@ function Feedback({ token, state }: { token: string; state: ReturnType<typeof us
           ]}
           onChange={(status) => setFilter({ ...filter, status: status as api.FeedbackStatus })}
         />
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="搜索反馈…"
-          className="min-w-0 @md:flex-1"
-        />
+        <SearchInput value={search} onChange={setSearch} placeholder="搜索反馈…" className="min-w-0 @md:flex-1" />
         <Button type="submit" variant="filled">
           搜索
         </Button>
@@ -238,10 +214,7 @@ function Feedback({ token, state }: { token: string; state: ReturnType<typeof us
           listKey={read.listKey}
           rowKey={(r) => r.id}
           loading={read.loading}
-          {...tableError(
-            read.isPrevious ? `搜索反馈第 ${pages.page} 页加载失败` : '搜索反馈加载失败',
-            read.message,
-          )}
+          {...tableError(read.isPrevious ? `搜索反馈第 ${pages.page} 页加载失败` : '搜索反馈加载失败', read.message)}
           onRetry={read.retry}
           empty="暂无搜索反馈"
         />
@@ -270,9 +243,7 @@ const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
 function SemanticTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(semanticConfigQuery, token);
   const feedback = useFeedbackState(token);
-  const [initialSettled, setInitialSettled] = useState(
-    () => !read.loading && !feedback.read.loading,
-  );
+  const [initialSettled, setInitialSettled] = useState(() => !read.loading && !feedback.read.loading);
   if (!initialSettled && !read.loading && !feedback.read.loading) setInitialSettled(true);
   const initialLoading = !initialSettled && (read.loading || feedback.read.loading);
   const test = useAdminMutation(token);
@@ -305,13 +276,7 @@ function SemanticTab({ token }: AdminPanelProps) {
         isLoading={read.refreshing || feedback.read.refreshing}
       />
       {initialLoading ? (
-        <PageLoadingIndicator
-          size="pane"
-          holdFooter
-          delay={120}
-          label="正在加载智能搜索设置…"
-          className="min-h-60"
-        />
+        <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载智能搜索设置…" className="min-h-60" />
       ) : (
         <>
           <ReadState

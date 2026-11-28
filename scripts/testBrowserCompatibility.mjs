@@ -68,8 +68,7 @@ test('spring fits bound displacement error and never add bounce to effects', () 
         Math.abs(value - legacy.springEase(spec)(t)) < (shape === 'spatialFast' ? 0.051 : 0.02),
         `${shape} at ${t}`,
       );
-      if (shape === 'effects')
-        assert.ok(value >= previous && value <= 1, 'Effects must be monotone');
+      if (shape === 'effects') assert.ok(value >= previous && value <= 1, 'Effects must be monotone');
       previous = value;
       peak = Math.max(peak, value);
     }

@@ -94,11 +94,7 @@ export default function Avatar({
           error: it doubles as the decode placeholder, so the circle is never
           empty — and React cannot see an imperative swap anyway. */}
       <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
-        {inline ? (
-          <MdPerson size={Math.round(size * 0.6)} />
-        ) : (
-          <MdPerson className="size-[60cqmin]" />
-        )}
+        {inline ? <MdPerson size={Math.round(size * 0.6)} /> : <MdPerson className="size-[60cqmin]" />}
       </div>
 
       {url && !broken ? (

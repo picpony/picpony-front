@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-  type SyntheticEvent,
-} from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
 import Link from 'next/link';
 import { SKIP, useResource } from '@/lib/resource';
 import { featuredImage, useBrowsingFingerprint } from '@/lib/resources';
@@ -62,12 +54,7 @@ export function FeaturedBannerSkeleton({ paused = false }: { paused?: boolean })
   return (
     <div className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
       <div className="relative w-full" style={{ paddingBottom: BANNER_HEIGHT }}>
-        <MediaLoadingPlaceholder
-          variant="contained"
-          size="md"
-          paused={paused}
-          className="rounded-lg"
-        />
+        <MediaLoadingPlaceholder variant="contained" size="md" paused={paused} className="rounded-lg" />
       </div>
     </div>
   );
@@ -121,13 +108,7 @@ export default function FeaturedBanner({
   /* Before the session is known, only a seeded read may start — the anonymous one the server
      already made. Without a seed the read waits for the session, so a signed-in visitor with a
      key does not pay for an anonymous read first. */
-  const args = !enabled
-    ? SKIP
-    : ready
-      ? { apiKey, contentFilter }
-      : seed
-        ? { apiKey: undefined, contentFilter }
-        : SKIP;
+  const args = !enabled ? SKIP : ready ? { apiKey, contentFilter } : seed ? { apiKey: undefined, contentFilter } : SKIP;
   const read = useResource(featuredImage, args, {
     initial: seed ? { key: seed.key, data: seed.data, generatedAt: seed.generatedAt } : undefined,
     /* A keyed re-read keeps the anonymous picture up meanwhile; a filter change does not. */
@@ -161,11 +142,7 @@ export default function FeaturedBanner({
   const playAllowed = mounted && tier === 'standard' && !saveDataRequested();
 
   const fullUrl = featured?.representations?.full || featured?.view_url || '';
-  const imgFormat = (
-    featured?.format ||
-    fullUrl.split(/[?#]/)[0].split('.').pop() ||
-    ''
-  ).toLowerCase();
+  const imgFormat = (featured?.format || fullUrl.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
   const isVideo = imgFormat === 'webm' || imgFormat === 'mp4';
   const displayImageUrl =
     featured?.representations?.large ||
@@ -226,13 +203,7 @@ export default function FeaturedBanner({
 
   /* Not a list: opening the banner walks no sequence, so a stale one from a grid is dropped. */
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (
-      event.button === 0 &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
+    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
       clearImageSequence();
     }
     heroClick(event);
@@ -380,9 +351,7 @@ export default function FeaturedBanner({
                   <Badge
                     key={tag}
                     tone="media"
-                    className={
-                      tagIndex >= 4 ? 'max-w-36 shrink-0 max-sm:hidden' : 'max-w-36 shrink-0'
-                    }
+                    className={tagIndex >= 4 ? 'max-w-36 shrink-0 max-sm:hidden' : 'max-w-36 shrink-0'}
                   >
                     {tagName(tag) || tag}
                   </Badge>
@@ -435,9 +404,7 @@ export default function FeaturedBanner({
         >
           <MdVisibilityOff size={ICON.large} aria-hidden="true" />
           <span className="text-title-m text-on-surface">近日推荐含剧透内容</span>
-          <span className="line-clamp-2 max-w-md text-body-m break-words">
-            {spoilers.join('、')}
-          </span>
+          <span className="line-clamp-2 max-w-md text-body-m break-words">{spoilers.join('、')}</span>
           <span className="text-label-l">点按显示</span>
         </button>
       )}

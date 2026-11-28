@@ -49,94 +49,93 @@ interface TaskDefinition {
  * figures, which are its own: what a claim actually pays is the server's, and its receipt is what
  * the toast reports. 累计任务 is not offered (R5-032): the original listed it as 暂未开发 too.
  */
-const CATEGORIES: { id: TaskCategory; label: string; subtitle: string; tasks: TaskDefinition[] }[] =
-  [
-    {
-      id: 'novice',
-      label: '新手任务',
-      subtitle: '仅限完成一次',
-      tasks: [
-        {
-          key: 'bind_api',
-          claimId: 'novice_bind_api',
-          name: '首次绑定 API Key',
-          xp: 100,
-          coins: 5,
-          target: 1,
-          href: settingsHref('account'),
-        },
-        {
-          key: 'verify_api',
-          claimId: 'novice_verify_api',
-          name: '首次核验 API Key',
-          xp: 100,
-          coins: 10,
-          target: 1,
-          href: settingsHref('account'),
-        },
-        {
-          key: 'set_bg',
-          claimId: 'novice_set_bg',
-          name: '首次设置主页横幅',
-          xp: 30,
-          coins: 2,
-          target: 1,
-          href: settingsHref('account'),
-        },
-      ],
-    },
-    {
-      id: 'daily',
-      label: '每日任务',
-      subtitle: '每天零点（北京时间）刷新进度',
-      tasks: [
-        { key: 'login', claimId: 'login', name: '每日登录', xp: 10, coins: 1, target: 1 },
-        {
-          key: 'fav',
-          claimId: 'fav',
-          name: '每日收藏 5 张图片',
-          xp: 15,
-          coins: 2,
-          target: 5,
-          href: '/',
-        },
-        {
-          key: 'share',
-          claimId: 'share',
-          name: '每日分享 5 张图片',
-          xp: 15,
-          coins: 3,
-          target: 5,
-          href: '/',
-        },
-        {
-          key: 'comment',
-          claimId: 'comment',
-          name: '每日评论 5 次',
-          xp: 15,
-          coins: 3,
-          target: 5,
-          href: '/',
-        },
-      ],
-    },
-    {
-      id: 'weekly',
-      label: '每周任务',
-      subtitle: '每周刷新进度',
-      tasks: [
-        {
-          key: 'upload',
-          claimId: 'weekly_upload',
-          name: '每周通过 PicPony 上传 5 次作品',
-          xp: 15,
-          coins: 5,
-          target: 5,
-          href: '/upload',
-        },
-      ],
-    },
-  ];
+const CATEGORIES: { id: TaskCategory; label: string; subtitle: string; tasks: TaskDefinition[] }[] = [
+  {
+    id: 'novice',
+    label: '新手任务',
+    subtitle: '仅限完成一次',
+    tasks: [
+      {
+        key: 'bind_api',
+        claimId: 'novice_bind_api',
+        name: '首次绑定 API Key',
+        xp: 100,
+        coins: 5,
+        target: 1,
+        href: settingsHref('account'),
+      },
+      {
+        key: 'verify_api',
+        claimId: 'novice_verify_api',
+        name: '首次核验 API Key',
+        xp: 100,
+        coins: 10,
+        target: 1,
+        href: settingsHref('account'),
+      },
+      {
+        key: 'set_bg',
+        claimId: 'novice_set_bg',
+        name: '首次设置主页横幅',
+        xp: 30,
+        coins: 2,
+        target: 1,
+        href: settingsHref('account'),
+      },
+    ],
+  },
+  {
+    id: 'daily',
+    label: '每日任务',
+    subtitle: '每天零点（北京时间）刷新进度',
+    tasks: [
+      { key: 'login', claimId: 'login', name: '每日登录', xp: 10, coins: 1, target: 1 },
+      {
+        key: 'fav',
+        claimId: 'fav',
+        name: '每日收藏 5 张图片',
+        xp: 15,
+        coins: 2,
+        target: 5,
+        href: '/',
+      },
+      {
+        key: 'share',
+        claimId: 'share',
+        name: '每日分享 5 张图片',
+        xp: 15,
+        coins: 3,
+        target: 5,
+        href: '/',
+      },
+      {
+        key: 'comment',
+        claimId: 'comment',
+        name: '每日评论 5 次',
+        xp: 15,
+        coins: 3,
+        target: 5,
+        href: '/',
+      },
+    ],
+  },
+  {
+    id: 'weekly',
+    label: '每周任务',
+    subtitle: '每周刷新进度',
+    tasks: [
+      {
+        key: 'upload',
+        claimId: 'weekly_upload',
+        name: '每周通过 PicPony 上传 5 次作品',
+        xp: 15,
+        coins: 5,
+        target: 5,
+        href: '/upload',
+      },
+    ],
+  },
+];
 
 type CategoryId = TaskCategory;
 
@@ -167,10 +166,7 @@ function LevelCard({
      a figure made up for an answer that carried none (R5-031). The level follows from the
      experience by the site's own rule where only that is known. */
   const experience = document?.experience ?? session.experience;
-  const level =
-    document?.level ??
-    session.level ??
-    (experience !== null ? Math.floor(experience / 100) + 1 : null);
+  const level = document?.level ?? session.level ?? (experience !== null ? Math.floor(experience / 100) + 1 : null);
   const coins = document?.coins ?? session.coins;
   const progress = experience !== null ? experience % 100 : null;
   /* The tasks document carries no badges; the session's own equipped set is the account's. */
@@ -199,12 +195,7 @@ function LevelCard({
               </span>
             )}
             {worn.map((badge) => (
-              <UserBadge
-                key={badge.badge_name}
-                name={badge.badge_name}
-                color={badge.badge_color}
-                size="md"
-              />
+              <UserBadge key={badge.badge_name} name={badge.badge_name} color={badge.badge_color} size="md" />
             ))}
           </div>
         </div>
@@ -212,9 +203,7 @@ function LevelCard({
           scroll={false}
           href="/tasks/coins"
           data-ripple=""
-          aria-label={
-            coins !== null && !loading ? `金币 ${formatExactCount(coins)}，查看明细` : '金币明细'
-          }
+          aria-label={coins !== null && !loading ? `金币 ${formatExactCount(coins)}，查看明细` : '金币明细'}
           className="state-layer -mx-3 -my-2 block touch-manipulation rounded-sm px-3 py-2 text-right text-on-surface focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
         >
           <span className="flex items-center justify-end text-label-l text-on-surface-variant">
@@ -354,11 +343,7 @@ function TaskRow({
             /* One tone in every state (D1-004): the trailing control already says claimable or
                claimed, and the severity fills read as a warning when something good was ready —
                and on the dark track they all but vanished (1.9:1). */
-            <ProgressBar
-              value={(progress / target) * 100}
-              label={`${task.name} 进度`}
-              className="w-auto flex-1"
-            />
+            <ProgressBar value={(progress / target) * 100} label={`${task.name} 进度`} className="w-auto flex-1" />
           )}
           <div className="flex h-4.5 w-12 shrink-0 items-center justify-end text-body-s tabular-nums text-on-surface-variant">
             {loading ? <Skeleton className="h-3 w-8" /> : `${progress} / ${target}`}
@@ -371,17 +356,8 @@ function TaskRow({
         {loading ? (
           <Skeleton className="h-8 w-full rounded-full" />
         ) : isClaimed ? (
-          <span
-            className={cn(
-              'flex h-8 items-center gap-1 text-label-m text-success',
-              landed && 'animate-fade-in',
-            )}
-          >
-            <MdCheckCircle
-              size={ICON.dense}
-              aria-hidden="true"
-              className={cn(landed && 'animate-control-pop')}
-            />
+          <span className={cn('flex h-8 items-center gap-1 text-label-m text-success', landed && 'animate-fade-in')}>
+            <MdCheckCircle size={ICON.dense} aria-hidden="true" className={cn(landed && 'animate-control-pop')} />
             已领取
           </span>
         ) : canClaim ? (
@@ -449,9 +425,7 @@ export default function TasksPage() {
         const shownDoc = tasks.peek({ token }).data;
         setReceipt((previous) => ({
           document: shownDoc,
-          ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(
-            task.claimId,
-          ),
+          ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(task.claimId),
         }));
         updateUserInfo(token, { coins: paid.balance });
         showToast(`已领取，经验 +${paid.experience}，金币 +${paid.coins}`, 'success');
@@ -523,12 +497,7 @@ export default function TasksPage() {
               <p className="mb-3 px-1 text-body-s text-on-surface-variant">{category.subtitle}</p>
               {!loading && (!block || category.tasks.some((task) => !block[task.key])) ? (
                 /* The answer carried no progress for this category: say so, never draw zeros. */
-                <ErrorRetry
-                  size="pane"
-                  title="任务进度加载失败"
-                  message="任务进度数据不完整"
-                  onRetry={read.refresh}
-                />
+                <ErrorRetry size="pane" title="任务进度加载失败" message="任务进度数据不完整" onRetry={read.refresh} />
               ) : (
                 <div data-page-loading={loading || undefined}>
                   {category.tasks.map((task) => (

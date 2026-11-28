@@ -16,9 +16,7 @@ export function playDetailArrival(blocks: Iterable<Element>): () => void {
   const running: Animation[] = [];
   for (const block of blocks) {
     if (!(block instanceof HTMLElement)) continue;
-    running.push(
-      block.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, fill: 'backwards' }),
-    );
+    running.push(block.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, fill: 'backwards' }));
   }
   return () => {
     for (const animation of running) animation.cancel();

@@ -132,22 +132,16 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       if (fillRef.current) {
         fillRef.current.style.transform = `translateX(${knobX + barButtonWidth - barWidth}px)`;
       }
-      if (pieceRef.current)
-        pieceRef.current.style.transform = `translateX(${(x * imageMaxX) / maxSliderX}px)`;
+      if (pieceRef.current) pieceRef.current.style.transform = `translateX(${(x * imageMaxX) / maxSliderX}px)`;
     },
     [maxSliderX],
   );
 
   const measureLayout = useCallback(() => {
-    const imageWidth =
-      imageRef.current?.clientWidth || containerRef.current?.clientWidth || puzzleWidth;
+    const imageWidth = imageRef.current?.clientWidth || containerRef.current?.clientWidth || puzzleWidth;
     const barWidth = trackRefElement.current?.clientWidth || puzzleWidth;
-    const coarse =
-      typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-    const barButtonWidth = Math.min(
-      barWidth,
-      Math.max((barWidth * pieceSize) / puzzleWidth, coarse ? 48 : 0),
-    );
+    const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const barButtonWidth = Math.min(barWidth, Math.max((barWidth * pieceSize) / puzzleWidth, coarse ? 48 : 0));
     const nextLayout = {
       imageWidth,
       imagePieceSize: (imageWidth * pieceSize) / puzzleWidth,
@@ -318,10 +312,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
         window.clearTimeout(refetchTimerRef.current);
         if (mountedRef.current && activeRef.current) void fetchCaptcha({ keepError: true });
       };
-      refetchTimerRef.current = window.setTimeout(
-        refresh,
-        SPRING_MS.fastSpatial * MOTION_SPEED_SCALE.slow,
-      );
+      refetchTimerRef.current = window.setTimeout(refresh, SPRING_MS.fastSpatial * MOTION_SPEED_SCALE.slow);
       snapBack(refresh);
     },
     [fetchCaptcha, snapBack],
@@ -329,13 +320,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
   // Mouse and touch drags send their actual movement in the backend's logical coordinates.
   const submitTrack = useCallback(async () => {
-    if (
-      !challengeReadyRef.current ||
-      loadingRef.current ||
-      verifyingRef.current ||
-      !trackRef.current.length
-    )
-      return;
+    if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || !trackRef.current.length) return;
     const finalX = sliderXRef.current;
     /* A tap, or a jump with no movement in between: no trace the server would accept. */
     if (finalX < 5 || trackRef.current.length < 3) {
@@ -365,13 +350,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
   const startDrag = useCallback(
     (e: MouseEvent | TouchEvent) => {
-      if (
-        !challengeReadyRef.current ||
-        loadingRef.current ||
-        verifyingRef.current ||
-        draggingRef.current
-      )
-        return;
+      if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || draggingRef.current) return;
       if ('cancelable' in e && e.cancelable) e.preventDefault();
 
       draggingRef.current = true;
@@ -385,9 +364,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       const button = sliderBtnRef.current;
       const buttonRect = button?.getBoundingClientRect();
       grabRatioRef.current =
-        buttonRect && buttonRect.width > 0
-          ? clamp01((clientX - buttonRect.left) / buttonRect.width)
-          : 0.5;
+        buttonRect && buttonRect.width > 0 ? clamp01((clientX - buttonRect.left) / buttonRect.width) : 0.5;
       startXRef.current = clientX;
       startYRef.current = clientY;
       startTimeRef.current = Date.now();
@@ -406,8 +383,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
           const contentWidth = bar.clientWidth * transformScale;
           const buttonWidth = button.offsetWidth * transformScale;
           const visualMaxX = Math.max(1, contentWidth - buttonWidth);
-          const visualLeft =
-            getClientX(moveEvent) - contentLeft - buttonWidth * grabRatioRef.current;
+          const visualLeft = getClientX(moveEvent) - contentLeft - buttonWidth * grabRatioRef.current;
           x = (visualLeft / visualMaxX) * maxSliderX;
         }
         x = clamp(x, 0, maxSliderX);
@@ -602,12 +578,7 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       </div>
       {/* The hint, or why the last attempt failed — one line in one place, so a
           failure neither grows the card nor needs a second control to recover from. */}
-      <p
-        className={cn(
-          'text-body-s text-center',
-          errorMsg ? 'text-error' : 'text-on-surface-variant',
-        )}
-      >
+      <p className={cn('text-body-s text-center', errorMsg ? 'text-error' : 'text-on-surface-variant')}>
         {/* Only the failure is announced; the hint coming back after it is not news. */}
         <span aria-live="polite">{errorMsg}</span>
         {!errorMsg && '拖动拼图对齐缺口'}

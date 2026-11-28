@@ -43,15 +43,7 @@ interface SearchInputProps extends Omit<
  * a combobox (`useCombobox`'s `inputProps`, a keyboard handler) can be this field too.
  */
 const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  {
-    value,
-    onChange,
-    placeholder = '搜索…',
-    className = '',
-    variant = 'filter',
-    'aria-label': ariaLabel,
-    ...rest
-  },
+  { value, onChange, placeholder = '搜索…', className = '', variant = 'filter', 'aria-label': ariaLabel, ...rest },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement | null>(null);

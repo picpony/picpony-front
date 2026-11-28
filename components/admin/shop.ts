@@ -26,8 +26,7 @@ export interface ShopFormValues {
 export type ShopFormErrors = Partial<Record<'name' | 'imageUrl' | 'price' | 'stock', string>>;
 
 export function shopForm(item?: ShopItemRow | null): ShopFormValues {
-  if (!item)
-    return { name: '', description: '', imageUrl: '', price: '10', stock: '100', active: true };
+  if (!item) return { name: '', description: '', imageUrl: '', price: '10', stock: '100', active: true };
   return {
     name: item.name ?? '',
     description: item.description ?? '',

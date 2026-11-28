@@ -32,9 +32,7 @@ import { useTagNames } from './useTagNames';
 const ROW = 'm3-row flex min-h-18 items-center bg-surface-container-low';
 
 function RowsSkeleton() {
-  return (
-    <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载标签订阅…" />
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载标签订阅…" />;
 }
 
 /**
@@ -70,11 +68,7 @@ function SubscriptionRow({
         className="state-layer flex min-w-0 flex-1 items-center gap-4 self-stretch py-3 pr-2 pl-4 transition-ui focus-visible:outline-hidden focus-visible:inset-ring-2 focus-visible:focus-ring-inset"
       >
         <div className="min-w-0 flex-1">
-          <NameFade
-            as="div"
-            name={asking ? undefined : name}
-            className="truncate text-title-m text-on-surface"
-          >
+          <NameFade as="div" name={asking ? undefined : name} className="truncate text-title-m text-on-surface">
             {asking ? <Skeleton className="inline-block h-4 w-1/3 align-middle" /> : name}
           </NameFade>
           {/* The tag leaves this line for the one above when the dictionary turns out to have no
@@ -162,8 +156,7 @@ export default function SubscriptionsScreen() {
   };
 
   let body: React.ReactNode;
-  if (!ready)
-    body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
+  if (!ready) body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
   else if (!token) body = <SignInRequired description="登录后即可订阅标签并追踪新图片" />;
   else if (list === undefined && read.error !== undefined) {
     body = (

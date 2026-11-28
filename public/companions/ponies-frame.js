@@ -121,9 +121,7 @@
     ['innerWidth', 'width'],
     ['innerHeight', 'height'],
   ]) {
-    const own =
-      Object.getOwnPropertyDescriptor(window, key) ||
-      Object.getOwnPropertyDescriptor(Window.prototype, key);
+    const own = Object.getOwnPropertyDescriptor(window, key) || Object.getOwnPropertyDescriptor(Window.prototype, key);
     if (typeof own?.get !== 'function') continue;
     Object.defineProperty(window, key, {
       configurable: true,
@@ -252,21 +250,11 @@
     const below = box.bottom + SPEECH_GAP + entry.h <= vh - SPEECH_EDGE;
     /* Above, where speech is drawn; below only where the top of the frame is in the way — and kept
        on its side while it still fits, so a pony walking along an edge does not flip it. */
-    const side =
-      entry.side === 'below'
-        ? below || !above
-          ? 'below'
-          : 'above'
-        : above || !below
-          ? 'above'
-          : 'below';
+    const side = entry.side === 'below' ? (below || !above ? 'below' : 'above') : above || !below ? 'above' : 'below';
     const top = side === 'above' ? box.top - SPEECH_GAP - entry.h : box.bottom + SPEECH_GAP;
     node.style.left = `${left}px`;
     node.style.top = `${Math.max(SPEECH_EDGE, Math.min(vh - entry.h - SPEECH_EDGE, top))}px`;
-    node.style.setProperty(
-      '--tail',
-      `${Math.max(TAIL_INSET, Math.min(entry.w - TAIL_INSET, centre - left))}px`,
-    );
+    node.style.setProperty('--tail', `${Math.max(TAIL_INSET, Math.min(entry.w - TAIL_INSET, centre - left))}px`);
     if (side !== entry.side) {
       entry.side = side;
       node.dataset.side = side;
@@ -294,14 +282,12 @@
       const before = overlay.lastElementChild;
       const result = speak.call(this, time, speech);
       const node = overlay.lastElementChild;
-      if (node instanceof HTMLElement && node !== before && node.tagName === 'DIV')
-        adopt(node, this);
+      if (node instanceof HTMLElement && node !== before && node.tagName === 'DIV') adopt(node, this);
       return result;
     };
   }
   addEventListener('message', (event) => {
-    if (event.source !== parent || !event.data || event.data.source !== 'picpony-companions')
-      return;
+    if (event.source !== parent || !event.data || event.data.source !== 'picpony-companions') return;
     const data = event.data;
     if (data.type === 'ping') {
       tell({ type: 'ready' });

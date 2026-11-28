@@ -29,13 +29,7 @@ import {
 } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { sessionUser } from '@/lib/resources';
-import {
-  readToken,
-  readUserInfo,
-  resolveDerpiCredentials,
-  updateUserInfo,
-  writeUserInfo,
-} from '@/lib/hooks';
+import { readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, writeUserInfo } from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
 import { focusField, useFieldErrors } from '@/lib/useFieldErrors';
@@ -51,12 +45,7 @@ import {
   validateUsername,
 } from '@/lib/validation';
 
-import type {
-  AuthView,
-  PendingRegistration,
-  ViewSwitch,
-  AuthFormProps as ViewProps,
-} from './AuthModal';
+import type { AuthView, PendingRegistration, ViewSwitch, AuthFormProps as ViewProps } from './AuthModal';
 
 /**
  * A password reset whose code is on its way. It outlives the dialog the same way a pending
@@ -128,33 +117,16 @@ export default function AuthForms({ view, ...props }: ViewProps & { view: AuthVi
  */
 function BackToLogin({ onSwitch }: { onSwitch: (next: ViewSwitch) => void }) {
   return (
-    <Button
-      variant="text"
-      icon={<MdArrowBack />}
-      onClick={() => onSwitch({ view: 'login' })}
-      className="-ml-4 mb-6"
-    >
+    <Button variant="text" icon={<MdArrowBack />} onClick={() => onSwitch({ view: 'login' })} className="-ml-4 mb-6">
       返回登录
     </Button>
   );
 }
 
 /** A view's title. `h2`: the dialog sits under the page's own `h1`, and names itself by it. */
-function ViewHeading({
-  id,
-  children,
-  className,
-}: {
-  id: string;
-  children: ReactNode;
-  className?: string;
-}) {
+function ViewHeading({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   return (
-    <h2
-      id={id}
-      tabIndex={-1}
-      className={cn('text-headline-s text-on-surface focus-visible:outline-hidden', className)}
-    >
+    <h2 id={id} tabIndex={-1} className={cn('text-headline-s text-on-surface focus-visible:outline-hidden', className)}>
       {children}
     </h2>
   );
@@ -281,10 +253,7 @@ function useFocusOnMount(
  * keeps its size until the window can render, and the button that asked reports the wait.
  * `mounted` is a one-way latch: `Modal`'s exit animation needs the element to stay.
  */
-function useCaptchaChallenge(
-  onCaptchaChange: (open: boolean) => void,
-  isCurrentFlow: () => boolean,
-) {
+function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrentFlow: () => boolean) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -352,10 +321,7 @@ async function establishSession(
       updateUserInfo(base.token, {
         ...result.user,
         ...base,
-        ...resolveDerpiCredentials(
-          result.user as unknown as Record<string, unknown>,
-          readUserInfo(),
-        ),
+        ...resolveDerpiCredentials(result.user as unknown as Record<string, unknown>, readUserInfo()),
       });
     }
   } catch {
@@ -387,13 +353,7 @@ function LoginForm({
   const passwordField = form.field('password');
 
   useReportDirty(Boolean(username || password), onDirtyChange);
-  const viewRef = useFocusOnMount(
-    focusOnMount,
-    finePointer,
-    headingId,
-    () => usernameRef.current,
-    isCurrentFlow,
-  );
+  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
 
   const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
@@ -484,16 +444,8 @@ function LoginForm({
             忘记密码？
           </Button>
         </div>
-        {captcha.mounted && (
-          <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />
-        )}
-        <Button
-          type="submit"
-          variant="filled"
-          size="lg"
-          fullWidth
-          loading={isLoading || captcha.preparing}
-        >
+        {captcha.mounted && <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />}
+        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
           登录
         </Button>
       </form>
@@ -518,15 +470,8 @@ function RegisterForm(props: ViewProps) {
   };
   const stepProps = { ...props, onPendingChange, focusOnMount: props.focusOnMount || arrived };
   return (
-    <div
-      key={props.pending ? 'verify' : 'details'}
-      className={cn(arrived && 'animate-page-transition')}
-    >
-      {props.pending ? (
-        <VerifyEmail {...stepProps} pending={props.pending} />
-      ) : (
-        <RegisterDetails {...stepProps} />
-      )}
+    <div key={props.pending ? 'verify' : 'details'} className={cn(arrived && 'animate-page-transition')}>
+      {props.pending ? <VerifyEmail {...stepProps} pending={props.pending} /> : <RegisterDetails {...stepProps} />}
     </div>
   );
 }
@@ -555,13 +500,7 @@ function RegisterDetails({
   const usernameField = form.field('username');
 
   useReportDirty(Boolean(username || email || password), onDirtyChange);
-  const viewRef = useFocusOnMount(
-    focusOnMount,
-    finePointer,
-    headingId,
-    () => usernameRef.current,
-    isCurrentFlow,
-  );
+  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
 
   const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
@@ -663,16 +602,8 @@ function RegisterDetails({
             form.clear('password');
           }}
         />
-        {captcha.mounted && (
-          <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />
-        )}
-        <Button
-          type="submit"
-          variant="filled"
-          size="lg"
-          fullWidth
-          loading={isLoading || captcha.preparing}
-        >
+        {captcha.mounted && <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />}
+        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
           注册
         </Button>
       </form>
@@ -684,15 +615,7 @@ function RegisterDetails({
 }
 
 /** The resend control both code steps share: a text button that counts down after a send. */
-function ResendButton({
-  seconds,
-  busy,
-  onResend,
-}: {
-  seconds: number;
-  busy: boolean;
-  onResend: () => void;
-}) {
+function ResendButton({ seconds, busy, onResend }: { seconds: number; busy: boolean; onResend: () => void }) {
   return (
     <Button
       type="button"
@@ -730,13 +653,7 @@ function VerifyEmail({
   const codeField = form.field('code');
 
   useReportDirty(code.length > 0, onDirtyChange);
-  const viewRef = useFocusOnMount(
-    focusOnMount,
-    finePointer,
-    headingId,
-    () => codeRef.current,
-    isCurrentFlow,
-  );
+  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => codeRef.current, isCurrentFlow);
 
   const verify = async (value: string) => {
     if (!isCurrentFlow() || operation.busy()) return;
@@ -852,11 +769,7 @@ function VerifyEmail({
         />
       </div>
       {captcha.mounted && (
-        <CaptchaModal
-          isOpen={captcha.open}
-          onClose={captcha.close}
-          onVerify={(proof) => void resend(proof)}
-        />
+        <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={(proof) => void resend(proof)} />
       )}
     </div>
   );
@@ -880,8 +793,7 @@ function ResetForm({
     if (typeof window === 'undefined') return null;
     const stored = readPendingReset();
     if (!stored) return null;
-    if (prefillAccount && resetCooldownKey(prefillAccount) !== resetCooldownKey(stored.account))
-      return null;
+    if (prefillAccount && resetCooldownKey(prefillAccount) !== resetCooldownKey(stored.account)) return null;
     return stored;
   });
   const [step, setStep] = useState<'request' | 'reset'>(restored ? 'reset' : 'request');
@@ -959,10 +871,7 @@ function ResetForm({
       cooldown.start();
       setVerification(data.verification);
       writePendingReset({ account, verification: data.verification, sentAt: Date.now() });
-      showToast(
-        data.message ?? (resend ? '已重新发送验证码' : '已发送验证码至注册邮箱'),
-        'success',
-      );
+      showToast(data.message ?? (resend ? '已重新发送验证码' : '已发送验证码至注册邮箱'), 'success');
       if (!resend) goTo('reset');
     } catch (err) {
       if (!operation.current(pending)) return;
@@ -1003,8 +912,7 @@ function ResetForm({
     } catch (err) {
       if (!operation.current(pending)) return;
       /* One answer for a wrong code, a lapsed request and an unknown address, on purpose. */
-      if (isRefusal(err, 'PASSWORD_RESET_INVALID'))
-        resetForm.set('code', failureOf(err, '验证码错误或已失效'));
+      if (isRefusal(err, 'PASSWORD_RESET_INVALID')) resetForm.set('code', failureOf(err, '验证码错误或已失效'));
       else showToast(failureOf(err, '密码重置失败，请检查验证码'), 'error');
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
@@ -1043,13 +951,7 @@ function ResetForm({
                   requestForm.clear('account');
                 }}
               />
-              <Button
-                type="submit"
-                variant="filled"
-                size="lg"
-                fullWidth
-                loading={isLoading || captcha.preparing}
-              >
+              <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
                 发送验证码
               </Button>
             </form>
@@ -1058,19 +960,12 @@ function ResetForm({
           <>
             {/* 「如果」: the backend does not say whether the address has an account, by design. */}
             <p className="text-body-m text-on-surface-variant mb-6">
-              如果 <span className="text-on-surface wrap-anywhere">{account}</span>{' '}
-              已注册，验证码已发送至该邮箱，10 分钟内有效
+              如果 <span className="text-on-surface wrap-anywhere">{account}</span> 已注册，验证码已发送至该邮箱，10
+              分钟内有效
             </p>
             <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               {/* Tells a password manager whose password the new one is. */}
-              <input
-                type="text"
-                name="username"
-                autoComplete="username"
-                value={account}
-                readOnly
-                hidden
-              />
+              <input type="text" name="username" autoComplete="username" value={account} readOnly hidden />
               <div
                 ref={(element) => {
                   codeRef.current = element;

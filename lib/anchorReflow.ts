@@ -6,8 +6,7 @@
 export function observeAnchorReflow(anchor: HTMLElement, measure: () => void): () => void {
   let frame = 0;
   const onReflow = (event: Event) => {
-    if (event.type === 'scroll' && event.target instanceof Node && !event.target.contains(anchor))
-      return;
+    if (event.type === 'scroll' && event.target instanceof Node && !event.target.contains(anchor)) return;
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;

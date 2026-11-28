@@ -56,8 +56,7 @@ let sent = [];
 const OK = Symbol('ok');
 let answer = () => OK;
 /** The picture id a `/…/{image_id}[/…]` route names. */
-const imageOf = (target) =>
-  Number(/\/(?:favorites|browsing-history)\/(\d+)/.exec(target.pathname)?.[1]);
+const imageOf = (target) => Number(/\/(?:favorites|browsing-history)\/(\d+)/.exec(target.pathname)?.[1]);
 const space = (over = {}) => ({
   owner_id: 1,
   has_password: true,
@@ -177,11 +176,7 @@ const flush = async () => {
 };
 const paint = () => new Promise((resolve) => setTimeout(resolve, 10));
 function setSession(next) {
-  if (next)
-    values.set(
-      LS_KEYS.userInfo,
-      JSON.stringify({ token: next, username: next, id: next === token ? 1 : 2 }),
-    );
+  if (next) values.set(LS_KEYS.userInfo, JSON.stringify({ token: next, username: next, id: next === token ? 1 : 2 }));
   else values.delete(LS_KEYS.userInfo);
   events.dispatchEvent(new Event('user_info_updated'));
 }
@@ -276,9 +271,7 @@ test('pending and failed private-list reads expire too, and late responses canno
   await checking;
   assert.equal(privacy.privacySnapshot().images, null);
   answer = (a) =>
-    a === 'get_privacy_faves'
-      ? rustError(503, 'DATABASE_UNAVAILABLE', '数据库暂时不可用')
-      : privacyAnswers(a);
+    a === 'get_privacy_faves' ? rustError(503, 'DATABASE_UNAVAILABLE', '数据库暂时不可用') : privacyAnswers(a);
   const leave2 = privacy.enterPrivacyScreen(token);
   await privacy.checkPrivacy(token);
   assert.equal(privacy.privacySnapshot().status, 'list-failed');
@@ -337,9 +330,7 @@ test('a server relock refusal removes a previously visible list during refresh',
   await privacy.checkPrivacy(token);
   assert.equal(privacy.privacySnapshot().images.length, 2);
   answer = (a) =>
-    a === 'get_privacy_faves'
-      ? rustError(403, 'PRIVACY_LOCKED', '隐私空间未解锁或解锁已过期，请重新输入密码')
-      : OK;
+    a === 'get_privacy_faves' ? rustError(403, 'PRIVACY_LOCKED', '隐私空间未解锁或解锁已过期，请重新输入密码') : OK;
   await privacy.reloadPrivacy(token);
   assert.equal(privacy.privacySnapshot().status, 'locked');
   assert.equal(privacy.privacySnapshot().images, null);
@@ -361,17 +352,12 @@ test('session changes between account-password verification and reset prevent th
 });
 
 test('privacy moves distinguish failed adds from failed removals and preserve both copies after a partial failure', async () => {
-  faveIds.seed(
-    { token },
-    { ids: [1, 2, 3], dates: {}, folders: { 1: [1], 2: [1], 3: [1] } },
-    Date.now(),
-  );
+  faveIds.seed({ token }, { ids: [1, 2, 3], dates: {}, folders: { 1: [1], 2: [1], 3: [1] } }, Date.now());
   answer = (a, b, target) => {
     if (a === 'check_has_privacy_password') return space({ unlocked: false });
     if (a === 'add_privacy_fave' && imageOf(target) === 2)
       return rustError(409, 'PRIVACY_FAVORITES_LIMIT', '隐私收藏数量已达10000张');
-    if (a === 'toggle_fave' && imageOf(target) === 3)
-      return rustError(503, 'DATABASE_UNAVAILABLE', '数据库暂时不可用');
+    if (a === 'toggle_fave' && imageOf(target) === 3) return rustError(503, 'DATABASE_UNAVAILABLE', '数据库暂时不可用');
     return OK;
   };
   const result = await actions.moveToPrivacy(token, [picture(1), picture(2), picture(3)]);
@@ -411,11 +397,7 @@ test('cancel during a two-step privacy move finishes the accepted picture and se
 
 test('partial folder removal preserves failures and memberships in the other folders', async () => {
   const index = { ids: [1, 2], dates: {}, folders: { 1: [1, 2], 2: [1] } };
-  faveFolders.seed(
-    { token },
-    { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null },
-    Date.now(),
-  );
+  faveFolders.seed({ token }, { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null }, Date.now());
   faveIds.seed({ token, folderId: 1 }, index, Date.now());
   answer = (a, b, target) =>
     a === 'get_faves'
@@ -436,11 +418,7 @@ test('partial folder removal preserves failures and memberships in the other fol
 
 test('two removals before one paint compose correctly in every cached folder, even on a cold global index', async () => {
   const index = { ids: [1, 2, 3], dates: {}, folders: { 1: [1, 2], 2: [1, 2], 3: [1] } };
-  faveFolders.seed(
-    { token },
-    { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null },
-    Date.now(),
-  );
+  faveFolders.seed({ token }, { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null }, Date.now());
   faveIds.seed({ token, folderId: 1 }, index, Date.now());
   faveIds.seed({ token, folderId: 2 }, { ...index, ids: [1, 2] }, Date.now());
   answer = (a) => (a === 'get_faves' ? favesOf(index.ids, index.folders) : { folder_ids: [2] });
@@ -518,10 +496,7 @@ test('acknowledged favourite changes expire this account’s task progress witho
 
 test('a rejected favourite and a batch with no acknowledged changes do not expire task progress', async (t) => {
   const expired = t.mock.method(tasks, 'expire', () => {});
-  answer = (a) =>
-    a === 'get_faves'
-      ? favesOf([1])
-      : rustError(404, 'FOLDER_NOT_FOUND', '收藏夹不存在或不属于此账号');
+  answer = (a) => (a === 'get_faves' ? favesOf([1]) : rustError(404, 'FOLDER_NOT_FOUND', '收藏夹不存在或不属于此账号'));
   await assert.rejects(actions.setImageFolders(token, 1, [2]));
   const outcome = await actions.removeFromFolder(token, [1], 1);
   assert.equal(outcome.failed.length, 1);
@@ -546,12 +521,10 @@ test('an acknowledged response for an old session cannot expire another account�
 test('download skips unreachable lines, rejects error pages and empty bodies, and makes a readable partial ZIP', async () => {
   const media = new Uint8Array([137, 80, 78, 71, 9]);
   answer = (_a, _b, u) => {
-    if (u.searchParams.has('_t'))
-      return new Response(media, { headers: { 'content-type': 'image/png' } });
+    if (u.searchParams.has('_t')) return new Response(media, { headers: { 'content-type': 'image/png' } });
     if (u.pathname.includes('/2/'))
       return new Response('<html>blocked</html>', { headers: { 'content-type': 'text/html' } });
-    if (u.pathname.includes('/3/'))
-      return new Response('', { headers: { 'content-type': 'image/png' } });
+    if (u.pathname.includes('/3/')) return new Response('', { headers: { 'content-type': 'image/png' } });
     return new Response(media, {
       headers: { 'content-type': 'application/octet-stream; charset=binary' },
     });
@@ -610,9 +583,7 @@ test('unreachable worker probes do not discard a readable direct line', async ()
 
 test('a folder link is the backend’s short link to the owner’s id, made signed in (the share counts there)', async () => {
   answer = (a) =>
-    a === 'create_share_link'
-      ? { share_id: 'FolderLinkShareId0000001', preview_status: 'generic' }
-      : OK;
+    a === 'create_share_link' ? { share_id: 'FolderLinkShareId0000001', preview_status: 'generic' } : OK;
   assert.equal(await copyFolderLink(token, '小马', 2, '风景'), true);
   await flush();
   assert.equal(clipboard[0], 'https://fixture.invalid/share.php?id=FolderLinkShareId0000001');
@@ -633,9 +604,7 @@ test('a folder link is the backend’s short link to the owner’s id, made sign
 
 test('a folder link the backend refuses is the long one', async () => {
   answer = (a) =>
-    a === 'create_share_link'
-      ? rustError(400, 'SHARE_TARGET_NOT_ALLOWED', '分享目标只能是本站页面')
-      : OK;
+    a === 'create_share_link' ? rustError(400, 'SHARE_TARGET_NOT_ALLOWED', '分享目标只能是本站页面') : OK;
   assert.equal(await copyFolderLink(token, '小马', 2, '风景'), true);
   await flush();
   assert.equal(clipboard[0], 'https://fixture.invalid/favorites/shared/~1/2');
@@ -648,20 +617,13 @@ test('a failed clipboard copy or a session that changed copies nothing', async (
   setSession('next-account');
   assert.equal(await copyFolderLink(token, 'test', 2, 'folder'), false);
   assert.equal(clipboard.length, 0);
-  assert.equal(
-    sent.filter((r) => r.action === 'create_share_link').length,
-    1,
-    'an obsolete session makes no link',
-  );
+  assert.equal(sent.filter((r) => r.action === 'create_share_link').length, 1, 'an obsolete session makes no link');
 });
 
 test('shared privacy transport failures stay failures instead of masquerading as a password gate', async () => {
   for (const status of [429, 500]) {
     answer = () => rustError(status, status === 429 ? 'RATE_LIMITED' : 'INTERNAL', '不可用');
-    await assert.rejects(
-      api.getSharedPrivacyFaves(token, 2),
-      (e) => e.status === status && e.retryable,
-    );
+    await assert.rejects(api.getSharedPrivacyFaves(token, 2), (e) => e.status === status && e.retryable);
   }
 });
 
@@ -704,17 +666,10 @@ test('下载全部 packs a page an archive, hands each over as it is finished an
     progress.every(([done], at) => at === 0 || done > progress[at - 1][0]),
     'progress counts across the batch',
   );
-  assert.equal(
-    sent.filter((r) => r.target.searchParams.has('_t')).length,
-    1,
-    'one probe for the whole batch',
-  );
+  assert.equal(sent.filter((r) => r.target.searchParams.has('_t')).length, 1, 'one probe for the whole batch');
   const count = spawnSync(
     'python',
-    [
-      '-c',
-      'import io,sys,zipfile; print(len(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).namelist()))',
-    ],
+    ['-c', 'import io,sys,zipfile; print(len(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).namelist()))'],
     { input: Buffer.from(await handed[0].archive.arrayBuffer()) },
   );
   assert.equal(count.stdout.toString().trim(), String(download.ARCHIVE_LIMIT));
@@ -790,15 +745,10 @@ test('a removal writes the folder’s shifted pages from the pictures already he
   const size = 50;
   const ids = Array.from({ length: size + 10 }, (_, i) => i + 1);
   const index = { ids, dates: {}, folders: Object.fromEntries(ids.map((id) => [id, [2]])) };
-  faveFolders.seed(
-    { token },
-    { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null },
-    Date.now(),
-  );
+  faveFolders.seed({ token }, { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null }, Date.now());
   faveIds.seed({ token, folderId: 2 }, index, Date.now());
   const pages = [ids.slice(0, size), ids.slice(size)];
-  for (const page of pages)
-    favePictures.seed({ ids: page }, { ids: page, images: page.map(picture) }, Date.now());
+  for (const page of pages) favePictures.seed({ ids: page }, { ids: page, images: page.map(picture) }, Date.now());
   answer = (a) => (a === 'get_faves' ? favesOf(ids, index.folders) : { folder_ids: [] });
   const result = await actions.removeFromFolder(token, [3], 2);
   assert.deepEqual(result.succeeded, [3]);
@@ -820,11 +770,7 @@ test('a shifted page never counts a picture no cached page answered as missing (
   const size = 50;
   const ids = Array.from({ length: size + 10 }, (_, i) => i + 1);
   const index = { ids, dates: {}, folders: Object.fromEntries(ids.map((id) => [id, [2]])) };
-  faveFolders.seed(
-    { token },
-    { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null },
-    Date.now(),
-  );
+  faveFolders.seed({ token }, { folders: [{ id: 1, isMain: true }, { id: 2 }], privacy: null }, Date.now());
   faveIds.seed({ token, folderId: 2 }, index, Date.now());
   const first = ids.slice(0, size);
   favePictures.seed({ ids: first }, { ids: first, images: first.map(picture) }, Date.now());

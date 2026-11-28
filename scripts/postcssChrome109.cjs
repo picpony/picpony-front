@@ -6,10 +6,7 @@ module.exports = () => ({
   OnceExit(root, { postcss }) {
     const properties = [];
     root.walkAtRules('property', (rule) => {
-      if (
-        rule.params.startsWith('--tw-') &&
-        !rule.nodes.some((node) => node.prop === 'initial-value')
-      ) {
+      if (rule.params.startsWith('--tw-') && !rule.nodes.some((node) => node.prop === 'initial-value')) {
         properties.push(rule);
       }
     });

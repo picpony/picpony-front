@@ -189,8 +189,7 @@ test('the list key normalises its defaults, so the server seed and the first rea
 /* ----- the transport ------------------------------------------------------------------------- */
 
 test('the list read sends the category, the order and a trimmed search, and names the session', async () => {
-  respond = () =>
-    Response.json({ posts: [wirePost({ id: 1 })], total: 1, page: 2, total_pages: 0 });
+  respond = () => Response.json({ posts: [wirePost({ id: 1 })], total: 1, page: 2, total_pages: 0 });
   const list = await forum.getForumPosts({
     page: 2,
     category: 'commission',
@@ -240,14 +239,12 @@ test('a thread is its post and a page of replies; past its last page it is that 
     1,
     'the post is read once',
   );
-  respond = () =>
-    Response.json({ error: { code: 'POST_NOT_FOUND', message: '帖子不存在' } }, { status: 404 });
+  respond = () => Response.json({ error: { code: 'POST_NOT_FOUND', message: '帖子不存在' } }, { status: 404 });
   await assert.rejects(
     forum.getForumPostDetail('404'),
     (error) => error instanceof ApiError && error.notFound && !error.retryable,
   );
-  respond = () =>
-    Response.json({ error: { code: 'BAD_REQUEST', message: '无效' } }, { status: 400 });
+  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '无效' } }, { status: 400 });
   await assert.rejects(
     forum.getForumPostDetail('x'),
     (error) => error instanceof ApiError && error.notFound,
@@ -284,26 +281,16 @@ test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences',
 
   respond = () => new Response(null, { status: 204 });
   await forum.deleteForumPost('T', 42);
-  assert.deepEqual(
-    [calls.at(-1).init.method, calls.at(-1).url.pathname],
-    ['DELETE', '/api/v1/forum/posts/42'],
-  );
+  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/posts/42']);
   await forum.deleteForumComment('T', 9);
-  assert.deepEqual(
-    [calls.at(-1).init.method, calls.at(-1).url.pathname],
-    ['DELETE', '/api/v1/forum/comments/9'],
-  );
+  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/comments/9']);
 
   respond = () => Response.json({ id: 1, content: 'hi' }, { status: 201 });
   await forum.createForumComment('T', { postId: 42, content: 'hi', replyToUserId: 3 }, 'k3');
   assert.equal(calls.at(-1).url.pathname, '/api/v1/forum/posts/42/comments');
   assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'hi', reply_to_user_id: 3 });
   await forum.createForumComment('T', { postId: 42, content: 'top' }, 'k4');
-  assert.deepEqual(
-    JSON.parse(calls.at(-1).init.body),
-    { content: 'top' },
-    'a top-level reply names nobody',
-  );
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'top' }, 'a top-level reply names nobody');
 
   respond = () => Response.json({ liked: true, like_count: 8 });
   assert.deepEqual(await forum.setForumPostLike('T', 42, true), { liked: true, count: 8 });
@@ -313,10 +300,7 @@ test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences',
   );
 
   respond = () =>
-    Response.json(
-      { error: { code: 'POST_VERSION_CONFLICT', message: '帖子已更新，请刷新后重试' } },
-      { status: 409 },
-    );
+    Response.json({ error: { code: 'POST_VERSION_CONFLICT', message: '帖子已更新，请刷新后重试' } }, { status: 409 });
   await assert.rejects(
     forum.updateForumPost('T', 42, body, 4, 'k5'),
     (error) => error instanceof ApiError && error.message === '帖子已更新，请刷新后重试',
@@ -350,10 +334,7 @@ test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences',
   await forum.importSharedBlockGroup('T', { name: 'b', hidden_tags: ['x'], spoilered_tags: [] });
   assert.deepEqual(
     [calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
-    [
-      '/api/v1/me/block-group-imports',
-      { name: 'b', hidden_tags: ['x'], spoilered_tags: [], active: false },
-    ],
+    ['/api/v1/me/block-group-imports', { name: 'b', hidden_tags: ['x'], spoilered_tags: [], active: false }],
   );
 
   respond = () =>
@@ -441,10 +422,7 @@ test('a picture uploads over XHR with progress and the session’s CSRF token, a
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(400, { error: { code: 'BAD_REQUEST', message: '图片格式不支持' } });
-  await assert.rejects(
-    pending,
-    (error) => error instanceof ApiError && error.message === '图片格式不支持',
-  );
+  await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片格式不支持');
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(201, '<html></html>');
@@ -453,30 +431,20 @@ test('a picture uploads over XHR with progress and the session’s CSRF token, a
   const controller = new AbortController();
   pending = forum.uploadForumImage('T', new Blob(['x']), { signal: controller.signal });
   controller.abort();
-  await assert.rejects(
-    pending,
-    (error) => error.name === 'AbortError',
-    'a cancelled upload stays a cancellation',
-  );
+  await assert.rejects(pending, (error) => error.name === 'AbortError', 'a cancelled upload stays a cancellation');
 });
 
 test('a picture is checked before it is sent: kind, size, and a GIF is never redrawn', async () => {
   const file = (type, size) => ({ type, size, name: 'f' });
   await assert.rejects(images.prepareForumImage(file('text/plain', 10)), /请选择图片文件/);
   await assert.rejects(images.prepareForumImage(file('image/png', 60 * 1024 * 1024)), /50 MB/);
-  await assert.rejects(
-    images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)),
-    /动图超过 5 MB/,
-  );
+  await assert.rejects(images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)), /动图超过 5 MB/);
   const small = file('image/gif', 1024);
   assert.equal(await images.prepareForumImage(small), small, 'a small picture goes as it is');
   globalThis.createImageBitmap = async () => {
     throw new Error('cannot decode');
   };
-  await assert.rejects(
-    images.prepareForumImage(file('image/heic', 6 * 1024 * 1024)),
-    /无法在浏览器中压缩/,
-  );
+  await assert.rejects(images.prepareForumImage(file('image/heic', 6 * 1024 * 1024)), /无法在浏览器中压缩/);
   assert.equal(
     images.storedAssetPath(`https://picpony.top/api/v1/media/${'a'.repeat(64)}`),
     `/api/v1/media/${'a'.repeat(64)}`,
@@ -487,26 +455,16 @@ test('a picture is checked before it is sent: kind, size, and a GIF is never red
 /* ----- words ---------------------------------------------------------------------------------- */
 
 test('a quote is built from the words it answers: no tags, no nested quote, no cut mid-tag (R6-031)', () => {
-  const quoted = text.replyQuote(
-    'fl"utter]shy',
-    '[quote="a"]旧的[/quote]逆天图？[img]/uploads/forum/x.png[/img]',
-  );
+  const quoted = text.replyQuote('fl"utter]shy', '[quote="a"]旧的[/quote]逆天图？[img]/uploads/forum/x.png[/img]');
   assert.match(quoted, /^\[quote="fluttershy"\]\n/);
   assert.doesNotMatch(quoted, /\[img\]|旧的/);
   assert.match(quoted, /逆天图？/);
   assert.match(quoted, /\[图片\]/);
-  const long = text.replyQuote(
-    'u',
-    `[url=https://example.test/${'a'.repeat(200)}]链接[/url]${'字'.repeat(150)}`,
-  );
+  const long = text.replyQuote('u', `[url=https://example.test/${'a'.repeat(200)}]链接[/url]${'字'.repeat(150)}`);
   const inner = long.slice(long.indexOf('\n') + 1, long.indexOf('\n[/quote]'));
   assert.ok(Array.from(inner).length <= text.QUOTE_LENGTH + 1);
   assert.doesNotMatch(inner, /\[|\]/, 'nothing left open');
-  assert.equal(
-    text.replyQuote('u', '[img]/a.png[/img]').includes('[图片]'),
-    true,
-    'a picture alone is 「[图片]」',
-  );
+  assert.equal(text.replyQuote('u', '[img]/a.png[/img]').includes('[图片]'), true, 'a picture alone is 「[图片]」');
 });
 
 test('a teaser prefers the 简介, then the body’s own words', () => {
@@ -523,10 +481,7 @@ test('a teaser prefers the 简介, then the body’s own words', () => {
     '附有约稿链接',
   );
   const shared_groups = { tagGroups: [{ name: 'a', tags: [] }], blockGroups: [] };
-  assert.equal(
-    text.forumTeaser({ ...base, category: 'taggroups', content: '', shared_groups }),
-    '分享了 1 个标签组',
-  );
+  assert.equal(text.forumTeaser({ ...base, category: 'taggroups', content: '', shared_groups }), '分享了 1 个标签组');
   assert.equal(text.isBlankRichText('[p][br][/p]'), true);
   assert.equal(text.isBlankRichText('[img]/a.png[/img]'), false, 'a picture is something to send');
 });
@@ -569,11 +524,7 @@ test('the original front end’s draft is adopted once, by the first account to 
   assert.equal(adopted.title, '旧草稿');
   assert.equal(adopted.category, 'commission');
   assert.equal(adopted.commissionLink, 'https://x.test');
-  assert.deepEqual(
-    adopted.images,
-    [],
-    'its pictures were staged on the old backend, which the new one refuses',
-  );
+  assert.deepEqual(adopted.images, [], 'its pictures were staged on the old backend, which the new one refuses');
   assert.equal(storage.getItem('forum_post_draft'), null, 'removed once it is this account’s');
   assert.equal(drafts.readDraft('2', null), null, 'and nobody else adopts it');
   assert.equal(drafts.readDraft('1', null).title, '旧草稿');
@@ -597,10 +548,7 @@ function load(file, dependencies = {}, globals = {}) {
       require: (name) => {
         if (name in dependencies) return dependencies[name];
         if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
-        return new Proxy(
-          {},
-          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
-        );
+        return new Proxy({}, { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) });
       },
       URLSearchParams,
       URL,
@@ -761,32 +709,20 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   tree = hooks.render(() => PostComposer(props));
   await submit();
   assert.equal(created.length, 0);
-  assert.equal(
-    byLabel(tree, '标题').props.error,
-    '标题至少需要 5 个字符',
-    'the message is the field’s',
-  );
-  assert.equal(
-    byType(tree, 'DynamicComponent').props.invalid,
-    true,
-    'and an empty body is flagged at the editor',
-  );
+  assert.equal(byLabel(tree, '标题').props.error, '标题至少需要 5 个字符', 'the message is the field’s');
+  assert.equal(byType(tree, 'DynamicComponent').props.invalid, true, 'and an empty body is flagged at the editor');
   assert.deepEqual(toasts, [], 'no toast for a problem that belongs to a field');
 
   byLabel(tree, '标题').props.onChange({ target: { value: '一个足够长的标题' } });
   tree = hooks.render(() => PostComposer(props));
-  byType(tree, 'DynamicComponent').props.onChange(
-    `[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`,
-  );
+  byType(tree, 'DynamicComponent').props.onChange(`[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`);
   byType(tree, 'DynamicComponent').props.onUploaded(`/api/v1/media/${'c'.repeat(64)}`);
   byType(tree, '@/components/forum/CoverField:default').props.onBusyChange(true);
   tree = hooks.render(() => PostComposer(props));
   assert.equal(byLabel(tree, '标题').props.error, undefined, 'typing clears the field’s message');
   await submit();
   assert.equal(created.length, 0, 'a cover still uploading holds the post');
-  assert.ok(
-    find(tree, (node) => node.type === 'p' && node.props.children === '图片还在上传，请稍候'),
-  );
+  assert.ok(find(tree, (node) => node.type === 'p' && node.props.children === '图片还在上传，请稍候'));
 
   byType(tree, '@/components/forum/CoverField:default').props.onBusyChange(false);
   tree = hooks.render(() => PostComposer(props));
@@ -818,20 +754,12 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   createReply = async () => 88;
   await submit();
   assert.equal(created.length, 2, 'retried by the writer');
-  assert.equal(
-    created[1].key,
-    created[0].key,
-    'a retry after a lost answer is the same post (one Idempotency-Key)',
-  );
+  assert.equal(created[1].key, created[0].key, 'a retry after a lost answer is the same post (one Idempotency-Key)');
   assert.deepEqual(
     done.map(([id]) => id),
     [88],
   );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(cleared.at(-1))),
-    ['1', null],
-    'published: the draft goes',
-  );
+  assert.deepEqual(JSON.parse(JSON.stringify(cleared.at(-1))), ['1', null], 'published: the draft goes');
   assert.deepEqual(toasts, ['已发布']);
   const savesBefore = saved.length;
   timers.splice(0).forEach((callback) => callback());
@@ -907,8 +835,7 @@ test('the container flies the picture flight’s spring: Compose’s shared-elem
   assert.ok(at(0.5) < 100, `half at ${at(0.5)}`);
   assert.ok(at(0.9) < 220, `nine tenths at ${at(0.9)}`);
   assert.ok(steps.at(-1) < 0.003, `last frame ${steps.at(-1)}`);
-  for (let t = 0; t < 1; t += 0.01)
-    assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
+  for (let t = 0; t < 1; t += 0.01) assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
 });
 
 test('the contents hand over on the flight’s windows, one after the other', () => {
@@ -988,16 +915,12 @@ test('a turned leg sends each content back over the same stretch of travel it ca
     for (const p of [0.02, 0.1, 0.3, 0.45, 0.62, 0.8, 0.95, 1]) {
       for (const to of [0, 1]) {
         const track = container.fadeTrack(window, p, to, out);
-        for (let i = 1; i < track.length; i += 1)
-          assert.ok(track[i].offset > track[i - 1].offset, 'offsets climb');
+        for (let i = 1; i < track.length; i += 1) assert.ok(track[i].offset > track[i - 1].offset, 'offsets climb');
         assert.equal(track[0].offset, 0);
         assert.equal(track.at(-1).offset, 1);
         for (let u = 0; u <= 1.0001; u += 0.025) {
           const expected = container.fadeAt(window, p + (to - p) * Math.min(1, u), out);
-          assert.ok(
-            Math.abs(trackAt(track, Math.min(1, u)) - expected) < 1e-9,
-            `p ${p} → ${to} at ${u}`,
-          );
+          assert.ok(Math.abs(trackAt(track, Math.min(1, u)) - expected) < 1e-9, `p ${p} → ${to} at ${u}`);
         }
         /* It leaves from exactly what was on screen at the turn: no step in the content's opacity. */
         assert.ok(Math.abs(track[0].opacity - container.fadeAt(window, p, out)) < 1e-12);
@@ -1019,16 +942,14 @@ test('a turn leaves from where the container is, at once, on the curve, over wha
        never under its floor. */
     const share = Math.max(
       heroConstants.HERO_REVERSE_MIN_DURATION_MS / full,
-      heroConstants.HERO_REVERSE_BASE_RATIO +
-        heroConstants.HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(p),
+      heroConstants.HERO_REVERSE_BASE_RATIO + heroConstants.HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(p),
     );
     assert.ok(Math.abs(turned.duration - full * share) < 1e-9, `duration ${turned.duration}`);
     assert.ok(turned.duration <= full + 1e-9);
     /* It moves on its first frame, the way it was sent, and lands on its end without passing it. */
     const travel = (ms) => container.legAt(turned, ms).travel;
     assert.ok(travel(frame) < turned.from - 1e-6, `elapsed ${elapsed}: still on the first frame`);
-    for (let ms = 0; ms < turned.duration; ms += 1)
-      assert.ok(travel(ms + 1) <= travel(ms) + 1e-12, 'one way');
+    for (let ms = 0; ms < turned.duration; ms += 1) assert.ok(travel(ms + 1) <= travel(ms) + 1e-12, 'one way');
     assert.ok(Math.abs(travel(turned.duration)) < 1e-12, 'lands on the first end');
   }
   /* A turn of a turn heads for the second end again, from where the turned leg had got to. */
@@ -1052,10 +973,7 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
     radii: [0, 0, 0, 0],
     colour: 'rgb(255, 248, 248)',
   };
-  for (const levels of [
-    container.shutterLevels(null),
-    container.shutterLevels({ left: 416, width: 896 }),
-  ]) {
+  for (const levels of [container.shutterLevels(null), container.shutterLevels({ left: 416, width: 896 })]) {
     for (const elapsed of [0, 1000 / 60, 90, 200, 333, full, full + 50]) {
       const pose = container.containerPose(leg, card, page, elapsed);
       const p = container.forumTransformProgress(Math.min(1, elapsed / full));
@@ -1076,15 +994,9 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
   assert.deepEqual(container.containerPose(leg, card, page, 0).box, card.box);
   assert.deepEqual(container.containerPose(leg, card, page, full).box, page.box);
   /* The tone too, between two computed colours; one the browser would not print stays at its end. */
-  assert.equal(
-    container.colourAt('rgb(0, 0, 0)', 'rgba(255, 255, 255, 0.5)', 0.5),
-    'rgba(128, 128, 128, 0.75)',
-  );
+  assert.equal(container.colourAt('rgb(0, 0, 0)', 'rgba(255, 255, 255, 0.5)', 0.5), 'rgba(128, 128, 128, 0.75)');
   assert.equal(container.colourAt('rgb(1, 2, 3)', 'rgb(1, 2, 3)', 0.3), 'rgb(1, 2, 3)');
-  assert.equal(
-    container.colourAt('color(display-p3 1 0 0)', 'rgb(0, 0, 0)', 0.2),
-    'color(display-p3 1 0 0)',
-  );
+  assert.equal(container.colourAt('color(display-p3 1 0 0)', 'rgb(0, 0, 0)', 0.2), 'color(display-p3 1 0 0)');
   /* The turned leg starts exactly there: its own first pose is the pose it was turned at. */
   const elapsed = 120;
   const now = container.containerPose(leg, card, page, elapsed);
@@ -1179,10 +1091,7 @@ test('shared content alignment keeps the slot locked onto the flying picture and
       assert.ok(Math.abs(box.left + inOffset.x + inShift.x - shared.left) < 1e-9, `slot x at ${u}`);
       assert.ok(Math.abs(box.top + inOffset.y + inShift.y - shared.top) < 1e-9, `slot y at ${u}`);
       /* Outgoing cover slot sits at `box + outOffset + outShift`, matching the flying picture too. */
-      assert.ok(
-        Math.abs(box.left + outOffset.x + outShift.x - shared.left) < 1e-9,
-        `out x at ${u}`,
-      );
+      assert.ok(Math.abs(box.left + outOffset.x + outShift.x - shared.left) < 1e-9, `out x at ${u}`);
       assert.ok(Math.abs(box.top + outOffset.y + outShift.y - shared.top) < 1e-9, `out y at ${u}`);
     }
   }
@@ -1212,9 +1121,7 @@ test('forum list always requests summary=1 and renders taggroup counts in teaser
   calls.length = 0;
   respond = () =>
     Response.json({
-      posts: [
-        wirePost({ id: 55, content_summary: true, content: { type: 'discussion', html: '' } }),
-      ],
+      posts: [wirePost({ id: 55, content_summary: true, content: { type: 'discussion', html: '' } })],
       total: 1,
       page: 1,
       total_pages: 1,
@@ -1226,8 +1133,7 @@ test('forum list always requests summary=1 and renders taggroup counts in teaser
 
   // 400 validation errors propagate directly without a fallback retry.
   calls.length = 0;
-  respond = () =>
-    Response.json({ error: { code: 'BAD_REQUEST', message: '搜索词过长' } }, { status: 400 });
+  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '搜索词过长' } }, { status: 400 });
   await assert.rejects(() => forum.getForumPosts({ page: 1, search: 'x'.repeat(200) }));
   assert.equal(calls.length, 1);
 });
@@ -1403,11 +1309,7 @@ test('rememberForumOrigin ignores summary list previews and never arms container
   );
 
   transition.rememberForumOrigin(88, row, summaryPost);
-  assert.equal(
-    transition.readForumPreview(88),
-    null,
-    'summary row is not stored as a complete preview',
-  );
+  assert.equal(transition.readForumPreview(88), null, 'summary row is not stored as a complete preview');
   assert.deepEqual(expected, [], 'cold summary click does not arm route container transform');
 
   transition.rememberForumOrigin(88, row, fullPost);

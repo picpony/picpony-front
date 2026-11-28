@@ -122,12 +122,7 @@ export default function HeroStageActive({ phase, snapshot, sessionId }: HeroStag
                 <div data-image-detail-crossfade className="w-full">
                   <div className="image-detail-page mx-auto max-w-5xl px-2 sm:px-4">
                     <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
-                      <DetailHeader
-                        key={image.id}
-                        image={image}
-                        layout="stage"
-                        pending={record === null}
-                      />
+                      <DetailHeader key={image.id} image={image} layout="stage" pending={record === null} />
                       <div
                         data-image-detail-media-pane
                         className="image-detail-media-pane relative flex w-full items-start justify-center px-4 pb-4 pt-2 sm:px-6"

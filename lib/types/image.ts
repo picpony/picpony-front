@@ -37,10 +37,7 @@ export interface PonyImage {
 }
 
 /** A list can provide media geometry before the detail endpoint supplies metadata. */
-export type ImagePreview = Pick<
-  PonyImage,
-  'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'
-> &
+export type ImagePreview = Pick<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'> &
   Partial<Omit<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>>;
 
 /**

@@ -19,10 +19,7 @@ const store = new Map<string, unknown>();
  * app (prefix it with the screen) and must not identify a record when records share a
  * screen — use `useScreenStateFor` for that.
  */
-export function useScreenState<T>(
-  key: string,
-  initial: T,
-): [T, (value: T | ((prev: T) => T)) => void] {
+export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => (store.has(key) ? (store.get(key) as T) : initial));
 
   const set = useCallback(
@@ -34,8 +31,7 @@ export function useScreenState<T>(
          screen never runs its updater, so a store written only there kept the stale value
          (measured on /messages: a conversation closed by a navigation from inside its layer). */
       if (typeof next !== 'function' || store.has(key)) {
-        const resolved =
-          typeof next === 'function' ? (next as (p: T) => T)(store.get(key) as T) : next;
+        const resolved = typeof next === 'function' ? (next as (p: T) => T)(store.get(key) as T) : next;
         store.set(key, resolved);
         setValue(resolved);
         return;

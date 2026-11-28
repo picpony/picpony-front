@@ -1,12 +1,7 @@
 'use client';
 
 import { clamp01 } from '@/lib/utils';
-import {
-  springProgress,
-  springVelocity,
-  springVelocityFromSpeed,
-  type SpringResponse,
-} from './spring';
+import { springProgress, springVelocity, springVelocityFromSpeed, type SpringResponse } from './spring';
 
 /**
  * A leg's progress function, in one of two kinds — the shape is independent of the leg's
@@ -127,15 +122,11 @@ export function curveVelocity(curve: ProgressCurve, time: number) {
 }
 
 export function progressAt(model: HeroProgressModel, time: number) {
-  return model.kind === 'curve'
-    ? curveProgress(model.curve, time)
-    : springProgress(time, model.response);
+  return model.kind === 'curve' ? curveProgress(model.curve, time) : springProgress(time, model.response);
 }
 
 export function velocityAt(model: HeroProgressModel, time: number) {
-  return model.kind === 'curve'
-    ? curveVelocity(model.curve, time)
-    : springVelocity(time, model.response);
+  return model.kind === 'curve' ? curveVelocity(model.curve, time) : springVelocity(time, model.response);
 }
 
 /** Material's `ProgressThresholds`: a sub-timeline inside the leg's own progress. */
@@ -151,12 +142,7 @@ export function intervalProgress(progress: number, start: number, end: number) {
  * 1, which had shipped once. A spread that must not be forgotten is a hazard; a function
  * that owns the spread is not.
  */
-export function relaunch(
-  base: SpringResponse,
-  speed: number,
-  distance: number,
-  duration: number,
-): HeroProgressModel {
+export function relaunch(base: SpringResponse, speed: number, distance: number, duration: number): HeroProgressModel {
   return {
     kind: 'spring',
     response: {
@@ -220,8 +206,7 @@ const SPACING_BEND = 1.5;
 function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
   const step = 1 / SPACING_STEPS;
   const values = new Float64Array(SPACING_STEPS + 1);
-  for (let index = 0; index <= SPACING_STEPS; index += 1)
-    values[index] = progressAt(model, index * step);
+  for (let index = 0; index <= SPACING_STEPS; index += 1) values[index] = progressAt(model, index * step);
   const measure = new Float64Array(SPACING_STEPS + 1);
   let bend = 0;
   for (let index = 1; index <= SPACING_STEPS; index += 1) {
@@ -229,8 +214,7 @@ function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
     if (index < SPACING_STEPS) {
       bend = Math.sqrt(Math.abs(values[index + 1] - 2 * values[index] + values[index - 1])) / step;
     }
-    measure[index] =
-      measure[index - 1] + Math.max(1, SPACING_BEND * bend, SPACING_TRAVEL * slope) * step;
+    measure[index] = measure[index - 1] + Math.max(1, SPACING_BEND * bend, SPACING_TRAVEL * slope) * step;
   }
   const total = measure[SPACING_STEPS];
   const offsets = [0];

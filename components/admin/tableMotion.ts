@@ -24,8 +24,7 @@ const ownedFrames = new WeakMap<Element, number>();
 export function markLayoutOwned(el: Element | null | undefined) {
   if (!el || typeof el.setAttribute !== 'function') return;
   const previous = ownedFrames.get(el);
-  if (previous !== undefined && typeof cancelAnimationFrame === 'function')
-    cancelAnimationFrame(previous);
+  if (previous !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(previous);
   el.setAttribute('data-layout-owned', '');
   if (typeof requestAnimationFrame !== 'function') return;
   const clear = () => {
@@ -42,20 +41,14 @@ export function markLayoutOwned(el: Element | null | undefined) {
 /** The move running on `el`, if any. */
 export function runningMove(el: Element): Animation | undefined {
   const animation = moves.get(el);
-  return animation && animation.playState !== 'idle' && animation.playState !== 'finished'
-    ? animation
-    : undefined;
+  return animation && animation.playState !== 'idle' && animation.playState !== 'finished' ? animation : undefined;
 }
 
 /**
  * Replaces `el`'s move. The previous one is cancelled, so the caller reads the pose to start from
  * (`drawnOffsetY`, a rect) before calling this.
  */
-export function startMove(
-  el: HTMLElement,
-  keyframes: Keyframe[],
-  timing: KeyframeAnimationOptions,
-): Animation {
+export function startMove(el: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions): Animation {
   moves.get(el)?.cancel();
   const animation = el.animate(keyframes, timing);
   moves.set(el, animation);
@@ -93,11 +86,7 @@ function isMotionBoundary(el: Element): boolean {
  */
 export function followersOf(node: Element, band: { top: number; bottom: number }): HTMLElement[] {
   const result: HTMLElement[] = [];
-  for (
-    let current: Element | null = node;
-    current && !isMotionBoundary(current);
-    current = current.parentElement
-  ) {
+  for (let current: Element | null = node; current && !isMotionBoundary(current); current = current.parentElement) {
     for (let sibling = current.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
       if (!(sibling instanceof HTMLElement)) continue;
       if (sibling.hasAttribute('data-tab-pane') && insideConcealedPane(sibling)) continue;
@@ -120,16 +109,8 @@ export function followersOf(node: Element, band: { top: number; bottom: number }
  */
 export function precedersOf(node: Element, band: { top: number; bottom: number }): HTMLElement[] {
   const result: HTMLElement[] = [];
-  for (
-    let current: Element | null = node;
-    current && !isMotionBoundary(current);
-    current = current.parentElement
-  ) {
-    for (
-      let sibling = current.previousElementSibling;
-      sibling;
-      sibling = sibling.previousElementSibling
-    ) {
+  for (let current: Element | null = node; current && !isMotionBoundary(current); current = current.parentElement) {
+    for (let sibling = current.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
       if (!(sibling instanceof HTMLElement)) continue;
       if (sibling.hasAttribute('data-tab-pane') && insideConcealedPane(sibling)) continue;
       const rect = sibling.getBoundingClientRect();

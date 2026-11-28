@@ -209,12 +209,7 @@ export default function PoniesTab({ token }: AdminPanelProps) {
       <MutationResult mutation={mutation} />
       <MutationResult mutation={discovery} />
       <div className="flex flex-col gap-3 @md:flex-row @md:items-center">
-        <SearchInput
-          value={filter}
-          onChange={setFilter}
-          placeholder="筛选角色…"
-          className="min-w-0 @md:flex-1"
-        />
+        <SearchInput value={filter} onChange={setFilter} placeholder="筛选角色…" className="min-w-0 @md:flex-1" />
         {config && (
           <div className="flex flex-wrap items-center gap-2">
             {[true, false].map((enabled) => (
@@ -268,8 +263,7 @@ export default function PoniesTab({ token }: AdminPanelProps) {
          corrects the read itself — minting a draft from it made the panel claim unsaved settings
          (刷新 asked to discard them) and pinned every row to this snapshot, hiding the re-read
          `committed` asks for (review P6-F6). */
-            const renamed = (rows: Pony[]) =>
-              rows.map((row) => (row.path === shownRow.path ? { ...row, name } : row));
+            const renamed = (rows: Pony[]) => rows.map((row) => (row.path === shownRow.path ? { ...row, name } : row));
             if (draft) setDraft({ ...draft, ponies: renamed(draft.ponies) });
             else if (read.data) {
               const base = read.data;
@@ -304,9 +298,7 @@ function PonyEditor({
   onRenamed: (name: string) => void;
 }) {
   const [name, setName] = useState(pony.name);
-  const [editing, setEditing] = useState<{ name: string; text: string; closing: boolean } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<{ name: string; text: string; closing: boolean } | null>(null);
   const read = useResource(speechQuery, token ? { token, name: pony.name, path: pony.path } : SKIP);
   const rename = useCatalogMutation(token);
   const save = useCatalogMutation(token);
@@ -374,9 +366,7 @@ function PonyEditor({
         surface="dialog"
         isClosing={editing.closing}
         onEscape={busy ? undefined : closeSpeech}
-        onExitComplete={() =>
-          setEditing((current) => (current?.name === row.name && current.closing ? null : current))
-        }
+        onExitComplete={() => setEditing((current) => (current?.name === row.name && current.closing ? null : current))}
       >
         <AdminForm
           className="max-w-none"
@@ -385,9 +375,7 @@ function PonyEditor({
             void save.run(
               () => api.savePonySpeech(token, revision, pony.path, editing.name, editing.text),
               () => {
-                setEditing((current) =>
-                  current?.name === row.name ? { ...current, closing: true } : current,
-                );
+                setEditing((current) => (current?.name === row.name ? { ...current, closing: true } : current));
                 showToast('已保存台词', 'success');
               },
               () => {
@@ -406,21 +394,14 @@ function PonyEditor({
             value={editing.text}
             readOnly={busy}
             onChange={(event) =>
-              setEditing((current) =>
-                current ? { ...current, text: event.target.value } : current,
-              )
+              setEditing((current) => (current ? { ...current, text: event.target.value } : current))
             }
           />
           <FormActions>
             <Button type="button" variant="text" disabled={busy} onClick={closeSpeech}>
               取消
             </Button>
-            <Button
-              type="submit"
-              variant="filled"
-              loading={save.busy}
-              disabled={rename.busy || save.uncertain}
-            >
+            <Button type="submit" variant="filled" loading={save.busy} disabled={rename.busy || save.uncertain}>
               保存台词
             </Button>
           </FormActions>
@@ -468,12 +449,7 @@ function PonyEditor({
             onChange={(event) => setName(event.target.value)}
           />
           <FormActions>
-            <Button
-              type="submit"
-              variant="filled"
-              loading={rename.busy}
-              disabled={save.busy || rename.uncertain}
-            >
+            <Button type="submit" variant="filled" loading={rename.busy} disabled={save.busy || rename.uncertain}>
               保存名称
             </Button>
           </FormActions>

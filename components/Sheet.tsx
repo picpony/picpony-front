@@ -11,13 +11,7 @@ import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { clamp, cn } from '@/lib/utils';
 import ScrollArea from './ScrollArea';
-import {
-  useExitAnimation,
-  useOverlayLayer,
-  useMounted,
-  useScrollLock,
-  OverlayLayerContext,
-} from '@/lib/overlay';
+import { useExitAnimation, useOverlayLayer, useMounted, useScrollLock, OverlayLayerContext } from '@/lib/overlay';
 
 interface SheetProps {
   isOpen: boolean;
@@ -204,9 +198,7 @@ export default function Sheet({
            (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
            on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
            `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
-        const timing = isOpen
-          ? spring('defaultSpatial', 'overlay')
-          : spring('fastEffects', 'overlay');
+        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { y: isOpen ? 0 : '100%', ...timing, overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
@@ -274,9 +266,7 @@ export default function Sheet({
           return;
         }
 
-        const panelRelease = dismiss
-          ? spring('fastEffects', 'overlay')
-          : spring('defaultSpatial', 'overlay');
+        const panelRelease = dismiss ? spring('fastEffects', 'overlay') : spring('defaultSpatial', 'overlay');
         const scrimRelease = spring('defaultEffects', 'overlay');
 
         if (scrim)
@@ -445,10 +435,7 @@ export default function Sheet({
                 /* No browser touch action on the strip or the title: the drag is the
                  sheet's, and a downward pan that reached the browser as well would start
                  its overscroll glow or pull-to-refresh under the finger. */
-                <div
-                  className="flex h-12 shrink-0 touch-none items-center justify-center"
-                  aria-hidden="true"
-                >
+                <div className="flex h-12 shrink-0 touch-none items-center justify-center" aria-hidden="true">
                   <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
                 </div>
               )}

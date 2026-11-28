@@ -27,16 +27,14 @@ export type RichTextEditorSize = 'post' | 'reply';
  * The editing area's minimum height in px: [phone, from `sm` up]. The editor's stylesheet and
  * the placeholder below both read this table, so the box the chunk lands in is the box it fills.
  */
-export const EDITOR_MIN_HEIGHT: Record<RichTextEditorSize | 'default', readonly [number, number]> =
-  {
-    post: [200, 300],
-    reply: [120, 160],
-    default: [300, 300],
-  };
+export const EDITOR_MIN_HEIGHT: Record<RichTextEditorSize | 'default', readonly [number, number]> = {
+  post: [200, 300],
+  reply: [120, 160],
+  default: [300, 300],
+};
 
 /** Shared geometry for the loaded field and its lazy placeholder. */
-export const EDITOR_FRAME_CLASS_NAME =
-  'rich-text-editor relative w-full min-w-0 rounded-md border bg-surface';
+export const EDITOR_FRAME_CLASS_NAME = 'rich-text-editor relative w-full min-w-0 rounded-md border bg-surface';
 export const EDITOR_TOOLBAR_CLASS_NAME =
   'flex min-h-[calc(max(40px,var(--touch-floor))+13px)] rounded-t-[calc(var(--radius-md)-1px)] border-b border-outline-variant bg-surface-container-low';
 
@@ -47,10 +45,7 @@ export const EDITOR_TOOLBAR_CLASS_NAME =
 export function EditorPlaceholder({ size }: { size?: RichTextEditorSize }) {
   const [phone, wide] = EDITOR_MIN_HEIGHT[size ?? 'default'];
   return (
-    <div
-      aria-hidden="true"
-      className={cn(EDITOR_FRAME_CLASS_NAME, 'overflow-hidden border-outline')}
-    >
+    <div aria-hidden="true" className={cn(EDITOR_FRAME_CLASS_NAME, 'overflow-hidden border-outline')}>
       <div className={EDITOR_TOOLBAR_CLASS_NAME} />
       <div
         className="flex items-center justify-center p-4 h-(--editor-phone) sm:h-(--editor-wide)"

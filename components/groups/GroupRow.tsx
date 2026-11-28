@@ -72,13 +72,7 @@ export function GroupRow({
           <h2 className="line-clamp-2 text-title-m wrap-anywhere" title={name}>
             {name}
           </h2>
-          <p
-            className={cn(
-              'text-body-s tabular-nums',
-              STATE_TRANSITION,
-              !active && 'text-on-surface-variant',
-            )}
-          >
+          <p className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>
             {summary}
           </p>
         </div>
@@ -182,13 +176,7 @@ export function TagMarks({
           </li>
         ))}
         {rest > 0 && (
-          <li
-            className={cn(
-              'text-body-s tabular-nums',
-              STATE_TRANSITION,
-              !active && 'text-on-surface-variant',
-            )}
-          >
+          <li className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>
             +{rest}
           </li>
         )}

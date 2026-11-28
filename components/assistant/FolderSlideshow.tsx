@@ -12,10 +12,7 @@ import { readToken, useSession } from '@/lib/hooks';
 import { useDocumentVisible } from '@/lib/mascot/visibility';
 import { describeImage } from '@/lib/imageDescription';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
-import type {
-  AssistantSlideshowReceipt,
-  AssistantSlideshowRequest,
-} from '@/lib/assistant/slideshow';
+import type { AssistantSlideshowReceipt, AssistantSlideshowRequest } from '@/lib/assistant/slideshow';
 
 const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false });
 
@@ -36,10 +33,7 @@ export default function FolderSlideshow({
   const visible = useDocumentVisible();
   const allowed = token === request.token;
   const folders = useResource(faveFolders, allowed ? { token: request.token } : SKIP);
-  const index = useResource(
-    faveIds,
-    allowed ? { token: request.token, folderId: request.folderId } : SKIP,
-  );
+  const index = useResource(faveIds, allowed ? { token: request.token, folderId: request.folderId } : SKIP);
   const totalPages = Math.max(1, Math.ceil((index.data?.ids.length ?? 0) / FAVE_PAGE_SIZE));
   const page = clamp(request.page, 1, totalPages);
   const ids = useMemo(
@@ -52,14 +46,10 @@ export default function FolderSlideshow({
     () => (pictures.data ? rules.withhold(pictures.data.images, pictures.data.ids) : null),
     [pictures.data, rules],
   );
-  const allTags = useMemo(
-    () => [...new Set(filtered?.images.flatMap((image) => image.tags) ?? [])],
-    [filtered],
-  );
+  const allTags = useMemo(() => [...new Set(filtered?.images.flatMap((image) => image.tags) ?? [])], [filtered]);
   const spoilers = useSpoilerMatch(allTags);
   const images = useMemo(
-    () =>
-      filtered?.images.filter((image) => !image.tags.some((tag) => spoilers.includes(tag))) ?? [],
+    () => filtered?.images.filter((image) => !image.tags.some((tag) => spoilers.includes(tag))) ?? [],
     [filtered, spoilers],
   );
   const slides = useMemo<PicLightboxSlide[]>(
@@ -95,9 +85,7 @@ export default function FolderSlideshow({
   const opening = useRef(false);
   const error = index.error ?? pictures.error ?? folders.error;
   const ready =
-    index.data !== undefined &&
-    folders.data !== undefined &&
-    (ids.length === 0 || pictures.data !== undefined);
+    index.data !== undefined && folders.data !== undefined && (ids.length === 0 || pictures.data !== undefined);
   useEffect(() => {
     if (!allowed) {
       onError(new Error('账号已切换，已停止放映'));
@@ -125,18 +113,7 @@ export default function FolderSlideshow({
       }
       setOpen(true);
     }, onError);
-  }, [
-    allowed,
-    error,
-    ready,
-    visible,
-    folders.data,
-    request.folderId,
-    request.token,
-    slides.length,
-    onReady,
-    onError,
-  ]);
+  }, [allowed, error, ready, visible, folders.data, request.folderId, request.token, slides.length, onReady, onError]);
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(() => {

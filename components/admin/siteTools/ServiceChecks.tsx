@@ -52,8 +52,7 @@ export default function ServiceChecks({ token }: { token: string }) {
         if (runs.current === id) setChecks((previous) => [...previous, row]);
       },
       (error) => {
-        if (!isAborted(error) && readToken() === token)
-          setError(apiErrorMessage(error, '线路检测失败'));
+        if (!isAborted(error) && readToken() === token) setError(apiErrorMessage(error, '线路检测失败'));
       },
       () => {
         if (controller.current === runController) controller.current = null;

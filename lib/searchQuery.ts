@@ -209,10 +209,7 @@ export function blacklistBeyondQuery(blacklist: PublicBlacklist): Set<number> {
 }
 
 /** `images` without the blacklisted ids the query could not carry. Same array when none apply. */
-export function withoutOverflowBlacklisted<T extends { id: number }>(
-  images: T[],
-  blacklist: PublicBlacklist,
-): T[] {
+export function withoutOverflowBlacklisted<T extends { id: number }>(images: T[], blacklist: PublicBlacklist): T[] {
   const rest = blacklistBeyondQuery(blacklist);
   return rest.size ? images.filter((image) => !rest.has(image.id)) : images;
 }
@@ -223,10 +220,7 @@ export function withoutOverflowBlacklisted<T extends { id: number }>(
  * terms, the image-search results' client-side check and /search's quick tags, so a tag the
  * feed hides can never be offered or shown somewhere else.
  */
-export function excludedTagsFrom(
-  s: QuerySettings,
-  filters: BlockFilters = DEFAULT_BLOCK_FILTERS,
-): Set<string> {
+export function excludedTagsFrom(s: QuerySettings, filters: BlockFilters = DEFAULT_BLOCK_FILTERS): Set<string> {
   const contentFilter = parseContentFilter(s.contentFilter);
   const excluded = new Set<string>(contentFilter === 'developer' ? [] : filters[contentFilter]);
   if (s.banAnthro) for (const tag of filters.banAnthro) excluded.add(tag);
@@ -276,10 +270,7 @@ export function buildSearchQueryFrom(
  * server keys a first-time visitor's feed on `''` while their browser keys the identical query
  * on `safe|-|d|-|` and the seed does not apply.
  */
-export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint(
-  'safe|-|d|-|',
-  DEFAULT_BLOCK_FILTERS,
-);
+export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint('safe|-|d|-|', DEFAULT_BLOCK_FILTERS);
 
 /**
  * The home feed's sort fields, and the only ones allowed to reach an upstream URL. The value
@@ -328,9 +319,7 @@ export function parseFingerprintCookie(raw: string | undefined): string {
  * defaults — what a visitor who has never opened /settings has anyway.
  */
 export function parseBrowsingFingerprint(raw: string | undefined): QuerySettings {
-  const [contentFilter = 'safe', anthro = '-', discomfort = 'd', pony = '-', hidden = ''] = (
-    raw ?? ''
-  ).split('|');
+  const [contentFilter = 'safe', anthro = '-', discomfort = 'd', pony = '-', hidden = ''] = (raw ?? '').split('|');
   return {
     contentFilter: parseContentFilter(contentFilter),
     banAnthro: anthro === 'a',
@@ -631,8 +620,7 @@ export function isSingleTagQuery(query: string): boolean {
 export function excludedTermsIn(query: string, excluded: ReadonlySet<string>): string[] {
   if (/(?:^|[\s(,])(?:OR|\|\|)(?=[\s(]|$)/.test(query)) return [];
   return splitQueryTerms(query).filter(
-    (term) =>
-      !/^[-!(]/.test(term) && !/^not\s/i.test(term) && excluded.has(term.trim().toLowerCase()),
+    (term) => !/^[-!(]/.test(term) && !/^not\s/i.test(term) && excluded.has(term.trim().toLowerCase()),
   );
 }
 

@@ -21,8 +21,7 @@ import type { DerpiTagRow, GlossaryTag } from './model';
  */
 
 function signedIn(token: string) {
-  if (readToken() !== token)
-    throw new ApiError('http', { status: 401, message: '登录状态已失效，请重新登录' });
+  if (readToken() !== token) throw new ApiError('http', { status: 401, message: '登录状态已失效，请重新登录' });
 }
 
 export interface DictionaryArgs {
@@ -44,15 +43,7 @@ export interface DictionaryPage {
 export const dictionaryPage = defineResource<DictionaryArgs, DictionaryPage>({
   name: 'admin-dictionary',
   key: (args) =>
-    [
-      args.token,
-      args.page,
-      args.limit,
-      args.keyword,
-      args.sort,
-      args.category,
-      args.untranslated ? 1 : 0,
-    ].join('\n'),
+    [args.token, args.page, args.limit, args.keyword, args.sort, args.category, args.untranslated ? 1 : 0].join('\n'),
   ttl: 60_000,
   maxEntries: 8,
   fetch: async (args, signal) => {

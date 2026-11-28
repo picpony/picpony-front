@@ -35,10 +35,7 @@ function stripInline(line: string): string {
   return (
     line
       // Escaped characters are placeholders first, so the rules below cannot eat them.
-      .replace(
-        /\\([\\`*_{}[\]()#+\-.!|>~"@=])/g,
-        (_, ch: string) => `\u0000${ch.charCodeAt(0)}\u0000`,
-      )
+      .replace(/\\([\\`*_{}[\]()#+\-.!|>~"@=])/g, (_, ch: string) => `\u0000${ch.charCodeAt(0)}\u0000`)
       // Spoilers: Markdown `||…||` and the Textile/BBCode `[spoiler]…[/spoiler]`.
       .replace(/\|\|[\s\S]*?\|\|/g, '')
       .replace(/\[spoiler\][\s\S]*?\[\/spoiler\]/gi, '')

@@ -39,11 +39,7 @@ const DETACH_BELOW = 0.5;
  */
 function clippingAncestors(element: HTMLElement): HTMLElement[] {
   const found: HTMLElement[] = [];
-  for (
-    let node = element.parentElement;
-    node && node !== document.body;
-    node = node.parentElement
-  ) {
+  for (let node = element.parentElement; node && node !== document.body; node = node.parentElement) {
     const style = getComputedStyle(node);
     if (style.overflowX !== 'visible' || style.overflowY !== 'visible') found.push(node);
     if (style.position === 'fixed') break;
@@ -129,8 +125,7 @@ export function suggestionRow({
   variant = 'menu',
   lines = 1,
 }: { variant?: 'menu' | 'search'; lines?: 1 | 2 } = {}): SuggestionRow {
-  if (variant === 'search')
-    return { className: `${ROW_BASE} min-h-14 rounded-xl px-3`, height: 56 };
+  if (variant === 'search') return { className: `${ROW_BASE} min-h-14 rounded-xl px-3`, height: 56 };
   if (lines === 2) return { className: `${ROW_BASE} min-h-14 rounded-sm px-2`, height: 56 };
   return { className: `${ROW_BASE} min-h-10 rounded-sm px-2`, height: undefined };
 }
@@ -225,10 +220,7 @@ export default function Popover({
   /* Kept in the tree past `open` so the exit has something to play on. The
      shared hook rather than a hand-rolled flag; `Modal` and `Sheet` hold
      themselves open the same way. */
-  const rendering = useExitAnimation(
-    open,
-    variant === 'search' ? SPRING_MS.defaultEffects : EXIT_MS,
-  );
+  const rendering = useExitAnimation(open, variant === 'search' ? SPRING_MS.defaultEffects : EXIT_MS);
   const placedPanel = useRef<HTMLDivElement | null>(null);
   /* The content box the search view's height runs on, the height it last had on screen (a
      layout effect can only read the new one), and the run itself with where it is heading. */
@@ -275,8 +267,7 @@ export default function Popover({
     const up = estimate > spaceBelow && spaceAbove > spaceBelow;
     opensUp.current = up;
     const panelWidth = panelRef.current?.offsetWidth;
-    const aligned =
-      !matchAnchorWidth && panelWidth ? rect.left + (rect.width - panelWidth) / 2 : rect.left;
+    const aligned = !matchAnchorWidth && panelWidth ? rect.left + (rect.width - panelWidth) / 2 : rect.left;
     // Preserve the horizontal clamp while scrolling, rather than undoing it and
     // asking the next layout effect for a second state update and geometry pass.
     const left = panelWidth
@@ -378,8 +369,7 @@ export default function Popover({
     const panelStyle = getComputedStyle(panel);
     const fromTransform = firstPlacement && open ? collapsed : panelStyle.transform;
     const fromOpacity = firstPlacement && open ? '0' : panelStyle.opacity;
-    const fromContentOpacity =
-      firstPlacement && open && morph ? '0' : getComputedStyle(content).opacity;
+    const fromContentOpacity = firstPlacement && open && morph ? '0' : getComputedStyle(content).opacity;
     const transform = open ? 'none' : collapsed;
     const opacity = open ? '1' : '0';
     panel.style.transform = transform;
@@ -390,12 +380,7 @@ export default function Popover({
 
     if (tier === 'off') return;
 
-    if (
-      fromOpacity === opacity &&
-      fromTransform === transform &&
-      fromContentOpacity === content.style.opacity
-    )
-      return;
+    if (fromOpacity === opacity && fromTransform === transform && fromContentOpacity === content.style.opacity) return;
     /* An anchored menu *unfolds out of its trigger* and folds back into it as Compose's
        `DropdownMenu` does: its scale on FastSpatial **both ways**, its fade on FastEffects —
        `Menu.kt` runs one `transitionSpec` per property for open and close alike. The search view
@@ -405,13 +390,9 @@ export default function Popover({
        clipped above 1. */
     const timing = springTiming('fastSpatial', 'overlay');
     const fade = springTiming(variant === 'search' ? 'defaultEffects' : 'fastEffects', 'overlay');
-    const running = [
-      panel.animate([{ opacity: fromOpacity }, { opacity }], { ...fade, fill: 'both' }),
-    ];
+    const running = [panel.animate([{ opacity: fromOpacity }, { opacity }], { ...fade, fill: 'both' })];
     if (fromTransform !== transform) {
-      running.push(
-        panel.animate([{ transform: fromTransform }, { transform }], { ...timing, fill: 'both' }),
-      );
+      running.push(panel.animate([{ transform: fromTransform }, { transform }], { ...timing, fill: 'both' }));
     }
     if (morph) {
       const effects = springTiming('fastEffects', 'overlay');
@@ -450,16 +431,7 @@ export default function Popover({
         animation.cancel();
       }
     };
-  }, [
-    open,
-    mounted,
-    rendering,
-    placement.up,
-    placement.width,
-    anchorRef,
-    variant,
-    matchAnchorWidth,
-  ]);
+  }, [open, mounted, rendering, placement.up, placement.width, anchorRef, variant, matchAnchorWidth]);
 
   /* The search view's second track: its height.
    *
@@ -528,10 +500,7 @@ export default function Popover({
        simply clamped at zero height). Anything in between — a list replaced underneath, or a
        re-aim once the measured space below arrives — is a box following its content, so it
        takes `FollowHeight`'s layout spring, which never overshoots the rows. */
-    const timing = springTiming(
-      !open ? 'defaultSpatial' : first ? 'slowSpatial' : 'layout',
-      'overlay',
-    );
+    const timing = springTiming(!open ? 'defaultSpatial' : first ? 'slowSpatial' : 'layout', 'overlay');
     const animation = box.animate([{ height: `${from}px` }, { height: `${to}px` }], {
       ...timing,
       fill: 'both',
@@ -701,11 +670,7 @@ export default function Popover({
             inset && (variant === 'search' ? 'rounded-xl' : 'rounded-sm'),
           )}
         >
-          <div
-            ref={contentRef}
-            role="presentation"
-            className={inset ? 'flex flex-col gap-0.5' : undefined}
-          >
+          <div ref={contentRef} role="presentation" className={inset ? 'flex flex-col gap-0.5' : undefined}>
             {children}
           </div>
         </ScrollArea>

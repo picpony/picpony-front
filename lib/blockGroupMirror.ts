@@ -51,19 +51,12 @@ export function mirrorBlockGroups(groups: readonly BlockGroup[]): boolean {
   const same = (key: string, next: string) => {
     try {
       const current: unknown = JSON.parse(stored(key));
-      return (
-        Array.isArray(current) &&
-        JSON.stringify([...current].sort()) === JSON.stringify(JSON.parse(next).sort())
-      );
+      return Array.isArray(current) && JSON.stringify([...current].sort()) === JSON.stringify(JSON.parse(next).sort());
     } catch {
       return false;
     }
   };
-  if (
-    same(LS_KEYS.activeHiddenTags, nextHidden) &&
-    same(LS_KEYS.activeSpoileredTags, nextSpoilered)
-  )
-    return false;
+  if (same(LS_KEYS.activeHiddenTags, nextHidden) && same(LS_KEYS.activeSpoileredTags, nextSpoilered)) return false;
   /* Both or neither (review P4-O6): with the hidden list written and the spoilered one refused,
      the device's filter had changed while no `settings_updated` went out, so the cookie and the
      fingerprint the server reads stayed on the old list. The first write is rolled back. */

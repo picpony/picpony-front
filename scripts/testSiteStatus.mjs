@@ -62,12 +62,8 @@ after(() => {
 
 const { PUT, POST, GET, HEAD } = await import('../app/api/v1/[...path]/route.ts');
 const { SITE_STATUS_CACHE_TAG } = await import('../lib/constants.ts');
-const {
-  BLOCK_FILTERS_CACHE_TAG,
-  PUBLIC_BLACKLIST_CACHE_TAG,
-  readBlockFilters,
-  readPublicBlacklist,
-} = await import('../lib/blockFilters.server.ts');
+const { BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG, readBlockFilters, readPublicBlacklist } =
+  await import('../lib/blockFilters.server.ts');
 const { readSiteBootstrap } = await import('../lib/bootstrap.server.ts');
 const { readRoutePolicyOnce } = await import('../lib/imageLine.server.ts');
 const { isPublicCacheControl, mergeVary, canForwardPublicCache, resolveProxyCacheControl } =
@@ -113,35 +109,20 @@ test('all accepted status writes expire the shared server tag without consuming 
     };
     const res = await PUT(request(resource), params(resource));
     assert.deepEqual(await res.json(), { revision: 2 });
-    assert.deepEqual(
-      invalidations,
-      [{ tag: SITE_STATUS_CACHE_TAG, profile: { expire: 0 } }],
-      resource,
-    );
+    assert.deepEqual(invalidations, [{ tag: SITE_STATUS_CACHE_TAG, profile: { expire: 0 } }], resource);
   }
 });
 
 test('refusals, failed HTTP, GET and unrelated writes do not invalidate status', async () => {
   const cases = [
-    [
-      '/admin/maintenance',
-      'PUT',
-      409,
-      JSON.stringify({ error: { code: 'REVISION_CONFLICT', message: 'x' } }),
-    ],
+    ['/admin/maintenance', 'PUT', 409, JSON.stringify({ error: { code: 'REVISION_CONFLICT', message: 'x' } })],
     ['/admin/maintenance', 'PUT', 503, '<html>failure</html>'],
-    [
-      '/admin/maintenance',
-      'GET',
-      200,
-      JSON.stringify({ maintenance_mode: false, maintenance_message: '' }),
-    ],
+    ['/admin/maintenance', 'GET', 200, JSON.stringify({ maintenance_mode: false, maintenance_message: '' })],
     ['/me/email', 'PUT', 200, JSON.stringify({})],
   ];
   for (const [resource, method, status, body] of cases) {
     invalidations.length = 0;
-    globalThis.fetch = async () =>
-      new Response(body, { status, headers: { 'content-type': 'application/json' } });
+    globalThis.fetch = async () => new Response(body, { status, headers: { 'content-type': 'application/json' } });
     await (method === 'GET' ? GET : PUT)(request(resource, method), params(resource));
     assert.deepEqual(invalidations, [], `${method} ${resource} ${status}`);
   }
@@ -162,21 +143,14 @@ test('the proxy forwards the visitor address it was handed, validated, never as 
     params(resource),
   );
   await POST(request(resource, 'POST', { 'x-forwarded-for': '2001:db8::1' }), params(resource));
-  await POST(
-    request(resource, 'POST', { 'x-forwarded-for': 'not-an-ip', 'x-real-ip': 'also bad' }),
-    params(resource),
-  );
+  await POST(request(resource, 'POST', { 'x-forwarded-for': 'not-an-ip', 'x-real-ip': 'also bad' }), params(resource));
   assert.equal(seen[0].get('x-real-ip'), '198.51.100.7');
   assert.equal(
     seen[0].get('x-forwarded-for'),
     '203.0.113.9, 198.51.100.7',
     'a non-address entry is dropped, the client appended',
   );
-  assert.equal(
-    seen[1].get('x-real-ip'),
-    '2001:db8::1',
-    'the nearest hop when no proxy named the client',
-  );
+  assert.equal(seen[1].get('x-real-ip'), '2001:db8::1', 'the nearest hop when no proxy named the client');
   assert.equal(seen[1].get('x-forwarded-for'), '2001:db8::1');
   assert.equal(seen[2].get('x-real-ip'), null);
   assert.equal(seen[2].get('x-forwarded-for'), null, 'nothing known: nothing forwarded');
@@ -209,11 +183,7 @@ test('the server reads the Rust status resources: route policy and maintenance, 
   assert.equal(policy.api, 'third_party');
   assert.equal(policy.image, 'cdn');
   assert.equal(policy.thirdPartyUrl, 'https://relay.example.test');
-  assert.equal(
-    policy.thirdPartyPassApiKey,
-    true,
-    "the pass-key flag is the routing policy's own field",
-  );
+  assert.equal(policy.thirdPartyPassApiKey, true, "the pass-key flag is the routing policy's own field");
   assert.deepEqual(await readMaintenance(), { active: true, message: '暂停更新' });
   assert.equal(calls.length, 2);
   for (const init of calls) assert.deepEqual(init.next.tags, [SITE_STATUS_CACHE_TAG]);
@@ -257,10 +227,7 @@ test('`auto` is a policy of its own, not `direct`', async () => {
 
 test('maintenance fails open when the status cannot be read', async () => {
   globalThis.fetch = async () =>
-    Response.json(
-      { error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } },
-      { status: 503 },
-    );
+    Response.json({ error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } }, { status: 503 });
   assert.deepEqual(await readMaintenance(), { active: false, message: '' });
 });
 
@@ -334,10 +301,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
   assert.equal(isPublicCacheControl('public, no-store'), false);
   assert.equal(isPublicCacheControl('max-age=300'), false);
   assert.equal(isPublicCacheControl('publicly=1'), false);
-  assert.equal(
-    mergeVary('Accept-Encoding', 'Authorization', 'Cookie'),
-    'Accept-Encoding, Authorization, Cookie',
-  );
+  assert.equal(mergeVary('Accept-Encoding', 'Authorization', 'Cookie'), 'Accept-Encoding, Authorization, Cookie');
   assert.equal(
     mergeVary('cookie, Accept-Encoding', 'Authorization', 'Cookie'),
     'cookie, Accept-Encoding, Authorization',
@@ -370,9 +334,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
     const req = new Request(`https://app.invalid/api/v1${resource}`, {
       method,
       headers,
-      ...(method !== 'GET' && method !== 'HEAD'
-        ? { body: JSON.stringify({}), duplex: 'half' }
-        : {}),
+      ...(method !== 'GET' && method !== 'HEAD' ? { body: JSON.stringify({}), duplex: 'half' } : {}),
     });
     Object.defineProperty(req, 'nextUrl', { value: new URL(req.url) });
     return req;
@@ -424,10 +386,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
   );
   assert.equal(notMod.status, 304);
   assert.equal(notMod.body, null);
-  assert.equal(
-    notMod.headers.get('cache-control'),
-    'public, max-age=86400, stale-while-revalidate=604800',
-  );
+  assert.equal(notMod.headers.get('cache-control'), 'public, max-age=86400, stale-while-revalidate=604800');
   assert.equal(notMod.headers.get('etag'), 'W/"10-20-30"');
 
   // 3. HEAD 200 public passes through.
@@ -470,13 +429,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
 
   // 5. Negative security boundaries MUST force `private, no-store`:
   const denyCases = [
-    [
-      'Authorization header',
-      'GET',
-      { authorization: 'Bearer tok' },
-      200,
-      { 'cache-control': 'public, max-age=60' },
-    ],
+    ['Authorization header', 'GET', { authorization: 'Bearer tok' }, 200, { 'cache-control': 'public, max-age=60' }],
     [
       'Authorization + auth_bind',
       'GET',
@@ -498,8 +451,7 @@ test('proxy cache-control pass-through enforces all five security boundaries and
     ['non-200/304 status 404', 'GET', {}, 404, { 'cache-control': 'public, max-age=60' }],
   ];
   for (const [label, method, reqHeaders, status, resHeaders] of denyCases) {
-    globalThis.fetch = async () =>
-      new Response(status === 304 ? null : 'ok', { status, headers: resHeaders });
+    globalThis.fetch = async () => new Response(status === 304 ? null : 'ok', { status, headers: resHeaders });
     const handler = method === 'POST' ? POST : GET;
     const res = await handler(
       anonReq('/media/' + 'b'.repeat(64), method, reqHeaders),
@@ -566,11 +518,7 @@ test('readSiteBootstrap consolidates SSR startup into one tagged request and fai
   assert.deepEqual(boot.maintenance, { active: true, message: '维护中' });
   assert.deepEqual(boot.routePolicy.blockFilters.safe, ['explicit']);
   assert.deepEqual(boot.routePolicy.blacklist, [11, 22, 33]);
-  assert.deepEqual(seen[0].tags, [
-    SITE_STATUS_CACHE_TAG,
-    BLOCK_FILTERS_CACHE_TAG,
-    PUBLIC_BLACKLIST_CACHE_TAG,
-  ]);
+  assert.deepEqual(seen[0].tags, [SITE_STATUS_CACHE_TAG, BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG]);
   assert.equal(seen.length, 2, 'one bootstrap call plus overflow blacklist page 2');
 
   // When /bootstrap fails, fail open immediately without cascading to legacy endpoints.
@@ -625,10 +573,7 @@ test('readSiteBootstrap consolidates SSR startup into one tagged request and fai
       });
     }
     if (u.pathname === '/api/v1/image-blocklist' && u.searchParams.get('revision') === '2') {
-      return Response.json(
-        { error: { code: 'SNAPSHOT_STALE', message: 'stale' } },
-        { status: 409 },
-      );
+      return Response.json({ error: { code: 'SNAPSHOT_STALE', message: 'stale' } }, { status: 409 });
     }
     if (u.pathname === '/api/v1/image-blocklist' && u.searchParams.get('page') === '1') {
       return Response.json({
@@ -802,8 +747,7 @@ test('sessionUser consumes embedded equipped_badges in a single GET /me request'
   globalThis.fetch = async (url) => {
     const pathname = new URL(String(url), 'https://app.invalid').pathname;
     paths.push(pathname);
-    if (pathname === '/api/v1/me')
-      return Response.json({ user: { ...baseMe, equipped_badges: [badge] } });
+    if (pathname === '/api/v1/me') return Response.json({ user: { ...baseMe, equipped_badges: [badge] } });
     return new Response('unexpected', { status: 500 });
   };
   clearAllResources();

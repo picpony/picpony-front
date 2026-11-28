@@ -353,11 +353,7 @@ export interface Resource<Args, T> {
    * keeps its age; `fresh` stamps it as just read, for an answer that *is* a complete read made
    * outside the resource (the settings sync's own account read).
    */
-  write: (
-    args: Args,
-    update: T | ((previous: T | undefined) => T),
-    options?: { fresh?: boolean },
-  ) => void;
+  write: (args: Args, update: T | ((previous: T | undefined) => T), options?: { fresh?: boolean }) => void;
   /**
    * Install a server-rendered answer as if it had been fetched at `fetchedAt` — the SSR seam.
    *
@@ -411,20 +407,11 @@ export function expireAllResources() {
  * mark the factory call PURE: importing one catalogue member need not retain every adapter.
  */
 export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Resource<Args, T> {
-  const {
-    name,
-    key: keyOf,
-    fetch: fetcher,
-    ttl = 60_000,
-    maxEntries = 32,
-    publishGate,
-    lane = 'picpony',
-  } = options;
+  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate, lane = 'picpony' } = options;
   const store = new Map<string, Entry<T>>();
   let registered = false;
 
-  const isStale = (entry: Entry<T>) =>
-    entry.status === 'resolved' && Date.now() - entry.fetchedAt >= ttl;
+  const isStale = (entry: Entry<T>) => entry.status === 'resolved' && Date.now() - entry.fetchedAt >= ttl;
 
   function buildSnapshot(entry: Entry<T>): ResourceSnapshot<T> {
     return Object.freeze({
@@ -486,8 +473,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   }
 
   function clear(refetch: boolean, args?: Args) {
-    const entries =
-      args === undefined ? Array.from(store) : [[keyOf(args), store.get(keyOf(args))] as const];
+    const entries = args === undefined ? Array.from(store) : [[keyOf(args), store.get(keyOf(args))] as const];
     for (const [key, entry] of entries) {
       if (!entry) continue;
       discard(key, entry);
@@ -624,10 +610,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     return entry;
   }
 
-  function read(
-    args: Args,
-    { priority = 'immediate', force = false }: { priority?: Priority; force?: boolean } = {},
-  ) {
+  function read(args: Args, { priority = 'immediate', force = false }: { priority?: Priority; force?: boolean } = {}) {
     const key = keyOf(args);
     const stored = store.get(key);
     /* A placeholder is not an answer and not a request — see `Entry.placeholder`. It is replaced
@@ -637,11 +620,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     if (existing && !force) {
       /* A guess that turns into a real activation is promoted, not re-sent: if queued it moves to
          the front, if already in flight there is nothing to do but wait. */
-      if (
-        priority === 'immediate' &&
-        existing.priority === 'background' &&
-        existing.status === 'queued'
-      ) {
+      if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
         existing.priority = 'immediate';
         /* Dropping the queued job runs its `cancel`, which errors the entry and queues a commit
            for it; the replacement takes over that commit's listeners, so the commit is dropped
@@ -841,12 +820,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
 
       /* Never clobber a client value that is at least as fresh: makes a remount from the router
          cache harmless, and stops a stale RSC payload overwriting a refreshed value. */
-      if (
-        stored &&
-        !stored.placeholder &&
-        stored.value !== undefined &&
-        stored.fetchedAt >= fetchedAt
-      ) {
+      if (stored && !stored.placeholder && stored.value !== undefined && stored.fetchedAt >= fetchedAt) {
         return;
       }
 
@@ -901,10 +875,7 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       /* A placeholder holds listeners and nothing else — no previous value to update from; the
          flag must come off or the next `read` would discard the written value. */
       const entry = stored && !stored.placeholder ? stored : undefined;
-      const next =
-        typeof update === 'function'
-          ? (update as (previous: T | undefined) => T)(entry?.value)
-          : update;
+      const next = typeof update === 'function' ? (update as (previous: T | undefined) => T)(entry?.value) : update;
       /* A write is already an answer, including on a cold key. Never call create(): enqueue
          starts the fetch synchronously. Replacing the entry also fences off older reads and
          revalidations, so their late responses cannot undo a successful mutation. */
@@ -1112,13 +1083,11 @@ export function useResource<Args, T>(
 
   const refetchInterval = options?.refetchInterval;
   useEffect(() => {
-    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined')
-      return;
+    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined') return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastTick = Date.now();
     const due = () =>
-      document.visibilityState === 'visible' &&
-      (typeof navigator === 'undefined' || navigator.onLine !== false);
+      document.visibilityState === 'visible' && (typeof navigator === 'undefined' || navigator.onLine !== false);
     const tick = () => {
       lastTick = Date.now();
       resource.expire(args as Args);
@@ -1172,19 +1141,10 @@ export function useResource<Args, T>(
     scope: boolean | string;
     data: T | undefined;
   }>(() => ({ resource, scope: retentionScope, data: undefined }));
-  const previous =
-    retained.resource === resource && retained.scope === retentionScope ? retained.data : undefined;
+  const previous = retained.resource === resource && retained.scope === retentionScope ? retained.data : undefined;
   const nextRetained =
-    keepPrevious && key !== null
-      ? snapshot.data !== undefined
-        ? snapshot.data
-        : previous
-      : undefined;
-  if (
-    retained.resource !== resource ||
-    retained.scope !== retentionScope ||
-    retained.data !== nextRetained
-  ) {
+    keepPrevious && key !== null ? (snapshot.data !== undefined ? snapshot.data : previous) : undefined;
+  if (retained.resource !== resource || retained.scope !== retentionScope || retained.data !== nextRetained) {
     // Clearing a scope or disabling the read must also clear its retained answer.
     setRetained({ resource, scope: retentionScope, data: nextRetained });
   }

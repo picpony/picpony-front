@@ -15,12 +15,7 @@ import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Tabs, { type TabItem } from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { showToast } from '@/components/Toast';
-import {
-  ROW_STACK_CLASS,
-  SettingsRow,
-  SettingsSection,
-  SwitchRow,
-} from '@/app/settings/SettingsRow';
+import { ROW_STACK_CLASS, SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
 import { LS_KEYS } from '@/lib/constants';
 import { useEscapeBack } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -65,12 +60,7 @@ const GROUPS: Array<{ id: PerfRunGroup; label: string; description: string }> = 
 
 /** Status steps a run of these groups announces; `perfRunSteps` in the runner, which loads late. */
 function runSteps(rounds: number, include: Record<PerfRunGroup, boolean>) {
-  return (
-    2 +
-    (include.scroll ? rounds : 0) +
-    (include.hero ? rounds * 3 : 0) +
-    (include.stress ? rounds * 4 : 0)
-  );
+  return 2 + (include.scroll ? rounds : 0) + (include.hero ? rounds * 3 : 0) + (include.stress ? rounds * 4 : 0);
 }
 
 type DeviceFacts = { viewport: string; dpr: number; cores: number | null; pointer: string };
@@ -113,9 +103,7 @@ export default function PerfScreen() {
   return (
     <>
       <PageBack onClick={back} label="返回设置" />
-      <div className="mx-auto w-full max-w-4xl page-back-room">
-        {mounted ? <PerfReady /> : <PerfSkeleton />}
-      </div>
+      <div className="mx-auto w-full max-w-4xl page-back-room">{mounted ? <PerfReady /> : <PerfSkeleton />}</div>
     </>
   );
 }
@@ -189,8 +177,7 @@ function PerfReady() {
         const gallery = new URLSearchParams(window.location.search).get('gallery');
         const started = startPerfRun({
           rounds: roundCount,
-          galleryHref:
-            gallery && gallery.startsWith('/') && !gallery.startsWith('//') ? gallery : '/',
+          galleryHref: gallery && gallery.startsWith('/') && !gallery.startsWith('//') ? gallery : '/',
           navigate: (href) => router.push(href, { scroll: false }),
           note,
           noCorner,
@@ -263,13 +250,7 @@ function PerfReady() {
         title="性能测试"
         subtitle={subtitle}
         actions={
-          <Button
-            variant="filled"
-            icon={<MdPlayArrow />}
-            loading={starting}
-            disabled={!anyGroup}
-            onClick={start}
-          >
+          <Button variant="filled" icon={<MdPlayArrow />} loading={starting} disabled={!anyGroup} onClick={start}>
             {report ? '重新测试' : '开始测试'}
           </Button>
         }
@@ -383,9 +364,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-label-m text-on-surface-variant">{label}</dt>
-      <dd className="mt-0.5 text-body-m tabular-nums wrap-anywhere text-on-surface">
-        {children ?? '—'}
-      </dd>
+      <dd className="mt-0.5 text-body-m tabular-nums wrap-anywhere text-on-surface">{children ?? '—'}</dd>
     </div>
   );
 }

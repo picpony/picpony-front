@@ -77,15 +77,7 @@ const HAS_DISPLAY =
   /(?:^|\s)(?:block|inline-block|inline|flex|inline-flex|grid|inline-grid|table|contents|hidden)(?=\s|$)/;
 
 const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
-  const {
-    variant = 'filled',
-    padding = 'md',
-    interactive = false,
-    as,
-    className = '',
-    children,
-    ...rest
-  } = props;
+  const { variant = 'filled', padding = 'md', interactive = false, as, className = '', children, ...rest } = props;
   const disabled = 'disabled' in props && props.disabled;
   const resolved = as ?? (interactive ? 'button' : 'div');
   const isButton = resolved === 'button';
@@ -133,21 +125,13 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   }
   if (resolved === 'a') {
     return (
-      <a
-        {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)}
-        {...presentation}
-        ref={ref as Ref<HTMLAnchorElement>}
-      >
+      <a {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)} {...presentation} ref={ref as Ref<HTMLAnchorElement>}>
         {children}
       </a>
     );
   }
   return (
-    <div
-      {...(rest as HTMLAttributes<HTMLDivElement>)}
-      {...presentation}
-      ref={ref as Ref<HTMLDivElement>}
-    >
+    <div {...(rest as HTMLAttributes<HTMLDivElement>)} {...presentation} ref={ref as Ref<HTMLDivElement>}>
       {children}
     </div>
   );

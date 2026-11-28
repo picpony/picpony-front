@@ -163,11 +163,7 @@ test('folder mutations speak the Rust routes; favouriting is idempotent and repl
       ['PUT', '/api/v1/me/favorites/7', { saved: false }],
       ['PUT', '/api/v1/me/favorites/7/folders', { folder_ids: [] }],
       ['POST', '/api/v1/me/favorite-folders/deletions', { folder_ids: [2, 3] }],
-      [
-        'POST',
-        '/api/v1/me/favorite-folder-merges',
-        { source_folder_ids: [2], target_folder_id: 3 },
-      ],
+      ['POST', '/api/v1/me/favorite-folder-merges', { source_folder_ids: [2], target_folder_id: 3 }],
     ],
   );
   const keys = sent.map((x) => new Headers(x.init.headers).get('Idempotency-Key'));
@@ -179,9 +175,7 @@ test('both transfers expose per-folder partial failures', async () => {
     inserted_count: 1,
     failed_count: 1,
     failed_items: [{ image_id: 8, folder_id: 3, code: 'ALREADY_PRESENT', reason: '该项目已存在' }],
-    target_results: [
-      { folder_id: 3, requested_count: 2, inserted_count: 1, duplicate_count: 1, blocked_count: 0 },
-    ],
+    target_results: [{ folder_id: 3, requested_count: 2, inserted_count: 1, duplicate_count: 1, blocked_count: 0 }],
     removed_count: 0,
     mode: 'copy',
   });
@@ -296,19 +290,8 @@ test('C11 reports rating/hidden-tag exclusions separately from missing and black
     onlyPony: false,
     hiddenTags: ['hidden'],
   };
-  const images = [
-    picture(1),
-    { ...picture(2), tags: ['explicit'] },
-    { ...picture(3), tags: ['hidden'] },
-    picture(5),
-  ];
-  const result = model.withholdFromDevice(
-    images,
-    [1, 2, 3, 4, 5],
-    settings,
-    DEFAULT_BLOCK_FILTERS,
-    [5],
-  );
+  const images = [picture(1), { ...picture(2), tags: ['explicit'] }, { ...picture(3), tags: ['hidden'] }, picture(5)];
+  const result = model.withholdFromDevice(images, [1, 2, 3, 4, 5], settings, DEFAULT_BLOCK_FILTERS, [5]);
   assert.deepEqual(
     result.images.map((x) => x.id),
     [1],
@@ -358,10 +341,7 @@ test('lookup bounds URL size and both favourites reads explicitly ask Everything
   await api.lookupImagesByIds([1, 2]);
   await api.getDerpiFaves('test-key', 1, 50);
   assert.ok(sent.every((x) => new URL(x.url).searchParams.get('filter_id') === '56027'));
-  await assert.rejects(
-    api.lookupImagesByIds(Array.from({ length: 51 }, (_, i) => i + 1)),
-    RangeError,
-  );
+  await assert.rejects(api.lookupImagesByIds(Array.from({ length: 51 }, (_, i) => i + 1)), RangeError);
 });
 test('all six settings are registered with account scope', () => {
   for (const id of [
@@ -578,8 +558,5 @@ test('a wrong privacy password is 403 PASSWORD_MISMATCH: a field refusal by its 
     false,
     'any other 403 is a permission refusal, not the field',
   );
-  assert.ok(
-    !sent.some((x) => x.path === '/api/v1/me'),
-    'a 403 never asks whether the session is still alive',
-  );
+  assert.ok(!sent.some((x) => x.path === '/api/v1/me'), 'a 403 never asks whether the session is still alive');
 });

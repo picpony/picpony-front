@@ -79,19 +79,14 @@ export interface RichTextEditorPanelsHandle {
 }
 
 function closeAll(state: PanelState): PanelState {
-  return Object.fromEntries(
-    Object.entries(state).map(([key, value]) => [key, { ...value, open: false }]),
-  );
+  return Object.fromEntries(Object.entries(state).map(([key, value]) => [key, { ...value, open: false }]));
 }
 
 function sameContext(a: EditorContextMenu, b: EditorContextMenu) {
   return (
     a.anchor === b.anchor &&
     a.items.length === b.items.length &&
-    a.items.every(
-      (item, index) =>
-        item.value === b.items[index].value && item.disabled === b.items[index].disabled,
-    )
+    a.items.every((item, index) => item.value === b.items[index].value && item.disabled === b.items[index].disabled)
   );
 }
 
@@ -217,10 +212,7 @@ function ColorPanel({ entry, close }: { entry: Entry<EditorColorPanel>; close: (
                 };
                 let next = index;
                 if (event.key in offsets)
-                  next = Math.max(
-                    0,
-                    Math.min(request.colors.length - 1, index + offsets[event.key]),
-                  );
+                  next = Math.max(0, Math.min(request.colors.length - 1, index + offsets[event.key]));
                 else if (event.key === 'Home') next = 0;
                 else if (event.key === 'End') next = request.colors.length - 1;
                 else return;
@@ -296,10 +288,7 @@ function FormPanel({ entry, close }: { entry: Entry<EditorFormPanel>; close: () 
             const value = values[index];
             if (field.required && !value) errors[index] = `请输入${field.label}`;
             else if (field.url && value && !safeUrl(value)) errors[index] = '请输入有效的链接地址';
-            else if (
-              field.max &&
-              (!Number.isInteger(Number(value)) || Number(value) < 1 || Number(value) > field.max)
-            )
+            else if (field.max && (!Number.isInteger(Number(value)) || Number(value) < 1 || Number(value) > field.max))
               errors[index] = `请输入 1 至 ${field.max} 的整数`;
           });
           setDraft((current) => ({ ...current, errors }));
@@ -331,9 +320,7 @@ function FormPanel({ entry, close }: { entry: Entry<EditorFormPanel>; close: () 
             onChange={(event) =>
               setDraft((current) => ({
                 ...current,
-                values: current.values.map((value, position) =>
-                  position === index ? event.target.value : value,
-                ),
+                values: current.values.map((value, position) => (position === index ? event.target.value : value)),
                 errors: { ...current.errors, [index]: '' },
               }))
             }
@@ -359,9 +346,7 @@ export default function RichTextEditorPanels({
     () => ({ current: state.context?.request.anchor ?? null }),
     [state.context?.request.anchor],
   );
-  const panelOpen = Boolean(
-    state.image?.open || state.color?.open || state.form?.open || state.context?.open,
-  );
+  const panelOpen = Boolean(state.image?.open || state.color?.open || state.form?.open || state.context?.open);
   useLayoutEffect(() => {
     const owner = ownerRef.current;
     owner?.toggleAttribute('data-panel-open', panelOpen);
@@ -373,18 +358,10 @@ export default function RichTextEditorPanels({
       open(request) {
         const next = ++revision.current;
         setState((current) => {
-          if (
-            request.kind === 'color' &&
-            current.color?.open &&
-            current.color.request.anchor === request.anchor
-          ) {
+          if (request.kind === 'color' && current.color?.open && current.color.request.anchor === request.anchor) {
             return { ...current, color: { ...current.color, open: false } };
           }
-          if (
-            request.kind === 'image' &&
-            current.image?.open &&
-            current.image.request.anchor === request.anchor
-          ) {
+          if (request.kind === 'image' && current.image?.open && current.image.request.anchor === request.anchor) {
             return { ...current, image: { ...current.image, open: false } };
           }
           return { ...closeAll(current), [request.kind]: { request, open: true, revision: next } };
@@ -401,12 +378,9 @@ export default function RichTextEditorPanels({
               contextRef.current?.element?.contains(document.activeElement)
             )
               return current;
-            return current.context?.open
-              ? { ...current, context: { ...current.context, open: false } }
-              : current;
+            return current.context?.open ? { ...current, context: { ...current.context, open: false } } : current;
           }
-          if (current.context?.open && sameContext(current.context.request, request))
-            return current;
+          if (current.context?.open && sameContext(current.context.request, request)) return current;
           return { ...current, context: { request, open: true, revision: 0 } };
         });
       },
@@ -419,21 +393,13 @@ export default function RichTextEditorPanels({
   const close = (kind: keyof PanelState, expected: number) =>
     setState((current) => {
       const entry = current[kind];
-      return entry?.revision === expected && entry.open
-        ? { ...current, [kind]: { ...entry, open: false } }
-        : current;
+      return entry?.revision === expected && entry.open ? { ...current, [kind]: { ...entry, open: false } } : current;
     });
   return (
     <>
-      {state.image && (
-        <ImageMenu entry={state.image} close={() => close('image', state.image!.revision)} />
-      )}
-      {state.color && (
-        <ColorPanel entry={state.color} close={() => close('color', state.color!.revision)} />
-      )}
-      {state.form && (
-        <FormPanel entry={state.form} close={() => close('form', state.form!.revision)} />
-      )}
+      {state.image && <ImageMenu entry={state.image} close={() => close('image', state.image!.revision)} />}
+      {state.color && <ColorPanel entry={state.color} close={() => close('color', state.color!.revision)} />}
+      {state.form && <FormPanel entry={state.form} close={() => close('form', state.form!.revision)} />}
       {state.context && (
         <Menu
           open={state.context.open}

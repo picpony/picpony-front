@@ -25,10 +25,7 @@ export function shapeFor(name: SpringName, category: MotionCategory = 'feedback'
   return motionTier(category) === 'reduced' ? 'effects' : shapeOf(name);
 }
 
-export function springTiming(
-  name: SpringName,
-  category: MotionCategory = 'feedback',
-): SpringTiming {
+export function springTiming(name: SpringName, category: MotionCategory = 'feedback'): SpringTiming {
   return {
     duration: scaledMs(SPRING_MS[name], category),
     easing: springEasing(shapeFor(name, category)),

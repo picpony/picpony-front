@@ -337,11 +337,7 @@ export function inkColor(
      linear in the components and both endpoints have it), so chroma and level are set
      independently rather than fighting each other. */
   const k = spread > 1e-6 ? Math.min(1, chroma / spread) : 0;
-  return [
-    (1 + (unit[0] - 1) * k) * target,
-    (1 + (unit[1] - 1) * k) * target,
-    (1 + (unit[2] - 1) * k) * target,
-  ];
+  return [(1 + (unit[0] - 1) * k) * target, (1 + (unit[1] - 1) * k) * target, (1 + (unit[2] - 1) * k) * target];
 }
 
 /**

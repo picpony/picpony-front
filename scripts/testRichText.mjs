@@ -8,32 +8,20 @@ const bb = await import('../lib/bbcode.ts');
 const { remarkHardBreaks } = await import('../lib/markdownBreaks.ts');
 
 test('an empty paragraph is dropped, the text around it kept (R6-050)', () => {
-  assert.equal(
-    bb.bbcodeToSafeHtml('[div][p][br][/p]\n[p]after[/p]\n[/div]'),
-    '<div><p>after</p></div>',
-  );
+  assert.equal(bb.bbcodeToSafeHtml('[div][p][br][/p]\n[p]after[/p]\n[/div]'), '<div><p>after</p></div>');
   assert.equal(bb.bbcodeToSafeHtml('[p][br][/p]'), '');
   assert.equal(bb.bbcodeToSafeHtml('[p]a[br][br][/p]'), '<p>a</p>');
   assert.equal(bb.bbcodeToSafeHtml('[quote][/quote]after'), '<p>after</p>');
 });
 
 test('one line-break rule: a newline is a break, a blank line a paragraph (R6-049)', () => {
-  assert.equal(
-    bb.bbcodeToSafeHtml('纯文本第一行\n纯文本第二行'),
-    '<p>纯文本第一行<br />纯文本第二行</p>',
-  );
+  assert.equal(bb.bbcodeToSafeHtml('纯文本第一行\n纯文本第二行'), '<p>纯文本第一行<br />纯文本第二行</p>');
   assert.equal(bb.bbcodeToSafeHtml('一\n\n二'), '<p>一</p><p>二</p>');
 });
 
 test('the original front end’s alignment and highlight render, and a colour is kept legible (R6-043)', () => {
-  assert.equal(
-    bb.bbcodeToSafeHtml('[right]r[/right]'),
-    '<div style="text-align:right;"><p>r</p></div>',
-  );
-  assert.equal(
-    bb.bbcodeToSafeHtml('[center]c[/center]'),
-    '<div style="text-align:center;"><p>c</p></div>',
-  );
+  assert.equal(bb.bbcodeToSafeHtml('[right]r[/right]'), '<div style="text-align:right;"><p>r</p></div>');
+  assert.equal(bb.bbcodeToSafeHtml('[center]c[/center]'), '<div style="text-align:center;"><p>c</p></div>');
   assert.equal(
     bb.bbcodeToSafeHtml('[color=rgb(44, 62, 80)]ink[/color]'),
     '<p><span data-ink="" style="--rt-ink:rgb(44, 62, 80);">ink</span></p>',
@@ -65,15 +53,7 @@ test('a colour is a colour: functional forms pass, a bare function name and anyt
   ]) {
     assert.equal(bb.safeColor(value), value, value);
   }
-  for (const value of [
-    'rgba',
-    'rgb',
-    'hsl',
-    'red;position:fixed',
-    'url(x)',
-    'rgb(1,2,3);x:y',
-    'expression(1)',
-  ]) {
+  for (const value of ['rgba', 'rgb', 'hsl', 'red;position:fixed', 'url(x)', 'rgb(1,2,3);x:y', 'expression(1)']) {
     assert.equal(bb.safeColor(value), null, value);
   }
   assert.equal(bb.bbcodeToSafeHtml('[color=rgba]lost colour[/color]'), '<p>lost colour</p>');
@@ -86,10 +66,7 @@ test('pictures: responsive sources from the hook, a zoom button outside links, l
     sizes: '100vw',
   });
   const html = bb.bbcodeToSafeHtml('[img]/uploads/forum/a.png[/img]', { image, zoomable: true });
-  assert.match(
-    html,
-    /^<button type="button" class="rt-image" data-rt-zoom="" aria-label="查看大图"><img /,
-  );
+  assert.match(html, /^<button type="button" class="rt-image" data-rt-zoom="" aria-label="查看大图"><img /);
   assert.match(
     html,
     /src="\/_next\/image\?url=https%3A%2F%2Fpicpony\.top%2Fuploads%2Fforum%2Fa\.png&amp;w=828&amp;q=75"/,
@@ -97,10 +74,9 @@ test('pictures: responsive sources from the hook, a zoom button outside links, l
   assert.match(html, /srcset="https:\/\/picpony\.top\/uploads\/forum\/a\.png 1x" sizes="100vw"/);
   assert.match(html, /loading="lazy" decoding="async" data-loading=""/);
   /* Inside a link the link takes the press: no second control inside it. */
-  const linked = bb.bbcodeToSafeHtml(
-    '[url=https://example.test/][img]https://example.test/a.png[/img][/url]',
-    { zoomable: true },
-  );
+  const linked = bb.bbcodeToSafeHtml('[url=https://example.test/][img]https://example.test/a.png[/img][/url]', {
+    zoomable: true,
+  });
   assert.doesNotMatch(linked, /<button/);
   assert.match(linked, /^<a href="https:\/\/example\.test\/" target="_blank"/);
 });
@@ -152,10 +128,7 @@ test('plain text comes from the parse tree: pictures are words, quotes are left 
   const reply =
     '[quote="小雨天"]\n[div][p]吃一半开始互撸对方肚皮了()[/p]\n[/div]\n[/quote]\n\n[div][p]我也要撸肚皮[/p]\n[/div]';
   assert.equal(bb.bbcodeToPlainText(reply), '我也要撸肚皮');
-  assert.equal(
-    bb.bbcodeToPlainText(reply, { quotes: true }),
-    '吃一半开始互撸对方肚皮了() 我也要撸肚皮',
-  );
+  assert.equal(bb.bbcodeToPlainText(reply, { quotes: true }), '吃一半开始互撸对方肚皮了() 我也要撸肚皮');
   assert.equal(
     bb.bbcodeToPlainText('逆天图？一大堆欸。[img]/uploads/forum/forum_6a40.png[/img]'),
     '逆天图？一大堆欸。 [图片]',

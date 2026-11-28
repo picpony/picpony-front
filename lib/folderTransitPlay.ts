@@ -86,9 +86,7 @@ function hideCloneCardBadges(root: HTMLElement) {
 }
 
 /** Reads a decoded, visible `<img>` inside `container`, or null when nothing is painted yet. */
-function readVisibleImg(
-  container: HTMLElement | null,
-): { src: string; ratio: number; anchorY: number } | null {
+function readVisibleImg(container: HTMLElement | null): { src: string; ratio: number; anchorY: number } | null {
   const img = container?.querySelector<HTMLImageElement>('img') ?? null;
   if (!img || !img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return null;
   const style = getComputedStyle(img);
@@ -129,9 +127,7 @@ function pageCoverTarget(
     const selector = `[data-masonry-id="${CSS.escape(coverId)}"]`;
     const slot = page.querySelector<HTMLElement>(selector);
     const spoilered = slot?.querySelector('.card-spoiler:not([inert])') !== null;
-    const link = !spoilered
-      ? (slot?.querySelector<HTMLElement>('.image-hero-card-link') ?? null)
-      : null;
+    const link = !spoilered ? (slot?.querySelector<HTMLElement>('.image-hero-card-link') ?? null) : null;
     const thumb = link?.firstElementChild instanceof HTMLElement ? link.firstElementChild : null;
     if (thumb) {
       const box = rectOf(thumb);
@@ -162,8 +158,7 @@ function pageCoverTarget(
     if (visibleBox(box, view)) {
       return {
         end: { box, radii: radiiOf(getComputedStyle(placeholder)), anchorY: 0.5 },
-        hideInClone: (clone) =>
-          hideCloneSlot(clone.querySelector<HTMLElement>('[data-grid-placeholder]')),
+        hideInClone: (clone) => hideCloneSlot(clone.querySelector<HTMLElement>('[data-grid-placeholder]')),
       };
     }
   }
@@ -272,8 +267,7 @@ export function playFolderOpen(page: HTMLElement, href: string, fresh: boolean):
         lastCover.get(href)?.id ||
         null;
       const sharedTo = view ? (pageCoverTarget(page, coverId, view)?.end ?? null) : null;
-      if (toBox && turnFlight(closing, 'open', page, { to: pageSurface(toBox), sharedTo, hidden }))
-        flight = closing;
+      if (toBox && turnFlight(closing, 'open', page, { to: pageSurface(toBox), sharedTo, hidden })) flight = closing;
       else {
         if (!toBox) dismissFlight(closing);
         reveal(hidden);
@@ -284,9 +278,7 @@ export function playFolderOpen(page: HTMLElement, href: string, fresh: boolean):
     const cardBox = cardCopy ? rectOf(cardCopy) : null;
     const fromBox = cardBox && view ? visibleBox(cardBox, view) : null;
     const incoming =
-      fresh && fromBox && toBox && crossFade
-        ? captureVisualClone(page, crossFade, { keepImages: true })
-        : null;
+      fresh && fromBox && toBox && crossFade ? captureVisualClone(page, crossFade, { keepImages: true }) : null;
     if (!crossFade || !cardCopy || !cardBox || !fromBox || !toBox || !incoming || !view) {
       reveal(hidden);
       return;
@@ -366,9 +358,7 @@ export function playFolderReturn(card: HTMLElement, href: string): () => void {
     const hidden: Hidden[] = [];
     hide(card, 'visibility', hidden);
     if (pageCopy) hide(pageCopy, 'visibility', hidden);
-    if (
-      !turnFlight(opening, 'back', card, { to: cardSurf, sharedTo: cardCover?.end ?? null, hidden })
-    ) {
+    if (!turnFlight(opening, 'back', card, { to: cardSurf, sharedTo: cardCover?.end ?? null, hidden })) {
       reveal(hidden);
       return () => {};
     }

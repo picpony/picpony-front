@@ -131,14 +131,8 @@ export type PerfReport = {
   aborted?: string;
 };
 
-export function summarize(
-  id: PerfScenarioId,
-  samples: PerfSample[],
-  interval: number,
-): PerfScenario {
-  const latencies = samples
-    .map((sample) => sample.latencyMs)
-    .filter((v): v is number => v !== null);
+export function summarize(id: PerfScenarioId, samples: PerfSample[], interval: number): PerfScenario {
+  const latencies = samples.map((sample) => sample.latencyMs).filter((v): v is number => v !== null);
   const settles = samples.map((sample) => sample.settleMs).filter((v): v is number => v !== null);
   const frames = samples.reduce((sum, sample) => sum + sample.frames.frames, 0);
   const dropped = samples.reduce((sum, sample) => sum + sample.frames.dropped, 0);
@@ -169,8 +163,7 @@ export function summarize(
     frameVerdict = verdictOf(pooled, interval);
     verdict = samples.every((sample) => sample.completed) ? 'smooth' : 'janky';
   }
-  if (glitches && (glitches.vanishes > 0 || glitches.stuck > 0 || glitches.leftPage > 0))
-    verdict = 'janky';
+  if (glitches && (glitches.vanishes > 0 || glitches.stuck > 0 || glitches.leftPage > 0)) verdict = 'janky';
   return {
     id,
     label: SCENARIO_LABEL[id],
@@ -247,16 +240,12 @@ export function reportToMarkdown(report: PerfReport) {
     if (hw.gpuRaw && hw.gpuRaw !== hw.gpu) lines.push(`| GPU 原始字符串 | ${cell(hw.gpuRaw)} |`);
   }
   lines.push(`| 刷新率 | ${device.refreshHz} Hz |`);
-  lines.push(
-    `| 屏幕 / 视口 | ${device.screen} / ${device.viewport}（DPR ${device.devicePixelRatio}） |`,
-  );
+  lines.push(`| 屏幕 / 视口 | ${device.screen} / ${device.viewport}（DPR ${device.devicePixelRatio}） |`);
   lines.push(
     `| CPU 核心 / 内存 | ${device.cores ?? '未知'} / ${device.memoryGb === null ? '未知' : `${device.memoryGb} GB`} |`,
   );
   lines.push(`| 指针 | ${device.pointer === 'coarse' ? '触摸' : '鼠标'} |`);
-  lines.push(
-    `| 动画设置 | ${device.motion}${device.reducedMotion ? '（系统要求减弱动态效果）' : ''} |`,
-  );
+  lines.push(`| 动画设置 | ${device.motion}${device.reducedMotion ? '（系统要求减弱动态效果）' : ''} |`);
   lines.push(`| 网络 | ${device.connection ?? '未知'} |`);
   lines.push(`| 长帧数据 | ${LONG_FRAME_LABEL[device.longFrameSource]} |`);
   if (device.noCorner) lines.push('| 对照 | 关闭圆角动画 |');
@@ -265,9 +254,7 @@ export function reportToMarkdown(report: PerfReport) {
   lines.push('');
   lines.push('## 汇总');
   lines.push('');
-  lines.push(
-    '| 场景 | 结论 | 响应延迟 | 完成用时 | 平均帧率 | 流畅度 | 掉帧 | 最长帧 | P95 帧 | 长帧 / 阻塞 |',
-  );
+  lines.push('| 场景 | 结论 | 响应延迟 | 完成用时 | 平均帧率 | 流畅度 | 掉帧 | 最长帧 | P95 帧 | 长帧 / 阻塞 |');
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const scenario of report.scenarios) {
     const s = scenario.summary;

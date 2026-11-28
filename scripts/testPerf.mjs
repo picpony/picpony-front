@@ -8,8 +8,7 @@ requireTypeStripping('testPerf');
 const stats = await import('../lib/perf/stats.ts');
 const report = await import('../lib/perf/report.ts');
 
-const frames = (count, interval, start = 0) =>
-  Array.from({ length: count }, (_, i) => start + i * interval);
+const frames = (count, interval, start = 0) => Array.from({ length: count }, (_, i) => start + i * interval);
 
 test('the refresh interval is the median gap, so one long frame does not change the display', () => {
   const stamps = frames(60, 1000 / 60);
@@ -87,11 +86,7 @@ test('a scenario summary takes the worse of smoothness and response, and the Mar
   assert.equal(fast.summary.verdict, 'smooth');
   const slow = report.summarize('open', [sample(250), sample(260)], interval);
   assert.equal(slow.summary.verdict, 'janky');
-  const unfinished = report.summarize(
-    'close-pull',
-    [{ ...sample(40), completed: false }],
-    interval,
-  );
+  const unfinished = report.summarize('close-pull', [{ ...sample(40), completed: false }], interval);
   assert.equal(unfinished.summary.verdict, 'janky');
   const full = {
     version: report.PERF_REPORT_VERSION,
@@ -126,15 +121,10 @@ test('a scenario summary takes the worse of smoothness and response, and the Mar
 test('hardware: GPU names trimmed, phone SoC guessed', async () => {
   const hardware = await import('../lib/perf/hardware.ts');
   assert.equal(
-    hardware.cleanRenderer(
-      'ANGLE (AMD, AMD Radeon RX 6500 XT (0x0000743F) Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    ),
+    hardware.cleanRenderer('ANGLE (AMD, AMD Radeon RX 6500 XT (0x0000743F) Direct3D11 vs_5_0 ps_5_0, D3D11)'),
     'AMD Radeon RX 6500 XT',
   );
-  assert.equal(
-    hardware.cleanRenderer('ANGLE (Qualcomm, Adreno (TM) 830, OpenGL ES 3.2)'),
-    'Adreno 830',
-  );
+  assert.equal(hardware.cleanRenderer('ANGLE (Qualcomm, Adreno (TM) 830, OpenGL ES 3.2)'), 'Adreno 830');
   assert.equal(hardware.cleanRenderer('Apple GPU'), 'Apple GPU');
   assert.equal(hardware.socFromGpu('Adreno 830'), '骁龙 8 至尊版（推测）');
   assert.equal(hardware.socFromGpu('Mali-G720'), null);
@@ -155,16 +145,9 @@ test('completed cuts keep their frame verdict without inventing a failed respons
     const cut = report.summarize(id, [sample], interval);
     assert.equal(cut.summary.latencyMs, null);
     assert.equal(cut.summary.verdict, 'smooth', `${id}: no flight is not a timeout`);
-    assert.equal(
-      report.summarize(id, [{ ...sample, completed: false }], interval).summary.verdict,
-      'janky',
-    );
+    assert.equal(report.summarize(id, [{ ...sample, completed: false }], interval).summary.verdict, 'janky');
     const stalled = { ...sample, frames: stats.frameStats(frames(20, interval * 3), interval) };
-    assert.equal(
-      report.summarize(id, [stalled], interval).summary.verdict,
-      'janky',
-      'real dropped frames still count',
-    );
+    assert.equal(report.summarize(id, [stalled], interval).summary.verdict, 'janky', 'real dropped frames still count');
     assert.equal(
       report.summarize(id, [sample, { ...sample, latencyMs: 250 }], interval).summary.verdict,
       'janky',
@@ -198,11 +181,7 @@ test('a completed report survives blocked storage and takes precedence over an o
     denied = true;
     assert.equal(report.loadReport(), null, 'a cold read also tolerates denied storage');
     report.saveReport(current);
-    assert.equal(
-      report.loadReport(),
-      current,
-      'navigation can render and export the in-memory run',
-    );
+    assert.equal(report.loadReport(), current, 'navigation can render and export the in-memory run');
     denied = false;
     assert.deepEqual(JSON.parse(stored), previous);
     assert.equal(report.loadReport(), current, 'the stale stored run must not replace the new one');
@@ -242,10 +221,6 @@ test('the stress run keeps pass/fail on correctness and reports its frames as a 
   assert.equal(stress.summary.verdict, 'smooth');
   assert.equal(stress.summary.frameVerdict, 'janky');
   assert.equal(report.overallVerdict([stress]), 'smooth');
-  const open = report.summarize(
-    'open',
-    [{ ...sample, glitches: undefined, latencyMs: 40 }],
-    interval,
-  );
+  const open = report.summarize('open', [{ ...sample, glitches: undefined, latencyMs: 40 }], interval);
   assert.equal(open.summary.frameVerdict, undefined);
 });

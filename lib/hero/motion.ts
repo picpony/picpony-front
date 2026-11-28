@@ -132,11 +132,7 @@ function reverseContainerLeg(
     // A viewport rebuild replaces clipFrom with a mid-flight pose. The endpoint must
     // still be the actual card/host, never that earlier rebase point.
     clipTo: destination,
-    radiusFrom: interpolate(
-      previous.radiusFrom,
-      previous.radiusTo,
-      intervalProgress(progress, shape.start, shape.end),
-    ),
+    radiusFrom: interpolate(previous.radiusFrom, previous.radiusTo, intervalProgress(progress, shape.start, shape.end)),
     radiusTo: radius,
     host,
   };
@@ -329,11 +325,7 @@ function cornerAblation(element: HTMLElement, keyframes: Keyframe[]): Keyframe[]
   return keyframes.map(({ offset }) => ({ offset }));
 }
 
-function animateAt(
-  element: HTMLElement,
-  keyframes: Keyframe[],
-  timing: KeyframeAnimationOptions,
-): AnimationOwner {
+function animateAt(element: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions): AnimationOwner {
   const animation = element.animate(cornerAblation(element, keyframes), {
     ...timing,
     fill: 'both',
@@ -502,11 +494,7 @@ function buildContainerAnimations(
       borderRadius: formatHeroContainerRadius(
         pose,
         container.host,
-        interpolate(
-          container.radiusFrom,
-          container.radiusTo,
-          intervalProgress(progress, shape.start, shape.end),
-        ),
+        interpolate(container.radiusFrom, container.radiusTo, intervalProgress(progress, shape.start, shape.end)),
       ),
     };
     counter[index] = { offset, transform: formatHeroContainerCompensator(pose) };
@@ -537,11 +525,7 @@ function buildContainerAnimations(
  * `sampledTrack` preserves those samples as keyframes on Chrome 109; see
  * docs/motion-system.md#browser-compatibility.
  */
-function animateScalar(
-  element: HTMLElement,
-  track: SampledTrack,
-  duration: number,
-): AnimationOwner {
+function animateScalar(element: HTMLElement, track: SampledTrack, duration: number): AnimationOwner {
   return animateAt(element, track.keyframes, { duration, easing: track.easing });
 }
 
@@ -622,10 +606,7 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
           ? [{ opacity: current?.opacity ?? 0 }, { opacity: 1 }]
           : [
               {
-                opacity:
-                  current?.opacity ??
-                  liveOpacity?.get(floatingBack) ??
-                  numericOpacity(floatingBack),
+                opacity: current?.opacity ?? liveOpacity?.get(floatingBack) ?? numericOpacity(floatingBack),
               },
               { opacity: 0 },
             ],
@@ -785,9 +766,7 @@ export class HeroMotion {
   }
 
   get finished() {
-    return Promise.all([this.landedCompletion.promise, this.sharedCompletion.promise]).then(
-      () => undefined,
-    );
+    return Promise.all([this.landedCompletion.promise, this.sharedCompletion.promise]).then(() => undefined);
   }
 
   /** Current visual state — sampled from the emitted tracks, with no layout reads. */
@@ -795,11 +774,7 @@ export class HeroMotion {
     const currentTime = this.visual[0]?.animation.currentTime;
     // A pending animation has not presented any travel, even if setup blocked for a whole leg.
     const elapsed =
-      typeof currentTime === 'number'
-        ? currentTime
-        : this.landedCompletion.settled
-          ? this.leg.duration
-          : 0;
+      typeof currentTime === 'number' ? currentTime : this.landedCompletion.settled ? this.leg.duration : 0;
     return {
       ...evaluateLeg(this.leg, this.leg.startedAt + elapsed),
       pullOffset: this.pullOffset,
@@ -861,8 +836,7 @@ export class HeroMotion {
     if (this.disposed || this.retired || this.sharedReleased || this.choreography === 'dismiss') {
       return null;
     }
-    if (overlay === this.overlay || this.mirrors.some((mirror) => mirror.overlay === overlay))
-      return null;
+    if (overlay === this.overlay || this.mirrors.some((mirror) => mirror.overlay === overlay)) return null;
     const mirror: HeroMirror = {
       overlay,
       floatingBack,
@@ -917,11 +891,7 @@ export class HeroMotion {
       this.choreography !== 'dismiss'
     ) {
       owners.push(
-        ...buildContainerAnimations(
-          { clip: mirror.clip, unclip: mirror.unclip },
-          this.containerLeg,
-          this.leg,
-        ),
+        ...buildContainerAnimations({ clip: mirror.clip, unclip: mirror.unclip }, this.containerLeg, this.leg),
       );
       const scroller = this.windowScrollStart
         ? mirror.unclip.querySelector<HTMLElement>('.image-detail-overlay-scroll')
@@ -964,9 +934,7 @@ export class HeroMotion {
   private readSharedPoses() {
     const poses = readOverlayPoses(this.overlay, this.floatingBack);
     this.mirrors.forEach((mirror) => {
-      readOverlayPoses(mirror.overlay, mirror.floatingBack).forEach((pose, element) =>
-        poses.set(element, pose),
-      );
+      readOverlayPoses(mirror.overlay, mirror.floatingBack).forEach((pose, element) => poses.set(element, pose));
     });
     return poses;
   }
@@ -982,8 +950,7 @@ export class HeroMotion {
   setPullOffset(distance: number, x = 0) {
     this.pullOffset = distance;
     this.pullOffsetX = x;
-    this.flight.compensator.style.transform =
-      distance || x ? `translate3d(${x}px, ${distance}px, 0)` : '';
+    this.flight.compensator.style.transform = distance || x ? `translate3d(${x}px, ${distance}px, 0)` : '';
   }
 
   /**
@@ -1009,12 +976,7 @@ export class HeroMotion {
     };
   }
 
-  async reverse(
-    destination?: HeroRect,
-    plane?: HeroScrollPlane,
-    measured?: HeroPose,
-    inputs?: HeroReverseInputs,
-  ) {
+  async reverse(destination?: HeroRect, plane?: HeroScrollPlane, measured?: HeroPose, inputs?: HeroReverseInputs) {
     if (this.disposed || this.retired) return;
     const pose = measured ?? this.measurePose();
     /* The host box with the other reads, before the cancels and the plane move below write to
@@ -1135,8 +1097,7 @@ export class HeroMotion {
     const pose = measured ?? this.measurePose();
     const previous = this.leg;
     const windowScroll = this.windowScroll?.offset() ?? 0;
-    const sharedPose =
-      this.landedCompletion.settled || this.sharedReleased ? undefined : this.readSharedPoses();
+    const sharedPose = this.landedCompletion.settled || this.sharedReleased ? undefined : this.readSharedPoses();
     this.cancelVisual(false);
 
     const currentScreen = planeRectToScreen(pose.rect, this.flight.plane);
@@ -1166,10 +1127,7 @@ export class HeroMotion {
        than chosen: only a spring can be solved for a launch slope. The floor is scaled
        like everything else: "too short to sample" is a fraction of the flight's own clock,
        not a wall-clock figure. */
-    const duration = Math.max(
-      scaledMs(FLIGHT_REBUILD_MIN_MS, 'image'),
-      previous.duration - pose.elapsed,
-    );
+    const duration = Math.max(scaledMs(FLIGHT_REBUILD_MIN_MS, 'image'), previous.duration - pose.elapsed);
     this.leg = createHeroLeg({
       from,
       to,
@@ -1498,12 +1456,7 @@ export class HeroMotion {
                 top: this.preread?.planeScroll?.top ?? plane.scroller.scrollTop,
                 range: plane.maxScrollTop,
               };
-              this.windowScroll = followHeroWindowScroll(
-                plane.scroller,
-                this.clip,
-                scroller,
-                this.windowScrollStart,
-              );
+              this.windowScroll = followHeroWindowScroll(plane.scroller, this.clip, scroller, this.windowScrollStart);
             }
           }
         }
@@ -1566,9 +1519,7 @@ export class HeroMotion {
        element-centred origin would fling the visible rows. Read once — the gallery scroller
        is hidden while the detail is open, so the offset cannot move under the leg. */
     const scroller = element.parentElement;
-    const centre =
-      this.preread?.backgroundPivot ??
-      (scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0);
+    const centre = this.preread?.backgroundPivot ?? (scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0);
     // A scale matrix excludes transform-origin. Moving the pivot while continuing from
     // s<1 moves the grid by (1-s) * pivotDelta even though the scale did not change.
     if (!continueFromCurrent || from <= 0.001 || !element.style.transformOrigin) {

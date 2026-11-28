@@ -31,21 +31,12 @@ type DetailHeaderProps = {
 };
 
 function getImageFormat(image: ImagePreview) {
-  const source =
-    image.format || (image.representations?.full || image.view_url || '').split(/[?#]/)[0];
+  const source = image.format || (image.representations?.full || image.view_url || '').split(/[?#]/)[0];
   return source.split('.').pop()?.toUpperCase() || '未知';
 }
 
 /** A value the row has; otherwise a placeholder while the record is coming, else a dash. */
-function MetaValue({
-  value,
-  pending,
-  width,
-}: {
-  value: ReactNode | null;
-  pending: boolean;
-  width: string;
-}) {
+function MetaValue({ value, pending, width }: { value: ReactNode | null; pending: boolean; width: string }) {
   if (value !== null) return value;
   if (pending) {
     return (
@@ -117,15 +108,10 @@ export default function DetailHeader({
      that can carry a real tooltip (`useTooltip` hangs `aria-describedby` and
      shows on focus as well as hover). The other items name a *value* on a
      non-focusable element, so they take an `sr-only` label instead. */
-  const {
-    anchorRef: uploaderRef,
-    anchorProps: uploaderProps,
-    tooltip: uploaderTooltip,
-  } = useTooltip('上传者');
+  const { anchorRef: uploaderRef, anchorProps: uploaderProps, tooltip: uploaderTooltip } = useTooltip('上传者');
 
   const size = typeof image.size === 'number' && image.size > 0 ? formatBytes(image.size) : null;
-  const created =
-    typeof image.created_at === 'string' && image.created_at ? image.created_at : null;
+  const created = typeof image.created_at === 'string' && image.created_at ? image.created_at : null;
   /* `null` is an anonymous upload (Derpibooru sends no name and no id); `undefined` is a row
      that did not carry the field. */
   const anonymous = image.uploader === null || (image.uploader !== undefined && !image.uploader_id);
@@ -138,9 +124,7 @@ export default function DetailHeader({
       data-image-detail-reveal="header"
       className={cn(
         'image-detail-header bg-transparent px-4 py-3 sm:px-6',
-        isStage
-          ? 'image-detail-header-stage overflow-hidden'
-          : layout === 'overlay' && 'image-detail-header-route',
+        isStage ? 'image-detail-header-stage overflow-hidden' : layout === 'overlay' && 'image-detail-header-route',
       )}
     >
       <h1 className="sr-only">{describeImage(image)}</h1>
@@ -160,19 +144,13 @@ export default function DetailHeader({
                 className="shrink-0 text-on-surface-variant group-hover:text-primary-ink"
                 aria-hidden="true"
               />
-              <span className="truncate decoration-1 underline-offset-2 group-hover:underline">
-                {image.uploader}
-              </span>
+              <span className="truncate decoration-1 underline-offset-2 group-hover:underline">{image.uploader}</span>
               {uploaderTooltip}
             </Link>
           ) : (
             <div className="flex min-w-0 shrink items-center gap-1.5">
               <span className="sr-only">上传者</span>
-              <MdPerson
-                size={ICON.dense}
-                className="shrink-0 text-on-surface-variant"
-                aria-hidden="true"
-              />
+              <MdPerson size={ICON.dense} className="shrink-0 text-on-surface-variant" aria-hidden="true" />
               <MetaValue
                 value={anonymous ? <span className="truncate">匿名用户</span> : null}
                 pending={pending}
@@ -203,10 +181,7 @@ export default function DetailHeader({
           </div>
         </div>
         <div
-          className={cn(
-            row,
-            'image-detail-header-caption shrink-0 text-body-s text-on-surface-variant tabular-nums',
-          )}
+          className={cn(row, 'image-detail-header-caption shrink-0 text-body-s text-on-surface-variant tabular-nums')}
         >
           <span className="min-w-0 truncate">
             <span className="sr-only">尺寸</span>

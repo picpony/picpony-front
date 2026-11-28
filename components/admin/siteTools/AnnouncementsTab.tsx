@@ -31,19 +31,11 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
   /* The previewed notice stays put while its dialog leaves: closing clears `open` alone, so the
      title and the body hold through the exit rather than turning into 公告 and an empty panel in
      the commit that closes it (M1-009). The next preview replaces it. */
-  const [preview, setPreview] = useState<{ announcement: Announcement; open: boolean } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<{ announcement: Announcement; open: boolean } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   useRichTextScrollbars(previewRef, preview?.open ? preview.announcement.content : null);
   const history = useToolPage(announcementsQuery, token, { page }, 'history');
-  if (
-    history.data &&
-    !history.isPrevious &&
-    !history.isLoading &&
-    !history.error &&
-    page > history.data.totalPages
-  )
+  if (history.data && !history.isPrevious && !history.isLoading && !history.error && page > history.data.totalPages)
     setPage(history.data.totalPages);
   const publish = useAdminMutation(token),
     remove = useAdminMutation(token);
@@ -133,11 +125,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
   ];
   return (
     <div className="space-y-6">
-      <SectionHeader
-        section="announcement"
-        onRefresh={history.refresh}
-        isLoading={history.refreshing}
-      />
+      <SectionHeader section="announcement" onRefresh={history.refresh} isLoading={history.refreshing} />
       <AdminNote>正文支持 HTML，换行会保留；发布后将推送至全站用户信箱。</AdminNote>
       <AdminForm aria-label="发布公告" onSubmit={submit}>
         <FormGrid>
@@ -180,10 +168,7 @@ function AnnouncementsTab({ token }: AdminPanelProps) {
           listKey={history.listKey}
           rowKey={(r) => r.id}
           loading={history.loading}
-          {...tableError(
-            history.isPrevious ? `公告记录第 ${page} 页加载失败` : '公告记录加载失败',
-            history.message,
-          )}
+          {...tableError(history.isPrevious ? `公告记录第 ${page} 页加载失败` : '公告记录加载失败', history.message)}
           onRetry={history.retry}
           empty="暂无公告"
         />

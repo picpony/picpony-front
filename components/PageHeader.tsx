@@ -28,32 +28,15 @@ interface PageHeaderProps {
  * into the shell's slot so it survives route transitions sitting still. Render
  * `PageBack` alongside this component, not inside it.
  */
-export default function PageHeader({
-  title,
-  subtitle,
-  actions,
-  level = 1,
-  className = '',
-}: PageHeaderProps) {
+export default function PageHeader({ title, subtitle, actions, level = 1, className = '' }: PageHeaderProps) {
   const Heading = level === 2 ? 'h2' : 'h1';
   return (
     <div className={cn('mb-6', className)}>
-      <div
-        className={cn(
-          'flex flex-wrap items-center justify-between',
-          actions ? 'gap-x-4 gap-y-3' : undefined,
-        )}
-      >
-        <Heading className="text-headline-s min-w-0 flex-auto wrap-anywhere text-on-surface">
-          {title}
-        </Heading>
-        {actions && (
-          <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>
-        )}
+      <div className={cn('flex flex-wrap items-center justify-between', actions ? 'gap-x-4 gap-y-3' : undefined)}>
+        <Heading className="text-headline-s min-w-0 flex-auto wrap-anywhere text-on-surface">{title}</Heading>
+        {actions && <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {subtitle && (
-        <div className="text-body-m mt-1 tabular-nums text-on-surface-variant">{subtitle}</div>
-      )}
+      {subtitle && <div className="text-body-m mt-1 tabular-nums text-on-surface-variant">{subtitle}</div>}
     </div>
   );
 }

@@ -12,13 +12,13 @@ Visible scrollbars use `OverlayScrollbars` (`components/ScrollArea.tsx` and `lib
 
 Thumb and hover-rail ink derive from the owned `--md-sys-color-on-surface-rgb` channels so contrast scales cleanly across every surface container elevation and palette. Desktop fine pointers use tiered capsule thumbs (5→8 px on primary page/detail scrollers, 4→7 px on compact overlays and panels, 4→6 px inside multiline fields) with `(hover: hover)` rail reveal, crisp `fastEffects` arrival and gentler `defaultEffects` auto-hide fade-out; touch devices render a 4 px scroll indicator with no hover track. Rounded shells, focus outlines, safe areas and inset popovers apply matching track clearances, and `clickScroll` reads `motionTier('scroll')` and `scaledMs(..., 'scroll')` live on every track click.
 
-| Container                                         | Mechanism                                                                                                   |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Page-level scroller and image-detail overlay      | `ScrollArea` (`.main-scrollbar`, `.os-slot-page` / `.os-detail-slot`), floating pseudo-scrollbar, no gutter |
-| Overlays, drawers, popovers, panels and tables    | `ScrollArea` (`.popover-scrollbar`), floating pseudo-scrollbar with `overscroll-contain`, no gutter         |
-| Multiline fields (`Textarea`, `ChatComposer`)     | `useOverlayScrollbar` mounted onto the enclosing `.m3-field` slot                                           |
-| HTML-injected rich text tables and `<pre>` blocks | `useRichTextScrollbars` (wrapper mode)                                                                      |
-| Horizontal chips or tabs                          | `.scrollbar-hide` with `scroll-fade-x`                                                                      |
+| Container | Mechanism |
+| --- | --- |
+| Page-level scroller and image-detail overlay | `ScrollArea` (`.main-scrollbar`, `.os-slot-page` / `.os-detail-slot`), floating pseudo-scrollbar, no gutter |
+| Overlays, drawers, popovers, panels and tables | `ScrollArea` (`.popover-scrollbar`), floating pseudo-scrollbar with `overscroll-contain`, no gutter |
+| Multiline fields (`Textarea`, `ChatComposer`) | `useOverlayScrollbar` mounted onto the enclosing `.m3-field` slot |
+| HTML-injected rich text tables and `<pre>` blocks | `useRichTextScrollbars` (wrapper mode) |
+| Horizontal chips or tabs | `.scrollbar-hide` with `scroll-fade-x` |
 
 `ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Direct-child `ResizeObserver` updates, input refreshes and scrollbar pointer entry/press sync live viewport dimensions into OverlayScrollbars through `syncScrollbarGeometry()` so `--os-viewport-percent` and drag travel stay strictly proportional to the current total height across route changes, tab switches and async loads without invoking `update(true)`'s auto-hide resets. Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`. Default tracks sit at local `z-index: 5` (below sticky `z-10` headers such as `ColorPicker`'s preview dock), while page, detail and multiline-field tracks sit at `15` (strictly below `--z-route-crossfade`).
 
@@ -26,14 +26,14 @@ Thumb and hover-rail ink derive from the owned `--md-sys-color-on-surface-rgb` c
 
 `lib/scrollMemory.ts` mounts once as `RouteScrollMemory`. Every router push/replace passes `scroll: false`; every Link passes `scroll={false}`.
 
-| Change                                | Owner and result                                              |
-| ------------------------------------- | ------------------------------------------------------------- |
-| New pathname                          | Route memory starts at zero                                   |
-| Back / Forward                        | Restore that history entry's offset                           |
-| Page turn                             | Pagination scrolls to its anchor using the distance-based law |
-| Tab switch                            | `startTabTransition` / `TabPanesDriver`                       |
-| Back / Forward between search queries | Search restores after the matching results render             |
-| Image detail                          | Hero owns the detail and its background handoff               |
+| Change | Owner and result |
+| --- | --- |
+| New pathname | Route memory starts at zero |
+| Back / Forward | Restore that history entry's offset |
+| Page turn | Pagination scrolls to its anchor using the distance-based law |
+| Tab switch | `startTabTransition` / `TabPanesDriver` |
+| Back / Forward between search queries | Search restores after the matching results render |
+| Image detail | Hero owns the detail and its background handoff |
 
 The route owner depends on pathname, not query changes. Search traversal is detected from the rendered entry rather than a racing `popstate` listener.
 
@@ -74,11 +74,11 @@ Tab memory is keyed by pathname, tab-group position and tab name. Traversal reta
 
 `COOKIE_KEYS.imageLine` mirrors the resolved image line. `ImageLineProvider` makes server markup and the client's first attempt agree. Later retries read live policy; a stale cookie may cost one corrected attempt.
 
-| Image                 | Delivery                                                                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------- |
-| Still gallery card    | Raw Derpibooru URL through the optimizer once, then the visitor's browser-direct line with backoff |
-| Animated gallery card | Bypass optimizer; `pickRendition` uses card width at up to 1.5× density                            |
-| Detail final          | Original CDN rendition via `shouldBypassImageOptimizer(true)`                                      |
+| Image | Delivery |
+| --- | --- |
+| Still gallery card | Raw Derpibooru URL through the optimizer once, then the visitor's browser-direct line with backoff |
+| Animated gallery card | Bypass optimizer; `pickRendition` uses card width at up to 1.5× density |
+| Detail final | Original CDN rendition via `shouldBypassImageOptimizer(true)` |
 
 Do not send line-wrapped open proxy URLs into Next's optimizer. `MASONRY_CARD_SIZES` comes from the actual drawer, gutters and column cap. Development bypasses optimization, so verify production too.
 
@@ -103,13 +103,13 @@ The flight paints the card's decoded bitmap into a canvas. The underlying detail
 
 ## Verification
 
-| Command                             | Checks                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| `bun run net:scroll`                | No empty grid frame during paging                                         |
-| `bun run net:tabs`                  | Tab height, remembered offsets and first-visit zero                       |
-| `bun run net:tabnav`                | Tab → detail → Back                                                       |
-| `bun run perf:pageturn`             | No blank in-view card or late hiding of painted cards                     |
-| `bun run perf:sharpness:assert`     | Controlled-CDN flyer upgrade before landing                               |
+| Command | Checks |
+| --- | --- |
+| `bun run net:scroll` | No empty grid frame during paging |
+| `bun run net:tabs` | Tab height, remembered offsets and first-visit zero |
+| `bun run net:tabnav` | Tab → detail → Back |
+| `bun run perf:pageturn` | No blank in-view card or late hiding of painted cards |
+| `bun run perf:sharpness:assert` | Controlled-CDN flyer upgrade before landing |
 | `bun run test:browser --card-video` | Video frame readiness, media retries, offline recovery and hover playback |
 
 Measure image work at DPR 2. The sharpness probe must sample `.image-hero-flyer-image`, not the underlying detail layer.

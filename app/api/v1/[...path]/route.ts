@@ -109,10 +109,7 @@ function backendCookies(header: string): string {
     .map((part) => part.trim())
     .filter(
       (part) =>
-        part &&
-        !APP_COOKIES.has(
-          part.slice(0, part.indexOf('=') === -1 ? part.length : part.indexOf('=')).trim(),
-        ),
+        part && !APP_COOKIES.has(part.slice(0, part.indexOf('=') === -1 ? part.length : part.indexOf('=')).trim()),
     )
     .join('; ');
 }
@@ -187,17 +184,13 @@ function bodyMode(request: NextRequest): 'buffer' | 'probe' | 'stream' {
 }
 
 /** What a probing read found: the whole body, or the start of one too large to hold. */
-type ProbedBody =
-  { kind: 'whole'; body: ArrayBuffer } | { kind: 'overflow'; body: ReadableStream<Uint8Array> };
+type ProbedBody = { kind: 'whole'; body: ArrayBuffer } | { kind: 'overflow'; body: ReadableStream<Uint8Array> };
 
 /**
  * Reads a small body whole, under the same pace rule as `pacedBody`: no chunk for `BODY_IDLE_MS`
  * aborts with `BODY_STALLED`. Past `BUFFERED_BODY_MAX` it throws `BODY_TOO_LARGE`.
  */
-async function readBounded(
-  body: ReadableStream<Uint8Array>,
-  signal: AbortSignal,
-): Promise<ArrayBuffer> {
+async function readBounded(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<ArrayBuffer> {
   const read = await readUpTo(body, signal, false);
   if (read.kind !== 'whole') throw new DOMException(BODY_TOO_LARGE, 'QuotaExceededError');
   return read.body;
@@ -207,11 +200,7 @@ async function readBounded(
  * `readBounded`, except that with `overflow` a body past the cap is not an error: the chunks read
  * so far and the rest of the stream are handed back as one stream, to be forwarded as is.
  */
-async function readUpTo(
-  body: ReadableStream<Uint8Array>,
-  signal: AbortSignal,
-  overflow: boolean,
-): Promise<ProbedBody> {
+async function readUpTo(body: ReadableStream<Uint8Array>, signal: AbortSignal, overflow: boolean): Promise<ProbedBody> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -221,14 +210,9 @@ async function readUpTo(
   try {
     for (;;) {
       const stalled = new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new DOMException(BODY_STALLED, 'TimeoutError')),
-          BODY_IDLE_MS,
-        );
+        timer = setTimeout(() => reject(new DOMException(BODY_STALLED, 'TimeoutError')), BODY_IDLE_MS);
       });
-      const { done, value } = await Promise.race([reader.read(), stalled]).finally(() =>
-        clearTimeout(timer),
-      );
+      const { done, value } = await Promise.race([reader.read(), stalled]).finally(() => clearTimeout(timer));
       if (done) break;
       total += value.byteLength;
       chunks.push(value);
@@ -271,20 +255,12 @@ async function readUpTo(
   return { kind: 'whole', body: out.buffer as ArrayBuffer };
 }
 
-async function proxy(
-  request: NextRequest,
-  context: { params: Promise<{ path: string[] }> },
-): Promise<Response> {
+async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const { path } = await context.params;
   /* A decoded catch-all segment must stay a segment. URL normalisation removes dots and
      upstream servers may decode escaped separators again, escaping the /api/v1 namespace. */
-  if (
-    path?.some((part) => part === '.' || part === '..' || /[/\\%\u0000-\u001f\u007f]/.test(part))
-  ) {
-    return Response.json(
-      { error: { code: 'INVALID_PATH', message: '接口路径无效' } },
-      { status: 400 },
-    );
+  if (path?.some((part) => part === '.' || part === '..' || /[/\\%\u0000-\u001f\u007f]/.test(part))) {
+    return Response.json({ error: { code: 'INVALID_PATH', message: '接口路径无效' } }, { status: 400 });
   }
   const suffix = path?.length ? `/${path.map(encodeURIComponent).join('/')}` : '';
   const target = new URL(`${UPSTREAM_PATH}${suffix}`, UPSTREAM_ORIGIN);
@@ -324,8 +300,7 @@ async function proxy(
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
   /* A live reply is a stream the client reads as it arrives: the ordinary total timeout would
      cut it at 30s, and a buffered or compressed response would defeat it entirely. */
-  const eventStream =
-    request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false;
+  const eventStream = request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false;
 
   /* A small body is read whole so it goes upstream with a Content-Length, never chunked
      (see `BUFFERED_BODY_MAX`). */
@@ -366,8 +341,7 @@ async function proxy(
      request gets one budget; a streamed body gets a pace instead (see `BODY_IDLE_MS`). */
   const streamed = hasBody && buffered === null;
   const paceController = streamed ? new AbortController() : null;
-  const paced =
-    streamed && paceController ? pacedBody(overflowBody ?? request.body!, paceController) : null;
+  const paced = streamed && paceController ? pacedBody(overflowBody ?? request.body!, paceController) : null;
   /* A streamed body with a declared length (every browser upload, XHR or fetch with FormData)
      keeps that length upstream, so it is not sent chunked either. Without one it has to be. */
   const declaredLength = request.headers.get('content-length');
@@ -386,11 +360,7 @@ async function proxy(
       redirect: 'manual',
       cache: 'no-store',
       signal: paceController
-        ? AbortSignal.any([
-            request.signal,
-            paceController.signal,
-            AbortSignal.timeout(BODY_TOTAL_MS),
-          ])
+        ? AbortSignal.any([request.signal, paceController.signal, AbortSignal.timeout(BODY_TOTAL_MS)])
         : eventStream
           ? request.signal
           : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
@@ -467,14 +437,8 @@ async function proxy(
     responseHeaders.set('Cache-Control', 'private, no-store');
   }
   responseHeaders.set('X-Content-Type-Options', 'nosniff');
-  responseHeaders.set(
-    'Content-Security-Policy',
-    "sandbox; default-src 'none'; frame-ancestors 'none'",
-  );
-  if (
-    eventStream &&
-    upstream.headers.get('content-type')?.toLowerCase().includes('text/event-stream')
-  ) {
+  responseHeaders.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
+  if (eventStream && upstream.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) {
     /* The body is already streamed through; keep proxies from collecting it first. */
     responseHeaders.set('Cache-Control', 'no-cache, no-store, no-transform');
     responseHeaders.set('X-Accel-Buffering', 'no');
@@ -483,10 +447,7 @@ async function proxy(
   }
 
   const nullBody =
-    request.method === 'HEAD' ||
-    upstream.status === 204 ||
-    upstream.status === 205 ||
-    upstream.status === 304;
+    request.method === 'HEAD' || upstream.status === 204 || upstream.status === 205 || upstream.status === 304;
   if (nullBody && upstream.body) {
     void upstream.body.cancel().catch(() => {});
   }

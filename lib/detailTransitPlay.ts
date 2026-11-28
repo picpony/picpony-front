@@ -3,20 +3,8 @@
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { captureVisualClone, restoreSnapshotScroll } from '@/lib/pageSnapshot';
-import {
-  FORUM_FADE,
-  FORUM_TRANSFORM_MS,
-  visibleBox,
-  type Box,
-  type Radii,
-} from '@/lib/forumContainer';
-import {
-  hide,
-  playContainerRun,
-  rectOf,
-  surfaceOf,
-  type Hidden,
-} from '@/lib/containerTransformPlay';
+import { FORUM_FADE, FORUM_TRANSFORM_MS, visibleBox, type Box, type Radii } from '@/lib/forumContainer';
+import { hide, playContainerRun, rectOf, surfaceOf, type Hidden } from '@/lib/containerTransformPlay';
 import { unsealDetailCopy, type DetailExitSnapshot } from '@/lib/detailTransit';
 
 /**

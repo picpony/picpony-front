@@ -33,18 +33,9 @@ import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import SelectionBar, { type SelectionCommand } from '@/components/favorites/SelectionBar';
-import {
-  FOLDER_GRID,
-  FolderBadges,
-  FolderCard,
-  FolderGridSkeleton,
-} from '@/components/favorites/FolderCard';
+import { FOLDER_GRID, FolderBadges, FolderCard, FolderGridSkeleton } from '@/components/favorites/FolderCard';
 import { MergeDialog } from '@/components/favorites/FolderDialogs';
-import {
-  FolderMenuButton,
-  isFolderPublic,
-  useFolderCommands,
-} from '@/components/favorites/useFolderCommands';
+import { FolderMenuButton, isFolderPublic, useFolderCommands } from '@/components/favorites/useFolderCommands';
 import { settingsHref } from '@/app/settings/tabs';
 
 /**
@@ -62,13 +53,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const defaultFolder = useDefaultFaveFolder(token, folders);
 
   const coverIds = folders
-    ? [
-        ...new Set(
-          folders
-            .map((folder) => folder.latestImageId)
-            .filter((cover): cover is number => cover !== null),
-        ),
-      ]
+    ? [...new Set(folders.map((folder) => folder.latestImageId).filter((cover): cover is number => cover !== null))]
     : [];
   const covers = useResource(folderCovers, coverIds.length > 0 ? { ids: coverIds, fp } : SKIP, {
     keepPrevious: fp,
@@ -94,10 +79,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const rootRef = useRef<HTMLDivElement>(null);
   useFolderReturn(rootRef);
   const { prompt, promptDialog } = usePrompt();
-  const order = useMemo(
-    () => (folders ?? []).filter((folder) => !folder.isMain).map((folder) => folder.id),
-    [folders],
-  );
+  const order = useMemo(() => (folders ?? []).filter((folder) => !folder.isMain).map((folder) => folder.id), [folders]);
   const selection = useSelectionMode({
     order,
     restoreFocus: () => (selectRef.current?.disabled ? createRef.current : selectRef.current),
@@ -318,20 +300,12 @@ export default function FoldersPane({ token, active }: { token: string; active: 
                     <FolderCard
                       folder={folder}
                       href={faveFolderHref(folder.id)}
-                      cover={
-                        folder.latestImageId !== null
-                          ? covers.data?.[folder.latestImageId]
-                          : undefined
-                      }
-                      coverPending={
-                        folder.latestImageId !== null && covers.data === undefined && !covers.error
-                      }
+                      cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
+                      coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
                       badges={
                         <FolderBadges
                           isDefault={folder.id === defaultFolder.id}
-                          isPublic={
-                            commands.showFaves && isFolderPublic(folder.id, commands.publicIds)
-                          }
+                          isPublic={commands.showFaves && isFolderPublic(folder.id, commands.publicIds)}
                         />
                       }
                       menu={
@@ -365,12 +339,7 @@ export default function FoldersPane({ token, active }: { token: string; active: 
         onExit={exit}
       />
       {promptDialog}
-      <MergeDialog
-        open={mergeOpen}
-        folders={chosen}
-        onClose={() => setMergeOpen(false)}
-        onConfirm={merge}
-      />
+      <MergeDialog open={mergeOpen} folders={chosen} onClose={() => setMergeOpen(false)} onConfirm={merge} />
       {commands.dialogs}
       {confirmDialog}
     </div>

@@ -39,13 +39,7 @@ export type ImageLine = 'direct' | 'cdn' | 'picpony';
 export type ApiPolicy = 'auto' | ApiLine;
 export type ImagePolicy = 'auto' | ImageLine;
 
-const API_POLICIES: readonly string[] = [
-  'auto',
-  'direct',
-  'api_accel',
-  'picpony_api',
-  'third_party',
-];
+const API_POLICIES: readonly string[] = ['auto', 'direct', 'api_accel', 'picpony_api', 'third_party'];
 const IMAGE_POLICIES: readonly string[] = ['auto', 'direct', 'cdn', 'picpony'];
 
 const API_LINE_LABELS: Record<ApiLine, string> = {
@@ -326,11 +320,7 @@ export function applySavedRoutePolicy(patch: Partial<SiteStatusResponse>): void 
     global_api_third_party_url: policy.thirdPartyUrl,
     global_api_third_party_pass_api_key: policy.thirdPartyPassApiKey,
   };
-  for (const key of [
-    'global_api_route_policy',
-    'global_image_route_policy',
-    'global_api_third_party_url',
-  ] as const) {
+  for (const key of ['global_api_route_policy', 'global_image_route_policy', 'global_api_third_party_url'] as const) {
     if (typeof patch[key] === 'string') merged[key] = patch[key];
   }
   if (typeof patch.global_api_third_party_pass_api_key === 'boolean') {

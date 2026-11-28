@@ -95,9 +95,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
       () => adminApi.updateTeamMember(token, rosterRevision(token), member.id, payload),
       () => {
         showToast(`已保存成员「${String(payload.name)}」`, 'success');
-        setEditing((current) =>
-          current?.id === member.id ? { id: member.id, closing: true } : current,
-        );
+        setEditing((current) => (current?.id === member.id ? { id: member.id, closing: true } : current));
       },
       '保存失败',
       { key: member.id, onCommitted: committed },
@@ -155,17 +153,10 @@ export default function TeamTab({ token }: AdminPanelProps) {
       primary: true,
       render: (member) => (
         <span className="flex min-w-0 items-center gap-3">
-          <Avatar
-            src={member.account_avatar || member.avatar_url}
-            name={member.name}
-            size={40}
-            unoptimized
-          />
+          <Avatar src={member.account_avatar || member.avatar_url} name={member.name} size={40} unoptimized />
           <span className="min-w-0">
             <span className="block text-body-m-emphasized text-on-surface">{member.name}</span>
-            {member.role && (
-              <span className="block text-body-s text-on-surface-variant">{member.role}</span>
-            )}
+            {member.role && <span className="block text-body-s text-on-surface-variant">{member.role}</span>}
           </span>
         </span>
       ),
@@ -198,8 +189,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
       actions: true,
       render: (member) => {
         const open = editing?.id === member.id && !editing.closing;
-        const busy =
-          saveMutation.pendingKeys.has(member.id) || deleteMutation.pendingKeys.has(member.id);
+        const busy = saveMutation.pendingKeys.has(member.id) || deleteMutation.pendingKeys.has(member.id);
         return (
           <>
             <IconButton
@@ -238,9 +228,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
         id={teamEditorId(member.id)}
         label={`编辑成员 ${current.name}`}
         isClosing={editing.closing}
-        onExitComplete={() =>
-          setEditing((state) => (state?.id === member.id && state.closing ? null : state))
-        }
+        onExitComplete={() => setEditing((state) => (state?.id === member.id && state.closing ? null : state))}
         onEscape={saveMutation.pendingKeys.has(member.id) ? undefined : closeEditor}
       >
         <TeamMemberForm
@@ -271,9 +259,7 @@ export default function TeamTab({ token }: AdminPanelProps) {
         <SectionHeading as="h3" id="admin-team-members-heading">
           成员列表
         </SectionHeading>
-        <AdminNote>
-          小编团队自动同步词库贡献榜前 16 名；姓名、头衔、关联用户与备用头像支持手动编辑。
-        </AdminNote>
+        <AdminNote>小编团队自动同步词库贡献榜前 16 名；姓名、头衔、关联用户与备用头像支持手动编辑。</AdminNote>
         <AdminListAnchor>
           <DataTable<TeamMemberRow>
             columns={columns}
@@ -332,9 +318,7 @@ function TeamMemberForm({
   const external = member ? externalLink(member.link_url) : null;
 
   const initial = teamForm(member);
-  const dirty = (Object.keys(initial) as (keyof TeamFormValues)[]).some(
-    (key) => initial[key] !== values[key],
-  );
+  const dirty = (Object.keys(initial) as (keyof TeamFormValues)[]).some((key) => initial[key] !== values[key]);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -377,8 +361,7 @@ function TeamMemberForm({
     if (generation.current !== ticket) return;
     setImporting(false);
     if (outcome.error) {
-      if (isNotFound(outcome.error))
-        setErrors((previous) => ({ ...previous, userId: `没有 ID 为 ${uid} 的用户` }));
+      if (isNotFound(outcome.error)) setErrors((previous) => ({ ...previous, userId: `没有 ID 为 ${uid} 的用户` }));
       else showToast(apiErrorMessage(outcome.error, '导入失败'), 'error');
       return;
     }
@@ -394,9 +377,7 @@ function TeamMemberForm({
       name: profile.username,
       /* The bound account's own avatar is what /about shows; `avatar_url` takes only an HTTPS
          address, so a site-relative avatar path is not copied into it. */
-      avatarUrl: /^https:\/\//.test(profile.avatar ?? '')
-        ? (profile.avatar ?? '')
-        : previous.avatarUrl,
+      avatarUrl: /^https:\/\//.test(profile.avatar ?? '') ? (profile.avatar ?? '') : previous.avatarUrl,
       /* A title already typed is the admin's; the role's suggestion only fills a blank one. */
       title: previous.title.trim() ? previous.title : suggested.title,
       category: previous.title.trim() ? previous.category : suggested.category,

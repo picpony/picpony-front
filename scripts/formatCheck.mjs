@@ -47,6 +47,5 @@ const result = spawnSync(
   ],
   { stdio: 'inherit' },
 );
-if (result.status === 0)
-  console.log(`format:check: no whitespace errors since ${from.slice(0, 12)}`);
+if (result.status === 0) console.log(`format:check: no whitespace errors since ${from.slice(0, 12)}`);
 process.exit(result.status ?? 1);

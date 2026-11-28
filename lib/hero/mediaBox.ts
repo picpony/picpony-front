@@ -36,10 +36,7 @@ export function getHeroMediaPreviewSizes() {
   return `(max-width: ${HERO_MEDIA_BREAKPOINT_PX - 1}px) 100vw, ${HERO_MEDIA_MAX_WIDTH_PX}px`;
 }
 
-export function getHeroMediaRenderedWidth(
-  image: HeroMediaDimensions,
-  viewport: { width: number; height: number },
-) {
+export function getHeroMediaRenderedWidth(image: HeroMediaDimensions, viewport: { width: number; height: number }) {
   const { width, aspectRatio } = getHeroMediaDimensions(image);
   const horizontalPadding =
     viewport.width < HERO_MEDIA_BREAKPOINT_PX

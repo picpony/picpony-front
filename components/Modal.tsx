@@ -6,13 +6,7 @@ import { MdClose } from '@/components/icons/shell';
 import IconButton from './IconButton';
 import ScrollArea from './ScrollArea';
 import { cn } from '@/lib/utils';
-import {
-  useExitAnimation,
-  useOverlayLayer,
-  useMounted,
-  useScrollLock,
-  OverlayLayerContext,
-} from '@/lib/overlay';
+import { useExitAnimation, useOverlayLayer, useMounted, useScrollLock, OverlayLayerContext } from '@/lib/overlay';
 import { motionTier } from '@/lib/appearance';
 import { SPRING_MS } from '@/lib/spring';
 import { surfaceArrival, surfaceDeparture } from '@/lib/springTiming';
@@ -345,8 +339,7 @@ export default function Modal({
          text selection that starts in a field and is released over the scrim arrives
          here as a scrim click. Only a press that *began* on the scrim may close. */
         onPointerDown={(event) => {
-          pressOnScrim.current =
-            event.target === event.currentTarget || event.target === scrimRef.current;
+          pressOnScrim.current = event.target === event.currentTarget || event.target === scrimRef.current;
         }}
         onClick={(event) => {
           const started = pressOnScrim.current;
@@ -366,10 +359,7 @@ export default function Modal({
           ref={scrimRef}
           data-modal-scrim=""
           aria-hidden="true"
-          className={cn(
-            'absolute inset-0',
-            danger ? 'danger-scrim bg-scrim-danger' : 'bg-scrim-veil',
-          )}
+          className={cn('absolute inset-0', danger ? 'danger-scrim bg-scrim-danger' : 'bg-scrim-veil')}
         />
         <div
           ref={panelRef}

@@ -48,8 +48,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-motion-'));
@@ -110,14 +109,11 @@ await send('Network.enable');
 await send('Network.setBypassServiceWorker', { bypass: true });
 
 /* Headless Edge reports `prefers-reduced-motion: reduce`; the app resolves that to 减弱 unless a
-   tier is stored, and 减弱 changes the shapes being measured. Pin it. */ await send(
-  'Page.navigate',
-  { url: `http://127.0.0.1:${PORT}/` },
-);
+   tier is stored, and 减弱 changes the shapes being measured. Pin it. */ await send('Page.navigate', {
+  url: `http://127.0.0.1:${PORT}/`,
+});
 await new Promise((r) => setTimeout(r, 2500));
-await evalIn(
-  `localStorage.setItem('picpony_motion','standard'); localStorage.setItem('picpony_entrance','true'); 1`,
-);
+await evalIn(`localStorage.setItem('picpony_motion','standard'); localStorage.setItem('picpony_entrance','true'); 1`);
 await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await new Promise((r) => setTimeout(r, 4000));
 

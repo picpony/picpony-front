@@ -4,11 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 /* The runtime store only: the Stage shell is mounted by `AppLayout` on every route, returns
    `null` while idle, and loads `HeroStageActive` behind a dynamic import so detail chrome stays
    out of every route's initial document. */
-import {
-  getImageHeroStage,
-  registerImageHeroStageWarmer,
-  subscribeImageHeroStage,
-} from '@/lib/hero/runtime';
+import { getImageHeroStage, registerImageHeroStageWarmer, subscribeImageHeroStage } from '@/lib/hero/runtime';
 import type { ImageHeroStageState } from '@/lib/hero/types';
 
 const EMPTY_STAGE: ImageHeroStageState = { phase: 'idle', snapshot: null, sessionId: null };

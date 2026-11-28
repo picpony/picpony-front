@@ -1,19 +1,11 @@
 /** Material 24x24 glyphs for the common chunk, extracted verbatim from react-icons/md. */
 import { pathIcon, SvgIcon, type IconProps } from './SvgIcon';
 
-export const MdArrowBack = /*#__PURE__*/ pathIcon(
-  'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z',
-);
-export const MdArrowUpward = /*#__PURE__*/ pathIcon(
-  'm4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8z',
-);
+export const MdArrowBack = /*#__PURE__*/ pathIcon('M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z');
+export const MdArrowUpward = /*#__PURE__*/ pathIcon('m4 12 1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8z');
 export const MdCheck = /*#__PURE__*/ pathIcon('M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z');
-export const MdChevronLeft = /*#__PURE__*/ pathIcon(
-  'M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z',
-);
-export const MdChevronRight = /*#__PURE__*/ pathIcon(
-  'M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z',
-);
+export const MdChevronLeft = /*#__PURE__*/ pathIcon('M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z');
+export const MdChevronRight = /*#__PURE__*/ pathIcon('M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z');
 export const MdComment = /*#__PURE__*/ pathIcon(
   'M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4zM18 14H6v-2h12zm0-3H6V9h12zm0-3H6V6h12z',
 );
@@ -24,18 +16,14 @@ export const MdErrorOutline = /*#__PURE__*/ pathIcon(
   'M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2M12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8',
 );
 export const MdExpandMore = /*#__PURE__*/ pathIcon('M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z');
-export const MdFirstPage = /*#__PURE__*/ pathIcon(
-  'M18.41 16.59 13.82 12l4.59-4.59L17 6l-6 6 6 6zM6 6h2v12H6z',
-);
+export const MdFirstPage = /*#__PURE__*/ pathIcon('M18.41 16.59 13.82 12l4.59-4.59L17 6l-6 6 6 6zM6 6h2v12H6z');
 export const MdImage = /*#__PURE__*/ pathIcon(
   'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2M8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z',
 );
 export const MdInbox = /*#__PURE__*/ pathIcon(
   'M19 3H4.99c-1.11 0-1.98.89-1.98 2L3 19c0 1.1.88 2 1.99 2H19c1.1 0 2-.9 2-2V5a2 2 0 0 0-2-2m0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H4.99V5H19z',
 );
-export const MdLastPage = /*#__PURE__*/ pathIcon(
-  'M5.59 7.41 10.18 12l-4.59 4.59L7 18l6-6-6-6zM16 6h2v12h-2z',
-);
+export const MdLastPage = /*#__PURE__*/ pathIcon('M5.59 7.41 10.18 12l-4.59 4.59L7 18l6-6-6-6zM16 6h2v12h-2z');
 export const MdLock = /*#__PURE__*/ pathIcon(
   'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2m-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2m3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1z',
 );

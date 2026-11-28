@@ -144,8 +144,7 @@ export default function LottieIcon({
   }, [mode]);
 
   useEffect(() => {
-    if (motionTier('ambient') === 'standard')
-      animationRef.current?.setSpeed(1 / motionScale('ambient'));
+    if (motionTier('ambient') === 'standard') animationRef.current?.setSpeed(1 / motionScale('ambient'));
   }, [speed]);
 
   const ready = playback.ready && playback.loaded === shouldLoad && shouldLoad;
@@ -160,10 +159,7 @@ export default function LottieIcon({
       // decoration and must not be announced at all.
       {...(ariaLabel ? { role: 'img', 'aria-label': ariaLabel } : { 'aria-hidden': true })}
     >
-      <span
-        ref={hostRef}
-        className={cn('absolute inset-0 [&>svg]:h-full [&>svg]:w-full', !ready && 'invisible')}
-      />
+      <span ref={hostRef} className={cn('absolute inset-0 [&>svg]:h-full [&>svg]:w-full', !ready && 'invisible')} />
       {!ready && fallback}
     </span>
   );

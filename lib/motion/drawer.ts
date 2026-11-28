@@ -47,13 +47,7 @@ const DRAWER_FLICK_VELOCITY = 450;
  * and a revert left GSAP's resting transform (`translate3d(0,0,0)` with `translate:
  * none`) inline, so a closed drawer stood on screen, inert, until a reload.
  */
-export function useDrawerSwipe({
-  drawerRef,
-  scrimRef,
-  open,
-  onOpenChange,
-  enabled = true,
-}: DrawerSwipeOptions) {
+export function useDrawerSwipe({ drawerRef, scrimRef, open, onOpenChange, enabled = true }: DrawerSwipeOptions) {
   /* `open` and `onOpenChange` are read through refs rather than declared as
    * dependencies: `useGSAP` only tears its context down on unmount unless
    * `revertOnUpdate` is set, so a dependency flipping on every drawer toggle added a
@@ -179,10 +173,8 @@ export function useDrawerSwipe({
          * boolean endpoint snapped both of them home under the finger. */
         const pose = getComputedStyle(d);
         const translate = pose.translate.split(' ')[0];
-        const independentX =
-          (parseFloat(translate) || 0) * (translate.endsWith('%') ? width / 100 : 1);
-        const transformX =
-          pose.transform === 'none' ? 0 : new DOMMatrixReadOnly(pose.transform).m41;
+        const independentX = (parseFloat(translate) || 0) * (translate.endsWith('%') ? width / 100 : 1);
+        const transformX = pose.transform === 'none' ? 0 : new DOMMatrixReadOnly(pose.transform).m41;
         startOffset = gsap.utils.clamp(-width, 0, independentX + transformX);
         gsap.killTweensOf(d);
         const s = scrim();
@@ -233,19 +225,11 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        const spec = toOpen
-          ? spring('defaultSpatial', 'overlay')
-          : spring('fastEffects', 'overlay');
+        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         const scrimSpec = spring('defaultEffects', 'overlay');
 
         settling = toOpen;
-        springBoth(
-          d,
-          s,
-          { x: target, ...spec },
-          { opacity: toOpen ? 1 : 0, ...scrimSpec },
-          release,
-        );
+        springBoth(d, s, { x: target, ...spec }, { opacity: toOpen ? 1 : 0, ...scrimSpec }, release);
       });
 
       /* **Opened or closed from elsewhere while the gesture owns the panel** — Back (on a
@@ -273,9 +257,7 @@ export function useDrawerSwipe({
         settling = openNow;
         /* Opened or closed from elsewhere: the tap's pair — DefaultSpatial open (`openMotion`),
            FastEffects shut (`closeMotion`); the scrim on DefaultEffects. */
-        const spec = openNow
-          ? spring('defaultSpatial', 'overlay')
-          : spring('fastEffects', 'overlay');
+        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         springBoth(
           d,
           s,

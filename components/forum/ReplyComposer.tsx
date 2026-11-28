@@ -134,8 +134,7 @@ export default function ReplyComposer({
 
   /* Ctrl/⌘+Enter sends, as in every composer; plain Enter is a new paragraph. */
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.nativeEvent.isComposing)
-      return;
+    if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey) || event.nativeEvent.isComposing) return;
     event.preventDefault();
     void submit();
   };
@@ -167,9 +166,7 @@ export default function ReplyComposer({
               <MdReply size={ICON.dense} className="shrink-0" aria-hidden="true" />
               <p className="min-w-0 flex-1 truncate text-body-m">
                 回复 <span className="text-label-l-emphasized">{replyTo.username}</span>：
-                <span className="text-body-s">
-                  {bbcodeToPlainText(replyTo.content, { maxLength: 80 })}
-                </span>
+                <span className="text-body-s">{bbcodeToPlainText(replyTo.content, { maxLength: 80 })}</span>
               </p>
               <IconButton
                 variant="on-container"
@@ -202,12 +199,7 @@ export default function ReplyComposer({
             </p>
           )}
           <div className="flex justify-end">
-            <Button
-              variant="filled"
-              icon={<MdSend />}
-              loading={sending}
-              onClick={() => void submit()}
-            >
+            <Button variant="filled" icon={<MdSend />} loading={sending} onClick={() => void submit()}>
               发送回复
             </Button>
           </div>

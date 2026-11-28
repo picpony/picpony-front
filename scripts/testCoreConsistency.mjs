@@ -117,8 +117,7 @@ function videoPreviewHarness() {
       IntersectionObserver: Observer,
     },
   );
-  const activeSubscriptions = () =>
-    appearance.size + hero.size + document.count() + video.count() + connection.count();
+  const activeSubscriptions = () => appearance.size + hero.size + document.count() + video.count() + connection.count();
   return {
     state,
     document,
@@ -202,11 +201,7 @@ test('video preview guards exist only during a hover, and observe ancestor attri
   assert.equal(h.observers.length, 0);
   h.state.tier = 'standard';
   const stop = h.start();
-  assert.equal(
-    h.observers.length,
-    2,
-    'one ancestor observer and one visibility observer for the playing card',
-  );
+  assert.equal(h.observers.length, 2, 'one ancestor observer and one visibility observer for the playing card');
   assert.equal(h.observers[0].targets.length, 2);
   for (const { options } of h.observers[0].targets) {
     assert.equal(options.attributes, true);
@@ -228,11 +223,7 @@ test('a refused play releases the hover guard, and a previous pause cannot stop 
   assert.equal(h.activeSubscriptions(), 0);
   const stop = h.start();
   h.video.emit('pause');
-  assert.equal(
-    h.video.paused,
-    false,
-    'queued pause from the previous hover has no authority over new playback',
-  );
+  assert.equal(h.video.paused, false, 'queued pause from the previous hover has no authority over new playback');
   assert.ok(h.activeSubscriptions() > 0);
   stop();
   assert.equal(h.activeSubscriptions(), 0);
@@ -438,45 +429,23 @@ test('all date shapes accept backend timestamps and ISO offsets without corrupti
   assert.equal(format.formatDate('2026-09-14 09:26:00'), '2026/09/14');
   assert.equal(format.formatMonthDay('2026-09-14 09:26:00'), '09/14');
   assert.equal(format.formatClock('2026-09-14 09:26:00'), '09:26');
-  for (const name of [
-    'formatDateTime',
-    'formatShortDateTime',
-    'formatDate',
-    'formatMonthDay',
-    'formatCompactDate',
-  ]) {
+  for (const name of ['formatDateTime', 'formatShortDateTime', 'formatDate', 'formatMonthDay', 'formatCompactDate']) {
     assert.equal(format[name]('invalid date'), 'invalid date');
     assert.equal(format[name](new Date(NaN)), '');
   }
   /* Offset-less means Beijing; an explicit zone is taken as written and shown in Beijing. */
-  assert.equal(
-    format.parseBackendTime('2026-09-14 09:26:00').toISOString(),
-    '2026-09-14T01:26:00.000Z',
-  );
-  assert.equal(
-    format.parseBackendTime('2026-09-14T09:26:00').toISOString(),
-    '2026-09-14T01:26:00.000Z',
-  );
+  assert.equal(format.parseBackendTime('2026-09-14 09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14T09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
   assert.equal(format.parseBackendTime('2026-09-14').toISOString(), '2026-09-13T16:00:00.000Z');
-  assert.equal(
-    format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(),
-    '2026-09-14T01:26:00.000Z',
-  );
-  assert.equal(
-    format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(),
-    '2026-09-14T01:26:00.000Z',
-  );
-  assert.equal(
-    format.parseBackendTime('2026-11-23T14:29:37.837878+00:00').toISOString(),
-    '2026-11-23T14:29:37.837Z',
-  );
+  assert.equal(format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(format.parseBackendTime('2026-11-23T14:29:37.837878+00:00').toISOString(), '2026-11-23T14:29:37.837Z');
   assert.equal(format.formatDateTime('2026-09-14T01:26:00Z'), '2026/09/14 09:26');
   assert.equal(format.formatDateTime('2026-11-23T14:29:37.837878+00:00'), '2026/11/23 22:29');
   assert.equal(format.parseBackendTime(''), null);
   assert.equal(format.parseBackendTime('not a date'), null);
   assert.ok(
-    format.backendTimeValue('2026-09-14 09:26:00') <
-      format.backendTimeValue('2026-09-14T01:27:00Z'),
+    format.backendTimeValue('2026-09-14 09:26:00') < format.backendTimeValue('2026-09-14T01:27:00Z'),
     'a Beijing stamp and a UTC one sort on one clock',
   );
 
@@ -500,19 +469,9 @@ test('all date shapes accept backend timestamps and ISO offsets without corrupti
   assert.equal(format.formatRelativeTime('2026-09-14 08:36:00'), '3 小时前');
   assert.equal(format.formatRelativeTime('2026-09-12 11:00:00'), '2 天前');
   assert.equal(format.formatRelativeTime('2026-07-20 10:00:00'), '2026/07/20');
-  assert.equal(
-    format.formatRelativeTime('2026-09-14 12:05:00'),
-    '刚刚',
-    'a skewed future stamp is not negative',
-  );
-  assert.deepEqual(
-    { ...format.lastOnlineStatus('2026-09-14 11:57:00') },
-    { online: true, text: '在线' },
-  );
-  assert.deepEqual(
-    { ...format.lastOnlineStatus('2026-09-14 11:48:00') },
-    { online: false, text: '12 分钟前' },
-  );
+  assert.equal(format.formatRelativeTime('2026-09-14 12:05:00'), '刚刚', 'a skewed future stamp is not negative');
+  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:57:00') }, { online: true, text: '在线' });
+  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:48:00') }, { online: false, text: '12 分钟前' });
   assert.equal(format.formatLastOnline(new Date(now - 12 * 60_000).toISOString()), '12 分钟前');
   assert.equal(format.formatLastOnline('2020-01-01T00:00:00Z'), '2020/01/01');
   assert.equal(format.formatLastOnline('invalid date'), 'invalid date');
@@ -557,10 +516,7 @@ function stateHarness() {
       useMemo: (create) => create(),
       useEffect(callback, dependencies) {
         const index = cursor++;
-        if (
-          !slots[index] ||
-          dependencies.some((value, offset) => !Object.is(value, slots[index][offset]))
-        ) {
+        if (!slots[index] || dependencies.some((value, offset) => !Object.is(value, slots[index][offset]))) {
           slots[index] = dependencies;
           effects.push(() => {
             cleanups[index]?.();
@@ -612,17 +568,9 @@ test('paged reads retain rows only within their resource and explicit account/fi
   assert.equal(render().data, first, 'a page change keeps the list height');
   assert.equal(render().isPrevious, true, 'retained rows say they belong to another key');
   snapshots.set('2', { ...empty, error: new Error('Offline') });
-  assert.equal(
-    render().data,
-    first,
-    'failed next pages keep the previous answer with the new error',
-  );
+  assert.equal(render().data, first, 'failed next pages keep the previous answer with the new error');
   assert.equal(render().error.message, 'Offline');
-  assert.equal(
-    render().isPrevious,
-    true,
-    'a failed page turn is distinguishable from a loaded page',
-  );
+  assert.equal(render().isPrevious, true, 'a failed page turn is distinguishable from a loaded page');
   scope = 'first-user:developer';
   assert.equal(render().data, undefined, 'a filter change cannot retain the previous filter');
   scope = 'first-user:safe';
@@ -644,10 +592,7 @@ test('paged reads retain rows only within their resource and explicit account/fi
   scope = true;
   render();
   const otherResource = { ...source, peekKey: () => empty };
-  assert.equal(
-    harness.render(() => useResource(otherResource, { page }, { keepPrevious: true })).data,
-    undefined,
-  );
+  assert.equal(harness.render(() => useResource(otherResource, { page }, { keepPrevious: true })).data, undefined);
 });
 
 test('Derpi upload pagination restores separate user/filter pages on a live switch and a return visit', () => {
@@ -773,11 +718,7 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   tree = render();
   assert.equal(queries.at(-1).page, 1, 'the first safe read cannot inherit developer page 3');
   assert.equal(queries.at(-1).contentFilter, 'safe');
-  assert.equal(
-    find(tree, 'EmptyState'),
-    undefined,
-    'ten available uploads must not render as empty',
-  );
+  assert.equal(find(tree, 'EmptyState'), undefined, 'ten available uploads must not render as empty');
   assert.equal(find(tree, 'Pagination'), undefined, 'one page needs no pager');
 
   filter = 'developer';
@@ -789,30 +730,18 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   filter = 'developer';
   assert.equal(find(render(), 'Pagination').props.currentPage, 3);
   userId = 'second-user';
-  assert.equal(
-    find(render(), 'Pagination').props.currentPage,
-    1,
-    'another user owns another page history',
-  );
+  assert.equal(find(render(), 'Pagination').props.currentPage, 1, 'another user owns another page history');
   assert.equal(queries.at(-1).id, 43);
 
   userId = 'first-user';
   filter = 'safe';
   assert.equal(find(render(), 'Pagination').props.currentPage, 2);
   leave();
-  assert.equal(
-    find(render(), 'Pagination').props.currentPage,
-    2,
-    'a return visit restores the safe page',
-  );
+  assert.equal(find(render(), 'Pagination').props.currentPage, 2, 'a return visit restores the safe page');
   filter = 'developer';
   leave();
   tree = render();
-  assert.equal(
-    find(tree, 'Pagination').props.currentPage,
-    3,
-    'a return visit restores the developer page',
-  );
+  assert.equal(find(tree, 'Pagination').props.currentPage, 3, 'a return visit restores the developer page');
   assert.equal(queries.at(-1).page, 3);
   assert.equal(queries.at(-1).contentFilter, 'developer');
   assert.ok(find(tree, 'PageBack'), 'the page keeps its back affordance');
@@ -901,11 +830,7 @@ test('developer-mode writes preserve accepted settings after closing without upd
   assert.equal(statusSignal.aborted, true);
   requests[0].resolve({ active: true });
   await first;
-  assert.equal(
-    stored.get('developer'),
-    'true',
-    'the same account keeps its accepted setting after closing',
-  );
+  assert.equal(stored.get('developer'), 'true', 'the same account keeps its accepted setting after closing');
   assert.equal(notices.length, 0, 'closed forms cannot publish a success notice');
 
   // Start the failure case with the mode off on both sides.
@@ -1013,9 +938,7 @@ for (const kind of ['Image', 'Video']) {
       });
       tree.props.ref.current = target;
       const children = tree.props.children.filter(Boolean);
-      const preview = children.find(
-        (node) => node.props?.['data-image-detail-layer'] === 'preview',
-      );
+      const preview = children.find((node) => node.props?.['data-image-detail-layer'] === 'preview');
       const final = children.find((node) => node.props?.['data-image-detail-layer'] === 'final');
       const decoded = {
         currentSrc: 'final.png',
@@ -1081,21 +1004,12 @@ test('tag groups keep their distinct navigation actions and independent expansio
     '@/lib/tagCategories': {
       tagCategoryChip: (category) => category,
       ratingTagRank: (tag) => (tag === 'safe' ? 0 : tag === 'grimdark' ? 5 : -1),
-      ratingTagChip: (tag) =>
-        tag === 'safe' ? 'rating:green' : tag === 'grimdark' ? 'rating:purple' : undefined,
+      ratingTagChip: (tag) => (tag === 'safe' ? 'rating:green' : tag === 'grimdark' ? 'rating:purple' : undefined),
     },
     '@/lib/tagTranslations': { tagTranslationKey: (name) => name.toLowerCase() },
   });
   const tree = TagList({
-    tags: [
-      'artist:one & two',
-      'artist:second',
-      'oc:pony',
-      'oc:other',
-      'smile',
-      'safe',
-      'spoiler:omit',
-    ],
+    tags: ['artist:one & two', 'artist:second', 'oc:pony', 'oc:other', 'smile', 'safe', 'spoiler:omit'],
     visibleTagLimits: { imageId: 4, artists: 1, ocs: 1, regular: 1 },
     translations: { safe: '安全' },
     counts: { safe: 0 },
@@ -1112,20 +1026,14 @@ test('tag groups keep their distinct navigation actions and independent expansio
   const chips = collect(tree, 'Chip');
   assert.equal(chips.length, 3);
   chips.forEach((chip) => chip.props.onClick());
-  assert.equal(
-    new URL(pushes[0][0], 'https://app.invalid').searchParams.get('q'),
-    'artist:one & two',
-  );
+  assert.equal(new URL(pushes[0][0], 'https://app.invalid').searchParams.get('q'), 'artist:one & two');
   assert.equal(new URL(pushes[1][0], 'https://app.invalid').searchParams.get('q'), 'oc:pony');
   assert.deepEqual(selected, ['safe']);
   /* The glossary's name is shown, the real tag is named on demand, and the count sits outside the
      truncating label, so a long name cannot hide it. */
   const spans = collect(chips[2], 'span');
   assert.equal(spans.find((span) => span.props.className === 'truncate').props.children, '安全');
-  assert.equal(
-    spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children,
-    '0',
-  );
+  assert.equal(spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children, '0');
   assert.equal(chips[2].props.tip, 'safe');
   assert.equal(chips[2].props.colors, 'rating:green');
   assert.equal(chips[0].props.tip, undefined);
@@ -1311,11 +1219,7 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     assert.equal(lastMock.instances[0].options.autoplay, false);
     assert.deepEqual(lastMock.instances[0].events, [['goToAndStop', 266, true]]);
     const settled = renderLast();
-    assert.equal(
-      settled.props.children[1],
-      false,
-      `${tier} hides fallback once last frame is ready`,
-    );
+    assert.equal(settled.props.children[1], false, `${tier} hides fallback once last frame is ready`);
     assert.ok(!String(settled.props.children[0].props.className).includes('invisible'));
 
     // Switching back to standard replays without tearing down, and returning snaps back to the last frame.
@@ -1325,11 +1229,7 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     await lastHooks.flushEffects();
     assert.equal(lastMock.loads, 1, 'tier switch reuses the loaded instance');
     const playEvents = lastMock.instances[0].events.slice(1);
-    assert.ok(
-      playEvents.some(
-        ([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true,
-      ),
-    );
+    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
     assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
 
     state.tier = tier;
@@ -1413,11 +1313,7 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
     await hooks.flushEffects();
     assert.equal(mock.loads, 1);
     assert.equal(mock.instances[0].options.autoplay, false);
-    assert.deepEqual(
-      mock.instances[0].events,
-      [['goToAndStop', 139, true]],
-      `${scenario.name} stops on frame 139`,
-    );
+    assert.deepEqual(mock.instances[0].events, [['goToAndStop', 139, true]], `${scenario.name} stops on frame 139`);
 
     // Switching to standard + entrance plays; switching back snaps to the last frame.
     state.tier = 'standard';
@@ -1427,11 +1323,7 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
     await hooks.flushEffects();
     assert.equal(mock.loads, 1);
     const playEvents = mock.instances[0].events.slice(1);
-    assert.ok(
-      playEvents.some(
-        ([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true,
-      ),
-    );
+    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
     assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
 
     state.tier = scenario.tier;
@@ -1485,18 +1377,13 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
     const failTrace = extractTrace(FailingAbout, failHooks);
     const renderFail = () => {
       const node = failHooks.render(() => failTrace.type(failTrace.props));
-      if (node.props.children?.props?.ref)
-        node.props.children.props.ref.current = { tagName: 'DIV' };
+      if (node.props.children?.props?.ref) node.props.children.props.ref.current = { tagName: 'DIV' };
       return node;
     };
     renderFail();
     await failHooks.flushEffects();
     const fallbackTree = renderFail();
-    assert.equal(
-      fallbackTree.props.children.type,
-      'Logo',
-      `${scenario.name} falls back to Logo on load error`,
-    );
+    assert.equal(fallbackTree.props.children.type, 'Logo', `${scenario.name} falls back to Logo on load error`);
     failHooks.dispose();
   }
 

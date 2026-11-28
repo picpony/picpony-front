@@ -6,38 +6,20 @@ import { folderLabel, resolveDefaultFolder } from '@/lib/favorites';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { SKIP, useResource } from '@/lib/resource';
 import { profileFaveFolders, sessionUser, sharedFaveIds, userProfile } from '@/lib/resources';
-import {
-  changeSyncedSetting,
-  SYNCED_SETTINGS,
-  useSyncedSetting,
-  type SyncedValues,
-} from '@/lib/settingsSync';
+import { changeSyncedSetting, SYNCED_SETTINGS, useSyncedSetting, type SyncedValues } from '@/lib/settingsSync';
 
 /** Read through the registry at event time, rather than a dialog's older render. */
-export function readFavouriteSetting<K extends 'defaultFaveFolder' | 'publicFaveFolderIds'>(
-  id: K,
-): SyncedValues[K] {
+export function readFavouriteSetting<K extends 'defaultFaveFolder' | 'publicFaveFolderIds'>(id: K): SyncedValues[K] {
   return SYNCED_SETTINGS.find((entry) => entry.id === id)!.read() as SyncedValues[K];
 }
 
 /** The folder's live name; an expired choice is corrected only after this account's settings arrive. */
-export function useDefaultFaveFolder(
-  token: string | null,
-  folders: readonly FaveFolder[] | undefined,
-) {
+export function useDefaultFaveFolder(token: string | null, folders: readonly FaveFolder[] | undefined) {
   const stored = useSyncedSetting('defaultFaveFolder');
   const account = useResource(sessionUser, token ? { token } : SKIP);
-  const resolved = folders
-    ? resolveDefaultFolder(folders, stored)
-    : { ...stored, corrected: false };
+  const resolved = folders ? resolveDefaultFolder(folders, stored) : { ...stored, corrected: false };
   useEffect(() => {
-    if (
-      !token ||
-      !folders ||
-      !resolved.corrected ||
-      account.data?.kind !== 'ok' ||
-      !('settings' in account.data.user)
-    )
+    if (!token || !folders || !resolved.corrected || account.data?.kind !== 'ok' || !('settings' in account.data.user))
       return;
     if (readToken() !== token) return;
     changeSyncedSetting('defaultFaveFolder', { id: resolved.id, name: resolved.name });
@@ -58,8 +40,7 @@ function visibilityOf(user: ReturnType<typeof readUserInfo>) {
       settings = null;
     }
   }
-  const record =
-    settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
+  const record = settings && typeof settings === 'object' ? (settings as Record<string, unknown>) : {};
   return JSON.stringify([record.showFaves, record.publicFaveFolderIds]);
 }
 
@@ -89,12 +70,7 @@ function watchConfirmedVisibility() {
 }
 
 /** One folder's public choice, preserving changes made while a menu or a confirm was open. */
-export function setFolderPublic(
-  token: string,
-  folders: readonly FaveFolder[],
-  folderId: number,
-  on: boolean,
-) {
+export function setFolderPublic(token: string, folders: readonly FaveFolder[], folderId: number, on: boolean) {
   if (readToken() !== token) return;
   watchConfirmedVisibility();
   const current = readFavouriteSetting('publicFaveFolderIds') ?? folders.map((folder) => folder.id);
@@ -103,6 +79,5 @@ export function setFolderPublic(
 }
 
 export function setDefaultFaveFolder(token: string, folder: FaveFolder) {
-  if (readToken() === token)
-    changeSyncedSetting('defaultFaveFolder', { id: folder.id, name: folderLabel(folder) });
+  if (readToken() === token) changeSyncedSetting('defaultFaveFolder', { id: folder.id, name: folderLabel(folder) });
 }

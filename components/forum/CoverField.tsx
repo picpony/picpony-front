@@ -124,13 +124,7 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={preview} alt="封面" className="absolute inset-0 size-full object-cover" />
             ) : preview === null ? (
-              <FadeInImage
-                src={getAssetUrl(value)}
-                alt="封面"
-                fill
-                sizes="320px"
-                className="object-cover"
-              />
+              <FadeInImage src={getAssetUrl(value)} alt="封面" fill sizes="320px" className="object-cover" />
             ) : null}
           </div>
           <IconButton
@@ -158,9 +152,7 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
       <p
         id={helperId}
         role={error ? 'alert' : undefined}
-        className={
-          error ? 'mt-1 text-body-s text-error' : 'mt-1 text-body-s text-on-surface-variant'
-        }
+        className={error ? 'mt-1 text-body-s text-error' : 'mt-1 text-body-s text-on-surface-variant'}
       >
         {error ?? '最大 5 MB，超出时将自动压缩'}
       </p>

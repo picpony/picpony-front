@@ -150,9 +150,7 @@ export default function DetailVideo({
     const previewImg = previewImgRef.current;
     const ready = Boolean(
       (finalEl && finalEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !finalEl.error) ||
-      (previewVid &&
-        previewVid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-        !previewVid.error) ||
+      (previewVid && previewVid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !previewVid.error) ||
       (previewImg && previewImg.complete && previewImg.naturalWidth > 0),
     );
     if (ready) {
@@ -169,8 +167,7 @@ export default function DetailVideo({
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);
   const showFailure = finalFailed;
-  const showPlaceholder =
-    placeholderGone !== finalSrc && !finalFailed && !(heroActive && hasPreview);
+  const showPlaceholder = placeholderGone !== finalSrc && !finalFailed && !(heroActive && hasPreview);
 
   const cancelFinalReady = useCallback((owner?: HTMLVideoElement) => {
     const lease = finalFrameLeaseRef.current;
@@ -219,12 +216,7 @@ export default function DetailVideo({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onPreviewReadyRef.current;
-    if (
-      !readySurfaceId ||
-      !target ||
-      !callback ||
-      publishedPreviewSurfaceRef.current === readySurfaceId
-    ) {
+    if (!readySurfaceId || !target || !callback || publishedPreviewSurfaceRef.current === readySurfaceId) {
       return;
     }
     publishedPreviewSurfaceRef.current = readySurfaceId;
@@ -235,12 +227,7 @@ export default function DetailVideo({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onFinalReadyRef.current;
-    if (
-      !readySurfaceId ||
-      !target ||
-      !callback ||
-      publishedFinalSurfaceRef.current === readySurfaceId
-    ) {
+    if (!readySurfaceId || !target || !callback || publishedFinalSurfaceRef.current === readySurfaceId) {
       return;
     }
     publishedFinalSurfaceRef.current = readySurfaceId;

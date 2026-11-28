@@ -180,9 +180,7 @@ export default function StatusView({
 
   const shell = cn(
     'text-on-surface-variant',
-    fill
-      ? cn('flex flex-col items-center justify-center text-center', FILL_BOX)
-      : statusViewBox(size),
+    fill ? cn('flex flex-col items-center justify-center text-center', FILL_BOX) : statusViewBox(size),
     className,
   );
   /* Without its own entrance — in a pane, or standing down for the caller's swap — the shell is

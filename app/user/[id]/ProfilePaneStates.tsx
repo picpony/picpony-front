@@ -44,13 +44,7 @@ export function useVisited(active: boolean): boolean {
 
 /** A tab the owner hides from visitors — the original front end's sentence. */
 export function PaneHidden() {
-  return (
-    <EmptyState
-      size="pane"
-      icon={<MdVisibilityOff size={ICON.display} />}
-      title="该用户隐藏了该内容"
-    />
-  );
+  return <EmptyState size="pane" icon={<MdVisibilityOff size={ICON.display} />} title="该用户隐藏了该内容" />;
 }
 
 /** The owner's own view of a tab they hide from visitors: the content, and a line saying so. */
@@ -75,27 +69,11 @@ export function OwnerHiddenNote({ tab }: { tab: ProfileTab }) {
  * the server's own sentence, with no 重试 that could only get the same answer (R7-020). Anything
  * else is the failure preset with the error's sentence and 重试.
  */
-export function PaneFailure({
-  error,
-  title,
-  onRetry,
-}: {
-  error: unknown;
-  title: string;
-  onRetry: () => void;
-}) {
+export function PaneFailure({ error, title, onRetry }: { error: unknown; title: string; onRetry: () => void }) {
   if (!isRetryable(error)) {
-    return (
-      <EmptyState
-        size="pane"
-        icon={<MdBlock size={ICON.display} />}
-        title={apiErrorMessage(error)}
-      />
-    );
+    return <EmptyState size="pane" icon={<MdBlock size={ICON.display} />} title={apiErrorMessage(error)} />;
   }
-  return (
-    <ErrorRetry size="pane" title={title} message={apiErrorMessage(error)} onRetry={onRetry} />
-  );
+  return <ErrorRetry size="pane" title={title} message={apiErrorMessage(error)} onRetry={onRetry} />;
 }
 
 /** Placeholder while a profile's post or comment rows are unknown. */

@@ -28,8 +28,7 @@ import { registerPageFooter } from '@/lib/pageTransit';
 
 const HELD = 'data-page-held';
 /** A first-load placeholder that is not inside a concealed tab pane. */
-const PLACEHOLDER =
-  '[data-page-loading]:not([data-tab-pane]:not([data-tab-pane-active]) [data-page-loading])';
+const PLACEHOLDER = '[data-page-loading]:not([data-tab-pane]:not([data-tab-pane-active]) [data-page-loading])';
 
 /**
  * A ref callback for the page footer: watches the page it sits in for as long as it is mounted,

@@ -124,8 +124,7 @@ export class FlutedGlassTrail {
       this.advance(dt);
     }
     this.encode();
-    this.quiet =
-      !this.depositing() && this.peakDensity < REST_DENSITY && this.peakVelocity < REST_VELOCITY;
+    this.quiet = !this.depositing() && this.peakDensity < REST_DENSITY && this.peakVelocity < REST_VELOCITY;
     return true;
   }
 
@@ -169,8 +168,7 @@ export class FlutedGlassTrail {
         const c = density[(y0 + 1) * N + x0];
         const d = density[(y0 + 1) * N + x0 + 1];
         densityNext[cell] =
-          (a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy) *
-          densityKeep;
+          (a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy) * densityKeep;
       }
     }
 

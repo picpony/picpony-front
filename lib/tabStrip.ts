@@ -26,8 +26,7 @@ export const STRIP_MIN_LEG = 0.6;
 /** One leg: `p` from `from` to `to` over `duration` ms, launched at `launch` (normalised). */
 export type StripLeg = { from: number; to: number; duration: number; launch: number };
 
-const raw = (launch: number, t: number) =>
-  1 - (1 + (STRIP_RATE - launch) * t) * Math.exp(-STRIP_RATE * t);
+const raw = (launch: number, t: number) => 1 - (1 + (STRIP_RATE - launch) * t) * Math.exp(-STRIP_RATE * t);
 
 /** A leg's progress on `t ∈ [0, 1]`, normalised so it ends exactly at 1. */
 export function stripProgress(launch: number): (t: number) => number {
@@ -78,12 +77,7 @@ export function stripPose(leg: StripLeg, elapsed: number): { p: number; speed: n
  * a velocity-continuous turn does): the reader has just sent the strip the other way. `launch` is
  * a fresh tap's, for a caller on a clock of its own (the forum's container transform).
  */
-export function turnStrip(
-  leg: StripLeg,
-  elapsed: number,
-  full: number,
-  launch: number = STRIP_LAUNCH,
-): StripLeg {
+export function turnStrip(leg: StripLeg, elapsed: number, full: number, launch: number = STRIP_LAUNCH): StripLeg {
   const { p, speed } = stripPose(leg, elapsed);
   const to = leg.to === 1 ? 0 : 1;
   const remaining = Math.abs(to - p);

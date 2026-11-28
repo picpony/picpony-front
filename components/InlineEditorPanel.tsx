@@ -66,8 +66,7 @@ export function captureInlineEditorLayout(trigger: Element) {
   }
   const view = window.innerHeight;
   const tops = new Map<HTMLElement, number>();
-  for (const el of followersOf(row, { top: -view, bottom: view * 2 }))
-    tops.set(el, el.getBoundingClientRect().top);
+  for (const el of followersOf(row, { top: -view, bottom: view * 2 })) tops.set(el, el.getBoundingClientRect().top);
   pending = {
     editorId: trigger.getAttribute('aria-controls'),
     row,
@@ -86,8 +85,7 @@ export function captureInlineEditorLayout(trigger: Element) {
  */
 function takeCapture(panel: HTMLElement): Capture | null {
   const capture = pending;
-  if (!capture || (capture.editorId !== panel.id && capture.row !== panel.previousElementSibling))
-    return null;
+  if (!capture || (capture.editorId !== panel.id && capture.row !== panel.previousElementSibling)) return null;
   pending = null;
   return performance.now() - capture.at <= CAPTURE_TTL_MS ? capture : null;
 }
@@ -95,9 +93,8 @@ function takeCapture(panel: HTMLElement): Capture | null {
 /** Nearest scroll container: the dialog/sheet body when nested inside one, else the app scroller. */
 function scrollerOf(el: Element): HTMLElement | null {
   return (
-    (typeof el.closest === 'function'
-      ? el.closest<HTMLElement>('[data-app-scroll-container]')
-      : null) ?? getAppScroller()
+    (typeof el.closest === 'function' ? el.closest<HTMLElement>('[data-app-scroll-container]') : null) ??
+    getAppScroller()
   );
 }
 
@@ -248,9 +245,7 @@ export default function InlineEditorPanel({
       /* Closing takes the panel's controls away (it goes inert at once): focus that was inside
          returns to the control that opened it, rather than falling to the page. */
       if (panel.contains(document.activeElement)) {
-        const trigger = document.querySelector<HTMLElement>(
-          `[aria-controls="${CSS.escape(panel.id)}"]`,
-        );
+        const trigger = document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panel.id)}"]`);
         trigger?.focus({ preventScroll: true });
       }
       const run = turn(panel, surface, tier, previous ?? null, 'close');
@@ -330,10 +325,7 @@ function footprint(panel: HTMLElement) {
  * The panel is collapsed for the one read rather than hidden — a focused field inside it keeps its
  * box, so it keeps focus — and the scroll offset the read clamped is put back.
  */
-function layoutWithout(
-  panel: HTMLElement,
-  targets: HTMLElement[],
-): { tops: number[]; shift: number } {
+function layoutWithout(panel: HTMLElement, targets: HTMLElement[]): { tops: number[]; shift: number } {
   const scroller = scrollerOf(panel);
   const scrollTop = scroller?.scrollTop ?? 0;
   const { height, marginTop } = panel.style;
@@ -354,12 +346,7 @@ function layoutWithout(
  * opacity on the effects twin, which cannot overshoot). 减弱 fades the panel in and moves nothing —
  * the reflow is a long travel, which that tier drops; 关闭 appears outright.
  */
-function open(
-  panel: HTMLElement,
-  surface: HTMLElement,
-  tier: MotionTier,
-  capture: Capture | null,
-): Run {
+function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, capture: Capture | null): Run {
   const run: Run = { phase: 'open', own: [], moved: [], corner: null, landing: null };
   if (tier === 'off') return run;
   const corners = cornerRow(panel);
@@ -378,9 +365,7 @@ function open(
      pressed, where it is drawn with the panel taking no room — measured against where the layout
      has it now (its box less any move it is still drawn at, which the new move replaces). */
   const targets = followersOf(panel, { top: -distance, bottom: window.innerHeight + distance });
-  const before = targets.some((el) => !capture?.tops.has(el))
-    ? layoutWithout(panel, targets).tops
-    : null;
+  const before = targets.some((el) => !capture?.tops.has(el)) ? layoutWithout(panel, targets).tops : null;
   const offsets = targets.map((el, index) => {
     const drawn = el.getBoundingClientRect().top;
     return (capture?.tops.get(el) ?? before?.[index] ?? drawn) - (drawn - drawnOffsetY(el));
@@ -413,11 +398,7 @@ function open(
     }
     run.moved.push([
       el,
-      startMove(
-        el,
-        [{ transform: `translateY(${offsets[index]}px)` }, { transform: 'none' }],
-        spatial,
-      ),
+      startMove(el, [{ transform: `translateY(${offsets[index]}px)` }, { transform: 'none' }], spatial),
     ]);
   });
   return run;
@@ -458,9 +439,7 @@ function turn(
      the panel down by the page's shift. */
   const without = closing && tier === 'standard' ? layoutWithout(panel, moved) : null;
   const shift = without && without.shift >= 0.5 ? without.shift : 0;
-  const above = shift
-    ? precedersOf(panel, { top: -shift, bottom: view }).filter((el) => !moved.includes(el))
-    : [];
+  const above = shift ? precedersOf(panel, { top: -shift, bottom: view }).filter((el) => !moved.includes(el)) : [];
   const targets = [...moved, ...above];
   const panelPose = poseOf(panel);
   const surfacePose = poseOf(surface);
@@ -487,16 +466,9 @@ function turn(
         ...springTiming('fastEffects', 'list'),
         fill: closing ? 'forwards' : 'auto',
       };
-      run.own.push(
-        panel.animate([{ opacity: panelPose.opacity }, { opacity: closing ? 0 : 1 }], fade),
-      );
+      run.own.push(panel.animate([{ opacity: panelPose.opacity }, { opacity: closing ? 0 : 1 }], fade));
       if (corners && cornerFrom)
-        run.corner = cornerTrack(
-          corners.row,
-          cornerFrom,
-          closing ? corners.end : corners.seam,
-          fade,
-        );
+        run.corner = cornerTrack(corners.row, cornerFrom, closing ? corners.end : corners.seam, fade);
     }
     return run;
   }
@@ -514,18 +486,12 @@ function turn(
       ],
       timing,
     ),
-    surface.animate(
-      [{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }],
-      timing,
-    ),
+    surface.animate([{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }], timing),
   );
   content.forEach((child, index) => {
     run.own.push(
       child.animate(
-        [
-          { translate: contentPoses[index].translate },
-          { translate: closing ? `0 ${-CONTENT_TRAVEL}px` : 'none' },
-        ],
+        [{ translate: contentPoses[index].translate }, { translate: closing ? `0 ${-CONTENT_TRAVEL}px` : 'none' }],
         timing,
       ),
       child.animate([{ opacity: contentPoses[index].opacity }, { opacity: closing ? 0 : 1 }], fade),

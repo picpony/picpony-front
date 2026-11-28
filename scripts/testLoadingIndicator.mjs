@@ -52,10 +52,7 @@ test('all seven M3E indicator shapes build valid closed cubic rings inside the 1
     }
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
-    assert.ok(
-      Math.abs(cx - 50) < 2 && Math.abs(cy - 50) < 2,
-      `shape ${s} is centred near (50, 50)`,
-    );
+    assert.ok(Math.abs(cx - 50) < 2 && Math.abs(cy - 50) < 2, `shape ${s} is centred near (50, 50)`);
   }
 });
 
@@ -73,21 +70,12 @@ test('standard morph spring overshoots organically while reduced stays criticall
     standardPeak > 1.05 && standardPeak < 1.15,
     `standard overshoot matches ζ=0.6 (${standardPeak.toFixed(4)})`,
   );
-  assert.ok(
-    reducedPeak <= 1.0001,
-    `reduced motion must never overshoot (${reducedPeak.toFixed(4)})`,
-  );
+  assert.ok(reducedPeak <= 1.0001, `reduced motion must never overshoot (${reducedPeak.toFixed(4)})`);
 
   const standardEnd = indicator.loadingSpringProgress(indicator.MORPH_INTERVAL_MS, false);
   const reducedEnd = indicator.loadingSpringProgress(indicator.MORPH_INTERVAL_MS, true);
-  assert.ok(
-    Math.abs(standardEnd - 1) < 0.01,
-    `standard settles at 650 ms (${standardEnd.toFixed(4)})`,
-  );
-  assert.ok(
-    Math.abs(reducedEnd - 1) < 0.01,
-    `reduced settles at 650 ms (${reducedEnd.toFixed(4)})`,
-  );
+  assert.ok(Math.abs(standardEnd - 1) < 0.01, `standard settles at 650 ms (${standardEnd.toFixed(4)})`);
+  assert.ok(Math.abs(reducedEnd - 1) < 0.01, `reduced settles at 650 ms (${reducedEnd.toFixed(4)})`);
 });
 
 test('sampled frames stay within the 0..100 viewBox through spring overshoot across all seven transitions', () => {
@@ -97,14 +85,8 @@ test('sampled frames stay within the 0..100 viewBox through spring overshoot acr
   );
   for (let step = 0; step < indicator.LOADING_SHAPE_COUNT; step += 1) {
     for (let offset = 0; offset <= indicator.MORPH_INTERVAL_MS; offset += 65) {
-      const frame = indicator.sampleLoadingFrame(
-        step * indicator.MORPH_INTERVAL_MS + offset,
-        false,
-      );
-      assert.match(
-        frame.path,
-        /^M[\d.-]+ [\d.-]+(?:C[\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+)+Z$/,
-      );
+      const frame = indicator.sampleLoadingFrame(step * indicator.MORPH_INTERVAL_MS + offset, false);
+      assert.match(frame.path, /^M[\d.-]+ [\d.-]+(?:C[\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+)+Z$/);
       assert.ok(frame.rotationDeg >= 0 && frame.rotationDeg < 360);
       const nums = frame.path.match(/-?\d+(?:\.\d+)?/g).map(Number);
       for (const n of nums) {
@@ -235,10 +217,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
     rafCallbacks.delete(id1);
     cb1(now);
     const midTransform = groupEl.getAttribute('transform');
-    assert.ok(
-      midTransform && midTransform !== 'rotate(0.0 50 50)',
-      `animated rotation advanced (${midTransform})`,
-    );
+    assert.ok(midTransform && midTransform !== 'rotate(0.0 50 50)', `animated rotation advanced (${midTransform})`);
 
     // 3. Same-commit handoff (< 120 ms gap) preserves phase seamlessly.
     unsub1();
@@ -247,10 +226,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
     const groupEl2 = new FakeElement({}, appRoot);
     const unsub2 = indicator.subscribeLoadingIndicator({ path: pathEl2, group: groupEl2 });
     const handoffTransform = groupEl2.getAttribute('transform');
-    assert.ok(
-      handoffTransform && handoffTransform !== 'rotate(0.0 50 50)',
-      `handoff kept phase (${handoffTransform})`,
-    );
+    assert.ok(handoffTransform && handoffTransform !== 'rotate(0.0 50 50)', `handoff kept phase (${handoffTransform})`);
 
     // 4. Opening an overlay sets `inert` on [data-app-root]: rAF stops; closing clears `inert`
     // even after > 120 ms and resumes from the paused morph phase without snapping back to 0°.
@@ -316,11 +292,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
       active: 0,
       running: false,
     });
-    assert.equal(
-      rafCallbacks.size,
-      0,
-      'dropping last active subscriber stops rAF even with dormant sibling',
-    );
+    assert.equal(rafCallbacks.size, 0, 'dropping last active subscriber stops rAF even with dormant sibling');
 
     // After > 120 ms idle (with dormant subscriber still mounted), a fresh active indicator starts cleanly at 0°.
     now = 5000;
@@ -343,11 +315,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
     globalThis.document.hidden = false;
     listeners.get('visibilitychange')?.();
     assert.equal(indicator.getLoadingIndicatorStats().running, true);
-    assert.equal(
-      bgGroup.getAttribute('transform'),
-      'rotate(0.0 50 50)',
-      'returning to tab starts freshly at 0°',
-    );
+    assert.equal(bgGroup.getAttribute('transform'), 'rotate(0.0 50 50)', 'returning to tab starts freshly at 0°');
     unsubBg();
 
     // 8. Pooled scroll-root IntersectionObserver pauses off-screen targets via `data-m3e-offscreen`
@@ -399,11 +367,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
       assert.equal(ioInstances.length, 1, 'siblings under one scroll root share a single observer');
       assert.equal(ioInstances[0].opts.root, scroller);
       assert.equal(hostA.hasAttribute('data-m3e-offscreen'), true);
-      assert.equal(
-        indicator.getLoadingIndicatorStats().running,
-        false,
-        'off-screen cards do not spin rAF',
-      );
+      assert.equal(indicator.getLoadingIndicatorStats().running, false, 'off-screen cards do not spin rAF');
 
       // Scroll brings hostA into view: wakes immediately and clears data-m3e-offscreen.
       now = 15000;
@@ -439,11 +403,7 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
         liveTransform,
         'observed handoff pre-paints live phase on frame 0',
       );
-      assert.equal(
-        hostC.hasAttribute('data-m3e-offscreen'),
-        true,
-        'still waits for IO before marking inView',
-      );
+      assert.equal(hostC.hasAttribute('data-m3e-offscreen'), true, 'still waits for IO before marking inView');
       unsubC();
 
       // Scrolling hostA back out pauses rAF and restores data-m3e-offscreen.
@@ -456,18 +416,10 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
       });
 
       unsubA();
-      assert.equal(
-        hostA.hasAttribute('data-m3e-offscreen'),
-        false,
-        'unsubscribe cleans up offscreen attribute',
-      );
+      assert.equal(hostA.hasAttribute('data-m3e-offscreen'), false, 'unsubscribe cleans up offscreen attribute');
       assert.equal(ioInstances[0].disconnected, false);
       unsubB();
-      assert.equal(
-        ioInstances[0].disconnected,
-        true,
-        'last unsubscribe disconnects pooled observer',
-      );
+      assert.equal(ioInstances[0].disconnected, true, 'last unsubscribe disconnects pooled observer');
     } finally {
       globalThis.IntersectionObserver = prevIO;
     }
@@ -501,11 +453,7 @@ function loadComponent(file, imports) {
   const mod = { exports: {} };
   const resolve = (specifier) => {
     if (specifier in imports) return imports[specifier];
-    if (
-      specifier === 'react' ||
-      specifier.startsWith('react/') ||
-      specifier.startsWith('react-compiler-runtime')
-    ) {
+    if (specifier === 'react' || specifier.startsWith('react/') || specifier.startsWith('react-compiler-runtime')) {
       return require(specifier);
     }
     throw new Error(`${file} imports ${specifier}, which this test does not provide`);
@@ -547,14 +495,8 @@ test('LoadingIndicator, MediaLoadingPlaceholder and PageLoadingIndicator honour 
   assert.match(mediaHtml, /aria-hidden="true"/);
   assert.match(mediaHtml, /data-indicator-responsive="default"/);
   const indicatorClass = mediaHtml.match(/class="([^"]*m3e-loading-indicator[^"]*)"/)?.[1] ?? '';
-  assert.ok(
-    indicatorClass.includes('media-loading-responsive'),
-    'uses 2D container-query responsive sizing',
-  );
-  assert.ok(
-    !/(?:^|\s)inline-flex(?:\s|$)/.test(indicatorClass),
-    'no competing unconditional inline-flex',
-  );
+  assert.ok(indicatorClass.includes('media-loading-responsive'), 'uses 2D container-query responsive sizing');
+  assert.ok(!/(?:^|\s)inline-flex(?:\s|$)/.test(indicatorClass), 'no competing unconditional inline-flex');
   assert.ok(!/(?:^|\s)size-10(?:\s|$)/.test(indicatorClass), 'no competing unconditional size-10');
 
   // Explicit-size MediaLoadingPlaceholder omits `media-loading-placeholder` (`container-type: size`).
@@ -565,9 +507,7 @@ test('LoadingIndicator, MediaLoadingPlaceholder and PageLoadingIndicator honour 
   assert.match(fixedMediaHtml, /\bsize-12\b/);
 
   // Quiet MediaLoadingPlaceholder renders only the neutral plate (no SVG glyph or size containment).
-  const quietHtml = renderToStaticMarkup(
-    React.createElement(MediaLoadingPlaceholder, { quiet: true }),
-  );
+  const quietHtml = renderToStaticMarkup(React.createElement(MediaLoadingPlaceholder, { quiet: true }));
   assert.match(quietHtml, /data-loading-placeholder=""/);
   assert.doesNotMatch(quietHtml, /media-loading-placeholder/);
   assert.doesNotMatch(quietHtml, /<svg/);
@@ -585,9 +525,7 @@ test('LoadingIndicator, MediaLoadingPlaceholder and PageLoadingIndicator honour 
   assert.match(settledHtml, /m3e-loading-paused/);
 
   // Settled MediaLoadingPlaceholder without instantHide uses split dismissal class and scales down gently.
-  const smoothSettledHtml = renderToStaticMarkup(
-    React.createElement(MediaLoadingPlaceholder, { settled: true }),
-  );
+  const smoothSettledHtml = renderToStaticMarkup(React.createElement(MediaLoadingPlaceholder, { settled: true }));
   assert.match(smoothSettledHtml, /m3e-loading-dismiss/);
   assert.match(smoothSettledHtml, /scale-90/);
   assert.match(smoothSettledHtml, /opacity-0/);

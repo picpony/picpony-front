@@ -30,10 +30,7 @@ import AboutFrame, { ROSTER_GRID, TeamCard, TeamSkeleton } from './AboutFrame';
 
 /* Module scope: the React Compiler does not lower a dynamic `import()` inside a component. */
 const loadTrace = () =>
-  Promise.all([
-    loadLottiePlayer(),
-    import('@/lib/lottie/logoNonParallel.json').then((m) => m.default),
-  ]);
+  Promise.all([loadLottiePlayer(), import('@/lib/lottie/logoNonParallel.json').then((m) => m.default)]);
 
 /** The Lottie composition's own frame, so the reserved box matches what lands. */
 const TRACE_ASPECT = '3000 / 1053';
@@ -172,11 +169,7 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
      press. The guide stays a pointer gesture by design — an easter egg — so it has no keyboard
      path; giving it a real entry point is the owner's call. */
   return (
-    <div
-      className={`select-none ${MARK_WIDTH}`}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={handleClick}
-    >
+    <div className={`select-none ${MARK_WIDTH}`} onMouseDown={(e) => e.preventDefault()} onClick={handleClick}>
       <div
         ref={hostRef}
         role="img"
@@ -207,9 +200,7 @@ function resolveMemberAvatar(m: Pick<TeamMember, 'account_avatar' | 'avatar_url'
  * `link_url` — which the backend only accepts as an http(s) page address (`team::link`), opened
  * in a new tab. `null`: no link.
  */
-function resolveMemberLink(
-  m: Pick<TeamMember, 'user_id' | 'link_url'>,
-): { href: string; external: boolean } | null {
+function resolveMemberLink(m: Pick<TeamMember, 'user_id' | 'link_url'>): { href: string; external: boolean } | null {
   if (m.user_id !== null && m.user_id > 0) return { href: `/user/${m.user_id}`, external: false };
   return /^https?:\/\//i.test(m.link_url) ? { href: m.link_url, external: true } : null;
 }
@@ -250,9 +241,7 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
         />
       )}
 
-      {!loading && !error && groups.length === 0 && (
-        <EmptyState size="inline" title="暂无团队成员" />
-      )}
+      {!loading && !error && groups.length === 0 && <EmptyState size="inline" title="暂无团队成员" />}
 
       {!loading && !error && groups.length > 0 && (
         <div className="space-y-5">
@@ -273,31 +262,18 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                             whole text still in `title`. A long Latin handle breaks inside the
                             word rather than overflowing; the grid stretches every cell in a row to
                             the tallest and each centres on its avatar, so the avatars stay level. */}
-                        <p
-                          className="line-clamp-2 wrap-anywhere text-label-l text-on-surface"
-                          title={m.name}
-                        >
+                        <p className="line-clamp-2 wrap-anywhere text-label-l text-on-surface" title={m.name}>
                           {m.name}
                         </p>
                         {/* One line, its whole text in `title` (D1-008): wrapped in a narrow cell,
                             a role left one character on a line of its own (「小马维基数据支 / 持」). */}
-                        <p
-                          className="mt-0.5 truncate text-body-s text-on-surface-variant"
-                          title={m.role}
-                        >
+                        <p className="mt-0.5 truncate text-body-s text-on-surface-variant" title={m.role}>
                           {m.role}
                         </p>
                       </div>
                       {link && (
-                        <span
-                          className="shrink-0 text-on-surface-variant [&>svg]:block"
-                          aria-hidden="true"
-                        >
-                          {link.external ? (
-                            <MdOpenInNew size={ICON.dense} />
-                          ) : (
-                            <MdChevronRight size={ICON.dense} />
-                          )}
+                        <span className="shrink-0 text-on-surface-variant [&>svg]:block" aria-hidden="true">
+                          {link.external ? <MdOpenInNew size={ICON.dense} /> : <MdChevronRight size={ICON.dense} />}
                         </span>
                       )}
                     </>
@@ -318,13 +294,7 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                       {inner}
                     </a>
                   ) : link ? (
-                    <Link
-                      scroll={false}
-                      key={m.id}
-                      href={link.href}
-                      data-ripple
-                      className={rowLink}
-                    >
+                    <Link scroll={false} key={m.id} href={link.href} data-ripple className={rowLink}>
                       {inner}
                     </Link>
                   ) : (

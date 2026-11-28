@@ -186,12 +186,7 @@ const detailOf = (user) => ({
 /** What `adminUpdateUser` answers: the parts it saved. */
 const updated = (applied = ['资料']) => ({ applied, login_required: false });
 const plainOf = (value) => JSON.parse(JSON.stringify(value));
-function fixture(
-  file,
-  api = {},
-  initialData = {},
-  { expose = '', expand = [], modules = {} } = {},
-) {
+function fixture(file, api = {}, initialData = {}, { expose = '', expand = [], modules = {} } = {}) {
   const hooks = harness();
   const session = { token: 'account-A' };
   const toasts = [];
@@ -259,9 +254,7 @@ function fixture(
       userProfile: {
         name: 'user-profile',
         read: (args) =>
-          api.userProfileRead
-            ? api.userProfileRead(args)
-            : Promise.resolve(data['user-profile'] ?? null),
+          api.userProfileRead ? api.userProfileRead(args) : Promise.resolve(data['user-profile'] ?? null),
       },
       translateSwitch: {
         name: 'translate-switch',
@@ -306,24 +299,11 @@ function fixture(
   dependencies['./team'] = load('components/admin/team.ts', dependencies);
   dependencies['./shop'] = load('components/admin/shop.ts', dependencies);
   dependencies['./sharedQueries'] = load('components/admin/sharedQueries.ts', dependencies);
-  dependencies['./ColorField'] = dependencies['../ColorField'] = load(
-    'components/admin/ColorField.tsx',
-    dependencies,
-  );
-  dependencies['./rules'] = dependencies['./users/rules'] = load(
-    'components/admin/users/rules.ts',
-    dependencies,
-  );
+  dependencies['./ColorField'] = dependencies['../ColorField'] = load('components/admin/ColorField.tsx', dependencies);
+  dependencies['./rules'] = dependencies['./users/rules'] = load('components/admin/users/rules.ts', dependencies);
   dependencies['./users/UserEditor'] = load('components/admin/users/UserEditor.tsx', dependencies);
   /* The glossary's parts import their siblings one directory down. */
-  for (const name of [
-    'useAdminMutation',
-    'useSettled',
-    'queries',
-    'AdminForm',
-    'SectionHeader',
-    'paging',
-  ]) {
+  for (const name of ['useAdminMutation', 'useSettled', 'queries', 'AdminForm', 'SectionHeader', 'paging']) {
     if (dependencies[`./${name}`]) dependencies[`../${name}`] = dependencies[`./${name}`];
   }
   dependencies['./model'] = load('components/admin/glossary/model.ts', dependencies);
@@ -349,9 +329,7 @@ function fixture(
     subject: loaded.subject,
     useMutation: dependencies['./useAdminMutation'].useAdminMutation,
     render: () =>
-      hooks.render(() =>
-        expandTree(Component({ token: session.token, ...viewer, openTab: () => {} }), expand),
-      ),
+      hooks.render(() => expandTree(Component({ token: session.token, ...viewer, openTab: () => {} }), expand)),
   };
 }
 
@@ -374,10 +352,7 @@ const input = (tree, key, value) =>
       node.props[key] === value,
   );
 const button = (tree, label) =>
-  find(
-    tree,
-    (node) => node.type === '@/components/Button:default' && node.props.children === label,
-  );
+  find(tree, (node) => node.type === '@/components/Button:default' && node.props.children === label);
 const modal = (tree, title) =>
   find(tree, (node) => node.type === '@/components/Modal:default' && node.props.title === title);
 const change = (node, value) => node.props.onChange({ target: { value } });
@@ -396,17 +371,10 @@ const adminForm = (tree, label) =>
       (label === undefined ||
         node.props['aria-label'] === label ||
         (node.props['aria-labelledby'] &&
-          find(
-            node,
-            (child) =>
-              child.props?.id === node.props['aria-labelledby'] && child.props.children === label,
-          ))),
+          find(node, (child) => child.props?.id === node.props['aria-labelledby'] && child.props.children === label))),
   );
 const iconButton = (tree, label) =>
-  find(
-    tree,
-    (node) => node.type === '@/components/IconButton:default' && node.props['aria-label'] === label,
-  );
+  find(tree, (node) => node.type === '@/components/IconButton:default' && node.props['aria-label'] === label);
 
 test('admin reads and writes surface the backend sentence; there is no envelope left to check', async () => {
   const fx = fixture();
@@ -422,23 +390,16 @@ test('admin reads and writes surface the backend sentence; there is no envelope 
   });
   assert.equal(refusal.message, '内容已被修改，请刷新后重试');
   assert.equal(refusal.retryable, true);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(fx.queries.retryError('用户列表加载失败', refusal.message))),
-    { title: '用户列表加载失败', message: '内容已被修改，请刷新后重试' },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', '用户列表加载失败'))),
-    { error: '用户列表加载失败' },
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', undefined))),
-    {},
-  );
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.retryError('用户列表加载失败', refusal.message))), {
+    title: '用户列表加载失败',
+    message: '内容已被修改，请刷新后重试',
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', '用户列表加载失败'))), {
+    error: '用户列表加载失败',
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(fx.queries.tableError('用户列表加载失败', undefined))), {});
   /* A forbidden read is not offered 重试. */
-  assert.equal(
-    new ApiError('http', { status: 403, serverMessage: '需要管理员权限' }).retryable,
-    false,
-  );
+  assert.equal(new ApiError('http', { status: 403, serverMessage: '需要管理员权限' }).retryable, false);
 });
 
 test('mutation locks immediately, recovers after failure and ignores account/unmount continuations', async () => {
@@ -635,10 +596,7 @@ test('the wealth dialog refuses an empty change and a deduction below zero witho
     'nothing to change is said in the dialog',
   );
 
-  const op = find(
-    dialog(),
-    (node) => node.type === '@/components/Select:default' && node.props.label === '操作',
-  );
+  const op = find(dialog(), (node) => node.type === '@/components/Select:default' && node.props.label === '操作');
   op.props.onChange('sub');
   change(input(dialog(), 'label', '数值'), '30');
   change(input(dialog(), 'label', '扣除金币的原因'), '违规');
@@ -681,16 +639,13 @@ test('renaming a filtered user keeps the closing editor mounted until exit compl
   );
   let tree = fx.render();
   fx.hooks.effects();
-  const search = () =>
-    find(fx.render(), (node) => node.type === '@/components/SearchInput:default');
+  const search = () => find(fx.render(), (node) => node.type === '@/components/SearchInput:default');
   search().props.onChange('Alice');
   tree = fx.render();
   await iconButton(actionCell(tree, user), '编辑用户 Alice').props.onClick({ currentTarget: {} });
   const editor = () => {
     const table = byType(fx.render(), 'DataTable');
-    return expandTree(table.props.expandedRow(table.props.rows.find((row) => row.id === 7)), [
-      'UserEditor',
-    ]);
+    return expandTree(table.props.expandedRow(table.props.rows.find((row) => row.id === 7)), ['UserEditor']);
   };
   assert.equal(
     input(editor(), 'id', 'users-inline-7-password').props.autoComplete,
@@ -704,11 +659,7 @@ test('renaming a filtered user keeps the closing editor mounted until exit compl
     { username: 'Bob' },
     'a save sends what changed, never the untouched fields',
   );
-  assert.equal(
-    requests[0].account.account_revision,
-    3,
-    'the write names the revision the editor read',
-  );
+  assert.equal(requests[0].account.account_revision, 3, 'the write names the revision the editor read');
   requests[0].resolve(updated());
   await settle();
   assert.deepEqual(
@@ -736,11 +687,7 @@ test('renaming a filtered user keeps the closing editor mounted until exit compl
   assert.equal(expandTree(closing, ['UserEditor']).props.id, 'users-inline-7-editor');
 
   closing.props.onExitComplete();
-  assert.equal(
-    byType(fx.render(), 'DataTable').props.rows.length,
-    0,
-    'the old-name filter applies after exit',
-  );
+  assert.equal(byType(fx.render(), 'DataTable').props.rows.length, 0, 'the old-name filter applies after exit');
   search().props.onChange('');
   tree = fx.render();
   assert.equal(byType(tree, 'DataTable').props.rows.length, 2);
@@ -785,15 +732,8 @@ test('the user editor validates what changed and sends nothing for an untouched 
     const table = byType(fx.render(), 'DataTable');
     return expandTree(table.props.expandedRow(user), ['UserEditor']);
   };
-  const gender = find(
-    editor(),
-    (node) => node.type === '@/components/Select:default' && node.props.label === '性别',
-  );
-  assert.equal(
-    gender.props.value,
-    '男',
-    "the old admin editor's spelling opens as the vocabulary users write",
-  );
+  const gender = find(editor(), (node) => node.type === '@/components/Select:default' && node.props.label === '性别');
+  assert.equal(gender.props.value, '男', "the old admin editor's spelling opens as the vocabulary users write");
 
   adminForm(editor()).props.onSubmit();
   assert.equal(requests.length, 0, 'an untouched form is not a request');
@@ -806,10 +746,7 @@ test('the user editor validates what changed and sends nothing for an untouched 
   change(input(editor(), 'id', 'users-inline-7-password'), 'short');
   adminForm(editor()).props.onSubmit();
   assert.equal(requests.length, 0);
-  assert.ok(
-    input(editor(), 'id', 'users-inline-7-email').props.error,
-    'the address is refused on its own field',
-  );
+  assert.ok(input(editor(), 'id', 'users-inline-7-email').props.error, 'the address is refused on its own field');
   assert.ok(input(editor(), 'id', 'users-inline-7-password').props.error, 'so is the password');
   fx.hooks.dispose();
 });
@@ -890,10 +827,7 @@ test('notification failure retains the broadcast draft and HTTP errors cannot an
   let tree = fx.render();
   fx.hooks.effects();
   const audience = (value) =>
-    find(
-      fx.render(),
-      (node) => node.type === '@/components/Radio:default' && node.props.value === value,
-    );
+    find(fx.render(), (node) => node.type === '@/components/Radio:default' && node.props.value === value);
   assert.equal(audience('all').props.checked, false, 'a broadcast is never the default audience');
   assert.equal(audience('user').props.checked, false);
   change(input(fx.render(), 'label', '通知标题'), ' 标题 ');
@@ -965,18 +899,13 @@ test('a notification to one user names the recipient in its confirm and sends th
   await new Promise((resolve) => setTimeout(resolve, 450));
   const field = input(fx.render(), 'label', '接收用户 ID');
   assert.equal(field.props.helper, '将发送给「小马」');
-  assert.equal(
-    fx.reads.filter((read) => read.name === 'user-profile' && read.args !== SKIP).at(-1).args.id,
-    '42',
-  );
+  assert.equal(fx.reads.filter((read) => read.name === 'user-profile' && read.args !== SKIP).at(-1).args.id, '42');
   change(input(fx.render(), 'label', '通知标题'), '审核通过');
   change(
     find(fx.render(), (node) => node.type === '@/components/Input:Textarea'),
     '您的稿件已通过',
   );
-  find(fx.render(), (node) => node.type === '@/components/ToggleSwitch:default').props.onChange(
-    true,
-  );
+  find(fx.render(), (node) => node.type === '@/components/ToggleSwitch:default').props.onChange(true);
   adminForm(fx.render()).props.onSubmit();
   assert.deepEqual(fx.asked.at(-1), {
     title: '确认发送通知',
@@ -1042,13 +971,8 @@ test('a badge grant sends the award body, and the link list is read only once it
   );
   const header = () => find(fx.render(), (node) => node.type === './SectionHeader:default');
   assert.equal(header().props.onRefresh, undefined, 'no refresh that would refresh nothing');
-  const linkTable = () =>
-    find(fx.render(), (node) => node.type === '@/components/DataTable:default');
-  assert.equal(
-    linkTable().props.loading,
-    true,
-    'an unopened link list is its skeleton, never 暂无领取链接',
-  );
+  const linkTable = () => find(fx.render(), (node) => node.type === '@/components/DataTable:default');
+  assert.equal(linkTable().props.loading, true, 'an unopened link list is its skeleton, never 暂无领取链接');
 
   const grant = () => adminForm(fx.render(), '授予徽章');
   change(input(grant(), 'label', '徽章名称'), ' 元老 ');
@@ -1084,11 +1008,7 @@ test('a badge grant sends the award body, and the link list is read only once it
   change(input(grant(), 'label', '注册截止日期'), '2025-06-30');
   change(input(grant(), 'label', '到期日期'), '2026-12-31');
   grant().props.onSubmit();
-  assert.equal(
-    fx.asked.at(-1).tone,
-    'danger',
-    'a grant to everyone registered in a window is a wide action',
-  );
+  assert.equal(fx.asked.at(-1).tone, 'danger', 'a grant to everyone registered in a window is a wide action');
   assert.deepEqual(plainOf(grants.at(-1)), {
     name: '周年',
     color: '#f1c40f',
@@ -1106,11 +1026,7 @@ test('a badge grant sends the award body, and the link list is read only once it
   const expiry = linkTable()
     .props.columns.find((column) => column.key === 'expiry')
     .render(row);
-  assert.equal(
-    expiry.props.children,
-    '链接：永久 · 徽章：2026/12/31',
-    'both expiries are spelled out',
-  );
+  assert.equal(expiry.props.children, '链接：永久 · 徽章：2026/12/31', 'both expiries are spelled out');
   const state = linkTable()
     .props.columns.find((column) => column.key === 'state')
     .render(row);
@@ -1133,11 +1049,7 @@ test('a badge grant sends the award body, and the link list is read only once it
     'unset dates and messages are left out',
   );
   await settle();
-  assert.deepEqual(
-    fx.refreshes.slice(refreshesBefore),
-    ['admin-badge-links'],
-    'a new link is read back into the list',
-  );
+  assert.deepEqual(fx.refreshes.slice(refreshesBefore), ['admin-badge-links'], 'a new link is read back into the list');
   fx.hooks.dispose();
 });
 
@@ -1156,8 +1068,7 @@ test('message audit waits for an explicit query, isolates accounts and forwards 
     undefined,
     'before a query there is nothing to refresh — the header read the whole site once',
   );
-  const searchForm = () =>
-    find(fx.render(), (node) => node.type === 'form' && node.props.role === 'search');
+  const searchForm = () => find(fx.render(), (node) => node.type === 'form' && node.props.role === 'search');
   change(input(tree, 'aria-label', '审计用户 ID'), 'x');
   searchForm().props.onSubmit({ preventDefault() {} });
   assert.equal(fx.reads.at(-1).args, SKIP, 'a malformed id reads nothing');
@@ -1179,10 +1090,7 @@ test('message audit waits for an explicit query, isolates accounts and forwards 
   fx.session.token = 'account-B';
   fx.render();
   assert.equal(fx.reads.at(-1).args, SKIP);
-  await assert.rejects(
-    resource.fetch({ token: 'account-A', userId: 8 }, controller.signal),
-    /登录状态/,
-  );
+  await assert.rejects(resource.fetch({ token: 'account-A', userId: 8 }, controller.signal), /登录状态/);
   assert.equal(calls.length, 1);
 });
 
@@ -1213,8 +1121,7 @@ test('report locks survive filtering a pending row out and back in, while other 
   let tree = fx.render();
   fx.hooks.effects();
   const first = button(actionCell(tree, reports[0]), '处理').props.onClick();
-  const search = () =>
-    find(fx.render(), (node) => node.type === '@/components/SearchInput:default');
+  const search = () => find(fx.render(), (node) => node.type === '@/components/SearchInput:default');
   search().props.onChange('2');
   tree = fx.render();
   assert.equal(byType(tree, 'DataTable').props.rows.length, 1);
@@ -1267,11 +1174,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
   assert.equal(profileReads[0].args.id, '5');
   assert.equal(button(form(), '导入资料').props.loading, true);
   change(input(form(), 'label', '成员姓名'), '手动输入');
-  assert.equal(
-    button(form(), '导入资料').props.loading,
-    false,
-    'typing over the import makes it obsolete',
-  );
+  assert.equal(button(form(), '导入资料').props.loading, false, 'typing over the import makes it obsolete');
   profileReads[0].resolve({ id: 5, username: '旧查询', avatar: 'old.png', role: 'admin' });
   await settle();
   assert.equal(input(form(), 'label', '成员姓名').props.value, '手动输入');
@@ -1283,10 +1186,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
   assert.equal(input(form(), 'label', '成员姓名').props.value, '小明');
   assert.equal(input(form(), 'label', '头衔').props.value, '管理员');
   assert.equal(
-    find(
-      form(),
-      (node) => node.type === '@/components/Select:default' && node.props.label === '栏目',
-    ).props.value,
+    find(form(), (node) => node.type === '@/components/Select:default' && node.props.label === '栏目').props.value,
     'manager',
   );
   assert.equal(
@@ -1303,10 +1203,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
     role: 'admin',
   });
   await settle();
-  assert.equal(
-    input(form(), 'label', '备用头像链接').props.value,
-    'https://cdn.picpony.test/a.png',
-  );
+  assert.equal(input(form(), 'label', '备用头像链接').props.value, 'https://cdn.picpony.test/a.png');
   profileReads.splice(2, 1);
 
   change(input(form(), 'label', '关联站内用户 ID'), '99');
@@ -1323,11 +1220,7 @@ test('team import fills the form from the account, and an obsolete answer cannot
   fx.hooks.dispose();
   profileReads[3].reject(new Error('late failure'));
   await settle();
-  assert.equal(
-    fx.toasts.length,
-    2,
-    'a form that has gone says nothing (the two toasts are the two imports)',
-  );
+  assert.equal(fx.toasts.length, 2, 'a form that has gone says nothing (the two toasts are the two imports)');
 });
 
 test('a team save refreshes the public roster after leaving its editor but cannot affect another account', async () => {
@@ -1407,23 +1300,15 @@ test('a member is edited under its row; binding an account links the card, an ex
   await iconButton(actionCell(fx.render(), member), '编辑成员 老成员').props.onClick({
     currentTarget: {},
   });
-  const editor = () =>
-    expandTree(byType(fx.render(), 'DataTable').props.expandedRow(member), ['TeamMemberForm']);
+  const editor = () => expandTree(byType(fx.render(), 'DataTable').props.expandedRow(member), ['TeamMemberForm']);
   assert.equal(editor().props.id, 'team-inline-3-editor');
   change(input(editor(), 'label', '排序号'), '1.5');
   adminForm(editor()).props.onSubmit();
   assert.equal(payloads.length, 0);
-  assert.equal(
-    input(editor(), 'label', '排序号').props.error,
-    '排序号须为 -2147483648～2147483647 的整数',
-  );
+  assert.equal(input(editor(), 'label', '排序号').props.error, '排序号须为 -2147483648～2147483647 的整数');
   change(input(editor(), 'label', '排序号'), '-1');
   adminForm(editor()).props.onSubmit();
-  assert.equal(
-    payloads.at(-1).link_url,
-    'https://example.test/me',
-    'no account bound: the stored link is kept',
-  );
+  assert.equal(payloads.at(-1).link_url, 'https://example.test/me', 'no account bound: the stored link is kept');
   assert.equal(payloads.at(-1).order_num, -1);
   await settle();
 
@@ -1509,11 +1394,7 @@ test('a shop item is refused on its own fields, saved with the item body, and ed
   assert.equal(targets[0], undefined);
   await settle();
   assert.deepEqual(fx.toasts.at(-1), ['已添加商品「头像框」', 'success']);
-  assert.deepEqual(
-    fx.refreshes,
-    ['admin-shop', 'shop-items'],
-    'the shop page reads its list again too',
-  );
+  assert.deepEqual(fx.refreshes, ['admin-shop', 'shop-items'], 'the shop page reads its list again too');
 
   const price = byType(fx.render(), 'DataTable')
     .props.columns.find((column) => column.key === 'price')
@@ -1522,8 +1403,7 @@ test('a shop item is refused on its own fields, saved with the item body, and ed
   await iconButton(actionCell(fx.render(), item), '编辑商品 改名卡').props.onClick({
     currentTarget: {},
   });
-  const editor = () =>
-    expandTree(byType(fx.render(), 'DataTable').props.expandedRow(item), ['ShopItemForm']);
+  const editor = () => expandTree(byType(fx.render(), 'DataTable').props.expandedRow(item), ['ShopItemForm']);
   find(editor(), (node) => node.type === '@/components/Checkbox:default').props.onChange(false);
   adminForm(editor()).props.onSubmit();
   assert.deepEqual(plainOf(payloads.at(-1)), {
@@ -1610,11 +1490,7 @@ test('a new tag is checked against the dictionary, and a confirmed save clears t
   dialog(fx.render(), 'CreateTagDialog').props.onSave(form);
   await settle();
   assert.equal(saves.length, 0, 'a tag the dictionary holds is not written again');
-  assert.equal(
-    dialog(fx.render(), 'CreateTagDialog').props.duplicate,
-    'missing-tag',
-    'and the field says so',
-  );
+  assert.equal(dialog(fx.render(), 'CreateTagDialog').props.duplicate, 'missing-tag', 'and the field says so');
 
   exists = false;
   dialog(fx.render(), 'CreateTagDialog').props.onSave(form);
@@ -1680,16 +1556,8 @@ test('an edit carries the row flags through, writes an untranslated name as empt
   assert.equal(saves.length, 1);
   assert.equal(saves[0].revision, 1, 'an edit names the revision the row was read at');
   assert.equal(editor().props.closing, true);
-  assert.equal(
-    fx.data['admin-dictionary'].tags[0].cn,
-    '未翻译',
-    'the row shows what was saved at once',
-  );
-  assert.equal(
-    fx.data['admin-dictionary'].tags[0].revision,
-    2,
-    'with the revision the save answered',
-  );
+  assert.equal(fx.data['admin-dictionary'].tags[0].cn, '未翻译', 'the row shows what was saved at once');
+  assert.equal(fx.data['admin-dictionary'].tags[0].revision, 2, 'with the revision the save answered');
   const before = fx.refreshes.filter((name) => name === 'admin-dictionary').length;
   editor().props.onExitComplete();
   assert.equal(
@@ -1715,39 +1583,28 @@ test('the editor sends the tag body: the restricted mark kept, no translation is
   };
   const form = model.tagFormOf(tag);
   assert.equal(form.translations, '', '未翻译 is no translation, not a name');
-  assert.deepEqual(
-    plainOf(model.tagSavePayload({ ...form, translations: '小马，马 , 小马' }, tag)),
-    {
-      en: 'pony',
-      cn: '小马',
-      aliases: ['马'],
-      cat: 'species',
-      count: 5,
-      description: '',
-      restricted: true,
-      id: 7,
-      revision: 4,
-    },
-  );
+  assert.deepEqual(plainOf(model.tagSavePayload({ ...form, translations: '小马，马 , 小马' }, tag)), {
+    en: 'pony',
+    cn: '小马',
+    aliases: ['马'],
+    cat: 'species',
+    count: 5,
+    description: '',
+    restricted: true,
+    id: 7,
+    revision: 4,
+  });
   assert.equal(model.tagSavePayload(form, tag).cn, '未翻译', 'the backend refuses an empty cn');
   assert.equal(
     model.exportText([tag, { ...tag, en: 'zebra', cn: '斑马', aliases: ['马'] }]),
     '# pony =\nzebra = 斑马, 马',
   );
   assert.deepEqual(
-    JSON.parse(
-      JSON.stringify(
-        model.parseImport(model.exportText([{ ...tag, cn: '小马', aliases: ['马'] }])).tasks,
-      ),
-    ),
+    JSON.parse(JSON.stringify(model.parseImport(model.exportText([{ ...tag, cn: '小马', aliases: ['马'] }])).tasks)),
     [{ en: 'pony', cn: '小马', aliases: ['马'], cat: 'general', count: 0, description: '' }],
     'an export imports again',
   );
-  assert.equal(
-    model.historyTime('2026-09-30 16:30:00'),
-    '2026/10/01 00:30',
-    'history times are UTC',
-  );
+  assert.equal(model.historyTime('2026-09-30 16:30:00'), '2026/10/01 00:30', 'history times are UTC');
   assert.equal(model.pageSizeOf('150'), 150);
   assert.equal(model.pageSizeOf('15'), 100);
 });
@@ -1790,16 +1647,8 @@ for (const operation of ['import', 'delete', 'sync']) {
         'it names what it deletes (review P6-O7)',
       );
       await settle();
-      assert.deepEqual(
-        JSON.parse(JSON.stringify(writes)),
-        [[[1, 2]]],
-        'one request names every id',
-      );
-      assert.equal(
-        button(fx.render(), '批量删除（2）'),
-        undefined,
-        'the selection is gone with the rows',
-      );
+      assert.deepEqual(JSON.parse(JSON.stringify(writes)), [[[1, 2]]], 'one request names every id');
+      assert.equal(button(fx.render(), '批量删除（2）'), undefined, 'the selection is gone with the rows');
     } else {
       dialog(tree, 'SyncDialog').props.onFinished({
         created: 2,
@@ -1820,11 +1669,7 @@ for (const operation of ['import', 'delete', 'sync']) {
 
 test('a bulk write confirmed after leaving the glossary still invalidates lookup caches', async () => {
   const response = deferred();
-  const fx = fixture(
-    'glossary/GlossaryTab',
-    { batchImportDictionaryTags: () => response.promise },
-    glossaryData(),
-  );
+  const fx = fixture('glossary/GlossaryTab', { batchImportDictionaryTags: () => response.promise }, glossaryData());
   const tree = await openGlossary(fx);
   dialog(tree, 'BatchImportDialog').props.onImport([
     { en: 'new-tag', cn: '新词', aliases: [], cat: 'general', count: 0, description: '' },
@@ -1854,18 +1699,11 @@ test('handling a feedback opens its tag under its row, and saving the tag closes
   await openGlossary(fx);
   const feedback = feedbackRow(31, 'TAG-2', '缺少翻译\n建议的正确翻译：标签二');
   dialog(fx.render(), 'FeedbackDialog').props.onHandle(feedback);
-  assert.equal(
-    find(fx.render(), (node) => node.type === '@/components/SearchInput:default').props.value,
-    'TAG-2',
-  );
+  assert.equal(find(fx.render(), (node) => node.type === '@/components/SearchInput:default').props.value, 'TAG-2');
   fx.hooks.effects();
   await new Promise((resolve) => setTimeout(resolve, 450));
   const editor = byType(fx.render(), 'DataTable').props.expandedRow(glossaryTags[1]);
-  assert.equal(
-    editor?.type.name,
-    'TagEditor',
-    'the filtered list opens the tag the feedback names',
-  );
+  assert.equal(editor?.type.name, 'TagEditor', 'the filtered list opens the tag the feedback names');
   assert.equal(editor.props.workOrder.id, 31);
   editor.props.onSave({
     id: 2,
@@ -1879,11 +1717,7 @@ test('handling a feedback opens its tag under its row, and saving the tag closes
     restricted: true,
   });
   await settle();
-  assert.deepEqual(
-    plainOf(handled),
-    [[31, 'processed']],
-    'the status alone: the backend keeps no handling note',
-  );
+  assert.deepEqual(plainOf(handled), [[31, 'processed']], 'the status alone: the backend keeps no handling note');
   assert.ok(fx.refreshes.includes('admin-tag-feedback'), 'the queue reads again');
   fx.hooks.dispose();
 });
@@ -1899,9 +1733,7 @@ test('a malformed admin list fails its own tab with a named message, never the w
     return source.stats;
   };
   const names = fx.queries.derived((source) => source.rows.map((row) => row.username));
-  const broken = fx.hooks.render(() =>
-    fx.queries.useAdminSelect(resource, fx.session.token, strict),
-  );
+  const broken = fx.hooks.render(() => fx.queries.useAdminSelect(resource, fx.session.token, strict));
   assert.equal(broken.data, undefined);
   assert.equal(broken.error, '统计加载失败');
   assert.equal(broken.loading, false, 'a failed view is not a skeleton forever');
@@ -1957,14 +1789,7 @@ test('role choices preserve current values and restrict self, administrator and 
   );
   const initial = rules.initialUserForm({ id: 5, username: 'Name', role: 'user', gender: 'male' });
   assert.equal(initial.gender, '男');
-  assert.equal(
-    rules.userUpdatePayload(
-      { id: 5, username: 'Name', role: 'user', gender: 'male' },
-      initial,
-      true,
-    ),
-    null,
-  );
+  assert.equal(rules.userUpdatePayload({ id: 5, username: 'Name', role: 'user', gender: 'male' }, initial, true), null);
 });
 
 test('a long unpaged response renders one page and resets pagination when its filter changes', () => {
@@ -2001,9 +1826,7 @@ test('glossary bulk toasts say each count that is not zero, and a partial import
     {
       batchImportDictionaryTags: async () => {
         imports.push(1);
-        return imports.length === 1
-          ? { created: 2, skipped: 1, failed: 1 }
-          : { created: 1, skipped: 0, failed: 0 };
+        return imports.length === 1 ? { created: 2, skipped: 1, failed: 1 } : { created: 1, skipped: 0, failed: 0 };
       },
     },
     glossaryData(),
@@ -2024,10 +1847,7 @@ test('glossary bulk toasts say each count that is not zero, and a partial import
   assert.equal(dialog(fx.render(), 'BatchImportDialog').props.open, true);
   dialog(fx.render(), 'BatchImportDialog').props.onImport([task]);
   await settle();
-  assert.deepEqual(fx.toasts.at(-1), [
-    '已导入 2 个标签，跳过 1 个已有的标签，1 个导入失败',
-    'warning',
-  ]);
+  assert.deepEqual(fx.toasts.at(-1), ['已导入 2 个标签，跳过 1 个已有的标签，1 个导入失败', 'warning']);
   assert.equal(
     dialog(fx.render(), 'BatchImportDialog').props.open,
     true,
@@ -2086,11 +1906,7 @@ test('review P6-F2: a feedback closes only when its own tag is saved, never on a
 
   /* Nor does adding an unrelated tag through 添加新标签. */
   button(fx.render(), '添加新标签').props.onClick();
-  assert.equal(
-    dialog(fx.render(), 'CreateTagDialog').props.workOrder,
-    null,
-    'an unprefilled add is not the feedback',
-  );
+  assert.equal(dialog(fx.render(), 'CreateTagDialog').props.workOrder, null, 'an unprefilled add is not the feedback');
   dialog(fx.render(), 'CreateTagDialog').props.onSave({
     en: 'other-tag',
     translations: '别的',
@@ -2179,14 +1995,8 @@ test('review P6-F4: the user editor holds a changed API key to the shared 20-cha
   await iconButton(actionCell(fx2.render(), user), '编辑用户 Alice').props.onClick({
     currentTarget: {},
   });
-  const editor2 = () =>
-    expandTree(byType(fx2.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
-  for (const bad of [
-    'abcdefghij+lmnopqrst',
-    'abcdefghij.lmnopqrst',
-    'short',
-    'abcdefghijklmnopqrstu',
-  ]) {
+  const editor2 = () => expandTree(byType(fx2.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
+  for (const bad of ['abcdefghij+lmnopqrst', 'abcdefghij.lmnopqrst', 'short', 'abcdefghijklmnopqrstu']) {
     change(input(editor2(), 'id', 'users-inline-7-api-key'), bad);
     adminForm(editor2()).props.onSubmit();
     assert.equal(requests.length, 0, `${bad} is refused before sending`);
@@ -2214,13 +2024,10 @@ test('review P6-F4: the user editor holds a changed API key to the shared 20-cha
   await iconButton(actionCell(fx3.render(), user), '编辑用户 Alice').props.onClick({
     currentTarget: {},
   });
-  const editor3 = () =>
-    expandTree(byType(fx3.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
+  const editor3 = () => expandTree(byType(fx3.render(), 'DataTable').props.expandedRow(user), ['UserEditor']);
   find(
     editor3(),
-    (node) =>
-      node.type === '@/components/Checkbox:default' &&
-      node.props.label === '解除该用户的 API Key 绑定',
+    (node) => node.type === '@/components/Checkbox:default' && node.props.label === '解除该用户的 API Key 绑定',
   ).props.onChange(true);
   adminForm(editor3()).props.onSubmit();
   assert.deepEqual(plainOf(requests), [{ apiKey: null }]);
@@ -2250,8 +2057,7 @@ test('review P6-F5: a server-paged list moves off a page it no longer has', asyn
       },
     },
   );
-  const reads = () =>
-    fx.reads.filter((read) => read.name === 'admin-notifications' && read.args !== SKIP);
+  const reads = () => fx.reads.filter((read) => read.name === 'admin-notifications' && read.args !== SKIP);
   fx.render();
   fx.hooks.effects();
   const pager = () => find(fx.render(), (node) => node.type?.name === 'AdminPager');
@@ -2286,8 +2092,7 @@ test('review P6-F5: a server-paged list moves off a page it no longer has', asyn
     },
     { expose: 'FeedbackDialog' },
   );
-  const feedbackReads = () =>
-    feedback.reads.filter((read) => read.name === 'admin-tag-feedback' && read.args !== SKIP);
+  const feedbackReads = () => feedback.reads.filter((read) => read.name === 'admin-tag-feedback' && read.args !== SKIP);
   const render = () =>
     feedback.hooks.render(() =>
       feedback.subject({ open: true, token: feedback.session.token, onClose() {}, onHandle() {} }),
@@ -2368,11 +2173,7 @@ test('review P6-F8: adding or deducting zero coins is refused; setting zero is a
   fx.hooks.effects();
   button(actionCell(fx.render(), user), '修改资产').props.onClick();
   const dialog = () => modal(fx.render(), '修改资产 · 测试用户');
-  const op = () =>
-    find(
-      dialog(),
-      (node) => node.type === '@/components/Select:default' && node.props.label === '操作',
-    );
+  const op = () => find(dialog(), (node) => node.type === '@/components/Select:default' && node.props.label === '操作');
   for (const [value, label] of [
     ['add', '增加金币的原因'],
     ['sub', '扣除金币的原因'],

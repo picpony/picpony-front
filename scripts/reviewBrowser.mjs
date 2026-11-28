@@ -146,9 +146,7 @@ const upstream = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   if (url.pathname === '/__review_fixture') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(
-      JSON.stringify(fixture(url.searchParams.get('url'), url.searchParams.get('method') ?? 'GET')),
-    );
+    res.end(JSON.stringify(fixture(url.searchParams.get('url'), url.searchParams.get('method') ?? 'GET')));
     return;
   }
   const result = fixture(url.href, req.method);
@@ -180,21 +178,17 @@ try {
   const fixtureUrl = `http://127.0.0.1:${upstream.address().port}`;
   const port = await availablePort();
   const base = `http://127.0.0.1:${port}`;
-  server = spawn(
-    process.execPath,
-    [path.join(root, 'node_modules/next/dist/bin/next'), 'start', '-p', String(port)],
-    {
-      cwd: root,
-      windowsHide: true,
-      stdio: ['ignore', 'ignore', 'pipe'],
-      env: {
-        ...process.env,
-        PICPONY_UPSTREAM_ORIGIN: fixtureUrl,
-        PICPONY_DERPI_ORIGIN: `${fixtureUrl}/api/v1/json`,
-        PICPONY_SERVER_MEMO_TTL_MS: '0',
-      },
+  server = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'start', '-p', String(port)], {
+    cwd: root,
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'pipe'],
+    env: {
+      ...process.env,
+      PICPONY_UPSTREAM_ORIGIN: fixtureUrl,
+      PICPONY_DERPI_ORIGIN: `${fixtureUrl}/api/v1/json`,
+      PICPONY_SERVER_MEMO_TTL_MS: '0',
     },
-  );
+  });
   let serverError = '';
   server.stderr.on('data', (chunk) => {
     serverError = (serverError + chunk).slice(-5000);

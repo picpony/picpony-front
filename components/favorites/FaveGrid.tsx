@@ -6,19 +6,10 @@ import { SKIP, useResource } from '@/lib/resource';
 import { favePictures, useBrowsingFingerprint } from '@/lib/resources';
 import { getBrowsingSettings, readHiddenTags } from '@/lib/api/client';
 import { currentBlockFilters, currentPublicBlacklist } from '@/lib/blockFilters';
-import {
-  clearImageSequence,
-  createPagedSequence,
-  type ImageSequenceSource,
-} from '@/lib/imageSequence';
+import { clearImageSequence, createPagedSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { useListReveal } from '@/lib/listReveal';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import {
-  FAVE_PAGE_SIZE,
-  withheldSentence,
-  withholdFromDevice,
-  type FilteredPage,
-} from '@/lib/favorites';
+import { FAVE_PAGE_SIZE, withheldSentence, withholdFromDevice, type FilteredPage } from '@/lib/favorites';
 import type { FolderSeedCover } from '@/lib/folderTransit';
 import type { PonyImage } from '@/lib/types/image';
 import MasonryGrid, { type GridSelection } from '@/components/MasonryGrid';
@@ -49,8 +40,7 @@ export function useDeviceRules() {
   return useMemo(
     () => ({
       fp,
-      withhold: (found: readonly PonyImage[], asked: readonly number[]) =>
-        withholdNow(found, asked),
+      withhold: (found: readonly PonyImage[], asked: readonly number[]) => withholdNow(found, asked),
     }),
     [fp],
   );
@@ -113,10 +103,7 @@ export function useFavePage({
 }): FavePageState {
   const rules = useDeviceRules();
   const totalPages = Math.max(1, Math.ceil((ids?.length ?? 0) / FAVE_PAGE_SIZE));
-  const pageIds = useMemo(
-    () => ids?.slice((page - 1) * FAVE_PAGE_SIZE, page * FAVE_PAGE_SIZE) ?? [],
-    [ids, page],
-  );
+  const pageIds = useMemo(() => ids?.slice((page - 1) * FAVE_PAGE_SIZE, page * FAVE_PAGE_SIZE) ?? [], [ids, page]);
   const read = useResource(favePictures, pageIds.length > 0 ? { ids: pageIds } : SKIP, {
     keepPrevious: listKey,
   });
@@ -154,10 +141,7 @@ export function useFavePage({
     },
     [ids],
   );
-  const readPage = useCallback(
-    async (target: number) => (await pageOf(target)).map((image) => image.id),
-    [pageOf],
-  );
+  const readPage = useCallback(async (target: number) => (await pageOf(target)).map((image) => image.id), [pageOf]);
   const reveal = useListReveal(readPage, page, setPage, () => paneOf(listKey));
 
   const shownImages = shown?.images;
@@ -249,10 +233,7 @@ export function useLocalFavePage({
     },
     [images, rules],
   );
-  const readPage = useCallback(
-    async (target: number) => pageOf(target).map((image) => image.id),
-    [pageOf],
-  );
+  const readPage = useCallback(async (target: number) => pageOf(target).map((image) => image.id), [pageOf]);
   const reveal = useListReveal(readPage, page, setPage, () => paneOf(listKey));
 
   const shownImages = shown?.images;
@@ -360,16 +341,8 @@ export function FaveGridView({
       );
     }
     const count =
-      placeholderCount && placeholderCount > 0
-        ? Math.min(FAVE_PAGE_SIZE, placeholderCount)
-        : FAVE_PAGE_SIZE;
-    return (
-      <ImageGridSkeleton
-        count={count}
-        entrance={entrance}
-        seedCover={page === 1 ? seedCover : undefined}
-      />
-    );
+      placeholderCount && placeholderCount > 0 ? Math.min(FAVE_PAGE_SIZE, placeholderCount) : FAVE_PAGE_SIZE;
+    return <ImageGridSkeleton count={count} entrance={entrance} seedCover={page === 1 ? seedCover : undefined} />;
   }
 
   /* A failed read the screen owes an answer for: a turn whose rows are still another page's, or a
@@ -401,9 +374,7 @@ export function FaveGridView({
           ref={setRows}
           /* The paging dim, for a turn only (M1-001): dimmed on every read, a removal blinked
              the whole grid while it re-read the page underneath the rows it already showed. */
-          className={`transition-opacity spring-default-effects ${
-            turning ? 'paging-dim' : 'opacity-100'
-          }`}
+          className={`transition-opacity spring-default-effects ${turning ? 'paging-dim' : 'opacity-100'}`}
         >
           <MasonryGrid
             images={shown.images}

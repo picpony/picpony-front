@@ -54,11 +54,7 @@ export { canAnimateImageHero, prepareImageHero, warmImageHero, warmImageHeroSour
 // --- Intents -------------------------------------------------------------
 
 /** A press on a card: pre-mount its Stage for the click that may follow (`armOpen`). */
-export function armImageHeroOpen(
-  snapshot: ImageHeroSnapshot,
-  source: HTMLElement,
-  pointerType?: string,
-) {
+export function armImageHeroOpen(snapshot: ImageHeroSnapshot, source: HTMLElement, pointerType?: string) {
   return imageHeroController.armOpen(snapshot, source, pointerType);
 }
 
@@ -108,11 +104,7 @@ export function markImageHeroRouteResolvedWithoutMedia(surfaceId: string) {
   imageHeroController.markRouteResolvedWithoutMedia(surfaceId);
 }
 
-export function bindImageHeroDismissGesture(
-  surfaceId: string,
-  canStart: () => boolean,
-  navigation: HeroNavigation,
-) {
+export function bindImageHeroDismissGesture(surfaceId: string, canStart: () => boolean, navigation: HeroNavigation) {
   return imageHeroController.bindRouteDismiss(surfaceId, canStart, navigation);
 }
 

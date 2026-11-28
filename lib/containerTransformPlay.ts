@@ -262,9 +262,7 @@ const columnOf = (a: Box, b: Box) => (sameColumn(a, b) ? { left: a.left, width: 
 
 /** Whether a chain built for one column carries a pair needing the other. */
 const sameShape = (a: Chain['column'], b: Chain['column']) =>
-  a === null || b === null
-    ? a === b
-    : Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;
+  a === null || b === null ? a === b : Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;
 
 /** The clip chain for the pair `a` → `b` (`shutterLevels`), corners at `radii`, under `parent`. */
 function buildChain(parent: HTMLElement, a: Box, b: Box, radii: Radii): Chain {
@@ -378,8 +376,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
 
   type Shift = { x: number; y: number };
   type SharedPose = { box: Box; radii: Radii; img: Box };
-  let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null =
-    null;
+  let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null = null;
   let sharedEnds: { a: SharedPose; b: SharedPose } | null = null;
   let outSlotOffset: Shift | null = null;
   let inSlotOffset: Shift | null = null;
@@ -390,18 +387,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     const sharedFromBox = local(run.shared.from.box);
     const sharedToBox = local(run.shared.to.box);
     const ratio = Number.isFinite(run.shared.ratio) && run.shared.ratio > 0 ? run.shared.ratio : 1;
-    const fromImg = coverImageRect(
-      sharedFromBox.width,
-      sharedFromBox.height,
-      ratio,
-      run.shared.from.anchorY ?? 0.5,
-    );
-    const toImg = coverImageRect(
-      sharedToBox.width,
-      sharedToBox.height,
-      ratio,
-      run.shared.to.anchorY ?? 0.5,
-    );
+    const fromImg = coverImageRect(sharedFromBox.width, sharedFromBox.height, ratio, run.shared.from.anchorY ?? 0.5);
+    const toImg = coverImageRect(sharedToBox.width, sharedToBox.height, ratio, run.shared.to.anchorY ?? 0.5);
     const baseW = Math.max(fromImg.width, toImg.width, 1);
     const baseH = baseW / ratio;
     const sharedChain = buildChain(layer, sharedFromBox, sharedToBox, run.shared.from.radii);
@@ -498,19 +485,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     x: a.x + (b.x - a.x) * p,
     y: a.y + (b.y - a.y) * p,
   });
-  const animateShift = (
-    el: HTMLElement,
-    a: Shift,
-    b: Shift,
-    timing: KeyframeAnimationOptions,
-    list: Animation[],
-  ) => {
-    if (
-      Math.abs(a.x) <= 0.01 &&
-      Math.abs(a.y) <= 0.01 &&
-      Math.abs(b.x) <= 0.01 &&
-      Math.abs(b.y) <= 0.01
-    ) {
+  const animateShift = (el: HTMLElement, a: Shift, b: Shift, timing: KeyframeAnimationOptions, list: Animation[]) => {
+    if (Math.abs(a.x) <= 0.01 && Math.abs(a.y) <= 0.01 && Math.abs(b.x) <= 0.01 && Math.abs(b.y) <= 0.01) {
       el.style.transform = '';
       return;
     }
@@ -538,8 +514,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     };
     const list: Animation[] = [];
     animateShutters(chain, a.box, b.box, a.radii, b.radii, timing, list);
-    if (leavingShift && outShiftEnds)
-      animateShift(leavingShift, outShiftEnds.a, outShiftEnds.b, timing, list);
+    if (leavingShift && outShiftEnds) animateShift(leavingShift, outShiftEnds.a, outShiftEnds.b, timing, list);
     if (inShiftEnds) animateShift(arrivingShift, inShiftEnds.a, inShiftEnds.b, timing, list);
     if (sharedState && sharedEnds) {
       const { a: sa, b: sb } = sharedEnds;
@@ -670,8 +645,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     );
     window.clearTimeout(watchdog);
     const bound = () => {
-      if (animations === current && !done)
-        watchdog = window.setTimeout(finish, stage.boundMs + 300);
+      if (animations === current && !done) watchdog = window.setTimeout(finish, stage.boundMs + 300);
     };
     if (current[0]) current[0].ready.then(bound, () => {});
     else bound();
@@ -743,8 +717,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
         if (sameShape(sharedState.chain.column, nextColumn)) {
           sharedState.chain.levels.forEach((level, index) => {
             for (const corner of level.corners) {
-              sharedState!.chain.elements[index].style[CORNER_PROPS[corner]] =
-                `${nowShared.radii[corner]}px`;
+              sharedState!.chain.elements[index].style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
             }
           });
         } else {
@@ -760,12 +733,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
           b: {
             box: nextBox,
             radii: target.sharedTo.radii,
-            img: coverImageRect(
-              nextBox.width,
-              nextBox.height,
-              sharedState.ratio,
-              target.sharedTo.anchorY ?? 0.5,
-            ),
+            img: coverImageRect(nextBox.width, nextBox.height, sharedState.ratio, target.sharedTo.anchorY ?? 0.5),
           },
         };
         if (nowOutShift && outSlotOffset) {
@@ -781,8 +749,7 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
           const el = sharedState!.chain.elements[index];
           const [tx, ty] = level.translate(nowShared.box);
           el.style.transform = `translate(${tx}px, ${ty}px)`;
-          for (const corner of level.corners)
-            el.style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
+          for (const corner of level.corners) el.style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
         });
         sharedState.img.style.transform = sharedImgTransform(nowShared.img, sharedState.baseW);
         sharedRetiring?.cancel();

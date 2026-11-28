@@ -10,9 +10,7 @@ export function isRouteRequest(request, type, origin) {
   return (
     type === 'Document' ||
     url.searchParams.has('_rsc') ||
-    Object.entries(request.headers ?? {}).some(
-      ([name, value]) => name.toLowerCase() === 'rsc' && String(value) === '1',
-    )
+    Object.entries(request.headers ?? {}).some(([name, value]) => name.toLowerCase() === 'rsc' && String(value) === '1')
   );
 }
 

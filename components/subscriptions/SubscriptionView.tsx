@@ -49,13 +49,7 @@ const PER_PAGE = SUBSCRIPTION_PER_PAGE;
  * It answers for any tag, subscribed or not — a notification's link can outlive its subscription
  * — and 订阅 / 已订阅 sits in the header either way.
  */
-export default function SubscriptionView({
-  tag,
-  contentFilter,
-}: {
-  tag: string;
-  contentFilter: string;
-}) {
+export default function SubscriptionView({ tag, contentFilter }: { tag: string; contentFilter: string }) {
   const { token, ready } = useSession();
   const back = useBackOrParent('/subscriptions');
   useEscapeBack(back);
@@ -71,11 +65,7 @@ export default function SubscriptionView({
 
   /* What arrived since the last visit, kept for this one: marking seen sets the account's count
      to 0 at once, and the line above the pictures must not lose it while they are looked at. */
-  const [arrived, setArrived] = useScreenStateFor<number | null>(
-    'subscription:arrived',
-    scope,
-    null,
-  );
+  const [arrived, setArrived] = useScreenStateFor<number | null>('subscription:arrived', scope, null);
   const pending = token && subscription && subscription.newCount > 0 ? subscription : null;
   useEffect(() => {
     if (!token || !pending) return;
@@ -85,11 +75,9 @@ export default function SubscriptionView({
 
   const fp = useBrowsingFingerprint();
   const [page, setPage] = useScreenStateFor('subscription:page', `${scope}\n${contentFilter}`, 1);
-  const read = useResource(
-    tagGallery,
-    ready && tag ? { tag, page, perPage: PER_PAGE, contentFilter, fp } : SKIP,
-    { keepPrevious: `${scope}\n${contentFilter}\n${fp}` },
-  );
+  const read = useResource(tagGallery, ready && tag ? { tag, page, perPage: PER_PAGE, contentFilter, fp } : SKIP, {
+    keepPrevious: `${scope}\n${contentFilter}\n${fp}`,
+  });
 
   const [grid, setGrid] = useState<HTMLDivElement | null>(null);
   const [rows, setRows] = useState<HTMLDivElement | null>(null);
@@ -100,9 +88,9 @@ export default function SubscriptionView({
   const listKey = `subscription:${scope}:${contentFilter}:${fp}`;
   const readPage = useCallback(
     async (target: number) =>
-      (
-        await tagGallery.read({ tag, page: target, perPage: PER_PAGE, contentFilter, fp })
-      ).images.map((image) => image.id),
+      (await tagGallery.read({ tag, page: target, perPage: PER_PAGE, contentFilter, fp })).images.map(
+        (image) => image.id,
+      ),
     [tag, contentFilter, fp],
   );
   const reveal = useListReveal(readPage, page, setPage, () => grid);
@@ -208,9 +196,7 @@ export default function SubscriptionView({
         )}
         <div
           ref={setRows}
-          className={`transition-opacity spring-default-effects ${
-            read.isLoading ? 'paging-dim' : 'opacity-100'
-          }`}
+          className={`transition-opacity spring-default-effects ${read.isLoading ? 'paging-dim' : 'opacity-100'}`}
         >
           <MasonryGrid images={read.data.images} sequence={sequence} listKey={listKey} />
         </div>
@@ -219,9 +205,7 @@ export default function SubscriptionView({
             currentPage={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            onPrefetchPage={(next) =>
-              tagGallery.prefetch({ tag, page: next, perPage: PER_PAGE, contentFilter, fp })
-            }
+            onPrefetchPage={(next) => tagGallery.prefetch({ tag, page: next, perPage: PER_PAGE, contentFilter, fp })}
             disabled={read.isLoading}
           />
         )}
@@ -265,11 +249,7 @@ export default function SubscriptionView({
             <div className="mt-1 text-body-m text-on-surface-variant tabular-nums">{status}</div>
           </FollowHeight>
           <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
-            <ButtonLink
-              href={`/search?q=${encodeURIComponent(tagName)}`}
-              variant="text"
-              icon={<MdSearch />}
-            >
+            <ButtonLink href={`/search?q=${encodeURIComponent(tagName)}`} variant="text" icon={<MdSearch />}>
               在搜索中查看
             </ButtonLink>
             <SubscribeButton tag={tagName} />

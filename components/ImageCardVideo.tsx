@@ -84,11 +84,8 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
       return;
     }
     setLoad((state) => {
-      if (state.shown !== shown || state.attempt !== state.shown || state.attempt.giveUp)
-        return state;
-      const next = resilient
-        ? resolveNextAttempt(rawUrl, state.attempt)
-        : { ...state.attempt, giveUp: true };
+      if (state.shown !== shown || state.attempt !== state.shown || state.attempt.giveUp) return state;
+      const next = resilient ? resolveNextAttempt(rawUrl, state.attempt) : { ...state.attempt, giveUp: true };
       return {
         ...state,
         attempt: next,
@@ -226,9 +223,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
           settled={frameReady}
           instantHide
           quiet={heldOffline}
-          className={`transition-opacity spring-default-effects ${
-            frameReady ? 'opacity-0' : 'opacity-100'
-          }`}
+          className={`transition-opacity spring-default-effects ${frameReady ? 'opacity-0' : 'opacity-100'}`}
         />
       )}
       <video

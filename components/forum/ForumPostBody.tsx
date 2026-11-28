@@ -71,16 +71,13 @@ function TagList({ label, tags }: { label?: string; tags: string[] }) {
         </Badge>
       ))}
       {tags.length > TAG_PREVIEW && (
-        <span className="text-body-s tabular-nums text-on-surface-variant">
-          +{tags.length - TAG_PREVIEW}
-        </span>
+        <span className="text-body-s tabular-nums text-on-surface-variant">+{tags.length - TAG_PREVIEW}</span>
       )}
     </div>
   );
 }
 
-type ImportTarget =
-  { kind: 'tag'; group: SharedTagGroup } | { kind: 'block'; group: SharedBlockGroup };
+type ImportTarget = { kind: 'tag'; group: SharedTagGroup } | { kind: 'block'; group: SharedBlockGroup };
 type Outcome = { ok: true } | { ok: false; message: string };
 
 /* Module scope: the React Compiler does not lower a `try` with a `finally` in a component. */

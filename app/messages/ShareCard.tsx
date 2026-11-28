@@ -65,24 +65,15 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
               className="object-cover"
             />
           ) : (
-            <span
-              className="flex h-full items-center justify-center text-on-surface-variant"
-              aria-hidden="true"
-            >
+            <span className="flex h-full items-center justify-center text-on-surface-variant" aria-hidden="true">
               <MdImage size={ICON.large} />
             </span>
           )}
         </span>
         <span className="flex items-center gap-2 px-3 py-2.5">
-          <MdImage
-            size={ICON.dense}
-            aria-hidden="true"
-            className="shrink-0 text-on-surface-variant"
-          />
+          <MdImage size={ICON.dense} aria-hidden="true" className="shrink-0 text-on-surface-variant" />
           <span className="min-w-0 flex-1 truncate text-label-l text-on-surface">分享的图片</span>
-          <span className="shrink-0 text-label-m text-on-surface-variant tabular-nums">
-            #{target.imageId}
-          </span>
+          <span className="shrink-0 text-label-m text-on-surface-variant tabular-nums">#{target.imageId}</span>
         </span>
       </Card>
     );
@@ -90,15 +81,7 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
 
   const folder = target.kind === 'fave-folder';
   return (
-    <Card
-      as="a"
-      href={href}
-      onClick={navigate}
-      variant="filled"
-      padding="sm"
-      interactive
-      className="w-64 max-w-full"
-    >
+    <Card as="a" href={href} onClick={navigate} variant="filled" padding="sm" interactive className="w-64 max-w-full">
       <span className="flex items-center gap-3">
         <span
           aria-hidden="true"
@@ -114,11 +97,7 @@ export default function ShareCard({ target }: { target: ShareTarget; own?: boole
             {folder ? `${target.ownerUsername} 分享的收藏夹` : '输入密码后查看'}
           </span>
         </span>
-        <MdChevronRight
-          size={ICON.standard}
-          aria-hidden="true"
-          className="shrink-0 text-on-surface-variant"
-        />
+        <MdChevronRight size={ICON.standard} aria-hidden="true" className="shrink-0 text-on-surface-variant" />
       </span>
     </Card>
   );

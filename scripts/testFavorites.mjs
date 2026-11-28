@@ -99,9 +99,7 @@ function fixture(rawUrl, body, method = 'GET') {
     const id = Number(url.pathname.split('/').at(-1));
     const { saved } = JSON.parse(body);
     mutations++;
-    favorites = saved
-      ? [id, ...favorites.filter((value) => value !== id)]
-      : favorites.filter((value) => value !== id);
+    favorites = saved ? [id, ...favorites.filter((value) => value !== id)] : favorites.filter((value) => value !== id);
     return json({ image_id: id, folder_ids: saved ? [1] : [], favorited: saved });
   }
   if (op === 'get_tag_translations') {
@@ -112,8 +110,8 @@ function fixture(rawUrl, body, method = 'GET') {
   if (target.pathname.endsWith('/search/images')) {
     /* Positive `id:` terms only: a list query also carries the public blacklist as `-id:N`
        exclusions, and matching those answered an id search nobody made (B2, F3). */
-    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map(
-      (match) => Number(match[1]),
+    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) =>
+      Number(match[1]),
     );
     if (mutations === 1 && ids.includes(2100) && failRefresh) {
       failRefresh = false;
@@ -143,10 +141,7 @@ const upstream = createServer((req, res) => {
       isLookup ? url.searchParams.get('body') : null,
       isLookup ? (url.searchParams.get('method') ?? 'GET') : req.method,
     );
-    if (isLookup)
-      return void res
-        .writeHead(200, { 'content-type': 'application/json' })
-        .end(JSON.stringify(answer));
+    if (isLookup) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer));
     if (!answer) return void res.writeHead(404).end();
     res.writeHead(answer.status ?? 200, {
       'content-type': answer.contentType,
@@ -294,11 +289,10 @@ try {
   }
   assert.ok(ready, 'Test server did not start');
   const result = await new Promise((resolve, reject) => {
-    const child = spawn(
-      'python',
-      ['-X', 'utf8', '-c', python, origin, upstreamOrigin, JSON.stringify(user)],
-      { stdio: 'inherit', windowsHide: true },
-    );
+    const child = spawn('python', ['-X', 'utf8', '-c', python, origin, upstreamOrigin, JSON.stringify(user)], {
+      stdio: 'inherit',
+      windowsHide: true,
+    });
     child.on('error', reject);
     child.on('exit', resolve);
   });

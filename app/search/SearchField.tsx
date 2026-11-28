@@ -1,22 +1,7 @@
 'use client';
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-  type KeyboardEvent,
-} from 'react';
-import {
-  MdClose,
-  MdDeleteSweep,
-  MdHistory,
-  MdImageSearch,
-  MdSearch,
-  MdWarningAmber,
-} from 'react-icons/md';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { MdClose, MdDeleteSweep, MdHistory, MdImageSearch, MdSearch, MdWarningAmber } from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
@@ -32,10 +17,7 @@ import { useCombobox } from '@/lib/useCombobox';
 import { cn } from '@/lib/utils';
 import { clearSearchHistory, readSearchHistory } from './searchHistory';
 
-type FieldOption =
-  | { kind: 'recent'; query: string }
-  | { kind: 'clear-recent' }
-  | { kind: 'tag'; tag: TagSuggestion };
+type FieldOption = { kind: 'recent'; query: string } | { kind: 'clear-recent' } | { kind: 'tag'; tag: TagSuggestion };
 
 /** The separators between the terms a suggestion can replace — a comma, or an operator. */
 const SEPARATORS = /(?:,|，| OR | AND |\|\||&&|\n)/gi;
@@ -126,10 +108,7 @@ export default function SearchField({
   const options = useMemo<FieldOption[]>(() => {
     if (empty) {
       return recents.length > 0
-        ? [
-            ...recents.map((query): FieldOption => ({ kind: 'recent', query })),
-            { kind: 'clear-recent' },
-          ]
+        ? [...recents.map((query): FieldOption => ({ kind: 'recent', query })), { kind: 'clear-recent' }]
         : [];
     }
     return (suggestions ?? []).map((tag): FieldOption => ({ kind: 'tag', tag }));
@@ -198,8 +177,7 @@ export default function SearchField({
       setListOpen(open);
     },
     onSelect: pick,
-    onCompositionEnd: (committed) =>
-      lookUp(committed, inputRef.current?.selectionStart ?? committed.length),
+    onCompositionEnd: (committed) => lookUp(committed, inputRef.current?.selectionStart ?? committed.length),
     resetKey: empty ? '' : keyword,
   });
 
@@ -339,10 +317,7 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
   if (option.kind === 'recent') {
     return (
       <>
-        <span
-          className="grid size-6 shrink-0 place-items-center text-on-surface-variant"
-          aria-hidden="true"
-        >
+        <span className="grid size-6 shrink-0 place-items-center text-on-surface-variant" aria-hidden="true">
           <MdHistory size={ICON.standard} />
         </span>
         <span className="min-w-0 flex-1 truncate text-body-l text-on-surface">{option.query}</span>
@@ -352,15 +327,10 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
   if (option.kind === 'clear-recent') {
     return (
       <>
-        <span
-          className="grid size-6 shrink-0 place-items-center text-on-surface-variant"
-          aria-hidden="true"
-        >
+        <span className="grid size-6 shrink-0 place-items-center text-on-surface-variant" aria-hidden="true">
           <MdDeleteSweep size={ICON.standard} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-body-l text-on-surface-variant">
-          清空搜索历史
-        </span>
+        <span className="min-w-0 flex-1 truncate text-body-l text-on-surface-variant">清空搜索历史</span>
       </>
     );
   }
@@ -380,11 +350,7 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
         </span>
       </span>
       {restricted && (
-        <span
-          className="shrink-0 text-warning"
-          role="img"
-          aria-label="安全模式下不显示此标签的图片"
-        >
+        <span className="shrink-0 text-warning" role="img" aria-label="安全模式下不显示此标签的图片">
           <MdWarningAmber size={ICON.dense} aria-hidden="true" />
         </span>
       )}

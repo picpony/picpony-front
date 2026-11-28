@@ -17,10 +17,7 @@ export interface CursorPage<T> {
   next: number | null;
 }
 
-export type CursorRead<T> = (
-  before: number | undefined,
-  signal?: AbortSignal,
-) => Promise<CursorPage<T>>;
+export type CursorRead<T> = (before: number | undefined, signal?: AbortSignal) => Promise<CursorPage<T>>;
 
 /** Lists whose cursors are remembered, bounded: a token or a conversation is a list of its own. */
 const MAX_LISTS = 64;

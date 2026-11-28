@@ -55,11 +55,7 @@ export default function ImageGridSkeleton({
 
   if (seedCover && seedRatio !== null && seedLayout) {
     return (
-      <div
-        data-page-loading=""
-        data-grid-loading=""
-        className={cn('space-y-6', entrance && 'animate-fade-in')}
-      >
+      <div data-page-loading="" data-grid-loading="" className={cn('space-y-6', entrance && 'animate-fade-in')}>
         <div className="masonry" aria-hidden="true">
           <div className="masonry-grid" style={seedLayout.grid as CSSProperties}>
             <div className="masonry-item" style={seedLayout.items[0] as CSSProperties}>
@@ -79,20 +75,13 @@ export default function ImageGridSkeleton({
                   proxyThumb
                   eager
                   shimmer={false}
-                  className={
-                    seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'
-                  }
+                  className={seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
                 />
               </div>
             </div>
           </div>
         </div>
-        <PageLoadingIndicator
-          size="inline"
-          indicatorSize="lg"
-          paused={paused}
-          label="正在加载图片…"
-        />
+        <PageLoadingIndicator size="inline" indicatorSize="lg" paused={paused} label="正在加载图片…" />
       </div>
     );
   }

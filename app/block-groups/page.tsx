@@ -81,9 +81,7 @@ export default function BlockGroupsPage() {
 
   /** After a create or an import: the list as the server now has it (its fetch puts it in force). */
   const reread = useCallback(async (owner: string) => {
-    await blockGroups
-      .read({ token: owner }, { force: true })
-      .catch(() => blockGroups.expire({ token: owner }));
+    await blockGroups.read({ token: owner }, { force: true }).catch(() => blockGroups.expire({ token: owner }));
     shareableGroups.invalidate({ token: owner });
   }, []);
 
@@ -92,14 +90,9 @@ export default function BlockGroupsPage() {
     setSaving(true);
     /* An edit carries the version the list holds and keeps the switch where it is (the backend
        writes `active` with every save). */
-    const held = input.id
-      ? blockGroups.peek({ token }).data?.find((group) => group.id === input.id)
-      : undefined;
+    const held = input.id ? blockGroups.peek({ token }).data?.find((group) => group.id === input.id) : undefined;
     const saved = await settle(
-      saveBlockGroup(
-        token,
-        held ? { ...input, revision: held.revision, active: held.active } : input,
-      ),
+      saveBlockGroup(token, held ? { ...input, revision: held.revision, active: held.active } : input),
     );
     if (!saved.ok) {
       if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
@@ -147,13 +140,10 @@ export default function BlockGroupsPage() {
     (group: BlockGroup, active: boolean) => {
       if (!token || readToken() !== token) return;
       const flip = (value: boolean) =>
-        writeGroups(token, (list) =>
-          list.map((item) => (item.id === group.id ? { ...item, active: value } : item)),
-        );
+        writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, active: value } : item)));
       /* Each switch carries the group's version; every accepted one moves it on. */
       const heldRevision = () =>
-        blockGroups.peek({ token }).data?.find((item) => item.id === group.id)?.revision ??
-        group.revision;
+        blockGroups.peek({ token }).data?.find((item) => item.id === group.id)?.revision ?? group.revision;
       const current = toggles.current.get(group.id);
       const state = current ?? { confirmed: group.active, wanted: active };
       state.wanted = active;
@@ -177,9 +167,7 @@ export default function BlockGroupsPage() {
           sentAny = true;
           const { revision } = sent.value;
           if (readToken() === token) {
-            writeGroups(token, (list) =>
-              list.map((item) => (item.id === group.id ? { ...item, revision } : item)),
-            );
+            writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, revision } : item)));
           }
         }
         toggles.current.delete(group.id);
@@ -264,22 +252,12 @@ export default function BlockGroupsPage() {
       actions={
         signedIn && groups ? (
           <>
-            <Button
-              variant="tonal"
-              icon={<MdDownload />}
-              responsiveLabel
-              onClick={() => setImportOpen(true)}
-            >
+            <Button variant="tonal" icon={<MdDownload />} responsiveLabel onClick={() => setImportOpen(true)}>
               从 Derpibooru 导入
             </Button>
             {/* While empty, the empty state carries 新建 — one primary action, not two (R5-041). */}
             {count > 0 && (
-              <Button
-                variant="filled"
-                icon={<MdAdd />}
-                disabled={full}
-                onClick={() => openEditor(null)}
-              >
+              <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
                 新建
               </Button>
             )}

@@ -203,9 +203,7 @@ async function extractFromImage(file: File, desired = MAX_OPTIONS): Promise<Imag
  * there is no second hex, so `deriveTheme` takes the dark fill seven tones down against the
  * dark-page floor.
  */
-export async function resolveCustomPalette(
-  value: CustomSpec | string,
-): Promise<CustomPaletteInstall | null> {
+export async function resolveCustomPalette(value: CustomSpec | string): Promise<CustomPaletteInstall | null> {
   const recipe = rule ?? (await load());
   const spec = typeof value === 'string' ? parseCustomSpec(value) : value;
   const seed = spec ? recipe.normalizeCustomSeed(spec.seed) : null;

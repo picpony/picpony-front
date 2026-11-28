@@ -41,11 +41,7 @@ import Skeleton from '@/components/Skeleton';
 import SelectionBar, { type SelectionCommand } from '@/components/favorites/SelectionBar';
 import { FolderBadges } from '@/components/favorites/FolderCard';
 import { FaveGridView, useFavePage } from '@/components/favorites/FaveGrid';
-import {
-  FolderMenuButton,
-  isFolderPublic,
-  useFolderCommands,
-} from '@/components/favorites/useFolderCommands';
+import { FolderMenuButton, isFolderPublic, useFolderCommands } from '@/components/favorites/useFolderCommands';
 import { usePictureBatch } from '@/components/favorites/usePictureBatch';
 import { useAddressPage } from '@/components/favorites/useAddressPage';
 
@@ -218,10 +214,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             fill
             title="收藏夹不存在或已被删除"
             action={
-              <Button
-                variant="tonal"
-                onClick={() => router.replace(favoritesHref(), { scroll: false })}
-              >
+              <Button variant="tonal" onClick={() => router.replace(favoritesHref(), { scroll: false })}>
                 返回我的收藏
               </Button>
             }
@@ -304,10 +297,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
           vanished in a frame and back in a frame, and the room the page keeps for it stood empty
           over a column that must not move under the long press that started the mode. In the
           mode it is still Back — which peels the mode first (decision 1) — and says so. */}
-      <PageBack
-        onClick={selection.active ? exit : back}
-        label={selection.active ? '退出选择' : '返回我的收藏'}
-      />
+      <PageBack onClick={selection.active ? exit : back} label={selection.active ? '退出选择' : '返回我的收藏'} />
       <div
         ref={pageRef}
         data-folder-page={route}
@@ -378,13 +368,7 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
               failureTitle="收藏夹加载失败"
               seedCover={readFolderSeedCover(route, folder.latestImageId)}
               placeholderCount={count}
-              empty={
-                <EmptyState
-                  size="pane"
-                  icon={<MdPhotoLibrary size={ICON.display} />}
-                  title="暂无图片"
-                />
-              }
+              empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="暂无图片" />}
             />
           </div>
         )}

@@ -11,13 +11,7 @@ import { SPRING_MS } from '@/lib/spring';
 import { cn } from '@/lib/utils';
 import IconButton from './IconButton';
 import ScrollArea from './ScrollArea';
-import {
-  useExitAnimation,
-  useOverlayLayer,
-  useMounted,
-  useScrollLock,
-  OverlayLayerContext,
-} from '@/lib/overlay';
+import { useExitAnimation, useOverlayLayer, useMounted, useScrollLock, OverlayLayerContext } from '@/lib/overlay';
 
 interface SidePanelProps {
   isOpen: boolean;
@@ -151,9 +145,7 @@ export default function SidePanel({
            (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
            on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
            `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
-        const timing = isOpen
-          ? spring('defaultSpatial', 'overlay')
-          : spring('fastEffects', 'overlay');
+        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
         const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { x: isOpen ? 0 : '100%', ...timing, overwrite: true });
         if (scrim) gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
@@ -232,9 +224,7 @@ export default function SidePanel({
               ) : (
                 <span />
               )}
-              {!hideCloseButton && (
-                <IconButton onClick={handleClose} aria-label="关闭" dismiss icon={<MdClose />} />
-              )}
+              {!hideCloseButton && <IconButton onClick={handleClose} aria-label="关闭" dismiss icon={<MdClose />} />}
             </div>
           )}
           <ScrollArea

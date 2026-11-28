@@ -55,9 +55,7 @@ export class HeroVelocityTracker {
     if (release) {
       const last = samples.at(-1);
       const moved =
-        !last ||
-        Math.abs(release.x - last.x) > SAME_POSITION_PX ||
-        Math.abs(release.y - last.y) > SAME_POSITION_PX;
+        !last || Math.abs(release.x - last.x) > SAME_POSITION_PX || Math.abs(release.y - last.y) > SAME_POSITION_PX;
       if (last && release.time - last.time > ASSUME_STOPPED_MS && !moved) return { x: 0, y: 0 };
       if (moved && (!last || release.time > last.time)) samples = [...samples, release];
     }

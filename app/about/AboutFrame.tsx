@@ -80,12 +80,5 @@ export const ROSTER_GRID =
 
 /** Placeholder while dynamic team roster groups and member counts are loading. */
 export function TeamSkeleton() {
-  return (
-    <PageLoadingIndicator
-      size="pane"
-      indicatorSize="md"
-      label="正在加载团队成员…"
-      className="min-h-48"
-    />
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="md" label="正在加载团队成员…" className="min-h-48" />;
 }

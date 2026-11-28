@@ -121,14 +121,8 @@ export type LongFrameEntry = {
 };
 
 /** Long animation frames (or long tasks) overlapping `[from, to]`. */
-export function longFrameStats(
-  entries: readonly LongFrameEntry[],
-  from = -Infinity,
-  to = Infinity,
-): LongFrameStats {
-  const inside = entries.filter(
-    (entry) => entry.startTime <= to && entry.startTime + entry.duration >= from,
-  );
+export function longFrameStats(entries: readonly LongFrameEntry[], from = -Infinity, to = Infinity): LongFrameStats {
+  const inside = entries.filter((entry) => entry.startTime <= to && entry.startTime + entry.duration >= from);
   const longest = inside.reduce<LongFrameEntry | null>(
     (best, entry) => (!best || entry.duration > best.duration ? entry : best),
     null,
@@ -138,10 +132,7 @@ export function longFrameStats(
     count: inside.length,
     worstMs: round(inside.length ? Math.max(...inside.map((entry) => entry.duration)) : 0),
     blockingMs: round(
-      inside.reduce(
-        (sum, entry) => sum + (entry.blockingDuration ?? Math.max(0, entry.duration - 50)),
-        0,
-      ),
+      inside.reduce((sum, entry) => sum + (entry.blockingDuration ?? Math.max(0, entry.duration - 50)), 0),
     ),
   };
 }

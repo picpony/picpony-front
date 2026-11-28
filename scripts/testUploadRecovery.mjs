@@ -56,12 +56,9 @@ function storeFixture() {
     },
     '@/lib/resources': { tasks: { expire() {} } },
   };
-  const code = ts.transpileModule(
-    readFileSync(new URL('../app/upload/uploadStore.ts', import.meta.url), 'utf8'),
-    {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    },
-  ).outputText;
+  const code = ts.transpileModule(readFileSync(new URL('../app/upload/uploadStore.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
   const exports = {};
   vm.runInNewContext(
     code,
@@ -204,11 +201,7 @@ test('a duplicate after a lost answer stays unconfirmed, retains the draft and n
   assert.match(f.read().job.outcome.message, /查看你的上传以确认$/);
   assert.ok(f.read().draft.file);
   assert.equal(f.counted.length, 0);
-  assert.equal(
-    f.guards.has('beforeunload'),
-    true,
-    'the kept draft asks before a reload while its screen is open',
-  );
+  assert.equal(f.guards.has('beforeunload'), true, 'the kept draft asks before a reload while its screen is open');
   detach();
 });
 
@@ -222,11 +215,7 @@ test('a draft arms the unload guard only on its screen; an upload in flight arms
   const detach = f.store.attachUploadScreen();
   assert.equal(f.guards.has('beforeunload'), true, 'the screen opens on the draft');
   detach();
-  assert.equal(
-    f.guards.has('beforeunload'),
-    false,
-    'the screen is left; the draft is kept, unguarded',
-  );
+  assert.equal(f.guards.has('beforeunload'), false, 'the screen is left; the draft is kept, unguarded');
   assert.ok(f.read().draft.file);
   const pending = f.start();
   assert.equal(f.guards.has('beforeunload'), true, 'an upload in flight, with no screen open');

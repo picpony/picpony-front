@@ -72,9 +72,7 @@ export type TransferMode = 'move' | 'copy';
 const PAGE_LIMIT = 100;
 
 /** Pages of a list read until `total` is covered (each endpoint caps a page at 100). */
-async function readAllPages<Row>(
-  readPage: (page: number) => Promise<{ rows: Row[]; total: number }>,
-): Promise<Row[]> {
+async function readAllPages<Row>(readPage: (page: number) => Promise<{ rows: Row[]; total: number }>): Promise<Row[]> {
   const rows: Row[] = [];
   for (let page = 1; ; page += 1) {
     const answer = await readPage(page);
@@ -182,11 +180,7 @@ export async function getFaveFolders(token: string, signal?: AbortSignal): Promi
  * `GET /me/favorites[?folder_id=]`: a folder's favourites (0: all of them), every page — the
  * backend pages at most 100 a request, and the screens need the whole index.
  */
-export async function getFaves(
-  token: string,
-  folderId = 0,
-  signal?: AbortSignal,
-): Promise<FaveIndex> {
+export async function getFaves(token: string, folderId = 0, signal?: AbortSignal): Promise<FaveIndex> {
   type Item = { image_id: number; created_at: string; folder_ids: number[] };
   const items = await readAllPages<Item>(async (page) => {
     const data = await api<{ items: Item[]; total: number }>('GET', '/me/favorites', {
@@ -253,18 +247,14 @@ export async function batchAddFaves(
   imageIds: readonly number[],
   folderId?: number,
 ): Promise<{ folderId: number; inserted: number }> {
-  const data = await api<{ folder_id: number; inserted_count: number }>(
-    'POST',
-    '/me/favorite-imports',
-    {
-      token,
-      json: {
-        image_ids: [...imageIds],
-        ...(folderId && folderId > 0 ? { folder_id: folderId } : {}),
-      },
-      idempotencyKey: randomId(),
+  const data = await api<{ folder_id: number; inserted_count: number }>('POST', '/me/favorite-imports', {
+    token,
+    json: {
+      image_ids: [...imageIds],
+      ...(folderId && folderId > 0 ? { folder_id: folderId } : {}),
     },
-  );
+    idempotencyKey: randomId(),
+  });
   return { folderId: data.folder_id, inserted: data.inserted_count };
 }
 
@@ -281,10 +271,7 @@ export async function createFaveFolder(token: string, name: string): Promise<{ i
  * `POST /me/favorite-folders/deletions {folder_ids}`. **The backend keeps the pictures**: a deleted
  * folder's favourites move to the main folder. The main folder is refused (409 `MAIN_FOLDER`).
  */
-export async function deleteFaveFolders(
-  token: string,
-  folderIds: readonly number[],
-): Promise<void> {
+export async function deleteFaveFolders(token: string, folderIds: readonly number[]): Promise<void> {
   await api('POST', '/me/favorite-folders/deletions', {
     token,
     json: { folder_ids: [...folderIds] },
@@ -292,11 +279,7 @@ export async function deleteFaveFolders(
 }
 
 /** `POST /me/favorite-folder-merges`: the sources' pictures into the target; the sources are deleted. */
-export async function mergeFaveFolders(
-  token: string,
-  sourceIds: readonly number[],
-  targetId: number,
-): Promise<void> {
+export async function mergeFaveFolders(token: string, sourceIds: readonly number[], targetId: number): Promise<void> {
   await api('POST', '/me/favorite-folder-merges', {
     token,
     json: { source_folder_ids: [...sourceIds], target_folder_id: targetId },
@@ -316,19 +299,15 @@ export async function batchTransferFaves(
     folderNames?: ReadonlyMap<number, string>;
   },
 ): Promise<TransferResult> {
-  const data = await api<TransferAnswer>(
-    'POST',
-    `/me/favorite-folders/${seg(request.sourceFolderId)}/transfers`,
-    {
-      token,
-      json: {
-        image_ids: [...request.imageIds],
-        target_folder_ids: [...request.targetFolderIds],
-        mode: request.mode,
-      },
-      idempotencyKey: randomId(),
+  const data = await api<TransferAnswer>('POST', `/me/favorite-folders/${seg(request.sourceFolderId)}/transfers`, {
+    token,
+    json: {
+      image_ids: [...request.imageIds],
+      target_folder_ids: [...request.targetFolderIds],
+      mode: request.mode,
     },
-  );
+    idempotencyKey: randomId(),
+  });
   return transferResult(data, request.folderNames ?? new Map());
 }
 
@@ -360,11 +339,7 @@ export async function verifyPrivacyPassword(token: string, password: string): Pr
 }
 
 /** `PUT /me/privacy-space/password {old_password, new_password}`. */
-export async function changePrivacyPassword(
-  token: string,
-  oldPassword: string,
-  newPassword: string,
-): Promise<void> {
+export async function changePrivacyPassword(token: string, oldPassword: string, newPassword: string): Promise<void> {
   await api('PUT', '/me/privacy-space/password', {
     token,
     json: { old_password: oldPassword, new_password: newPassword },
@@ -382,10 +357,7 @@ export async function resetPrivacySpace(token: string, accountPassword: string):
 }
 
 /** `DELETE /me/privacy-space/unlock`. The caller does not wait on it: the space is locked on this side already. */
-export async function lockPrivacySpace(
-  token: string,
-  options: { keepalive?: boolean } = {},
-): Promise<void> {
+export async function lockPrivacySpace(token: string, options: { keepalive?: boolean } = {}): Promise<void> {
   await api('DELETE', '/me/privacy-space/unlock', { token, keepalive: options.keepalive });
 }
 
@@ -503,11 +475,7 @@ export async function batchTransferPrivacyFaves(
  * (`notFound`).
  */
 export async function resolveUsername(username: string, signal?: AbortSignal): Promise<number> {
-  const data = await api<{ id: number; username: string }>(
-    'GET',
-    `/users/by-username/${seg(username)}`,
-    { signal },
-  );
+  const data = await api<{ id: number; username: string }>('GET', `/users/by-username/${seg(username)}`, { signal });
   return data.id;
 }
 
@@ -517,20 +485,12 @@ export async function resolveUsername(username: string, signal?: AbortSignal): P
  * that does not exist or is not public is 404 `FOLDER_NOT_FOUND`; an owner who hides favourites
  * answers an empty list.
  */
-export async function getSharedFaves(
-  ownerId: number,
-  folderId = 0,
-  signal?: AbortSignal,
-): Promise<number[]> {
+export async function getSharedFaves(ownerId: number, folderId = 0, signal?: AbortSignal): Promise<number[]> {
   const ids = await readAllPages<number>(async (page) => {
-    const data = await api<{ image_ids: number[]; total: number }>(
-      'GET',
-      `/users/${seg(ownerId)}/favorites`,
-      {
-        signal,
-        query: { page, limit: PAGE_LIMIT, folder_id: folderId > 0 ? folderId : undefined },
-      },
-    );
+    const data = await api<{ image_ids: number[]; total: number }>('GET', `/users/${seg(ownerId)}/favorites`, {
+      signal,
+      query: { page, limit: PAGE_LIMIT, folder_id: folderId > 0 ? folderId : undefined },
+    });
     return { rows: data.image_ids, total: data.total };
   });
   return [...new Set(ids)];
@@ -540,15 +500,8 @@ export async function getSharedFaves(
  * `GET /users/{owner}/favorite-folders` — the owner's public folders (anonymous; the backend
  * applies `showFaves` and `publicFaveFolderIds`). An unknown owner is a `notFound` `ApiError`.
  */
-export async function getProfileFaveFolders(
-  ownerId: number,
-  signal?: AbortSignal,
-): Promise<ProfileFaveFolder[]> {
-  const data = await api<{ folders: PublicFolderRow[] }>(
-    'GET',
-    `/users/${seg(ownerId)}/favorite-folders`,
-    { signal },
-  );
+export async function getProfileFaveFolders(ownerId: number, signal?: AbortSignal): Promise<ProfileFaveFolder[]> {
+  const data = await api<{ folders: PublicFolderRow[] }>('GET', `/users/${seg(ownerId)}/favorite-folders`, { signal });
   return data.folders.map((row) => ({
     id: row.id,
     name: row.name,
@@ -591,11 +544,7 @@ export async function getSharedPrivacyFaves(
  * `POST /users/{owner}/privacy-space/unlock {password}`. A wrong password (or an owner without
  * one — the backend answers both alike) is 403 `PASSWORD_MISMATCH`.
  */
-export async function verifySharedPrivacyPassword(
-  token: string,
-  ownerId: number,
-  password: string,
-): Promise<void> {
+export async function verifySharedPrivacyPassword(token: string, ownerId: number, password: string): Promise<void> {
   await api('POST', `/users/${seg(ownerId)}/privacy-space/unlock`, { token, json: { password } });
 }
 
@@ -647,10 +596,7 @@ export const LOOKUP_LIMIT = 50;
  * exist. Derpibooru's default filter would silently drop some, indistinguishable from a deletion.
  * The request depends on the ids alone, so its cache key does too.
  */
-export async function lookupImagesByIds(
-  ids: readonly number[],
-  signal?: AbortSignal,
-): Promise<PonyImage[]> {
+export async function lookupImagesByIds(ids: readonly number[], signal?: AbortSignal): Promise<PonyImage[]> {
   if (ids.length > LOOKUP_LIMIT) throw new RangeError(`at most ${LOOKUP_LIMIT} ids a lookup`);
   if (ids.length === 0) return [];
   const query = ids.map((id) => `id:${id}`).join(' OR ');
@@ -698,9 +644,6 @@ export async function getDerpiFaves(
   const data = await readObject<{ images?: unknown; total?: unknown }>(res);
   if (!Array.isArray(data.images)) throw new ApiError('invalid');
   const images = pictureRows(data.images);
-  const total =
-    typeof data.total === 'number' && Number.isFinite(data.total)
-      ? Math.max(0, data.total)
-      : images.length;
+  const total = typeof data.total === 'number' && Number.isFinite(data.total) ? Math.max(0, data.total) : images.length;
   return { images, total };
 }

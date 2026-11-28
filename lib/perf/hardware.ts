@@ -22,10 +22,7 @@ export type PerfHardware = {
 };
 
 const withTimeout = <T>(promise: Promise<T>, ms: number) =>
-  Promise.race([
-    promise,
-    new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms)),
-  ]);
+  Promise.race([promise, new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms))]);
 
 /** `ANGLE (AMD, AMD Radeon RX 6500 XT (0x0000743F) Direct3D11 vs_5_0 ps_5_0, D3D11)` → the model. */
 export function cleanRenderer(raw: string) {
@@ -76,9 +73,7 @@ function webglRenderer() {
     if (!gl) return null;
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     /* Firefox and newer Chromium answer RENDERER itself with the unmasked (sanitized) name. */
-    const raw = String(
-      (info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '',
-    );
+    const raw = String((info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '');
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return raw || null;
   } catch {
@@ -120,13 +115,7 @@ async function clientHints() {
   if (!nav.userAgentData?.getHighEntropyValues) return { model: null, os: null };
   try {
     const hints = await withTimeout(
-      nav.userAgentData.getHighEntropyValues([
-        'model',
-        'platform',
-        'platformVersion',
-        'architecture',
-        'bitness',
-      ]),
+      nav.userAgentData.getHighEntropyValues(['model', 'platform', 'platformVersion', 'architecture', 'bitness']),
       1500,
     );
     if (!hints) return { model: null, os: null };

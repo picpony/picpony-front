@@ -78,9 +78,7 @@ for (const target of process.argv.slice(2)) {
     rows.push([src.split('/').pop(), r, b]);
   }
   rows.sort((a, b) => b[2] - a[2]);
-  console.log(
-    `\n${target}  ${srcs.length} scripts   raw ${raw.toLocaleString()}   br ${br.toLocaleString()}`,
-  );
+  console.log(`\n${target}  ${srcs.length} scripts   raw ${raw.toLocaleString()}   br ${br.toLocaleString()}`);
   for (const [name, r, b] of rows.slice(0, 8)) {
     console.log(`  ${String(b).padStart(7)} br  ${String(r).padStart(8)} raw  ${name}`);
   }

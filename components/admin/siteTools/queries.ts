@@ -19,10 +19,7 @@ export const quotaQuery = defineAdminQuery('ai-quota', api.readAiQuota);
 export const assistantQuery = defineAdminQuery('ai-assistant', api.readAssistantConfig);
 export const textTranslationQuery = defineAdminQuery('text-translation', api.readTextTranslation);
 
-function paged<A, T>(
-  name: string,
-  fetcher: (token: string, args: A, signal?: AbortSignal) => Promise<T>,
-) {
+function paged<A, T>(name: string, fetcher: (token: string, args: A, signal?: AbortSignal) => Promise<T>) {
   return defineResource<A & { token: string }, T>({
     name: `admin-site-tools-${name}`,
     key: (args) => JSON.stringify(args),

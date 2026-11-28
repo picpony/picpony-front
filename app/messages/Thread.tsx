@@ -12,13 +12,7 @@ import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ScrollArea from '@/components/ScrollArea';
 import Spinner from '@/components/Spinner';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import {
-  formatClock,
-  formatDate,
-  formatDayLabel,
-  formatDateTime,
-  parseBackendTime,
-} from '@/lib/format';
+import { formatClock, formatDate, formatDayLabel, formatDateTime, parseBackendTime } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
 import { scrollAppToElement } from '@/lib/scrollTo';
@@ -111,8 +105,7 @@ export default function Thread({
   const serverMessages = entries.filter((entry) => !entry.outgoing).map((entry) => entry.message);
   const { readId, deliveredId } = receiptPlacement(serverMessages, isOwn);
   let newestIncoming = 0;
-  for (const message of serverMessages)
-    if (!isOwn(message)) newestIncoming = Math.max(newestIncoming, message.id);
+  for (const message of serverMessages) if (!isOwn(message)) newestIncoming = Math.max(newestIncoming, message.id);
 
   /** Where the reader is: at the bottom, or on which row. */
   const record = useCallback(() => {
@@ -166,9 +159,7 @@ export default function Thread({
       const justSent = last !== m.last && newest.outgoing?.status === 'sending';
       restore(m.atBottom || justSent);
       if (!m.atBottom && !justSent && newestIncoming > m.newestIncoming) {
-        const arrived = serverMessages.filter(
-          (message) => !isOwn(message) && message.id > m.newestIncoming,
-        ).length;
+        const arrived = serverMessages.filter((message) => !isOwn(message) && message.id > m.newestIncoming).length;
         if (arrived > 0) setUnseen((count) => count + arrived);
       }
     }
@@ -251,19 +242,12 @@ export default function Thread({
       );
     }
     if (!entries.length) {
-      return (
-        <EmptyState
-          size="pane"
-          icon={<MdOutlineChatBubbleOutline size={ICON.display} />}
-          title="暂无消息"
-        />
-      );
+      return <EmptyState size="pane" icon={<MdOutlineChatBubbleOutline size={ICON.display} />} title="暂无消息" />;
     }
     return groups.map(({ lead, items }, index) => {
       const own = Boolean(lead.outgoing) || isOwn(lead.message);
       const previous = index > 0 ? groups[index - 1].lead : null;
-      const startsDay =
-        !previous || dayKey(previous.message.created_at) !== dayKey(lead.message.created_at);
+      const startsDay = !previous || dayKey(previous.message.created_at) !== dayKey(lead.message.created_at);
       const who = own ? me : contact;
       const rendered = items.map((entry) => ({
         ...entry,
@@ -305,10 +289,7 @@ export default function Thread({
                     endOfRun={endOfRun || Boolean(rendered[i + 1]?.attachment)}
                     timestamp={
                       endOfRun && !item.outgoing ? (
-                        <time
-                          dateTime={stamp?.toISOString()}
-                          title={formatDateTime(item.message.created_at)}
-                        >
+                        <time dateTime={stamp?.toISOString()} title={formatDateTime(item.message.created_at)}>
                           {formatClock(item.message.created_at)}
                         </time>
                       ) : undefined
@@ -362,9 +343,7 @@ export default function Thread({
             </div>
           )}
           {/* Short conversations sit at the bottom; loading, empty and error states centre in the pane. */}
-          <div className={cn('flex flex-col', entries.length > 0 ? 'mt-auto' : 'my-auto')}>
-            {body}
-          </div>
+          <div className={cn('flex flex-col', entries.length > 0 ? 'mt-auto' : 'my-auto')}>{body}</div>
           <div ref={endRef} aria-hidden="true" />
         </div>
       </ScrollArea>
@@ -436,12 +415,5 @@ function deliveryStatus(
  */
 /** Placeholder while conversation message count and bubble heights are unknown. */
 export function ThreadSkeleton() {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      label="正在加载消息…"
-      className="min-h-48"
-    />
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载消息…" className="min-h-48" />;
 }

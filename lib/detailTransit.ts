@@ -96,15 +96,9 @@ export function opensFromDetailOrigin(id: number | string): boolean {
 
 /** The row a picture was opened from, while it is in the list on screen. */
 export function findDetailOriginRow(id: number | string): HTMLElement | null {
-  const row = document.querySelector<HTMLElement>(
-    `[data-detail-origin="${CSS.escape(String(id))}"]`,
-  );
+  const row = document.querySelector<HTMLElement>(`[data-detail-origin="${CSS.escape(String(id))}"]`);
   if (!row?.isConnected || row.getClientRects().length === 0) return null;
-  for (
-    let pane = row.closest('[data-tab-pane]');
-    pane;
-    pane = pane.parentElement?.closest('[data-tab-pane]') ?? null
-  ) {
+  for (let pane = row.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
     if (!pane.hasAttribute('data-tab-pane-active')) return null;
   }
   return row;

@@ -46,8 +46,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-back-'));
@@ -91,15 +90,10 @@ ws.onmessage = async (m) => {
     pending.delete(msg.id);
   }
   if (msg.method === 'Runtime.consoleAPICalled') {
-    logs.push(
-      msg.params.type + ': ' + msg.params.args.map((a) => a.value ?? a.description ?? '').join(' '),
-    );
+    logs.push(msg.params.type + ': ' + msg.params.args.map((a) => a.value ?? a.description ?? '').join(' '));
   }
   if (msg.method === 'Runtime.exceptionThrown') {
-    logs.push(
-      'EXC: ' +
-        (msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text),
-    );
+    logs.push('EXC: ' + (msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text));
   }
   if (msg.method === 'Fetch.requestPaused') {
     const { requestId, request } = msg.params;
@@ -131,8 +125,7 @@ const evalIn = async (expr) => {
     awaitPromise: true,
     returnByValue: true,
   });
-  if (r.result?.exceptionDetails)
-    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
+  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');
@@ -206,10 +199,7 @@ const opened = await evalIn(`(() => {
   return row.getAttribute('href');
 })()`);
 console.log('C. clicked row        ', opened);
-check(
-  typeof opened === 'string' && /^\/forum\/\d+$/.test(opened),
-  'No actual forum row was opened',
-);
+check(typeof opened === 'string' && /^\/forum\/\d+$/.test(opened), 'No actual forum row was opened');
 console.log('   history calls       ', JSON.stringify(await evalIn('window.__hist')));
 console.log('   clicks              ', JSON.stringify(await evalIn('window.__clicks')));
 console.log(
@@ -246,10 +236,7 @@ await new Promise((r) => setTimeout(r, 3500));
 const returned = await evalIn(STATE);
 console.log('D. after back        ', JSON.stringify(returned));
 const address = new URL(returned.url, 'http://fixture.invalid');
-check(
-  address.pathname === '/' && address.searchParams.get('tab') === 'forum',
-  'Back did not restore the forum URL',
-);
+check(address.pathname === '/' && address.searchParams.get('tab') === 'forum', 'Back did not restore the forum URL');
 check(
   returned.tabs.some((tab) => tab.tab === 'forum' && tab.selected === 'true'),
   'Back did not select the forum tab',

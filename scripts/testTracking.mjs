@@ -91,11 +91,7 @@ test('only a production build in an ordinary browser counts visits', () => {
 // --- the anonymous id -----------------------------------------------------------------------
 
 test('a stored id is kept when it has the original front end’s shape, and replaced otherwise', () => {
-  assert.equal(
-    visitor.isVisitorId('vmfz1k2x3-a1b2c3d4e5-f6g7h8i9j0'),
-    true,
-    'the original’s own ids survive',
-  );
+  assert.equal(visitor.isVisitorId('vmfz1k2x3-a1b2c3d4e5-f6g7h8i9j0'), true, 'the original’s own ids survive');
   assert.equal(visitor.isVisitorId('A_b-' + 'x'.repeat(12)), true);
   assert.equal(visitor.isVisitorId('short'), false);
   assert.equal(visitor.isVisitorId('x'.repeat(97)), false);
@@ -133,15 +129,8 @@ test('a count names the pathname alone: never the query, never the hash', () => 
 test('a segment that is somebody’s words or a share’s identity becomes its route’s name', () => {
   assert.equal(visitor.visitorPath('/subscriptions/oc%3Anyx'), '/subscriptions/[tag]');
   assert.equal(visitor.visitorPath('/subscriptions/rainbow%20dash/'), '/subscriptions/[tag]');
-  assert.equal(
-    visitor.visitorPath('/subscriptions'),
-    '/subscriptions',
-    'the list itself is a route',
-  );
-  assert.equal(
-    visitor.visitorPath('/favorites/shared/alice/12'),
-    '/favorites/shared/[username]/[folderId]',
-  );
+  assert.equal(visitor.visitorPath('/subscriptions'), '/subscriptions', 'the list itself is a route');
+  assert.equal(visitor.visitorPath('/favorites/shared/alice/12'), '/favorites/shared/[username]/[folderId]');
   assert.equal(visitor.visitorPath('/favorites/privacy/7'), '/favorites/privacy/[ownerId]');
   assert.equal(visitor.visitorPath('/user/1'), '/user/1', 'a public profile id is not private');
 });
@@ -270,11 +259,7 @@ test('track_visitor: POST /api/v1/site-visits {visitor_id, path}, no token, kept
   });
   assert.equal(init.keepalive, true);
   const headers = new Headers(init.headers);
-  assert.equal(
-    headers.get('Authorization'),
-    null,
-    'a signed-in request is not counted by the backend',
-  );
+  assert.equal(headers.get('Authorization'), null, 'a signed-in request is not counted by the backend');
   assert.equal(headers.get('X-CSRF-Token'), null, 'the route takes no session');
 });
 
@@ -298,10 +283,7 @@ test('track_share is gone: the share module exports no counter; a share is one l
   const sent = [];
   globalThis.fetch = async (url, init = {}) => {
     sent.push({ url: String(url), method: init.method });
-    return Response.json(
-      { share_id: 'TrackingShareId000000001', preview_status: 'generic' },
-      { status: 201 },
-    );
+    return Response.json({ share_id: 'TrackingShareId000000001', preview_status: 'generic' }, { status: 201 });
   };
   const link = await share.createShareLink(
     { targetUrl: 'https://app.invalid/pic/1', title: 't', desc: 'd' },

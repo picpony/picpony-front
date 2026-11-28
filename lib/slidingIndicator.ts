@@ -64,10 +64,7 @@ function restAt(mark: Mark, indicator: HTMLElement, pose: Pose) {
  * renders its new selection a frame later (`Tabs`), and the mark leaves with the panes rather than
  * after them. The commit that then selects the same tab finds the mark on its way and leaves it.
  */
-export function useSlidingIndicator<
-  C extends HTMLElement = HTMLDivElement,
-  I extends HTMLElement = HTMLSpanElement,
->(
+export function useSlidingIndicator<C extends HTMLElement = HTMLDivElement, I extends HTMLElement = HTMLSpanElement>(
   active: string,
 ): {
   containerRef: RefObject<C | null>;
@@ -117,9 +114,7 @@ export function useSlidingIndicator<
        overshoot included. */
     const flying = mark.glide;
     const progress =
-      flying?.animation.playState === 'running'
-        ? flying.animation.effect?.getComputedTiming().progress
-        : null;
+      flying?.animation.playState === 'running' ? flying.animation.effect?.getComputedTiming().progress : null;
     const from =
       flying && typeof progress === 'number'
         ? {
@@ -181,8 +176,7 @@ export function useSlidingIndicator<
     const measure = () => {
       const boxes = new Map<string, Pose>();
       for (const tab of container.querySelectorAll<HTMLElement>('[data-tab]')) {
-        if (tab.dataset.tab !== undefined)
-          boxes.set(tab.dataset.tab, { x: tab.offsetLeft, width: tab.offsetWidth });
+        if (tab.dataset.tab !== undefined) boxes.set(tab.dataset.tab, { x: tab.offsetLeft, width: tab.offsetWidth });
       }
       mark.boxes = boxes;
       const box = boxes.get(mark.value);

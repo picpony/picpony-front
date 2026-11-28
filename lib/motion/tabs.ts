@@ -9,14 +9,7 @@ import { recallTabScroll, rememberTabScroll, tabMayRestore, tabPanelTop } from '
 import { columnWindow } from '@/lib/tabStrip';
 import { runWhenIdle } from '@/lib/utils';
 import { AXIS_GAP, playSharedAxis, supportsEdgeMask } from './sharedAxis';
-import {
-  isConcealedPane,
-  leanPlan,
-  loadingInView,
-  paneClip,
-  type LeanPlan,
-  type PaneClip,
-} from './tabGeometry';
+import { isConcealedPane, leanPlan, loadingInView, paneClip, type LeanPlan, type PaneClip } from './tabGeometry';
 
 /* --- the height a switch leaves ------------------------------------------- */
 
@@ -153,18 +146,9 @@ function clearPaneFlags(panel: HTMLElement) {
  * the run confirms it; a remove-and-re-add of the same attribute would still restyle the pane
  * and force one more style pass inside the tap's own task.
  */
-function setPaneFlags(
-  panel: HTMLElement,
-  leaving: HTMLElement | null,
-  entering: HTMLElement | null,
-) {
+function setPaneFlags(panel: HTMLElement, leaving: HTMLElement | null, entering: HTMLElement | null) {
   for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
-    const want =
-      pane === leaving
-        ? 'data-tab-pane-leaving'
-        : pane === entering
-          ? 'data-tab-pane-entering'
-          : null;
+    const want = pane === leaving ? 'data-tab-pane-leaving' : pane === entering ? 'data-tab-pane-entering' : null;
     for (const flag of MOTION_FLAGS) {
       if (flag === want) {
         if (!pane.hasAttribute(flag)) pane.setAttribute(flag, '');
@@ -260,13 +244,7 @@ function runTabTransition(
   }
   /* The press that led here primed this very switch. */
   if (primed) {
-    if (
-      primed.panel === panel &&
-      primed.from === from &&
-      primed.to === to &&
-      primed.play(before, true)
-    )
-      return true;
+    if (primed.panel === panel && primed.from === from && primed.to === to && primed.play(before, true)) return true;
     releasePrimedRun(primed.panel === panel);
   }
   // A third destination must pick up the following controls where the reader sees them,
@@ -330,11 +308,7 @@ function prepareTabRun(
      (`columnWindow`) — where the scroller is the window and the strip slides (the reduced tier's
      short shift stays inside the column), and where the engine can mask the edges. */
   const edge =
-    view &&
-    scroller &&
-    stripWindow === scroller &&
-    motionTier('tabs') === 'standard' &&
-    supportsEdgeMask()
+    view && scroller && stripWindow === scroller && motionTier('tabs') === 'standard' && supportsEdgeMask()
       ? columnWindow(column, {
           left: view.left + scroller.clientLeft,
           right: view.left + scroller.clientLeft + scroller.clientWidth,
@@ -392,32 +366,15 @@ function prepareTabRun(
   /* The lean is the panel's own statement (`TabPanes lean`), so the tap and the reactive path
      cannot disagree about it. */
   let lean: LeanPlan | undefined;
-  if (
-    view &&
-    scroller &&
-    panel.hasAttribute('data-tab-lean') &&
-    motionTier('tabs') === 'standard'
-  ) {
+  if (view && scroller && panel.hasAttribute('data-tab-lean') && motionTier('tabs') === 'standard') {
     if (
       !loadingInView(leaving, view.top, view.bottom, 0) &&
       !loadingInView(entering, view.top, view.bottom, origin - next)
     ) {
       /* The panel's top on screen now, and once the arriving pane's offset is written. */
       const panelTop = view.top + tabPanelTop(panel, scroller);
-      const out = leanPlan(
-        leaving,
-        view.top,
-        view.bottom,
-        0,
-        Math.max(view.top, panelTop - origin),
-      );
-      const into = leanPlan(
-        entering,
-        view.top,
-        view.bottom,
-        origin - next,
-        Math.max(view.top, panelTop - next),
-      );
+      const out = leanPlan(leaving, view.top, view.bottom, 0, Math.max(view.top, panelTop - origin));
+      const into = leanPlan(entering, view.top, view.bottom, origin - next, Math.max(view.top, panelTop - next));
       lean = { blocks: [...out.blocks, ...into.blocks], lift: [...out.lift, ...into.lift] };
     }
   }
@@ -461,10 +418,7 @@ function prepareTabRun(
        of writing it. */
     if (reversed && scroller && offsetY !== 0) scroller.scrollTop = origin;
     if (scroller) holdFloor(panel, scroller, staying);
-    if (
-      staying.hasAttribute('data-tab-pane-active') &&
-      !going.hasAttribute('data-tab-pane-active')
-    ) {
+    if (staying.hasAttribute('data-tab-pane-active') && !going.hasAttribute('data-tab-pane-active')) {
       /* React already agrees — the commit landed during the run, or the tab was local state
          all along — so the flags have nothing left to hold, and nothing else would clear them:
          the driver clears on a commit, and that commit has been. */
@@ -721,14 +675,7 @@ export function playPrimedTabTransition(panel: HTMLElement, to: string): boolean
 
 /** Set the switch up now, if the panel is at rest on `from`. */
 function primeNow(panel: HTMLElement, from: string, to: string, direction: 1 | -1): boolean {
-  if (
-    !panel.isConnected ||
-    activeTabRun ||
-    primedRun ||
-    motionTier('tabs') === 'off' ||
-    heroOwnsScreen()
-  )
-    return false;
+  if (!panel.isConnected || activeTabRun || primedRun || motionTier('tabs') === 'off' || heroOwnsScreen()) return false;
   /* Only from rest: a switch still waiting for its commit holds flags of its own. */
   for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
     if (MOTION_FLAGS.some((flag) => pane.hasAttribute(flag))) return false;
@@ -736,11 +683,7 @@ function primeNow(panel: HTMLElement, from: string, to: string, direction: 1 | -
   const leaving = paneOf(panel, from);
   const entering = paneOf(panel, to);
   if (!leaving || !entering || leaving === entering) return false;
-  if (
-    !leaving.hasAttribute('data-tab-pane-active') ||
-    entering.hasAttribute('data-tab-pane-active')
-  )
-    return false;
+  if (!leaving.hasAttribute('data-tab-pane-active') || entering.hasAttribute('data-tab-pane-active')) return false;
   primedRun = prepareTabRun(panel, leaving, entering, from, to, direction, undefined, true);
   return primedRun !== null;
 }
@@ -881,8 +824,7 @@ export class TabPanesDriver extends Component<DriverProps> {
       setPaneFlags(panel, paneOf(panel, from), paneOf(panel, this.props.active));
     }
     // The next active pane could enlarge the shared grid in the commit itself.
-    const follower =
-      from !== null && activeTabRun?.panel === panel ? paintedFollower(panel) : undefined;
+    const follower = from !== null && activeTabRun?.panel === panel ? paintedFollower(panel) : undefined;
     return { scrollTop: getAppScroller()?.scrollTop, follower };
   }
 
@@ -904,8 +846,7 @@ export class TabPanesDriver extends Component<DriverProps> {
       );
       const direction: 1 | -1 = order.indexOf(active) > order.indexOf(from) ? 1 : -1;
       /* The run keeps the flags placed before the commit (it writes only what differs). */
-      if (runTabTransition(panel, from, active, direction, before?.scrollTop, before?.follower))
-        return;
+      if (runTabTransition(panel, from, active, direction, before?.scrollTop, before?.follower)) return;
     }
     /* No switch: nothing is animating, so React's `data-tab-pane-active` is the only truth and
      * every motion flag is stale — including a hold placed before this commit, and a press's. */

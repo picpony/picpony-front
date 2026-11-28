@@ -216,8 +216,7 @@ function focusableItems(roots: HTMLElement[]): HTMLElement[] {
     // Native editing hosts are tabbable without a tabindex attribute (their
     // DOM tabIndex property is nevertheless -1). Explicit -1 still opts out.
     return (
-      el.tabIndex >= 0 ||
-      (!el.hasAttribute('tabindex') && el.isContentEditable && !el.parentElement?.isContentEditable)
+      el.tabIndex >= 0 || (!el.hasAttribute('tabindex') && el.isContentEditable && !el.parentElement?.isContentEditable)
     );
   });
 }
@@ -256,16 +255,10 @@ export function revealRow(scroller: HTMLElement, row: HTMLElement, inset = 8): v
 
 /** A portalled menu is last in document order. Tab leaves it relative to its
  *  trigger, not relative to that portal's DOM position. */
-export function moveFocusFrom(
-  anchor: HTMLElement | null,
-  backwards: boolean,
-  exclude?: HTMLElement | null,
-): void {
+export function moveFocusFrom(anchor: HTMLElement | null, backwards: boolean, exclude?: HTMLElement | null): void {
   if (!anchor) return;
   const scope = containingScope();
-  const items = focusableItems(scope?.roots ?? [document.body]).filter(
-    (el) => !exclude?.contains(el),
-  );
+  const items = focusableItems(scope?.roots ?? [document.body]).filter((el) => !exclude?.contains(el));
   const index = items.indexOf(anchor);
   if (index < 0 || !items.length) return;
   const next = (index + (backwards ? -1 : 1) + items.length) % items.length;
@@ -291,9 +284,7 @@ export function skipCoveredTabStops(event: KeyboardEvent, covered: HTMLElement):
     return;
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || covered.contains(active)) return;
-  const direction = event.shiftKey
-    ? Node.DOCUMENT_POSITION_PRECEDING
-    : Node.DOCUMENT_POSITION_FOLLOWING;
+  const direction = event.shiftKey ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING;
   if (!(active.compareDocumentPosition(covered) & direction)) return;
   const candidates = focusableItems([document.body]).filter(
     (element) => active.compareDocumentPosition(element) & direction,
@@ -415,8 +406,7 @@ export function subscribeScreenQuiet(listener: () => void): () => void {
     attributeFilter: ['data-image-hero-transition', 'data-image-hero-state'],
   });
   const scroller = getAppScroller();
-  if (scroller)
-    observer.observe(scroller, { attributes: true, attributeFilter: ['data-route-transit'] });
+  if (scroller) observer.observe(scroller, { attributes: true, attributeFilter: ['data-route-transit'] });
   return () => {
     modalListeners.delete(listener);
     observer.disconnect();
@@ -428,11 +418,7 @@ export function subscribeScreenQuiet(listener: () => void): () => void {
  * containment and restoration. Call with `open && mounted && rendering` for portals.
  * Focus waits for a hero's initially hidden destination to become visible.
  */
-export function useOverlayLayer(
-  isOpen: boolean,
-  panelRef: ElementRef,
-  options: OverlayOptions,
-): OverlayLayer {
+export function useOverlayLayer(isOpen: boolean, panelRef: ElementRef, options: OverlayOptions): OverlayLayer {
   const latest = useRef(options);
   const parent = useContext(OverlayLayerContext);
   const historyParent = useMemo(() => {
@@ -474,10 +460,7 @@ export function useOverlayLayer(
         frame = requestAnimationFrame(enter);
         return;
       }
-      if (
-        focusScope()?.layer === layer &&
-        !rootsOf(layer).some((root) => root.contains(document.activeElement))
-      )
+      if (focusScope()?.layer === layer && !rootsOf(layer).some((root) => root.contains(document.activeElement)))
         focusPanel(layer);
     };
     frame = requestAnimationFrame(enter);
@@ -487,8 +470,7 @@ export function useOverlayLayer(
       const index = layers.indexOf(layer);
       // React has already made the departing panel inert by cleanup time, so
       // its former place in the modal stack cannot be read from activeLayers.
-      const wasTopModal =
-        layers.findLast((candidate) => candidate.options.current.modal !== false) === layer;
+      const wasTopModal = layers.findLast((candidate) => candidate.options.current.modal !== false) === layer;
       if (index >= 0) layers.splice(index, 1);
       if (layers.length === 0) {
         document.removeEventListener('keydown', onOverlayKeyDown);
@@ -507,12 +489,7 @@ export function useOverlayLayer(
            departed (it stays mounted through its exit), so the departing-roots test below
            cannot tell them apart. Moving it pulled focus to the first field mid-typing: text
            meant for a second field landed in the first. */
-        if (
-          active instanceof HTMLElement &&
-          scope &&
-          scope.roots.some((root) => root.contains(active))
-        )
-          return;
+        if (active instanceof HTMLElement && scope && scope.roots.some((root) => root.contains(active))) return;
         // A hero return exposes the gallery before its old route unmounts. Preserve a
         // new focus choice made there (or in a newer overlay) during that interval.
         if (
@@ -537,8 +514,7 @@ export function useOverlayLayer(
              tabindex when this dialog took the focus, so focusing it again is a silent no-op.
              After a password change the sign-out remount had landed on the heading, the
              sign-in dialog opened from there, and closing it left focus on the body. */
-          if (document.activeElement !== target && !focusLanding(target) && wasTopModal && !scope)
-            focusPageLanding();
+          if (document.activeElement !== target && !focusLanding(target) && wasTopModal && !scope) focusPageLanding();
         } else if (wasTopModal && scope) {
           focusPanel(scope.layer);
         } else if (wasTopModal) {

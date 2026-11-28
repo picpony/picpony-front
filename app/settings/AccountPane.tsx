@@ -3,13 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { MdPerson, MdShield } from '@/components/icons/shell';
 import { MdEdit, MdImage, MdLock } from '@/components/icons/common';
-import {
-  MdLink,
-  MdLinkOff,
-  MdMarkEmailRead,
-  MdPhotoCamera,
-  MdVerifiedUser,
-} from '@/components/icons/settings';
+import { MdLink, MdLinkOff, MdMarkEmailRead, MdPhotoCamera, MdVerifiedUser } from '@/components/icons/settings';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -40,14 +34,7 @@ import PasswordDialog from './PasswordDialog';
 import ProfileDialog, { profileOf } from './ProfileDialog';
 import UsernameDialog from './UsernameDialog';
 import { RowButton, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
-import {
-  emailVerified,
-  pendingEmailChange,
-  saveAccountFields,
-  text,
-  useAccount,
-  type Account,
-} from './useAccount';
+import { emailVerified, pendingEmailChange, saveAccountFields, text, useAccount, type Account } from './useAccount';
 import AssistantSettings from '@/components/assistant/AssistantSettings';
 
 type DialogKind = 'username' | 'password' | 'email' | 'profile' | 'apikey';
@@ -70,9 +57,7 @@ function credentialFields(credential: UpstreamCredential): Record<string, unknow
 
 /** `abcd••••••••wxyz` — the key's ends, enough to recognise it, never the whole. */
 function maskKey(key: string): string {
-  return key.length > 8
-    ? `${key.slice(0, 4)}${'•'.repeat(8)}${key.slice(-4)}`
-    : '•'.repeat(key.length);
+  return key.length > 8 ? `${key.slice(0, 4)}${'•'.repeat(8)}${key.slice(-4)}` : '•'.repeat(key.length);
 }
 
 /**
@@ -171,8 +156,7 @@ function AccountSections({ account }: { account: Account }) {
       return;
     }
     handoff.current = null;
-    if (pending.dialog || document.activeElement === document.body)
-      pending.to.current?.focus({ preventScroll: true });
+    if (pending.dialog || document.activeElement === document.body) pending.to.current?.focus({ preventScroll: true });
   });
   const show = (kind: DialogKind) => {
     const to = kind === 'email' ? emailAction : kind === 'apikey' ? keyAction : null;
@@ -211,9 +195,7 @@ function AccountSections({ account }: { account: Account }) {
       type: blob.type,
     });
     try {
-      const data = await (kind === 'avatar'
-        ? uploadAvatar(token, file)
-        : uploadBanner(token, file));
+      const data = await (kind === 'avatar' ? uploadAvatar(token, file) : uploadBanner(token, file));
       if (readToken() !== token) return;
       saveAccountFields(token, { [kind]: data.url });
       if (kind === 'avatar') setAvatarPick(null);
@@ -221,10 +203,7 @@ function AccountSections({ account }: { account: Account }) {
       showToast(kind === 'avatar' ? '已更换头像' : '已更换横幅', 'success');
     } catch (error) {
       if (readToken() === token) {
-        showToast(
-          apiErrorMessage(error, kind === 'avatar' ? '头像上传失败' : '横幅上传失败'),
-          'error',
-        );
+        showToast(apiErrorMessage(error, kind === 'avatar' ? '头像上传失败' : '横幅上传失败'), 'error');
       }
     } finally {
       setUploading(null);
@@ -246,8 +225,7 @@ function AccountSections({ account }: { account: Account }) {
       const next = await verifyUpstreamCredential(token, credential.revision);
       if (readToken() !== token) return;
       adoptCredential(next);
-      if (next.identity.status === 'verified')
-        showToast(`已核验，Derpibooru 账号为 ${next.identity.name}`, 'success');
+      if (next.identity.status === 'verified') showToast(`已核验，Derpibooru 账号为 ${next.identity.name}`, 'success');
       else if (next.identity.status === 'no_activity')
         showToast('该账号暂无上传或评论，无法确认 Derpibooru 用户名', 'info');
       else showToast('该 API Key 已失效或没有访问权限，请重新绑定', 'error');
@@ -392,12 +370,7 @@ function AccountSections({ account }: { account: Account }) {
             )
           }
           action={
-            <RowButton
-              label="编辑个人资料"
-              icon={<MdEdit />}
-              onClick={() => show('profile')}
-              collapse={false}
-            >
+            <RowButton label="编辑个人资料" icon={<MdEdit />} onClick={() => show('profile')} collapse={false}>
               编辑
             </RowButton>
           }
@@ -409,12 +382,7 @@ function AccountSections({ account }: { account: Account }) {
           label="密码"
           supporting="修改后需要重新登录"
           action={
-            <RowButton
-              label="修改密码"
-              icon={<MdEdit />}
-              onClick={() => show('password')}
-              collapse={false}
-            >
+            <RowButton label="修改密码" icon={<MdEdit />} onClick={() => show('password')} collapse={false}>
               修改
             </RowButton>
           }
@@ -547,22 +515,14 @@ function AccountSections({ account }: { account: Account }) {
       </SettingsSection>
 
       <SettingsSection title="隐私" icon={<MdShield size={ICON.control} />}>
-        <SwitchRow
-          label="公开我的上传"
-          checked={showUploads}
-          onChange={(v) => changeSyncedSetting('showUploads', v)}
-        />
+        <SwitchRow label="公开我的上传" checked={showUploads} onChange={(v) => changeSyncedSetting('showUploads', v)} />
         <SwitchRow
           label="公开我的收藏"
           description="仅在开启后于个人主页显示公开收藏夹"
           checked={showFaves}
           onChange={(v) => changeSyncedSetting('showFaves', v)}
         />
-        <SwitchRow
-          label="公开我的帖子"
-          checked={showPosts}
-          onChange={(v) => changeSyncedSetting('showPosts', v)}
-        />
+        <SwitchRow label="公开我的帖子" checked={showPosts} onChange={(v) => changeSyncedSetting('showPosts', v)} />
         <SwitchRow
           label="公开我的评论"
           checked={showComments}

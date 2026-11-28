@@ -16,13 +16,7 @@ export interface ForumListKeyArgs {
 }
 
 export function forumListKey({ page, category, sort, search, token }: ForumListKeyArgs): string {
-  return JSON.stringify([
-    page,
-    category || 'all',
-    sort || 'updated_at',
-    (search ?? '').trim(),
-    token || null,
-  ]);
+  return JSON.stringify([page, category || 'all', sort || 'updated_at', (search ?? '').trim(), token || null]);
 }
 
 /** The list a visitor lands on: the first page, every category, the default order, no search. */

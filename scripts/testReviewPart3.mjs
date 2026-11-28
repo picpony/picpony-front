@@ -124,11 +124,7 @@ test("P3-F1: the settings sync's account read settles on its own answer, whoever
   while (heldUsers.length) answerUser({ theme: 'a' });
   await refresh;
   await other;
-  assert.equal(
-    settled.error,
-    undefined,
-    'it used to reject as aborted, and the sync stopped without writing',
-  );
+  assert.equal(settled.error, undefined, 'it used to reject as aborted, and the sync stopped without writing');
 
   /* A write to the account while the sync's read is out (a checkout's coin balance). */
   settled = null;
@@ -142,11 +138,7 @@ test("P3-F1: the settings sync's account read settles on its own answer, whoever
   answerUser({ theme: 'b' });
   await second;
   await frame();
-  assert.equal(
-    sessionUser.peek({ token }).data.user.settings.theme,
-    'b',
-    'the answer is installed for every reader',
-  );
+  assert.equal(sessionUser.peek({ token }).data.user.settings.theme, 'b', 'the answer is installed for every reader');
   assert.equal(sessionUser.peek({ token }).isStale, false, 'and counts as a fresh read');
   values.delete(LS_KEYS.userInfo);
 });
@@ -170,9 +162,7 @@ test('P3-F2: a queued guess promoted to a real read keeps the value on screen', 
     lane: 'derpi',
     key: () => 'page',
     fetch: () =>
-      new Promise((resolve, reject) =>
-        reads.push(() => (fail ? reject(new Error('down')) : resolve(['fresh']))),
-      ),
+      new Promise((resolve, reject) => reads.push(() => (fail ? reject(new Error('down')) : resolve(['fresh'])))),
   });
   resource.write({}, ['shown']);
   const unsubscribe = resource.subscribe({}, () => {});
@@ -197,11 +187,7 @@ test('P3-F2: a queued guess promoted to a real read keeps the value on screen', 
   );
   const real = resource.read({});
   await frame();
-  assert.deepEqual(
-    resource.peek({}).data,
-    ['shown'],
-    'the promoted read used to start with no data — a skeleton',
-  );
+  assert.deepEqual(resource.peek({}).data, ['shown'], 'the promoted read used to start with no data — a skeleton');
   await until(() => reads.length === 1);
   reads.shift()();
   assert.deepEqual(await real, ['fresh']);
@@ -228,11 +214,7 @@ test('P3-F3: a step past an end skips pages that add nothing and stops at the re
   });
   sequence.openFromSequence(source);
   /* Page 2 came back empty (all withheld), page 3 only repeats a seam: neither is the end. */
-  assert.equal(
-    await sequence.stepImageSequence(3, 1),
-    7,
-    'it used to say 已是最后一张 after the empty page',
-  );
+  assert.equal(await sequence.stepImageSequence(3, 1), 7, 'it used to say 已是最后一张 after the empty page');
   assert.deepEqual(asked, [2, 3, 4]);
   assert.equal(await sequence.stepImageSequence(8, 1), null, 'the last page is still the end');
   assert.deepEqual(asked, [2, 3, 4], 'nothing is read past totalPages');
@@ -266,10 +248,7 @@ test('P3-F4: a reply names only PicPony comments and accounts', () => {
     { userId: null, commentId: null },
     'a Derpibooru comment id used to be sent as reply_to_comment_id',
   );
-  const composer = readFileSync(
-    new URL('../components/CommentComposer.tsx', import.meta.url),
-    'utf8',
-  );
+  const composer = readFileSync(new URL('../components/CommentComposer.tsx', import.meta.url), 'utf8');
   assert.match(composer, /replyReference\(replyTo\)/);
   assert.doesNotMatch(composer, /commentId:\s*replyTo\?\.id/);
 });
@@ -277,15 +256,9 @@ test('P3-F4: a reply names only PicPony comments and accounts', () => {
 test('P3-F5: a source link shows its invisible characters escaped', () => {
   const spoof = 'https://evil.example/%E2%80%AEgpj.moc.elgoog';
   assert.equal(readableSourceUrl(spoof), spoof, 'U+202E used to be decoded into the text');
-  assert.equal(
-    readableSourceUrl('https://example.com/%E5%9B%BE%E7%89%87'),
-    'https://example.com/图片',
-  );
+  assert.equal(readableSourceUrl('https://example.com/%E5%9B%BE%E7%89%87'), 'https://example.com/图片');
   assert.equal(readableSourceUrl('https://example.com/a%20b'), 'https://example.com/a b');
-  assert.equal(
-    readableSourceUrl('https://example.com/%E2%80%8Bx%00'),
-    'https://example.com/%E2%80%8Bx%00',
-  );
+  assert.equal(readableSourceUrl('https://example.com/%E2%80%8Bx%00'), 'https://example.com/%E2%80%8Bx%00');
   assert.equal(
     readableSourceUrl('https://example.com/%E0%A4'),
     'https://example.com/%E0%A4',
@@ -311,10 +284,6 @@ test('P3-F6: 加载更多 is offered by page count, not by rows', () => {
     false,
     'rows < total used to offer it for ever',
   );
-  assert.equal(
-    comments.hasMoreDerpiComments([page(50), page(0)], 400),
-    false,
-    'an empty page is the end',
-  );
+  assert.equal(comments.hasMoreDerpiComments([page(50), page(0)], 400), false, 'an empty page is the end');
   assert.equal(comments.hasMoreDerpiComments([page(10)], null), false);
 });

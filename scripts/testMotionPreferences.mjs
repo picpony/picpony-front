@@ -45,9 +45,7 @@ function reset() {
 }
 
 test('named category preferences survive reordering and reject invalid or oversized values', () => {
-  const parsed = model.parseMotionCustom(
-    'page:slow,feedback:fast,image:warp,unknown:fast,__proto__:slow',
-  );
+  const parsed = model.parseMotionCustom('page:slow,feedback:fast,image:warp,unknown:fast,__proto__:slow');
   assert.deepEqual(parsed, { ...model.motionPreset('default'), feedback: 'fast', page: 'slow' });
   assert.deepEqual(model.parseMotionCustom(model.formatMotionCustom(parsed)), parsed);
   for (const invalid of [null, undefined, '', 'bad', 'page:slow,'.repeat(150)]) {
@@ -115,11 +113,7 @@ test('custom effects seed the resolved tier, preserve speed edits and gate categ
   assert.equal(appearance.motionTier('image'), 'reduced');
   assert.equal(appearance.motionTier('overlay'), 'standard');
   assert.equal(appearance.motionScale(), 0);
-  assert.equal(
-    appearance.motionScale('overlay'),
-    0.7,
-    'a disabled feedback clock cannot stop an enabled overlay',
-  );
+  assert.equal(appearance.motionScale('overlay'), 0.7, 'a disabled feedback clock cannot stop an enabled overlay');
   assert.equal(
     appearance.motionRatio('overlay'),
     0.5,
@@ -138,11 +132,7 @@ test('custom effects seed the resolved tier, preserve speed edits and gate categ
   assert.equal(appearance.motionScale('overlay'), 0.7);
   const standard = timing.springTiming('defaultSpatial', 'overlay');
   const reduced = timing.springTiming('defaultSpatial', 'image');
-  assert.notEqual(
-    standard.easing,
-    reduced.easing,
-    'a reduced image does not remove the overlay spring overshoot',
-  );
+  assert.notEqual(standard.easing, reduced.easing, 'a reduced image does not remove the overlay spring overshoot');
 });
 
 test('effects presets overwrite all categories while keeping custom mode and custom speeds', () => {
@@ -201,12 +191,7 @@ test('reduced preserves category speeds and off wins over every category and spr
 });
 
 test('pre-paint storage recovery matches the server model and works before hydration', () => {
-  for (const raw of [
-    null,
-    'page:slow,feedback:fast',
-    'overlay:warp,ambient:slow',
-    'x'.repeat(1025),
-  ]) {
+  for (const raw of [null, 'page:slow,feedback:fast', 'overlay:warp,ambient:slow', 'x'.repeat(1025)]) {
     const css = new Map();
     const element = {
       dataset: {},
@@ -260,12 +245,9 @@ test('GSAP category springs compensate for the global clock exactly once', () =>
     '@/lib/springTiming': timing,
     '@/lib/motionTokens': { DURATION: { short: 0.2 }, EASE: {} },
   };
-  const source = ts.transpileModule(
-    readFileSync(new URL('../lib/motion/engine.ts', import.meta.url), 'utf8'),
-    {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    },
-  ).outputText;
+  const source = ts.transpileModule(readFileSync(new URL('../lib/motion/engine.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
   vm.runInNewContext(source, {
     exports,
     require: (name) => {
@@ -279,9 +261,7 @@ test('GSAP category springs compensate for the global clock exactly once', () =>
       appearance.commitMotionCustom({ ...model.motionPreset('default'), feedback, overlay });
       const wallSeconds = exports.spring('defaultSpatial', 'overlay').duration / globalSpeed;
       assert.ok(
-        Math.abs(
-          wallSeconds - springs.SPRING_DURATION.defaultSpatial * model.MOTION_SPEED_SCALE[overlay],
-        ) < 1e-9,
+        Math.abs(wallSeconds - springs.SPRING_DURATION.defaultSpatial * model.MOTION_SPEED_SCALE[overlay]) < 1e-9,
       );
     }
   }

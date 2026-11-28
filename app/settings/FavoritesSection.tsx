@@ -53,12 +53,7 @@ export default function FavoritesSection() {
         label="默认收藏夹"
         supporting={`「${resolved.name}」`}
         action={
-          <RowButton
-            label="选择默认收藏夹"
-            icon={<MdEdit />}
-            onClick={() => setChoosing(true)}
-            collapse={false}
-          >
+          <RowButton label="选择默认收藏夹" icon={<MdEdit />} onClick={() => setChoosing(true)} collapse={false}>
             选择
           </RowButton>
         }
@@ -79,8 +74,7 @@ export default function FavoritesSection() {
         onClose={() => setChoosing(false)}
         onConfirm={(id) => {
           const folder = folders?.find((each) => each.id === id);
-          if (folder)
-            changeSyncedSetting('defaultFaveFolder', { id: folder.id, name: folderLabel(folder) });
+          if (folder) changeSyncedSetting('defaultFaveFolder', { id: folder.id, name: folderLabel(folder) });
           setChoosing(false);
         }}
       />

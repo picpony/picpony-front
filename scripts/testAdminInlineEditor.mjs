@@ -16,10 +16,7 @@ import { transformSync } from '@babel/core';
 import compiler from 'babel-plugin-react-compiler';
 import ts from 'typescript';
 
-const source = readFileSync(
-  path.resolve(import.meta.dirname, '../components/InlineEditorPanel.tsx'),
-  'utf8',
-);
+const source = readFileSync(path.resolve(import.meta.dirname, '../components/InlineEditorPanel.tsx'), 'utf8');
 
 /** Keyframes built inside the vm context carry its realm's prototypes; compare their data. */
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -107,8 +104,7 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
     getBoundingClientRect() {
       /* A follower moves up by the panel's footprint while the panel is collapsed for a read — or
          by less, when the free space of a short page holds it (`pinned`). */
-      const collapsed =
-        this !== panel && panelCollapsed() && this.follows ? -(this.pinned ?? 589) : 0;
+      const collapsed = this !== panel && panelCollapsed() && this.follows ? -(this.pinned ?? 589) : 0;
       const top = this.top - scroller.scrollTop + (this.drawnY ?? 0) + collapsed;
       return { top, bottom: top + this.height, height: this.height };
     }
@@ -252,11 +248,7 @@ function switchEditor({ replaceRow = false, matchingId = true } = {}) {
 
 test('the component compiles whole: no opt-out, and the compiler kept it', () => {
   assert.doesNotMatch(source, /'use no memo'/, 'the WAAPI version needs no compiler opt-out');
-  assert.match(
-    compiled,
-    /react\/compiler-runtime/,
-    'the React Compiler bailed out of InlineEditorPanel',
-  );
+  assert.match(compiled, /react\/compiler-runtime/, 'the React Compiler bailed out of InlineEditorPanel');
 });
 
 test('R9-038 commit holds the pressed row before paint, including a React replacement node', () => {
@@ -288,22 +280,11 @@ test('M1-032 opening: a two-box translate clip, the content behind it, what foll
   assert.equal(rise.timing.delay, 40, 'the content arrives behind the panel');
   assert.equal(rise.timing.fill, 'backwards');
   assert.deepEqual(plain(fadeIn.keyframes), [{ opacity: 0 }, { opacity: 1 }]);
-  assert.equal(
-    fadeIn.timing.easing,
-    'linear(defaultEffects)',
-    'opacity on the effects twin, which cannot overshoot',
-  );
+  assert.equal(fadeIn.timing.easing, 'linear(defaultEffects)', 'opacity on the effects twin, which cannot overshoot');
   /* An open nothing pressed derives the push: everything after moved down by the footprint. */
   assert.equal(h.motion.started.length, 1);
-  assert.deepEqual(plain(h.motion.started[0].keyframes), [
-    { transform: 'translateY(-589px)' },
-    { transform: 'none' },
-  ]);
-  assert.equal(
-    h.motion.started[0].timing.easing,
-    'linear(layout)',
-    "what follows moves on the clip's own spring",
-  );
+  assert.deepEqual(plain(h.motion.started[0].keyframes), [{ transform: 'translateY(-589px)' }, { transform: 'none' }]);
+  assert.equal(h.motion.started[0].timing.easing, 'linear(layout)', "what follows moves on the clip's own spring");
 });
 
 test('M1-032 a follower the press saw higher glides from there, counted against its layout box', () => {
@@ -319,10 +300,7 @@ test('M1-032 a follower the press saw higher glides from there, counted against 
   next.drawnY = 40;
   h.render({}).commit();
   assert.equal(h.motion.started.length, 1);
-  assert.deepEqual(plain(h.motion.started[0].keyframes), [
-    { transform: 'translateY(-589px)' },
-    { transform: 'none' },
-  ]);
+  assert.deepEqual(plain(h.motion.started[0].keyframes), [{ transform: 'translateY(-589px)' }, { transform: 'none' }]);
 });
 
 test('M1-030 a StrictMode remount adopts the running opening instead of landing it', () => {
@@ -342,11 +320,7 @@ test('M1-030 a StrictMode remount adopts the running opening instead of landing 
     0,
     'nothing was landed or cancelled',
   );
-  assert.equal(
-    h.panel.animations.length + h.log.length,
-    created,
-    'the second mount started nothing',
-  );
+  assert.equal(h.panel.animations.length + h.log.length, created, 'the second mount started nothing');
   assert.equal(h.motion.started.length, 1, 'the reflow is still running');
 
   /* A real unmount lands everything, its own moves only. */
@@ -469,9 +443,7 @@ test('减弱 fades the panel and moves nothing; 关闭 runs nothing and removes 
   assert.equal(reduced.panel.animations.length, 1);
   assert.deepEqual(plain(reduced.panel.animations[0].keyframes), [{ opacity: 0 }, { opacity: 1 }]);
   assert.equal(
-    reduced.surface.animations.length +
-      reduced.content.animations.length +
-      reduced.motion.started.length,
+    reduced.surface.animations.length + reduced.content.animations.length + reduced.motion.started.length,
     0,
   );
 
@@ -565,20 +537,13 @@ test("under the last row, the row's bottom corners move with the panel instead o
     { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
   ]);
   assert.equal(rounding.timing.easing, 'linear(layout)');
-  assert.equal(
-    rounding.timing.fill,
-    'forwards',
-    "held at the run's end until the removal gives the row those corners",
-  );
+  assert.equal(rounding.timing.fill, 'forwards', "held at the run's end until the removal gives the row those corners");
   h.panel.animations.at(-1).finish();
   await h.panel.animations.at(-1).finished;
   await Promise.resolve();
   assert.ok(exited && rounding.cancelled);
   const tail = h.log
-    .filter(
-      ([kind, name]) =>
-        kind === 'flushSync' || kind === 'exit' || (kind === 'cancel' && name === 'row'),
-    )
+    .filter(([kind, name]) => kind === 'flushSync' || kind === 'exit' || (kind === 'cancel' && name === 'row'))
     .map(([kind]) => kind);
   assert.deepEqual(
     tail.slice(-3),
@@ -604,8 +569,7 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
   modalScroller.getBoundingClientRect = () => ({ top: 120, bottom: 680, height: 560 });
   const row = new h.Element('row', 2450);
   row.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
-  h.panel.closest = (selector) =>
-    selector === '[data-app-scroll-container]' ? modalScroller : null;
+  h.panel.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
   h.panel.previousElementSibling = row;
   h.exports.captureInlineEditorLayout({
     closest: (selector) => (selector === '.m3-row' ? row : null),
@@ -619,11 +583,7 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
     'the modal scroll body absorbs the row shift instead of the background page',
   );
   assert.equal(h.scroller.scrollTop, 2000, 'the page scroller behind the modal is untouched');
-  assert.equal(
-    h.motion.owned.length,
-    1,
-    'opening signals layout ownership to an enclosing FollowHeight',
-  );
+  assert.equal(h.motion.owned.length, 1, 'opening signals layout ownership to an enclosing FollowHeight');
 
   const { commit } = h.render({ isClosing: true, onExitComplete() {} });
   cleanup();
@@ -632,9 +592,5 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
   clip.finish();
   await clip.finished;
   await Promise.resolve();
-  assert.equal(
-    h.motion.owned.length,
-    2,
-    'closing signals layout ownership right before unmounting the panel',
-  );
+  assert.equal(h.motion.owned.length, 2, 'closing signals layout ownership right before unmounting the panel');
 });

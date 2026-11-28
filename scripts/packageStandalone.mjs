@@ -35,8 +35,7 @@ const standalone = path.join(root, '.next/standalone');
 /** `--platform linux-x64` names the package; the default is the host that built it. */
 const args = process.argv.slice(2);
 const platformFlag = args.indexOf('--platform');
-const platform =
-  platformFlag === -1 ? `${process.platform}-${process.arch}` : (args[platformFlag + 1] ?? '');
+const platform = platformFlag === -1 ? `${process.platform}-${process.arch}` : (args[platformFlag + 1] ?? '');
 if (!/^[a-z0-9]+-[a-z0-9]+$/.test(platform)) {
   console.error(`package:standalone: bad platform ${JSON.stringify(platform)}`);
   process.exit(1);
@@ -90,16 +89,11 @@ const buildId = existsSync(buildIdFile) ? readFileSync(buildIdFile, 'utf8').trim
  */
 const packageFile = path.join(out, 'package.json');
 const { name, version, engines } = JSON.parse(readFileSync(packageFile, 'utf8'));
-writeFileSync(
-  packageFile,
-  `${JSON.stringify({ name, version, private: true, engines }, null, 2)}\n`,
-);
+writeFileSync(packageFile, `${JSON.stringify({ name, version, private: true, engines }, null, 2)}\n`);
 
 const launch = windows ? 'run.cmd' : 'sh run.sh';
 const portExample = windows ? 'set PORT=8080 && run.cmd' : 'PORT=8080 sh run.sh';
-const hostExample = windows
-  ? 'set HOSTNAME=127.0.0.1 && set PORT=3100 && run.cmd'
-  : 'HOSTNAME=127.0.0.1 sh run.sh';
+const hostExample = windows ? 'set HOSTNAME=127.0.0.1 && set PORT=3100 && run.cmd' : 'HOSTNAME=127.0.0.1 sh run.sh';
 /* Set by GitHub Actions; a local package is from whatever the checkout happened to hold. */
 const commit = process.env.GITHUB_SHA?.slice(0, 12);
 

@@ -157,10 +157,7 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
 }
 
 /** Run once now, joining a run already going for the same account. */
-export function syncTagSubscriptionsNow(
-  token: string,
-  now: () => number = Date.now,
-): Promise<SyncResult> {
+export function syncTagSubscriptionsNow(token: string, now: () => number = Date.now): Promise<SyncResult> {
   if (running?.token === token) return running.promise;
   attempts.set(token, now());
   const promise = run(token, now).finally(() => {

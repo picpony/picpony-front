@@ -87,11 +87,7 @@ const SKIP_FLOW_DIRECTION = () => ({});
 const IGNORE_ALL_MUTATIONS = () => true;
 const SYNC_ATTR = 'data-os-sync';
 
-function isGeometryStale(
-  viewport: HTMLElement,
-  instance: OverlayScrollbarsInstance,
-  axis: ScrollbarAxis,
-): boolean {
+function isGeometryStale(viewport: HTMLElement, instance: OverlayScrollbarsInstance, axis: ScrollbarAxis): boolean {
   const clientW = viewport.clientWidth;
   const clientH = viewport.clientHeight;
   if (clientW === 0 && clientH === 0) return false;
@@ -232,8 +228,7 @@ export function buildScrollbarOptions(
   autoHideSuspend?: boolean,
 ): PartialOptions {
   const coarse = isCoarsePointer();
-  const resolvedAutoHide: ScrollbarsAutoHideBehavior =
-    autoHide === 'auto' ? (coarse ? 'scroll' : 'leave') : autoHide;
+  const resolvedAutoHide: ScrollbarsAutoHideBehavior = autoHide === 'auto' ? (coarse ? 'scroll' : 'leave') : autoHide;
   const suspend = coarse ? false : (autoHideSuspend ?? autoHide === 'auto');
 
   return {
@@ -312,10 +307,7 @@ export function mountSlottedScrollbar(
     autoHideSuspend,
     defer = false,
     observeInput = false,
-  }: Pick<
-    OverlayScrollbarOptions,
-    'axis' | 'autoHide' | 'autoHideSuspend' | 'defer' | 'observeInput'
-  > = {},
+  }: Pick<OverlayScrollbarOptions, 'axis' | 'autoHide' | 'autoHideSuspend' | 'defer' | 'observeInput'> = {},
 ): OverlayScrollbarHandle {
   let disposed = false;
   let instance: OverlayScrollbarsInstance | null = null;
@@ -328,8 +320,7 @@ export function mountSlottedScrollbar(
   const ignoreMutations = axis === 'y' && viewport.tagName !== 'P' && !viewport.isContentEditable;
 
   const isTransitionBusy = () =>
-    viewport.hasAttribute('data-axis-running') ||
-    document.documentElement.hasAttribute('data-image-hero-transition');
+    viewport.hasAttribute('data-axis-running') || document.documentElement.hasAttribute('data-image-hero-transition');
 
   const waitForMotionSettle = () => {
     if (motionWaitObserver || typeof MutationObserver === 'undefined') return;

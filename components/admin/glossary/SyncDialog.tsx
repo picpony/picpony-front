@@ -59,11 +59,9 @@ async function syncPages(
       if (!current()) break;
       result.failedPages += 1;
       /* One sentence for the first failed page; the tally says how many. */
-      if (result.failedPages === 1)
-        showToast(apiErrorMessage(error, `第 ${page} 页同步失败`), 'error');
+      if (result.failedPages === 1) showToast(apiErrorMessage(error, `第 ${page} 页同步失败`), 'error');
     }
-    if (page < range.to && current())
-      await new Promise((resolve) => setTimeout(resolve, PAGE_PAUSE_MS));
+    if (page < range.to && current()) await new Promise((resolve) => setTimeout(resolve, PAGE_PAUSE_MS));
   }
 }
 
@@ -91,9 +89,7 @@ export default function SyncDialog({
   const [start, setStart] = useState('1');
   const [end, setEnd] = useState('20');
   const [errors, setErrors] = useState<{ start?: string; end?: string }>({});
-  const [progress, setProgress] = useState<{ done: number; total: number; page: number } | null>(
-    null,
-  );
+  const [progress, setProgress] = useState<{ done: number; total: number; page: number } | null>(null);
   const [stopping, setStopping] = useState(false);
   const run = useRef(0);
   const locked = useRef(false);
@@ -186,15 +182,8 @@ export default function SyncDialog({
         )
       }
     >
-      <AdminForm
-        id={FORM_ID}
-        onSubmit={() => void submit()}
-        className="max-w-none"
-        aria-label="同步原站热门标签"
-      >
-        <AdminNote>
-          按原站图片数量从高到低拉取标签，每页 50 个；词库中已有的标签会跳过，新标签记为未翻译。
-        </AdminNote>
+      <AdminForm id={FORM_ID} onSubmit={() => void submit()} className="max-w-none" aria-label="同步原站热门标签">
+        <AdminNote>按原站图片数量从高到低拉取标签，每页 50 个；词库中已有的标签会跳过，新标签记为未翻译。</AdminNote>
         <FollowHeight watch={running}>
           <SwapContent contentKey={running ? 'running' : 'idle'}>
             {running ? (

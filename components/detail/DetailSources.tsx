@@ -12,11 +12,7 @@ import { readableSourceUrl, sourceLinksOf } from '@/lib/imageSources';
  * where the ordinary break-word rule leaves the box's minimum width at the longest segment and the
  * first line runs off the screen (the detail's scrollers clip sideways now).
  */
-export default function DetailSources({
-  image,
-}: {
-  image: Pick<ImagePreview, 'source_url' | 'source_urls'>;
-}) {
+export default function DetailSources({ image }: { image: Pick<ImagePreview, 'source_url' | 'source_urls'> }) {
   const headingId = useId();
   const sources = sourceLinksOf(image);
   if (sources.length === 0) return null;

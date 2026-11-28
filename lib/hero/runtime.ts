@@ -1,11 +1,6 @@
 'use client';
 
-import type {
-  HeroNavigation,
-  HeroStageNodes,
-  ImageHeroRuntimeState,
-  ImageHeroStageState,
-} from './types';
+import type { HeroNavigation, HeroStageNodes, ImageHeroRuntimeState, ImageHeroStageState } from './types';
 
 /**
  * The part of the hero system the **shell** needs on every route, and nothing else: the runtime

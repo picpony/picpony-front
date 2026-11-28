@@ -23,8 +23,7 @@ export function savedSemanticTiming(
         : values.semantic_cloud_enabled === true,
     semantic_cloud_has_key: hasKey,
     semantic_cloud_timeout_ms:
-      integer(response.semantic_cloud_timeout_ms, 500, 30000) ??
-      Number(values.semantic_cloud_timeout_ms),
+      integer(response.semantic_cloud_timeout_ms, 500, 30000) ?? Number(values.semantic_cloud_timeout_ms),
     semantic_search_estimate_ms:
       typeof measured === 'number' || typeof measured === 'string' ? Number(measured) : undefined,
   });

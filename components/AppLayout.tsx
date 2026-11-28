@@ -13,12 +13,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import {
-  usePathname,
-  useRouter,
-  useSearchParams,
-  useSelectedLayoutSegments,
-} from 'next/navigation';
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegments } from 'next/navigation';
 import {
   MdMenu,
   MdSearch,
@@ -105,13 +100,7 @@ import { heroOwnsScreen } from '@/lib/appScroller';
 import { clearBottomChrome, setBottomChrome } from '@/lib/bottomChrome';
 import { clearAllTabScroll } from '@/lib/tabScroll';
 import { holdFooterWhileLoading } from '@/lib/pageLoadingHold';
-import {
-  ensureHomeBackStack,
-  homeTabOf,
-  setHomeTabSwitcher,
-  writeHomeTab,
-  type HomeTab,
-} from '@/lib/homeTabs';
+import { ensureHomeBackStack, homeTabOf, setHomeTabSwitcher, writeHomeTab, type HomeTab } from '@/lib/homeTabs';
 import {
   clearUserInfo,
   readToken,
@@ -139,9 +128,7 @@ import { parseSidebarMode, type SidebarMode } from '@/lib/sidebarMode';
  * A prefetch of the whole route, page and all (`lib/routePayload.ts`). The router takes it as the
  * `kind` its own `prefetch` declares, whose enum Next does not export; this is its `full` member.
  */
-const FULL_PREFETCH = 'full' as NonNullable<
-  Parameters<ReturnType<typeof useRouter>['prefetch']>[1]
->['kind'];
+const FULL_PREFETCH = 'full' as NonNullable<Parameters<ReturnType<typeof useRouter>['prefetch']>[1]>['kind'];
 
 /**
  * The account's Derpibooru key, mirrored where the request layer reads it. Outside the component
@@ -172,9 +159,7 @@ function SearchBar() {
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     if (pathname === '/search') {
-      const field = document.querySelector<HTMLInputElement>(
-        '[data-page-content] input[data-search-field]',
-      );
+      const field = document.querySelector<HTMLInputElement>('[data-page-content] input[data-search-field]');
       if (field) {
         scrollAppToElement(field, { offset: 16 });
         field.focus({ preventScroll: true });
@@ -362,8 +347,7 @@ function TabNavBar({
       const height = Math.round(node.offsetHeight);
       // A hidden band measures 0: keep the last real height rather than restyling to it.
       if (height > 0) measuredHeight.current = height;
-      if (measuredHeight.current > 0)
-        setBottomChrome(owner, measuredHeight.current, shownRef.current);
+      if (measuredHeight.current > 0) setBottomChrome(owner, measuredHeight.current, shownRef.current);
     };
     write();
     const observer = new ResizeObserver(write);
@@ -460,11 +444,7 @@ function readShellHeroView(): ShellHeroView {
         : 'moving';
   const back = runtime.direction === 'back';
   const background = runtime.background;
-  if (
-    shellHeroView.settle !== settle ||
-    shellHeroView.back !== back ||
-    shellHeroView.background !== background
-  ) {
+  if (shellHeroView.settle !== settle || shellHeroView.back !== back || shellHeroView.background !== background) {
     shellHeroView = { settle, back, background };
   }
   return shellHeroView;
@@ -538,11 +518,7 @@ export default function AppLayout({
      only covers the overlay, and a direct visit left the drawer's edge-swipe armed underneath
      a screen you pan and swipe on. */
   const isImageDetailRoute = Boolean(imageDetailId);
-  const imageHeroRuntime = useSyncExternalStore(
-    subscribeImageHeroRuntime,
-    readShellHeroView,
-    readShellHeroView,
-  );
+  const imageHeroRuntime = useSyncExternalStore(subscribeImageHeroRuntime, readShellHeroView, readShellHeroView);
   const { openAuth } = useAuthModal();
   const { confirm, confirmDialog } = useConfirm();
   /* A traversal reaches the list before the router publishes it: the browser is back on the
@@ -554,9 +530,7 @@ export default function AppLayout({
      record there kept `/` as the background of the next page — 主页 highlighted and the home
      pill floating over /search (R12-018). */
   const browserLeftDetail =
-    isImageDetailOpen &&
-    typeof window !== 'undefined' &&
-    !/^\/pic\/[^/]+$/.test(window.location.pathname);
+    isImageDetailOpen && typeof window !== 'undefined' && !/^\/pic\/[^/]+$/.test(window.location.pathname);
   /* A close holds the gallery exactly as it was under the detail until its flight is on the
      compositor (`galleryExposed`, see `HeroController.exposeGallery`): the restyle that lifting
      `inert` costs then runs under a moving picture instead of in front of it. */
@@ -640,15 +614,12 @@ export default function AppLayout({
      compared the list with itself. With no detail open, a record whose page is not the one
      being rendered is already stale. (A close lands on its record's own page, so it keeps it.) */
   const recordedBackground =
-    imageHeroRuntime.background &&
-    (isImageDetailOpen || imageHeroRuntime.background.pathname === pathname)
+    imageHeroRuntime.background && (isImageDetailOpen || imageHeroRuntime.background.pathname === pathname)
       ? imageHeroRuntime.background
       : null;
   const imageHeroBackground =
     recordedBackground ??
-    (browserLeftDetail
-      ? { pathname: window.location.pathname, search: window.location.search }
-      : null) ??
+    (browserLeftDetail ? { pathname: window.location.pathname, search: window.location.search } : null) ??
     (isImageDetailOpen ? (readDetailBackground(pathname) ?? lastPageLocation) : null);
   const backgroundPathname = imageHeroBackground?.pathname ?? pathname;
   const frozenBackgroundSearch = imageHeroBackground?.search ?? null;
@@ -682,9 +653,7 @@ export default function AppLayout({
      picture used to cut straight to the next page. A close never gets here — it lands on its
      record's own page, so the background does not change. */
   const crossFadeEnabled =
-    (imageHeroRuntime.settle === 'gallery-idle' &&
-      !imageHeroRuntime.background &&
-      !isImageDetailOpen) ||
+    (imageHeroRuntime.settle === 'gallery-idle' && !imageHeroRuntime.background && !isImageDetailOpen) ||
     (imageHeroRuntime.settle === 'detail-idle' && !isImageDetailOpen);
 
   useEffect(() => {
@@ -995,8 +964,7 @@ export default function AppLayout({
       setModalOpen((open) => !open);
       return;
     }
-    const next: SidebarMode =
-      dockedMode === 'expanded' ? 'icons' : dockedMode === 'icons' ? 'hidden' : 'expanded';
+    const next: SidebarMode = dockedMode === 'expanded' ? 'icons' : dockedMode === 'icons' ? 'hidden' : 'expanded';
     setDockedMode(next);
     persistDockedMode(next);
   };
@@ -1087,10 +1055,7 @@ export default function AppLayout({
           back.removeAttribute('data-return-focus');
           return;
         }
-        if (
-          getComputedStyle(back).visibility === 'hidden' &&
-          performance.now() < started + RETURN_WAIT_MS
-        ) {
+        if (getComputedStyle(back).visibility === 'hidden' && performance.now() < started + RETURN_WAIT_MS) {
           frame = requestAnimationFrame(land);
           return;
         }
@@ -1134,9 +1099,7 @@ export default function AppLayout({
     [],
   );
   const coveredHomeGallery =
-    isImageDetailOpen &&
-    onHome &&
-    new URLSearchParams(frozenBackgroundSearch ?? '').get('tab') !== 'forum';
+    isImageDetailOpen && onHome && new URLSearchParams(frozenBackgroundSearch ?? '').get('tab') !== 'forum';
 
   return (
     <BackgroundLocationProvider frozenSearch={providedBackgroundSearch}>
@@ -1207,18 +1170,10 @@ export default function AppLayout({
               }
               className="ml-1 touch-size"
               icon={
-                <span
-                  ref={themeIconRef}
-                  key={scheme}
-                  className={cn('block', swapTo === scheme && 'animate-icon-swap')}
-                >
+                <span ref={themeIconRef} key={scheme} className={cn('block', swapTo === scheme && 'animate-icon-swap')}>
                   {/* The glyph shows the scheme you are *in*, not the one you would switch
                       to — matching the label beside it. */}
-                  {scheme === 'dark' ? (
-                    <MdDarkMode size={ICON.standard} />
-                  ) : (
-                    <MdLightMode size={ICON.standard} />
-                  )}
+                  {scheme === 'dark' ? <MdDarkMode size={ICON.standard} /> : <MdLightMode size={ICON.standard} />}
                 </span>
               }
             />
@@ -1240,10 +1195,7 @@ export default function AppLayout({
                 href="/messages"
                 aria-label={messagesLabel}
                 data-ripple="inner"
-                className={cn(
-                  iconButtonClasses({ variant: 'on-primary', size: 'md' }),
-                  'touch-size',
-                )}
+                className={cn(iconButtonClasses({ variant: 'on-primary', size: 'md' }), 'touch-size')}
               >
                 <span data-ripple-host="" aria-hidden="true" />
                 <MdNotifications aria-hidden="true" />
@@ -1271,9 +1223,7 @@ export default function AppLayout({
             'fixed inset-0 z-drawer-scrim bg-scrim-veil transition-opacity md:hidden',
             /* A scrim only fades, so it takes the panel's *effects* spring both ways: on the
                panel's spatial clock its opacity would be clipped at 1 through the overshoot. */
-            modalOpen
-              ? 'spring-default-effects opacity-100'
-              : 'spring-default-effects pointer-events-none opacity-0',
+            modalOpen ? 'spring-default-effects opacity-100' : 'spring-default-effects pointer-events-none opacity-0',
           )}
           onClick={closeModalDrawer}
           aria-hidden="true"
@@ -1320,9 +1270,7 @@ export default function AppLayout({
               'app-sidebar flex flex-col overflow-hidden bg-surface-container-low transition-[width,margin-right,translate]',
               'fixed inset-y-0 left-0 z-drawer w-[min(18rem,calc(100vw-3.5rem))] rounded-r-lg edge-skirt-l',
               'md:relative md:inset-auto md:z-auto md:h-full md:shrink-0 md:rounded-none md:shadow-none',
-              modalOpen
-                ? 'surface-enter translate-x-0'
-                : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
+              modalOpen ? 'surface-enter translate-x-0' : 'spring-fast-effects -translate-x-[calc(100%+0.5rem)]',
               /* Docked, one curve both ways (`drawer-dock`): the margin is the content area's
                  width, and a page that widens on one curve and narrows on another reads as two
                  different motions. */
@@ -1400,9 +1348,7 @@ export default function AppLayout({
                     <Avatar size={40} />
                     <span className="sidebar-label min-w-0 flex-1">
                       <span className="text-title-s text-on-surface block truncate">未登录</span>
-                      <span className="text-body-s text-on-surface-variant block truncate">
-                        点击登录
-                      </span>
+                      <span className="text-body-s text-on-surface-variant block truncate">点击登录</span>
                     </span>
                   </button>
                 )}
@@ -1467,10 +1413,7 @@ export default function AppLayout({
                   'data-scroll-hidden': detailCovers ? '' : undefined,
                 }}
               >
-                <div
-                  data-image-detail-background-visual
-                  className="flex min-h-full w-full flex-col"
-                >
+                <div data-image-detail-background-visual className="flex min-h-full w-full flex-col">
                   <div
                     key={`${backgroundPathname}:${sessionEpoch}`}
                     data-page-content
@@ -1545,11 +1488,7 @@ export default function AppLayout({
                     </footer>
                   </div>
                 </div>
-                <div
-                  data-image-hero-gallery-anchor
-                  aria-hidden="true"
-                  className="image-hero-gallery-anchor"
-                />
+                <div data-image-hero-gallery-anchor aria-hidden="true" className="image-hero-gallery-anchor" />
               </ScrollArea>
               {/* The sibling immediately above `RouteCrossFade`, so the ordering is stated
                   rather than incidental: within one commit phase React runs siblings in

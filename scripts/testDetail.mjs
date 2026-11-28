@@ -42,14 +42,10 @@ globalThis.fetch = async (url) => {
 const markup = await import('../lib/derpiMarkup.ts');
 
 test('a Derpibooru comment links to Derpibooru, and its picture references to this app', () => {
-  const body =
-    '[@Someone](/images/232093#comment_10184427)\n>>123 and >>456s here (>>789t)\nsee [tag](/tags/pony)';
+  const body = '[@Someone](/images/232093#comment_10184427)\n>>123 and >>456s here (>>789t)\nsee [tag](/tags/pony)';
   const out = markup.derpiMarkdown(body);
   assert.match(out, /\]\(https:\/\/derpibooru\.org\/images\/232093#comment_10184427\)/);
-  assert.match(
-    out,
-    /^\[>>123\]\(\/pic\/123\) and \[>>456\]\(\/pic\/456\) here \(\[>>789\]\(\/pic\/789\)\)/m,
-  );
+  assert.match(out, /^\[>>123\]\(\/pic\/123\) and \[>>456\]\(\/pic\/456\) here \(\[>>789\]\(\/pic\/789\)\)/m);
   assert.match(out, /\]\(https:\/\/derpibooru\.org\/tags\/pony\)/);
   /* An absolute link and a protocol-relative one are left as written. */
   assert.equal(
@@ -59,20 +55,17 @@ test('a Derpibooru comment links to Derpibooru, and its picture references to th
   /* A reference inside a word, or a number after a quote marker with no second `>`, is not one. */
   assert.equal(markup.derpiMarkdown('a>>12 > 34'), 'a>>12 > 34');
   /* Code is shown as written. */
-  assert.equal(
-    markup.derpiMarkdown('`>>123` and\n```\n>>456 [x](/y)\n```'),
-    '`>>123` and\n```\n>>456 [x](/y)\n```',
-  );
+  assert.equal(markup.derpiMarkdown('`>>123` and\n```\n>>456 [x](/y)\n```'), '`>>123` and\n```\n>>456 [x](/y)\n```');
   /* A quoted reference is still a reference. */
   assert.equal(markup.derpiMarkdown('> >>42 quoted'), '> [>>42](/pic/42) quoted');
   assert.equal(markup.derpiMarkdown(null), '');
 });
 
 test('a link to a Derpibooru comment is recognised in every spelling Philomena writes', () => {
-  assert.deepEqual(
-    markup.derpiCommentTarget('https://derpibooru.org/images/232093#comment_10184427'),
-    { imageId: 232093, commentId: 10184427 },
-  );
+  assert.deepEqual(markup.derpiCommentTarget('https://derpibooru.org/images/232093#comment_10184427'), {
+    imageId: 232093,
+    commentId: 10184427,
+  });
   assert.deepEqual(markup.derpiCommentTarget('/images/5#comment_6'), { imageId: 5, commentId: 6 });
   assert.deepEqual(markup.derpiCommentTarget('https://trixiebooru.org/7#comment_8'), {
     imageId: 7,
@@ -125,8 +118,7 @@ test("a translation is the backend's words, and a failure is its sentence rather
     );
   await assert.rejects(
     translate.translateText('Some words'),
-    (error) =>
-      error.code === 'TRANSLATION_NOT_CONFIGURED' && error.message.includes('文本翻译服务未开启'),
+    (error) => error.code === 'TRANSLATION_NOT_CONFIGURED' && error.message.includes('文本翻译服务未开启'),
   );
   await assert.rejects(translate.translateText('   '), /没有可翻译的内容/);
   globalThis.fetch = async (url) => {
@@ -161,11 +153,7 @@ test("the image translation job reads the queue, the finished picture and the se
   assert.equal((await translate.pollImageTranslation(source)).state, 'translating');
   const done = await translate.pollImageTranslation(source);
   assert.equal(done.state, 'completed');
-  assert.equal(
-    done.translatedUrl,
-    '/api/v1/translation/files/abc.png',
-    'served through the same-origin proxy',
-  );
+  assert.equal(done.translatedUrl, '/api/v1/translation/files/abc.png', 'served through the same-origin proxy');
   assert.deepEqual(await translate.pollImageTranslation(source), {
     state: 'failed',
     translatedUrl: null,
@@ -180,17 +168,10 @@ test("the image translation job reads the queue, the finished picture and the se
   /* The raw URL is the service's cache key: sent as is, on every call. */
   assert.equal(calls[0][1], 'POST');
   assert.deepEqual(JSON.parse(calls[0][2]), { image: source });
-  assert.ok(
-    calls
-      .slice(1)
-      .every(([url]) => new URL(url, 'http://localhost').searchParams.get('image') === source),
-  );
+  assert.ok(calls.slice(1).every(([url]) => new URL(url, 'http://localhost').searchParams.get('image') === source));
 
   globalThis.fetch = async () =>
-    Response.json(
-      { error: { code: 'IMAGE_TRANSLATION_DISABLED', message: '图片翻译功能已关闭' } },
-      { status: 503 },
-    );
+    Response.json({ error: { code: 'IMAGE_TRANSLATION_DISABLED', message: '图片翻译功能已关闭' } }, { status: 503 });
   await assert.rejects(
     translate.requestImageTranslation(source),
     (error) =>
@@ -231,10 +212,7 @@ test('a download is named by the picture, whichever line carried it, and falls b
   assert.equal(download.downloadName({ id: 232093, url: raw, format: 'gif' }), '232093.gif');
   /* The last path segment of a wrapped URL is the proxy's query string; the name ignores it. */
   assert.equal(download.downloadName({ id: 232093, url: wrapped }), '232093.gif');
-  assert.equal(
-    download.downloadName({ id: 5, url: 'https://example.com/file', format: 'JPEG' }),
-    '5.jpeg',
-  );
+  assert.equal(download.downloadName({ id: 5, url: 'https://example.com/file', format: 'JPEG' }), '5.jpeg');
   assert.equal(download.downloadName({ id: 6, url: 'https://example.com/file' }), '6');
   const candidates = download.downloadCandidates(wrapped);
   assert.equal(candidates.at(-1), raw);
@@ -243,10 +221,7 @@ test('a download is named by the picture, whichever line carried it, and falls b
 
 test("the original front end's picture link opens the picture, and nothing else does", () => {
   assert.equal(searchState.legacySharedImageHref('#q=id:232093'), '/pic/232093');
-  assert.equal(
-    searchState.legacySharedImageHref('#q=id%3A5&page=1&sf=first_seen_at&sd=desc'),
-    '/pic/5',
-  );
+  assert.equal(searchState.legacySharedImageHref('#q=id%3A5&page=1&sf=first_seen_at&sd=desc'), '/pic/5');
   assert.equal(searchState.legacySharedImageHref('#q=pony'), null);
   assert.equal(searchState.legacySharedImageHref('#q=id:5 OR id:6'), null);
   assert.equal(searchState.legacySharedImageHref('#mode=shared_search&q=id:5'), null);

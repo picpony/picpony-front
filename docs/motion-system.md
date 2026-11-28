@@ -6,23 +6,23 @@ Spring roles, motion preferences and lifecycle rules. [Component motion](motion.
 
 [lib/spring.ts](../lib/spring.ts) is the source of truth. Call sites choose a role, not a duration or easing curve.
 
-| Runtime        | API                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------- |
-| CSS            | Generated `spring-*` utilities and spring tokens                                    |
-| Web Animations | `springTiming`, `surfaceArrival`, `surfaceDeparture` from `lib/springTiming.ts`     |
-| GSAP           | `spring`, `surfaceArrival`, `surfaceDeparture` through the existing motion boundary |
+| Runtime | API |
+| --- | --- |
+| CSS | Generated `spring-*` utilities and spring tokens |
+| Web Animations | `springTiming`, `surfaceArrival`, `surfaceDeparture` from `lib/springTiming.ts` |
+| GSAP | `spring`, `surfaceArrival`, `surfaceDeparture` through the existing motion boundary |
 
 ### Spring roles
 
-| Role             | Use                                                                               |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `fastSpatial`    | Control movement, handle changes, small anchored surfaces                         |
-| `defaultSpatial` | Partial-screen surface movement and tab indicators                                |
-| `slowSpatial`    | Large surface arrival and search expansion                                        |
-| `fastEffects`    | State layers, outgoing colour, small fades and surfaces leaving the screen        |
-| `defaultEffects` | Incoming colour, scrims, dialog fades and corner morphs                           |
-| `slowEffects`    | Full-screen arrival fade                                                          |
-| `layout`         | Bounds following layout: placement, content height, collapse, docked drawer width |
+| Role | Use |
+| --- | --- |
+| `fastSpatial` | Control movement, handle changes, small anchored surfaces |
+| `defaultSpatial` | Partial-screen surface movement and tab indicators |
+| `slowSpatial` | Large surface arrival and search expansion |
+| `fastEffects` | State layers, outgoing colour, small fades and surfaces leaving the screen |
+| `defaultEffects` | Incoming colour, scrims, dialog fades and corner morphs |
+| `slowEffects` | Full-screen arrival fade |
+| `layout` | Bounds following layout: placement, content height, collapse, docked drawer width |
 
 The six spatial/effects roles follow Compose's `MotionScheme.expressive()`. `layout` is the project's critically damped content-size spring. Exact damping, stiffness and settle times remain in the source and generated tokens.
 
@@ -60,11 +60,11 @@ Tooltip first entry establishes its closed style before paint when `@starting-st
 
 `lib/appearance.ts` owns storage, cookies and resolved root attributes. Read the current attribute-backed value rather than interpreting storage at a call site.
 
-| Axis     | Choices                                   | Effect                                     |
-| -------- | ----------------------------------------- | ------------------------------------------ |
-| Motion   | `off` / `reduced` / `standard` / `custom` | Kind of motion                             |
-| Speed    | `fast` / `default` / `slow` / `custom`    | Clock scale: 0.7 / 1 / 1.4                 |
-| Entrance | `blocking` / `non-blocking` / `off`       | Unrequested entrances and splash behaviour |
+| Axis | Choices | Effect |
+| --- | --- | --- |
+| Motion | `off` / `reduced` / `standard` / `custom` | Kind of motion |
+| Speed | `fast` / `default` / `slow` / `custom` | Clock scale: 0.7 / 1 / 1.4 |
+| Entrance | `blocking` / `non-blocking` / `off` | Unrequested entrances and splash behaviour |
 
 Custom motion and speed share the categories in `lib/motionPreferences.ts`. A preset replaces only its own axis. The first custom edit inherits the active preset; later visits retain saved edits.
 
@@ -104,11 +104,11 @@ Do not add a second global duration multiplier for entrance: some keyframes serv
 
 `SplashScreen` follows `entranceMode()`:
 
-| Mode                    | Completion                                                 |
-| ----------------------- | ---------------------------------------------------------- |
+| Mode | Completion |
+| --- | --- |
 | `non-blocking`, default | Document load and a presented frame; can end mid-signature |
-| `blocking`              | Signature completes and holds for its defined pause        |
-| `off`                   | No entrance or splash                                      |
+| `blocking` | Signature completes and holds for its defined pause |
+| `off` | No entrance or splash |
 
 The server includes the splash only when preferences permit; pre-paint attributes must agree before it shows. Reduced/off tiers do not run Lottie or hold the page behind an empty splash. `SplashScreen` does not prefetch Lottie at module evaluation: `blocking` loads `lottie_light` and `logoNonParallel.json` immediately on layout takeover, whereas `non-blocking` delays loading briefly so fast loads dismiss on the static `.logo-mask` with zero Lottie traffic. `Logo`'s hover trace (`logoTrace.json`) loads strictly on pointer hover or keyboard focus intent, never during idle.
 

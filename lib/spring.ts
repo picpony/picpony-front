@@ -103,13 +103,7 @@ export interface SpringSpec {
   stiffness: number;
 }
 
-type SchemeRole =
-  | 'fastSpatial'
-  | 'defaultSpatial'
-  | 'slowSpatial'
-  | 'fastEffects'
-  | 'defaultEffects'
-  | 'slowEffects';
+type SchemeRole = 'fastSpatial' | 'defaultSpatial' | 'slowSpatial' | 'fastEffects' | 'defaultEffects' | 'slowEffects';
 
 /**
  * Compose's two motion schemes, verbatim (`androidx.compose.material3.MotionScheme`). The effects
@@ -239,9 +233,7 @@ function displacement({ damping, stiffness }: SpringSpec): (seconds: number) => 
   }
   const damped = omega * Math.sqrt(1 - damping * damping);
   return (t) =>
-    1 -
-    Math.exp(-damping * omega * t) *
-      (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t));
+    1 - Math.exp(-damping * omega * t) * (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t));
 }
 
 /**

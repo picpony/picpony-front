@@ -67,9 +67,7 @@ function rawResponse(time: number, response: SpringResponse) {
   const wd = damped(response);
   if (wd <= 0) return 1 - (1 + (rate - velocity) * time) * Math.exp(-rate * time);
   const a = (response.damping ?? 1) * rate;
-  return (
-    1 - Math.exp(-a * time) * (Math.cos(wd * time) + ((a - velocity) / wd) * Math.sin(wd * time))
-  );
+  return 1 - Math.exp(-a * time) * (Math.cos(wd * time) + ((a - velocity) / wd) * Math.sin(wd * time));
 }
 
 /** Normalized progress: exactly 0 at t=0 and exactly 1 at t=1. */
@@ -94,8 +92,7 @@ export function springVelocity(time: number, response: SpringResponse) {
   if (Math.abs(end) < 1e-9) return 1;
   const wd = damped(response);
   if (wd <= 0) {
-    const slope =
-      Math.exp(-rate * clamped) * (rate * (1 + (rate - velocity) * clamped) - (rate - velocity));
+    const slope = Math.exp(-rate * clamped) * (rate * (1 + (rate - velocity) * clamped) - (rate - velocity));
     return slope / end;
   }
   /* raw'(t) = e^(-a t) · [v · cos(ω_d t) + (a·C + ω_d) · sin(ω_d t)],  C = (a - v)/ω_d.
@@ -103,9 +100,7 @@ export function springVelocity(time: number, response: SpringResponse) {
      below depends on. */
   const a = (response.damping ?? 1) * rate;
   const c = (a - velocity) / wd;
-  const slope =
-    Math.exp(-a * clamped) *
-    (velocity * Math.cos(wd * clamped) + (a * c + wd) * Math.sin(wd * clamped));
+  const slope = Math.exp(-a * clamped) * (velocity * Math.cos(wd * clamped) + (a * c + wd) * Math.sin(wd * clamped));
   return slope / end;
 }
 
@@ -159,12 +154,7 @@ export function solveSpringVelocity(target: number, response: SpringResponse) {
  * @param distance total px the new motion covers
  * @param duration new motion duration in ms
  */
-export function springVelocityFromSpeed(
-  speed: number,
-  distance: number,
-  duration: number,
-  response: SpringResponse,
-) {
+export function springVelocityFromSpeed(speed: number, distance: number, duration: number, response: SpringResponse) {
   if (!Number.isFinite(speed) || distance <= 0.5 || duration <= 0) return 0;
   // px/ms → progress per normalized time unit.
   return solveSpringVelocity((speed * duration) / distance, response);

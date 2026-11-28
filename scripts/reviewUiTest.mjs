@@ -100,16 +100,14 @@ function resolve(specifier, parent) {
       ? path.resolve(path.dirname(parent), specifier)
       : null;
   if (!file) throw new Error(`Unmapped dependency ${specifier} from ${parent}`);
-  if (!path.extname(file))
-    file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
+  if (!path.extname(file)) file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
   if (!file || !existsSync(file)) throw new Error(`Missing dependency ${specifier}`);
   return file;
 }
 function bundle(id, source) {
   if (modules.has(id)) return;
   modules.set(id, '');
-  let code =
-    source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
+  let code = source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
   if (source !== undefined || /\.tsx?$/.test(id))
     code = ts.transpileModule(code, {
       compilerOptions: {
@@ -130,14 +128,12 @@ bundle('entry', entry);
 const js = `(()=>{const process={env:{NODE_ENV:'production'}};const modules={${[...modules].map(([id, code]) => `${JSON.stringify(id)}:(module,exports,require)=>{${code}\n}`).join(',')}};const cache={};function require(id){if(cache[id])return cache[id].exports;const m={exports:{}};cache[id]=m;modules[id](m,m.exports,require);return m.exports;}require('entry')})();`;
 new Script(js, { filename: 'review-ui-bundle' });
 const server = createServer((req, res) => {
-  if (req.url === '/app.js')
-    return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
+  if (req.url === '/app.js') return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
   if (req.url === '/editor.js')
     return void res
       .writeHead(200, { 'content-type': 'text/javascript' })
       .end(readFileSync(path.join(root, 'node_modules/@wangeditor/editor/dist/index.js')));
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    .end(`<!doctype html><html><body><style>
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><html><body><style>
     :root{--z-dialog:100;--z-popover:200}button{padding:8px;margin:2px}.fixed{position:fixed}.inset-0{inset:0}.z-dialog{z-index:100}.z-popover{z-index:200}.bg-scrim-veil{background:#8888}[role=dialog]{background:white;padding:20px;margin:20px;max-height:90vh;overflow:auto}input,textarea{display:block}[data-slate-editor]{min-height:80px}.invisible{visibility:hidden}
   </style><div id="root"></div><script src="/editor.js"></script><script src="/app.js"></script></body></html>`);
 });

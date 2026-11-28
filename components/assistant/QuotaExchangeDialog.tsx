@@ -40,11 +40,7 @@ export default function QuotaExchangeDialog({
   const rate = pending ? pending.pointsPerCoin : quota.points_per_coin;
   const points = valid && rate ? amount * rate : null;
   const fieldError =
-    !valid && coins !== ''
-      ? '请输入 1 至 100000 的整数'
-      : insufficient
-        ? '金币不足，请减少兑换数量'
-        : undefined;
+    !valid && coins !== '' ? '请输入 1 至 100000 的整数' : insufficient ? '金币不足，请减少兑换数量' : undefined;
   return (
     <Modal
       isOpen={isOpen}
@@ -58,13 +54,7 @@ export default function QuotaExchangeDialog({
           <Button variant="text" disabled={busy} onClick={onClose}>
             取消
           </Button>
-          <Button
-            form={formId}
-            type="submit"
-            variant="filled"
-            disabled={!valid || insufficient}
-            loading={busy}
-          >
+          <Button form={formId} type="submit" variant="filled" disabled={!valid || insufficient} loading={busy}>
             {pending ? '核对结果' : '兑换'}
           </Button>
         </>
@@ -79,8 +69,7 @@ export default function QuotaExchangeDialog({
         className="space-y-4"
       >
         <p className="text-body-m text-on-surface-variant">
-          现有 <span className="text-on-surface tabular-nums">{formatExactCount(quota.coins)}</span>{' '}
-          金币，
+          现有 <span className="text-on-surface tabular-nums">{formatExactCount(quota.coins)}</span> 金币，
           <span className="tabular-nums">1 金币 = {quota.points_per_coin} 点额度</span>
         </p>
         <Input
@@ -128,9 +117,7 @@ export default function QuotaExchangeDialog({
             </Link>
           </p>
         ) : null}
-        {error !== undefined && (
-          <ErrorRetry size="inline" title="兑换未完成" message={apiErrorMessage(error)} />
-        )}
+        {error !== undefined && <ErrorRetry size="inline" title="兑换未完成" message={apiErrorMessage(error)} />}
       </form>
     </Modal>
   );

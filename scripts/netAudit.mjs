@@ -204,9 +204,7 @@ const JOURNEYS = [
     /* `get_faves` is the page's 已收藏 index (`faveIds` in app/favorites/page.tsx), read beside the
        folder list; the covers wait on the folder list alone. On a cold start it could settle just
        before the cover search started and push it from r2 to r3 with no change in the code. */
-    steps: [
-      { label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] },
-    ],
+    steps: [{ label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] }],
   },
   {
     name: 'favorites → back → favorites',
@@ -248,9 +246,7 @@ const JOURNEYS = [
     name: 'cold subscriptions',
     why: 'the screen and drawer share one subscription read',
     auth: true,
-    steps: [
-      { label: 'GET /subscriptions', navigate: '/subscriptions', content: /get_tag_subscriptions/ },
-    ],
+    steps: [{ label: 'GET /subscriptions', navigate: '/subscriptions', content: /get_tag_subscriptions/ }],
   },
   {
     name: 'cold tag groups',
@@ -262,9 +258,7 @@ const JOURNEYS = [
     name: 'cold coin ledger',
     why: 'one ledger read, without fetching the parent task screen',
     auth: true,
-    steps: [
-      { label: 'GET /tasks/coins', navigate: '/tasks/coins', content: /get_coin_transactions/ },
-    ],
+    steps: [{ label: 'GET /tasks/coins', navigate: '/tasks/coins', content: /get_coin_transactions/ }],
   },
 ];
 
@@ -505,10 +499,7 @@ async function runStep(cdp, step, origin, serverReads) {
       byId.set(requestId, entry);
       return;
     }
-    if (
-      message.method === 'Network.loadingFinished' ||
-      message.method === 'Network.loadingFailed'
-    ) {
+    if (message.method === 'Network.loadingFinished' || message.method === 'Network.loadingFailed') {
       activity.finish(message.params.requestId);
       const entry = byId.get(message.params.requestId);
       if (!entry) return;
@@ -554,8 +545,7 @@ async function runStep(cdp, step, origin, serverReads) {
         activity.touch();
       }
       if (activity.isQuiet()) break;
-      if (performance.now() >= cap)
-        throw new Error(`${step.label} did not settle within ${STEP_CAP_MS}ms`);
+      if (performance.now() >= cap) throw new Error(`${step.label} did not settle within ${STEP_CAP_MS}ms`);
     }
   } finally {
     off();
@@ -594,9 +584,7 @@ async function runStep(cdp, step, origin, serverReads) {
      scored as an improvement — the one thing the floor exists to catch. */
   const changesRoute = Boolean(step.navigate || step.click || step.back);
   const serverContent =
-    step.content && changesRoute && !contentEntry
-      ? serverApi.some((action) => step.content.test(action))
-      : false;
+    step.content && changesRoute && !contentEntry ? serverApi.some((action) => step.content.test(action)) : false;
 
   return {
     label: step.label,
@@ -606,11 +594,7 @@ async function runStep(cdp, step, origin, serverReads) {
     serverEntries: serverApi,
     rounds,
     contentRound:
-      contentEntry && typeof contentEntry.round === 'number'
-        ? contentEntry.round
-        : serverContent
-          ? 0
-          : null,
+      contentEntry && typeof contentEntry.round === 'number' ? contentEntry.round : serverContent ? 0 : null,
     firstApiMs: api.length ? Math.round(Math.min(...api.map((e) => e.at))) : null,
     contentMs: contentEntry ? Math.round(contentEntry.at) : null,
     entries: api.map((e) => ({
@@ -759,9 +743,7 @@ const upstream = createHttpServer((req, res) => {
     return;
   }
   /* Recorded before the response, so a read still in flight when a step ends is still counted. */
-  const action = req.url?.startsWith('/api/v1/json')
-    ? req.url
-    : (opOf(req.method, asUpstream) ?? req.url ?? '');
+  const action = req.url?.startsWith('/api/v1/json') ? req.url : (opOf(req.method, asUpstream) ?? req.url ?? '');
   /* The maintenance state and the route policy are excluded for the same reason `CHROME_READS`
      excludes `get_user`: the server reads them on every route, so counting them would make
      `serverApi` a function of how many navigations a journey contains rather than of what moved
@@ -908,8 +890,7 @@ try {
         const filterReads = serverReads.filter(
           (name) => name === 'get_block_tags' || name === 'get_site_bootstrap',
         ).length;
-        if (filterReads > 1)
-          fail(journey.name, `${result.label} duplicated the public filter-definition read`);
+        if (filterReads > 1) fail(journey.name, `${result.label} duplicated the public filter-definition read`);
         if (step.navigate && filterReads === 0) {
           fail(journey.name, `${result.label} did not read the public filter definitions`);
         }
@@ -983,9 +964,7 @@ try {
         const wasTotal = was.api + (was.serverApi ?? 0);
         const stepTotal = step.api + (step.serverApi ?? 0);
         const dRound =
-          step.contentRound !== null && was.contentRound !== null
-            ? step.contentRound - was.contentRound
-            : 0;
+          step.contentRound !== null && was.contentRound !== null ? step.contentRound - was.contentRound : 0;
         const mark = dApi > 0 || dRound > 0 ? '✗' : dApi < 0 || dRound < 0 ? '↓' : ' ';
         const roundCell =
           was.contentRound === null && step.contentRound === null
@@ -997,9 +976,7 @@ try {
           (was.serverApi ?? 0) || step.serverApi
             ? `api ${was.api}+${was.serverApi ?? 0}→${step.api}+${step.serverApi}`
             : `api ${was.api}→${step.api}`;
-        console.log(
-          `  ${mark} ${`${name} / ${step.label}`.padEnd(40)} ${apiCell.padEnd(20)} ${roundCell}`,
-        );
+        console.log(`  ${mark} ${`${name} / ${step.label}`.padEnd(40)} ${apiCell.padEnd(20)} ${roundCell}`);
         /* A journey may always get cheaper — that is the work — and may never get dearer, because
            every optimisation here is meant to move a request earlier rather than add one. */
         if (dApi > 0) fail(name, `${step.label} sends ${dApi} more request(s) than the baseline`);
@@ -1022,10 +999,7 @@ try {
            different: it proves this very screen loaded its content on the server. In that case
            an idle announcement missing the observation window cannot make the screen fail. */
         if (was.api > 0 && step.api === 0 && step.contentRound !== 0) {
-          fail(
-            name,
-            `${step.label} now sends no browser requests at all — the screen is not loading`,
-          );
+          fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
         } else if (wasTotal > 0 && stepTotal === 0) {
           fail(name, `${step.label} now sends no requests at all — the screen is not loading`);
         }

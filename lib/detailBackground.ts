@@ -52,9 +52,7 @@ function keys(pathname: string): string[] {
   }
 }
 
-export function readDetailBackground(
-  pathname: string,
-): Readonly<ImageHeroBackgroundLocation> | null {
+export function readDetailBackground(pathname: string): Readonly<ImageHeroBackgroundLocation> | null {
   for (const key of keys(pathname)) {
     const remembered = backgrounds.get(key);
     if (remembered) return remembered;
@@ -63,10 +61,7 @@ export function readDetailBackground(
 }
 
 /** Record after the router commits its entry; a render may run before that URL is written. */
-export function rememberDetailBackground(
-  pathname: string,
-  background: ImageHeroBackgroundLocation,
-): void {
+export function rememberDetailBackground(pathname: string, background: ImageHeroBackgroundLocation): void {
   const remembered = Object.freeze({ pathname: background.pathname, search: background.search });
   for (const key of keys(pathname)) backgrounds.set(key, remembered);
 }

@@ -67,11 +67,7 @@ export function getHeroBoxTransform(
  * inner layer must morph its own crop as the outer box changes aspect ratio.
  * Expressed relative to the already-scaled outer box.
  */
-export function getHeroCoverTransform(
-  base: HeroRect,
-  display: HeroRect,
-  host: HeroHost,
-): HeroBoxTransform {
+export function getHeroCoverTransform(base: HeroRect, display: HeroRect, host: HeroHost): HeroBoxTransform {
   const outer = getHeroBoxTransform(base, display, host);
   const localLeft = display.left - host.left;
   const localTop = display.top - host.top;
@@ -91,12 +87,7 @@ export function formatHeroTransform({ x, y, scaleX, scaleY }: HeroBoxTransform) 
 }
 
 /** Local-space radius for the clip child, whose parent carries the scale. */
-export function formatHeroClipRadius(
-  base: HeroRect,
-  width: number,
-  height: number,
-  radius: number,
-) {
+export function formatHeroClipRadius(base: HeroRect, width: number, height: number, radius: number) {
   const scaleX = width / base.width;
   const scaleY = height / base.height;
   return `${radius / scaleX}px / ${radius / scaleY}px`;
@@ -416,12 +407,7 @@ export function lerpHeroRectArc(arc: HeroRectArc, progress: number): HeroRect {
  * Convenience for call sites needing one sample rather than a whole track. The arc is a
  * property of the pair — build it once with `createHeroRectArc` in a loop.
  */
-export function lerpHeroRect(
-  from: HeroRect,
-  to: HeroRect,
-  progress: number,
-  bow: number,
-): HeroRect {
+export function lerpHeroRect(from: HeroRect, to: HeroRect, progress: number, bow: number): HeroRect {
   return lerpHeroRectArc(createHeroRectArc(from, to, bow), progress);
 }
 
@@ -530,11 +516,7 @@ export function heroArcCoverFraction(rect: HeroRect, baseAspect: number) {
  * is the same under any monotone reparameterisation, so this file stays independent of
  * `progress.ts` and the solver's answer is good for either clock.
  */
-export function heroArcCropRetrace(
-  arc: HeroRectArc,
-  baseAspect: number,
-  samples = HERO_ARC_SOLVE_SAMPLES,
-) {
+export function heroArcCropRetrace(arc: HeroRectArc, baseAspect: number, samples = HERO_ARC_SOLVE_SAMPLES) {
   const first = heroArcCoverFraction(lerpHeroRectArc(arc, 0), baseAspect);
   const last = heroArcCoverFraction(lerpHeroRectArc(arc, 1), baseAspect);
   const rising = last >= first;
@@ -564,12 +546,7 @@ export function heroArcCropRetrace(
  * Runs **once per leg** — `buildFlightKeyframes` and `buildContainerAnimations` take
  * `leg.bow` — not per frame.
  */
-export function solveHeroArcBow(
-  from: HeroRect,
-  to: HeroRect,
-  baseAspect: number,
-  budget = HERO_ARC_CROP_BUDGET,
-) {
+export function solveHeroArcBow(from: HeroRect, to: HeroRect, baseAspect: number, budget = HERO_ARC_CROP_BUDGET) {
   const arc = createHeroRectArc(from, to, 1);
   // Nothing bows: both corners are on an axis, so there is no arc to give back.
   if (!arc.lead.center && !arc.trail.center) return 1;
@@ -678,16 +655,12 @@ export function solveHeroArcContainBows(
     for (let index = 0; index <= samples; index += 1) {
       const seen = clip(sampledRectAt(innerSamples, index, innerBow, innerRect));
       if (!(seen.width > 0) || !(seen.height > 0)) continue;
-      worst = Math.max(
-        worst,
-        heroRectEscape(seen, sampledRectAt(outerSamples, index, outerBow, outerRect)),
-      );
+      worst = Math.max(worst, heroRectEscape(seen, sampledRectAt(outerSamples, index, outerBow, outerRect)));
       if (settle && worst > HERO_ARC_CONTAIN_SLACK) return worst;
     }
     return worst;
   };
-  const holds = (innerBow: number, outerBow: number) =>
-    escapeAt(innerBow, outerBow) <= HERO_ARC_CONTAIN_SLACK;
+  const holds = (innerBow: number, outerBow: number) => escapeAt(innerBow, outerBow) <= HERO_ARC_CONTAIN_SLACK;
   /** Largest feasible outer bow, or null when no grid point holds. */
   const scanOuter = (innerBow: number) => {
     if (holds(innerBow, 1)) return 1;
@@ -753,11 +726,7 @@ const MAX_RELEASE_SPEED_PX_PER_MS = 4;
  * route's controller. Only the component heading *towards* the card counts: a sideways or
  * backwards component would launch the picture away from where it is going.
  */
-export function releaseSpeedAlong(
-  velocity: { x: number; y: number } | undefined,
-  from: HeroRect,
-  to: HeroRect,
-) {
+export function releaseSpeedAlong(velocity: { x: number; y: number } | undefined, from: HeroRect, to: HeroRect) {
   if (!velocity) return undefined;
   const dx = to.left + to.width / 2 - (from.left + from.width / 2);
   const dy = to.top + to.height / 2 - (from.top + from.height / 2);

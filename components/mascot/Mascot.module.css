@@ -37,9 +37,7 @@
   right: max(16px, env(safe-area-inset-right));
   bottom: 0;
   transform: translateY(
-    calc(
-      -1 * max(0px, var(--app-bottom-chrome, 0px) + 4px - max(16px, env(safe-area-inset-bottom)))
-    )
+    calc(-1 * max(0px, var(--app-bottom-chrome, 0px) + 4px - max(16px, env(safe-area-inset-bottom))))
   );
   transition: transform calc(var(--motion-base-spring-fast-effects) * var(--motion-pill-scale))
     var(--ease-spring-effects);
@@ -48,8 +46,8 @@
 :global(html[data-bottom-chrome]) .lift {
   /* Clearing the page's bottom chrome as it arrives: its bounds follow a layout change, so the
      layout spring, after the page's hand-off. */
-  transition: transform calc(var(--motion-base-spring-layout) * var(--motion-pill-scale))
-    var(--ease-spring-effects) calc(var(--motion-base-handoff) * var(--motion-pill-scale));
+  transition: transform calc(var(--motion-base-spring-layout) * var(--motion-pill-scale)) var(--ease-spring-effects)
+    calc(var(--motion-base-handoff) * var(--motion-pill-scale));
 }
 
 .stage {
@@ -60,8 +58,7 @@
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   transition:
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient))
       var(--ease-spring-default-spatial),
     visibility 0s;
@@ -73,10 +70,8 @@
   transform: translateY(16px);
   visibility: hidden;
   transition:
-    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 
@@ -161,8 +156,7 @@
   transition:
     transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient))
       var(--ease-spring-default-spatial),
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects);
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 /* Collapsed: the original's corner peek, given a plate — the character tucked into a round chip
@@ -190,10 +184,8 @@
   opacity: 0;
   transform: scale(0.6);
   transition:
-    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     color var(--duration-spring-fast-effects) var(--ease-spring-effects),
     border-radius var(--duration-spring-default-effects) var(--ease-spring-effects);
@@ -213,8 +205,7 @@
   opacity: 1;
   transform: none;
   transition:
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient))
       var(--ease-spring-default-spatial),
     background-color var(--duration-spring-fast-effects) var(--ease-spring-effects),
@@ -278,10 +269,8 @@
 .pose {
   filter: drop-shadow(var(--md-sys-elevation-drop-2));
   transition:
-    transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient))
-      var(--ease-spring-fast-spatial),
-    filter calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale-ambient)) var(--ease-spring-fast-spatial),
+    filter calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -344,8 +333,7 @@
   transform: translateY(calc(-1 * var(--tools-lift, 0px)));
   pointer-events: auto;
   transition:
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient))
       var(--ease-spring-default-spatial),
     visibility 0s;
@@ -380,8 +368,7 @@
   visibility: hidden;
   pointer-events: none;
   transition:
-    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 
@@ -395,8 +382,7 @@
     visibility: hidden;
     pointer-events: none;
     transition:
-      opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-        var(--ease-spring-effects),
+      opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
       visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
   }
 }
@@ -415,8 +401,7 @@
   filter: var(--md-sys-elevation-filter-2);
   transform-origin: calc(100% - var(--bubble-tail, 64px)) calc(100% + 8px);
   transition:
-    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     transform calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-ambient))
       var(--ease-spring-default-spatial),
     visibility 0s;
@@ -427,10 +412,8 @@
   transform: translateY(6px) scale(0.94);
   visibility: hidden;
   transition:
-    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
-    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient))
-      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
+    transform calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient)) var(--ease-spring-effects),
     visibility 0s calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-ambient));
 }
 

@@ -7,10 +7,7 @@ export const MOTION_PRESETS = [
 
 export type MotionPreset = (typeof MOTION_PRESETS)[number]['value'];
 export type MotionSpeed = MotionPreset | 'custom';
-export const MOTION_SPEEDS: readonly MotionSpeed[] = [
-  ...MOTION_PRESETS.map(({ value }) => value),
-  'custom',
-];
+export const MOTION_SPEEDS: readonly MotionSpeed[] = [...MOTION_PRESETS.map(({ value }) => value), 'custom'];
 export const MOTION_SPEED_SCALE: Record<MotionPreset, number> = {
   fast: 0.7,
   default: 1,
@@ -69,27 +66,21 @@ export function parseMotionEffects(raw: string | null | undefined): MotionCustom
 }
 
 export function formatMotionEffects(effects: MotionCustomEffects): string {
-  return MOTION_CATEGORIES.map(
-    ({ id }) => `${id}:${isMotionTier(effects[id]) ? effects[id] : 'standard'}`,
-  ).join(',');
+  return MOTION_CATEGORIES.map(({ id }) => `${id}:${isMotionTier(effects[id]) ? effects[id] : 'standard'}`).join(',');
 }
 
 export function motionEffectsAttributes(
   effects: MotionCustomEffects,
 ): Record<`data-motion-${MotionCategory}`, MotionTier> {
-  return Object.fromEntries(
-    MOTION_CATEGORIES.map(({ id }) => [`data-motion-${id}`, effects[id]]),
-  ) as Record<`data-motion-${MotionCategory}`, MotionTier>;
+  return Object.fromEntries(MOTION_CATEGORIES.map(({ id }) => [`data-motion-${id}`, effects[id]])) as Record<
+    `data-motion-${MotionCategory}`,
+    MotionTier
+  >;
 }
 
-export function motionEffectsStyle(
-  effects: MotionCustomEffects,
-): Record<`--motion-custom-enabled-${string}`, number> {
+export function motionEffectsStyle(effects: MotionCustomEffects): Record<`--motion-custom-enabled-${string}`, number> {
   return Object.fromEntries(
-    MOTION_CATEGORIES.map(({ id }) => [
-      `--motion-custom-enabled-${id}`,
-      effects[id] === 'off' ? 0 : 1,
-    ]),
+    MOTION_CATEGORIES.map(({ id }) => [`--motion-custom-enabled-${id}`, effects[id] === 'off' ? 0 : 1]),
   );
 }
 
@@ -106,15 +97,11 @@ export function parseMotionCustom(raw: string | null | undefined): MotionCustomS
 }
 
 export function formatMotionCustom(speeds: MotionCustomSpeeds): string {
-  return MOTION_CATEGORIES.map(
-    ({ id }) => `${id}:${isMotionPreset(speeds[id]) ? speeds[id] : 'default'}`,
-  ).join(',');
+  return MOTION_CATEGORIES.map(({ id }) => `${id}:${isMotionPreset(speeds[id]) ? speeds[id] : 'default'}`).join(',');
 }
 
 /** Raw custom scales never override the off tier; CSS opts into them only in custom mode. */
-export function motionCustomStyle(
-  speeds: MotionCustomSpeeds,
-): Record<`--motion-custom-${string}`, number> {
+export function motionCustomStyle(speeds: MotionCustomSpeeds): Record<`--motion-custom-${string}`, number> {
   return Object.fromEntries(
     MOTION_CATEGORIES.map(({ id }) => [`--motion-custom-${id}`, MOTION_SPEED_SCALE[speeds[id]]]),
   );

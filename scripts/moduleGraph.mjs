@@ -4,8 +4,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
-const isSource = (file) =>
-  EXTENSIONS.some((ext) => file.endsWith(ext)) && !/\.d\.[cm]?ts$/.test(file);
+const isSource = (file) => EXTENSIONS.some((ext) => file.endsWith(ext)) && !/\.d\.[cm]?ts$/.test(file);
 
 export function readSources(root) {
   const sources = new Map();
@@ -48,11 +47,7 @@ export function buildGraph(sources) {
       const candidates =
         local === null
           ? []
-          : [
-              local,
-              ...EXTENSIONS.map((ext) => stem + ext),
-              ...EXTENSIONS.map((ext) => `${local}/index${ext}`),
-            ];
+          : [local, ...EXTENSIONS.map((ext) => stem + ext), ...EXTENSIONS.map((ext) => `${local}/index${ext}`)];
       const target = candidates.find((candidate) => sources.has(candidate)) ?? local ?? specifier;
       edges.push({
         target,
@@ -73,8 +68,7 @@ export function buildGraph(sources) {
       }
       if (ts.isCallExpression(node)) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword) add(node.arguments[0], true);
-        else if (ts.isIdentifier(node.expression) && node.expression.text === 'require')
-          add(node.arguments[0]);
+        else if (ts.isIdentifier(node.expression) && node.expression.text === 'require') add(node.arguments[0]);
       }
       ts.forEachChild(node, visit);
     };
@@ -123,8 +117,7 @@ export function findCycles(graph) {
     if (done.has(file)) return;
     active.set(file, stack.length);
     stack.push(file);
-    for (const edge of graph.get(file)?.edges ?? [])
-      if (!edge.dynamic && graph.has(edge.target)) visit(edge.target);
+    for (const edge of graph.get(file)?.edges ?? []) if (!edge.dynamic && graph.has(edge.target)) visit(edge.target);
     stack.pop();
     active.delete(file);
     done.add(file);

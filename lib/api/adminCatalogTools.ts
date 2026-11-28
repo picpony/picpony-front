@@ -39,8 +39,7 @@ export async function catalogWrite<T>(request: () => Promise<T>): Promise<T> {
     if (!(error instanceof ApiError)) throw new CatalogOutcomeUnknown();
     if (error.kind === 'network' || error.kind === 'timeout' || error.kind === 'invalid')
       throw new CatalogOutcomeUnknown();
-    if (error.kind === 'http' && (error.status ?? 0) >= 500 && error.status !== 501)
-      throw new CatalogOutcomeUnknown();
+    if (error.kind === 'http' && (error.status ?? 0) >= 500 && error.status !== 501) throw new CatalogOutcomeUnknown();
     if (error.kind === 'http' && error.status === 501)
       throw new ApiError('http', {
         status: 501,
@@ -53,17 +52,12 @@ export async function catalogWrite<T>(request: () => Promise<T>): Promise<T> {
 const write =
   <T extends object = AdminRow>(method: string, path: string, json?: unknown) =>
   (token: string) =>
-    catalogWrite(() =>
-      adminWrite<T>(method, path, json === undefined ? { token } : { token, json }),
-    );
+    catalogWrite(() => adminWrite<T>(method, path, json === undefined ? { token } : { token, json }));
 const READ = { cache: 'no-store' as const };
 
 // ---- Badge descriptions ----------------------------------------------------
 
-export async function getBadgeDictionary(
-  token: string,
-  signal?: AbortSignal,
-): Promise<BadgeDictionary> {
+export async function getBadgeDictionary(token: string, signal?: AbortSignal): Promise<BadgeDictionary> {
   const data = await api<{
     dictionary: { name: string; description: string }[];
     used_badges: { name: string; color: string }[];
@@ -124,13 +118,7 @@ export function getLegacyShopPurchases(
   before?: number,
   signal?: AbortSignal,
 ): Promise<PurchasePage<LegacyPurchase>> {
-  return records<LegacyPurchase>(
-    token,
-    '/admin/shop/legacy-purchases',
-    text(keyword, 100),
-    before,
-    signal,
-  );
+  return records<LegacyPurchase>(token, '/admin/shop/legacy-purchases', text(keyword, 100), before, signal);
 }
 /** Refunds the coins and restores the stock; answers `{ purchase_id, refunded, balance }`. */
 export function refundShopPurchase(token: string, id: number) {
@@ -169,9 +157,7 @@ export function saveMascot(token: string, revision: number, body: MascotBody, id
     : write('PUT', `/admin/mascots/${seg(integer(id, 1))}`, json)(token);
 }
 export function deleteMascot(token: string, revision: number, id: number) {
-  return write('DELETE', `/admin/mascots/${seg(integer(id, 1))}`, { expected_revision: revision })(
-    token,
-  );
+  return write('DELETE', `/admin/mascots/${seg(integer(id, 1))}`, { expected_revision: revision })(token);
 }
 export function toggleMascot(token: string, revision: number, id: number, active: boolean) {
   return write('POST', `/admin/mascots/${seg(integer(id, 1))}/activation`, {
@@ -209,11 +195,7 @@ export async function getPonies(
 /** The characters on disk; none is enabled until the roster is saved. */
 export async function scanPonies(token: string): Promise<Pony[]> {
   const data = await catalogWrite(() =>
-    adminWrite<{ ponies: { name: string; path: string; preview: string }[] }>(
-      'POST',
-      '/admin/ponies/scans',
-      { token },
-    ),
+    adminWrite<{ ponies: { name: string; path: string; preview: string }[] }>('POST', '/admin/ponies/scans', { token }),
   );
   return data.ponies.map((row) => ({
     name: row.name,
@@ -235,13 +217,7 @@ export function savePonies(token: string, revision: number, enabled: boolean, po
   })(token);
 }
 /** Answers `{ path, new_name, applied_revision }`. */
-export function savePonyName(
-  token: string,
-  revision: number,
-  path: string,
-  oldName: string,
-  name: string,
-) {
+export function savePonyName(token: string, revision: number, path: string, oldName: string, name: string) {
   return write<{ path: string; new_name: string; applied_revision: number }>(
     'PUT',
     `/admin/ponies/${seg(ponyPath(path))}/name`,
@@ -252,11 +228,7 @@ export function savePonyName(
     },
   )(token);
 }
-export async function getPonySpeeches(
-  token: string,
-  path: string,
-  signal?: AbortSignal,
-): Promise<Speech[]> {
+export async function getPonySpeeches(token: string, path: string, signal?: AbortSignal): Promise<Speech[]> {
   return (
     await api<{ speeches: Speech[] }>('GET', `/admin/ponies/${seg(ponyPath(path))}/speeches`, {
       token,
@@ -265,13 +237,7 @@ export async function getPonySpeeches(
     })
   ).speeches;
 }
-export function savePonySpeech(
-  token: string,
-  revision: number,
-  path: string,
-  name: string,
-  value: string,
-) {
+export function savePonySpeech(token: string, revision: number, path: string, name: string, value: string) {
   return write('PUT', `/admin/ponies/${seg(ponyPath(path))}/speeches`, {
     expected_revision: revision,
     speech_name: required(name, '台词名称'),

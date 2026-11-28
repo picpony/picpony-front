@@ -8,12 +8,7 @@ import { showToast } from '@/components/Toast';
 import { useAuthModal } from '@/components/AuthModal';
 import { changePassword, isRefusal } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
-import {
-  PASSWORD_HINT,
-  validateNewPassword,
-  validatePasswordConfirmation,
-  validateRequired,
-} from '@/lib/validation';
+import { PASSWORD_HINT, validateNewPassword, validatePasswordConfirmation, validateRequired } from '@/lib/validation';
 import { clearUserInfo, readToken } from '@/lib/hooks';
 import { useFieldErrors } from '@/lib/useFieldErrors';
 
@@ -77,12 +72,10 @@ export default function PasswordDialog({
     }
   };
 
-  const edit =
-    (field: Field, set: (value: string) => void) =>
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      set(event.target.value);
-      form.clear(field);
-    };
+  const edit = (field: Field, set: (value: string) => void) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    set(event.target.value);
+    form.clear(field);
+  };
 
   return (
     <Modal
@@ -103,14 +96,7 @@ export default function PasswordDialog({
     >
       <form id="password-form" onSubmit={submit} noValidate className="space-y-4">
         {/* Whose password this is, for a password manager; never shown. */}
-        <input
-          type="text"
-          name="username"
-          autoComplete="username"
-          value={username}
-          readOnly
-          hidden
-        />
+        <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
         <Input
           {...form.field('current')}
           label="当前密码"

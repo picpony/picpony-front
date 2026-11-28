@@ -1,15 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-  type RefObject,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { MdOutlineChatBubbleOutline } from '@/components/icons/messages';
 import EmptyState from '@/components/EmptyState';
@@ -109,14 +101,7 @@ function useSplitLayout(ref: RefObject<HTMLElement | null>): boolean | null {
  * Side by side, Esc (outside a field) closes the open conversation; Back leaves the screen, as
  * for any sidebar destination.
  */
-export default function ChatPane({
-  token,
-  me,
-  active,
-  target,
-  onTargetConsumed,
-  onScreenChange,
-}: ChatPaneProps) {
+export default function ChatPane({ token, me, active, target, onTargetConsumed, onScreenChange }: ChatPaneProps) {
   const [selected, setSelectedState] = useState<ChatUser | null>(() =>
     openConversation?.token === token ? openConversation.contact : null,
   );
@@ -128,11 +113,7 @@ export default function ChatPane({
     [token],
   );
   const [collapsed, setCollapsed] = useScreenState('messages:rail-collapsed', false);
-  const contacts = useResource(
-    recentContacts,
-    { token },
-    { refetchInterval: active ? CONTACTS_POLL_MS : undefined },
-  );
+  const contacts = useResource(recentContacts, { token }, { refetchInterval: active ? CONTACTS_POLL_MS : undefined });
   const columnRef = useRef<HTMLDivElement>(null);
   const split = useSplitLayout(columnRef);
   const screenOpen = split === false && active && selected !== null;
@@ -211,15 +192,7 @@ export default function ChatPane({
   useEscapeBack(close, split === true && active && selected !== null);
 
   const noteTripOut = (event: MouseEvent<HTMLElement>) => {
-    if (
-      !selected ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    )
-      return;
+    if (!selected || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element | null)?.closest?.('a[href]');
     if (!(link instanceof HTMLAnchorElement) || link.target === '_blank') return;
     if (new URL(link.href, window.location.href).origin !== window.location.origin) return;
@@ -249,14 +222,7 @@ export default function ChatPane({
           {list}
           <div className="flex min-w-0 flex-1 flex-col border-l border-outline-variant">
             {selected ? (
-              <Conversation
-                key={selected.id}
-                token={token}
-                contact={selected}
-                me={me}
-                layout="pane"
-                active={active}
-              />
+              <Conversation key={selected.id} token={token} contact={selected} me={me} layout="pane" active={active} />
             ) : (
               <EmptyState
                 size="pane"
@@ -303,9 +269,7 @@ function ConversationScreen({
 }) {
   const mounted = useMounted();
   const panelRef = useRef<HTMLElement>(null);
-  const host = mounted
-    ? (document.querySelector('[data-page-back-slot]')?.parentElement ?? null)
-    : null;
+  const host = mounted ? (document.querySelector('[data-page-back-slot]')?.parentElement ?? null) : null;
   const layer = useOverlayLayer(host !== null, panelRef, {
     onClose,
     history: true,

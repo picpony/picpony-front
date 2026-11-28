@@ -55,9 +55,7 @@ function byDay(rows: readonly CoinTransaction[], now: number | null) {
 }
 
 function LedgerSkeleton() {
-  return (
-    <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载金币明细…" />
-  );
+  return <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载金币明细…" />;
 }
 
 /**
@@ -92,9 +90,7 @@ export default function CoinLedger() {
   /* The session's figure (the shop and a claim keep it current); absent, the subtitle is too. */
   const stored = user?.coins;
   const balance =
-    typeof stored === 'number' || (typeof stored === 'string' && stored.trim() !== '')
-      ? Number(stored)
-      : NaN;
+    typeof stored === 'number' || (typeof stored === 'string' && stored.trim() !== '') ? Number(stored) : NaN;
   const header = (
     <PageHeader
       title="金币明细"
@@ -155,9 +151,7 @@ export default function CoinLedger() {
                     className="m3-row flex items-center gap-4 bg-surface-container-low px-4 py-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-label-l text-on-surface wrap-anywhere">
-                        {row.reason || '金币变动'}
-                      </p>
+                      <p className="text-label-l text-on-surface wrap-anywhere">{row.reason || '金币变动'}</p>
                       <p className="mt-0.5 text-body-s tabular-nums text-on-surface-variant">
                         <time dateTime={row.createdAt} title={formatDateTime(row.createdAt)}>
                           {formatClock(row.createdAt)}
@@ -170,9 +164,7 @@ export default function CoinLedger() {
                         row.amount > 0 ? 'text-success' : 'text-on-surface',
                       )}
                     >
-                      <span className="sr-only">
-                        {row.amount > 0 ? '收入' : row.amount < 0 ? '支出' : ''}
-                      </span>
+                      <span className="sr-only">{row.amount > 0 ? '收入' : row.amount < 0 ? '支出' : ''}</span>
                       {formatSignedCount(row.amount)}
                     </span>
                   </div>

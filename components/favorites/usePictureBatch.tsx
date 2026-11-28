@@ -20,28 +20,12 @@ import {
   transferFromPrivacy,
   transferPictures,
 } from '@/lib/favoritesActions';
-import {
-  archiveName,
-  packArchives,
-  packedSentence,
-  originalUrl,
-  saveArchive,
-} from '@/lib/favoritesDownload';
-import {
-  addPrivacyPictures,
-  reloadPrivacy,
-  removeFromPrivacy,
-  restoreToPrivacy,
-} from '@/lib/favoritesPrivacy';
+import { archiveName, packArchives, packedSentence, originalUrl, saveArchive } from '@/lib/favoritesDownload';
+import { addPrivacyPictures, reloadPrivacy, removeFromPrivacy, restoreToPrivacy } from '@/lib/favoritesPrivacy';
 import { readToken } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import type { PonyImage } from '@/lib/types/image';
-import ProgressDialog, {
-  completeProgress,
-  progressLanding,
-  runSummary,
-  type ProgressState,
-} from './ProgressDialog';
+import ProgressDialog, { completeProgress, progressLanding, runSummary, type ProgressState } from './ProgressDialog';
 import { TransferDialog } from './FolderDialogs';
 
 /**
@@ -50,8 +34,7 @@ import { TransferDialog } from './FolderDialogs';
  * signed-in account's own space, so on someone else's it would have moved your pictures while
  * you looked at theirs.
  */
-export type BatchSource =
-  { kind: 'folder'; folderId: number } | { kind: 'privacy' } | { kind: 'shared-privacy' };
+export type BatchSource = { kind: 'folder'; folderId: number } | { kind: 'privacy' } | { kind: 'shared-privacy' };
 type OwnSource = Exclude<BatchSource, { kind: 'shared-privacy' }>;
 
 type Progress = (done: number, total: number) => void;
@@ -84,8 +67,7 @@ async function runRemoval(
       source.folderId,
       { signal, onProgress },
     );
-    const only =
-      images.length === 1 && outcome.succeeded.length === 1 ? outcome.succeeded[0] : null;
+    const only = images.length === 1 && outcome.succeeded.length === 1 ? outcome.succeeded[0] : null;
     const previous = only !== null ? (outcome.previous.get(only) ?? [source.folderId]) : [];
     return {
       left: outcome.succeeded,
@@ -113,8 +95,7 @@ function countSentence(
   verb: string,
   fallback: string,
 ): { text: string; tone: ToastType } {
-  if (done === 0 && failed.length > 0)
-    return { text: apiErrorMessage(failed[0], fallback), tone: 'error' };
+  if (done === 0 && failed.length > 0) return { text: apiErrorMessage(failed[0], fallback), tone: 'error' };
   return {
     text: runSummary(verb, done, failed.length),
     tone: failed.length > 0 ? 'warning' : 'success',
@@ -157,9 +138,7 @@ export function usePictureBatch({
 }) {
   const router = useRouter();
   const showPrivacy = useSyncedSetting('showPrivacyFaves');
-  const [transfer, setTransfer] = useState<{ mode: TransferMode; images: PonyImage[] } | null>(
-    null,
-  );
+  const [transfer, setTransfer] = useState<{ mode: TransferMode; images: PonyImage[] } | null>(null);
   /* The transfer the dialog shows — held through its exit, let go once it has played, and the
      folder list read for as long (M1-008, M1-009): read only while `transfer` was set, the dialog
      dropped to its loading rows and read 移动 0 张到… on its way out. */
@@ -257,14 +236,10 @@ export function usePictureBatch({
     }
     const controller = begin(`正在移出${where}`, '正在移出', images.length, !single);
     if (!controller) return;
-    const outcome = await settled(
-      runRemoval(token, source, images, controller.signal, step('正在移出')),
-    );
+    const outcome = await settled(runRemoval(token, source, images, controller.signal, step('正在移出')));
     await end(
       controller,
-      !single && outcome.ok
-        ? runSummary('已移出', outcome.value.left.length, outcome.value.failed.length)
-        : null,
+      !single && outcome.ok ? runSummary('已移出', outcome.value.left.length, outcome.value.failed.length) : null,
     );
     if (readToken() !== token) return;
     if (!outcome.ok) {
@@ -280,8 +255,7 @@ export function usePictureBatch({
           label: '撤销',
           onClick: () =>
             void settled(undo()).then(
-              (result) =>
-                !result.ok && showToast(apiErrorMessage(result.error, '撤销失败'), 'error'),
+              (result) => !result.ok && showToast(apiErrorMessage(result.error, '撤销失败'), 'error'),
             ),
         },
       });
@@ -307,9 +281,7 @@ export function usePictureBatch({
     );
     await end(
       controller,
-      several && outcome.ok
-        ? runSummary('已移入', outcome.value.succeeded.length, outcome.value.failed.length)
-        : null,
+      several && outcome.ok ? runSummary('已移入', outcome.value.succeeded.length, outcome.value.failed.length) : null,
     );
     if (readToken() !== token) return;
     if (!outcome.ok) {
@@ -350,10 +322,7 @@ export function usePictureBatch({
       const controller = begin('正在下载', '正在下载', 1, false);
       if (!controller) return;
       const outcome = await settled(
-        downloadOriginal(
-          { id: image.id, url: originalUrl(image), format: image.format },
-          controller.signal,
-        ),
+        downloadOriginal({ id: image.id, url: originalUrl(image), format: image.format }, controller.signal),
       );
       await end(controller, null);
       if (readToken() !== token || controller.signal.aborted) return;
@@ -378,9 +347,7 @@ export function usePictureBatch({
     );
     await end(
       controller,
-      outcome.ok && !outcome.value.cancelled
-        ? runSummary('已打包', outcome.value.packed, outcome.value.failed)
-        : null,
+      outcome.ok && !outcome.value.cancelled ? runSummary('已打包', outcome.value.packed, outcome.value.failed) : null,
     );
     if (readToken() !== token) return;
     if (!outcome.ok) {
@@ -389,10 +356,7 @@ export function usePictureBatch({
     }
     const packed = outcome.value;
     if (packed.cancelled) {
-      showToast(
-        packed.archives > 0 ? `已停止下载，已保存 ${packed.archives} 个压缩包` : '已停止下载',
-        'info',
-      );
+      showToast(packed.archives > 0 ? `已停止下载，已保存 ${packed.archives} 个压缩包` : '已停止下载', 'info');
     } else if (packed.archives === 0) {
       showToast('所选图片均下载失败', 'error');
     } else {
@@ -406,14 +370,12 @@ export function usePictureBatch({
   const shareOne = (image: PonyImage) =>
     share({ kind: 'image', imageId: image.id, thumbUrl: shareThumbUrl(image.representations) });
 
-  const targets =
-    source.kind === 'folder' ? folders.filter((folder) => folder.id !== source.folderId) : folders;
+  const targets = source.kind === 'folder' ? folders.filter((folder) => folder.id !== source.folderId) : folders;
 
   return {
     busy,
     openTransfer: (mode: TransferMode, images: PonyImage[]) => {
-      if (!running.current && images.length > 0 && source.kind !== 'shared-privacy')
-        setTransfer({ mode, images });
+      if (!running.current && images.length > 0 && source.kind !== 'shared-privacy') setTransfer({ mode, images });
     },
     remove,
     toPrivacy,

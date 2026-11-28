@@ -48,11 +48,7 @@ test('plain detail origins follow history entries across a visit to another page
   window.location.pathname = '/admin';
   window.navigation.currentEntry.key = 'admin';
   memory.rememberDetailBackground('/pic/7', { pathname: '/admin', search: '' });
-  assert.equal(
-    memory.readDetailBackground('/pic/7'),
-    null,
-    'a pending old render cannot name a new entry',
-  );
+  assert.equal(memory.readDetailBackground('/pic/7'), null, 'a pending old render cannot name a new entry');
   window.location.pathname = '/pic/7';
   window.navigation.currentEntry.key = 'picture-a';
   window.history.state = { tree: ['search', 'q=pony'], replaced: true };
@@ -84,11 +80,7 @@ test('without Navigation API, opaque restored state separates one picture opened
   assert.equal(memory.readDetailBackground('/pic/7').search, 'q=first');
   window.history.state = { layer: true, tree: ['search', { q: 'first' }] };
   memory.rememberDetailBackground('/pic/7', { pathname: '/admin', search: '' });
-  assert.equal(
-    memory.readDetailBackground('/pic/7'),
-    null,
-    'modal entries have no origin of their own',
-  );
+  assert.equal(memory.readDetailBackground('/pic/7'), null, 'modal entries have no origin of their own');
   window.history.state = { tree: ['search', { q: 'first' }] };
   assert.equal(memory.readDetailBackground('/pic/7').search, 'q=first');
 });
@@ -129,13 +121,7 @@ test('Next restored-tree refresh hints cannot change a no-Navigation-API detail 
               children: [
                 '(.)pic',
                 {
-                  children: [
-                    ['id', '7', 'd', []],
-                    { children: ['__PAGE__', {}, null, null, 4096] },
-                    null,
-                    null,
-                    4096,
-                  ],
+                  children: [['id', '7', 'd', []], { children: ['__PAGE__', {}, null, null, 4096] }, null, null, 4096],
                 },
                 null,
                 null,
@@ -372,11 +358,7 @@ test('the next input writes a waiting URL at once, before its own handlers run',
   await Promise.resolve();
   await Promise.resolve();
   browser.dispatch('pointerdown');
-  assert.deepEqual(
-    browser.calls,
-    [['push', '/?tab=forum']],
-    'written synchronously by the pointerdown',
-  );
+  assert.deepEqual(browser.calls, [['push', '/?tab=forum']], 'written synchronously by the pointerdown');
   await settle();
   assert.equal(browser.calls.length, 1, 'and only once');
 });
@@ -392,11 +374,7 @@ test('a traversal before the frame cancels the waiting write', async () => {
   assert.deepEqual(browser.calls, [], 'the entry it was meant for is gone');
   tabs.writeHomeTab('forum');
   await settle();
-  assert.deepEqual(
-    browser.calls,
-    [['push', '/?tab=forum']],
-    'and the next request writes normally',
-  );
+  assert.deepEqual(browser.calls, [['push', '/?tab=forum']], 'and the next request writes normally');
 });
 
 test('a cold entry at /?tab=forum gets the gallery put beneath it, once', async () => {
@@ -462,10 +440,7 @@ test('the tab strip leaves at its fastest without lunging, and only slows from t
      speed for 34ms: an even glide that was halfway only after 82ms, which read on a phone as the
      page dragging behind the finger. Thrown at 4.5 over 300ms it moved 22.7% in its first frame and
      was 90% there by 133ms: a lunge. Between the two, and never gaining speed. */
-  assert.ok(
-    frames[0] >= 0.13 && frames[0] <= 0.18,
-    `first frame ${(frames[0] * 100).toFixed(1)}% of the window`,
-  );
+  assert.ok(frames[0] >= 0.13 && frames[0] <= 0.18, `first frame ${(frames[0] * 100).toFixed(1)}% of the window`);
   for (let k = 1; k < frames.length; k += 1) {
     assert.ok(
       frames[k] <= frames[k - 1] + 1e-12,
@@ -480,10 +455,7 @@ test('the tab strip leaves at its fastest without lunging, and only slows from t
   let previous = 0;
   for (let ms = 0; ms <= full; ms += 0.5) {
     const { p } = strip.stripPose(leg, ms);
-    assert.ok(
-      p >= previous - 1e-12 && p <= 1 + 1e-12,
-      `monotone and never past its end, at ${ms}ms`,
-    );
+    assert.ok(p >= previous - 1e-12 && p <= 1 + 1e-12, `monotone and never past its end, at ${ms}ms`);
     if (half === null && p >= 0.5) half = ms;
     if (most === null && p >= 0.9) most = ms;
     previous = p;
@@ -519,20 +491,14 @@ test('a second tap turns the strip from where it is, the other way at once', () 
     assert.ok(Math.abs(next.from - before.p) < 1e-12, `continuous at ${elapsed}ms`);
     assert.equal(next.to, 0);
     for (let ms = 0; ms <= next.duration; ms += 2) {
-      assert.ok(
-        strip.stripPose(next, ms).p <= before.p + 1e-12,
-        `never the old way, ${elapsed}ms in`,
-      );
+      assert.ok(strip.stripPose(next, ms).p <= before.p + 1e-12, `never the old way, ${elapsed}ms in`);
     }
     if (before.p >= 0.3) {
       const start = strip.stripPose(next, 0).speed;
       /* Or as fast as a leg of that length can leave without overshooting the side it returns to:
          a tap's launch over a short way back would pass the critically damped ceiling. */
       const ceiling = strip.stripPose({ ...next, launch: strip.STRIP_MAX_LAUNCH }, 0).speed;
-      assert.ok(
-        start >= Math.min(fresh, ceiling) * 0.99,
-        `leaves at a fresh tap's speed or more, ${elapsed}ms in`,
-      );
+      assert.ok(start >= Math.min(fresh, ceiling) * 0.99, `leaves at a fresh tap's speed or more, ${elapsed}ms in`);
       assert.ok(start >= before.speed * 0.95, `and no slower than it was going, ${elapsed}ms in`);
       /* `Animation.reverse` played a late tap back through the tail: 1–1.6% per frame. */
       assert.ok(framesOf(strip, next, 1)[0] >= 0.05, `moves in its first frame, ${elapsed}ms in`);
@@ -610,10 +576,7 @@ test('a block leans by a small continuous function of its height, top first', ()
     previous = depth;
   }
   /* Tops within a band — masonry cards that read as one row — move together. */
-  assert.equal(
-    strip.leanDepth(64 + 640, view.top, view.height),
-    strip.leanDepth(64 + 660, view.top, view.height),
-  );
+  assert.equal(strip.leanDepth(64 + 640, view.top, view.height), strip.leanDepth(64 + 660, view.top, view.height));
 });
 
 /** A block's lag, linear between its samples. */
@@ -661,10 +624,7 @@ test('a leaning block eases after its pane: it moves at once, leans, and lands f
   assert.ok(ahead > -1e-9, `never ahead of its pane (${(ahead * 100).toFixed(3)}%)`);
   /* Straight lines between the samples stay within the run's pixel and a half of the lag itself. */
   for (let t = 0; t <= end; t += 0.5) {
-    assert.ok(
-      Math.abs(lagOf(samples, t) - lagOf(fine, t)) / px < 1.6,
-      `within tolerance at ${t}ms`,
-    );
+    assert.ok(Math.abs(lagOf(samples, t) - lagOf(fine, t)) / px < 1.6, `within tolerance at ${t}ms`);
   }
   /* Lower down, further behind: each depth leans further, and the lowest lands last. */
   let previous = { behind: 0, end: 0 };
@@ -718,19 +678,13 @@ test('a turn carries every leaning block on from where it is, top first', () => 
       const was = lagOf(before(depth, 0.02 * px), at);
       const samples = after(depth, 0.5 * px);
       /* The block's own position is continuous through the tap. */
-      assert.ok(
-        Math.abs(samples[0][1] - was) < 2 * px,
-        `no jump at the turn (${at}ms, depth ${depth})`,
-      );
+      assert.ok(Math.abs(samples[0][1] - was) < 2 * px, `no jump at the turn (${at}ms, depth ${depth})`);
       assert.equal(samples.at(-1)[1], 0, 'landing on its pane');
       if (at <= 100 && depth === 1) {
         /* Mid-flight, the lowest block is still behind its pane, so it goes on the old way until
            the pane comes back past it: the lean reverses top first. */
         const position = (t) => strip.stripAt(history, t) - lagOf(samples, t);
-        assert.ok(
-          position(at + 4) >= position(at) - 1e-9,
-          `still leaving just after the tap (${at}ms)`,
-        );
+        assert.ok(position(at + 4) >= position(at) - 1e-9, `still leaving just after the tap (${at}ms)`);
         assert.ok(position(at + 120) < position(at + 4), `and on its way back after (${at}ms)`);
       }
     }
@@ -785,10 +739,7 @@ test('leanPlan ignores zero-height sticky slots while still descending through d
   const row1 = new FakeElement('row1', rect(200, 120), surface);
   const row2 = new FakeElement('row2', rect(330, 120), surface);
   const row3 = new FakeElement('row3', rect(460, 120), surface);
-  const contentsWrap = new FakeElement('contents', rect(0, 0, 0), { display: 'contents' }, [
-    row2,
-    row3,
-  ]);
+  const contentsWrap = new FakeElement('contents', rect(0, 0, 0), { display: 'contents' }, [row2, row3]);
   const grid = new FakeElement('grid', rect(200, 900), {}, [row1, contentsWrap]);
   const stickySlot = new FakeElement('sticky-slot', rect(700, 0), {
     position: 'sticky',
@@ -808,9 +759,7 @@ test('leanPlan ignores zero-height sticky slots while still descending through d
     Array.from(plan.blocks, (block) => block.el.name),
     ['row1', 'row2', 'row3'],
   );
-  assert.ok(
-    plan.blocks[0].depth < plan.blocks[1].depth && plan.blocks[1].depth < plan.blocks[2].depth,
-  );
+  assert.ok(plan.blocks[0].depth < plan.blocks[1].depth && plan.blocks[1].depth < plan.blocks[2].depth);
 });
 
 // --- lib/maintenance.server.ts ------------------------------------------------------------
@@ -827,10 +776,7 @@ function loadMaintenance({ respond, env = {}, cookie } = {}) {
       react: { cache: (fn) => fn },
       'next/headers': {
         cookies: async () => ({
-          get: (name) =>
-            name === 'devMaintenancePreview' && cookie !== undefined
-              ? { value: cookie }
-              : undefined,
+          get: (name) => (name === 'devMaintenancePreview' && cookie !== undefined ? { value: cookie } : undefined),
         }),
       },
       '@/lib/constants': { SITE_STATUS_CACHE_TAG: 'site-status' },
@@ -929,13 +875,7 @@ function makeFakeBar(classes = []) {
   };
 }
 
-function makeFakeViewport({
-  clientW = 1280,
-  clientH = 668,
-  scrollW = 1280,
-  scrollH = 3409,
-  isConnected = true,
-} = {}) {
+function makeFakeViewport({ clientW = 1280, clientH = 668, scrollW = 1280, scrollH = 3409, isConnected = true } = {}) {
   const attrs = new Map();
   return {
     isConnected,
@@ -1002,11 +942,7 @@ test('syncScrollbarGeometry nudges native update without force when total height
   assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
   assert.equal(viewport.getAttribute('data-os-sync'), '0');
   assert.equal(state.hasOverflow.y, false);
-  assert.equal(
-    syncScrollbarGeometry(viewport, instance, 'y'),
-    false,
-    'off-axis overflow does not loop',
-  );
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), false, 'off-axis overflow does not loop');
 });
 
 test('syncScrollbarGeometry preserves auto-hide classes when falling back to forced refresh', () => {
@@ -1043,11 +979,7 @@ test('syncScrollbarGeometry preserves auto-hide classes when falling back to for
   assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
   assert.deepEqual(calls, [false, true]);
   assert.equal(vBar.classes.has('os-scrollbar-auto-hide'), true, 'keeps auto-hide active');
-  assert.equal(
-    vBar.classes.has('os-scrollbar-auto-hide-hidden'),
-    false,
-    'does not hide active bar',
-  );
+  assert.equal(vBar.classes.has('os-scrollbar-auto-hide-hidden'), false, 'does not hide active bar');
   assert.equal(hBar.classes.has('os-scrollbar-auto-hide'), true);
   assert.equal(hBar.classes.has('os-scrollbar-auto-hide-hidden'), true);
 });
@@ -1089,9 +1021,6 @@ test('syncScrollbarGeometry respects fractional-DPR tolerance and skips hidden v
       hasOverflow: { x: false, y: false },
     }),
   };
-  assert.equal(
-    syncScrollbarGeometry(makeFakeViewport({ clientH: 668, scrollH: 3000 }), sleeping, 'y'),
-    false,
-  );
+  assert.equal(syncScrollbarGeometry(makeFakeViewport({ clientH: 668, scrollH: 3000 }), sleeping, 'y'), false);
   assert.equal(updates, 0);
 });

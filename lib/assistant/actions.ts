@@ -10,12 +10,7 @@ import { obj, positiveId, str, type AssistantAction, type JsonObject } from './p
  * are `specialized` there (the server answers them with its own `account_summary`,
  * `my_collections` and `my_task_status` tools) and `get_private_messages` is not catalogued.
  */
-export const READ_ENDPOINTS = new Set([
-  'get_faves',
-  'get_recent_contacts',
-  'get_tag_subscriptions',
-  'get_my_ponies',
-]);
+export const READ_ENDPOINTS = new Set(['get_faves', 'get_recent_contacts', 'get_tag_subscriptions', 'get_my_ponies']);
 export const WRITE_ENDPOINTS = new Set([
   'claim_task',
   'send_message',
@@ -52,19 +47,15 @@ export const PAGE_CONTROLS = Object.entries(NAVIGATION).map(([id, { label }]) =>
   risk: 'read',
 }));
 export function controlHref(id: unknown): string | null {
-  return typeof id === 'string' && id.startsWith('nav.')
-    ? (NAVIGATION[id.slice(4)]?.href ?? null)
-    : null;
+  return typeof id === 'string' && id.startsWith('nav.') ? (NAVIGATION[id.slice(4)]?.href ?? null) : null;
 }
 
 /** Same-origin, named application destinations only; no raw URL/DOM execution contract. */
 export function assistantHref(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length > 2000 || /[\\\u0000-\u001f]/.test(value))
-    return null;
+  if (typeof value !== 'string' || value.length > 2000 || /[\\\u0000-\u001f]/.test(value)) return null;
   try {
     const url = new URL(value, 'https://picpony.top');
-    if (url.origin !== 'https://picpony.top' || url.username || url.password || url.hash)
-      return null;
+    if (url.origin !== 'https://picpony.top' || url.username || url.password || url.hash) return null;
     if (
       !/^(\/(?:settings|tasks(?:\/coins)?|messages|favorites(?:\/folder\/[1-9]\d*)?|shop|history|subscriptions|about|policy|search)?|\/(?:pic|user|forum)\/[1-9]\d*)$/.test(
         url.pathname,
@@ -101,16 +92,14 @@ const PAGE_ACTIONS = [
 /** Writes the server itself executes once the user confirms (`assistant_actions::decide_pending`). */
 const SERVER_WRITES = ['claim_task_reward'];
 export function actionIsWrite(action: AssistantAction): boolean {
-  if (action.name === 'call_site_api')
-    return !READ_ENDPOINTS.has(str(action.arguments.endpoint, 80));
+  if (action.name === 'call_site_api') return !READ_ENDPOINTS.has(str(action.arguments.endpoint, 80));
   if (action.name === 'interact_page') return controlHref(action.arguments.control_id) === null;
   return !PAGE_ACTIONS.includes(action.name);
 }
 export function actionSupported(action: AssistantAction): boolean {
   if (action.name === 'call_site_api')
     return (
-      READ_ENDPOINTS.has(str(action.arguments.endpoint, 80)) ||
-      WRITE_ENDPOINTS.has(str(action.arguments.endpoint, 80))
+      READ_ENDPOINTS.has(str(action.arguments.endpoint, 80)) || WRITE_ENDPOINTS.has(str(action.arguments.endpoint, 80))
     );
   if (action.name === 'interact_page')
     return controlHref(action.arguments.control_id) !== null && action.arguments.action === 'click';
@@ -122,10 +111,7 @@ export function actionSupported(action: AssistantAction): boolean {
  * into its name where the account's folder list is at hand: 「删除收藏夹：12、15」 asked somebody to
  * confirm an irreversible delete without saying what it deleted.
  */
-export function actionLabel(
-  action: AssistantAction,
-  folderName?: (id: number) => string | undefined,
-): string {
+export function actionLabel(action: AssistantAction, folderName?: (id: number) => string | undefined): string {
   const folders = (value: unknown) => foldersLabel(value, folderName);
   const folder = (value: unknown) => foldersLabel([value], folderName);
   const args = action.arguments;
@@ -259,11 +245,7 @@ export function validateSiteSpec(
     throw new Error('此操作不支持自动执行，请前往对应页面手动完成');
   }
   const values = obj(method === 'GET' ? request.query : request.body);
-  if (
-    Object.keys(values).some((key) =>
-      /token|password|secret|authorization|user_id|url|headers|action/i.test(key),
-    )
-  )
+  if (Object.keys(values).some((key) => /token|password|secret|authorization|user_id|url|headers|action/i.test(key)))
     throw new Error('操作包含受限信息，未执行');
   const reviewed = obj(action.arguments.parameters);
   const targets: Record<string, string[]> = {
@@ -280,10 +262,7 @@ export function validateSiteSpec(
     save_my_ponies: ['ponies'],
   };
   for (const key of targets[endpoint] ?? []) {
-    if (
-      Object.hasOwn(values, key) !== Object.hasOwn(reviewed, key) ||
-      !sameParameter(values[key], reviewed[key])
-    )
+    if (Object.hasOwn(values, key) !== Object.hasOwn(reviewed, key) || !sameParameter(values[key], reviewed[key]))
       throw new Error('服务器操作与已核对的内容不一致，未执行');
   }
   return { endpoint, method, values };
@@ -293,10 +272,7 @@ function sameParameter(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b))
     return a.length === b.length && a.every((value, i) => sameParameter(value, b[i]));
-  if (
-    (typeof a === 'number' && typeof b === 'string') ||
-    (typeof b === 'number' && typeof a === 'string')
-  )
+  if ((typeof a === 'number' && typeof b === 'string') || (typeof b === 'number' && typeof a === 'string'))
     return String(a) === String(b);
   return false;
 }

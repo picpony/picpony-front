@@ -57,15 +57,8 @@ import {
  * require.
  */
 const READ = { cache: 'no-store' as const };
-function write<T extends object = Row>(
-  token: string,
-  method: string,
-  path: string,
-  json?: unknown,
-): Promise<T> {
-  return catalogWrite(() =>
-    adminWrite<T>(method, path, json === undefined ? { token } : { token, json }),
-  );
+function write<T extends object = Row>(token: string, method: string, path: string, json?: unknown): Promise<T> {
+  return catalogWrite(() => adminWrite<T>(method, path, json === undefined ? { token } : { token, json }));
 }
 
 export { readAnnouncementHistory };
@@ -95,16 +88,13 @@ interface WireSemanticCloud {
   semantic_cloud_has_key: boolean;
   semantic_cloud_key_readable: boolean;
 }
-export async function readSemanticConfig(
-  token: string,
-  signal?: AbortSignal,
-): Promise<SemanticConfig> {
+export async function readSemanticConfig(token: string, signal?: AbortSignal): Promise<SemanticConfig> {
   const [mode, cloud] = await Promise.all([
-    api<{ semantic_search_mode: string; semantic_search_enabled: boolean }>(
-      'GET',
-      '/admin/semantic-search',
-      { token, signal, ...READ },
-    ),
+    api<{ semantic_search_mode: string; semantic_search_enabled: boolean }>('GET', '/admin/semantic-search', {
+      token,
+      signal,
+      ...READ,
+    }),
     api<WireSemanticCloud>('GET', '/admin/semantic-cloud', { token, signal, ...READ }),
   ]);
   return {
@@ -135,8 +125,7 @@ export interface CloudTest {
   model: string;
   latency_ms: number;
 }
-export const testSemanticCloud = (token: string) =>
-  write<CloudTest>(token, 'POST', '/admin/semantic-cloud/tests');
+export const testSemanticCloud = (token: string) => write<CloudTest>(token, 'POST', '/admin/semantic-cloud/tests');
 
 // ---- 搜索反馈 ----------------------------------------------------------------
 
@@ -171,11 +160,7 @@ interface WireFeedback {
   created_at: string;
 }
 /** One cursor page (`before` → `next_cursor`), with the queue's three totals. */
-export async function readFeedback(
-  token: string,
-  args: FeedbackArgs,
-  signal?: AbortSignal,
-): Promise<FeedbackPage> {
+export async function readFeedback(token: string, args: FeedbackArgs, signal?: AbortSignal): Promise<FeedbackPage> {
   const d = await api<{
     feedback: WireFeedback[];
     next_cursor: number | null;
@@ -252,11 +237,11 @@ interface WireApiRoute {
 export async function readSiteRoutes(token: string, signal?: AbortSignal): Promise<SiteRoutes> {
   const [apiLine, image] = await Promise.all([
     api<WireApiRoute>('GET', '/admin/api-route-policy', { token, signal, ...READ }),
-    api<{ global_image_route_policy: string; revision: number }>(
-      'GET',
-      '/admin/image-route-policy',
-      { token, signal, ...READ },
-    ),
+    api<{ global_image_route_policy: string; revision: number }>('GET', '/admin/image-route-policy', {
+      token,
+      signal,
+      ...READ,
+    }),
   ]);
   return {
     api: {
@@ -290,12 +275,7 @@ export const saveApiRoute = (token: string, values: Values) => {
   });
 };
 export const saveImageRoute = (token: string, values: Values) =>
-  write<SavedRoute>(
-    token,
-    'PUT',
-    '/admin/image-route-policy',
-    fieldsPayload(imageRouteFields, values),
-  );
+  write<SavedRoute>(token, 'PUT', '/admin/image-route-policy', fieldsPayload(imageRouteFields, values));
 
 // ---- 中转服务 ----------------------------------------------------------------
 
@@ -394,11 +374,7 @@ export async function readRelayStats(token: string, args: RelayStatsArgs, signal
     message: d.message ?? '',
   };
 }
-export async function readRelayErrors(
-  token: string,
-  args: PageArgs & { date: string },
-  signal?: AbortSignal,
-) {
+export async function readRelayErrors(token: string, args: PageArgs & { date: string }, signal?: AbortSignal) {
   const d = await api<{
     logs: Row[];
     total: unknown;
@@ -532,10 +508,7 @@ export async function readStatistics(token: string, signal?: AbortSignal): Promi
 // ---- 开发者 -------------------------------------------------------------------
 
 /** Every account barred from API acceleration (`GET /admin/api-accel-bans`, an id cursor). */
-export async function readAccelerationBans(
-  token: string,
-  signal?: AbortSignal,
-): Promise<Set<number>> {
+export async function readAccelerationBans(token: string, signal?: AbortSignal): Promise<Set<number>> {
   const banned = new Set<number>();
   let after: number | undefined;
   for (let n = 0; n < 500; n += 1) {
@@ -551,11 +524,7 @@ export async function readAccelerationBans(
   return banned;
 }
 /** One account's flag, re-read from `GET /admin/users/{id}`. */
-export async function readAccelerationBan(
-  token: string,
-  target: number,
-  signal?: AbortSignal,
-): Promise<boolean> {
+export async function readAccelerationBan(token: string, target: number, signal?: AbortSignal): Promise<boolean> {
   return (
     await api<{ user: { api_accel_banned: boolean } }>('GET', `/admin/users/${seg(id(target))}`, {
       token,
@@ -610,12 +579,7 @@ export async function readTextTranslation(token: string, signal?: AbortSignal) {
 }
 /** Answers the saved settings in the read's own shape (the key masked). */
 export const saveTextTranslation = (token: string, values: Values) =>
-  write<WireTextTranslation>(
-    token,
-    'PUT',
-    '/admin/text-translation',
-    textTranslationPayload(values),
-  );
+  write<WireTextTranslation>(token, 'PUT', '/admin/text-translation', textTranslationPayload(values));
 
 // ---- 彩彩 AI：额度 -------------------------------------------------------------
 
@@ -719,9 +683,7 @@ const FAILURES: Record<string, string> = {
   MODEL_REQUEST_REJECTED: '模型服务拒绝了请求',
   MODEL_RESPONSE_TOO_LARGE: '模型响应过大',
 };
-export function probeFailure(
-  failure: { code: string; upstream_status?: number | null } | null | undefined,
-): string {
+export function probeFailure(failure: { code: string; upstream_status?: number | null } | null | undefined): string {
   if (!failure) return '检查失败';
   const sentence = FAILURES[failure.code] ?? `检查失败（${failure.code}）`;
   return failure.upstream_status ? `${sentence}（HTTP ${failure.upstream_status}）` : sentence;
@@ -758,9 +720,7 @@ function assistantConfig(d: {
 }
 /** The global revision every provider write names, the default persona, and the providers (primary first). */
 export async function readAssistantConfig(token: string, signal?: AbortSignal) {
-  return assistantConfig(
-    await api('GET', '/admin/assistant/providers', { token, signal, ...READ }),
-  );
+  return assistantConfig(await api('GET', '/admin/assistant/providers', { token, signal, ...READ }));
 }
 /**
  * Create (`id` absent) or replace one provider. `request_id` is the backend's own retry key (a
@@ -912,11 +872,7 @@ export async function probeProvider(
 // ---- 全站统计（Derpibooru） ----------------------------------------------------------
 
 /** Counts ignore gallery filters. Use the current route policy and the operator's own key. */
-export async function collectSiteStats(
-  token: string,
-  current: () => boolean,
-  signal?: AbortSignal,
-) {
+export async function collectSiteStats(token: string, current: () => boolean, signal?: AbortSignal) {
   await refreshRoutePolicy();
   const result = { images: 0, tags: 0, comments: 0 };
   for (const type of ['images', 'tags', 'comments'] as const) {
@@ -961,11 +917,7 @@ export interface LineCheck {
  * `picpony_api` is CORS-capable so its real status is readable. For the lines that remain opaque, an
  * opaque response proves reachability only, never an HTTP success or an unbanned upstream.
  */
-export async function checkServiceLines(
-  token: string,
-  signal: AbortSignal,
-  report: (row: LineCheck) => void,
-) {
+export async function checkServiceLines(token: string, signal: AbortSignal, report: (row: LineCheck) => void) {
   await ensureRoutePolicy();
   signal.throwIfAborted();
   const url = `${DERPIBOORU_API_BASE}/images?per_page=1`;
@@ -1002,10 +954,7 @@ export async function checkServiceLines(
         /* A decode is the answer, so there is no status to report — `decoded` is what the cell
            prints for these lines. `probeImage` owns its own 5s timer and takes no signal. */
         try {
-          await probeImage(
-            `${probe.url}${probe.url.includes('?') ? '&' : '?'}_t=${Date.now()}`,
-            PROBE_MS,
-          );
+          await probeImage(`${probe.url}${probe.url.includes('?') ? '&' : '?'}_t=${Date.now()}`, PROBE_MS);
           row = { name: probe.name, latency: Date.now() - started, status: 'decoded' };
         } catch {
           const latency = Date.now() - started;

@@ -1,11 +1,5 @@
 /** Public search rules from `GET /api/v1/filters/block-tags`. No account data lives here. */
-export const BLOCK_FILTER_KEYS = [
-  'safe',
-  'spoilers',
-  'banAnthro',
-  'banDiscomfort',
-  'onlyPony',
-] as const;
+export const BLOCK_FILTER_KEYS = ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'] as const;
 export type BlockFilterKey = (typeof BLOCK_FILTER_KEYS)[number];
 export type BlockFilters = Record<BlockFilterKey, string[]>;
 
@@ -26,15 +20,7 @@ export const DEFAULT_BLOCK_FILTERS: BlockFilters = {
   ],
   spoilers: ['explicit', 'questionable', 'grotesque', 'grimdark', 'islamic state'],
   banAnthro: ['anthro', 'humanized', 'morbidly obese'],
-  banDiscomfort: [
-    'overweight',
-    'obese',
-    'obesity',
-    'nightmare fuel',
-    'politics',
-    'watersports',
-    'poofy diaper',
-  ],
+  banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
   onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
 };
 
@@ -138,9 +124,7 @@ export function parsePublicBlacklist(raw: unknown): number[] | null {
  * `PUBLIC_BLACKLIST_PAGE_LIMIT`), sorted. `null` when any page could not be read: a partial list
  * would un-hide pictures that are pulled.
  */
-export async function readWholeBlacklist(
-  fetchPage: (page: number) => Promise<unknown>,
-): Promise<number[] | null> {
+export async function readWholeBlacklist(fetchPage: (page: number) => Promise<unknown>): Promise<number[] | null> {
   const ids = new Set<number>();
   for (let page = 1; ; page += 1) {
     const body = await fetchPage(page);

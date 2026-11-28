@@ -92,10 +92,7 @@ export interface BlockGroupInput {
  * `{name, hidden_tags, spoilered_tags, active, expected_revision}`. **An edit must send `active`**:
  * the backend writes it, and its default is on. Resolves with the group's id and new revision.
  */
-export async function saveBlockGroup(
-  token: string,
-  input: BlockGroupInput,
-): Promise<{ id: number; revision: number }> {
+export async function saveBlockGroup(token: string, input: BlockGroupInput): Promise<{ id: number; revision: number }> {
   const body = {
     name: input.name,
     hidden_tags: [...input.hidden],
@@ -122,14 +119,10 @@ export async function toggleBlockGroup(
   active: boolean,
   revision: number,
 ): Promise<{ revision: number }> {
-  const data = await api<{ active: boolean; revision: number }>(
-    'PUT',
-    `/me/block-groups/${seg(id)}/activation`,
-    {
-      token,
-      json: { active, expected_revision: revision },
-    },
-  );
+  const data = await api<{ active: boolean; revision: number }>('PUT', `/me/block-groups/${seg(id)}/activation`, {
+    token,
+    json: { active, expected_revision: revision },
+  });
   return { revision: data.revision };
 }
 
@@ -144,10 +137,7 @@ export interface DerpiFilterSummary {
 }
 
 /** `GET /filters/user?key=` — the filters the key's own account made. */
-export async function getDerpiUserFilters(
-  apiKey: string,
-  signal?: AbortSignal,
-): Promise<DerpiFilterSummary[]> {
+export async function getDerpiUserFilters(apiKey: string, signal?: AbortSignal): Promise<DerpiFilterSummary[]> {
   const data = await readObject<{ filters?: unknown }>(
     await proxyFetch(`${DERPIBOORU_API_BASE}/filters/user?key=${encodeURIComponent(apiKey)}`, {
       signal,
@@ -192,10 +182,7 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
     const batch = ids.slice(start, start + 50);
     const query = batch.map((id) => `id:${id}`).join(' OR ');
     const data = await readObject<{ tags?: unknown }>(
-      await proxyFetch(
-        `${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=50`,
-        { signal },
-      ),
+      await proxyFetch(`${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=50`, { signal }),
     );
     for (const tag of Array.isArray(data.tags) ? (data.tags as Record<string, unknown>[]) : []) {
       if (tag && typeof tag.name === 'string') names.push(tag.name);
@@ -205,9 +192,7 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
 }
 
 function ids(value: unknown): number[] {
-  return (Array.isArray(value) ? value : [])
-    .map(Number)
-    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  return (Array.isArray(value) ? value : []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
 }
 
 export interface ImportedFilter {
@@ -226,15 +211,9 @@ export async function getDerpiFilterTags(
   signal?: AbortSignal,
 ): Promise<ImportedFilter> {
   const data = await readObject<{ filter?: unknown }>(
-    await proxyFetch(
-      `${DERPIBOORU_API_BASE}/filters/${filterId}?key=${encodeURIComponent(apiKey)}`,
-      { signal },
-    ),
+    await proxyFetch(`${DERPIBOORU_API_BASE}/filters/${filterId}?key=${encodeURIComponent(apiKey)}`, { signal }),
   );
-  const filter =
-    data.filter && typeof data.filter === 'object'
-      ? (data.filter as Record<string, unknown>)
-      : null;
+  const filter = data.filter && typeof data.filter === 'object' ? (data.filter as Record<string, unknown>) : null;
   if (!filter) throw new ApiError('invalid');
   const hidden = tagList([
     ...(await tagNames(ids(filter.hidden_tag_ids), signal)),
@@ -248,10 +227,7 @@ export async function getDerpiFilterTags(
     ...complexTerms(filter.spoilered_complex),
   ]).filter((tag) => !hiddenSet.has(tag));
   return {
-    name:
-      typeof filter.name === 'string' && filter.name.trim()
-        ? filter.name.trim()
-        : `过滤器 ${filterId}`,
+    name: typeof filter.name === 'string' && filter.name.trim() ? filter.name.trim() : `过滤器 ${filterId}`,
     hidden,
     spoilered,
   };

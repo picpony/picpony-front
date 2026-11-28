@@ -41,24 +41,10 @@ function LiveToolRow({ tool }: { tool: AssistantLiveTool }) {
   );
 }
 
-export default function AssistantPanel({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
+export default function AssistantPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { token, user } = useSession();
   if (!token || !user?.id) return null;
-  return (
-    <Conversation
-      key={token}
-      token={token}
-      accountId={String(user.id)}
-      isOpen={isOpen}
-      onClose={onClose}
-    />
-  );
+  return <Conversation key={token} token={token} accountId={String(user.id)} isOpen={isOpen} onClose={onClose} />;
 }
 
 function Conversation({
@@ -112,8 +98,7 @@ function Conversation({
   /* The folder names a confirmation card shows instead of bare ids (review P5-O2), read only while
      a card is waiting for an answer. */
   const folderList = useResource(faveFolders, state.task?.pending_id ? { token } : SKIP);
-  const folderName = (id: number) =>
-    folderList.data?.folders.find((folder) => folder.id === id)?.name;
+  const folderName = (id: number) => folderList.data?.folders.find((folder) => folder.id === id)?.name;
   const quota = useResource(assistantQuota, state.available ? { token } : SKIP);
   const desktop = useMediaQuery(MEDIA.sm, true);
   const [history, setHistory] = useState(false);
@@ -140,13 +125,7 @@ function Conversation({
     if (isOpen) void warmMarkdownDocument();
   }, [session, isOpen]);
   useEffect(() => {
-    if (
-      isOpen &&
-      state.available &&
-      !state.loading &&
-      focusPending.current &&
-      !interacted.current
-    ) {
+    if (isOpen && state.available && !state.loading && focusPending.current && !interacted.current) {
       focusPending.current = false;
       composer.current?.focus({ preventScroll: true });
     }
@@ -218,21 +197,10 @@ function Conversation({
     !state.live.length &&
     !state.streaming;
   const hasTrailing = Boolean(
-    state.pending ||
-    state.live.length > 0 ||
-    state.streaming ||
-    state.task ||
-    state.receipts.length > 0 ||
-    state.error,
+    state.pending || state.live.length > 0 || state.streaming || state.task || state.receipts.length > 0 || state.error,
   );
   const thread = isThreadLoading ? (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      paused={!isOpen}
-      delay={120}
-      label="正在加载对话…"
-    />
+    <PageLoadingIndicator size="inline" indicatorSize="md" paused={!isOpen} delay={120} label="正在加载对话…" />
   ) : state.ready && !state.available ? (
     <EmptyState
       title={state.status || '彩彩 AI 暂不可用'}
@@ -392,9 +360,7 @@ function Conversation({
               <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
               {!state.busy && (
                 <div className="flex flex-col items-end gap-1.5">
-                  <p className="text-body-s text-on-surface-variant text-end">
-                    此条消息的执行状态尚未确认，草稿已保留
-                  </p>
+                  <p className="text-body-s text-on-surface-variant text-end">此条消息的执行状态尚未确认，草稿已保留</p>
                   <div className="-me-4 flex flex-wrap justify-end gap-2">
                     <Button variant="text" onClick={() => void session.restore()}>
                       核对记录
@@ -405,8 +371,7 @@ function Conversation({
                         if (
                           (await confirm({
                             title: '确认保留草稿',
-                            message:
-                              '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。',
+                            message: '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。',
                             tone: 'filled',
                           })) &&
                           current()
@@ -429,10 +394,7 @@ function Conversation({
               {state.live.length > 0 ? (
                 state.live.map((block, index) =>
                   block.type === 'text' ? (
-                    <div
-                      key={`text-${index}`}
-                      className="text-body-m min-w-0 max-w-full wrap-anywhere"
-                    >
+                    <div key={`text-${index}`} className="text-body-m min-w-0 max-w-full wrap-anywhere">
                       <MarkdownRenderer content={block.text.replaceAll('||', '\n\n')} />
                     </div>
                   ) : (
@@ -455,11 +417,7 @@ function Conversation({
                 ))}
               </ul>
               <div className="mt-4 flex flex-wrap justify-end gap-2">
-                <Button
-                  variant="text"
-                  disabled={state.busy}
-                  onClick={() => void session.decide('reject')}
-                >
+                <Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>
                   取消
                 </Button>
                 <Button

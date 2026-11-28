@@ -107,11 +107,7 @@ function takePose(element: HTMLElement) {
   return pose;
 }
 
-function track(
-  element: HTMLElement,
-  animations: Animation[],
-  arrival: Animation | null = null,
-): StepMotion {
+function track(element: HTMLElement, animations: Animation[], arrival: Animation | null = null): StepMotion {
   running.set(element, animations);
   if (arrival) arrivals.set(element, arrival);
   else arrivals.delete(element);
@@ -155,11 +151,7 @@ function releasedKeyframes(
  *
  * Returns a finished motion when motion is off: the swap is then a cut.
  */
-export function playStepExit(
-  element: HTMLElement,
-  direction: StepDirection,
-  speed = 0,
-): StepMotion {
+export function playStepExit(element: HTMLElement, direction: StepDirection, speed = 0): StepMotion {
   const pose = takePose(element);
   if (motionTier('image') === 'off') return DONE;
   const { duration, easing } = springTiming('fastEffects', 'image');
@@ -192,10 +184,10 @@ export function playStepEnter(element: HTMLElement, direction: StepDirection): S
   if (motionTier('image') === 'off') return DONE;
   const spatial = springTiming('defaultSpatial', 'image');
   const effects = springTiming('defaultEffects', 'image');
-  const slide = element.animate(
-    [{ transform: translate(direction * stepTravel()) }, { transform: translate(0) }],
-    { duration: spatial.duration, easing: spatial.easing },
-  );
+  const slide = element.animate([{ transform: translate(direction * stepTravel()) }, { transform: translate(0) }], {
+    duration: spatial.duration,
+    easing: spatial.easing,
+  });
   const fade = element.animate([{ opacity: 0 }, { opacity: 1 }], {
     duration: effects.duration,
     easing: effects.easing,
@@ -360,14 +352,11 @@ export function bindStepSwipe({
 
   const speed = (event?: PointerEvent) =>
     tracker.velocity(
-      event
-        ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY }
-        : undefined,
+      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
     ).x;
 
   const track = (event: PointerEvent) => {
-    const coalesced =
-      typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
     for (const point of coalesced.length ? coalesced : [event]) {
       tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
     }
@@ -416,12 +405,7 @@ export function bindStepSwipe({
       else reset();
       return;
     }
-    if (
-      event.pointerType !== 'touch' ||
-      !event.isPrimary ||
-      startsOnMediaControls(event) ||
-      !canStart()
-    ) {
+    if (event.pointerType !== 'touch' || !event.isPrimary || startsOnMediaControls(event) || !canStart()) {
       return;
     }
     pointerId = event.pointerId;
@@ -474,8 +458,7 @@ export function bindStepSwipe({
     /* A finger heading back towards where it started is taking the page back, however far it
        had got — the same rule as the dismiss (`DISMISS_RETREAT_VELOCITY_PX_PER_MS`). */
     const retreating = releaseSpeed * Math.sign(dx) < -DISMISS_RETREAT_VELOCITY_PX_PER_MS;
-    const far =
-      !retreating && Math.abs(dx) >= Math.min(width * SWIPE_COMMIT_FRACTION, SWIPE_COMMIT_MAX_PX);
+    const far = !retreating && Math.abs(dx) >= Math.min(width * SWIPE_COMMIT_FRACTION, SWIPE_COMMIT_MAX_PX);
     const flung =
       Math.abs(dx) >= SWIPE_MIN_FLING_PX &&
       Math.abs(releaseSpeed) >= SWIPE_FLING_PX_PER_MS &&

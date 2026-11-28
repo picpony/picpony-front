@@ -118,9 +118,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
     setError('');
     try {
       /* Throws `ApiError` with the backend's sentence (a wrong code, a cooldown, the prerequisites). */
-      const state = await (enabled
-        ? enableDeveloperMode(token, password)
-        : disableDeveloperMode(token));
+      const state = await (enabled ? enableDeveloperMode(token, password) : disableDeveloperMode(token));
       if (readToken() !== token) return;
       /* The stored flag can be on while access is not (an expired maintenance grant): the answer's
          `active` is what the device mirrors. */
@@ -201,9 +199,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
             />
           )}
 
-          {status === 'banned' && (
-            <p className="text-body-m text-error">你的开发者权限已被封禁，请联系管理员</p>
-          )}
+          {status === 'banned' && <p className="text-body-m text-error">你的开发者权限已被封禁，请联系管理员</p>}
 
           {status === 'error' && (
             <ErrorRetry
@@ -220,11 +216,7 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                 <div className="space-y-4">
                   {/* The sentence is text on the surface; the brand ink is for the mark. */}
                   <div className="flex items-center gap-2 text-body-m text-on-surface">
-                    <MdConstruction
-                      size={ICON.control}
-                      className="shrink-0 text-primary-ink"
-                      aria-hidden="true"
-                    />
+                    <MdConstruction size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
                     当前已处于开发者模式
                   </div>
                 </div>

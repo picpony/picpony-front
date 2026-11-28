@@ -200,19 +200,14 @@ function sameLocation(a: string, b: string) {
   try {
     const left = new URL(a, window.location.href);
     const right = new URL(b, window.location.href);
-    return (
-      left.origin === right.origin &&
-      left.pathname === right.pathname &&
-      left.search === right.search
-    );
+    return left.origin === right.origin && left.pathname === right.pathname && left.search === right.search;
   } catch {
     return a === b;
   }
 }
 
 function navigationIndex(): number | null {
-  const nav = (window as unknown as { navigation?: { currentEntry?: { index?: number } | null } })
-    .navigation;
+  const nav = (window as unknown as { navigation?: { currentEntry?: { index?: number } | null } }).navigation;
   const index = nav?.currentEntry?.index;
   return typeof index === 'number' && index >= 0 ? index : null;
 }
@@ -279,12 +274,7 @@ function ownWrite(kind: 'push' | 'replace', data: unknown) {
   if (!reached) install();
 }
 
-function intercept(
-  kind: 'push' | 'replace',
-  data: unknown,
-  unused: string,
-  url?: string | URL | null,
-) {
+function intercept(kind: 'push' | 'replace', data: unknown, unused: string, url?: string | URL | null) {
   reached = true;
   if (writing) {
     write(kind, data, unused, url);

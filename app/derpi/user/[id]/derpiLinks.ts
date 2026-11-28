@@ -24,8 +24,7 @@ export function philomenaSlug(name: string): string {
 
 /** The account's page: the slug the API sent, else the one its name makes. */
 export function derpiProfileUrl(profile: { name: string; slug?: unknown }): string {
-  const slug =
-    typeof profile.slug === 'string' && profile.slug ? profile.slug : philomenaSlug(profile.name);
+  const slug = typeof profile.slug === 'string' && profile.slug ? profile.slug : philomenaSlug(profile.name);
   /* `+` is the slug's own space and is kept; everything else a path segment cannot carry is encoded. */
   return `https://derpibooru.org/profiles/${encodeURIComponent(slug).replaceAll('%2B', '+')}`;
 }

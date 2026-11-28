@@ -99,12 +99,7 @@ test('JSON mutations preserve payloads and explicit authentication', async () =>
   });
   await admin.adminToggleTranslate('session', { translate_enabled: true });
   const contracts = [
-    [
-      'PUT',
-      '/api/v1/admin/maintenance',
-      { maintenance_mode: false, maintenance_message: '' },
-      'Bearer session',
-    ],
+    ['PUT', '/api/v1/admin/maintenance', { maintenance_mode: false, maintenance_message: '' }, 'Bearer session'],
     ['PUT', '/api/v1/admin/translation', { translate_enabled: true }, 'Bearer session'],
   ];
   assert.equal(calls.length, contracts.length);
@@ -116,10 +111,7 @@ test('JSON mutations preserve payloads and explicit authentication', async () =>
     assert.deepEqual(JSON.parse(init.body), body);
     assert.equal(new Headers(init.headers).get('Content-Type'), 'application/json');
     assert.equal(new Headers(init.headers).get('Authorization'), authorization);
-    assert.ok(
-      new Headers(init.headers).get('Idempotency-Key'),
-      'an admin write carries its retry key',
-    );
+    assert.ok(new Headers(init.headers).get('Idempotency-Key'), 'an admin write carries its retry key');
   }
 });
 
@@ -144,37 +136,18 @@ test('account writes are /api/v1 resources: path ids, native bodies, the bearer 
       { username: '小马', email: 'p@example.test', password: 'test-only1', captcha_proof: 'proof' },
       null,
     ],
-    [
-      'PUT',
-      '/api/v1/me/username',
-      { username: 'pony & friends', expected_revision: 3 },
-      'Bearer session',
-    ],
+    ['PUT', '/api/v1/me/username', { username: 'pony & friends', expected_revision: 3 }, 'Bearer session'],
     ['POST', '/api/v1/auth/email-verifications/v%2F1/resends', { captcha_proof: 'proof' }, null],
     ['POST', '/api/v1/auth/email-verifications/v1/confirmation', { code: '123456' }, null],
-    [
-      'POST',
-      '/api/v1/auth/password-resets',
-      { email: 'p@example.test', captcha_proof: 'proof' },
-      null,
-    ],
-    [
-      'PUT',
-      '/api/v1/auth/password-resets/r1',
-      { code: '123456', new_password: 'next-pass1' },
-      null,
-    ],
+    ['POST', '/api/v1/auth/password-resets', { email: 'p@example.test', captcha_proof: 'proof' }, null],
+    ['PUT', '/api/v1/auth/password-resets/r1', { code: '123456', new_password: 'next-pass1' }, null],
     ['POST', '/api/v1/me/badges/claims/claim-token%26value', undefined, 'Bearer session'],
   ];
   assert.equal(calls.length, contracts.length);
   for (const [index, [method, path, body, authorization]] of contracts.entries()) {
     const { url, init } = calls[index];
     assert.equal(init.method, method);
-    assert.equal(
-      url.pathname + url.search === path || url.href.endsWith(path),
-      true,
-      `${path} ← ${url.href}`,
-    );
+    assert.equal(url.pathname + url.search === path || url.href.endsWith(path), true, `${path} ← ${url.href}`);
     assert.equal(url.searchParams.has('action'), false);
     assert.deepEqual(init.body === undefined ? undefined : JSON.parse(init.body), body);
     assert.equal(new Headers(init.headers).get('Authorization'), authorization);
@@ -233,10 +206,7 @@ test('bodyless mutations and captcha requests retain their distinct wire contrac
   ];
   assert.deepEqual(await picpony.captchaVerify('c1', 120, trace), { proof: 'p', expires_in: 120 });
   /* `lock_privacy_space` is `DELETE /me/privacy-space/unlock` (`privacy::relock`): no body. */
-  assert.deepEqual(
-    [calls[0].init.method, calls[0].url.pathname],
-    ['DELETE', '/api/v1/me/privacy-space/unlock'],
-  );
+  assert.deepEqual([calls[0].init.method, calls[0].url.pathname], ['DELETE', '/api/v1/me/privacy-space/unlock']);
   assert.equal(calls[0].init.body, undefined);
   assert.equal(new Headers(calls[0].init.headers).get('Content-Type'), null);
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer session');
@@ -245,10 +215,7 @@ test('bodyless mutations and captcha requests retain their distinct wire contrac
   assert.equal(calls[1].url.pathname, '/api/v1/admin/developer-access/password/rotations');
   const rotation = JSON.parse(calls[1].init.body);
   assert.equal(rotation.expected_generation, 4);
-  assert.match(
-    rotation.request_id,
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-  );
+  assert.match(rotation.request_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(new Headers(calls[1].init.headers).get('Content-Type'), 'application/json');
   assert.deepEqual(
     calls.slice(2).map(({ url, init }) => [init.method, url.pathname]),
@@ -314,8 +281,7 @@ test('dictionary and audit filters retain optional fields, timestamps and encode
 });
 
 test('strict reads throw typed failures and normalise list fields at the boundary', async () => {
-  respond = () =>
-    Response.json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
+  respond = () => Response.json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
   await assert.rejects(
     picpony.getUserProfile('999999'),
     (error) =>
@@ -327,37 +293,25 @@ test('strict reads throw typed failures and normalise list fields at the boundar
       !/HTTP|JSON/.test(error.message),
   );
 
-  respond = () =>
-    Response.json({ error: { code: 'BAD_REQUEST', message: '无效的帖子ID' } }, { status: 400 });
+  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '无效的帖子ID' } }, { status: 400 });
   await assert.rejects(
     forum.getForumPostDetail('abc'),
     (error) => error instanceof ApiError && error.notFound && error.status === 400,
   );
 
   respond = () =>
-    Response.json(
-      { error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } },
-      { status: 503 },
-    );
+    Response.json({ error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } }, { status: 503 });
   await assert.rejects(
     blockGroupApi.getBlockGroups('session'),
-    (error) =>
-      error instanceof ApiError && error.kind === 'http' && error.status === 503 && error.retryable,
+    (error) => error instanceof ApiError && error.kind === 'http' && error.status === 503 && error.retryable,
     'a failed read is not an empty list',
   );
 
   respond = () =>
-    Response.json(
-      { error: { code: 'FOLDER_NOT_FOUND', message: '收藏夹未公开或不存在' } },
-      { status: 404 },
-    );
+    Response.json({ error: { code: 'FOLDER_NOT_FOUND', message: '收藏夹未公开或不存在' } }, { status: 404 });
   await assert.rejects(
     favorites.getSharedFaves(12, 3),
-    (error) =>
-      error instanceof ApiError &&
-      error.code === 'FOLDER_NOT_FOUND' &&
-      error.notFound &&
-      !error.retryable,
+    (error) => error instanceof ApiError && error.code === 'FOLDER_NOT_FOUND' && error.notFound && !error.retryable,
   );
 
   respond = () => Response.json({ posts: [], total: 0, total_pages: 0 });
@@ -366,11 +320,7 @@ test('strict reads throw typed failures and normalise list fields at the boundar
     { posts: [], total_pages: 1 },
     'no `success` field: a 2xx is the answer',
   );
-  respond = () =>
-    Response.json(
-      { error: { code: 'PROFILE_PRIVATE', message: '用户未公开此类活动' } },
-      { status: 403 },
-    );
+  respond = () => Response.json({ error: { code: 'PROFILE_PRIVATE', message: '用户未公开此类活动' } }, { status: 403 });
   await assert.rejects(
     picpony.getUserPosts('1'),
     (error) => error instanceof ApiError && error.code === 'PROFILE_PRIVATE' && !error.retryable,
@@ -414,8 +364,7 @@ test('strict reads throw typed failures and normalise list fields at the boundar
     ],
     'a contact is the other person, by user id, with the start of the newest message',
   );
-  respond = () =>
-    Response.json({ error: { code: 'UNAUTHORIZED', message: '请先登录' } }, { status: 401 });
+  respond = () => Response.json({ error: { code: 'UNAUTHORIZED', message: '请先登录' } }, { status: 401 });
   await assert.rejects(
     messaging.readRecentContacts('session'),
     (error) => error instanceof ApiError && error.kind === 'http' && error.status === 401,
@@ -445,13 +394,10 @@ test('strict reads throw typed failures and normalise list fields at the boundar
 });
 
 test('announcement HTML is sanitised inside the adapter for every consumer', async () => {
-  const content =
-    '正文<img src="x" onerror="window.__xss=1"><a href="javascript:window.__js=1">链接</a><b>保留</b>';
+  const content = '正文<img src="x" onerror="window.__xss=1"><a href="javascript:window.__js=1">链接</a><b>保留</b>';
   respond = () =>
     Response.json({
-      announcements: [
-        { id: 1, version: 'V1', title: '标题', content, created_at: '2026-09-18T00:00:00Z' },
-      ],
+      announcements: [{ id: 1, version: 'V1', title: '标题', content, created_at: '2026-09-18T00:00:00Z' }],
       next_cursor: 1,
     });
   const history = await messaging.readAnnouncementHistory(1);
@@ -479,13 +425,8 @@ test('announcement HTML is sanitised inside the adapter for every consumer', asy
   assert.doesNotMatch(latest.announcement.content, /onerror|javascript:/i);
   assert.equal(latest.announcement.date, '2026-09-18T00:00:00Z');
   respond = () => Response.json({ announcement: null });
-  assert.equal(
-    (await picpony.getAnnouncement()).announcement,
-    undefined,
-    'nothing published is no announcement',
-  );
-  respond = () =>
-    Response.json({ error: { code: 'UNAVAILABLE', message: '服务暂时不可用' } }, { status: 503 });
+  assert.equal((await picpony.getAnnouncement()).announcement, undefined, 'nothing published is no announcement');
+  respond = () => Response.json({ error: { code: 'UNAVAILABLE', message: '服务暂时不可用' } }, { status: 503 });
   await assert.rejects(
     messaging.readAnnouncementHistory(1),
     (error) => error instanceof ApiError && error.status === 503,
@@ -595,7 +536,6 @@ test('body-read failures remain rejections rather than fabricated API envelopes'
   await assert.rejects(
     readApi(response),
     (error) =>
-      error === failure ||
-      (error instanceof ApiError && (error.cause === failure || error.kind === 'aborted')),
+      error === failure || (error instanceof ApiError && (error.cause === failure || error.kind === 'aborted')),
   );
 });

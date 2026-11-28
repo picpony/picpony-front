@@ -23,9 +23,7 @@ import ServiceChecks from './ServiceChecks';
 
 function RelayConfig({ token }: { token: string }) {
   const read = useAdminQuery(relayConfigQuery, token);
-  const refresh = (
-    <RefreshButton onClick={read.refresh} label="刷新设置" loading={read.refreshing} />
-  );
+  const refresh = <RefreshButton onClick={read.refresh} label="刷新设置" loading={read.refreshing} />;
   return (
     <div className="space-y-6">
       <ReadState
@@ -44,13 +42,10 @@ function RelayConfig({ token }: { token: string }) {
             validate={(v) => fieldsPayload(relayFields, v)}
             save={(v) => api.saveRelayConfig(token, v)}
             refresh={() => relayConfigQuery.invalidate()}
-            confirmation={() =>
-              '确定要修改全站中转服务设置吗？并发上限、自动切回及白名单将一并更新。'
-            }
+            confirmation={() => '确定要修改全站中转服务设置吗？并发上限、自动切回及白名单将一并更新。'}
           >
             <AdminNote>
-              自动切回本轮已尝试 <span className="tabular-nums">{read.data.attempts}</span> 次，最多
-              3 次。
+              自动切回本轮已尝试 <span className="tabular-nums">{read.data.attempts}</span> 次，最多 3 次。
             </AdminNote>
           </ConfigEditor>
         ) : (
@@ -70,19 +65,8 @@ function RelayStats({ token }: { token: string }) {
   });
   const [date, setDate] = useState(''),
     [dateError, setDateError] = useState('');
-  const read = useToolPage(
-    relayStatsQuery,
-    token,
-    args,
-    `${args.range}:${args.date}:${args.sort}:${args.order}`,
-  );
-  if (
-    read.data &&
-    !read.isPrevious &&
-    !read.isLoading &&
-    !read.error &&
-    args.page > read.data.totalPages
-  )
+  const read = useToolPage(relayStatsQuery, token, args, `${args.range}:${args.date}:${args.sort}:${args.order}`);
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && args.page > read.data.totalPages)
     setArgs({ ...args, page: read.data.totalPages });
   return (
     <div className="space-y-6">
@@ -100,9 +84,7 @@ function RelayStats({ token }: { token: string }) {
       >
         <SectionHeading
           as="h3"
-          actions={
-            <RefreshButton onClick={read.refresh} label="刷新统计" loading={read.refreshing} />
-          }
+          actions={<RefreshButton onClick={read.refresh} label="刷新统计" loading={read.refreshing} />}
         >
           请求统计
         </SectionHeading>
@@ -151,10 +133,7 @@ function RelayStats({ token }: { token: string }) {
           listKey={read.listKey}
           rowKey={(r, i) => `${r.ip}:${r.username}:${i}`}
           loading={read.loading}
-          {...tableError(
-            read.isPrevious ? `中转统计第 ${args.page} 页加载失败` : '中转统计加载失败',
-            read.message,
-          )}
+          {...tableError(read.isPrevious ? `中转统计第 ${args.page} 页加载失败` : '中转统计加载失败', read.message)}
           onRetry={read.retry}
           empty="暂无中转请求"
           columns={[
@@ -221,13 +200,7 @@ function RelayStats({ token }: { token: string }) {
 function RelayErrors({ token }: { token: string }) {
   const [args, setArgs] = useState({ date: '', page: 1 });
   const read = useToolPage(relayErrorsQuery, token, args, args.date);
-  if (
-    read.data &&
-    !read.isPrevious &&
-    !read.isLoading &&
-    !read.error &&
-    args.page > read.data.totalPages
-  )
+  if (read.data && !read.isPrevious && !read.isLoading && !read.error && args.page > read.data.totalPages)
     setArgs({ ...args, page: read.data.totalPages });
   return (
     <div className="space-y-6">
@@ -244,19 +217,14 @@ function RelayErrors({ token }: { token: string }) {
         />
         <RefreshButton onClick={read.refresh} label="刷新日志" loading={read.refreshing} />
       </div>
-      <AdminNote>
-        {read.data?.available === false ? '尚无错误日志。' : '仅展示最近 5,000 条原站错误记录。'}
-      </AdminNote>
+      <AdminNote>{read.data?.available === false ? '尚无错误日志。' : '仅展示最近 5,000 条原站错误记录。'}</AdminNote>
       <AdminListAnchor>
         <DataTable
           rows={read.data?.rows ?? []}
           listKey={read.listKey}
           rowKey={(r) => r.key}
           loading={read.loading}
-          {...tableError(
-            read.isPrevious ? `中转日志第 ${args.page} 页加载失败` : '中转日志加载失败',
-            read.message,
-          )}
+          {...tableError(read.isPrevious ? `中转日志第 ${args.page} 页加载失败` : '中转日志加载失败', read.message)}
           onRetry={read.retry}
           empty="暂无原站错误记录"
           columns={[
@@ -266,8 +234,7 @@ function RelayErrors({ token }: { token: string }) {
               primary: true,
               width: 'minmax(0, 2fr)',
               className: 'wrap-anywhere',
-              render: (r) =>
-                r.reason || (r.status === null ? '未收到原站响应' : `原站返回 ${r.status}`),
+              render: (r) => r.reason || (r.status === null ? '未收到原站响应' : `原站返回 ${r.status}`),
             },
             {
               key: 'status',
@@ -292,8 +259,7 @@ function RelayErrors({ token }: { token: string }) {
                 <>
                   {formatDateTime(r.time)}
                   <br />
-                  {r.duration === null ? '耗时未记录' : `${r.duration} 毫秒`} ·{' '}
-                  {r.phase || '阶段未记录'}
+                  {r.duration === null ? '耗时未记录' : `${r.duration} 毫秒`} · {r.phase || '阶段未记录'}
                 </>
               ),
             },
@@ -336,15 +302,9 @@ function RelayTab({ token }: AdminPanelProps) {
         <TabPane value="relay-config">
           <RelayConfig token={token} />
         </TabPane>
-        <TabPane value="relay-stats">
-          {visited.has('relay-stats') && <RelayStats token={token} />}
-        </TabPane>
-        <TabPane value="relay-errors">
-          {visited.has('relay-errors') && <RelayErrors token={token} />}
-        </TabPane>
-        <TabPane value="relay-checks">
-          {visited.has('relay-checks') && <ServiceChecks token={token} />}
-        </TabPane>
+        <TabPane value="relay-stats">{visited.has('relay-stats') && <RelayStats token={token} />}</TabPane>
+        <TabPane value="relay-errors">{visited.has('relay-errors') && <RelayErrors token={token} />}</TabPane>
+        <TabPane value="relay-checks">{visited.has('relay-checks') && <ServiceChecks token={token} />}</TabPane>
       </TabPanes>
     </div>
   );

@@ -35,22 +35,12 @@ const query = defineResource<Params, api.PurchasePage<Row>>({
       : api.getShopPurchases(p.token, p.keyword, p.before, signal);
   },
 });
-export default function PurchasesPane({
-  token,
-  legacy = false,
-}: {
-  token: string;
-  legacy?: boolean;
-}) {
+export default function PurchasesPane({ token, legacy = false }: { token: string; legacy?: boolean }) {
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState('');
   const scope = `${token}:${legacy}:${filter}`;
   const pages = useCursorPages(scope);
-  const read = useResource(
-    query,
-    { token, keyword: filter, legacy, before: pages.cursor },
-    { keepPrevious: scope },
-  );
+  const read = useResource(query, { token, keyword: filter, legacy, before: pages.cursor }, { keepPrevious: scope });
   if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
   const listKey = useShownListKey(`${scope}\n${pages.page}`, read.isPrevious);
   const mutation = useCatalogMutation(token);
@@ -73,11 +63,7 @@ export default function PurchasesPane({
       header: legacy ? '原因' : '商品',
       width: 'minmax(0, 2fr)',
       render: (row) =>
-        'reason' in row ? (
-          row.reason
-        ) : (
-          <span className="tabular-nums">{`${row.item_name} × ${row.quantity}`}</span>
-        ),
+        'reason' in row ? row.reason : <span className="tabular-nums">{`${row.item_name} × ${row.quantity}`}</span>,
     },
     /* Exact and grouped, never 万/亿: a refund amount has to be checkable against a balance.
        A legacy row's amount is a signed ledger entry, a purchase's total is what was paid. */
@@ -86,8 +72,7 @@ export default function PurchasesPane({
       header: '金币',
       width: 'auto',
       className: 'tabular-nums',
-      render: (row) =>
-        'amount' in row ? formatSignedCount(row.amount) : formatExactCount(row.total_amount),
+      render: (row) => ('amount' in row ? formatSignedCount(row.amount) : formatExactCount(row.total_amount)),
     },
     {
       key: 'time',
@@ -183,11 +168,7 @@ export default function PurchasesPane({
           <Button type="submit" variant="filled">
             查询
           </Button>
-          <RefreshButton
-            onClick={read.refresh}
-            label="刷新记录"
-            loading={read.isLoading && read.data !== undefined}
-          />
+          <RefreshButton onClick={read.refresh} label="刷新记录" loading={read.isLoading && read.data !== undefined} />
         </div>
       </form>
       <MutationResult mutation={mutation} />

@@ -19,9 +19,7 @@ const LABELS: Record<FavoritesTab, string> = {
 
 /** The row, in its order. */
 export function favoritesTabs(showPrivacy: boolean): { value: FavoritesTab; label: string }[] {
-  const offered: FavoritesTab[] = showPrivacy
-    ? ['folders', 'derpibooru', 'privacy']
-    : ['folders', 'derpibooru'];
+  const offered: FavoritesTab[] = showPrivacy ? ['folders', 'derpibooru', 'privacy'] : ['folders', 'derpibooru'];
   return offered.map((value) => ({ value, label: LABELS[value] }));
 }
 
@@ -55,8 +53,7 @@ function writeQueued() {
   queued = null;
   if (!here || !tab) return;
   const href = favoritesHref(tab);
-  if (href !== `${window.location.pathname}${window.location.search}`)
-    window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting write goes with it. */

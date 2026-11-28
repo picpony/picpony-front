@@ -17,12 +17,7 @@ import TabPanes, { TabPane } from '@/components/TabPanes';
 import FoldersPane from './FoldersPane';
 import DerpiPane from './DerpiPane';
 import PrivacyPane from './PrivacyPane';
-import {
-  dropQueuedFavoritesAddress,
-  favoritesTabs,
-  landingTab,
-  replaceFavoritesAddress,
-} from './tabs';
+import { dropQueuedFavoritesAddress, favoritesTabs, landingTab, replaceFavoritesAddress } from './tabs';
 
 const TAB_ROW_LABEL = '收藏';
 
@@ -79,9 +74,7 @@ function FavoritesScreen({ token }: { token: string }) {
   const account = useResource(sessionUser, { token });
   const tabParam = useBackgroundSearchParams().get('tab');
   const requested = isFavoritesTab(tabParam) ? tabParam : null;
-  const [tab, setTab] = useState<FavoritesTab>(() =>
-    landingTab(requested ?? 'folders', showPrivacy),
-  );
+  const [tab, setTab] = useState<FavoritesTab>(() => landingTab(requested ?? 'folders', showPrivacy));
 
   /* A link followed while the screen is up selects its tab. */
   const [seen, setSeen] = useState(requested);
@@ -143,13 +136,7 @@ function FavoritesScreen({ token }: { token: string }) {
           )
         }
       />
-      <Tabs
-        tabs={favoritesTabs(showPrivacy)}
-        value={shown}
-        onChange={select}
-        label={TAB_ROW_LABEL}
-        className="mb-6"
-      />
+      <Tabs tabs={favoritesTabs(showPrivacy)} value={shown} onChange={select} label={TAB_ROW_LABEL} className="mb-6" />
       <TabPanes value={shown} lean>
         <TabPane value="folders">
           {visited.has('folders') && <FoldersPane token={token} active={shown === 'folders'} />}

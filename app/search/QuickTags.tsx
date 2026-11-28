@@ -21,14 +21,7 @@ const GROUP_LABELS: Record<QuickTagGroup, string> = {
 
 /** Placeholder while quick-tag categories and dynamic chip widths load. */
 export function QuickTagsSkeleton() {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      label="正在加载快捷标签…"
-      className="min-h-28"
-    />
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载快捷标签…" className="min-h-28" />;
 }
 
 function QuickTagRow({
@@ -46,10 +39,7 @@ function QuickTagRow({
   useScrollFade(rowRef);
   return (
     <div className="flex h-10 min-w-0 items-center gap-3">
-      <span
-        className="w-8 shrink-0 text-label-l text-on-surface-variant"
-        id={`quick-tags-${group}`}
-      >
+      <span className="w-8 shrink-0 text-label-l text-on-surface-variant" id={`quick-tags-${group}`}>
         {GROUP_LABELS[group]}
       </span>
       <div

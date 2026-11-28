@@ -133,10 +133,7 @@ function centreOf(el: Element | null | undefined): RevealPoint | null {
 const usablePoint = (point: RevealPoint | null): RevealPoint | null =>
   point && Number.isFinite(point.x) && Number.isFinite(point.y) ? point : null;
 
-function resolveRevealOrigin(
-  origin: RevealPoint | undefined,
-  box: { width: number; height: number },
-): RevealPoint {
+function resolveRevealOrigin(origin: RevealPoint | undefined, box: { width: number; height: number }): RevealPoint {
   /* Not defensive dressing: a caller measuring an already-unmounted control hands
    * over a rect of zeros, and a `NaN` reaching the emitted `clip-path` as `at NaN%`
    * invalidates the whole declaration — the keyframes carry no clip and the wipe
@@ -203,8 +200,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
   const reachY = Math.max(fy, 1 - fy) * box.height + box.topInset;
   // A percentage radius resolves against sqrt((w² + h²) / 2), so scale by √2
   // over the diagonal to turn a length back into that percentage.
-  const radiusPercent =
-    (Math.hypot(reachX, reachY) / Math.hypot(box.width, box.height)) * Math.SQRT2 * 100 + 1;
+  const radiusPercent = (Math.hypot(reachX, reachY) / Math.hypot(box.width, box.height)) * Math.SQRT2 * 100 + 1;
   const at = `at ${(fx * 100).toFixed(3)}% ${(fy * 100).toFixed(3)}%`;
   const id = String(++themeTransitionId);
   const animationName = `theme-circular-reveal-${id}`;
@@ -344,10 +340,7 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }) 
 
 /** A time-of-day sky phase transition as a gentle circular reveal while `sky` is active. */
 export function changeSkyPhase(phaseId: SkyPhaseId, origin?: { x: number; y: number }) {
-  if (
-    (pendingPalette ?? currentPalette()) !== SKY_PALETTE ||
-    phaseId === (pendingSkyPhase ?? currentSkyPhase())
-  ) {
+  if ((pendingPalette ?? currentPalette()) !== SKY_PALETTE || phaseId === (pendingSkyPhase ?? currentSkyPhase())) {
     return;
   }
   pendingSkyPhase = phaseId;
@@ -364,10 +357,7 @@ export function changeSkyPhase(phaseId: SkyPhaseId, origin?: { x: number; y: num
  * seed and its 副色相. The derivation is the caller's (`resolveCustomPalette`
  * awaits a chunk); nothing may await inside the wipe's capture callback.
  */
-export function changeCustomPalette(
-  install: CustomPaletteInstall,
-  origin?: { x: number; y: number },
-) {
+export function changeCustomPalette(install: CustomPaletteInstall, origin?: { x: number; y: number }) {
   if (
     (pendingPalette ?? currentPalette()) === CUSTOM_PALETTE &&
     currentCustomSeed() === install.seed &&

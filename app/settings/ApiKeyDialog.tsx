@@ -58,9 +58,7 @@ export default function ApiKeyDialog({
   const [key, setKey] = useState(current);
   const [busy, setBusy] = useState(false);
   const trimmed = key.trim();
-  const form = useFieldErrors<'key'>(() => [
-    ['key', !trimmed ? '请输入 API Key' : validateApiKey(trimmed)],
-  ]);
+  const form = useFieldErrors<'key'>(() => [['key', !trimmed ? '请输入 API Key' : validateApiKey(trimmed)]]);
 
   const close = () => {
     if (busy) return;

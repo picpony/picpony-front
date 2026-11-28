@@ -21,12 +21,8 @@ const { createHeroRectArc, lerpHeroRectArc, getHeroMediaRenderedWidth } = geomet
 const { progressAt, sampleProgress, velocityAt } = await import('../lib/hero/progress.ts');
 const constants = await import('../lib/hero/constants.ts');
 const { HERO_FLIGHT_PROGRESS, HERO_PROGRESS_SAMPLES } = constants;
-const {
-  formatHeroContainerCompensator,
-  formatHeroContainerRadius,
-  formatHeroTransform,
-  getHeroContainerPose,
-} = geometry;
+const { formatHeroContainerCompensator, formatHeroContainerRadius, formatHeroTransform, getHeroContainerPose } =
+  geometry;
 const { HERO_CONTAINER_SHAPE, HERO_TARGET_RADIUS_PX } = constants;
 const { intervalProgress } = await import('../lib/hero/progress.ts');
 const { interpolate } = await import('../lib/hero/spring.ts');
@@ -188,19 +184,14 @@ for (const [name, from, image, viewport] of CASES) {
     const b = dir === 'fwd' ? to : from;
     const bow = geometry.solveHeroArcBow(a, b, baseAspect);
     const audit = auditPath(a, b, baseAspect, createHeroRectArc(a, b, bow));
-    const edges =
-      audit.reversals === 0 ? 'monotone ' : `FAIL ${String(audit.reversals).padStart(3)}`;
-    const past =
-      audit.pastLanding > 0.05 ? `${audit.pastEdge} +${audit.pastLanding.toFixed(1)}px` : 'none';
+    const edges = audit.reversals === 0 ? 'monotone ' : `FAIL ${String(audit.reversals).padStart(3)}`;
+    const past = audit.pastLanding > 0.05 ? `${audit.pastEdge} +${audit.pastLanding.toFixed(1)}px` : 'none';
     const retrace = `${(audit.crop * 100).toFixed(1)}%`;
     console.log(
       `${name.padEnd(20)} ${dir.padEnd(5)} ${edges}  ${past.padEnd(14)} ${retrace.padStart(6)}  ${bow.toFixed(2)}`,
     );
     if (audit.reversals > 0) {
-      fail(
-        'a/edges',
-        `${name} ${dir} reverses ${audit.reversals}x, worst ${audit.worstReversal.toFixed(2)}px`,
-      );
+      fail('a/edges', `${name} ${dir} reverses ${audit.reversals}x, worst ${audit.worstReversal.toFixed(2)}px`);
     }
     if (audit.pastLanding > 0.05) {
       fail(
@@ -249,8 +240,7 @@ function tableError(model, samples) {
     const a = table[segment];
     const b = table[segment + 1];
     const span = b.offset - a.offset;
-    const lerp =
-      span > 0 ? a.progress + (b.progress - a.progress) * ((t - a.offset) / span) : a.progress;
+    const lerp = span > 0 ? a.progress + (b.progress - a.progress) * ((t - a.offset) / span) : a.progress;
     const error = Math.abs(lerp - progressAt(model, t));
     if (error > worst) {
       worst = error;
@@ -260,9 +250,7 @@ function tableError(model, samples) {
   return { worst, worstAt };
 }
 
-console.log(
-  `\nmodel               p(0) p(1) monotone  v(0)      table@24   table@32   table@${HERO_PROGRESS_SAMPLES}`,
-);
+console.log(`\nmodel               p(0) p(1) monotone  v(0)      table@24   table@32   table@${HERO_PROGRESS_SAMPLES}`);
 for (const [label, model] of MODELS) {
   const zero = progressAt(model, 0);
   const one = progressAt(model, 1);
@@ -401,11 +389,7 @@ for (const [label, card, image, viewport] of CASES) {
       );
 
       /* (e/corner) Containment, and the browser's own clamp. */
-      const screenR = interpolate(
-        radiusFrom,
-        radiusTo,
-        intervalProgress(progress, shape.start, shape.end),
-      );
+      const screenR = interpolate(radiusFrom, radiusTo, intervalProgress(progress, shape.start, shape.end));
       const local = Number.parseFloat(formatHeroContainerRadius(pose, host, screenR));
       if (screenR > 0) {
         const rx = local * pose.scaleX;
@@ -428,8 +412,8 @@ for (const [label, card, image, viewport] of CASES) {
        of a lerp is not the lerp of a reciprocal. Real, unavoidable, and pinned: the scale error
        is a fraction, the offset is in px, and both must stay under what the eye reads at these
        durations. Sampled between the real keyframes (eased offsets, not uniform progress). */
-    const keyPoses = sampleProgress(HERO_FLIGHT_PROGRESS[direction], HERO_PROGRESS_SAMPLES).map(
-      ({ progress }) => getHeroContainerPose(lerpHeroRectArc(arc, progress), host),
+    const keyPoses = sampleProgress(HERO_FLIGHT_PROGRESS[direction], HERO_PROGRESS_SAMPLES).map(({ progress }) =>
+      getHeroContainerPose(lerpHeroRectArc(arc, progress), host),
     );
     for (let i = 0; i + 1 < keyPoses.length; i += 1) {
       const a = keyPoses[i];
@@ -469,8 +453,7 @@ for (const [label, card, image, viewport] of CASES) {
     const endRadius = formatHeroContainerRadius(endPose, host, radiusTo);
     const landed =
       (forward
-        ? endClip === 'translate3d(0px, 0px, 0) scale(1, 1)' &&
-          endComp === 'scale(1, 1) translate(0px, 0px)'
+        ? endClip === 'translate3d(0px, 0px, 0) scale(1, 1)' && endComp === 'scale(1, 1) translate(0px, 0px)'
         : true) && Number.parseFloat(endRadius) >= 0;
 
     if (!landed) {
@@ -485,8 +468,7 @@ for (const [label, card, image, viewport] of CASES) {
       if (!above) fail('e/clamp', `${label} never expresses a box above the host`);
     }
 
-    if (isotropy > 1e-9)
-      fail('e/still', `${label} ${direction} content moves, off by ${isotropy.toExponential(2)}`);
+    if (isotropy > 1e-9) fail('e/still', `${label} ${direction} content moves, off by ${isotropy.toExponential(2)}`);
     if (boxError > 1e-9) fail('e/box', `${label} ${direction} off by ${boxError.toExponential(2)}`);
     if (capBound) fail('e/corner', `${label} ${direction} needs a radius the browser would clamp`);
 
@@ -541,20 +523,14 @@ if (worstDrift > DRIFT_TOLERANCE) {
      must hold is that it is visibly on its way in the first 60Hz frame. */
   const firstFrame = progressAt(flight, 1000 / 60 / constants.HERO_DURATIONS.forward);
   if (!(launch >= 0 && firstFrame > 0.02)) {
-    fail(
-      'd/model',
-      `the flight covers ${(firstFrame * 100).toFixed(1)}% in its first frame: a hang-back`,
-    );
+    fail('d/model', `the flight covers ${(firstFrame * 100).toFixed(1)}% in its first frame: a hang-back`);
   }
-  if (!(crestAt > 0))
-    fail('d/model', 'the flight crests at the press, before anyone can see it move');
-  if (!(crestAt <= 0.25))
-    fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
+  if (!(crestAt > 0)) fail('d/model', 'the flight crests at the press, before anyone can see it move');
+  if (!(crestAt <= 0.25)) fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
   if (!oneCrest) fail('d/model', 'the flight changes speed more than once');
   /* At rest within the settle threshold (1/512 of the travel, `lib/spring.ts`): what speed is
      left is a sub-pixel creep the leg's last sample hands to the static pose. */
-  if (!(Math.abs(arrival) < 0.02))
-    fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
+  if (!(Math.abs(arrival) < 0.02)) fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,8 +569,7 @@ function sharedContainBow(card, media, host, cropBow) {
     for (let i = 0; i <= constants.HERO_ARC_SOLVE_SAMPLES; i += 1) {
       const p = i / constants.HERO_ARC_SOLVE_SAMPLES;
       if (
-        geometry.heroRectEscape(lerpHeroRectArc(inner, p), lerpHeroRectArc(outer, p)) >
-        constants.HERO_ARC_CONTAIN_SLACK
+        geometry.heroRectEscape(lerpHeroRectArc(inner, p), lerpHeroRectArc(outer, p)) > constants.HERO_ARC_CONTAIN_SLACK
       ) {
         return false;
       }
@@ -620,9 +595,7 @@ let worstRawEscape = 0;
 const gaveWay = [];
 
 console.log('\ncontainment — the window gives way, the picture keeps its arc');
-console.log(
-  'case                 bow(pic)  bow(win)   escape   picture bow      window bow      was',
-);
+console.log('case                 bow(pic)  bow(win)   escape   picture bow      window bow      was');
 for (const [name, card, image, viewport] of CASES) {
   const media = destination(image, viewport);
   const host = overlayBox(viewport);
@@ -673,10 +646,7 @@ for (const [name, card, image, viewport] of CASES) {
       `${`${win.px.toFixed(0)}px ${win.pct.toFixed(1)}%`.padEnd(14)}  ${was.pct.toFixed(1).padStart(5)}%`,
   );
   if (escape > ESCAPE_CEILING) {
-    fail(
-      'f/contain',
-      `${name} leaves the window by ${escape.toFixed(1)}px, over the ${ESCAPE_CEILING}px ceiling`,
-    );
+    fail('f/contain', `${name} leaves the window by ${escape.toFixed(1)}px, over the ${ESCAPE_CEILING}px ceiling`);
   }
   /* The picture giving way is the solver's last resort, and it is printed rather than failed:
      two pairs on this matrix genuinely reach it. Compare the last column instead — every row has
@@ -693,10 +663,7 @@ console.log(
 /* The two shapes the flight flew before, beside it: the evidence for the contract in (d). */
 const PREVIOUS = [
   ['fastOutSlowIn (was)', { kind: 'curve', curve: { x1: 0.4, y1: 0, x2: 0.2, y2: 1 } }],
-  [
-    'launched, 350 (was)',
-    { kind: 'spring', response: { rate: 6.6408, velocity: 3.3204, damping: 1 } },
-  ],
+  ['launched, 350 (was)', { kind: 'spring', response: { rate: 6.6408, velocity: 3.3204, damping: 1 } }],
 ];
 console.log('\nper-tenth travel');
 for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
@@ -741,8 +708,7 @@ for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
       worst = Math.max(worst, Math.abs(sx - p.x), Math.abs(sy - p.y));
     }
   }
-  if (worst > 1e-6)
-    fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off under the window`);
+  if (worst > 1e-6) fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off under the window`);
 }
 
 if (failures.length) {

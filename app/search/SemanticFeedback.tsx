@@ -67,19 +67,11 @@ export default function SemanticFeedback({
 
   return (
     <div className="mt-12 flex flex-col items-center gap-1 text-center">
-      <Button
-        variant="text"
-        icon={<MdOutlineFeedback />}
-        onClick={openCaptcha}
-        loading={sending}
-        disabled={sent}
-      >
+      <Button variant="text" icon={<MdOutlineFeedback />} onClick={openCaptcha} loading={sending} disabled={sent}>
         {sent ? '已反馈' : '反馈本次搜索结果'}
       </Button>
       {sent && <p className="text-body-s text-on-surface-variant">已提交给管理员核查</p>}
-      {captchaMounted && (
-        <CaptchaModal isOpen={captchaOpen} onClose={() => setCaptchaOpen(false)} onVerify={send} />
-      )}
+      {captchaMounted && <CaptchaModal isOpen={captchaOpen} onClose={() => setCaptchaOpen(false)} onVerify={send} />}
     </div>
   );
 }

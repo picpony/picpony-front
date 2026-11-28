@@ -54,11 +54,7 @@ export default function MascotSettings() {
         )
       }
     >
-      <SwitchRow
-        label="显示吉祥物"
-        checked={shown}
-        onChange={(v) => changeSyncedSetting('showMascot', v)}
-      />
+      <SwitchRow label="显示吉祥物" checked={shown} onChange={(v) => changeSyncedSetting('showMascot', v)} />
       {config.data === undefined ? (
         /* Direct siblings, not wrapped: `.m3-row`'s corners and 2px seams are scoped per parent
            (`app/globals.css`), so a wrapper around the placeholder rows turned 显示吉祥物 into a
@@ -73,16 +69,8 @@ export default function MascotSettings() {
               leading={<Skeleton className="h-12 w-12 rounded-md" data-page-loading="" />}
               action={<Skeleton className="h-10 w-32" />}
             />
-            <SettingsRow
-              label="桌面端大小"
-              aria-hidden="true"
-              action={<Skeleton className="h-10 w-20" />}
-            />
-            <SettingsRow
-              label="移动端大小"
-              aria-hidden="true"
-              action={<Skeleton className="h-10 w-20" />}
-            />
+            <SettingsRow label="桌面端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
+            <SettingsRow label="移动端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
           </>
         )
       ) : !available ? (

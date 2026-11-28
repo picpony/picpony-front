@@ -74,10 +74,7 @@ export function useSliderPaint(fraction: number, disabled: boolean, endFraction?
       ? (progress: number) => boundedRangeProgress(from, [fraction, endFraction], progress)
       : (progress: number) => (clamp01(from[0] + distance * progress) - from[0]) / distance;
     const poseAt = (progress: number) =>
-      sliderPose(
-        from[0] + distance * progress,
-        range ? from[1] + endDistance * progress : undefined,
-      );
+      sliderPose(from[0] + distance * progress, range ? from[1] + endDistance * progress : undefined);
     const timing = springTiming('fastSpatial', 'feedback');
     const tracks: [HTMLElement, (progress: number) => Keyframe][] = [
       [position, (progress) => ({ transform: poseAt(progress).transform })],

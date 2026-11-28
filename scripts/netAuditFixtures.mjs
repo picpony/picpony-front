@@ -32,25 +32,13 @@ export function blockFiltersEnvelope() {
     ],
     spoilers: ['explicit', 'questionable', 'grotesque', 'grimdark', 'islamic state'],
     banAnthro: ['anthro', 'humanized', 'morbidly obese'],
-    banDiscomfort: [
-      'overweight',
-      'obese',
-      'obesity',
-      'nightmare fuel',
-      'politics',
-      'watersports',
-      'poofy diaper',
-    ],
+    banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
     onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
   };
   /* The Rust backend's `GET /api/v1/filters/block-tags`: every row, and the five groups as names. */
   let id = 0;
-  const tags = Object.entries(rules).flatMap(([filter, names]) =>
-    names.map((tag) => ({ id: ++id, filter, tag })),
-  );
-  const filters = Object.fromEntries(
-    Object.entries(rules).map(([key, names]) => [key, [...names]]),
-  );
+  const tags = Object.entries(rules).flatMap(([filter, names]) => names.map((tag) => ({ id: ++id, filter, tag })));
+  const filters = Object.fromEntries(Object.entries(rules).map(([key, names]) => [key, [...names]]));
   return { tags, filters };
 }
 
@@ -502,9 +490,7 @@ const DERPI = [
   [
     /^\/search\/images$/,
     (params) => {
-      const ids = [...(params.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) =>
-        Number(match[1]),
-      );
+      const ids = [...(params.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) => Number(match[1]));
       if (ids.length) {
         const unique = [...new Set(ids)];
         return {
@@ -512,16 +498,10 @@ const DERPI = [
           total: unique.length,
         };
       }
-      return imagePage(
-        Number(params.get('per_page')) || 50,
-        1000 + (Number(params.get('page')) || 1) * 1000,
-      );
+      return imagePage(Number(params.get('per_page')) || 50, 1000 + (Number(params.get('page')) || 1) * 1000);
     },
   ],
-  [
-    /^\/images\/featured$/,
-    () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] }),
-  ],
+  [/^\/images\/featured$/, () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] })],
   [/^\/images\/\d+$/, (_params, pathname) => ({ image: image(Number(pathname.split('/').pop())) })],
   [/^\/search\/tags$/, () => ({ tags: [], total: 0 })],
   [/^\/profiles\/.+$/, () => ({ user: { id: 1, name: 'fixture', slug: 'fixture', awards: [] } })],

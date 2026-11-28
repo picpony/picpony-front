@@ -139,12 +139,7 @@ export class HeroRouteRegistry {
          off to, and that is a final answer rather than a not-yet — so it satisfies the wait.
          `handoffOpening` never reads `route.target`; the closing path does, and already
          falls back to a plain history collapse when it is null. */
-      if (
-        requirePreview &&
-        !route.resolvedWithoutMedia &&
-        (!route.previewPaintable || !route.target)
-      )
-        continue;
+      if (requirePreview && !route.resolvedWithoutMedia && (!route.previewPaintable || !route.target)) continue;
       if (!candidate || route.epoch > candidate.epoch) candidate = route;
     }
     return candidate;
@@ -252,10 +247,7 @@ export class HeroRouteRegistry {
       const light = deferInert;
       if (light) {
         const active = typeof document !== 'undefined' ? document.activeElement : null;
-        if (
-          active instanceof HTMLElement &&
-          (route.overlay.contains(active) || route.floatingBack?.contains(active))
-        ) {
+        if (active instanceof HTMLElement && (route.overlay.contains(active) || route.floatingBack?.contains(active))) {
           active.blur();
         }
       }
@@ -265,9 +257,7 @@ export class HeroRouteRegistry {
         leaseAttribute(route.overlay, cut, cutValue),
         route.floatingBack ? leaseAttribute(route.floatingBack, cut, cutValue) : null,
         leaseInlineStyles(route.overlay, { pointerEvents: 'none' }),
-        route.floatingBack
-          ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' })
-          : null,
+        route.floatingBack ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' }) : null,
       );
       removeShield();
     };

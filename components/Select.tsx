@@ -87,8 +87,7 @@ export default function Select<T extends string = string>({
   const selected = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
   const firstEnabled = options.findIndex((option) => !option.disabled);
-  const cursorIndex =
-    options[activeIndex] && !options[activeIndex].disabled ? activeIndex : firstEnabled;
+  const cursorIndex = options[activeIndex] && !options[activeIndex].disabled ? activeIndex : firstEnabled;
 
   // A route-policy update can disable a setting while its menu is open. Close
   // declaratively after commit; commit() also checks disabled for the tiny gap.
@@ -98,9 +97,7 @@ export default function Select<T extends string = string>({
 
   const openMenu = () => {
     if (disabled) return;
-    setActiveIndex(
-      selectedIndex >= 0 && !options[selectedIndex].disabled ? selectedIndex : firstEnabled,
-    );
+    setActiveIndex(selectedIndex >= 0 && !options[selectedIndex].disabled ? selectedIndex : firstEnabled);
     setOpen(true);
   };
 
@@ -160,11 +157,7 @@ export default function Select<T extends string = string>({
       case 'End':
         event.preventDefault();
         if (open)
-          setActiveIndex(
-            event.key === 'Home'
-              ? firstEnabled
-              : options.findLastIndex((option) => !option.disabled),
-          );
+          setActiveIndex(event.key === 'Home' ? firstEnabled : options.findLastIndex((option) => !option.disabled));
         break;
       case 'Enter':
       case ' ':
@@ -220,9 +213,7 @@ export default function Select<T extends string = string>({
               ? 'cursor-not-allowed text-on-surface disabled-content'
               : cn(
                   'cursor-pointer ripple-secondary',
-                  isSelected
-                    ? 'bg-secondary-container text-on-secondary-container forced-selected'
-                    : 'text-on-surface',
+                  isSelected ? 'bg-secondary-container text-on-secondary-container forced-selected' : 'text-on-surface',
                   /* The keyboard cursor. `state-layer` paints nothing until a pointer
                      arrives, so arrowing through this list used to show no cursor at
                      all — the scroll moved and the row was announced, and nothing on
@@ -253,11 +244,7 @@ export default function Select<T extends string = string>({
   const valueCell = (
     <span className="grid min-w-0 flex-1 text-left">
       {options.map((o) => (
-        <span
-          key={o.value}
-          aria-hidden="true"
-          className="col-start-1 row-start-1 invisible truncate"
-        >
+        <span key={o.value} aria-hidden="true" className="col-start-1 row-start-1 invisible truncate">
           {o.label}
         </span>
       ))}

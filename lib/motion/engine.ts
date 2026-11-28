@@ -36,10 +36,7 @@ export const SPRING = SPRING_DURATION;
  * its duration and takes the critically damped shape (`shapeFor`), mirroring the CSS rule.
  * The duration compensates for the global clock with `motionRatio`, as every category spring does.
  */
-export function spring(
-  name: SpringName,
-  category: MotionCategory = 'feedback',
-): { duration: number; ease: string } {
+export function spring(name: SpringName, category: MotionCategory = 'feedback'): { duration: number; ease: string } {
   return {
     duration: SPRING_DURATION[name] * motionRatio(category),
     ease: `spring-${shapeFor(name, category)}`,
@@ -61,10 +58,7 @@ export function surfaceArrival(
 }
 
 /** A surface leaving: everything on one effects spring (rule 4 in `lib/spring.ts`). */
-export function surfaceDeparture(
-  size: 'fast' | 'default' = 'default',
-  category: MotionCategory = 'overlay',
-) {
+export function surfaceDeparture(size: 'fast' | 'default' = 'default', category: MotionCategory = 'overlay') {
   return spring(`${size}Effects`, category);
 }
 

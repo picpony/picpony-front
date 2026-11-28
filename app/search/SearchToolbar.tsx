@@ -60,9 +60,7 @@ export const SINCE_LABELS: Record<SinceFilter, string> = {
 };
 
 /** One active condition as the words a chip says. */
-export function filterChipLabels(
-  filters: SearchFilters,
-): { key: keyof SearchFilters; label: string }[] {
+export function filterChipLabels(filters: SearchFilters): { key: keyof SearchFilters; label: string }[] {
   const out: { key: keyof SearchFilters; label: string }[] = [];
   const sign = (op: FilterComparison) => (op === 'gte' ? '≥' : '<');
   if (filters.upvotes)
@@ -70,8 +68,7 @@ export function filterChipLabels(
       key: 'upvotes',
       label: `点赞数 ${sign(filters.upvotes.op)} ${filters.upvotes.value}`,
     });
-  if (filters.score)
-    out.push({ key: 'score', label: `净得分 ${sign(filters.score.op)} ${filters.score.value}` });
+  if (filters.score) out.push({ key: 'score', label: `净得分 ${sign(filters.score.op)} ${filters.score.value}` });
   if (filters.aspect) out.push({ key: 'aspect', label: ASPECT_LABELS[filters.aspect].chip });
   if (filters.media) out.push({ key: 'media', label: MEDIA_LABELS[filters.media].chip });
   if (filters.since) out.push({ key: 'since', label: SINCE_LABELS[filters.since] });
@@ -102,8 +99,7 @@ function draftOf(filters: SearchFilters): Draft {
 }
 
 function filtersOf(draft: Draft): SearchFilters {
-  const count = (text: string, op: FilterComparison) =>
-    /^-?\d{1,9}$/.test(text) ? { op, value: Number(text) } : null;
+  const count = (text: string, op: FilterComparison) => (/^-?\d{1,9}$/.test(text) ? { op, value: Number(text) } : null);
   return {
     upvotes: count(draft.upvotes, draft.upvotesOp),
     score: count(draft.score, draft.scoreOp),
@@ -173,22 +169,13 @@ export default function SearchToolbar({
   const draftChanged = filtersKey(pending) !== committedKey;
   const draftEmpty = countSearchFilters(pending) === 0;
 
-  const sortOptions = canRank
-    ? SORT_OPTIONS
-    : SORT_OPTIONS.filter((option) => option.value !== '_score');
+  const sortOptions = canRank ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.value !== '_score');
 
   return (
     <div className="@container">
       <div className="flex flex-wrap items-center justify-center gap-2">
         <div className="flex min-w-0 max-w-full items-center gap-2">
-          <Select
-            value={sortBy}
-            onChange={onSort}
-            size="sm"
-            shape="pill"
-            aria-label="排序方式"
-            options={sortOptions}
-          />
+          <Select value={sortBy} onChange={onSort} size="sm" shape="pill" aria-label="排序方式" options={sortOptions} />
           {sortBy !== 'random' && (
             <Button
               variant="surface"
@@ -420,14 +407,7 @@ function ChoiceCondition({
   return (
     <div role="group" aria-labelledby={captionId} className={className}>
       <ConditionCaption id={captionId}>{label}</ConditionCaption>
-      <Select
-        value={value}
-        onChange={onChange}
-        size="sm"
-        className="w-full"
-        aria-label={label}
-        options={options}
-      />
+      <Select value={value} onChange={onChange} size="sm" className="w-full" aria-label={label} options={options} />
     </div>
   );
 }

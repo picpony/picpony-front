@@ -42,8 +42,7 @@ const HANDLE_TRANSITION =
   '[transition:width_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),height_var(--duration-spring-fast-spatial)_var(--ease-spring-fast-spatial),background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** The check crosses while the handle is still travelling, so it takes the fastest
  *  *effects* spring (ζ1 k3800) rather than a hand-counted 33ms. */
-const ICON_TRANSITION =
-  '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
+const ICON_TRANSITION = '[transition:opacity_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
 /** Track and outline recolour together with the handle, on the same short step. */
 const TRACK_TRANSITION =
   '[transition:background-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),border-color_var(--duration-spring-fast-effects)_var(--ease-spring-effects),box-shadow_var(--duration-spring-fast-effects)_var(--ease-spring-effects)]';
@@ -226,9 +225,7 @@ export default function ToggleSwitch({
                   checked ? 'bg-on-primary' : 'bg-outline',
                   !checked && !disabled && 'group-hover/switch:bg-on-surface-variant',
                   'forced-color-adjust-none',
-                  checked
-                    ? 'forced-colors:bg-[color:HighlightText]'
-                    : 'forced-colors:bg-[color:CanvasText]',
+                  checked ? 'forced-colors:bg-[color:HighlightText]' : 'forced-colors:bg-[color:CanvasText]',
                 )}
               >
                 {/* Only the selected state carries a mark. */}

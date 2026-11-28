@@ -47,12 +47,10 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 /* `PICPONY_BROWSER`: any Chromium, for a run off Windows (as `net:audit` takes it). */
-const EDGE =
-  process.env.PICPONY_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const EDGE = process.env.PICPONY_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-ripple-'));
 const browser = spawn(
   EDGE,
@@ -101,8 +99,7 @@ const evalIn = async (expr) => {
     awaitPromise: true,
     returnByValue: true,
   });
-  if (r.result?.exceptionDetails)
-    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300));
+  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');
@@ -149,9 +146,7 @@ if (typeof out === 'string') {
 } else {
   console.log('ripple opacity token:', out.cssOpacityAtStart);
   console.log('ms:opacity  ' + out.samples.map(([t, o]) => t + ':' + o).join('  '));
-  const nums = out.samples
-    .map(([, o]) => (o === 'gone' ? null : Number(o)))
-    .filter((n) => n !== null);
+  const nums = out.samples.map(([, o]) => (o === 'gone' ? null : Number(o))).filter((n) => n !== null);
   const peak = Math.max(...nums);
   const token = Number(out.cssOpacityAtStart);
   console.log('peak opacity:', peak);
@@ -159,9 +154,7 @@ if (typeof out === 'string') {
     console.log('FAIL: no wave was sampled');
     failed = true;
   } else if (!(token > 0)) {
-    console.log(
-      `FAIL: could not read the ripple opacity token (got ${JSON.stringify(out.cssOpacityAtStart)})`,
-    );
+    console.log(`FAIL: could not read the ripple opacity token (got ${JSON.stringify(out.cssOpacityAtStart)})`);
     failed = true;
   } else if (peak > token + 0.005) {
     console.log(`FAIL: the wave peaked at ${peak}, above its token ${out.cssOpacityAtStart}`);

@@ -52,9 +52,7 @@ export default function SectionHeader({
           hasActions ? (
             <div className="flex min-h-10 flex-wrap items-center justify-end gap-2">
               {actions}
-              {onRefresh && (
-                <RefreshButton onClick={onRefresh} label={refreshLabel} loading={isLoading} />
-              )}
+              {onRefresh && <RefreshButton onClick={onRefresh} label={refreshLabel} loading={isLoading} />}
             </div>
           ) : undefined
         }
@@ -64,11 +62,7 @@ export default function SectionHeader({
       {/* The subtitle sits under the title row rather than inside it: in the row it made the
           title's block taller than the 40dp action row, which moved the title up by 8px on exactly
           the panels that had one. */}
-      {subtitle && (
-        <p className="mt-1 text-body-m tabular-nums text-on-surface-variant wrap-anywhere">
-          {subtitle}
-        </p>
-      )}
+      {subtitle && <p className="mt-1 text-body-m tabular-nums text-on-surface-variant wrap-anywhere">{subtitle}</p>}
     </div>
   );
 }

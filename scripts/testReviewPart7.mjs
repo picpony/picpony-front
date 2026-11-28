@@ -81,8 +81,7 @@ test('P1-F5: the status cache is invalidated by every write to a status field', 
 });
 
 test('P1-F11: a limiter per client address, with a Retry-After', async () => {
-  const { createRateLimiter, clientAddress, rateLimited } =
-    await import('../lib/rateLimit.server.ts');
+  const { createRateLimiter, clientAddress, rateLimited } = await import('../lib/rateLimit.server.ts');
   let now = 1_000;
   const take = createRateLimiter({ limit: 3, windowMs: 10_000 }, () => now);
   assert.deepEqual([take('a'), take('a'), take('a')], [0, 0, 0]);
@@ -92,14 +91,8 @@ test('P1-F11: a limiter per client address, with a Retry-After', async () => {
   assert.equal(take('a'), 1);
   now += 500;
   assert.equal(take('a'), 0, 'a new window');
-  assert.equal(
-    clientAddress(new Headers({ 'x-real-ip': '203.0.113.9', 'x-forwarded-for': '1.1.1.1' })),
-    '203.0.113.9',
-  );
-  assert.equal(
-    clientAddress(new Headers({ 'x-forwarded-for': '198.51.100.7, 10.0.0.1' })),
-    '198.51.100.7',
-  );
+  assert.equal(clientAddress(new Headers({ 'x-real-ip': '203.0.113.9', 'x-forwarded-for': '1.1.1.1' })), '203.0.113.9');
+  assert.equal(clientAddress(new Headers({ 'x-forwarded-for': '198.51.100.7, 10.0.0.1' })), '198.51.100.7');
   assert.equal(clientAddress(new Headers()), 'local');
   const answer = rateLimited(7);
   assert.equal(answer.status, 429);
@@ -147,20 +140,14 @@ test('P1-F11: /relay and /upload/submit answer 429 past their ceiling, before an
 
 test('P1-F11 / P2-O1: a user key never rides the third-party accel worker; a keyless read still does', async () => {
   const route = await import('../lib/route.ts');
-  const keyed =
-    'https://derpibooru.org/api/v1/json/search/images?q=my%3Afaves&key=abcdefghij0123456789';
+  const keyed = 'https://derpibooru.org/api/v1/json/search/images?q=my%3Afaves&key=abcdefghij0123456789';
   const viaAccel = route.buildApiLineUrl(keyed, 'api_accel');
   assert.ok(viaAccel.startsWith('/relay?url='), viaAccel);
   assert.equal(
-    new URL(
-      decodeURIComponent(viaAccel.slice('/relay?url='.length).split('&')[0]),
-    ).searchParams.get('key'),
+    new URL(decodeURIComponent(viaAccel.slice('/relay?url='.length).split('&')[0])).searchParams.get('key'),
     'abcdefghij0123456789',
   );
-  const anonymous = route.buildApiLineUrl(
-    'https://derpibooru.org/api/v1/json/search/images?q=safe',
-    'api_accel',
-  );
+  const anonymous = route.buildApiLineUrl('https://derpibooru.org/api/v1/json/search/images?q=safe', 'api_accel');
   assert.doesNotMatch(anonymous, /^\/relay/);
   assert.ok(route.carriesApiKey(keyed));
   assert.ok(!route.carriesApiKey('https://derpibooru.org/api/v1/json/images/1?keyword=x'));
@@ -176,10 +163,7 @@ test('P2-O1: a write keeps its key — to Derpibooru itself when the third party
   });
   assert.equal(route.applyApiLineToWrite(write), write);
   route.applySavedRoutePolicy({ global_api_third_party_pass_api_key: true });
-  assert.equal(
-    route.applyApiLineToWrite(write),
-    'https://tx.pone.quest/api/v1/json/images?key=abcdefghij0123456789',
-  );
+  assert.equal(route.applyApiLineToWrite(write), 'https://tx.pone.quest/api/v1/json/images?key=abcdefghij0123456789');
   route.applySavedRoutePolicy({ global_api_route_policy: 'auto' });
   assert.equal(route.applyApiLineToWrite(write), write);
 });
@@ -197,11 +181,7 @@ test('P1-F12: the three hops share one set of header rules', async () => {
   });
   const out = forwardableResponseHeaders(upstream, new Set(['vary']));
   assert.deepEqual([...out.keys()], ['content-type']);
-  for (const file of [
-    'app/api/v1/[...path]/route.ts',
-    'app/relay/route.ts',
-    'app/upload/submit/route.ts',
-  ]) {
+  for (const file of ['app/api/v1/[...path]/route.ts', 'app/relay/route.ts', 'app/upload/submit/route.ts']) {
     const text = source(file);
     assert.match(text, /forwardableResponseHeaders/, file);
     assert.doesNotMatch(text, /const SKIP_RESPONSE_HEADERS/, file);
@@ -226,11 +206,7 @@ test('P1-F14 / P6-O12: the Windows suites skip documentation-only changes and dr
 test('P2-O3: a new password is measured in bytes, as the backend measures it', async () => {
   const { validateNewPassword, passwordLength } = await import('../lib/validation.ts');
   assert.equal(passwordLength('中中a1234'), 11);
-  assert.equal(
-    validateNewPassword('中中a1234'),
-    null,
-    'seven characters, eleven bytes: the server accepts it',
-  );
+  assert.equal(validateNewPassword('中中a1234'), null, 'seven characters, eleven bytes: the server accepts it');
   assert.match(
     validateNewPassword('中文中文中文中a'),
     /^密码需为 8 到 20 位$/,
@@ -263,11 +239,7 @@ test('P3-O3: blacklisted ids beyond the query are filtered from the results', as
   const { blacklistBeyondQuery, withoutOverflowBlacklisted, MAX_BLACKLIST_TERMS } =
     await import('../lib/searchQuery.ts');
   const list = Array.from({ length: MAX_BLACKLIST_TERMS + 3 }, (_, i) => i + 1);
-  assert.deepEqual(
-    [...blacklistBeyondQuery(list)],
-    [1, 2, 3],
-    'the oldest three the query could not carry',
-  );
+  assert.deepEqual([...blacklistBeyondQuery(list)], [1, 2, 3], 'the oldest three the query could not carry');
   assert.equal(blacklistBeyondQuery(list.slice(0, 15)).size, 0);
   const images = [{ id: 1 }, { id: 4 }, { id: 500 }];
   assert.deepEqual(
@@ -303,33 +275,22 @@ test('P3-O1 / P3-O2 / P3-O4 / P3-O5: on-screen refreshes are kept, open records 
 test('P4-O1: a message picture is drawn only from the known image hosts; others become links', async () => {
   const { legacyTokens } = await import('../app/messages/messageText.ts');
   const drawn = legacyTokens('[p]看[/p][img]https://derpicdn.net/img/1.png[/img]');
-  assert.ok(
-    drawn.some((token) => token.type === 'image' && token.src === 'https://derpicdn.net/img/1.png'),
-  );
+  assert.ok(drawn.some((token) => token.type === 'image' && token.src === 'https://derpicdn.net/img/1.png'));
   const tracked = legacyTokens('[br][img]https://tracker.example/pixel.gif[/img]');
   assert.ok(!tracked.some((token) => token.type === 'image'), 'no fetch on open');
-  assert.ok(
-    tracked.some(
-      (token) => token.type === 'link' && token.href.startsWith('https://tracker.example/'),
-    ),
-  );
+  assert.ok(tracked.some((token) => token.type === 'link' && token.href.startsWith('https://tracker.example/')));
 });
 
 test('P4-O5: archives are planned under a byte budget as well as a count', async () => {
-  const { planArchives, ARCHIVE_BYTES, ARCHIVE_LIMIT } =
-    await import('../lib/favoritesDownload.ts');
+  const { planArchives, ARCHIVE_BYTES, ARCHIVE_LIMIT } = await import('../lib/favoritesDownload.ts');
   const video = (id) => ({ id, size: 50 * 1024 * 1024 });
   const plan = planArchives(Array.from({ length: 14 }, (_, i) => video(i + 1)));
   assert.deepEqual(
     plan.map((part) => part.length),
     [6, 6, 2],
   );
-  assert.ok(
-    plan.every((part) => part.reduce((sum, image) => sum + image.size, 0) <= ARCHIVE_BYTES),
-  );
-  const small = planArchives(
-    Array.from({ length: ARCHIVE_LIMIT + 1 }, (_, i) => ({ id: i + 1, size: 1000 })),
-  );
+  assert.ok(plan.every((part) => part.reduce((sum, image) => sum + image.size, 0) <= ARCHIVE_BYTES));
+  const small = planArchives(Array.from({ length: ARCHIVE_LIMIT + 1 }, (_, i) => ({ id: i + 1, size: 1000 })));
   assert.deepEqual(
     small.map((part) => part.length),
     [ARCHIVE_LIMIT, 1],
@@ -359,11 +320,7 @@ test('P4-O6: the block-group mirror writes both lists or neither', async () => {
       { id: 1, name: 'g', is_active: true, hidden_tags: ['new'], spoilered_tags: ['other'] },
     ]);
     assert.equal(changed, false);
-    assert.equal(
-      values.get(LS_KEYS.activeHiddenTags),
-      '["old"]',
-      'the first write was rolled back',
-    );
+    assert.equal(values.get(LS_KEYS.activeHiddenTags), '["old"]', 'the first write was rolled back');
   } finally {
     globalThis.localStorage.setItem = original;
   }
@@ -374,19 +331,13 @@ test('P4-O8 / P4-O9 / P4-O10: shares queue behind the conversation, image result
   assert.match(source('app/messages/outbox.ts'), /export function sendInLine/);
   assert.doesNotMatch(source('app/search/SearchScreen.tsx'), /images: outcome\.images\.filter/);
   assert.match(source('app/search/imageSearchStore.ts'), /entry\.token !== readToken\(\)/);
-  assert.match(
-    source('components/forum/threadActions.ts'),
-    /JSON\.stringify\(\[post\.id, post\.title/,
-  );
+  assert.match(source('components/forum/threadActions.ts'), /JSON\.stringify\(\[post\.id, post\.title/);
 });
 
 test('P4-O11: a full pending-tag library says so instead of dropping the oldest', async () => {
   const { LS_KEYS } = await import('../lib/constants.ts');
   const { addPendingTag, MAX_PENDING } = await import('../lib/pendingTags.ts');
-  values.set(
-    LS_KEYS.pendingTags,
-    JSON.stringify(Array.from({ length: MAX_PENDING }, (_, i) => `t${i}`)),
-  );
+  values.set(LS_KEYS.pendingTags, JSON.stringify(Array.from({ length: MAX_PENDING }, (_, i) => `t${i}`)));
   assert.equal(addPendingTag('one-more'), 'full');
   assert.equal(JSON.parse(values.get(LS_KEYS.pendingTags))[0], 't0');
   values.delete(LS_KEYS.pendingTags);
@@ -423,19 +374,13 @@ test('P5-O3 / P5-O9 / P5-O11 / P5-O12: approvals merge, a cleared history arms n
   const deletes = source('app/history/useHistoryDeletes.ts');
   assert.match(deletes, /generation\.current \+= 1/);
   assert.match(deletes, /if \(generation\.current === startedIn\)\s+sent\.current/);
-  assert.match(
-    source('app/claim-badge/ClaimBadgeContent.tsx'),
-    /replace\(\/\[。\.！!\]\+\$\/, ''\)/,
-  );
+  assert.match(source('app/claim-badge/ClaimBadgeContent.tsx'), /replace\(\/\[。\.！!\]\+\$\/, ''\)/);
   assert.match(source('app/tasks/page.tsx'), /const shownDoc = tasks\.peek\(\{ token \}\)\.data/);
 });
 
 test("P5-O4: a Derpibooru link needs the bound account's id, never a page that cannot open", async () => {
   const profiles = await import('../lib/profiles.ts');
-  assert.equal(
-    profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: 42 }),
-    '/derpi/user/42',
-  );
+  assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: 42 }), '/derpi/user/42');
   assert.equal(profiles.derpiProfileHref({ id: 1, username: 'a', derpi_user_id: null }), null);
 });
 
@@ -492,37 +437,22 @@ test('P6-O2: a shop picture must be an HTTPS address without credentials', async
     shopPayload(form('https://picpony.top/uploads/a.png')).payload?.image_url,
     'https://picpony.top/uploads/a.png',
   );
-  assert.equal(
-    shopPayload(form('')).payload?.image_url,
-    null,
-    'no picture is `null` on `POST /admin/shop/items`',
-  );
+  assert.equal(shopPayload(form('')).payload?.image_url, null, 'no picture is `null` on `POST /admin/shop/items`');
 });
 
 test('P6-O4: a saved assistant config is the list the save answered, not a stale re-read', () => {
   /* `POST`/`PUT /admin/assistant/providers` answer the whole list again; it replaces the read at once. */
-  assert.match(
-    source('components/admin/siteTools/AssistantTab.tsx'),
-    /assistantQuery\.write\(token, d\.config\)/,
-  );
+  assert.match(source('components/admin/siteTools/AssistantTab.tsx'), /assistantQuery\.write\(token, d\.config\)/);
 });
 
 test('P6-O5: badge dates are checked against today and each other', async () => {
   const { badgeDateProblems, beijingToday } = await import('../components/admin/badges.ts');
-  assert.equal(
-    beijingToday(Date.UTC(2026, 9, 8, 17, 0)),
-    '2026-10-09',
-    'Beijing is already tomorrow',
-  );
+  assert.equal(beijingToday(Date.UTC(2026, 9, 8, 17, 0)), '2026-10-09', 'Beijing is already tomorrow');
   assert.ok(badgeDateProblems({ badgeExpiresAt: '2026-10-01' }, '2026-10-09').badgeExpiresAt);
   assert.ok(
-    badgeDateProblems({ badgeExpiresAt: '2026-11-01', linkExpiresAt: '2026-12-01' }, '2026-10-09')
-      .badgeExpiresAt,
+    badgeDateProblems({ badgeExpiresAt: '2026-11-01', linkExpiresAt: '2026-12-01' }, '2026-10-09').badgeExpiresAt,
   );
-  assert.deepEqual(
-    badgeDateProblems({ badgeExpiresAt: '2026-12-01', linkExpiresAt: '2026-11-01' }, '2026-10-09'),
-    {},
-  );
+  assert.deepEqual(badgeDateProblems({ badgeExpiresAt: '2026-12-01', linkExpiresAt: '2026-11-01' }, '2026-10-09'), {});
   assert.deepEqual(badgeDateProblems({}, '2026-10-09'), {});
 });
 
@@ -550,10 +480,7 @@ test("P6-O6: the glossary editor sets 限制级; a form without it carries the r
 });
 
 test('P6-O7 / P6-O14: bulk delete names what it deletes; removing a user reads the editor as it is', () => {
-  assert.match(
-    source('components/admin/glossary/GlossaryTab.tsx'),
-    /selectedNames\.current\.get\(id\)/,
-  );
+  assert.match(source('components/admin/glossary/GlossaryTab.tsx'), /selectedNames\.current\.get\(id\)/);
   assert.match(
     source('components/admin/UsersTab.tsx'),
     /setEditing\(\(current\) => \(current\?\.id === user\.id \? null : current\)\)/,

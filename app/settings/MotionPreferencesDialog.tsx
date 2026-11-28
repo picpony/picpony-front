@@ -3,12 +3,7 @@
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
-import {
-  commitMotionCustom,
-  commitMotionEffects,
-  useMotionCustom,
-  useMotionEffects,
-} from '@/lib/appearance';
+import { commitMotionCustom, commitMotionEffects, useMotionCustom, useMotionEffects } from '@/lib/appearance';
 import {
   MOTION_CATEGORIES,
   MOTION_PRESETS,

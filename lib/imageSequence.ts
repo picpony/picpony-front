@@ -121,10 +121,8 @@ export function imageNeighbours(id: number, source = snapshot.source): ImageNeig
   return {
     previous: index > 0 ? ids[index - 1] : null,
     next: index < ids.length - 1 ? ids[index + 1] : null,
-    canLoadPrevious:
-      index === 0 && Boolean(source.loadPrevious) && (source.hasPrevious?.() ?? false),
-    canLoadNext:
-      index === ids.length - 1 && Boolean(source.loadNext) && (source.hasNext?.() ?? false),
+    canLoadPrevious: index === 0 && Boolean(source.loadPrevious) && (source.hasPrevious?.() ?? false),
+    canLoadNext: index === ids.length - 1 && Boolean(source.loadNext) && (source.hasNext?.() ?? false),
     inSequence: true,
   };
 }

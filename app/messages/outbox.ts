@@ -88,11 +88,7 @@ function backendStamp(now: number): string {
 function transmit(token: string, key: string, item: OutboxItem) {
   const run = async () => {
     /* A session that changed while this waited in line is not the one that wrote it. */
-    if (
-      readToken() !== token ||
-      !(items.get(key) ?? EMPTY).some((entry) => entry.localId === item.localId)
-    )
-      return;
+    if (readToken() !== token || !(items.get(key) ?? EMPTY).some((entry) => entry.localId === item.localId)) return;
     try {
       await sendMessage(token, item.contactId, item.content, item.sendKey);
       update(key, item.localId, { status: 'sent' });
@@ -165,10 +161,7 @@ export function retryMessage(token: string, contactId: number, localId: string, 
     afterId,
     createdAt: backendStamp(Date.now()),
   };
-  publish(key, [
-    ...(items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId),
-    retried,
-  ]);
+  publish(key, [...(items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId), retried]);
   transmit(token, key, retried);
 }
 

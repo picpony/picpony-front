@@ -35,10 +35,7 @@ export interface RoleChoice {
 }
 
 /** What the role field offers `viewer` for `target`. */
-export function roleChoice(
-  viewer: { id: number; role: Role },
-  target: { id: number; role: unknown },
-): RoleChoice {
+export function roleChoice(viewer: { id: number; role: Role }, target: { id: number; role: unknown }): RoleChoice {
   const current = roleOf(target.role);
   const root = viewer.id === ROOT_ACCOUNT_ID;
   const option = (role: Role) => ({ value: role, label: roleInfo(role).label });
@@ -53,8 +50,7 @@ export function roleChoice(
      (`ROLE_GRANT_FORBIDDEN`); only 创始人 may grant 管理员. */
   if (target.id === ROOT_ACCOUNT_ID) return lockedTo('站点 1 号账号的创始人角色不能修改');
   if (current === 'super_admin' && !root) return lockedTo('创始人的角色只能由站点的 1 号账号修改');
-  if (current === 'admin' && viewer.role !== 'super_admin')
-    return lockedTo('仅创始人可以修改管理员的角色');
+  if (current === 'admin' && viewer.role !== 'super_admin') return lockedTo('仅创始人可以修改管理员的角色');
 
   const grantable = ROLE_ORDER.filter((role) => {
     if (role === 'super_admin') return false;
@@ -65,8 +61,7 @@ export function roleChoice(
   return {
     options: ROLE_ORDER.filter((role) => roles.includes(role)).map(option),
     locked: null,
-    note:
-      viewer.role === 'super_admin' ? '创始人角色不能通过后台授予' : '仅创始人可以授予管理员角色',
+    note: viewer.role === 'super_admin' ? '创始人角色不能通过后台授予' : '仅创始人可以授予管理员角色',
   };
 }
 

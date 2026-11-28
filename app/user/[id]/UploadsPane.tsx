@@ -23,13 +23,7 @@ import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
 import { settingsHref } from '@/app/settings/tabs';
-import {
-  OwnerHiddenNote,
-  PaneFailure,
-  PaneHidden,
-  useVisited,
-  type ProfilePaneProps,
-} from './ProfilePaneStates';
+import { OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
 
 /** A page of the grid — also `lib/prefetchRoute.ts`'s `PROFILE_PER_PAGE`, which warms page 1. */
 export const UPLOADS_PER_PAGE = 12;
@@ -79,9 +73,9 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
   const listKey = `profile-uploads:${id}:${fp}`;
   const readPage = useCallback(
     async (target: number) =>
-      (
-        await userUploads.read({ id, page: target, perPage: UPLOADS_PER_PAGE, token, fp })
-      ).uploads.map((image) => image.id),
+      (await userUploads.read({ id, page: target, perPage: UPLOADS_PER_PAGE, token, fp })).uploads.map(
+        (image) => image.id,
+      ),
     [id, token, fp],
   );
   const reveal = useListReveal(readPage, page, setPage, () => pane);
@@ -120,8 +114,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
 
   const data = read.data;
   if (data === undefined) {
-    if (read.error)
-      return <PaneFailure error={read.error} title="上传记录加载失败" onRetry={read.refresh} />;
+    if (read.error) return <PaneFailure error={read.error} title="上传记录加载失败" onRetry={read.refresh} />;
     return <UploadsSkeleton />;
   }
   if (data.binding === 'hidden') return <PaneHidden />;
@@ -192,16 +185,9 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       {/* The count is the viewer's: the search runs inside their content settings. The search
           link opens the same pictures in /search, where they can be sorted and filtered. */}
       <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <p className="text-body-m text-on-surface-variant tabular-nums">
-          共 {formatCount(data.total)} 张
-        </p>
+        <p className="text-body-m text-on-surface-variant tabular-nums">共 {formatCount(data.total)} 张</p>
         {term && (
-          <ButtonLink
-            href={`/search?q=${encodeURIComponent(term)}`}
-            variant="text"
-            size="xs"
-            icon={<MdSearch />}
-          >
+          <ButtonLink href={`/search?q=${encodeURIComponent(term)}`} variant="text" size="xs" icon={<MdSearch />}>
             {own ? '搜索我的作品' : '搜索该用户的作品'}
           </ButtonLink>
         )}
@@ -218,9 +204,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       )}
       <div
         ref={setRows}
-        className={`transition-opacity spring-default-effects ${
-          read.isLoading ? 'paging-dim' : 'opacity-100'
-        }`}
+        className={`transition-opacity spring-default-effects ${read.isLoading ? 'paging-dim' : 'opacity-100'}`}
       >
         {/* The pane already owns its entrance; the card still owns opening the image. */}
         <MasonryGrid images={data.uploads} entrance={false} sequence={sequence} listKey={listKey} />
@@ -230,9 +214,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
           currentPage={page}
           totalPages={data.totalPages}
           onPageChange={setPage}
-          onPrefetchPage={(next) =>
-            userUploads.prefetch({ id, page: next, perPage: UPLOADS_PER_PAGE, token, fp })
-          }
+          onPrefetchPage={(next) => userUploads.prefetch({ id, page: next, perPage: UPLOADS_PER_PAGE, token, fp })}
           disabled={read.isLoading}
           className="mt-8"
         />

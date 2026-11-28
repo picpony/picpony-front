@@ -75,9 +75,7 @@ export function taskDocumentOf(data: WireTasks): TaskDocument {
 
 /** The level card and every category's progress. */
 export async function getTasks(token: string, signal?: AbortSignal): Promise<TaskDocument> {
-  return taskDocumentOf(
-    await api<WireTasks>('GET', '/me/tasks', { token, cache: 'no-store', signal }),
-  );
+  return taskDocumentOf(await api<WireTasks>('GET', '/me/tasks', { token, cache: 'no-store', signal }));
 }
 
 /** What a claim paid out, as the server reported it. */

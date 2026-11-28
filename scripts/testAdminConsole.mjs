@@ -49,10 +49,12 @@ test('R9-026 blank coins are omitted, explicit zero is retained, and unsafe numb
   };
   assert.equal(wealthPayload(user, form), null);
   /* `PATCH /admin/users/{id}/wealth` names the balances it was made against (409 when they moved). */
-  assert.deepEqual(
-    plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })),
-    { expected_coins: 100, expected_experience: 10, experience: 12, experience_reason: '活动' },
-  );
+  assert.deepEqual(plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })), {
+    expected_coins: 100,
+    expected_experience: 10,
+    experience: 12,
+    experience_reason: '活动',
+  });
   assert.deepEqual(plain(wealthPayload(user, { ...form, coinsValue: '0', coinsReason: '调整' })), {
     expected_coins: 100,
     expected_experience: 10,
@@ -64,8 +66,7 @@ test('R9-026 blank coins are omitted, explicit zero is retained, and unsafe numb
 test('badge audiences reject a bad ID instead of silently granting to a shorter list', () => {
   const { parseUserIds, grantPayload } = load('components/admin/badges.ts');
   assert.deepEqual(plain(parseUserIds('2，3、2 4')), [2, 3, 4]);
-  for (const text of ['2,0', '2,-3', '2,three', '2,1.5', '2,9007199254740992'])
-    assert.equal(parseUserIds(text), null);
+  for (const text of ['2,0', '2,-3', '2,three', '2,1.5', '2,9007199254740992']) assert.equal(parseUserIds(text), null);
   const form = {
     name: ' 活动 ',
     color: '#abcdef',
@@ -130,11 +131,7 @@ test('glossary history uses the cached original editor UTC contract and displays
   assert.equal(historyTime('2026-09-24 12:00:00'), historyTime('2026-09-24T12:00:00Z'));
   assert.match(historyTime('2026-09-24 12:00:00'), /20:00/);
   assert.match(historyTime('2026-09-24T12:00:00+08:00'), /12:00/);
-  assert.equal(
-    historyTime('2026-09-24 17:30:00'),
-    '2026/09/25 01:30',
-    'a UTC evening is the next Beijing morning',
-  );
+  assert.equal(historyTime('2026-09-24 17:30:00'), '2026/09/25 01:30', 'a UTC evening is the next Beijing morning');
   assert.equal(historyTime(null), '');
   assert.equal(historyTime('not a time'), 'not a time');
 });
@@ -148,11 +145,7 @@ test('G4-018 the three UTC columns and every other stamp are read by one parser 
   assert.equal(iso(format.parseBackendTime('2026-08-31 17:30:00')), '2026-08-31T09:30:00.000Z');
   assert.equal(iso(format.parseBackendUtcTime('2026-08-31 17:30:00')), '2026-08-31T17:30:00.000Z');
   /* A stamp that names its zone is taken as written by both. */
-  for (const zoned of [
-    '2026-08-31T17:30:00Z',
-    '2026-09-01T01:30:00+08:00',
-    '2026-09-01T01:30:00+0800',
-  ]) {
+  for (const zoned of ['2026-08-31T17:30:00Z', '2026-09-01T01:30:00+08:00', '2026-09-01T01:30:00+0800']) {
     assert.equal(iso(format.parseBackendUtcTime(zoned)), iso(format.parseBackendTime(zoned)));
   }
   assert.equal(format.parseBackendUtcTime(''), null);
@@ -195,17 +188,7 @@ test('G4-018 a late-night view lands on its Beijing day, and a day boundary spli
 /* G4-015: a figure that did not arrive is never a zero in the console that sets it. */
 test('G4-015 admin figures read absent as absent: tables print a dash, forms open empty', () => {
   const figures = load('components/admin/figures.ts');
-  for (const absent of [
-    undefined,
-    null,
-    '',
-    '  ',
-    true,
-    false,
-    'abc',
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-  ]) {
+  for (const absent of [undefined, null, '', '  ', true, false, 'abc', Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.equal(figures.figureOf(absent), null, String(absent));
     assert.equal(figures.figureText(absent), '—');
     assert.equal(figures.figureField(absent), '');
@@ -229,10 +212,7 @@ test('G4-015 admin figures read absent as absent: tables print a dash, forms ope
     active: true,
   });
   assert.deepEqual([present.price, present.stock], ['0', '7']);
-  assert.ok(
-    shopPayload({ ...present, price: '' }, { id: 4 }).errors.price,
-    'a save cannot write a price nobody typed',
-  );
+  assert.ok(shopPayload({ ...present, price: '' }, { id: 4 }).errors.price, 'a save cannot write a price nobody typed');
 
   const { teamForm } = load('components/admin/team.ts', {
     '@/lib/roles': { roleInfo: () => ({ label: '' }) },
@@ -303,10 +283,8 @@ test('R9-043 admin reads forward cancellation and the feedback queue reads by cu
         requests.push({ method, path: apiPath, options });
         if (apiPath === '/dictionary/tags') return { tags: [{ en: 'PONY' }] };
         if (apiPath === '/editor/dictionary/feedback') return { feedback: [], next_cursor: null };
-        if (apiPath === '/admin/notifications')
-          return { notifications: [], total: 0, total_pages: 1 };
-        if (apiPath === '/team-members' || apiPath === '/admin/team-members')
-          return { revision: 1, members: [] };
+        if (apiPath === '/admin/notifications') return { notifications: [], total: 0, total_pages: 1 };
+        if (apiPath === '/team-members' || apiPath === '/admin/team-members') return { revision: 1, members: [] };
         return {};
       },
       seg: (value) => encodeURIComponent(String(value)),
@@ -316,8 +294,7 @@ test('R9-043 admin reads forward cancellation and the feedback queue reads by cu
   assert.equal(await api.checkTagExists('fixture', 'pony', controller.signal), true);
   assert.equal(await api.checkTagExists('fixture', 'missing', controller.signal), false);
   assert.ok(requests.every(({ options }) => options.signal === controller.signal));
-  const feedback = requests.find(({ path: p }) => p === '/editor/dictionary/feedback').options
-    .query;
+  const feedback = requests.find(({ path: p }) => p === '/editor/dictionary/feedback').options.query;
   assert.equal(feedback.status, 'pending');
   assert.equal(feedback.before, 41);
 });
@@ -463,11 +440,7 @@ test('M1-031 the empty and failure rows come and go as entries; a leaving row ke
     error: '第 2 页加载失败',
     errorDetail: '请求超时，请稍后再试',
   });
-  assert.equal(
-    keys(failed),
-    '#error 1 2',
-    'a failed page turn shows above the rows still on screen',
-  );
+  assert.equal(keys(failed), '#error 1 2', 'a failed page turn shows above the rows still on screen');
   failed = step(failed, { rows: rowsOf(1, 2) });
   const gone = failed.entries[0];
   assert.equal(keys(failed), '(#error) 1 2');
@@ -487,11 +460,7 @@ test("a dropped leaver's columns are held through the merges that follow, and le
   };
   state = step(state, { rows: rowsOf(1, 3), listKey: 'p1' });
   assert.equal(keys(state), '1 (2) 3');
-  assert.deepEqual(
-    state.held,
-    [40, 523.5, 261.75, 260],
-    'a delete, an undo or an arrival keeps the floor',
-  );
+  assert.deepEqual(state.held, [40, 523.5, 261.75, 260], 'a delete, an undo or an arrival keeps the floor');
   state = step(state, { rows: rowsOf(1, 3, 4), listKey: 'p1' });
   assert.deepEqual(state.held, [40, 523.5, 261.75, 260]);
   for (const [label, props] of [
@@ -589,17 +558,9 @@ test('tableMotion stops at modal scroll containers and marks FLIP layout ownersh
   exports.markLayoutOwned(table);
   assert.equal(table.hasAttribute('data-layout-owned'), true);
   frames.shift()();
-  assert.equal(
-    table.hasAttribute('data-layout-owned'),
-    true,
-    'still marked through the first paint frame',
-  );
+  assert.equal(table.hasAttribute('data-layout-owned'), true, 'still marked through the first paint frame');
   frames.shift()();
-  assert.equal(
-    table.hasAttribute('data-layout-owned'),
-    false,
-    'cleared after two animation frames',
-  );
+  assert.equal(table.hasAttribute('data-layout-owned'), false, 'cleared after two animation frames');
 });
 
 test('FollowHeight track never clips growing loading panes and holds primed presses silently', async () => {
@@ -648,8 +609,7 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
     },
     querySelector(sel) {
       if (sel === '[data-tab-primed]') return this._attrs.has('data-tab-primed') ? this : null;
-      if (sel === '[data-tab-pane-leaving]')
-        return this._attrs.has('data-tab-pane-leaving') ? this : null;
+      if (sel === '[data-tab-pane-leaving]') return this._attrs.has('data-tab-pane-leaving') ? this : null;
       if (sel === '[data-layout-owned]') return null;
       return null;
     },
@@ -763,11 +723,7 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   assert.equal(animations.length, 1, 'shrinking loading pane holds at 900');
   assert.equal(outer.style.height, '900px');
   resize(1100);
-  assert.equal(
-    animations.length,
-    2,
-    'growing past the held height releases and animates immediately',
-  );
+  assert.equal(animations.length, 2, 'growing past the held height releases and animates immediately');
   assert.deepEqual(plain(animations[1].keyframes), [{ height: '900px' }, { height: '1100px' }]);
   animations[1].finish();
   await Promise.resolve();
@@ -790,11 +746,7 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   outer._height = 320;
   mutationCallbacks.at(-1)();
   while (frames.length) frames.shift()?.();
-  assert.equal(
-    animations.length,
-    beforePrime,
-    'cancelled prime releases silently with no height animation',
-  );
+  assert.equal(animations.length, beforePrime, 'cancelled prime releases silently with no height animation');
   assert.equal(outer.style.height, '');
   assert.equal(outer.style.clipPath, '');
 
@@ -806,11 +758,7 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   inner.removeAttribute('data-tab-primed');
   mutationCallbacks.at(-1)();
   while (frames.length) frames.shift()?.();
-  assert.equal(
-    animations.length,
-    beforePrime + 1,
-    'playing a primed taller tab expands immediately',
-  );
+  assert.equal(animations.length, beforePrime + 1, 'playing a primed taller tab expands immediately');
   assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '552px' }, { height: '1100px' }]);
 });
 

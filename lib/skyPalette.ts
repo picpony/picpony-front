@@ -32,10 +32,7 @@ export function skyPhaseEntry(id: unknown): SkyPhase {
 /** The active 天空 phase for a local hour (`0..23`). */
 export function skyPhaseForHour(hour: number): SkyPhase {
   const normalized = ((Math.floor(hour) % 24) + 24) % 24;
-  return (
-    SKY_PHASES.find((phase) => normalized >= phase.startHour && normalized < phase.endHour) ??
-    SKY_PHASES[0]
-  );
+  return SKY_PHASES.find((phase) => normalized >= phase.startHour && normalized < phase.endHour) ?? SKY_PHASES[0];
 }
 
 /** The active 天空 phase at `date` in the device's local timezone. */

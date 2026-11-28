@@ -51,11 +51,7 @@ export default function DerpiDescription({ markdown, id }: { markdown: string; i
 
   return (
     <div>
-      <div
-        ref={bodyRef}
-        id={id}
-        className={`text-body-m text-on-surface wrap-anywhere ${expanded ? '' : CLAMP}`}
-      >
+      <div ref={bodyRef} id={id} className={`text-body-m text-on-surface wrap-anywhere ${expanded ? '' : CLAMP}`}>
         <MarkdownRenderer content={linkImageReferences(markdown.replace(/\r\n?/g, '\n'))} />
       </div>
       {(overflows || expanded) && (

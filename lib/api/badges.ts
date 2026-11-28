@@ -22,13 +22,9 @@ export interface ClaimBadgeResult {
  */
 export async function claimBadge(userToken: string, claimToken: string): Promise<ClaimBadgeResult> {
   try {
-    const claimed = await api<{ id: number; name: string }>(
-      'POST',
-      `/me/badges/claims/${seg(claimToken)}`,
-      {
-        token: userToken,
-      },
-    );
+    const claimed = await api<{ id: number; name: string }>('POST', `/me/badges/claims/${seg(claimToken)}`, {
+      token: userToken,
+    });
     return { success: true, badge_name: claimed.name };
   } catch (error) {
     if (

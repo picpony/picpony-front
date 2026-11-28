@@ -55,8 +55,7 @@ export const readForumFirstPage = createServerMemo({
         summary: true,
       });
       const query = new URLSearchParams();
-      for (const [name, value] of Object.entries(params))
-        if (value !== undefined) query.set(name, String(value));
+      for (const [name, value] of Object.entries(params)) if (value !== undefined) query.set(name, String(value));
       const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/forum/posts?${query}`, {
         next: { revalidate: cacheSeconds(REVALIDATE_S) },
         signal: AbortSignal.timeout(TIMEOUT_MS),

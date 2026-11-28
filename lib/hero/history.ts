@@ -167,8 +167,7 @@ function positionOf(state: unknown): HistoryPosition {
 
 function stateWithMarker(marker: HeroMarker) {
   const current = window.history.state;
-  const state =
-    current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
+  const state = current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
   // A rung is never a layer entry.
   delete state[HISTORY_LAYER_KEY];
   return { ...state, [HISTORY_STATE_KEY]: { version: 2, ...marker } };
@@ -334,8 +333,7 @@ class HeroHistoryDriver {
     if (normalizeHref(window.location.href) !== expected) return false;
 
     const current = this.currentMarker();
-    const reuseCurrent =
-      current?.role === 'provisional' || (!current && this.position === 'provisional');
+    const reuseCurrent = current?.role === 'provisional' || (!current && this.position === 'provisional');
     if (current && !reuseCurrent) return false;
 
     record.backgroundDepth = 2;
@@ -367,16 +365,8 @@ class HeroHistoryDriver {
     if (current && current.token !== record.token) return false;
     if (current?.role === 'guard') return true;
     try {
-      window.history.replaceState(
-        stateWithMarker(markerFor(record, 'base')),
-        '',
-        window.location.href,
-      );
-      window.history.pushState(
-        stateWithMarker(markerFor(record, 'guard')),
-        '',
-        window.location.href,
-      );
+      window.history.replaceState(stateWithMarker(markerFor(record, 'base')), '', window.location.href);
+      window.history.pushState(stateWithMarker(markerFor(record, 'guard')), '', window.location.href);
     } catch {
       return false;
     }
@@ -392,9 +382,7 @@ class HeroHistoryDriver {
   ensureBackground(record: HeroHistoryRecord, current: () => boolean = () => true) {
     return this.enqueue(false, async () => {
       if (!current()) return false;
-      const expectedHref = normalizeHref(
-        `${record.background.pathname}${record.background.search}`,
-      );
+      const expectedHref = normalizeHref(`${record.background.pathname}${record.background.search}`);
       const currentHref = normalizeHref(window.location.href);
       const marker = this.currentMarker();
       const ownsUnmarkedProvisional =
@@ -428,10 +416,7 @@ class HeroHistoryDriver {
         record.token,
       );
       const landed =
-        current() &&
-        confirmed &&
-        !this.currentMarker() &&
-        normalizeHref(window.location.href) === expectedHref;
+        current() && confirmed && !this.currentMarker() && normalizeHref(window.location.href) === expectedHref;
       if (landed) this.position = 'background';
       return landed;
     });
@@ -451,16 +436,9 @@ class HeroHistoryDriver {
         return true;
       }
       if (this.hasLateTraversal() || this.currentMarker()) return false;
-      const confirmed = await this.goAndConfirm(
-        -1,
-        (marker, href) => !marker && href === expected,
-        ownerToken,
-      );
+      const confirmed = await this.goAndConfirm(-1, (marker, href) => !marker && href === expected, ownerToken);
       const landed =
-        current() &&
-        confirmed &&
-        !this.currentMarker() &&
-        normalizeHref(window.location.href) === expected;
+        current() && confirmed && !this.currentMarker() && normalizeHref(window.location.href) === expected;
       if (landed) this.position = 'background';
       return landed;
     });
@@ -475,11 +453,7 @@ class HeroHistoryDriver {
         return true;
       }
       if (this.hasLateTraversal() || this.currentMarker()) return false;
-      const confirmed = await this.goAndConfirm(
-        1,
-        (marker, href) => !marker && href === expected,
-        record.token,
-      );
+      const confirmed = await this.goAndConfirm(1, (marker, href) => !marker && href === expected, record.token);
       if (confirmed) this.position = 'background';
       return confirmed;
     });
@@ -492,9 +466,7 @@ class HeroHistoryDriver {
       let marker = this.currentMarker();
 
       if (!marker || marker.token !== record.token) {
-        const expectedBackground = normalizeHref(
-          `${record.background.pathname}${record.background.search}`,
-        );
+        const expectedBackground = normalizeHref(`${record.background.pathname}${record.background.search}`);
         if (normalizeHref(window.location.href) !== expectedBackground) return false;
         const restoredBase = await this.goAndConfirm(
           record.backgroundDepth,
@@ -523,13 +495,7 @@ class HeroHistoryDriver {
       }
       if (marker.role !== 'base') return false;
 
-      if (
-        await this.goAndConfirm(
-          1,
-          (next) => next?.token === record.token && next.role === 'guard',
-          record.token,
-        )
-      ) {
+      if (await this.goAndConfirm(1, (next) => next?.token === record.token && next.role === 'guard', record.token)) {
         if (!current() || !this.isGuard(record)) return false;
         this.position = 'guard';
         return true;
@@ -547,11 +513,7 @@ class HeroHistoryDriver {
       ) {
         return false;
       }
-      window.history.pushState(
-        stateWithMarker(markerFor(record, 'guard')),
-        '',
-        window.location.href,
-      );
+      window.history.pushState(stateWithMarker(markerFor(record, 'guard')), '', window.location.href);
       this.position = 'guard';
       return true;
     });
@@ -612,11 +574,7 @@ class HeroHistoryDriver {
       };
       try {
         replaceEntryUrl(markerFor(updated, 'base'), updated.detailHref);
-        window.history.pushState(
-          stateWithMarker(markerFor(updated, 'guard')),
-          '',
-          window.location.href,
-        );
+        window.history.pushState(stateWithMarker(markerFor(updated, 'guard')), '', window.location.href);
       } catch {
         return null;
       }
@@ -636,11 +594,7 @@ class HeroHistoryDriver {
    */
   replaceUnownedDetail(detailHref: string, fromHref: string, signal?: AbortSignal) {
     return this.enqueue(false, async () => {
-      if (
-        signal?.aborted ||
-        this.currentMarker() ||
-        normalizeHref(window.location.href) !== normalizeHref(fromHref)
-      ) {
+      if (signal?.aborted || this.currentMarker() || normalizeHref(window.location.href) !== normalizeHref(fromHref)) {
         return false;
       }
       window.history.replaceState(null, '', normalizeHref(detailHref));
@@ -656,11 +610,7 @@ class HeroHistoryDriver {
     return this.enqueue(false, async () => {
       if (this.hasLateTraversal()) return false;
       const steps =
-        marker.role === 'guard'
-          ? -(marker.backgroundDepth + 1)
-          : marker.role === 'base'
-            ? -marker.backgroundDepth
-            : -1;
+        marker.role === 'guard' ? -(marker.backgroundDepth + 1) : marker.role === 'base' ? -marker.backgroundDepth : -1;
       const expected = normalizeHref(`${marker.background.pathname}${marker.background.search}`);
       return this.goAndConfirm(steps, (next, href) => href === expected && !next, marker.token);
     });

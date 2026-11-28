@@ -34,10 +34,7 @@ function useSettledOffline(): boolean {
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     if (offline === settled) return;
-    const timer = window.setTimeout(
-      () => setSettled(offline),
-      offline ? OPEN_AFTER_MS : CLOSE_AFTER_MS,
-    );
+    const timer = window.setTimeout(() => setSettled(offline), offline ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, [offline, settled]);
   return settled;

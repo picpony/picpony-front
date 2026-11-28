@@ -26,8 +26,7 @@ async function everyPage<T>(
 ): Promise<T[]> {
   const first = await read(1);
   const rows = [...first.rows];
-  for (let page = 2; page <= Math.min(first.totalPages, maxPages); page += 1)
-    rows.push(...(await read(page)).rows);
+  for (let page = 2; page <= Math.min(first.totalPages, maxPages); page += 1) rows.push(...(await read(page)).rows);
   return rows;
 }
 
@@ -119,11 +118,7 @@ export async function adminGetUsers(token: string, signal?: AbortSignal): Promis
   });
 }
 
-export async function adminGetUser(
-  token: string,
-  userId: number,
-  signal?: AbortSignal,
-): Promise<AdminUserDetail> {
+export async function adminGetUser(token: string, userId: number, signal?: AbortSignal): Promise<AdminUserDetail> {
   return (
     await api<{ user: AdminUserDetail }>('GET', `/admin/users/${seg(userId)}`, {
       token,
@@ -237,11 +232,7 @@ export async function adminUpdateUser(
 }
 
 /** Ban or unban from the list: the list carries no account revision, so the account is read first. */
-export async function adminSetBanned(
-  token: string,
-  userId: number,
-  banned: boolean,
-): Promise<AdminRow> {
+export async function adminSetBanned(token: string, userId: number, banned: boolean): Promise<AdminRow> {
   const user = await adminGetUser(token, userId);
   return adminWrite('PATCH', `/admin/users/${seg(userId)}`, {
     token,
@@ -293,16 +284,14 @@ export interface AdminShopItem {
 }
 
 /** Every item, inactive ones included (an administrator's token makes `/shop/items` list them). */
-export async function adminGetShopItems(
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminShopItem[]> {
+export async function adminGetShopItems(token: string, signal?: AbortSignal): Promise<AdminShopItem[]> {
   return everyCursor(async (before) => {
-    const data = await api<{ items: AdminShopItem[]; next_cursor: number | null }>(
-      'GET',
-      '/shop/items',
-      { token, signal, query: { before, limit: 1000 }, ...READ },
-    );
+    const data = await api<{ items: AdminShopItem[]; next_cursor: number | null }>('GET', '/shop/items', {
+      token,
+      signal,
+      query: { before, limit: 1000 },
+      ...READ,
+    });
     return { rows: data.items, next: data.next_cursor };
   });
 }
@@ -317,11 +306,7 @@ export interface ShopItemBody {
 }
 
 /** A new item (`id` absent) or an edit of one, guarded by the revision the list carried. */
-export async function adminSaveShopItem(
-  token: string,
-  body: ShopItemBody,
-  target?: { id: number; revision: number },
-) {
+export async function adminSaveShopItem(token: string, body: ShopItemBody, target?: { id: number; revision: number }) {
   return target
     ? adminWrite('PUT', `/admin/shop/items/${seg(target.id)}`, {
         token,
@@ -355,11 +340,12 @@ export interface AdminReport {
 /** Every report, pending first (the backend's order). */
 export async function adminGetReports(token: string, signal?: AbortSignal): Promise<AdminReport[]> {
   return everyPage(async (page) => {
-    const data = await api<{ reports: AdminReport[]; total_pages: number }>(
-      'GET',
-      '/admin/image-reports',
-      { token, signal, query: { page, limit: 100 }, ...READ },
-    );
+    const data = await api<{ reports: AdminReport[]; total_pages: number }>('GET', '/admin/image-reports', {
+      token,
+      signal,
+      query: { page, limit: 100 },
+      ...READ,
+    });
     return { rows: data.reports, totalPages: data.total_pages };
   });
 }
@@ -388,10 +374,7 @@ export interface AdminBlocklist {
 }
 
 /** The whole blocklist at one policy revision (each page is read at it, so the pages agree). */
-export async function adminGetBlacklist(
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminBlocklist> {
+export async function adminGetBlacklist(token: string, signal?: AbortSignal): Promise<AdminBlocklist> {
   let revision: number | undefined;
   const items = await everyPage(async (page) => {
     const data = await api<{ revision: number; blocks: AdminBlock[]; total_pages: number }>(
@@ -406,12 +389,7 @@ export async function adminGetBlacklist(
 }
 
 /** Answers `{ applied_revision, current_revision, changed }`. */
-export async function adminAddBlacklist(
-  token: string,
-  revision: number,
-  imageId: number,
-  reason: string,
-) {
+export async function adminAddBlacklist(token: string, revision: number, imageId: number, reason: string) {
   return adminWrite('PUT', `/admin/image-blocklist/${seg(imageId)}`, {
     token,
     json: { expected_revision: revision, reason },
@@ -429,10 +407,7 @@ export async function adminRemoveBlacklist(token: string, revision: number, imag
 // Announcements, notifications, messages
 // ---------------------------------------------------------------------------
 
-export async function saveAnnouncement(
-  token: string,
-  data: { version: string; title: string; content: string },
-) {
+export async function saveAnnouncement(token: string, data: { version: string; title: string; content: string }) {
   return adminWrite('POST', '/admin/announcements', { token, json: data });
 }
 
@@ -457,16 +432,12 @@ export async function adminGetAllMessages(
   params: { userId?: number; before?: number; limit?: number },
   signal?: AbortSignal,
 ): Promise<{ messages: AuditMessageRow[]; next: number | null }> {
-  const data = await api<{ messages: AuditMessageRow[]; next_cursor: number | null }>(
-    'GET',
-    '/admin/messages',
-    {
-      token,
-      signal,
-      ...READ,
-      query: { user_id: params.userId, before: params.before, limit: params.limit ?? 50 },
-    },
-  );
+  const data = await api<{ messages: AuditMessageRow[]; next_cursor: number | null }>('GET', '/admin/messages', {
+    token,
+    signal,
+    ...READ,
+    query: { user_id: params.userId, before: params.before, limit: params.limit ?? 50 },
+  });
   return { messages: data.messages, next: data.next_cursor };
 }
 
@@ -554,16 +525,14 @@ export interface AdminBadgeLink {
   created_at: string;
 }
 
-export async function adminGetBadgeLinks(
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminBadgeLink[]> {
+export async function adminGetBadgeLinks(token: string, signal?: AbortSignal): Promise<AdminBadgeLink[]> {
   return everyCursor(async (before) => {
-    const data = await api<{ links: AdminBadgeLink[]; next_cursor: number | null }>(
-      'GET',
-      '/admin/badges/campaigns',
-      { token, signal, query: { before, limit: 1000 }, ...READ },
-    );
+    const data = await api<{ links: AdminBadgeLink[]; next_cursor: number | null }>('GET', '/admin/badges/campaigns', {
+      token,
+      signal,
+      query: { before, limit: 1000 },
+      ...READ,
+    });
     return { rows: data.links, next: data.next_cursor };
   });
 }
@@ -587,11 +556,9 @@ export async function adminCreateBadgeLink(token: string, data: BadgeCampaign) {
 
 /** A new claim token for the campaign; the previous link stops working. Answers `{ id, token }`. */
 export async function adminRotateBadgeLink(token: string, id: number) {
-  return adminWrite<{ id: number; token: string }>(
-    'POST',
-    `/admin/badges/campaigns/${seg(id)}/token-rotations`,
-    { token },
-  );
+  return adminWrite<{ id: number; token: string }>('POST', `/admin/badges/campaigns/${seg(id)}/token-rotations`, {
+    token,
+  });
 }
 
 export async function adminToggleBadgeLink(token: string, id: number, active: boolean) {
@@ -623,10 +590,7 @@ export interface MaintenanceStatus {
 }
 
 /** The console's read of the maintenance switch (an administrator's own session). */
-export async function getMaintenanceStatus(
-  token: string,
-  signal?: AbortSignal,
-): Promise<MaintenanceStatus> {
+export async function getMaintenanceStatus(token: string, signal?: AbortSignal): Promise<MaintenanceStatus> {
   return api<MaintenanceStatus>('GET', '/me/maintenance-status', { token, signal, ...READ });
 }
 
@@ -650,10 +614,7 @@ export interface AdminTranslation {
   image_translation_provider: string;
   queue: TranslationQueue;
 }
-export async function adminGetTranslation(
-  token: string,
-  signal?: AbortSignal,
-): Promise<AdminTranslation> {
+export async function adminGetTranslation(token: string, signal?: AbortSignal): Promise<AdminTranslation> {
   return api<AdminTranslation>('GET', '/admin/translation', { token, signal, ...READ });
 }
 
@@ -668,10 +629,7 @@ export async function getSiteStats(signal?: AbortSignal): Promise<SiteStats> {
   return api<SiteStats>('GET', '/site-stats', { signal, ...READ });
 }
 
-export async function adminSyncSiteStats(
-  token: string,
-  data: { images: number; tags: number; comments: number },
-) {
+export async function adminSyncSiteStats(token: string, data: { images: number; tags: number; comments: number }) {
   return adminWrite('PUT', '/admin/site-stats', { token, json: data });
 }
 
@@ -724,10 +682,7 @@ export interface MaintenancePassword {
 }
 
 /** Reveals the current maintenance password (initialising it if there is none); audited. */
-export async function adminGetDeveloperPassword(
-  token: string,
-  signal?: AbortSignal,
-): Promise<MaintenancePassword> {
+export async function adminGetDeveloperPassword(token: string, signal?: AbortSignal): Promise<MaintenancePassword> {
   return api<MaintenancePassword>('POST', '/admin/developer-access/password/revelations', {
     token,
     signal,
@@ -765,10 +720,7 @@ export interface DeveloperUser {
 }
 
 /** Every account that has developer mode or is banned from it. */
-export async function adminGetDeveloperUsers(
-  token: string,
-  signal?: AbortSignal,
-): Promise<DeveloperUser[]> {
+export async function adminGetDeveloperUsers(token: string, signal?: AbortSignal): Promise<DeveloperUser[]> {
   return everyCursor(async (after) => {
     const data = await api<{ users: DeveloperUser[]; next_cursor: number | null }>(
       'GET',
@@ -808,11 +760,10 @@ function developerWrite(
   userId: number,
   revision: number,
 ) {
-  return adminWrite<DeveloperAccess>(
-    method,
-    `/admin/users/${seg(userId)}/developer-access/${change}`,
-    { token, json: { expected_revision: revision } },
-  );
+  return adminWrite<DeveloperAccess>(method, `/admin/users/${seg(userId)}/developer-access/${change}`, {
+    token,
+    json: { expected_revision: revision },
+  });
 }
 export const adminEnableDeveloper = (token: string, userId: number, revision: number) =>
   developerWrite('PUT', 'grant', token, userId, revision);
@@ -874,12 +825,7 @@ export async function addTeamMember(token: string, revision: number, member: Tea
   });
 }
 
-export async function updateTeamMember(
-  token: string,
-  revision: number,
-  id: number,
-  member: TeamMemberBody,
-) {
+export async function updateTeamMember(token: string, revision: number, id: number, member: TeamMemberBody) {
   return adminWrite('PUT', `/admin/team-members/${seg(id)}`, {
     token,
     json: { expected_revision: revision, member },
@@ -934,11 +880,7 @@ export async function getTagFeedback(
   return { feedback: data.feedback, next: data.next_cursor };
 }
 
-export async function handleTagFeedback(
-  token: string,
-  id: number,
-  status: 'pending' | 'processed' | 'rejected',
-) {
+export async function handleTagFeedback(token: string, id: number, status: 'pending' | 'processed' | 'rejected') {
   return adminWrite('PUT', `/editor/dictionary/feedback/${seg(id)}`, { token, json: { status } });
 }
 
@@ -998,8 +940,7 @@ export async function batchImportDictionaryTags(token: string, tasks: Dictionary
       created += 1;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) skipped += 1;
-      else if (error instanceof ApiError && (error.status === 401 || error.status === 403))
-        throw error;
+      else if (error instanceof ApiError && (error.status === 401 || error.status === 403)) throw error;
       else failed += 1;
     }
   }
@@ -1061,7 +1002,5 @@ export async function adminReportedImages(
   );
   const data = await readObject<{ images?: unknown }>(res);
   if (!Array.isArray(data.images)) throw new ApiError('invalid');
-  return new Map(
-    data.images.filter(isImage).map((image) => [image.id, applyImageLine(image)] as const),
-  );
+  return new Map(data.images.filter(isImage).map((image) => [image.id, applyImageLine(image)] as const));
 }

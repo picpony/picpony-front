@@ -32,9 +32,7 @@ const STAT_FIELDS = [
   { key: 'comments', label: '评论总数' },
 ] as const;
 
-const statsQuery = defineAdminQuery<SiteStats>('site-stats', (_token, signal) =>
-  adminApi.getSiteStats(signal),
-);
+const statsQuery = defineAdminQuery<SiteStats>('site-stats', (_token, signal) => adminApi.getSiteStats(signal));
 
 /** The longest notice the maintenance screen shows; the server cuts anything past it. */
 const MESSAGE_MAX = 500;
@@ -47,15 +45,7 @@ const messageLength = (text: string) => Array.from(text).length;
  * description are the row's real words, and hiding the whole row left a screen reader with nothing
  * where the two switches are (G4-021).
  */
-function RowSkeleton({
-  icon,
-  label,
-  description,
-}: {
-  icon: ReactNode;
-  label: string;
-  description: string;
-}) {
+function RowSkeleton({ icon, label, description }: { icon: ReactNode; label: string; description: string }) {
   return (
     <div className="flex items-center gap-4">
       <div className="min-w-0 flex-1">
@@ -97,8 +87,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
 
   const current = status.data;
   const message = draft ?? current?.maintenanceMessage ?? '';
-  const messageError =
-    messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 个字符` : undefined;
+  const messageError = messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 个字符` : undefined;
 
   const commitMaintenance = (enabled: boolean) => {
     if (!current || messageError) return;
@@ -111,11 +100,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
       () => {
         setDraft(null);
         showToast(
-          enabled === current.maintenanceMode
-            ? '已保存维护提示'
-            : enabled
-              ? '已开启维护模式'
-              : '已关闭维护模式',
+          enabled === current.maintenanceMode ? '已保存维护提示' : enabled ? '已开启维护模式' : '已关闭维护模式',
           'success',
         );
       },
@@ -172,11 +157,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
     <div className="space-y-6">
       <SectionHeader section="other" />
 
-      <section
-        aria-label="站点开关"
-        aria-busy={!current && !status.error ? true : undefined}
-        className="space-y-4"
-      >
+      <section aria-label="站点开关" aria-busy={!current && !status.error ? true : undefined} className="space-y-4">
         {status.error && !current ? (
           <ErrorRetry
             size="inline"
@@ -283,13 +264,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
         <SectionHeading
           as="h3"
           icon={<MdBarChart size={ICON.control} />}
-          actions={
-            <RefreshButton
-              onClick={statistics.refresh}
-              label="刷新统计"
-              loading={statistics.refreshing}
-            />
-          }
+          actions={<RefreshButton onClick={statistics.refresh} label="刷新统计" loading={statistics.refreshing} />}
         >
           <span id="admin-site-statistics-heading">全站数据统计</span>
         </SectionHeading>
@@ -320,9 +295,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
             </dl>
             {stats ? (
               <p className="text-body-s tabular-nums text-on-surface-variant">
-                {stats.updated_at
-                  ? `统计更新于 ${formatDateTime(stats.updated_at)}`
-                  : '暂无统计更新时间'}
+                {stats.updated_at ? `统计更新于 ${formatDateTime(stats.updated_at)}` : '暂无统计更新时间'}
               </p>
             ) : (
               <Skeleton className="h-4.5 w-44" />
@@ -340,9 +313,7 @@ export default function OtherTab({ token }: AdminPanelProps) {
                 void syncMutation.run(
                   async (isCurrent) => {
                     const counts = await collectSiteStats(token, isCurrent);
-                    return counts && isCurrent()
-                      ? adminApi.adminSyncSiteStats(token, counts)
-                      : null;
+                    return counts && isCurrent() ? adminApi.adminSyncSiteStats(token, counts) : null;
                   },
                   () => showToast('已同步全站统计', 'success'),
                   '全站统计同步失败',

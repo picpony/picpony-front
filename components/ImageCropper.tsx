@@ -126,9 +126,7 @@ export default function ImageCropper({
   // must not each schedule a render.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const panFrom = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
-  const pinchFrom = useRef<{ dist: number; zoom: number; mid: Point; x: number; y: number } | null>(
-    null,
-  );
+  const pinchFrom = useRef<{ dist: number; zoom: number; mid: Point; x: number; y: number } | null>(null);
 
   const outH = outputHeight ?? Math.round(outputWidth / aspect);
 
@@ -304,10 +302,7 @@ export default function ImageCropper({
       e.preventDefault();
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
       const rate = e.ctrlKey ? PINCH_WHEEL_ZOOM_RATE : WHEEL_ZOOM_RATE;
-      zoomAt(
-        (zoom) => zoom * Math.exp(-e.deltaY * unit * rate),
-        toStagePoint(e.clientX, e.clientY),
-      );
+      zoomAt((zoom) => zoom * Math.exp(-e.deltaY * unit * rate), toStagePoint(e.clientX, e.clientY));
     };
     stage.addEventListener('wheel', onWheel, { passive: false });
     return () => stage.removeEventListener('wheel', onWheel);
@@ -361,11 +356,8 @@ export default function ImageCropper({
       ctx.scale(scale, scale);
       ctx.drawImage(img, -natural.w / 2, -natural.h / 2, natural.w, natural.h);
 
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/webp', QUALITY),
-      ).then(
-        (b) =>
-          b ?? new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', QUALITY)),
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', QUALITY)).then(
+        (b) => b ?? new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', QUALITY)),
       );
 
       if (!blob) throw new Error('导出失败');
@@ -460,12 +452,7 @@ export default function ImageCropper({
         ) : (
           !ready && (
             <div className="absolute inset-0 grid place-items-center">
-              <LoadingIndicator
-                variant="contained"
-                size="md"
-                tone="on-media"
-                label="正在加载图片"
-              />
+              <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />
             </div>
           )
         )}
@@ -537,19 +524,11 @@ export default function ImageCropper({
             size="xs"
             icon={<MdRotateRight />}
             disabled={!ready}
-            onClick={() =>
-              setView((prev) => constrainView({ ...prev, rotation: (prev.rotation + 90) % 360 }))
-            }
+            onClick={() => setView((prev) => constrainView({ ...prev, rotation: (prev.rotation + 90) % 360 }))}
           >
             旋转
           </Button>
-          <Button
-            variant="text"
-            size="xs"
-            icon={<MdRestartAlt />}
-            disabled={!ready}
-            onClick={() => setView(INITIAL)}
-          >
+          <Button variant="text" size="xs" icon={<MdRestartAlt />} disabled={!ready} onClick={() => setView(INITIAL)}>
             重置
           </Button>
         </div>

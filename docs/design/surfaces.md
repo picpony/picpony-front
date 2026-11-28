@@ -6,20 +6,20 @@ Shape, elevation, stacking and interaction layers. Colour-role assignments are i
 
 Use the role's token. The radius scale is 0 / 4 / 8 / 12 / 16 / 20 / 28 / 32 / 48 dp.
 
-| Role                                                                                                                | Utility        | Radius         |
-| ------------------------------------------------------------------------------------------------------------------- | -------------- | -------------- |
-| Button, FAB, avatar, circular icon control                                                                          | `rounded-full` | Capsule/circle |
-| Count badge, search field                                                                                           | `rounded-full` | Capsule        |
-| Card, section, palette tile, outlined field, rich-text editor, code box, colour swatch, hovered square icon control | `rounded-md`   | 12 dp          |
-| Chip, filled field, ordinary menu/listbox row                                                                       | `rounded-sm`   | 8 dp           |
-| Tab state shape, top corners                                                                                        | `rounded-t-md` | 12 dp          |
-| Badge, inline code, grouped seam                                                                                    | `rounded-xs`   | 4 dp           |
-| Snackbar and plain tooltip                                                                                          | `rounded-xs`   | 4 dp           |
-| Menu and ordinary popover                                                                                           | `rounded-lg`   | 16 dp          |
-| Modal drawer, trailing corners                                                                                      | `rounded-r-lg` | 16 dp          |
-| Dialog, sheet, large media, search suggestions                                                                      | `rounded-2xl`  | 28 dp          |
-| Gallery tile and chat row                                                                                           | `rounded-lg`   | 16 dp          |
-| Profile banner from `sm`                                                                                            | `rounded-3xl`  | 32 dp          |
+| Role | Utility | Radius |
+| --- | --- | --- |
+| Button, FAB, avatar, circular icon control | `rounded-full` | Capsule/circle |
+| Count badge, search field | `rounded-full` | Capsule |
+| Card, section, palette tile, outlined field, rich-text editor, code box, colour swatch, hovered square icon control | `rounded-md` | 12 dp |
+| Chip, filled field, ordinary menu/listbox row | `rounded-sm` | 8 dp |
+| Tab state shape, top corners | `rounded-t-md` | 12 dp |
+| Badge, inline code, grouped seam | `rounded-xs` | 4 dp |
+| Snackbar and plain tooltip | `rounded-xs` | 4 dp |
+| Menu and ordinary popover | `rounded-lg` | 16 dp |
+| Modal drawer, trailing corners | `rounded-r-lg` | 16 dp |
+| Dialog, sheet, large media, search suggestions | `rounded-2xl` | 28 dp |
+| Gallery tile and chat row | `rounded-lg` | 16 dp |
+| Profile banner from `sm` | `rounded-3xl` | 32 dp |
 
 A docked drawer has no rounded docking edge. Use explicit steps rather than bare `rounded`. Skeletons inherit the replaced object's radius. Keep the Hero target radius consistent with `HERO_TARGET_RADIUS_PX`.
 
@@ -33,13 +33,13 @@ A centred pill within a pill is concentric at any size. Search uses `shape="pill
 
 Menus form one family:
 
-| Part         | Ordinary menu | Search suggestions |
-| ------------ | ------------- | ------------------ |
-| Outer radius | 16 dp         | 28 dp              |
-| Panel inset  | 8 dp          | 8 dp               |
-| Row radius   | 8 dp          | 20 dp              |
-| Row gap      | 2 dp          | 2 dp               |
-| Row height   | 40 dp         | 56 dp              |
+| Part | Ordinary menu | Search suggestions |
+| --- | --- | --- |
+| Outer radius | 16 dp | 28 dp |
+| Panel inset | 8 dp | 8 dp |
+| Row radius | 8 dp | 20 dp |
+| Row gap | 2 dp | 2 dp |
+| Row height | 40 dp | 56 dp |
 
 `Popover` owns inset and gap. Use `inset={false}` only for content that supplies its own geometry. `suggestionRow` supplies both classes and height for `estimateMenuHeight`; its variant matches the panel. Two-line ordinary suggestions use 56 dp.
 
@@ -67,11 +67,11 @@ A reply that is prose rather than a message passes `plain` to `ChatBubble`: no f
 
 Use `shadow-e1` through `shadow-e5`. Tone provides the first depth cue; ordinary controls and cards have no rest or hover shadow, including `Card variant="elevated"`.
 
-| Floating surface                                              | Level |
-| ------------------------------------------------------------- | ----- |
-| Modal bottom sheet, search suggestions, plain tooltip         | `e1`  |
-| Menu, ordinary popover, floating navigation, collapsed mascot | `e2`  |
-| Dialog, FAB, snackbar                                         | `e3`  |
+| Floating surface | Level |
+| --- | --- |
+| Modal bottom sheet, search suggestions, plain tooltip | `e1` |
+| Menu, ordinary popover, floating navigation, collapsed mascot | `e2` |
+| Dialog, FAB, snackbar | `e3` |
 
 Keyboard rings and crop masks use box-shadow without being elevation; do not remove them as decorative shadows.
 
@@ -91,13 +91,13 @@ Children inside one component may use small local integers; they are not members
 
 Use `state-layer` with `data-ripple`, not per-control hover colours.
 
-| State                                    | Alpha                  |
-| ---------------------------------------- | ---------------------- |
-| Hover                                    | 0.08                   |
-| Focus                                    | 0.10                   |
-| Pressed (static / off-motion fallback)   | 0.10                   |
+| State | Alpha |
+| --- | --- |
+| Hover | 0.08 |
+| Focus | 0.10 |
+| Pressed (static / off-motion fallback) | 0.10 |
 | Press ripple (`--md-sys-ripple-opacity`) | 0.14 light / 0.18 dark |
-| Dragged                                  | 0.16                   |
+| Dragged | 0.16 |
 
 Hover requires `(hover: hover)`; keyboard focus does not. Selection controls (`Checkbox`, `Radio`, `ToggleSwitch`) use named groups and their own 40 dp circular state layers with centred press ripples across the full label. Keep disabled ripple hosts mounted; the delegated gate checks native and ARIA-disabled state. When motion is enabled, `[data-ripple]` controls omit the flat `:active::before` flash so the expanding wave carries pressed feedback cleanly (and touch scroll detection is never pre-empted by a frame-0 tint); the off-motion tier restores the 0.10 flat pressed state layer.
 

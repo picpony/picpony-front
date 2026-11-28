@@ -4,10 +4,10 @@ Resource reads, caching, SSR seeds, prefetch and settings synchronization. Trans
 
 ## State ownership
 
-| State              | Owner                                     | Key                      |
-| ------------------ | ----------------------------------------- | ------------------------ |
-| Server answers     | `lib/resource.ts`                         | Read arguments           |
-| Screen state       | `lib/screenState.ts`                      | Screen identity          |
+| State | Owner | Key |
+| --- | --- | --- |
+| Server answers | `lib/resource.ts` | Read arguments |
+| Screen state | `lib/screenState.ts` | Screen identity |
 | Resource catalogue | `lib/resources.ts` or domain `queries.ts` | Domain-defined arguments |
 
 Screens use `useResource`; they do not fetch directly. Use `useScreenStateFor` when the same screen component can represent different records.
@@ -36,14 +36,14 @@ PicPony reads default to a 15-second deadline, overridable by `timeoutMs`. Write
 
 ## SSR seeds
 
-| Route              | Server data                                                                                                                                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                | Addressed gallery page up to page 20 and anonymous featured image; layout startup reads `GET /api/v1/bootstrap` once and shares policy, maintenance, filter definitions and blacklist across the request |
-| `/?tab=forum`      | Initial default forum list (`summary=1`)                                                                                                                                                                 |
-| `/about`           | Team roster                                                                                                                                                                                              |
-| `/stats`           | Default seven-day statistics; other date windows read on the client                                                                                                                                      |
-| `/user/[id]`       | Profile header; missing users call `notFound()`                                                                                                                                                          |
-| Direct `/pic/[id]` | Picture record and glossary names available in time                                                                                                                                                      |
+| Route | Server data |
+| --- | --- |
+| `/` | Addressed gallery page up to page 20 and anonymous featured image; layout startup reads `GET /api/v1/bootstrap` once and shares policy, maintenance, filter definitions and blacklist across the request |
+| `/?tab=forum` | Initial default forum list (`summary=1`) |
+| `/about` | Team roster |
+| `/stats` | Default seven-day statistics; other date windows read on the client |
+| `/user/[id]` | Profile header; missing users call `notFound()` |
+| Direct `/pic/[id]` | Picture record and glossary names available in time |
 
 The image overlay performs no server read. It starts from its list row. Personal data, search results and keyed featured-image reads remain client-side. A thread is never read on the server, including for metadata, because its read counts a view; it sets its title with `useDocumentTitle`.
 
@@ -96,11 +96,11 @@ Each `picpony` and `derpi` lane has four slots, at most two for background work.
 
 ## Refresh, invalidation and private data
 
-| Operation           | Contract                                                    |
-| ------------------- | ----------------------------------------------------------- |
-| `expire`            | Keep data and start a background read                       |
-| `invalidate`        | Keep mounted subscribers; schedule reread in a microtask    |
-| `write`             | Replace the answer and cancel stale work                    |
+| Operation | Contract |
+| --- | --- |
+| `expire` | Keep data and start a background read |
+| `invalidate` | Keep mounted subscribers; schedule reread in a microtask |
+| `write` | Replace the answer and cancel stale work |
 | `clearAllResources` | Abort and drop entries without fetching for the old account |
 
 A same-tick invalidate followed by an authoritative write should send no redundant request. Failed or dropped refreshes leave the original timestamp stale.

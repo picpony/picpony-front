@@ -18,8 +18,7 @@ import { ICON } from '@/lib/icons';
 
 /** What a search came back with: pictures, or a query the service suggests running instead. */
 export type ImageSearchOutcome =
-  | { kind: 'images'; images: PonyImage[]; total: number; preview: string | null }
-  | { kind: 'query'; query: string };
+  { kind: 'images'; images: PonyImage[]; total: number; preview: string | null } | { kind: 'query'; query: string };
 
 interface ImageSearchModalProps {
   isOpen: boolean;
@@ -112,8 +111,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         setStatus({ kind: 'error', message: apiErrorMessage(err, '无法读取此图片') });
       }
     } finally {
-      if (active.current && current === generation.current && request === fileRead.current)
-        setIsReading(false);
+      if (active.current && current === generation.current && request === fileRead.current) setIsReading(false);
     }
   };
 
@@ -174,12 +172,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
           <Button variant="text" type="button" onClick={close}>
             取消
           </Button>
-          <Button
-            variant="filled"
-            onClick={() => void handleSubmit()}
-            disabled={!ready}
-            loading={isUploading}
-          >
+          <Button variant="filled" onClick={() => void handleSubmit()} disabled={!ready} loading={isUploading}>
             开始搜索
           </Button>
         </>
@@ -214,12 +207,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
                       className="object-contain rounded-md"
                     />
                   </div>
-                  <p
-                    className={cn(
-                      'text-body-s mt-3',
-                      dropState !== 'dragging' && 'text-on-surface-variant',
-                    )}
-                  >
+                  <p className={cn('text-body-s mt-3', dropState !== 'dragging' && 'text-on-surface-variant')}>
                     点击或拖拽以更换图片
                   </p>
                 </>
@@ -231,12 +219,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
                     size={ICON.display}
                     className={cn('mb-3', dropState !== 'dragging' && 'text-on-surface-variant')}
                   />
-                  <p
-                    className={cn(
-                      'text-body-m-emphasized',
-                      dropState !== 'dragging' && 'text-on-surface',
-                    )}
-                  >
+                  <p className={cn('text-body-m-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
                     点击或拖拽图片到此处
                   </p>
                 </>
@@ -276,9 +259,7 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
           <div className="mb-2 flex items-center justify-between">
             <p className="text-label-l text-on-surface">容差</p>
             {/* A value is text: `on-surface`, not the brand ink (2.5:1 at this size). */}
-            <span className="text-label-l-emphasized text-on-surface tabular-nums">
-              {distance.toFixed(2)}
-            </span>
+            <span className="text-label-l-emphasized text-on-surface tabular-nums">{distance.toFixed(2)}</span>
           </div>
           <Slider
             min={0.01}

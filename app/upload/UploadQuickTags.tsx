@@ -53,12 +53,7 @@ export default function UploadQuickTags({
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
         ) : (
-          <PageLoadingIndicator
-            size="inline"
-            indicatorSize="md"
-            label="正在加载快捷标签…"
-            className="min-h-28"
-          />
+          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载快捷标签…" className="min-h-28" />
         )
       ) : (
         <div className="space-y-3">
@@ -69,10 +64,7 @@ export default function UploadQuickTags({
               aria-labelledby={`upload-quick-${group}`}
               className="flex flex-wrap items-center gap-2"
             >
-              <span
-                id={`upload-quick-${group}`}
-                className="w-8 shrink-0 text-label-m text-on-surface-variant"
-              >
+              <span id={`upload-quick-${group}`} className="w-8 shrink-0 text-label-m text-on-surface-variant">
                 {label}
               </span>
               {tags.map((tag) => {

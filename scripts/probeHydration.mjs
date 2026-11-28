@@ -46,8 +46,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-hyd-'));
@@ -87,9 +86,7 @@ ws.onmessage = (m) => {
     pending.delete(msg.id);
   }
   if (msg.method === 'Runtime.consoleAPICalled') {
-    logs.push(
-      `${msg.params.type}: ${msg.params.args.map((a) => a.value ?? a.description ?? '').join(' ')}`,
-    );
+    logs.push(`${msg.params.type}: ${msg.params.args.map((a) => a.value ?? a.description ?? '').join(' ')}`);
   }
   if (msg.method === 'Log.entryAdded') {
     logs.push(`${msg.params.entry.level}: ${msg.params.entry.text} ${msg.params.entry.url ?? ''}`);
@@ -148,8 +145,9 @@ for (const target of process.argv.slice(2)) {
   await send('Page.navigate', { url });
   await new Promise((r) => setTimeout(r, 5000));
   /* Only hydration. Resource 4xx are the documented local constraint (remote `next/image` URLs
-     resolve into 198.18/15 and Next's SSRF guard rejects them), and they drown the signal. */ const bad =
-    logs.filter((l) => /hydrat|did not match|server rendered HTML/i.test(l));
+     resolve into 198.18/15 and Next's SSRF guard rejects them), and they drown the signal. */ const bad = logs.filter(
+    (l) => /hydrat|did not match|server rendered HTML/i.test(l),
+  );
   console.log(`\n${target}`);
   console.log(`  html bytes             ${html.length}`);
   for (const [label, re] of Object.entries(PATTERNS)) {

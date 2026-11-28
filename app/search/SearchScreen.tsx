@@ -21,12 +21,7 @@ import { ICON } from '@/lib/icons';
 import { createPagedSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { loadSearchArtwork } from '@/lib/lottieAssets';
 import { SKIP, useResource } from '@/lib/resource';
-import {
-  searchFeed,
-  semanticQuery,
-  syncBrowsingCookie,
-  useBrowsingFingerprint,
-} from '@/lib/resources';
+import { searchFeed, semanticQuery, syncBrowsingCookie, useBrowsingFingerprint } from '@/lib/resources';
 import {
   NO_SEARCH_FILTERS,
   composeQuery,
@@ -86,8 +81,7 @@ const MAX_REACHABLE_PAGE = 999;
 /** How long a list turning its page for a return flight may take before the flight gives up. */
 const REVEAL_TIMEOUT_MS = 4000;
 
-const pagesFor = (total: number) =>
-  Math.max(1, Math.min(MAX_REACHABLE_PAGE, Math.ceil(total / PAGE_SIZE)));
+const pagesFor = (total: number) => Math.max(1, Math.min(MAX_REACHABLE_PAGE, Math.ceil(total / PAGE_SIZE)));
 
 /* ---------------------------------------------------------------------------------------------
  * History. /search's URL is its whole state (`readSearchLocation`), and the screen writes its own
@@ -124,8 +118,7 @@ function hrefOf(state: SearchLocation, fallbackSort: string): string {
 
 /** The Navigation API's entry key — stable for one history slot — or the URL where it is missing. */
 function entryKey(): string {
-  const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } })
-    .navigation;
+  const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } }).navigation;
   return nav?.currentEntry?.key ?? `url:${window.location.pathname}${window.location.search}`;
 }
 
@@ -178,11 +171,7 @@ function unionTags(first: readonly string[], second: readonly string[]): string[
  * the next entry. Reads go through resources — the semantic parse, the result pages, the
  * dictionary — so coming back to a search costs nothing.
  */
-export default function SearchScreen({
-  semantic: initialSemantic,
-}: {
-  semantic: SemanticSearchConfig;
-}) {
+export default function SearchScreen({ semantic: initialSemantic }: { semantic: SemanticSearchConfig }) {
   const semantic = useSemanticConfig(initialSemantic);
   const pathname = usePathname();
   const params = useBackgroundSearchParams();
@@ -205,9 +194,7 @@ export default function SearchScreen({
         // Storage can be disabled; searching still works with the default order.
       }
       setPrefs((previous) =>
-        previous.ready && previous.defaultSort === defaultSort
-          ? previous
-          : { ready: true, defaultSort },
+        previous.ready && previous.defaultSort === defaultSort ? previous : { ready: true, defaultSort },
       );
       syncBrowsingCookie();
     };
@@ -222,18 +209,12 @@ export default function SearchScreen({
   }, []);
 
   /* ----- what the query means ----- */
-  const { terms: baseTerms, filters } = useMemo(
-    () => parseSearchFilters(location.query),
-    [location.query],
-  );
+  const { terms: baseTerms, filters } = useMemo(() => parseSearchFilters(location.query), [location.query]);
   const baseText = baseTerms.join(', ');
-  const semanticCandidate =
-    !location.image && semantic.availability !== 'off' && isSemanticText(baseText);
+  const semanticCandidate = !location.image && semantic.availability !== 'off' && isSemanticText(baseText);
   const parse = useResource(
     semanticQuery,
-    semanticCandidate && !location.literal
-      ? { text: baseText, timeoutMs: semantic.timeoutMs }
-      : SKIP,
+    semanticCandidate && !location.literal ? { text: baseText, timeoutMs: semantic.timeoutMs } : SKIP,
   );
 
   let interpretation: Interpretation = { kind: 'plain' };
@@ -266,8 +247,7 @@ export default function SearchScreen({
       : interpretation.kind === 'converted'
         ? composeQuery(interpretation.included, filters)
         : location.query;
-  const rankingText =
-    interpretation.kind === 'converted' ? interpretation.included.join(', ') : baseText;
+  const rankingText = interpretation.kind === 'converted' ? interpretation.included.join(', ') : baseText;
 
   /* ----- the read ----- */
   const sortBy = effectiveSearchSort(location.sort, prefs.defaultSort, rankingText);
@@ -278,8 +258,7 @@ export default function SearchScreen({
   const [pageOverride, setPageOverride] = useState<{ set: string; page: number } | null>(null);
   if (
     pageOverride &&
-    (pageOverride.set !== resultSet ||
-      (pathname === '/search' && location.page === pageOverride.page))
+    (pageOverride.set !== resultSet || (pathname === '/search' && location.page === pageOverride.page))
   ) {
     setPageOverride(null);
   }
@@ -289,9 +268,7 @@ export default function SearchScreen({
   const sortKnown = prefs.ready || location.sort !== '';
   const read = useResource(
     searchFeed,
-    effectiveQuery && sortKnown
-      ? { query: effectiveQuery, page, sortField: sortBy, sortDir, fp }
-      : SKIP,
+    effectiveQuery && sortKnown ? { query: effectiveQuery, page, sortField: sortBy, sortDir, fp } : SKIP,
     /* Retention scoped to one result set: a page turn keeps its rows (dimmed) so the scroller
        keeps its height; a new query, sort or content setting never shows the previous answer
        as if it were the new one. */
@@ -323,8 +300,7 @@ export default function SearchScreen({
       const anchor = resultsRef.current;
       const scroller = getAppScroller();
       if (!anchor || !scroller) return;
-      if (anchor.getBoundingClientRect().top < scroller.getBoundingClientRect().top)
-        scrollAppToElement(anchor);
+      if (anchor.getBoundingClientRect().top < scroller.getBoundingClientRect().top) scrollAppToElement(anchor);
     });
   };
 
@@ -352,9 +328,7 @@ export default function SearchScreen({
 
   /* ----- pin the tags a parse produced, so reload and share run the same search at once ----- */
   const pinned =
-    interpretation.kind === 'converted' && interpretation.fromParse
-      ? interpretation.included.join(',')
-      : '';
+    interpretation.kind === 'converted' && interpretation.fromParse ? interpretation.included.join(',') : '';
   useEffect(() => {
     if (!pinned) return;
     /* A task of its own: this can land in the commit that answers a history traversal, and a
@@ -473,9 +447,7 @@ export default function SearchScreen({
     effectiveQuery && data && data.images.length > 0
       ? [resultSet, shownPage, data.images.map((image) => image.id).join(',')].join('|')
       : '';
-  const [sequenceState, setSequenceState] = useState<{ key: string; source?: ImageSequenceSource }>(
-    { key: '' },
-  );
+  const [sequenceState, setSequenceState] = useState<{ key: string; source?: ImageSequenceSource }>({ key: '' });
   if (sequenceState.key !== sequenceKey) {
     let source: ImageSequenceSource | undefined;
     if (sequenceKey && effectiveQuery && data) {
@@ -565,8 +537,7 @@ export default function SearchScreen({
     const record = () => {
       frame = 0;
       const shown = shownEntry.current;
-      if (shown && !pendingRestore.current && shown.key === entryKey())
-        offsets.set(shown.key, scroller.scrollTop);
+      if (shown && !pendingRestore.current && shown.key === entryKey()) offsets.set(shown.key, scroller.scrollTop);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(record);
@@ -679,8 +650,7 @@ export default function SearchScreen({
     /* The panel applies to what is in the field — words typed and not yet searched included —
        and so is a new search when those words differ; a chip only ever edits the search on
        screen. */
-    const fieldTerms =
-      from === 'panel' ? parseSearchFilters(normalizeSearchText(inputValue)).terms : baseTerms;
+    const fieldTerms = from === 'panel' ? parseSearchFilters(normalizeSearchText(inputValue)).terms : baseTerms;
     const query = composeQuery(fieldTerms, next);
     if (!query) {
       showToast('请输入关键词或设置筛选条件', 'info');
@@ -744,8 +714,7 @@ export default function SearchScreen({
     };
   };
 
-  const singleTag =
-    effectiveQuery && isSingleTagQuery(effectiveQuery) ? splitQueryTerms(effectiveQuery)[0] : null;
+  const singleTag = effectiveQuery && isSingleTagQuery(effectiveQuery) ? splitQueryTerms(effectiveQuery)[0] : null;
   const feedback =
     semanticCandidate && parse.data?.modelUsed ? (
       <SemanticFeedback query={baseText} tags={parse.data.tags} engines={parse.data.engines} />
@@ -837,9 +806,7 @@ export default function SearchScreen({
               }
               title="输入关键词搜索图片"
               description={
-                semantic.availability === 'off'
-                  ? '支持标签或英文原名搜索'
-                  : '支持中文描述、标签或英文原名搜索'
+                semantic.availability === 'off' ? '支持标签或英文原名搜索' : '支持中文描述、标签或英文原名搜索'
               }
             />
           </div>
@@ -879,8 +846,7 @@ export default function SearchScreen({
                 href={hrefFor({
                   page: 1,
                   sharedBy: null,
-                  tags:
-                    interpretation.kind === 'converted' ? interpretation.included : location.tags,
+                  tags: interpretation.kind === 'converted' ? interpretation.included : location.tags,
                 })}
                 query={location.query}
               />

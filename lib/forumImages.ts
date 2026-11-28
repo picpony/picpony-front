@@ -19,11 +19,7 @@ const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 /** The long edge a shrunken picture is drawn at. */
 const MAX_EDGE = 2048;
 
-function canvasBlob(
-  canvas: HTMLCanvasElement,
-  type: string,
-  quality: number,
-): Promise<Blob | null> {
+function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
@@ -61,8 +57,7 @@ export async function encodeWithinLimit(
   for (let step = 0; step < JPEG_QUALITIES.length; step += 1) {
     const blob = await encoder.encode('image/jpeg', JPEG_QUALITIES[step]);
     if (!blob) return null;
-    if (blob.size <= FORUM_IMAGE_MAX_BYTES || step === JPEG_QUALITIES.length - 1)
-      return { blob, type: 'image/jpeg' };
+    if (blob.size <= FORUM_IMAGE_MAX_BYTES || step === JPEG_QUALITIES.length - 1) return { blob, type: 'image/jpeg' };
   }
   return null;
 }
@@ -108,8 +103,7 @@ export async function prepareForumImage(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) throw new Error('请选择图片文件');
   if (file.size > MAX_SOURCE_BYTES) throw new Error('原图不能超过 50 MB');
   if (file.type === 'image/gif') {
-    if (file.size > FORUM_IMAGE_MAX_BYTES)
-      throw new Error('动图超过 5 MB，压缩会丢失动画，请缩小后再上传');
+    if (file.size > FORUM_IMAGE_MAX_BYTES) throw new Error('动图超过 5 MB，压缩会丢失动画，请缩小后再上传');
     return file;
   }
   if (file.size <= FORUM_IMAGE_MAX_BYTES) return file;
@@ -120,13 +114,11 @@ export async function prepareForumImage(file: File): Promise<File> {
     /* A format the browser cannot decode (HEIC on most desktops): nothing to redraw. */
     throw new Error('图片超过 5 MB，且无法在浏览器中压缩，请缩小后再上传');
   }
-  if (shrunk.size > FORUM_IMAGE_MAX_BYTES)
-    throw new Error('图片压缩后仍超过 5 MB，请降低分辨率后再试');
+  if (shrunk.size > FORUM_IMAGE_MAX_BYTES) throw new Error('图片压缩后仍超过 5 MB，请降低分辨率后再试');
   return shrunk;
 }
 
-export type ForumUploadOutcome =
-  { ok: true; path: string } | { ok: false; message: string; aborted: boolean };
+export type ForumUploadOutcome = { ok: true; path: string } | { ok: false; message: string; aborted: boolean };
 
 /**
  * Prepares and uploads one picture; resolves with its address (`/api/v1/media/<asset>`, what the

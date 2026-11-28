@@ -8,15 +8,10 @@ import { readSemanticConfig } from './semantic.server';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const first = (value: string | string[] | undefined) =>
-  (Array.isArray(value) ? value[0] : value) ?? '';
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? '';
 
 /** The first document's title names the search; the screen keeps it in step afterwards. */
-export async function generateMetadata({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}): Promise<Metadata> {
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const params = await searchParams;
   if (first(params.image)) return { title: '以图搜图结果' };
   const query = first(params.q).trim();
@@ -28,15 +23,7 @@ export async function generateMetadata({
  * does not rearrange when it arrives. `data-page-loading` holds the footer back while it is up,
  * with or without the grid under it.
  */
-function SearchFallback({
-  hasQuery,
-  hasImage,
-  hasFrom,
-}: {
-  hasQuery: boolean;
-  hasImage: boolean;
-  hasFrom: boolean;
-}) {
+function SearchFallback({ hasQuery, hasImage, hasFrom }: { hasQuery: boolean; hasImage: boolean; hasFrom: boolean }) {
   return (
     <div className="mx-auto max-w-7xl" aria-busy="true" data-page-loading>
       <div className="mx-auto mb-6 max-w-2xl">

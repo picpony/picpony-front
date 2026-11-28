@@ -57,14 +57,7 @@ interface DerpiFilterImportProps {
 }
 
 function FilterRows() {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      label="正在加载过滤规则…"
-      className="min-h-36"
-    />
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载过滤规则…" className="min-h-36" />;
 }
 
 /**
@@ -73,13 +66,7 @@ function FilterRows() {
  * names, plus the plain tags its expressions name). A filter that is only expressions and
  * wildcards has nothing a block group can hold, and says so rather than making an empty group.
  */
-export default function DerpiFilterImport({
-  isOpen,
-  onClose,
-  apiKey,
-  canCreate,
-  onImport,
-}: DerpiFilterImportProps) {
+export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, onImport }: DerpiFilterImportProps) {
   const read = useResource(derpiFilters, isOpen && apiKey ? { apiKey } : SKIP);
   const [importing, setImporting] = useState<number | null>(null);
   const [problem, setProblem] = useState<{ id: number; message: string } | null>(null);
@@ -100,8 +87,7 @@ export default function DerpiFilterImport({
         });
       } else {
         const imported = await settle(onImport(result));
-        if (!imported.ok)
-          setProblem({ id: filter.id, message: apiErrorMessage(imported.error, '导入失败') });
+        if (!imported.ok) setProblem({ id: filter.id, message: apiErrorMessage(imported.error, '导入失败') });
       }
     }
     setImporting(null);
@@ -134,13 +120,7 @@ export default function DerpiFilterImport({
       />
     );
   } else if (read.data.length === 0) {
-    body = (
-      <EmptyState
-        size="pane"
-        icon={<MdFilterAlt size={ICON.display} />}
-        title="暂无可导入的过滤器"
-      />
-    );
+    body = <EmptyState size="pane" icon={<MdFilterAlt size={ICON.display} />} title="暂无可导入的过滤器" />;
   } else {
     body = (
       <div>
@@ -151,11 +131,7 @@ export default function DerpiFilterImport({
         )}
         <div role="list">
           {read.data.map((filter) => (
-            <div
-              role="listitem"
-              key={filter.id}
-              className="m3-row bg-surface-container-highest p-4"
-            >
+            <div role="listitem" key={filter.id} className="m3-row bg-surface-container-highest p-4">
               <div className="flex items-center gap-4">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-label-l text-on-surface" title={filter.name}>

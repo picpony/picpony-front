@@ -2,12 +2,7 @@
 
 import { applySavedRoutePolicy } from '@/lib/route';
 import * as api from '@/lib/api/adminSiteTools';
-import {
-  apiRouteFields,
-  imageRouteFields,
-  fieldsPayload,
-  routePayload,
-} from '@/lib/adminSiteTools/model';
+import { apiRouteFields, imageRouteFields, fieldsPayload, routePayload } from '@/lib/adminSiteTools/model';
 import type { SiteStatusResponse } from '@/lib/types/site';
 import SectionHeading from '@/components/SectionHeading';
 import { AdminNote } from '../AdminForm';
@@ -17,9 +12,7 @@ import type { AdminPanelProps } from '../registry';
 import { ConfigEditor, ReadState, protectedPanel } from './common';
 import { routesQuery } from './queries';
 
-const POLICY_LABELS = Object.fromEntries(
-  (apiRouteFields[0].options ?? []).map((o) => [o.value, o.label]),
-);
+const POLICY_LABELS = Object.fromEntries((apiRouteFields[0].options ?? []).map((o) => [o.value, o.label]));
 /** How many of the latest automatic switches the panel lists. */
 const HISTORY_SHOWN = 5;
 

@@ -39,13 +39,7 @@ interface SemanticLineProps {
  * What the old front end said in a transient toast (已转换为标签：…) stays on screen here, as
  * chips: each can be left out of the search, and 搜索原文 runs the words as typed instead.
  */
-export default function SemanticLine({
-  state,
-  onSearchOriginal,
-  onUseTags,
-  onToggleTag,
-  onRetry,
-}: SemanticLineProps) {
+export default function SemanticLine({ state, onSearchOriginal, onUseTags, onToggleTag, onRetry }: SemanticLineProps) {
   let body: ReactNode;
   let action: ReactNode = null;
   let announcement = '';
@@ -54,13 +48,7 @@ export default function SemanticLine({
     case 'pending':
       /* Keyed on the estimate too: a re-parse that lands a different seconds figure restarts the
          wait rather than inheriting 比预计的久. */
-      body = (
-        <PendingParse
-          key={`${state.text}:${state.estimateMs}`}
-          text={state.text}
-          estimateMs={state.estimateMs}
-        />
-      );
+      body = <PendingParse key={`${state.text}:${state.estimateMs}`} text={state.text} estimateMs={state.estimateMs} />;
       action = (
         <Button variant="text" className="shrink-0" onClick={onSearchOriginal}>
           搜索原文
@@ -87,14 +75,8 @@ export default function SemanticLine({
       announcement = '已按原文搜索';
       break;
     case 'failed':
-      announcement = state.timedOut
-        ? '智能解析超时，已按原文搜索'
-        : '智能解析暂时不可用，已按原文搜索';
-      body = (
-        <Note icon={<MdWarningAmber size={ICON.control} className="text-warning" />}>
-          {announcement}
-        </Note>
-      );
+      announcement = state.timedOut ? '智能解析超时，已按原文搜索' : '智能解析暂时不可用，已按原文搜索';
+      body = <Note icon={<MdWarningAmber size={ICON.control} className="text-warning" />}>{announcement}</Note>;
       if (state.retryable) {
         action = (
           <Button variant="text" className="shrink-0" onClick={onRetry}>

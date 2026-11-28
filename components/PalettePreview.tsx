@@ -53,30 +53,19 @@ export default function PalettePreview({
         <span className="text-title-s">PicPony</span>
         <span className="text-label-m font-mono tabular-nums">{caption}</span>
       </div>
-      <div
-        className={cn(
-          'flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3',
-          loading && 'invisible',
-        )}
-      >
+      <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3', loading && 'invisible')}>
         {/* A selected row's pill, and a favourite that is on — the two things 配色方案 changes. */}
         <span
           className="text-label-m rounded-full px-3 py-1"
           style={
-            light
-              ? { background: light['secondary-container'], color: light['on-secondary-container'] }
-              : undefined
+            light ? { background: light['secondary-container'], color: light['on-secondary-container'] } : undefined
           }
         >
           选中
         </span>
         <span
           className="grid size-8 shrink-0 place-items-center rounded-md"
-          style={
-            light
-              ? { background: light['tertiary-container'], color: light['on-tertiary-container'] }
-              : undefined
-          }
+          style={light ? { background: light['tertiary-container'], color: light['on-tertiary-container'] } : undefined}
         >
           <MdStar size={ICON.control} aria-hidden="true" />
         </span>
@@ -85,10 +74,7 @@ export default function PalettePreview({
             className="size-4 shrink-0 rounded-full"
             style={light ? { background: light['primary-ink'] } : undefined}
           />
-          <span
-            className="text-body-s"
-            style={light ? { color: light['on-surface-variant'] } : undefined}
-          >
+          <span className="text-body-s" style={light ? { color: light['on-surface-variant'] } : undefined}>
             图标与标记
           </span>
         </span>
@@ -96,9 +82,7 @@ export default function PalettePreview({
             reads as a button that has lost its handler, and this is not a control. */}
         <span
           className="text-label-s ml-auto rounded-xs px-2 py-0.5"
-          style={
-            roles ? { background: roles.dark.primary, color: roles.dark['on-primary'] } : undefined
-          }
+          style={roles ? { background: roles.dark.primary, color: roles.dark['on-primary'] } : undefined}
         >
           深色方案 <span className="font-mono tabular-nums">{roles?.dark.primary ?? caption}</span>
         </span>

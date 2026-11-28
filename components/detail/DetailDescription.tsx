@@ -17,8 +17,7 @@ const COLLAPSED_MAX_HEIGHT = 160;
 /** The folded height fades out rather than stopping mid-line: the mask is alpha, not colour, and
  *  unfolding carries its stop down to the bottom edge so the fade leaves with the clip. Two
  *  two-stop gradients interpolate, so this rides the height's own transition. */
-const fadeMask = (open: boolean) =>
-  `linear-gradient(to bottom, black ${open ? 100 : 65}%, transparent)`;
+const fadeMask = (open: boolean) => `linear-gradient(to bottom, black ${open ? 100 : 65}%, transparent)`;
 
 /**
  * The picture's description, rendered — Derpibooru writes Markdown, with its own picture
@@ -39,9 +38,7 @@ export default function DetailDescription({ description }: { description?: strin
   const open = expanded === text;
   const [overflowing, setOverflowing] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
-  const translation = useTextTranslation(plainTextOf(text), (message) =>
-    showToast(message, 'error'),
-  );
+  const translation = useTextTranslation(plainTextOf(text), (message) => showToast(message, 'error'));
 
   /* Whether the folded card hides anything, and how tall it stands unfolded — re-measured when
      its width changes, when a picture inside the description finishes loading and grows it, and

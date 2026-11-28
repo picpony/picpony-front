@@ -123,10 +123,7 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
        no inline style residue once settled. */
     const { spatial, effects } = surfaceArrival('default', 'entrance');
     // Capped (`STAGGER`): however many cards are on screen, the spread never passes 250ms.
-    const stepSeconds =
-      reduced || ordered.length <= 1
-        ? 0
-        : Math.min(STAGGER.step, STAGGER.max / (ordered.length - 1));
+    const stepSeconds = reduced || ordered.length <= 1 ? 0 : Math.min(STAGGER.step, STAGGER.max / (ordered.length - 1));
     const running = ordered.flatMap((el, index) => {
       const at = {
         delay: scaledMs(index * stepSeconds * 1000, 'entrance'),
@@ -154,13 +151,9 @@ export function useStaggerGridOn<T extends HTMLElement = HTMLElement>(
     const settle = () => {
       for (const animation of running) animation.cancel();
     };
-    const cleanupListener = () =>
-      root.removeEventListener('pointerdown', settle, { capture: true });
+    const cleanupListener = () => root.removeEventListener('pointerdown', settle, { capture: true });
     root.addEventListener('pointerdown', settle, { capture: true, once: true });
-    void Promise.all(running.map((animation) => animation.finished)).then(
-      cleanupListener,
-      cleanupListener,
-    );
+    void Promise.all(running.map((animation) => animation.finished)).then(cleanupListener, cleanupListener);
     return () => {
       cleanupListener();
       settle();

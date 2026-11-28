@@ -122,11 +122,7 @@ test("this tab's change keeps the other tab's unconfirmed change in the shared r
   otherTabWrites(LS_KEYS.settingsSyncPending, pendingRecord('7', { onlyPony: Date.now() }));
   /* Meanwhile an account read here (a tab coming back into view) answers with the old copy. */
   sync.adoptCloudSettings(ACCOUNT.token, structuredClone(serverUser), Date.now() + 1);
-  assert.equal(
-    values.get(LS_KEYS.onlyPony),
-    'true',
-    'an unconfirmed change in another tab is not adopted over',
-  );
+  assert.equal(values.get(LS_KEYS.onlyPony), 'true', 'an unconfirmed change in another tab is not adopted over');
   /* This tab changes something else. */
   sync.changeSyncedSetting('banAnthro', true);
   const record = JSON.parse(values.get(LS_KEYS.settingsSyncPending));
@@ -135,17 +131,9 @@ test("this tab's change keeps the other tab's unconfirmed change in the shared r
   await settle();
   const sent = writes.at(-1);
   assert.equal(sent.banAnthro, true);
-  assert.equal(
-    sent.onlyPony,
-    true,
-    "the write carries the other tab's change, not the cloud's old copy",
-  );
+  assert.equal(sent.onlyPony, true, "the write carries the other tab's change, not the cloud's old copy");
   assert.equal(sent.mascotId, '3');
-  assert.equal(
-    values.has(LS_KEYS.settingsSyncPending),
-    false,
-    'both entries were confirmed by that write',
-  );
+  assert.equal(values.has(LS_KEYS.settingsSyncPending), false, 'both entries were confirmed by that write');
 });
 
 test("a confirmed change from the other tab is not reverted by this tab's stale copy or slow read", async () => {
@@ -206,20 +194,13 @@ test('P2-F11: turning developer mode off takes the developer filter with it at o
   };
   values.set(LS_KEYS.userInfo, JSON.stringify(dev));
   window.dispatchEvent(new Event('user_info_updated'));
-  sync.adoptCloudSettings(
-    dev.token,
-    { ...dev, settings: { contentFilter: 'developer' } },
-    Date.now(),
-  );
+  sync.adoptCloudSettings(dev.token, { ...dev, settings: { contentFilter: 'developer' } }, Date.now());
   assert.equal(values.get(LS_KEYS.contentFilter), 'developer');
   /* What DeveloperGuideModal does on an accepted 关闭: the device flag goes, then the gate. */
   values.delete(LS_KEYS.developer);
   sync.enforceContentGate();
   assert.equal(values.get(LS_KEYS.contentFilter), 'safe');
-  const modal = readFileSync(
-    new URL('../components/DeveloperGuideModal.tsx', import.meta.url),
-    'utf8',
-  );
+  const modal = readFileSync(new URL('../components/DeveloperGuideModal.tsx', import.meta.url), 'utf8');
   assert.match(modal, /if \(!enabled\) enforceContentGate\(\);/);
   await settle();
 });
@@ -249,9 +230,7 @@ test("review P5-F1: a change another tab confirmed ends this tab's failed state,
   assert.equal(writes.length, sentBefore, 'nothing is re-sent');
   /* A later change here does not put the confirmed entry back into the shared record. */
   sync.changeSyncedSetting('banAnthro', true);
-  assert.deepEqual(Object.keys(JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending), [
-    'banAnthro',
-  ]);
+  assert.deepEqual(Object.keys(JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending), ['banAnthro']);
   await settle();
 });
 
@@ -262,21 +241,12 @@ test('review P5-F1: an entry the other tab re-keyed or replaced with a newer cha
   assert.equal(sync.settingsSyncSnapshot().state, 'failed');
   const mine = JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending.showChineseTags;
   /* Another account's record (a sign-in elsewhere being written) says nothing about this one. */
-  otherTabWrites(
-    LS_KEYS.settingsSyncPending,
-    pendingRecord('someone-else', { onlyPony: Date.now() }),
-  );
+  otherTabWrites(LS_KEYS.settingsSyncPending, pendingRecord('someone-else', { onlyPony: Date.now() }));
   assert.ok(sync.settingsSyncSnapshot().pending.showChineseTags, 'kept across a foreign record');
   /* An older timestamp leaving the record does not cover this tab's newer change. */
-  otherTabWrites(
-    LS_KEYS.settingsSyncPending,
-    pendingRecord('31', { showChineseTags: mine - 1000 }),
-  );
+  otherTabWrites(LS_KEYS.settingsSyncPending, pendingRecord('31', { showChineseTags: mine - 1000 }));
   otherTabWrites(LS_KEYS.settingsSyncPending, null);
-  assert.ok(
-    sync.settingsSyncSnapshot().pending.showChineseTags,
-    'an older confirmation does not cover a newer change',
-  );
+  assert.ok(sync.settingsSyncSnapshot().pending.showChineseTags, 'an older confirmation does not cover a newer change');
   assert.equal(sync.settingsSyncSnapshot().state, 'failed');
   failWrites = false;
   sync.retrySettingsSync();

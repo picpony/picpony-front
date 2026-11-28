@@ -267,8 +267,7 @@ export function captureVisualClone(
     } else if (element.tagName === 'IMG') {
       const img = element as HTMLImageElement;
       if (img.complete && img.naturalWidth > 0) imgSrcByIndex.set(i, img.currentSrc);
-      else if (keepImages && (img.hasAttribute('src') || img.hasAttribute('srcset')))
-        loadingImgIndices.push(i);
+      else if (keepImages && (img.hasAttribute('src') || img.hasAttribute('srcset'))) loadingImgIndices.push(i);
       else if (keepLoading && !img.complete && img.loading !== 'lazy') loadingImgIndices.push(i);
       else imgSrcByIndex.set(i, null);
     }

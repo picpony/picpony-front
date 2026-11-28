@@ -48,8 +48,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-metrics-'));
@@ -124,10 +123,9 @@ const KEYS = [
 const load = [],
   tab = [];
 
-/* The service worker would make run 2 onwards a different measurement from run 1. */ await send(
-  'Page.navigate',
-  { url: `http://127.0.0.1:${PORT}/` },
-);
+/* The service worker would make run 2 onwards a different measurement from run 1. */ await send('Page.navigate', {
+  url: `http://127.0.0.1:${PORT}/`,
+});
 await new Promise((r) => setTimeout(r, 3000));
 await evalIn(`(async () => {
   const rs = await navigator.serviceWorker.getRegistrations();

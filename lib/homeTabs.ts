@@ -60,8 +60,7 @@ type NavigationLike = {
   entries?: () => NavigationEntryLike[];
 };
 
-const navigationApi = () =>
-  (window as unknown as { navigation?: NavigationLike }).navigation ?? null;
+const navigationApi = () => (window as unknown as { navigation?: NavigationLike }).navigation ?? null;
 
 /** Whether `url` is this route's gallery tab. */
 function isGalleryEntry(url: string | null | undefined): boolean {
@@ -69,9 +68,7 @@ function isGalleryEntry(url: string | null | undefined): boolean {
   try {
     const parsed = new URL(url, window.location.origin);
     return (
-      parsed.origin === window.location.origin &&
-      parsed.pathname === '/' &&
-      homeTabOf(parsed.search) === 'gallery'
+      parsed.origin === window.location.origin && parsed.pathname === '/' && homeTabOf(parsed.search) === 'gallery'
     );
   } catch {
     return false;

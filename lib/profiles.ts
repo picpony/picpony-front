@@ -84,10 +84,7 @@ export function profileFromWire(user: WireProfile): ProfileUser {
  * The profile with some of its owner's settings replaced — the owner's own view lays the choices
  * this device holds over the record, which is the server's and minutes old at worst.
  */
-export function withSettings(
-  profile: ProfileUser,
-  overrides: Record<string, unknown>,
-): ProfileUser {
+export function withSettings(profile: ProfileUser, overrides: Record<string, unknown>): ProfileUser {
   return { ...profile, settings: { ...profile.settings, ...overrides } };
 }
 

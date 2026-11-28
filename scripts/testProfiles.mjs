@@ -116,11 +116,7 @@ test('a tab the owner hides is hidden from visitors only', () => {
   assert.equal(profiles.hiddenFromVisitors(profile, 'uploads'), true);
   assert.equal(profiles.hiddenFromVisitors(profile, 'faves'), false);
   assert.equal(profiles.tabVisible(profile, 'uploads', false), false);
-  assert.equal(
-    profiles.tabVisible(profile, 'uploads', true),
-    true,
-    'the owner always sees their own',
-  );
+  assert.equal(profiles.tabVisible(profile, 'uploads', true), true, 'the owner always sees their own');
   assert.equal(
     profiles.hiddenFromVisitors(profiles.withSettings(profile, { showUploads: true }), 'uploads'),
     false,
@@ -129,10 +125,7 @@ test('a tab the owner hides is hidden from visitors only', () => {
 });
 
 test('uploads are the verified account’s, by id, and nobody’s without one', () => {
-  assert.equal(
-    profiles.uploaderTerm(P({ upstream_identity: { id: 583672, name: 'x' } })),
-    'uploader_id:583672',
-  );
+  assert.equal(profiles.uploaderTerm(P({ upstream_identity: { id: 583672, name: 'x' } })), 'uploader_id:583672');
   assert.equal(profiles.uploaderTerm(P()), null);
   assert.equal(profiles.hasBoundAccount(P()), false);
 });
@@ -144,14 +137,9 @@ test('the default tab is chosen from public data: uploads when a visitor can see
   assert.equal(profiles.defaultProfileTab(bound()), 'uploads');
   assert.equal(profiles.defaultProfileTab(P()), 'faves', 'unbound');
   assert.equal(profiles.defaultProfileTab(bound({ showUploads: false })), 'faves');
+  assert.equal(profiles.defaultProfileTab(bound({ showUploads: false, showFaves: false })), 'posts');
   assert.equal(
-    profiles.defaultProfileTab(bound({ showUploads: false, showFaves: false })),
-    'posts',
-  );
-  assert.equal(
-    profiles.defaultProfileTab(
-      bound({ showUploads: false, showFaves: false, showPosts: false, showComments: false }),
-    ),
+    profiles.defaultProfileTab(bound({ showUploads: false, showFaves: false, showPosts: false, showComments: false })),
     'uploads',
     'hiding everything opens on uploads, whose hidden state says so',
   );
@@ -161,15 +149,9 @@ test('the IP location shows unless it is missing or 未知; hidden by its owner,
   assert.equal(profiles.ipLocationOf(P({ ip_location: ' 中国 江苏 ' })), '中国 江苏');
   assert.equal(profiles.ipLocationOf(P({ ip_location: '未知' })), null);
   assert.equal(profiles.ipLocationOf(P({ ip_location: '' })), null);
+  assert.equal(profiles.ipLocationOf(P({ ip_location: '该用户已隐藏' })), '已隐藏', "the backend's own answer");
   assert.equal(
-    profiles.ipLocationOf(P({ ip_location: '该用户已隐藏' })),
-    '已隐藏',
-    "the backend's own answer",
-  );
-  assert.equal(
-    profiles.ipLocationOf(
-      profiles.withSettings(P({ ip_location: '中国 广东' }), { hideIpLocation: true }),
-    ),
+    profiles.ipLocationOf(profiles.withSettings(P({ ip_location: '中国 广东' }), { hideIpLocation: true })),
     '已隐藏',
     'the owner’s own setting wins even over a location the backend still sent',
   );
@@ -184,10 +166,7 @@ test('a birthday prints its month and day, never its year', () => {
 });
 
 test('the Derpibooru card links in the app, by id', () => {
-  assert.equal(
-    profiles.derpiProfileHref(P({ upstream_identity: { id: 583672, name: 'x' } })),
-    '/derpi/user/583672',
-  );
+  assert.equal(profiles.derpiProfileHref(P({ upstream_identity: { id: 583672, name: 'x' } })), '/derpi/user/583672');
   assert.equal(profiles.derpiProfileHref(P()), null);
 });
 
@@ -294,8 +273,7 @@ test('public folders: the owner’s by id, mapped from the backend’s rows; an 
   ]);
   assert.equal(asked.pathname, '/api/v1/users/12/favorite-folders');
 
-  globalThis.fetch = async () =>
-    json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
+  globalThis.fetch = async () => json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
   const missing = await favorites.getProfileFaveFolders(99).catch((error) => error);
   assert.ok(missing instanceof ApiError);
   assert.equal(isNotFound(missing), true);
@@ -315,8 +293,7 @@ test('the badge dictionary is a name → description map; a failure throws', asy
   };
   assert.deepEqual(await picpony.getBadgeDictionary(), { 公测先锋: '参与公测' });
   assert.equal(asked, '/api/v1/badges/dictionary');
-  globalThis.fetch = async () =>
-    json({ error: { code: 'INTERNAL', message: '服务暂不可用' } }, { status: 503 });
+  globalThis.fetch = async () => json({ error: { code: 'INTERNAL', message: '服务暂不可用' } }, { status: 503 });
   await assert.rejects(picpony.getBadgeDictionary(), ApiError);
 });
 
@@ -372,10 +349,7 @@ test('equipping sends the worn set as ids, in order, and a refusal throws its se
   );
 
   globalThis.fetch = async () =>
-    json(
-      { error: { code: 'BADGE_NOT_OWNED', message: '只能佩戴本人拥有且未过期的徽章' } },
-      { status: 403 },
-    );
+    json({ error: { code: 'BADGE_NOT_OWNED', message: '只能佩戴本人拥有且未过期的徽章' } }, { status: 403 });
   const refusal = await picpony.equipBadges('t', []).catch((error) => error);
   assert.ok(refusal instanceof ApiError);
   assert.equal(refusal.code, 'BADGE_NOT_OWNED');
@@ -386,11 +360,7 @@ test('shared faves are one entry per picture, first position kept, every page re
   const asked = [];
   globalThis.fetch = async (url) => {
     const target = new URL(String(url), 'https://app.invalid');
-    asked.push([
-      target.pathname,
-      target.searchParams.get('page'),
-      target.searchParams.get('folder_id'),
-    ]);
+    asked.push([target.pathname, target.searchParams.get('page'), target.searchParams.get('folder_id')]);
     const page = Number(target.searchParams.get('page'));
     /* A favourite saved between the two reads shifts picture 100 onto the second page. */
     const ids = page === 1 ? Array.from({ length: 100 }, (_, i) => i + 1) : [100, 101];
@@ -418,8 +388,7 @@ test('the profile seed: the record, not-found for the backend’s 404 or an impo
   globalThis.fetch = async (url) => {
     const id = new URL(String(url)).pathname.split('/').pop();
     asked.push(id);
-    if (id === '404')
-      return json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
+    if (id === '404') return json({ error: { code: 'USER_NOT_FOUND', message: '用户不存在' } }, { status: 404 });
     if (id === '500') return new Response('', { status: 500 });
     return json({ user: wire({ id: Number(id), username: `u${id}` }) });
   };
@@ -428,11 +397,7 @@ test('the profile seed: the record, not-found for the backend’s 404 or an impo
   assert.equal(seed.data.username, 'u7');
   assert.equal(seed.data.has_api_key, false, 'the seed is the mapped domain profile');
   assert.equal(await readUserProfile('404'), PROFILE_MISSING);
-  assert.equal(
-    await readUserProfile('500'),
-    null,
-    'a fault is left to the client read, and not retained',
-  );
+  assert.equal(await readUserProfile('500'), null, 'a fault is left to the client read, and not retained');
   assert.equal(await readUserProfile('7&x=1'), PROFILE_MISSING);
   assert.deepEqual(asked, ['7', '404', '500'], 'an impossible id is never sent');
 });
@@ -450,9 +415,7 @@ test('the profile reads forward their AbortSignal through their real adapters', 
     let signal;
     globalThis.fetch = async (_, init) => {
       signal = init?.signal;
-      return new Promise((_, reject) =>
-        signal?.addEventListener('abort', () => reject(signal.reason), { once: true }),
-      );
+      return new Promise((_, reject) => signal?.addEventListener('abort', () => reject(signal.reason), { once: true }));
     };
     const pending = resource.read(args, { priority: 'background' });
     await tick();
@@ -486,10 +449,7 @@ test('BadgeEquipDialog updates sessionUser cache after equipping badges', async 
   const vm = await import('node:vm');
   const ts = (await import('typescript')).default;
   const code = ts.transpileModule(
-    readFileSync(
-      path.resolve(import.meta.dirname, '..', 'components/BadgeEquipDialog.tsx'),
-      'utf8',
-    ),
+    readFileSync(path.resolve(import.meta.dirname, '..', 'components/BadgeEquipDialog.tsx'), 'utf8'),
     {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
@@ -607,14 +567,8 @@ test('BadgeEquipDialog updates sessionUser cache after equipping badges', async 
   const saveBtn = findAll(tree, (n) => n.type === 'Button' && n.props?.variant === 'filled')[0];
   await saveBtn.props.onClick();
   const plain = (value) => JSON.parse(JSON.stringify(value));
-  assert.deepEqual(plain(written.sessionUser.user.equipped_badges), [
-    { id: 1, name: '星辰', color: '#6750a4' },
-  ]);
-  assert.deepEqual(plain(written.userProfile.equipped_badges), [
-    { id: 1, name: '星辰', color: '#6750a4' },
-  ]);
-  assert.deepEqual(plain(written.userInfo.equipped_badges), [
-    { id: 1, name: '星辰', color: '#6750a4' },
-  ]);
+  assert.deepEqual(plain(written.sessionUser.user.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
+  assert.deepEqual(plain(written.userProfile.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
+  assert.deepEqual(plain(written.userInfo.equipped_badges), [{ id: 1, name: '星辰', color: '#6750a4' }]);
   assert.equal(written.tasksExpired, true);
 });

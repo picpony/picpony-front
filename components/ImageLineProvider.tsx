@@ -29,13 +29,7 @@ const ImageLineContext = createContext<ImageLine | null>(null);
  * handing out a line that may have been taken out of the running mid-session.
  * One state flip after mount fixes it.
  */
-export function ImageLineProvider({
-  value,
-  children,
-}: {
-  value: ImageLine | null;
-  children: ReactNode;
-}) {
+export function ImageLineProvider({ value, children }: { value: ImageLine | null; children: ReactNode }) {
   const [line, setLine] = useState<ImageLine | null>(value);
   useEffect(() => {
     /* Out of the effect body: `react-hooks/set-state-in-effect` rejects a synchronous setState
@@ -53,13 +47,7 @@ export function ImageLineProvider({
  * hydrating pass; a spoiler cover has no ladder — `lib/spoilers.ts` answers from
  * `localStorage` once hydrated — and the hydrating render of every cover reads this.
  */
-export function SpoilerTagsProvider({
-  value,
-  children,
-}: {
-  value: readonly string[];
-  children: ReactNode;
-}) {
+export function SpoilerTagsProvider({ value, children }: { value: readonly string[]; children: ReactNode }) {
   return <SpoilerTagsContext.Provider value={value}>{children}</SpoilerTagsContext.Provider>;
 }
 

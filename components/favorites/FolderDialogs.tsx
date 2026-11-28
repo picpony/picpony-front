@@ -275,9 +275,7 @@ export function TransferDialog({
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const verb = mode === 'move' ? '移动' : '复制';
-  const validTargets = folders
-    .filter((folder) => targets.has(folder.id))
-    .map((folder) => folder.id);
+  const validTargets = folders.filter((folder) => targets.has(folder.id)).map((folder) => folder.id);
 
   const close = () => {
     if (busy || creating) return;
@@ -326,19 +324,9 @@ export function TransferDialog({
       }
     >
       {error ? (
-        <ErrorRetry
-          size="inline"
-          title="收藏夹加载失败"
-          message={apiErrorMessage(error)}
-          onRetry={onRetry}
-        />
+        <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
       ) : loading ? (
-        <PageLoadingIndicator
-          size="inline"
-          indicatorSize="md"
-          label="正在加载收藏夹…"
-          className="min-h-32"
-        />
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
       ) : folders.length === 0 ? (
         <EmptyState size="inline" title="暂无其他收藏夹" />
       ) : (
@@ -377,10 +365,7 @@ export function MergeDialog({
   const [busy, setBusy] = useState(false);
   /* Followed while the choice is being made; held once it is being carried out and for the exit. */
   if (open && !busy && folders !== offered) setFolders(offered);
-  const target =
-    chosen !== null && folders.some((folder) => folder.id === chosen)
-      ? chosen
-      : (folders[0]?.id ?? null);
+  const target = chosen !== null && folders.some((folder) => folder.id === chosen) ? chosen : (folders[0]?.id ?? null);
   const radioName = useId();
 
   const close = () => {
@@ -416,13 +401,7 @@ export function MergeDialog({
       <p className="mb-2 text-body-m text-on-surface-variant">
         选择要保留的收藏夹，其余 {others} 个收藏夹的图片将并入其中
       </p>
-      <FolderRadioList
-        folders={folders}
-        value={target}
-        onChange={setChosen}
-        name={radioName}
-        disabled={busy}
-      />
+      <FolderRadioList folders={folders} value={target} onChange={setChosen} name={radioName} disabled={busy} />
     </ChoiceSurface>
   );
 }
@@ -482,19 +461,9 @@ export function FolderChoiceDialog({
       }
     >
       {error ? (
-        <ErrorRetry
-          size="inline"
-          title="收藏夹加载失败"
-          message={apiErrorMessage(error)}
-          onRetry={onRetry}
-        />
+        <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
       ) : loading ? (
-        <PageLoadingIndicator
-          size="inline"
-          indicatorSize="md"
-          label="正在加载收藏夹…"
-          className="min-h-32"
-        />
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
       ) : (
         <FolderRadioList folders={folders} value={shown} onChange={setChosen} name={radioName} />
       )}

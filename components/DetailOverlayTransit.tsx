@@ -1,12 +1,7 @@
 'use client';
 
 import { Component, type ReactNode } from 'react';
-import {
-  captureDetailExit,
-  forgetDetailExit,
-  playDetailExit,
-  type DetailExitSnapshot,
-} from '@/lib/detailTransit';
+import { captureDetailExit, forgetDetailExit, playDetailExit, type DetailExitSnapshot } from '@/lib/detailTransit';
 import { getImageHeroRuntime, subscribeImageHeroRuntime } from '@/lib/hero/runtime';
 
 interface Props {

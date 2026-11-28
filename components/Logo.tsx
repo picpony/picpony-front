@@ -86,8 +86,7 @@ export const INTRO_LATEST_START_MS = 2500;
  * network — spent the deadline before the splash was on screen, and it was dismissed unplayed.
  */
 export function sinceFirstByte(): number {
-  const entry = performance.getEntriesByType('navigation')[0] as
-    PerformanceNavigationTiming | undefined;
+  const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
   return performance.now() - (entry?.responseStart || 0);
 }
 
@@ -149,8 +148,7 @@ export default function Logo({
   /** The player for `kind`, created on demand; null when the tier or the node says no. */
   const ensure = useCallback(
     async (kind: TraceKind) => {
-      if (motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard' || !hostRef.current)
-        return null;
+      if (motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard' || !hostRef.current) return null;
       if (animationRef.current?.kind === kind) return animationRef.current.animation;
       const generation = generationRef.current;
       const [player, data] = await loadTrace(kind);
@@ -171,10 +169,7 @@ export default function Logo({
         autoplay: false,
         animationData: data as object,
       }) as unknown as TraceAnimation;
-      animation.setSpeed(
-        (kind === 'intro' ? INTRO_SPEED : 1) /
-          motionScale(kind === 'intro' ? 'entrance' : 'ambient'),
-      );
+      animation.setSpeed((kind === 'intro' ? INTRO_SPEED : 1) / motionScale(kind === 'intro' ? 'entrance' : 'ambient'));
       animationRef.current = { kind, animation };
       return animation;
     },
@@ -200,8 +195,7 @@ export default function Logo({
     const loaded = animationRef.current;
     if (loaded && motionTier(loaded.kind === 'intro' ? 'entrance' : 'ambient') === 'standard') {
       loaded.animation.setSpeed(
-        (loaded.kind === 'intro' ? INTRO_SPEED : 1) /
-          motionScale(loaded.kind === 'intro' ? 'entrance' : 'ambient'),
+        (loaded.kind === 'intro' ? INTRO_SPEED : 1) / motionScale(loaded.kind === 'intro' ? 'entrance' : 'ambient'),
       );
     }
   }, [speed, tier]);
@@ -310,13 +304,7 @@ export default function Logo({
       onBlur={interactive ? onLeave : undefined}
     >
       <span role="img" aria-label="PicPony" className={cn('logo-mask', className)} />
-      {traced && (
-        <span
-          ref={hostRef}
-          aria-hidden="true"
-          className={cn('logo-trace', keyline && 'logo-keyline')}
-        />
-      )}
+      {traced && <span ref={hostRef} aria-hidden="true" className={cn('logo-trace', keyline && 'logo-keyline')} />}
     </span>
   );
 }

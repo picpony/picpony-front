@@ -29,15 +29,7 @@ import {
  * press hands the row's rectangle to the thread's container transform (`rememberForumOrigin`),
  * so a post opened from a profile grows out of its row as it does from the forum.
  */
-export default function PostsPane({
-  profile,
-  id,
-  own,
-  ready,
-  active,
-  token,
-  now,
-}: ProfilePaneProps) {
+export default function PostsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:posts', id, 1);
   const visible = tabVisible(profile, 'posts', own);
@@ -76,12 +68,7 @@ export default function PostsPane({
           />
         </div>
       )}
-      <div
-        className={cn(
-          'transition-opacity spring-default-effects',
-          read.isLoading ? 'paging-dim' : 'opacity-100',
-        )}
-      >
+      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
         {data.posts.map((post) => (
           <Link
             scroll={false}
@@ -94,13 +81,7 @@ export default function PostsPane({
             <div className="flex items-start gap-3">
               {post.cover_image ? (
                 <div className="relative size-14 shrink-0 overflow-hidden rounded-sm bg-surface-container-highest">
-                  <FadeInImage
-                    src={getAssetUrl(post.cover_image)}
-                    alt=""
-                    fill
-                    sizes="56px"
-                    className="object-cover"
-                  />
+                  <FadeInImage src={getAssetUrl(post.cover_image)} alt="" fill sizes="56px" className="object-cover" />
                 </div>
               ) : null}
               <div className="min-w-0 flex-1">
@@ -108,9 +89,7 @@ export default function PostsPane({
                   {post.title}
                 </h3>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label-m text-on-surface-variant">
-                  <span className="tabular-nums">
-                    {formatCompactDateTime(post.created_at, now)}
-                  </span>
+                  <span className="tabular-nums">{formatCompactDateTime(post.created_at, now)}</span>
                   <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                     <MdComment size={ICON.dense} aria-hidden="true" />
                     <span className="sr-only">回复数</span>

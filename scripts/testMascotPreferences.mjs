@@ -18,10 +18,9 @@ function fixture(initial = {}) {
     legacyMascotId: 'picpony_selected_mascot_id',
     legacyMascotSize: 'picpony_mascot_size',
   };
-  const source = ts.transpileModule(
-    readFileSync(new URL('../lib/mascot/settings.ts', import.meta.url), 'utf8'),
-    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
-  ).outputText;
+  const source = ts.transpileModule(readFileSync(new URL('../lib/mascot/settings.ts', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
   vm.runInNewContext(source, {
     exports,
     window: {},
@@ -30,10 +29,8 @@ function fixture(initial = {}) {
       setItem: (key, value) => values.set(key, value),
     },
     require(name) {
-      if (name === '@/lib/constants')
-        return { LS_KEYS: keys, COOKIE_KEYS: { entranceMotion: 'entranceMotion' } };
-      if (name === '@/lib/appearance')
-        return { commitEntranceMode: (mode) => values.set(keys.entranceMotion, mode) };
+      if (name === '@/lib/constants') return { LS_KEYS: keys, COOKIE_KEYS: { entranceMotion: 'entranceMotion' } };
+      if (name === '@/lib/appearance') return { commitEntranceMode: (mode) => values.set(keys.entranceMotion, mode) };
       throw Error(`Unexpected import: ${name}`);
     },
   });
@@ -74,30 +71,15 @@ test('the account keeps the original boolean and adds whether the entrance block
      comparison would refuse. */
   const entry = fixture().entry('introAnimation');
   assert.deepEqual([...entry.cloudKeys], ['introAnimationEnabled', 'introAnimationBlocking']);
-  assert.deepEqual(
-    { ...entry.toCloud('blocking') },
-    { introAnimationEnabled: true, introAnimationBlocking: true },
-  );
+  assert.deepEqual({ ...entry.toCloud('blocking') }, { introAnimationEnabled: true, introAnimationBlocking: true });
   assert.deepEqual(
     { ...entry.toCloud('non-blocking') },
     { introAnimationEnabled: true, introAnimationBlocking: false },
   );
-  assert.deepEqual(
-    { ...entry.toCloud('off') },
-    { introAnimationEnabled: false, introAnimationBlocking: false },
-  );
-  assert.equal(
-    entry.fromCloud({ introAnimationEnabled: false, introAnimationBlocking: true }),
-    'off',
-  );
-  assert.equal(
-    entry.fromCloud({ introAnimationEnabled: true, introAnimationBlocking: true }),
-    'blocking',
-  );
-  assert.equal(
-    entry.fromCloud({ introAnimationEnabled: 'true', introAnimationBlocking: false }),
-    'non-blocking',
-  );
+  assert.deepEqual({ ...entry.toCloud('off') }, { introAnimationEnabled: false, introAnimationBlocking: false });
+  assert.equal(entry.fromCloud({ introAnimationEnabled: false, introAnimationBlocking: true }), 'off');
+  assert.equal(entry.fromCloud({ introAnimationEnabled: true, introAnimationBlocking: true }), 'blocking');
+  assert.equal(entry.fromCloud({ introAnimationEnabled: 'true', introAnimationBlocking: false }), 'non-blocking');
   assert.equal(entry.fromCloud({}), undefined);
   /* The original front end says that it plays and not how: this device's mode stands, unless the
      device had it off. */
@@ -119,8 +101,5 @@ test('legacy mascot id and size migrate without overriding valid current choices
   assert.equal(f.entry('mascotSizeDesktop').read(), 'large');
   assert.equal(f.entry('mascotSizeMobile').read(), 'small');
   assert.equal(f.entry('mascotSizeMobile').fromCloud({ mascotSize: 'xlarge' }), 'xlarge');
-  assert.equal(
-    f.entry('mascotSizeMobile').fromCloud({ mascotSize: 'xlarge', mascotSizeMobile: 'medium' }),
-    'medium',
-  );
+  assert.equal(f.entry('mascotSizeMobile').fromCloud({ mascotSize: 'xlarge', mascotSizeMobile: 'medium' }), 'medium');
 });

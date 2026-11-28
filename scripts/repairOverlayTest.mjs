@@ -105,16 +105,14 @@ function resolve(specifier, parent) {
       ? path.resolve(path.dirname(parent), specifier)
       : null;
   if (!file) throw new Error(`Unmapped dependency ${specifier} from ${parent}`);
-  if (!path.extname(file))
-    file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
+  if (!path.extname(file)) file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
   if (!file || !existsSync(file)) throw new Error(`Missing dependency ${specifier}`);
   return file;
 }
 function bundle(id, source) {
   if (modules.has(id)) return;
   modules.set(id, '');
-  let code =
-    source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
+  let code = source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
   if (source !== undefined || /\.tsx?$/.test(id))
     code = ts.transpileModule(code, {
       compilerOptions: {
@@ -134,14 +132,12 @@ function bundle(id, source) {
 bundle('entry', entry);
 const js = `(()=>{const process={env:{NODE_ENV:'production'}};const modules={${[...modules].map(([id, code]) => `${JSON.stringify(id)}:(module,exports,require)=>{${code}\n}`).join(',')}};const cache={};function require(id){if(cache[id])return cache[id].exports;const m={exports:{}};cache[id]=m;modules[id](m,m.exports,require);return m.exports;}require('entry')})();`;
 const server = createServer((req, res) => {
-  if (req.url === '/app.js')
-    return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
+  if (req.url === '/app.js') return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
   if (req.url === '/editor.js')
     return void res
       .writeHead(200, { 'content-type': 'text/javascript' })
       .end(readFileSync(path.join(root, 'node_modules/@wangeditor/editor/dist/index.js')));
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    .end(`<!doctype html><html><body><style>
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><html><body><style>
     :root{--z-dialog:100;--z-popover:200}body{font-family:sans-serif}button{padding:10px;margin:3px}.fixed{position:fixed}.inset-0{inset:0}.z-dialog{z-index:100}.z-popover{z-index:200}.bg-scrim-veil{background:#8888}[role=dialog]{background:white;padding:20px;max-width:500px;margin:20px}.cursor-grab,.cursor-grabbing{width:50px;height:40px;border:1px solid;position:relative}.max-w-78{width:310px}img{width:310px;height:155px}.relative{position:relative}
     </style><div id="root"></div><script src="/app.js"></script></body></html>`);
 });

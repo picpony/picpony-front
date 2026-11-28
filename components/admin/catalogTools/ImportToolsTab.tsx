@@ -38,11 +38,7 @@ export default function ImportToolsTab({ token }: AdminPanelProps) {
   const { confirmThen, confirmDialog } = useConfirm();
   return (
     <div className="@container space-y-6">
-      <SectionHeader
-        section="data-import"
-        onRefresh={translation.refresh}
-        isLoading={translation.refreshing}
-      />
+      <SectionHeader section="data-import" onRefresh={translation.refresh} isLoading={translation.refreshing} />
       {translation.error && (
         <ErrorRetry
           size="inline"
@@ -51,20 +47,12 @@ export default function ImportToolsTab({ token }: AdminPanelProps) {
         />
       )}
       {(counts || !translation.error) && (
-        <dl
-          role="status"
-          aria-label="翻译队列状态"
-          className="grid grid-cols-2 gap-3 @md:grid-cols-4"
-        >
+        <dl role="status" aria-label="翻译队列状态" className="grid grid-cols-2 gap-3 @md:grid-cols-4">
           {QUEUE_METRICS.map(({ key, label }, index) => (
             <Card key={key} variant="filled" padding="sm" className="space-y-1">
               <dt className="text-body-s text-on-surface-variant">{label}</dt>
               <dd className="text-title-l tabular-nums text-on-surface">
-                {counts ? (
-                  formatCount(counts[key])
-                ) : (
-                  <Skeleton className="h-7 w-16" delay={index * 40} />
-                )}
+                {counts ? formatCount(counts[key]) : <Skeleton className="h-7 w-16" delay={index * 40} />}
               </dd>
             </Card>
           ))}

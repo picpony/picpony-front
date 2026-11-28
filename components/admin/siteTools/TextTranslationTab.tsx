@@ -18,11 +18,7 @@ function TextTranslationTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(textTranslationQuery, token);
   return (
     <div className="space-y-6">
-      <SectionHeader
-        section="text-translation"
-        onRefresh={read.refresh}
-        isLoading={read.refreshing}
-      />
+      <SectionHeader section="text-translation" onRefresh={read.refresh} isLoading={read.refreshing} />
       <ReadState
         title="文本翻译设置加载失败"
         loading={read.loading}
@@ -43,9 +39,7 @@ function TextTranslationTab({ token }: AdminPanelProps) {
             }
           >
             <AdminNote>
-              {read.data.hasKey
-                ? `已保存密钥（${read.data.masked}），留空即可保留。`
-                : '尚未保存密钥。'}
+              {read.data.hasKey ? `已保存密钥（${read.data.masked}），留空即可保留。` : '尚未保存密钥。'}
             </AdminNote>
           </ConfigEditor>
         )}

@@ -46,11 +46,7 @@ function load(file, imports) {
   const module = { exports: {} };
   const resolve = (specifier) => {
     if (specifier in imports) return imports[specifier];
-    if (
-      specifier === 'react' ||
-      specifier.startsWith('react/') ||
-      specifier.startsWith('react-compiler-runtime')
-    ) {
+    if (specifier === 'react' || specifier.startsWith('react/') || specifier.startsWith('react-compiler-runtime')) {
       return require(specifier);
     }
     throw new Error(`${file} imports ${specifier}, which this test does not provide`);
@@ -97,19 +93,13 @@ test('in the page column the route fallback is the M3E loading indicator, announ
 });
 
 test('inside the picture slot the route fallback renders nothing at all', () => {
-  const html = renderToStaticMarkup(
-    React.createElement(slot.ImageDetailSlot, null, React.createElement(Loading)),
-  );
+  const html = renderToStaticMarkup(React.createElement(slot.ImageDetailSlot, null, React.createElement(Loading)));
   assert.equal(html, '', 'no silhouette, no status, no footer hold');
 });
 
 test('the slot boundary adds no element of its own and passes its content through', () => {
   const html = renderToStaticMarkup(
-    React.createElement(
-      slot.ImageDetailSlot,
-      null,
-      React.createElement('section', { id: 'detail' }, 'picture'),
-    ),
+    React.createElement(slot.ImageDetailSlot, null, React.createElement('section', { id: 'detail' }, 'picture')),
   );
   assert.equal(html, '<section id="detail">picture</section>');
 });
@@ -117,17 +107,12 @@ test('the slot boundary adds no element of its own and passes its content throug
 test('the boundary reaches the fallback however deep Next nests it', () => {
   /* Next renders the fallback several components below the slot element (the layout router, its
      error and loading boundaries); context crosses all of them. */
-  const Wrapper = ({ children }) =>
-    React.createElement(React.Fragment, null, React.createElement('i', null, children));
+  const Wrapper = ({ children }) => React.createElement(React.Fragment, null, React.createElement('i', null, children));
   const html = renderToStaticMarkup(
     React.createElement(
       slot.ImageDetailSlot,
       null,
-      React.createElement(
-        Wrapper,
-        null,
-        React.createElement(Wrapper, null, React.createElement(Loading)),
-      ),
+      React.createElement(Wrapper, null, React.createElement(Wrapper, null, React.createElement(Loading))),
     ),
   );
   assert.equal(html, '<i><i></i></i>');
@@ -136,13 +121,7 @@ test('the boundary reaches the fallback however deep Next nests it', () => {
 /* The shell's wiring, read from its syntax tree: the `@imageDetail` slot (the `overlay` prop) is
    rendered inside `ImageDetailSlot`, and the page (`children`) is not. */
 const shellSource = readFileSync(path.join(ROOT, 'components/AppLayout.tsx'), 'utf8');
-const shell = ts.createSourceFile(
-  'AppLayout.tsx',
-  shellSource,
-  ts.ScriptTarget.Latest,
-  true,
-  ts.ScriptKind.TSX,
-);
+const shell = ts.createSourceFile('AppLayout.tsx', shellSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
 function jsxExpressions(name) {
   const found = [];

@@ -24,11 +24,8 @@ export function isWithheldBy(
   settings: QuerySettings,
   filters: BlockFilters,
 ): boolean {
-  const own = new Set(
-    (tags ?? []).filter((t) => typeof t === 'string').map((t) => t.trim().toLowerCase()),
-  );
-  for (const tag of excludedTagsFrom(settings, filters))
-    if (own.has(tag.trim().toLowerCase())) return true;
+  const own = new Set((tags ?? []).filter((t) => typeof t === 'string').map((t) => t.trim().toLowerCase()));
+  for (const tag of excludedTagsFrom(settings, filters)) if (own.has(tag.trim().toLowerCase())) return true;
   if (settings.onlyPony && filters.onlyPony.length > 0) {
     return !filters.onlyPony.some((tag) => own.has(tag));
   }

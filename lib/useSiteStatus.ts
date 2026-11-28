@@ -1,11 +1,7 @@
 'use client';
 
 import { useMemo, useSyncExternalStore } from 'react';
-import {
-  getSavedSiteStatus,
-  getServerSiteStatus,
-  subscribeSavedSiteStatus,
-} from '@/lib/siteStatus';
+import { getSavedSiteStatus, getServerSiteStatus, subscribeSavedSiteStatus } from '@/lib/siteStatus';
 import type { SemanticSearchConfig } from '@/lib/semanticConfig';
 
 function useSavedStatus() {

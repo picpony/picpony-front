@@ -43,13 +43,7 @@ const TABS: { value: ProfileTab; label: string }[] = [
  * The id comes from the route's own props, never `useParams()`: the intercepted image route also
  * has an `id`, and the background page must keep its own while the foreground changes.
  */
-export default function ProfileContent({
-  id,
-  profileSeed,
-}: {
-  id: string;
-  profileSeed: ProfileSeed | null;
-}) {
+export default function ProfileContent({ id, profileSeed }: { id: string; profileSeed: ProfileSeed | null }) {
   const { user, token, ready } = useSession();
   const clock = useNow();
   const now = clock ?? profileSeed?.generatedAt ?? null;
@@ -86,11 +80,7 @@ export default function ProfileContent({
   if (profileRead.data === null) return <ProfileMissing />;
 
   const sessionId = Number(user?.id);
-  const own =
-    ready &&
-    profile !== undefined &&
-    Number.isSafeInteger(sessionId) &&
-    sessionId === Number(profile.id);
+  const own = ready && profile !== undefined && Number.isSafeInteger(sessionId) && sessionId === Number(profile.id);
   const canMessage = ready && profile !== undefined && user !== null && !own;
   /* The default tab stays on public data, so the server and every viewer choose the same one. */
   const tab = pickedTab ?? (profile ? defaultProfileTab(profile) : 'uploads');
@@ -177,24 +167,13 @@ export default function ProfileContent({
             /* Tabs depend on the profile and viewer's permissions; wait with one centred
                indicator under the fixed profile header until the record confirms the layout. */
             <div className="mt-8">
-              <PageLoadingIndicator
-                size="pane"
-                indicatorSize="lg"
-                holdFooter
-                label="正在加载用户内容…"
-              />
+              <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载用户内容…" />
             </div>
           )}
         </div>
       </div>
       {own && token && profile && now !== null && (
-        <BadgeEquipDialog
-          open={equipOpen}
-          onClose={() => setEquipOpen(false)}
-          token={token}
-          profileId={id}
-          now={now}
-        />
+        <BadgeEquipDialog open={equipOpen} onClose={() => setEquipOpen(false)} token={token} profileId={id} now={now} />
       )}
     </>
   );

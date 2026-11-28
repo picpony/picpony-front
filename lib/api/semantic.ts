@@ -117,10 +117,7 @@ export async function semanticSearch(
             ai_context: {
               query_mode: aiContext.queryMode,
               query_source: aiContext.querySource,
-              current_query:
-                aiContext.queryMode === 'refine'
-                  ? (aiContext.currentQuery ?? '').slice(0, 300)
-                  : '',
+              current_query: aiContext.queryMode === 'refine' ? (aiContext.currentQuery ?? '').slice(0, 300) : '',
             },
           }
         : {}),
@@ -156,10 +153,7 @@ export interface SemanticParse {
 /** The search screen's reading of `semanticSearch`: "not available" is an answer, not an error. */
 export async function parseSemanticQuery(
   query: string,
-  {
-    signal,
-    timeoutMs = DEFAULT_SEMANTIC_TIMEOUT_MS,
-  }: { signal?: AbortSignal; timeoutMs?: number } = {},
+  { signal, timeoutMs = DEFAULT_SEMANTIC_TIMEOUT_MS }: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<SemanticParse> {
   try {
     const result = await semanticSearch(query, { signal, timeoutMs });
@@ -233,12 +227,7 @@ export async function submitSemanticFeedback(
 // ---------------------------------------------------------------------------
 
 export type QuickTagGroup = 'rating' | 'species' | 'character' | 'general';
-export const QUICK_TAG_GROUPS: readonly QuickTagGroup[] = [
-  'rating',
-  'species',
-  'character',
-  'general',
-];
+export const QUICK_TAG_GROUPS: readonly QuickTagGroup[] = ['rating', 'species', 'character', 'general'];
 
 export interface QuickTag {
   /** The Derpibooru tag. */
@@ -261,23 +250,14 @@ interface QuickTagRow {
  * five most searched entries. The dictionary may hold the same English tag twice (legacy rows are
  * kept, not merged), so a group is still de-duplicated by tag.
  */
-export async function getQuickTags(
-  signal?: AbortSignal,
-): Promise<Record<QuickTagGroup, QuickTag[]>> {
-  const data = await api<{ tags: Record<QuickTagGroup, QuickTagRow[]> }>(
-    'GET',
-    '/dictionary/quick-tags',
-    { signal },
-  );
+export async function getQuickTags(signal?: AbortSignal): Promise<Record<QuickTagGroup, QuickTag[]>> {
+  const data = await api<{ tags: Record<QuickTagGroup, QuickTagRow[]> }>('GET', '/dictionary/quick-tags', { signal });
   const out = {} as Record<QuickTagGroup, QuickTag[]>;
   for (const group of QUICK_TAG_GROUPS) {
     const seen = new Set<string>();
     out[group] = data.tags[group]
       .map((row) => ({ en: row.en.trim(), cn: chineseName(row.cn) }))
-      .filter(
-        (row) =>
-          row.en && !seen.has(row.en.toLowerCase()) && Boolean(seen.add(row.en.toLowerCase())),
-      );
+      .filter((row) => row.en && !seen.has(row.en.toLowerCase()) && Boolean(seen.add(row.en.toLowerCase())));
   }
   return out;
 }
@@ -347,10 +327,9 @@ function suggestionRows(rows: readonly DictionaryRow[], typed = ''): TagSuggesti
       id: row.id,
       en,
       cn: pickChineseName(cn, typed),
-      aliases: [
-        ...splitNames(cn),
-        ...row.aliases.map((alias) => alias.trim()).filter(Boolean),
-      ].filter((name, index, all) => all.indexOf(name) === index),
+      aliases: [...splitNames(cn), ...row.aliases.map((alias) => alias.trim()).filter(Boolean)].filter(
+        (name, index, all) => all.indexOf(name) === index,
+      ),
       category: row.category,
       count: row.search_count,
       description: row.description,
@@ -384,10 +363,7 @@ export async function suggestTags(keyword: string, signal?: AbortSignal): Promis
 export async function lookupTag(tag: string, signal?: AbortSignal): Promise<TagSuggestion | null> {
   const data = await dictionarySuggest(tag, 5, signal);
   const wanted = tag.trim().toLowerCase();
-  return (
-    suggestionRows(data.tags).find((row) => row.en.toLowerCase() === wanted && !row.sensitive) ??
-    null
-  );
+  return suggestionRows(data.tags).find((row) => row.en.toLowerCase() === wanted && !row.sensitive) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,8 +401,7 @@ export async function searchImageByUrl(
       signal,
     });
     data = await response.json().then(
-      (value: unknown) =>
-        value && typeof value === 'object' ? (value as Record<string, unknown>) : {},
+      (value: unknown) => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {}),
       () => ({}),
     );
   } catch (error) {
@@ -434,13 +409,10 @@ export async function searchImageByUrl(
     throw toApiError(error);
   }
   const serviceMessage = typeof data.error === 'string' ? data.error : undefined;
-  if (!response.ok)
-    throw new ApiError('http', { status: response.status, serverMessage: serviceMessage });
+  if (!response.ok) throw new ApiError('http', { status: response.status, serverMessage: serviceMessage });
   if (data.success === false) throw new ApiError('envelope', { serverMessage: serviceMessage });
   const suggested =
-    typeof data.searchQuery === 'string' && data.searchQuery.trim()
-      ? data.searchQuery.trim()
-      : undefined;
+    typeof data.searchQuery === 'string' && data.searchQuery.trim() ? data.searchQuery.trim() : undefined;
   if (!Array.isArray(data.images) && !suggested) throw new ApiError('invalid');
   const images = (Array.isArray(data.images) ? (data.images as PonyImage[]) : [])
     .filter((image) => image && typeof image === 'object' && Number.isFinite(Number(image.id)))

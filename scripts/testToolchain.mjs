@@ -55,10 +55,9 @@ test('a React lint rule still honours glob exceptions without hiding real violat
       rules: { 'react/jsx-pascal-case': ['error', { ignore: ['Ignored_*'] }] },
     },
   });
-  const [result] = await eslint.lintText(
-    'const allowed = <Ignored_name />; const rejected = <Broken_name />;',
-    { filePath: 'toolchain-fixture.jsx' },
-  );
+  const [result] = await eslint.lintText('const allowed = <Ignored_name />; const rejected = <Broken_name />;', {
+    filePath: 'toolchain-fixture.jsx',
+  });
   assert.equal(result.errorCount, 1);
   assert.equal(result.messages[0].ruleId, 'react/jsx-pascal-case');
   assert.match(result.messages[0].message, /Broken_name/);

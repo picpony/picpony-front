@@ -52,9 +52,7 @@ export function derpiMarkdown(body: string | null | undefined): string {
  * A link that names a comment on Derpibooru (`…/images/232093#comment_10184427`, absolute or
  * not): its picture and comment ids, so a click can scroll to it when it is on screen here.
  */
-export function derpiCommentTarget(
-  href: string | null | undefined,
-): { imageId: number; commentId: number } | null {
+export function derpiCommentTarget(href: string | null | undefined): { imageId: number; commentId: number } | null {
   if (!href) return null;
   const match =
     /^(?:https?:\/\/(?:www\.)?(?:derpibooru\.org|trixiebooru\.org))?\/(?:images\/)?(\d+)#comment_(\d+)$/i.exec(
@@ -97,10 +95,7 @@ function stripBbcode(text: string, keepQuotes: boolean): string {
  */
 export function plainTextOf(
   body: string | null | undefined,
-  {
-    max = Number.POSITIVE_INFINITY,
-    keepQuotes = true,
-  }: { max?: number; keepQuotes?: boolean } = {},
+  { max = Number.POSITIVE_INFINITY, keepQuotes = true }: { max?: number; keepQuotes?: boolean } = {},
 ): string {
   if (!body) return '';
   /* A picture reference survives the Markdown rules (which would read `>>` as a quote marker). */

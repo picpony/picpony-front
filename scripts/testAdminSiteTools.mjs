@@ -76,10 +76,7 @@ const provider = {
  * `{ method, path, options, write }` and answered by `reply(call, n)` (a value, or a throw).
  * `fetch` is only the Derpibooru reads and the line probes, which bypass the backend.
  */
-function fixture(
-  reply = () => ({}),
-  { fetchPayload = { total: 1 }, fetchStatus = 200, imageOk = true } = {},
-) {
+function fixture(reply = () => ({}), { fetchPayload = { total: 1 }, fetchStatus = 200, imageOk = true } = {}) {
   const calls = [];
   const fetches = [];
   const images = [];
@@ -101,8 +98,7 @@ function fixture(
     }),
     readObject: async (res) => {
       const data = await res.json();
-      if (!data || typeof data !== 'object' || Array.isArray(data))
-        throw new errors.ApiError('invalid');
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new errors.ApiError('invalid');
       return data;
     },
   };
@@ -141,10 +137,9 @@ function fixture(
     {
       fetch: async (url, options = {}) => {
         fetches.push({ url: String(url), options });
-        return Response.json(
-          typeof fetchPayload === 'function' ? fetchPayload(fetches.length) : fetchPayload,
-          { status: fetchStatus },
-        );
+        return Response.json(typeof fetchPayload === 'function' ? fetchPayload(fetches.length) : fetchPayload, {
+          status: fetchStatus,
+        });
       },
     },
     cache,
@@ -160,8 +155,7 @@ function fixture(
     },
   };
 }
-const refusal = (f, status, serverMessage = '权限不足') =>
-  new f.errors.ApiError('http', { status, serverMessage });
+const refusal = (f, status, serverMessage = '权限不足') => new f.errors.ApiError('http', { status, serverMessage });
 
 test('numeric settings reject blank, fractions, exponent notation and unsafe values; explicit zero survives', () => {
   for (const bad of ['', ' ', '2.5', '1e3', '-1', '9007199254740992'])
@@ -223,9 +217,7 @@ test('the route editors offer auto on both lines, and the candidates are dedupli
   assert.ok(model.apiRouteFields[0].options.some((o) => o.value === 'auto'));
   assert.ok(model.imageRouteFields[0].options.some((o) => o.value === 'auto'));
   assert.deepEqual(
-    plain(
-      model.routePayload({ policy: 'auto', third_party_urls: '', third_party_pass_api_key: false }),
-    ),
+    plain(model.routePayload({ policy: 'auto', third_party_urls: '', third_party_pass_api_key: false })),
     { policy: 'auto', third_party_urls: '', third_party_pass_api_key: false },
   );
   assert.equal(
@@ -248,11 +240,7 @@ test('accepted cloud timing shares the public rule, handles key clearing, and ca
   });
   assert.deepEqual(
     plain(
-      savedSemanticTiming(
-        { ...cloud, semantic_cloud_timeout_ms: '1000', semantic_cloud_clear_key: true },
-        {},
-        true,
-      ),
+      savedSemanticTiming({ ...cloud, semantic_cloud_timeout_ms: '1000', semantic_cloud_clear_key: true }, {}, true),
     ),
     { estimateMs: 7000, timeoutMs: 16000 },
   );
@@ -300,9 +288,7 @@ test('announcement preserves original HTML/newline contract and rejects incomple
 });
 test('config secrets never become form defaults, clear and replace are mutually exclusive', () => {
   assert.equal(model.providerValues({ ...provider, api_key: 'server-secret' }).api_key, '');
-  assert.throws(() =>
-    model.providerPayload({ ...provider, api_key: 'fixture-secret', clear_key: true }),
-  );
+  assert.throws(() => model.providerPayload({ ...provider, api_key: 'fixture-secret', clear_key: true }));
   assert.throws(() =>
     model.cloudPayload({
       ...cloud,
@@ -340,13 +326,7 @@ const mutations = [
     '/admin/semantic-search',
     { semantic_search_mode: 'qwen' },
   ],
-  [
-    'saveSemanticCloud',
-    [cloud],
-    'PUT',
-    '/admin/semantic-cloud',
-    { ...cloud, semantic_cloud_timeout_ms: 15000 },
-  ],
+  ['saveSemanticCloud', [cloud], 'PUT', '/admin/semantic-cloud', { ...cloud, semantic_cloud_timeout_ms: 15000 }],
   ['testSemanticCloud', [], 'POST', '/admin/semantic-cloud/tests', undefined],
   ['archiveFeedback', [7, false], 'PUT', '/admin/search/feedback/7/archive', { archived: false }],
   ['deleteFeedback', [[7, 8, 7]], 'POST', '/admin/search/feedback/deletions', { ids: [7, 8] }],
@@ -617,10 +597,7 @@ test('访问统计 joins registrations and visitors by day and keeps the 30-minu
   );
   const stats = await f.api.readStatistics('fixture-token');
   for (const call of f.calls) assert.deepEqual(plain(call.options.query), { days: 30 });
-  assert.deepEqual(f.calls.map((c) => c.path).sort(), [
-    '/admin/metrics/registrations',
-    '/admin/metrics/visitors',
-  ]);
+  assert.deepEqual(f.calls.map((c) => c.path).sort(), ['/admin/metrics/registrations', '/admin/metrics/visitors']);
   assert.deepEqual(plain(stats), {
     todayNewUsers: 4,
     onlineUsers: 3,
@@ -692,9 +669,7 @@ test('typed reads map the handler DTOs without fallbacks', async () => {
     temporary_locks: [{ id: 4, username: 'u', attempts: 5, locked_until: null }],
     server_time: 1,
   })).api.readRateLimits('fixture-token');
-  assert.deepEqual(plain(rates.rules), [
-    { action: 'search', label: 'search', max: '3', window: '60', key_type: 'ip' },
-  ]);
+  assert.deepEqual(plain(rates.rules), [{ action: 'search', label: 'search', max: '3', window: '60', key_type: 'ip' }]);
   assert.deepEqual(plain(rates.locks), [{ id: 4, username: 'u', attempts: 5, until: null }]);
 });
 test('model benchmarks accept fractional milliseconds and a failure carries its static code', async () => {
@@ -717,10 +692,7 @@ test('model benchmarks accept fractional milliseconds and a failure carries its 
   /* G2-003: a working model that did not report its duration is still a working model. */
   assert.equal(result.benchmarks.c.ok, true);
   assert.equal(result.benchmarks.c.latency, null);
-  assert.equal(
-    f.api.probeFailure({ code: 'MODEL_RATE_LIMIT', upstream_status: 429 }),
-    '模型服务限流（HTTP 429）',
-  );
+  assert.equal(f.api.probeFailure({ code: 'MODEL_RATE_LIMIT', upstream_status: 429 }), '模型服务限流（HTTP 429）');
   assert.equal(f.api.probeFailure({ code: 'SOMETHING_NEW' }), '检查失败（SOMETHING_NEW）');
 });
 test('a probe re-sends the same body while the backend says running, and ends on a refusal', async () => {
@@ -738,18 +710,11 @@ test('a probe re-sends the same body while the backend says running, and ends on
   });
   assert.equal(f.calls.length, 2);
   assert.equal(f.calls[0].path, '/admin/assistant/providers/p1/model-discoveries');
-  assert.deepEqual(
-    f.calls[0].options.json,
-    f.calls[1].options.json,
-    'the poll repeats the same request_id',
-  );
+  assert.deepEqual(f.calls[0].options.json, f.calls[1].options.json, 'the poll repeats the same request_id');
   const refused = fixture(() => {
     throw refusal(refused, 409, '配置已变化');
   });
-  await assert.rejects(
-    refused.api.probeProvider('fixture-token', 'p1', 7, 'benchmark', 'pony'),
-    /配置已变化/,
-  );
+  await assert.rejects(refused.api.probeProvider('fixture-token', 'p1', 7, 'benchmark', 'pony'), /配置已变化/);
   assert.equal(refused.calls.length, 1);
   assert.equal(refused.calls[0].options.json.model, 'pony');
 });
@@ -759,9 +724,7 @@ test('manual accelerator checks judge an image line by a decode and an API line 
      no `fetch` at all; the four API/site lines still report their HTTP status. */
   const f = fixture(undefined, { fetchStatus: 503 }),
     reports = [];
-  await f.api.checkServiceLines('fixture-token', new AbortController().signal, (row) =>
-    reports.push(row),
-  );
+  await f.api.checkServiceLines('fixture-token', new AbortController().signal, (row) => reports.push(row));
   assert.equal(reports.length, 7);
   assert.equal(f.images.length, 3, 'three image lines are decoded, not fetched');
   assert.ok(
@@ -773,17 +736,13 @@ test('manual accelerator checks judge an image line by a decode and an API line 
     reports.filter((r) => r.status === 'decoded').map((r) => r.name),
     ['图片加速服务器', '图片 CDN', '图片直连'],
   );
-  assert.ok(
-    reports.filter((r) => r.status !== 'decoded').every((r) => r.status === 503 && !r.error),
-  );
+  assert.ok(reports.filter((r) => r.status !== 'decoded').every((r) => r.status === 503 && !r.error));
   assert.ok(f.fetches.every((r) => r.options.credentials === 'omit' && r.options.signal));
   assert.equal(f.calls.length, 0, 'the probes never reach the backend');
 
   const failing = fixture(undefined, { imageOk: false }),
     failed = [];
-  await failing.api.checkServiceLines('fixture-token', new AbortController().signal, (row) =>
-    failed.push(row),
-  );
+  await failing.api.checkServiceLines('fixture-token', new AbortController().signal, (row) => failed.push(row));
   const image = failed.find((r) => r.name === '图片 CDN');
   assert.equal(image.status, null);
   assert.equal(image.error, '无法加载图片');
@@ -833,13 +792,8 @@ test('G2-005 / NEW-1: 最后请求 reads its unit from the magnitude — the sam
   /* The boundary: 1e11 seconds is the year 5138, 1e11 milliseconds is 1973. */
   assert.equal(model.epochStamp(99_999_999_999), 99_999_999_999_000);
   assert.equal(model.epochStamp(100_000_000_000), 100_000_000_000);
-  assert.equal(
-    model.epochStamp('2026-10-03 22:00:00'),
-    '2026-10-03 22:00:00',
-    'a formatted stamp is kept as text',
-  );
-  for (const bad of [null, undefined, '', '  ', -1, Number.NaN, {}])
-    assert.equal(model.epochStamp(bad), null);
+  assert.equal(model.epochStamp('2026-10-03 22:00:00'), '2026-10-03 22:00:00', 'a formatted stamp is kept as text');
+  for (const bad of [null, undefined, '', '  ', -1, Number.NaN, {}]) assert.equal(model.epochStamp(bad), null);
   for (const last_seen of [instant, instant / 1000]) {
     const f = fixture(() => ({
       stats: [{ ip: '1.2.3.4', username: '', total: 1, search: 0, normal: 1, last_seen }],
@@ -907,9 +861,7 @@ test('NEW-3: a relay error log answers its own availability; a missing upstream 
     })).api.readRelayErrors('fixture-token', { page: 1, date: '' }),
   );
   const invalid = fixture();
-  await assert.rejects(
-    invalid.api.readRelayErrors('fixture-token', { page: 1, date: '2026-02-30' }),
-  );
+  await assert.rejects(invalid.api.readRelayErrors('fixture-token', { page: 1, date: '2026-02-30' }));
   assert.equal(invalid.calls.length, 0, 'an impossible date is refused before any request');
 });
 test('G2-009: a write nobody heard the answer to is outcome-unknown, held without a retry; a refusal stays a refusal', async () => {
@@ -945,9 +897,7 @@ test('G2-009: a write nobody heard the answer to is outcome-unknown, held withou
   const f = fixture(() => {
     throw new TypeError('offline');
   });
-  const error = await f.api
-    .saveSemanticMode('fixture-token', { semantic_search_mode: 'off' })
-    .catch((e) => e);
+  const error = await f.api.saveSemanticMode('fixture-token', { semantic_search_mode: 'off' }).catch((e) => e);
   assert.equal(error.constructor.name, 'CatalogOutcomeUnknown');
 });
 test('G2-019: a view keeps its identity per answer, and a failure is remembered too', () => {

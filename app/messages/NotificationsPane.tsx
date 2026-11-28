@@ -102,13 +102,7 @@ export default function NotificationsPane({ token, type, active, unread }: Notif
     return <ListRowsSkeleton />;
   }
   if (data.notifications.length === 0 && page === 1) {
-    return (
-      <EmptyState
-        size="pane"
-        icon={<MdNotificationsNone size={ICON.display} />}
-        title={copy.empty}
-      />
-    );
+    return <EmptyState size="pane" icon={<MdNotificationsNone size={ICON.display} />} title={copy.empty} />;
   }
 
   return (
@@ -158,12 +152,7 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
     >
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         {/* The pane's first level under the page's heading: the tab is the section. */}
-        <h2
-          className={cn(
-            'text-title-m-emphasized min-w-0 wrap-anywhere',
-            !unread && 'text-on-surface',
-          )}
-        >
+        <h2 className={cn('text-title-m-emphasized min-w-0 wrap-anywhere', !unread && 'text-on-surface')}>
           {unread && <span className="sr-only">未读：</span>}
           {item.title}
         </h2>
@@ -172,9 +161,7 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
           title={formatDateTime(item.created_at)}
           className="text-body-s shrink-0 tabular-nums"
         >
-          {now === null
-            ? formatDateTime(item.created_at)
-            : formatRelativeTime(item.created_at, now)}
+          {now === null ? formatDateTime(item.created_at) : formatRelativeTime(item.created_at, now)}
         </time>
       </div>
       {/* The body is plain text with the backend's link markers: its line breaks are kept. */}

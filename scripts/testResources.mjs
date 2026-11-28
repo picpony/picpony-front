@@ -7,8 +7,7 @@ requireTypeStripping('testResources');
 const frames = [];
 globalThis.window = { requestAnimationFrame: (callback) => frames.push(callback) };
 globalThis.document = { visibilityState: 'visible', addEventListener() {} };
-const { defineResource, clearAllResources, expireAllResources } =
-  await import('../lib/resource.ts');
+const { defineResource, clearAllResources, expireAllResources } = await import('../lib/resource.ts');
 const tick = async () => {
   await new Promise((resolve) => setImmediate(resolve));
   while (frames.length) frames.shift()();
@@ -44,16 +43,8 @@ const deferred = () => {
   }
   expireAllResources();
   clearAllResources();
-  assert.equal(
-    expirations,
-    0,
-    'construction, pure peeks and a server seed never register a resource',
-  );
-  assert.equal(
-    unused.peek({}).data,
-    undefined,
-    'SSR must not put an account into a process-wide store',
-  );
+  assert.equal(expirations, 0, 'construction, pure peeks and a server seed never register a resource');
+  assert.equal(unused.peek({}).data, undefined, 'SSR must not put an account into a process-wide store');
 }
 
 // Every way a dormant resource gains data must participate in logout and global refresh.
@@ -206,11 +197,7 @@ unsubscribe();
   const reads = [1, 2, 3, 4, 5].map((id) => pages.read({ id: String(id) }));
   forum.read({ id: 'thread' }).catch(() => {});
   await tick();
-  assert.equal(
-    started.filter((name) => name === 'pages').length,
-    4,
-    'the Derpibooru lane caps at four',
-  );
+  assert.equal(started.filter((name) => name === 'pages').length, 4, 'the Derpibooru lane caps at four');
   assert.ok(started.includes('forum'), 'the PicPony lane is not blocked by it');
   clearAllResources();
   await Promise.allSettled(reads);
@@ -293,11 +280,7 @@ unsubscribe();
   list.write({ page: 2 }, ['old page two']);
   await tick();
   list.invalidate();
-  assert.deepEqual(
-    list.peek({ page: 1 }).data,
-    ['old'],
-    'the mounted page keeps its rows while re-read',
-  );
+  assert.deepEqual(list.peek({ page: 1 }).data, ['old'], 'the mounted page keeps its rows while re-read');
   list.write({ page: 1 }, []);
   await tick();
   assert.equal(fetches, 0, 'the write replaced the pending re-read before it was sent');
@@ -311,6 +294,4 @@ unsubscribe();
   clearAllResources();
 }
 
-console.log(
-  'Resource regressions passed: writes, refreshes, invalidation, races, account clear, lanes, release.',
-);
+console.log('Resource regressions passed: writes, refreshes, invalidation, races, account clear, lanes, release.');

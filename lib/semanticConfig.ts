@@ -27,10 +27,7 @@ export interface SemanticSearchSettings {
 export type SemanticTimingInput = Partial<
   Pick<
     SemanticSearchSettings,
-    | 'semantic_search_mode'
-    | 'semantic_cloud_enabled'
-    | 'semantic_cloud_has_key'
-    | 'semantic_cloud_timeout_ms'
+    'semantic_search_mode' | 'semantic_cloud_enabled' | 'semantic_cloud_has_key' | 'semantic_cloud_timeout_ms'
   >
 > & {
   semantic_search_estimate_ms?: number | null;

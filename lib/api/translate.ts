@@ -79,10 +79,7 @@ type QueueAnswer =
   | { status: 'not_found' };
 
 /** The two 503s that say the image translation cannot take work at all (switch off, line not migrated). */
-const UNAVAILABLE_CODES = new Set([
-  'IMAGE_TRANSLATION_DISABLED',
-  'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE',
-]);
+const UNAVAILABLE_CODES = new Set(['IMAGE_TRANSLATION_DISABLED', 'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE']);
 
 /** The finished file is served by the backend under `/api/v1/translation/files/…`: through the
     same-origin proxy, like every other `/api/v1` read. */

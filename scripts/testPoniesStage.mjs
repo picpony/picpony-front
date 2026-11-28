@@ -7,10 +7,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
 
-const SOURCE = readFileSync(
-  new URL('../public/companions/ponies-frame.js', import.meta.url),
-  'utf8',
-);
+const SOURCE = readFileSync(new URL('../public/companions/ponies-frame.js', import.meta.url), 'utf8');
 const CHANNEL = 'test-channel';
 
 /** One frame document: the script, a stand-in engine with one instance per spawned pony, and the
@@ -38,8 +35,7 @@ function frameDocument(viewport = { width: 1440, height: 900 }) {
     document: { documentElement: { style: { setProperty() {} } } },
     requestAnimationFrame: () => 1,
     cancelAnimationFrame() {},
-    addEventListener: (type, listener) =>
-      listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+    addEventListener: (type, listener) => listeners.set(type, [...(listeners.get(type) ?? []), listener]),
   };
   context.window = context;
   context.parent = { postMessage: (data) => told.push(data) };
@@ -74,10 +70,7 @@ function frameDocument(viewport = { width: 1440, height: 900 }) {
       size: () => ({ width: box.width, height: box.height }),
       position: () => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 }),
       isOffscreen: () =>
-        box.x < 0 ||
-        box.y < 0 ||
-        box.x + box.width > context.innerWidth ||
-        box.y + box.height > context.innerHeight,
+        box.x < 0 || box.y < 0 || box.x + box.width > context.innerWidth || box.y + box.height > context.innerHeight,
       nextBehavior: () => calls.push(['next', name]),
     };
     instances.set(name, instance);
@@ -87,9 +80,7 @@ function frameDocument(viewport = { width: 1440, height: 900 }) {
       for (const name of Object.keys(config.spawn ?? {})) spawn(name);
     },
     ponies: () =>
-      Object.fromEntries(
-        [...instances].map(([name, instance]) => [name.toLowerCase(), { instances: [instance] }]),
-      ),
+      Object.fromEntries([...instances].map(([name, instance]) => [name.toLowerCase(), { instances: [instance] }])),
     start: () => calls.push(['start']),
     pause: () => calls.push(['pause']),
     resume: () => calls.push(['resume']),
@@ -117,11 +108,7 @@ const configs = (...names) =>
 
 test('the engine measures the frame itself until a stage is sent, and the stage from then on', () => {
   const frame = frameDocument();
-  assert.deepEqual(
-    frame.measured(),
-    { width: 1440, height: 900 },
-    'before init: the frame’s own viewport',
-  );
+  assert.deepEqual(frame.measured(), { width: 1440, height: 900 }, 'before init: the frame’s own viewport');
   frame.send({
     type: 'init',
     configs: configs('a'),
@@ -136,11 +123,7 @@ test('the engine measures the frame itself until a stage is sent, and the stage 
     'the stage, never past the box it was measured from',
   );
   frame.viewport.width = 1200;
-  assert.deepEqual(
-    frame.measured(),
-    { width: 1128, height: 812 },
-    'a resize of the frame is not a change of stage',
-  );
+  assert.deepEqual(frame.measured(), { width: 1128, height: 812 }, 'a resize of the frame is not a change of stage');
   frame.send({ type: 'stage', width: 1416, height: 812 });
   assert.deepEqual(frame.measured(), { width: 1416, height: 812 });
 });
@@ -173,11 +156,7 @@ test('a stage that is not a box is ignored', () => {
     paused: false,
     stage: null,
   });
-  assert.deepEqual(
-    without.measured(),
-    { width: 1440, height: 900 },
-    'no stage at init: the frame’s own size',
-  );
+  assert.deepEqual(without.measured(), { width: 1440, height: 900 }, 'no stage at init: the frame’s own size');
 });
 
 test('a smaller stage brings a pony past its edge back in, from the edge when it is out of sight', () => {
@@ -226,11 +205,7 @@ test('held, the walk-in waits for the release; a deferred start places everyone 
   frame.send({ type: 'pause' });
   frame.calls.length = 0;
   frame.send({ type: 'stage', width: 1128, height: 812 });
-  assert.deepEqual(
-    frame.measured(),
-    { width: 1128, height: 812 },
-    'the stage itself changes at once',
-  );
+  assert.deepEqual(frame.measured(), { width: 1128, height: 812 }, 'the stage itself changes at once');
   assert.deepEqual(frame.calls, [], 'nothing walks while the page is covered');
   frame.send({ type: 'resume' });
   assert.deepEqual(frame.calls, [['resume'], ['moved', 'gone', 1128, 100], ['next', 'gone']]);
@@ -248,9 +223,5 @@ test('held, the walk-in waits for the release; a deferred start places everyone 
   deferred.send({ type: 'stage', width: 1128, height: 812 });
   deferred.calls.length = 0;
   deferred.send({ type: 'resume' });
-  assert.deepEqual(
-    deferred.calls,
-    [['start']],
-    'the engine’s own start puts every pony on the stage',
-  );
+  assert.deepEqual(deferred.calls, [['start']], 'the engine’s own start puts every pony on the stage');
 });

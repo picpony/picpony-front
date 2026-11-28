@@ -6,11 +6,7 @@ import Button from '@/components/Button';
 import Chip from '@/components/Chip';
 import EmptyState from '@/components/EmptyState';
 import FollowHeight from '@/components/FollowHeight';
-import {
-  DETAIL_TAG_SECTIONS,
-  DetailTagPlaceholder,
-  DetailTagSection,
-} from '@/components/detail/DetailTagSections';
+import { DETAIL_TAG_SECTIONS, DetailTagPlaceholder, DetailTagSection } from '@/components/detail/DetailTagSections';
 import { useTooltip } from '@/components/Tooltip';
 import { formatCount } from '@/lib/format';
 import { ratingTagChip, ratingTagRank, tagCategoryChip } from '@/lib/tagCategories';
@@ -111,17 +107,10 @@ function TagChip({
   /* The real tag, on demand: a translated chip shows the glossary's name, and two tags can share
      one (两个都叫 「碧琪」). Hover or focus shows it, a long press on touch; a long English name the
      chip truncates shows its whole self the same way. */
-  const { anchorRef, anchorProps, tooltip } = useTooltip(
-    translated || tag.length > 24 ? tag : undefined,
-  );
+  const { anchorRef, anchorProps, tooltip } = useTooltip(translated || tag.length > 24 ? tag : undefined);
   return (
     <>
-      <Chip
-        ref={anchorRef as React.Ref<HTMLButtonElement>}
-        {...anchorProps}
-        colors={colors}
-        onClick={onClick}
-      >
+      <Chip ref={anchorRef as React.Ref<HTMLButtonElement>} {...anchorProps} colors={colors} onClick={onClick}>
         {/* The count sits outside the truncating label: a long tag used to lose its count first. */}
         <span className="flex min-w-0 items-baseline gap-1">
           <span className="truncate">{label}</span>
@@ -184,8 +173,7 @@ export default function TagList({
   if (
     !pending &&
     (applied.chipSet !== chipSet ||
-      ((offscreen || settling) &&
-        (applied.translations !== translations || applied.counts !== counts)))
+      ((offscreen || settling) && (applied.translations !== translations || applied.counts !== counts)))
   ) {
     setApplied({ chipSet, translations, counts });
   }
@@ -221,10 +209,7 @@ export default function TagList({
           ? 'empty'
           : pending
             ? 'pending'
-            : JSON.stringify([
-                visible.map((tag) => [label(tag), applied.counts?.[tag]]),
-                remaining,
-              ]);
+            : JSON.stringify([visible.map((tag) => [label(tag), applied.counts?.[tag]]), remaining]);
         return (
           <FollowHeight key={section.key} watch={layoutKey}>
             {show && (
@@ -246,10 +231,9 @@ export default function TagList({
                             colors={section.colors ?? regularTagColors(tag)}
                             onClick={() =>
                               section.prefix
-                                ? router.push(
-                                    `/search?q=${encodeURIComponent(section.prefix + tag)}`,
-                                    { scroll: false },
-                                  )
+                                ? router.push(`/search?q=${encodeURIComponent(section.prefix + tag)}`, {
+                                    scroll: false,
+                                  })
                                 : onTagClick(tag)
                             }
                           />

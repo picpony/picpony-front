@@ -17,14 +17,14 @@ Dependency directions, lazy loading and shared state ownership. Start with the [
 
 [lib/motion.ts](../lib/motion.ts) is the public facade. Implementations in `lib/motion/` import their direct collaborators, never the facade.
 
-| Module                | Responsibility                                           |
-| --------------------- | -------------------------------------------------------- |
-| `engine.ts`           | GSAP registration, curves, springs and speed             |
-| `drawer.ts`           | Phone swipe-to-close drawer lifecycle (GSAP + Observer)  |
+| Module | Responsibility |
+| --- | --- |
+| `engine.ts` | GSAP registration, curves, springs and speed |
+| `drawer.ts` | Phone swipe-to-close drawer lifecycle (GSAP + Observer) |
 | `theme.ts`, `grid.ts` | GSAP-free View Transition wipes and WAAPI grid entrances |
-| `tabGeometry.ts`      | Geometry reads and motion planning                       |
-| `sharedAxis.ts`       | Web Animations playback and style restoration            |
-| `tabs.ts`             | React state, scroll and pane coordination (GSAP-free)    |
+| `tabGeometry.ts` | Geometry reads and motion planning |
+| `sharedAxis.ts` | Web Animations playback and style restoration |
+| `tabs.ts` | React state, scroll and pane coordination (GSAP-free) |
 
 GSAP-free helpers stay outside the engine: `appScroller.ts`, `motionTokens.ts`, `pageTransit.ts`, `tabIntent.ts`, `tabScroll.ts`, `springTiming.ts`, `slidingIndicator.ts` and `scrollTo.ts`. `routeCrossFadePlay.ts` also uses Web Animations directly and must not pull GSAP.
 
@@ -32,17 +32,17 @@ GSAP-free helpers stay outside the engine: `appScroller.ts`, `motionTokens.ts`, 
 
 GSAP, the Hero engine, the active Hero Stage, `react-icons/md`, Markdown, auth forms, the palette engine and admin API must stay out of the shell's initial static graph.
 
-| Feature            | Boundary                                                                                                                                                                                  |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| General motion     | `lib/motionLazy.tsx` (`tabs`, `theme`, `grid` are GSAP-free; `drawer` loads GSAP only when the phone modal drawer opens)                                                                  |
-| Hero               | Shell imports `lib/hero/runtime.ts`, `lib/hero/input.ts` and the idle `HeroStage` shell; `HeroStageActive` and `@/lib/hero` load dynamically after first gallery paint and on card intent |
-| Icons              | Shell and core routes (`/`, `/messages`, `/settings`) import lightweight inline SVG modules under `components/icons/`; low-frequency routes keep `react-icons/md` in their own chunks     |
-| Markdown           | `MarkdownRenderer` lazily loads `MarkdownDocument`                                                                                                                                        |
-| Rich-text editor   | `dynamic()` with `EditorPlaceholder`                                                                                                                                                      |
-| Authentication     | `AuthModal` owns the live dialog; only `AuthForms` is lazy                                                                                                                                |
-| Captcha and sheet  | Dynamic import plus a “has opened” latch                                                                                                                                                  |
-| Palette generation | Loaded by the theme picker                                                                                                                                                                |
-| Admin panels       | Lazy registry; visited panels stay mounted to retain drafts                                                                                                                               |
+| Feature | Boundary |
+| --- | --- |
+| General motion | `lib/motionLazy.tsx` (`tabs`, `theme`, `grid` are GSAP-free; `drawer` loads GSAP only when the phone modal drawer opens) |
+| Hero | Shell imports `lib/hero/runtime.ts`, `lib/hero/input.ts` and the idle `HeroStage` shell; `HeroStageActive` and `@/lib/hero` load dynamically after first gallery paint and on card intent |
+| Icons | Shell and core routes (`/`, `/messages`, `/settings`) import lightweight inline SVG modules under `components/icons/`; low-frequency routes keep `react-icons/md` in their own chunks |
+| Markdown | `MarkdownRenderer` lazily loads `MarkdownDocument` |
+| Rich-text editor | `dynamic()` with `EditorPlaceholder` |
+| Authentication | `AuthModal` owns the live dialog; only `AuthForms` is lazy |
+| Captcha and sheet | Dynamic import plus a “has opened” latch |
+| Palette generation | Loaded by the theme picker |
+| Admin panels | Lazy registry; visited panels stay mounted to retain drafts |
 
 A component mounted with `isOpen={false}` still loads its dynamic chunk. Use a latch when it must wait for first use, and keep the component mounted through its exit.
 
@@ -54,14 +54,14 @@ Auth loading must preserve Close, Escape, Back and focus handling before form co
 
 An event handler must not await a lazy chunk before `preventDefault()` or its state update.
 
-| Entry                                                                       | Immediate fallback                               |
-| --------------------------------------------------------------------------- | ------------------------------------------------ |
-| `changeScheme`, `changePalette`, `changeCustomPalette`, `changePaletteHues` | Matching `commit*` preference write              |
-| `startTabTransition`                                                        | Record the outgoing offset                       |
-| `TabPanesMotion`                                                            | `applyInstantTabScroll` and React pane selection |
-| `StaggerGrid`                                                               | Show the cards without an entrance               |
-| `DrawerSwipe`                                                               | Button, scrim and Escape still work              |
-| Route cross-fade                                                            | `captureRouteSnapshot` returns `null`            |
+| Entry | Immediate fallback |
+| --- | --- |
+| `changeScheme`, `changePalette`, `changeCustomPalette`, `changePaletteHues` | Matching `commit*` preference write |
+| `startTabTransition` | Record the outgoing offset |
+| `TabPanesMotion` | `applyInstantTabScroll` and React pane selection |
+| `StaggerGrid` | Show the cards without an entrance |
+| `DrawerSwipe` | Button, scrim and Escape still work |
+| Route cross-fade | `captureRouteSnapshot` returns `null` |
 
 The shell warms GSAP-free tab, theme, grid and route cross-fade code through `runWhenIdle`, leaving GSAP (`DrawerSwipe`, `Sheet`, `SidePanel`, `SliderCaptcha`) unloaded on desktop homepage hydration and tab switches. Hooks remain unconditional inside loaded child components; do not pass hooks as props. The caller owns refs from its first render.
 

@@ -15,14 +15,7 @@ import {
   type PerfScenarioId,
 } from './report';
 import { collectHardware, type PerfHardware } from './hardware';
-import {
-  firstFrameAfter,
-  frameStats,
-  longFrameStats,
-  refreshInterval,
-  round,
-  type LongFrameEntry,
-} from './stats';
+import { firstFrameAfter, frameStats, longFrameStats, refreshInterval, round, type LongFrameEntry } from './stats';
 
 /**
  * **The on-device performance run behind /perf.** A tap on 开始测试 hands this module the app's
@@ -69,12 +62,7 @@ export type PerfRunGroup = 'scroll' | 'hero' | 'stress';
 /** Status steps a run of these groups announces: the chip's `x/y`. */
 export function perfRunSteps(rounds: number, include: Partial<Record<PerfRunGroup, boolean>> = {}) {
   const on = (group: PerfRunGroup) => include[group] !== false;
-  return (
-    2 +
-    (on('scroll') ? rounds : 0) +
-    (on('hero') ? rounds * 3 : 0) +
-    (on('stress') ? rounds * 4 : 0)
-  );
+  return 2 + (on('scroll') ? rounds : 0) + (on('hero') ? rounds * 3 : 0) + (on('stress') ? rounds * 4 : 0);
 }
 
 const THUMB_SELECTOR = '.image-card [data-image-hero-role="thumbnail"]';
@@ -284,12 +272,7 @@ class PerfRun {
         await this.stressScenario(round, rounds);
       }
     } catch (error) {
-      aborted =
-        error instanceof Cancelled
-          ? '已取消'
-          : error instanceof Error
-            ? error.message
-            : String(error);
+      aborted = error instanceof Cancelled ? '已取消' : error instanceof Error ? error.message : String(error);
       if (heroState() !== 'gallery-idle') this.pressEscape();
     } finally {
       document.documentElement.removeAttribute('data-perf-no-corner');
@@ -325,10 +308,7 @@ class PerfRun {
     if (!scroller) return;
     this.check();
     const origin = scroller.scrollTop;
-    const target = Math.min(
-      origin + scroller.clientHeight * 3,
-      scroller.scrollHeight - scroller.clientHeight,
-    );
+    const target = Math.min(origin + scroller.clientHeight * 3, scroller.scrollHeight - scroller.clientHeight);
     if (target - origin < 100) return;
     const start = performance.now();
     scroller.scrollTo({ top: target, behavior: 'smooth' });
@@ -375,19 +355,12 @@ class PerfRun {
       await nextFrame();
       if (heroState() === 'gallery-idle') this.fireMouse(link, 'click', x, y);
     }
-    const sample = await this.measure(
-      input,
-      (phase) => phase.startsWith('opening'),
-      'detail-idle',
-      8_000,
-    );
+    const sample = await this.measure(input, (phase) => phase.startsWith('opening'), 'detail-idle', 8_000);
     this.add('open', sample);
     if (!sample.completed) {
       if (heroState() !== 'gallery-idle') {
         this.pressEscape();
-        await this.waitFor(() => heroState() === 'gallery-idle', 5_000, '详情页无法关闭').catch(
-          () => {},
-        );
+        await this.waitFor(() => heroState() === 'gallery-idle', 5_000, '详情页无法关闭').catch(() => {});
       }
       return false;
     }
@@ -411,15 +384,7 @@ class PerfRun {
     this.firePointer(media, 'pointerdown', x0, y, 'touch', pointerId, 1);
     for (let step = 1; step <= 8; step += 1) {
       await nextFrame();
-      this.firePointer(
-        media,
-        'pointermove',
-        x0 + (travel * step) / 8,
-        y + step,
-        'touch',
-        pointerId,
-        1,
-      );
+      this.firePointer(media, 'pointermove', x0 + (travel * step) / 8, y + step, 'touch', pointerId, 1);
     }
     await nextFrame();
     this.firePointer(media, 'pointerup', x0 + travel, y + 8, 'touch', pointerId, 0);
@@ -457,9 +422,7 @@ class PerfRun {
       if (!route) {
         this.add(id, this.failed('找不到详情页'));
         this.pressEscape();
-        await this.waitFor(() => heroState() === 'gallery-idle', 5_000, '详情页无法关闭').catch(
-          () => {},
-        );
+        await this.waitFor(() => heroState() === 'gallery-idle', 5_000, '详情页无法关闭').catch(() => {});
         return;
       }
       route.scrollTop = 0;
@@ -491,12 +454,7 @@ class PerfRun {
       await this.recoverToGallery();
       return;
     }
-    const sample = await this.measure(
-      input,
-      (phase) => phase.startsWith('closing'),
-      'gallery-idle',
-      8_000,
-    );
+    const sample = await this.measure(input, (phase) => phase.startsWith('closing'), 'gallery-idle', 8_000);
     this.add(id, sample);
     await this.recoverToGallery();
   }
@@ -790,8 +748,7 @@ class PerfRun {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-    const supported =
-      (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
+    const supported = (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes) || [];
     const type = supported.includes('long-animation-frame')
       ? 'long-animation-frame'
       : supported.includes('longtask')
@@ -804,8 +761,7 @@ class PerfRun {
           this.longFrames.push({
             startTime: entry.startTime,
             duration: entry.duration,
-            blockingDuration: (entry as PerformanceEntry & { blockingDuration?: number })
-              .blockingDuration,
+            blockingDuration: (entry as PerformanceEntry & { blockingDuration?: number }).blockingDuration,
             detail: describeLongFrame(entry),
           });
         }
@@ -860,20 +816,12 @@ class PerfRun {
       /* Loaded and revealed: a card whose picture has not faded in cannot fly (the hero falls back
          to a plain navigation), and that would measure the fallback instead of the animation. */
       const image = thumb.querySelector('img');
-      if (
-        !image ||
-        !(image.complete && image.naturalWidth > 0 && getComputedStyle(image).opacity === '1')
-      )
+      if (!image || !(image.complete && image.naturalWidth > 0 && getComputedStyle(image).opacity === '1'))
         return false;
       const box = thumb.getBoundingClientRect();
       if (box.width < 40 || box.height < 40) return false;
       /* Wholly on screen, clear of the app bar and the bottom chrome. */
-      return (
-        box.top >= 72 &&
-        box.bottom <= window.innerHeight - 72 &&
-        box.left >= 0 &&
-        box.right <= window.innerWidth
-      );
+      return box.top >= 72 && box.bottom <= window.innerHeight - 72 && box.left >= 0 && box.right <= window.innerWidth;
     });
   }
 
@@ -883,11 +831,9 @@ class PerfRun {
   }
 
   private async waitForImages() {
-    await this.waitFor(() => this.cards().length >= 2, 15_000, '图片没有加载出来').catch(
-      (error) => {
-        if (error instanceof Cancelled) throw error;
-      },
-    );
+    await this.waitFor(() => this.cards().length >= 2, 15_000, '图片没有加载出来').catch((error) => {
+      if (error instanceof Cancelled) throw error;
+    });
   }
 
   private firePointer(
@@ -930,9 +876,7 @@ class PerfRun {
   }
 
   private pressEscape() {
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-    );
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   }
 
   private async recoverToGallery() {
@@ -988,8 +932,8 @@ class PerfRun {
     return {
       userAgent: navigator.userAgent,
       platform:
-        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
-          ?.platform ?? navigator.platform,
+        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+        navigator.platform,
       devicePixelRatio: window.devicePixelRatio,
       screen: `${screen.width}×${screen.height}`,
       viewport: `${window.innerWidth}×${window.innerHeight}`,
@@ -1037,8 +981,7 @@ class PerfRun {
     track.className =
       'relative mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-on-surface-variant forced-boundary';
     const bar = document.createElement('span');
-    bar.className =
-      'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary forced-mark';
+    bar.className = 'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary forced-mark';
     track.append(bar);
     body.append(head, text, track);
     const cancel = document.createElement('button');

@@ -21,13 +21,7 @@ import { GENDER_OPTIONS, optionsWith } from '@/lib/profileFields';
 import type { Role } from '@/lib/roles';
 import { copyText } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
-import {
-  validateApiKey,
-  validateEmail,
-  validateNewPassword,
-  validateUsername,
-  PASSWORD_HINT,
-} from '@/lib/validation';
+import { validateApiKey, validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
 import { AdminForm, FormActions, FormGrid } from '../AdminForm';
 import { retryError } from '../queries';
 import Checkbox from '@/components/Checkbox';
@@ -128,10 +122,7 @@ export default function UserEditor({
   const id = (field: string) => `users-inline-${row.id}-${field}`;
 
   const dirty = Boolean(
-    baseline &&
-    form &&
-    choice &&
-    userUpdatePayload(baseline, form, choice.locked === null) !== null,
+    baseline && form && choice && userUpdatePayload(baseline, form, choice.locked === null) !== null,
   );
   useEffect(() => {
     onDirtyChange(dirty);
@@ -140,8 +131,7 @@ export default function UserEditor({
   const set = <K extends keyof UserFormValues>(field: K, value: UserFormValues[K]) => {
     setState((previous) => {
       if (!previous.form) return previous;
-      const nextErrors =
-        field in previous.errors ? { ...previous.errors, [field]: undefined } : previous.errors;
+      const nextErrors = field in previous.errors ? { ...previous.errors, [field]: undefined } : previous.errors;
       return { ...previous, form: { ...previous.form, [field]: value }, errors: nextErrors };
     });
   };
@@ -152,10 +142,8 @@ export default function UserEditor({
     const next: Partial<Record<FieldName, string>> = {};
     /* An unchanged name or address is not re-validated: an account older than a rule must still
        be editable without being renamed. */
-    if (form.username.trim() !== before.username)
-      next.username = validateUsername(form.username) ?? undefined;
-    if (form.email.trim() !== before.email && form.email.trim())
-      next.email = validateEmail(form.email) ?? undefined;
+    if (form.username.trim() !== before.username) next.username = validateUsername(form.username) ?? undefined;
+    if (form.email.trim() !== before.email && form.email.trim()) next.email = validateEmail(form.email) ?? undefined;
     if (form.password) next.password = validateNewPassword(form.password) ?? undefined;
     /* A changed key is held to the rule the user's own 账户 dialog and the upload hop share (review
        P6-F4); clearing it (an unbind) and an unchanged legacy key are not re-validated. */
@@ -163,9 +151,7 @@ export default function UserEditor({
       next.apiKey = validateApiKey(form.apiKey) ?? undefined;
     if (Object.values(next).some(Boolean)) {
       setState((previous) => ({ ...previous, errors: next }));
-      const first = (['username', 'email', 'password', 'apiKey'] as const).find(
-        (field) => next[field],
-      );
+      const first = (['username', 'email', 'password', 'apiKey'] as const).find((field) => next[field]);
       if (first) document.getElementById(id(first === 'apiKey' ? 'api-key' : first))?.focus();
       return;
     }
@@ -178,8 +164,7 @@ export default function UserEditor({
     showToast((await copyText(password)) ? '已生成随机密码并复制' : '已生成随机密码', 'success');
   };
 
-  const contentState =
-    activeAccount && form && choice ? 'ready' : detailError ? 'error' : 'loading';
+  const contentState = activeAccount && form && choice ? 'ready' : detailError ? 'error' : 'loading';
   const badges = activeAccount ? userBadges(activeAccount.badges) : [];
   const facts = activeAccount
     ? [
@@ -211,11 +196,7 @@ export default function UserEditor({
           <AdminForm onSubmit={submit}>
             <SectionHeading
               as="h3"
-              subtitle={
-                facts.length > 0 ? (
-                  <span className="tabular-nums">{facts.join(' · ')}</span>
-                ) : undefined
-              }
+              subtitle={facts.length > 0 ? <span className="tabular-nums">{facts.join(' · ')}</span> : undefined}
               aside={<RoleBadge role={activeAccount.role} showUser size="md" />}
             >
               <span className="tabular-nums">{`#${activeAccount.id} ${activeAccount.username}`}</span>

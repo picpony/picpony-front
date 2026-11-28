@@ -241,10 +241,7 @@ function toCubicRing(raw: readonly Point[]): CubicRing {
     const prev = pts[pts.length - 1];
     if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > 1e-5) pts.push(p);
   }
-  if (
-    pts.length > 2 &&
-    Math.hypot(pts[0]!.x - pts[pts.length - 1]!.x, pts[0]!.y - pts[pts.length - 1]!.y) <= 1e-5
-  ) {
+  if (pts.length > 2 && Math.hypot(pts[0]!.x - pts[pts.length - 1]!.x, pts[0]!.y - pts[pts.length - 1]!.y) <= 1e-5) {
     pts.pop();
   }
 
@@ -396,9 +393,7 @@ export function loadingSpringProgress(elapsedMs: number, reduced: boolean): numb
   }
   const zeta = 0.6;
   const damped = omega * 0.8; // √(1 - 0.6²) = 0.8
-  return (
-    1 - Math.exp(-zeta * omega * t) * (Math.cos(damped * t) + (zeta / 0.8) * Math.sin(damped * t))
-  );
+  return 1 - Math.exp(-zeta * omega * t) * (Math.cos(damped * t) + (zeta / 0.8) * Math.sin(damped * t));
 }
 
 export interface LoadingFrame {
@@ -418,8 +413,7 @@ export function sampleLoadingFrame(elapsedMs: number, reduced: boolean): Loading
   const from = list[stepIndex % LOADING_SHAPE_COUNT]!;
   const to = list[(stepIndex + 1) % LOADING_SHAPE_COUNT]!;
   // AOSP dual rotation: 50° continuous spin + 90° spring impulse per 650 ms morph.
-  const rotationDeg =
-    (((140 * stepIndex + 50 * linearFraction + 90 * springFraction) % 360) + 360) % 360;
+  const rotationDeg = (((140 * stepIndex + 50 * linearFraction + 90 * springFraction) % 360) + 360) % 360;
   return {
     path: ringToPath(from, to, springFraction),
     rotationDeg,
@@ -544,11 +538,7 @@ function watchAncestors(sub: LoadingSubscriber) {
   if (typeof MutationObserver === 'undefined' || !isDomElement(sub.path)) return;
   const docRoot = typeof document !== 'undefined' ? document.documentElement : null;
   const ancestors: Element[] = [];
-  for (
-    let node: Element | null = sub.path.parentElement;
-    node && node !== docRoot;
-    node = node.parentElement
-  ) {
+  for (let node: Element | null = sub.path.parentElement; node && node !== docRoot; node = node.parentElement) {
     ancestors.push(node);
   }
   if (ancestors.length === 0) return;
@@ -678,8 +668,7 @@ function noteIdle(now: number) {
   if (hadActive) {
     hadActive = false;
     lastActiveTime = now;
-    pausedElapsedMs =
-      originTime && hasMountedPaintedSubscriber() ? Math.max(0, now - originTime) : 0;
+    pausedElapsedMs = originTime && hasMountedPaintedSubscriber() ? Math.max(0, now - originTime) : 0;
   } else if (!hasMountedPaintedSubscriber()) {
     pausedElapsedMs = 0;
   }
@@ -691,8 +680,7 @@ function ensureOrigin(now: number, targets: readonly LoadingSubscriber[]): numbe
   } else if (!hadActive) {
     // Resuming an already-painted indicator after a temporary pause (inert overlay, background
     // tab, or off-screen scroll) continues from its paused morph phase instead of snapping to 0°.
-    const resumingPainted =
-      pausedElapsedMs > 0 && targets.some((sub) => paintedSubscribers.has(sub));
+    const resumingPainted = pausedElapsedMs > 0 && targets.some((sub) => paintedSubscribers.has(sub));
     if (resumingPainted) {
       originTime = now - pausedElapsedMs;
     } else if (lastActiveTime > 0 && now - lastActiveTime > CLOCK_RESET_IDLE_MS) {
@@ -721,11 +709,7 @@ function stopLoop() {
   }
 }
 
-function paintAtElapsed(
-  targets: readonly LoadingSubscriber[],
-  elapsedMs: number,
-  tier: MotionTier,
-) {
+function paintAtElapsed(targets: readonly LoadingSubscriber[], elapsedMs: number, tier: MotionTier) {
   const frame = sampleLoadingFrame(elapsedMs, tier === 'reduced');
   const rotate = `rotate(${frame.rotationDeg.toFixed(1)} 50 50)`;
   for (const sub of targets) {

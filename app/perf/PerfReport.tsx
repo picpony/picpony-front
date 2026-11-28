@@ -106,9 +106,7 @@ export default function ReportView({
             <div className="min-w-0">
               <p className="text-label-m text-on-surface-variant">总体结论</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                <p className="text-headline-s-emphasized text-on-surface">
-                  {VERDICT_LABEL[report.overall]}
-                </p>
+                <p className="text-headline-s-emphasized text-on-surface">{VERDICT_LABEL[report.overall]}</p>
                 {totalScenarios > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     {counts.smooth > 0 && (
@@ -133,13 +131,7 @@ export default function ReportView({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              size="xs"
-              variant="tonal"
-              icon={<MdContentCopy />}
-              className="pointer-coarse:my-1"
-              onClick={onCopy}
-            >
+            <Button size="xs" variant="tonal" icon={<MdContentCopy />} className="pointer-coarse:my-1" onClick={onCopy}>
               复制报告
             </Button>
             <Button
@@ -148,12 +140,7 @@ export default function ReportView({
               variant="surface"
               icon={<MdDownload />}
               trailingIcon={
-                <MdExpandMore
-                  className={cn(
-                    'transition-transform spring-fast-spatial',
-                    exportOpen && 'rotate-180',
-                  )}
-                />
+                <MdExpandMore className={cn('transition-transform spring-fast-spatial', exportOpen && 'rotate-180')} />
               }
               aria-haspopup="menu"
               aria-expanded={exportOpen}
@@ -302,9 +289,7 @@ function ScenarioRow({ scenario, refreshHz }: { scenario: PerfScenario; refreshH
               <div className="flex flex-col gap-1.5 @2xl:w-48 @2xl:shrink-0 @2xl:border-r @2xl:border-outline-variant @2xl:pr-4">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-label-m text-on-surface-variant">流畅度</span>
-                  <span className="text-title-l-emphasized tabular-nums text-on-surface">
-                    {pct(s.smoothness)}
-                  </span>
+                  <span className="text-title-l-emphasized tabular-nums text-on-surface">{pct(s.smoothness)}</span>
                 </div>
                 <ProgressBar value={smoothnessPct} label={`${scenario.label} 流畅度`} />
                 <div className="flex items-baseline justify-between gap-2 text-body-s tabular-nums">
@@ -442,15 +427,9 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{ms(sample.latencyMs)}</td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{ms(sample.settleMs)}</td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.frames.frames}</td>
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                  {sample.frames.dropped}
-                </td>
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                  {ms(sample.frames.worstFrameMs)}
-                </td>
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                  {sample.longFrames.count}
-                </td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.frames.dropped}</td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">{ms(sample.frames.worstFrameMs)}</td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.longFrames.count}</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">
                   <span className="flex items-center gap-2">
                     {sample.completed ? (
@@ -521,9 +500,7 @@ function parseWorst(detail: string): Breakdown | null {
   };
   let known = false;
   for (const part of splitTop(head[2])) {
-    const match = /^(脚本|其中强制布局|渲染回调|样式布局) (\d+(?:\.\d+)?)(?:（(.*)）)?$/.exec(
-      part.trim(),
-    );
+    const match = /^(脚本|其中强制布局|渲染回调|样式布局) (\d+(?:\.\d+)?)(?:（(.*)）)?$/.exec(part.trim());
     if (!match) return null;
     known = true;
     const value = Number(match[2]);
@@ -577,9 +554,7 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
     return (
       <>
         <p className="text-label-l tabular-nums text-on-surface">第 {round} 轮</p>
-        <p className="mt-1 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">
-          {detail}
-        </p>
+        <p className="mt-1 text-body-s tabular-nums wrap-anywhere text-on-surface-variant">{detail}</p>
       </>
     );
   }
@@ -614,9 +589,7 @@ function WorstFrame({ round, detail }: { round: number; detail: string }) {
           </li>
         ))}
         {parsed.forcedMs > 0 && <li>其中强制布局 {Math.round(parsed.forcedMs)} ms</li>}
-        {parsed.totalMs - accounted >= 1 && (
-          <li>其他 {Math.round(parsed.totalMs - accounted)} ms</li>
-        )}
+        {parsed.totalMs - accounted >= 1 && <li>其他 {Math.round(parsed.totalMs - accounted)} ms</li>}
       </ul>
       {parsed.callers.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1">

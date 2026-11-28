@@ -68,10 +68,7 @@ function remember(token: string, tag: string, id: number) {
 }
 
 /** `GET /me/tag-subscriptions` → the list, in the backend's order (most unread first). A refusal throws. */
-export async function getTagSubscriptions(
-  token: string,
-  signal?: AbortSignal,
-): Promise<TagSubscription[]> {
+export async function getTagSubscriptions(token: string, signal?: AbortSignal): Promise<TagSubscription[]> {
   const data = await api<{ subscriptions: SubscriptionRow[] }>('GET', '/me/tag-subscriptions', {
     token,
     signal,
@@ -113,11 +110,7 @@ export function isAlreadySubscribed(error: unknown): boolean {
 }
 
 /** `POST /me/tag-subscriptions {tag, image_count}` → the new subscription's id. The count is the live one, looked up first. */
-export async function addTagSubscription(
-  token: string,
-  tagName: string,
-  imageCount: number,
-): Promise<{ id: number }> {
+export async function addTagSubscription(token: string, tagName: string, imageCount: number): Promise<{ id: number }> {
   const data = await api<{ id: number }>('POST', '/me/tag-subscriptions', {
     token,
     json: { tag: tagName, image_count: imageCount },
@@ -136,11 +129,7 @@ export async function removeTagSubscription(token: string, tagName: string): Pro
 
 /** `POST /me/tag-subscriptions/{id}/read-receipts`, by tag — its new pictures have been looked at. */
 export async function markTagSubscriptionSeen(token: string, tagName: string): Promise<void> {
-  await api(
-    'POST',
-    `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}/read-receipts`,
-    { token },
-  );
+  await api('POST', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}/read-receipts`, { token });
 }
 
 export interface TagCountUpdate {
@@ -164,23 +153,17 @@ export async function syncTagSubscriptions(
 }
 
 /** `POST /me/tag-subscription-syncs/{sync_id}/completion` → how many subscriptions gained pictures. */
-export async function finalizeTagSubscriptionSync(
-  token: string,
-  syncId: string,
-): Promise<{ updatedTags: number }> {
-  const data = await api<{ updated_tags: number }>(
-    'POST',
-    `/me/tag-subscription-syncs/${seg(syncId)}/completion`,
-    { token },
-  );
+export async function finalizeTagSubscriptionSync(token: string, syncId: string): Promise<{ updatedTags: number }> {
+  const data = await api<{ updated_tags: number }>('POST', `/me/tag-subscription-syncs/${seg(syncId)}/completion`, {
+    token,
+  });
   return { updatedTags: data.updated_tags };
 }
 
 /** A fresh `sync_id`: a version-4 UUID, as the backend requires. */
 export function newSyncToken(): string {
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function')
-    crypto.getRandomValues(bytes);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') crypto.getRandomValues(bytes);
   else for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
@@ -216,15 +199,9 @@ function tagRows(data: { tags?: unknown }): DerpiTagRow[] {
     }));
 }
 
-async function searchTags(
-  query: string,
-  perPage: number,
-  signal?: AbortSignal,
-): Promise<DerpiTagRow[]> {
+async function searchTags(query: string, perPage: number, signal?: AbortSignal): Promise<DerpiTagRow[]> {
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=${perPage}`;
-  const data = await readObject<{ tags?: unknown }>(
-    await proxyFetch(url, { cache: 'no-store', signal }),
-  );
+  const data = await readObject<{ tags?: unknown }>(await proxyFetch(url, { cache: 'no-store', signal }));
   if (!Array.isArray(data.tags)) throw new ApiError('invalid');
   return tagRows(data);
 }
@@ -269,8 +246,7 @@ export function tagSlug(name: string): string {
   return out;
 }
 
-const notFound = () =>
-  new ApiError('http', { status: 404, notFound: true, message: TAG_NOT_FOUND_MESSAGE });
+const notFound = () => new ApiError('http', { status: 404, notFound: true, message: TAG_NOT_FOUND_MESSAGE });
 
 /**
  * The count a subscription starts from, or a refusal. A count Derpibooru did not send cannot be
@@ -310,9 +286,7 @@ export async function lookupDerpiTag(tag: string, signal?: AbortSignal): Promise
     const rows = await searchTags(escapeTag(wanted), 50, signal);
     hit = rows.find(same);
     if (!hit) {
-      hit = rows.find((row) =>
-        row.aliases.some((alias) => alias === wantedSlug || alias === wanted),
-      );
+      hit = rows.find((row) => row.aliases.some((alias) => alias === wantedSlug || alias === wanted));
       listedAlias = Boolean(hit);
     }
   }

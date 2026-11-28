@@ -88,10 +88,7 @@ function merge(...lists: Comment[][]): Comment[] {
  * row count then never reached the total: 加载更多 stayed offered at the end of the thread, and
  * every press read another empty page. An empty page is the end, whatever the total said.
  */
-export function hasMoreDerpiComments(
-  pages: readonly (readonly Comment[])[],
-  total: number | null,
-): boolean {
+export function hasMoreDerpiComments(pages: readonly (readonly Comment[])[], total: number | null): boolean {
   if (total === null || pages.length === 0 || pages[pages.length - 1].length === 0) return false;
   return pages.length * DERPI_COMMENTS_PER_PAGE < total;
 }
@@ -127,8 +124,7 @@ export function prefetchImageComments(imageId: number) {
 /** Both halves of the thread are already in the cache (a reopen, a step back): show it at once. */
 export function hasCachedImageComments(imageId: number) {
   return (
-    siteComments.peek({ imageId }).data !== undefined &&
-    derpiComments.peek({ imageId, page: 1 }).data !== undefined
+    siteComments.peek({ imageId }).data !== undefined && derpiComments.peek({ imageId, page: 1 }).data !== undefined
   );
 }
 
@@ -147,9 +143,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
     const timer = window.setTimeout(() => setGraceOver(imageId), JOIN_GRACE_MS);
     return () => window.clearTimeout(timer);
   }, [imageId, waiting]);
-  const shown =
-    enabled &&
-    ((siteSettled && derpiSettled) || (graceOver === imageId && (siteSettled || derpiSettled)));
+  const shown = enabled && ((siteSettled && derpiSettled) || (graceOver === imageId && (siteSettled || derpiSettled)));
 
   const [extra, setExtra] = useState<ExtraPages>({
     imageId,
@@ -163,9 +157,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
   const moreError = ownPages ? extra.error : undefined;
 
   const derpiTotal = first.data?.total ?? null;
-  const hasMore =
-    first.data !== undefined &&
-    hasMoreDerpiComments([first.data.comments, ...extraPages], derpiTotal);
+  const hasMore = first.data !== undefined && hasMoreDerpiComments([first.data.comments, ...extraPages], derpiTotal);
 
   const pagesLoaded = extraPages.length;
   const loadMore = useCallback(() => {
@@ -190,9 +182,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
             : state,
         ),
       (error: unknown) =>
-        setExtra((state) =>
-          state.imageId === imageId ? { ...state, loading: false, error } : state,
-        ),
+        setExtra((state) => (state.imageId === imageId ? { ...state, loading: false, error } : state)),
     );
   }, [hasMore, imageId, moreLoading, pagesLoaded]);
 
@@ -204,8 +194,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
   );
 
   const siteCount = siteData ? siteData.length : null;
-  const total =
-    siteCount !== null || derpiTotal !== null ? (siteCount ?? 0) + (derpiTotal ?? 0) : null;
+  const total = siteCount !== null || derpiTotal !== null ? (siteCount ?? 0) + (derpiTotal ?? 0) : null;
 
   const refreshSite = useCallback(() => {
     siteComments.invalidate({ imageId });
@@ -215,9 +204,7 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
 
   const removeSiteComment = useCallback(
     (id: number) => {
-      siteComments.write({ imageId }, (previous) =>
-        (previous ?? []).filter((comment) => comment.id !== id),
-      );
+      siteComments.write({ imageId }, (previous) => (previous ?? []).filter((comment) => comment.id !== id));
       refreshSite();
     },
     [imageId, refreshSite],

@@ -192,11 +192,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
          * container pair, so the states differ by hue, not by whether an edge
          * exists. Under forced colors that step is gone, so the system edge
          * stands in for it (a selected filter chip also keeps its check). */
-        colors
-          ? colors
-          : isFilled
-            ? TONE_SELECTED[tone]
-            : cn('bg-surface-container-high', TONE_TEXT[tone]),
+        colors ? colors : isFilled ? TONE_SELECTED[tone] : cn('bg-surface-container-high', TONE_TEXT[tone]),
         'forced-boundary',
         disabled && 'cursor-not-allowed disabled-content',
         className,

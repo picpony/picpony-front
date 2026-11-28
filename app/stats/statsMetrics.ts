@@ -67,10 +67,8 @@ export function periodWord(granularity: StatsGranularity): string {
 export function chartBuckets(data: SiteStats): ChartBucket[] {
   return data.series.map(({ date }) => {
     const [year, month, day] = date.split('-').map(Number);
-    if (data.granularity === 'month')
-      return { key: date, tick: `${year}/${month}`, detail: `${year}年${month}月` };
-    const detail =
-      data.granularity === 'week' ? `${formatChineseDay(date)}当周` : formatChineseDay(date);
+    if (data.granularity === 'month') return { key: date, tick: `${year}/${month}`, detail: `${year}年${month}月` };
+    const detail = data.granularity === 'week' ? `${formatChineseDay(date)}当周` : formatChineseDay(date);
     return { key: date, tick: `${month}/${day}`, detail };
   });
 }
@@ -94,11 +92,7 @@ export function chartMetrics(section: StatsSection, data: SiteStats, view: Chart
     const values = data.series.map((point) => point[field]);
     const last = values.at(-1);
     // The final bucket is the cumulative snapshot within this window, not today's site total.
-    const summary = cumulative
-      ? last
-      : values.length
-        ? values.reduce((sum, value) => sum + value, 0)
-        : undefined;
+    const summary = cumulative ? last : values.length ? values.reduce((sum, value) => sum + value, 0) : undefined;
     return { key: field, label, tone, values, summary: summary ?? null };
   });
   return {

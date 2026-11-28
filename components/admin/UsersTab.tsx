@@ -125,9 +125,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         async () => ({ ...(await adminApi.adminUpdateUser(token, user, changes)) }),
         () => {
           showToast(`已保存${named(user)}的资料`, 'success');
-          setEditing((current) =>
-            current?.id === user.id ? { id: user.id, closing: true } : current,
-          );
+          setEditing((current) => (current?.id === user.id ? { id: user.id, closing: true } : current));
         },
         '保存失败',
         {
@@ -175,10 +173,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
           banning ? '封禁失败' : '解封失败',
           () => {
             usersQuery.write(token, (previous) => ({
-              rows:
-                previous?.rows.map((row) =>
-                  row.id === user.id ? { ...row, is_banned: banning } : row,
-                ) ?? [],
+              rows: previous?.rows.map((row) => (row.id === user.id ? { ...row, is_banned: banning } : row)) ?? [],
             }));
             userDetail.invalidate({ token, id: user.id });
             read.refresh();
@@ -358,9 +353,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         badgeBusy={(badgeId) => badgeMutation.pendingKeys.has(badgeId)}
         onSave={save}
         onCancel={closeEditor}
-        onExitComplete={() =>
-          setEditing((current) => (current?.id === user.id && current.closing ? null : current))
-        }
+        onExitComplete={() => setEditing((current) => (current?.id === user.id && current.closing ? null : current))}
         onDirtyChange={setDirty}
         onEditBadge={(target, badge) =>
           setBadgeEdit((current) => ({
@@ -400,13 +393,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
             setEditing(null);
             paged.setPage(page);
           }}
-          summary={
-            read.data
-              ? keyword
-                ? `找到 ${paged.total} 位用户`
-                : `共 ${paged.total} 位用户`
-              : undefined
-          }
+          summary={read.data ? (keyword ? `找到 ${paged.total} 位用户` : `共 ${paged.total} 位用户`) : undefined}
         />
       </AdminListAnchor>
       <BadgeEditDialog

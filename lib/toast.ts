@@ -62,11 +62,7 @@ function dwellFor(message: string, type: ToastType) {
  *     showToast('邮箱地址无效', 'error');
  *     showToast('已删除', 'success', { action: { label: '撤销', onClick: undo } });
  */
-export const showToast = (
-  message: string,
-  type: ToastType = 'success',
-  options?: number | ToastOptions,
-) => {
+export const showToast = (message: string, type: ToastType = 'success', options?: number | ToastOptions) => {
   const opts = typeof options === 'number' ? { duration: options } : (options ?? {});
   const toast: ToastNotice = {
     id: ++toastId,

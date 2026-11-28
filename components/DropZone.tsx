@@ -117,13 +117,7 @@ export default function DropZone({
   const [drag, setDrag] = useState<'none' | 'ok' | 'invalid'>('none');
 
   const state: DropZoneState =
-    drag !== 'none' && !disabled
-      ? drag === 'ok'
-        ? 'dragging'
-        : 'invalid'
-      : filled
-        ? 'filled'
-        : 'idle';
+    drag !== 'none' && !disabled ? (drag === 'ok' ? 'dragging' : 'invalid') : filled ? 'filled' : 'idle';
 
   const take = useCallback(
     (file: File | undefined | null) => {
@@ -188,8 +182,7 @@ export default function DropZone({
         SIZES[size],
         disabled && 'disabled-content',
         state === 'idle' && 'border-dashed border-outline text-on-surface',
-        state === 'dragging' &&
-          'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
+        state === 'dragging' && 'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
         state === 'invalid' && 'border-dashed border-error text-on-surface',
         state === 'filled' &&
           (surface === 'dialog'

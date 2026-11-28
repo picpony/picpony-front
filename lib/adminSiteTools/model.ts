@@ -77,8 +77,7 @@ export function id(value: unknown): number {
   return n;
 }
 export function strings(value: unknown): string[] {
-  if (!Array.isArray(value) || value.some((x) => typeof x !== 'string'))
-    throw new ApiError('invalid');
+  if (!Array.isArray(value) || value.some((x) => typeof x !== 'string')) throw new ApiError('invalid');
   return value as string[];
 }
 export function rows(value: unknown): Row[] {
@@ -143,12 +142,7 @@ export function fieldsPayload(fields: FieldSpec[], values: Values): Row {
           ? Number(s)
           : NaN
         : integer(s, f.min ?? 0, f.max ?? Number.MAX_SAFE_INTEGER);
-      if (
-        n === null ||
-        !Number.isFinite(n) ||
-        n < (f.min ?? 0) ||
-        n > (f.max ?? Number.MAX_SAFE_INTEGER)
-      )
+      if (n === null || !Number.isFinite(n) || n < (f.min ?? 0) || n > (f.max ?? Number.MAX_SAFE_INTEGER))
         errors[f.key] =
           `${f.label}须为 ${f.min ?? 0}～${f.max ?? Number.MAX_SAFE_INTEGER} 的${f.decimal ? '数字' : '整数'}`;
       else result[f.key] = n;
@@ -162,8 +156,7 @@ export function fieldsPayload(fields: FieldSpec[], values: Values): Row {
       else result[f.key] = list;
     } else if (!s && !f.optional) errors[f.key] = `请填写${f.label}`;
     else if (f.max && s.length > f.max) errors[f.key] = `${f.label}最多 ${f.max} 个字符`;
-    else if (s && f.kind === 'url' && !webUrl(s))
-      errors[f.key] = '请输入完整的 HTTP 或 HTTPS 地址，不含账号或片段';
+    else if (s && f.kind === 'url' && !webUrl(s)) errors[f.key] = '请输入完整的 HTTP 或 HTTPS 地址，不含账号或片段';
     else if (f.options && !f.options.some((o) => o.value === s)) errors[f.key] = `请选择${f.label}`;
     else result[f.key] = s;
   }
@@ -319,8 +312,7 @@ export function azureEndpoint(value: string): boolean {
 export function textTranslationPayload(values: Values): Row {
   const body = fieldsPayload(textTranslationFields, values);
   const problems: Record<string, string> = {};
-  if (!azureEndpoint(text(body.endpoint)))
-    problems.endpoint = '请填写 Azure Translator 的 HTTPS 地址';
+  if (!azureEndpoint(text(body.endpoint))) problems.endpoint = '请填写 Azure Translator 的 HTTPS 地址';
   const region = text(body.region).toLowerCase();
   if (!/^[a-z0-9]*$/.test(region)) problems.region = '区域只能包含小写字母和数字';
   if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(text(body.target_language)))
@@ -430,9 +422,7 @@ export const providerFields: FieldSpec[] = [
 ];
 export const GATEWAY = 'https://ai.picpony.top:10443/v1';
 /** The form's values for a provider (or a new one), the candidates kept beside them. */
-export function providerValues(
-  source: Omit<ProviderDraft, 'api_key' | 'clear_key'> | null,
-): Values {
+export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_key'> | null): Values {
   const p = source ?? {
     name: '',
     base_url: '',
@@ -473,12 +463,9 @@ export function providerPayload(values: Values): ProviderDraft {
   const candidates = [...new Set(strings(values.model_candidates ?? []))];
   const problems: Record<string, string> = {};
   if (candidates.some((m) => !m.trim() || m.length > 160)) problems.model = '候选模型名称无效';
-  if (body.model_selection === 'manual' && !text(body.model))
-    problems.model = '固定模型时请填写模型名称';
-  if (text(body.base_url) && !text(body.base_url).startsWith('https://'))
-    problems.base_url = '请填写 HTTPS 地址';
-  if (text(body.models_url) && !text(body.models_url).startsWith('https://'))
-    problems.models_url = '请填写 HTTPS 地址';
+  if (body.model_selection === 'manual' && !text(body.model)) problems.model = '固定模型时请填写模型名称';
+  if (text(body.base_url) && !text(body.base_url).startsWith('https://')) problems.base_url = '请填写 HTTPS 地址';
+  if (text(body.models_url) && !text(body.models_url).startsWith('https://')) problems.models_url = '请填写 HTTPS 地址';
   if (body.clear_key && body.api_key) problems.api_key = '清除密钥时请先清空新密钥';
   if (Object.keys(problems).length) throw new FormProblem(problems);
   return {

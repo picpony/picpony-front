@@ -41,13 +41,7 @@ import {
 } from '@/components/RichTextEditorShell';
 import './RichTextEditor.css';
 
-import type {
-  IDomEditor,
-  Toolbar,
-  IEditorConfig,
-  IDropPanelMenu,
-  IModalMenu,
-} from '@wangeditor/editor';
+import type { IDomEditor, Toolbar, IEditorConfig, IDropPanelMenu, IModalMenu } from '@wangeditor/editor';
 
 export type { RichTextEditorHandle, RichTextEditorSize };
 
@@ -100,10 +94,7 @@ function styleListRows(editable: HTMLElement) {
   );
   for (const row of rows) {
     row.setAttribute('data-editor-list', '');
-    row.toggleAttribute(
-      'data-editor-list-start',
-      !rows.has(row.previousElementSibling as HTMLElement),
-    );
+    row.toggleAttribute('data-editor-list-start', !rows.has(row.previousElementSibling as HTMLElement));
     row.toggleAttribute('data-editor-list-end', !rows.has(row.nextElementSibling as HTMLElement));
   }
 }
@@ -246,12 +237,7 @@ const TOOL_GAP = 2;
 const DIVIDER = 9;
 const BAR_PADDING = 12;
 const PANEL_TOOL_MIN = 60;
-const PANEL_TOOLS: ReadonlySet<string> = new Set([
-  'color',
-  'bgColor',
-  'group-image',
-  'insertTable',
-]);
+const PANEL_TOOLS: ReadonlySet<string> = new Set(['color', 'bgColor', 'group-image', 'insertTable']);
 
 interface ToolbarPlan {
   keys: readonly string[];
@@ -259,8 +245,7 @@ interface ToolbarPlan {
   overflow: boolean;
 }
 
-const widthOf = (key: string, tool: number) =>
-  PANEL_TOOLS.has(key) ? Math.max(tool, PANEL_TOOL_MIN) : tool;
+const widthOf = (key: string, tool: number) => (PANEL_TOOLS.has(key) ? Math.max(tool, PANEL_TOOL_MIN) : tool);
 
 /** The width a run of tools takes on one row, its gaps and dividers included. */
 function runWidth(keys: readonly string[], tool: number): number {
@@ -519,10 +504,7 @@ export default function RichTextEditor({
         if (!slot || editorScrollbars.has(scroller)) return;
         addClasses(slot, 'os-slot');
         scroller.setAttribute('data-os-axis', 'y');
-        editorScrollbars.set(
-          scroller,
-          mountSlottedScrollbar(scroller, slot, { axis: 'y', observeInput: true }),
-        );
+        editorScrollbars.set(scroller, mountSlottedScrollbar(scroller, slot, { axis: 'y', observeInput: true }));
       });
       for (const [scroller, handle] of editorScrollbars) {
         if (!scroller.isConnected) {
@@ -540,13 +522,7 @@ export default function RichTextEditor({
 
     const init = async () => {
       const { createEditor, createToolbar, DomEditor } = await loadEditorPackage();
-      if (
-        !isCurrent() ||
-        !editorContainerRef.current ||
-        !toolbarContainerRef.current ||
-        !shellRef.current
-      )
-        return;
+      if (!isCurrent() || !editorContainerRef.current || !toolbarContainerRef.current || !shellRef.current) return;
       const config = latest.current;
       const editorConfig: Partial<IEditorConfig> = {
         autoFocus: false,
@@ -579,10 +555,7 @@ export default function RichTextEditor({
       };
       if (config.enableImageUpload) {
         editorConfig.MENU_CONF!.uploadImage = {
-          async customUpload(
-            file: File,
-            insertFn: (url: string, alt: string, href: string) => void,
-          ) {
+          async customUpload(file: File, insertFn: (url: string, alt: string, href: string) => void) {
             const owner = editorRef.current;
             if (!owner || !isCurrent() || latest.current.disabled) return;
             const readCredential = latest.current.getToken ?? readToken;
@@ -611,8 +584,7 @@ export default function RichTextEditor({
             }
             /* What the editor draws is the picture read back with the token (else the file
                itself); what it writes is the stored path (`editorValue`). */
-            const preview =
-              (await mediaPreview(token, outcome.path)) ?? rememberMediaPreview(outcome.path, file);
+            const preview = (await mediaPreview(token, outcome.path)) ?? rememberMediaPreview(outcome.path, file);
             if (!isCurrent() || editorRef.current !== owner || latest.current.disabled) return;
             insertFn(preview ?? getAssetUrl(outcome.path), '', '');
             latest.current.onUploaded?.(outcome.path);
@@ -690,10 +662,7 @@ export default function RichTextEditor({
       };
       const restoreAfterPanel = (anchor: HTMLElement) => () => {
         const active = document.activeElement;
-        if (
-          canEdit() &&
-          (active === document.body || active === anchor || active === editorFocusTarget())
-        )
+        if (canEdit() && (active === document.body || active === anchor || active === editorFocusTarget()))
           editor.restoreSelection();
       };
       const openTool = (key: string, anchor: HTMLElement) => {
@@ -713,8 +682,7 @@ export default function RichTextEditor({
               if (action === 'insertImage') openTool(action, anchor);
               else {
                 const upload = menuOf(action);
-                if (upload && !upload.isDisabled(editor))
-                  upload.exec(editor, upload.getValue(editor));
+                if (upload && !upload.isDisabled(editor)) upload.exec(editor, upload.getValue(editor));
               }
             },
           });
@@ -763,9 +731,7 @@ export default function RichTextEditor({
               if (!canEdit()) return;
               editor.restoreSelection();
               native
-                .querySelector<HTMLElement>(
-                  `td[data-x="${Number(values[1]) - 1}"][data-y="${Number(values[0]) - 1}"]`,
-                )
+                .querySelector<HTMLElement>(`td[data-x="${Number(values[1]) - 1}"][data-y="${Number(values[0]) - 1}"]`)
                 ?.click();
             },
           });
@@ -811,9 +777,7 @@ export default function RichTextEditor({
         if ((event.target as Element).closest('button[data-menu-key]')) event.preventDefault();
       };
       const panelClick = (event: MouseEvent) => {
-        const button = (event.target as Element).closest<HTMLButtonElement>(
-          'button[data-menu-key]',
-        );
+        const button = (event.target as Element).closest<HTMLButtonElement>('button[data-menu-key]');
         const key = button?.dataset.menuKey;
         if (button && (key === 'undo' || key === 'redo')) {
           event.preventDefault();
@@ -835,13 +799,7 @@ export default function RichTextEditor({
           ? shell.querySelector<HTMLButtonElement>('button[data-menu-key="insertLink"]')
           : (event.target as Element).closest<HTMLButtonElement>('button[data-menu-key]');
         const key = linkShortcut ? 'insertLink' : button?.dataset.menuKey;
-        if (
-          !button ||
-          !key ||
-          (!linkShortcut && event.key !== 'ArrowDown') ||
-          !PANEL_TOOLS_HANDLED.has(key)
-        )
-          return;
+        if (!button || !key || (!linkShortcut && event.key !== 'ArrowDown') || !PANEL_TOOLS_HANDLED.has(key)) return;
         event.preventDefault();
         event.stopPropagation();
         openTool(key, button);
@@ -861,9 +819,7 @@ export default function RichTextEditor({
           panelsRef.current?.context(null);
           return;
         }
-        const buttons = Array.from(
-          bar.querySelectorAll<HTMLButtonElement>('button[data-menu-key]'),
-        );
+        const buttons = Array.from(bar.querySelectorAll<HTMLButtonElement>('button[data-menu-key]'));
         const type = buttons.some((button) => button.dataset.menuKey === 'editLink')
           ? 'link'
           : buttons.some((button) => button.dataset.menuKey === 'deleteImage')
@@ -892,8 +848,7 @@ export default function RichTextEditor({
             else {
               const action = menuOf(key);
               editor.restoreSelection();
-              if (action && !action.isDisabled(editor))
-                action.exec(editor, action.getValue(editor));
+              if (action && !action.isDisabled(editor)) action.exec(editor, action.getValue(editor));
             }
           },
           dismiss: () => DomEditor.getHoverbar(editor)?.hideAndClean(),
@@ -903,92 +858,69 @@ export default function RichTextEditor({
       // WangEditor uses a non-ARIA role and CSS-only tooltip labels. Bridge its
       // real DOM, including controls added when a toolbar group opens.
       const nameControls = () => {
-        const editable =
-          editorContainerRef.current?.querySelector<HTMLElement>('[data-slate-editor]');
+        const editable = editorContainerRef.current?.querySelector<HTMLElement>('[data-slate-editor]');
         if (editable) {
-          const {
-            label: name,
-            placeholder: hint,
-            invalid: bad,
-            describedBy: described,
-          } = latest.current;
+          const { label: name, placeholder: hint, invalid: bad, describedBy: described } = latest.current;
           editable.setAttribute('role', 'textbox');
           editable.setAttribute('aria-multiline', 'true');
           addClasses(editable, 'rich-text-content focus-visible:outline-hidden');
           editable.classList.toggle('disabled-content', latest.current.disabled);
           styleListRows(editable);
-          if (editable.getAttribute('aria-label') !== (name || hint))
-            editable.setAttribute('aria-label', name || hint);
+          if (editable.getAttribute('aria-label') !== (name || hint)) editable.setAttribute('aria-label', name || hint);
           if (bad) editable.setAttribute('aria-invalid', 'true');
           else editable.removeAttribute('aria-invalid');
           if (described) editable.setAttribute('aria-describedby', described);
           else editable.removeAttribute('aria-describedby');
         }
-        shellRef.current
-          ?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]')
-          .forEach((button) => {
-            const key = button.dataset.menuKey ?? '';
-            const label =
-              MENU_LABELS[key] ??
-              button.getAttribute('aria-label') ??
-              button.dataset.tooltip?.trim() ??
-              button.textContent?.trim();
-            // A generic name is preferable to an unnamed toolbar command if a
-            // future WangEditor plugin introduces a new key before its wording is
-            // added above; the key itself is an implementation detail.
-            const name = label || '编辑器工具栏操作';
-            if (button.getAttribute('aria-label') !== name) button.setAttribute('aria-label', name);
-            if (PANEL_TOOLS_HANDLED.has(key)) {
-              const popup = key === 'group-image' ? 'menu' : 'dialog';
-              if (button.getAttribute('aria-haspopup') !== popup)
-                button.setAttribute('aria-haspopup', popup);
-            }
-            addClasses(button, EDITOR_CONTROL_CLASSES);
-            if (!button.hasAttribute('data-ripple')) button.setAttribute('data-ripple', '');
-            if (!button.hasAttribute('type')) button.type = 'button';
-            const history = editorHistory(editor);
-            const historyEmpty =
-              key === 'undo'
-                ? !history?.undos.length
-                : key === 'redo'
-                  ? !history?.redos.length
-                  : false;
-            const unavailable =
-              latest.current.disabled || button.classList.contains('disabled') || historyEmpty;
-            if (button.disabled !== unavailable) button.disabled = unavailable;
-            button.classList.toggle('disabled-content', unavailable);
-            const selected =
-              button.classList.contains('active') ||
-              button.getAttribute('aria-expanded') === 'true';
-            button.classList.toggle('forced-selected', selected);
-            if (button.getAttribute('aria-disabled') !== String(unavailable))
-              button.setAttribute('aria-disabled', String(unavailable));
-            if (TOGGLE_TOOLS.has(key) && button.getAttribute('aria-pressed') !== String(selected)) {
-              button.setAttribute('aria-pressed', String(selected));
-            }
-            // The shared tooltip uses the same label; the package's pseudo-elements
-            // must not take over the state-layer pseudo-element on a button.
-            if (button.classList.contains('w-e-menu-tooltip-v5'))
-              button.classList.remove('w-e-menu-tooltip-v5');
-          });
+        shellRef.current?.querySelectorAll<HTMLButtonElement>('button[data-menu-key]').forEach((button) => {
+          const key = button.dataset.menuKey ?? '';
+          const label =
+            MENU_LABELS[key] ??
+            button.getAttribute('aria-label') ??
+            button.dataset.tooltip?.trim() ??
+            button.textContent?.trim();
+          // A generic name is preferable to an unnamed toolbar command if a
+          // future WangEditor plugin introduces a new key before its wording is
+          // added above; the key itself is an implementation detail.
+          const name = label || '编辑器工具栏操作';
+          if (button.getAttribute('aria-label') !== name) button.setAttribute('aria-label', name);
+          if (PANEL_TOOLS_HANDLED.has(key)) {
+            const popup = key === 'group-image' ? 'menu' : 'dialog';
+            if (button.getAttribute('aria-haspopup') !== popup) button.setAttribute('aria-haspopup', popup);
+          }
+          addClasses(button, EDITOR_CONTROL_CLASSES);
+          if (!button.hasAttribute('data-ripple')) button.setAttribute('data-ripple', '');
+          if (!button.hasAttribute('type')) button.type = 'button';
+          const history = editorHistory(editor);
+          const historyEmpty =
+            key === 'undo' ? !history?.undos.length : key === 'redo' ? !history?.redos.length : false;
+          const unavailable = latest.current.disabled || button.classList.contains('disabled') || historyEmpty;
+          if (button.disabled !== unavailable) button.disabled = unavailable;
+          button.classList.toggle('disabled-content', unavailable);
+          const selected = button.classList.contains('active') || button.getAttribute('aria-expanded') === 'true';
+          button.classList.toggle('forced-selected', selected);
+          if (button.getAttribute('aria-disabled') !== String(unavailable))
+            button.setAttribute('aria-disabled', String(unavailable));
+          if (TOGGLE_TOOLS.has(key) && button.getAttribute('aria-pressed') !== String(selected)) {
+            button.setAttribute('aria-pressed', String(selected));
+          }
+          // The shared tooltip uses the same label; the package's pseudo-elements
+          // must not take over the state-layer pseudo-element on a button.
+          if (button.classList.contains('w-e-menu-tooltip-v5')) button.classList.remove('w-e-menu-tooltip-v5');
+        });
         if (shellRef.current) syncScrollbars(shellRef.current);
-        const nextHints = Array.from(
-          shellRef.current?.querySelectorAll<HTMLElement>('button[data-menu-key]') ?? [],
-        )
+        const nextHints = Array.from(shellRef.current?.querySelectorAll<HTMLElement>('button[data-menu-key]') ?? [])
           .filter((target) => !target.closest('.w-e-hover-bar, .w-e-bar-item-menus-container'))
           .map((target) => ({
             target,
-            label: target.matches(
-              ':disabled, [aria-disabled="true"], [aria-expanded="true"], .disabled',
-            )
+            label: target.matches(':disabled, [aria-disabled="true"], [aria-expanded="true"], .disabled')
               ? undefined
               : (target.getAttribute('aria-label') ?? undefined),
           }));
         setHints((previous) =>
           previous.length === nextHints.length &&
           nextHints.every(
-            (hint, index) =>
-              hint.target === previous[index].target && hint.label === previous[index].label,
+            (hint, index) => hint.target === previous[index].target && hint.label === previous[index].label,
           )
             ? previous
             : nextHints,
@@ -1003,14 +935,7 @@ export default function RichTextEditor({
         characterData: true,
         subtree: true,
         attributes: true,
-        attributeFilter: [
-          'data-tooltip',
-          'class',
-          'disabled',
-          'aria-disabled',
-          'aria-expanded',
-          'style',
-        ],
+        attributeFilter: ['data-tooltip', 'class', 'disabled', 'aria-disabled', 'aria-expanded', 'style'],
       });
       /* A width change re-plans the row (a phone turned, a sidebar opened); nothing is rebuilt
          unless the tools that fit have changed. */
@@ -1109,13 +1034,7 @@ export default function RichTextEditor({
     >
       <FollowHeight track>
         <div ref={rowRef} data-toolbar-row="" className={EDITOR_TOOLBAR_CLASS_NAME}>
-          <div
-            ref={toolbarContainerRef}
-            id={toolbarId}
-            role="toolbar"
-            aria-label="格式"
-            className="min-w-0 flex-1"
-          />
+          <div ref={toolbarContainerRef} id={toolbarId} role="toolbar" aria-label="格式" className="min-w-0 flex-1" />
           {overflow && (
             <button
               type="button"

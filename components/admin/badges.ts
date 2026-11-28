@@ -67,10 +67,8 @@ export function badgeDateProblems(
   today = beijingToday(),
 ): { badgeExpiresAt?: string; linkExpiresAt?: string } {
   const problems: { badgeExpiresAt?: string; linkExpiresAt?: string } = {};
-  if (dates.badgeExpiresAt && dates.badgeExpiresAt < today)
-    problems.badgeExpiresAt = '徽章到期日期不能早于今天';
-  if (dates.linkExpiresAt && dates.linkExpiresAt < today)
-    problems.linkExpiresAt = '链接失效日期不能早于今天';
+  if (dates.badgeExpiresAt && dates.badgeExpiresAt < today) problems.badgeExpiresAt = '徽章到期日期不能早于今天';
+  if (dates.linkExpiresAt && dates.linkExpiresAt < today) problems.linkExpiresAt = '链接失效日期不能早于今天';
   if (
     !problems.badgeExpiresAt &&
     dates.badgeExpiresAt &&

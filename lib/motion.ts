@@ -5,16 +5,7 @@
  * Each implementation owns its state and lifecycle; they never import this facade.
  * Token-only consumers use motionTokens, springTiming or appScroller directly.
  */
-export {
-  SPRING,
-  spring,
-  surfaceArrival,
-  surfaceDeparture,
-  Flip,
-  gsap,
-  useGSAP,
-  Observer,
-} from './motion/engine';
+export { SPRING, spring, surfaceArrival, surfaceDeparture, Flip, gsap, useGSAP, Observer } from './motion/engine';
 export {
   circularReveal,
   changeScheme,

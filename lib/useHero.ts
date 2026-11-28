@@ -113,8 +113,7 @@ let detailCodeWarmScheduled = false;
 function scheduleDetailCodeWarm(href: string) {
   if (detailCodeWarmScheduled || typeof window === 'undefined') return;
   detailCodeWarmScheduled = true;
-  const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] })
-    .requestIdleCallback;
+  const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] }).requestIdleCallback;
   const later = (run: () => void) => {
     if (idle) idle.call(window, run, { timeout: 4000 });
     else setTimeout(run, 1500);
@@ -127,9 +126,7 @@ function scheduleDetailCodeWarm(href: string) {
       warmHeroEngine()
         .then((engine) => engine?.warmImageHero())
         .then((detail) =>
-          (
-            detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined
-          )?.warmDetailDeferredCode?.(),
+          (detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined)?.warmDetailDeferredCode?.(),
         ),
     () => {
       const family = getComputedStyle(document.body).fontFamily;
@@ -314,10 +311,7 @@ export function useHeroLink<T extends HTMLElement>({
         return;
       }
       /* The trailing click of a tap whose release already opened the picture. */
-      if (
-        event.detail !== 0 &&
-        performance.now() - releaseOpenedAtRef.current < TOUCH_CLICK_SWALLOW_MS
-      ) {
+      if (event.detail !== 0 && performance.now() - releaseOpenedAtRef.current < TOUCH_CLICK_SWALLOW_MS) {
         releaseOpenedAtRef.current = -Infinity;
         event.preventDefault();
         event.nativeEvent.stopImmediatePropagation();

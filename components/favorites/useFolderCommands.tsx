@@ -2,15 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  MdContentCopy,
-  MdDeleteOutline,
-  MdMoreVert,
-  MdPublic,
-  MdPublicOff,
-  MdSend,
-  MdStar,
-} from 'react-icons/md';
+import { MdContentCopy, MdDeleteOutline, MdMoreVert, MdPublic, MdPublicOff, MdSend, MdStar } from 'react-icons/md';
 import IconButton from '@/components/IconButton';
 import Menu, { type MenuAction } from '@/components/Menu';
 import { showToast } from '@/components/Toast';
@@ -22,11 +14,7 @@ import { favoritesHref, folderLabel, settled, type DefaultFolder } from '@/lib/f
 import { deleteFolders } from '@/lib/favoritesActions';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
-import {
-  readFavouriteSetting,
-  setDefaultFaveFolder,
-  setFolderPublic,
-} from '@/lib/favoritesSettings';
+import { readFavouriteSetting, setDefaultFaveFolder, setFolderPublic } from '@/lib/favoritesSettings';
 import { copyFolderLink } from '@/lib/favoritesShare';
 import { settingsHref } from '@/app/settings/tabs';
 
@@ -66,8 +54,7 @@ export function useFolderCommands({
   const { confirm, confirmDialog } = useConfirm();
   const { share, shareDialog } = useShareToContact();
 
-  const setPublic = (folder: FaveFolder, on: boolean) =>
-    setFolderPublic(token, folders, folder.id, on);
+  const setPublic = (folder: FaveFolder, on: boolean) => setFolderPublic(token, folders, folder.id, on);
 
   const run = async (folder: FaveFolder, command: FolderCommand) => {
     if (readToken() !== token) return;

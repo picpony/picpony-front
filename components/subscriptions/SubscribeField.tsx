@@ -67,10 +67,7 @@ export default function SubscribeField({
   const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, {
     keepPrevious: 'subscribe-field',
   });
-  const options = useMemo<TagSuggestion[]>(
-    () => (keyword ? (read.data ?? []) : []),
-    [keyword, read.data],
-  );
+  const options = useMemo<TagSuggestion[]>(() => (keyword ? (read.data ?? []) : []), [keyword, read.data]);
 
   const lookUp = (text: string) => {
     clearTimeout(timer.current);
@@ -166,13 +163,7 @@ export default function SubscribeField({
                   }}
                 />
               )}
-              <Button
-                type="submit"
-                variant="filled"
-                icon={<MdNotificationAdd />}
-                loading={busy}
-                responsiveLabel
-              >
+              <Button type="submit" variant="filled" icon={<MdNotificationAdd />} loading={busy} responsiveLabel>
                 订阅
               </Button>
             </>
@@ -200,9 +191,7 @@ export default function SubscribeField({
                 <span className={cn('size-2.5 rounded-full', tagCategoryDot(option.category))} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-body-l text-on-surface">
-                  {option.cn || option.en}
-                </span>
+                <span className="block truncate text-body-l text-on-surface">{option.cn || option.en}</span>
                 <span className="block truncate text-body-s text-on-surface-variant">
                   {option.cn ? `${option.en} · ${category.label}` : category.label}
                 </span>

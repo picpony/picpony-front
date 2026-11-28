@@ -5,13 +5,7 @@ import { cn } from '@/lib/utils';
 import { motionTier } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
 import { insideConcealedPane } from '@/lib/tabPaneVisibility';
-import {
-  dropMove,
-  followersOf,
-  markLayoutOwned,
-  precedersOf,
-  startMove,
-} from '@/components/admin/tableMotion';
+import { dropMove, followersOf, markLayoutOwned, precedersOf, startMove } from '@/components/admin/tableMotion';
 import { PageLoadingIndicator } from './LoadingIndicator';
 import EmptyState from './EmptyState';
 import ErrorRetry from './ErrorRetry';
@@ -136,11 +130,7 @@ function statusOf<T>(props: DataTableProps<T>, rows: readonly T[]): State<T>['st
   return rows.length === 0 ? 'empty' : '';
 }
 
-function entriesOf<T>(
-  props: DataTableProps<T>,
-  rows: readonly T[],
-  status: State<T>['status'],
-): Entry<T>[] {
+function entriesOf<T>(props: DataTableProps<T>, rows: readonly T[], status: State<T>['status']): Entry<T>[] {
   const result: Entry<T>[] = [];
   if (status === 'error') {
     result.push({
@@ -160,9 +150,7 @@ function entriesOf<T>(
 
 /** Two lists of rows with nothing in common: a different page or a different list, not an edit. */
 function disjoint<T>(previous: Entry<T>[], next: Entry<T>[]) {
-  const before = new Set(
-    previous.filter((entry) => entry.kind === 'row' && !entry.leaving).map((entry) => entry.key),
-  );
+  const before = new Set(previous.filter((entry) => entry.kind === 'row' && !entry.leaving).map((entry) => entry.key));
   const after = next.filter((entry) => entry.kind === 'row');
   return before.size > 0 && after.length > 0 && after.every((entry) => !before.has(entry.key));
 }
@@ -172,18 +160,12 @@ function disjoint<T>(previous: Entry<T>[], next: Entry<T>[]) {
  * where it was: after the nearest entry before it that is still there (`PresenceList`'s rule). A
  * row leaving keeps the editor it last showed. An entry that comes back (撤销) is simply present.
  */
-function merge<T>(
-  previous: Entry<T>[],
-  next: Entry<T>[],
-  expanded: Map<string, ReactNode>,
-): Entry<T>[] {
+function merge<T>(previous: Entry<T>[], next: Entry<T>[], expanded: Map<string, ReactNode>): Entry<T>[] {
   const present = new Set(next.map((entry) => entry.key));
   let result = next;
   previous.forEach((entry, index) => {
     if (present.has(entry.key)) return;
-    const leaving = entry.leaving
-      ? entry
-      : { ...entry, leaving: true, expanded: expanded.get(entry.key) };
+    const leaving = entry.leaving ? entry : { ...entry, leaving: true, expanded: expanded.get(entry.key) };
     let anchor = -1;
     for (let i = index - 1; i >= 0; i -= 1) {
       anchor = result.findIndex((candidate) => candidate.key === previous[i].key);
@@ -310,20 +292,10 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
     let entries = state.entries;
     let animate = false;
     let held = state.held;
-    if (
-      state.loading ||
-      !Object.is(props.listKey, state.listKey) ||
-      rows !== state.rows ||
-      status !== state.status
-    ) {
+    if (state.loading || !Object.is(props.listKey, state.listKey) || rows !== state.rows || status !== state.status) {
       const next = entriesOf(props, rows, status);
       const keepLeavers = typeof document !== 'undefined' && motionTier('list') !== 'off';
-      if (
-        state.loading ||
-        !Object.is(props.listKey, state.listKey) ||
-        disjoint(state.entries, next) ||
-        !keepLeavers
-      ) {
+      if (state.loading || !Object.is(props.listKey, state.listKey) || disjoint(state.entries, next) || !keepLeavers) {
         entries = next;
         /* Rows that replace the list outright size their own tracks: nothing on screen is held. */
         held = null;
@@ -368,8 +340,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
   }
 
   getSnapshotBeforeUpdate(_props: DataTableProps<T>, previous: State<T>): Snapshot {
-    if (!this.state.animate || previous.shape === this.state.shape || !this.body || !this.root)
-      return null;
+    if (!this.state.animate || previous.shape === this.state.shape || !this.body || !this.root) return null;
     if (motionTier('list') === 'off' || insideConcealedPane(this.root)) return { skip: true };
     const view = window.innerHeight;
     /* What follows the table moves with its rows; what precedes it moves when the table shrinks at
@@ -404,9 +375,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
       return;
     }
     markLayoutOwned(this.root);
-    const wasLeaving = new Set(
-      previous.entries.filter((entry) => entry.leaving).map((entry) => entry.key),
-    );
+    const wasLeaving = new Set(previous.entries.filter((entry) => entry.leaving).map((entry) => entry.key));
     const before = new Set(previous.entries.map((entry) => entry.key));
     const groups = this.groups();
 
@@ -467,14 +436,10 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
     }
     this.fitFirstRow();
     const retired = new Set(
-      this.state.entries
-        .filter((entry) => entry.leaving)
-        .flatMap((entry) => groups.get(entry.key) ?? []),
+      this.state.entries.filter((entry) => entry.leaving).flatMap((entry) => groups.get(entry.key) ?? []),
     );
     const movers = [
-      ...Array.from(body.children).filter(
-        (el): el is HTMLElement => el instanceof HTMLElement && !retired.has(el),
-      ),
+      ...Array.from(body.children).filter((el): el is HTMLElement => el instanceof HTMLElement && !retired.has(el)),
       ...snapshot.around.filter((el) => el.isConnected),
     ];
     for (const el of movers) dropMove(el);
@@ -501,12 +466,9 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
       }
       const dy = was.top - is.top;
       if (Math.abs(dy) < 0.5 || is.height === 0) continue;
-      this.track(
-        startMove(el, [{ transform: `translateY(${dy}px)` }, { transform: 'none' }], glide),
-      );
+      this.track(startMove(el, [{ transform: `translateY(${dy}px)` }, { transform: 'none' }], glide));
     }
-    for (const el of coming)
-      el.animate([{ opacity: opacities.get(el) ?? '0' }, { opacity: 1 }], fadeIn);
+    for (const el of coming) el.animate([{ opacity: opacities.get(el) ?? '0' }, { opacity: 1 }], fadeIn);
     const fadeOut = { ...springTiming('fastEffects', 'list'), fill: 'forwards' as const };
     for (const { key, els } of leaving) {
       els.forEach((el, index) => {
@@ -728,10 +690,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             )}
 
             {details.map((col) => (
-              <span
-                key={col.key}
-                className={cn('text-body-m text-on-surface min-w-0 wrap-anywhere', col.className)}
-              >
+              <span key={col.key} className={cn('text-body-m text-on-surface min-w-0 wrap-anywhere', col.className)}>
                 {/* The column's name, beside its value, where there is no header
                     row above to name it. */}
                 <span className="text-on-surface-variant @2xl/table:hidden">
@@ -747,10 +706,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
                 {actions.map((col) => (
                   <div
                     key={col.key}
-                    className={cn(
-                      'flex flex-wrap items-center gap-2 pointer-coarse:gap-4',
-                      col.className,
-                    )}
+                    className={cn('flex flex-wrap items-center gap-2 pointer-coarse:gap-4', col.className)}
                   >
                     {col.render(row, i)}
                   </div>
@@ -787,10 +743,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
           key={entry.key}
           data-presence-key={entry.key}
           tabIndex={-1}
-          className={cn(
-            'm3-row focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
-            rowTone,
-          )}
+          className={cn('m3-row focus-visible:outline-hidden focus-visible:ring-2 focus-ring', rowTone)}
         >
           {typeof empty === 'string' || empty == null ? (
             <EmptyState size="inline" title={empty ?? '暂无数据'} />
@@ -832,24 +785,17 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
               </div>
             )}
             {heading && (
-              <span
-                className={cn('text-label-l text-on-surface-variant min-w-0', heading.className)}
-              >
+              <span className={cn('text-label-l text-on-surface-variant min-w-0', heading.className)}>
                 {heading.header}
               </span>
             )}
             {details.map((col) => (
-              <span
-                key={col.key}
-                className={cn('text-label-l text-on-surface-variant min-w-0', col.className)}
-              >
+              <span key={col.key} className={cn('text-label-l text-on-surface-variant min-w-0', col.className)}>
                 {col.header}
               </span>
             ))}
             {actions.length > 0 && (
-              <span className="text-label-l text-on-surface-variant justify-self-end">
-                {actions[0].header}
-              </span>
+              <span className="text-label-l text-on-surface-variant justify-self-end">{actions[0].header}</span>
             )}
           </div>
 

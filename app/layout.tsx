@@ -118,9 +118,7 @@ export const viewport: Viewport = {
 };
 
 /** `{ id: [lightPrimary, darkPrimary] }`, for the pre-paint script to index. */
-const BUILT_IN_BAR_COLORS = Object.fromEntries(
-  PALETTES.map((p) => [p.id, [p.light.primary, p.dark.primary]]),
-);
+const BUILT_IN_BAR_COLORS = Object.fromEntries(PALETTES.map((p) => [p.id, [p.light.primary, p.dark.primary]]));
 
 /**
  * The eleventh palette, resolved from the spec in the cookie — its seed and its 副色相 (a bare
@@ -211,11 +209,7 @@ export default async function RootLayout({
      visitors (one Data Cache entry tagged with status, filter and blacklist tags), and `cookies()`
      already makes this route dynamic, so overlapping costs nothing while serialising puts the
      latencies end to end. */
-  const [cookieStore, headerStore, bootstrap] = await Promise.all([
-    cookies(),
-    headers(),
-    readSiteBootstrapOnce(),
-  ]);
+  const [cookieStore, headerStore, bootstrap] = await Promise.all([cookies(), headers(), readSiteBootstrapOnce()]);
   const { routePolicy, maintenance } = bootstrap;
   /* Windows takes a different Chinese face (see the note above `--font-han` in globals.css),
      so the first byte has to know. Chromium states the platform in a default client hint;
@@ -229,8 +223,7 @@ export default async function RootLayout({
      from a visitor (the session's token lives in the browser), so it goes by the hint the
      client writes from the backend's own answer — see `components/MaintenanceScreen.tsx`,
      which also corrects the hint when it is wrong in either direction. */
-  const maintenanceLocked =
-    maintenance.active && cookieStore.get(COOKIE_KEYS.maintenanceStaff)?.value !== '1';
+  const maintenanceLocked = maintenance.active && cookieStore.get(COOKIE_KEYS.maintenanceStaff)?.value !== '1';
   const sidebarMode = parseSidebarMode(cookieStore.get(COOKIE_KEYS.sidebarCollapsed)?.value);
   const darkMode = cookieStore.get(COOKIE_KEYS.darkMode)?.value === 'true';
   /* Only an explicit dismissal hides the banner, so a missing or corrupt cookie shows it —
@@ -248,17 +241,11 @@ export default async function RootLayout({
   const builtIn = PALETTES.find((p) => p.id === paletteCookie) ?? PALETTES[0];
   const onSky = paletteCookie === SKY_PALETTE;
   const skyPhaseCookie = cookieStore.get(COOKIE_KEYS.skyPhase)?.value;
-  const skyPhase = onSky
-    ? isSkyPhaseId(skyPhaseCookie)
-      ? skyPhaseEntry(skyPhaseCookie)
-      : skyPhaseAtBeijing()
-    : null;
+  const skyPhase = onSky ? (isSkyPhaseId(skyPhaseCookie) ? skyPhaseEntry(skyPhaseCookie) : skyPhaseAtBeijing()) : null;
   const onCustom = !onSky && paletteCookie === CUSTOM_PALETTE ? custom : null;
   const paletteId = onSky ? SKY_PALETTE : onCustom ? CUSTOM_PALETTE : builtIn.id;
   const effectiveDarkMode = skyPhase ? skyPhase.scheme === 'dark' : darkMode;
-  const barColors = custom
-    ? { ...BUILT_IN_BAR_COLORS, [CUSTOM_PALETTE]: custom.bar }
-    : BUILT_IN_BAR_COLORS;
+  const barColors = custom ? { ...BUILT_IN_BAR_COLORS, [CUSTOM_PALETTE]: custom.bar } : BUILT_IN_BAR_COLORS;
   const motionCookie = cookieStore.get(COOKIE_KEYS.motion)?.value;
   /* The spoiler tags, so the gallery's covers are in the server's own HTML, not appearing
      after hydration. Bounded and split rather than trusted: it is a cookie reaching a
@@ -293,8 +280,7 @@ export default async function RootLayout({
      不阻塞 — the direction a default should fail in for something whose absence is the normal
      state, and the one that holds the page back least. */
   const entranceCookie = cookieStore.get(COOKIE_KEYS.entranceMotion)?.value;
-  const entrance =
-    entranceCookie === 'off' || entranceCookie === 'blocking' ? entranceCookie : undefined;
+  const entrance = entranceCookie === 'off' || entranceCookie === 'blocking' ? entranceCookie : undefined;
   /* 单色 only on an explicit `mono`: a corrupt cookie means 多色, the default and the CSS's own
      attribute-free state. */
   const mono = cookieStore.get(COOKIE_KEYS.paletteHues)?.value === 'mono';
@@ -303,8 +289,7 @@ export default async function RootLayout({
   const splitDetailLayout = cookieStore.get(COOKIE_KEYS.detailLayout)?.value === 'split';
   /* 窄屏详情页左右切换按钮: hidden only on an explicit `false`, so a missing or corrupt cookie
      keeps the default shown state. */
-  const hideMobileDetailStep =
-    cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
+  const hideMobileDetailStep = cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
 
   return (
     <html
@@ -392,10 +377,7 @@ export default async function RootLayout({
             read fails it still carries the public filter rules and blacklist, with an empty
             `api` that makes the browser load the policy itself — holding no request more than
             2s for it (see `lib/route.server.ts` and `ensureRoutePolicy`). */}
-        <script
-          type="text/javascript"
-          dangerouslySetInnerHTML={{ __html: inlineRoutePolicyScript(routePolicy) }}
-        />
+        <script type="text/javascript" dangerouslySetInnerHTML={{ __html: inlineRoutePolicyScript(routePolicy) }} />
       </head>
 
       {/* **The splash is first in the byte stream** unless 入场动画 is 关闭: its mark writes itself
@@ -405,9 +387,7 @@ export default async function RootLayout({
           scripting off (`SplashScreen`). Not over the maintenance screen: there is no app behind
           it to enter. */}
       <body className="h-full flex flex-col overflow-hidden">
-        {entrance !== 'off' && entranceTier === 'standard' && !maintenanceLocked && (
-          <SplashScreen />
-        )}
+        {entrance !== 'off' && entranceTier === 'standard' && !maintenanceLocked && <SplashScreen />}
         <NextTopLoader
           /* Rides the chrome's bottom edge (`--app-chrome-bottom`, set in globals.css), where
              M3 puts a top app bar's linear indicator — and so below the dev banner and the

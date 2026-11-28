@@ -150,10 +150,7 @@ export type UnsubscribeOutcome =
  * removal must not go out on the token captured before it — the subscribe step above and the
  * shop's checkout check the same way (G3-018).
  */
-export async function unsubscribeConfirmed(
-  token: string,
-  tagName: string,
-): Promise<UnsubscribeOutcome> {
+export async function unsubscribeConfirmed(token: string, tagName: string): Promise<UnsubscribeOutcome> {
   if (readToken() !== token) return { kind: 'stale-session' };
   try {
     await unsubscribeFromTag(token, tagName);
@@ -181,9 +178,7 @@ export function markSubscriptionSeen(token: string, tagName: string): void {
   if (seenInFlight.has(key)) return;
   seenInFlight.add(key);
   writeList(token, (list) =>
-    list.map((entry) =>
-      normaliseTagName(entry.tagName) === wanted ? { ...entry, newCount: 0 } : entry,
-    ),
+    list.map((entry) => (normaliseTagName(entry.tagName) === wanted ? { ...entry, newCount: 0 } : entry)),
   );
   void markTagSubscriptionSeen(token, tagName)
     .catch(() => {})
@@ -196,9 +191,7 @@ export function failureSentence(what: string, why: string): string {
 }
 
 /** The toast a subscribe outcome is worth, as `[message, tone]`. */
-export function subscribeMessage(
-  outcome: SubscribeOutcome,
-): [string, 'success' | 'warning' | 'error'] {
+export function subscribeMessage(outcome: SubscribeOutcome): [string, 'success' | 'warning' | 'error'] {
   switch (outcome.kind) {
     case 'done':
       return [

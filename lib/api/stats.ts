@@ -57,10 +57,7 @@ export interface SiteStats {
   series: StatsPoint[];
 }
 
-export async function readSiteStats(
-  { start, end }: StatsWindow,
-  signal?: AbortSignal,
-): Promise<SiteStats> {
+export async function readSiteStats({ start, end }: StatsWindow, signal?: AbortSignal): Promise<SiteStats> {
   const data = await api<SiteStats>('GET', '/stats', {
     query: { start, end },
     signal,

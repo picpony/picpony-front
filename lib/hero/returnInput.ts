@@ -40,12 +40,8 @@ export function takeOverHeroReturnInput({
 }): HeroReturnInput | null {
   const snapshot = readHeroScrollInput();
   const inside = (target: EventTarget | null) => target instanceof Node && source.contains(target);
-  const touch =
-    snapshot.touches.length === 1 && inside(snapshot.touches[0].target)
-      ? snapshot.touches[0]
-      : null;
-  const wheel =
-    snapshot.touches.length === 0 && inside(snapshot.wheel?.target ?? null) ? snapshot.wheel : null;
+  const touch = snapshot.touches.length === 1 && inside(snapshot.touches[0].target) ? snapshot.touches[0] : null;
+  const wheel = snapshot.touches.length === 0 && inside(snapshot.wheel?.target ?? null) ? snapshot.wheel : null;
   if (!touch && !wheel) return null;
 
   let active = true;
@@ -100,9 +96,7 @@ export function takeOverHeroReturnInput({
     cleanups.push(() => window.removeEventListener('wheel', wheelListener, true));
     if (wheel.target) {
       wheel.target.addEventListener('wheel', wheelListener as EventListener, { passive: false });
-      cleanups.push(() =>
-        wheel.target?.removeEventListener('wheel', wheelListener as EventListener),
-      );
+      cleanups.push(() => wheel.target?.removeEventListener('wheel', wheelListener as EventListener));
     }
     waitWheelEnd();
   }
@@ -115,16 +109,13 @@ export function takeOverHeroReturnInput({
         finish('superseded');
         return;
       }
-      const moved = Array.from(event.changedTouches).find(
-        (entry) => entry.identifier === touch.identifier,
-      );
+      const moved = Array.from(event.changedTouches).find((entry) => entry.identifier === touch.identifier);
       if (moved) {
         onTouch(x - moved.clientX, y - moved.clientY);
         x = moved.clientX;
         y = moved.clientY;
       }
-      if (!Array.from(event.touches).some((entry) => entry.identifier === touch.identifier))
-        finish('ended');
+      if (!Array.from(event.touches).some((entry) => entry.identifier === touch.identifier)) finish('ended');
     };
     for (const type of ['touchmove', 'touchend', 'touchcancel']) {
       touch.target.addEventListener(type, touchListener, { passive: true });
@@ -137,8 +128,7 @@ export function takeOverHeroReturnInput({
       subscribeHeroInteraction(() => {
         // A real end is handled above. Losing the shared contact through blur or its safety
         // timeout cancels pending movement, even if a background tab cannot drain its frame.
-        if (!readHeroScrollInput().touches.some((entry) => entry.identifier === touch.identifier))
-          finish('superseded');
+        if (!readHeroScrollInput().touches.some((entry) => entry.identifier === touch.identifier)) finish('superseded');
       }),
     );
   }

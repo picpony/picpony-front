@@ -58,12 +58,7 @@ function unionHeroRects(a: HeroRect, b: HeroRect): HeroRect {
   };
 }
 import { bindHeroDismissGesture, type HeroPullRelease } from './gestures';
-import {
-  imageHeroHistory,
-  normalizeHeroHref,
-  type HeroHistoryNavigation,
-  type HeroHistoryRecord,
-} from './history';
+import { imageHeroHistory, normalizeHeroHref, type HeroHistoryNavigation, type HeroHistoryRecord } from './history';
 import {
   hasActiveHeroInput,
   initializeHeroInput,
@@ -96,12 +91,7 @@ import {
 } from './runtime';
 import { heroFrameScheduler } from './scheduler';
 import { HeroScrollContinuity, type HeroScrollOffset } from './scroll';
-import {
-  canFollowHeroScroll,
-  followHeroScroll,
-  type HeroScrollFollow,
-  type HeroScrollFollowStart,
-} from './follow';
+import { canFollowHeroScroll, followHeroScroll, type HeroScrollFollow, type HeroScrollFollowStart } from './follow';
 import { motionTier } from '@/lib/appearance';
 import {
   HeroSignal,
@@ -184,12 +174,7 @@ type OpeningScrollBridge = {
    * Stage from its content so the Stage can take the scroll back at the same offset. No offset
    * is mirrored anywhere while it owns — see `HeroController.promoteAdoption`.
    */
-  own: (
-    scroller: HTMLElement,
-    content: HTMLElement,
-    transferStageInput: boolean,
-    initial: HeroScrollOffset,
-  ) => void;
+  own: (scroller: HTMLElement, content: HTMLElement, transferStageInput: boolean, initial: HeroScrollOffset) => void;
   /** The Stage takes the scroll back, aligned once to where the route was. */
   disown: () => void;
   returnToGallery: (scroller: HTMLElement, outgoing?: HTMLElement) => void;
@@ -677,10 +662,7 @@ export class HeroController {
    */
   registerRoute(registration: HeroRouteRegistration) {
     this.initialize();
-    const route = this.routes.register(
-      registration,
-      normalizeHeroHref(`/pic/${registration.imageId}`),
-    );
+    const route = this.routes.register(registration, normalizeHeroHref(`/pic/${registration.imageId}`));
     const releaseClicks = this.guardRouteClicks(route);
 
     const foreground = this.foreground;
@@ -1141,8 +1123,7 @@ export class HeroController {
     );
     route.pull = pull;
 
-    const active = () =>
-      this.runtime.phase === 'detail-idle' && this.runtime.imageId === route.imageId;
+    const active = () => this.runtime.phase === 'detail-idle' && this.runtime.imageId === route.imageId;
     const release = bindHeroDismissGesture({
       target: route.scroller,
       scroller: route.scroller,
@@ -1306,8 +1287,7 @@ export class HeroController {
     const adopted = armed?.id ?? null;
     const id = adopted ?? ++this.sessionSequence;
     const record =
-      options.historyRecord ??
-      imageHeroHistory.createRecord(intent.snapshot, background, intent.detailHref, id);
+      options.historyRecord ?? imageHeroHistory.createRecord(intent.snapshot, background, intent.detailHref, id);
     if (options.historyRecord) imageHeroHistory.remember(record);
 
     const session: OpeningSession = {
@@ -1355,12 +1335,7 @@ export class HeroController {
 
     // Plant a same-URL history entry now: it is a synchronous Back barrier while
     // the App Router is still preparing its asynchronous route commit.
-    if (
-      !session.historyRestore &&
-      !session.collapseRecord &&
-      !session.predecessor &&
-      !session.provisionalClaimed
-    ) {
+    if (!session.historyRestore && !session.collapseRecord && !session.predecessor && !session.provisionalClaimed) {
       session.provisionalClaimed = imageHeroHistory.claim(record);
     }
 
@@ -1684,11 +1659,7 @@ export class HeroController {
     this.scheduleOpeningBindings(session, stage, motion);
   }
 
-  private scheduleOpeningBindings(
-    session: OpeningSession,
-    stage: HeroStageNodes,
-    motion: HeroMotion,
-  ) {
+  private scheduleOpeningBindings(session: OpeningSession, stage: HeroStageNodes, motion: HeroMotion) {
     /* **The picture's first frame before anything else.** Its tracks are created above and go
        to the compositor with the frame that ends this task; binding the scroll follow and the
        dismiss recognisers here put their peer animations, leases and listeners (~15ms at 4×
@@ -1755,11 +1726,9 @@ export class HeroController {
     this.foreground = session;
     this.pendingOpen = null;
     if (motion && measured) {
-      void motion
-        .reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
-        .catch(() => {
-          if (this.owns(session)) void this.reverseOpening(session, false);
-        });
+      void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs).catch(() => {
+        if (this.owns(session)) void this.reverseOpening(session, false);
+      });
       setStageReady(stage!, true);
       session.viewportBaseline = {
         destination: measured.destination,
@@ -1790,10 +1759,7 @@ export class HeroController {
       session.provisionalClaimed = true;
       this.startRouteNavigation(session);
     }
-    const committed = await this.waitForRouterCommit(
-      session.record.detailHref,
-      session.abort.signal,
-    );
+    const committed = await this.waitForRouterCommit(session.record.detailHref, session.abort.signal);
     if (!this.owns(session)) return false;
     session.resuming = false;
     return committed;
@@ -1818,12 +1784,7 @@ export class HeroController {
       await this.failParallelOpen(session);
       return false;
     }
-    if (
-      !(await this.waitForRouterCommit(
-        backgroundHref(session.collapseRecord!.background),
-        session.abort.signal,
-      ))
-    ) {
+    if (!(await this.waitForRouterCommit(backgroundHref(session.collapseRecord!.background), session.abort.signal))) {
       await this.failParallelOpen(session);
       return false;
     }
@@ -2058,11 +2019,8 @@ export class HeroController {
       /* In split mode the left media pane is sticky, so translating the whole cross-fade block
          would move the route's picture away from the stationary flyer; follow only the scrolling
          right-column blocks instead. */
-      const revealNodes = sticky
-        ? [...route.content.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)]
-        : [];
-      const followTarget: HTMLElement | readonly HTMLElement[] =
-        revealNodes.length > 0 ? revealNodes : node;
+      const revealNodes = sticky ? [...route.content.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)] : [];
+      const followTarget: HTMLElement | readonly HTMLElement[] = revealNodes.length > 0 ? revealNodes : node;
       follow = bridge.follow(route.scroller, route.content, followTarget, {
         source: scroll.top,
         target: scroll.routeTop,
@@ -2159,15 +2117,10 @@ export class HeroController {
     // A wheel may pause past its active flag while the browser still owns the same stream.
     // Preserve that stream independently of the Stage's visual lifetime.
     const input = readHeroScrollInput();
-    session.scrollBridge?.own(
-      route.scroller,
-      route.content,
-      Boolean(input.wheel || input.touches.length),
-      {
-        left: scroll.routeLeft,
-        top: parked,
-      },
-    );
+    session.scrollBridge?.own(route.scroller, route.content, Boolean(input.wheel || input.touches.length), {
+      left: scroll.routeLeft,
+      top: parked,
+    });
     this.bindOpeningPullRecognizer(session, route.overlay, route.scroller, parked);
     heroProbeMark('hx:t:promote');
     this.events.notify();
@@ -2177,13 +2130,10 @@ export class HeroController {
   /** Keep a press's intent across turns and handoff; see docs/hero.md#input. */
   private guardRouteClicks(route: HeroRoute): Disposer {
     let held: { id: number; at: number } | null = null;
-    const inContent = (target: EventTarget | null) =>
-      target instanceof Node && route.scroller.contains(target);
+    const inContent = (target: EventTarget | null) => target instanceof Node && route.scroller.contains(target);
     const press = (event: PointerEvent) => {
       held =
-        !this.isPublicationQuiet() && inContent(event.target)
-          ? { id: event.pointerId, at: performance.now() }
-          : null;
+        !this.isPublicationQuiet() && inContent(event.target) ? { id: event.pointerId, at: performance.now() } : null;
     };
     const cancel = (event: PointerEvent) => {
       if (held?.id === event.pointerId) held = null;
@@ -2216,24 +2166,22 @@ export class HeroController {
   private watchPromotion(session: OpeningSession) {
     const adoption = session.adoption;
     if (!adoption) return;
-    void waitForHeroInteractionQuiet(session.abort.signal, HERO_HANDOFF_SCROLL_QUIET_MS).then(
-      (outcome) => {
-        if (outcome === 'aborted' || session.adoption !== adoption || adoption.owned) return;
-        void runScheduledFrame(session.abort.signal, {
-          read: () => readOpeningScroll(adoption.stage, adoption.route),
-          write: (scroll) => {
-            if (session.adoption !== adoption || adoption.owned) return;
-            /* A new stream started between the quiet and this frame: keep following and look
+    void waitForHeroInteractionQuiet(session.abort.signal, HERO_HANDOFF_SCROLL_QUIET_MS).then((outcome) => {
+      if (outcome === 'aborted' || session.adoption !== adoption || adoption.owned) return;
+      void runScheduledFrame(session.abort.signal, {
+        read: () => readOpeningScroll(adoption.stage, adoption.route),
+        write: (scroll) => {
+          if (session.adoption !== adoption || adoption.owned) return;
+          /* A new stream started between the quiet and this frame: keep following and look
                again — never move a gesture in progress. */
-            if (!isHeroInteractionQuiet()) {
-              this.watchPromotion(session);
-              return;
-            }
-            this.promoteAdoption(session, scroll);
-          },
-        });
-      },
-    );
+          if (!isHeroInteractionQuiet()) {
+            this.watchPromotion(session);
+            return;
+          }
+          this.promoteAdoption(session, scroll);
+        },
+      });
+    });
   }
 
   /**
@@ -2395,11 +2343,7 @@ export class HeroController {
    * adoption's leases are released *before* the handoff's own is taken: both write the Stage's
    * `visibility` and `pointer-events`, and a lease restores what it found.
    */
-  private async revealOpeningHandoff(
-    session: OpeningSession,
-    route: HeroRoute,
-    stage: HeroStageNodes,
-  ) {
+  private async revealOpeningHandoff(session: OpeningSession, route: HeroRoute, stage: HeroStageNodes) {
     let revealed = false;
     await runScheduledFrame(session.abort.signal, {
       read: () => stage.scroller.scrollTop,
@@ -2431,9 +2375,7 @@ export class HeroController {
           leaseInlineStyles(stage.scroller, { pointerEvents: 'none' }),
           leaseInlineStyles(stage.surface, { visibility: 'hidden' }),
           leaseInlineStyles(stage.content, { visibility: 'hidden' }),
-          session.motion
-            ? leaseInlineStyles(session.motion.flight.layer, { visibility: 'hidden' })
-            : null,
+          session.motion ? leaseInlineStyles(session.motion.flight.layer, { visibility: 'hidden' }) : null,
           stage.floatingBack
             ? leaseInlineStyles(stage.floatingBack, {
                 visibility: 'hidden',
@@ -2477,18 +2419,12 @@ export class HeroController {
       session.scrollBridge?.sync();
       session.scrollContinuity?.setInputTarget(route.scroller);
     };
-    listeners.forEach((type) =>
-      scroller.addEventListener(type, fresh, { capture: true, passive: false }),
-    );
+    listeners.forEach((type) => scroller.addEventListener(type, fresh, { capture: true, passive: false }));
     const abortWait = () => wait.abort();
     session.abort.signal.addEventListener('abort', abortWait, { once: true });
     try {
       if (!isHeroInteractionQuiet()) {
-        await waitForHeroInteractionQuiet(
-          wait.signal,
-          HERO_HANDOFF_SCROLL_QUIET_MS,
-          HERO_HANDOFF_FOLLOW_MAX_MS,
-        );
+        await waitForHeroInteractionQuiet(wait.signal, HERO_HANDOFF_SCROLL_QUIET_MS, HERO_HANDOFF_FOLLOW_MAX_MS);
       }
     } finally {
       session.abort.signal.removeEventListener('abort', abortWait);
@@ -2503,12 +2439,7 @@ export class HeroController {
   }
 
   private completeOpeningHandoff(session: OpeningSession) {
-    if (
-      session.handoffCommitted ||
-      this.foreground !== session ||
-      session.reversing ||
-      !session.handoffRoute
-    ) {
+    if (session.handoffCommitted || this.foreground !== session || session.reversing || !session.handoffRoute) {
       return false;
     }
     session.handoffCommitted = true;
@@ -2579,10 +2510,7 @@ export class HeroController {
   }
 
   /** No flyer (no stage, disconnected source, or a history restore): URL only. */
-  private async recoverOpeningWithoutFlight(
-    session: OpeningSession,
-    collapse: Promise<boolean> | null,
-  ) {
+  private async recoverOpeningWithoutFlight(session: OpeningSession, collapse: Promise<boolean> | null) {
     if (!this.owns(session)) return;
     this.setPhase('recovering', session, session.intent.background!);
 
@@ -2596,8 +2524,7 @@ export class HeroController {
     const committed = await waitForSignal(this.events, {
       signal: session.abort.signal,
       timeout: HERO_ROUTE_TIMEOUT_MS,
-      read: () =>
-        this.observedHref === normalizeHeroHref(session.intent.detailHref) ? true : null,
+      read: () => (this.observedHref === normalizeHeroHref(session.intent.detailHref) ? true : null),
     });
     if (!this.owns(session)) return;
     if (!committed) {
@@ -2642,11 +2569,7 @@ export class HeroController {
     await this.reverseOpening(session, true);
   }
 
-  private async reverseOpening(
-    session: OpeningSession,
-    navigationHandled: boolean,
-    restoreRecord?: HeroHistoryRecord,
-  ) {
+  private async reverseOpening(session: OpeningSession, navigationHandled: boolean, restoreRecord?: HeroHistoryRecord) {
     if (session.reversing || !this.owns(session)) return;
 
     // Measure before flipping any state; the pose must reflect what is on screen
@@ -2686,12 +2609,7 @@ export class HeroController {
        nothing the reverse reads. */
     const reversal =
       session.motion && measurement
-        ? session.motion.reverse(
-            measurement.destination,
-            measurement.plane,
-            measurement.pose,
-            measurement.inputs,
-          )
+        ? session.motion.reverse(measurement.destination, measurement.plane, measurement.pose, measurement.inputs)
         : null;
     // Caught, not dropped: `finished` rejects on cancel and the await below is later.
     reversal?.catch(() => undefined);
@@ -2726,8 +2644,7 @@ export class HeroController {
     }
 
     const galleryScroller = measurement?.plane?.scroller ?? getGalleryScrollPlane()?.scroller;
-    if (galleryScroller)
-      session.scrollBridge?.returnToGallery(galleryScroller, measurement?.inputSource);
+    if (galleryScroller) session.scrollBridge?.returnToGallery(galleryScroller, measurement?.inputSource);
     this.setPhase('reversing', session, session.intent.background!);
     session.shared.dispose();
 
@@ -2738,11 +2655,7 @@ export class HeroController {
     }
     if (this.foreground !== session) return;
 
-    const onBackground = await this.returnToBackground(
-      session,
-      navigationHandled,
-      () => this.foreground === session,
-    );
+    const onBackground = await this.returnToBackground(session, navigationHandled, () => this.foreground === session);
     if (this.foreground !== session) return;
 
     // An unclaimed touch still holds its flyer. A managed return can settle the pixels while
@@ -2764,8 +2677,7 @@ export class HeroController {
 
     const recordToRestore =
       restoreRecord ??
-      (session.collapseRecord &&
-      normalizeHeroHref(window.location.href) === session.collapseRecord.detailHref
+      (session.collapseRecord && normalizeHeroHref(window.location.href) === session.collapseRecord.detailHref
         ? session.collapseRecord
         : null);
     if (recordToRestore) {
@@ -2789,10 +2701,7 @@ export class HeroController {
       this.queuePendingOpen(pending, this.waitForGalleryIdle());
       return;
     }
-    this.queuePendingOpen(
-      pending,
-      this.waitForRouterCommit(backgroundHref(session.intent.background!)),
-    );
+    this.queuePendingOpen(pending, this.waitForRouterCommit(backgroundHref(session.intent.background!)));
   }
 
   /** Resolves as soon as nothing is flying and the gallery is the live view. */
@@ -2919,8 +2828,7 @@ export class HeroController {
 
     const route = this.routes.findByImage(intent.imageId, normalizeHeroHref(window.location.href));
     const findThumbnail = () =>
-      findImageHeroThumbnail(intent.imageId, record.snapshot.sourceKey) ??
-      findImageHeroThumbnail(intent.imageId);
+      findImageHeroThumbnail(intent.imageId, record.snapshot.sourceKey) ?? findImageHeroThumbnail(intent.imageId);
     const thumbnail = route?.target ? findThumbnail() : null;
     if (!route?.target || isHeroThumbnailInView(thumbnail)) {
       return this.beginClosing(intent, record, route, thumbnail);
@@ -2934,9 +2842,7 @@ export class HeroController {
     const preparation = (async (): Promise<ImageHeroCloseOutcome> => {
       const revealed = await Promise.race([
         this.revealInList(intent.imageId),
-        new Promise<boolean>((resolve) =>
-          window.setTimeout(() => resolve(false), STEP_REVEAL_TIMEOUT_MS),
-        ),
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), STEP_REVEAL_TIMEOUT_MS)),
       ]);
       // In the DOM is not yet on screen: the list's own scroll to it may still be settling.
       let shown = revealed ? findThumbnail() : null;
@@ -3164,9 +3070,7 @@ export class HeroController {
       /* Read before the flight's DOM writes below (see `HeroMotionOptions.preread`). */
       const background = getHeroBackgroundVisual();
       const backgroundPivot =
-        background?.parentElement === plane.scroller
-          ? plane.scrollTop + plane.viewportHeight / 2
-          : undefined;
+        background?.parentElement === plane.scroller ? plane.scrollTop + plane.viewportHeight / 2 : undefined;
       /* The shared tracks' starting values, on the same layout: read inside the motion's build
          they came after the flyer's `animate()` and the leases' writes, and each forced a style
          recalc on the close's first frame. */
@@ -3176,8 +3080,7 @@ export class HeroController {
         { overlay: route.overlay, floatingBack: route.floatingBack, choreography },
         'back',
       );
-      const backgroundAmount =
-        continueBackground && background ? readHeroBackgroundAmount(background) : undefined;
+      const backgroundAmount = continueBackground && background ? readHeroBackgroundAmount(background) : undefined;
       const flight = createHeroFlight({
         asset,
         treatment: thumbnail,
@@ -3257,10 +3160,7 @@ export class HeroController {
         return;
       }
 
-      const committed = await this.waitForRouterCommit(
-        backgroundHref(session.record.background),
-        session.abort.signal,
-      );
+      const committed = await this.waitForRouterCommit(backgroundHref(session.record.background), session.abort.signal);
       if (!(await this.guardClosing(session))) return;
       if (!committed) {
         await this.reverseClosing(session);
@@ -3340,8 +3240,7 @@ export class HeroController {
     this.foreground = null;
     const sequence = this.sessionSequence;
     const lifecycle = this.lifecycleAbort.signal;
-    const current = () =>
-      this.foreground === null && this.sessionSequence === sequence && !lifecycle.aborted;
+    const current = () => this.foreground === null && this.sessionSequence === sequence && !lifecycle.aborted;
     this.events.notify();
     const closed = await imageHeroHistory.ensureBackground(session.record, current);
     if (!current()) {
@@ -3386,9 +3285,7 @@ export class HeroController {
     const motion = previous.motion;
     const measured = motion
       ? {
-          destination: previous.thumbnail.isConnected
-            ? getGalleryLandingRect(previous.thumbnail)
-            : undefined,
+          destination: previous.thumbnail.isConnected ? getGalleryLandingRect(previous.thumbnail) : undefined,
           plane: getGalleryScrollPlane() ?? undefined,
           pose: motion.measurePose(),
           inputs: motion.readReverseInputs(),
@@ -3458,12 +3355,7 @@ export class HeroController {
 
     try {
       if (session.motion && measurement) {
-        await session.motion.reverse(
-          measurement.destination,
-          undefined,
-          measurement.pose,
-          measurement.inputs,
-        );
+        await session.motion.reverse(measurement.destination, undefined, measurement.pose, measurement.inputs);
       }
     } catch {
       // Continue restoring the real route even if the visual reverse was cut.
@@ -3485,12 +3377,8 @@ export class HeroController {
         signal: this.lifecycleAbort.signal,
         read: () => {
           if (this.foreground !== session) return false;
-          const current = this.routes.findByImage(
-            session.record.imageId,
-            session.record.detailHref,
-          );
-          return current &&
-            (current.resolvedWithoutMedia || (current.previewPaintable && current.target))
+          const current = this.routes.findByImage(session.record.imageId, session.record.detailHref);
+          return current && (current.resolvedWithoutMedia || (current.previewPaintable && current.target))
             ? current
             : null;
         },
@@ -3631,8 +3519,7 @@ export class HeroController {
     /** The route following on the compositor, until the handoff commits it into a peer. */
     let following: HeroScrollFollow | null = null;
     let released = false;
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => syncHeight(true));
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => syncHeight(true));
 
     const sync = () => {
       if (released || !this.owns(session)) return;
@@ -3646,8 +3533,7 @@ export class HeroController {
          — see `handleViewportInvalidation` for the re-aim's own half).
          Undefined means "measure it in the read phase". */
       const measuredHeight = fromObserver ? (targetContent?.scrollHeight ?? 0) : undefined;
-      const measured =
-        fromObserver && session.adoption ? this.measureViewportDestination(session) : undefined;
+      const measured = fromObserver && session.adoption ? this.measureViewportDestination(session) : undefined;
       heroFrameScheduler.request(sizeOwner, {
         read: () => measuredHeight ?? targetContent?.scrollHeight ?? 0,
         write: (height) => {
@@ -3739,8 +3625,8 @@ export class HeroController {
       },
       returnToGallery: (galleryScroller, priorSource) => {
         if (released) return;
-        const outgoing = [stage.scroller, targetScroller, priorSource].filter(
-          (element): element is HTMLElement => Boolean(element && element !== galleryScroller),
+        const outgoing = [stage.scroller, targetScroller, priorSource].filter((element): element is HTMLElement =>
+          Boolean(element && element !== galleryScroller),
         );
         continuity.replacePeers(galleryScroller);
         // The browser may still be delivering a wheel stream to the old
@@ -3864,10 +3750,7 @@ export class HeroController {
         if (record && imageHeroHistory.isGuard(record)) {
           /* The signal reaches the rewrite itself, not only this wait: abandoned by a traversal of
              the user's, it writes nothing even if its own step onto the base has landed. */
-          const updated = await settleUnlessAborted(
-            imageHeroHistory.retarget(record, target, signal),
-            signal,
-          );
+          const updated = await settleUnlessAborted(imageHeroHistory.retarget(record, target, signal), signal);
           if (signal.aborted) return true;
           if (!updated) {
             await this.recoverFailedStep(record);
@@ -3899,10 +3782,7 @@ export class HeroController {
   /** The rewrite did not happen. Put the guard back if the step onto the base did, and let the
    *  location say which picture the viewer shows. */
   private async recoverFailedStep(record: HeroHistoryRecord) {
-    if (
-      !imageHeroHistory.isGuard(record) &&
-      normalizeHeroHref(window.location.href) === record.detailHref
-    ) {
+    if (!imageHeroHistory.isGuard(record) && normalizeHeroHref(window.location.href) === record.detailHref) {
       await this.restoreGuardStrict(record);
     }
     this.failStep();
@@ -3956,21 +3836,15 @@ export class HeroController {
     const foreground = this.foreground;
 
     if (foreground?.kind === 'opening') {
-      if (
-        navigation.programmatic &&
-        foreground.resuming &&
-        navigation.programmaticToken === foreground.record.token
-      )
+      if (navigation.programmatic && foreground.resuming && navigation.programmaticToken === foreground.record.token)
         return;
       const background = normalizeHeroHref(backgroundHref(foreground.intent.background!));
       if (navigation.href === background) {
         const ownsParallelCollapse = Boolean(
           navigation.programmatic &&
           !foreground.routeNavigationStarted &&
-          ((foreground.collapseRecord &&
-            navigation.programmaticToken === foreground.collapseRecord.token) ||
-            (foreground.predecessor &&
-              navigation.programmaticToken === foreground.predecessor.token)),
+          ((foreground.collapseRecord && navigation.programmaticToken === foreground.collapseRecord.token) ||
+            (foreground.predecessor && navigation.programmaticToken === foreground.predecessor.token)),
         );
         if (!ownsParallelCollapse) void this.reverseOpening(foreground, true);
         return;
@@ -3989,9 +3863,7 @@ export class HeroController {
           navigation.href !== foreground.record.detailHref
         ) {
           // Back skipped past the provisional barrier; recover the gallery entry.
-          foreground.backgroundRecovery ??= imageHeroHistory.recoverSkippedBackground(
-            foreground.record,
-          );
+          foreground.backgroundRecovery ??= imageHeroHistory.recoverSkippedBackground(foreground.record);
         }
         void this.reverseOpening(foreground, true);
       }
@@ -4006,9 +3878,7 @@ export class HeroController {
       return;
     }
     /* The picture on screen as the traversal arrived: a step's target from its press on. */
-    const onScreen =
-      this.stepTarget?.imageId ??
-      (this.runtime.phase === 'detail-idle' ? this.runtime.imageId : null);
+    const onScreen = this.stepTarget?.imageId ?? (this.runtime.phase === 'detail-idle' ? this.runtime.imageId : null);
     if (this.detailStep) {
       /* The user's own traversal overtook a step whose ladder rewrite had not landed: the ladder
          still names the picture the step left, while the viewer shows its target. A Back closes
@@ -4101,12 +3971,9 @@ export class HeroController {
     }
 
     // Forward into a detail entry: replay the open.
-    const arrivingFromGallery =
-      navigation.previous === 'background' || navigation.previous === 'unknown';
+    const arrivingFromGallery = navigation.previous === 'background' || navigation.previous === 'unknown';
     const enteringDetail =
-      navigation.position === 'base' ||
-      navigation.position === 'guard' ||
-      navigation.position === 'provisional';
+      navigation.position === 'base' || navigation.position === 'guard' || navigation.position === 'provisional';
     if (!arrivingFromGallery || !enteringDetail) return;
     if (navigation.position === 'guard') {
       /* Back from a route the viewer was left for (a tag, an artist): the viewer returns as it
@@ -4122,18 +3989,13 @@ export class HeroController {
   private replayHistoryOpen(navigation: HeroHistoryNavigation) {
     const record = navigation.record!;
     const source =
-      findImageHeroThumbnail(record.imageId, record.snapshot.sourceKey) ??
-      findImageHeroThumbnail(record.imageId);
+      findImageHeroThumbnail(record.imageId, record.snapshot.sourceKey) ?? findImageHeroThumbnail(record.imageId);
     /* A ladder a step rewrote may carry no frame (the list never painted that picture); the card
        being flown from has one now. */
-    const kept = isHeroFrameAlive(record.snapshot.previewFrame)
-      ? record.snapshot.previewFrame
-      : null;
+    const kept = isHeroFrameAlive(record.snapshot.previewFrame) ? record.snapshot.previewFrame : null;
     const frame = kept ?? (source ? captureHeroFrame(getVisualMedia(source)) : null);
     const snapshot =
-      frame === record.snapshot.previewFrame
-        ? record.snapshot
-        : { ...record.snapshot, previewFrame: frame };
+      frame === record.snapshot.previewFrame ? record.snapshot : { ...record.snapshot, previewFrame: frame };
     const provisional = navigation.position === 'provisional';
     const intent: HeroOpenIntent = {
       snapshot,
@@ -4187,8 +4049,7 @@ export class HeroController {
 
   private isRecordBackground(record: HeroHistoryRecord) {
     return (
-      normalizeHeroHref(window.location.href) ===
-        normalizeHeroHref(backgroundHref(record.background)) &&
+      normalizeHeroHref(window.location.href) === normalizeHeroHref(backgroundHref(record.background)) &&
       imageHeroHistory.currentMarker() === null
     );
   }
@@ -4216,20 +4077,12 @@ export class HeroController {
   private async restoreGuardStrict(record: HeroHistoryRecord, current: () => boolean = () => true) {
     if (!current()) return false;
     // Queue even when the guard is current: a previous turn may already be traversing away.
-    if (
-      (await imageHeroHistory.restoreGuard(record, current)) &&
-      current() &&
-      imageHeroHistory.isGuard(record)
-    ) {
+    if ((await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record)) {
       return true;
     }
     if (!(await imageHeroHistory.waitForStable()) || !current()) return false;
     if (imageHeroHistory.isGuard(record)) return true;
-    return (
-      (await imageHeroHistory.restoreGuard(record, current)) &&
-      current() &&
-      imageHeroHistory.isGuard(record)
-    );
+    return (await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record);
   }
 
   /** Derive phase purely from the observable location, with no session running. */
@@ -4420,21 +4273,16 @@ export class HeroController {
   }
 
   private findOpeningRoute(session: OpeningSession, requirePreview: boolean) {
-    return this.routes.findForSession(
-      session.snapshot.image.id,
-      normalizeHeroHref(session.intent.detailHref),
-      {
-        floor: session.routeFloor,
-        requirePreview,
-        allowExisting: session.allowExistingRoute,
-      },
-    );
+    return this.routes.findForSession(session.snapshot.image.id, normalizeHeroHref(session.intent.detailHref), {
+      floor: session.routeFloor,
+      requirePreview,
+      allowExisting: session.allowExistingRoute,
+    });
   }
 
   /** The viewer's history entry, as the key for what the list under it looked like. */
   private viewerEntryKey() {
-    const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } })
-      .navigation;
+    const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } }).navigation;
     const key = nav?.currentEntry?.key;
     if (key) return `entry:${key}`;
     // Without the Navigation API: the ladder's token, or for a detail with none, its URL.
@@ -4474,8 +4322,7 @@ export class HeroController {
       }
     };
     // Safari shipped `requestIdleCallback` late; a timer is the same promise with less care.
-    const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] })
-      .requestIdleCallback;
+    const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] }).requestIdleCallback;
     if (idle) {
       const handle = window.requestIdleCallback(read, {
         timeout: BACKGROUND_SCROLL_READ_TIMEOUT_MS,
@@ -4601,26 +4448,16 @@ export class HeroController {
         waitAbort.abort();
         signals.forEach((signal) => signal.removeEventListener('abort', abortWait));
       }
-      if (
-        !this.owns(session) ||
-        session.abort.signal.aborted ||
-        lifecycleSignal.aborted ||
-        outcome === 'aborted'
-      )
+      if (!this.owns(session) || session.abort.signal.aborted || lifecycleSignal.aborted || outcome === 'aborted')
         return false;
       if (outcome === 'expired') return true;
       sync?.();
-      const frameConfirmed = await waitForFrame(
-        [session.abort.signal, lifecycleSignal],
-        HERO_ROUTE_TIMEOUT_MS,
-      );
-      if (!this.owns(session) || session.abort.signal.aborted || lifecycleSignal.aborted)
-        return false;
+      const frameConfirmed = await waitForFrame([session.abort.signal, lifecycleSignal], HERO_ROUTE_TIMEOUT_MS);
+      if (!this.owns(session) || session.abort.signal.aborted || lifecycleSignal.aborted) return false;
       // Hidden documents can suspend rAF after input has already transferred. The frame
       // timeout is a completed handoff budget too, not permission to abandon a live session.
       if (!frameConfirmed) return true;
-      if (continuity?.hasNativeInput || (isHeroInteractionQuiet() && !hasActiveHeroInput()))
-        return true;
+      if (continuity?.hasNativeInput || (isHeroInteractionQuiet() && !hasActiveHeroInput())) return true;
     }
     return false;
   }

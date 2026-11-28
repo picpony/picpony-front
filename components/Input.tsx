@@ -130,22 +130,13 @@ export function Field({
   const overLimit = count ? count.value > count.max : false;
 
   return (
-    <div
-      className={cn(
-        'flex min-w-0 flex-col gap-1',
-        !HAS_WIDTH.test(className) && 'w-full',
-        className,
-      )}
-    >
+    <div className={cn('flex min-w-0 flex-col gap-1', !HAS_WIDTH.test(className) && 'w-full', className)}>
       {children}
 
       {(error || helper || count) && (
         <div id={supportId} className="flex items-start justify-between gap-3">
           <p
-            className={cn(
-              'text-body-s min-w-0 wrap-anywhere',
-              error ? 'text-error' : 'text-on-surface-variant',
-            )}
+            className={cn('text-body-s min-w-0 wrap-anywhere', error ? 'text-error' : 'text-on-surface-variant')}
             // Errors announce themselves; helper text is static and must not.
             role={error ? 'alert' : undefined}
           >
@@ -156,10 +147,7 @@ export function Field({
               /* `on-surface-variant`, not `outline`: a character count is supporting
                  *text*, and `outline` is the boundary role — under the 4.5:1 AA floor
                  for body text on this app's light surface. */
-              className={cn(
-                'text-body-s shrink-0 tabular-nums',
-                overLimit ? 'text-error' : 'text-on-surface-variant',
-              )}
+              className={cn('text-body-s shrink-0 tabular-nums', overLimit ? 'text-error' : 'text-on-surface-variant')}
             >
               {count.value} / {count.max}
             </span>
@@ -406,9 +394,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           }}
           id={inputId}
           type={reveal && revealed ? 'text' : type}
-          aria-describedby={
-            [describedBy, supportId, countId].filter(Boolean).join(' ') || undefined
-          }
+          aria-describedby={[describedBy, supportId, countId].filter(Boolean).join(' ') || undefined}
           aria-invalid={error ? true : undefined}
           required={required}
           /* `:placeholder-shown` is what tells the label whether the field is
@@ -470,8 +456,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const dense = !labelled && size === 'sm';
   const shellRef = useRef<HTMLDivElement>(null);
   const localRef = useRef<HTMLTextAreaElement>(null);
-  const refreshKey =
-    typeof rest.value === 'string' || typeof rest.value === 'number' ? rest.value : undefined;
+  const refreshKey = typeof rest.value === 'string' || typeof rest.value === 'number' ? rest.value : undefined;
 
   useOverlayScrollbar(localRef, shellRef, {
     axis: 'y',
@@ -480,13 +465,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   });
 
   return (
-    <Field
-      helper={helper}
-      error={error}
-      count={count}
-      className={fieldClassName}
-      supportId={supportId}
-    >
+    <Field helper={helper} error={error} count={count} className={fieldClassName} supportId={supportId}>
       <div
         ref={shellRef}
         {...shellProps({
@@ -572,14 +551,7 @@ type ColorSwatchProps = {
 };
 
 export const ColorSwatch = forwardRef<HTMLButtonElement, ColorSwatchProps>(function ColorSwatch(
-  {
-    className = '',
-    'aria-label': ariaLabel,
-    value,
-    onChange,
-    disabled,
-    dialogTitle = '自定义颜色',
-  },
+  { className = '', 'aria-label': ariaLabel, value, onChange, disabled, dialogTitle = '自定义颜色' },
   ref,
 ) {
   /* Mounted from the first open on, and re-keyed per open so each starts on the current value. */

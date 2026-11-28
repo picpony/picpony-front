@@ -79,9 +79,7 @@ export default function DevBanner({
       className="bg-warning-container text-on-warning-container flex shrink-0 select-none items-center gap-2 pb-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
     >
       <MdConstruction size={ICON.dense} className="shrink-0" aria-hidden="true" />
-      <p className="text-body-s-emphasized min-w-0 flex-1 text-center">
-        网站处于开发阶段，不代表最终品质
-      </p>
+      <p className="text-body-s-emphasized min-w-0 flex-1 text-center">网站处于开发阶段，不代表最终品质</p>
       <IconButton
         variant="on-container"
         size="sm"

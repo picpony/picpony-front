@@ -23,18 +23,12 @@ function canonical(value: unknown): unknown {
 export function actionSignature(action: AssistantAction): string {
   return JSON.stringify([action.name, canonical(action.arguments)]);
 }
-export function approvedAction(
-  records: readonly TaskApproval[],
-  taskId: string,
-  action: AssistantAction,
-): boolean {
+export function approvedAction(records: readonly TaskApproval[], taskId: string, action: AssistantAction): boolean {
   return records.some(
     (record) =>
       record.taskId === taskId &&
       record.decision === 'confirm' &&
-      record.calls.some(
-        (call) => call.id === action.call_id && call.signature === actionSignature(action),
-      ),
+      record.calls.some((call) => call.id === action.call_id && call.signature === actionSignature(action)),
   );
 }
 export function taskRejected(records: readonly TaskApproval[], taskId: string): boolean {
@@ -61,9 +55,7 @@ export function parseApprovals(text: string | null): TaskApproval[] {
       if (!taskId || !Array.isArray(record.calls)) return [];
       const calls = record.calls.slice(0, 24).flatMap((value) => {
         const call = obj(value);
-        return typeof call.signature === 'string' &&
-          call.signature.length <= 20000 &&
-          str(call.id, 160)
+        return typeof call.signature === 'string' && call.signature.length <= 20000 && str(call.id, 160)
           ? [{ id: str(call.id, 160), signature: call.signature }]
           : [];
       });

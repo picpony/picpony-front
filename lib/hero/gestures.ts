@@ -139,9 +139,7 @@ export function bindHeroDismissGesture({
 
   const releaseVelocity = (event?: PointerEvent) =>
     tracker.velocity(
-      event
-        ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY }
-        : undefined,
+      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
     );
 
   const finishGesture = (
@@ -184,8 +182,7 @@ export function bindHeroDismissGesture({
 
   /** Feed every coalesced position to the tracker; publish only the newest pose. */
   const track = (event: PointerEvent) => {
-    const coalesced =
-      typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
     for (const point of coalesced.length ? coalesced : [event]) {
       tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
     }
@@ -421,8 +418,7 @@ export function bindHeroDismissGesture({
     const release = releasedClick;
     if (release) {
       const isGestureClick =
-        Math.hypot(event.clientX - release.x, event.clientY - release.y) <=
-        CLICK_SUPPRESSION_RADIUS_PX;
+        Math.hypot(event.clientX - release.x, event.clientY - release.y) <= CLICK_SUPPRESSION_RADIUS_PX;
       releasedClick = null;
       if (isGestureClick) {
         // Swallow the synthetic click a drag leaves behind.

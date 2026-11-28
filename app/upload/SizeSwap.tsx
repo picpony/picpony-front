@@ -51,8 +51,7 @@ export default class SizeSwap extends Component<SizeSwapProps> {
   private fade: Animation | null = null;
 
   getSnapshotBeforeUpdate(previous: SizeSwapProps): number | null {
-    if (previous.contentKey === this.props.contentKey || !this.node || motionTier('list') === 'off')
-      return null;
+    if (previous.contentKey === this.props.contentKey || !this.node || motionTier('list') === 'off') return null;
     return this.node.getBoundingClientRect().height;
   }
 
@@ -65,10 +64,7 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     const [start, end] = this.visibleTravel(node, from, to);
     if (Math.abs(end - start) >= 1) {
       node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-      const resize = node.animate(
-        [{ height: `${start}px` }, { height: `${end}px` }],
-        springTiming('layout', 'list'),
-      );
+      const resize = node.animate([{ height: `${start}px` }, { height: `${end}px` }], springTiming('layout', 'list'));
       const release = () => {
         if (this.resize !== resize) return;
         this.resize = null;
@@ -105,14 +101,11 @@ export default class SizeSwap extends Component<SizeSwapProps> {
     const top = node.getBoundingClientRect().top;
     const view = Math.max(0, scroller.getBoundingClientRect().top + scroller.clientHeight - top);
     let floor = 0;
-    const column =
-      this.props.endsPage && to < from ? node.closest('[data-page-content] > *') : null;
+    const column = this.props.endsPage && to < from ? node.closest('[data-page-content] > *') : null;
     if (column) {
       /* The free space under the page's content once the box has its new height: what the shell's
          column stretches by to keep the footer at the bottom of the screen. */
-      const content = Math.max(
-        ...Array.from(column.children, (child) => child.getBoundingClientRect().bottom),
-      );
+      const content = Math.max(...Array.from(column.children, (child) => child.getBoundingClientRect().bottom));
       floor = Math.min(view, to + Math.max(0, column.getBoundingClientRect().bottom - content));
     }
     return [clamp(from, floor, view), clamp(to, floor, view)];

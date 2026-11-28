@@ -34,24 +34,17 @@ function captureBlocks(root: HTMLElement, page: HTMLElement): Block[] {
       (style.backgroundColor === 'transparent' || style.backgroundColor === 'rgba(0, 0, 0, 0)') &&
       style.backgroundImage === 'none' &&
       style.boxShadow === 'none' &&
-      ![
-        style.borderTopWidth,
-        style.borderRightWidth,
-        style.borderBottomWidth,
-        style.borderLeftWidth,
-      ].some((border) => parseFloat(border) > 0) &&
+      ![style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].some(
+        (border) => parseFloat(border) > 0,
+      ) &&
       style.overflowX === 'visible' &&
       style.overflowY === 'visible';
-    const children = Array.from(element.children).filter(
-      (child): child is HTMLElement => child instanceof HTMLElement,
-    );
+    const children = Array.from(element.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
     if (
       depth < 12 &&
       children.length &&
       !element.hasAttribute('data-masonry-id') &&
-      (style.display === 'contents' ||
-        element.hasAttribute('data-tab-pane') ||
-        (bare && rect.height > 64))
+      (style.display === 'contents' || element.hasAttribute('data-tab-pane') || (bare && rect.height > 64))
     ) {
       children.forEach((child) => visit(child, depth + 1));
     } else if (style.display !== 'inline' && style.display !== 'contents') {
@@ -146,17 +139,9 @@ export function useSidebarResize(
     });
     // The drawer already owns the overlay layout spring, including shortened CSS
     // reversals and category speed. Its exact clock also drives the content tracks.
-    const leader =
-      running.find((animation) => animation.transitionProperty === 'width') ?? running[0];
+    const leader = running.find((animation) => animation.transitionProperty === 'width') ?? running[0];
     const timing = leader.effect!.getTiming();
-    for (const {
-      element,
-      rect,
-      next,
-      base,
-      position: computedPosition,
-      zIndex: computedZIndex,
-    } of after) {
+    for (const { element, rect, next, base, position: computedPosition, zIndex: computedZIndex } of after) {
       if (
         next.width <= 0 ||
         next.height <= 0 ||

@@ -25,9 +25,7 @@ function purchaseKey(account: string, lines: readonly CheckoutLine[]): string {
 }
 
 /** The session's coin balance, or `null` when it does not carry one (a session from before). */
-export function balanceOf(
-  user: Readonly<Record<string, unknown>> | null | undefined,
-): number | null {
+export function balanceOf(user: Readonly<Record<string, unknown>> | null | undefined): number | null {
   const value = user?.coins;
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
   const coins = Number(value);
@@ -60,12 +58,7 @@ export function isCheckoutRefusal(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
   const status = error.status;
   return (
-    error.kind === 'http' &&
-    status !== undefined &&
-    status >= 400 &&
-    status < 500 &&
-    status !== 408 &&
-    status !== 429
+    error.kind === 'http' && status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429
   );
 }
 
@@ -96,11 +89,7 @@ function refreshAfterPurchase(token: string) {
  * sentence says to look at 金币明细 before trying again. A retry of the same cart reuses the lost
  * purchase's key, so the backend answers it with that purchase rather than charging again.
  */
-export function runCheckout(
-  token: string,
-  account: string,
-  lines: readonly CheckoutLine[],
-): Promise<CheckoutOutcome> {
+export function runCheckout(token: string, account: string, lines: readonly CheckoutLine[]): Promise<CheckoutOutcome> {
   if (readToken() !== token)
     return Promise.resolve({ kind: 'stale-session', message: '登录状态已变化，请重新确认购买' });
   const pending = inFlight.get(account);
@@ -118,8 +107,7 @@ async function performCheckout(
   lines: readonly CheckoutLine[],
 ): Promise<CheckoutOutcome> {
   /* A confirmation may outlive the session that opened it, especially in another tab. */
-  if (readToken() !== token)
-    return { kind: 'stale-session', message: '登录状态已变化，请重新确认购买' };
+  if (readToken() !== token) return { kind: 'stale-session', message: '登录状态已变化，请重新确认购买' };
   const key = purchaseKey(account, lines);
   let result: CheckoutResult;
   try {

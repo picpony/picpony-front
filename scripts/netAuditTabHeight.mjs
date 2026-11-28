@@ -138,8 +138,7 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }));
   });
 const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result
-    ?.value;
+  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
 await send('Page.enable');
 socket.addEventListener('message', async (e) => {
@@ -486,9 +485,7 @@ const viewHolds = async (label) => {
     Math.abs(r.min - r.before) > 1 ||
     Math.abs(r.after - r.before) > 1
   ) {
-    console.error(
-      `\nFAIL: the 全部 / 本站讨论 switch moved the page under the reader (${JSON.stringify(r)})`,
-    );
+    console.error(`\nFAIL: the 全部 / 本站讨论 switch moved the page under the reader (${JSON.stringify(r)})`);
     return true;
   }
   return false;
@@ -544,9 +541,7 @@ const forum = after.panes.find((p) => p.name === 'forum');
 const gallery = after.panes.find((p) => p.name === 'gallery');
 let failed = paneFailed;
 if (gallery && !gallery.concealed) {
-  console.error(
-    `\nFAIL: the gallery pane is still shown (display ${gallery.display}) after the switch`,
-  );
+  console.error(`\nFAIL: the gallery pane is still shown (display ${gallery.display}) after the switch`);
   failed = true;
 }
 if (forum && Math.abs(after.panelH - forum.h) > 2) {
@@ -576,8 +571,6 @@ if (after.panelInline !== '-') {
   failed = true;
 }
 console.log(
-  failed
-    ? ''
-    : '\nthe whole pane moves, the view row holds the offset, and the panel measures the visible pane',
+  failed ? '' : '\nthe whole pane moves, the view row holds the offset, and the panel measures the visible pane',
 );
 process.exit(failed ? 1 : 0);

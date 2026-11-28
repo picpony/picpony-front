@@ -236,12 +236,7 @@ export default function SearchResults({
   return (
     /* Scroll target for <Pagination>: a page turn lands on the caption, not above the field. */
     <div data-pagination-anchor>
-      <ResultCaption
-        total={data.total}
-        shownPage={shownPage}
-        singleTag={singleTag}
-        action={captionAction}
-      />
+      <ResultCaption total={data.total} shownPage={shownPage} singleTag={singleTag} action={captionAction} />
       {isPrevious && error ? (
         /* The page turn failed: the pictures below are the last page that loaded, and the
            screen says so rather than leaving the pager on a page it is not showing. */
@@ -257,10 +252,7 @@ export default function SearchResults({
       <div
         ref={gridRef}
         aria-busy={turning || undefined}
-        className={cn(
-          'transition-opacity spring-default-effects',
-          turning ? 'paging-dim' : 'opacity-100',
-        )}
+        className={cn('transition-opacity spring-default-effects', turning ? 'paging-dim' : 'opacity-100')}
       >
         <MasonryGrid listKey={gridKey} images={data.images} sequence={sequence} />
       </div>

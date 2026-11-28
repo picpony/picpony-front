@@ -50,9 +50,7 @@ export function BadgeLinkDeleteScope({
     );
   };
   return (
-    <DeleteScopeContext.Provider
-      value={{ busyId, busy: mutation.busy, uncertain: mutation.uncertain, remove }}
-    >
+    <DeleteScopeContext.Provider value={{ busyId, busy: mutation.busy, uncertain: mutation.uncertain, remove }}>
       <MutationResult mutation={mutation} />
       {children}
       {confirmDialog}

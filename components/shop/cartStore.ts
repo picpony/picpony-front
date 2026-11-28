@@ -37,15 +37,11 @@ const UPDATED = 'picpony_cart_updated';
 const EMPTY: readonly CartLine[] = Object.freeze([]);
 
 /** The account a cart belongs to: the session's id, or its name when an old session has none. */
-export function cartAccount(
-  user: Readonly<Record<string, unknown>> | null | undefined,
-): string | null {
+export function cartAccount(user: Readonly<Record<string, unknown>> | null | undefined): string | null {
   if (!user) return null;
   const id = Number(user.id);
   if (Number.isSafeInteger(id) && id > 0) return `id:${id}`;
-  return typeof user.username === 'string' && user.username.trim()
-    ? `name:${user.username.trim()}`
-    : null;
+  return typeof user.username === 'string' && user.username.trim() ? `name:${user.username.trim()}` : null;
 }
 
 function lineOf(value: unknown): CartLine | null {
@@ -53,8 +49,7 @@ function lineOf(value: unknown): CartLine | null {
   const row = value as { id?: unknown; quantity?: unknown; name?: unknown };
   const id = Number(row.id);
   const quantity = Math.floor(Number(row.quantity));
-  if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(quantity) || quantity < 1)
-    return null;
+  if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(quantity) || quantity < 1) return null;
   return {
     id,
     quantity: Math.min(quantity, MAX_LINE_QUANTITY),
@@ -166,11 +161,7 @@ export function useCart(account: string | null): readonly CartLine[] {
  * now holds, or `null` when nothing was added — the line is already at the limit, or storage
  * refused the write.
  */
-export function addToCart(
-  account: string,
-  item: { id: number; name: string },
-  limit: number,
-): number | null {
+export function addToCart(account: string, item: { id: number; name: string }, limit: number): number | null {
   const ceiling = Math.min(Math.max(0, Math.floor(limit)), MAX_LINE_QUANTITY);
   let result: number | null = null;
   const written = update(account, (lines) => {
@@ -190,17 +181,10 @@ export function addToCart(
  * Returns whether the cart was stored — `false` when storage refused the write, and then nothing
  * changed (G3-006: the stepper used to drop this and fail silently where 加入购物车 explains).
  */
-export function setCartQuantity(
-  account: string,
-  id: number,
-  quantity: number,
-  limit: number,
-): boolean {
+export function setCartQuantity(account: string, id: number, quantity: number, limit: number): boolean {
   const ceiling = Math.min(Math.max(1, Math.floor(limit)), MAX_LINE_QUANTITY);
   const next = Math.min(Math.max(1, Math.floor(quantity)), ceiling);
-  return update(account, (lines) =>
-    lines.map((line) => (line.id === id ? { ...line, quantity: next } : line)),
-  );
+  return update(account, (lines) => lines.map((line) => (line.id === id ? { ...line, quantity: next } : line)));
 }
 
 /** Lines out of the cart. Returns whether that was stored, as `setCartQuantity` does. */
@@ -210,10 +194,7 @@ export function removeFromCart(account: string, ids: readonly number[]): boolean
 }
 
 /** Consume only the purchased quantities; additions made while checkout waited stay in the cart. */
-export function consumeFromCart(
-  account: string,
-  bought: readonly { id: number; quantity: number }[],
-): boolean {
+export function consumeFromCart(account: string, bought: readonly { id: number; quantity: number }[]): boolean {
   const quantities = new Map(bought.map((line) => [line.id, line.quantity]));
   return update(account, (lines) =>
     lines

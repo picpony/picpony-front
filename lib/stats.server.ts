@@ -37,13 +37,10 @@ export const readStatsSeed = createServerMemo({
   load: async (): Promise<StatsSeed | null> => {
     const window = defaultStatsWindow();
     try {
-      const res = await fetch(
-        `${UPSTREAM_ORIGIN}/api/v1/stats?start=${window.start}&end=${window.end}`,
-        {
-          next: { revalidate: cacheSeconds(REVALIDATE_S) },
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        },
-      );
+      const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/stats?start=${window.start}&end=${window.end}`, {
+        next: { revalidate: cacheSeconds(REVALIDATE_S) },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
       if (!res.ok) return null;
       const data = (await res.json()) as SiteStats;
       return { key: statsWindowKey(window), data, generatedAt: Date.now() };

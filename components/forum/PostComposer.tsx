@@ -12,10 +12,7 @@ import { showToast } from '@/components/Toast';
 import { EditorPlaceholder, type RichTextEditorHandle } from '@/components/RichTextEditorShell';
 import CoverField from '@/components/forum/CoverField';
 import { CategoryIcon } from '@/components/forum/ForumBadges';
-import SharedGroupsPicker, {
-  sharedGroupsOf,
-  type KeptGroups,
-} from '@/components/forum/SharedGroupsPicker';
+import SharedGroupsPicker, { sharedGroupsOf, type KeptGroups } from '@/components/forum/SharedGroupsPicker';
 import {
   createForumPost,
   FORUM_CATEGORIES,
@@ -88,16 +85,12 @@ async function send(
   editing: { id: number; revision: number } | null,
   body: ForumPostInput,
 ): Promise<Outcome> {
-  const attempt = postKeys.key(
-    `${token}:${editing ? `${editing.id}@${editing.revision}` : 'new'}`,
-    body,
-  );
+  const attempt = postKeys.key(`${token}:${editing ? `${editing.id}@${editing.revision}` : 'new'}`, body);
   try {
     const id =
       editing === null
         ? await createForumPost(token, body, attempt.key)
-        : (await updateForumPost(token, editing.id, body, editing.revision, attempt.key),
-          editing.id);
+        : (await updateForumPost(token, editing.id, body, editing.revision, attempt.key), editing.id);
     attempt.settle();
     return { ok: true, id };
   } catch (error) {
@@ -229,18 +222,14 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
     if (!title) next.title = '请输入标题';
     else if (title.length < TITLE_MIN) next.title = `标题至少需要 ${TITLE_MIN} 个字符`;
     else if (title.length > TITLE_MAX) next.title = `标题不能超过 ${TITLE_MAX} 个字符`;
-    if (draft.excerpt.trim().length > EXCERPT_MAX)
-      next.excerpt = `简介不能超过 ${EXCERPT_MAX} 个字符`;
-    if (draft.category === 'discussion' && isBlankRichText(draft.content))
-      next.content = '请输入正文';
+    if (draft.excerpt.trim().length > EXCERPT_MAX) next.excerpt = `简介不能超过 ${EXCERPT_MAX} 个字符`;
+    if (draft.category === 'discussion' && isBlankRichText(draft.content)) next.content = '请输入正文';
     if (draft.category === 'commission') {
       const link = draft.commissionLink.trim();
       if (link && !isCommissionLink(link)) next.link = '约稿平台链接需以 http:// 或 https:// 开头';
-      else if (!link && isBlankRichText(draft.content))
-        next.content = '正文和约稿平台链接至少填写一项';
+      else if (!link && isBlankRichText(draft.content)) next.content = '正文和约稿平台链接至少填写一项';
     }
-    if (draft.category === 'taggroups' && draft.groups.length === 0)
-      next.groups = '请至少选择一个标签组或屏蔽组';
+    if (draft.category === 'taggroups' && draft.groups.length === 0) next.groups = '请至少选择一个标签组或屏蔽组';
     return next;
   };
 
@@ -257,9 +246,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
     const category = draft.category;
     let cover: string | null = null;
     if (category !== 'taggroups') {
-      const first = draft.firstImageAsCover
-        ? (firstImageOf(content) ?? draft.images[0] ?? null)
-        : null;
+      const first = draft.firstImageAsCover ? (firstImageOf(content) ?? draft.images[0] ?? null) : null;
       cover = draft.cover ?? (first ? storedAssetPath(first) : null);
     }
     return {
@@ -270,9 +257,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       commission_link: category === 'commission' ? draft.commissionLink.trim() : '',
       cover_image: cover,
       shared_groups:
-        category === 'taggroups'
-          ? sharedGroupsOf(draft.groups, shareableGroups.peek({ token }).data, kept)
-          : null,
+        category === 'taggroups' ? sharedGroupsOf(draft.groups, shareableGroups.peek({ token }).data, kept) : null,
     };
   };
 
@@ -295,11 +280,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
     const body = bodyOf();
     setFailure(null);
     setSending(true);
-    const outcome = await send(
-      session,
-      post ? { id: post.id, revision: post.revision } : null,
-      body,
-    );
+    const outcome = await send(session, post ? { id: post.id, revision: post.revision } : null, body);
     setSending(false);
     if (readToken() !== session) return;
     if (!outcome.ok) {
@@ -321,8 +302,8 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md bg-secondary-container py-2 ps-4 pe-2 text-on-secondary-container">
           <MdHistory size={ICON.control} aria-hidden="true" className="shrink-0" />
           <p className="min-w-0 flex-1 text-body-m tabular-nums">
-            {editing === null ? '已恢复上次未完成的草稿' : '已恢复上次未保存的修改'}（
-            {formatShortDateTime(restoredAt)}）
+            {editing === null ? '已恢复上次未完成的草稿' : '已恢复上次未保存的修改'}（{formatShortDateTime(restoredAt)}
+            ）
           </p>
           <Button
             type="button"
@@ -399,9 +380,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
           <p id={contentId} className="mb-2 text-title-s text-on-surface">
             正文
             {category === 'commission' && (
-              <span className="text-body-m text-on-surface-variant">
-                （和约稿平台链接至少填写一项）
-              </span>
+              <span className="text-body-m text-on-surface-variant">（和约稿平台链接至少填写一项）</span>
             )}
           </p>
           <RichTextEditor
@@ -409,9 +388,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
             onChange={(next) => set('content', next, 'content')}
             size="post"
             label="正文"
-            placeholder={
-              category === 'commission' ? '输入约稿说明（价格、周期、要求等）…' : '输入帖子内容…'
-            }
+            placeholder={category === 'commission' ? '输入约稿说明（价格、周期、要求等）…' : '输入帖子内容…'}
             invalid={Boolean(errors.content)}
             describedBy={errors.content ? contentErrorId : undefined}
             handleRef={editor}
@@ -483,10 +460,7 @@ export default function PostComposer({ userId, token, post, onDone, onCancel }: 
       )}
 
       {failure && (
-        <p
-          role="alert"
-          className="rounded-md bg-error-container p-4 text-body-m text-on-error-container"
-        >
+        <p role="alert" className="rounded-md bg-error-container p-4 text-body-m text-on-error-container">
           {failure}
         </p>
       )}

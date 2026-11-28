@@ -129,10 +129,7 @@ export default function SubscribeButton({
         icon={
           /* Nested a level for the turn, so it names its own size (the slot sizes only a glyph
              directly inside it). Keyed on the state: each new glyph mounts, and turns if asked. */
-          <span
-            key={subscribed ? 'on' : 'off'}
-            className={cn('block', turnTo === subscribed && 'animate-icon-swap')}
-          >
+          <span key={subscribed ? 'on' : 'off'} className={cn('block', turnTo === subscribed && 'animate-icon-swap')}>
             <Glyph size={ICON.control} />
           </span>
         }

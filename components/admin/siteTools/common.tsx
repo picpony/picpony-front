@@ -20,8 +20,7 @@ import { useAdminMutation } from '../useAdminMutation';
 
 export function protectedPanel(Content: ComponentType<AdminPanelProps>) {
   return function SiteToolPanel(props: AdminPanelProps) {
-    if (!props.token || !canAccess('admin', props.role))
-      return <EmptyState size="pane" title="没有访问权限" />;
+    if (!props.token || !canAccess('admin', props.role)) return <EmptyState size="pane" title="没有访问权限" />;
     return <Content key={props.token} {...props} />;
   };
 }
@@ -89,9 +88,7 @@ export function SettingsFields({
 }) {
   /* Full-width for multiline/toggle fields and for any trailing odd half-width field in a run so
      no single field sits alone in a 50% orphan column. */
-  const fullSpan = fields.map(
-    (f) => ['textarea', 'ips', 'origins'].includes(f.kind ?? '') || f.kind === 'boolean',
-  );
+  const fullSpan = fields.map((f) => ['textarea', 'ips', 'origins'].includes(f.kind ?? '') || f.kind === 'boolean');
   let run = 0;
   for (let i = 0; i < fields.length; i++) {
     if (fullSpan[i]) {
@@ -150,13 +147,7 @@ export function SettingsFields({
                 readOnly={busy}
                 type={f.kind === 'password' ? 'password' : 'text'}
                 inputMode={
-                  f.kind === 'number'
-                    ? f.decimal
-                      ? 'decimal'
-                      : 'numeric'
-                    : f.kind === 'url'
-                      ? 'url'
-                      : 'text'
+                  f.kind === 'number' ? (f.decimal ? 'decimal' : 'numeric') : f.kind === 'url' ? 'url' : 'text'
                 }
                 autoComplete={f.kind === 'password' ? 'new-password' : 'off'}
                 helper={f.helper}
@@ -201,8 +192,7 @@ export function ConfigEditor({
 }) {
   const [draft, setDraft] = useState<{ values: Values; savedFrom?: Values } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const values =
-    draft && (!draft.savedFrom || draft.savedFrom === initial) ? draft.values : initial;
+  const values = draft && (!draft.savedFrom || draft.savedFrom === initial) ? draft.values : initial;
   const mutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   /* The form is named by its heading, not by an `aria-label` restating it (G4-031). */
@@ -232,8 +222,7 @@ export function ConfigEditor({
         `${title}保存失败`,
         { onCommitted: (data) => refresh(data, snapshot) },
       );
-    if (confirmation)
-      confirmThen(`确认保存${title}`, confirmation(snapshot), commit, { tone: 'filled' });
+    if (confirmation) confirmThen(`确认保存${title}`, confirmation(snapshot), commit, { tone: 'filled' });
     else commit();
   };
   return (

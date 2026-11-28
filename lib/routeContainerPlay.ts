@@ -48,11 +48,7 @@ export function crossFadeLayer(): HTMLElement | null {
 /** Whether every tab pane around `el` is the one on screen: a concealed pane keeps its layout, so
     what is in it still answers with rectangles, but nobody is looking at them. */
 export function inShownPanes(el: HTMLElement): boolean {
-  for (
-    let pane = el.closest('[data-tab-pane]');
-    pane;
-    pane = pane.parentElement?.closest('[data-tab-pane]') ?? null
-  ) {
+  for (let pane = el.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
     if (!pane.hasAttribute('data-tab-pane-active')) return false;
   }
   return true;
@@ -64,8 +60,7 @@ export function routePlayable(el: HTMLElement): boolean {
 }
 
 /** By the wall-clock rule: the slowest speed, the transform or the page fade, whichever ends later. */
-const BOUND_MS =
-  Math.max(FORUM_TRANSFORM_MS, HANDOFF_MS + SPRING_MS.slowEffects) * MOTION_SPEED_SCALE.slow;
+const BOUND_MS = Math.max(FORUM_TRANSFORM_MS, HANDOFF_MS + SPRING_MS.slowEffects) * MOTION_SPEED_SCALE.slow;
 
 /** Which way a flight goes along its pair: into the larger thing, or back into the list. */
 export type Leg = 'open' | 'back';
@@ -102,15 +97,12 @@ function mirrorPageContainer(layer: HTMLElement, crossFade: HTMLElement) {
   const style = getComputedStyle(page);
   if (!style.containerType || style.containerType === 'normal') return;
   const contentWidth =
-    page.getBoundingClientRect().width -
-    (parseFloat(style.paddingLeft) || 0) -
-    (parseFloat(style.paddingRight) || 0);
+    page.getBoundingClientRect().width - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
   const padRight = Math.max(0, layer.getBoundingClientRect().width - contentWidth);
   layer.style.boxSizing = 'border-box';
   layer.style.paddingRight = `${padRight}px`;
   layer.style.containerType = style.containerType;
-  if (style.containerName && style.containerName !== 'none')
-    layer.style.containerName = style.containerName;
+  if (style.containerName && style.containerName !== 'none') layer.style.containerName = style.containerName;
 }
 
 /** Plays a leg above the route cross-fade. Null when it cannot start. */
@@ -137,8 +129,7 @@ export function flyOnRoute(
       layer.setAttribute(`data-${how.kind}-transform`, '');
       /* Above the cross-fade, and above any flight still fading off there: the newest on top. */
       let anchor: Element = crossFade;
-      while (anchor.nextElementSibling?.hasAttribute('data-container-transform'))
-        anchor = anchor.nextElementSibling;
+      while (anchor.nextElementSibling?.hasAttribute('data-container-transform')) anchor = anchor.nextElementSibling;
       anchor.after(layer);
       mirrorPageContainer(layer, crossFade);
       return true;
@@ -159,10 +150,7 @@ export function flyOnRoute(
 
 /** Keeps a running leg as a flight — `flyOnRoute` does for every leg it starts; the registry's
     own test (`scripts/testFolderTransit.mjs`) does with a stand-in. */
-export function trackFlight(
-  handle: ContainerHandle,
-  how: { key: string; leg: Leg; target: HTMLElement },
-): Flight {
+export function trackFlight(handle: ContainerHandle, how: { key: string; leg: Leg; target: HTMLElement }): Flight {
   const flight: Flight = {
     key: how.key,
     leg: how.leg,
@@ -222,24 +210,13 @@ export function release(flight: Flight) {
 export function claimable(key: string, leg: Leg): Flight | null {
   let found: Flight | null = null;
   for (const flight of flights) {
-    if (
-      flight.key === key &&
-      flight.leg !== leg &&
-      !flight.handle.done &&
-      !flight.target.isConnected
-    )
-      found = flight;
+    if (flight.key === key && flight.leg !== leg && !flight.handle.done && !flight.target.isConnected) found = flight;
   }
   return found;
 }
 
 /** Turns `flight` onto `target`, now going `leg`; when it cannot be turned it fades where it is. */
-export function turnFlight(
-  flight: Flight,
-  leg: Leg,
-  target: HTMLElement,
-  turn: ContainerTurn,
-): boolean {
+export function turnFlight(flight: Flight, leg: Leg, target: HTMLElement, turn: ContainerTurn): boolean {
   cancelAnimationFrame(flight.wait);
   flight.wait = 0;
   flight.orphaned = false;

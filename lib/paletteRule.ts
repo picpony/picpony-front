@@ -33,13 +33,7 @@
  * keep 单色's colours in both (`selection`, below).
  */
 
-import {
-  Hct,
-  TonalPalette,
-  argbFromHex,
-  differenceDegrees,
-  hexFromArgb,
-} from '@material/material-color-utilities';
+import { Hct, TonalPalette, argbFromHex, differenceDegrees, hexFromArgb } from '@material/material-color-utilities';
 
 import { clearChromaAt } from './clearColor';
 import { quantizeCelebi } from './quantize';
@@ -115,8 +109,7 @@ export const MIN_SEED_CHROMA = 15;
  * grey be a theme: near-monochrome, not a grey bar over a randomly-hued ramp.
  */
 export const rampChroma = (hue: number, fillChroma: number) => {
-  const floor =
-    Math.min(BRAND_CHROMA, maxChroma(hue, CHROMA_REFERENCE_TONE)) * hueConfidence(fillChroma);
+  const floor = Math.min(BRAND_CHROMA, maxChroma(hue, CHROMA_REFERENCE_TONE)) * hueConfidence(fillChroma);
   return Math.max(fillChroma, floor);
 };
 
@@ -162,8 +155,7 @@ const fromHex = (hex: string) => {
   return TonalPalette.fromHueAndChroma(m.hue, m.chroma);
 };
 
-export type PaletteName =
-  'primary' | 'secondary' | 'neutral' | 'neutralVariant' | 'error' | 'success' | 'warning';
+export type PaletteName = 'primary' | 'secondary' | 'neutral' | 'neutralVariant' | 'error' | 'success' | 'warning';
 
 /* --- Exact installation: the displayed seed is `primary` -------------------
  * A wallpaper style decides `primary` at a dark P40/P80 and three of five don't
@@ -177,15 +169,9 @@ export type PaletteName =
 export function paletteSet(hue: number, chroma: number): Record<PaletteName, TonalPalette> {
   return {
     primary: TonalPalette.fromHueAndChroma(hue, chroma),
-    secondary: TonalPalette.fromHueAndChroma(
-      hue + HARMONY.secondary.dHue,
-      HARMONY.secondary.chroma,
-    ),
+    secondary: TonalPalette.fromHueAndChroma(hue + HARMONY.secondary.dHue, HARMONY.secondary.chroma),
     neutral: TonalPalette.fromHueAndChroma(hue, NEUTRAL_CHROMA),
-    neutralVariant: TonalPalette.fromHueAndChroma(
-      hue + HARMONY.neutralVariant.dHue,
-      HARMONY.neutralVariant.chroma,
-    ),
+    neutralVariant: TonalPalette.fromHueAndChroma(hue + HARMONY.neutralVariant.dHue, HARMONY.neutralVariant.chroma),
     error: fromHex(SEMANTIC.error),
     success: fromHex(SEMANTIC.success),
     warning: fromHex(SEMANTIC.warning),
@@ -338,23 +324,16 @@ function inkTones(
   const white = contrast('#ffffff', light) >= bar && contrast('#ffffff', dark) >= bar;
 
   let inkLight = Math.round(hctOf(light).tone);
-  while (
-    inkLight > 10 &&
-    contrast(p(inkLight), surfaceLight) < (readable ? BUILT_IN_INK_CONTRAST : LIGHT_INK)
-  )
+  while (inkLight > 10 && contrast(p(inkLight), surfaceLight) < (readable ? BUILT_IN_INK_CONTRAST : LIGHT_INK))
     inkLight -= 1;
 
   let inkDark = Math.round(hctOf(dark).tone);
-  while (
-    inkDark < 95 &&
-    contrast(p(inkDark), surfaceDark) < (readable ? BUILT_IN_INK_CONTRAST : DARK_SEPARATION)
-  )
+  while (inkDark < 95 && contrast(p(inkDark), surfaceDark) < (readable ? BUILT_IN_INK_CONTRAST : DARK_SEPARATION))
     inkDark += 1;
 
   let onTone = 20;
   if (readable && !white) {
-    while (onTone > 0 && Math.min(contrast(p(onTone), light), contrast(p(onTone), dark)) < bar)
-      onTone -= 1;
+    while (onTone > 0 && Math.min(contrast(p(onTone), light), contrast(p(onTone), dark)) < bar) onTone -= 1;
   }
   const ink = white ? '#ffffff' : p(onTone);
   const inkTone = white ? 100 : onTone;
@@ -811,8 +790,7 @@ export function deriveTheme(
   const light = lightHex.toLowerCase();
   const f = hctOf(light);
   const baseChroma = rampChroma(f.hue, f.chroma);
-  const chroma =
-    options?.rampChromaCap !== undefined ? Math.min(baseChroma, options.rampChromaCap) : baseChroma;
+  const chroma = options?.rampChromaCap !== undefined ? Math.min(baseChroma, options.rampChromaCap) : baseChroma;
   const palettes = paletteSet(f.hue, chroma);
 
   const derivedDark = !darkHex;
@@ -845,10 +823,7 @@ export function deriveTheme(
     const second = TonalPalette.fromHueAndChroma(accents.second.hue, accents.second.chroma);
     const secondDeep =
       inkPolicy === 'built-in'
-        ? TonalPalette.fromHueAndChroma(
-            accents.second.hue,
-            deepSecondChroma(accents.second.hue, accents.second.chroma),
-          )
+        ? TonalPalette.fromHueAndChroma(accents.second.hue, deepSecondChroma(accents.second.hue, accents.second.chroma))
         : second;
     const spark = TonalPalette.fromHueAndChroma(accents.spark.hue, accents.spark.chroma);
     const neutralC = accents.neutralChroma?.neutral ?? NEUTRAL_CHROMA;
@@ -943,9 +918,7 @@ export function paletteTones(derived: DerivedTheme): CustomTones {
 /** The themed tokens where 单色 differs from 多色, in either scheme. */
 export function monoTokens(derived: DerivedTheme): string[] {
   return THEMED_TOKENS.filter(
-    (token) =>
-      derived.mono.light[token] !== derived.light[token] ||
-      derived.mono.dark[token] !== derived.dark[token],
+    (token) => derived.mono.light[token] !== derived.light[token] || derived.mono.dark[token] !== derived.dark[token],
   );
 }
 
@@ -1199,11 +1172,7 @@ export function scoreClusters(quantised: Map<number, number>): ScoredCluster[] {
  * difference, 90° down to 15°, at which `desired` candidates exist, or the 15° yield if none. Only
  * ever colours of the picture: where nothing passes the answer is empty, never Google Blue.
  */
-export function monetPicks(
-  scored: readonly ScoredCluster[],
-  desired: number,
-  minChroma: number,
-): number[] {
+export function monetPicks(scored: readonly ScoredCluster[], desired: number, minChroma: number): number[] {
   const passing = scored.filter(
     ({ hct, proportion }) => hct.chroma >= minChroma && proportion > CUTOFF_EXCITED_PROPORTION,
   );
@@ -1211,8 +1180,7 @@ export function monetPicks(
   for (let difference = 90; difference >= 15; difference--) {
     chosen = [];
     for (const cluster of passing) {
-      if (!chosen.some((other) => differenceDegrees(cluster.hct.hue, other.hct.hue) < difference))
-        chosen.push(cluster);
+      if (!chosen.some((other) => differenceDegrees(cluster.hct.hue, other.hct.hue) < difference)) chosen.push(cluster);
       if (chosen.length >= desired) break;
     }
     if (chosen.length >= desired) break;
@@ -1228,24 +1196,16 @@ export function monetPicks(
  * darker tone of one they have (a deep and a pale pink are two themes), so a one-hue picture can
  * still offer choices without offering the same colour twice.
  */
-function morePictureColours(
-  scored: readonly ScoredCluster[],
-  chosen: readonly number[],
-  count: number,
-): number[] {
+function morePictureColours(scored: readonly ScoredCluster[], chosen: readonly number[], count: number): number[] {
   if (count <= 0) return [];
   const ranked = scored.filter(
-    ({ argb, hct, share }) =>
-      hct.chroma >= THEME_MIN_CHROMA && share >= EXTRA_MIN_SHARE && !chosen.includes(argb),
+    ({ argb, hct, share }) => hct.chroma >= THEME_MIN_CHROMA && share >= EXTRA_MIN_SHARE && !chosen.includes(argb),
   );
   const taken = chosen.map((argb) => Hct.fromInt(argb));
-  const newHue = (hct: Hct) =>
-    taken.every((t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP);
+  const newHue = (hct: Hct) => taken.every((t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP);
   const newTone = (hct: Hct) =>
     taken.every(
-      (t) =>
-        differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP ||
-        Math.abs(hct.tone - t.tone) >= EXTRA_TONE_GAP,
+      (t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP || Math.abs(hct.tone - t.tone) >= EXTRA_TONE_GAP,
     );
   const picked: number[] = [];
   for (const accepts of [newHue, newTone]) {

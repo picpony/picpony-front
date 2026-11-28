@@ -41,15 +41,7 @@ function target(comment: UserComment): { href: string; label: string; icon: Reac
  * is a sibling laid under the row's content — the `DropZone` arrangement: the content lets the
  * pointer through to it, except on a link of the comment's own.
  */
-export default function CommentsPane({
-  profile,
-  id,
-  own,
-  ready,
-  active,
-  token,
-  now,
-}: ProfilePaneProps) {
+export default function CommentsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:comments', id, 1);
   const visible = tabVisible(profile, 'comments', own);
@@ -68,9 +60,7 @@ export default function CommentsPane({
     );
   }
   if (data.comments.length === 0 && !read.isPrevious) {
-    return (
-      <EmptyState size="pane" icon={<MdChatBubbleOutline size={ICON.display} />} title="暂无评论" />
-    );
+    return <EmptyState size="pane" icon={<MdChatBubbleOutline size={ICON.display} />} title="暂无评论" />;
   }
 
   const failedTurn = read.isPrevious && Boolean(read.error);
@@ -87,12 +77,7 @@ export default function CommentsPane({
           />
         </div>
       )}
-      <div
-        className={cn(
-          'transition-opacity spring-default-effects',
-          read.isLoading ? 'paging-dim' : 'opacity-100',
-        )}
-      >
+      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
         {data.comments.map((comment, index) => {
           const where = target(comment);
           const when = formatCompactDateTime(comment.created_at, now);

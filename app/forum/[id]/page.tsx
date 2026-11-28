@@ -29,13 +29,7 @@ import ForumPostBody from '@/components/forum/ForumPostBody';
 import { CategoryBadge, PinnedBadge } from '@/components/forum/ForumBadges';
 import ReplyComposer, { type ReplyTarget } from '@/components/forum/ReplyComposer';
 import ThreadComments, { replyElementId } from '@/components/forum/ThreadComments';
-import {
-  copyPostLink,
-  removeComment,
-  removePost,
-  sendLike,
-  sharePostNatively,
-} from '@/components/forum/threadActions';
+import { copyPostLink, removeComment, removePost, sendLike, sharePostNatively } from '@/components/forum/threadActions';
 import { FORUM_STAFF_ROLES } from '@/lib/api/forum';
 import { apiErrorMessage, isNotFound, isRetryable } from '@/lib/api/errors';
 import { useBackOrParent } from '@/lib/backNavigation';
@@ -67,8 +61,7 @@ function replacePage(id: string, page: number) {
   else params.delete('page');
   const query = params.toString();
   const href = `/forum/${id}${query ? `?${query}` : ''}`;
-  if (href !== `${window.location.pathname}${window.location.search}`)
-    window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
 /** Shared cold-open placeholder for both the Suspense boundary and the client thread read. */
@@ -224,17 +217,14 @@ function ForumThreadContent() {
   const [sharing, setSharing] = useState(false);
   const shareItems: MenuAction[] = [
     { value: 'copy', label: '复制链接', icon: <MdLink /> },
-    ...(shareMenu?.native
-      ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare /> }]
-      : []),
+    ...(shareMenu?.native ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare /> }] : []),
   ];
   const onShareSelect = (value: string) => {
     setShareMenu(null);
     if (!post) return;
     setSharing(true);
     const done = () => setSharing(false);
-    const run =
-      value === 'native' ? sharePostNatively(post, readToken()) : copyPostLink(post, readToken());
+    const run = value === 'native' ? sharePostNatively(post, readToken()) : copyPostLink(post, readToken());
     void run.then(done, done);
   };
 
@@ -246,9 +236,7 @@ function ForumThreadContent() {
   /* The original front end's rule: the author edits; the author or staff delete. */
   const moreItems: MenuAction[] = [
     ...(own ? [{ value: 'edit', label: '编辑', icon: <MdEdit /> }] : []),
-    ...(own || staff
-      ? [{ value: 'delete', label: '删除', icon: <MdDeleteOutline />, destructive: true }]
-      : []),
+    ...(own || staff ? [{ value: 'delete', label: '删除', icon: <MdDeleteOutline />, destructive: true }] : []),
   ];
 
   const deletePost = async () => {
@@ -309,8 +297,7 @@ function ForumThreadContent() {
   );
 
   const canDeleteReply = useCallback(
-    (comment: ForumComment) =>
-      staff || (Number.isSafeInteger(myId) && myId > 0 && comment.user_id === myId),
+    (comment: ForumComment) => staff || (Number.isSafeInteger(myId) && myId > 0 && comment.user_id === myId),
     [staff, myId],
   );
 
@@ -336,10 +323,7 @@ function ForumThreadContent() {
       let replies: number | null = null;
       patchThreadPage({ id, page, token: session }, (previous) => {
         const comments = previous.comments.filter((row) => row.id !== comment.id);
-        const total = Math.max(
-          0,
-          previous.total_comments - (previous.comments.length - comments.length),
-        );
+        const total = Math.max(0, previous.total_comments - (previous.comments.length - comments.length));
         replies = total;
         return {
           ...previous,
@@ -445,8 +429,7 @@ function ForumThreadContent() {
     );
   }
 
-  const coverShown =
-    post.cover_image && !post.content.includes(post.cover_image) ? post.cover_image : null;
+  const coverShown = post.cover_image && !post.content.includes(post.cover_image) ? post.cover_image : null;
   const total = data?.total_comments ?? post.reply_count ?? 0;
 
   return (
@@ -469,16 +452,11 @@ function ForumThreadContent() {
             {(post.is_pinned || post.category !== 'discussion') && (
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {post.is_pinned && <PinnedBadge size="md" />}
-                {post.category !== 'discussion' && (
-                  <CategoryBadge category={post.category} size="md" />
-                )}
+                {post.category !== 'discussion' && <CategoryBadge category={post.category} size="md" />}
               </div>
             )}
             <div className="mb-4 flex items-start gap-2">
-              <h1
-                id={titleId}
-                className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s"
-              >
+              <h1 id={titleId} className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s">
                 {post.title}
               </h1>
               {moreItems.length > 0 && (
@@ -567,9 +545,7 @@ function ForumThreadContent() {
                 loading={sharing}
                 icon={<MdShare />}
                 onClick={() =>
-                  setShareMenu((open) =>
-                    open ? null : { native: typeof navigator.share === 'function' },
-                  )
+                  setShareMenu((open) => (open ? null : { native: typeof navigator.share === 'function' }))
                 }
                 className="ms-auto -me-2"
               />

@@ -10,12 +10,7 @@ import Radio from '@/components/Radio';
 import PendingTagsPicker from '@/components/groups/PendingTagsPicker';
 import TagComboField, { type TagComboFieldHandle } from '@/components/groups/TagComboField';
 import TagWell from '@/components/groups/TagWell';
-import {
-  MAX_GROUP_NAME,
-  MAX_TAGS_PER_LIST,
-  type BlockGroup,
-  type BlockGroupInput,
-} from '@/lib/api/blockGroups';
+import { MAX_GROUP_NAME, MAX_TAGS_PER_LIST, type BlockGroup, type BlockGroupInput } from '@/lib/api/blockGroups';
 import { ICON } from '@/lib/icons';
 
 type ListKind = 'hide' | 'spoiler';
@@ -53,13 +48,7 @@ interface BlockGroupEditorProps {
  * that leaves before it is read. 保存 is `filled`: saving is not destructive. A dialog with
  * changes asks before it is dismissed, by any route (✕, Esc, the scrim, Back).
  */
-export default function BlockGroupEditor({
-  isOpen,
-  initial,
-  saving,
-  onSave,
-  onClose,
-}: BlockGroupEditorProps) {
+export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onClose }: BlockGroupEditorProps) {
   const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState(initial);
   const [seen, setSeen] = useState(initial);
@@ -76,10 +65,7 @@ export default function BlockGroupEditor({
     setErrors({});
   }
 
-  const chosen = useMemo(
-    () => new Set([...draft.hidden, ...draft.spoilered]),
-    [draft.hidden, draft.spoilered],
-  );
+  const chosen = useMemo(() => new Set([...draft.hidden, ...draft.spoilered]), [draft.hidden, draft.spoilered]);
   const dirty =
     draft.name !== initial.name ||
     draft.hidden.join('\n') !== initial.hidden.join('\n') ||

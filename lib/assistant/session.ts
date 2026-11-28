@@ -49,8 +49,7 @@ import {
 } from './protocol';
 
 /** One piece of the live reply, in the order the turn produced it. */
-export type AssistantLiveBlock =
-  { type: 'text'; text: string } | { type: 'tool'; tool: AssistantLiveTool };
+export type AssistantLiveBlock = { type: 'text'; text: string } | { type: 'tool'; tool: AssistantLiveTool };
 
 export interface AssistantSnapshot {
   ready: boolean;
@@ -165,17 +164,8 @@ export function createAssistantSession(
     snapshot = { ...snapshot, ...next };
     listeners.forEach((listener) => listener());
   };
-  const add = (
-    role: AssistantMessage['role'],
-    content: string,
-    id = '',
-    tools?: AssistantLiveTool[],
-  ) => {
-    if (
-      (!content && !tools?.length) ||
-      (id && snapshot.messages.some((message) => message.id === id))
-    )
-      return;
+  const add = (role: AssistantMessage['role'], content: string, id = '', tools?: AssistantLiveTool[]) => {
+    if ((!content && !tools?.length) || (id && snapshot.messages.some((message) => message.id === id))) return;
     const message: AssistantMessage = { role, content, id };
     if (tools?.length) message.tools = tools;
     publish({ messages: [...snapshot.messages, message].slice(-MAX_HISTORY) });
@@ -198,8 +188,7 @@ export function createAssistantSession(
     failure: apiErrorMessage,
     definitive: (error) =>
       error instanceof ActionRejected ||
-      (error instanceof ApiError &&
-        (error.kind === 'envelope' || error.status === 400 || error.status === 403)),
+      (error instanceof ApiError && (error.kind === 'envelope' || error.status === 400 || error.status === 403)),
     journal,
   });
   const following = (id: string, status: string): AssistantTask => ({
@@ -217,9 +206,7 @@ export function createAssistantSession(
   function mergeTool(tools: AssistantLiveTool[], event: AssistantLiveTool): AssistantLiveTool[] {
     const index = tools.findIndex((tool) => tool.id === event.id);
     if (index < 0) return [...tools, event].slice(-8);
-    return tools.map((tool, at) =>
-      at === index ? { ...tool, ...event, ok: event.ok ?? tool.ok } : tool,
-    );
+    return tools.map((tool, at) => (at === index ? { ...tool, ...event, ok: event.ok ?? tool.ok } : tool));
   }
 
   /** Append a delta to the text run it belongs to, starting a new run after a tool call. */
@@ -233,10 +220,7 @@ export function createAssistantSession(
   }
 
   /** The first fragment and the completed call are one block, at the point the call began. */
-  function mergeLiveTool(
-    live: AssistantLiveBlock[],
-    tool: AssistantLiveTool,
-  ): AssistantLiveBlock[] {
+  function mergeLiveTool(live: AssistantLiveBlock[], tool: AssistantLiveTool): AssistantLiveBlock[] {
     const index = live.findIndex((block) => block.type === 'tool' && block.tool.id === tool.id);
     if (index < 0) return [...live, { type: 'tool', tool }];
     return live.map((block, at) =>
@@ -272,9 +256,7 @@ export function createAssistantSession(
           });
         } else if (event.type === 'tool_result') {
           publish({
-            tools: snapshot.tools.map((tool) =>
-              tool.id === event.id ? { ...tool, ok: event.ok } : tool,
-            ),
+            tools: snapshot.tools.map((tool) => (tool.id === event.id ? { ...tool, ok: event.ok } : tool)),
             live: snapshot.live.map((block) =>
               block.type === 'tool' && block.tool.id === event.id
                 ? { type: 'tool', tool: { ...block.tool, ok: event.ok } }
@@ -332,21 +314,17 @@ export function createAssistantSession(
       /* Calls the server issued to this page while the turn runs (page observations, clicks, reads
          and confirmed / fully granted writes). Each is executed once: the runner claims it (a call
          already answered comes back `cached`) and its receipt resumes the model. */
-      const calls = turn.client_calls.filter(
-        (call) => call.task_id === taskId && !handled.has(call.id),
-      );
+      const calls = turn.client_calls.filter((call) => call.task_id === taskId && !handled.has(call.id));
       if (calls.length) {
         publish({ task: following(taskId, turn.status), status: '彩彩 AI 正在操作页面…' });
         calls.forEach((call) => handled.add(call.id));
         /* A paused or failed run releases its calls for 核对任务; the runner's journal still keeps a
            write that may have reached the backend from being sent twice. */
         const release = () => calls.forEach((call) => handled.delete(call.id));
-        const ran = await runActions(taskId, calls.map(clientCallAction)).catch(
-          (error: unknown) => {
-            release();
-            throw error;
-          },
-        );
+        const ran = await runActions(taskId, calls.map(clientCallAction)).catch((error: unknown) => {
+          release();
+          throw error;
+        });
         if (!ran) {
           release();
           return;
@@ -452,8 +430,7 @@ export function createAssistantSession(
       return;
     }
     const first = obj(Array.isArray(result.results) ? result.results[0] : undefined);
-    const dispatched =
-      result.dispatched === true ? result : first.dispatched === true ? first : null;
+    const dispatched = result.dispatched === true ? result : first.dispatched === true ? first : null;
     if (dispatched) {
       const callId = uuid(dispatched.call_id);
       if (!callId) throw new Error('服务器未返回确认凭证，未执行');
@@ -588,11 +565,9 @@ export function createAssistantSession(
           });
           /* A turn still running here lost its page's stream on reload; tail it again. A parked
              confirmation is not streamed — the card is the whole of that state. */
-          if (activeTask && activeTask.status !== 'waiting_confirmation')
-            startStream(activeTask.id);
+          if (activeTask && activeTask.status !== 'waiting_confirmation') startStream(activeTask.id);
         } catch (error) {
-          if (!disposed && !isAborted(error))
-            publish({ error: apiErrorMessage(error), ready: true });
+          if (!disposed && !isAborted(error)) publish({ error: apiErrorMessage(error), ready: true });
         } finally {
           restoring = null;
           if (!disposed) publish({ loading: false });
@@ -674,9 +649,7 @@ export function createAssistantSession(
           await showPending(task.id);
           return;
         }
-        const record = approvals.find(
-          (item) => item.taskId === task.id && item.decision === 'confirm',
-        );
+        const record = approvals.find((item) => item.taskId === task.id && item.decision === 'confirm');
         const action = record && approvedActionOf(record);
         if (record && action && task.status === 'running') {
           const result = await decideAssistantAction(token, action.call_id, 'confirm');

@@ -48,8 +48,7 @@ registerHooks({
     return {
       url: pathToFileURL(resolved).href,
       shortCircuit: true,
-      format:
-        resolved.endsWith('.ts') || resolved.endsWith('.tsx') ? 'module-typescript' : undefined,
+      format: resolved.endsWith('.ts') || resolved.endsWith('.tsx') ? 'module-typescript' : undefined,
     };
   },
 });
@@ -198,10 +197,8 @@ function swirlField(ux, uy, t) {
   const o = Math.sin(ax * s * 2.1 + ay * s * 1.8 + t * 0.4);
 
   const u2 = s * 2.1;
-  const dx =
-    ax + Math.cos(ay * u2 * 2.7 - t * 0.45) * 0.07 + Math.sin(ax * u2 * 1.9 + t * 0.6) * 0.04;
-  const dy =
-    ay + Math.sin(ax * u2 * 2.3 + t * 0.65) * 0.07 + Math.cos(ay * u2 * 1.6 - t * 0.4) * 0.04;
+  const dx = ax + Math.cos(ay * u2 * 2.7 - t * 0.45) * 0.07 + Math.sin(ax * u2 * 1.9 + t * 0.6) * 0.04;
+  const dy = ay + Math.sin(ax * u2 * 2.3 + t * 0.65) * 0.07 + Math.cos(ay * u2 * 1.6 - t * 0.4) * 0.04;
   const h = Math.cos(dx * u2 * 1.4 - dy * u2 * 1.9 + t * 0.35);
 
   const f = s * 3.7;
@@ -259,13 +256,9 @@ const trailVec = [0, 0, 0];
       for (let c = 0; c < 3; c += 1) {
         const swirl = (colorA[c] + (colorB[c] - colorA[c]) * y) * shimmer;
         const directional =
-          ((ink.left[c] * wL + ink.right[c] * wR) * hw + (ink.up[c] * wU + ink.down[c] * wD) * vw) /
-          sw;
+          ((ink.left[c] * wL + ink.right[c] * wR) * hw + (ink.up[c] * wU + ink.down[c] * wD) * vw) / sw;
         const tint = ink.base[c] + (directional - ink.base[c]) * k;
-        backdrop[i + c] = Math.max(
-          0,
-          Math.min(255, Math.round(srgbEncode(swirl + (tint - swirl) * cover) * 255)),
-        );
+        backdrop[i + c] = Math.max(0, Math.min(255, Math.round(srgbEncode(swirl + (tint - swirl) * cover) * 255)));
       }
     }
   }
@@ -290,9 +283,7 @@ function backdropAt(px, py, out) {
     const b = backdrop[(y0 * W + x1) * 3 + c];
     const d = backdrop[(y1 * W + x0) * 3 + c];
     const e = backdrop[(y1 * W + x1) * 3 + c];
-    out[c] = srgbDecode(
-      (a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + d * (1 - tx) * ty + e * tx * ty) / 255,
-    );
+    out[c] = srgbDecode((a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + d * (1 - tx) * ty + e * tx * ty) / 255);
   }
 }
 

@@ -118,9 +118,7 @@ export function Tooltip({
     const left = clamp(centred, VIEWPORT_PADDING, window.innerWidth - VIEWPORT_PADDING - width);
     const next = { top: flip ? above : below, left, above: flip };
     setPlace((prev) =>
-      Math.abs(prev.top - next.top) < 0.5 &&
-      Math.abs(prev.left - next.left) < 0.5 &&
-      prev.above === next.above
+      Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.left - next.left) < 0.5 && prev.above === next.above
         ? prev
         : next,
     );
@@ -231,13 +229,7 @@ export function Tooltip({
  */
 type TooltipAnchorProps = Pick<
   HTMLAttributes<HTMLElement>,
-  | 'aria-describedby'
-  | 'onPointerEnter'
-  | 'onPointerLeave'
-  | 'onPointerDown'
-  | 'onFocus'
-  | 'onBlur'
-  | 'onContextMenu'
+  'aria-describedby' | 'onPointerEnter' | 'onPointerLeave' | 'onPointerDown' | 'onFocus' | 'onBlur' | 'onContextMenu'
 >;
 
 export function useTooltip(
@@ -420,23 +412,11 @@ export function useTooltip(
       externalTarget.removeEventListener('contextmenu', onContextMenu);
       if (anchorRef.current === externalTarget) anchorRef.current = null;
     };
-  }, [
-    externalTarget,
-    label,
-    showForPointer,
-    leaveForPointer,
-    onPress,
-    showForFocus,
-    hide,
-    cancel,
-    onContextMenu,
-  ]);
+  }, [externalTarget, label, showForPointer, leaveForPointer, onPress, showForFocus, hide, cancel, onContextMenu]);
 
   useLayoutEffect(() => {
     if (!externalTarget || !label || !open) return;
-    const ids = new Set(
-      externalTarget.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean),
-    );
+    const ids = new Set(externalTarget.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean));
     ids.add(id);
     externalTarget.setAttribute('aria-describedby', [...ids].join(' '));
     return () => {

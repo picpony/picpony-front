@@ -157,8 +157,8 @@ export async function loadTagCounts(
 
   if (joined.length > 0) {
     groups.push(
-      Promise.all(joined.map(({ tag, count }) => count.then((c) => [tag, c] as const))).then(
-        (pairs) => Object.fromEntries(pairs),
+      Promise.all(joined.map(({ tag, count }) => count.then((c) => [tag, c] as const))).then((pairs) =>
+        Object.fromEntries(pairs),
       ),
     );
   }

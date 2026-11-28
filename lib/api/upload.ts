@@ -19,14 +19,7 @@ import { API_V1, apiErrorBody, apiRequest } from './http';
  */
 
 /** What the form takes: the original front end's list, and Derpibooru's own. */
-export const UPLOAD_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'video/webm',
-  'video/mp4',
-] as const;
+export const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/webm', 'video/mp4'] as const;
 export const UPLOAD_ACCEPT = UPLOAD_TYPES.join(',');
 export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -115,8 +108,7 @@ function sendOnce(
     if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
     xhr.responseType = 'text';
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0)
-        onProgress?.(Math.min(1, event.loaded / event.total));
+      if (event.lengthComputable && event.total > 0) onProgress?.(Math.min(1, event.loaded / event.total));
     };
     xhr.onload = () => {
       done();
@@ -157,11 +149,7 @@ export async function uploadMedia(
   path: string,
   token: string,
   form: FormData,
-  {
-    signal,
-    onProgress,
-    tooLarge,
-  }: { signal?: AbortSignal; onProgress?: (fraction: number) => void; tooLarge: string },
+  { signal, onProgress, tooLarge }: { signal?: AbortSignal; onProgress?: (fraction: number) => void; tooLarge: string },
 ): Promise<UploadedMedia> {
   let answer = await sendOnce(path, token, form, csrfOf(token), signal, onProgress);
   if (answer.status === 403 && apiErrorBody(answer.body).code === 'CSRF_MISMATCH') {
@@ -211,8 +199,7 @@ export async function stageUpload(
   } catch {
     url = null;
   }
-  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:'))
-    throw new ApiError('invalid');
+  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) throw new ApiError('invalid');
   return url.href;
 }
 
@@ -237,8 +224,7 @@ export interface DerpiUploadInput {
   username?: string;
 }
 
-const UNCONFIRMED =
-  '未能确认上传结果，文件和填写内容已保留，请先检查 Derpibooru 是否已有此图片后再试';
+const UNCONFIRMED = '未能确认上传结果，文件和填写内容已保留，请先检查 Derpibooru 是否已有此图片后再试';
 
 /** Philomena's field names, onto the form's. */
 function fieldOf(key: string): UploadField {
@@ -273,8 +259,7 @@ export function uploadComplaint(field: UploadField, raw: string): string {
  * objects is read too.
  */
 export function uploadErrorsOf(body: unknown): Partial<Record<UploadField, string>> {
-  const errors =
-    body && typeof body === 'object' ? (body as { errors?: unknown }).errors : undefined;
+  const errors = body && typeof body === 'object' ? (body as { errors?: unknown }).errors : undefined;
   const out: Partial<Record<UploadField, string>> = {};
   const blocks = Array.isArray(errors) ? errors : [errors];
   for (const block of blocks) {
@@ -294,8 +279,7 @@ export function uploadErrorsOf(body: unknown): Partial<Record<UploadField, strin
 }
 
 function hopMessage(body: unknown): string | undefined {
-  const message =
-    body && typeof body === 'object' ? (body as { message?: unknown }).message : undefined;
+  const message = body && typeof body === 'object' ? (body as { message?: unknown }).message : undefined;
   return typeof message === 'string' && message.trim() ? message.trim() : undefined;
 }
 
@@ -304,10 +288,7 @@ function hopMessage(body: unknown): string | undefined {
  * unconfirmed (the answer was lost, so it may have landed) — and never throws for an answer;
  * only the caller's own abort rejects.
  */
-export async function submitDerpiImage(
-  input: DerpiUploadInput,
-  signal?: AbortSignal,
-): Promise<DerpiUploadOutcome> {
+export async function submitDerpiImage(input: DerpiUploadInput, signal?: AbortSignal): Promise<DerpiUploadOutcome> {
   let response: Response;
   try {
     response = await fetch(UPLOAD_SUBMIT_PATH, {
@@ -358,8 +339,7 @@ export async function submitDerpiImage(
   /* Our hop's own answers: a refused body (400 — a bug, not the user's), a dead relay (502), or
      the relay's silence (504, which may have reached Derpibooru). */
   if (response.status === 504) return { kind: 'unconfirmed', message: UNCONFIRMED };
-  if (response.status === 429)
-    return { kind: 'rejected', fields: {}, message: FAILURE_MESSAGES.rateLimited };
+  if (response.status === 429) return { kind: 'rejected', fields: {}, message: FAILURE_MESSAGES.rateLimited };
   if (response.status >= 500) return { kind: 'unconfirmed', message: UNCONFIRMED };
   return {
     kind: 'rejected',

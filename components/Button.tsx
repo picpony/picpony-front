@@ -78,9 +78,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
      accessible name from a string label when the call site gave none. An explicit
      `aria-label` still wins. */
   const derivedLabel =
-    responsiveLabel && typeof children === 'string' && !rest['aria-label']
-      ? children
-      : rest['aria-label'];
+    responsiveLabel && typeof children === 'string' && !rest['aria-label'] ? children : rest['aria-label'];
 
   return (
     <button

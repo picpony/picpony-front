@@ -1,11 +1,7 @@
 'use client';
 
 import { useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from 'react';
-import {
-  useOverlayScrollbar,
-  type ScrollbarAutoHide,
-  type ScrollbarAxis,
-} from '@/lib/overlayScrollbar';
+import { useOverlayScrollbar, type ScrollbarAutoHide, type ScrollbarAxis } from '@/lib/overlayScrollbar';
 import { cn } from '@/lib/utils';
 
 type ScrollAreaTag = 'div' | 'main' | 'p' | 'pre';

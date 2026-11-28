@@ -87,13 +87,7 @@ import {
   subscribeAppearance,
   type PaletteId,
 } from './appearance';
-import {
-  isPaletteHues,
-  parseAccent,
-  parseCustomSpec,
-  type AccentChoice,
-  type PaletteHues,
-} from './paletteSpec';
+import { isPaletteHues, parseAccent, parseCustomSpec, type AccentChoice, type PaletteHues } from './paletteSpec';
 import {
   DEFAULT_PRIVACY_UNLOCK_SECONDS,
   MAIN_FOLDER_NAME,
@@ -275,12 +269,7 @@ export function ageFrom(birthday: unknown, now: number = Date.now()): number | n
   if (!match) return null;
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  )
-    return null;
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
   const today = new Date(now + DAY_OFFSET_MS);
   let age = today.getUTCFullYear() - year;
   const months = today.getUTCMonth() + 1 - month;
@@ -302,9 +291,7 @@ export function developerModeEnabled(): boolean {
  * Why 中等限制 cannot be chosen right now, or `null` when it can. `account` is the saved record:
  * a birthday typed into the profile editor and not yet saved unlocks nothing.
  */
-export function spoilersBlockedBy(
-  account: AccountRecord | null,
-): 'signed-out' | 'no-birthday' | 'too-young' | null {
+export function spoilersBlockedBy(account: AccountRecord | null): 'signed-out' | 'no-birthday' | 'too-young' | null {
   if (!account) return 'signed-out';
   const age = ageFrom(account.birthday);
   if (age === null) return 'no-birthday';
@@ -329,10 +316,7 @@ const isFullRecord = (account: AccountRecord | null) => !account || 'birthday' i
 // The registry
 // ---------------------------------------------------------------------------
 
-const BUILT_IN_PALETTES: readonly string[] = [
-  ...PALETTES.map((palette) => palette.id),
-  SKY_PALETTE,
-];
+const BUILT_IN_PALETTES: readonly string[] = [...PALETTES.map((palette) => palette.id), SKY_PALETTE];
 
 interface PaletteChoice {
   id: PaletteId;
@@ -371,8 +355,7 @@ const paletteSetting: SyncedSetting<PaletteChoice> = {
   read: () => {
     const stored = readStored(LS_KEYS.palette);
     const spec = parseCustomSpec(readStored(LS_KEYS.paletteCustom));
-    if (stored === CUSTOM_PALETTE && spec)
-      return { id: CUSTOM_PALETTE, seed: spec.seed, accent: spec.accent };
+    if (stored === CUSTOM_PALETTE && spec) return { id: CUSTOM_PALETTE, seed: spec.seed, accent: spec.accent };
     return {
       id: stored && BUILT_IN_PALETTES.includes(stored) ? (stored as PaletteId) : DEFAULT_PALETTE,
       seed: null,
@@ -393,12 +376,7 @@ const paletteSetting: SyncedSetting<PaletteChoice> = {
       .then(({ resolveCustomPalette }) => resolveCustomPalette({ seed, accent: value.accent }))
       .then((install) => {
         /* The user picked something else while the recipe was on its way: theirs is newer. */
-        if (
-          !install ||
-          version !== paletteVersion ||
-          readToken() !== token ||
-          (changedAt.get('palette') ?? 0) >= asked
-        )
+        if (!install || version !== paletteVersion || readToken() !== token || (changedAt.get('palette') ?? 0) >= asked)
           return;
         adopting(() => commitCustomPalette(install));
       })
@@ -411,9 +389,7 @@ const paletteSetting: SyncedSetting<PaletteChoice> = {
     if (theme === 'auto') return { id: DEFAULT_PALETTE, seed: null, accent: null };
     if (theme === CUSTOM_PALETTE) {
       const seed = seedOf(settings.themeCustomSeed);
-      return seed
-        ? { id: CUSTOM_PALETTE, seed, accent: parseAccent(settings.themeCustomAccent) ?? null }
-        : undefined;
+      return seed ? { id: CUSTOM_PALETTE, seed, accent: parseAccent(settings.themeCustomAccent) ?? null } : undefined;
     }
     return typeof theme === 'string' && BUILT_IN_PALETTES.includes(theme)
       ? { id: theme as PaletteId, seed: null, accent: null }
@@ -430,8 +406,7 @@ const paletteSetting: SyncedSetting<PaletteChoice> = {
     if (value.id === DEFAULT_PALETTE && base.theme === 'auto') return { theme: 'auto' };
     return { theme: value.id };
   },
-  equals: (a, b) =>
-    a.id === b.id && (a.id !== CUSTOM_PALETTE || (a.seed === b.seed && a.accent === b.accent)),
+  equals: (a, b) => a.id === b.id && (a.id !== CUSTOM_PALETTE || (a.seed === b.seed && a.accent === b.accent)),
 };
 
 /**
@@ -486,16 +461,10 @@ const defaultFaveFolderSetting: SyncedSetting<DefaultFolder> = {
   },
   write: (value) => {
     writeStored(LS_KEYS.defaultFaveFolderId, value.id > 0 ? String(value.id) : null);
-    writeStored(
-      LS_KEYS.defaultFaveFolderName,
-      value.name && value.name !== MAIN_FOLDER_NAME ? value.name : null,
-    );
+    writeStored(LS_KEYS.defaultFaveFolderName, value.name && value.name !== MAIN_FOLDER_NAME ? value.name : null);
   },
   fromCloud: (settings) => {
-    const named =
-      typeof settings.defaultFaveFolderName === 'string'
-        ? settings.defaultFaveFolderName.trim()
-        : '';
+    const named = typeof settings.defaultFaveFolderName === 'string' ? settings.defaultFaveFolderName.trim() : '';
     if (settings.defaultFaveFolderId === undefined && !named) return NO_DEFAULT_FOLDER;
     const id = Number.parseInt(String(settings.defaultFaveFolderId ?? ''), 10);
     return { id: Number.isSafeInteger(id) && id > 0 ? id : 0, name: named || MAIN_FOLDER_NAME };
@@ -526,13 +495,10 @@ const publicFaveFoldersSetting: SyncedSetting<number[] | null> = {
       return null;
     }
   },
-  write: (value) =>
-    writeStored(LS_KEYS.publicFaveFolderIds, value === null ? null : JSON.stringify(value)),
+  write: (value) => writeStored(LS_KEYS.publicFaveFolderIds, value === null ? null : JSON.stringify(value)),
   fromCloud: (settings) => folderIdsOf(settings.publicFaveFolderIds) ?? null,
   toCloud: (value) => ({ publicFaveFolderIds: value }),
-  equals: (a, b) =>
-    a === b ||
-    (a !== null && b !== null && a.length === b.length && a.every((id) => b.includes(id))),
+  equals: (a, b) => a === b || (a !== null && b !== null && a.length === b.length && a.every((id) => b.includes(id))),
 };
 
 /** 解锁时长 — how long the privacy space stays unlocked once left; the original front end's seven steps. */
@@ -541,15 +507,10 @@ const privacyUnlockSetting: SyncedSetting<number> = {
   cloudKeys: ['privacyUnlockDurationSeconds'],
   fallback: DEFAULT_PRIVACY_UNLOCK_SECONDS,
   scope: 'account',
-  read: () =>
-    parseUnlockSeconds(readStored(LS_KEYS.privacyUnlockSeconds)) ?? DEFAULT_PRIVACY_UNLOCK_SECONDS,
+  read: () => parseUnlockSeconds(readStored(LS_KEYS.privacyUnlockSeconds)) ?? DEFAULT_PRIVACY_UNLOCK_SECONDS,
   write: (value) =>
-    writeStored(
-      LS_KEYS.privacyUnlockSeconds,
-      value === DEFAULT_PRIVACY_UNLOCK_SECONDS ? null : String(value),
-    ),
-  fromCloud: (settings) =>
-    parseUnlockSeconds(settings.privacyUnlockDurationSeconds) ?? DEFAULT_PRIVACY_UNLOCK_SECONDS,
+    writeStored(LS_KEYS.privacyUnlockSeconds, value === DEFAULT_PRIVACY_UNLOCK_SECONDS ? null : String(value)),
+  fromCloud: (settings) => parseUnlockSeconds(settings.privacyUnlockDurationSeconds) ?? DEFAULT_PRIVACY_UNLOCK_SECONDS,
   toCloud: (value) => ({ privacyUnlockDurationSeconds: value }),
   equals: same,
 };
@@ -763,10 +724,7 @@ const stateListeners = new Set<() => void>();
  * a stored choice that differs from the last one seen is a change to send — unless this engine is
  * the one adopting it.
  */
-const APPEARANCE_ENTRIES = [
-  paletteSetting,
-  paletteHuesSetting,
-] as readonly SyncedSetting<unknown>[];
+const APPEARANCE_ENTRIES = [paletteSetting, paletteHuesSetting] as readonly SyncedSetting<unknown>[];
 const lastSeen = new Map<string, unknown>();
 let adoptingAppearance = false;
 
@@ -865,14 +823,11 @@ function persistPending(confirmed?: ReadonlyMap<string, number>) {
   }
   const merged = allPending();
   if (confirmed) {
-    for (const [id, at] of confirmed)
-      if ((merged.get(id) ?? Number.POSITIVE_INFINITY) <= at) merged.delete(id);
+    for (const [id, at] of confirmed) if ((merged.get(id) ?? Number.POSITIVE_INFINITY) <= at) merged.delete(id);
   }
   writeStored(
     LS_KEYS.settingsSyncPending,
-    merged.size
-      ? JSON.stringify({ account: session.account, pending: Object.fromEntries(merged) })
-      : null,
+    merged.size ? JSON.stringify({ account: session.account, pending: Object.fromEntries(merged) }) : null,
   );
 }
 
@@ -922,9 +877,7 @@ function pendingChangedElsewhere(oldValue: string | null, newValue: string | nul
 function recordOwnedBy(raw: string, account: string): boolean {
   try {
     const record: unknown = JSON.parse(raw);
-    return Boolean(
-      record && typeof record === 'object' && (record as { account?: unknown }).account === account,
-    );
+    return Boolean(record && typeof record === 'object' && (record as { account?: unknown }).account === account);
   } catch {
     return false;
   }
@@ -1158,8 +1111,7 @@ async function flush() {
       stored = await send(copy);
     }
     if (readToken() !== token) return;
-    for (const [id, at] of sent)
-      if ((pending.get(id) ?? Number.POSITIVE_INFINITY) <= at) pending.delete(id);
+    for (const [id, at] of sent) if ((pending.get(id) ?? Number.POSITIVE_INFINITY) <= at) pending.delete(id);
     persistPending(sent);
     base = { ...copy, settings: stored.settings, revision: stored.revision, at: Date.now() };
     bridge?.writeSession(token, stored.settings);
@@ -1210,8 +1162,7 @@ export function bindSettingsSync(next: SettingsSyncBridge): () => void {
   global.__picponySettingsSyncUnbind?.();
   const onStorage = (event: StorageEvent) => {
     if (event.key === null || event.key === LS_KEYS.userInfo) sessionChanged();
-    if (event.key === LS_KEYS.settingsSyncPending)
-      pendingChangedElsewhere(event.oldValue, event.newValue);
+    if (event.key === LS_KEYS.settingsSyncPending) pendingChangedElsewhere(event.oldValue, event.newValue);
     if (event.key === null || event.key === LS_KEYS.detailLayout) {
       const next = detailLayoutSetting.read();
       applyDetailLayoutAttribute(next);

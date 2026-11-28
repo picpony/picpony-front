@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  HERO_BACKGROUND_SELECTOR,
-  HERO_BACKGROUND_VISUAL_SELECTOR,
-  HERO_UNCLIP_SELECTOR,
-} from './constants';
+import { HERO_BACKGROUND_SELECTOR, HERO_BACKGROUND_VISUAL_SELECTOR, HERO_UNCLIP_SELECTOR } from './constants';
 import type { HeroRect } from './geometry';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
@@ -40,10 +36,7 @@ type InlineStyleLeaseState = {
  * a fresh open) routinely want the same property on the same node; last writer
  * wins visually and releasing out of order still restores the correct value.
  */
-const inlineStyleLeases = new WeakMap<
-  HTMLElement,
-  Map<LeasedStyleProperty, InlineStyleLeaseState>
->();
+const inlineStyleLeases = new WeakMap<HTMLElement, Map<LeasedStyleProperty, InlineStyleLeaseState>>();
 
 function escapeSelector(value: string) {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -124,10 +117,7 @@ export function isHeroTargetSticky(target: HTMLElement | null): boolean {
  * that sink reports a shrunken box. The flyer must land on the box the
  * thumbnail will occupy once the sink unwinds.
  */
-export function getHeroRectWithoutAncestorTransform(
-  element: HTMLElement,
-  ancestor: HTMLElement | null,
-): HeroRect {
+export function getHeroRectWithoutAncestorTransform(element: HTMLElement, ancestor: HTMLElement | null): HeroRect {
   const rect = getHeroRect(element);
   if (!ancestor || !ancestor.contains(element)) return rect;
   const style = getComputedStyle(ancestor);
@@ -172,9 +162,7 @@ export function findImageHeroThumbnail(imageId: number, sourceKey?: string | nul
      Check layout, not visibility: the flight itself hides the real thumbnail
      while its captured frame is on screen. */
   const candidates = [
-    ...document.querySelectorAll<HTMLElement>(
-      `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
-    ),
+    ...document.querySelectorAll<HTMLElement>(`[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`),
   ].filter((candidate) => {
     /* Every enclosing pane, not only the nearest: a concealed pane keeps its layout
        (`content-visibility: hidden`), so a card in the active inner pane of a concealed outer
@@ -188,11 +176,7 @@ export function findImageHeroThumbnail(imageId: number, sourceKey?: string | nul
     }
     return candidate.getClientRects().length > 0;
   });
-  return (
-    candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ??
-    candidates[0] ??
-    null
-  );
+  return candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ?? candidates[0] ?? null;
 }
 
 /** The card link around a picture's thumbnail — where focus returns as its detail closes. */
@@ -271,13 +255,11 @@ export function getMediaSize(media: VisualMedia) {
  */
 export function getMediaPixelSize(media: VisualMedia) {
   const size = getMediaSize(media);
-  if (!size || !(media instanceof HTMLImageElement) || !media.srcset || !media.currentSrc)
-    return size;
+  if (!size || !(media instanceof HTMLImageElement) || !media.srcset || !media.currentSrc) return size;
   const probe = new Image();
   probe.src = media.currentSrc;
   if (probe.complete && probe.naturalWidth > 0 && probe.naturalHeight > 0) {
-    if (probe.naturalWidth >= size.width)
-      return { width: probe.naturalWidth, height: probe.naturalHeight };
+    if (probe.naturalWidth >= size.width) return { width: probe.naturalWidth, height: probe.naturalHeight };
     return size;
   }
   probe.removeAttribute('src');
@@ -326,8 +308,7 @@ function getPresentedMediaOpacity(media: VisualMedia) {
  */
 export function getVisualMedia(element: HTMLElement | null): VisualMedia | null {
   if (!element) return null;
-  const directMedia =
-    element instanceof HTMLImageElement || element instanceof HTMLVideoElement ? element : null;
+  const directMedia = element instanceof HTMLImageElement || element instanceof HTMLVideoElement ? element : null;
   const detailHost = directMedia?.hasAttribute('data-image-detail-layer')
     ? directMedia.matches('[data-image-detail-hero-active]')
       ? directMedia
@@ -341,12 +322,8 @@ export function getVisualMedia(element: HTMLElement | null): VisualMedia | null 
       ...(detailHost.matches('img[data-image-detail-layer], video[data-image-detail-layer]')
         ? [detailHost as VisualMedia]
         : []),
-      ...detailHost.querySelectorAll<VisualMedia>(
-        'img[data-image-detail-layer], video[data-image-detail-layer]',
-      ),
-    ].filter(
-      (media) => media.closest<HTMLElement>('[data-image-detail-hero-active]') === detailHost,
-    );
+      ...detailHost.querySelectorAll<VisualMedia>('img[data-image-detail-layer], video[data-image-detail-layer]'),
+    ].filter((media) => media.closest<HTMLElement>('[data-image-detail-hero-active]') === detailHost);
     const final = layers.find((media) => media.dataset.imageDetailLayer === 'final') ?? null;
     const preview = layers.find((media) => media.dataset.imageDetailLayer === 'preview') ?? null;
     const candidates = [preview, final]
@@ -530,10 +507,7 @@ export function leaseHeroCardChrome(element: HTMLElement | null): DomLease {
  * blink per open. `visibility: hidden` hides the subtree, takes the node out of the tab
  * order, and is not transitionable, so the reveal is a single frame.
  */
-export function leaseHeroRouteSealed(nodes: {
-  overlay: HTMLElement;
-  floatingBack: HTMLElement | null;
-}): DomLease {
+export function leaseHeroRouteSealed(nodes: { overlay: HTMLElement; floatingBack: HTMLElement | null }): DomLease {
   const sealed = { visibility: 'hidden', pointerEvents: 'none' } as const;
   return combineHeroLeases(
     leaseInlineStyles(nodes.overlay, sealed),

@@ -92,8 +92,7 @@ const FORMATS = {
 };
 
 /** `YYYY-MM-DD`, optionally `[ T]HH:mm[:ss[.fff]]`, optionally a zone. */
-const TIMESTAMP =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
+const TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
 
 type DateInput = string | number | Date | null | undefined;
 
@@ -220,18 +219,14 @@ export function formatClock(value: DateInput): string {
 export function formatCompactDateTime(value: DateInput, now: number = Date.now()): string {
   const d = parseBackendTime(value);
   if (!d) return typeof value === 'string' ? value : '';
-  return beijingYear(d.getTime()) === beijingYear(now)
-    ? FORMATS.shortDateTime.format(d)
-    : FORMATS.date.format(d);
+  return beijingYear(d.getTime()) === beijingYear(now) ? FORMATS.shortDateTime.format(d) : FORMATS.date.format(d);
 }
 
 /** `08/20` this year, `2024/08/20` otherwise — the tightest form that cannot lie about a year. */
 export function formatCompactDate(value: DateInput, now: number = Date.now()): string {
   const d = parseBackendTime(value);
   if (!d) return typeof value === 'string' ? value : '';
-  return beijingYear(d.getTime()) === beijingYear(now)
-    ? FORMATS.monthDay.format(d)
-    : FORMATS.date.format(d);
+  return beijingYear(d.getTime()) === beijingYear(now) ? FORMATS.monthDay.format(d) : FORMATS.date.format(d);
 }
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -256,9 +251,7 @@ export function formatDayLabel(
   if (days > 1 && days < 7) return WEEKDAYS[local.getUTCDay()];
   const month = local.getUTCMonth() + 1;
   const day = local.getUTCDate();
-  return beijingYear(ms) === beijingYear(now)
-    ? `${month}月${day}日`
-    : `${local.getUTCFullYear()}年${month}月${day}日`;
+  return beijingYear(ms) === beijingYear(now) ? `${month}月${day}日` : `${local.getUTCFullYear()}年${month}月${day}日`;
 }
 
 /**
@@ -287,10 +280,7 @@ export const ONLINE_WINDOW_MS = 5 * 60_000;
  * otherwise. Returned as two fields so the screen can present 在线 as a state rather than as
  * 「上次在线：在线」.
  */
-export function lastOnlineStatus(
-  value: DateInput,
-  now: number = Date.now(),
-): { online: boolean; text: string } {
+export function lastOnlineStatus(value: DateInput, now: number = Date.now()): { online: boolean; text: string } {
   const d = parseBackendTime(value);
   if (!d) return { online: false, text: typeof value === 'string' ? value : '' };
   if (now - d.getTime() < ONLINE_WINDOW_MS) return { online: true, text: '在线' };

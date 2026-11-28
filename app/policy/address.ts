@@ -45,8 +45,7 @@ function writeQueued() {
   queued = null;
   if (!here || !tab) return;
   const href = policyHref(tab);
-  if (href !== `${window.location.pathname}${window.location.search}`)
-    window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting write goes with it. */

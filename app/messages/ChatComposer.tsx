@@ -108,9 +108,7 @@ function emojiImage(name: string): HTMLImageElement {
 }
 
 function nodesOf(pieces: readonly ComposerPiece[]): Node[] {
-  return pieces.map((piece) =>
-    piece.type === 'text' ? document.createTextNode(piece.text) : emojiImage(piece.name),
-  );
+  return pieces.map((piece) => (piece.type === 'text' ? document.createTextNode(piece.text) : emojiImage(piece.name)));
 }
 
 const isEmojiNode = (node: Node): node is HTMLImageElement =>
@@ -163,8 +161,7 @@ function render(root: HTMLElement, pieces: readonly ComposerPiece[]) {
   root.replaceChildren(...nodesOf(pieces));
   /* A final empty line needs a box to hold the caret. */
   const last = pieces[pieces.length - 1];
-  if (last?.type === 'text' && last.text.endsWith('\n'))
-    root.appendChild(document.createElement('br'));
+  if (last?.type === 'text' && last.text.endsWith('\n')) root.appendChild(document.createElement('br'));
 }
 
 /** Units a child spans: its text length, or one for an emoji or a line break. */
@@ -182,8 +179,7 @@ function unitsAt(root: HTMLElement, node: Node, offset: number): number {
     return units;
   }
   for (const child of children) {
-    if (child === node)
-      return units + (node.nodeType === Node.TEXT_NODE ? offset : offset > 0 ? unitsOf(child) : 0);
+    if (child === node) return units + (node.nodeType === Node.TEXT_NODE ? offset : offset > 0 ? unitsOf(child) : 0);
     /* Inside something the engine nested (flattened on the next input): its start. */
     if (child.contains(node)) return units;
     units += unitsOf(child);
@@ -218,8 +214,7 @@ function positionOf(root: HTMLElement, caret: number): { node: Node; offset: num
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     const units = unitsOf(child);
-    if (child.nodeType === Node.TEXT_NODE && remaining <= units)
-      return { node: child, offset: remaining };
+    if (child.nodeType === Node.TEXT_NODE && remaining <= units) return { node: child, offset: remaining };
     if (remaining < units || (remaining === 0 && units > 0)) return { node: root, offset: i };
     remaining -= units;
   }
@@ -244,10 +239,7 @@ function totalUnits(pieces: readonly ComposerPiece[]): number {
 }
 
 /** Split pieces at a unit offset. */
-function splitAt(
-  pieces: readonly ComposerPiece[],
-  caret: number,
-): [ComposerPiece[], ComposerPiece[]] {
+function splitAt(pieces: readonly ComposerPiece[], caret: number): [ComposerPiece[], ComposerPiece[]] {
   const before: ComposerPiece[] = [];
   const after: ComposerPiece[] = [];
   let remaining = caret;
@@ -273,17 +265,7 @@ function joinPieces(...groups: ComposerPiece[][]): ComposerPiece[] {
 }
 
 const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  {
-    initialValue,
-    placeholder,
-    label,
-    onChange,
-    onSubmit,
-    onFocus,
-    onEscape,
-    autoFocus = false,
-    id,
-  },
+  { initialValue, placeholder, label, onChange, onSubmit, onFocus, onEscape, autoFocus = false, id },
   ref,
 ) {
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -472,11 +454,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
       latest.current.onSubmit();
       return;
     }
-    pendingEdit.current = type.startsWith('delete')
-      ? 'delete'
-      : type === 'insertFromDrop'
-        ? 'insert'
-        : 'type';
+    pendingEdit.current = type.startsWith('delete') ? 'delete' : type === 'insertFromDrop' ? 'insert' : 'type';
   };
 
   /* React's synthetic `onBeforeInput` is a legacy polyfill without `inputType`; listen natively. */

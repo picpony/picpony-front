@@ -91,10 +91,7 @@ const queues = new Map<string, Promise<unknown>>();
  * One versioned write, queued behind the token's earlier ones; a stale revision is read again and
  * the write sent once more.
  */
-function versioned(
-  token: string,
-  send: (revision: number, key: string) => Promise<WriteAnswer>,
-): Promise<WriteAnswer> {
+function versioned(token: string, send: (revision: number, key: string) => Promise<WriteAnswer>): Promise<WriteAnswer> {
   const write = async () => {
     let answer: WriteAnswer;
     try {
@@ -149,10 +146,7 @@ export async function recordBrowsingHistory(
   token: string,
   visit: { imageId: number; previewUrl?: string | null; uploader?: string | null },
 ): Promise<void> {
-  const preview =
-    visit.previewUrl && /^https:\/\/[^\s#@]+$/i.test(visit.previewUrl)
-      ? visit.previewUrl
-      : undefined;
+  const preview = visit.previewUrl && /^https:\/\/[^\s#@]+$/i.test(visit.previewUrl) ? visit.previewUrl : undefined;
   const uploader = visit.uploader?.trim() || undefined;
   await versioned(token, (revision, key) =>
     api<WriteAnswer>('PUT', `/me/browsing-history/${seg(visit.imageId)}`, {
@@ -191,10 +185,7 @@ export async function deleteBrowsingHistoryItem(
  * (`recordBrowsingHistory`), so it returns at the top with a new time: the backend has no other
  * way back.
  */
-export async function restoreBrowsingHistoryItem(
-  token: string,
-  entry: HistoryEntry,
-): Promise<void> {
+export async function restoreBrowsingHistoryItem(token: string, entry: HistoryEntry): Promise<void> {
   await recordBrowsingHistory(token, {
     imageId: entry.id,
     previewUrl: entry.previewUrl,

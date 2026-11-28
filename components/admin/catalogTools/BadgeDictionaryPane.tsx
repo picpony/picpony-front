@@ -124,9 +124,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
               onChange={(value) => {
                 setName(value);
                 setNameError('');
-                setDescription(
-                  read.data?.dicts.find((row) => row.badge_name === value)?.description ?? '',
-                );
+                setDescription(read.data?.dicts.find((row) => row.badge_name === value)?.description ?? '');
               }}
               disabled={mutation.busy}
             />
@@ -154,12 +152,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
         />
         <MutationResult mutation={mutation} />
         <FormActions>
-          <Button
-            type="submit"
-            variant="filled"
-            loading={mutation.busy}
-            disabled={mutation.uncertain}
-          >
+          <Button type="submit" variant="filled" loading={mutation.busy} disabled={mutation.uncertain}>
             保存简介
           </Button>
         </FormActions>
@@ -168,9 +161,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
         <SectionHeading
           as="h3"
           id="admin-badge-dict-heading"
-          actions={
-            <RefreshButton onClick={read.refresh} label="刷新简介" loading={read.refreshing} />
-          }
+          actions={<RefreshButton onClick={read.refresh} label="刷新简介" loading={read.refreshing} />}
         >
           已有徽章简介
         </SectionHeading>
@@ -185,11 +176,7 @@ export default function BadgeDictionaryPane({ token }: { token: string }) {
             onRetry={read.retryable ? read.refresh : undefined}
             empty="暂无徽章简介"
           />
-          <AdminPager
-            page={paged.page}
-            totalPages={paged.totalPages}
-            onPageChange={paged.setPage}
-          />
+          <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
         </AdminListAnchor>
       </section>
       {confirmDialog}

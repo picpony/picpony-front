@@ -237,14 +237,7 @@
   }
 
   /* Native menus remain command adapters; shared React surfaces own their UI. */
-  .rich-text-editor
-    :is(
-      .w-e-bar-item-menus-container,
-      .w-e-hover-bar,
-      .w-e-drop-panel,
-      .w-e-select-list,
-      .w-e-modal
-    ) {
+  .rich-text-editor :is(.w-e-bar-item-menus-container, .w-e-hover-bar, .w-e-drop-panel, .w-e-select-list, .w-e-modal) {
     display: none !important;
   }
 

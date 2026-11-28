@@ -101,9 +101,7 @@ export default function DerpiUserPage({ params }: { params: Promise<{ id: string
   const scope = `${userId}:${contentFilter}`;
 
   /* A filter change must adopt its own remembered page before starting a read. */
-  return (
-    <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />
-  );
+  return <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />;
 }
 
 /**
@@ -142,9 +140,7 @@ function DerpiUserContent({
   const fp = useBrowsingFingerprint();
   const uploadsRead = useResource(
     derpiUserUploads,
-    accountId !== null && !missing
-      ? { id: accountId, page: uploadsPage, perPage: PER_PAGE, contentFilter, fp }
-      : SKIP,
+    accountId !== null && !missing ? { id: accountId, page: uploadsPage, perPage: PER_PAGE, contentFilter, fp } : SKIP,
     { keepPrevious: `${scope}\n${fp}` },
   );
 
@@ -162,8 +158,7 @@ function DerpiUserContent({
   const [rows, setRows] = useState<HTMLDivElement | null>(null);
   const failureRef = useRef<HTMLDivElement>(null);
   const [dataPage, setDataPage] = useState(uploadsPage);
-  if (uploadsRead.data !== undefined && !uploadsRead.isPrevious && dataPage !== uploadsPage)
-    setDataPage(uploadsPage);
+  if (uploadsRead.data !== undefined && !uploadsRead.isPrevious && dataPage !== uploadsPage) setDataPage(uploadsPage);
 
   const listKey = `derpi-uploads:${accountId ?? userId}:${contentFilter}:${fp}`;
   const readPage = useCallback(
@@ -292,9 +287,7 @@ function DerpiUserContent({
                 {profile ? (
                   <>
                     <span className="min-w-0 max-w-full wrap-anywhere">{profile.name}</span>
-                    <span className="text-body-m tabular-nums text-on-surface-variant">
-                      #{profile.id}
-                    </span>
+                    <span className="text-body-m tabular-nums text-on-surface-variant">#{profile.id}</span>
                   </>
                 ) : (
                   'Derpibooru 用户'
@@ -331,8 +324,7 @@ function DerpiUserContent({
               <>
                 <Button
                   onClick={() =>
-                    uploaderQuery &&
-                    router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })
+                    uploaderQuery && router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })
                   }
                   variant="filled"
                   size="lg"
@@ -402,20 +394,14 @@ function DerpiUserContent({
                   icon={<MdImage size={ICON.display} />}
                   title="暂无上传"
                   description={
-                    (profile?.uploads_count ?? 0) > 0
-                      ? '在当前内容筛选设置下，该用户没有可显示的图片'
-                      : undefined
+                    (profile?.uploads_count ?? 0) > 0 ? '在当前内容筛选设置下，该用户没有可显示的图片' : undefined
                   }
                 />
               )
             ) : (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
-              <div
-                ref={setGrid}
-                data-pagination-anchor
-                aria-busy={uploadsRead.isLoading || undefined}
-              >
+              <div ref={setGrid} data-pagination-anchor aria-busy={uploadsRead.isLoading || undefined}>
                 {failedTurn && (
                   <div ref={failureRef} className="mb-4">
                     <ErrorRetry
@@ -432,11 +418,7 @@ function DerpiUserContent({
                     uploadsRead.isLoading ? 'paging-dim' : 'opacity-100'
                   }`}
                 >
-                  <MasonryGrid
-                    images={uploadsRead.data.images}
-                    sequence={sequence}
-                    listKey={listKey}
-                  />
+                  <MasonryGrid images={uploadsRead.data.images} sequence={sequence} listKey={listKey} />
                 </div>
                 {totalPages > 1 && (
                   <Pagination

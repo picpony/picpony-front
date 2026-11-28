@@ -145,10 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /* Consumers open the dialog; its local view does not affect them. Keeping the actions stable
      avoids re-rendering the shell and the page beneath it on every open, close or view switch. */
-  const value = useMemo(
-    () => ({ openAuth, closeAuth, switchView }),
-    [openAuth, closeAuth, switchView],
-  );
+  const value = useMemo(() => ({ openAuth, closeAuth, switchView }), [openAuth, closeAuth, switchView]);
 
   return (
     <AuthContext.Provider value={value}>
@@ -224,8 +221,7 @@ function AuthModal({
      reports its own state after it mounts. */
   const [dirtyFlow, setDirtyFlow] = useState<number | null>(null);
   const onDirtyChange = useCallback(
-    (dirty: boolean) =>
-      setDirtyFlow((current) => (dirty ? flow : current === flow ? null : current)),
+    (dirty: boolean) => setDirtyFlow((current) => (dirty ? flow : current === flow ? null : current)),
     [flow],
   );
   const dirty = dirtyFlow === flow;
@@ -257,10 +253,7 @@ function AuthModal({
       hideCloseButton
       // 整个窗口组件在验证码弹窗打开时缩小让位，带动画
       // 独立 scale 属性与 Modal 的 WAAPI transform 分开，保留嵌套弹层的层级反馈
-      panelClassName={cn(
-        'transition-[scale] spring-default-spatial',
-        captchaOpen ? 'scale-95' : 'scale-100',
-      )}
+      panelClassName={cn('transition-[scale] spring-default-spatial', captchaOpen ? 'scale-95' : 'scale-100')}
     >
       {/* 手机高度跟随内容自适应，桌面保持固定较高高度 */}
       <div className="flex md:min-h-[min(40rem,calc(100dvh-3rem))]">
@@ -285,9 +278,7 @@ function AuthModal({
               /* Explicit width: `LottieIcon` centres its fallback in a shrink-to-fit grid cell,
                  so a percentage width on `.logo-mask` resolved to 0px while loading or if
                  loading fails. */
-              fallback={
-                <Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />
-              }
+              fallback={<Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />}
             />
           )}
         </div>
@@ -316,13 +307,7 @@ function AuthModal({
                     <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
                       {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
                     </h2>
-                    <LoadingIndicator
-                      variant="contained"
-                      size="md"
-                      label="加载中"
-                      paused={!isOpen}
-                      delay={120}
-                    />
+                    <LoadingIndicator variant="contained" size="md" label="加载中" paused={!isOpen} delay={120} />
                   </div>
                 }
               >

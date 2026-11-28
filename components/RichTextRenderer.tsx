@@ -28,11 +28,7 @@ export function isBBCode(text: string): boolean {
   return BBCODE_TAG.test(text);
 }
 
-export default function RichTextRenderer({
-  content,
-  format = 'auto',
-  className,
-}: RichTextRendererProps) {
+export default function RichTextRenderer({ content, format = 'auto', className }: RichTextRendererProps) {
   const bbcode = format === 'bbcode' || (format === 'auto' && isBBCode(content));
   if (bbcode) return <BBCodeRenderer content={content} className={className} />;
   if (className) {

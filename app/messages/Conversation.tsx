@@ -1,16 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { MdArrowBack, MdRefresh } from '@/components/icons/common';
 import { MdOutlineEmojiEmotions, MdSend } from '@/components/icons/messages';
 import Avatar from '@/components/Avatar';
@@ -28,14 +19,7 @@ import ChatComposer, { type ChatComposerHandle } from './ChatComposer';
 import { isBlankValue, outgoingValue } from './composerModel';
 import { readDraft, writeDraft } from './drafts';
 import EmojiPicker, { type EmojiPick, type EmojiPickerHandle } from './EmojiPicker';
-import {
-  discardMessage,
-  queueMessage,
-  retryMessage,
-  settleSent,
-  useOutbox,
-  type OutboxItem,
-} from './outbox';
+import { discardMessage, queueMessage, retryMessage, settleSent, useOutbox, type OutboxItem } from './outbox';
 import Thread, { type ThreadEntry } from './Thread';
 import { matchOutgoing, mergeMessages } from './threadModel';
 import { markConversationRead } from './unread';
@@ -129,11 +113,9 @@ export default function Conversation({
   active = true,
 }: ConversationProps) {
   const contactId = contact.id;
-  const first = useResource(
-    conversationPage,
-    active ? { token, withUserId: contactId, page: 1 } : SKIP,
-    { refetchInterval: active ? CONVERSATION_POLL_MS : undefined },
-  );
+  const first = useResource(conversationPage, active ? { token, withUserId: contactId, page: 1 } : SKIP, {
+    refetchInterval: active ? CONVERSATION_POLL_MS : undefined,
+  });
   const [thread, setThread] = useState<ThreadState>(() =>
     first.data ? foldFirstPage(EMPTY_THREAD, first.data) : EMPTY_THREAD,
   );
@@ -232,8 +214,7 @@ export default function Conversation({
     composerRef.current?.clear();
   };
 
-  const newestKnownId = () =>
-    latest.current.messages.reduce((max, message) => Math.max(max, message.id), 0);
+  const newestKnownId = () => latest.current.messages.reduce((max, message) => Math.max(max, message.id), 0);
 
   /* ---- Emoji ---- */
   const wide = useMediaQuery(MEDIA.sm);
@@ -293,9 +274,7 @@ export default function Conversation({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex min-w-0 shrink-0 items-center gap-1 bg-surface-container px-2 py-2 sm:px-3">
-        {layout === 'screen' && (
-          <IconButton onClick={onBack} aria-label="返回联系人列表" icon={<MdArrowBack />} />
-        )}
+        {layout === 'screen' && <IconButton onClick={onBack} aria-label="返回联系人列表" icon={<MdArrowBack />} />}
         {/* Who this is, and the way to their profile. */}
         <Link
           href={`/user/${contactId}`}
@@ -340,9 +319,7 @@ export default function Conversation({
       <div
         className={cn(
           'flex shrink-0 items-end gap-2 bg-surface-container px-2 pt-2 [--touch-floor:48px]',
-          layout === 'screen' && !(docked && emojiOpen)
-            ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))]'
-            : 'pb-2',
+          layout === 'screen' && !(docked && emojiOpen) ? 'pb-[max(0.5rem,env(safe-area-inset-bottom))]' : 'pb-2',
         )}
       >
         <IconButton

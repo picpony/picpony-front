@@ -61,13 +61,7 @@ const SEARCH_DEBOUNCE_MS = 450;
  * server can render into a cold `/?tab=forum` (`seed`). A link to a filtered list is not a thing
  * the original front end had either.
  */
-export default function ForumPane({
-  seed,
-  active = true,
-}: {
-  seed?: ForumSeed | null;
-  active?: boolean;
-}) {
+export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | null; active?: boolean }) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { token, ready } = useSession();
@@ -208,9 +202,7 @@ export default function ForumPane({
     if (!origin) return;
     let stop: (() => void) | null = null;
     const frame = requestAnimationFrame(() => {
-      const row = rootRef.current?.querySelector<HTMLElement>(
-        `[data-forum-row="${CSS.escape(origin.id)}"]`,
-      );
+      const row = rootRef.current?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(origin.id)}"]`);
       clearForumReturn();
       if (row) stop = playForumReturn(row, origin);
     });
@@ -299,9 +291,7 @@ export default function ForumPane({
           <div className="mb-4">
             <ErrorRetry
               size="inline"
-              title={
-                landedView.split('|')[0] !== String(page) ? `第 ${page} 页加载失败` : '帖子加载失败'
-              }
+              title={landedView.split('|')[0] !== String(page) ? `第 ${page} 页加载失败` : '帖子加载失败'}
               message={apiErrorMessage(read.error)}
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
@@ -332,12 +322,7 @@ export default function ForumPane({
           </Button>
         }
       />
-      <form
-        role="search"
-        aria-label="搜索帖子"
-        className="mb-3 flex items-center gap-2"
-        onSubmit={onSubmit}
-      >
+      <form role="search" aria-label="搜索帖子" className="mb-3 flex items-center gap-2" onSubmit={onSubmit}>
         <SearchInput
           className="min-w-0 flex-1"
           value={typed}

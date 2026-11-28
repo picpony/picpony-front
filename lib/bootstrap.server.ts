@@ -12,11 +12,7 @@ import {
   type PublicBlacklist,
   type PublicBlacklistPage,
 } from '@/lib/blockFilters';
-import {
-  BLOCK_FILTERS_CACHE_TAG,
-  PUBLIC_BLACKLIST_CACHE_TAG,
-  setRequestBootstrap,
-} from '@/lib/blockFilters.server';
+import { BLOCK_FILTERS_CACHE_TAG, PUBLIC_BLACKLIST_CACHE_TAG, setRequestBootstrap } from '@/lib/blockFilters.server';
 import { setRequestRoutePolicy } from '@/lib/imageLine.server';
 import type { MaintenanceState } from '@/lib/maintenance.server';
 import type { InlineRoutePolicy } from '@/lib/route.server';
@@ -90,9 +86,7 @@ async function readFreshBlacklist(signal: AbortSignal): Promise<number[] | null>
   let revision: number | undefined;
   for (let page = 1; page <= MAX_BLACKLIST_PAGES; page += 1) {
     const revParam =
-      page > 1 && typeof revision === 'number' && Number.isSafeInteger(revision)
-        ? `&revision=${revision}`
-        : '';
+      page > 1 && typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
     const response = await fetch(
       `${UPSTREAM_ORIGIN}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}${revParam}`,
       { signal, cache: 'no-store' },
@@ -116,8 +110,7 @@ async function readRemainingBlacklistPages(
   signal: AbortSignal,
 ): Promise<number[] | null> {
   const ids = new Set<number>(firstPage);
-  const revParam =
-    typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
+  const revParam = typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
   for (let page = 2; page <= MAX_BLACKLIST_PAGES; page += 1) {
     const response = await fetch(
       `${UPSTREAM_ORIGIN}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}${revParam}`,
@@ -155,11 +148,7 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     if (!res.ok) return null;
     const raw = (await res.json()) as RawBootstrap;
     const policy = raw?.routing_policy?.policy;
-    if (
-      !policy ||
-      typeof policy.api_policy !== 'string' ||
-      typeof policy.media_policy !== 'string'
-    ) {
+    if (!policy || typeof policy.api_policy !== 'string' || typeof policy.media_policy !== 'string') {
       return null;
     }
     const maint = raw?.maintenance;
@@ -171,11 +160,7 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     let blacklist: number[] = [...new Set(page1)].sort((a, b) => a - b);
     if (raw.image_blocklist?.has_more) {
       try {
-        const whole = await readRemainingBlacklistPages(
-          blacklist,
-          raw.image_blocklist.revision,
-          signal,
-        );
+        const whole = await readRemainingBlacklistPages(blacklist, raw.image_blocklist.revision, signal);
         /* Preserve valid maintenance, routing policy, block filters and page-1 blacklist even if
            a later blacklist page fails or times out. */
         if (whole) blacklist = whole;
@@ -186,8 +171,7 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     const maintenance: MaintenanceState = maint.maintenance_mode
       ? {
           active: true,
-          message:
-            typeof maint.maintenance_message === 'string' ? maint.maintenance_message.trim() : '',
+          message: typeof maint.maintenance_message === 'string' ? maint.maintenance_message.trim() : '',
         }
       : { active: false, message: '' };
     const routePolicy: InlineRoutePolicy = {

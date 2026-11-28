@@ -71,10 +71,7 @@ export function isBadgeExpired(expiresAt: string | null | undefined, now: number
 }
 
 /** What a badge's validity reads as: 永久有效, 有效期至 2026/10/01, or 已过期. */
-export function badgeValidity(
-  expiresAt: string | null | undefined,
-  now: number,
-): { expired: boolean; text: string } {
+export function badgeValidity(expiresAt: string | null | undefined, now: number): { expired: boolean; text: string } {
   const end = parseBackendTime(expiresAt);
   if (!end) return { expired: false, text: '永久有效' };
   if (now > end.getTime()) return { expired: true, text: '已过期' };
@@ -99,7 +96,5 @@ export function wornBadges(
 
 /** Two equipped sets name the same badges in the same order. */
 export function sameEquipped(a: readonly EquippedBadge[], b: readonly EquippedBadge[]): boolean {
-  return (
-    a.length === b.length && a.every((badge, index) => badge.badge_name === b[index]?.badge_name)
-  );
+  return a.length === b.length && a.every((badge, index) => badge.badge_name === b[index]?.badge_name);
 }

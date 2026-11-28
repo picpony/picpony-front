@@ -241,10 +241,7 @@ function revokeSession(user: StoredUserInfo) {
 /** The expected token protects a new login from an older request's 401. Storage that
  * refuses the removal cannot hold a session either, so the event still goes out — once.
  * `revoke: false` for a session the backend has already ended (a password change). */
-export function clearUserInfo(
-  expectedToken: string,
-  { revoke = true }: { revoke?: boolean } = {},
-): boolean {
+export function clearUserInfo(expectedToken: string, { revoke = true }: { revoke?: boolean } = {}): boolean {
   const current = readUserInfo();
   if (clearedToken === expectedToken || current?.token !== expectedToken) return false;
   clearedToken = expectedToken;

@@ -87,9 +87,7 @@ export default function TagGroupsPage() {
         const { revision: next } = saved.value;
         writeGroups(token, (list) =>
           list.map((group) =>
-            group.id === input.id
-              ? { ...group, name: input.name, tags: [...input.tags], revision: next }
-              : group,
+            group.id === input.id ? { ...group, name: input.name, tags: [...input.tags], revision: next } : group,
           ),
         );
         tagGroups.expire({ token });
@@ -149,16 +147,13 @@ export default function TagGroupsPage() {
    */
   const share = useCallback(
     async (group: TagGroup) => {
-      if (!token || readToken() !== token || sharePending.current || group.tags.length === 0)
-        return;
+      if (!token || readToken() !== token || sharePending.current || group.tags.length === 0) return;
       sharePending.current = true;
       shareRequest.current?.abort();
       const controller = new AbortController();
       shareRequest.current = controller;
       const current = () =>
-        !controller.signal.aborted &&
-        readToken() === token &&
-        window.location.pathname === '/tag-groups';
+        !controller.signal.aborted && readToken() === token && window.location.pathname === '/tag-groups';
       setSharing(group.id);
       const username = readUserInfo()?.username;
       const sharer = (typeof username === 'string' && username.trim()) || ANONYMOUS;
@@ -221,12 +216,7 @@ export default function TagGroupsPage() {
       actions={
         signedIn && groups && count > 0 ? (
           /* While empty, the empty state carries 新建 — one primary action, not two. */
-          <Button
-            variant="filled"
-            icon={<MdAdd />}
-            disabled={full}
-            onClick={() => openEditor(null)}
-          >
+          <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
             新建
           </Button>
         ) : undefined

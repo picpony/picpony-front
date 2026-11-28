@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import EmptyState from '@/components/EmptyState';
 import Skeleton from '@/components/Skeleton';
 import SwapContent from '@/components/SwapContent';
@@ -91,8 +84,7 @@ function tickIndexes(count: number, limit: number): number[] {
   for (let index = 0; index < count; index += stride) indexes.push(index);
   const last = indexes[indexes.length - 1];
   if (last !== count - 1) {
-    if (count - 1 - last <= stride * 0.75 && indexes.length > 1)
-      indexes[indexes.length - 1] = count - 1;
+    if (count - 1 - last <= stride * 0.75 && indexes.length > 1) indexes[indexes.length - 1] = count - 1;
     else indexes.push(count - 1);
   }
   return indexes;
@@ -102,15 +94,7 @@ const subscribeNothing = () => () => {};
 const onClient = () => true;
 const onServer = () => false;
 
-function StatSeriesPaint({
-  dataKey,
-  active,
-  children,
-}: {
-  dataKey: string;
-  active: boolean;
-  children: ReactNode;
-}) {
+function StatSeriesPaint({ dataKey, active, children }: { dataKey: string; active: boolean; children: ReactNode }) {
   const groupRef = useRef<SVGGElement>(null);
   const clientMounted = useSyncExternalStore(subscribeNothing, onClient, onServer);
   const canEnter = useRef(clientMounted);
@@ -132,15 +116,13 @@ function StatSeriesPaint({
     const changed = pending.current.event !== event;
     const mode = `${active}:${tier}:${scale}`;
     if (changed) pending.current = { event, value: true };
-    else if (previousMode.current !== null && previousMode.current !== mode)
-      pending.current.value = false;
+    else if (previousMode.current !== null && previousMode.current !== mode) pending.current.value = false;
     previousMode.current = mode;
     const current = pending.current;
     const group = groupRef.current;
     const plot = group?.ownerSVGElement?.parentElement;
     const blockedEntrance =
-      event.category === 'entrance' &&
-      (!canEnter.current || !entranceMotion() || (plot && routeTransitActive(plot)));
+      event.category === 'entrance' && (!canEnter.current || !entranceMotion() || (plot && routeTransitActive(plot)));
     if (!group || !active || group.closest('[inert]') || tier === 'off' || blockedEntrance) {
       current.value = false;
       return;
@@ -200,19 +182,14 @@ export default function StatChart({
   const yTicks = [0, step, step * 2, step * 3, step * 4];
   const xTicks = tickIndexes(count, Math.min(7, Math.max(2, Math.floor(plotWidth / 72))));
   // Never carry a hovered bucket into another view or revive it on returning to a tab.
-  const valid =
-    selection && isActive && !loading && selection.key === contentKey && selection.index < count;
+  const valid = selection && isActive && !loading && selection.key === contentKey && selection.index < count;
   if (selection && !valid) setSelection(null);
   const active = valid ? selection.index : null;
   const bucket = active === null ? null : buckets[active];
-  const pointX = (index: number) =>
-    PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
+  const pointX = (index: number) => PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
   const linePath = (item: ChartSeries) =>
     item.values
-      .map(
-        (value, index) =>
-          `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`,
-      )
+      .map((value, index) => `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`)
       .join(' ');
 
   // Keep axis type at CSS-pixel size without forcing layout in concealed tab panes.
@@ -268,14 +245,11 @@ export default function StatChart({
           <dl
             className={cn(
               'mt-2 grid gap-x-4 gap-y-2',
-              series.length > 2
-                ? 'grid-cols-2 @lg:grid-cols-4'
-                : series.length === 2 && 'grid-cols-2',
+              series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
             )}
           >
             {series.map((item, seriesIndex) => {
-              const dash =
-                series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
+              const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
               return (
                 <div key={item.key} className="min-w-0">
                   <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
@@ -283,10 +257,7 @@ export default function StatChart({
                       width={18}
                       height={6}
                       viewBox="0 0 18 6"
-                      className={cn(
-                        'shrink-0 forced-colors:text-[color:CanvasText]',
-                        TONE[item.tone],
-                      )}
+                      className={cn('shrink-0 forced-colors:text-[color:CanvasText]', TONE[item.tone])}
                       aria-hidden="true"
                     >
                       <line
@@ -316,9 +287,7 @@ export default function StatChart({
           <div
             className={cn(
               'mt-2 grid gap-x-4 gap-y-2',
-              series.length > 2
-                ? 'grid-cols-2 @lg:grid-cols-4'
-                : series.length === 2 && 'grid-cols-2',
+              series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
             )}
           >
             {(series.length > 0 ? series : [{ key: 'placeholder' }]).map((item, idx) => (
@@ -347,9 +316,7 @@ export default function StatChart({
                   selectAt(event.clientX, 'select', event.pointerType === 'touch');
               }}
               onPointerCancel={() => setSelection(null)}
-              onPointerLeave={() =>
-                setSelection((current) => (current?.source === 'hover' ? null : current))
-              }
+              onPointerLeave={() => setSelection((current) => (current?.source === 'hover' ? null : current))}
               onFocus={() => setFocused(true)}
               onBlur={() => {
                 setFocused(false);
@@ -364,10 +331,8 @@ export default function StatChart({
                 }
                 if (loading) return;
                 let next: number;
-                if (event.key === 'ArrowLeft')
-                  next = active === null ? count - 1 : Math.max(0, active - 1);
-                else if (event.key === 'ArrowRight')
-                  next = active === null ? 0 : Math.min(count - 1, active + 1);
+                if (event.key === 'ArrowLeft') next = active === null ? count - 1 : Math.max(0, active - 1);
+                else if (event.key === 'ArrowRight') next = active === null ? 0 : Math.min(count - 1, active + 1);
                 else if (event.key === 'Home') next = 0;
                 else if (event.key === 'End') next = count - 1;
                 else return;
@@ -375,22 +340,10 @@ export default function StatChart({
                 inspect(next, 'select');
               }}
             >
-              <svg
-                viewBox={`0 0 ${width} ${HEIGHT}`}
-                className="h-60 w-full"
-                focusable="false"
-                aria-hidden="true"
-              >
+              <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" focusable="false" aria-hidden="true">
                 {series.length === 1 && (
                   <defs>
-                    <linearGradient
-                      id={areaGradId}
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                      className={TONE[series[0].tone]}
-                    >
+                    <linearGradient id={areaGradId} x1="0" y1="0" x2="0" y2="1" className={TONE[series[0].tone]}>
                       <stop
                         offset="0%"
                         stopColor="currentColor"
@@ -452,8 +405,7 @@ export default function StatChart({
                     const path = linePath(item);
                     const lastX = pointX(count - 1);
                     const lastY = pointY(item.values[count - 1] ?? 0, max);
-                    const dash =
-                      series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
+                    const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
                     return (
                       <g key={item.key} className={TONE[item.tone]}>
                         <path
@@ -515,12 +467,7 @@ export default function StatChart({
             <Skeleton className="h-60 w-full rounded-sm" />
           ) : (
             <div className="flex h-60 items-center justify-center">
-              <EmptyState
-                size="inline"
-                title="此时间范围暂无数据"
-                description="请选择其他日期范围"
-                entrance={false}
-              />
+              <EmptyState size="inline" title="此时间范围暂无数据" description="请选择其他日期范围" entrance={false} />
             </div>
           )}
         </SwapContent>

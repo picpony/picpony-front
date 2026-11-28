@@ -78,8 +78,7 @@ async function readBody(res: Response): Promise<string> {
   try {
     return await res.text();
   } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError')
-      throw new ApiError('timeout', { cause: error });
+    if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError('timeout', { cause: error });
     throw error;
   }
 }
@@ -88,9 +87,7 @@ function parseObject(text: string): Record<string, unknown> | null {
   if (!text) return null;
   try {
     const data: unknown = JSON.parse(text);
-    return data !== null && typeof data === 'object' && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
-      : null;
+    return data !== null && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null;
   } catch {
     return null;
   }
@@ -233,21 +230,8 @@ function onApiUnauthorized(path: string, token: string) {
  * rejects it before the handler runs, so nothing happened) refreshes the token and is sent once
  * more. Reads are bounded by `READ_DEADLINE_MS`; writes are not, and are never retried otherwise.
  */
-export async function apiRequest(
-  method: string,
-  path: string,
-  options: ApiOptions = {},
-): Promise<Response> {
-  const {
-    token,
-    query,
-    json,
-    body,
-    timeoutMs,
-    idempotencyKey,
-    notFoundStatuses: _nf,
-    ...init
-  } = options;
+export async function apiRequest(method: string, path: string, options: ApiOptions = {}): Promise<Response> {
+  const { token, query, json, body, timeoutMs, idempotencyKey, notFoundStatuses: _nf, ...init } = options;
   void _nf;
   const verb = method.toUpperCase();
   const write = verb !== 'GET' && verb !== 'HEAD';
@@ -295,10 +279,7 @@ export async function apiRequest(
  * Decode a new-backend answer. 2xx → the JSON body (`undefined` for 204 / an empty body);
  * anything else → `ApiError` carrying the backend's `error.code` and `error.message`.
  */
-export async function readApi<T>(
-  res: Response,
-  options: { notFoundStatuses?: readonly number[] } = {},
-): Promise<T> {
+export async function readApi<T>(res: Response, options: { notFoundStatuses?: readonly number[] } = {}): Promise<T> {
   const text = await readBody(res);
   let data: unknown = undefined;
   if (text) {

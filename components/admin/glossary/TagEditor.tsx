@@ -7,14 +7,7 @@ import InlineEditorPanel from '@/components/InlineEditorPanel';
 import SectionHeading from '@/components/SectionHeading';
 import { AdminForm, FormActions } from '../AdminForm';
 import TagFields, { WorkOrderNote } from './TagFields';
-import {
-  tagFormOf,
-  tagSavePayload,
-  withSuggestion,
-  type GlossaryTag,
-  type TagForm,
-  type TagSave,
-} from './model';
+import { tagFormOf, tagSavePayload, withSuggestion, type GlossaryTag, type TagForm, type TagSave } from './model';
 import type { Feedback } from './resources';
 
 export function tagEditorId(tagId: number) {
@@ -49,9 +42,7 @@ export default function TagEditor({
   const [form, setForm] = useState<TagForm>(() => tagFormOf(tag));
   const initial = tagFormOf(tag);
   const dirty = (Object.keys(initial) as (keyof TagForm)[]).some((key) =>
-    key === 'flags'
-      ? initial.flags?.restricted !== form.flags?.restricted
-      : initial[key] !== form[key],
+    key === 'flags' ? initial.flags?.restricted !== form.flags?.restricted : initial[key] !== form[key],
   );
   useEffect(() => {
     onDirtyChange(dirty);

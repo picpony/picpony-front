@@ -167,8 +167,7 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }));
   });
 const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result
-    ?.value;
+  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
 await send('Page.enable');
 socket.addEventListener('message', async (e) => {
@@ -198,8 +197,7 @@ await send('Emulation.setDeviceMetricsOverride', {
   deviceScaleFactor: DESKTOP ? 1 : DPR,
   mobile: !DESKTOP,
 });
-if (!DESKTOP)
-  await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+if (!DESKTOP) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 await send('Page.addScriptToEvaluateOnNewDocument', {
   source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}`,
 });
@@ -306,9 +304,7 @@ async function tap(selector, label) {
 /** The main thread's top-level work between two trace times (µs), self time by event name. */
 function breakdown(events, fromUs, toUs) {
   const main = new Set(
-    events
-      .filter((e) => e.name === 'thread_name' && e.args?.name === 'CrRendererMain')
-      .map((e) => `${e.pid}:${e.tid}`),
+    events.filter((e) => e.name === 'thread_name' && e.args?.name === 'CrRendererMain').map((e) => `${e.pid}:${e.tid}`),
   );
   const slices = events
     .filter((e) => main.has(`${e.pid}:${e.tid}`) && e.ph === 'X' && e.ts >= fromUs && e.ts < toUs)
@@ -327,8 +323,7 @@ function breakdown(events, fromUs, toUs) {
   return [...byName].sort((a, b) => b[1] - a[1]).slice(0, 16);
 }
 
-const fmt = (v) =>
-  v === null || v === undefined || Number.isNaN(v) ? '   -' : String(Math.round(v)).padStart(4);
+const fmt = (v) => (v === null || v === undefined || Number.isNaN(v) ? '   -' : String(Math.round(v)).padStart(4));
 const median = (list) => {
   const v = list.filter((x) => typeof x === 'number' && !Number.isNaN(x)).sort((a, b) => a - b);
   return v.length ? v[Math.floor((v.length - 1) / 2)] : null;
@@ -383,9 +378,7 @@ async function measure(name, selector, label) {
     await done;
   }
   /* The profile's clock is the monotonic one in µs; `performance.timeOrigin` aligns it. */
-  const clock = profiling
-    ? await evaluate(`({ now: performance.now(), origin: performance.timeOrigin })`)
-    : null;
+  const clock = profiling ? await evaluate(`({ now: performance.now(), origin: performance.timeOrigin })`) : null;
   const profile = profiling ? (await send('Profiler.stop'))?.profile : null;
   const lat = await evaluate(`window.__lat`);
   if (!ok || !lat) return console.log(`${name.padEnd(26)} no tab "${label}"`);
@@ -396,11 +389,7 @@ async function measure(name, selector, label) {
   const started = lat.frames.find((f) => typeof f.start === 'number');
   const at = (ms) => {
     const f = [...lat.frames].reverse().find((frame) => frame.t <= lift + ms);
-    return f && f.p !== null
-      ? Math.round(f.p * 100)
-      : f && started && f.t > started.start
-        ? 100
-        : 0;
+    return f && f.p !== null ? Math.round(f.p * 100) : f && started && f.t > started.start ? 100 : 0;
   };
   const settled = started ? lat.frames.find((f) => f.t > started.start && !f.live) : null;
   const metrics = {
@@ -422,26 +411,17 @@ async function measure(name, selector, label) {
   if (DUMP) {
     for (const m of lat.marks)
       console.log(`      ${m.type} timeStamp ${fmt(m.ts - lift)}, handled ${fmt(m.at - lift)}`);
-    for (const e of lat.events.filter(
-      (e) => !/^(pointer|mouse)(over|out|enter|leave)$/.test(e.name),
-    )) {
-      console.log(
-        `      event ${e.name.padEnd(18)} processing ${fmt(e.ps - lift)} .. ${fmt(e.pe - lift)}`,
-      );
+    for (const e of lat.events.filter((e) => !/^(pointer|mouse)(over|out|enter|leave)$/.test(e.name))) {
+      console.log(`      event ${e.name.padEnd(18)} processing ${fmt(e.ps - lift)} .. ${fmt(e.pe - lift)}`);
     }
     const frames = lat.frames.filter((f) => f.t > lift - 120).slice(0, 14);
     console.log(
       `      frames ${frames.map((f) => `${Math.round(f.t - lift)}${f.p === null ? '' : `:${Math.round(f.p * 100)}%`}`).join(' ')}`,
     );
-    for (const l of lat.loafs.filter(
-      (l) => l.start + l.dur > (down?.ts ?? lift) - 5 && l.start < lift + 400,
-    )) {
+    for (const l of lat.loafs.filter((l) => l.start + l.dur > (down?.ts ?? lift) - 5 && l.start < lift + 400)) {
       const scripts = l.scripts
         .filter((s) => s.dur >= 3)
-        .map(
-          (s) =>
-            `${s.invoker}${s.fn ? `(${s.fn})` : ''} ${s.dur}ms${s.forced ? ` [forced ${s.forced}]` : ''}`,
-        )
+        .map((s) => `${s.invoker}${s.fn ? `(${s.fn})` : ''} ${s.dur}ms${s.forced ? ` [forced ${s.forced}]` : ''}`)
         .join('; ');
       console.log(
         `      long frame ${fmt(l.start - lift)} ${Math.round(l.dur)}ms (blocking ${Math.round(l.blocking)}) ${scripts}`,
@@ -452,9 +432,7 @@ async function measure(name, selector, label) {
     /* Align on the profile's end, taken just after the read of `performance.now()` above. */
     const shift = profile.endTime - clock.now * 1000;
     const until = started ? started.start : lift + 300;
-    console.log(
-      `      JavaScript from the press to the strip's start (${Math.round(until - down.ts)}ms), self time:`,
-    );
+    console.log(`      JavaScript from the press to the strip's start (${Math.round(until - down.ts)}ms), self time:`);
     for (const [key, ms] of profileTop(profile, down.ts, until, shift)) {
       if (ms >= 0.8) console.log(`        ${ms.toFixed(1).padStart(6)}ms  ${key}`);
     }
@@ -475,16 +453,12 @@ async function measure(name, selector, label) {
   }
   if (tracing && click && started && down) {
     /* Trace time is µs on the monotonic clock; align it on the click's own dispatch. */
-    const dispatch = traceEvents.find(
-      (e) => e.name === 'EventDispatch' && e.args?.data?.type === 'click',
-    );
+    const dispatch = traceEvents.find((e) => e.name === 'EventDispatch' && e.args?.data?.type === 'click');
     if (dispatch) {
       const offset = dispatch.ts - click.ps * 1000;
       const from = down.ts * 1000 + offset;
       const to = started.start * 1000 + offset;
-      console.log(
-        `      main thread from the press to the strip's start (${Math.round((to - from) / 1000)}ms):`,
-      );
+      console.log(`      main thread from the press to the strip's start (${Math.round((to - from) / 1000)}ms):`);
       for (const [key, us] of breakdown(traceEvents, from, to)) {
         if (us >= 1000) console.log(`        ${(us / 1000).toFixed(1).padStart(6)}ms  ${key}`);
       }
@@ -540,9 +514,7 @@ for (const { route, taps } of scenarios) {
   await sleep(9000);
   await evaluate(INSTALL);
   if (NO_LEAN)
-    await evaluate(
-      `document.querySelectorAll('[data-tab-lean]').forEach((el) => el.removeAttribute('data-tab-lean'))`,
-    );
+    await evaluate(`document.querySelectorAll('[data-tab-lean]').forEach((el) => el.removeAttribute('data-tab-lean'))`);
   for (let round = 0; round < REPEAT; round += 1) {
     for (const [name, selector, label] of taps) {
       if (ONLY && !name.includes(ONLY)) continue;

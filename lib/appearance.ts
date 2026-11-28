@@ -122,13 +122,7 @@ export const DEFAULT_ENTRANCE_MODE: EntranceMode = 'non-blocking';
 
 /* `SchemeSetting` needs no validation list — derived from two booleans, not read as a string;
    the other two come straight out of storage. */
-const MOTION_SETTINGS: readonly MotionSetting[] = [
-  'off',
-  'reduced',
-  'standard',
-  'system',
-  'custom',
-];
+const MOTION_SETTINGS: readonly MotionSetting[] = ['off', 'reduced', 'standard', 'system', 'custom'];
 
 /* --- Storage: both halves are wrapped (localStorage throws in a private window in some
    engines; a failed persist must not take the page down). --- */
@@ -191,8 +185,7 @@ export function readMotionSpeed(): MotionSpeed {
 
 /* --- Resolving `system` ------------------------------------------------- */
 
-const matches = (query: string) =>
-  typeof window !== 'undefined' && window.matchMedia(query).matches;
+const matches = (query: string) => typeof window !== 'undefined' && window.matchMedia(query).matches;
 
 export const systemPrefersDark = () => matches(MEDIA.dark);
 export const systemPrefersReducedMotion = () => matches(MEDIA.reducedMotion);
@@ -343,8 +336,7 @@ function motionSpeedScale(category: MotionCategory = 'feedback'): number {
 }
 
 /** `ms` at the current speed, for a WAAPI `duration` or a GSAP seconds value. */
-export const scaledMs = (ms: number, category: MotionCategory = 'feedback') =>
-  ms * motionScale(category);
+export const scaledMs = (ms: number, category: MotionCategory = 'feedback') => ms * motionScale(category);
 
 /** GSAP already scales its global clock by feedback; a gesture needs only this relative factor. */
 export function motionRatio(category: MotionCategory): number {
@@ -507,10 +499,8 @@ function applyMotionEffects(effects: MotionCustomEffects) {
   const raw = formatMotionEffects(effects);
   const valid = parseMotionEffects(raw);
   el.dataset.motionEffects = raw;
-  for (const [name, value] of Object.entries(motionEffectsAttributes(valid)))
-    el.setAttribute(name, value);
-  for (const [name, value] of Object.entries(motionEffectsStyle(valid)))
-    el.style.setProperty(name, String(value));
+  for (const [name, value] of Object.entries(motionEffectsAttributes(valid))) el.setAttribute(name, value);
+  for (const [name, value] of Object.entries(motionEffectsStyle(valid))) el.style.setProperty(name, String(value));
   writeCookie(COOKIE_KEYS.motionEffects, raw);
 }
 
@@ -562,8 +552,7 @@ function emit() {
    than `addEventListener` had — masked today because the app-shell subscriber never unmounts, but a
    count returning to zero would leak a retained query per cycle. */
 let mediaCache: MediaQueryList[] | null = null;
-const systemMedia = () =>
-  (mediaCache ??= [window.matchMedia(MEDIA.dark), window.matchMedia(MEDIA.reducedMotion)]);
+const systemMedia = () => (mediaCache ??= [window.matchMedia(MEDIA.dark), window.matchMedia(MEDIA.reducedMotion)]);
 
 function subscribe(onChange: () => void) {
   listeners.add(onChange);
@@ -732,12 +721,9 @@ export const useSchemeSetting = () => useAppearance(readSchemeSetting, 'system' 
 /** `serverValue` is the scheme the server painted, when the caller knows it (the app bar gets it
  *  from the cookie), so a glyph that follows the scheme renders the same on both sides of
  *  hydration instead of correcting itself after it. */
-export const useScheme = (serverValue: ColorScheme = 'light') =>
-  useAppearance(currentScheme, serverValue);
-export const usePalette = (serverValue: PaletteId = DEFAULT_PALETTE) =>
-  useAppearance(currentPalette, serverValue);
-export const useSkyPhase = (serverValue: SkyPhaseId = DEFAULT_SKY_PHASE) =>
-  useAppearance(currentSkyPhase, serverValue);
+export const useScheme = (serverValue: ColorScheme = 'light') => useAppearance(currentScheme, serverValue);
+export const usePalette = (serverValue: PaletteId = DEFAULT_PALETTE) => useAppearance(currentPalette, serverValue);
+export const useSkyPhase = (serverValue: SkyPhaseId = DEFAULT_SKY_PHASE) => useAppearance(currentSkyPhase, serverValue);
 export const useCustomSeed = () => useAppearance(currentCustomSeed, null as string | null);
 export const useCustomAccent = () => useAppearance(currentCustomAccent, null as AccentChoice);
 export const useCustomTonesRaw = () => useAppearance(currentCustomTonesRaw, null as string | null);
@@ -745,13 +731,11 @@ export const usePaletteHues = () => useAppearance(currentPaletteHues, 'multi' as
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
 export const useMotionCustom = () => parseMotionCustom(useAppearance(currentMotionCustomRaw, ''));
-export const useMotionEffects = () =>
-  parseMotionEffects(useAppearance(currentMotionEffectsRaw, ''));
+export const useMotionEffects = () => parseMotionEffects(useAppearance(currentMotionEffectsRaw, ''));
 export const useMotionMode = () => useAppearance(motionMode, 'standard' as MotionMode);
 export const useMotionEnabled = () =>
   useAppearance(() => MOTION_CATEGORIES.some(({ id }) => motionTier(id) !== 'off'), true);
-export const useMotionScale = (category: MotionCategory) =>
-  useAppearance(() => motionScale(category), 1);
+export const useMotionScale = (category: MotionCategory) => useAppearance(() => motionScale(category), 1);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
 export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANCE_MODE);
 

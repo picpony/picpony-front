@@ -18,12 +18,7 @@ import ErrorRetry from './ErrorRetry';
 import { getHeroMediaResponsiveSizes } from '@/lib/hero/geometry';
 import { HERO_PREVIEW_FALLBACK_MS } from '@/lib/hero/constants';
 import { isDetailFinalOptimized, shouldBypassImageOptimization } from '@/lib/detailFinalSource';
-import {
-  getRawImageUrl,
-  resolveNextAttempt,
-  type ImageTier,
-  type LoadAttempt,
-} from '@/lib/imageLoader';
+import { getRawImageUrl, resolveNextAttempt, type ImageTier, type LoadAttempt } from '@/lib/imageLoader';
 import { IMAGE_CDN_BASE, IMAGE_WORKER_BASE } from '@/lib/constants';
 import { SPRING_MS } from '@/lib/spring';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
@@ -221,14 +216,11 @@ export default function DetailImage({
   }, [finalSrc, isPainted]);
   /* While a Hero flight carries the card's preview (`heroActive && hasPreview`), the flyer and
      cached preview own the pixels — never paint a contained disc behind a transparent vector. */
-  const showPlaceholder =
-    placeholderGone !== finalSrc && !finalGivenUp && !(heroActive && hasPreview);
+  const showPlaceholder = placeholderGone !== finalSrc && !finalGivenUp && !(heroActive && hasPreview);
 
   /* The translation layer: decoded before it is shown, so the swap is a fade, not a load. */
   const [translationDecoded, setTranslationDecoded] = useState<string | null>(null);
-  const translationVisible = Boolean(
-    translationSrc && showTranslation && translationDecoded === translationSrc,
-  );
+  const translationVisible = Boolean(translationSrc && showTranslation && translationDecoded === translationSrc);
   /* The original stands down once the translation has faded in over it — not before, or the fade
      would dip to the empty box, and not never, or a translation with transparent parts would show
      the original through them. Going back, it is there at once, under the fade out. The timer
@@ -253,12 +245,7 @@ export default function DetailImage({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onPreviewReadyRef.current;
-    if (
-      !readySurfaceId ||
-      !target ||
-      !callback ||
-      publishedPreviewSurfaceRef.current === readySurfaceId
-    ) {
+    if (!readySurfaceId || !target || !callback || publishedPreviewSurfaceRef.current === readySurfaceId) {
       return;
     }
     publishedPreviewSurfaceRef.current = readySurfaceId;
@@ -269,12 +256,7 @@ export default function DetailImage({
     const readySurfaceId = surfaceIdRef.current;
     const target = targetRef.current;
     const callback = onFinalReadyRef.current;
-    if (
-      !readySurfaceId ||
-      !target ||
-      !callback ||
-      publishedFinalSurfaceRef.current === readySurfaceId
-    ) {
+    if (!readySurfaceId || !target || !callback || publishedFinalSurfaceRef.current === readySurfaceId) {
       return;
     }
     publishedFinalSurfaceRef.current = readySurfaceId;
@@ -448,10 +430,7 @@ export default function DetailImage({
       loading: 'eager',
       unoptimized: shouldBypassImageOptimization(finalSrc),
     });
-    const lease = createImagePrefetchLease(
-      finalSrc,
-      getDetailFinalCandidate(props.srcSet, props.src, width, height),
-    );
+    const lease = createImagePrefetchLease(finalSrc, getDetailFinalCandidate(props.srcSet, props.src, width, height));
     prefetchLeaseRef.current = lease;
 
     return () => {
@@ -499,8 +478,7 @@ export default function DetailImage({
       return;
     }
     setLadder((state) => {
-      if (state.src !== finalSrc || state.attempt !== state.shown || state.attempt.giveUp)
-        return state;
+      if (state.src !== finalSrc || state.attempt !== state.shown || state.attempt.giveUp) return state;
       const next = resolveNextAttempt(getRawImageUrl(state.src), state.attempt);
       return {
         ...state,
@@ -526,11 +504,7 @@ export default function DetailImage({
           if (!decodedIn(element)) return;
         }
         requestAnimationFrame(() => {
-          if (
-            sourceRef.current.finalSrc !== finalSrc ||
-            !element.isConnected ||
-            element.currentSrc !== loadedSrc
-          )
+          if (sourceRef.current.finalSrc !== finalSrc || !element.isConnected || element.currentSrc !== loadedSrc)
             return;
           const lease = prefetchLeaseRef.current;
           if (lease?.source === finalSrc) {
@@ -557,16 +531,10 @@ export default function DetailImage({
           if (!decodedIn(element)) return;
         }
         requestAnimationFrame(() => {
-          if (
-            sourceRef.current.previewSrc !== previewSrc ||
-            !element.isConnected ||
-            element.currentSrc !== loadedSrc
-          )
+          if (sourceRef.current.previewSrc !== previewSrc || !element.isConnected || element.currentSrc !== loadedSrc)
             return;
           markPreviewReady();
-          setPainted((state) =>
-            state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' },
-          );
+          setPainted((state) => (state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' }));
         });
       })();
     },
@@ -694,9 +662,7 @@ export default function DetailImage({
       )}
       {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
           the press the media box below it is listening for. */}
-      {!failedWithNothing && (
-        <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
-      )}
+      {!failedWithNothing && <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />}
       {!failedWithNothing && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           {finalGivenUp && isPainted ? (

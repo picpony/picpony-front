@@ -18,14 +18,7 @@ import * as api from '@/lib/api/favorites';
 import type { FaveIndex, TransferMode, TransferResult } from '@/lib/api/favorites';
 import { ApiError, apiErrorMessage } from '@/lib/api/errors';
 import { readToken } from '@/lib/hooks';
-import {
-  faveFolders,
-  faveIds,
-  favePictures,
-  profileFaveFolders,
-  sharedFaveIds,
-  tasks,
-} from '@/lib/resources';
+import { faveFolders, faveIds, favePictures, profileFaveFolders, sharedFaveIds, tasks } from '@/lib/resources';
 import { changeSyncedSetting } from '@/lib/settingsSync';
 import { readFavouriteSetting } from '@/lib/favoritesSettings';
 import type { PonyImage } from '@/lib/types/image';
@@ -54,12 +47,7 @@ export function favouritesChanged(
  * favourited, in those folders — an empty list when which ones is not known yet (the re-read that
  * follows every change fills it in; no folder id is ever invented here).
  */
-function writeMembership(
-  token: string,
-  imageId: number,
-  folders: readonly number[] | null,
-  basis?: FaveIndex,
-) {
+function writeMembership(token: string, imageId: number, folders: readonly number[] | null, basis?: FaveIndex) {
   if (readToken() !== token) return;
   const cached = basis ?? faveIds.peek({ token }).data;
   if (!cached) return;
@@ -101,17 +89,9 @@ function writeMembership(
     faveIds.write(args, (previous) => {
       const page = previous ?? shown;
       const belongs =
-        folders === null
-          ? false
-          : folders.length > 0
-            ? folders.includes(folderId)
-            : page.ids.includes(imageId);
+        folders === null ? false : folders.length > 0 ? folders.includes(folderId) : page.ids.includes(imageId);
       const has = page.ids.includes(imageId);
-      const ids = belongs
-        ? has
-          ? page.ids
-          : [imageId, ...page.ids]
-        : page.ids.filter((id) => id !== imageId);
+      const ids = belongs ? (has ? page.ids : [imageId, ...page.ids]) : page.ids.filter((id) => id !== imageId);
       const membership = { ...page.folders };
       const dates = { ...page.dates };
       if (belongs) {
@@ -159,13 +139,10 @@ function shiftPicturePages(before: readonly number[], after: readonly number[]) 
   for (let start = 0, page = 0; start < after.length; start += FAVE_PAGE_SIZE, page += 1) {
     const ids = after.slice(start, start + FAVE_PAGE_SIZE);
     const was = before.slice(start, start + FAVE_PAGE_SIZE);
-    if (!read[page] || (ids.length === was.length && ids.every((id, at) => id === was[at])))
-      continue;
+    if (!read[page] || (ids.length === was.length && ids.every((id, at) => id === was[at]))) continue;
     if (favePictures.peek({ ids }).data) continue;
     const covered = ids.filter((id) => answered.has(id));
-    const images = covered
-      .map((id) => known.get(id))
-      .filter((image): image is PonyImage => image !== undefined);
+    const images = covered.map((id) => known.get(id)).filter((image): image is PonyImage => image !== undefined);
     favePictures.write({ ids }, { ids: covered, images });
     if (covered.length === ids.length) favePictures.expire({ ids });
   }
@@ -186,11 +163,7 @@ export async function freshIndex(token: string): Promise<FaveIndex> {
  * holds resolves without a request; otherwise `toggle_fave {saved: true}` — idempotent on the
  * server — and the folders it answers are written through.
  */
-export async function favouriteImage(
-  token: string,
-  imageId: number,
-  folderId: number,
-): Promise<{ folders: number[] }> {
+export async function favouriteImage(token: string, imageId: number, folderId: number): Promise<{ folders: number[] }> {
   requireSession(token);
   const index = await faveIds.read({ token });
   requireSession(token);
@@ -205,10 +178,7 @@ export async function favouriteImage(
  * Take a picture out of favourites altogether — every folder (`toggle_fave {saved: false}`).
  * Resolves with the folders it was in, for 撤销.
  */
-export async function unfavouriteImage(
-  token: string,
-  imageId: number,
-): Promise<{ previous: number[] }> {
+export async function unfavouriteImage(token: string, imageId: number): Promise<{ previous: number[] }> {
   requireSession(token);
   const index = faveIds.peek({ token }).data ?? (await freshIndex(token));
   requireSession(token);
@@ -223,11 +193,7 @@ export async function unfavouriteImage(
  * The folders a picture is in, exactly (`set_image_fave_folders`): the picker's 保存, a removal
  * from one folder, and 撤销. An empty list unfavourites it.
  */
-export async function setImageFolders(
-  token: string,
-  imageId: number,
-  folderIds: readonly number[],
-): Promise<number[]> {
+export async function setImageFolders(token: string, imageId: number, folderIds: readonly number[]): Promise<number[]> {
   requireSession(token);
   const index = await faveIds.read({ token });
   requireSession(token);
@@ -244,8 +210,7 @@ export async function restoreFavourite(
   previous: readonly number[],
   fallbackFolder: number,
 ) {
-  if (previous.length > 0 && previous.every((id) => id > 0))
-    return setImageFolders(token, imageId, previous);
+  if (previous.length > 0 && previous.every((id) => id > 0)) return setImageFolders(token, imageId, previous);
   return (await favouriteImage(token, imageId, fallbackFolder)).folders;
 }
 
@@ -308,9 +273,7 @@ export async function removeFromFolder(
 
 /** The account's folder names, from the list on screen — a transfer's answer names folders by id. */
 function folderNames(token: string): Map<number, string> {
-  return new Map(
-    (faveFolders.peek({ token }).data?.folders ?? []).map((folder) => [folder.id, folder.name]),
-  );
+  return new Map((faveFolders.peek({ token }).data?.folders ?? []).map((folder) => [folder.id, folder.name]));
 }
 
 /** Move or copy pictures of one folder into others (`batch_transfer_faves`). */
@@ -415,10 +378,7 @@ export async function importFavourites(
   token: string,
   imageIds: readonly number[],
   folderId: number,
-  {
-    signal,
-    onProgress,
-  }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
+  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<{ imported: number[]; skipped: number[]; failed: { id: number; error: unknown }[] }> {
   const index = await freshIndex(token);
   const known = new Set(index.ids);
@@ -509,11 +469,7 @@ export async function deleteFolders(token: string, folderIds: readonly number[])
 }
 
 /** Merge folders into one of them; a default folder merged away hands its role to the target. */
-export async function mergeFolders(
-  token: string,
-  sourceIds: readonly number[],
-  target: DefaultFolder,
-): Promise<void> {
+export async function mergeFolders(token: string, sourceIds: readonly number[], target: DefaultFolder): Promise<void> {
   requireSession(token);
   await api.mergeFaveFolders(token, sourceIds, target.id);
   if (readToken() === token) {

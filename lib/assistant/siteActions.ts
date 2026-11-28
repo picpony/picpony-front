@@ -10,11 +10,7 @@ import {
 } from '@/lib/favoritesActions';
 import { getTasks, claimTask } from '@/lib/api/tasks';
 import { sendMessage } from '@/lib/api/messages';
-import {
-  addTagSubscription,
-  lookupDerpiTag,
-  removeTagSubscription,
-} from '@/lib/api/tagSubscriptions';
+import { addTagSubscription, lookupDerpiTag, removeTagSubscription } from '@/lib/api/tagSubscriptions';
 import { getAvailablePonies, saveMyPonies, ponyNames } from '@/lib/api/desktopPonies';
 import { myPonies } from '@/lib/desktopPonies/queries';
 import {
@@ -27,11 +23,7 @@ import {
 } from '@/lib/resources';
 import { SYNCED_SETTINGS } from '@/lib/settingsSync';
 import { getBrowsingSettings } from '@/lib/api/client';
-import {
-  assertAssistantAccount,
-  readAssistantSiteInfo,
-  resolveAssistantSearch,
-} from '@/lib/api/assistant';
+import { assertAssistantAccount, readAssistantSiteInfo, resolveAssistantSearch } from '@/lib/api/assistant';
 import { searchHref, readSearchLocation, SEARCH_SORT_FIELDS } from '@/lib/searchState';
 import {
   obj,
@@ -57,17 +49,13 @@ import { requestAssistantSlideshow } from './slideshow';
 
 function folderSettings() {
   return {
-    defaultFolder: SYNCED_SETTINGS.find(
-      (s) => s.id === 'defaultFaveFolder',
-    )!.read() as DefaultFolder,
-    publicIds: SYNCED_SETTINGS.find((s) => s.id === 'publicFaveFolderIds')!.read() as
-      number[] | null,
+    defaultFolder: SYNCED_SETTINGS.find((s) => s.id === 'defaultFaveFolder')!.read() as DefaultFolder,
+    publicIds: SYNCED_SETTINGS.find((s) => s.id === 'publicFaveFolderIds')!.read() as number[] | null,
   };
 }
 /** The catalogue's whitelisted query for a read (`get_faves {folder_id}`; the others take none). */
 function readQuery(endpoint: string, values: JsonObject): Record<string, number> {
-  if (endpoint === 'get_faves' && values.folder_id !== undefined)
-    return { folder_id: requireId(values.folder_id) };
+  if (endpoint === 'get_faves' && values.folder_id !== undefined) return { folder_id: requireId(values.folder_id) };
   return {};
 }
 const done = (summary: string, data: unknown = {}): Partial<AssistantReceipt> => ({
@@ -82,11 +70,7 @@ const navigate = (href: string): Partial<AssistantReceipt> => ({
 });
 
 /** Every remote write below is an existing, reviewed application operation, preceded by a server claim. */
-async function writeSite(
-  token: string,
-  endpoint: string,
-  values: JsonObject,
-): Promise<Partial<AssistantReceipt>> {
+async function writeSite(token: string, endpoint: string, values: JsonObject): Promise<Partial<AssistantReceipt>> {
   assertAssistantAccount(token);
   const stillCurrent = () => assertAssistantAccount(token);
   switch (endpoint) {
@@ -132,11 +116,7 @@ async function writeSite(
       const list = await favorites.getFaveFolders(token);
       stillCurrent();
       const target = list.folders.find((f) => f.id === targetId);
-      if (
-        !target ||
-        ids.includes(targetId) ||
-        ids.some((id) => !list.folders.some((f) => f.id === id && !f.isMain))
-      )
+      if (!target || ids.includes(targetId) || ids.some((id) => !list.folders.some((f) => f.id === id && !f.isMain)))
         throw new ActionRejected('合并目标无效，主收藏夹不能被合并移除');
       await mergeFolders(token, ids, { id: target.id, name: target.name });
       stillCurrent();
@@ -305,8 +285,7 @@ export async function dispatchAssistantAction(
   if (action.name === 'open_settings') return navigate('/settings');
   if (action.name === 'start_folder_slideshow') {
     const id =
-      positiveId(args.folder_id) ||
-      positiveId(/^\/favorites\/folder\/(\d+)/.exec(window.location.pathname)?.[1]);
+      positiveId(args.folder_id) || positiveId(/^\/favorites\/folder\/(\d+)/.exec(window.location.pathname)?.[1]);
     if (!id) throw new Error('请先打开要放映的收藏夹');
     const result = await requestAssistantSlideshow({
       token,
@@ -341,9 +320,7 @@ export async function dispatchAssistantAction(
     const current = readSearchLocation(new URLSearchParams(window.location.search));
     const hasQuery = Object.hasOwn(args, 'query');
     const query = hasQuery ? requireText(args.query, 300) : current.query || '*';
-    const resolution = hasQuery
-      ? await resolveAssistantSearch(query)
-      : { tags: current.tags ?? [query] };
+    const resolution = hasQuery ? await resolveAssistantSearch(query) : { tags: current.tags ?? [query] };
     assertAssistantAccount(token);
     const rating = str(args.rating, 30),
       contentFilter = getBrowsingSettings().contentFilter;

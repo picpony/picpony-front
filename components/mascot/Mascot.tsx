@@ -97,13 +97,7 @@ const dwellFor = (text: string) => Math.min(12_000, Math.max(4_500, 3_000 + text
  * gaps between wing and tail are the page's — and it says where the head is, which is where the
  * speech bubble's tail points. Until it lands, or if it never does, an ellipse over the art stands in.
  */
-export default function Mascot({
-  onChat,
-  active = true,
-}: {
-  onChat: () => void;
-  active?: boolean;
-}) {
+export default function Mascot({ onChat, active = true }: { onChat: () => void; active?: boolean }) {
   const selected = useSyncedSetting('mascotId');
   const config = useResource(mascotConfig, { selected }, { keepPrevious: 'mascot-runtime' });
   const desktopSize = useSyncedSetting('mascotSizeDesktop');
@@ -185,12 +179,8 @@ export default function Mascot({
   const resolvedShape = embeddedShape ?? shape.data ?? null;
   /* An outline of another shape is another picture's (a stale answer, a rotated file): not used. */
   const outline =
-    ready && art && resolvedShape && Math.abs(resolvedShape.w / resolvedShape.h - aspect) < 0.05
-      ? resolvedShape
-      : null;
-  const hitPath = outline
-    ? shapePath(outline, artW, artH, coarse ? HIT_PAD.coarse : HIT_PAD.fine)
-    : null;
+    ready && art && resolvedShape && Math.abs(resolvedShape.w / resolvedShape.h - aspect) < 0.05 ? resolvedShape : null;
+  const hitPath = outline ? shapePath(outline, artW, artH, coarse ? HIT_PAD.coarse : HIT_PAD.fine) : null;
   const head = outline ? shapeHead(outline) : null;
   const reach = Math.max(0, ((coarse ? TOUCH_FLOOR.coarse : TOUCH_FLOOR.fine) - TOOLS_PX) / 2);
   const toolsLift = outline
@@ -231,8 +221,7 @@ export default function Mascot({
     const frame = requestAnimationFrame(() => {
       if (skip) setInstant(true);
       setShown(true);
-      if (skip)
-        settle = requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
+      if (skip) settle = requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -313,8 +302,7 @@ export default function Mascot({
       if (TOOLS_REACH <= most && fromRight - TOOLS_REACH >= TAIL_INSET - 1) right = TOOLS_REACH;
       else bottom = above;
     }
-    const tail =
-      width > TAIL_INSET * 2 ? clamp(fromRight - right, TAIL_INSET, width - TAIL_INSET) : width / 2;
+    const tail = width > TAIL_INSET * 2 ? clamp(fromRight - right, TAIL_INSET, width - TAIL_INSET) : width / 2;
     node.style.setProperty('--bubble-right', `${right}px`);
     node.style.setProperty('--bubble-bottom', `${bottom}px`);
     node.style.setProperty('--bubble-tail', `${tail}px`);
@@ -377,16 +365,17 @@ export default function Mascot({
     for (const running of node.getAnimations()) running.cancel();
     const up = springTiming('fastSpatial', 'ambient');
     const down = springTiming('fastSpatial', 'ambient');
-    const lift = node.animate(
-      [{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }],
-      { duration: up.duration, easing: up.easing, fill: 'forwards' },
-    );
+    const lift = node.animate([{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }], {
+      duration: up.duration,
+      easing: up.easing,
+      fill: 'forwards',
+    });
     lift.finished
       .then(() => {
-        const land = node.animate(
-          [{ transform: 'translateY(-6px) scale(1.05)' }, { transform: 'none' }],
-          { duration: down.duration, easing: down.easing },
-        );
+        const land = node.animate([{ transform: 'translateY(-6px) scale(1.05)' }, { transform: 'none' }], {
+          duration: down.duration,
+          easing: down.easing,
+        });
         lift.cancel();
         return land.finished;
       })
@@ -491,10 +480,11 @@ export default function Mascot({
     const current = hold.current;
     if (!fill || !open || bubble?.kind !== 'hold' || !current) return;
     meter.current?.cancel();
-    const animation = fill.animate(
-      [{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }],
-      { duration: HOLD_MS, easing: 'linear', fill: 'forwards' },
-    );
+    const animation = fill.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }], {
+      duration: HOLD_MS,
+      easing: 'linear',
+      fill: 'forwards',
+    });
     animation.currentTime = Math.min(HOLD_MS, performance.now() - current.started);
     meter.current = animation;
     /* Let go, the meter stays where the hold left it while the bubble fades: cancelled, it snapped
@@ -675,10 +665,7 @@ export default function Mascot({
             data-open={open ? 'true' : 'false'}
             inert={!open || undefined}
             aria-hidden={!open || undefined}
-            className={cn(
-              styles.bubble,
-              'rounded-lg bg-surface-container text-on-surface forced-boundary',
-            )}
+            className={cn(styles.bubble, 'rounded-lg bg-surface-container text-on-surface forced-boundary')}
             onPointerEnter={() => clearTimeout(dismissTimer.current)}
             onPointerLeave={() => {
               if (bubble?.kind === 'tip' && openNow.current) scheduleDismiss(bubble.text);
@@ -708,13 +695,7 @@ export default function Mascot({
                 >
                   {bubble?.text}
                 </ScrollArea>
-                <IconButton
-                  dismiss
-                  size="sm"
-                  aria-label="关闭吉祥物对话"
-                  onClick={closeBubble}
-                  icon={<MdClose />}
-                />
+                <IconButton dismiss size="sm" aria-label="关闭吉祥物对话" onClick={closeBubble} icon={<MdClose />} />
               </div>
             )}
           </div>
@@ -750,10 +731,7 @@ export default function Mascot({
                 neutral circle at rest, tonal rounded square under a pointer, tighter corners on press. */}
             <span
               data-ripple-host=""
-              className={cn(
-                styles.plate,
-                'bg-surface-container-highest text-on-surface forced-boundary shadow-e2',
-              )}
+              className={cn(styles.plate, 'bg-surface-container-highest text-on-surface forced-boundary shadow-e2')}
               aria-hidden="true"
             />
             <span
@@ -797,13 +775,7 @@ export default function Mascot({
           {/* Tucks the figure into its plate: aligned with the detail page's pinned page actions
               (`quiet`, neutral disc at rest becoming the tonal rounded square under a pointer). */}
           <div className={cn(styles.tools, 'hover-reveal')} inert={collapsed || undefined}>
-            <IconButton
-              variant="quiet"
-              size="sm"
-              aria-label="收起吉祥物"
-              onClick={collapse}
-              icon={<MdExpandMore />}
-            />
+            <IconButton variant="quiet" size="sm" aria-label="收起吉祥物" onClick={collapse} icon={<MdExpandMore />} />
           </div>
 
           <p className="sr-only" role="status" aria-live="polite">

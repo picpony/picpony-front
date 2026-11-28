@@ -177,8 +177,7 @@ export class ZipWriter {
       directorySize += record.buffer.length;
     }
     const count = this.entries.length;
-    const end64 =
-      this.forceZip64 || count >= MAX_16 || directoryOffset >= MAX_32 || directorySize >= MAX_32;
+    const end64 = this.forceZip64 || count >= MAX_16 || directoryOffset >= MAX_32 || directorySize >= MAX_32;
     if (end64) {
       const zip64EndOffset = directoryOffset + directorySize;
       const record = new Bytes(56)
@@ -193,10 +192,7 @@ export class ZipWriter {
         .u64(directorySize)
         .u64(directoryOffset);
       const locator = new Bytes(20).u32(ZIP64_LOCATOR).u32(0).u64(zip64EndOffset).u32(1);
-      this.parts.push(
-        record.buffer as Uint8Array<ArrayBuffer>,
-        locator.buffer as Uint8Array<ArrayBuffer>,
-      );
+      this.parts.push(record.buffer as Uint8Array<ArrayBuffer>, locator.buffer as Uint8Array<ArrayBuffer>);
     }
     const end = new Bytes(22)
       .u32(END_OF_CENTRAL)
@@ -246,8 +242,7 @@ export function uniqueEntryName(url: string, fallback: string, taken: Set<string
   const stem = dot > 0 ? safe.slice(0, dot) : safe;
   const extension = dot > 0 ? safe.slice(dot) : '';
   let candidate = safe;
-  for (let n = 2; taken.has(candidate.toLowerCase()); n += 1)
-    candidate = `${stem}_${n}${extension}`;
+  for (let n = 2; taken.has(candidate.toLowerCase()); n += 1) candidate = `${stem}_${n}${extension}`;
   taken.add(candidate.toLowerCase());
   return candidate;
 }

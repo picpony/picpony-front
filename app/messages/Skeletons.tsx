@@ -5,9 +5,7 @@ import { PageLoadingIndicator } from '@/components/LoadingIndicator';
  * `holdFooter` (`data-page-loading`) keeps the page footer out of the viewport until data lands.
  */
 export function ListRowsSkeleton() {
-  return (
-    <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载消息列表…" />
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载消息列表…" />;
 }
 
 /**

@@ -44,15 +44,12 @@ const semantic = await import('../lib/api/semantic.ts');
 const { ApiError } = await import('../lib/api/errors.ts');
 
 test('top-level terms split at commas outside groups and quotes, full-width commas included', () => {
-  assert.deepEqual(query.splitQueryTerms('fluttershy, rarity，safe'), [
-    'fluttershy',
-    'rarity',
-    'safe',
+  assert.deepEqual(query.splitQueryTerms('fluttershy, rarity，safe'), ['fluttershy', 'rarity', 'safe']);
+  assert.deepEqual(query.splitQueryTerms('pony, (mime_type:video/webm OR mime_type:video/mp4), "a, b"'), [
+    'pony',
+    '(mime_type:video/webm OR mime_type:video/mp4)',
+    '"a, b"',
   ]);
-  assert.deepEqual(
-    query.splitQueryTerms('pony, (mime_type:video/webm OR mime_type:video/mp4), "a, b"'),
-    ['pony', '(mime_type:video/webm OR mime_type:video/mp4)', '"a, b"'],
-  );
   assert.deepEqual(query.splitQueryTerms(' , ,'), []);
   assert.equal(query.normalizeSearchText('  小蝶，雨天 ,  '), '小蝶,雨天');
 });
@@ -70,27 +67,18 @@ test('advanced conditions are parsed out of the query and written back in place,
     since: 'week',
   });
   const once = query.composeQuery(parsed.terms, parsed.filters);
-  const twice = query.composeQuery(
-    query.parseSearchFilters(once).terms,
-    query.parseSearchFilters(once).filters,
-  );
+  const twice = query.composeQuery(query.parseSearchFilters(once).terms, query.parseSearchFilters(once).filters);
   assert.equal(once, twice, 'applying the same conditions twice changes nothing');
   assert.equal(
     query.composeQuery(parsed.terms, query.NO_SEARCH_FILTERS),
     'pony',
     'clearing the conditions removes them from the query',
   );
-  const video = query.parseSearchFilters(
-    '(mime_type:video/mp4 OR mime_type:video/webm), score.lt:-5',
-  );
+  const video = query.parseSearchFilters('(mime_type:video/mp4 OR mime_type:video/webm), score.lt:-5');
   assert.equal(video.filters.media, 'video');
   assert.deepEqual(video.filters.score, { op: 'lt', value: -5 });
   const kept = query.parseSearchFilters('upvotes.gt:5, -animated:true');
-  assert.deepEqual(
-    kept.terms,
-    ['upvotes.gt:5', '-animated:true'],
-    'conditions the panel cannot express stay terms',
-  );
+  assert.deepEqual(kept.terms, ['upvotes.gt:5', '-animated:true'], 'conditions the panel cannot express stay terms');
   assert.equal(query.countSearchFilters(kept.filters), 0);
 });
 
@@ -114,16 +102,7 @@ test('a single plain tag is recognised; conditions, negations and operators are 
   for (const tag of ['fluttershy', 'twilight sparkle', 'artist:someone', 'oc:blue sky']) {
     assert.equal(query.isSingleTagQuery(tag), true, tag);
   }
-  for (const other of [
-    'a, b',
-    '-safe',
-    'score.gte:5',
-    'upvotes:3',
-    'pony*',
-    'a OR b',
-    '小蝶',
-    '"quoted"',
-  ]) {
+  for (const other of ['a, b', '-safe', 'score.gte:5', 'upvotes:3', 'pony*', 'a OR b', '小蝶', '"quoted"']) {
     assert.equal(query.isSingleTagQuery(other), false, other);
   }
 });
@@ -138,11 +117,7 @@ test('the empty state can name the term the content settings exclude', () => {
   });
   assert.deepEqual(query.excludedTermsIn('fluttershy, explicit', excluded), ['explicit']);
   assert.deepEqual(query.excludedTermsIn('spider', excluded), ['spider']);
-  assert.deepEqual(
-    query.excludedTermsIn('explicit OR safe', excluded),
-    [],
-    'an alternative may still match',
-  );
+  assert.deepEqual(query.excludedTermsIn('explicit OR safe', excluded), [], 'an alternative may still match');
   assert.deepEqual(query.excludedTermsIn('-explicit', excluded), []);
 });
 
@@ -160,24 +135,12 @@ test('the query’s -tag terms and the image-search check share one exclusion se
   }
   const allowed = query.imageFilterFor(settings, undefined, [42]);
   assert.equal(allowed({ id: 1, tags: ['pony', 'safe'] }), true);
-  assert.equal(
-    allowed({ id: 2, tags: ['pony', 'suggestive'] }),
-    false,
-    'excluded by the content filter',
-  );
+  assert.equal(allowed({ id: 2, tags: ['pony', 'suggestive'] }), false, 'excluded by the content filter');
   assert.equal(allowed({ id: 3, tags: ['pony', 'anthro'] }), false, 'excluded by 屏蔽类人生物');
   assert.equal(allowed({ id: 4, tags: ['human', 'safe'] }), false, '只看小马 wants a pony tag');
-  assert.equal(
-    allowed({ id: 5, tags: ['Spider', 'pony'] }),
-    false,
-    'hidden tags, case-insensitively',
-  );
+  assert.equal(allowed({ id: 5, tags: ['Spider', 'pony'] }), false, 'hidden tags, case-insensitively');
   assert.equal(allowed({ id: 42, tags: ['pony'] }), false, 'the public blacklist');
-  assert.equal(
-    allowed({ id: 6, tags: [] }),
-    true,
-    'an untagged record passes, as it did in the original front end',
-  );
+  assert.equal(allowed({ id: 6, tags: [] }), true, 'an untagged record passes, as it did in the original front end');
   const developer = query.imageFilterFor({
     ...settings,
     contentFilter: 'developer',
@@ -198,21 +161,15 @@ test('the URL is the whole state: every search reproduces from it, junk falls ba
   assert.equal(location.page, 3);
   assert.equal(location.literal, false);
   const literal = state.readSearchLocation(
-    new URL(
-      state.searchHref('小蝶', 'created_at', 'desc', 1, { literal: true, tags: ['x'] }),
-      'https://e.test',
-    ).searchParams,
+    new URL(state.searchHref('小蝶', 'created_at', 'desc', 1, { literal: true, tags: ['x'] }), 'https://e.test')
+      .searchParams,
   );
   assert.equal(literal.literal, true);
   assert.equal(literal.tags, null, 'a literal search pins no tags');
-  const image = state.readSearchLocation(
-    new URL(state.imageSearchHref('abc12345'), 'https://e.test').searchParams,
-  );
+  const image = state.readSearchLocation(new URL(state.imageSearchHref('abc12345'), 'https://e.test').searchParams);
   assert.equal(image.image, 'abc12345');
   assert.equal(state.readSearchLocation(new URLSearchParams('image=<script>')).image, null);
-  const junk = state.readSearchLocation(
-    new URLSearchParams('q=%20pony%20&dir=sideways&page=-4&tags=,,'),
-  );
+  const junk = state.readSearchLocation(new URLSearchParams('q=%20pony%20&dir=sideways&page=-4&tags=,,'));
   assert.deepEqual(
     { query: junk.query, direction: junk.direction, page: junk.page, tags: junk.tags },
     { query: 'pony', direction: 'desc', page: 1, tags: null },
@@ -226,19 +183,11 @@ test('a shared search names its sharer, and the original front end’s links sti
   });
   const location = state.readSearchLocation(new URL(shared, 'https://e.test').searchParams);
   assert.equal(location.sharedBy, 'Review Admin');
-  assert.deepEqual(
-    location.tags,
-    ['fluttershy'],
-    'the shared search runs the sharer’s tags at once',
-  );
+  assert.deepEqual(location.tags, ['fluttershy'], 'the shared search runs the sharer’s tags at once');
   const hostile = state.readSearchLocation(
     new URLSearchParams(`q=pony&from=${encodeURIComponent('a\u0000b\n' + 'x'.repeat(80))}`),
   );
-  assert.equal(
-    hostile.sharedBy,
-    `ab${'x'.repeat(30)}`,
-    'control characters dropped, length bounded',
-  );
+  assert.equal(hostile.sharedBy, `ab${'x'.repeat(30)}`, 'control characters dropped, length bounded');
   assert.equal(state.readSearchLocation(new URLSearchParams('q=pony&from=%20%20')).sharedBy, null);
 
   const legacy = state.legacySharedSearchHref(
@@ -248,16 +197,8 @@ test('a shared search names its sharer, and the original front end’s links sti
   assert.equal(new URL(legacy, 'https://e.test').pathname, '/search');
   assert.equal(arrived.query, 'fluttershy, safe');
   assert.equal(arrived.sharedBy, '小明');
-  assert.equal(
-    state.legacySharedSearchHref('#mode=shared_search&user=x&q=*'),
-    '/search',
-    'the old “everything” query',
-  );
-  assert.equal(
-    state.legacySharedSearchHref('#mode=shared_faves&user=x'),
-    null,
-    'other fragments are not this one’s',
-  );
+  assert.equal(state.legacySharedSearchHref('#mode=shared_search&user=x&q=*'), '/search', 'the old “everything” query');
+  assert.equal(state.legacySharedSearchHref('#mode=shared_faves&user=x'), null, 'other fragments are not this one’s');
   assert.equal(state.legacySharedSearchHref(''), null);
 });
 
@@ -265,10 +206,7 @@ test('a share link is the backend’s short link, made once, and the long one on
   const share = await import('../lib/api/share.ts');
   const calls = [];
   let answer = () =>
-    Response.json(
-      { share_id: 'AbCdEfGhIjKlMnOpQrStUvWx', url: 'x', preview_status: 'generic' },
-      { status: 201 },
-    );
+    Response.json({ share_id: 'AbCdEfGhIjKlMnOpQrStUvWx', url: 'x', preview_status: 'generic' }, { status: 201 });
   globalThis.window.location = { origin: 'https://picpony.test' };
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
@@ -291,16 +229,9 @@ test('a share link is the backend’s short link, made once, and the long one on
     title: input.title,
     description: input.desc,
   });
-  assert.equal(
-    new Headers(calls[0].init.headers).get('authorization'),
-    null,
-    'no session, no attribution',
-  );
+  assert.equal(new Headers(calls[0].init.headers).get('authorization'), null, 'no session, no attribution');
   /* A picture names its id; its preview picture is the backend’s own, so no URL is sent. */
-  await share.createShareLink(
-    { ...input, imageId: 42, imageUrl: 'https://derpicdn.net/t.png' },
-    { token: 'tok' },
-  );
+  await share.createShareLink({ ...input, imageId: 42, imageUrl: 'https://derpicdn.net/t.png' }, { token: 'tok' });
   assert.deepEqual(JSON.parse(calls[1].init.body), {
     target_url: input.targetUrl,
     title: input.title,
@@ -310,10 +241,7 @@ test('a share link is the backend’s short link, made once, and the long one on
   assert.equal(new Headers(calls[1].init.headers).get('authorization'), 'Bearer tok');
   /* A refused target (not this site) or a failure hands over the long link. */
   answer = () =>
-    Response.json(
-      { error: { code: 'SHARE_TARGET_NOT_ALLOWED', message: '分享目标只能是本站页面' } },
-      { status: 400 },
-    );
+    Response.json({ error: { code: 'SHARE_TARGET_NOT_ALLOWED', message: '分享目标只能是本站页面' } }, { status: 400 });
   assert.deepEqual(await share.createShareLink(input), { url: input.targetUrl, short: false });
   answer = () => {
     throw new TypeError('offline');
@@ -390,18 +318,13 @@ test('the semantic parse posts the words and maps every answer', async () => {
 
   for (const code of ['SEMANTIC_SEARCH_DISABLED', 'SEMANTIC_CLOUD_NOT_CONFIGURED']) {
     stubFetch(() => [503, { error: { code, message: '智能中文搜索未开启' } }]);
-    assert.equal(
-      (await semantic.parseSemanticQuery('小蝶')).enabled,
-      false,
-      `${code} is an answer, not a failure`,
-    );
+    assert.equal((await semantic.parseSemanticQuery('小蝶')).enabled, false, `${code} is an answer, not a failure`);
   }
 
   stubFetch(() => [400, { error: { code: 'INVALID_INPUT', message: '搜索内容不能为空' } }]);
   await assert.rejects(
     semantic.parseSemanticQuery('x'),
-    (error) =>
-      error instanceof ApiError && error.message === '搜索内容不能为空' && !error.retryable,
+    (error) => error instanceof ApiError && error.message === '搜索内容不能为空' && !error.retryable,
   );
 
   stubFetch(() => [
@@ -410,15 +333,11 @@ test('the semantic parse posts the words and maps every answer', async () => {
   ]);
   await assert.rejects(
     semantic.parseSemanticQuery('x'),
-    (error) =>
-      error instanceof ApiError && error.code === 'SEMANTIC_SEARCH_UNAVAILABLE' && error.retryable,
+    (error) => error instanceof ApiError && error.code === 'SEMANTIC_SEARCH_UNAVAILABLE' && error.retryable,
   );
 
   stubFetch(() => [502, '<html>bad gateway</html>']);
-  await assert.rejects(
-    semantic.parseSemanticQuery('x'),
-    (error) => error instanceof ApiError && error.retryable,
-  );
+  await assert.rejects(semantic.parseSemanticQuery('x'), (error) => error instanceof ApiError && error.retryable);
 });
 
 test('semanticSearch carries the assistant context and returns the receipt as sent', async () => {
@@ -461,10 +380,7 @@ test('semanticSearch carries the assistant context and returns the receipt as se
   assert.deepEqual(result.tags, ['fluttershy', '-human']);
   assert.equal(result.cached, true);
 
-  stubFetch(() => [
-    422,
-    { error: { code: 'QUERY_UNVERIFIED', message: '标签「foo」不在词库中，未执行搜索' } },
-  ]);
+  stubFetch(() => [422, { error: { code: 'QUERY_UNVERIFIED', message: '标签「foo」不在词库中，未执行搜索' } }]);
   await assert.rejects(
     semantic.semanticSearch('foo', { aiContext: { queryMode: 'new', querySource: 'model_query' } }),
     (error) => error instanceof ApiError && error.code === 'QUERY_UNVERIFIED',
@@ -473,8 +389,7 @@ test('semanticSearch carries the assistant context and returns the receipt as se
 
 test('feedback posts the proof; quick tags and suggestions read the backend rows', async () => {
   const calls = stubFetch((url) => {
-    if (url.startsWith('/api/v1/search/feedback'))
-      return [201, { success: true, message: '感谢反馈！' }];
+    if (url.startsWith('/api/v1/search/feedback')) return [201, { success: true, message: '感谢反馈！' }];
     if (url.startsWith('/api/v1/dictionary/quick-tags')) {
       return [
         200,
@@ -548,9 +463,5 @@ test('feedback posts the proof; quick tags and suggestions read the backend rows
   assert.equal(suggestCall.pathname, '/api/v1/dictionary/tags');
   assert.equal(suggestCall.searchParams.get('suggest'), 'true');
   assert.equal(suggestCall.searchParams.get('limit'), '15');
-  assert.equal(
-    new Headers(calls.at(-1).init.headers).get('Authorization'),
-    null,
-    'the dictionary is public',
-  );
+  assert.equal(new Headers(calls.at(-1).init.headers).get('Authorization'), null, 'the dictionary is public');
 });

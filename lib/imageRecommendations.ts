@@ -106,9 +106,7 @@ function recommendation(
   const deep = register ? register === 'deep' : isCool(family.hue) && family.darkShare >= 0.6;
   const yellow = family.hue >= 70 && family.hue < 125;
   const warm = family.hue < 70 || family.hue >= 325;
-  const tone = deep
-    ? clamp(family.tone, 34, 42)
-    : clamp(family.tone, yellow ? 86 : 82, yellow ? 92 : warm ? 86 : 88);
+  const tone = deep ? clamp(family.tone, 34, 42) : clamp(family.tone, yellow ? 86 : 82, yellow ? 92 : warm ? 86 : 88);
   return {
     seed: clearColorAt(family.hue, tone, deep ? 'deep' : 'light'),
     accent: companionOf(family, families),
@@ -120,10 +118,7 @@ function recommendation(
  * receive clear light/deep fills. A small vivid detail can be a companion, never a chroma
  * bonus over a larger family. Called only after an image is read, behind the palette seam.
  */
-export function recommendImageColors(
-  pixels: Uint8ClampedArray,
-  desired = MAX_OPTIONS,
-): ImageRecommendation[] {
+export function recommendImageColors(pixels: Uint8ClampedArray, desired = MAX_OPTIONS): ImageRecommendation[] {
   const count = Number.isFinite(desired) ? clamp(Math.trunc(desired), 0, MAX_OPTIONS) : MAX_OPTIONS;
   if (!count) return [];
   const opaque: number[] = [];
@@ -147,8 +142,7 @@ export function recommendImageColors(
   const families = familiesOf(clusters, opaque.length);
   const options: ImageRecommendation[] = [];
   const add = (option: ImageRecommendation) => {
-    if (options.length < count && !options.some((o) => o.seed === option.seed))
-      options.push(option);
+    if (options.length < count && !options.some((o) => o.seed === option.seed)) options.push(option);
   };
   if (!families.length) {
     // No reliable hue: retain actual image tones instead of inventing a colourful fallback.

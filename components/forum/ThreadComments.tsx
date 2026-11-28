@@ -23,13 +23,7 @@ export const replyElementId = (id: number) => `reply-${id}`;
  * is the page size; the last page ends at the total. Nothing assumes the backend's page size
  * (R6-038) — it has never been observed past one page.
  */
-export function floorOf(
-  index: number,
-  page: number,
-  totalPages: number,
-  pageLength: number,
-  total: number,
-): number {
+export function floorOf(index: number, page: number, totalPages: number, pageLength: number, total: number): number {
   if (page < totalPages) return (page - 1) * pageLength + index + 1;
   return Math.max(0, total - pageLength) + index + 1;
 }
@@ -69,14 +63,8 @@ const ReplyRow = memo(function ReplyRow({
         badges={comment.badges}
         meta={
           <>
-            <time
-              dateTime={comment.created_at}
-              title={formatDateTime(comment.created_at)}
-              className="tabular-nums"
-            >
-              {now === null
-                ? formatDate(comment.created_at)
-                : formatCompactDateTime(comment.created_at, now)}
+            <time dateTime={comment.created_at} title={formatDateTime(comment.created_at)} className="tabular-nums">
+              {now === null ? formatDate(comment.created_at) : formatCompactDateTime(comment.created_at, now)}
             </time>
             <span aria-hidden="true">·</span>
             <span className="tabular-nums">#{floor}</span>
@@ -84,12 +72,7 @@ const ReplyRow = memo(function ReplyRow({
         }
         actions={
           <>
-            <IconButton
-              size="sm"
-              aria-label="回复"
-              icon={<MdReply />}
-              onClick={() => onReply(comment)}
-            />
+            <IconButton size="sm" aria-label="回复" icon={<MdReply />} onClick={() => onReply(comment)} />
             {canDelete && (
               <IconButton
                 size="sm"
@@ -115,13 +98,7 @@ const ReplyRow = memo(function ReplyRow({
 /** Placeholder while reply count and body heights are unknown. */
 function RepliesSkeleton() {
   return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      holdFooter
-      label="正在加载回复…"
-      className="min-h-36"
-    />
+    <PageLoadingIndicator size="inline" indicatorSize="md" holdFooter label="正在加载回复…" className="min-h-36" />
   );
 }
 
@@ -200,12 +177,7 @@ export default function ThreadComments({
         </div>
       )}
       {totalPages > 1 && comments !== undefined && (
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={onPageChange}
-          className="mt-6"
-        />
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} className="mt-6" />
       )}
     </section>
   );

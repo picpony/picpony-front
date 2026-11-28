@@ -166,10 +166,7 @@ export function waitForFrame(signals: AbortSignal[], timeout: number) {
 }
 
 /** Run one batched read/write pass, resolving false if the session aborted. */
-export function runScheduledFrame<T>(
-  abortSignal: AbortSignal,
-  task: { read: () => T; write: (value: T) => void },
-) {
+export function runScheduledFrame<T>(abortSignal: AbortSignal, task: { read: () => T; write: (value: T) => void }) {
   if (abortSignal.aborted) return Promise.resolve(false);
   const owner = {};
   return new Promise<boolean>((resolve) => {

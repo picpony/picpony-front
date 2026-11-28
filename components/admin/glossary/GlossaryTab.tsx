@@ -67,13 +67,7 @@ import {
   type ImportTask,
   type TagForm,
 } from './model';
-import {
-  dictionaryPage,
-  duplicateTags,
-  tagFeedback,
-  type DictionaryArgs,
-  type Feedback,
-} from './resources';
+import { dictionaryPage, duplicateTags, tagFeedback, type DictionaryArgs, type Feedback } from './resources';
 import TagEditor, { tagEditorId } from './TagEditor';
 import CreateTagDialog from './CreateTagDialog';
 import BatchImportDialog from './BatchImportDialog';
@@ -208,13 +202,7 @@ ${duplicatePage.listKey}`
     setCreate((current) => ({ open: true, prefill, session: current.session + 1 }));
   };
 
-  if (
-    pendingTag &&
-    !duplicates &&
-    keyword.toLowerCase() === pendingTag &&
-    list.data &&
-    !list.isPrevious
-  ) {
+  if (pendingTag && !duplicates && keyword.toLowerCase() === pendingTag && list.data && !list.isPrevious) {
     const match = list.data.tags.find((tag) => tag.en.toLowerCase() === pendingTag);
     setPendingTag(null);
     if (match) setEditing({ id: match.id, closing: false });
@@ -263,17 +251,13 @@ ${duplicatePage.listKey}`
           if (inDuplicates) {
             if (duplicateTags.peek(token).data) {
               duplicateTags.write(token, (previous) =>
-                (previous ?? []).map((row) =>
-                  row.id === tag.id ? savedTag(row, payload, revision) : row,
-                ),
+                (previous ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)),
               );
             }
           } else if (dictionaryPage.peek(listArgs).data) {
             dictionaryPage.write(listArgs, (previous) => ({
               ...(previous as NonNullable<typeof previous>),
-              tags: (previous?.tags ?? []).map((row) =>
-                row.id === tag.id ? savedTag(row, payload, revision) : row,
-              ),
+              tags: (previous?.tags ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)),
             }));
           }
           refreshAfterClose.current = true;
@@ -341,8 +325,7 @@ ${duplicatePage.listKey}`
        (review P6-O7) — the count alone hid entries on pages no longer in view. */
     const shownIds = new Set(rows.map((row) => row.id));
     const names = ids.map((id) => selectedNames.current.get(id) ?? `#${id}`);
-    const listed =
-      names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
+    const listed = names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
     const offscreen = ids.filter((id) => !shownIds.has(id)).length;
     const note = offscreen > 0 ? `其中 ${offscreen} 个不在当前页。` : '';
     confirmThen(
@@ -410,10 +393,7 @@ ${duplicatePage.listKey}`
       .filter(Boolean)
       .join('，');
     const clean = !result.stopped && !result.failedTags && !result.failedPages;
-    showToast(
-      `${result.stopped ? '已停止同步' : '已同步'}：${tally}`,
-      clean ? 'success' : 'warning',
-    );
+    showToast(`${result.stopped ? '已停止同步' : '已同步'}：${tally}`, clean ? 'success' : 'warning');
     if (clean) setSyncOpen(false);
   };
 
@@ -422,9 +402,7 @@ ${duplicatePage.listKey}`
       showToast('当前页没有可导出的标签', 'info');
       return;
     }
-    const url = URL.createObjectURL(
-      new Blob([exportText(rows)], { type: 'text/plain;charset=utf-8' }),
-    );
+    const url = URL.createObjectURL(new Blob([exportText(rows)], { type: 'text/plain;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
     link.download = duplicates ? 'tags_duplicates.txt' : `tags_page_${currentPage}.txt`;
@@ -554,9 +532,7 @@ ${duplicatePage.listKey}`
           </Badge>
         ) : (
           <span className="min-w-0">
-            <span className="block text-body-m-emphasized text-on-surface wrap-anywhere">
-              {tag.cn}
-            </span>
+            <span className="block text-body-m-emphasized text-on-surface wrap-anywhere">{tag.cn}</span>
             {tag.aliases.length > 0 && (
               <span className="block text-body-s text-on-surface-variant wrap-anywhere">{`别名：${tag.aliases.join('、')}`}</span>
             )}
@@ -654,12 +630,7 @@ ${duplicatePage.listKey}`
         isLoading={read.isLoading && read.data !== undefined}
         actions={
           <>
-            <Button
-              type="button"
-              variant="tonal"
-              icon={<MdFeedback />}
-              onClick={() => setFeedbackOpen(true)}
-            >
+            <Button type="button" variant="tonal" icon={<MdFeedback />} onClick={() => setFeedbackOpen(true)}>
               用户反馈
             </Button>
             <Button
@@ -673,12 +644,7 @@ ${duplicatePage.listKey}`
             >
               工具
             </Button>
-            <Button
-              type="button"
-              variant="filled"
-              icon={<MdAdd />}
-              onClick={() => openCreate(null)}
-            >
+            <Button type="button" variant="filled" icon={<MdAdd />} onClick={() => openCreate(null)}>
               添加新标签
             </Button>
           </>
@@ -782,9 +748,7 @@ ${duplicatePage.listKey}`
           expandedRow={renderEditor}
           loading={Boolean(token) && read.data === undefined && !read.error}
           skeletonRows={Math.min(perPage, 8)}
-          {...(read.data === undefined
-            ? tableError(duplicates ? '查重结果加载失败' : '词库加载失败', failure)
-            : {})}
+          {...(read.data === undefined ? tableError(duplicates ? '查重结果加载失败' : '词库加载失败', failure) : {})}
           onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
           empty={
             duplicates ? (
@@ -849,9 +813,7 @@ ${duplicatePage.listKey}`
             aside={
               <>
                 {'已翻译 '}
-                <span className="tabular-nums text-on-surface">
-                  {formatCount(stats.translated)}
-                </span>
+                <span className="tabular-nums text-on-surface">{formatCount(stats.translated)}</span>
                 {' / 共 '}
                 <span className="tabular-nums text-on-surface">{formatCount(stats.total)}</span>
                 {` 个标签（${share.toFixed(2)}%）`}
@@ -870,10 +832,7 @@ ${duplicatePage.listKey}`
         prefill={create.prefill}
         saving={saveMutation.pendingKeys.has('create')}
         workOrder={
-          workOrder &&
-          create.open &&
-          create.prefill?.name &&
-          sameTag(workOrder.tag, create.prefill.name)
+          workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag, create.prefill.name)
             ? workOrder
             : null
         }

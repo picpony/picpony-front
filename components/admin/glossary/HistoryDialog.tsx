@@ -62,12 +62,7 @@ export default function HistoryDialog({
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
         ) : read.data === undefined ? (
-          <PageLoadingIndicator
-            size="inline"
-            indicatorSize="md"
-            label="正在加载编辑历史…"
-            className="min-h-40"
-          />
+          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载编辑历史…" className="min-h-40" />
         ) : records.length === 0 ? (
           <EmptyState size="inline" title="暂无编辑记录" />
         ) : (
@@ -103,9 +98,7 @@ export default function HistoryDialog({
               <dl className="grid gap-x-6 gap-y-3 rounded-md bg-surface-container-highest p-4 text-body-m sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <dt className="text-label-l text-on-surface-variant">英文标签</dt>
-                  <dd className="font-mono text-on-surface wrap-anywhere">
-                    {selected.en_name || '—'}
-                  </dd>
+                  <dd className="font-mono text-on-surface wrap-anywhere">{selected.en_name || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">中文翻译</dt>
@@ -115,9 +108,7 @@ export default function HistoryDialog({
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">别名</dt>
-                  <dd className="text-on-surface wrap-anywhere">
-                    {historyAliases(selected.aliases) || '—'}
-                  </dd>
+                  <dd className="text-on-surface wrap-anywhere">{historyAliases(selected.aliases) || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">分类</dt>

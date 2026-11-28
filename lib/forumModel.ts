@@ -60,11 +60,7 @@ export function sortOf(value: unknown): ForumSort {
 export const FORUM_PAGE_SIZE = 20;
 
 /** The staff who may remove anybody's post or reply (the original front end's list). */
-export const FORUM_STAFF_ROLES: ReadonlySet<string> = new Set([
-  'admin',
-  'superadmin',
-  'super_admin',
-]);
+export const FORUM_STAFF_ROLES: ReadonlySet<string> = new Set(['admin', 'superadmin', 'super_admin']);
 
 // ---------------------------------------------------------------------------
 // The backend's rows
@@ -171,8 +167,7 @@ function bodyOf(
         shared_groups: null,
       };
     case 'taggroups': {
-      const hasFullGroups =
-        Array.isArray(content.tag_groups) && Array.isArray(content.block_groups);
+      const hasFullGroups = Array.isArray(content.tag_groups) && Array.isArray(content.block_groups);
       if (!hasFullGroups) {
         return {
           content: decode(content.description),
@@ -189,13 +184,11 @@ function bodyOf(
         commission_link: '',
         shared_groups: {
           tagGroups: content.tag_groups!,
-          blockGroups: content.block_groups!.map(
-            ({ name, hidden_tags, spoilered_tags }): SharedBlockGroup => ({
-              name,
-              hidden_tags,
-              spoilered_tags,
-            }),
-          ),
+          blockGroups: content.block_groups!.map(({ name, hidden_tags, spoilered_tags }): SharedBlockGroup => ({
+            name,
+            hidden_tags,
+            spoilered_tags,
+          })),
         },
       };
     }

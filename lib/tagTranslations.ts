@@ -39,12 +39,7 @@ function store(): Map<string, CacheEntry> {
     if (raw) {
       const now = Date.now();
       for (const [tag, entry] of Object.entries(JSON.parse(raw) as Record<string, CacheEntry>)) {
-        if (
-          !entry ||
-          (entry.c !== null && typeof entry.c !== 'string') ||
-          !Number.isFinite(entry.t)
-        )
-          continue;
+        if (!entry || (entry.c !== null && typeof entry.c !== 'string') || !Number.isFinite(entry.t)) continue;
         const ttl = entry.c !== null ? HIT_TTL_MS : MISS_TTL_MS;
         if (now >= entry.t && now - entry.t < ttl) {
           cache.set(tag, entry);
@@ -163,9 +158,9 @@ export async function loadTagTranslations(
 
   if (joined.length > 0) {
     groups.push(
-      Promise.all(
-        joined.map(({ tag, translation }) => translation.then((t) => [tag, t] as const)),
-      ).then((pairs) => Object.fromEntries(pairs)),
+      Promise.all(joined.map(({ tag, translation }) => translation.then((t) => [tag, t] as const))).then((pairs) =>
+        Object.fromEntries(pairs),
+      ),
     );
   }
 
@@ -178,10 +173,7 @@ export async function loadTagTranslations(
         // dictionary miss. A later visit can retry a transient outage.
         if (!data?.success || !data.translations) return misses();
         const translations = Object.fromEntries(
-          batch.map((tag) => [
-            tag,
-            typeof data.translations[tag] === 'string' ? data.translations[tag] : null,
-          ]),
+          batch.map((tag) => [tag, typeof data.translations[tag] === 'string' ? data.translations[tag] : null]),
         );
         const now = Date.now();
         for (const tag of batch) entries.set(tag, { c: translations[tag], t: now });

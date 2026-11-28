@@ -112,9 +112,7 @@ function RowTrailing({ badge, badgeLabel }: { badge?: number; badgeLabel?: strin
   const { pending } = useLinkStatus();
   const compact = useContext(CompactSidebar);
   if (pending) return compact ? null : <Spinner size="sm" tone="inherit" label="正在打开" />;
-  return (
-    <CountBadge count={badge ?? 0} label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined} />
-  );
+  return <CountBadge count={badge ?? 0} label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined} />;
 }
 
 /** Icon-only navigation reports progress in the glyph's existing 24dp cell.
@@ -124,10 +122,7 @@ function RowIcon({ icon }: { icon: ReactNode }) {
   const compact = useContext(CompactSidebar);
   const loading = compact && pending;
   return (
-    <span
-      className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block"
-      aria-hidden={loading ? undefined : true}
-    >
+    <span className="grid h-6 w-6 shrink-0 place-items-center [&>svg]:block" aria-hidden={loading ? undefined : true}>
       {loading ? <Spinner size="md" tone="inherit" /> : icon}
     </span>
   );
@@ -196,10 +191,7 @@ function NavItem({
         {href ? (
           <RowTrailing badge={badge} badgeLabel={badgeLabel} />
         ) : (
-          <CountBadge
-            count={badge ?? 0}
-            label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined}
-          />
+          <CountBadge count={badge ?? 0} label={badge ? (badgeLabel ?? `${badge} 条未读`) : undefined} />
         )}
       </span>
     </span>
@@ -304,11 +296,7 @@ function Section({ label, children }: { label?: string; children: ReactNode }) {
       {/* `pt-2 pb-1` — 8 above and 4 below a 20px `title-s` line box. A heading
           binds to what it introduces, so the space above has to be the larger
           one (the same 2:1 asymmetry the base heading rule uses). */}
-      {label && (
-        <h2 className="sidebar-heading text-title-s text-on-surface-variant px-4 pt-2 pb-1">
-          {label}
-        </h2>
-      )}
+      {label && <h2 className="sidebar-heading text-title-s text-on-surface-variant px-4 pt-2 pb-1">{label}</h2>}
       {children}
     </div>
   );
@@ -334,18 +322,14 @@ export default function SidebarNav({
   const onHome = backgroundPathname === '/';
   const forumTab = searchParams.get('tab') === 'forum';
   /* A thread belongs to 论坛: the destination stays lit while you read one. */
-  const inThread =
-    backgroundPathname.startsWith('/forum/') && backgroundPathname !== '/forum/create';
+  const inThread = backgroundPathname.startsWith('/forum/') && backgroundPathname !== '/forum/create';
   const staff = isStaff(user?.role);
   /* 标签订阅's count: the new pictures across the account's subscriptions (the original's badge). */
   const subscriptionUpdates = useSubscriptionUpdates();
 
   return (
     <CompactSidebar value={compact}>
-      <nav
-        aria-label="主导航"
-        className="sidebar-nav flex flex-1 select-none flex-col gap-1 px-3 pb-3"
-      >
+      <nav aria-label="主导航" className="sidebar-nav flex flex-1 select-none flex-col gap-1 px-3 pb-3">
         <Section>
           {/* `scroll={false}` unconditionally: these two are the same control as the tab
               bar, and the tab machinery owns the scroller (it restores each tab's own offset).
@@ -425,10 +409,7 @@ export default function SidebarNav({
               icon={<MdOutlineSubscriptions size={ICON.standard} />}
               activeIcon={<MdSubscriptions size={ICON.standard} />}
               label="标签订阅"
-              active={
-                backgroundPathname === '/subscriptions' ||
-                backgroundPathname.startsWith('/subscriptions/')
-              }
+              active={backgroundPathname === '/subscriptions' || backgroundPathname.startsWith('/subscriptions/')}
               current={backgroundPathname === '/subscriptions'}
               badge={subscriptionUpdates}
               badgeLabel={`${subscriptionUpdates} 张新图片`}
@@ -521,13 +502,7 @@ export default function SidebarNav({
               onReselect={onReselect}
             />
           )}
-          {user && (
-            <NavItem
-              icon={<MdOutlineLogout size={ICON.standard} />}
-              label="登出"
-              onClick={onLogout}
-            />
-          )}
+          {user && <NavItem icon={<MdOutlineLogout size={ICON.standard} />} label="登出" onClick={onLogout} />}
         </Section>
       </nav>
     </CompactSidebar>

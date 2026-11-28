@@ -48,8 +48,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-sw-'));
@@ -99,8 +98,7 @@ const evalIn = async (expr) => {
     awaitPromise: true,
     returnByValue: true,
   });
-  if (r.result?.exceptionDetails)
-    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
+  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');

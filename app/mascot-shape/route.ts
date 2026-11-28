@@ -41,16 +41,9 @@ function target(raw: string | null): URL | null {
   } catch {
     return null;
   }
-  if (
-    url.protocol !== 'https:' ||
-    url.hostname !== ASSET_HOST ||
-    url.port !== '' ||
-    url.username ||
-    url.password
-  )
+  if (url.protocol !== 'https:' || url.hostname !== ASSET_HOST || url.port !== '' || url.username || url.password)
     return null;
-  if (url.search || url.hash || !(IMAGE_PATH.test(url.pathname) || UPLOAD_PATH.test(url.pathname)))
-    return null;
+  if (url.search || url.hash || !(IMAGE_PATH.test(url.pathname) || UPLOAD_PATH.test(url.pathname))) return null;
   return url;
 }
 
@@ -116,13 +109,7 @@ async function silhouette(bytes: Uint8Array): Promise<MascotShape | null> {
   const scale = MASCOT_SHAPE_GRID / Math.max(width, height);
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
-  const alpha = await image
-    .rotate()
-    .resize(w, h, { fit: 'fill' })
-    .ensureAlpha()
-    .extractChannel(3)
-    .raw()
-    .toBuffer();
+  const alpha = await image.rotate().resize(w, h, { fit: 'fill' }).ensureAlpha().extractChannel(3).raw().toBuffer();
   if (alpha.length !== w * h) return null;
   return { w, h, rows: shapeRows(alpha, w, h) };
 }
@@ -171,9 +158,7 @@ function assetHref(value: string): string | null {
   const raw = value.trim();
   if (!raw) return null;
   try {
-    const url = /^https?:\/\//.test(raw)
-      ? new URL(raw)
-      : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
+    const url = /^https?:\/\//.test(raw) ? new URL(raw) : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
     return url.href;
   } catch {
     return null;

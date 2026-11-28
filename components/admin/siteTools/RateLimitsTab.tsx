@@ -40,8 +40,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
     setDraft(rules.map((r) => (r.action === action ? { ...r, [name]: value } : r)));
     setErrors({});
   };
-  const closeEditor = () =>
-    setEditing((current) => (current ? { ...current, closing: true } : null));
+  const closeEditor = () => setEditing((current) => (current ? { ...current, closing: true } : null));
   const submit = () => {
     if (save.isPending()) return;
     try {
@@ -69,11 +68,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
   };
   return (
     <div className="space-y-6">
-      <SectionHeader
-        section="rate-management"
-        onRefresh={read.refresh}
-        isLoading={read.refreshing}
-      />
+      <SectionHeader section="rate-management" onRefresh={read.refresh} isLoading={read.refreshing} />
       <ReadState
         variant="table"
         title="频率规则加载失败"
@@ -83,11 +78,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
       >
         {read.data && (
           <>
-            <AdminForm
-              aria-labelledby="admin-rate-rules-heading"
-              onSubmit={submit}
-              className="max-w-none"
-            >
+            <AdminForm aria-labelledby="admin-rate-rules-heading" onSubmit={submit} className="max-w-none">
               <SectionHeading as="h3" id="admin-rate-rules-heading">
                 频率规则
               </SectionHeading>
@@ -110,9 +101,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
                         isClosing={editing.closing}
                         onEscape={closeEditor}
                         onExitComplete={() =>
-                          setEditing((current) =>
-                            current?.action === r.action && current.closing ? null : current,
-                          )
+                          setEditing((current) => (current?.action === r.action && current.closing ? null : current))
                         }
                       >
                         <div className="@container/form max-w-2xl space-y-4">
@@ -218,12 +207,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
               ))}
               {superAdmin && (
                 <FormActions>
-                  <Button
-                    type="submit"
-                    variant="filled"
-                    loading={save.busy}
-                    disabled={!rules.length}
-                  >
+                  <Button type="submit" variant="filled" loading={save.busy} disabled={!rules.length}>
                     保存频率规则
                   </Button>
                 </FormActions>
@@ -294,11 +278,7 @@ function RateLimitsTab({ token, role }: AdminPanelProps) {
                     },
                   ]}
                 />
-                <AdminPager
-                  page={locks.page}
-                  totalPages={locks.totalPages}
-                  onPageChange={locks.setPage}
-                />
+                <AdminPager page={locks.page} totalPages={locks.totalPages} onPageChange={locks.setPage} />
               </AdminListAnchor>
             </section>
           </>

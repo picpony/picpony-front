@@ -92,11 +92,7 @@ test('P6-F3: saving a tag without touching its names sends them as stored; 、 i
   const form = { ...model.tagFormOf(tag), description: '只改简介' };
   const payload = plain(model.tagSavePayload(form, tag));
   assert.equal(payload.cn, '苹果嘉儿、AJ', 'a name with 、 is one name');
-  assert.deepEqual(
-    payload.aliases,
-    ['小苹果，大苹果'],
-    'a stored alias with a comma survives a description-only save',
-  );
+  assert.deepEqual(payload.aliases, ['小苹果，大苹果'], 'a stored alias with a comma survives a description-only save');
   assert.equal(payload.description, '只改简介');
 
   /* An edited field is parsed — on commas only. */

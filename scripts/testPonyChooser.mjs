@@ -3,8 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import test from 'node:test';
 import { requireTypeStripping } from './tsResolve.mjs';
 requireTypeStripping('testPonyChooser');
-const { filterPonies, ponyNameParts, ponyPreview, samePonySelection } =
-  await import('../lib/desktopPonies/chooser.ts');
+const { filterPonies, ponyNameParts, ponyPreview, samePonySelection } = await import('../lib/desktopPonies/chooser.ts');
 const { PONY_PREVIEWS } = await import('../lib/desktopPonies/previewCatalog.ts');
 
 test('search finds original names and English paths; selected filter never changes selection order', () => {

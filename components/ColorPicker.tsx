@@ -183,15 +183,7 @@ export default function ColorPicker({
  * 70+ individual swatch skeletons inside the modal.
  */
 function PickerSkeleton({ paused }: { paused: boolean }) {
-  return (
-    <PageLoadingIndicator
-      size="pane"
-      paused={paused}
-      delay={120}
-      label="正在加载取色器…"
-      className="min-h-80"
-    />
-  );
+  return <PageLoadingIndicator size="pane" paused={paused} delay={120} label="正在加载取色器…" className="min-h-80" />;
 }
 
 /**
@@ -251,10 +243,7 @@ function PickerDialog({
   const chooseMode = (mode: AccentMode) =>
     setAccent((current) => ({
       mode,
-      hue:
-        mode === 'custom' && current.hue === null
-          ? (choiceFor('custom', null) as number)
-          : current.hue,
+      hue: mode === 'custom' && current.hue === null ? (choiceFor('custom', null) as number) : current.hue,
     }));
 
   const onModeKey = (event: KeyboardEvent, index: number) => {
@@ -340,10 +329,7 @@ function PickerDialog({
     let target: [number, number] | null = null;
     if (move[event.key]) {
       const [dr, dc] = move[event.key]!;
-      target = [
-        (row + dr + TONES.length) % TONES.length,
-        (column + dc + CHROMAS.length) % CHROMAS.length,
-      ];
+      target = [(row + dr + TONES.length) % TONES.length, (column + dc + CHROMAS.length) % CHROMAS.length];
     } else if (event.key === 'Home') target = [row, 0];
     else if (event.key === 'End') target = [row, CHROMAS.length - 1];
     if (!target) return;
@@ -478,10 +464,7 @@ function PickerDialog({
               >
                 <span />
                 {CHROMAS.map((x) => (
-                  <span
-                    key={x}
-                    className="text-label-s text-on-surface-variant text-center tabular-nums"
-                  >
+                  <span key={x} className="text-label-s text-on-surface-variant text-center tabular-nums">
                     {Math.round(x * 100)}%
                   </span>
                 ))}
@@ -569,19 +552,11 @@ function PickerDialog({
                     >
                       {/* Concentric inside the 12dp tile with 8dp inset: 12 − 8 = 4dp (`rounded-xs`). */}
                       <span className="forced-boundary forced-color-adjust-auto relative -z-10 h-9 w-12 shrink-0 overflow-hidden rounded-xs">
-                        <PaletteTileFace
-                          size="compact"
-                          tone={tones[scheme]}
-                          face={tones.face[scheme]}
-                          hues="multi"
-                        />
+                        <PaletteTileFace size="compact" tone={tones[scheme]} face={tones.face[scheme]} hues="multi" />
                       </span>
                       <span className="text-label-l">{label}</span>
                       <span
-                        className={cn(
-                          'text-label-s',
-                          on ? 'text-on-secondary-container' : 'text-on-surface-variant',
-                        )}
+                        className={cn('text-label-s', on ? 'text-on-secondary-container' : 'text-on-surface-variant')}
                       >
                         {caption}
                       </span>

@@ -53,9 +53,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return items;
-    return items.filter(
-      (item) => String(item.image_id) === keyword || item.reason?.toLowerCase().includes(keyword),
-    );
+    return items.filter((item) => String(item.image_id) === keyword || item.reason?.toLowerCase().includes(keyword));
   }, [search, items]);
   const paged = usePagedRows(filtered, search.trim());
 
@@ -77,12 +75,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       () =>
         void addMutation.run(
           () =>
-            adminApi.adminAddBlacklist(
-              token,
-              blacklistQuery.peek(token).data?.revision ?? revision,
-              id,
-              reason.trim(),
-            ),
+            adminApi.adminAddBlacklist(token, blacklistQuery.peek(token).data?.revision ?? revision, id, reason.trim()),
           () => {
             showToast(`已屏蔽图片 #${id}`, 'success');
             setImageId('');
@@ -161,9 +154,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       header: '时间',
       width: 'auto',
       className: 'tabular-nums',
-      render: (item) => (
-        <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>
-      ),
+      render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
     },
     {
       key: 'actions',
@@ -213,13 +204,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
             fieldClassName="min-w-0 @lg/form:flex-1"
             onChange={(event) => setReason(event.target.value)}
           />
-          <Button
-            type="submit"
-            size="lg"
-            variant="danger"
-            icon={<MdBlock />}
-            loading={addMutation.busy}
-          >
+          <Button type="submit" size="lg" variant="danger" icon={<MdBlock />} loading={addMutation.busy}>
             屏蔽图片
           </Button>
         </div>
@@ -241,9 +226,7 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
           page={paged.page}
           totalPages={paged.totalPages}
           onPageChange={paged.setPage}
-          summary={
-            read.data ? (keyword ? `找到 ${paged.total} 条` : `共 ${paged.total} 条`) : undefined
-          }
+          summary={read.data ? (keyword ? `找到 ${paged.total} 条` : `共 ${paged.total} 条`) : undefined}
         />
       </AdminListAnchor>
       {confirmDialog}

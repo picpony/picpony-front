@@ -23,8 +23,7 @@ function maskRouteWindow(layer: HTMLElement, clone: HTMLElement, page: HTMLEleme
   const scroller = getAppScroller();
   const plane = page.parentElement;
   /* A page's column is its root, inside the content wrapper; the clone has the same structure. */
-  const column = (root: HTMLElement) =>
-    root.firstElementChild?.firstElementChild?.getBoundingClientRect() ?? null;
+  const column = (root: HTMLElement) => root.firstElementChild?.firstElementChild?.getBoundingClientRect() ?? null;
   const leaving = column(clone);
   const arriving = column(page);
   if (!scroller || !plane || !leaving || !arriving) return null;
@@ -100,12 +99,7 @@ function whenPageArrives(page: HTMLElement, arrived: () => void, bound: number):
  * nothing on a cold document has navigated yet. `warmRouteCrossFade()` pulls it in after first
  * paint; if it is absent, `captureRouteSnapshot` declines to clone and the navigation is a cut.
  */
-export function playRouteCrossFade(
-  layer: HTMLElement,
-  snapshot: RouteSnapshot,
-  from: string,
-  to: string,
-) {
+export function playRouteCrossFade(layer: HTMLElement, snapshot: RouteSnapshot, from: string, to: string) {
   /* A second navigation mid-fade drops the older frame rather than stacking two stale layers;
      the snapshot just taken is of whatever was on screen a moment ago, the truer thing to fade. */
   cancelRouteCrossFade();
@@ -178,9 +172,7 @@ export function playRouteCrossFade(
     const slow = springTiming('slowEffects', 'page');
     const backAnimations: Animation[] = [];
     if (backLeaves) {
-      backAnimations.push(
-        backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
-      );
+      backAnimations.push(backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }));
     }
     if (backArrives) {
       backAnimations.push(
@@ -242,15 +234,13 @@ export function playRouteCrossFade(
        affordance's copy fades in place without rising. */
     animations.push(
       snapshot.node.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
-      snapshot.node.animate(
-        [{ transform: 'translate3d(0, 0px, 0)' }, { transform: `translate3d(0, ${rise}px, 0)` }],
-        { ...def, fill: 'forwards' },
-      ),
+      snapshot.node.animate([{ transform: 'translate3d(0, 0px, 0)' }, { transform: `translate3d(0, ${rise}px, 0)` }], {
+        ...def,
+        fill: 'forwards',
+      }),
     );
     if (backLeaves) {
-      animations.push(
-        backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }),
-      );
+      animations.push(backLeaves.animate([{ opacity: 1 }, { opacity: 0 }], { ...fast, fill: 'forwards' }));
     }
     /* Incoming leg: `fill: 'forwards'` leaves the inline hidden state in effect during `delay`,
        then reveals and fades `0 -> 1` on SlowEffects after the handoff. */

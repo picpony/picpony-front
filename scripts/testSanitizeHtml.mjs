@@ -5,8 +5,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
 const { sanitizeHtml } = await import('../lib/sanitizeHtml.ts');
-const { sanitizeAnnouncementUrl, sanitizeAnnouncementAttr } =
-  await import('../lib/sanitizeHtml.browser.ts');
+const { sanitizeAnnouncementUrl, sanitizeAnnouncementAttr } = await import('../lib/sanitizeHtml.browser.ts');
 const attacks = [
   '<img src=x onerror="globalThis.__reviewExecuted=1">',
   '<a href="javascript:globalThis.__reviewExecuted=1">click</a>',
@@ -39,24 +38,15 @@ assert.match(sanitizeHtml(article), /href="mailto:hi@picpony\.top\?subject=Hello
 assert.match(sanitizeHtml(article), /colspan="2"/);
 assert.doesNotMatch(sanitizeHtml(article), /\+2/);
 assert.equal(sanitizeHtml('<script>bad()</script><p>visible</p>'), '<p>visible</p>');
-assert.equal(
-  sanitizeHtml('<title>a</title><textarea>b</textarea><xmp>c</xmp><p>ok</p>'),
-  '<p>ok</p>',
-);
-assert.doesNotMatch(
-  sanitizeHtml('<a href="//evil.test/x">a</a><a href="/\\evil.test/x">b</a>'),
-  /evil\.test/,
-);
+assert.equal(sanitizeHtml('<title>a</title><textarea>b</textarea><xmp>c</xmp><p>ok</p>'), '<p>ok</p>');
+assert.doesNotMatch(sanitizeHtml('<a href="//evil.test/x">a</a><a href="/\\evil.test/x">b</a>'), /evil\.test/);
 assert.doesNotMatch(
   sanitizeHtml('<a id="location" name="document" href="https://example.test">link</a>'),
   /\b(?:id|name)=/i,
 );
 
 // Verify the browser sanitizer's URL & attribute validators in Node as well.
-assert.equal(
-  sanitizeAnnouncementUrl('href', 'https://example.test/?a=1&b=2'),
-  'https://example.test/?a=1&b=2',
-);
+assert.equal(sanitizeAnnouncementUrl('href', 'https://example.test/?a=1&b=2'), 'https://example.test/?a=1&b=2');
 assert.equal(sanitizeAnnouncementUrl('href', 'mailto:hi@picpony.top'), 'mailto:hi@picpony.top');
 assert.equal(
   sanitizeAnnouncementUrl('href', ' mailto:hi@picpony.top?subject=Hello World '),
@@ -67,10 +57,7 @@ assert.equal(sanitizeAnnouncementUrl('href', 'java\tscript:alert(1)'), null);
 assert.equal(sanitizeAnnouncementUrl('href', 'java script:alert(1)'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '//evil.test/x'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '/\\evil.test/x'), null);
-assert.equal(
-  sanitizeAnnouncementUrl('src', 'https://picpony.top/a.png'),
-  'https://picpony.top/a.png',
-);
+assert.equal(sanitizeAnnouncementUrl('src', 'https://picpony.top/a.png'), 'https://picpony.top/a.png');
 assert.equal(sanitizeAnnouncementUrl('src', '/uploads/a.png'), '/uploads/a.png');
 assert.equal(sanitizeAnnouncementUrl('src', 'mailto:a@b.c'), null);
 assert.equal(sanitizeAnnouncementUrl('src', 'data:image/svg+xml,<svg/>'), null);

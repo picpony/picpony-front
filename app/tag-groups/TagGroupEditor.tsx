@@ -45,13 +45,7 @@ interface TagGroupEditorProps {
  * full one are said under the tag field. 保存 is `filled`. A dialog with changes asks before it
  * is dismissed, by any route (✕, Esc, the scrim, Back).
  */
-export default function TagGroupEditor({
-  isOpen,
-  initial,
-  saving,
-  onSave,
-  onClose,
-}: TagGroupEditorProps) {
+export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClose }: TagGroupEditorProps) {
   const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState(initial);
   const [seen, setSeen] = useState(initial);

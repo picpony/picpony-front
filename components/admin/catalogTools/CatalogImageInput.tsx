@@ -100,12 +100,7 @@ export default function CatalogImageInput({
           >
             上传图片
           </Button>
-          <Button
-            type="button"
-            variant="text"
-            disabled={disabled || mutation.busy}
-            onClick={() => setFile(null)}
-          >
+          <Button type="button" variant="text" disabled={disabled || mutation.busy} onClick={() => setFile(null)}>
             移除文件
           </Button>
         </div>

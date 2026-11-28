@@ -45,8 +45,7 @@ const { API_KEY_PATTERN } = await import('../lib/validation.ts');
 const { settingsHref } = await import('../app/settings/tabs.ts');
 const { uploaderTerm } = await import('../lib/profiles.ts');
 const { buildSearchQueryFrom } = await import('../lib/searchQuery.ts');
-const { philomenaSlug, derpiProfileUrl, derpiFallbackUrl } =
-  await import('../app/derpi/user/[id]/derpiLinks.ts');
+const { philomenaSlug, derpiProfileUrl, derpiFallbackUrl } = await import('../app/derpi/user/[id]/derpiLinks.ts');
 const { createActionRunner, UncertainAction } = await import('../lib/assistant/runner.ts');
 const { createReceiptJournal } = await import('../lib/assistant/journal.ts');
 
@@ -97,10 +96,7 @@ test('P5-F3: the profile sends its owner to 账户 for what lives there, never t
 
 const OPERATOR = /^\s+(?:AND|OR|&&|\|\|)\s+/;
 const STOP = (s, i) =>
-  s[i] === ',' ||
-  OPERATOR.test(s.slice(i)) ||
-  /^\s*\)/.test(s.slice(i)) ||
-  /^\s*\^[-+]?\d/.test(s.slice(i));
+  s[i] === ',' || OPERATOR.test(s.slice(i)) || /^\s*\)/.test(s.slice(i)) || /^\s*\^[-+]?\d/.test(s.slice(i));
 
 /** `dirty_text` from `i`: the end of the term's text, or -1 when it matches nothing. */
 function dirtyText(s, i) {
@@ -242,10 +238,7 @@ test('P5-F4: a bound name is one literal term, whatever it contains', () => {
     );
     /* Wrapped in the viewer's exclusions as the uploads read does, the group still closes on ours. */
     const query = decodeURIComponent(
-      buildSearchQueryFrom(
-        { contentFilter: 'safe', banAnthro: false, onlyPony: false, hiddenTags: [] },
-        term,
-      ),
+      buildSearchQueryFrom({ contentFilter: 'safe', banAnthro: false, onlyPony: false, hiddenTags: [] }, term),
     );
     assert.ok(query.startsWith(`(${term})`), query);
     assert.ok(groupHolds(term), query);
@@ -274,10 +267,7 @@ test('P5-F4: a bound name is one literal term, whatever it contains', () => {
 
 test('P5-F5: the Derpibooru profile link is the slug the site keys it by', () => {
   assert.equal(philomenaSlug('Background Pony'), 'Background+Pony');
-  assert.equal(
-    philomenaSlug('a.b-c/d\\e:f+g'),
-    'a-dot-b-dash-c-fwslash-d-bwslash-e-colon-f-plus-g',
-  );
+  assert.equal(philomenaSlug('a.b-c/d\\e:f+g'), 'a-dot-b-dash-c-fwslash-d-bwslash-e-colon-f-plus-g');
   assert.equal(derpiProfileUrl({ name: 'Foo Bar' }), 'https://derpibooru.org/profiles/Foo+Bar');
   assert.equal(derpiProfileUrl({ name: 'Mr. X' }), 'https://derpibooru.org/profiles/Mr-dot-+X');
   assert.equal(

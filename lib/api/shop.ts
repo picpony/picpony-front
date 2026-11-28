@@ -45,20 +45,13 @@ const CATALOGUE_LIMIT = 1000;
  * The items on sale, newest first (the backend's order). An administrator's token is also answered
  * with the switched-off items (what the console calls 已下架); those are not on sale here.
  */
-export async function getShopItems(
-  token: string | null,
-  signal?: AbortSignal,
-): Promise<ShopItem[]> {
-  const data = await api<{ items: WireShopItem[]; next_cursor: number | null }>(
-    'GET',
-    '/shop/items',
-    {
-      token: token ?? undefined,
-      query: { limit: CATALOGUE_LIMIT },
-      cache: 'no-store',
-      signal,
-    },
-  );
+export async function getShopItems(token: string | null, signal?: AbortSignal): Promise<ShopItem[]> {
+  const data = await api<{ items: WireShopItem[]; next_cursor: number | null }>('GET', '/shop/items', {
+    token: token ?? undefined,
+    query: { limit: CATALOGUE_LIMIT },
+    cache: 'no-store',
+    signal,
+  });
   return data.items
     .filter((row) => row.active)
     .map((row) => ({
@@ -100,18 +93,13 @@ export async function checkoutCart(
   lines: readonly CheckoutLine[],
   idempotencyKey: string,
 ): Promise<CheckoutResult> {
-  const data = await api<{ spent?: unknown; balance?: unknown } | undefined>(
-    'POST',
-    '/me/shop/checkouts',
-    {
-      token,
-      json: checkoutBody(lines),
-      idempotencyKey,
-    },
-  );
+  const data = await api<{ spent?: unknown; balance?: unknown } | undefined>('POST', '/me/shop/checkouts', {
+    token,
+    json: checkoutBody(lines),
+    idempotencyKey,
+  });
   /* A 2xx that does not say what was spent cannot say whether anything was: money is the one
      answer read with suspicion, so the caller treats it as unconfirmed, never as done. */
-  if (typeof data?.spent !== 'number' || typeof data.balance !== 'number')
-    throw new ApiError('invalid');
+  if (typeof data?.spent !== 'number' || typeof data.balance !== 'number') throw new ApiError('invalid');
   return { spent: data.spent, balance: data.balance };
 }

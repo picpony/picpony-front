@@ -78,12 +78,7 @@ type SendOutcome = { ok: true } | { ok: false; message: string };
 const sendKeys = new Map<string, string>();
 
 /** The post itself, at module scope (the React Compiler cannot lower a `finally` in a component). */
-async function send(
-  token: string,
-  imageId: number,
-  text: string,
-  replyTo: ReplyTarget | null,
-): Promise<SendOutcome> {
+async function send(token: string, imageId: number, text: string, replyTo: ReplyTarget | null): Promise<SendOutcome> {
   const body = replyBody(text, replyTo);
   const attempt = `${imageId}\n${body}`;
   const key = sendKeys.get(attempt) ?? requestId();
@@ -122,12 +117,7 @@ interface ComposerPose {
  * away**: the draft is kept per picture for the life of the page (a step to the next picture and
  * back, a session that expires mid-sentence, a failed send), and the editor reopens on it.
  */
-export default function CommentComposer({
-  imageId,
-  replyTo,
-  onCancelReply,
-  onPosted,
-}: CommentComposerProps) {
+export default function CommentComposer({ imageId, replyTo, onCancelReply, onPosted }: CommentComposerProps) {
   const { openAuth } = useAuthModal();
   const session = useSession();
   const signedIn = Boolean(session.token);
@@ -233,9 +223,7 @@ export default function CommentComposer({
       queueMicrotask(() => {
         if (alive) {
           setTransition((current) =>
-            current.imageId === imageId && current.phase === phase
-              ? { ...current, phase: 'idle' }
-              : current,
+            current.imageId === imageId && current.phase === phase ? { ...current, phase: 'idle' } : current,
           );
         }
       });
@@ -246,9 +234,7 @@ export default function CommentComposer({
 
     const from =
       interrupted?.height ??
-      (opening
-        ? triggerWrap?.getBoundingClientRect().height
-        : editorWrap?.getBoundingClientRect().height) ??
+      (opening ? triggerWrap?.getBoundingClientRect().height : editorWrap?.getBoundingClientRect().height) ??
       box.getBoundingClientRect().height;
     const to = box.getBoundingClientRect().height;
 
@@ -285,10 +271,7 @@ export default function CommentComposer({
         if (travel > 0) {
           animations.push(
             editorWrap.animate(
-              [
-                { translate: interrupted?.editorTranslate ?? `0 ${-travel}px` },
-                { translate: 'none' },
-              ],
+              [{ translate: interrupted?.editorTranslate ?? `0 ${-travel}px` }, { translate: 'none' }],
               { ...layoutTiming, delay: handoff, fill: 'backwards' },
             ),
           );
@@ -305,10 +288,7 @@ export default function CommentComposer({
         if (travel > 0) {
           animations.push(
             editorWrap.animate(
-              [
-                { translate: interrupted?.editorTranslate ?? 'none' },
-                { translate: `0 ${-travel}px` },
-              ],
+              [{ translate: interrupted?.editorTranslate ?? 'none' }, { translate: `0 ${-travel}px` }],
               { ...layoutTiming, fill: 'forwards' },
             ),
           );
@@ -330,9 +310,7 @@ export default function CommentComposer({
       if (!alive) return;
       box.style.clipPath = '';
       setTransition((current) =>
-        current.imageId === imageId && current.phase === phase
-          ? { ...current, phase: 'idle' }
-          : current,
+        current.imageId === imageId && current.phase === phase ? { ...current, phase: 'idle' } : current,
       );
     };
     if (animations.length === 0) {
@@ -346,16 +324,8 @@ export default function CommentComposer({
       if (animations.some((animation) => animation.playState === 'running')) {
         poseRef.current = {
           height: box.getBoundingClientRect().height,
-          triggerOpacity: triggerWrap
-            ? Number(getComputedStyle(triggerWrap).opacity)
-            : opening
-              ? 0
-              : 1,
-          editorOpacity: editorWrap
-            ? Number(getComputedStyle(editorWrap).opacity)
-            : opening
-              ? 1
-              : 0,
+          triggerOpacity: triggerWrap ? Number(getComputedStyle(triggerWrap).opacity) : opening ? 0 : 1,
+          editorOpacity: editorWrap ? Number(getComputedStyle(editorWrap).opacity) : opening ? 1 : 0,
           editorTranslate: editorWrap ? getComputedStyle(editorWrap).translate || 'none' : 'none',
         };
       }
@@ -429,13 +399,7 @@ export default function CommentComposer({
             className="flex h-14 w-full cursor-pointer select-none touch-manipulation items-center rounded-md bg-surface-container-high px-4 text-left text-body-l text-on-surface-variant transition-ui state-layer forced-boundary focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
           >
             <span className="truncate">
-              {signedIn
-                ? trimmed
-                  ? '继续编辑评论…'
-                  : '发表评论…'
-                : trimmed
-                  ? '登录后继续编辑评论'
-                  : '登录后发表评论'}
+              {signedIn ? (trimmed ? '继续编辑评论…' : '发表评论…') : trimmed ? '登录后继续编辑评论' : '登录后发表评论'}
             </span>
           </button>
         </div>

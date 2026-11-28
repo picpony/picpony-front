@@ -122,8 +122,7 @@ export default function CartBar({
   useLayoutEffect(() => {
     const spacer = roomRef.current;
     if (active || !roomHeld) return;
-    const scroller =
-      spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+    const scroller = spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
     /* Below the viewport (or with no box at all — the docked layout hides it), the room can go:
        the page under the reader does not change, and nothing clamps the offset. */
     const free = () => {
@@ -167,9 +166,7 @@ export default function CartBar({
             className={cn(
               'w-full max-w-sm transition-opacity',
               /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
-              active
-                ? 'pointer-events-auto opacity-100 spring-default-effects'
-                : 'opacity-0 spring-fast-effects',
+              active ? 'pointer-events-auto opacity-100 spring-default-effects' : 'opacity-0 spring-fast-effects',
             )}
           >
             {/* The travel: up into place on the spatial spring, back down on the effects one. */}
@@ -179,22 +176,12 @@ export default function CartBar({
                 'transition-[translate]',
                 active
                   ? 'translate-y-0 spring-default-spatial'
-                  : cn(
-                      tier === 'reduced' ? 'translate-y-2' : 'translate-y-4',
-                      'spring-fast-effects',
-                    ),
+                  : cn(tier === 'reduced' ? 'translate-y-2' : 'translate-y-4', 'spring-fast-effects'),
               )}
             >
-              <span
-                className="relative inline-flex shrink-0 text-on-surface-variant"
-                aria-hidden="true"
-              >
+              <span className="relative inline-flex shrink-0 text-on-surface-variant" aria-hidden="true">
                 <MdShoppingCart size={ICON.standard} />
-                <CountBadge
-                  key={appearance}
-                  count={shown.pieces}
-                  className="absolute -top-1.5 -right-2.5"
-                />
+                <CountBadge key={appearance} count={shown.pieces} className="absolute -top-1.5 -right-2.5" />
               </span>
               <span className="min-w-0 flex-1 truncate text-body-m whitespace-nowrap text-on-surface tabular-nums">
                 {shown.summary}

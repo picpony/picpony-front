@@ -85,8 +85,7 @@ function writeQueued() {
   else params.set('tab', tab);
   const query = params.toString();
   const href = query ? `/settings?${query}` : '/settings';
-  if (href !== `${window.location.pathname}${window.location.search}`)
-    window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting write goes with it. */

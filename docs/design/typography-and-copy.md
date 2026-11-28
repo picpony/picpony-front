@@ -8,10 +8,10 @@ Use the fifteen M3 roles: `text-display-*`, `text-headline-*`, `text-title-*`, `
 
 Each role owns its weight, size, tracking and line height. Render exactly one role per element; `cn` joins classes without resolving conflicts.
 
-| Role family                        | Regular → emphasized weight |
-| ---------------------------------- | --------------------------- |
-| `label-*`, `title-*`, `headline-*` | 500 → 700                   |
-| `display-*`, `body-*`              | 400 → 500                   |
+| Role family | Regular → emphasized weight |
+| --- | --- |
+| `label-*`, `title-*`, `headline-*` | 500 → 700 |
+| `display-*`, `body-*` | 400 → 500 |
 
 Headings use their role's normal weight unless the call site explicitly chooses its emphasized form. Semantic heading level does not set the visual role.
 
@@ -32,13 +32,13 @@ PicPony posts, replies and comments use explicit `format="bbcode"`. Derpibooru M
 
 A newline is a line break; a blank line starts a paragraph. `bbcodeToSafeHtml`, `remarkHardBreaks` and `htmlToBBCode` preserve that round trip. Drop break-only paragraphs and line breaks adjacent to block boundaries.
 
-| Element                                | Block margin                         |
-| -------------------------------------- | ------------------------------------ |
-| Paragraph                              | `0.75em`                             |
-| Heading                                | `1.25em 0.5em`                       |
-| List                                   | `0.75em`, plus `1.5em` start padding |
-| List item                              | `0.25em`                             |
-| Image, video, quote, code block, table | `1em`                                |
+| Element | Block margin |
+| --- | --- |
+| Paragraph | `0.75em` |
+| Heading | `1.25em 0.5em` |
+| List | `0.75em`, plus `1.5em` start padding |
+| List item | `0.25em` |
+| Image, video, quote, code block, table | `1em` |
 
 The host names a type role: post body `body-l`, reply `body-m`. Keep first/last-child margin resets. Restore list markers removed by preflight; use `on-surface-variant` for them.
 
@@ -88,20 +88,20 @@ The expanded toolbar follows `FollowHeight`'s layout spring rather than jumping 
 
 The product UI is Chinese. These rules apply to strings, including loading, confirmation and error states.
 
-| Concern                     | Rule                                                                               |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| Ellipsis                    | `…`, not `...`                                                                     |
-| Chinese punctuation         | `：`, `，`, `（）`; preserve Latin identifier syntax where needed                  |
-| Latin beside CJK            | One space: `图片 ID`, `API Key`                                                    |
-| Toast                       | No final `！`                                                                      |
-| Confirmation body           | `确定要…吗？`, using the formal demonstratives `此` / `该`; no decorative brackets |
-| Confirmation title / button | `确认X` / `确认`                                                                   |
-| Destructive verbs           | `删除` destroys a record; `移除` detaches; `清空` empties                          |
-| Success                     | `已<verb>`                                                                         |
-| Completed batch             | `已<verb> N 张`, optionally `，M 张失败`, from `runSummary`                        |
-| Load failure title          | `{X}加载失败`                                                                      |
-| Item removal label          | `移除 {label}`                                                                     |
-| Error detail / retry        | `lib/api/errors.ts`, using `apiErrorMessage` and retry classification              |
+| Concern | Rule |
+| --- | --- |
+| Ellipsis | `…`, not `...` |
+| Chinese punctuation | `：`, `，`, `（）`; preserve Latin identifier syntax where needed |
+| Latin beside CJK | One space: `图片 ID`, `API Key` |
+| Toast | No final `！` |
+| Confirmation body | `确定要…吗？`, using the formal demonstratives `此` / `该`; no decorative brackets |
+| Confirmation title / button | `确认X` / `确认` |
+| Destructive verbs | `删除` destroys a record; `移除` detaches; `清空` empties |
+| Success | `已<verb>` |
+| Completed batch | `已<verb> N 张`, optionally `，M 张失败`, from `runSummary` |
+| Load failure title | `{X}加载失败` |
+| Item removal label | `移除 {label}` |
+| Error detail / retry | `lib/api/errors.ts`, using `apiErrorMessage` and retry classification |
 
 Do not duplicate a completed batch's toast in a second live region. Use `useConfirm` / `usePrompt` instead of reimplementing their wording and behaviour.
 

@@ -74,9 +74,7 @@ const panel = (
     return pending;
   };
   return function LazyAdminPanel(props: AdminPanelProps) {
-    const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>(() =>
-      loaded ? 'ready' : 'loading',
-    );
+    const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>(() => (loaded ? 'ready' : 'loading'));
     const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {

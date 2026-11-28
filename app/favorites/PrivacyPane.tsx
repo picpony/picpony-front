@@ -151,12 +151,7 @@ export default function PrivacyPane({ token, active }: { token: string; active: 
       <div key={view} className={cn(swapped && 'animate-page-transition')}>
         {face}
       </div>
-      <PrivacyResetDialog
-        open={resetOpen}
-        token={token}
-        username={username}
-        onClose={() => setResetOpen(false)}
-      />
+      <PrivacyResetDialog open={resetOpen} token={token} username={username} onClose={() => setResetOpen(false)} />
     </>
   );
 }
@@ -195,10 +190,7 @@ function OpenPrivacy({
       ).images,
     [images, rules],
   );
-  const pageOrder = useMemo(
-    () => (state.shown?.images ?? []).map((image) => image.id),
-    [state.shown],
-  );
+  const pageOrder = useMemo(() => (state.shown?.images ?? []).map((image) => image.id), [state.shown]);
   const selection = useSelectionMode({ order: pageOrder, restoreFocus: () => selectRef.current });
   const { exit, forget, enter } = selection;
   const settled = useCallback(
@@ -327,12 +319,7 @@ function OpenPrivacy({
           >
             选择
           </Button>
-          <Button
-            variant="tonal"
-            icon={<MdLockOutline />}
-            onClick={() => lockPrivacy(token)}
-            responsiveLabel
-          >
+          <Button variant="tonal" icon={<MdLockOutline />} onClick={() => lockPrivacy(token)} responsiveLabel>
             锁定
           </Button>
           <IconButton

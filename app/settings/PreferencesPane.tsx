@@ -71,19 +71,12 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           wrap="md"
           supporting={
             <>
-              <span className="block">
-                {FILTER_DESCRIPTIONS[filter] ?? FILTER_DESCRIPTIONS.safe}
-              </span>
+              <span className="block">{FILTER_DESCRIPTIONS[filter] ?? FILTER_DESCRIPTIONS.safe}</span>
               {blocked && (
                 <span className="mt-0.5 flex flex-wrap items-center gap-x-3">
                   {SPOILERS_BLOCKED[blocked]}
                   {blocked === 'no-birthday' && (
-                    <Button
-                      variant="text"
-                      size="xs"
-                      onClick={onOpenAccount}
-                      className="-ms-3 -my-1.5"
-                    >
+                    <Button variant="text" size="xs" onClick={onOpenAccount} className="-ms-3 -my-1.5">
                       前往账户
                     </Button>
                   )}
@@ -100,9 +93,7 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
               options={[
                 { value: 'safe', label: '完全安全（Safe）' },
                 { value: 'spoilers', label: '中等限制（Spoilers）', disabled: blocked !== null },
-                ...(developer || filter === 'developer'
-                  ? [{ value: 'developer', label: '开发者模式' }]
-                  : []),
+                ...(developer || filter === 'developer' ? [{ value: 'developer', label: '开发者模式' }] : []),
               ]}
             />
           }

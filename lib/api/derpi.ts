@@ -26,10 +26,7 @@ function isImage(value: unknown): value is PonyImage {
 function withImageLine(data: { total?: unknown; images?: unknown }): ApiResponse {
   if (!Array.isArray(data.images)) throw new ApiError('invalid');
   /* A query carries the newest hundred blacklisted ids; the rest are filtered here (review P3-O3). */
-  const images = withoutOverflowBlacklisted(
-    data.images.filter(isImage),
-    currentPublicBlacklist(),
-  ).map(applyImageLine);
+  const images = withoutOverflowBlacklisted(data.images.filter(isImage), currentPublicBlacklist()).map(applyImageLine);
   const total = Number(data.total);
   return { total: Number.isFinite(total) && total >= 0 ? total : images.length, images };
 }
@@ -86,10 +83,7 @@ export async function getImageComments(
       id: Number(row.id),
       body: typeof row.body === 'string' ? row.body : '',
       created_at: typeof row.created_at === 'string' ? row.created_at : '',
-      user_id:
-        Number.isSafeInteger(Number(row.user_id)) && Number(row.user_id) > 0
-          ? Number(row.user_id)
-          : null,
+      user_id: Number.isSafeInteger(Number(row.user_id)) && Number(row.user_id) > 0 ? Number(row.user_id) : null,
       username: typeof row.author === 'string' && row.author.trim() ? row.author : '匿名用户',
       avatar: derpiAvatar(row.avatar),
       source: 'trixiebooru',
@@ -126,10 +120,7 @@ export async function getImages(
  * 近日推荐. `null` only when Derpibooru answers with no featured picture; a failure throws, so
  * the resource keeps it as an error to retry rather than caching "no banner" for its whole TTL.
  */
-export async function getFeatured(
-  key?: string,
-  signal?: AbortSignal,
-): Promise<FeaturedImage | null> {
+export async function getFeatured(key?: string, signal?: AbortSignal): Promise<FeaturedImage | null> {
   let url = `${DERPIBOORU_API_BASE}/images/featured`;
   if (key) url += `?key=${encodeURIComponent(key)}`;
   const res = await proxyFetch(url, { cache: 'no-store', signal });
@@ -219,9 +210,7 @@ export async function searchDerpiTags(
      `,` or `\\` — `artist:foo`, `oc (pony)` — was read as query syntax and answered 400. */
   const safeName = query.trim().split(/\s+/).filter(Boolean).map(escapePhilomenaTerm).join('* *');
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=name:*${encodeURIComponent(safeName)}*&per_page=30`;
-  const data = await readObject<{ tags?: unknown; total?: unknown }>(
-    await proxyFetch(url, { signal }),
-  );
+  const data = await readObject<{ tags?: unknown; total?: unknown }>(await proxyFetch(url, { signal }));
   const tags = tagsOf(data);
   return { tags, total: Number(data.total) || tags.length };
 }
@@ -231,9 +220,7 @@ export async function getDerpiPopularTags(
   signal?: AbortSignal,
 ): Promise<{ tags: DerpiTag[]; total: number }> {
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=*&sf=images&sd=desc&per_page=50&page=${page}`;
-  const data = await readObject<{ tags?: unknown; total?: unknown }>(
-    await proxyFetch(url, { signal }),
-  );
+  const data = await readObject<{ tags?: unknown; total?: unknown }>(await proxyFetch(url, { signal }));
   const tags = tagsOf(data);
   return { tags, total: Number(data.total) || tags.length };
 }
@@ -258,20 +245,14 @@ function escapePhilomenaTerm(tag: string): string {
  * 走常规 `proxyFetch`，与老前端不同：老前端对该查询显式 `directOnly`，但直连
  * 未必通——加速服务器默认开着正是为此，直连专用意味着连不上的用户永远看不到计数。
  */
-export async function getDerpiTagCounts(
-  tags: string[],
-  signal?: AbortSignal,
-): Promise<Record<string, number>> {
+export async function getDerpiTagCounts(tags: string[], signal?: AbortSignal): Promise<Record<string, number>> {
   if (tags.length === 0) return {};
   /* Philomena answers at most `TAG_COUNT_BATCH` rows, so a longer list is split here rather than
      trusted to every caller (review P1-F17): the rows past 50 used to come back as "not found". */
   if (tags.length > TAG_COUNT_BATCH) {
     const counts: Record<string, number> = {};
     for (let start = 0; start < tags.length; start += TAG_COUNT_BATCH) {
-      Object.assign(
-        counts,
-        await getDerpiTagCounts(tags.slice(start, start + TAG_COUNT_BATCH), signal),
-      );
+      Object.assign(counts, await getDerpiTagCounts(tags.slice(start, start + TAG_COUNT_BATCH), signal));
     }
     return counts;
   }
@@ -290,17 +271,13 @@ export async function getDerpiTagCounts(
 }
 
 /** A Derpibooru profile; an unknown id is a `notFound` `ApiError`, not a generic failure. */
-export async function getDerpiProfile(
-  userId: string | number,
-  signal?: AbortSignal,
-): Promise<DerpiProfileResponse> {
+export async function getDerpiProfile(userId: string | number, signal?: AbortSignal): Promise<DerpiProfileResponse> {
   const res = await proxyFetch(`${DERPIBOORU_API_BASE}/profiles/${encodeURIComponent(userId)}`, {
     signal,
   });
   const data = await readObject<{ user?: unknown }>(res);
   const user = data.user as { id?: unknown } | undefined;
-  if (!user || typeof user !== 'object' || typeof user.id !== 'number')
-    throw new ApiError('invalid');
+  if (!user || typeof user !== 'object' || typeof user.id !== 'number') throw new ApiError('invalid');
   const profile = data.user as DerpiProfileResponse['user'];
   return { user: { ...profile, awards: listOf(profile.awards) } };
 }

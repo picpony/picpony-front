@@ -66,13 +66,7 @@ export function useIconToss(identity: string | number) {
     const center = rect.left + rect.width / 2;
     const viewportWidth = document.documentElement.clientWidth;
     const direction =
-      center < viewportWidth * 0.2
-        ? 1
-        : center > viewportWidth * 0.8
-          ? -1
-          : Math.random() < 0.5
-            ? -1
-            : 1;
+      center < viewportWidth * 0.2 ? 1 : center > viewportWidth * 0.8 ? -1 : Math.random() < 0.5 ? -1 : 1;
     const angle = (direction * (15 + Math.random() * 35) * Math.PI) / 180;
     const impulse = 360 + Math.random() * 100;
     const vx = Math.sin(angle) * impulse;

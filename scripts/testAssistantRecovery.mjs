@@ -3,13 +3,11 @@ import test from 'node:test';
 import { requireTypeStripping } from './tsResolve.mjs';
 requireTypeStripping('testAssistantRecovery');
 const { createActionRunner, UncertainAction } = await import('../lib/assistant/runner.ts');
-const { createReceiptJournal, parseExchange, parsePendingChat } =
-  await import('../lib/assistant/journal.ts');
+const { createReceiptJournal, parseExchange, parsePendingChat } = await import('../lib/assistant/journal.ts');
 const { assistantHref, actionIsWrite, actionLabel, requireIds, validateSiteSpec } =
   await import('../lib/assistant/actions.ts');
 const { receiptData } = await import('../lib/assistant/protocol.ts');
-const { approvalFor, approvedAction, parseApprovals, taskRejected } =
-  await import('../lib/assistant/approval.ts');
+const { approvalFor, approvedAction, parseApprovals, taskRejected } = await import('../lib/assistant/approval.ts');
 /** Task ids are the backend's turn UUIDs. */
 const T = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -77,10 +75,7 @@ test('server/model read risk cannot downgrade a known write; default permission 
 });
 test('concurrent calls, retry and a new runner after reload dispatch a confirmed operation once', async () => {
   const f = fixture();
-  const [a, b] = await Promise.all([
-    f.runner.run(action(), T(10), true),
-    f.runner.run(action(), T(10), true),
-  ]);
+  const [a, b] = await Promise.all([f.runner.run(action(), T(10), true), f.runner.run(action(), T(10), true)]);
   assert.deepEqual(a, b);
   await createActionRunner(f.deps).run(action(), T(10), true);
   assert.equal(f.counts.dispatch, 1);
@@ -144,10 +139,7 @@ test('server cached receipts are identity checked and never dispatch again', asy
     cached: true,
     result: { ok: true, data: { task_id: T(999), call_id: 'call-2' } },
   });
-  await assert.rejects(
-    f.runner.run({ ...action(), call_id: 'call-2' }, T(11), true),
-    UncertainAction,
-  );
+  await assert.rejects(f.runner.run({ ...action(), call_id: 'call-2' }, T(11), true), UncertainAction);
 });
 test('unsupported endpoints and manual credentials are rejected before dispatch', async () => {
   const f = fixture();
@@ -182,10 +174,7 @@ test('full permission needs server approval; revoked default permission does not
   f.deps.permission = async () => 'full';
   assert.equal((await f.runner.run(action(), T(10))).error, 'confirmation_required');
   f.deps.permission = async () => 'default';
-  assert.equal(
-    (await f.runner.run({ ...action(), approval_granted: true }, T(10))).error,
-    'confirmation_required',
-  );
+  assert.equal((await f.runner.run({ ...action(), approval_granted: true }, T(10))).error, 'confirmation_required');
   assert.equal(f.counts.dispatch, 0);
 });
 test('route allowlist, bounded drafts and redaction preserve the account boundary', () => {
@@ -201,10 +190,7 @@ test('route allowlist, bounded drafts and redaction preserve the account boundar
     assert.equal(assistantHref(href), null);
   assert.equal(assistantHref('/pic/123'), '/pic/123');
   assert.equal(assistantHref('/settings?tab=account'), '/settings?tab=account');
-  assert.equal(
-    parsePendingChat(JSON.stringify({ requestId: 'id', message: 'x'.repeat(2001) })),
-    null,
-  );
+  assert.equal(parsePendingChat(JSON.stringify({ requestId: 'id', message: 'x'.repeat(2001) })), null);
   assert.equal(
     parseExchange(JSON.stringify({ requestId: 'stable-id', coins: 3, pointsPerCoin: 2 })),
     null,
@@ -245,11 +231,7 @@ test('human approval survives an interrupted confirmation but binds exact argume
     }),
     false,
   );
-  assert.equal(
-    approvedAction(parseApprovals('[17]'), T(17), original),
-    false,
-    'Old bare IDs grant no new authority',
-  );
+  assert.equal(approvedAction(parseApprovals('[17]'), T(17), original), false, 'Old bare IDs grant no new authority');
 });
 test('an explicit local rejection remains a rejection across a lost reply and reload', () => {
   const approvals = parseApprovals(JSON.stringify([approvalFor(T(17), [action()], 'reject')]));

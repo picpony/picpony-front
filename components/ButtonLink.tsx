@@ -19,8 +19,7 @@ export default function ButtonLink({
   children,
   ...rest
 }: ButtonLinkProps) {
-  const label =
-    rest['aria-label'] ?? (responsiveLabel && typeof children === 'string' ? children : undefined);
+  const label = rest['aria-label'] ?? (responsiveLabel && typeof children === 'string' ? children : undefined);
   return (
     <Link
       {...rest}

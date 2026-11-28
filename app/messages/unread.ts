@@ -49,9 +49,7 @@ export function markConversationRead(token: string, contactId: number, seenUnrea
   const row = recentContacts.peek({ token }).data?.find((contact) => contact.id === contactId);
   if (row && row.unread_count > 0) {
     recentContacts.write({ token }, (previous) =>
-      (previous ?? []).map((contact) =>
-        contact.id === contactId ? { ...contact, unread_count: 0 } : contact,
-      ),
+      (previous ?? []).map((contact) => (contact.id === contactId ? { ...contact, unread_count: 0 } : contact)),
     );
   }
   markRead(token, 'chat', Math.max(row?.unread_count ?? 0, seenUnread));

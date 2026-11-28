@@ -78,6 +78,9 @@ jobs:
           fi
           git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "$base" HEAD -- . ":(exclude)public/companions/browserponies.js"
 
+      - name: Prettier
+        run: npm run format:prettier
+
       - name: Test and tooling syntax
         run: |
           for script in scripts/*.mjs; do node --check "$script" || exit 1; done
@@ -97,6 +100,9 @@ jobs:
       # `app/theme-palettes.css` or `lib/generated/*` fails here rather than drifting.
       - name: Colours
         run: npm run colors
+
+      - name: Motion tokens
+        run: npm run motion
 
       - name: Hero path
         run: npm run hero:path

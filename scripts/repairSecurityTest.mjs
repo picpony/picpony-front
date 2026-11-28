@@ -78,23 +78,14 @@ const conversions = [
     '<p style="text-align: center;">居中的段落</p><p style="text-align: right;">右对齐</p>',
     '[center]居中的段落[/center]\n\n[right]右对齐[/right]',
   ],
-  [
-    '<p><span style="background-color: rgb(216, 68, 147);">高亮文字</span></p>',
-    '[bg=rgb(216, 68, 147)]高亮文字[/bg]',
-  ],
+  ['<p><span style="background-color: rgb(216, 68, 147);">高亮文字</span></p>', '[bg=rgb(216, 68, 147)]高亮文字[/bg]'],
   [
     '<p><span style="color: rgb(231, 95, 51); background-color: rgb(216, 68, 147);">两者</span></p>',
     '[bg=rgb(216, 68, 147)][color=rgb(231, 95, 51)]两者[/color][/bg]',
   ],
-  [
-    '<p><span style="color: rgba(1, 2, 3, 0.5);">半透明</span></p>',
-    '[color=rgba(1, 2, 3, 0.5)]半透明[/color]',
-  ],
+  ['<p><span style="color: rgba(1, 2, 3, 0.5);">半透明</span></p>', '[color=rgba(1, 2, 3, 0.5)]半透明[/color]'],
   ['<p>第一行<br>第二行</p><p>第二段</p>', '第一行\n第二行\n\n第二段'],
-  [
-    '<p><a href="https://example.test/a]b c">x</a></p>',
-    '[url=https://example.test/a%5Db%20c]x[/url]',
-  ],
+  ['<p><a href="https://example.test/a]b c">x</a></p>', '[url=https://example.test/a%5Db%20c]x[/url]'],
   ['<p><a href="javascript:alert(1)">x</a> <img src="data:image/png;base64,AAAA"></p>', 'x'],
   ['<p><br></p><p>after a blank line</p><p><br></p>', 'after a blank line'],
 ];
@@ -108,19 +99,11 @@ assert.equal(
   bbcodeToSafeHtml('[code][b]literal[/b]\n\n<script>x</script>[/code]'),
   '<pre><code>[b]literal[/b]\n\n&lt;script&gt;x&lt;/script&gt;</code></pre>',
 );
-assert.equal(
-  bbcodeToSafeHtml('line 1\nline 2\n\nparagraph 2'),
-  '<p>line 1<br />line 2</p><p>paragraph 2</p>',
-);
-assert.equal(
-  bbcodeToSafeHtml('[list][*]first[*]second[/list]'),
-  '<ul><li>first</li><li>second</li></ul>',
-);
+assert.equal(bbcodeToSafeHtml('line 1\nline 2\n\nparagraph 2'), '<p>line 1<br />line 2</p><p>paragraph 2</p>');
+assert.equal(bbcodeToSafeHtml('[list][*]first[*]second[/list]'), '<ul><li>first</li><li>second</li></ul>');
 assert.doesNotMatch(outputs[0].html, /<a\b/);
 assert.doesNotMatch(bbcodeToSafeHtml('[color=red;position:fixed]safe[/color]'), /style=/);
-assert.doesNotThrow(() =>
-  bbcodeToSafeHtml('[quote]'.repeat(10_000) + 'text' + '[/quote]'.repeat(10_000)),
-);
+assert.doesNotThrow(() => bbcodeToSafeHtml('[quote]'.repeat(10_000) + 'text' + '[/quote]'.repeat(10_000)));
 
 const realFetch = globalThis.fetch;
 try {
@@ -262,10 +245,7 @@ with sync_playwright() as p:
     assert.equal(actual, expected, `The editor's HTML serialises as written: ${html}`);
   }
   assert.match(browser.roundtrips[5].roundtrip, /\[quote="Alice"\]/);
-  assert.match(
-    browser.roundtrips[5].roundtrip,
-    /\[code\]\[b\]literal\[\/b\]\n\n<script>x<\/script>\[\/code\]/,
-  );
+  assert.match(browser.roundtrips[5].roundtrip, /\[code\]\[b\]literal\[\/b\]\n\n<script>x<\/script>\[\/code\]/);
   /* A row ends its line, as the original front end writes it; the renderer reads both. */
   assert.match(
     browser.roundtrips[8].roundtrip,
@@ -275,6 +255,4 @@ with sync_playwright() as p:
     `Browser parsed both presentations of ${outputs.length} BBCode cases safely; ${browser.editor.length} complete editor roundtrips passed.`,
   );
 }
-console.log(
-  'BBCode security, nesting, paragraphs, literal code and badge request regressions passed.',
-);
+console.log('BBCode security, nesting, paragraphs, literal code and badge request regressions passed.');

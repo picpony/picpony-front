@@ -51,8 +51,7 @@ export function useUserSearch(token: string | null, query: string) {
     keyword,
     /** The people found for the current text, or `undefined` while there is none yet. */
     users: current ? read.data : undefined,
-    searching:
-      keyword !== '' && (!current || (read.data === undefined && read.error === undefined)),
+    searching: keyword !== '' && (!current || (read.data === undefined && read.error === undefined)),
     error: current ? read.error : undefined,
     retry: read.refresh,
     flush,
@@ -96,12 +95,7 @@ export function useShareToContact() {
   }, []);
 
   const shareDialog = target ? (
-    <ShareToContactDialog
-      key={round}
-      target={target}
-      isOpen={open}
-      onClose={() => setOpen(false)}
-    />
+    <ShareToContactDialog key={round} target={target} isOpen={open} onClose={() => setOpen(false)} />
   ) : null;
 
   return { share, shareDialog };
@@ -147,13 +141,9 @@ function ShareToContactDialog({
   };
 
   const keyword = search.keyword;
-  const contactRows = (contacts.data ?? []).filter(
-    (contact) => !keyword || matchesName(contact.username, keyword),
-  );
+  const contactRows = (contacts.data ?? []).filter((contact) => !keyword || matchesName(contact.username, keyword));
   const known = new Set(contactRows.map((contact) => contact.id));
-  const userRows = keyword
-    ? (search.users ?? []).filter((person) => person.id !== myId && !known.has(person.id))
-    : [];
+  const userRows = keyword ? (search.users ?? []).filter((person) => person.id !== myId && !known.has(person.id)) : [];
 
   const list = (() => {
     if (!token) return <SignInRequired size="inline" description="登录后即可分享给其他用户" />;
@@ -173,11 +163,7 @@ function ShareToContactDialog({
           <ul aria-label={keyword ? '搜索结果' : '最近联系人'} className="flex flex-col gap-0.5">
             {people.map((person) => (
               <li key={person.id}>
-                <PersonRow
-                  person={person}
-                  state={rows.get(person.id)}
-                  onSend={() => void send(person)}
-                />
+                <PersonRow person={person} state={rows.get(person.id)} onSend={() => void send(person)} />
               </li>
             ))}
           </ul>
@@ -231,20 +217,14 @@ function ShareToContactDialog({
 
 /** What is being shared, above the people it can go to. */
 function SharePreview({ target }: { target: ShareTarget }) {
-  const Glyph =
-    target.kind === 'image' ? MdImage : target.kind === 'fave-folder' ? MdFolderShared : MdLock;
+  const Glyph = target.kind === 'image' ? MdImage : target.kind === 'fave-folder' ? MdFolderShared : MdLock;
   const title =
     target.kind === 'image'
       ? `图片 #${target.imageId}`
       : target.kind === 'fave-folder'
         ? target.folderName
         : `${target.ownerName} 的隐私空间`;
-  const kind =
-    target.kind === 'image'
-      ? '图片卡片'
-      : target.kind === 'fave-folder'
-        ? '收藏夹卡片'
-        : '隐私空间卡片';
+  const kind = target.kind === 'image' ? '图片卡片' : target.kind === 'fave-folder' ? '收藏夹卡片' : '隐私空间卡片';
   return (
     <div className="flex items-center gap-3 rounded-lg bg-surface-container-highest p-2">
       <span
@@ -252,15 +232,7 @@ function SharePreview({ target }: { target: ShareTarget }) {
         className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-secondary-container text-on-secondary-container"
       >
         {target.kind === 'image' && target.thumbUrl ? (
-          <FadeInImage
-            src={target.thumbUrl}
-            alt=""
-            fill
-            sizes="48px"
-            resilient
-            proxyThumb
-            className="object-cover"
-          />
+          <FadeInImage src={target.thumbUrl} alt="" fill sizes="48px" resilient proxyThumb className="object-cover" />
         ) : (
           <Glyph size={ICON.standard} />
         )}
@@ -273,15 +245,7 @@ function SharePreview({ target }: { target: ShareTarget }) {
   );
 }
 
-function PersonRow({
-  person,
-  state,
-  onSend,
-}: {
-  person: ChatUser;
-  state: RowState | undefined;
-  onSend: () => void;
-}) {
+function PersonRow({ person, state, onSend }: { person: ChatUser; state: RowState | undefined; onSend: () => void }) {
   return (
     <button
       type="button"
@@ -297,10 +261,7 @@ function PersonRow({
     >
       <Avatar src={person.avatar} name={person.username} size={40} />
       <span className="min-w-0 flex-1 truncate text-label-l-emphasized">{person.username}</span>
-      <span
-        aria-hidden="true"
-        className="flex shrink-0 items-center gap-1 text-label-l text-on-surface-variant"
-      >
+      <span aria-hidden="true" className="flex shrink-0 items-center gap-1 text-label-l text-on-surface-variant">
         {state === 'sending' ? (
           <Spinner size="sm" tone="inherit" />
         ) : state === 'sent' ? (
@@ -351,18 +312,10 @@ function SearchStatus({
     );
   }
   if (keyword && empty) return <EmptyState size="inline" title="没有找到用户" />;
-  if (noContacts)
-    return <EmptyState size="inline" title="暂无联系人" description="搜索用户名即可分享" />;
+  if (noContacts) return <EmptyState size="inline" title="暂无联系人" description="搜索用户名即可分享" />;
   return null;
 }
 
 function PersonRowsSkeleton() {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      label="正在加载联系人…"
-      className="min-h-36"
-    />
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载联系人…" className="min-h-36" />;
 }

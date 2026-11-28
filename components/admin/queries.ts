@@ -6,10 +6,7 @@ import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 
 /** Admin reads use the same cancellation, account isolation and refresh rules as public
  * resources. This factory stays in the lazy admin chunks, never the public catalogue. */
-export function defineAdminQuery<T>(
-  name: string,
-  fetcher: (token: string, signal: AbortSignal) => Promise<T>,
-) {
+export function defineAdminQuery<T>(name: string, fetcher: (token: string, signal: AbortSignal) => Promise<T>) {
   return defineResource<string, T>({
     name: `admin-${name}`,
     key: (token) => token,
@@ -65,10 +62,7 @@ export function derived<S extends object, T>(fn: (source: S) => T): (source: S) 
   };
 }
 
-function attempt<S, T>(
-  select: (source: S) => T,
-  source: S,
-): { ok: true; value: T } | { ok: false; error: unknown } {
+function attempt<S, T>(select: (source: S) => T, source: S): { ok: true; value: T } | { ok: false; error: unknown } {
   try {
     return { ok: true, value: select(source) };
   } catch (error) {
@@ -108,10 +102,7 @@ export function useAdminSelect<S extends object, T>(
  * per literal (G4-011: four copies, two places to change per noun, which is how one panel came to
  * print two nouns).
  */
-export function retryError(
-  title: string,
-  message: string | undefined,
-): { title: string; message?: string } {
+export function retryError(title: string, message: string | undefined): { title: string; message?: string } {
   return { title, message: message && message !== title ? message : undefined };
 }
 
@@ -119,10 +110,7 @@ export function retryError(
  * `DataTable`'s failure props: the `{X}加载失败` title and, under it, the error's own sentence — left
  * out when it would only repeat the title (a malformed list already says `{X}加载失败`).
  */
-export function tableError(
-  title: string,
-  message: string | undefined,
-): { error?: string; errorDetail?: string } {
+export function tableError(title: string, message: string | undefined): { error?: string; errorDetail?: string } {
   if (!message) return {};
   const { message: detail } = retryError(title, message);
   return { error: title, errorDetail: detail };

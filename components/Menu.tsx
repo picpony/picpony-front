@@ -204,10 +204,7 @@ export default function Menu({
           onClick={() => run(item)}
           onKeyDown={onKeyDown}
           onPointerEnter={() => {
-            if (
-              !item.disabled &&
-              (focusOnOpen || popoverRef.current?.element?.contains(document.activeElement))
-            )
+            if (!item.disabled && (focusOnOpen || popoverRef.current?.element?.contains(document.activeElement)))
               setChosenIndex(index);
           }}
           data-ripple=""
@@ -221,17 +218,11 @@ export default function Menu({
             'spring-fast-effects transition-[color,box-shadow,opacity] focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
             item.disabled
               ? 'cursor-not-allowed disabled-content'
-              : cn(
-                  'cursor-pointer state-layer',
-                  item.destructive ? 'text-error' : 'text-on-surface',
-                ),
+              : cn('cursor-pointer state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
           )}
         >
           {item.icon && (
-            <span
-              className="grid size-6 shrink-0 place-items-center [&_svg]:block [&_svg]:size-6"
-              aria-hidden="true"
-            >
+            <span className="grid size-6 shrink-0 place-items-center [&_svg]:block [&_svg]:size-6" aria-hidden="true">
               {item.icon}
             </span>
           )}

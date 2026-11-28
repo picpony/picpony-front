@@ -19,14 +19,7 @@ import {
   type HeroHost,
   type HeroRect,
 } from './geometry';
-import {
-  intervalProgress,
-  progressAt,
-  relaunch,
-  sampleProgress,
-  velocityAt,
-  type HeroProgressModel,
-} from './progress';
+import { intervalProgress, progressAt, relaunch, sampleProgress, velocityAt, type HeroProgressModel } from './progress';
 import { interpolate } from './spring';
 import { screenRectToPlane, sizePlaneLayer, type HeroScrollPlane } from './plane';
 import type { FrameAsset, FrameLease } from './frameCache';
@@ -93,13 +86,11 @@ function getFlightGeometryFrames(leg: HeroLeg): readonly FlightGeometryFrame[] {
   const cached = geometryFrames.get(leg);
   if (cached) return cached;
   const arc = createHeroRectArc(leg.from, leg.to, leg.bow);
-  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES).map(
-    ({ offset, progress }) => ({
-      offset,
-      rect: lerpHeroRectArc(arc, progress),
-      radius: interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress, leg.direction)),
-    }),
-  );
+  const frames = sampleProgress(leg.progress, HERO_PROGRESS_SAMPLES).map(({ offset, progress }) => ({
+    offset,
+    rect: lerpHeroRectArc(arc, progress),
+    radius: interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress, leg.direction)),
+  }));
   geometryFrames.set(leg, frames);
   return frames;
 }
@@ -240,12 +231,7 @@ export function createHeroLeg({
     progress:
       speed === undefined
         ? HERO_FLIGHT_PROGRESS[direction]
-        : relaunch(
-            HERO_FLIGHT_RESPONSE[direction],
-            speed,
-            heroRectCenterDistance(from, to),
-            duration,
-          ),
+        : relaunch(HERO_FLIGHT_RESPONSE[direction], speed, heroRectCenterDistance(from, to), duration),
     bow: solveHeroArcBow(from, to, baseAspect),
     duration,
     startedAt,
@@ -272,9 +258,7 @@ export function evaluateLeg(leg: HeroLeg, time: number): HeroPose {
   // A filled WAAPI track is stationary after its last keyframe, even though the normalized
   // spring still has a nonzero derivative there. A later reversal must leave that pose at rest.
   const speed =
-    leg.duration > 0 && elapsed < leg.duration
-      ? (chord * velocityAt(leg.progress, offset)) / leg.duration
-      : 0;
+    leg.duration > 0 && elapsed < leg.duration ? (chord * velocityAt(leg.progress, offset)) / leg.duration : 0;
 
   return {
     rect,
@@ -329,23 +313,11 @@ export function buildFlightKeyframes(flight: HeroFlight, leg: HeroLeg): FlightKe
 export function applyFlightPose(flight: HeroFlight, rect: HeroRect, radius: number) {
   const host = planeHost(flight);
   flight.flyer.style.transform = formatHeroTransform(getHeroBoxTransform(flight.base, rect, host));
-  flight.clip.style.borderRadius = formatHeroClipRadius(
-    flight.base,
-    rect.width,
-    rect.height,
-    radius,
-  );
-  flight.image.style.transform = formatHeroTransform(
-    getHeroCoverTransform(flight.base, rect, host),
-  );
+  flight.clip.style.borderRadius = formatHeroClipRadius(flight.base, rect.width, rect.height, radius);
+  flight.image.style.transform = formatHeroTransform(getHeroCoverTransform(flight.base, rect, host));
 }
 
-export function moveFlightToPlane(
-  flight: HeroFlight,
-  plane: HeroScrollPlane,
-  rect: HeroRect,
-  radius: number,
-) {
+export function moveFlightToPlane(flight: HeroFlight, plane: HeroScrollPlane, rect: HeroRect, radius: number) {
   flight.layer.remove();
   /* The layer is in screen space (the window's pair is the identity, so nothing counters it);
      clearing any stale origin keeps a re-plant from inheriting an earlier window's. */
@@ -388,8 +360,7 @@ export function createHeroFlight({
   /* Read before the first DOM write below: inserting the layer dirties style, and a
      `getComputedStyle` after it forced a full style recalculation inside the very task that
      launches the flight (on every open, close and retarget). */
-  const cardRadius =
-    treatmentRadius ?? (Number.parseFloat(getComputedStyle(treatment).borderRadius) || 0);
+  const cardRadius = treatmentRadius ?? (Number.parseFloat(getComputedStyle(treatment).borderRadius) || 0);
   const layer = document.createElement('div');
   layer.className = 'image-hero-flight-layer';
   layer.setAttribute('aria-hidden', 'true');

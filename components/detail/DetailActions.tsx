@@ -119,10 +119,7 @@ export default function DetailActions({
       className="@container w-full"
     >
       <div className="flex flex-col gap-3 @3xl:grid @3xl:grid-cols-[1fr_minmax(16rem,26rem)_1fr] @3xl:items-center @3xl:gap-x-4">
-        <div
-          ref={primaryRef}
-          className="grid grid-cols-2 gap-2 @3xl:flex @3xl:items-center @3xl:justify-self-start"
-        >
+        <div ref={primaryRef} className="grid grid-cols-2 gap-2 @3xl:flex @3xl:items-center @3xl:justify-self-start">
           <Button
             variant="filled"
             icon={<MdDownload />}
@@ -138,17 +135,8 @@ export default function DetailActions({
             aria-label={passive ? undefined : '收藏'}
             aria-pressed={passive ? undefined : isFaved}
             loading={faveBusy}
-            className={cn(
-              'w-full @3xl:w-auto',
-              isFaved && 'rounded-md data-pressed:rounded-sm forced-selected',
-            )}
-            icon={
-              isFaved ? (
-                <MdStar className={cn(faveFill && 'animate-reaction-fill')} />
-              ) : (
-                <MdStarBorder />
-              )
-            }
+            className={cn('w-full @3xl:w-auto', isFaved && 'rounded-md data-pressed:rounded-sm forced-selected')}
+            icon={isFaved ? <MdStar className={cn(faveFill && 'animate-reaction-fill')} /> : <MdStarBorder />}
             onClick={onFave}
           >
             <span className="grid place-items-center">
@@ -168,9 +156,7 @@ export default function DetailActions({
           </Button>
         </div>
         {center && (
-          <div className="order-last flex w-full justify-center @3xl:order-none @3xl:justify-self-center">
-            {center}
-          </div>
+          <div className="order-last flex w-full justify-center @3xl:order-none @3xl:justify-self-center">{center}</div>
         )}
         <div className="flex h-10 w-full items-center justify-evenly rounded-full bg-surface-container-highest px-1 @3xl:col-start-3 @3xl:w-[var(--detail-primary-w,14.125rem)] @3xl:min-w-fit @3xl:justify-between @3xl:justify-self-end pointer-coarse:@3xl:gap-4">
           <ActionIcon

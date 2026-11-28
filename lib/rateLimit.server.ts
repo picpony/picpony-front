@@ -54,8 +54,7 @@ export function createRateLimiter(options: RateLimit, now: () => number = Date.n
       entry = { start: at, count: 0 };
       windows.set(key, entry);
     }
-    if (entry.count >= options.limit)
-      return Math.max(1, Math.ceil((entry.start + options.windowMs - at) / 1000));
+    if (entry.count >= options.limit) return Math.max(1, Math.ceil((entry.start + options.windowMs - at) / 1000));
     entry.count += 1;
     return 0;
   };

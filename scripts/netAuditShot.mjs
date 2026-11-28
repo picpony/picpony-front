@@ -177,13 +177,10 @@ await send('Page.addScriptToEvaluateOnNewDocument', {
 const nav = await send('Page.navigate', { url: `${origin}${route}` });
 if (nav?.errorText) console.error(`navigate failed: ${nav.errorText}`);
 await sleep(5000);
-/* Printed rather than assumed, for the reason above. */ const where = await send(
-  'Runtime.evaluate',
-  {
-    expression: 'location.pathname + " | " + document.title',
-    returnByValue: true,
-  },
-);
+/* Printed rather than assumed, for the reason above. */ const where = await send('Runtime.evaluate', {
+  expression: 'location.pathname + " | " + document.title',
+  returnByValue: true,
+});
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(outPath, Buffer.from(shot.data, 'base64'));
 console.log(`${where.result?.value ?? '?'}\n${outPath}`);

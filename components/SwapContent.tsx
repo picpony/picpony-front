@@ -128,9 +128,7 @@ export default function SwapContent({
     animations.push(run);
     // The departure is shorter than the arrival. Keep its inert snapshot until the whole
     // handoff finishes so clearing the slot cannot cancel an incoming spring mid-tail.
-    const running = animations.filter(
-      (animation): animation is Animation => animation !== undefined,
-    );
+    const running = animations.filter((animation): animation is Animation => animation !== undefined);
     Promise.all(running.map((animation) => animation.finished)).then(complete, () => {});
     return () => {
       alive = false;

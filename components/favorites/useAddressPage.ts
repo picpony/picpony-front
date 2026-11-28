@@ -15,8 +15,7 @@ function entryState(): Record<string, unknown> {
   const own: Record<string, unknown> = {};
   const state = window.history.state as Record<string, unknown> | null;
   for (const [key, value] of Object.entries(state ?? {})) {
-    if (key !== '__NA' && key !== '_N' && key !== '__PRIVATE_NEXTJS_INTERNALS_TREE')
-      own[key] = value;
+    if (key !== '__NA' && key !== '_N' && key !== '__PRIVATE_NEXTJS_INTERNALS_TREE') own[key] = value;
   }
   return own;
 }
@@ -47,11 +46,7 @@ export function useAddressPage(route: string, hold: boolean): [number, (page: nu
   const urlPage = pageParam(params.get('page'));
   const [nav, setNav] = useState<PageNav>({ page: urlPage, seen: urlPage, written: urlPage });
   if (urlPage !== nav.seen) {
-    setNav(
-      urlPage === nav.written
-        ? { ...nav, seen: urlPage }
-        : { page: urlPage, seen: urlPage, written: urlPage },
-    );
+    setNav(urlPage === nav.written ? { ...nav, seen: urlPage } : { page: urlPage, seen: urlPage, written: urlPage });
   }
 
   const own = pathname === route;
@@ -70,9 +65,6 @@ export function useAddressPage(route: string, hold: boolean): [number, (page: nu
     return () => window.clearTimeout(timer);
   }, [own, hold, page, written, route]);
 
-  const setPage = useCallback(
-    (next: number) => setNav((current) => ({ ...current, page: Math.max(1, next) })),
-    [],
-  );
+  const setPage = useCallback((next: number) => setNav((current) => ({ ...current, page: Math.max(1, next) })), []);
   return [page, setPage];
 }

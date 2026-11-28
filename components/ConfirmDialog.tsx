@@ -98,27 +98,16 @@ export function useConfirm() {
       danger={tone === 'danger'}
       footer={
         <>
-          <Button
-            variant="text"
-            onClick={() => settle(false)}
-            data-autofocus={tone === 'danger' ? '' : undefined}
-          >
+          <Button variant="text" onClick={() => settle(false)} data-autofocus={tone === 'danger' ? '' : undefined}>
             {options?.cancelLabel ?? '取消'}
           </Button>
-          <Button
-            variant={tone}
-            onClick={() => settle(true)}
-            data-autofocus={tone === 'danger' ? undefined : ''}
-          >
+          <Button variant={tone} onClick={() => settle(true)} data-autofocus={tone === 'danger' ? undefined : ''}>
             {options?.confirmLabel ?? '确认'}
           </Button>
         </>
       }
     >
-      <div
-        id={messageId}
-        className="text-body-m text-on-surface-variant whitespace-pre-line wrap-anywhere"
-      >
+      <div id={messageId} className="text-body-m text-on-surface-variant whitespace-pre-line wrap-anywhere">
         {options?.message}
       </div>
     </Modal>
@@ -202,9 +191,7 @@ export function usePrompt() {
         </>
       }
     >
-      {options?.message && (
-        <p className="text-body-m text-on-surface-variant mb-4 wrap-anywhere">{options.message}</p>
-      )}
+      {options?.message && <p className="text-body-m text-on-surface-variant mb-4 wrap-anywhere">{options.message}</p>}
       {/* A one-line answer (a name, a link to copy) is a one-line field, where Enter
           confirms — a resizable textarea for a folder's name read as unfinished. Enter
           that commits an IME composition is the composition's, not the dialog's. */}

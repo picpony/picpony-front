@@ -45,8 +45,7 @@ export function saveAccountFields(token: string, fields: Record<string, unknown>
   const current = readUserInfo();
   if (!current || current.token !== token) return false;
   const cached = sessionUser.peek({ token }).data;
-  if (cached?.kind === 'ok')
-    sessionUser.write({ token }, { kind: 'ok', user: { ...cached.user, ...fields } });
+  if (cached?.kind === 'ok') sessionUser.write({ token }, { kind: 'ok', user: { ...cached.user, ...fields } });
   return updateUserInfo(token, fields);
 }
 
@@ -75,9 +74,7 @@ export function emailVerified(record: StoredUserInfo): boolean {
 }
 
 /** The address change awaiting its code, if this session began one. */
-export function pendingEmailChange(
-  record: StoredUserInfo,
-): { email: string; verification: string } | null {
+export function pendingEmailChange(record: StoredUserInfo): { email: string; verification: string } | null {
   const email = text(record[EMAIL_PENDING]);
   const verification = text(record[EMAIL_PENDING_VERIFICATION]);
   return email && verification ? { email, verification } : null;

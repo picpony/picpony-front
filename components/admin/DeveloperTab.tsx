@@ -1,14 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  MdBlock,
-  MdLockOpen,
-  MdContentCopy,
-  MdPersonAdd,
-  MdRefresh,
-  MdRemoveCircle,
-} from 'react-icons/md';
+import { MdBlock, MdLockOpen, MdContentCopy, MdPersonAdd, MdRefresh, MdRemoveCircle } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -113,9 +106,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         void rotateMutation.run(
           async () => {
             const generation = passwordQuery.peek(token).data?.generation;
-            return generation === undefined
-              ? null
-              : adminApi.adminRefreshDeveloperPassword(token, generation);
+            return generation === undefined ? null : adminApi.adminRefreshDeveloperPassword(token, generation);
           },
           () => showToast('已更新维护密码', 'success'),
           '更新失败',
@@ -174,9 +165,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
                 token,
                 (previous) =>
                   previous?.map((row) =>
-                    row.id === user.id
-                      ? { ...row, developer_access: { ...row.developer_access, ...access } }
-                      : row,
+                    row.id === user.id ? { ...row, developer_access: { ...row.developer_access, ...access } } : row,
                   ) ?? [],
               );
               users.refresh();
@@ -191,9 +180,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       header: '用户名',
       primary: true,
       width: 'minmax(0, 1.2fr)',
-      render: (user) => (
-        <span className="text-body-m-emphasized text-on-surface">{user.username}</span>
-      ),
+      render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
     },
     {
       key: 'id',
@@ -229,9 +216,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       width: 'minmax(0, 1.1fr)',
       className: 'tabular-nums',
       render: (user) => (
-        <span className="text-on-surface-variant">
-          {user.created_at ? formatDateTime(user.created_at) : '—'}
-        </span>
+        <span className="text-on-surface-variant">{user.created_at ? formatDateTime(user.created_at) : '—'}</span>
       ),
     },
     {
@@ -284,10 +269,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
             }
             loading={banMutation.pendingKeys.has(user.id)}
             onClick={() => {
-              if (
-                user.id === viewerId ||
-                ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin')
-              )
+              if (user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin'))
                 return;
               const banned = user.developer_access.banned;
               confirmThen(
@@ -297,16 +279,8 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
                   void banMutation.run(
                     () =>
                       banned
-                        ? adminApi.adminUnbanDeveloper(
-                            token,
-                            user.id,
-                            accessRevision(token, user.id),
-                          )
-                        : adminApi.adminBanDeveloper(
-                            token,
-                            user.id,
-                            accessRevision(token, user.id),
-                          ),
+                        ? adminApi.adminUnbanDeveloper(token, user.id, accessRevision(token, user.id))
+                        : adminApi.adminBanDeveloper(token, user.id, accessRevision(token, user.id)),
                     () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
                     banned ? '开发者权限解封失败' : '开发者权限封禁失败',
                     { key: user.id, onCommitted: () => usersQuery.invalidate() },
@@ -331,16 +305,12 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         isLoading={password.refreshing || users.refreshing}
       />
 
-      <section
-        aria-labelledby="admin-maintenance-password-heading"
-        className="@container space-y-4"
-      >
+      <section aria-labelledby="admin-maintenance-password-heading" className="@container space-y-4">
         <SectionHeading as="h3" id="admin-maintenance-password-heading">
           维护密码
         </SectionHeading>
         <AdminNote>
-          系统随机生成的 8 位数字，每 3 天（北京时间早上 8
-          点）自动更新一次。用户开启开发者模式时需要输入此密码。
+          系统随机生成的 8 位数字，每 3 天（北京时间早上 8 点）自动更新一次。用户开启开发者模式时需要输入此密码。
         </AdminNote>
         {password.error && !password.data ? (
           <ErrorRetry
@@ -385,9 +355,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         {password.data ? (
           <p className="text-body-s tabular-nums text-on-surface-variant">
             {[
-              password.data.updatedAt
-                ? `上次更新：${utcTime(password.data.updatedAt)}`
-                : '上次更新：首次生成',
+              password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成',
               password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null,
             ]
               .filter(Boolean)
@@ -420,13 +388,7 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
                 setTargetError(null);
               }}
             />
-            <Button
-              type="submit"
-              size="lg"
-              variant="filled"
-              icon={<MdPersonAdd />}
-              loading={enableMutation.busy}
-            >
+            <Button type="submit" size="lg" variant="filled" icon={<MdPersonAdd />} loading={enableMutation.busy}>
               开启开发者模式
             </Button>
           </div>

@@ -107,12 +107,9 @@ export function parseQuota(raw: QuotaWire): AssistantQuota {
 
 /** `GET /me/assistant/runtime` — whether a model is configured, and the site switch in `quota.enabled`. */
 export async function getAssistantConfig(token: string, signal?: AbortSignal) {
-  const raw = await call<{ model_configured: boolean; quota: QuotaWire }>(
-    'GET',
-    '/me/assistant/runtime',
-    token,
-    { signal },
-  );
+  const raw = await call<{ model_configured: boolean; quota: QuotaWire }>('GET', '/me/assistant/runtime', token, {
+    signal,
+  });
   const enabled = raw.model_configured && raw.quota.enabled;
   return {
     enabled,
@@ -182,24 +179,13 @@ export async function getAssistantQuota(token: string, signal?: AbortSignal) {
 }
 
 async function readPermission(token: string, signal?: AbortSignal) {
-  return call<{ mode: PermissionMode; revision: number }>(
-    'GET',
-    '/me/assistant/permissions',
-    token,
-    { signal },
-  );
+  return call<{ mode: PermissionMode; revision: number }>('GET', '/me/assistant/permissions', token, { signal });
 }
-export async function getAssistantPermission(
-  token: string,
-  signal?: AbortSignal,
-): Promise<PermissionMode> {
+export async function getAssistantPermission(token: string, signal?: AbortSignal): Promise<PermissionMode> {
   return (await readPermission(token, signal)).mode;
 }
 /** `PUT /me/assistant/permissions` — CAS on the grant's revision, read just before. */
-export async function setAssistantPermission(
-  token: string,
-  mode: PermissionMode,
-): Promise<PermissionMode> {
+export async function setAssistantPermission(token: string, mode: PermissionMode): Promise<PermissionMode> {
   const { revision } = await readPermission(token);
   const saved = await call<{ mode: PermissionMode }>('PUT', '/me/assistant/permissions', token, {
     json: {
@@ -231,8 +217,7 @@ export async function exchangeAssistantQuota(
   pending: { coins: number; requestId: string; revision: number; configRevision: number },
 ) {
   const { coins, requestId, revision, configRevision } = pending;
-  if (!Number.isSafeInteger(coins) || coins < 1 || coins > 100000 || !requestId)
-    throw new ApiError('invalid');
+  if (!Number.isSafeInteger(coins) || coins < 1 || coins > 100000 || !requestId) throw new ApiError('invalid');
   const data = await call<{ quota: QuotaWire }>('POST', '/me/assistant/quota-exchanges', token, {
     json: { expected_revision: revision, expected_config_revision: configRevision, coins },
     idempotencyKey: requestId,
@@ -248,17 +233,12 @@ export async function assistantChat(
   token: string,
   body: { message: string; request_id: string; session_key: string; page_context: JsonObject },
 ): Promise<{ task_id: string }> {
-  const data = await call<{ success: boolean; task_id?: string; error?: string }>(
-    'POST',
-    '/me/assistant/chat',
-    token,
-    { json: body },
-  ).catch(refusal);
+  const data = await call<{ success: boolean; task_id?: string; error?: string }>('POST', '/me/assistant/chat', token, {
+    json: body,
+  }).catch(refusal);
   if (data.success === false)
     throw new AssistantRefusal(
-      data.error === 'assistant_not_ready'
-        ? '彩彩 AI 暂未就绪，请稍后再试'
-        : '彩彩 AI 暂时无法回复',
+      data.error === 'assistant_not_ready' ? '彩彩 AI 暂未就绪，请稍后再试' : '彩彩 AI 暂时无法回复',
     );
   const taskId = uuid(data.task_id);
   if (!taskId) throw new ApiError('invalid');
@@ -355,15 +335,10 @@ export async function decideAssistantAction(
   pendingId: string,
   decision: 'confirm' | 'reject',
 ): Promise<JsonObject> {
-  return call<JsonObject>(
-    'POST',
-    `/me/assistant/action-requests/${seg(pendingId)}/confirmations`,
-    token,
-    {
-      json: { decision },
-      idempotencyKey: `${pendingId}-${decision}`,
-    },
-  ).catch(refusal);
+  return call<JsonObject>('POST', `/me/assistant/action-requests/${seg(pendingId)}/confirmations`, token, {
+    json: { decision },
+    idempotencyKey: `${pendingId}-${decision}`,
+  }).catch(refusal);
 }
 
 /** `POST /me/assistant/api-claims {task_id, call_id}` — `{request}` while issued, `{cached, result}` once answered. */
@@ -395,15 +370,10 @@ async function legacyConversation(token: string): Promise<{ id: string; revision
 export async function deleteAssistantMessage(token: string, messageId: string) {
   const conversation = await legacyConversation(token);
   if (!conversation) return;
-  await call(
-    'DELETE',
-    `/me/assistant/conversations/${seg(conversation.id)}/messages/${seg(messageId)}`,
-    token,
-    {
-      json: { expected_revision: conversation.revision },
-      idempotencyKey: randomId(),
-    },
-  );
+  await call('DELETE', `/me/assistant/conversations/${seg(conversation.id)}/messages/${seg(messageId)}`, token, {
+    json: { expected_revision: conversation.revision },
+    idempotencyKey: randomId(),
+  });
 }
 /** `DELETE /me/assistant/conversations/{id}/messages` — clears the history and cancels an active turn. */
 export async function clearAssistantHistory(token: string) {
@@ -420,10 +390,7 @@ export async function clearAssistantHistory(token: string) {
  * mirroring `mode:"read"` rows of the backend's frozen catalogue), each mapped to its `/api/v1`
  * resource. Only the catalogue's whitelisted query parameters arrive here.
  */
-const SITE_READS: Record<
-  string,
-  (token: string, query: Record<string, number>) => Promise<unknown>
-> = {
+const SITE_READS: Record<string, (token: string, query: Record<string, number>) => Promise<unknown>> = {
   get_faves: (token, query) =>
     call('GET', '/me/favorites', token, {
       query: query.folder_id ? { folder_id: query.folder_id } : {},
@@ -439,8 +406,7 @@ export async function readAssistantSiteInfo(
   query: Record<string, number> = {},
 ): Promise<unknown> {
   const read = SITE_READS[endpoint];
-  if (!READ_ENDPOINTS.has(endpoint) || !read)
-    throw new ApiError('envelope', { serverMessage: '此读取操作不受支持' });
+  if (!READ_ENDPOINTS.has(endpoint) || !read) throw new ApiError('envelope', { serverMessage: '此读取操作不受支持' });
   return read(token, query);
 }
 

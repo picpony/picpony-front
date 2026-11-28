@@ -119,12 +119,10 @@ export const MAX_HISTORY = 40;
 export const ACTIVE_STATES: readonly string[] = ['queued', 'running', 'waiting_confirmation'];
 export const obj = (value: unknown): JsonObject =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonObject) : {};
-export const str = (value: unknown, max = MAX_REPLY): string =>
-  typeof value === 'string' ? value.slice(0, max) : '';
+export const str = (value: unknown, max = MAX_REPLY): string => (typeof value === 'string' ? value.slice(0, max) : '');
 /** A business id the model or the user supplied (folder, image, user) — still checked. */
 export const positiveId = (value: unknown): number => {
-  const n =
-    typeof value === 'number' || (typeof value === 'string' && value.trim()) ? Number(value) : NaN;
+  const n = typeof value === 'number' || (typeof value === 'string' && value.trim()) ? Number(value) : NaN;
   return Number.isSafeInteger(n) && n > 0 ? n : 0;
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -198,8 +196,7 @@ export function redact(value: unknown, depth = 0): unknown {
         )
         .map(([k, v]) => [k, redact(v, depth + 1)]),
     );
-  if (typeof value === 'string')
-    return /^(data:|blob:)/i.test(value) ? '[文件内容未提供]' : value.slice(0, 800);
+  if (typeof value === 'string') return /^(data:|blob:)/i.test(value) ? '[文件内容未提供]' : value.slice(0, 800);
   return value;
 }
 export function receiptData(value: unknown): JsonObject {

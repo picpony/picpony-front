@@ -70,12 +70,7 @@ export default function Radio({
     >
       {/* `touch-target` on the dial when bare; with a label the label itself holds the
           coarse-pointer 48dp floor so wrapped rows never overlap hit boxes. */}
-      <span
-        className={cn(
-          'relative flex h-5 w-5 shrink-0 items-center justify-center',
-          !label && 'touch-target',
-        )}
-      >
+      <span className={cn('relative flex h-5 w-5 shrink-0 items-center justify-center', !label && 'touch-target')}>
         <input
           ref={inputRef}
           type="radio"
@@ -114,9 +109,7 @@ export default function Radio({
             'relative h-5 w-5 rounded-full border-2 spring-default-effects transition-[border-color,box-shadow] pointer-events-none',
             /* The outline half comes back under forced colors, where the ring is not painted. */
             'peer-focus-visible:ring-2 peer-focus-visible:focus-ring peer-focus-visible:outline-hidden forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight]',
-            checked
-              ? 'border-primary-ink forced-colors:border-[color:Highlight]'
-              : 'border-on-surface-variant',
+            checked ? 'border-primary-ink forced-colors:border-[color:Highlight]' : 'border-on-surface-variant',
           )}
         />
         {/* The dot is 12dp (`RadioButtonDotSize`).
@@ -146,11 +139,7 @@ export default function Radio({
         <span
           className={cn(
             'min-w-0 flex-1 text-label-l',
-            tone === 'error'
-              ? 'text-error'
-              : tone === 'warning'
-                ? 'text-warning'
-                : 'text-on-surface',
+            tone === 'error' ? 'text-error' : tone === 'warning' ? 'text-warning' : 'text-on-surface',
           )}
         >
           {label}

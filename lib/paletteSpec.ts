@@ -40,8 +40,7 @@ export type PaletteHues = 'multi' | 'mono';
 
 export const PALETTE_HUES: readonly PaletteHues[] = ['multi', 'mono'];
 
-export const isPaletteHues = (value: unknown): value is PaletteHues =>
-  value === 'multi' || value === 'mono';
+export const isPaletteHues = (value: unknown): value is PaletteHues => value === 'multi' || value === 'mono';
 
 /** The `<html>` attribute 单色 is keyed on, present only for `mono`. */
 export const HUES_ATTRIBUTE = 'data-palette-hues';

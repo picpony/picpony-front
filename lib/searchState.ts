@@ -65,11 +65,7 @@ export function queryHasRanking(query: string | null | undefined): boolean {
  * `fallback` (itself never `_score`). A URL carrying `sort=_score` for a plain tag query then
  * shows and runs the default order, rather than 相关性 that means 最新.
  */
-export function effectiveSearchSort(
-  value: string | null | undefined,
-  fallback: string,
-  query: string,
-): string {
+export function effectiveSearchSort(value: string | null | undefined, fallback: string, query: string): string {
   const safeFallback = defaultSearchSort(fallback);
   const sort = searchSort(value, safeFallback);
   return sort === '_score' && !queryHasRanking(query) ? safeFallback : sort;
@@ -182,8 +178,7 @@ export function searchHref(
  */
 export function legacySharedSearchHref(hash: string): string | null {
   const fragment = hash.replace(/^#/, '');
-  if (!fragment.startsWith('mode=shared_search') && !fragment.startsWith('mode=shared_tag_group'))
-    return null;
+  if (!fragment.startsWith('mode=shared_search') && !fragment.startsWith('mode=shared_tag_group')) return null;
   const params = new URLSearchParams(fragment);
   const query = (params.get('q') ?? '').trim();
   if (!query || query === '*') return '/search';

@@ -16,11 +16,11 @@ Protocol and transport rules for the Rust backend at [api.picpony.top](https://a
 
 [lib/api/http.ts](../lib/api/http.ts) owns transport:
 
-| API                          | Use                                                                        |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `api()`                      | Decoded responses                                                          |
-| `apiRequest()` + `readApi()` | A stream, header or other access to the `Response`                         |
-| `ApiError`                   | HTTP status and backend code; `network` / `timeout` for transport failures |
+| API | Use |
+| --- | --- |
+| `api()` | Decoded responses |
+| `apiRequest()` + `readApi()` | A stream, header or other access to the `Response` |
+| `ApiError` | HTTP status and backend code; `network` / `timeout` for transport failures |
 
 A 404 maps to `notFound`; `notFoundStatuses` adds endpoint-specific cases. Preserve the backend message as `serverMessage`; user-facing errors use [lib/api/errors.ts](../lib/api/errors.ts).
 

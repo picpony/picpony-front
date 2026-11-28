@@ -344,16 +344,13 @@ export class HeroPullSurface {
       this.write(this.latest);
     });
     this.observer.observe(this.nodes.overlay, { childList: true, subtree: true });
-    this.options
-      .mirrors?.()
-      .forEach((mirror) => this.observer?.observe(mirror, { childList: true, subtree: true }));
+    this.options.mirrors?.().forEach((mirror) => this.observer?.observe(mirror, { childList: true, subtree: true }));
   }
 
   private refreshTargets() {
     const { overlay, floatingBack } = this.nodes;
     const remember = (element: HTMLElement, property: PullStyle['property']) => {
-      if (this.styles.some((style) => style.element === element && style.property === property))
-        return;
+      if (this.styles.some((style) => style.element === element && style.property === property)) return;
       this.styles.push({ element, property, original: element.style[property], written: '' });
     };
     const surfaces = [overlay, ...(this.options.mirrors?.() ?? [])];

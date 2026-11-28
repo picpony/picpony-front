@@ -46,9 +46,6 @@ export const readRoutePolicyOnce = cache(async (): Promise<InlineRoutePolicy> =>
   return readRoutePolicy();
 });
 
-export function ssrImageLine(
-  policy: { image: string } | null,
-  cookieLine: string | undefined,
-): ImageLine | null {
+export function ssrImageLine(policy: { image: string } | null, cookieLine: string | undefined): ImageLine | null {
   return asLine(policy?.image) ?? asLine(cookieLine);
 }

@@ -15,13 +15,7 @@ import ErrorRetry from '@/components/ErrorRetry';
  * whose entire content is the status block. A list's empty state must not — it sits
  * under a page header, and filling would push the page past the viewport.
  */
-export default function Error({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     // The digest is the only handle on the server-side stack in production.
     console.error('Route error:', error);
@@ -33,9 +27,7 @@ export default function Error({
       title="页面加载失败"
       message={
         error.digest ? (
-          <span className="text-label-s text-on-surface-variant block font-mono">
-            错误编号：{error.digest}
-          </span>
+          <span className="text-label-s text-on-surface-variant block font-mono">错误编号：{error.digest}</span>
         ) : undefined
       }
       onRetry={reset}

@@ -23,13 +23,7 @@ import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
 import { defineAdminQuery, useAdminQuery, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
-import {
-  shopForm,
-  shopPayload,
-  type ShopFormErrors,
-  type ShopFormValues,
-  type ShopItemRow,
-} from './shop';
+import { shopForm, shopPayload, type ShopFormErrors, type ShopFormValues, type ShopItemRow } from './shop';
 import { figureText } from './figures';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
@@ -60,14 +54,7 @@ function ItemThumb({ url }: { url?: string | null }) {
   return (
     <span className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-sm bg-surface-container-highest text-on-surface-variant">
       {src ? (
-        <FadeInImage
-          src={src}
-          unoptimized={unoptimized}
-          alt=""
-          fill
-          sizes="56px"
-          className="object-cover"
-        />
+        <FadeInImage src={src} unoptimized={unoptimized} alt="" fill sizes="56px" className="object-cover" />
       ) : (
         <MdCardGiftcard size={ICON.standard} aria-hidden="true" />
       )}
@@ -123,9 +110,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
       () => adminApi.adminSaveShopItem(token, payload, { id: item.id, revision: item.revision }),
       () => {
         showToast(`已保存商品「${String(payload.name)}」`, 'success');
-        setEditing((current) =>
-          current?.id === item.id ? { id: item.id, closing: true } : current,
-        );
+        setEditing((current) => (current?.id === item.id ? { id: item.id, closing: true } : current));
       },
       '保存失败',
       { key: item.id, onCommitted: committed },
@@ -144,10 +129,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
             key: item.id,
             onCommitted: () => {
               setEditing((current) => (current?.id === item.id ? null : current));
-              itemsQuery.write(
-                token,
-                (previous) => previous?.filter((row) => row.id !== item.id) ?? [],
-              );
+              itemsQuery.write(token, (previous) => previous?.filter((row) => row.id !== item.id) ?? []);
               committed();
             },
           },
@@ -189,9 +171,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
           <span className="min-w-0">
             <span className="block text-body-m-emphasized text-on-surface">{item.name}</span>
             {item.description && (
-              <span className="line-clamp-2 text-body-s text-on-surface-variant">
-                {item.description}
-              </span>
+              <span className="line-clamp-2 text-body-s text-on-surface-variant">{item.description}</span>
             )}
           </span>
         </span>
@@ -237,8 +217,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
       actions: true,
       render: (item) => {
         const open = editing?.id === item.id && !editing.closing;
-        const busy =
-          saveMutation.pendingKeys.has(item.id) || deleteMutation.pendingKeys.has(item.id);
+        const busy = saveMutation.pendingKeys.has(item.id) || deleteMutation.pendingKeys.has(item.id);
         return (
           <>
             <IconButton
@@ -277,9 +256,7 @@ export default function ShopTab({ token }: AdminPanelProps) {
         id={shopEditorId(item.id)}
         label={`编辑商品 ${current.name}`}
         isClosing={editing.closing}
-        onExitComplete={() =>
-          setEditing((state) => (state?.id === item.id && state.closing ? null : state))
-        }
+        onExitComplete={() => setEditing((state) => (state?.id === item.id && state.closing ? null : state))}
         onEscape={saveMutation.pendingKeys.has(item.id) ? undefined : closeEditor}
       >
         <ShopItemForm
@@ -398,9 +375,7 @@ function ShopItemForm({
   const prefix = item ? `shop-${item.id}` : 'shop-new';
 
   const initial = shopForm(item);
-  const dirty = (Object.keys(initial) as (keyof ShopFormValues)[]).some(
-    (key) => initial[key] !== values[key],
-  );
+  const dirty = (Object.keys(initial) as (keyof ShopFormValues)[]).some((key) => initial[key] !== values[key]);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

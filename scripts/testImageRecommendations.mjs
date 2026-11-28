@@ -5,8 +5,7 @@ import { requireTypeStripping } from './tsResolve.mjs';
 requireTypeStripping('testImageRecommendations');
 const { recommendImageColors } = await import('../lib/imageRecommendations.ts');
 const { quantizeCelebi } = await import('../lib/quantize.ts');
-const { hctOf, norm180, deriveCustomTheme, deriveTheme, contrast } =
-  await import('../lib/paletteRule.ts');
+const { hctOf, norm180, deriveCustomTheme, deriveTheme, contrast } = await import('../lib/paletteRule.ts');
 const { parseCustomSpec } = await import('../lib/paletteSpec.ts');
 
 function image(rows) {
@@ -161,9 +160,7 @@ test('recommendations install verbatim in both hue modes; legacy and manual seed
     for (const hues of [theme, theme.mono])
       for (const mode of ['light', 'dark']) {
         assert.ok(contrast(hues[mode]['on-primary'], hues[mode].primary) >= 4.5);
-        assert.ok(
-          contrast(hues[mode]['on-secondary-container'], hues[mode]['secondary-container']) >= 4.5,
-        );
+        assert.ok(contrast(hues[mode]['on-secondary-container'], hues[mode]['secondary-container']) >= 4.5);
       }
   }
 });

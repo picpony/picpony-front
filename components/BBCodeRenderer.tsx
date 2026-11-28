@@ -90,8 +90,7 @@ function settleImage(img: HTMLImageElement, failed: boolean) {
  */
 export default function BBCodeRenderer({ content, className }: BBCodeRendererProps) {
   const html = useMemo(
-    () =>
-      bbcodeToSafeHtml(content, { image: richImage, zoomable: true, isInternal: isInternalHref }),
+    () => bbcodeToSafeHtml(content, { image: richImage, zoomable: true, isInternal: isInternalHref }),
     [content],
   );
   const ref = useRef<HTMLDivElement>(null);
@@ -107,12 +106,10 @@ export default function BBCodeRenderer({ content, className }: BBCodeRendererPro
     const root = ref.current;
     if (!root) return;
     const onLoad = (event: Event) => {
-      if (event.target instanceof HTMLImageElement && root.contains(event.target))
-        settleImage(event.target, false);
+      if (event.target instanceof HTMLImageElement && root.contains(event.target)) settleImage(event.target, false);
     };
     const onError = (event: Event) => {
-      if (event.target instanceof HTMLImageElement && root.contains(event.target))
-        settleImage(event.target, true);
+      if (event.target instanceof HTMLImageElement && root.contains(event.target)) settleImage(event.target, true);
     };
     root.addEventListener('load', onLoad, true);
     root.addEventListener('error', onError, true);
@@ -158,12 +155,7 @@ export default function BBCodeRenderer({ content, className }: BBCodeRendererPro
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {viewer && (
-        <PicLightbox
-          open={viewer.open}
-          index={viewer.index}
-          slides={viewer.slides}
-          close={() => setViewer(null)}
-        />
+        <PicLightbox open={viewer.open} index={viewer.index} slides={viewer.slides} close={() => setViewer(null)} />
       )}
     </>
   );

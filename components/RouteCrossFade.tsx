@@ -1,11 +1,7 @@
 'use client';
 
 import { Component, createRef } from 'react';
-import {
-  cancelRouteCrossFade,
-  captureRouteSnapshot,
-  playRouteCrossFade,
-} from '@/lib/routeCrossFade';
+import { cancelRouteCrossFade, captureRouteSnapshot, playRouteCrossFade } from '@/lib/routeCrossFade';
 import type { RouteSnapshot } from '@/lib/pageSnapshot';
 
 interface Props {

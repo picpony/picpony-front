@@ -19,9 +19,7 @@ export function bindAssistantSlideshow(next: Handler): () => void {
     if (handler === next) handler = null;
   };
 }
-export function requestAssistantSlideshow(
-  request: AssistantSlideshowRequest,
-): Promise<AssistantSlideshowReceipt> {
+export function requestAssistantSlideshow(request: AssistantSlideshowRequest): Promise<AssistantSlideshowReceipt> {
   if (!handler) return Promise.reject(new Error('收藏夹放映暂不可用，请稍后再试'));
   return handler(request);
 }

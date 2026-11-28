@@ -90,12 +90,7 @@ export function TabPanes<T extends string = string>({
   const panes = (
     <>
       {/* No `key` on this element, ever — see the note above. */}
-      <div
-        ref={panelRef}
-        data-tab-panel
-        data-tab-lean={lean ? '' : undefined}
-        className={cn(className)}
-      >
+      <div ref={panelRef} data-tab-panel data-tab-lean={lean ? '' : undefined} className={cn(className)}>
         <ActiveTabContext.Provider value={value}>{children}</ActiveTabContext.Provider>
       </div>
       {/* A **sibling after** the panel, not a child of it. React attaches a
@@ -188,10 +183,7 @@ export function TabPane({
       /* A tab stop needs the app's one focus ring, or Tab from the tab row drew the
          engine's black outline round the whole section. The section step's corner,
          since this is the box the ring follows. */
-      className={cn(
-        'rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
-        className,
-      )}
+      className={cn('rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-ring', className)}
     >
       <InTabPaneContext.Provider value>{children}</InTabPaneContext.Provider>
     </div>

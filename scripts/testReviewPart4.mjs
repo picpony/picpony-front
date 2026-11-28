@@ -52,10 +52,7 @@ const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'u
 
 const OPERATOR = /^\s+(?:AND|OR|&&|\|\|)\s+/;
 const STOP = (s, i) =>
-  s[i] === ',' ||
-  OPERATOR.test(s.slice(i)) ||
-  /^\s*\)/.test(s.slice(i)) ||
-  /^\s*\^[-+]?\d/.test(s.slice(i));
+  s[i] === ',' || OPERATOR.test(s.slice(i)) || /^\s*\)/.test(s.slice(i)) || /^\s*\^[-+]?\d/.test(s.slice(i));
 
 /** `dirty_text` from `i`: the end of the term's text, or -1 when it matches nothing. */
 function dirtyText(s, i) {
@@ -160,8 +157,7 @@ function lex(s) {
 function groupHolds(scoped) {
   const query = `(${scoped}), -explicit`;
   const tokens = lex(query);
-  if (!tokens)
-    return true; /* A query Philomena cannot lex is a 400, not a way around the filters. */
+  if (!tokens) return true; /* A query Philomena cannot lex is a 400, not a way around the filters. */
   let depth = 0;
   for (const token of tokens) {
     if (token.type === 'lparen') depth += 1;
@@ -222,24 +218,7 @@ test('P4-F1: quoted terms where Philomena reads them stay as typed', () => {
 });
 
 test('P4-F1: fuzzed text never ends the group early', () => {
-  const pieces = [
-    'a',
-    'b',
-    ' ',
-    '(',
-    ')',
-    '"',
-    '\\',
-    ',',
-    '-',
-    '!',
-    ' OR ',
-    ' AND ',
-    ' || ',
-    'NOT ',
-    '^2',
-    'x:y',
-  ];
+  const pieces = ['a', 'b', ' ', '(', ')', '"', '\\', ',', '-', '!', ' OR ', ' AND ', ' || ', 'NOT ', '^2', 'x:y'];
   let seed = 4;
   const random = () => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -281,11 +260,7 @@ test('P4-F2: the description is measured in UTF-8 bytes, on the form and on the 
     '20,000 Chinese characters do not',
   );
   assert.equal(limits.uploadDescriptionProblem('a'.repeat(50_000)), null);
-  assert.equal(
-    limits.uploadDescriptionProblem(` ${'a'.repeat(50_000)} \n`),
-    null,
-    'measured trimmed, as sent',
-  );
+  assert.equal(limits.uploadDescriptionProblem(` ${'a'.repeat(50_000)} \n`), null, 'measured trimmed, as sent');
 
   const previous = globalThis.fetch;
   const forwarded = [];
@@ -328,11 +303,7 @@ test('P4-F2: the form and the hop agree on a source address and on the tag list'
   assert.equal(limits.uploadTagInput(null, ['pony']), 'pony');
 
   const page = source('app/upload/page.tsx');
-  assert.match(
-    page,
-    /uploadSourceUrl\(text\)/,
-    "the form checks a source with the hop's own function",
-  );
+  assert.match(page, /uploadSourceUrl\(text\)/, "the form checks a source with the hop's own function");
   assert.match(page, /uploadDescriptionProblem\(draft\.description\)/);
   assert.match(page, /UPLOAD_MAX_TAG_INPUT/);
   assert.doesNotMatch(page, /Array\.from\(draft\.description\)\.length/, 'no character count left');
@@ -349,15 +320,8 @@ test('P4-F3: a reply that lands keeps the words typed and the target picked whil
   const composer = source('components/forum/ReplyComposer.tsx');
   assert.match(composer, /const sent = content;/);
   assert.match(composer, /setContent\(\(current\) => \(current === sent \? '' : current\)\)/);
-  assert.match(
-    composer,
-    /latestReplyTo\.current\?\.commentId === target\.commentId\) onCancelReply\(\)/,
-  );
-  assert.doesNotMatch(
-    composer,
-    /setContent\(''\);\n\s*onCancelReply\(\);/,
-    'no unconditional clear left',
-  );
+  assert.match(composer, /latestReplyTo\.current\?\.commentId === target\.commentId\) onCancelReply\(\)/);
+  assert.doesNotMatch(composer, /setContent\(''\);\n\s*onCancelReply\(\);/, 'no unconditional clear left');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -393,21 +357,11 @@ test('P4-F4: a large PNG is redrawn as a PNG when that fits, and only flattened 
   });
   const jpeg = await encodeWithinLimit(heavy.encoder, 'image/webp');
   assert.equal(jpeg.type, 'image/jpeg');
-  assert.deepEqual(heavy.calls, [
-    'image/png@1',
-    'flatten',
-    'image/jpeg@0.9',
-    'image/jpeg@0.75',
-    'image/jpeg@0.6',
-  ]);
+  assert.deepEqual(heavy.calls, ['image/png@1', 'flatten', 'image/jpeg@0.9', 'image/jpeg@0.75', 'image/jpeg@0.6']);
 
   const photo = fakeEncoder({ 'image/jpeg': () => FORUM_IMAGE_MAX_BYTES * 2 });
   const last = await encodeWithinLimit(photo.encoder, 'image/jpeg');
-  assert.equal(
-    last.type,
-    'image/jpeg',
-    'the last step is taken as it is; the caller reports the size',
-  );
+  assert.equal(last.type, 'image/jpeg', 'the last step is taken as it is; the caller reports the size');
   assert.equal(photo.calls[0], 'flatten', 'a photo never tries PNG');
   assert.equal(photo.calls.at(-1), 'image/jpeg@0.3', "the original front end's quality floor");
 });
@@ -497,10 +451,7 @@ test("P4-F7: a share card's thumbnail is drawn only from Derpibooru's and PicPon
   ]) {
     assert.equal(shareThumbSrc(hostile), '', hostile);
   }
-  assert.match(
-    source('app/messages/ShareCard.tsx'),
-    /const thumb = shareThumbSrc\(target\.thumbUrl\)/,
-  );
+  assert.match(source('app/messages/ShareCard.tsx'), /const thumb = shareThumbSrc\(target\.thumbUrl\)/);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -510,8 +461,5 @@ test("P4-F7: a share card's thumbnail is drawn only from Derpibooru's and PicPon
 test('P4-F8: the switch loop asks for the list again once its writes have landed', () => {
   const page = source('app/block-groups/page.tsx');
   assert.match(page, /sentAny = true;/);
-  assert.match(
-    page,
-    /if \(sentAny && readToken\(\) === token\) blockGroups\.expire\(\{ token \}\);/,
-  );
+  assert.match(page, /if \(sentAny && readToken\(\) === token\) blockGroups\.expire\(\{ token \}\);/);
 });

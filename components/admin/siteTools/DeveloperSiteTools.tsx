@@ -43,23 +43,18 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
     state: Map<number, boolean>;
   }>({ token, state: new Map() });
   /* An override holds for the list it was made against; a new answer of the list replaces it. */
-  const overrides =
-    known.token === token && known.list === bans.data ? known.state : new Map<number, boolean>();
+  const overrides = known.token === token && known.list === bans.data ? known.state : new Map<number, boolean>();
   const bannedOf = (userId: number): boolean | undefined =>
     overrides.get(userId) ?? (bans.data ? bans.data.has(userId) : undefined);
   const remember = (userId: number, banned: boolean) =>
     setKnown((current) => ({
       token,
       list: bans.data,
-      state: new Map(
-        current.token === token && current.list === bans.data ? current.state : [],
-      ).set(userId, banned),
+      state: new Map(current.token === token && current.list === bans.data ? current.state : []).set(userId, banned),
     }));
   const [search, setSearch] = useState('');
   const paged = usePagedRows(
-    (users.data ?? []).filter((r) =>
-      `${r.id} ${r.username}`.toLowerCase().includes(search.trim().toLowerCase()),
-    ),
+    (users.data ?? []).filter((r) => `${r.id} ${r.username}`.toLowerCase().includes(search.trim().toLowerCase())),
     search,
   );
   const { confirmThen, confirmDialog } = useConfirm();
@@ -135,8 +130,7 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
                 header: '操作',
                 actions: true,
                 render: (r) => {
-                  const locked =
-                    r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');
+                  const locked = r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');
                   const banned = bannedOf(r.id);
                   return (
                     <>
@@ -185,11 +179,7 @@ function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
               },
             ]}
           />
-          <AdminPager
-            page={paged.page}
-            totalPages={paged.totalPages}
-            onPageChange={paged.setPage}
-          />
+          <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
         </AdminListAnchor>
       </section>
       {confirmDialog}

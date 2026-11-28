@@ -84,8 +84,7 @@ export function mediaWithoutPreview(text: string): string[] {
 export function storedMediaText(html: string): string {
   if (!html.includes('blob:')) return html;
   let result = html;
-  for (const [url, path] of pathByPreview)
-    if (result.includes(url)) result = result.split(url).join(path);
+  for (const [url, path] of pathByPreview) if (result.includes(url)) result = result.split(url).join(path);
   return result;
 }
 
@@ -104,10 +103,7 @@ export function previewMediaText(html: string): string {
  * the path changes or the component leaves. `undefined` while it is read; `null` when the path is
  * not backend media, there is no token, or the read failed (the caller falls back to the path).
  */
-export function useMediaPreview(
-  path: string | null,
-  token: string | null,
-): string | null | undefined {
+export function useMediaPreview(path: string | null, token: string | null): string | null | undefined {
   const asset = path ? mediaAsset(path) : null;
   const wanted = asset && token ? `${token}\n${asset}` : null;
   const [state, setState] = useState<{ key: string; url: string | null } | null>(null);

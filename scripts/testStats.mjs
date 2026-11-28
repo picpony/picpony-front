@@ -68,10 +68,7 @@ const metricFixture = {
 function entries(section, view, data = metricFixture) {
   const definition = metrics.STATS_SECTIONS.find((item) => item.value === `stats-${section}`);
   const model = metrics.chartMetrics(definition, data, view);
-  return [
-    model.overviewLabel,
-    Object.fromEntries(model.series.map(({ key, summary }) => [key, summary])),
-  ];
+  return [model.overviewLabel, Object.fromEntries(model.series.map(({ key, summary }) => [key, summary]))];
 }
 
 test('statistics growth overviews follow the selected buckets rather than the all-time totals', () => {
@@ -79,14 +76,8 @@ test('statistics growth overviews follow the selected buckets rather than the al
   assert.deepEqual(entries('users', 'added'), ['区间新增', { new_users: 19 }]);
   assert.deepEqual(entries('tags', 'total'), ['区间末累计', { total_chinese_tags: 51 }]);
   assert.deepEqual(entries('tags', 'added'), ['区间新增', { new_chinese_tags: 2 }]);
-  assert.deepEqual(entries('users', 'total', { ...metricFixture, series: [] }), [
-    '区间末累计',
-    { total_users: null },
-  ]);
-  assert.deepEqual(entries('users', 'added', { ...metricFixture, series: [] }), [
-    '区间新增',
-    { new_users: null },
-  ]);
+  assert.deepEqual(entries('users', 'total', { ...metricFixture, series: [] }), ['区间末累计', { total_users: null }]);
+  assert.deepEqual(entries('users', 'added', { ...metricFixture, series: [] }), ['区间新增', { new_users: null }]);
 });
 
 test('traffic keeps server window counts and community metrics stay separate in both views', () => {
@@ -160,16 +151,13 @@ function fixture() {
     '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   };
   const exports = {};
-  const source = ts.transpileModule(
-    readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   vm.runInNewContext(source, {
     exports,
     require: (name) => {
@@ -366,8 +354,7 @@ function hookRuntime() {
       }
     },
     unmount() {
-      for (const effect of slots.filter((slot) => typeof slot?.setup === 'function'))
-        effect.cleanup?.();
+      for (const effect of slots.filter((slot) => typeof slot?.setup === 'function')) effect.cleanup?.();
     },
   };
 }
@@ -430,16 +417,13 @@ function seriesFixture({
     },
   };
   const exports = {};
-  const source = ts.transpileModule(
-    readFileSync(path.join(root, 'components/StatChart.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/StatChart.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   // Test the private paint component without adding a production export or copying its logic.
   vm.runInNewContext(source + '\nexports.StatSeriesPaint = StatSeriesPaint;', {
     exports,
@@ -472,8 +456,7 @@ function seriesFixture({
   };
 }
 
-const animatedProperties = (run) =>
-  [...new Set(run.frames.flatMap((frame) => Object.keys(frame)))].sort();
+const animatedProperties = (run) => [...new Set(run.frames.flatMap((frame) => Object.keys(frame)))].sort();
 
 function rangeFixture() {
   const hooks = hookRuntime();
@@ -512,16 +495,13 @@ function rangeFixture() {
     },
   };
   const exports = {};
-  const source = ts.transpileModule(
-    readFileSync(path.join(root, 'components/RangeSlider.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/RangeSlider.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   const document = { activeElement: null };
   vm.runInNewContext(source, {
     exports,
@@ -574,11 +554,7 @@ test('native keyboard/AT commits survive a synchronous controlled draft echo and
     control.inputs()[handle].props.onChange({ currentTarget: { value: String(value) } });
   change(0, 21);
   assert.deepEqual(control.drafts, [{ start: 21, end: 40 }]);
-  assert.deepEqual(
-    control.commits,
-    [{ start: 21, end: 40 }],
-    'a parent flush must not swallow the semantic commit',
-  );
+  assert.deepEqual(control.commits, [{ start: 21, end: 40 }], 'a parent flush must not swallow the semantic commit');
   change(0, 21);
   control.inputs()[0].props.onBlur();
   assert.equal(control.drafts.length, 1);
@@ -613,28 +589,16 @@ test('cold stats entrance uses its own category, and resize/Strict replay do not
   assert.equal(chart.runs[0].options.delay, 0);
   chart.render({ width: 310 });
   assert.equal(chart.runs.length, 1);
-  assert.equal(
-    chart.runs[0].cancelled,
-    false,
-    'percentage clips/opacity do not cancel for a parent measurement',
-  );
+  assert.equal(chart.runs[0].cancelled, false, 'percentage clips/opacity do not cancel for a parent measurement');
   chart.replay();
   assert.equal(chart.runs[0].cancelled, true);
-  assert.equal(
-    chart.runs.length,
-    2,
-    'Strict replay must rebuild the unfinished entrance before paint',
-  );
+  assert.equal(chart.runs.length, 2, 'Strict replay must rebuild the unfinished entrance before paint');
   assert.equal(chart.runs[1].cancelled, false);
   chart.runs[1].finish();
   chart.replay();
   assert.equal(chart.runs.length, 2, 'a completed event must not replay');
   chart.render({ dataKey: 'daily:2,2' });
-  assert.equal(
-    chart.runs.length,
-    2,
-    'custom feedback off must not disable or reuse entrance motion',
-  );
+  assert.equal(chart.runs.length, 2, 'custom feedback off must not disable or reuse entrance motion');
   chart.unmount();
 });
 
@@ -652,11 +616,7 @@ test('off, inactive, inert, route-owned and disabled entrances stay static but r
     assert.equal(chart.runs.length, 0, 'activation may not replay a consumed entrance');
     if (!options.inert) {
       chart.render({ dataKey: 'daily:1,1' });
-      assert.equal(
-        chart.runs.length,
-        1,
-        'real data/view updates belong to feedback even with entrances off',
-      );
+      assert.equal(chart.runs.length, 1, 'real data/view updates belong to feedback even with entrances off');
       assert.deepEqual(chart.timings[0], { role: 'defaultEffects', category: 'feedback' });
     }
     chart.unmount();
@@ -708,16 +668,13 @@ function swapEffectsFixture({ tier = 'standard', active = true } = {}) {
     },
   };
   const exports = {};
-  const source = ts.transpileModule(
-    readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   vm.runInNewContext(source, {
     exports,
     queueMicrotask,
@@ -730,8 +687,7 @@ function swapEffectsFixture({ tier = 'standard', active = true } = {}) {
   const render = (updates = {}) => {
     Object.assign(props, updates);
     return hooks.render(exports.default, props, (tree) => {
-      for (const child of tree.props.children.filter(Boolean))
-        child.props.ref.current = { animate };
+      for (const child of tree.props.children.filter(Boolean)) child.props.ref.current = { animate };
     });
   };
   render();
@@ -750,10 +706,7 @@ test('a plot swap waits for both incoming tracks before clearing its inert depar
   assert.equal(swap.runs.length, 3);
   swap.runs[2].finish(); // Short exit ends first; incoming spatial tail still belongs to this run.
   await microtasks();
-  assert.ok(
-    departing(swap.render()),
-    'the exit alone must not clear the snapshot/cancel incoming tracks',
-  );
+  assert.ok(departing(swap.render()), 'the exit alone must not clear the snapshot/cancel incoming tracks');
   assert.equal(swap.runs[0].cancelled, false);
   assert.equal(swap.runs[1].cancelled, false);
   swap.runs[0].finish();
@@ -801,21 +754,13 @@ test('rapid series updates cancel obsolete effects; tab/pref changes settle with
   assert.equal(chart.runs.length, 2);
   chart.modes.feedback = 'reduced';
   chart.render();
-  assert.equal(
-    chart.runs.length,
-    2,
-    'tier changes finish existing data rather than inventing an entrance',
-  );
+  assert.equal(chart.runs.length, 2, 'tier changes finish existing data rather than inventing an entrance');
   chart.render({ dataKey: 'daily:2,2' });
   assert.deepEqual(animatedProperties(chart.runs[2]), ['opacity']);
   chart.modes.entrance = 'off';
   chart.scales.entrance = 1.4;
   chart.render();
-  assert.equal(
-    chart.runs[2].cancelled,
-    false,
-    'unrelated entrance preferences cannot cancel active feedback',
-  );
+  assert.equal(chart.runs[2].cancelled, false, 'unrelated entrance preferences cannot cancel active feedback');
   assert.equal(chart.runs.length, 3);
   chart.scales.feedback = 1.4;
   chart.render();
@@ -831,16 +776,13 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   const hooks = hookRuntime();
   const jsx = (type, props) => ({ type, props });
   const exports = {};
-  const source = ts.transpileModule(
-    readFileSync(path.join(root, 'components/TabPanes.tsx'), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(path.join(root, 'components/TabPanes.tsx'), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
   vm.runInNewContext(source, {
     exports,
     require: (name) => {
@@ -876,12 +818,9 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   assert.ok(follower.props.className.split(/\s+/).includes('bg-surface'), follower.props.className);
 
   const tabScroll = {};
-  const scrollSource = ts.transpileModule(
-    readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'),
-    {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    },
-  ).outputText;
+  const scrollSource = ts.transpileModule(readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
   vm.runInNewContext(scrollSource, {
     exports: tabScroll,
     require: (name) => {
@@ -892,9 +831,7 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   const scroller = { scrollTop: 0, getBoundingClientRect: () => ({ top: 0 }) };
   const panel = (hasWindow, hasFollower) => ({
     closest: (selector) => (hasWindow && selector === '[data-tab-window]' ? {} : null),
-    nextElementSibling: hasFollower
-      ? { hasAttribute: (attr) => attr === 'data-tab-follower' }
-      : null,
+    nextElementSibling: hasFollower ? { hasAttribute: (attr) => attr === 'data-tab-follower' } : null,
     getBoundingClientRect: () => ({ top: 24 }),
   });
   assert.equal(tabScroll.tabMayRestore(panel(false, false), scroller), true);

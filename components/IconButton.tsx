@@ -95,8 +95,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
   /* `forced-boundary` wherever there is a container to lose: forced colors flattens it
      to the canvas (the outlined variant's border survives on its own). */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
-  tonal:
-    'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
+  tonal: 'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
   /* A leading action on a plain page surface keeps its distance until it is reached for. At rest
      it wears the neutral container `Button variant="surface"` wears — one material for a neutral
      surface control across both primitives, round because a circle is what the page's own
@@ -126,8 +125,7 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      a finger nothing hovers, and a page of rows was a column of red bins; a removal that 撤销
      takes back is a trailing action, not a warning (OD-5). The press wave carries `error` so
      hovered and touch presses alike match its destructive intent. */
-  'danger-quiet':
-    'bg-transparent text-on-surface-variant ripple-error focus-visible:text-error focus-ring',
+  'danger-quiet': 'bg-transparent text-on-surface-variant ripple-error focus-visible:text-error focus-ring',
   /* `state-layer` paints from the element's own `color`, so `on-media` gives the
      hover and press their tint without a second hand-picked value.
      The ring is `focus-ring-on-media`, painted inward: `focus-ring` is
@@ -341,11 +339,7 @@ export function iconButtonClasses({
     isSelected
       ? cn(
           SELECTED[selectedTone],
-          variant === 'on-primary'
-            ? 'focus-ring-on-primary'
-            : variant === 'media'
-              ? 'focus-ring-inset'
-              : 'focus-ring',
+          variant === 'on-primary' ? 'focus-ring-on-primary' : variant === 'media' ? 'focus-ring-inset' : 'focus-ring',
           'forced-selected',
         )
       : cn(
@@ -373,9 +367,7 @@ export function iconButtonClasses({
           shape === 'round' &&
           !isSelected &&
           !isDisabled &&
-          (size === 'lg'
-            ? 'enabled:hover:not-data-pressed:rounded-lg'
-            : 'enabled:hover:not-data-pressed:rounded-md'),
+          (size === 'lg' ? 'enabled:hover:not-data-pressed:rounded-lg' : 'enabled:hover:not-data-pressed:rounded-md'),
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */
@@ -438,8 +430,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
   /* A copy riding along on an animation is `aria-hidden` and must not describe
      itself; nor must a disabled control, which has nothing to offer on hover. */
   const inert = rest['aria-hidden'] === true || rest['aria-hidden'] === 'true';
-  const label =
-    tooltip === false || inert || isDisabled ? undefined : (tooltip ?? title ?? rest['aria-label']);
+  const label = tooltip === false || inert || isDisabled ? undefined : (tooltip ?? title ?? rest['aria-label']);
   const { anchorRef, anchorProps, tooltip: bubble } = useTooltip(label);
 
   return (
@@ -493,9 +484,7 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
         onClick={loading ? blockActivation : onClick}
         aria-pressed={rest['aria-pressed'] ?? (toggle ? Boolean(selected) : undefined)}
         aria-disabled={loading || rest['aria-disabled'] || undefined}
-        aria-describedby={
-          [describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined
-        }
+        aria-describedby={[describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined}
         aria-busy={loading || rest['aria-busy'] || undefined}
       >
         <span data-ripple-host="" aria-hidden="true" />

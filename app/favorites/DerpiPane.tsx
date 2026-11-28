@@ -45,8 +45,7 @@ function importSentence(
   stopped: boolean,
 ): [string, 'success' | 'warning' | 'error'] {
   const failed = result.failed.length;
-  if (failed > 0 && result.imported.length === 0)
-    return [apiErrorMessage(result.failed[0].error, '导入失败'), 'error'];
+  if (failed > 0 && result.imported.length === 0) return [apiErrorMessage(result.failed[0].error, '导入失败'), 'error'];
   const summary = runSummary('已导入', result.imported.length, failed);
   return [stopped ? `已停止：${summary}` : summary, failed > 0 ? 'warning' : 'success'];
 }
@@ -177,16 +176,11 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
     const outcome = await settled(
       importFavourites(token, ids, folderId, {
         signal: controller.signal,
-        onProgress: (done, total) =>
-          setProgress((current) => (current ? { ...current, done, total } : current)),
+        onProgress: (done, total) => setProgress((current) => (current ? { ...current, done, total } : current)),
       }),
     );
     if (outcome.ok && !controller.signal.aborted) {
-      setProgress(
-        completeProgress(
-          runSummary('已导入', outcome.value.imported.length, outcome.value.failed.length),
-        ),
-      );
+      setProgress(completeProgress(runSummary('已导入', outcome.value.imported.length, outcome.value.failed.length)));
       await progressLanding();
     }
     run.current = null;
@@ -213,9 +207,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         />
       );
     }
-    return (
-      <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载账号信息…" />
-    );
+    return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载账号信息…" />;
   }
   if (apiKey === null) {
     return (
@@ -259,16 +251,9 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
   return (
     <div ref={setPane} aria-busy={read.isLoading || undefined} data-pagination-anchor="">
       <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="text-body-m text-on-surface-variant tabular-nums">
-          共 {formatCount(data.total)} 张
-        </p>
+        <p className="text-body-m text-on-surface-variant tabular-nums">共 {formatCount(data.total)} 张</p>
         {shown.images.length > 0 && (
-          <Button
-            variant="tonal"
-            icon={<MdCloudUpload />}
-            loading={checking}
-            onClick={() => void startImport()}
-          >
+          <Button variant="tonal" icon={<MdCloudUpload />} loading={checking} onClick={() => void startImport()}>
             导入本页到云端
           </Button>
         )}
@@ -293,16 +278,9 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
       ) : (
         <div
           ref={setRows}
-          className={`transition-opacity spring-default-effects ${
-            turning ? 'paging-dim' : 'opacity-100'
-          }`}
+          className={`transition-opacity spring-default-effects ${turning ? 'paging-dim' : 'opacity-100'}`}
         >
-          <MasonryGrid
-            images={shown.images}
-            entrance={false}
-            sequence={sequence}
-            listKey={listKey}
-          />
+          <MasonryGrid images={shown.images} entrance={false} sequence={sequence} listKey={listKey} />
         </div>
       )}
       {totalPages > 1 && (

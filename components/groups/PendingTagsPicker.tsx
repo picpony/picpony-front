@@ -40,12 +40,7 @@ interface PendingTagsPickerProps {
  * level="group"`, G4-031) over a tonal box. The hint is the box's first line and describes the
  * chips, rather than sitting in the caption, where it would become part of the heading's name.
  */
-export default function PendingTagsPicker({
-  chosen,
-  onAdd,
-  confirm,
-  disabled = false,
-}: PendingTagsPickerProps) {
+export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = false }: PendingTagsPickerProps) {
   const library = usePendingTags();
   const headingId = useId();
   const hintId = useId();
@@ -89,10 +84,7 @@ export default function PendingTagsPicker({
   };
 
   const clear = async () => {
-    if (
-      !(await confirm({ title: '确认清空', message: '确定要清空待定标签库吗？', tone: 'danger' }))
-    )
-      return;
+    if (!(await confirm({ title: '确认清空', message: '确定要清空待定标签库吗？', tone: 'danger' }))) return;
     if (!clearPendingTags()) {
       showToast('清空失败', 'error');
       return;
@@ -104,13 +96,7 @@ export default function PendingTagsPicker({
 
   return (
     <section aria-labelledby={headingId}>
-      <SectionHeading
-        as="h3"
-        level="group"
-        id={headingId}
-        icon={<MdInventory2 size={ICON.dense} />}
-        className="px-0"
-      >
+      <SectionHeading as="h3" level="group" id={headingId} icon={<MdInventory2 size={ICON.dense} />} className="px-0">
         待定标签库
       </SectionHeading>
       <div className="rounded-md bg-surface-container-highest p-3 forced-boundary">

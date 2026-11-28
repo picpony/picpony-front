@@ -76,16 +76,14 @@ function resolve(specifier, parent) {
       ? path.resolve(path.dirname(parent), specifier)
       : null;
   if (!file) throw new Error(`Unmapped dependency ${specifier} from ${parent}`);
-  if (!path.extname(file))
-    file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
+  if (!path.extname(file)) file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
   if (!file || !existsSync(file)) throw new Error(`Missing dependency ${specifier}`);
   return file;
 }
 function bundle(id, source) {
   if (modules.has(id)) return;
   modules.set(id, '');
-  let code =
-    source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
+  let code = source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
   if (source !== undefined || /\.tsx?$/.test(id))
     code = ts.transpileModule(code, {
       compilerOptions: {
@@ -105,8 +103,7 @@ function bundle(id, source) {
 bundle('entry', entry);
 const js = `(()=>{const process={env:{NODE_ENV:'production'}};const modules={${[...modules].map(([id, code]) => `${JSON.stringify(id)}:(module,exports,require)=>{${code}\n}`).join(',')}};const cache={};function require(id){if(cache[id])return cache[id].exports;const m={exports:{}};cache[id]=m;modules[id](m,m.exports,require);return m.exports;}require('entry')})();`;
 const server = createServer((req, res) => {
-  if (req.url === '/app.js')
-    return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
+  if (req.url === '/app.js') return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     .end(`<!doctype html><html><body style="margin:0"><style>
     .drawer{position:fixed;top:0;bottom:0;left:0;width:288px;background:#ddd;translate:calc(-100% - 8px) 0;transition:translate 108ms}

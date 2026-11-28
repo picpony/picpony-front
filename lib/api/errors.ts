@@ -39,8 +39,7 @@
  * - `aborted`: the caller cancelled. Adapters rethrow the caller's own `AbortError` rather than
  *   constructing one of these; the kind exists so `isAborted` has one answer for both.
  */
-export type ApiErrorKind =
-  'network' | 'timeout' | 'http' | 'envelope' | 'invalid' | 'syntax' | 'aborted';
+export type ApiErrorKind = 'network' | 'timeout' | 'http' | 'envelope' | 'invalid' | 'syntax' | 'aborted';
 
 export interface ApiErrorInit {
   status?: number;
@@ -92,11 +91,7 @@ function usableServerMessage(value: unknown): string | undefined {
   return text;
 }
 
-function defaultRetryable(
-  kind: ApiErrorKind,
-  status: number | undefined,
-  notFound: boolean,
-): boolean {
+function defaultRetryable(kind: ApiErrorKind, status: number | undefined, notFound: boolean): boolean {
   if (notFound || kind === 'syntax' || kind === 'aborted') return false;
   /* A refusal about *this* request or *this* credential answers the same every time: a bad
      request, a dead session (the shell signs out on it) and a permission refusal. */
@@ -208,10 +203,7 @@ const HAN = /[㐀-鿿]/;
  * `SyntaxError` from a JSON parse) never reaches the UI — those become the network sentence
  * or `fallback`.
  */
-export function apiErrorMessage(
-  error: unknown,
-  fallback: string = FAILURE_MESSAGES.generic,
-): string {
+export function apiErrorMessage(error: unknown, fallback: string = FAILURE_MESSAGES.generic): string {
   if (error instanceof ApiError) return error.message;
   if (isAborted(error)) return FAILURE_MESSAGES.aborted;
   if (error instanceof TypeError) return FAILURE_MESSAGES.network;
@@ -231,7 +223,6 @@ export function toApiError(error: unknown, timedOut = false): unknown {
   if (error instanceof ApiError) return error;
   if (timedOut) return new ApiError('timeout', { cause: error });
   if (isAborted(error)) return error;
-  if (error instanceof Error && error.name === 'TimeoutError')
-    return new ApiError('timeout', { cause: error });
+  if (error instanceof Error && error.name === 'TimeoutError') return new ApiError('timeout', { cause: error });
   return new ApiError('network', { cause: error });
 }

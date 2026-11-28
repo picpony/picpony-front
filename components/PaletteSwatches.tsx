@@ -31,12 +31,7 @@ import {
 } from '@/lib/appearance';
 import { BRAND_SEED } from '@/lib/paletteSpec';
 import { SKY_FACES, THEME_FACES } from '@/lib/generated/themeFaces';
-import {
-  SKY_PHASES_DAY_FIRST,
-  msUntilNextSkyPhase,
-  skyPhaseEntry,
-  skyPhaseRangeLabel,
-} from '@/lib/skyPalette';
+import { SKY_PHASES_DAY_FIRST, msUntilNextSkyPhase, skyPhaseEntry, skyPhaseRangeLabel } from '@/lib/skyPalette';
 import { ICON } from '@/lib/icons';
 import { changeCustomPalette, changePalette, changePaletteHues } from '@/lib/motionLazy';
 import { resolveCustomPalette, warmPalette } from '@/lib/paletteLazy';
@@ -111,12 +106,10 @@ const CARD_CLASS =
 /** Concentric inside the 12dp card with a 4dp bezel: 12 − 4 = 8dp (`rounded-sm`). Restores
  * `forced-color-adjust: auto` so a selected card's `forced-selected` opt-out never leaks raw
  * palette fills into only the active tile under forced colours. */
-const PREVIEW_CLASS =
-  'forced-boundary forced-color-adjust-auto relative -z-10 h-14 w-full overflow-hidden rounded-sm';
+const PREVIEW_CLASS = 'forced-boundary forced-color-adjust-auto relative -z-10 h-14 w-full overflow-hidden rounded-sm';
 
 /** The label inside a card; `px-1` pairs with the card's 4dp bezel for 8dp horizontal clearance. */
-const labelClass = (selected: boolean) =>
-  cn('truncate px-1', selected ? 'text-label-m-emphasized' : 'text-label-m');
+const labelClass = (selected: boolean) => cn('truncate px-1', selected ? 'text-label-m-emphasized' : 'text-label-m');
 
 /**
  * The theme colour picker: ten static built-in palettes, the dynamic time-of-day 天空 palette and
@@ -396,12 +389,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             )}
           >
             <span aria-hidden="true" className={cn(PREVIEW_CLASS, 'block')}>
-              <PaletteTileFace
-                tone={skyTone}
-                face={SKY_FACES[liveSkyPhase.id]}
-                hues={hues}
-                selected={skySelected}
-              />
+              <PaletteTileFace tone={skyTone} face={SKY_FACES[liveSkyPhase.id]} hues={hues} selected={skySelected} />
             </span>
             <span aria-hidden="true" className={labelClass(skySelected)}>
               {SKY_LABEL}
@@ -473,9 +461,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                 {liveSkyPhase.label} · {skyPhaseRangeLabel(liveSkyPhase)}
               </p>
             </div>
-            <p className="text-body-s text-on-surface-variant mt-0.5">
-              配色与深浅模式随时间自动变化，深浅切换已禁用
-            </p>
+            <p className="text-body-s text-on-surface-variant mt-0.5">配色与深浅模式随时间自动变化，深浅切换已禁用</p>
           </div>
           <div aria-hidden="true" className="grid grid-cols-4 gap-2 @sm:grid-cols-8">
             {SKY_PHASES_DAY_FIRST.map((phase) => {
@@ -494,12 +480,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                     className="forced-boundary forced-color-adjust-auto block h-5 w-full rounded-xs"
                     style={{ background: phase.primary }}
                   />
-                  <span
-                    className={cn(
-                      'truncate px-0.5',
-                      current ? 'text-label-s-emphasized' : 'text-label-s',
-                    )}
-                  >
+                  <span className={cn('truncate px-0.5', current ? 'text-label-s-emphasized' : 'text-label-s')}>
                     {phase.label}
                   </span>
                 </div>
@@ -538,9 +519,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
           <p className="text-body-s text-on-surface-variant mt-0.5">
             {customSeed ? <span className="font-mono tabular-nums">{customSeed}</span> : '未设置'}
             {/* The 副色相 only means something under 多色, and only once a colour exists. */}
-            {customSeed && (
-              <span className="mono:hidden">{` · 副色相 ${accentName(customAccent)}`}</span>
-            )}
+            {customSeed && <span className="mono:hidden">{` · 副色相 ${accentName(customAccent)}`}</span>}
           </p>
         </div>
         {/* Two ways in, side by side, because they are two different questions:

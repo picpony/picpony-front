@@ -47,16 +47,11 @@ const STAFF_ROLES = new Set(['admin', 'super_admin']);
  * that maintenance is over; whether the session is staff is its own `GET /me` role, asked only
  * when there is a session.
  */
-async function readSiteAccess(
-  token: string | null,
-  signal: AbortSignal,
-): Promise<SiteAccess | null> {
+async function readSiteAccess(token: string | null, signal: AbortSignal): Promise<SiteAccess | null> {
   try {
     const [status, me] = await Promise.all([
       api<MaintenanceStatus>('GET', '/maintenance-status', { signal, cache: 'no-store' }),
-      token
-        ? api<{ user: { role: string } }>('GET', '/me', { token, signal, cache: 'no-store' })
-        : null,
+      token ? api<{ user: { role: string } }>('GET', '/me', { token, signal, cache: 'no-store' }) : null,
     ]);
     return {
       maintenance: status.maintenance_mode,
@@ -172,18 +167,12 @@ export default function MaintenanceScreen({ message }: { message: string }) {
         description={
           <>
             {message || DEFAULT_MESSAGE}
-            <span className="text-body-s mt-2 block">
-              {refused ? '当前账号在维护期间无法访问' : '请稍后再试'}
-            </span>
+            <span className="text-body-s mt-2 block">{refused ? '当前账号在维护期间无法访问' : '请稍后再试'}</span>
           </>
         }
         action={
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button
-              variant="filled"
-              loading={refreshing}
-              onClick={() => startRefresh(() => router.refresh())}
-            >
+            <Button variant="filled" loading={refreshing} onClick={() => startRefresh(() => router.refresh())}>
               刷新
             </Button>
             {/* Shown once the session is known, so a signed-in device never flashes the wrong one. */}
@@ -248,9 +237,7 @@ export function MaintenanceNotice({ inert }: { inert?: boolean }) {
       className="bg-error-container text-on-error-container flex shrink-0 select-none items-center justify-center gap-2 py-1.5 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
     >
       <MdConstruction size={ICON.dense} className="shrink-0" aria-hidden="true" />
-      <p className="text-body-s-emphasized min-w-0 text-center">
-        网站当前处于维护模式，普通用户无法访问
-      </p>
+      <p className="text-body-s-emphasized min-w-0 text-center">网站当前处于维护模式，普通用户无法访问</p>
     </div>
   );
 }

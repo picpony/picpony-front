@@ -73,12 +73,7 @@ function replaceMessagesUrl(update: (params: URLSearchParams) => void) {
 
 function writeQueuedAddress() {
   const here = window.location.pathname === '/messages';
-  if (
-    here &&
-    queuedAddress.length &&
-    isHistoryLayerState(window.history.state) &&
-    hasModalLayer()
-  ) {
+  if (here && queuedAddress.length && isHistoryLayerState(window.history.state) && hasModalLayer()) {
     stopWaiting ??= subscribeScreenQuiet(writeQueuedAddress);
     return;
   }
@@ -91,8 +86,7 @@ function writeQueuedAddress() {
   for (const update of updates) update(params);
   const query = params.toString();
   const href = query ? `/messages?${query}` : '/messages';
-  if (href !== `${window.location.pathname}${window.location.search}`)
-    window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting writes go with it: the next one decides its own address. */
@@ -147,12 +141,9 @@ export default function MessagesScreen({ token }: { token: string | null }) {
 
   const [tab, setTab] = useState<MessagesTab | null>(() => {
     const requested = linkedUser !== null ? 'chat' : requestedTab;
-    if (!token || requested)
-      return chooseInitialTab({ requested, stored: storedTab, unread: null, signedIn });
+    if (!token || requested) return chooseInitialTab({ requested, stored: storedTab, unread: null, signedIn });
     const known = unreadCounts.peek({ token }).data;
-    return known
-      ? chooseInitialTab({ requested: null, stored: storedTab, unread: byTab(known), signedIn })
-      : null;
+    return known ? chooseInitialTab({ requested: null, stored: storedTab, unread: byTab(known), signedIn }) : null;
   });
   /* Waiting on the counts: choose the moment they (or their failure) arrive… */
   if (tab === null && (counts !== null || unread.error !== undefined)) {
@@ -195,11 +186,7 @@ export default function MessagesScreen({ token }: { token: string | null }) {
 
   /* Signed in on the spot, the request is opened — once the screen is quiet (the sign-in
      dialog gone), so the tab changes in view. */
-  const quiet = useSyncExternalStore(
-    token && pending ? subscribeScreenQuiet : noSubscription,
-    isScreenQuiet,
-    notQuiet,
-  );
+  const quiet = useSyncExternalStore(token && pending ? subscribeScreenQuiet : noSubscription, isScreenQuiet, notQuiet);
   if (token && pending && quiet) {
     setPending(null);
     if (pending.user !== null) setTarget(pending.user);

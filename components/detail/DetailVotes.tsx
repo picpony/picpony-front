@@ -13,13 +13,7 @@ import type { PonyImage } from '@/lib/types/image';
  * `HeroStage` and `DetailSkeleton` draw the same single-line placeholder height so the handoff
  * never shifts.
  */
-export default function DetailVotes({
-  image,
-  pending,
-}: {
-  image: PonyImage | null;
-  pending: boolean;
-}) {
+export default function DetailVotes({ image, pending }: { image: PonyImage | null; pending: boolean }) {
   if (pending) {
     return (
       <div

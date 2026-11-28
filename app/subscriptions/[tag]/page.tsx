@@ -20,7 +20,5 @@ export default function SubscriptionPage({ params }: { params: Promise<{ tag: st
   const tag = tagFromSegment(use(params).tag);
   const contentFilter = parseContentFilter(useStoredValue(LS_KEYS.contentFilter, 'safe'));
   if (!tag) notFound();
-  return (
-    <SubscriptionView key={`${tag}\n${contentFilter}`} tag={tag} contentFilter={contentFilter} />
-  );
+  return <SubscriptionView key={`${tag}\n${contentFilter}`} tag={tag} contentFilter={contentFilter} />;
 }

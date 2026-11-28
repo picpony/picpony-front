@@ -15,10 +15,7 @@ import type { OutboxItem } from './outbox';
  * the shift would lose them. The thread is the union of everything read instead; a later copy
  * of a message wins, which is how 已读 reaches a message already on screen.
  */
-export function mergeMessages(
-  previous: readonly Message[],
-  incoming: readonly Message[],
-): Message[] {
+export function mergeMessages(previous: readonly Message[], incoming: readonly Message[]): Message[] {
   if (incoming.length === 0) return previous as Message[];
   const byId = new Map<number, Message>();
   for (const message of previous) byId.set(message.id, message);
@@ -97,9 +94,7 @@ export function matchOutgoing(
       pending.push(item);
       continue;
     }
-    const candidates = own.filter(
-      (message) => message.id > item.afterId && !claimed.has(message.id),
-    );
+    const candidates = own.filter((message) => message.id > item.afterId && !claimed.has(message.id));
     const match =
       candidates.find((message) => message.content === item.content) ??
       (item.status === 'sent' ? candidates[0] : undefined);
@@ -130,12 +125,7 @@ export function contactTime(value: string, now: number | null): string {
 
 export type MessagesTab = 'announcement' | 'notification' | 'interaction' | 'chat';
 
-export const MESSAGE_TABS: readonly MessagesTab[] = [
-  'announcement',
-  'notification',
-  'interaction',
-  'chat',
-];
+export const MESSAGE_TABS: readonly MessagesTab[] = ['announcement', 'notification', 'interaction', 'chat'];
 
 export function isMessagesTab(value: unknown): value is MessagesTab {
   return typeof value === 'string' && (MESSAGE_TABS as readonly string[]).includes(value);
@@ -172,10 +162,7 @@ export interface PersonalRequest {
  * The personal half of a request, or `null` when there is none. Kept by a signed-out screen, so
  * a sign-in on the spot opens what the link was for.
  */
-export function personalRequest(
-  tab: MessagesTab | null,
-  user: number | null,
-): PersonalRequest | null {
+export function personalRequest(tab: MessagesTab | null, user: number | null): PersonalRequest | null {
   if (user !== null) return { tab: 'chat', user };
   return tab === 'interaction' || tab === 'chat' ? { tab, user: null } : null;
 }

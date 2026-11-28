@@ -72,13 +72,7 @@ export default function BadgesTab({ token }: AdminPanelProps) {
         refreshLabel="刷新链接"
         isLoading={links.refreshing}
       />
-      <Tabs
-        value={sub}
-        onChange={setSub}
-        activation="manual"
-        label="徽章管理分区"
-        tabs={SUB_TABS}
-      />
+      <Tabs value={sub} onChange={setSub} activation="manual" label="徽章管理分区" tabs={SUB_TABS} />
       <TabPanes value={sub}>
         <TabPane value="grant">
           <GrantPane token={token} />
@@ -86,9 +80,7 @@ export default function BadgesTab({ token }: AdminPanelProps) {
         <TabPane value="links">
           <LinksPane token={token} links={links} asked={linksAsked} />
         </TabPane>
-        <TabPane value="badge-dictionary">
-          {dictionaryAsked && <BadgeDictionaryPane token={token} />}
-        </TabPane>
+        <TabPane value="badge-dictionary">{dictionaryAsked && <BadgeDictionaryPane token={token} />}</TabPane>
       </TabPanes>
     </div>
   );
@@ -128,13 +120,11 @@ function GrantPane({ token }: { token: string }) {
     if (form.target === 'dates') {
       if (!form.startDate) next.startDate = '请选择起始日期';
       if (!form.endDate) next.endDate = '请选择截止日期';
-      if (form.startDate && form.endDate && form.startDate > form.endDate)
-        next.endDate = '截止日期不能早于起始日期';
+      if (form.startDate && form.endDate && form.startDate > form.endDate) next.endDate = '截止日期不能早于起始日期';
     }
     if (!form.permanent && !form.expiresAt) next.expiresAt = '请选择徽章的到期日期';
     else if (!form.permanent)
-      next.expiresAt =
-        badgeDateProblems({ badgeExpiresAt: form.expiresAt }).badgeExpiresAt ?? next.expiresAt;
+      next.expiresAt = badgeDateProblems({ badgeExpiresAt: form.expiresAt }).badgeExpiresAt ?? next.expiresAt;
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
 
@@ -327,8 +317,7 @@ function LinksPane({
 
   const set = <K extends keyof LinkForm>(field: K, value: LinkForm[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
-    if (field === 'name' || field === 'color')
-      setErrors((previous) => ({ ...previous, [field]: undefined }));
+    if (field === 'name' || field === 'color') setErrors((previous) => ({ ...previous, [field]: undefined }));
   };
 
   const create = () => {
@@ -405,9 +394,7 @@ function LinksPane({
           onCommitted: () => {
             linksQuery.write(
               token,
-              (previous) =>
-                previous?.map((row) => (row.id === link.id ? { ...row, active: enabling } : row)) ??
-                [],
+              (previous) => previous?.map((row) => (row.id === link.id ? { ...row, active: enabling } : row)) ?? [],
             );
             links.refresh();
           },
@@ -415,12 +402,9 @@ function LinksPane({
       );
     if (enabling) run();
     else
-      confirmThen(
-        '确认停用链接',
-        `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`,
-        run,
-        { tone: 'filled' },
-      );
+      confirmThen('确认停用链接', `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run, {
+        tone: 'filled',
+      });
   };
 
   const expiry = (link: BadgeLink) =>
@@ -569,11 +553,7 @@ function LinksPane({
               onRetry={links.retryable ? links.refresh : undefined}
               empty="暂无领取链接"
             />
-            <AdminPager
-              page={paged.page}
-              totalPages={paged.totalPages}
-              onPageChange={paged.setPage}
-            />
+            <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
           </AdminListAnchor>
         </BadgeLinkDeleteScope>
       </section>

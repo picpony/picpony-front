@@ -49,8 +49,7 @@ const widestCount = (unit: string) => `已选择 888 ${unit}`;
 function fitFor(width: number, commands: readonly SelectionCommand[], countText: string): Fit {
   const room = width - CHROME - countWidth(countText);
   const labelled = commands.reduce(
-    (sum, command) =>
-      sum + LABELLED_BASE + Array.from(command.maxLabel ?? command.label).length * CHARACTER + GAP,
+    (sum, command) => sum + LABELLED_BASE + Array.from(command.maxLabel ?? command.label).length * CHARACTER + GAP,
     0,
   );
   if (room >= labelled) return { form: 'labelled' };
@@ -143,12 +142,7 @@ export default function SelectionBar({
   useEffect(() => {
     if (!active) return;
     const focused = document.activeElement;
-    if (
-      !focused ||
-      focused === document.body ||
-      !focused.isConnected ||
-      focused.closest('[inert]')
-    ) {
+    if (!focused || focused === document.body || !focused.isConnected || focused.closest('[inert]')) {
       closeRef.current?.focus({ preventScroll: true });
     }
   }, [active]);
@@ -165,8 +159,7 @@ export default function SelectionBar({
   useLayoutEffect(() => {
     const spacer = roomRef.current;
     if (active || !roomHeld) return;
-    const scroller =
-      spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+    const scroller = spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
     /* Below the viewport (or with no box at all, in a pane out of sight), the room can go: the
        page under the reader does not change, and nothing clamps the offset. */
     const free = () => {
@@ -193,8 +186,7 @@ export default function SelectionBar({
     };
   }, [active, roomHeld]);
 
-  const fit =
-    width > 0 ? fitFor(width, shown.commands, widestCount(unit)) : { form: 'icons' as const };
+  const fit = width > 0 ? fitFor(width, shown.commands, widestCount(unit)) : { form: 'icons' as const };
   const inline = fit.form === 'compact' ? shown.commands.slice(0, fit.shown) : shown.commands;
   const overflow = fit.form === 'compact' ? shown.commands.slice(fit.shown) : [];
 
@@ -202,10 +194,7 @@ export default function SelectionBar({
     <>
       <div
         ref={roomRef}
-        className={cn(
-          'shrink-0 transition-[height]',
-          room ? 'h-20 spring-layout' : 'h-0 spring-fast-effects',
-        )}
+        className={cn('shrink-0 transition-[height]', room ? 'h-20 spring-layout' : 'h-0 spring-fast-effects')}
         aria-hidden="true"
       />
       {/* `z-page-chrome`: the page's own floating chrome, as the home pill is — a stated step of the
@@ -223,9 +212,7 @@ export default function SelectionBar({
             className={cn(
               'max-w-full transition-opacity',
               /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
-              active
-                ? 'pointer-events-auto opacity-100 spring-default-effects'
-                : 'opacity-0 spring-fast-effects',
+              active ? 'pointer-events-auto opacity-100 spring-default-effects' : 'opacity-0 spring-fast-effects',
             )}
           >
             {/* The travel: up into place on the spatial spring, back down on the effects one. */}
@@ -235,18 +222,10 @@ export default function SelectionBar({
               className={cn(
                 'flex h-14 max-w-full items-center gap-1 rounded-full bg-surface-container-high px-2 text-on-surface shadow-e2 forced-boundary',
                 'transition-[translate]',
-                active
-                  ? 'translate-y-0 spring-default-spatial'
-                  : 'translate-y-4 spring-fast-effects',
+                active ? 'translate-y-0 spring-default-spatial' : 'translate-y-4 spring-fast-effects',
               )}
             >
-              <IconButton
-                ref={closeRef}
-                dismiss
-                icon={<MdClose />}
-                aria-label="退出选择"
-                onClick={onExit}
-              />
+              <IconButton ref={closeRef} dismiss icon={<MdClose />} aria-label="退出选择" onClick={onExit} />
               {/* As wide as its widest count (the `Select` technique): the live text and an
                 invisible three-digit one share one cell, so the bar never re-forms or re-centres
                 as the count grows. */}
@@ -303,9 +282,7 @@ export default function SelectionBar({
                       disabled: command.disabled,
                       destructive: command.destructive,
                     }))}
-                    onSelect={(value) =>
-                      overflow.find((command) => command.value === value)?.onSelect()
-                    }
+                    onSelect={(value) => overflow.find((command) => command.value === value)?.onSelect()}
                   />
                 </>
               )}

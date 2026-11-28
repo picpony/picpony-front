@@ -45,8 +45,7 @@ const until = async (fn, ms = 40000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-page-'));
@@ -100,8 +99,7 @@ const evalIn = async (expr) => {
     awaitPromise: true,
     returnByValue: true,
   });
-  if (r.result?.exceptionDetails)
-    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
+  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');
@@ -312,9 +310,7 @@ ${label === 'fwd' ? '下一页' : '上一页 (already fetched)'}`);
       console.log('  ' + rows);
       continue;
     }
-    console.log(
-      '  t(ms)  scrollTop  scrollH  cards  inView  shimmer  plate  visible  HIDDEN   BARE  first',
-    );
+    console.log('  t(ms)  scrollTop  scrollH  cards  inView  shimmer  plate  visible  HIDDEN   BARE  first');
     for (const r of rows) {
       console.log(
         `  ${String(r.t).padStart(5)}  ${String(r.scrollTop).padStart(9)}  ${String(r.h).padStart(7)}  ${String(r.cards).padStart(5)}  ${String(r.inView).padStart(6)}  ${String(r.shimmering).padStart(7)}  ${String(r.plate).padStart(5)}  ${String(r.visible).padStart(7)}  ${String(r.HIDDEN).padStart(6)}  ${String(r.BARE).padStart(5)}  ${r.first}`,

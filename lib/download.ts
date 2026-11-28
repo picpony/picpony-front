@@ -32,47 +32,25 @@ export interface DownloadSource {
   format?: string | null;
 }
 
-const KNOWN_EXTENSIONS = new Set([
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'svg',
-  'webp',
-  'webm',
-  'mp4',
-  'apng',
-]);
+const KNOWN_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'webm', 'mp4', 'apng']);
 
 /** `3901120.png` — the file name a download is given. */
 export function downloadName({ id, url, format }: DownloadSource): string {
   const fromFormat = (format ?? '').toLowerCase().replace(/^\./, '');
   const fromUrl = getRawImageUrl(url).split(/[?#]/, 1)[0].split('.').pop()?.toLowerCase() ?? '';
-  const extension = KNOWN_EXTENSIONS.has(fromFormat)
-    ? fromFormat
-    : KNOWN_EXTENSIONS.has(fromUrl)
-      ? fromUrl
-      : '';
+  const extension = KNOWN_EXTENSIONS.has(fromFormat) ? fromFormat : KNOWN_EXTENSIONS.has(fromUrl) ? fromUrl : '';
   return extension ? `${id}.${extension}` : String(id);
 }
 
 /** The URLs to try, in order: the visitor's line, then the source itself. */
 export function downloadCandidates(url: string): string[] {
   const raw = getRawImageUrl(url);
-  return [
-    ...new Set(
-      (isImageForced() ? [toCurrentImageLine(raw)] : [toCurrentImageLine(raw), raw]).filter(
-        Boolean,
-      ),
-    ),
-  ];
+  return [...new Set((isImageForced() ? [toCurrentImageLine(raw)] : [toCurrentImageLine(raw), raw]).filter(Boolean))];
 }
 
 function isMedia(response: Response): boolean {
   const type = (response.headers.get('content-type') ?? '').toLowerCase();
-  return (
-    type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream'
-  );
+  return type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream';
 }
 
 /** Read the body, failing if it stalls; the caller's abort is kept. */
@@ -80,20 +58,14 @@ async function readBlob(response: Response, controller: AbortController): Promis
   const reader = response.body?.getReader();
   if (!reader) return response.blob();
   const parts: BlobPart[] = [];
-  let timer = setTimeout(
-    () => controller.abort(new DOMException('stalled', 'TimeoutError')),
-    STALL_MS,
-  );
+  let timer = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
   try {
     for (;;) {
       const { done, value } = await reader.read();
       clearTimeout(timer);
       if (done) break;
       parts.push(value as Uint8Array<ArrayBuffer>);
-      timer = setTimeout(
-        () => controller.abort(new DOMException('stalled', 'TimeoutError')),
-        STALL_MS,
-      );
+      timer = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
     }
   } finally {
     clearTimeout(timer);
@@ -119,10 +91,7 @@ function save(blob: Blob, name: string) {
  * Download the original. Resolves once the browser has the file; throws `ApiError` when every
  * line failed (the last failure's), or the caller's `AbortError` when it cancelled.
  */
-export async function downloadOriginal(
-  source: DownloadSource,
-  signal?: AbortSignal,
-): Promise<void> {
+export async function downloadOriginal(source: DownloadSource, signal?: AbortSignal): Promise<void> {
   await ensureRoutePolicy();
   let lastError: unknown = new ApiError('network');
   for (const candidate of downloadCandidates(source.url)) {
@@ -130,10 +99,7 @@ export async function downloadOriginal(
     const controller = new AbortController();
     const forward = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', forward, { once: true });
-    const headersTimer = setTimeout(
-      () => controller.abort(new DOMException('stalled', 'TimeoutError')),
-      STALL_MS,
-    );
+    const headersTimer = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
     try {
       const response = await fetch(candidate, { signal: controller.signal });
       clearTimeout(headersTimer);

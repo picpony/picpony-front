@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useState,
-  useEffect,
-  useLayoutEffect,
-  useCallback,
-  useRef,
-  useSyncExternalStore,
-} from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { MdCheckCircle, MdError, MdInfo, MdWarning } from '@/components/icons/shell';
 import { HANDOFF_MS, TRAVEL_PX } from '@/lib/motionTokens';
@@ -232,13 +225,10 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const leaveSpatial = springTiming('fastSpatial', 'overlay');
     const leaveFade = springTiming('fastEffects', 'overlay');
     running.current.forEach((animation) => animation.cancel());
-    const exit = card.animate(
-      [{ transform: from.transform }, { transform: `translateY(${-TRAVEL_PX.small}px)` }],
-      {
-        ...leaveSpatial,
-        fill: 'forwards',
-      },
-    );
+    const exit = card.animate([{ transform: from.transform }, { transform: `translateY(${-TRAVEL_PX.small}px)` }], {
+      ...leaveSpatial,
+      fill: 'forwards',
+    });
     const fadeOut = card.animate([{ opacity: from.opacity }, { opacity: 0 }], {
       ...leaveFade,
       fill: 'forwards',

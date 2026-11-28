@@ -25,14 +25,11 @@ export function forumTeaser(
   if (excerpt) return bbcodeToPlainText(excerpt, { maxLength });
   const truncated = Boolean(post.summary);
   if (post.category === 'taggroups') {
-    const tagCount =
-      post.shared_group_counts?.tagGroups ?? post.shared_groups?.tagGroups.length ?? 0;
-    const blockCount =
-      post.shared_group_counts?.blockGroups ?? post.shared_groups?.blockGroups.length ?? 0;
-    const parts = [
-      tagCount > 0 ? `${tagCount} 个标签组` : '',
-      blockCount > 0 ? `${blockCount} 个屏蔽组` : '',
-    ].filter(Boolean);
+    const tagCount = post.shared_group_counts?.tagGroups ?? post.shared_groups?.tagGroups.length ?? 0;
+    const blockCount = post.shared_group_counts?.blockGroups ?? post.shared_groups?.blockGroups.length ?? 0;
+    const parts = [tagCount > 0 ? `${tagCount} 个标签组` : '', blockCount > 0 ? `${blockCount} 个屏蔽组` : ''].filter(
+      Boolean,
+    );
     const lead = post.content.trim().replace(/\s+/g, ' ');
     const summary = parts.length > 0 ? `分享了 ${parts.join('、')}` : '';
     return [lead, summary].filter(Boolean).join(' · ') || post.title;
@@ -40,9 +37,7 @@ export function forumTeaser(
   if (post.category === 'commission') {
     const words = bbcodeToPlainText(post.content, { maxLength, images: 'drop', truncated });
     if (words) return words;
-    return post.commission_link
-      ? '附有约稿链接'
-      : bbcodeToPlainText(post.content, { maxLength, truncated });
+    return post.commission_link ? '附有约稿链接' : bbcodeToPlainText(post.content, { maxLength, truncated });
   }
   /* Pictures are left out of a teaser — unless they are all it has. */
   return (

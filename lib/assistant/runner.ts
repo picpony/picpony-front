@@ -12,11 +12,7 @@ import {
 import type { createReceiptJournal } from './journal';
 
 /** Tools the server dispatches to the client (`assistant_runner::CLIENT_TOOLS`). */
-export const CLIENT_CALLS: readonly string[] = [
-  'call_site_api',
-  'get_page_controls',
-  'interact_page',
-];
+export const CLIENT_CALLS: readonly string[] = ['call_site_api', 'get_page_controls', 'interact_page'];
 
 export class UncertainAction extends Error {
   constructor(message = '操作结果尚未确认，已停止重复提交，请先核对站内结果后再继续') {
@@ -37,11 +33,7 @@ export interface ActionDependencies {
 /** One task/call promise per document; durable intents and server claims survive reload. */
 export function createActionRunner(deps: ActionDependencies) {
   const running = new Map<string, Promise<AssistantReceipt>>();
-  function receipt(
-    action: AssistantAction,
-    taskId: string,
-    fields: Partial<AssistantReceipt>,
-  ): AssistantReceipt {
+  function receipt(action: AssistantAction, taskId: string, fields: Partial<AssistantReceipt>): AssistantReceipt {
     return {
       task_id: taskId,
       call_id: action.call_id,
@@ -53,11 +45,7 @@ export function createActionRunner(deps: ActionDependencies) {
       ...fields,
     };
   }
-  async function settle(
-    action: AssistantAction,
-    taskId: string,
-    approved: boolean,
-  ): Promise<AssistantReceipt> {
+  async function settle(action: AssistantAction, taskId: string, approved: boolean): Promise<AssistantReceipt> {
     deps.assertCurrent();
     if (!uuid(taskId) || !/^[A-Za-z0-9._:-]{1,160}$/.test(action.call_id)) {
       return receipt(action, taskId, {
@@ -94,11 +82,7 @@ export function createActionRunner(deps: ActionDependencies) {
            is the receipt this client sent — its own task and call ids identify it. */
         const cached = obj(claim.result),
           sent = obj(cached.data);
-        if (
-          sent.task_id !== taskId ||
-          sent.call_id !== action.call_id ||
-          typeof cached.ok !== 'boolean'
-        )
+        if (sent.task_id !== taskId || sent.call_id !== action.call_id || typeof cached.ok !== 'boolean')
           throw new UncertainAction('服务器返回的结果与此操作不一致，未重复执行');
         const result = receipt(action, taskId, {
           ok: cached.ok,
@@ -137,8 +121,7 @@ export function createActionRunner(deps: ActionDependencies) {
     } catch (e) {
       deps.assertCurrent();
       // Any thrown write may already have reached the backend. Keep the durable intent.
-      if (write && !deps.definitive(e))
-        throw new UncertainAction(deps.failure(e) + '；结果尚未确认，不会重复提交');
+      if (write && !deps.definitive(e)) throw new UncertainAction(deps.failure(e) + '；结果尚未确认，不会重复提交');
       result = receipt(action, taskId, { summary: deps.failure(e), error: 'client_action_failed' });
     }
     deps.journal.save(result);
@@ -149,8 +132,7 @@ export function createActionRunner(deps: ActionDependencies) {
     deps.assertCurrent();
     const saved = await deps.save(value);
     deps.assertCurrent();
-    if (saved.success !== true || !saved.result)
-      throw new UncertainAction('操作已完成，状态同步尚未确认');
+    if (saved.success !== true || !saved.result) throw new UncertainAction('操作已完成，状态同步尚未确认');
     deps.journal.acknowledge(value.task_id, value.call_id);
   }
   return {

@@ -4,13 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage, isAborted } from '@/lib/api/errors';
 import { recordWeeklyUpload } from '@/lib/api/tasks';
-import {
-  DUPLICATE_COMPLAINT,
-  stageUpload,
-  submitDerpiImage,
-  type RatingTag,
-  type UploadField,
-} from '@/lib/api/upload';
+import { DUPLICATE_COMPLAINT, stageUpload, submitDerpiImage, type RatingTag, type UploadField } from '@/lib/api/upload';
 import { readToken } from '@/lib/hooks';
 import { tasks } from '@/lib/resources';
 
@@ -100,13 +94,7 @@ function owned(owner: string | null): boolean {
 
 /** A draft with anything in it — what a reload would lose. */
 export function draftHasContent(draft: UploadDraft): boolean {
-  return Boolean(
-    draft.file ||
-    draft.rating ||
-    draft.tags.length ||
-    draft.source.trim() ||
-    draft.description.trim(),
-  );
+  return Boolean(draft.file || draft.rating || draft.tags.length || draft.source.trim() || draft.description.trim());
 }
 
 function inFlight(job: UploadJob | null): boolean {
@@ -217,13 +205,7 @@ export interface UploadRequest {
  * Stage the draft's file (unless this very file was staged moments ago), then hand it to
  * Derpibooru. Never throws; the outcome lands on the job.
  */
-export async function startUpload({
-  owner,
-  apiKey,
-  username,
-  tagInput,
-  navigate,
-}: UploadRequest): Promise<void> {
+export async function startUpload({ owner, apiKey, username, tagInput, navigate }: UploadRequest): Promise<void> {
   if (readToken() !== owner || !owned(owner) || inFlight(state.job)) return;
   const { file, source, description } = state.draft;
   if (!file) return;
@@ -239,8 +221,7 @@ export async function startUpload({
     if (current()) setJob(owner, null);
     return true;
   };
-  let url =
-    staged && staged.file === file && Date.now() - staged.at < STAGED_REUSE_MS ? staged.url : null;
+  let url = staged && staged.file === file && Date.now() - staged.at < STAGED_REUSE_MS ? staged.url : null;
 
   if (!url) {
     setJob(owner, { phase: 'staging', progress: null, outcome: null });
@@ -293,11 +274,7 @@ export async function startUpload({
   });
   if (stale()) return;
 
-  if (
-    outcome.kind === 'rejected' &&
-    unconfirmedFile === file &&
-    outcome.fields.image === DUPLICATE_COMPLAINT
-  ) {
+  if (outcome.kind === 'rejected' && unconfirmedFile === file && outcome.fields.image === DUPLICATE_COMPLAINT) {
     outcome = { kind: 'unconfirmed', message: LANDED };
   } else if (outcome.kind === 'rejected' && outcome.fields.image) {
     /* A file Derpibooru could not fetch or read is staged again on the next attempt. */

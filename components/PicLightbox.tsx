@@ -127,10 +127,7 @@ export default function PicLightbox({
       await Promise.race([
         Promise.allSettled(animations.map((animation) => animation.finished)),
         new Promise<void>((resolve) => {
-          exitTimer.current = setTimeout(
-            resolve,
-            SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
-          );
+          exitTimer.current = setTimeout(resolve, SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow);
         }),
       ]);
       if (turn !== closeTurn.current) return;
@@ -272,9 +269,7 @@ export default function PicLightbox({
       /* Replace the library's own loading ring with the M3E media loading indicator (`on-media`
          tone over the dark media stage) so fullscreen media loading matches detail and card wells. */
       render={{
-        iconLoading: () => (
-          <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />
-        ),
+        iconLoading: () => <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />,
         /* One picture has nowhere to go: the library would still draw both arrows,
            disabled, at the two edges (R4-034). */
         ...(slides.length <= 1 ? { buttonPrev: () => null, buttonNext: () => null } : null),

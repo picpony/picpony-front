@@ -24,10 +24,7 @@ export type PublishOptions = {
  * signal and from visibility changes rather than polling, and publishes on the
  * first frame after the transition settles.
  */
-export function publishWhenHeroSettled(
-  callback: () => void,
-  { idle = true, canPublish }: PublishOptions = {},
-) {
+export function publishWhenHeroSettled(callback: () => void, { idle = true, canPublish }: PublishOptions = {}) {
   const gate = canPublish ?? (() => imageHeroController.isPublicationQuiet());
   const blocked = () => document.visibilityState !== 'visible' || !gate();
 

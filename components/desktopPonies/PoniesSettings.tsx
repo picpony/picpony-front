@@ -77,22 +77,16 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
   /* A saved draft gives way only once the resource shows it: `write` publishes on a paint boundary,
      so clearing the draft as the save landed showed the previous selection for one frame — the
      lineup reverted and replayed its motion 0.7s after the choice (M1-040). */
-  if (draft && saveState === 'saved' && selection.data && samePonySelection(selection.data, draft))
-    setDraft(null);
+  if (draft && saveState === 'saved' && selection.data && samePonySelection(selection.data, draft)) setDraft(null);
   const chosen = draft ?? saved;
   const canEdit = !!token && selection.data !== undefined && catalog.data?.enabled === true;
   const ponies = catalog.data?.ponies ?? [];
   const matches = filterPonies(ponies, query, onlySelected, chosen);
   const pages = Math.max(1, Math.ceil(matches.length / PONY_PAGE_SIZE));
   const currentPage = clamp(page, 1, pages);
-  const pageChoices = matches.slice(
-    (currentPage - 1) * PONY_PAGE_SIZE,
-    currentPage * PONY_PAGE_SIZE,
-  );
+  const pageChoices = matches.slice((currentPage - 1) * PONY_PAGE_SIZE, currentPage * PONY_PAGE_SIZE);
   const atLimit = chosen.length >= MAX_PONIES;
-  const offline = catalog.data
-    ? chosen.filter((name) => !ponies.some((pony) => pony.name === name))
-    : [];
+  const offline = catalog.data ? chosen.filter((name) => !ponies.some((pony) => pony.name === name)) : [];
 
   async function flush() {
     window.clearTimeout(timer.current);
@@ -128,12 +122,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
     /* A newer selection arrived while this one was on the wire: send it now. The same one that
        just failed waits for 重试 — retrying it in a loop would hammer a backend that said no. */
     const pending = latest.current;
-    if (
-      pending &&
-      !(failed && samePonySelection(pending, next)) &&
-      readToken() === token &&
-      !timer.current
-    )
+    if (pending && !(failed && samePonySelection(pending, next)) && readToken() === token && !timer.current)
       void flush();
   }
   function change(next: string[]) {
@@ -229,12 +218,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
         移除已下线
       </Button>
     ) : chosen.length ? (
-      <Button
-        variant="text"
-        size="xs"
-        disabled={!canEdit}
-        onClick={() => replaceAll([], '已清空桌面小马')}
-      >
+      <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll([], '已清空桌面小马')}>
         清空
       </Button>
     ) : undefined;
@@ -246,12 +230,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
       icon={<MdPets size={ICON.control} />}
       actions={
         token ? (
-          <IconButton
-            aria-label="刷新桌面小马"
-            loading={refreshing}
-            onClick={refresh}
-            icon={<MdRefresh />}
-          />
+          <IconButton aria-label="刷新桌面小马" loading={refreshing} onClick={refresh} icon={<MdRefresh />} />
         ) : undefined
       }
       status={
@@ -328,11 +307,7 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
               <>
                 <p className="flex items-center justify-between gap-3 text-body-s text-on-surface-variant">
                   <span className="tabular-nums">
-                    {query.trim()
-                      ? `找到 ${matches.length} 个角色`
-                      : onlySelected
-                        ? '已选的角色'
-                        : '全部角色'}
+                    {query.trim() ? `找到 ${matches.length} 个角色` : onlySelected ? '已选的角色' : '全部角色'}
                   </span>
                   {pages > 1 && (
                     <span className="tabular-nums">{`${(currentPage - 1) * PONY_PAGE_SIZE + 1}–${Math.min(currentPage * PONY_PAGE_SIZE, matches.length)} / ${matches.length}`}</span>
@@ -357,21 +332,10 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
                           <CheckGlyph className="size-4" />
                         </span>
                         <PonyPreview key={pony.path} pony={pony} />
-                        <span
-                          className={cn(
-                            styles.name,
-                            selected ? 'text-label-l-emphasized' : 'text-label-l',
-                          )}
-                        >
+                        <span className={cn(styles.name, selected ? 'text-label-l-emphasized' : 'text-label-l')}>
                           {display.name}
                         </span>
-                        <span
-                          className={cn(
-                            styles.variant,
-                            'text-body-s',
-                            !selected && 'text-on-surface-variant',
-                          )}
-                        >
+                        <span className={cn(styles.variant, 'text-body-s', !selected && 'text-on-surface-variant')}>
                           {display.variant || ' '}
                         </span>
                       </Card>
@@ -430,9 +394,7 @@ function LineupSlot({
   sprite: ReactNode;
   onRemove: (name: string) => void;
 }) {
-  const { anchorRef, anchorProps, tooltip } = useTooltip(
-    disabled || leaving ? undefined : `移除 ${name}`,
-  );
+  const { anchorRef, anchorProps, tooltip } = useTooltip(disabled || leaving ? undefined : `移除 ${name}`);
   return (
     <>
       <button
@@ -496,19 +458,9 @@ function Lineup({
           <span key={index} className={styles.slot} />
         ))}
       </div>
-      <PresenceList
-        items={names}
-        getKey={(name) => name}
-        variant="grid"
-        fallbackFocus={fallbackFocus}
-      >
+      <PresenceList items={names} getKey={(name) => name} variant="grid" fallbackFocus={fallbackFocus}>
         {(entries, ref) => (
-          <div
-            ref={ref}
-            className={cn('absolute inset-0', styles.lineup)}
-            role="group"
-            aria-label="已选桌面小马"
-          >
+          <div ref={ref} className={cn('absolute inset-0', styles.lineup)} role="group" aria-label="已选桌面小马">
             {entries.map(({ item: name, key, leaving }) => (
               <LineupSlot
                 key={key}
@@ -529,7 +481,5 @@ function Lineup({
 
 /** Placeholder while the dynamic desktop pony catalog and user selection load. */
 function ChooserSkeleton() {
-  return (
-    <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载桌面小马…" />
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载桌面小马…" />;
 }

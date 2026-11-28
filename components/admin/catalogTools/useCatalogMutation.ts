@@ -17,11 +17,7 @@ function focusedElement(): HTMLElement | null {
  * a conditional or a `finally`, and the whole hook went uncompiled for one. A callback that throws
  * is a failure of the write, as it was when both lived in the hook's own `try`.
  */
-async function attempt<T>(
-  request: () => Promise<T>,
-  done: (result: T) => void,
-  failed: (failure: unknown) => void,
-) {
+async function attempt<T>(request: () => Promise<T>, done: (result: T) => void, failed: (failure: unknown) => void) {
   try {
     done(await request());
   } catch (failure) {
@@ -52,11 +48,7 @@ export function useCatalogMutation(token: string) {
       lock.current = false;
     };
   }, [token]);
-  async function run<T>(
-    request: () => Promise<T>,
-    success: (data: T) => void,
-    committed?: (data: T) => void,
-  ) {
+  async function run<T>(request: () => Promise<T>, success: (data: T) => void, committed?: (data: T) => void) {
     if (lock.current || uncertain || !token || readToken() !== token) return;
     lock.current = true;
     setBusy(true);

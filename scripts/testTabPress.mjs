@@ -145,8 +145,7 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }));
   });
 const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result
-    ?.value;
+  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
 
 await send('Page.enable');
 socket.addEventListener('message', async (e) => {
@@ -221,12 +220,9 @@ function check(label, state, expect = {}) {
     }
     if (expect.selected && !state.panels.some((p) => p.selected === expect.selected))
       problems.push(`${expect.selected} is not selected`);
-    if (expect.url && state.url !== expect.url)
-      problems.push(`address ${state.url}, expected ${expect.url}`);
+    if (expect.url && state.url !== expect.url) problems.push(`address ${state.url}, expected ${expect.url}`);
   }
-  console.log(
-    `${problems.length ? 'FAIL' : ' ok '}  ${label}${problems.length ? ` — ${problems.join('; ')}` : ''}`,
-  );
+  console.log(`${problems.length ? 'FAIL' : ' ok '}  ${label}${problems.length ? ` — ${problems.join('; ')}` : ''}`);
   if (problems.length) failures.push(`${label}: ${problems.join('; ')}`);
 }
 
@@ -363,9 +359,7 @@ async function inputDuringSwitch(switchTab, kind) {
   let point;
   try {
     await switchTab();
-    point = await evaluate(
-      playingPanel(kind === 'pan' ? null : `${VIEWS}[data-tab="home-discussed"]`),
-    );
+    point = await evaluate(playingPanel(kind === 'pan' ? null : `${VIEWS}[data-tab="home-discussed"]`));
     if (point) {
       if (kind === 'pan') await touchAt(point, { move: { x: 0, y: -160 } });
       else if (kind === 'tap') await touchAt(point, { hold: 5 });
@@ -400,8 +394,7 @@ let tierScript = null;
 for (const { cpu, tier } of runs) {
   console.log(`\nCPU ${cpu}x slower, ${tier}`);
   await send('Emulation.setCPUThrottlingRate', { rate: cpu });
-  if (tierScript)
-    await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: tierScript });
+  if (tierScript) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: tierScript });
   tierScript = (
     await send('Page.addScriptToEvaluateOnNewDocument', {
       source: `try{localStorage.setItem('picpony_motion',${JSON.stringify(tier)})}catch(e){}`,
@@ -493,9 +486,7 @@ for (const { cpu, tier } of runs) {
 
   /* The pill is fixed chrome, so it is pressed from anywhere down the gallery: the forum opens at
      its own top and the gallery comes back to where it was left. */
-  await evaluate(
-    `(() => { document.querySelector('.app-scroller').scrollTop = 1500; return true; })()`,
-  );
+  await evaluate(`(() => { document.querySelector('.app-scroller').scrollTop = 1500; return true; })()`);
   await sleep(400);
   const left = await scrollTop();
   await touch(PILL, '论坛');
@@ -582,14 +573,10 @@ const midRun = async (selector, label, name) => {
     if (!run.mask) problems.push('the panel is not masked');
     if (!(run.reach > 0) || run.padding !== run.reach)
       problems.push(`box widened by ${run.reach} with ${run.padding} padding`);
-    if (Math.abs(run.travel - run.window) > 1)
-      problems.push(`travels ${run.travel}, the window is ${run.window}`);
-    if (!(run.window <= run.inner))
-      problems.push(`the window ${run.window} is not inside the scroller's ${run.inner}`);
+    if (Math.abs(run.travel - run.window) > 1) problems.push(`travels ${run.travel}, the window is ${run.window}`);
+    if (!(run.window <= run.inner)) problems.push(`the window ${run.window} is not inside the scroller's ${run.inner}`);
   }
-  const detail = run
-    ? ` (travel ${Math.round(run.travel)} of ${run.inner}, reach ${run.reach})`
-    : '';
+  const detail = run ? ` (travel ${Math.round(run.travel)} of ${run.inner}, reach ${run.reach})` : '';
   console.log(
     `${problems.length ? 'FAIL' : ' ok '}  ${name}, mid-run${detail}${problems.length ? ` — ${problems.join('; ')}` : ''}`,
   );

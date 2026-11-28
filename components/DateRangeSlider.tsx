@@ -25,22 +25,14 @@ function dayFromIndex(index: number): string {
 
 /** Calendar-only adapter; shared numeric range owns drafts, input, paint and commit deduplication.
  * See docs/design/layout.md#slider. */
-export default function DateRangeSlider({
-  min,
-  max,
-  value,
-  onCommit,
-  className = '',
-}: DateRangeSliderProps) {
+export default function DateRangeSlider({ min, max, value, onCommit, className = '' }: DateRangeSliderProps) {
   return (
     <RangeSlider
       min={dayIndex(min)}
       max={dayIndex(max)}
       step={1}
       value={{ start: dayIndex(value.start), end: dayIndex(value.end) }}
-      onCommit={(next) =>
-        onCommit({ start: dayFromIndex(next.start), end: dayFromIndex(next.end) })
-      }
+      onCommit={(next) => onCommit({ start: dayFromIndex(next.start), end: dayFromIndex(next.end) })}
       startLabel="开始日期"
       endLabel="结束日期"
       aria-label="日期范围"

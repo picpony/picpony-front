@@ -91,21 +91,12 @@ export function ShareSearchButton({ href, query }: { href: string; query: string
  */
 export function SharedByNotice({ name, onDismiss }: { name: string; onDismiss: () => void }) {
   return (
-    <div
-      className="flex h-10 min-w-0 items-center gap-2 text-body-m text-on-surface-variant"
-      role="status"
-    >
+    <div className="flex h-10 min-w-0 items-center gap-2 text-body-m text-on-surface-variant" role="status">
       <MdShare size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
       <p className="min-w-0 flex-1 truncate">
         <span className="text-body-m-emphasized text-on-surface">{name}</span> 分享了此次搜索
       </p>
-      <IconButton
-        size="sm"
-        dismiss
-        aria-label="关闭分享提示"
-        icon={<MdClose />}
-        onClick={onDismiss}
-      />
+      <IconButton size="sm" dismiss aria-label="关闭分享提示" icon={<MdClose />} onClick={onDismiss} />
     </div>
   );
 }

@@ -32,13 +32,11 @@ try {
   live = JSON.parse(readFileSync(CACHE, 'utf8'));
   console.log('using cached live fixture');
 } catch {
-  const res = await fetch(
-    'https://derpibooru.org/api/v1/json/search/images?q=pony&per_page=50&sf=score&sd=desc',
-    { signal: AbortSignal.timeout(30000) },
-  );
+  const res = await fetch('https://derpibooru.org/api/v1/json/search/images?q=pony&per_page=50&sf=score&sd=desc', {
+    signal: AbortSignal.timeout(30000),
+  });
   const text = await res.text();
-  if (!text.startsWith('{'))
-    throw new Error(`derpibooru answered ${res.status} with non-JSON; try again later`);
+  if (!text.startsWith('{')) throw new Error(`derpibooru answered ${res.status} with non-JSON; try again later`);
   live = JSON.parse(text);
   writeFileSync(CACHE, text);
 }
@@ -46,9 +44,7 @@ try {
    that cannot show the defect — and a source with enough pixels to *be* sharp: a picture whose
    own `medium` is 800px wide cannot fill a 1888 device-pixel box however it is fetched. */
 live.images = live.images.filter(
-  (i) =>
-    ['png', 'jpg', 'jpeg', 'webp'].includes((i.format || '').toLowerCase()) &&
-    (i.width || 0) >= 2400,
+  (i) => ['png', 'jpg', 'jpeg', 'webp'].includes((i.format || '').toLowerCase()) && (i.width || 0) >= 2400,
 );
 if (!live.images.length) throw new Error('no large static images in the cached fixture');
 const byId = new Map(live.images.map((i) => [i.id, i]));
@@ -104,8 +100,7 @@ const until = async (fn, ms = 60000) => {
   }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
-  throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
 
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-sharp-'));
 const browser = spawn(
@@ -153,8 +148,7 @@ const send = (method, params = {}) =>
     ws.send(JSON.stringify({ id: i, method, params }));
   });
 const ev = async (e) =>
-  (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true }))
-    .result?.result?.value;
+  (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })).result?.result?.value;
 await send('Runtime.enable');
 await send('Page.enable');
 
@@ -243,11 +237,7 @@ if (FAKE_CDN) {
       crc.writeUInt32BE(crc32(withType) >>> 0);
       const chunkBuf = Buffer.concat([len, withType, crc]);
       // Before IEND, which is the last 12 bytes.
-      buf = Buffer.concat([
-        buf.subarray(0, buf.length - 12),
-        chunkBuf,
-        buf.subarray(buf.length - 12),
-      ]);
+      buf = Buffer.concat([buf.subarray(0, buf.length - 12), chunkBuf, buf.subarray(buf.length - 12)]);
     }
     const b64 = buf.toString('base64');
     bodies.set(rung.w, b64);
@@ -256,9 +246,7 @@ if (FAKE_CDN) {
   for (const r of RUNGS) bodyFor(r);
   console.log(
     'faking derpicdn: ' +
-      RUNGS.map((r) => `${r.w}px/${Math.round((bodies.get(r.w).length * 3) / 4 / 1024)}KB`).join(
-        ' ',
-      ),
+      RUNGS.map((r) => `${r.w}px/${Math.round((bodies.get(r.w).length * 3) / 4 / 1024)}KB`).join(' '),
   );
   const arrivals = [];
   on('Fetch.requestPaused', ({ requestId, request }) => {
@@ -415,9 +403,7 @@ const out = await ev(`(async () => {
 if (out?.error) console.log(out.error);
 else {
   const c = out.cardInfo;
-  console.log(
-    `card: ${c.cssWidth}px css, bitmap ${c.naturalWidth}px, aspect ${c.aspect}, dpr ${c.dpr}`,
-  );
+  console.log(`card: ${c.cssWidth}px css, bitmap ${c.naturalWidth}px, aspect ${c.aspect}, dpr ${c.dpr}`);
   console.log('  t(ms)  layer    devicePx  bitmapW  upscale');
   let prevKey = '';
   for (const s of out.samples) {
@@ -432,9 +418,7 @@ else {
   if (FAKE_CDN && globalThis.__arrivals?.length) {
     console.log('faked CDN, as served (rung, weight, held before fulfilling):');
     for (const a of globalThis.__arrivals) {
-      console.log(
-        `   ${String(a.w).padStart(4)}px ${String(a.kb).padStart(4)}KB  held ${String(a.ms).padStart(4)}ms`,
-      );
+      console.log(`   ${String(a.w).padStart(4)}px ${String(a.kb).padStart(4)}KB  held ${String(a.ms).padStart(4)}ms`);
     }
   }
   if (out.cdn?.length) {

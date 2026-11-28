@@ -102,10 +102,7 @@ const CONTACT_PAGE = 100;
 // ---------------------------------------------------------------------------
 
 /** 公告: public, paged. Bodies are sanitised here, the same way the pop-up's are. */
-export async function readAnnouncementHistory(
-  page: number,
-  signal?: AbortSignal,
-): Promise<AnnouncementPage> {
+export async function readAnnouncementHistory(page: number, signal?: AbortSignal): Promise<AnnouncementPage> {
   const result = await pager.read(
     'announcements',
     page,
@@ -173,10 +170,7 @@ export async function readNotifications(
 }
 
 /** Marks notices read (1–100 ids, the backend's bound). Resolves with how many changed. */
-export async function markNotificationsRead(
-  token: string,
-  ids: readonly number[],
-): Promise<number> {
+export async function markNotificationsRead(token: string, ids: readonly number[]): Promise<number> {
   if (ids.length === 0) return 0;
   const data = await api<{ marked: number }>('POST', '/me/notifications/read-receipts', {
     token,
@@ -223,16 +217,12 @@ export async function readConversation(
     `conversation:${token}:${withUserId}`,
     page,
     async (before, s) => {
-      const data = await api<Keyset<'messages', WireMessage>>(
-        'GET',
-        `/me/conversations/${seg(withUserId)}/messages`,
-        {
-          token,
-          query: { before, limit: CONVERSATION_PAGE },
-          cache: 'no-store',
-          signal: s,
-        },
-      );
+      const data = await api<Keyset<'messages', WireMessage>>('GET', `/me/conversations/${seg(withUserId)}/messages`, {
+        token,
+        query: { before, limit: CONVERSATION_PAGE },
+        cache: 'no-store',
+        signal: s,
+      });
       return { rows: data.messages, next: data.next_cursor };
     },
     signal,
@@ -267,11 +257,7 @@ export async function readConversation(
 }
 
 /** People to start a conversation with, by name. */
-export async function searchUsers(
-  token: string,
-  keyword: string,
-  signal?: AbortSignal,
-): Promise<ChatUser[]> {
+export async function searchUsers(token: string, keyword: string, signal?: AbortSignal): Promise<ChatUser[]> {
   const data = await api<{
     users: (WireUser & { experience: number })[];
     next_cursor: number | null;
@@ -345,9 +331,7 @@ function safeDecode(value: string): string {
  * representation, absolute, and **raw** — the image line (a proxy wrapper) is the sender's, and
  * the recipient's own line is applied when the card is drawn.
  */
-export function shareThumbUrl(
-  representations: Partial<ImageRepresentation> | null | undefined,
-): string {
+export function shareThumbUrl(representations: Partial<ImageRepresentation> | null | undefined): string {
   const chosen = representations?.small || representations?.thumb || representations?.medium || '';
   return absoluteImageUrl(chosen);
 }

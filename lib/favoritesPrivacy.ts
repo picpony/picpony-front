@@ -21,14 +21,7 @@ import type { PonyImage } from '@/lib/types/image';
 
 export const HEARTBEAT_MS = 5_000;
 export type PrivacyStatus =
-  | 'unknown'
-  | 'checking'
-  | 'check-failed'
-  | 'no-password'
-  | 'locked'
-  | 'loading'
-  | 'open'
-  | 'list-failed';
+  'unknown' | 'checking' | 'check-failed' | 'no-password' | 'locked' | 'loading' | 'open' | 'list-failed';
 
 export interface PrivacySnapshot {
   token: string | null;
@@ -92,8 +85,7 @@ function unlockMs() {
 }
 
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
-const unlocked = () =>
-  snapshot.status === 'open' || snapshot.status === 'loading' || snapshot.status === 'list-failed';
+const unlocked = () => snapshot.status === 'open' || snapshot.status === 'loading' || snapshot.status === 'list-failed';
 
 function stopHeartbeat() {
   if (heartbeat !== null) clearInterval(heartbeat);
@@ -200,10 +192,7 @@ async function loadList(token: string) {
   if (present > 0 && visible()) startHeartbeat();
   else leftScreen();
   const current = () =>
-    generation === asked &&
-    listVersion === version &&
-    snapshot.token === token &&
-    readToken() === token;
+    generation === asked && listVersion === version && snapshot.token === token && readToken() === token;
   try {
     const images = await api.getPrivacyFaves(token, controller.signal);
     if (!current()) return;
@@ -274,16 +263,11 @@ export function lockPrivacy(token: string, { auto = false }: { auto?: boolean } 
   cancelRead();
   stopHeartbeat();
   clearExpiry();
-  if (wasUnlocked)
-    publish({ status: 'locked', images: null, error: null, autoLocked: auto, refreshing: false });
+  if (wasUnlocked) publish({ status: 'locked', images: null, error: null, autoLocked: auto, refreshing: false });
   if (readToken() === token) void api.lockPrivacySpace(token, { keepalive: auto }).catch(() => {});
 }
 
-export async function changePrivacyPassword(
-  token: string,
-  oldPassword: string,
-  newPassword: string,
-) {
+export async function changePrivacyPassword(token: string, oldPassword: string, newPassword: string) {
   requireSession(token);
   await api.changePrivacyPassword(token, oldPassword, newPassword);
 }
@@ -323,8 +307,7 @@ export async function reloadPrivacy(token: string) {
 
 export function forgetPrivacyPictures(token: string, ids: readonly number[]) {
   if (!ownSession(token) || ids.length === 0) return;
-  if (ids.some((id) => knownIds.has(id)))
-    setKnown(new Set([...knownIds].filter((id) => !ids.includes(id))));
+  if (ids.some((id) => knownIds.has(id))) setKnown(new Set([...knownIds].filter((id) => !ids.includes(id))));
   if (!snapshot.images) return;
   cancelRead();
   const gone = new Set(ids);
@@ -351,10 +334,7 @@ export async function restoreToPrivacy(token: string, image: PonyImage) {
 export async function removeFromPrivacy(
   token: string,
   ids: readonly number[],
-  {
-    signal,
-    onProgress,
-  }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
+  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<{ removed: number[]; failed: { id: number; error: unknown }[] }> {
   const removed: number[] = [];
   const failed: { id: number; error: unknown }[] = [];

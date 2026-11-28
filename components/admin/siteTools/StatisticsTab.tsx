@@ -23,13 +23,7 @@ function StatisticsTab({ token }: AdminPanelProps) {
     <Card variant="filled" padding="sm" className="space-y-1">
       <dt className="text-body-s text-on-surface-variant">{label}</dt>
       <dd className="text-title-l tabular-nums">
-        {value !== undefined ? (
-          formatCount(value)
-        ) : stats.error ? (
-          '—'
-        ) : (
-          <Skeleton className="h-7 w-20" />
-        )}
+        {value !== undefined ? formatCount(value) : stats.error ? '—' : <Skeleton className="h-7 w-20" />}
       </dd>
     </Card>
   );
@@ -43,9 +37,7 @@ function StatisticsTab({ token }: AdminPanelProps) {
         {tile('在线用户', data?.onlineUsers)}
         {tile('在线访客', data?.onlineVisitors)}
       </dl>
-      <AdminNote>
-        在线人数为最近 30 分钟内活跃的账号与访客；访客按浏览器去重，按北京时间计日。
-      </AdminNote>
+      <AdminNote>在线人数为最近 30 分钟内活跃的账号与访客；访客按浏览器去重，按北京时间计日。</AdminNote>
       <DataTable
         rows={data?.days ?? []}
         rowKey={(r) => r.date}

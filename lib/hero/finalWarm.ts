@@ -12,12 +12,7 @@ import { getHeroMediaRenderedWidth, getHeroMediaResponsiveSizes } from './geomet
  * shared by the detail's own prefetch lease (`DetailImage`) and the press-time warm below, so
  * both ask for the file the final layer is going to request.
  */
-export function getDetailFinalCandidate(
-  srcSet: string | undefined,
-  fallback: string,
-  width: number,
-  height: number,
-) {
+export function getDetailFinalCandidate(srcSet: string | undefined, fallback: string, width: number, height: number) {
   if (!srcSet || typeof window === 'undefined') return fallback;
 
   const renderedWidth = getHeroMediaRenderedWidth(
@@ -34,11 +29,7 @@ export function getDetailFinalCandidate(
     .filter((candidate): candidate is { url: string; width: number } => Boolean(candidate))
     .sort((a, b) => a.width - b.width);
 
-  return (
-    candidates.find((candidate) => candidate.width >= targetWidth)?.url ??
-    candidates.at(-1)?.url ??
-    fallback
-  );
+  return candidates.find((candidate) => candidate.width >= targetWidth)?.url ?? candidates.at(-1)?.url ?? fallback;
 }
 
 /** The URL the detail's final `<img>` will request for this picture, or `''` for none. */

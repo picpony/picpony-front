@@ -9,12 +9,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import type {
-  SharedBlockGroup,
-  SharedTagGroup,
-  ShareableBlockGroup,
-  ShareableTagGroup,
-} from '@/lib/api/forum';
+import type { SharedBlockGroup, SharedTagGroup, ShareableBlockGroup, ShareableTagGroup } from '@/lib/api/forum';
 import { useResource, SKIP } from '@/lib/resource';
 import { shareableGroups } from '@/lib/resources';
 import { ICON } from '@/lib/icons';
@@ -137,144 +132,125 @@ interface SharedGroupsPickerProps {
  * checkbox row naming its first few tags — and, when editing, the groups the post already shares.
  * A group is shared as a copy, so a later change to it does not reach the post.
  */
-const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerProps>(
-  function SharedGroupsPicker({ token, selected, onChange, kept, error }, ref) {
-    const legendId = useId();
-    const errorId = useId();
-    const read = useResource(shareableGroups, token ? { token } : SKIP);
-    const options = optionsOf(read.data, kept);
-    const chosen = new Set(selected);
-    const toggle = (key: string, on: boolean) =>
-      onChange(
-        on
-          ? [...selected.filter((item) => item !== key), key]
-          : selected.filter((item) => item !== key),
-      );
+const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerProps>(function SharedGroupsPicker(
+  { token, selected, onChange, kept, error },
+  ref,
+) {
+  const legendId = useId();
+  const errorId = useId();
+  const read = useResource(shareableGroups, token ? { token } : SKIP);
+  const options = optionsOf(read.data, kept);
+  const chosen = new Set(selected);
+  const toggle = (key: string, on: boolean) =>
+    onChange(on ? [...selected.filter((item) => item !== key), key] : selected.filter((item) => item !== key));
 
-    return (
-      <fieldset
-        ref={ref}
-        tabIndex={-1}
-        aria-labelledby={legendId}
-        aria-describedby={error ? errorId : undefined}
-        aria-invalid={error ? true : undefined}
-        className="min-w-0 rounded-md focus-visible:outline-hidden"
-      >
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <legend id={legendId} className="text-title-s text-on-surface">
-            选择要分享的组
-          </legend>
-          <span className="text-body-s text-on-surface-variant tabular-nums">
-            已选 {chosen.size} 个
-          </span>
-        </div>
-        {read.data === undefined && !read.error && !kept ? (
-          <PageLoadingIndicator
-            size="inline"
-            indicatorSize="md"
-            label="正在加载分组…"
-            className="min-h-28"
-          />
-        ) : (
-          <>
-            {read.error !== undefined && (
-              <ErrorRetry
-                size="inline"
-                title="标签组与屏蔽组加载失败"
-                message={apiErrorMessage(read.error)}
-                onRetry={isRetryable(read.error) ? read.refresh : undefined}
-              />
-            )}
-            {options.length === 0 && read.error === undefined ? (
-              <EmptyState
-                size="inline"
-                title="暂无可分享的标签组或屏蔽组"
-                action={
-                  <Link
-                    href="/block-groups"
-                    scroll={false}
-                    className="prose-link text-body-m focus-visible:ring-2 focus-ring"
-                  >
-                    前往创建屏蔽组
-                  </Link>
-                }
-              />
-            ) : (
-              <ul>
-                {options.map((option) => {
-                  const nameId = `${legendId}-${option.key}`;
-                  return (
-                    <li
-                      key={option.key}
-                      /* The row is the pointer's target, the checkbox the keyboard's: a click
+  return (
+    <fieldset
+      ref={ref}
+      tabIndex={-1}
+      aria-labelledby={legendId}
+      aria-describedby={error ? errorId : undefined}
+      aria-invalid={error ? true : undefined}
+      className="min-w-0 rounded-md focus-visible:outline-hidden"
+    >
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <legend id={legendId} className="text-title-s text-on-surface">
+          选择要分享的组
+        </legend>
+        <span className="text-body-s text-on-surface-variant tabular-nums">已选 {chosen.size} 个</span>
+      </div>
+      {read.data === undefined && !read.error && !kept ? (
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载分组…" className="min-h-28" />
+      ) : (
+        <>
+          {read.error !== undefined && (
+            <ErrorRetry
+              size="inline"
+              title="标签组与屏蔽组加载失败"
+              message={apiErrorMessage(read.error)}
+              onRetry={isRetryable(read.error) ? read.refresh : undefined}
+            />
+          )}
+          {options.length === 0 && read.error === undefined ? (
+            <EmptyState
+              size="inline"
+              title="暂无可分享的标签组或屏蔽组"
+              action={
+                <Link
+                  href="/block-groups"
+                  scroll={false}
+                  className="prose-link text-body-m focus-visible:ring-2 focus-ring"
+                >
+                  前往创建屏蔽组
+                </Link>
+              }
+            />
+          ) : (
+            <ul>
+              {options.map((option) => {
+                const nameId = `${legendId}-${option.key}`;
+                return (
+                  <li
+                    key={option.key}
+                    /* The row is the pointer's target, the checkbox the keyboard's: a click
                        anywhere on the row toggles it, and the checkbox's own label takes its own
                        clicks (hence the test), so nothing toggles twice. */
-                      onClick={(event) => {
-                        if ((event.target as HTMLElement).closest('label')) return;
-                        toggle(option.key, !chosen.has(option.key));
-                      }}
-                      className="m3-row state-layer transition-ui flex cursor-pointer items-start gap-3 bg-surface-container-low p-3"
-                    >
-                      <Checkbox
-                        checked={chosen.has(option.key)}
-                        onChange={(on) => toggle(option.key, on)}
-                        aria-labelledby={nameId}
-                        className="mt-0.5 shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="shrink-0 text-on-surface-variant [&>svg]:block"
-                            aria-hidden="true"
-                          >
-                            {option.kind === 'tag' ? (
-                              <MdBookmarks size={ICON.dense} />
-                            ) : (
-                              <MdBlock size={ICON.dense} />
-                            )}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest('label')) return;
+                      toggle(option.key, !chosen.has(option.key));
+                    }}
+                    className="m3-row state-layer transition-ui flex cursor-pointer items-start gap-3 bg-surface-container-low p-3"
+                  >
+                    <Checkbox
+                      checked={chosen.has(option.key)}
+                      onChange={(on) => toggle(option.key, on)}
+                      aria-labelledby={nameId}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex min-w-0 items-center gap-2">
+                        <span className="shrink-0 text-on-surface-variant [&>svg]:block" aria-hidden="true">
+                          {option.kind === 'tag' ? <MdBookmarks size={ICON.dense} /> : <MdBlock size={ICON.dense} />}
+                        </span>
+                        <span
+                          id={nameId}
+                          className="min-w-0 truncate text-label-l-emphasized text-on-surface"
+                          title={option.name}
+                        >
+                          {option.kind === 'tag' ? '标签组' : '屏蔽组'}「{option.name}」
+                        </span>
+                        {option.source === 'kept' && <Badge className="shrink-0">帖子中已分享</Badge>}
+                      </p>
+                      <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                        {option.tags.slice(0, TAG_PREVIEW).map((tag) => (
+                          <Badge key={tag} title={tag} className="max-w-40">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {option.tags.length > TAG_PREVIEW && (
+                          <span className="text-body-s tabular-nums text-on-surface-variant">
+                            +{option.tags.length - TAG_PREVIEW}
                           </span>
-                          <span
-                            id={nameId}
-                            className="min-w-0 truncate text-label-l-emphasized text-on-surface"
-                            title={option.name}
-                          >
-                            {option.kind === 'tag' ? '标签组' : '屏蔽组'}「{option.name}」
-                          </span>
-                          {option.source === 'kept' && (
-                            <Badge className="shrink-0">帖子中已分享</Badge>
-                          )}
-                        </p>
-                        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
-                          {option.tags.slice(0, TAG_PREVIEW).map((tag) => (
-                            <Badge key={tag} title={tag} className="max-w-40">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {option.tags.length > TAG_PREVIEW && (
-                            <span className="text-body-s tabular-nums text-on-surface-variant">
-                              +{option.tags.length - TAG_PREVIEW}
-                            </span>
-                          )}
-                          {option.tags.length === 0 && (
-                            <span className="text-body-s text-on-surface-variant">暂无标签</span>
-                          )}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </>
-        )}
-        {error && (
-          <p id={errorId} role="alert" className="mt-1 text-body-s text-error">
-            {error}
-          </p>
-        )}
-      </fieldset>
-    );
-  },
-);
+                        )}
+                        {option.tags.length === 0 && (
+                          <span className="text-body-s text-on-surface-variant">暂无标签</span>
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+      {error && (
+        <p id={errorId} role="alert" className="mt-1 text-body-s text-error">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+});
 
 export default SharedGroupsPicker;

@@ -71,11 +71,7 @@ function CommentAvatar({ comment }: { comment: Comment }) {
   if (!comment.user_id) return <div className="shrink-0">{face}</div>;
   return (
     <Link
-      href={
-        comment.source === 'trixiebooru'
-          ? `/derpi/user/${comment.user_id}`
-          : `/user/${comment.user_id}`
-      }
+      href={comment.source === 'trixiebooru' ? `/derpi/user/${comment.user_id}` : `/user/${comment.user_id}`}
       aria-label={`查看 ${comment.username} 的个人资料`}
       scroll={false}
       className="block shrink-0 rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
@@ -102,11 +98,8 @@ function CommentRow({
 }) {
   const fromDerpibooru = comment.source === 'trixiebooru';
   const body = fromDerpibooru ? derpiMarkdown(comment.body) : comment.body;
-  const translation = useTextTranslation(plainTextOf(comment.body), (message) =>
-    showToast(message, 'error'),
-  );
-  const level =
-    !fromDerpibooru && typeof comment.experience === 'number' ? levelOf(comment.experience) : null;
+  const translation = useTextTranslation(plainTextOf(comment.body), (message) => showToast(message, 'error'));
+  const level = !fromDerpibooru && typeof comment.experience === 'number' ? levelOf(comment.experience) : null;
   const badges = !fromDerpibooru ? (comment.equipped_badges ?? []).slice(0, 3) : [];
 
   return (
@@ -125,9 +118,7 @@ function CommentRow({
             two-line list item. The actions used to be a 40dp row of their own under every
             comment, which made a one-line comment 125px tall. */}
         <div className="flex min-h-8 items-center gap-2">
-          <span className="min-w-0 truncate text-label-l-emphasized text-on-surface">
-            {comment.username}
-          </span>
+          <span className="min-w-0 truncate text-label-l-emphasized text-on-surface">{comment.username}</span>
           {level !== null && <Badge className="hidden shrink-0 sm:inline-flex">Lv.{level}</Badge>}
           <div
             className={cn(
@@ -144,12 +135,7 @@ function CommentRow({
               icon={<MdTranslate />}
               onClick={translation.toggle}
             />
-            <IconButton
-              size="sm"
-              aria-label="回复"
-              icon={<MdReply />}
-              onClick={() => onReply(comment)}
-            />
+            <IconButton size="sm" aria-label="回复" icon={<MdReply />} onClick={() => onReply(comment)} />
             {canDelete && (
               <IconButton
                 size="sm"
@@ -164,14 +150,8 @@ function CommentRow({
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-s text-on-surface-variant">
           {level !== null && <Badge className="shrink-0 sm:hidden">Lv.{level}</Badge>}
-          <time
-            dateTime={comment.created_at}
-            title={formatDateTime(comment.created_at)}
-            className="tabular-nums"
-          >
-            {now === null
-              ? formatDate(comment.created_at)
-              : formatCompactDateTime(comment.created_at, now)}
+          <time dateTime={comment.created_at} title={formatDateTime(comment.created_at)} className="tabular-nums">
+            {now === null ? formatDate(comment.created_at) : formatCompactDateTime(comment.created_at, now)}
           </time>
           {fromDerpibooru && <span>来自 Derpibooru</span>}
           {badges.map((badge) => (
@@ -198,14 +178,7 @@ function CommentRow({
 
 /** Placeholder while comment count and multiline body heights are unknown. */
 function CommentRowsSkeleton() {
-  return (
-    <PageLoadingIndicator
-      size="inline"
-      indicatorSize="md"
-      label="正在加载评论…"
-      className="min-h-36"
-    />
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载评论…" className="min-h-36" />;
 }
 
 /**
@@ -294,22 +267,20 @@ export default function CommentSection({
   };
 
   const handleDelete = (comment: Comment) => {
-    void confirm({ title: '确认删除', message: '确定要删除此评论吗？', tone: 'danger' }).then(
-      (confirmed) => {
-        const token = readToken();
-        if (!confirmed || !token) return;
-        setDeletingId(comment.id);
-        void removeComment(token, comment.id).then((outcome) => {
-          setDeletingId(null);
-          if (!outcome.ok) {
-            showToast(outcome.message, 'error');
-            return;
-          }
-          thread.removeSiteComment(comment.id);
-          showToast('已删除评论', 'success');
-        });
-      },
-    );
+    void confirm({ title: '确认删除', message: '确定要删除此评论吗？', tone: 'danger' }).then((confirmed) => {
+      const token = readToken();
+      if (!confirmed || !token) return;
+      setDeletingId(comment.id);
+      void removeComment(token, comment.id).then((outcome) => {
+        setDeletingId(null);
+        if (!outcome.ok) {
+          showToast(outcome.message, 'error');
+          return;
+        }
+        thread.removeSiteComment(comment.id);
+        showToast('已删除评论', 'success');
+      });
+    });
   };
 
   /* A reply's `@name` link names a comment on Derpibooru; when that comment is on screen here,
@@ -327,9 +298,7 @@ export default function CommentSection({
     const anchor = (event.target as Element).closest?.('a[href]');
     const target = derpiCommentTarget(anchor?.getAttribute('href'));
     if (!target || target.imageId !== imageId) return;
-    const row = listRef.current?.querySelector<HTMLElement>(
-      `[data-comment-key="trixiebooru-${target.commentId}"]`,
-    );
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-comment-key="trixiebooru-${target.commentId}"]`);
     if (!row) return;
     event.preventDefault();
     scrollAppToElement(row, { scroller: scrollerRef?.current ?? undefined });
@@ -339,20 +308,13 @@ export default function CommentSection({
   /* Every comment there is: Derpibooru's total (the thread's own once its first page is in, the
      record's until then, and still the record's if the list failed) plus PicPony's. */
   const derpiPart = thread.derpi.total ?? (typeof derpiCount === 'number' ? derpiCount : null);
-  const known =
-    derpiPart === null && thread.site.count === null
-      ? null
-      : (derpiPart ?? 0) + (thread.site.count ?? 0);
+  const known = derpiPart === null && thread.site.count === null ? null : (derpiPart ?? 0) + (thread.site.count ?? 0);
   const bothFailed = siteFailed && derpiFailed;
   const failure = thread.derpi.error ?? thread.site.error;
   const loading = !enabled || !thread.shown;
 
   return (
-    <section
-      ref={observe}
-      aria-labelledby={headingId}
-      className="mt-3 border-t border-outline-variant pt-8"
-    >
+    <section ref={observe} aria-labelledby={headingId} className="mt-3 border-t border-outline-variant pt-8">
       <SectionHeading
         as="h2"
         id={headingId}
@@ -425,19 +387,13 @@ export default function CommentSection({
             !derpiFailed && <EmptyState size="inline" title="暂无评论" />
           )}
           {thread.derpi.loading && (
-            <p
-              role="status"
-              className="flex items-center justify-center gap-2 text-body-m text-on-surface-variant"
-            >
+            <p role="status" className="flex items-center justify-center gap-2 text-body-m text-on-surface-variant">
               <Spinner size="sm" />
               正在加载 Derpibooru 评论…
             </p>
           )}
           {thread.site.loading && (
-            <p
-              role="status"
-              className="flex items-center justify-center gap-2 text-body-m text-on-surface-variant"
-            >
+            <p role="status" className="flex items-center justify-center gap-2 text-body-m text-on-surface-variant">
               <Spinner size="sm" />
               正在加载本站评论…
             </p>

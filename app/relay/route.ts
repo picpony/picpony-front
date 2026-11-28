@@ -124,10 +124,7 @@ async function relay(request: NextRequest): Promise<Response> {
      from. */
   if (response.status >= 300 && response.status < 400) {
     void response.body?.cancel().catch(() => {});
-    return Response.json(
-      { success: false, message: 'PicPony API 线路返回了重定向' },
-      { status: 502 },
-    );
+    return Response.json({ success: false, message: 'PicPony API 线路返回了重定向' }, { status: 502 });
   }
 
   /* Even /api/ can answer an HTML error or challenge page. Serving that document from our
@@ -151,10 +148,7 @@ async function relay(request: NextRequest): Promise<Response> {
         { status: response.status },
       );
     }
-    return Response.json(
-      { success: false, message: 'PicPony API 线路返回了非 JSON 内容' },
-      { status: 502 },
-    );
+    return Response.json({ success: false, message: 'PicPony API 线路返回了非 JSON 内容' }, { status: 502 });
   }
 
   const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);

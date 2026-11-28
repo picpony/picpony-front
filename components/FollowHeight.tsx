@@ -347,11 +347,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   render() {
     return (
       <div ref={this.setNode} className={this.props.className}>
-        {this.props.track ? (
-          <div ref={this.setInner}>{this.props.children}</div>
-        ) : (
-          this.props.children
-        )}
+        {this.props.track ? <div ref={this.setInner}>{this.props.children}</div> : this.props.children}
       </div>
     );
   }

@@ -16,12 +16,7 @@ import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import * as adminApi from '@/lib/api/admin';
-import {
-  BLOCK_FILTER_KEYS,
-  installBlockFilters,
-  type BlockFilterKey,
-  type BlockFilters,
-} from '@/lib/blockFilters';
+import { BLOCK_FILTER_KEYS, installBlockFilters, type BlockFilterKey, type BlockFilters } from '@/lib/blockFilters';
 import SectionHeader from './SectionHeader';
 import { AdminNote } from './AdminForm';
 import { defineAdminQuery, retryError, useAdminQuery } from './queries';
@@ -45,17 +40,14 @@ const RULES: Record<BlockFilterKey, { name: string; role: string }> = {
   onlyPony: { name: '只看小马', role: '允许的物种（任一即可）' },
 };
 
-const isRule = (value: string): value is BlockFilterKey =>
-  (BLOCK_FILTER_KEYS as readonly string[]).includes(value);
+const isRule = (value: string): value is BlockFilterKey => (BLOCK_FILTER_KEYS as readonly string[]).includes(value);
 
 /* The rules every visitor's searches carry: the rows (with the ids a removal names), and the same
    tags installed as this tab's live filters, so the console's own searches follow an edit at once. */
 const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (_token, signal) => {
   const data = await adminApi.getBlockTags(signal);
   const grouped: BlockTagsGroup = {};
-  const filters = Object.fromEntries(
-    BLOCK_FILTER_KEYS.map((key) => [key, [] as string[]]),
-  ) as BlockFilters;
+  const filters = Object.fromEntries(BLOCK_FILTER_KEYS.map((key) => [key, [] as string[]])) as BlockFilters;
   for (const row of data.tags) {
     if (!isRule(row.filter)) continue;
     (grouped[row.filter] ??= []).push({ id: row.id, tag_name: row.tag, filter_key: row.filter });
@@ -192,13 +184,7 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
           onRetry={read.retryable ? read.refresh : undefined}
         />
       ) : !read.data ? (
-        <PageLoadingIndicator
-          size="pane"
-          holdFooter
-          delay={120}
-          label="正在加载屏蔽标签…"
-          className="min-h-60"
-        />
+        <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载屏蔽标签…" className="min-h-60" />
       ) : (
         <div className="space-y-4">
           {BLOCK_FILTER_KEYS.map((key) => {

@@ -12,12 +12,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
 import { getAssetUrl } from '@/lib/utils';
 import * as api from '@/lib/api/adminCatalogTools';
-import {
-  mascotPayload,
-  mascotProblems,
-  tipCount,
-  type Mascot,
-} from '@/lib/adminCatalogTools/model';
+import { mascotPayload, mascotProblems, tipCount, type Mascot } from '@/lib/adminCatalogTools/model';
 import { mascotConfig } from '@/lib/mascot/queries';
 import type { AdminPanelProps } from '../registry';
 import SectionHeader from '../SectionHeader';
@@ -267,12 +262,7 @@ function MascotEditor({
         </>
       }
     >
-      <AdminForm
-        id="mascot-editor"
-        className="max-w-none"
-        aria-label="吉祥物资料"
-        onSubmit={submit}
-      >
+      <AdminForm id="mascot-editor" className="max-w-none" aria-label="吉祥物资料" onSubmit={submit}>
         <Input
           label="吉祥物名称"
           value={name}

@@ -70,10 +70,7 @@ assert.equal(credentials.derpi_user_id, '42');
 assert.equal(credentials.derpi_username, 'saved-owner');
 session.updateUserInfo('B', credentials);
 assert.equal(storage.getItem('derpi_api_key'), 'new-key');
-assert.equal(
-  session.resolveDerpiCredentials({ api_key: null }, session.readUserInfo()).api_key,
-  'new-key',
-);
+assert.equal(session.resolveDerpiCredentials({ api_key: null }, session.readUserInfo()).api_key, 'new-key');
 const verified = session.resolveDerpiCredentials(
   { api_key: 'verified-key', derpi_user_id: 73, derpi_username: 'verified-owner' },
   session.readUserInfo(),

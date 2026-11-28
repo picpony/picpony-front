@@ -10,15 +10,8 @@ import { requireTypeStripping } from './tsResolve.mjs';
 
 requireTypeStripping('testMascotShape');
 
-const {
-  shapeRows,
-  parseMascotShape,
-  shapePath,
-  shapeHead,
-  shapeLift,
-  MASCOT_SHAPE_GRID,
-  MASCOT_SHAPE_ALPHA,
-} = await import('../lib/mascot/shapeModel.ts');
+const { shapeRows, parseMascotShape, shapePath, shapeHead, shapeLift, MASCOT_SHAPE_GRID, MASCOT_SHAPE_ALPHA } =
+  await import('../lib/mascot/shapeModel.ts');
 const { GET } = await import('../app/mascot-shape/route.ts');
 const { getMascotConfig } = await import('../lib/api/mascot.ts');
 
@@ -70,8 +63,7 @@ function rects(path) {
   return out;
 }
 
-const inside = (boxes, x, y) =>
-  boxes.some(([x0, top, x1, bottom]) => x >= x0 && x < x1 && y >= top && y < bottom);
+const inside = (boxes, x, y) => boxes.some(([x0, top, x1, bottom]) => x >= x0 && x < x1 && y >= top && y < bottom);
 
 /** Distance from a point to the nearest character cell, in the figure's pixels. */
 function distance(shape, cw, ch, x, y) {
@@ -108,18 +100,7 @@ const FIGURE = drawn([
 
 test('runs follow the alpha threshold and close at the grid edge', () => {
   const w = 5;
-  const alpha = [
-    0,
-    MASCOT_SHAPE_ALPHA - 1,
-    MASCOT_SHAPE_ALPHA,
-    255,
-    0,
-    /* row 2 */ 255,
-    0,
-    0,
-    255,
-    255,
-  ];
+  const alpha = [0, MASCOT_SHAPE_ALPHA - 1, MASCOT_SHAPE_ALPHA, 255, 0, /* row 2 */ 255, 0, 0, 255, 255];
   assert.deepEqual(shapeRows(alpha, w, 2), [
     [2, 4],
     [0, 1, 3, 5],
@@ -192,13 +173,8 @@ test('padding forgives every aim within reach and reaches no further than a row 
         const d = distance(FIGURE, cw, ch, x, y);
         const hit = inside(boxes, x, y);
         /* A row is the vertical grain, and edges land on whole pixels. */
-        if (d <= pad - 1)
-          assert.ok(hit, `missed ${x},${y} at ${d.toFixed(2)}px (cell ${cw}x${ch}, pad ${pad})`);
-        if (hit)
-          assert.ok(
-            d <= pad + ch + 3,
-            `stray ${x},${y} at ${d.toFixed(2)}px (cell ${cw}x${ch}, pad ${pad})`,
-          );
+        if (d <= pad - 1) assert.ok(hit, `missed ${x},${y} at ${d.toFixed(2)}px (cell ${cw}x${ch}, pad ${pad})`);
+        if (hit) assert.ok(d <= pad + ch + 3, `stray ${x},${y} at ${d.toFixed(2)}px (cell ${cw}x${ch}, pad ${pad})`);
       }
     }
   }
@@ -216,9 +192,7 @@ test('the gap between the legs stays the page’s under a mouse', () => {
 test('rows that agree make one rectangle, and a slanting edge cannot drift a band wider', () => {
   const bar = drawn(['.##.', '.##.', '.##.', '.##.']);
   assert.equal(rects(shapePath(bar, 40, 40, 0)).length, 1);
-  const slant = drawn(
-    Array.from({ length: 12 }, (_, row) => '.'.repeat(row) + '#'.repeat(8) + '.'.repeat(12 - row)),
-  );
+  const slant = drawn(Array.from({ length: 12 }, (_, row) => '.'.repeat(row) + '#'.repeat(8) + '.'.repeat(12 - row)));
   const boxes = rects(shapePath(slant, 20, 12, 0));
   /* A cell a pixel wide: a band takes rows within a pixel of its first, so no rectangle is wider
      than a row plus that pixel. */
@@ -265,10 +239,7 @@ test('a box near the head rises just clear of it, and one clear already stays pu
   /* Under the body's left end only from row 6 down, 30px — the box already ends 4px above. */
   assert.equal(shapeLift(FIGURE, width, height, { left: 0, right: 20, top: -6, bottom: 26 }, 4), 0);
   assert.equal(shapeLift(FIGURE, width, height, { left: 0, right: 20, top: -6, bottom: 27 }, 4), 1);
-  assert.equal(
-    shapeLift(drawn(['....', '....']), 40, 20, { left: 0, right: 40, top: 0, bottom: 20 }, 4),
-    0,
-  );
+  assert.equal(shapeLift(drawn(['....', '....']), 40, 20, { left: 0, right: 40, top: 0, bottom: 20 }, 4), 0);
   /* Wherever it starts, the risen box keeps its distance from every cell it is beside. */
   for (let left = -20; left < width; left += 7) {
     for (let bottom = 0; bottom < height; bottom += 9) {
@@ -278,10 +249,7 @@ test('a box near the head rises just clear of it, and one clear already stays pu
       FIGURE.rows.forEach((runs, row) => {
         for (let i = 0; i < runs.length; i += 2) {
           if (runs[i + 1] * cw <= box.left - 4 || runs[i] * cw >= box.right + 4) continue;
-          assert.ok(
-            row * cw >= box.bottom - lift + 4 - 1e-9,
-            `box ${left},${bottom} lifted ${lift} meets row ${row}`,
-          );
+          assert.ok(row * cw >= box.bottom - lift + 4 - 1e-9, `box ${left},${bottom} lifted ${lift} meets row ${row}`);
         }
       });
     }
@@ -293,9 +261,7 @@ test('a box near the head rises just clear of it, and one clear already stays pu
 const SRC = 'https://picpony.top/uploads/mascots/pony.png';
 const call = (src) =>
   GET({
-    nextUrl: new URL(
-      `http://localhost/mascot-shape${src === undefined ? '' : `?src=${encodeURIComponent(src)}`}`,
-    ),
+    nextUrl: new URL(`http://localhost/mascot-shape${src === undefined ? '' : `?src=${encodeURIComponent(src)}`}`),
   });
 
 async function png(width, height, paint) {
@@ -341,11 +307,7 @@ test('the route reads nothing that is not an image on the asset host', async () 
 
 test('the route answers the runs of the artwork’s alpha, read once, never redirected', async () => {
   /* At the grid's own size, so no resampling blurs the edges the runs are checked against. */
-  const bytes = await png(
-    MASCOT_SHAPE_GRID,
-    MASCOT_SHAPE_GRID / 2,
-    (x, y) => x >= 24 && x < 72 && y >= 12,
-  );
+  const bytes = await png(MASCOT_SHAPE_GRID, MASCOT_SHAPE_GRID / 2, (x, y) => x >= 24 && x < 72 && y >= 12);
   const seen = [];
   globalThis.fetch = async (url, init) => {
     seen.push([String(url), init.redirect, init.cache]);
@@ -370,10 +332,7 @@ test('the route answers the runs of the artwork’s alpha, read once, never redi
 test('the route gives up on what is not a picture, or too much of one', async () => {
   const bytes = await png(8, 8, () => true);
   const cases = [
-    [
-      'https://picpony.top/u/html.png',
-      () => new Response('<html>', { headers: { 'content-type': 'text/html' } }),
-    ],
+    ['https://picpony.top/u/html.png', () => new Response('<html>', { headers: { 'content-type': 'text/html' } })],
     [
       'https://picpony.top/u/missing.png',
       () => new Response(bytes, { status: 404, headers: { 'content-type': 'image/png' } }),
@@ -457,11 +416,7 @@ test('P1-F8: with the configuration readable, only a configured mascot is read',
     assert.equal((await call(`https://picpony.top/uploads/${name}.png`)).status, 200, name);
   }
   /* A backend upload has no extension and is read from the backend at the same path. */
-  assert.equal(
-    (await call(`https://picpony.top/api/v1/mascots/images/${'a'.repeat(64)}`)).status,
-    200,
-    'upload',
-  );
+  assert.equal((await call(`https://picpony.top/api/v1/mascots/images/${'a'.repeat(64)}`)).status, 200, 'upload');
   assert.match(reads.at(-1), new RegExp(`/api/v1/mascots/images/${'a'.repeat(64)}$`));
   assert.deepEqual(configReads, ['/api/v1/mascots'], 'the list, read once');
   /* Any other picture on the asset host is refused before a byte is fetched — and a miss re-reads
@@ -540,16 +495,13 @@ test('Mascot skips /mascot-shape when config carries a valid shape and falls bac
   let fallbackShape = null;
 
   const jsx = (type, props) => ({ type, props });
-  const source = ts.transpileModule(
-    readFileSync(new URL('../components/mascot/Mascot.tsx', import.meta.url), 'utf8'),
-    {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX,
-      },
+  const source = ts.transpileModule(readFileSync(new URL('../components/mascot/Mascot.tsx', import.meta.url), 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
     },
-  ).outputText;
+  }).outputText;
 
   const states = [];
   let stateCursor = 0;
@@ -705,11 +657,7 @@ test('Mascot skips /mascot-shape when config carries a valid shape and falls bac
   states[0] = { src: externalUrl, w: 120, h: 120 };
   stateCursor = 0;
   const treeFallback = Mascot({ onChat() {} });
-  assert.equal(
-    shapeArgs.at(-1)?.src,
-    externalUrl,
-    'absent shape must query /mascot-shape fallback',
-  );
+  assert.equal(shapeArgs.at(-1)?.src, externalUrl, 'absent shape must query /mascot-shape fallback');
   const hitFallback = findByClass(treeFallback, 'hit');
   assert.match(String(hitFallback?.props?.style?.clipPath ?? ''), /^path\('M/);
 });

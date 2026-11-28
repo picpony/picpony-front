@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  FLIGHT_SPRING,
-  SPRINGS,
-  SPRING_MS,
-  springDurationMs,
-  springLinear,
-  springRate,
-} from '@/lib/spring';
+import { FLIGHT_SPRING, SPRINGS, SPRING_MS, springDurationMs, springLinear, springRate } from '@/lib/spring';
 import type { HeroProgressModel } from './progress';
 import type { SpringResponse } from './spring';
 import type { HeroDirection } from './types';

@@ -127,8 +127,7 @@ function ProviderEditor({
       { key: model ?? kind, onCommitted: () => assistantQuery.invalidate(token) },
     );
   };
-  const preset = () =>
-    change({ ...values, name: values.name || '绘云彩彩中转站', base_url: GATEWAY, models_url: '' });
+  const preset = () => change({ ...values, name: values.name || '绘云彩彩中转站', base_url: GATEWAY, models_url: '' });
   return (
     <AdminForm
       aria-label={provider ? `编辑模型配置 ${provider.name}` : '添加模型配置'}
@@ -136,9 +135,7 @@ function ProviderEditor({
       className="max-w-none space-y-6"
     >
       <div className="@container/form max-w-2xl space-y-4">
-        <SectionHeading as="h3">
-          {provider ? `编辑 · ${provider.name}` : '添加模型配置'}
-        </SectionHeading>
+        <SectionHeading as="h3">{provider ? `编辑 · ${provider.name}` : '添加模型配置'}</SectionHeading>
         <AdminNote>
           {provider?.has_key
             ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}`
@@ -147,13 +144,7 @@ function ProviderEditor({
         <Button type="button" variant="tonal" onClick={preset} disabled={busy}>
           使用绘云彩彩中转站
         </Button>
-        <SettingsFields
-          fields={providerFields}
-          values={values}
-          onChange={change}
-          busy={busy}
-          errors={errors}
-        />
+        <SettingsFields fields={providerFields} values={values} onChange={change} busy={busy} errors={errors} />
       </div>
       {provider && (
         <div className="space-y-4">
@@ -168,12 +159,9 @@ function ProviderEditor({
               loading={probe.pendingKeys.has('discover')}
               disabled={busy || unsaved || !provider.has_key}
               onClick={() =>
-                confirmThen(
-                  '确认获取模型列表',
-                  '确定要使用已保存的地址与密钥获取模型列表吗？',
-                  () => run('discover'),
-                  { tone: 'filled' },
-                )
+                confirmThen('确认获取模型列表', '确定要使用已保存的地址与密钥获取模型列表吗？', () => run('discover'), {
+                  tone: 'filled',
+                })
               }
             >
               获取模型列表
@@ -187,11 +175,7 @@ function ProviderEditor({
               清空选择
             </Button>
           </div>
-          {unsaved && (
-            <p className="text-body-s text-on-surface-variant">
-              请先保存当前地址与密钥，再获取模型或测速。
-            </p>
-          )}
+          {unsaved && <p className="text-body-s text-on-surface-variant">请先保存当前地址与密钥，再获取模型或测速。</p>}
           <AdminListAnchor>
             <DataTable
               rows={modelRows.rows}
@@ -211,9 +195,7 @@ function ProviderEditor({
                       onChange={(checked) =>
                         change({
                           ...values,
-                          model_candidates: checked
-                            ? [...candidates, r.name]
-                            : candidates.filter((x) => x !== r.name),
+                          model_candidates: checked ? [...candidates, r.name] : candidates.filter((x) => x !== r.name),
                         })
                       }
                     />
@@ -280,11 +262,7 @@ function ProviderEditor({
                 },
               ]}
             />
-            <AdminPager
-              page={modelRows.page}
-              totalPages={modelRows.totalPages}
-              onPageChange={modelRows.setPage}
-            />
+            <AdminPager page={modelRows.page} totalPages={modelRows.totalPages} onPageChange={modelRows.setPage} />
           </AdminListAnchor>
         </div>
       )}
@@ -314,13 +292,7 @@ function ProviderEditor({
 const PROVIDER_EDITOR_ID = 'admin-assistant-provider-editor';
 const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
 
-function Providers({
-  token,
-  read,
-}: {
-  token: string;
-  read: ReturnType<typeof useAdminQuery<Config>>;
-}) {
+function Providers({ token, read }: { token: string; read: ReturnType<typeof useAdminQuery<Config>> }) {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   /* Hold the last edited target while `Collapse` glides closed so its height contracts smoothly. */
   const [shownEditing, setShownEditing] = useState<string | 'new' | null>(null);
@@ -388,9 +360,7 @@ function Providers({
                   <>
                     {p.name}
                     <br />
-                    <span className="text-body-s text-on-surface-variant">
-                      {p.selected_model || '未选择模型'}
-                    </span>
+                    <span className="text-body-s text-on-surface-variant">{p.selected_model || '未选择模型'}</span>
                   </>
                 ),
               },
@@ -413,10 +383,7 @@ function Providers({
                 header: '状态',
                 width: 'auto',
                 render: (p) => (
-                  <Badge
-                    size="md"
-                    tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}
-                  >
+                  <Badge size="md" tone={p.enabled ? (p.key_available ? 'success' : 'error') : 'neutral'}>
                     {p.enabled ? (p.key_available ? '已启用' : '密钥不可用') : '未启用'}
                   </Badge>
                 ),
@@ -542,13 +509,7 @@ function AssistantTab({ token }: AdminPanelProps) {
         isLoading={providers.refreshing || quota.refreshing}
       />
       {initialLoading ? (
-        <PageLoadingIndicator
-          size="pane"
-          holdFooter
-          delay={120}
-          label="正在加载彩彩 AI 设置…"
-          className="min-h-60"
-        />
+        <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载彩彩 AI 设置…" className="min-h-60" />
       ) : (
         <>
           <Providers token={token} read={providers} />
@@ -570,9 +531,7 @@ function AssistantTab({ token }: AdminPanelProps) {
                   quotaQuery.invalidate();
                   assistantQuota.invalidate({ token });
                 }}
-                confirmation={() =>
-                  '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'
-                }
+                confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}
               >
                 <AdminNote>
                   成功回复扣 1 点，成功任务共扣 2 点；每日赠送于北京时间零点重置，兑换余额长期保留。

@@ -20,13 +20,7 @@ import { createVisitorTracker, trackingAllowed, VISIT_INTERVAL_MS } from '@/lib/
 export default function VisitorTracker() {
   useEffect(() => {
     if (!VISITOR_TRACKING_AVAILABLE) return;
-    if (
-      !trackingAllowed(
-        process.env.NODE_ENV,
-        typeof navigator === 'undefined' ? undefined : navigator,
-      )
-    )
-      return;
+    if (!trackingAllowed(process.env.NODE_ENV, typeof navigator === 'undefined' ? undefined : navigator)) return;
     const tracker = createVisitorTracker({
       now: Date.now,
       isHidden: () => document.visibilityState === 'hidden',

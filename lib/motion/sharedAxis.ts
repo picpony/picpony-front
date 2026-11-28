@@ -330,12 +330,8 @@ export function playSharedAxis(opts: {
     if (held) animation.pause();
     return animation;
   };
-  const run = (
-    node: HTMLElement,
-    keyframes: Keyframe[],
-    timing: KeyframeAnimationOptions,
-    id = 'tab-strip',
-  ) => adopt(node.animate(keyframes, timing), id);
+  const run = (node: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions, id = 'tab-strip') =>
+    adopt(node.animate(keyframes, timing), id);
   const place = (along: number, y = 0) =>
     axis === 'x' ? `translate3d(${along}px, ${y}px, 0)` : `translate3d(0, ${along + y}px, 0)`;
 
@@ -676,8 +672,7 @@ export function playSharedAxis(opts: {
       const elapsed = began === null ? 0 : at - began;
       const next = turnStrip(previous, elapsed, full);
       const p = previousFollow ? stripProgress(previous.launch)(elapsed / previous.duration) : 0;
-      const from =
-        previousFollow && previousFollow.from + (previousFollow.to - previousFollow.from) * p;
+      const from = previousFollow && previousFollow.from + (previousFollow.to - previousFollow.from) * p;
       reversed = next.to === 0;
       startLeg(next, began === null ? null : at, prior, from);
       return next;

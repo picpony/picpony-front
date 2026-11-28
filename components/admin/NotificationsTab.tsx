@@ -104,25 +104,20 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
 
   const typedId = accountId(recipient);
   const settledId = useSettled(typedId, typedId ? 400 : 0);
-  const lookup = useResource(
-    userProfile,
-    audience === 'user' && settledId ? { id: String(settledId) } : SKIP,
-  );
+  const lookup = useResource(userProfile, audience === 'user' && settledId ? { id: String(settledId) } : SKIP);
   const lookupCurrent = settledId === typedId;
   const recipientName = lookupCurrent ? lookup.data?.username : undefined;
   const recipientMissing = lookupCurrent && lookup.error !== undefined && isNotFound(lookup.error);
 
   const recipientHelper = (() => {
     if (audience !== 'user' || !typedId) return undefined;
-    if (!lookupCurrent || (lookup.data === undefined && lookup.error === undefined))
-      return '正在查找该用户…';
+    if (!lookupCurrent || (lookup.data === undefined && lookup.error === undefined)) return '正在查找该用户…';
     if (recipientName) return `将发送给「${recipientName}」`;
     if (lookup.error !== undefined && !recipientMissing) return '暂时无法确认该用户';
     return undefined;
   })();
 
-  const clear = (field: keyof typeof errors) =>
-    setErrors((previous) => ({ ...previous, [field]: undefined }));
+  const clear = (field: keyof typeof errors) => setErrors((previous) => ({ ...previous, [field]: undefined }));
 
   const send = () => {
     if (sendMutation.isPending()) return;
@@ -182,11 +177,9 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
   const scope = `${filter}:${keyword}`;
   const pages = useCursorPages(scope);
   const currentPage = pages.page;
-  const history = useResource(
-    notificationsQuery,
-    token ? { token, filter, before: pages.cursor, keyword } : SKIP,
-    { keepPrevious: `${token}:${scope}` },
-  );
+  const history = useResource(notificationsQuery, token ? { token, filter, before: pages.cursor, keyword } : SKIP, {
+    keepPrevious: `${token}:${scope}`,
+  });
   const rows = history.data?.rows ?? [];
   const totalPages = pages.totalPages;
   if (history.data && !history.isPrevious && !history.error) {
@@ -221,9 +214,7 @@ ${currentPage}`,
       key: 'title',
       header: '标题',
       primary: true,
-      render: (item) => (
-        <span className="text-body-m-emphasized text-on-surface">{item.title}</span>
-      ),
+      render: (item) => <span className="text-body-m-emphasized text-on-surface">{item.title}</span>,
     },
     {
       key: 'content',
@@ -253,9 +244,7 @@ ${currentPage}`,
       header: '时间',
       width: 'auto',
       className: 'tabular-nums',
-      render: (item) => (
-        <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>
-      ),
+      render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
     },
     {
       key: 'actions',
@@ -322,11 +311,7 @@ ${currentPage}`,
             />
           </div>
           {errors.audience && (
-            <p
-              id="notifications-audience-error"
-              role="alert"
-              className="mt-2 text-body-s text-error"
-            >
+            <p id="notifications-audience-error" role="alert" className="mt-2 text-body-s text-error">
               {errors.audience}
             </p>
           )}

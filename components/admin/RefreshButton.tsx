@@ -9,11 +9,7 @@ interface RefreshButtonProps {
   loading?: boolean;
 }
 
-export default function RefreshButton({
-  onClick,
-  label = '刷新列表',
-  loading = false,
-}: RefreshButtonProps) {
+export default function RefreshButton({ onClick, label = '刷新列表', loading = false }: RefreshButtonProps) {
   return (
     /* `loading`, not `disabled` plus a hand-spun glyph: the primitive already
        swaps the icon for a real `Spinner` and blocks interaction, which is

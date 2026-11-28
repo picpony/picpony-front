@@ -89,12 +89,7 @@ export default function Checkbox({
         className,
       )}
     >
-      <span
-        className={cn(
-          'relative flex size-4.5 shrink-0 items-center justify-center',
-          !label && 'touch-target',
-        )}
-      >
+      <span className={cn('relative flex size-4.5 shrink-0 items-center justify-center', !label && 'touch-target')}>
         <input
           ref={inputRef}
           type="checkbox"

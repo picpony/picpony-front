@@ -54,13 +54,7 @@ function TagGroupRow({
       data-presence-key={presenceKey}
       control={
         empty ? (
-          <Button
-            variant="tonal"
-            icon={<MdSearch />}
-            responsiveLabel
-            disabled
-            aria-label={searchLabel}
-          >
+          <Button variant="tonal" icon={<MdSearch />} responsiveLabel disabled aria-label={searchLabel}>
             搜索
           </Button>
         ) : (

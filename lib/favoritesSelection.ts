@@ -134,8 +134,7 @@ export function useSelectionMode({
     if (!wasActive.current) return;
     wasActive.current = false;
     const focused = document.activeElement;
-    if (focused && focused !== document.body && focused.isConnected && !focused.closest('[inert]'))
-      return;
+    if (focused && focused !== document.body && focused.isConnected && !focused.closest('[inert]')) return;
     latest.current.restoreFocus?.()?.focus({ preventScroll: true });
   }, [state.active]);
 
@@ -183,10 +182,7 @@ export function useFolderLongPress(onSelect: (() => void) | undefined) {
       }, 500);
     },
     onPointerMove: (event: React.PointerEvent) => {
-      if (
-        start.current &&
-        Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > TOUCH_SLOP_PX
-      )
+      if (start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > TOUCH_SLOP_PX)
         cancel();
     },
     onPointerUp: cancel,

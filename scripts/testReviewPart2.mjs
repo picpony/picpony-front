@@ -50,19 +50,14 @@ const { LS_KEYS } = await import('../lib/constants.ts');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('P2-F3: only the host is canonicalised, never a query that mentions trixiebooru', () => {
-  const searched =
-    'https://trixiebooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k';
+  const searched = 'https://trixiebooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k';
   assert.equal(
     route.canonicalDerpiUrl(searched),
     'https://derpibooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k',
   );
   /* The query used to be rewritten and the host left as it was when the query came first. */
   const queryFirst = 'https://derpibooru.org/api/v1/json/search/images?q=trixiebooru.org';
-  assert.equal(
-    route.canonicalDerpiUrl(queryFirst),
-    queryFirst,
-    'a canonical URL is left exactly as it is',
-  );
+  assert.equal(route.canonicalDerpiUrl(queryFirst), queryFirst, 'a canonical URL is left exactly as it is');
   assert.equal(
     route.canonicalDerpiUrl('https://www.trixiebooru.org/api/v1/json/images/1'),
     'https://derpibooru.org/api/v1/json/images/1',
@@ -122,18 +117,10 @@ test('P2-F5: a link the browser resolves to another host is never internal', () 
   ]) {
     assert.equal(isInternalHref(href), false, JSON.stringify(href));
   }
-  for (const href of [
-    '/forum/12',
-    'https://picpony.top/forum/5',
-    'https://www.picpony.top/pic/1?x=1#c',
-  ]) {
+  for (const href of ['/forum/12', 'https://picpony.top/forum/5', 'https://www.picpony.top/pic/1?x=1#c']) {
     assert.equal(isInternalHref(href), true, href);
   }
-  assert.equal(
-    isInternalHref('relative/path'),
-    false,
-    'a document-relative link depends on its page',
-  );
+  assert.equal(isInternalHref('relative/path'), false, 'a document-relative link depends on its page');
   assert.equal(isInternalHref('/api.php?action=x'), false);
   /* What the published BBCode does with it: an external link opens beside the app, with no opener. */
   const html = bbcodeToSafeHtml('[url=/\\evil.example/login]登录[/url]', {
@@ -164,11 +151,7 @@ test('P2-F10: clearing a session answers true once, even when storage refuses th
   };
   try {
     assert.equal(hooks.clearUserInfo('stuck'), true, 'the first 401 ends the session');
-    assert.equal(
-      hooks.clearUserInfo('stuck'),
-      false,
-      'a second 401 for the same token is not a second ending',
-    );
+    assert.equal(hooks.clearUserInfo('stuck'), false, 'a second 401 for the same token is not a second ending');
   } finally {
     globalThis.localStorage = stored;
   }

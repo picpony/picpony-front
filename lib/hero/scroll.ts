@@ -104,10 +104,7 @@ export class HeroScrollContinuity {
       onTouch: (left, top) => {
         this.pendingTouchLeft += left;
         this.pendingTouchTop += top;
-        if (
-          Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX ||
-          Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX
-        )
+        if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX)
           this.scheduleWheelResidual();
       },
       onEnd: (reason) => {
@@ -245,15 +242,8 @@ export class HeroScrollContinuity {
   }
 
   addDeltaSource(element: HTMLElement, initial?: Pick<InputSource, 'lineHeight' | 'pageHeight'>) {
-    if (
-      this.released ||
-      this.returnInput ||
-      this.peers.has(element) ||
-      this.deltaSources.has(element)
-    )
-      return;
-    const computedLineHeight =
-      initial?.lineHeight ?? Number.parseFloat(getComputedStyle(element).lineHeight);
+    if (this.released || this.returnInput || this.peers.has(element) || this.deltaSources.has(element)) return;
+    const computedLineHeight = initial?.lineHeight ?? Number.parseFloat(getComputedStyle(element).lineHeight);
     const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 16;
     const pageHeight = initial?.pageHeight ?? Math.max(1, element.clientHeight);
     const state: DeltaListener = {
@@ -289,8 +279,7 @@ export class HeroScrollContinuity {
         state.left = nextLeft;
         state.top = nextTop;
         if (performance.now() <= state.suppressScrollUntil) return;
-        if (Math.abs(deltaLeft) < SCROLL_EPSILON_PX && Math.abs(deltaTop) < SCROLL_EPSILON_PX)
-          return;
+        if (Math.abs(deltaLeft) < SCROLL_EPSILON_PX && Math.abs(deltaTop) < SCROLL_EPSILON_PX) return;
         this.applyDelta(deltaLeft, deltaTop);
       },
     };
@@ -318,12 +307,7 @@ export class HeroScrollContinuity {
    * rescue, so every source is dropped along with any queued residual.
    */
   releaseDeltaSources() {
-    if (
-      this.deltaSources.size === 0 &&
-      !this.hasWheelResidual() &&
-      !this.wheelRemainderLeft &&
-      !this.wheelRemainderTop
-    )
+    if (this.deltaSources.size === 0 && !this.hasWheelResidual() && !this.wheelRemainderLeft && !this.wheelRemainderTop)
       return;
     this.resetWheelResidual();
     this.clearDeltaSources();
@@ -471,28 +455,13 @@ export class HeroScrollContinuity {
     }
 
     // A DOM wheel target is not a compositor handoff. An offset changed by another owner is.
-    if (
-      this.returnManaged &&
-      measurement.target === this.inputTarget &&
-      this.isForeignScroll(measurement.target)
-    ) {
+    if (this.returnManaged && measurement.target === this.inputTarget && this.isForeignScroll(measurement.target)) {
       this.claimNativeInput(measurement.target);
       return;
     }
-    if (
-      Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX ||
-      Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX
-    ) {
-      const left = clamp(
-        (this.touchTargetLeft ?? measurement.left) + this.pendingTouchLeft,
-        0,
-        measurement.maxLeft,
-      );
-      const top = clamp(
-        (this.touchTargetTop ?? measurement.top) + this.pendingTouchTop,
-        0,
-        measurement.maxTop,
-      );
+    if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX) {
+      const left = clamp((this.touchTargetLeft ?? measurement.left) + this.pendingTouchLeft, 0, measurement.maxLeft);
+      const top = clamp((this.touchTargetTop ?? measurement.top) + this.pendingTouchTop, 0, measurement.maxTop);
       // Keep fractional drag distance even when the browser quantizes its scroll offset.
       this.touchTargetLeft = left;
       this.touchTargetTop = top;
@@ -510,11 +479,7 @@ export class HeroScrollContinuity {
       0,
       measurement.maxLeft,
     );
-    this.residualTargetTop = clamp(
-      startTop + this.pendingResidualTop + this.wheelRemainderTop,
-      0,
-      measurement.maxTop,
-    );
+    this.residualTargetTop = clamp(startTop + this.pendingResidualTop + this.wheelRemainderTop, 0, measurement.maxTop);
     this.wheelRemainderLeft = 0;
     this.wheelRemainderTop = 0;
     this.pendingResidualLeft = 0;
