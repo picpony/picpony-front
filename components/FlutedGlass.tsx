@@ -20,6 +20,7 @@ import {
   useMotionTier,
   usePalette,
   useScheme,
+  useSkyPhase,
   type MotionTier,
 } from '@/lib/appearance';
 import { clamp, cn } from '@/lib/utils';
@@ -424,6 +425,7 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
      array can see. `useCustomSeed` is the second half — the custom palette's id never
      changes, so only its seed reports that its colour did. */
   const palette = usePalette();
+  const skyPhase = useSkyPhase();
   const customSeed = useCustomSeed();
   const speed = useMotionScale('ambient');
 
@@ -715,11 +717,11 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
     };
   }, [generation]);
 
-  /* A theme or palette change re-reads five colours; nothing is rebuilt. */
+  /* A theme, palette or sky-phase change re-reads five colours; nothing is rebuilt. */
   useEffect(() => {
     schemeRef.current = scheme;
     handleRef.current?.setColours(scheme);
-  }, [scheme, palette, customSeed]);
+  }, [scheme, palette, customSeed, skyPhase]);
 
   /* A tier change starts the loop, or stops it on the still frame. */
   useEffect(() => {

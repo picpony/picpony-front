@@ -34,9 +34,30 @@ Use HCT for M3 tonal palettes. The categorical `accent-*` scale remains in OKLCH
 
 ## Built-in themes and harmony
 
-The palette axis contains ten built-ins and `custom`. `data-palette-hues="mono"` selects monochrome harmony; its absence selects multi-hue harmony.
+The palette axis contains ten static built-ins, the dynamic time-of-day `sky` (`天空`) palette, and `custom`. `data-palette-hues="mono"` selects monochrome harmony; its absence selects multi-hue harmony.
 
 Built-in source hues and guide citations live beside `THEMES`. Use the character guide's Fill row, not its Outline; mane/carapace choices are recorded where the coat cannot supply a usable colour.
+
+### Dynamic sky palette
+
+`sky` (`天空`) adapts across eight contiguous local-time phases covering 00:00–24:00 (`SKY_PHASES` in [scripts/palette.mjs](../../scripts/palette.mjs); scheduling in `lib/skyPalette.ts`):
+
+| Phase | Label | Hours | Scheme |
+| --- | --- | --- | --- |
+| `midnight` | `静夜` | 00:00–04:00 | `dark` |
+| `predawn` | `拂晓` | 04:00–06:00 | `dark` |
+| `dawn` | `晨曦` | 06:00–09:00 | `light` |
+| `morning` | `清昼` | 09:00–13:00 | `light` |
+| `afternoon` | `晴午` | 13:00–17:00 | `light` |
+| `sunset` | `暮霞` | 17:00–19:00 | `light` |
+| `twilight` | `薄暮` | 19:00–21:00 | `dark` |
+| `starlight` | `星夜` | 21:00–24:00 | `dark` |
+
+- Each phase owns a single fixed scheme. While `sky` is active, light/dark switching (`跟随系统`, `主题模式` and the app-bar toggle) is disabled and OS scheme changes are ignored; the user's stored scheme preference is preserved and restored upon switching away from `sky`.
+- Under monochrome harmony (`data-palette-hues="mono"`), each phase follows `SchemeTonalSpot` from its primary hue with tertiary reading secondary.
+- Under multi-hue harmony, each phase uses bespoke atmospheric neutral/neutral-variant hues and restrained chromas alongside its secondary and tertiary colours while preserving all WCAG contrast floors, severity separation, `DislikeAnalyzer`, dark-container clarity, tile-separation and `focus`/`chip-selected` invariants.
+- Generated rules live in `app/theme-palettes.css` under `html[data-palette='sky'][data-sky-phase='<id>']` and its `[data-palette-hues='mono']` delta, with `html.dark` toggled to the active phase's scheme so shared semantic, categorical and glass tokens match. `COOKIE_KEYS.skyPhase` carries the active phase for SSR (falling back to Beijing time when absent), and the inline pre-paint script in `app/layout.tsx` reconciles the browser's local hour before first paint.
+- `AppLayout` advances the active phase at hour boundaries and on tab return; `FlutedGlass` refreshes its shader ink on `skyPhase` changes. `lib/settingsSync.ts` syncs `sky` through the `theme` cloud key.
 
 ### Fill and foreground policy
 
@@ -128,7 +149,7 @@ Both pickers:
 
 Use `PaletteTileFace`, not colour discs. The tile previews its own page, primary, selection and accent, even when another theme is active.
 
-Built-ins use generated faces; custom uses `data-palette-tones`. In `/settings`, eleven palette cards fill the settings column in a container-responsive grid (`3 / 4 / 6` columns at default / `@sm` / `@xl` so no row leaves a single orphan and phones never squish four across): each card is a 12 dp tonal radio button (`surface-container-high` at rest, `secondary-container` when selected) with a 4 dp bezel wrapping a 56 dp concentric (`8 dp`) `PaletteTileFace` preview at `-z-10`, the selected check badge and an emphasized `label-m` name. `ImagePalettePicker` keeps its 4-column tile grid, and `ColorPicker` uses the compact 48 × 36 dp preview inside its companion-hue tiles. Focus uses the shared ring; forced colours supply a system boundary.
+Built-ins and `sky` use generated faces (`THEME_FACES` and `SKY_FACES`); custom uses `data-palette-tones`. In `/settings`, twelve palette cards fill the settings column in a container-responsive grid (`3 / 4 / 6` columns at default / `@sm` / `@xl` so every row fills evenly at every width): each card is a 12 dp tonal radio button (`surface-container-high` at rest, `secondary-container` when selected) with a 4 dp bezel wrapping a 56 dp concentric (`8 dp`) `PaletteTileFace` preview at `-z-10`, the selected check badge and an emphasized `label-m` name. The `sky` card live-previews the current local time-of-day phase and reveals a read-only 24-hour phase strip when selected. `ImagePalettePicker` keeps its 4-column tile grid, and `ColorPicker` uses the compact 48 × 36 dp preview inside its companion-hue tiles. Focus uses the shared ring; forced colours supply a system boundary.
 
 Arrow keys choose a palette, Home/End choose endpoints. Guard rapid changes against the wipe's target palette rather than the root's not-yet-committed value.
 

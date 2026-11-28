@@ -55,7 +55,8 @@ Compose the existing components; do not copy their class strings or interaction 
 | Image collection | `MasonryGrid` and `ImageGridSkeleton` |
 | Image batch selection | `MasonryGrid selection` |
 | Empty / failed state | `EmptyState` / `ErrorRetry`; `statusViewBox` for matching placeholders |
-| Route fallback | `PageFallback` from `components/ImageDetailSlot.tsx` |
+| Route fallback | `PageFallback` from `components/ImageDetailSlot.tsx` with `PageLoadingIndicator` |
+| Loading indicator | `LoadingIndicator`, `MediaLoadingPlaceholder`, `PageLoadingIndicator` (`components/LoadingIndicator.tsx`) |
 | Loading shapes | `Skeleton`, `SkeletonCircle`, row/grid-specific skeletons |
 | Progress value | `ProgressBar` |
 | Time-series chart | `StatChart`; token-based SVG with a stable exact-value readout |
@@ -114,7 +115,7 @@ IconButton owns its glyph size and tooltip:
 - `toggle` reports both true and false `aria-pressed`; its accessible label stays stable. `selected` alone is visual state.
 - Corner morphs use DefaultEffects, rotation FastSpatial and material FastEffects through `transition-icon-button`.
 
-Pressed corners take precedence over hover and remain unchanged when a held pointer leaves or re-enters. IconButton uses 8 dp at its 32 / 40 dp steps and 12 dp at 56 dp. An explicit corner class suppresses both hover and pressed shape changes, including for `quiet`.
+Pressed corners take precedence over hover and remain unchanged when a held pointer leaves or re-enters. `quiet` morphs to 12 dp at 32 / 40 dp and 16 dp at 56 dp under hover; pressed IconButton uses 8 dp at its 32 / 40 dp steps and 12 dp at 56 dp. An explicit corner class suppresses both hover and pressed shape changes, including for `quiet`.
 
 A loading Button/IconButton keeps its footprint, material and focus. It uses `aria-disabled`, `aria-busy` and blocked activation; native `disabled` is for unavailable controls. Loading wins when both props are set. Spinners inherit the intended ink without moving the label.
 
@@ -232,7 +233,15 @@ The skip link targets the detail. Reselecting the background destination closes 
 
 ## Loading and failure
 
-Use the destination's geometry: skeleton rows, ImageGridSkeleton or a card placeholder. A spinner reports an action, not an entire page.
+Choose the loading primitive by whether the destination layout is concrete and structurally helpful:
+
+- Use `LoadingIndicator` / `MediaLoadingPlaceholder` (Material 3 Expressive morphing polygon) inside already-sized media frames (`FadeInImage`, `ImageCard`, `ImageCardVideo`, `DetailImage`, `DetailVideo`, `FeaturedBanner`, `SliderCaptcha`, `PonyPreview`) instead of a scanning shimmer sweep.
+  - `MediaLoadingPlaceholder` paints its quiet surface plate and indicator immediately (cached media skips mounting it synchronously in `useLayoutEffect`, so scrolling into unloaded tiles shows feedback at once with zero blank delay), sizes its responsive glyph across both width and height via 2D `@container` (`container-type: size`, applied only in responsive mode), pauses off-screen, `@container`-hidden (`< 3rem`), offline, concealed-tab and `inert`/`hidden`-ancestor instances directly inside the driver's pooled scroll-root observer (`data-m3e-offscreen`, zero React re-renders on scroll) and ref-counted ancestor watchers, and supports `quiet` (plate only for SSR pre-hydration or offline holds) and `settled` / `instantHide` (dismissing the glyph promptly on load so transparent PNG/WebP/SVG artwork never shows a lingering shape behind it).
+  - `DetailImage` and `DetailVideo` suppress the media placeholder while a Hero flight carries the card's preview (`heroActive && hasPreview`) or when a layer is already decoded synchronously in `useLayoutEffect`, and continue on the shared clock seamlessly from `DetailSkeleton`.
+- Use `PageLoadingIndicator` (centred contained `LoadingIndicator`) for generic route fallbacks (`app/loading.tsx`), session/access gates (`claim-badge`, privacy gates, `upload`, `admin`, `settings`, `perf`, post composers), lazy tool dialogs (`AuthModal`, `ColorPicker`, `DeveloperGuideModal`, `TagInfoModal`, `AssistantPanel`) and editor chunks where a multi-box skeleton would be speculative or visually noisy. It yields its default minimum height whenever a caller supplies an explicit `min-h-*` class.
+  - Hydration-only gates and fast-cache panes pass `delay` so the layout box and `data-page-loading` footer hold take effect from frame zero while both the visual glyph and the `role="status"` live-region text withhold until the grace period passes — preventing 1-frame flashes and stale screen-reader announcements. Once revealed, pausing for a dialog exit freezes motion without double-fading the indicator. Coalesce simultaneous sibling reads (such as `AssistantTab`'s models + quota) into a single indicator rather than stacking two.
+- Keep structural skeletons (`ImageGridSkeleton`, `DataTable`, list/card grids, `StatChart` refresh overlay and inline text/figure placeholders) where repeating row or column geometry meaningfully previews the arriving layout.
+- Use `Spinner` or the button's `loading` prop for an action in flight.
 
 | Enclosure | StatusView preset |
 | --- | --- |
@@ -247,7 +256,7 @@ Use `entrance={false}` when a surrounding swap already animates the result. Do n
 
 `PageFallback` prevents a route-shaped `loading.tsx` from appearing in the parallel image-detail slot. The detail supplies its own loading state.
 
-An image is loaded only when `complete && naturalWidth > 0`. Recompute that boolean on every `displaySrc` change, including clearing it. A failed image retains a failure plate/retry; a paused shimmer still paints its placeholder.
+An image is loaded only when `complete && naturalWidth > 0`. Recompute that boolean on every `displaySrc` change, including clearing it. A failed image retains a failure plate/retry; a paused loading placeholder still paints its quiet surface.
 
 `useTagNames` distinguishes unresolved `undefined`, no translation `null` and a translated name. Keep a correctly typed placeholder, then reveal through `NameFade`; do not flash the raw tag as a temporary translation.
 

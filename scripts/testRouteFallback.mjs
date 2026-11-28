@@ -52,26 +52,36 @@ function load(file, imports) {
 }
 
 const slot = load('components/ImageDetailSlot.tsx', {});
-/* The placeholder primitive stands in as a plain marked box: what is under test is where the
-   fallback renders, not what a placeholder bar looks like. */
-const skeleton = {
+/* The loading indicator stands in as a plain marked status box: what is under test is where the
+   fallback renders, not what the morphing shape looks like. */
+const loadingIndicator = {
   __esModule: true,
-  default: ({ className = '' }) => React.createElement('div', { className: `skeleton ${className}` }),
-  SkeletonText: ({ lines = 3 }) =>
-    React.createElement('div', null, ...Array.from({ length: lines }, (_, i) => React.createElement('div', { key: i, className: 'skeleton' }))),
+  PageLoadingIndicator: ({ label = '加载中…', holdFooter = false, ...rest }) =>
+    React.createElement(
+      'div',
+      {
+        role: 'status',
+        'aria-live': 'polite',
+        'data-page-loading': holdFooter ? '' : undefined,
+        ...rest,
+      },
+      React.createElement('span', { className: 'sr-only' }, label),
+      React.createElement('span', { className: 'm3e-loading-indicator', 'aria-hidden': 'true' }),
+    ),
 };
 const loading = load('app/loading.tsx', {
-  '@/components/Skeleton': skeleton,
+  '@/components/LoadingIndicator': loadingIndicator,
   '@/components/ImageDetailSlot': slot,
 });
 const Loading = loading.default;
 
-test('in the page column the route fallback is the page silhouette, announced once', () => {
+test('in the page column the route fallback is the M3E loading indicator, announced once', () => {
   const html = renderToStaticMarkup(React.createElement(Loading));
   assert.match(html, /role="status"/);
   assert.match(html, /data-page-loading/);
+  assert.match(html, /data-route-fallback/);
   assert.match(html, /加载中…/);
-  assert.equal(html.match(/class="skeleton/g)?.length, 6, 'title, two blocks and three lines');
+  assert.match(html, /m3e-loading-indicator/);
 });
 
 test('inside the picture slot the route fallback renders nothing at all', () => {

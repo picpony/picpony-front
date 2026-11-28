@@ -49,6 +49,7 @@ import {
   BRAND_SEED,
   BRAND_SEED_DARK,
   HUES_ATTRIBUTE,
+  SKY_PHASE_ATTRIBUTE,
   type AccentChoice,
   type AccentPreset,
   type CustomSpec,
@@ -384,9 +385,14 @@ export interface Accents {
   /**
    * The neutrals' hue per scheme, where 多色 takes it from somewhere other than the
    * primary — the default theme's, whose primary is the mascot's mane and whose page
-   * is her coat. Chroma stays M3's (6 and 8).
+   * is her coat, and the 天空 phases' atmospheric paper/velvet surfaces.
    */
   neutralHue?: { light: number; dark: number };
+  /**
+   * Optional refined neutral / neutral-variant chromas for 多色 atmospheric palettes (`sky`).
+   * 单色 ignores this and keeps M3 `SchemeTonalSpot`'s fixed C6 / C8.
+   */
+  neutralChroma?: { neutral: number; neutralVariant: number };
 }
 
 /** The custom palette's second colour, at the quiet end of the built-ins' 14–18. */
@@ -768,6 +774,15 @@ function resolveRoles(
   return out;
 }
 
+export interface DeriveThemeOptions {
+  /**
+   * Optional ceiling on the primary ramp's chroma (`primary-ink`, `link`, `primary-container`).
+   * Used by the 天空 time-of-day phases to hold ink marks and night links to quiet editorial
+   * chroma instead of lifting every hue up to `BRAND_CHROMA`.
+   */
+  rampChromaCap?: number;
+}
+
 /**
  * Every role in `ROLES`, both schemes, both 配色方案.
  *
@@ -776,10 +791,17 @@ function resolveRoles(
  * the built-in's own dark fill; otherwise `deriveDarkFill`. Without `accents`, 多色
  * is 单色.
  */
-export function deriveTheme(lightHex: string, darkHex?: string, accents?: Accents, inkPolicy: InkPolicy = 'exact-custom'): DerivedTheme {
+export function deriveTheme(
+  lightHex: string,
+  darkHex?: string,
+  accents?: Accents,
+  inkPolicy: InkPolicy = 'exact-custom',
+  options?: DeriveThemeOptions,
+): DerivedTheme {
   const light = lightHex.toLowerCase();
   const f = hctOf(light);
-  const chroma = rampChroma(f.hue, f.chroma);
+  const baseChroma = rampChroma(f.hue, f.chroma);
+  const chroma = options?.rampChromaCap !== undefined ? Math.min(baseChroma, options.rampChromaCap) : baseChroma;
   const palettes = paletteSet(f.hue, chroma);
 
   const derivedDark = !darkHex;
@@ -811,12 +833,14 @@ export function deriveTheme(lightHex: string, darkHex?: string, accents?: Accent
         ? TonalPalette.fromHueAndChroma(accents.second.hue, deepSecondChroma(accents.second.hue, accents.second.chroma))
         : second;
     const spark = TonalPalette.fromHueAndChroma(accents.spark.hue, accents.spark.chroma);
+    const neutralC = accents.neutralChroma?.neutral ?? NEUTRAL_CHROMA;
+    const neutralVariantC = accents.neutralChroma?.neutralVariant ?? HARMONY.neutralVariant.chroma;
     const neutrals = (hue: number | undefined) =>
-      hue === undefined
+      hue === undefined && accents.neutralChroma === undefined
         ? { neutral: palettes.neutral, neutralVariant: palettes.neutralVariant }
         : {
-            neutral: TonalPalette.fromHueAndChroma(hue, NEUTRAL_CHROMA),
-            neutralVariant: TonalPalette.fromHueAndChroma(hue, HARMONY.neutralVariant.chroma),
+            neutral: TonalPalette.fromHueAndChroma(hue ?? f.hue, neutralC),
+            neutralVariant: TonalPalette.fromHueAndChroma(hue ?? f.hue, neutralVariantC),
           };
     const slots = (hue: number | undefined, secondary: TonalPalette): SlotPalettes => ({
       ...tonalSpot,
@@ -884,6 +908,11 @@ export function themeFace(derived: DerivedTheme): ThemeFace {
   return { light: scheme('light'), dark: scheme('dark') };
 }
 
+/** One fixed scheme's miniature face for a dynamic 天空 time-of-day phase. */
+export function skyPhaseFace(derived: DerivedTheme, scheme: 'light' | 'dark'): FaceScheme {
+  return themeFace(derived)[scheme];
+}
+
 /** A palette's whole tile — the bar per scheme and the face — what `data-palette-tones` packs. */
 export function paletteTones(derived: DerivedTheme): CustomTones {
   const bar = (s: 'light' | 'dark') => ({ primary: derived[s].primary!, onPrimary: derived[s]['on-primary']! });
@@ -943,9 +972,47 @@ export function paletteBlocksCss(
   return out.join('\n');
 }
 
-/* --- The custom palette ---------------------------------------------------- */
+/**
+ * The CSS blocks for one dynamic 天空 phase. Each phase owns a single fixed scheme (`light` or
+ * `dark`), so it emits one 多色 block at specificity (0,2,1) and one 单色 delta block at (0,3,1).
+ * Both outrank `:root` and `.dark` (0,1,0) while the active `html.dark` class still supplies the
+ * matching dark semantic/categorical/glass tokens for night phases.
+ */
+export function skyPhaseBlocksCss(
+  phaseId: string,
+  derived: DerivedTheme,
+  scheme: 'light' | 'dark',
+  { indent = '' }: { indent?: string } = {},
+): string {
+  const out: string[] = [];
+  const block = (selector: string, roles: RoleMap, tokens: readonly string[]) => {
+    out.push(`${indent}${selector} {`);
+    for (const token of tokens) {
+      out.push(`${indent}  --md-sys-color-${token}: ${roles[token]};`);
+      if (token === 'on-surface') {
+        out.push(`${indent}  --md-sys-color-on-surface-rgb: ${colorChannels(roles[token])};`);
+      }
+    }
+    out.push(`${indent}}`);
+  };
+  const base = `html[data-palette='${SKY_PALETTE}'][${SKY_PHASE_ATTRIBUTE}='${phaseId}']`;
+  const mono = `[${HUES_ATTRIBUTE}='mono']`;
+  const multiRoles = derived[scheme];
+  const monoRoles = derived.mono[scheme];
+  block(base, multiRoles, THEMED_TOKENS);
+  const changed = THEMED_TOKENS.filter((token) => monoRoles[token] !== multiRoles[token]);
+  if (changed.length > 0) {
+    block(`${base}${mono}`, monoRoles, changed);
+  }
+  return out.join('\n');
+}
 
-/** The eleventh palette's `data-palette` value. Its colours are per-user, not generated. */
+/* --- The dynamic sky and custom palettes ----------------------------------- */
+
+/** The dynamic time-of-day palette's `data-palette` value. */
+export const SKY_PALETTE = 'sky';
+
+/** The user-defined palette's `data-palette` value. Its colours are per-user, not generated. */
 export const CUSTOM_PALETTE = 'custom';
 
 const HEX = /^#[0-9a-f]{6}$/i;

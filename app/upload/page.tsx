@@ -15,7 +15,7 @@ import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import Radio from '@/components/Radio';
 import SignInRequired from '@/components/SignInRequired';
-import Skeleton from '@/components/Skeleton';
+import { MediaLoadingPlaceholder, PageLoadingIndicator } from '@/components/LoadingIndicator';
 import TagComboField, { type TagComboFieldHandle } from '@/components/groups/TagComboField';
 import TagWell from '@/components/groups/TagWell';
 import { settingsHref } from '@/app/settings/tabs';
@@ -178,54 +178,7 @@ function measureMedia(file: File, url: string): Promise<MediaSize | null> {
 }
 
 function UploadSkeleton() {
-  return (
-    <div data-page-loading aria-hidden="true" className="space-y-6">
-      <Skeleton className="h-56 w-full rounded-md" />
-      <div>
-        <Skeleton className="mb-2 h-5 w-24" delay={40} />
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 py-0.5 pointer-coarse:min-h-12">
-          {[24, 28, 28, 24].map((w, i) => (
-            <Skeleton key={i} className="h-5" style={{ width: `${w * 4}px` }} delay={60 + i * 20} />
-          ))}
-        </div>
-      </div>
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <Skeleton className="h-14 w-full rounded-md" delay={120} />
-          <Skeleton className="h-4 w-72 max-w-full" delay={140} />
-        </div>
-        <div>
-          <Skeleton className="mb-2 h-5 w-24" delay={160} />
-          <Skeleton className="h-14 w-full rounded-md" delay={180} />
-        </div>
-        <div>
-          <Skeleton className="mb-2 h-5 w-16" delay={200} />
-          <div className="space-y-3">
-            {[0, 1, 2].map((row) => (
-              <div key={row} className="flex flex-wrap items-center gap-2">
-                <Skeleton className="h-4 w-8 shrink-0" delay={220 + row * 40} />
-                {Array.from({ length: 4 }, (_, i) => (
-                  <Skeleton key={i} className="h-8 w-16 rounded-sm pointer-coarse:my-1" delay={240 + row * 40 + i * 20} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Skeleton className="h-14 w-full rounded-md" delay={300} />
-        <Skeleton className="h-4 w-44 max-w-full" delay={320} />
-      </div>
-      <div className="space-y-1">
-        <Skeleton className="h-28 w-full rounded-md" delay={340} />
-        <Skeleton className="h-4 w-12" delay={360} />
-      </div>
-      <div>
-        <Skeleton className="h-4 w-80 max-w-full" delay={380} />
-        <Skeleton className="mt-6 h-14 w-full rounded-full" delay={400} />
-      </div>
-    </div>
-  );
+  return <PageLoadingIndicator size="page" holdFooter delay={160} label="正在加载发布页…" />;
 }
 
 /**
@@ -258,7 +211,13 @@ function FilePreview({
     : undefined;
   let media: ReactNode;
   if (preview === null) {
-    media = <Skeleton className="h-48 w-64 max-w-full rounded-md" />;
+    media = (
+      <MediaLoadingPlaceholder
+        variant="contained"
+        size="md"
+        className="relative h-48 w-64 max-w-full rounded-md bg-surface-container-highest"
+      />
+    );
   } else if (video) {
     /* The video takes its own pointer events back from the zone (whose target lies behind the
        content): its controls play, pause and seek, and never open the picker (R7-007). */

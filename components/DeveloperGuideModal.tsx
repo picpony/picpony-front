@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { disableDeveloperMode, enableDeveloperMode, getDeveloperStatus } from '@/lib/api/picpony';
@@ -188,20 +188,8 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
     >
       <FollowHeight>
         <div className="space-y-4">
-          {/* The destination's own shape — three prerequisite rows plus the guidance line — rather than
-              a centred spinner, in the geometry it arrives in. */}
           {status === 'loading' && (
-            <div className="space-y-4" aria-hidden="true">
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="flex min-h-[21px] items-center gap-2">
-                    <SkeletonCircle size={18} delay={i * 90} />
-                    <Skeleton className="h-4 w-40 max-w-full" delay={i * 90 + 45} />
-                  </div>
-                ))}
-              </div>
-              <Skeleton className="h-4.5 w-56 max-w-full" delay={270} />
-            </div>
+            <PageLoadingIndicator size="inline" paused={!isOpen} delay={120} label="正在读取开发者状态…" className="min-h-28" />
           )}
 
           {status === 'banned' && (

@@ -48,7 +48,7 @@ export default function EditForumPostPage() {
   useDocumentTitle('编辑帖子 - PicPony');
 
   let body: React.ReactNode;
-  if (!ready) body = <ComposerSkeleton />;
+  if (!ready) body = <ComposerSkeleton delay={160} />;
   else if (!token) body = <SignInRequired description="登录后即可编辑帖子" />;
   else if (!post && read.error !== undefined) {
     body = isNotFound(read.error) ? (
@@ -67,7 +67,7 @@ export default function EditForumPostPage() {
         onRetry={isRetryable(read.error) ? read.refresh : undefined}
       />
     );
-  } else if (!post) body = <ComposerSkeleton />;
+  } else if (!post) body = <ComposerSkeleton delay={100} />;
   else if (!own) body = <EmptyState title="只能编辑自己的帖子" />;
   else {
     body = (

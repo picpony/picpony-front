@@ -85,7 +85,7 @@ Use `TRAVEL_PX.small` / `--motion-travel-small` for the shared 8 px reduced trav
 
 The off tier removes transitions but preserves:
 
-- Indeterminate progress, slowed rather than frozen. The circular indicator is the exception: its arc cannot grow once the dash is frozen, so it becomes one continuous stroke fading from transparent to solid and turns faster than its standard rate. `app/globals.css` holds both clocks.
+- Indeterminate progress, slowed rather than frozen. The circular indicator is the exception: its arc cannot grow once the dash is frozen, so it becomes one continuous stroke fading from transparent to solid and turns faster than its standard rate. The M3E morphing `LoadingIndicator` freezes its shape on `SoftBurst` and rotates gently under CSS (`4s linear infinite`). `app/globals.css` holds these clocks.
 - Determinate values, without interpolation.
 - Direct finger-controlled position; only the release animation is gated.
 - Scroll restoration and other position state.

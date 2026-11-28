@@ -20,7 +20,7 @@ Thumb and hover-rail ink derive from the owned `--md-sys-color-on-surface-rgb` c
 | HTML-injected rich text tables and `<pre>` blocks | `useRichTextScrollbars` (wrapper mode) |
 | Horizontal chips or tabs | `.scrollbar-hide` with `scroll-fade-x` |
 
-`ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`. Default tracks sit at local `z-index: 5` (below sticky `z-10` headers such as `ColorPicker`'s preview dock), while page, detail and multiline-field tracks sit at `15` (strictly below `--z-route-crossfade`).
+`ScrollArea` binds OverlayScrollbars with `elements.viewport = viewport` and mounts `.os-scrollbar` inside a non-scrolling sibling `.os-slot`, keeping React refs, `scrollTop`, `ScrollTimeline` sources and `data-app-scroll-container` selectors on the real scrolling element. Structural viewport overflow rules live in `app/globals.css` as direct non-inherited declarations rather than importing stock `overlayscrollbars.css` (whose inherited custom properties and `noContent` rule trigger whole-subtree style invalidations on `<main>`). Direct-child `ResizeObserver` updates, input refreshes and scrollbar pointer entry/press sync live viewport dimensions into OverlayScrollbars through `syncScrollbarGeometry()` so `--os-viewport-percent` and drag travel stay strictly proportional to the current total height across route changes, tab switches and async loads without invoking `update(true)`'s auto-hide resets. Covered galleries and active Hero transitions hide only the sibling `.os-scrollbar` tracks without toggling inherited properties on `<main>`. Default tracks sit at local `z-index: 5` (below sticky `z-10` headers such as `ColorPicker`'s preview dock), while page, detail and multiline-field tracks sit at `15` (strictly below `--z-route-crossfade`).
 
 ## Scroll ownership
 
@@ -57,7 +57,7 @@ Programmatic scrolling follows the square root of travel over the shared 360–1
 
 A cold load must not hide already painted SSR cards when the motion engine arrives. Decide engine availability once at mount and skip cascade when the route already owns entrance.
 
-`FadeInImage` cross-fades its placeholder on the image's clock and removes it only after the slowest-speed watchdog. No visible card may become blank during a page turn.
+`FadeInImage` cross-fades its M3E loading placeholder (`MediaLoadingPlaceholder`) on the image's clock and removes it only after the slowest-speed watchdog, pausing its morph clock while off-screen or fading out. No visible card may become blank during a page turn.
 
 ## Tab offsets
 

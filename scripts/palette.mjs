@@ -77,6 +77,7 @@ const {
   ROLES,
   MULTI_TONES,
   CUSTOM_PALETTE,
+  SKY_PALETTE,
   MIN_SEED_CHROMA,
   ON_PRIMARY_VARIANT_FLOOR,
   ON_PRIMARY_VARIANT_SHARE,
@@ -101,6 +102,8 @@ const {
   paletteBlocksCss,
   paletteSet,
   rampChroma,
+  skyPhaseBlocksCss,
+  skyPhaseFace,
   themeFace,
 } = rule;
 
@@ -203,6 +206,141 @@ const THEMES = [
 ];
 
 const CHARACTER_THEMES = THEMES.filter((t) => t.id !== 'default');
+
+/**
+ * The dynamic 天空 palette's eight contiguous time-of-day phases covering 00:00–24:00.
+ *
+ * Each phase owns a single fixed scheme (`light` during 06:00–19:00, `dark` during 19:00–06:00)
+ * because 天空 locks light/dark switching to the sky itself. Under 单色 each phase derives pure
+ * M3 `SchemeTonalSpot` from its primary hue; under 多色 each phase pairs an atmospheric canopy
+ * fill with bespoke paper/velvet neutrals, a quiet second colour and a distinct accent spark while
+ * holding every text/non-text contrast, severity separation and disliked-colour guard.
+ */
+const SKY_LABEL = '天空';
+const DEFAULT_SKY_PHASE = 'morning';
+const SKY_PHASES = [
+  {
+    id: 'midnight',
+    label: '静夜',
+    startHour: 0,
+    endHour: 4,
+    scheme: 'dark',
+    primary: { hue: 218, chroma: 17.0, tone: 25.0 },
+    rampChromaCap: 26,
+    neutral: { hue: 220, chroma: 3.6, variantChroma: 5.8 },
+    second: { hue: 274, chroma: 16, from: '寒月幽岚淡紫选态' },
+    spark: { hue: 308, chroma: 28, from: '霜月丁香微光' },
+    from: '寒月墨青 · 幽岚星寂：深夜最低眩光低彩墨青顶栏，配近中性冷月黑曜绒面',
+  },
+  {
+    id: 'predawn',
+    label: '拂晓',
+    startHour: 4,
+    endHour: 6,
+    scheme: 'dark',
+    primary: { hue: 324, chroma: 21.0, tone: 32.5 },
+    rampChromaCap: 29,
+    neutral: { hue: 318, chroma: 4.2, variantChroma: 6.4 },
+    second: { hue: 234, chroma: 16, from: '东方苏醒灰蓝天幕' },
+    spark: { hue: 356, chroma: 31, from: '破晓丝绒微绯' },
+    from: '晓雾黛紫 · 东方微绯：黎明前由寒夜轻柔抬升的丝绒黛紫，不以白屏刺目',
+  },
+  {
+    id: 'dawn',
+    label: '晨曦',
+    startHour: 6,
+    endHour: 9,
+    scheme: 'light',
+    primary: { hue: 354, chroma: 16.0, tone: 89.0 },
+    rampChromaCap: 31,
+    neutral: { hue: 10, chroma: 3.6, variantChroma: 6.0 },
+    second: { hue: 230, chroma: 13.5, from: '晨岚微蓝清透天色' },
+    spark: { hue: 56, chroma: 30, from: '晨露初金日光' },
+    from: '朝雾绯珠 · 晨露初金：极轻暖樱贝绯白顶栏与微暖宣纸，温柔唤醒双眼',
+  },
+  {
+    id: 'morning',
+    label: '清昼',
+    startHour: 9,
+    endHour: 13,
+    scheme: 'light',
+    primary: { hue: 206, chroma: 17.5, tone: 88.5 },
+    rampChromaCap: 28,
+    neutral: { hue: 208, chroma: 3.0, variantChroma: 5.6 },
+    second: { hue: 350, chroma: 11.5, from: '平安薄樱瓷粉选态' },
+    spark: { hue: 268, chroma: 31, from: '清雅鸢尾靛蓝' },
+    from: '雨过天青 · 月白画廊：克制低彩汝窑天青与近纯月白纸面，衬托画作本色',
+  },
+  {
+    id: 'afternoon',
+    label: '晴午',
+    startHour: 13,
+    endHour: 17,
+    scheme: 'light',
+    primary: { hue: 254, chroma: 21.5, tone: 85.0 },
+    rampChromaCap: 31,
+    neutral: { hue: 62, chroma: 3.8, variantChroma: 6.2 },
+    second: { hue: 56, chroma: 12.5, from: '午窗暖阳浅杏宣纸' },
+    spark: { hue: 184, chroma: 23.5, from: '雾桉晴青哑光海玉' },
+    from: '高空蔚蓝 · 午窗暖宣：澄澈高空晴蓝配微暖米宣纸面，单色下仍保蓝天本色',
+  },
+  {
+    id: 'sunset',
+    label: '暮霞',
+    startHour: 17,
+    endHour: 19,
+    scheme: 'light',
+    primary: { hue: 48, chroma: 19.5, tone: 85.5 },
+    rampChromaCap: 32,
+    neutral: { hue: 48, chroma: 4.2, variantChroma: 6.5 },
+    second: { hue: 274, chroma: 14.5, from: '维纳斯带暮空蓝紫' },
+    spark: { hue: 348, chroma: 32, from: '落霞山茶微玫' },
+    from: '落霞暖杏 · 维纳斯带：丝绸质感暖金杏霞与微暖纸面，提前柔和过渡入夜',
+  },
+  {
+    id: 'twilight',
+    label: '薄暮',
+    startHour: 19,
+    endHour: 21,
+    scheme: 'dark',
+    primary: { hue: 278, chroma: 26.5, tone: 38.0 },
+    rampChromaCap: 31,
+    neutral: { hue: 276, chroma: 4.8, variantChroma: 7.0 },
+    second: { hue: 338, chroma: 16, from: '天际残霞藕紫云影' },
+    spark: { hue: 48, chroma: 31, from: '华灯初上暖琥珀余烬' },
+    from: '蓝调暮霭 · 残霞灯火：承接维纳斯带步入蓝调靛紫暗色，留一缕暖灯余温',
+  },
+  {
+    id: 'starlight',
+    label: '星夜',
+    startHour: 21,
+    endHour: 24,
+    scheme: 'dark',
+    primary: { hue: 250, chroma: 23.5, tone: 31.5 },
+    rampChromaCap: 29,
+    neutral: { hue: 250, chroma: 4.2, variantChroma: 6.4 },
+    second: { hue: 300, chroma: 16, from: '深宵星云淡藤紫选态' },
+    spark: { hue: 204, chroma: 28, from: '银汉寒星冰青微光' },
+    from: '碧落星河 · 银汉微光：深邃普鲁士星蓝与静谧绒面，沉降亮度伴晚间阅读',
+  },
+];
+
+const skyAccentsOf = (phase) => ({
+  second: { hue: phase.second.hue, chroma: phase.second.chroma },
+  spark: { hue: phase.spark.hue, chroma: phase.spark.chroma },
+  neutralHue: { light: phase.neutral.hue, dark: phase.neutral.hue },
+  neutralChroma: { neutral: phase.neutral.chroma, neutralVariant: phase.neutral.variantChroma },
+});
+
+const skyGenerated = new Map(
+  SKY_PHASES.map((phase) => {
+    const fill = hexFromHct(phase.primary.hue, phase.primary.chroma, phase.primary.tone);
+    return [phase.id, deriveTheme(fill, fill, skyAccentsOf(phase), 'built-in', { rampChromaCap: phase.rampChromaCap })];
+  }),
+);
+
+const skyRolesOf = (phase, variant) =>
+  (variant === 'mono' ? skyGenerated.get(phase.id).mono : skyGenerated.get(phase.id))[phase.scheme];
 
 /** A theme's two fills: its direction-A decision, rendered one step apart. */
 function fillsOf(theme) {
@@ -1144,6 +1282,180 @@ console.log(
       .join('  ·  '),
 );
 
+/* ASSERTION 20 — the dynamic 天空 palette's eight phases hold every basic colour rule.
+ *
+ * Contiguous 00–24 schedule, exact tones, contrast bars (PAIRS + ACCENT_PAIRS), SchemeTonalSpot
+ * mono parity, severity distance, disliked-colour guard, dark container clarity, bar ink floor,
+ * tile separation against every built-in and sky phase, and clear separation between consecutive
+ * phases. */
+console.log('\nSKY PHASES (天空)');
+{
+  let expectedStart = 0;
+  for (const phase of SKY_PHASES) {
+    if (phase.startHour !== expectedStart || phase.endHour <= phase.startHour || phase.endHour > 24) {
+      failures.push(`sky ${phase.id}: invalid hour window ${phase.startHour}–${phase.endHour} (expected start ${expectedStart})`);
+    }
+    expectedStart = phase.endHour;
+  }
+  if (expectedStart !== 24) failures.push(`sky schedule ends at ${expectedStart}, expected 24`);
+  if (!SKY_PHASES.some((phase) => phase.id === DEFAULT_SKY_PHASE)) {
+    failures.push(`DEFAULT_SKY_PHASE ${DEFAULT_SKY_PHASE} is not in SKY_PHASES`);
+  }
+
+  for (let i = 0; i < SKY_PHASES.length; i += 1) {
+    const phase = SKY_PHASES[i];
+    const nextPhase = SKY_PHASES[(i + 1) % SKY_PHASES.length];
+    const g = skyGenerated.get(phase.id);
+    const m = g.meta;
+    const scheme = phase.scheme;
+    const multiRoles = g[scheme];
+    const monoRoles = g.mono[scheme];
+
+    if (m.fillChroma < MIN_SEED_CHROMA) {
+      failures.push(`sky ${phase.id} fill ${multiRoles.primary} chroma ${m.fillChroma.toFixed(1)} < ${MIN_SEED_CHROMA}`);
+    }
+    if (DislikeAnalyzer.isDisliked(hctOf(multiRoles.primary))) {
+      failures.push(`sky ${phase.id} primary ${multiRoles.primary} is in the disliked yellow-green band`);
+    }
+
+    for (const variant of VARIANTS) {
+      const roles = skyRolesOf(phase, variant);
+      const ref = rolesOf('default', variant)[scheme];
+      for (const [token, , lightTone, darkTone] of ROLES) {
+        const [lightAsk, darkAsk] = (variant === 'multi' && MULTI_TONES[token]) || [lightTone, darkTone];
+        const raw = scheme === 'light' ? lightAsk : darkAsk;
+        if (typeof raw !== 'number') continue;
+        const got = hctOf(roles[token]).tone;
+        if (Math.abs(got - raw) > 0.5) {
+          failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${token}: asked tone ${raw}, got ${got.toFixed(2)}`);
+        }
+      }
+      const nvTarget = variant === 'mono' ? HARMONY.neutralVariant.chroma : phase.neutral.variantChroma;
+      for (const token of NV_TOKENS) {
+        const got = hctOf(roles[token]).chroma;
+        if (Math.abs(got - nvTarget) > 1) {
+          failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${token} chroma ${got.toFixed(2)} off ${nvTarget.toFixed(2)}`);
+        }
+      }
+      for (const [a, b, rawBar, kind] of PAIRS) {
+        const v = contrast(roles[a], roles[b]);
+        const bar = typeof rawBar === 'object' ? rawBar[scheme] : rawBar;
+        const refVal = contrast(ref[a], ref[b]);
+        const where = `sky ${phase.id} ${VARIANT_LABEL[variant]} ${a}/${b}`;
+        if (kind === 'spread') {
+          if (Math.abs(v - refVal) > SPREAD) failures.push(`${where}: ${v.toFixed(2)} vs default ${refVal.toFixed(2)}`);
+          if (refVal >= bar && v < bar) failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1`);
+        }
+        if (kind === 'floor' && v < bar) failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1`);
+      }
+      for (const [a, b, bar] of ACCENT_PAIRS) {
+        const v = contrast(roles[a], roles[b]);
+        if (v < bar) failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`);
+      }
+      const full = contrast(roles['on-primary'], roles.primary);
+      const quiet = contrast(roles['on-primary-variant'], roles.primary);
+      if (quiet < ON_PRIMARY_VARIANT_FLOOR - BAR_INK_SLACK || quiet > full + BAR_INK_SLACK) {
+        failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant: ${quiet.toFixed(2)}:1 vs ${full.toFixed(2)}:1`);
+      }
+      const quietHct = hctOf(roles['on-primary-variant']);
+      if (quietHct.tone > hctOf(roles.primary).tone && quietHct.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA + 0.5) {
+        failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant tint chroma ${quietHct.chroma.toFixed(1)} > ${ON_PRIMARY_VARIANT_TINT_CHROMA}`);
+      }
+    }
+
+    /* 单色 exact SchemeTonalSpot parity + single-hue & selection invariants */
+    const fillHct = hctOf(multiRoles.primary);
+    const spec = new SchemeTonalSpot(Hct.from(fillHct.hue, fillHct.chroma, fillHct.tone), false, 0);
+    const ours = paletteSet(fillHct.hue, m.chroma);
+    for (const name of ['secondary', 'neutral', 'neutralVariant']) {
+      for (const tone of TONES_USED) {
+        if (ours[name].tone(tone) !== spec[`${name}Palette`].tone(tone)) {
+          failures.push(`sky ${phase.id} mono ${name} at tone ${tone} drifted from SchemeTonalSpot`);
+        }
+      }
+    }
+    for (const [a, b] of [...ONE_HUE, ...SELECTION]) {
+      if (monoRoles[a] !== monoRoles[b]) {
+        failures.push(`sky ${phase.id} 单色 ${a} ${monoRoles[a]} !== ${b} ${monoRoles[b]}`);
+      }
+    }
+    for (const [token] of SELECTION) {
+      if (multiRoles[token] !== monoRoles[token]) {
+        failures.push(`sky ${phase.id} ${token} differs between 多色 and 单色`);
+      }
+    }
+
+    /* 多色 hue gap, guards, severity distance, disliked colours, dark clarity */
+    const secGap = Math.abs(norm180(phase.second.hue - m.hue));
+    if (secGap < SECOND_GAP) failures.push(`sky ${phase.id} second hue gap ${secGap.toFixed(0)}° < ${SECOND_GAP}°`);
+    if (isGuardedHue(phase.second.hue)) failures.push(`sky ${phase.id} second hue H${phase.second.hue} is guarded`);
+    if (isGuardedHue(phase.spark.hue)) failures.push(`sky ${phase.id} spark hue H${phase.spark.hue} is guarded`);
+    if (deltaE(multiRoles.tertiary, multiRoles['primary-ink']) < READS_AS_ONE) {
+      failures.push(`sky ${phase.id} tertiary too close to primary-ink`);
+    }
+    for (const token of ACCENT_TOKENS) {
+      if (DislikeAnalyzer.isDisliked(hctOf(multiRoles[token]))) {
+        failures.push(`sky ${phase.id} 多色 ${token} ${multiRoles[token]} is disliked`);
+      }
+    }
+    for (const severity of ['error', 'success', 'warning']) {
+      for (const hex of [multiRoles[severity], current.light[`${severity}-fill`]]) {
+        const d = deltaE(multiRoles.tertiary, hex);
+        if (d < READS_AS_ONE) failures.push(`sky ${phase.id} tertiary ΔE ${d.toFixed(1)} from ${severity}`);
+      }
+      if (deltaE(multiRoles['secondary-container'], multiRoles[`${severity}-container`]) < READS_AS_ONE) {
+        failures.push(`sky ${phase.id} secondary-container too close to ${severity}-container`);
+      }
+      if (deltaE(multiRoles['tertiary-container'], multiRoles[`${severity}-container`]) < SAME_SWATCH) {
+        failures.push(`sky ${phase.id} tertiary-container too close to ${severity}-container`);
+      }
+    }
+    if (scheme === 'dark') {
+      for (const [token, declared] of [
+        ['secondary-container', phase.second],
+        ['tertiary-container', phase.spark],
+      ]) {
+        const deep = clearChromaAt(declared.hue, 30, 'deep');
+        const bar = Math.min(SECOND_AREA_CAP, SECOND_CLARITY * deep);
+        const got = hctOf(multiRoles[token]).chroma;
+        if (got < bar - CLARITY_ROUNDING) {
+          failures.push(`sky ${phase.id} dark ${token} chroma ${got.toFixed(1)} under ${bar.toFixed(1)}`);
+        }
+      }
+    }
+
+    /* Tile separation against all static built-ins and all sky phases in the same scheme */
+    for (const variant of VARIANTS) {
+      const page = hctOf(skyRolesOf(phase, variant)[FACE_ROLES.page]).tone;
+      for (const [token, where] of TILE_ENCLOSURES) {
+        for (const active of THEMES) {
+          const gap = Math.abs(page - hctOf(rolesOf(active.id, variant)[scheme][token]).tone);
+          if (gap < TILE_SEPARATION) {
+            failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (${active.id})`);
+          }
+        }
+        for (const activeSky of SKY_PHASES) {
+          if (activeSky.scheme !== scheme) continue;
+          const gap = Math.abs(page - hctOf(skyRolesOf(activeSky, variant)[token]).tone);
+          if (gap < TILE_SEPARATION) {
+            failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (sky:${activeSky.id})`);
+          }
+        }
+      }
+    }
+
+    const dNext = deltaE(multiRoles.primary, skyGenerated.get(nextPhase.id)[nextPhase.scheme].primary);
+    if (dNext < 8) {
+      failures.push(`sky ${phase.id} -> ${nextPhase.id} primary ΔE ${dNext.toFixed(1)} under 8`);
+    }
+    console.log(
+      `  ${pad(phase.id, 10)} ${pad(phase.label, 4)} ${String(phase.startHour).padStart(2, '0')}–${String(phase.endHour).padStart(2, '0')} ${pad(scheme, 5)}` +
+        `  ${multiRoles.primary} (${multiRoles['on-primary']} ${contrast(multiRoles['on-primary'], multiRoles.primary).toFixed(1)}:1)` +
+        `  surf ${multiRoles.surface}  sec ${multiRoles['secondary-container']}  tert ${multiRoles.tertiary}  Δnext ${dNext.toFixed(1)}`,
+    );
+  }
+}
+
 /* REPORT — asserted nowhere. How close a selection container comes to a tag or role chip: the
  * categorical scale owns the tone-90 plane, and what keeps a selected row from reading as a tag is
  * the chip rule (an accent never wears a chip), not distance — 单色 was as close for five themes. */
@@ -1230,6 +1542,24 @@ const paletteCss = (() => {
     }
     lines.push('');
   }
+  lines.push(`/* ${SKY_LABEL} — dynamic time-of-day palette, eight phases, each with a single fixed scheme.`);
+  lines.push('   多色 blocks sit at (0,2,1), 单色 delta blocks at (0,3,1); `html.dark` carries dark shared');
+  lines.push('   semantic/categorical/glass tokens during night phases while scheme switching is locked. */');
+  lines.push('');
+  for (const phase of SKY_PHASES) {
+    const g = skyGenerated.get(phase.id);
+    const roles = g[phase.scheme];
+    lines.push(
+      `/* ${SKY_LABEL} · ${phase.label}（${String(phase.startHour).padStart(2, '0')}:00–${String(phase.endHour).padStart(2, '0')}:00，${phase.scheme}）— ${phase.from}。`,
+    );
+    lines.push(
+      `   fill ${roles.primary}, on-primary ${roles['on-primary']}, ink ${roles['primary-ink']},` +
+        ` 多色：第二色 H${phase.second.hue} C${phase.second.chroma}（${phase.second.from}）；` +
+        `点缀 H${phase.spark.hue} C${phase.spark.chroma}（${phase.spark.from}）。 */`,
+    );
+    lines.push(skyPhaseBlocksCss(phase.id, g, phase.scheme));
+    lines.push('');
+  }
   return lines.join('\n');
 })();
 
@@ -1247,6 +1577,20 @@ const themeColorsTs = (() => {
       '  },',
     ].join('\n');
   });
+  const skyEntries = SKY_PHASES.map((phase) => {
+    const roles = skyGenerated.get(phase.id)[phase.scheme];
+    return [
+      '  {',
+      `    id: '${phase.id}',`,
+      `    label: '${phase.label}',`,
+      `    startHour: ${phase.startHour},`,
+      `    endHour: ${phase.endHour},`,
+      `    scheme: '${phase.scheme}',`,
+      `    primary: '${roles.primary}',`,
+      `    onPrimary: '${roles['on-primary']}',`,
+      '  },',
+    ].join('\n');
+  });
   return `// Generated by scripts/palette.mjs — do not edit. Run \`npm run colors:write\`.
 //
 // Per theme, the few hexes for the places a \`var()\` cannot reach.
@@ -1258,12 +1602,10 @@ const themeColorsTs = (() => {
 // file is in every route's bundle, so it carries only what the shell reads. Fields no consumer
 // touches go; fields a consumer needs are generated — the same rule read both ways.
 //
-// The eleventh palette is **not** in this array and must not be: its colours come from the
-// user's own seed, so there is nothing to generate. It is here only as an id, because
-// \`PaletteId\` is what every consumer validates against and a union that cannot express the
-// palette the user has chosen is a union that silently downgrades them to the default. The
-// derivation lives in \`lib/paletteRule.ts\`; this file stays free of it so that importing a
-// theme colour does not pull HCT into every route.
+// The dynamic 天空 palette (\`SKY_PALETTE\`) lives beside \`PALETTES\` as \`SKY_PHASES\` because each
+// time-of-day phase owns a single fixed scheme rather than a light/dark pair. The custom palette
+// is not in \`PALETTES\` either: its colours come from the user's own seed. Both stay free of HCT
+// so importing theme colours never pulls \`lib/paletteRule.ts\` into any route.
 
 export interface PaletteScheme {
   primary: string;
@@ -1277,34 +1619,63 @@ export interface PaletteEntry {
   dark: PaletteScheme;
 }
 
+export interface SkyPhaseEntry {
+  id: string;
+  label: string;
+  startHour: number;
+  endHour: number;
+  scheme: 'light' | 'dark';
+  primary: string;
+  onPrimary: string;
+}
+
 export const PALETTES = [
 ${entries.join('\n')}
 ] as const satisfies readonly PaletteEntry[];
+
+export const SKY_PHASES = [
+${skyEntries.join('\n')}
+] as const satisfies readonly SkyPhaseEntry[];
+
+/** The dynamic time-of-day palette. Mirrors \`SKY_PALETTE\` in \`lib/paletteRule.ts\`. */
+export const SKY_PALETTE = '${SKY_PALETTE}';
+export const SKY_LABEL = '${SKY_LABEL}';
 
 /** The user's own palette. Mirrors \`CUSTOM_PALETTE\` in \`lib/paletteRule.ts\`. */
 export const CUSTOM_PALETTE = '${CUSTOM_PALETTE}';
 
 export type BuiltInPaletteId = (typeof PALETTES)[number]['id'];
-export type PaletteId = BuiltInPaletteId | typeof CUSTOM_PALETTE;
+export type SkyPhaseId = (typeof SKY_PHASES)[number]['id'];
+export type PaletteId = BuiltInPaletteId | typeof SKY_PALETTE | typeof CUSTOM_PALETTE;
 
 export const DEFAULT_PALETTE: PaletteId = '${THEMES[0].id}';
+export const DEFAULT_SKY_PHASE: SkyPhaseId = '${DEFAULT_SKY_PHASE}';
 
 const IDS: readonly string[] = PALETTES.map((p) => p.id);
+const SKY_IDS: readonly string[] = SKY_PHASES.map((p) => p.id);
 
 export function isPaletteId(value: unknown): value is PaletteId {
-  return typeof value === 'string' && (value === CUSTOM_PALETTE || IDS.includes(value));
+  return typeof value === 'string' && (value === CUSTOM_PALETTE || value === SKY_PALETTE || IDS.includes(value));
+}
+
+export function isSkyPhaseId(value: unknown): value is SkyPhaseId {
+  return typeof value === 'string' && SKY_IDS.includes(value);
 }
 `;
 })();
 
 /* The tiles' faces: read off each theme's own roles by `themeFace`, the function the custom
-   palette's tile is drawn through too, so a built-in tile and the eleventh cannot disagree. */
+   palette's tile is drawn through too, so a built-in tile and the custom/sky tiles cannot disagree. */
 const themeFacesTs = (() => {
   const face = (f) =>
     `{ page: '${f.page}', pick: '${f.pick}', accent: '${f.accent}', monoPage: '${f.monoPage}', monoPick: '${f.monoPick}' }`;
   const entries = THEMES.map((theme) => {
     const f = themeFace(generated.get(theme.id));
     return [`  ${theme.id}: {`, `    light: ${face(f.light)},`, `    dark: ${face(f.dark)},`, '  },'].join('\n');
+  });
+  const skyFaceEntries = SKY_PHASES.map((phase) => {
+    const f = skyPhaseFace(skyGenerated.get(phase.id), phase.scheme);
+    return `  ${phase.id}: ${face(f)},`;
   });
   return `// Generated by scripts/palette.mjs — do not edit. Run \`npm run colors:write\`.
 //
@@ -1315,11 +1686,15 @@ const themeFacesTs = (() => {
 // because a tile shows a theme that is not the active one and every token is the active one's; a
 // file of its own, because only /settings draws tiles and \`themeColors.ts\` is in every route.
 
-import type { ThemeFace } from '../paletteSpec';
-import type { BuiltInPaletteId } from './themeColors';
+import type { FaceScheme, ThemeFace } from '../paletteSpec';
+import type { BuiltInPaletteId, SkyPhaseId } from './themeColors';
 
 export const THEME_FACES: Record<BuiltInPaletteId, ThemeFace> = {
 ${entries.join('\n')}
+};
+
+export const SKY_FACES: Record<SkyPhaseId, FaceScheme> = {
+${skyFaceEntries.join('\n')}
 };
 `;
 })();

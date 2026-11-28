@@ -20,14 +20,13 @@ import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
-import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import SignInRequired from '@/components/SignInRequired';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { showToast } from '@/components/Toast';
 import { FaveGridView, useDeviceRules, useLocalFavePage } from '@/components/favorites/FaveGrid';
 import { GateCard } from '@/components/favorites/PrivacyForms';
@@ -43,19 +42,10 @@ async function openSharedSpace(token: string, ownerId: number, password: string,
   return sharedPrivacyFaves.read({ token, ownerId }, { force: true });
 }
 
-function GateSkeleton() {
+function GateSkeleton({ delay = 0 }: { delay?: number }) {
   return (
-    <div className={COLUMN} data-page-loading="">
-      <div className="mb-6 flex flex-col gap-2">
-        <Skeleton className="h-8 w-48 max-w-full" />
-      </div>
-      <Card variant="filled" padding="lg" className="mx-auto flex w-full max-w-md flex-col items-center gap-3">
-        <Skeleton className="size-12 rounded-full" />
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="h-4 w-56 max-w-full" />
-        <Skeleton className="mt-2 h-14 w-full rounded-md" />
-        <Skeleton className="mt-1 h-10 w-24 self-end rounded-full" />
-      </Card>
+    <div className={COLUMN}>
+      <PageLoadingIndicator size="page" holdFooter delay={delay} label="正在加载隐私空间…" />
     </div>
   );
 }
@@ -82,7 +72,7 @@ export default function SharedPrivacyScreen({ ownerId }: { ownerId: number }) {
     return (
       <>
         {pageBack}
-        <GateSkeleton />
+        <GateSkeleton delay={160} />
       </>
     );
   }
@@ -190,7 +180,7 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
       return (
         <>
           {pageBack}
-          <GateSkeleton />
+          <GateSkeleton delay={100} />
         </>
       );
     }

@@ -6,10 +6,12 @@ import {
   commitPalette,
   commitPaletteHues,
   commitScheme,
+  commitSkyPhase,
   type CustomPaletteInstall,
   type PaletteHues,
   type PaletteId,
   type SchemeSetting,
+  type SkyPhaseId,
 } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { applyInstantTabScroll, rememberTabScroll } from '@/lib/tabScroll';
@@ -160,6 +162,16 @@ export function changePaletteHues(hues: PaletteHues, origin?: { x: number; y: nu
     return;
   }
   commitPaletteHues(hues);
+  void loadTheme();
+}
+
+/** Dynamic 天空 time-of-day transition as a wipe; falls back to an instant commit until loaded. */
+export function changeSkyPhase(phaseId: SkyPhaseId, origin?: { x: number; y: number }): void {
+  if (themeModule) {
+    themeModule.changeSkyPhase(phaseId, origin);
+    return;
+  }
+  commitSkyPhase(phaseId);
   void loadTheme();
 }
 

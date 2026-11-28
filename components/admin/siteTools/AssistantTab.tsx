@@ -9,6 +9,7 @@ import Collapse from '@/components/Collapse';
 import DataTable from '@/components/DataTable';
 import FollowHeight from '@/components/FollowHeight';
 import IconButton from '@/components/IconButton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import SectionHeading from '@/components/SectionHeading';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
@@ -109,8 +110,13 @@ function ProviderEditor({ token, config, provider, onDone }: { token: string; co
 const PROVIDER_EDITOR_ID = 'admin-assistant-provider-editor';
 const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
 
-function Providers({ token }: { token: string }) {
-  const read = useAdminQuery(assistantQuery, token);
+function Providers({
+  token,
+  read,
+}: {
+  token: string;
+  read: ReturnType<typeof useAdminQuery<Config>>;
+}) {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   /* Hold the last edited target while `Collapse` glides closed so its height contracts smoothly. */
   const [shownEditing, setShownEditing] = useState<string | 'new' | null>(null);
@@ -192,15 +198,25 @@ function Providers({ token }: { token: string }) {
 }
 
 function AssistantTab({ token }: AdminPanelProps) {
+  const providers = useAdminQuery(assistantQuery, token);
   const quota = useAdminQuery(quotaQuery, token);
+  /* Coalesce initial dual loading into a single centred indicator so opening 彩彩 AI never stacks
+     two spinning loaders vertically; once either settles, each section reports its own state. */
+  const bothLoading = providers.loading && quota.loading;
   return <div className="space-y-6">
-    <SectionHeader section="ai-assistant" onRefresh={() => { assistantQuery.invalidate(); quota.refresh(); }} isLoading={quota.refreshing} />
-    <Providers token={token} />
-    <ReadState title="额度规则加载失败" loading={quota.loading} error={quota.error} retry={quota.retryable ? quota.refresh : undefined}>
-      {quota.data && <ConfigEditor title="额度规则" token={token} initial={quota.data.values} fields={quotaFields} validate={(v) => fieldsPayload(quotaFields, v)} save={(v) => api.saveAiQuota(token, quota.data!.revision, v)} refresh={() => { quotaQuery.invalidate(); assistantQuota.invalidate({ token }); }} confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}>
-        <AdminNote>成功回复扣 1 点，成功任务共扣 2 点；每日赠送于北京时间零点重置，兑换余额长期保留。</AdminNote>
-      </ConfigEditor>}
-    </ReadState>
+    <SectionHeader section="ai-assistant" onRefresh={() => { providers.refresh(); quota.refresh(); }} isLoading={providers.refreshing || quota.refreshing} />
+    {bothLoading ? (
+      <PageLoadingIndicator size="pane" holdFooter label="正在加载彩彩 AI 设置…" className="min-h-60" />
+    ) : (
+      <>
+        <Providers token={token} read={providers} />
+        <ReadState title="额度规则加载失败" loading={quota.loading} error={quota.error} retry={quota.retryable ? quota.refresh : undefined}>
+          {quota.data && <ConfigEditor title="额度规则" token={token} initial={quota.data.values} fields={quotaFields} validate={(v) => fieldsPayload(quotaFields, v)} save={(v) => api.saveAiQuota(token, quota.data!.revision, v)} refresh={() => { quotaQuery.invalidate(); assistantQuota.invalidate({ token }); }} confirmation={() => '确定要修改全站彩彩 AI 额度规则吗？每日赠送与金币兑换比例将使用新规则。'}>
+            <AdminNote>成功回复扣 1 点，成功任务共扣 2 点；每日赠送于北京时间零点重置，兑换余额长期保留。</AdminNote>
+          </ConfigEditor>}
+        </ReadState>
+      </>
+    )}
   </div>;
 }
 export default protectedPanel(AssistantTab);

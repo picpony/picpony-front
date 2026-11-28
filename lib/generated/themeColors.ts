@@ -9,12 +9,10 @@
 // file is in every route's bundle, so it carries only what the shell reads. Fields no consumer
 // touches go; fields a consumer needs are generated — the same rule read both ways.
 //
-// The eleventh palette is **not** in this array and must not be: its colours come from the
-// user's own seed, so there is nothing to generate. It is here only as an id, because
-// `PaletteId` is what every consumer validates against and a union that cannot express the
-// palette the user has chosen is a union that silently downgrades them to the default. The
-// derivation lives in `lib/paletteRule.ts`; this file stays free of it so that importing a
-// theme colour does not pull HCT into every route.
+// The dynamic 天空 palette (`SKY_PALETTE`) lives beside `PALETTES` as `SKY_PHASES` because each
+// time-of-day phase owns a single fixed scheme rather than a light/dark pair. The custom palette
+// is not in `PALETTES` either: its colours come from the user's own seed. Both stay free of HCT
+// so importing theme colours never pulls `lib/paletteRule.ts` into any route.
 
 export interface PaletteScheme {
   primary: string;
@@ -26,6 +24,16 @@ export interface PaletteEntry {
   label: string;
   light: PaletteScheme;
   dark: PaletteScheme;
+}
+
+export interface SkyPhaseEntry {
+  id: string;
+  label: string;
+  startHour: number;
+  endHour: number;
+  scheme: 'light' | 'dark';
+  primary: string;
+  onPrimary: string;
 }
 
 export const PALETTES = [
@@ -91,16 +99,102 @@ export const PALETTES = [
   },
 ] as const satisfies readonly PaletteEntry[];
 
+export const SKY_PHASES = [
+  {
+    id: 'midnight',
+    label: '静夜',
+    startHour: 0,
+    endHour: 4,
+    scheme: 'dark',
+    primary: '#263f46',
+    onPrimary: '#ffffff',
+  },
+  {
+    id: 'predawn',
+    label: '拂晓',
+    startHour: 4,
+    endHour: 6,
+    scheme: 'dark',
+    primary: '#5b455f',
+    onPrimary: '#ffffff',
+  },
+  {
+    id: 'dawn',
+    label: '晨曦',
+    startHour: 6,
+    endHour: 9,
+    scheme: 'light',
+    primary: '#fbd6e3',
+    onPrimary: '#4f2137',
+  },
+  {
+    id: 'morning',
+    label: '清昼',
+    startHour: 9,
+    endHour: 13,
+    scheme: 'light',
+    primary: '#c5e4e8',
+    onPrimary: '#00363b',
+  },
+  {
+    id: 'afternoon',
+    label: '晴午',
+    startHour: 13,
+    endHour: 17,
+    scheme: 'light',
+    primary: '#c2d6f2',
+    onPrimary: '#083255',
+  },
+  {
+    id: 'sunset',
+    label: '暮霞',
+    startHour: 17,
+    endHour: 19,
+    scheme: 'light',
+    primary: '#fcccb3',
+    onPrimary: '#502406',
+  },
+  {
+    id: 'twilight',
+    label: '薄暮',
+    startHour: 19,
+    endHour: 21,
+    scheme: 'dark',
+    primary: '#51577d',
+    onPrimary: '#ffffff',
+  },
+  {
+    id: 'starlight',
+    label: '星夜',
+    startHour: 21,
+    endHour: 24,
+    scheme: 'dark',
+    primary: '#344c65',
+    onPrimary: '#ffffff',
+  },
+] as const satisfies readonly SkyPhaseEntry[];
+
+/** The dynamic time-of-day palette. Mirrors `SKY_PALETTE` in `lib/paletteRule.ts`. */
+export const SKY_PALETTE = 'sky';
+export const SKY_LABEL = '天空';
+
 /** The user's own palette. Mirrors `CUSTOM_PALETTE` in `lib/paletteRule.ts`. */
 export const CUSTOM_PALETTE = 'custom';
 
 export type BuiltInPaletteId = (typeof PALETTES)[number]['id'];
-export type PaletteId = BuiltInPaletteId | typeof CUSTOM_PALETTE;
+export type SkyPhaseId = (typeof SKY_PHASES)[number]['id'];
+export type PaletteId = BuiltInPaletteId | typeof SKY_PALETTE | typeof CUSTOM_PALETTE;
 
 export const DEFAULT_PALETTE: PaletteId = 'default';
+export const DEFAULT_SKY_PHASE: SkyPhaseId = 'morning';
 
 const IDS: readonly string[] = PALETTES.map((p) => p.id);
+const SKY_IDS: readonly string[] = SKY_PHASES.map((p) => p.id);
 
 export function isPaletteId(value: unknown): value is PaletteId {
-  return typeof value === 'string' && (value === CUSTOM_PALETTE || IDS.includes(value));
+  return typeof value === 'string' && (value === CUSTOM_PALETTE || value === SKY_PALETTE || IDS.includes(value));
+}
+
+export function isSkyPhaseId(value: unknown): value is SkyPhaseId {
+  return typeof value === 'string' && SKY_IDS.includes(value);
 }

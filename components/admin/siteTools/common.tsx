@@ -7,7 +7,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import { Field, Input, Textarea } from '@/components/Input';
 import Select from '@/components/Select';
 import ToggleSwitch from '@/components/ToggleSwitch';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import SectionHeading from '@/components/SectionHeading';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { showToast } from '@/components/Toast';
@@ -56,28 +56,12 @@ export function ReadState({
   return <>
     {error && <ErrorRetry size="inline" {...retryError(title, error)} onRetry={retry} />}
     {loading ? (
-      variant === 'table' ? (
-        <div data-page-loading="" className="space-y-4" aria-label="正在加载列表">
-          <Skeleton className="h-6 w-36" />
-          <div>
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="m3-row flex flex-col gap-2 bg-surface-container p-4">
-                <Skeleton className="h-4.5 w-2/5" delay={i * 70} />
-                <Skeleton className="h-4 w-3/4" delay={i * 70 + 40} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div data-page-loading="" className="max-w-2xl space-y-4" aria-label="正在加载设置">
-          <Skeleton className="h-6 w-36" />
-          <Skeleton className="h-14 w-full rounded-md" delay={60} />
-          <Skeleton className="h-14 w-full rounded-md" delay={120} />
-          <div className="flex justify-end">
-            <Skeleton className="h-10 w-28 rounded-full" delay={180} />
-          </div>
-        </div>
-      )
+      <PageLoadingIndicator
+        size="pane"
+        holdFooter
+        label={variant === 'table' ? '正在加载列表…' : '正在加载设置…'}
+        className="min-h-60"
+      />
     ) : children}
   </>;
 }

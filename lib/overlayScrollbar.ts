@@ -5,7 +5,7 @@ import type {
   PartialOptions,
   ScrollbarsAutoHideBehavior,
 } from 'overlayscrollbars';
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { motionTier, scaledMs } from '@/lib/appearance';
 import { MEDIA } from '@/lib/constants';
 import { runWhenIdle } from '@/lib/utils';
@@ -85,6 +85,114 @@ function isCoarsePointer(): boolean {
 
 const SKIP_FLOW_DIRECTION = () => ({});
 const IGNORE_ALL_MUTATIONS = () => true;
+const SYNC_ATTR = 'data-os-sync';
+
+function isGeometryStale(
+  viewport: HTMLElement,
+  instance: OverlayScrollbarsInstance,
+  axis: ScrollbarAxis,
+): boolean {
+  const clientW = viewport.clientWidth;
+  const clientH = viewport.clientHeight;
+  if (clientW === 0 && clientH === 0) return false;
+
+  const { overflowEdge, overflowAmount, hasOverflow } = instance.state();
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const dprTolerance = dpr % 1 !== 0 ? 1 : 0;
+
+  if (axis !== 'y') {
+    const scrollW = viewport.scrollWidth;
+    const expectedEdgeX = clientW + Math.max(0, clientW - scrollW);
+    const rawX = Math.max(0, scrollW - clientW);
+    const expectedX = rawX > dprTolerance ? rawX : 0;
+    if (
+      Math.abs(overflowEdge.x - expectedEdgeX) >= 1 ||
+      Math.abs(overflowAmount.x - expectedX) >= 1 ||
+      (expectedX > 0) !== hasOverflow.x
+    ) {
+      return true;
+    }
+  }
+
+  if (axis !== 'x') {
+    const scrollH = viewport.scrollHeight;
+    const expectedEdgeY = clientH + Math.max(0, clientH - scrollH);
+    const rawY = Math.max(0, scrollH - clientH);
+    const expectedY = rawY > dprTolerance ? rawY : 0;
+    if (
+      Math.abs(overflowEdge.y - expectedEdgeY) >= 1 ||
+      Math.abs(overflowAmount.y - expectedY) >= 1 ||
+      (expectedY > 0) !== hasOverflow.y
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Reconcile OverlayScrollbars' cached `overflowEdge`, `overflowAmount` and
+ * `--os-viewport-percent` thumb proportion against the live viewport geometry.
+ *
+ * When `ignoreMutation` suppresses OverlayScrollbars' subtree `MutationObserver`
+ * (or when content resizes without a pending mutation record, such as `<textarea>`
+ * input or async image layout), a bare `instance.update()` sees no observer hint
+ * and skips overflow re-measurement entirely. Toggling an unstyled attribute in
+ * `update.attributes` and immediately calling `instance.update()` drains the
+ * record synchronously via `takeRecords()` and runs OverlayScrollbars' native
+ * content-mutation overflow path without `update(true)`'s side effects (resetting
+ * `autoHideSuspend`, cancelling active auto-hide timers, or recreating observers).
+ */
+export function syncScrollbarGeometry(
+  viewport: HTMLElement,
+  instance: OverlayScrollbarsInstance,
+  axis: ScrollbarAxis,
+): boolean {
+  const { destroyed, sleeping } = instance.state();
+  if (!viewport.isConnected || destroyed || sleeping) return false;
+  if (!isGeometryStale(viewport, instance, axis)) return false;
+
+  viewport.setAttribute(SYNC_ATTR, viewport.getAttribute(SYNC_ATTR) === '1' ? '0' : '1');
+  instance.update();
+
+  if (!isGeometryStale(viewport, instance, axis)) return true;
+
+  // Fallback when OverlayScrollbars' internal content-size cache already matches
+  // the current scroll dimensions (for example, after a viewport-only resize such
+  // as a sidebar dock toggle): force a refresh while preserving auto-hide classes.
+  const { scrollbarHorizontal, scrollbarVertical } = instance.elements();
+  const bars = [scrollbarHorizontal.scrollbar, scrollbarVertical.scrollbar];
+  const saved = bars.map((el) => ({
+    el,
+    autoHide: el.classList.contains('os-scrollbar-auto-hide'),
+    hidden: el.classList.contains('os-scrollbar-auto-hide-hidden'),
+  }));
+  instance.update(true);
+  for (const { el, autoHide, hidden } of saved) {
+    el.classList.toggle('os-scrollbar-auto-hide', autoHide);
+    el.classList.toggle('os-scrollbar-auto-hide-hidden', hidden);
+  }
+  return true;
+}
+
+function attachTrackSync(
+  instance: OverlayScrollbarsInstance,
+  onSync: () => void,
+): () => void {
+  const { scrollbarHorizontal, scrollbarVertical } = instance.elements();
+  const bars = [scrollbarHorizontal.scrollbar, scrollbarVertical.scrollbar];
+  for (const bar of bars) {
+    bar.addEventListener('pointerenter', onSync, { passive: true });
+    bar.addEventListener('pointerdown', onSync, { capture: true, passive: true });
+  }
+  return () => {
+    for (const bar of bars) {
+      bar.removeEventListener('pointerenter', onSync);
+      bar.removeEventListener('pointerdown', onSync, { capture: true });
+    }
+  };
+}
 
 /**
  * Live click-scroll timing resolved on each track click so motion-tier and
@@ -135,6 +243,7 @@ export function buildScrollbarOptions(
     paddingAbsolute: false,
     showNativeOverlaidScrollbars: false,
     update: {
+      attributes: [SYNC_ATTR],
       elementEvents: null,
       flowDirectionStyles: SKIP_FLOW_DIRECTION,
       ignoreMutation: ignoreMutations ? IGNORE_ALL_MUTATIONS : null,
@@ -174,7 +283,7 @@ function observeDirectChildren(viewport: HTMLElement, onResize: () => void): () 
     resize.disconnect();
     for (const child of Array.from(viewport.children)) {
       if (child instanceof HTMLElement && !child.matches(SKIP_OBSERVE_SELECTOR)) {
-        resize.observe(child);
+        resize.observe(child, { box: 'border-box' });
       }
     }
   };
@@ -215,6 +324,7 @@ export function mountSlottedScrollbar(
   let instance: OverlayScrollbarsInstance | null = null;
   let cancelIdle: (() => void) | null = null;
   let cancelChildResize: (() => void) | null = null;
+  let detachTrackListeners: (() => void) | null = null;
   let motionWaitObserver: MutationObserver | null = null;
   let frame = 0;
 
@@ -247,6 +357,15 @@ export function mountSlottedScrollbar(
     });
   };
 
+  const syncNow = () => {
+    if (disposed || !instance || instance.state().destroyed) return;
+    if (isTransitionBusy()) {
+      waitForMotionSettle();
+      return;
+    }
+    syncScrollbarGeometry(viewport, instance, axis);
+  };
+
   const scheduleUpdate = () => {
     if (disposed || !instance || frame) return;
     if (isTransitionBusy()) {
@@ -255,12 +374,7 @@ export function mountSlottedScrollbar(
     }
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (disposed || !instance || instance.state().destroyed) return;
-      if (isTransitionBusy()) {
-        waitForMotionSettle();
-        return;
-      }
-      instance.update();
+      syncNow();
     });
   };
 
@@ -282,6 +396,7 @@ export function mountSlottedScrollbar(
     if (existing) {
       existing.options(options);
       instance = existing;
+      scheduleUpdate();
     } else {
       const savedDescendantScrolls: Array<[HTMLElement, number, number]> = [];
       for (const el of viewport.querySelectorAll<HTMLElement>(DESCENDANT_SCROLLER_SELECTOR)) {
@@ -303,7 +418,10 @@ export function mountSlottedScrollbar(
         if (el.scrollTop !== top) el.scrollTop = top;
       }
     }
+    detachTrackListeners?.();
+    detachTrackListeners = attachTrackSync(instance, syncNow);
     if (viewport.tagName !== 'TEXTAREA') {
+      cancelChildResize?.();
       cancelChildResize = observeDirectChildren(viewport, scheduleUpdate);
     }
     mediaQuery?.addEventListener?.('change', onMediaChange);
@@ -357,9 +475,12 @@ export function mountSlottedScrollbar(
       viewport.removeEventListener('pointerenter', start);
       viewport.removeEventListener('pointermove', start);
       if (observeInput) viewport.removeEventListener('input', scheduleUpdate);
+      detachTrackListeners?.();
+      detachTrackListeners = null;
       cancelChildResize?.();
       cancelChildResize = null;
       mediaQuery?.removeEventListener?.('change', onMediaChange);
+      viewport.removeAttribute(SYNC_ATTR);
       if (instance && !instance.state().destroyed) {
         instance.destroy();
       }
@@ -385,6 +506,12 @@ export function mountWrappedScrollbar(
   let disposed = false;
   let instance: OverlayScrollbarsInstance | null = null;
   let cancelIdle: (() => void) | null = null;
+  let detachTrackListeners: (() => void) | null = null;
+
+  const syncNow = () => {
+    if (disposed || !instance || instance.state().destroyed) return;
+    syncScrollbarGeometry(instance.elements().viewport, instance, axis);
+  };
 
   const attach = (mod: OverlayScrollbarsModule) => {
     if (disposed || !host.isConnected) return;
@@ -393,9 +520,12 @@ export function mountWrappedScrollbar(
     if (existing) {
       existing.options(options);
       instance = existing;
+      syncNow();
     } else {
       instance = mod.OverlayScrollbars(host, options);
     }
+    detachTrackListeners?.();
+    detachTrackListeners = attachTrackSync(instance, syncNow);
   };
 
   let started = false;
@@ -427,11 +557,7 @@ export function mountWrappedScrollbar(
   }
 
   return {
-    update: () => {
-      if (!disposed && instance && !instance.state().destroyed) {
-        instance.update();
-      }
-    },
+    update: syncNow,
     destroy: () => {
       disposed = true;
       cancelIdle?.();
@@ -439,7 +565,10 @@ export function mountWrappedScrollbar(
       host.removeEventListener('scroll', start);
       host.removeEventListener('pointerenter', start);
       host.removeEventListener('pointermove', start);
+      detachTrackListeners?.();
+      detachTrackListeners = null;
       if (instance && !instance.state().destroyed) {
+        instance.elements().viewport.removeAttribute(SYNC_ATTR);
         instance.destroy();
       }
       instance = null;
@@ -464,6 +593,8 @@ export function useOverlayScrollbar(
     refreshKey,
   }: OverlayScrollbarOptions = {},
 ) {
+  const handleRef = useRef<OverlayScrollbarHandle | null>(null);
+
   useEffect(() => {
     if (!enabled) return;
     const viewport = viewportRef.current;
@@ -476,18 +607,17 @@ export function useOverlayScrollbar(
       defer,
       observeInput,
     });
-    return () => handle.destroy();
+    handleRef.current = handle;
+    return () => {
+      handleRef.current = null;
+      handle.destroy();
+    };
   }, [viewportRef, slotRef, axis, autoHide, autoHideSuspend, defer, enabled, observeInput]);
 
   useEffect(() => {
     if (!enabled || refreshKey === undefined) return;
-    const viewport = viewportRef.current;
-    if (!viewport || !loadedModule) return;
-    const instance = loadedModule.OverlayScrollbars(viewport);
-    if (instance && !instance.state().destroyed) {
-      instance.update();
-    }
-  }, [viewportRef, enabled, refreshKey]);
+    handleRef.current?.update();
+  }, [enabled, refreshKey]);
 }
 
 /**

@@ -11,11 +11,11 @@ import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import Select from '@/components/Select';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Tabs, { type TabItem } from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { showToast } from '@/components/Toast';
-import { ROW_CLASS, ROW_STACK_CLASS, SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
+import { ROW_STACK_CLASS, SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
 import { LS_KEYS } from '@/lib/constants';
 import { useEscapeBack } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -112,38 +112,12 @@ export default function PerfScreen() {
   );
 }
 
-/** The screen's shape while waiting for client mount: header, tab strip, grouped rows. */
+/** Header plus a centred M3E loading indicator while waiting for client mount. */
 function PerfSkeleton() {
   return (
-    <div data-page-loading aria-busy="true" aria-label="正在加载性能测试">
-      <PageHeader
-        title="性能测试"
-        subtitle={<Skeleton className="h-5 w-72 max-w-full" />}
-        actions={<Skeleton className="h-10 w-28 rounded-full" />}
-      />
-      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
-        {['w-16', 'w-16'].map((width, index) => (
-          <div key={index} className="px-4">
-            <Skeleton className={`h-4 ${width}`} delay={index * 80} />
-          </div>
-        ))}
-      </div>
-      {[3, 2].map((rows, section) => (
-        <section key={section} className="mb-8" aria-hidden="true">
-          <Skeleton className="mb-4 h-6 w-24 rounded-xs" />
-          <div>
-            {Array.from({ length: rows }, (_, row) => (
-              <div key={row} className={ROW_CLASS}>
-                <div className="min-w-0 flex-1">
-                  <Skeleton className="h-4 w-32 rounded-xs" delay={row * 60} />
-                  <Skeleton className="mt-1.5 h-3.5 w-56 max-w-full rounded-xs" delay={row * 60 + 30} />
-                </div>
-                <Skeleton className="h-8 w-13 shrink-0 rounded-full" delay={row * 60 + 60} />
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
+    <div>
+      <PageHeader title="性能测试" />
+      <PageLoadingIndicator size="pane" holdFooter delay={160} label="正在加载性能测试…" />
     </div>
   );
 }

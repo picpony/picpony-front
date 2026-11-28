@@ -7,7 +7,7 @@ import { MdArrowUpward, MdComment, MdRefresh } from '@/components/icons/common';
 import FadeInImage from './FadeInImage';
 import ImageCardVideo from './ImageCardVideo';
 import Button from './Button';
-import Skeleton from './Skeleton';
+import { MediaLoadingPlaceholder } from './LoadingIndicator';
 import type { ImagePreview } from '@/lib/types/image';
 import { useHeroLink } from '@/lib/useHero';
 import { ICON } from '@/lib/icons';
@@ -217,9 +217,8 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
               onGiveUp={markFailed}
             />
           ) : (
-            /* The frame the server paints for a picture it leaves to the client: the same
-               shimmer the picture's own loading state starts with, so hydration is seamless. */
-            <Skeleton className="absolute inset-0 block rounded-none" />
+            /* The quiet frame the server paints for a picture it leaves to the client. */
+            <MediaLoadingPlaceholder quiet />
           )}
         </div>
 

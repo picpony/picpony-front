@@ -46,6 +46,9 @@ export const isPaletteHues = (value: unknown): value is PaletteHues =>
 /** The `<html>` attribute 单色 is keyed on, present only for `mono`. */
 export const HUES_ATTRIBUTE = 'data-palette-hues';
 
+/** The `<html>` attribute the dynamic 天空 palette's active time phase is keyed on. */
+export const SKY_PHASE_ATTRIBUTE = 'data-sky-phase';
+
 /**
  * How the custom palette's 副色相 is chosen. `null` is 自动 — the right-angle rule; a preset is a
  * relation to the seed's hue (re-derived from the seed, so it moves with it); a number is a hue the

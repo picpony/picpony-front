@@ -649,3 +649,173 @@ test('the development preview cookie is honoured in development only', async () 
   const prod = loadMaintenance({ cookie: '1', respond: () => json({ maintenance_mode: false, maintenance_message: '' }) });
   assert.equal((await prod.readMaintenance()).active, false);
 });
+
+// --- lib/overlayScrollbar.ts --------------------------------------------------------------
+
+function loadOverlayScrollbar({ dpr = 1 } = {}) {
+  return load(
+    'lib/overlayScrollbar.ts',
+    {
+      react: { useEffect() {}, useRef: (v) => ({ current: v }) },
+      '@/lib/appearance': { motionTier: () => 'standard', scaledMs: (ms) => ms },
+      '@/lib/constants': { MEDIA: { pointerCoarse: '(pointer: coarse)' } },
+      '@/lib/utils': { runWhenIdle: () => () => {} },
+    },
+    { window: { devicePixelRatio: dpr, matchMedia: () => ({ matches: false }) } },
+  );
+}
+
+function makeFakeBar(classes = []) {
+  const set = new Set(classes);
+  return {
+    classes: set,
+    classList: {
+      contains: (c) => set.has(c),
+      toggle: (c, force) => {
+        if (force) set.add(c);
+        else set.delete(c);
+      },
+    },
+  };
+}
+
+function makeFakeViewport({ clientW = 1280, clientH = 668, scrollW = 1280, scrollH = 3409, isConnected = true } = {}) {
+  const attrs = new Map();
+  return {
+    isConnected,
+    clientWidth: clientW,
+    clientHeight: clientH,
+    scrollWidth: scrollW,
+    scrollHeight: scrollH,
+    attrs,
+    getAttribute: (k) => attrs.get(k) ?? null,
+    setAttribute: (k, v) => attrs.set(k, String(v)),
+    removeAttribute: (k) => attrs.delete(k),
+  };
+}
+
+test('buildScrollbarOptions exposes the unstyled geometry-sync attribute alongside ignoreMutation', () => {
+  const { buildScrollbarOptions } = loadOverlayScrollbar();
+  const opts = buildScrollbarOptions('y', 'auto', true);
+  assert.deepEqual([...opts.update.attributes], ['data-os-sync']);
+  assert.equal(typeof opts.update.ignoreMutation, 'function');
+  assert.equal(opts.update.ignoreMutation(), true);
+});
+
+test('syncScrollbarGeometry nudges native update without force when total height changes', () => {
+  const { syncScrollbarGeometry } = loadOverlayScrollbar();
+  const viewport = makeFakeViewport({ clientH: 668, scrollH: 1134 });
+  const hBar = makeFakeBar(['os-scrollbar-auto-hide']);
+  const vBar = makeFakeBar(['os-scrollbar-auto-hide']);
+  const state = {
+    destroyed: false,
+    overflowEdge: { x: 1280, y: 668 },
+    overflowAmount: { x: 0, y: 2741 },
+    hasOverflow: { x: false, y: true },
+  };
+  const calls = [];
+  const instance = {
+    state: () => state,
+    elements: () => ({ scrollbarHorizontal: { scrollbar: hBar }, scrollbarVertical: { scrollbar: vBar } }),
+    update: (force) => {
+      calls.push(Boolean(force));
+      // Simulate OverlayScrollbars' content MutationObserver reading the sync attribute
+      // and updating overflowAmount to match the shorter route.
+      state.overflowEdge.y = viewport.clientHeight;
+      state.overflowAmount.y = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      state.hasOverflow.y = state.overflowAmount.y > 0;
+      return true;
+    },
+  };
+
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
+  assert.deepEqual(calls, [false], 'uses non-forced native update path');
+  assert.equal(viewport.getAttribute('data-os-sync'), '1');
+  assert.equal(state.overflowAmount.y, 466);
+
+  // Subsequent sync with unchanged dimensions is a cheap no-op.
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), false);
+  assert.deepEqual(calls, [false]);
+
+  // Shrinking to non-overflowing clears hasOverflow; off-axis x overflow is ignored on axis="y".
+  viewport.scrollHeight = 668;
+  viewport.scrollWidth = 1600;
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
+  assert.equal(viewport.getAttribute('data-os-sync'), '0');
+  assert.equal(state.hasOverflow.y, false);
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), false, 'off-axis overflow does not loop');
+});
+
+test('syncScrollbarGeometry preserves auto-hide classes when falling back to forced refresh', () => {
+  const { syncScrollbarGeometry } = loadOverlayScrollbar();
+  const viewport = makeFakeViewport({ clientH: 668, scrollH: 3409 });
+  const hBar = makeFakeBar(['os-scrollbar-auto-hide', 'os-scrollbar-auto-hide-hidden']);
+  const vBar = makeFakeBar(['os-scrollbar-auto-hide']);
+  const state = {
+    destroyed: false,
+    overflowEdge: { x: 1280, y: 668 },
+    overflowAmount: { x: 0, y: 2232 },
+    hasOverflow: { x: false, y: true },
+  };
+  const calls = [];
+  const instance = {
+    state: () => state,
+    elements: () => ({ scrollbarHorizontal: { scrollbar: hBar }, scrollbarVertical: { scrollbar: vBar } }),
+    update: (force) => {
+      calls.push(Boolean(force));
+      if (force) {
+        // Mirror OverlayScrollbars' update(true) side effects on auto-hide classes.
+        hBar.classes.delete('os-scrollbar-auto-hide');
+        vBar.classes.delete('os-scrollbar-auto-hide');
+        vBar.classes.add('os-scrollbar-auto-hide-hidden');
+        state.overflowAmount.y = viewport.scrollHeight - viewport.clientHeight;
+      }
+      return Boolean(force);
+    },
+  };
+
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
+  assert.deepEqual(calls, [false, true]);
+  assert.equal(vBar.classes.has('os-scrollbar-auto-hide'), true, 'keeps auto-hide active');
+  assert.equal(vBar.classes.has('os-scrollbar-auto-hide-hidden'), false, 'does not hide active bar');
+  assert.equal(hBar.classes.has('os-scrollbar-auto-hide'), true);
+  assert.equal(hBar.classes.has('os-scrollbar-auto-hide-hidden'), true);
+});
+
+test('syncScrollbarGeometry respects fractional-DPR tolerance and skips hidden viewports', () => {
+  const { syncScrollbarGeometry } = loadOverlayScrollbar({ dpr: 1.25 });
+  const viewport = makeFakeViewport({ clientH: 668, scrollH: 669 });
+  let updates = 0;
+  const instance = {
+    state: () => ({
+      destroyed: false,
+      overflowEdge: { x: 1280, y: 668.4 },
+      overflowAmount: { x: 0, y: 0 },
+      hasOverflow: { x: false, y: false },
+    }),
+    elements: () => ({ scrollbarHorizontal: { scrollbar: makeFakeBar() }, scrollbarVertical: { scrollbar: makeFakeBar() } }),
+    update: () => {
+      updates += 1;
+      return true;
+    },
+  };
+  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), false);
+  assert.equal(updates, 0);
+
+  const hidden = makeFakeViewport({ clientW: 0, clientH: 0, scrollH: 2000 });
+  assert.equal(syncScrollbarGeometry(hidden, instance, 'y'), false);
+  assert.equal(updates, 0);
+
+  const sleeping = {
+    ...instance,
+    state: () => ({
+      destroyed: false,
+      sleeping: true,
+      overflowEdge: { x: 1280, y: 668 },
+      overflowAmount: { x: 0, y: 0 },
+      hasOverflow: { x: false, y: false },
+    }),
+  };
+  assert.equal(syncScrollbarGeometry(makeFakeViewport({ clientH: 668, scrollH: 3000 }), sleeping, 'y'), false);
+  assert.equal(updates, 0);
+});

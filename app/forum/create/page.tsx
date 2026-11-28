@@ -27,7 +27,7 @@ export default function CreateForumPostPage() {
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader title="发布帖子" />
       {!ready ? (
-        <ComposerSkeleton />
+        <ComposerSkeleton delay={160} />
       ) : !token ? (
         <SignInRequired description="登录后即可发布帖子" />
       ) : (

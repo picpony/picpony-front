@@ -12,6 +12,9 @@ import { showToast } from '@/components/Toast';
 import {
   CUSTOM_PALETTE,
   PALETTES,
+  SKY_LABEL,
+  SKY_PALETTE,
+  notifySkyClock,
   unpackCustomTones,
   useCustomAccent,
   useCustomSeed,
@@ -19,6 +22,7 @@ import {
   usePalette,
   usePaletteHues,
   useScheme,
+  useSkyPhase,
   type AccentChoice,
   type CustomPaletteInstall,
   type CustomSpec,
@@ -26,7 +30,13 @@ import {
   type PaletteId,
 } from '@/lib/appearance';
 import { BRAND_SEED } from '@/lib/paletteSpec';
-import { THEME_FACES } from '@/lib/generated/themeFaces';
+import { SKY_FACES, THEME_FACES } from '@/lib/generated/themeFaces';
+import {
+  SKY_PHASES_DAY_FIRST,
+  msUntilNextSkyPhase,
+  skyPhaseEntry,
+  skyPhaseRangeLabel,
+} from '@/lib/skyPalette';
 import { ICON } from '@/lib/icons';
 import { changeCustomPalette, changePalette, changePaletteHues } from '@/lib/motionLazy';
 import { resolveCustomPalette, warmPalette } from '@/lib/paletteLazy';
@@ -71,7 +81,7 @@ function warmDialog(id: keyof typeof DIALOG_CHUNKS) {
 /** What the picker opens on before anything has been chosen: the brand's own light fill, 自动. */
 const UNSET: CustomSpec = { seed: BRAND_SEED, accent: null };
 
-/** The two doors into the eleventh palette. */
+/** The two doors into the custom palette. */
 type PickerId = 'hex' | 'image';
 
 /** How a 副色相 reads in the custom row, with no recipe needed to say it. */
@@ -108,8 +118,8 @@ const labelClass = (selected: boolean) =>
   cn('truncate px-1', selected ? 'text-label-m-emphasized' : 'text-label-m');
 
 /**
- * The theme colour picker: ten built-in palettes and the user's own, and the 配色方案 they are
- * shown in.
+ * The theme colour picker: ten static built-in palettes, the dynamic time-of-day 天空 palette and
+ * the user's own custom palette, plus the 配色方案 they are shown in.
  *
  * A screen-level component, not a design primitive — one call site, and no
  * primitive can hold it: `SelectOption` has nowhere to put a swatch, and a colour
@@ -124,24 +134,24 @@ const labelClass = (selected: boolean) =>
  * the standard one.
  *
  * **The tiles cannot read the tokens.** Every colour token is the *active* theme's, and
- * ten of the eleven tiles have to show a theme that is not active — so the hexes come
+ * eleven of the twelve tiles have to show a theme that is not active — so the hexes come
  * from `lib/generated/themeColors.ts` (the bar) and `lib/generated/themeFaces.ts` (the
  * rest), which `scripts/palette.mjs` writes from the same run that writes the CSS. The
- * eleventh reads the fourteen hexes `applyCustomPalette` parks on `<html>` — the same
+ * custom tile reads the fourteen hexes `applyCustomPalette` parks on `<html>` — the same
  * rule, not an exception to it.
  *
  * `role="radiogroup"` with a roving tab stop, because that is what a single choice
- * among eleven is: the arrows move the choice through the eleven in reading order,
+ * among twelve is: the arrows move the choice through the twelve in reading order,
  * Home and End jump to either end.
  *
  * ---------------------------------------------------------------------------
- * 配色方案, and the eleventh tile's two controls
+ * 配色方案, and the custom tile's two controls
  *
  * 配色方案 sits right under the tiles because it changes what they show — every tile's
  * selection pill and accent dot follow it — and it takes the same wipe a palette does.
  *
- * The eleventh tile and the controls under it are **separate objects with separate
- * jobs**. The tile answers *"use my colour"* — a radio like the other ten. The row
+ * The custom tile and the controls under it are **separate objects with separate
+ * jobs**. The tile answers *"use my colour"* — a radio like the other eleven. The row
  * answers *"what is my colour"*, in two ways because they are two different questions:
  * 选择颜色 opens `ColorPicker` (name a colour and its 副色相), 从图片取色 opens
  * `ImagePalettePicker` (find a pair). **Two triggers, two dialogs.** Two triggers into
@@ -150,7 +160,7 @@ const labelClass = (selected: boolean) =>
  * none of this app's tokens, speaks RGB/HSV where the system speaks HCT, and shows a
  * colour where a *theme* is being chosen.
  *
- * **Before a custom colour exists**, the eleventh tile shows a tonal placeholder with a palette
+ * **Before a custom colour exists**, the custom tile shows a tonal placeholder with a palette
  * glyph and stays reachable inside the radiogroup; activating it opens the colour picker directly
  * rather than leaving a dead disabled tile.
  */
@@ -158,12 +168,15 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   const active = usePalette();
   const scheme = useScheme();
   const hues = usePaletteHues();
+  const skyPhase = useSkyPhase();
   const customSeed = useCustomSeed();
   const customAccent = useCustomAccent();
-  /* The eleventh tile's own colours, which cannot come from the tokens: those are always
+  const liveSkyPhase = skyPhaseEntry(skyPhase);
+  const skyTone = { primary: liveSkyPhase.primary, onPrimary: liveSkyPhase.onPrimary };
+  /* The custom tile's own colours, which cannot come from the tokens: those are always
      the *active* theme's. `applyCustomPalette` parks the fourteen hexes on `<html>` and
      leaves them there when you switch away — same trap the generated files keep the
-     other ten out of. The screen mounts once the session is known, never in hydration,
+     other eleven out of. The screen mounts once the session is known, never in hydration,
      so the scheme and 配色方案 hooks read the root on their first render. */
   const customTones = unpackCustomTones(useCustomTonesRaw());
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -194,18 +207,47 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   };
   const closePicker = () => setPicker((p) => ({ ...p, open: null }));
 
-  const count = PALETTES.length + 1;
+  const skyIndex = PALETTES.length;
+  const customIndex = PALETTES.length + 1;
+  const count = PALETTES.length + 2;
+  const skySelected = active === SKY_PALETTE;
   const customActive = active === CUSTOM_PALETTE;
   const customSelected = Boolean(customSeed && customActive);
   /* A radiogroup with every stop at −1 is one the tab key cannot reach, which is
      what the per-tile tabIndex alone produces when nothing matches; this keeps
      the roving stop from depending on the id normalisation. */
-  const activeExists = customSelected || PALETTES.some((p) => p.id === active);
+  const activeExists = customSelected || skySelected || PALETTES.some((p) => p.id === active);
 
   /* The recipe is ~7 KB of HCT behind a dynamic import. Warming it on mount keeps
      the resolve's `await` off the interaction's path — /settings is the only
      screen that can reach it. */
   useEffect(warmPalette, []);
+
+  /* Keep the 天空 preview tile live across hour boundaries while another theme is active. */
+  useEffect(() => {
+    if (active === SKY_PALETTE) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        notifySkyClock();
+        arm();
+      }, msUntilNextSkyPhase());
+    };
+    const onReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      notifySkyClock();
+      arm();
+    };
+    arm();
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, [active]);
 
   /* Leaving the screen before the dialog finished leaving still applies the palette that
      was confirmed — without the wipe, whose origin is gone. */
@@ -266,8 +308,10 @@ export default function PaletteSwatches({ className }: { className?: string }) {
     event.preventDefault();
     const button = refs.current[next];
     button?.focus();
-    if (next === PALETTES.length) {
+    if (next === customIndex) {
       if (customSeed) pick(CUSTOM_PALETTE, button);
+    } else if (next === skyIndex) {
+      pick(SKY_PALETTE, button);
     } else {
       pick(PALETTES[next]!.id, button);
     }
@@ -276,8 +320,8 @@ export default function PaletteSwatches({ className }: { className?: string }) {
   return (
     <div className={cn('flex w-full flex-col gap-4', className)}>
       {/* Measure the settings column rather than the viewport so sidebar mode changes re-flow the
-          grid cleanly. Eleven cards fill 3 (3+3+3+2), 4 (4+4+3) or 6 (6+5) columns across the full
-          row width — never leaving a lone orphan on the last row or an empty right-hand margin. */}
+          grid cleanly. Twelve cards fill 3 (4×3), 4 (3×4) or 6 (2×6) columns evenly across the
+          full row width at every breakpoint. */}
       <div className="@container w-full">
         <div
           role="radiogroup"
@@ -324,7 +368,40 @@ export default function PaletteSwatches({ className }: { className?: string }) {
 
           <button
             ref={(node) => {
-              refs.current[PALETTES.length] = node;
+              refs.current[skyIndex] = node;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={skySelected}
+            aria-label={`${SKY_LABEL}（当前：${liveSkyPhase.label}）`}
+            tabIndex={skySelected ? 0 : -1}
+            onClick={(event) => pick(SKY_PALETTE, event.currentTarget)}
+            onKeyDown={(event) => onKeyDown(event, skyIndex)}
+            data-ripple
+            style={tileRippleStyle(skyTone, liveSkyPhase.scheme)}
+            className={cn(
+              CARD_CLASS,
+              skySelected
+                ? 'forced-selected bg-secondary-container text-on-secondary-container'
+                : 'forced-boundary bg-surface-container-high text-on-surface',
+            )}
+          >
+            <span aria-hidden="true" className={cn(PREVIEW_CLASS, 'block')}>
+              <PaletteTileFace
+                tone={skyTone}
+                face={SKY_FACES[liveSkyPhase.id]}
+                hues={hues}
+                selected={skySelected}
+              />
+            </span>
+            <span aria-hidden="true" className={labelClass(skySelected)}>
+              {SKY_LABEL}
+            </span>
+          </button>
+
+          <button
+            ref={(node) => {
+              refs.current[customIndex] = node;
             }}
             type="button"
             role="radio"
@@ -338,7 +415,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
               if (customSeed) pick(CUSTOM_PALETTE, event.currentTarget);
               else openPicker('hex', event.currentTarget);
             }}
-            onKeyDown={(event) => onKeyDown(event, PALETTES.length)}
+            onKeyDown={(event) => onKeyDown(event, customIndex)}
             data-ripple
             style={customTones ? tileRippleStyle(customTones[scheme], scheme) : undefined}
             className={cn(
@@ -374,6 +451,51 @@ export default function PaletteSwatches({ className }: { className?: string }) {
           </button>
         </div>
       </div>
+
+      {skySelected && (
+        <div className="border-outline-variant @container flex flex-col gap-3 border-t pt-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <p className="text-label-l text-on-surface">天空时段</p>
+              <p className="text-label-m text-primary-ink tabular-nums">
+                {liveSkyPhase.label} · {skyPhaseRangeLabel(liveSkyPhase)}
+              </p>
+            </div>
+            <p className="text-body-s text-on-surface-variant mt-0.5">
+              配色与深浅模式随时间自动变化，深浅切换已禁用
+            </p>
+          </div>
+          <div aria-hidden="true" className="grid grid-cols-4 gap-2 @sm:grid-cols-8">
+            {SKY_PHASES_DAY_FIRST.map((phase) => {
+              const current = phase.id === liveSkyPhase.id;
+              return (
+                <div
+                  key={phase.id}
+                  className={cn(
+                    'flex min-w-0 flex-col items-stretch gap-1.5 rounded-sm p-1 pb-1.5 text-center select-none',
+                    current
+                      ? 'forced-selected bg-secondary-container text-on-secondary-container'
+                      : 'forced-boundary bg-surface-container-high text-on-surface-variant',
+                  )}
+                >
+                  <span
+                    className="forced-boundary forced-color-adjust-auto block h-5 w-full rounded-xs"
+                    style={{ background: phase.primary }}
+                  />
+                  <span
+                    className={cn(
+                      'truncate px-0.5',
+                      current ? 'text-label-s-emphasized' : 'text-label-s',
+                    )}
+                  >
+                    {phase.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 配色方案, as a row: label and its line at the leading edge, the choice at the
           trailing edge. Under the tiles because it changes what they show. The rules on

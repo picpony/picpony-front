@@ -17,11 +17,11 @@ import { ICON } from '@/lib/icons';
 import { cn } from '@/lib/utils';
 import type { PonyImage } from '@/lib/types/image';
 import Button from '@/components/Button';
-import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import IconButton from '@/components/IconButton';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Menu from '@/components/Menu';
 import Skeleton from '@/components/Skeleton';
 import { useShareToContact } from '@/components/ShareToContactDialog';
@@ -31,15 +31,7 @@ import { usePictureBatch } from '@/components/favorites/usePictureBatch';
 import { PrivacyCreateForm, PrivacyPasswordDialog, PrivacyResetDialog, PrivacySettingsDialog, PrivacyUnlockForm } from '@/components/favorites/PrivacyForms';
 
 function GateSkeleton() {
-  return (
-    <Card variant="filled" padding="lg" className="mx-auto flex w-full max-w-md flex-col items-center gap-3" data-page-loading="">
-      <Skeleton className="size-12 rounded-full" />
-      <Skeleton className="h-6 w-40" />
-      <Skeleton className="h-4 w-56 max-w-full" />
-      <Skeleton className="mt-2 h-14 w-full rounded-md" />
-      <Skeleton className="mt-1 h-10 w-24 self-end rounded-full" />
-    </Card>
-  );
+  return <PageLoadingIndicator size="pane" holdFooter delay={100} label="正在加载隐私空间…" />;
 }
 
 /** Which face of the space is up — what the pane swaps between. */

@@ -22,7 +22,8 @@ import {
   MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
   formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
 } from '@/lib/motionPreferences';
-import { CUSTOM_PALETTE, PALETTES } from '@/lib/generated/themeColors';
+import { CUSTOM_PALETTE, PALETTES, SKY_PALETTE, isSkyPhaseId } from '@/lib/generated/themeColors';
+import { skyPhaseAtBeijing, skyPhaseEntry, skyPrePaintSchedule } from '@/lib/skyPalette';
 import { deriveCustomThemeCached, paletteBlocksCss, paletteTones } from '@/lib/paletteRule';
 import { packTones, parseCustomSpec } from '@/lib/paletteSpec';
 import { inlineRoutePolicyScript } from '@/lib/route.server';
@@ -163,15 +164,23 @@ function customPalette(specCookie: string | undefined) {
    Keys are spelled out because this is a string, not a module — it cannot import
    `LS_KEYS`; they must stay in step with `lib/constants.ts`. */
 const prePaint = (barColors: Record<string, readonly string[]>) => `(function(){
-var d=document.documentElement,C=${JSON.stringify(barColors)};
+var d=document.documentElement,C=${JSON.stringify(barColors)},S=${JSON.stringify(skyPrePaintSchedule())};
 var get=function(k){try{return localStorage.getItem(k)}catch(e){return null}};
 var q=function(m){try{return matchMedia(m).matches}catch(e){return false}};
+var p=get('picpony_palette'),k,bc;
+if(p==='${SKY_PALETTE}'){
+var h=new Date().getHours(),sp=S[0];
+for(var i=0;i<S.length;i++){if(h>=S[i][0])sp=S[i];}
+k=!!sp[2];d.classList.toggle('dark',k);d.dataset.palette=p;d.dataset.skyPhase=sp[1];bc=sp[3];
+}else{
+if(!C[p])p='default';
 var f=get('followSystemPrefersColorScheme');
-var k=(f===null||f==='true')?q('(prefers-color-scheme:dark)'):get('darkMode')==='true';
-d.classList.toggle('dark',k);
-var p=get('picpony_palette');if(!C[p])p='default';d.dataset.palette=p;
+k=(f===null||f==='true')?q('(prefers-color-scheme:dark)'):get('darkMode')==='true';
+d.classList.toggle('dark',k);d.dataset.palette=p;delete d.dataset.skyPhase;bc=C[p][k?1:0];
+}
 if(get('picpony_palette_hues')==='mono')d.dataset.paletteHues='mono';else delete d.dataset.paletteHues;
 if(get('picpony_detail_layout')==='split')d.dataset.detailLayout='split';else delete d.dataset.detailLayout;
+if(get('picpony_detail_mobile_step_buttons')==='false')d.dataset.detailMobileStep='off';else delete d.dataset.detailMobileStep;
 var m=get('picpony_motion');
 if(m!=='off'&&m!=='reduced'&&m!=='standard'&&m!=='custom')m=q('(prefers-reduced-motion:reduce)')?'reduced':'standard';
 d.dataset.motion=m;
@@ -181,7 +190,7 @@ var e=get('picpony_entrance_motion');if(e==='off'||e==='blocking')d.dataset.entr
 var P=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.userAgent||'';
 if(/Windows/i.test(P))d.dataset.os='windows';else delete d.dataset.os;
 try{var t=document.querySelector('meta[name="theme-color"]');
-if(t){t.removeAttribute('media');t.setAttribute('content',C[p][k?1:0]);}}catch(e){}
+if(t){t.removeAttribute('media');t.setAttribute('content',bc);}}catch(e){}
 })();`;
 
 export default async function RootLayout({
@@ -230,8 +239,14 @@ export default async function RootLayout({
      plain module, so the server can run it and put all sixty declarations in `<head>`. */
   const custom = customPalette(cookieStore.get(COOKIE_KEYS.paletteCustom)?.value);
   const builtIn = PALETTES.find((p) => p.id === paletteCookie) ?? PALETTES[0];
-  const onCustom = paletteCookie === CUSTOM_PALETTE ? custom : null;
-  const paletteId = onCustom ? CUSTOM_PALETTE : builtIn.id;
+  const onSky = paletteCookie === SKY_PALETTE;
+  const skyPhaseCookie = cookieStore.get(COOKIE_KEYS.skyPhase)?.value;
+  const skyPhase = onSky
+    ? (isSkyPhaseId(skyPhaseCookie) ? skyPhaseEntry(skyPhaseCookie) : skyPhaseAtBeijing())
+    : null;
+  const onCustom = !onSky && paletteCookie === CUSTOM_PALETTE ? custom : null;
+  const paletteId = onSky ? SKY_PALETTE : onCustom ? CUSTOM_PALETTE : builtIn.id;
+  const effectiveDarkMode = skyPhase ? skyPhase.scheme === 'dark' : darkMode;
   const barColors = custom
     ? { ...BUILT_IN_BAR_COLORS, [CUSTOM_PALETTE]: custom.bar }
     : BUILT_IN_BAR_COLORS;
@@ -276,19 +291,24 @@ export default async function RootLayout({
   /* 左右分栏 only on an explicit `split`: a corrupt cookie means 上下布局, the default and the
      CSS's own attribute-free state. */
   const splitDetailLayout = cookieStore.get(COOKIE_KEYS.detailLayout)?.value === 'split';
+  /* 窄屏详情页左右切换按钮: hidden only on an explicit `false`, so a missing or corrupt cookie
+     keeps the default shown state. */
+  const hideMobileDetailStep = cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
 
   return (
     <html
       /* Simplified Chinese, not bare `zh`: it is what picks the Simplified glyph forms and the
          per-script system face (see the font note above), the hyphenation and the voice. */
       lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} h-full antialiased ${darkMode ? 'dark' : ''}`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} h-full antialiased ${effectiveDarkMode ? 'dark' : ''}`}
       data-palette={paletteId}
+      data-sky-phase={skyPhase?.id}
       data-palette-seed={custom?.seed}
       data-palette-accent={custom?.accent}
       data-palette-tones={custom?.tones}
       data-palette-hues={mono ? 'mono' : undefined}
       data-detail-layout={splitDetailLayout ? 'split' : undefined}
+      data-detail-mobile-step={hideMobileDetailStep ? 'off' : undefined}
       data-motion={motion}
       data-motion-speed={motionSpeed}
       data-motion-custom={motionCustomCookie ? formatMotionCustom(motionCustom) : undefined}
@@ -303,7 +323,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* The eleventh palette's rules, same shape as `app/theme-palettes.css` and the same
+        {/* The custom palette's rules, same shape as `app/theme-palettes.css` and the same
             `paletteBlocksCss`, so the two cannot diverge. A `<style>`, not inline properties on
             `<html>`: an inline style beats every selector including
             `html.dark[data-palette='custom']`, which would leave the dark scheme painting the
@@ -316,7 +336,11 @@ export default async function RootLayout({
         <meta
           name="theme-color"
           content={
-            onCustom ? onCustom.bar[darkMode ? 1 : 0] : builtIn[darkMode ? 'dark' : 'light'].primary
+            skyPhase
+              ? skyPhase.primary
+              : onCustom
+                ? onCustom.bar[effectiveDarkMode ? 1 : 0]
+                : builtIn[effectiveDarkMode ? 'dark' : 'light'].primary
           }
         />
         {/* The three image hosts, warmed while the HTML parses — `lib/imageLoader.ts`'s ladder
@@ -401,7 +425,8 @@ export default async function RootLayout({
               ) : (
                 <AppLayout
                   initialSidebarMode={sidebarMode}
-                  initialScheme={darkMode ? 'dark' : 'light'}
+                  initialScheme={effectiveDarkMode ? 'dark' : 'light'}
+                  initialPalette={paletteId}
                   devBannerVisible={devBannerVisible}
                   maintenance={maintenance.active}
                   overlay={imageDetail}

@@ -7,7 +7,7 @@ import Button from '@/components/Button';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import Modal from '@/components/Modal';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { Textarea } from '@/components/Input';
 import { showToast } from '@/components/Toast';
 import { useAuthModal } from '@/components/AuthModal';
@@ -35,35 +35,11 @@ async function sendFeedback(token: string, tagName: string, reason: string, tran
 }
 
 /**
- * The entry while it is read, in the entry's own shape (M1-019): 中文名 over a row of name marks,
- * then 标签简介 over one line of prose, each placeholder inside the line box of the type role it
- * stands in for — so the commonest entry lands without the dialog moving at all, and any other
- * one moves only by the difference, on `FollowHeight`'s spring. One line because that is the
- * plurality: of fifteen live entries sampled (the tags a picture carries — rating, species,
- * characters), six had a one-line description, three none and six five lines or more, and none
- * had a category. A spinner here was a box of its own size: the panel grew 57px and re-centred
- * 28px in the frame the entry arrived.
+ * Centred M3E loading indicator while a tag's glossary entry is fetched; `FollowHeight`
+ * smoothly adapts the dialog height once the entry (or empty state) arrives.
  */
-function EntrySkeleton() {
-  return (
-    <div className="space-y-3">
-      <p className="sr-only" role="status">
-        正在查询词库…
-      </p>
-      <div aria-hidden="true">
-        <div className="text-label-m"><Skeleton className="inline-block h-2.5 w-9 align-middle" /></div>
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {/* A mark's own corner and its 20px box (`Badge` at `sm`). */}
-          <Skeleton className="h-5 w-10 rounded-xs" />
-          <Skeleton className="h-5 w-14 rounded-xs" />
-        </div>
-      </div>
-      <div aria-hidden="true">
-        <div className="text-label-m"><Skeleton className="inline-block h-2.5 w-12 align-middle" /></div>
-        <div className="mt-1 text-body-m"><Skeleton className="inline-block h-3 w-4/5 align-middle" /></div>
-      </div>
-    </div>
-  );
+function EntrySkeleton({ paused }: { paused: boolean }) {
+  return <PageLoadingIndicator size="inline" paused={paused} delay={120} label="正在查询词库…" className="min-h-24" />;
 }
 
 /**
@@ -260,7 +236,7 @@ export default function TagInfoModal({ tag, onClose }: { tag: string | null; onC
               />
             </div>
           ) : loading ? (
-            <EntrySkeleton />
+            <EntrySkeleton paused={tag === null} />
           ) : result.error !== undefined && entry === undefined ? (
             <ErrorRetry
               size="inline"

@@ -22,6 +22,7 @@ const virtual = {
   './IconButton': `const React=require('react');module.exports=({icon,dismiss,variant,tooltip,...props})=>React.createElement('button',{type:'button',...props},icon);`,
   './Button': `const React=require('react');module.exports=({children,variant,icon,...props})=>React.createElement('button',{type:'button',...props},children);`,
   './Spinner': `const React=require('react');module.exports=()=>React.createElement('span',{'role':'status'},'Loading');`,
+  './LoadingIndicator': `const React=require('react');const stub=({variant,size,tone,label,decorative,paused,settled,instantHide,quiet,delay,autoPause,responsive,holdFooter,indicatorSize,...rest})=>React.createElement('div',rest);module.exports=Object.assign(stub,{default:stub,MediaLoadingPlaceholder:stub,PageLoadingIndicator:stub});`,
   './Skeleton': `const React=require('react');module.exports=props=>React.createElement('div',props);`,
   './ErrorRetry': `const React=require('react');module.exports=({title,onRetry,retryLabel})=>React.createElement('div',null,title,React.createElement('button',{onClick:onRetry},retryLabel));`,
 };
