@@ -259,14 +259,18 @@ function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrent
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const preparingRef = useRef(false);
   return {
     mounted,
     open,
     preparing,
     request() {
+      if (preparingRef.current) return;
+      preparingRef.current = true;
       setPreparing(true);
       void import('./CaptchaModal').then(
         () => {
+          preparingRef.current = false;
           setPreparing(false);
           if (!isCurrentFlow()) return;
           setMounted(true);
@@ -274,7 +278,9 @@ function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrent
           onCaptchaChange(true);
         },
         () => {
+          preparingRef.current = false;
           setPreparing(false);
+          if (!isCurrentFlow()) return;
           showToast('安全验证加载失败，请重试', 'error');
         },
       );
@@ -289,7 +295,9 @@ function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrent
 /** A failed request's sentence: the server's own words (`error.message`), or the fallback. */
 function failureOf(error: unknown, fallback: string) {
   return apiErrorMessage(error, fallback);
-}/** Only the adapter's captcha refusal codes require a new proof. */
+}
+
+/** Only the adapter's captcha refusal codes require a new proof. */
 const needsNewProof = (error: unknown) => isRefusal(error, ...CAPTCHA_RETRY_CODES);
 
 /**
@@ -1009,7 +1017,7 @@ function ResetForm({
               </Button>
               <ResendButton
                 seconds={cooldown.remaining}
-                busy={isResending}
+                busy={isResending || captcha.preparing}
                 onResend={() => {
                   if (isCurrentFlow() && !operation.busy()) askProof('resend');
                 }}
