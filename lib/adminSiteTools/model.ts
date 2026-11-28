@@ -513,7 +513,6 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
 }
 export const providerFields: FieldSpec[] = providerFieldsFor('openai_compatible');
 export const GATEWAY = 'https://ai.picpony.top:10443/v1';
-export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /** The form's values for a provider (or a new one), using seconds for timeout and K for max tokens. */
 export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_key'> | null): Values {

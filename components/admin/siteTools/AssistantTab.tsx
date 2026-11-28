@@ -18,7 +18,6 @@ import {
   coerceThinkingForProvider,
   fieldsPayload,
   GATEWAY,
-  GEMINI_API_BASE,
   normalizeProviderType,
   providerFieldsFor,
   providerPayload,
@@ -168,23 +167,13 @@ function ProviderEditor({
       },
     );
   };
-  const isDefaultPresetName = (name: unknown) =>
-    typeof name !== 'string' || !name.trim() || name === '绘云彩彩中转站' || name === 'Google Gemini';
   const presetGateway = () =>
     change({
       ...values,
-      name: isDefaultPresetName(values.name) ? '绘云彩彩中转站' : values.name,
+      name: values.name || '绘云彩彩中转站',
       provider_type: 'openai_compatible',
       base_url: GATEWAY,
       thinking: coerceThinkingForProvider('openai_compatible', values.thinking),
-    });
-  const presetGemini = () =>
-    change({
-      ...values,
-      name: isDefaultPresetName(values.name) ? 'Google Gemini' : values.name,
-      provider_type: 'gemini',
-      base_url: GEMINI_API_BASE,
-      thinking: coerceThinkingForProvider('gemini', values.thinking),
     });
   return (
     <AdminForm
@@ -199,12 +188,9 @@ function ProviderEditor({
             ? `已保存密钥${provider.key_hint ? `（${provider.key_hint}）` : ''}，留空即可保留。${provider.key_available ? '' : '当前服务器无法解密该密钥，请重新填写。'}`
             : '尚未保存密钥。'}
         </AdminNote>
-        <div className="flex flex-wrap gap-2">
+        <div>
           <Button type="button" variant="tonal" onClick={presetGateway} disabled={busy}>
             使用绘云彩彩中转站
-          </Button>
-          <Button type="button" variant="tonal" onClick={presetGemini} disabled={busy}>
-            使用 Gemini 官方接口
           </Button>
         </div>
         <SettingsFields fields={fields} values={values} onChange={change} busy={busy} errors={errors} />
