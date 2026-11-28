@@ -40,11 +40,11 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
   const visible = tabVisible(profile, 'comments', own);
   const read = useResource(userComments, ready && visited && visible ? { id, page, token } : SKIP, { keepPrevious: id });
 
-  if (!ready) return <ListRowsSkeleton badge />;
+  if (!ready) return <ListRowsSkeleton />;
   if (!visible) return <PaneHidden />;
   const data = read.data;
   if (data === undefined) {
-    return read.error ? <PaneFailure error={read.error} title="评论加载失败" onRetry={read.refresh} /> : <ListRowsSkeleton badge />;
+    return read.error ? <PaneFailure error={read.error} title="评论加载失败" onRetry={read.refresh} /> : <ListRowsSkeleton />;
   }
   if (data.comments.length === 0 && !read.isPrevious) {
     return (

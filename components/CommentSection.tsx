@@ -7,7 +7,7 @@ import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import IconButton from '@/components/IconButton';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import Skeleton, { SkeletonCircle, SkeletonText } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import CommentComposer, { type ReplyTarget } from '@/components/CommentComposer';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -176,24 +176,9 @@ function CommentRow({
   );
 }
 
-/** Three rows in the row's own geometry: avatar, a name line with its actions, a meta line, text. */
+/** Placeholder while comment count and multiline body heights are unknown. */
 function CommentRowsSkeleton() {
-  return (
-    <div aria-hidden="true">
-      {Array.from({ length: 3 }, (_, i) => (
-        <div key={i} className="m3-row bg-surface-container-low flex gap-3 p-3 sm:gap-4 sm:p-4">
-          <SkeletonCircle size={40} delay={i * 120} />
-          <div className="min-w-0 flex-1">
-            <div className="flex min-h-8 items-center gap-2">
-              <Skeleton className="h-3.5 w-28" delay={i * 120 + 60} />
-            </div>
-            <Skeleton className="my-0.5 h-3.5 w-20" delay={i * 120 + 90} />
-            <SkeletonText lines={2} className="mt-1 py-1" delay={i * 120 + 120} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载评论…" className="min-h-36" />;
 }
 
 /**

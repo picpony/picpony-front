@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { MdBlock, MdVisibilityOff } from 'react-icons/md';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
@@ -86,32 +86,7 @@ export function PaneFailure({ error, title, onRetry }: { error: unknown; title: 
   return <ErrorRetry size="pane" title={title} message={apiErrorMessage(error)} onRetry={onRetry} />;
 }
 
-/**
- * The posts and comments lists' first-load rows: the grouped list's material, seam and 56dp
- * thumbnail, so the rows land where their placeholders stood. `data-page-loading` holds the
- * footer while it is on screen.
- */
-export function ListRowsSkeleton({ rows = 5, badge = false }: { rows?: number; badge?: boolean }) {
-  return (
-    <div data-page-loading="" className="mx-auto max-w-4xl">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="m3-row bg-surface-container-low p-4">
-          <div className="flex items-start gap-3">
-            <Skeleton className="size-14 shrink-0 rounded-sm" delay={i * 80} />
-            <div className="min-w-0 flex-1">
-              {badge ? (
-                <div className="mb-1.5 flex h-6 items-center gap-2">
-                  <Skeleton className="h-5 w-16 rounded-xs" delay={i * 80 + 40} />
-                  <Skeleton className="h-3.5 w-20" delay={i * 80 + 80} />
-                </div>
-              ) : (
-                <Skeleton className="mb-2 h-5 w-3/5" delay={i * 80 + 40} />
-              )}
-              <Skeleton className={badge ? 'h-5 w-3/5' : 'h-3.5 w-2/5'} delay={i * 80 + 120} />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+/** Placeholder while a profile's post or comment rows are unknown. */
+export function ListRowsSkeleton() {
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载列表…" className="mx-auto max-w-4xl" />;
 }

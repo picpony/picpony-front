@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import { GroupRowsSkeleton } from '@/components/groups/GroupRow';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import PresenceList from '@/components/PresenceList';
 import SignInRequired from '@/components/SignInRequired';
@@ -176,7 +177,7 @@ export default function TagGroupsPage() {
   }, [token]);
 
   const signedIn = ready && Boolean(token);
-  const loading = !ready || (Boolean(token) && groups === undefined && read.error === undefined);
+  const loading = signedIn && groups === undefined && read.error === undefined;
   const header = (
     <PageHeader
       title="标签组"
@@ -190,9 +191,7 @@ export default function TagGroupsPage() {
         ) : undefined
       }
       actions={
-        loading ? (
-          <Skeleton className="h-10 w-20 rounded-full" aria-hidden="true" />
-        ) : signedIn && groups && count > 0 ? (
+        signedIn && groups && count > 0 ? (
           /* While empty, the empty state carries 新建 — one primary action, not two. */
           <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
             新建
@@ -203,8 +202,10 @@ export default function TagGroupsPage() {
   );
 
   let body;
-  if (loading) {
-    body = <GroupRowsSkeleton control="button" />;
+  if (!ready) {
+    body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
+  } else if (loading) {
+    body = <GroupRowsSkeleton />;
   } else if (!token) {
     body = <SignInRequired description="登录后即可创建和管理标签组" />;
   } else if (!groups) {

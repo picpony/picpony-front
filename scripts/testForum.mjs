@@ -927,3 +927,27 @@ test('edit page ignores summary previews and waits for the full forumThread payl
   assert.ok(immediateComposer);
   assert.equal(immediateComposer.props.post.content, '[p]完整正文内容[/p]');
 });
+
+test('rememberForumOrigin ignores summary list previews and never arms container transform for loading cards', () => {
+  const expected = [];
+  const row = { getBoundingClientRect: () => ({ left: 10, top: 20, width: 600, height: 100 }) };
+  const transition = load('lib/forumTransition.ts', {
+    '@/lib/appScroller': { heroOwnsScreen: () => false },
+    '@/lib/appearance': { motionTier: () => 'standard' },
+    '@/lib/pageTransit': { expectRouteContainer: (path) => expected.push(path) },
+    '@/lib/forumTransitionPlay': { forumReturnInFlight: () => false },
+  }, { performance: { now: () => 1000 } });
+  const summaryPost = model.postOf(wirePost({ id: 88, content_summary: true, content: { type: 'discussion', html: '[p]摘要[/p]' } }));
+  const fullPost = model.postOf(wirePost({ id: 88, content_summary: false, content: { type: 'discussion', html: '[p]完整正文[/p]' } }));
+
+  transition.rememberForumOrigin(88, row, summaryPost);
+  assert.equal(transition.readForumPreview(88), null, 'summary row is not stored as a complete preview');
+  assert.deepEqual(expected, [], 'cold summary click does not arm route container transform');
+
+  transition.rememberForumOrigin(88, row, fullPost);
+  assert.equal(transition.readForumPreview(88)?.content, '[p]完整正文[/p]');
+  assert.deepEqual(expected, ['/forum/88'], 'complete post arms route container transform');
+
+  transition.rememberForumOrigin(88, row, summaryPost);
+  assert.equal(transition.readForumPreview(88)?.content, '[p]完整正文[/p]', 'summary click never downgrades a cached full preview');
+});

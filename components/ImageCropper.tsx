@@ -6,7 +6,7 @@ import Modal from '@/components/Modal';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Slider from '@/components/Slider';
-import Spinner from '@/components/Spinner';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import ErrorRetry from '@/components/ErrorRetry';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage } from '@/lib/api/errors';
@@ -446,8 +446,8 @@ export default function ImageCropper({
             <ErrorRetry size="inline" title="图片加载失败" message="无法读取此图片" onRetry={onClose} retryLabel="重新选择" />
           </div>
         ) : !ready && (
-          <div className="text-on-media absolute inset-0 grid place-items-center">
-            <Spinner size="lg" tone="inherit" />
+          <div className="absolute inset-0 grid place-items-center">
+            <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />
           </div>
         )}
 

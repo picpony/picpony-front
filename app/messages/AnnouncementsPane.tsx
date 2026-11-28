@@ -16,9 +16,6 @@ import { announcementHistory } from '@/lib/resources';
 import { useScreenState } from '@/lib/screenState';
 import { ListRowsSkeleton } from './Skeletons';
 
-/** The backend's page of announcements. */
-const PER_PAGE = 10;
-
 /**
  * 公告: every release note, newest first, ten to a page. Public.
  *
@@ -51,7 +48,7 @@ export default function AnnouncementsPane({ active }: { active: boolean }) {
         />
       );
     }
-    return <ListRowsSkeleton rows={PER_PAGE} badge />;
+    return <ListRowsSkeleton />;
   }
   if (data.announcements.length === 0 && page === 1) {
     return <EmptyState size="pane" icon={<MdCampaign size={ICON.display} />} title="暂无公告" />;

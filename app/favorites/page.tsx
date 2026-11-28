@@ -8,17 +8,16 @@ import { useSession } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import { formatCount } from '@/lib/format';
 import { useBackgroundSearchParams } from '@/components/BackgroundLocation';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import SignInRequired from '@/components/SignInRequired';
 import Skeleton from '@/components/Skeleton';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
-import { FolderGridSkeleton } from '@/components/favorites/FolderCard';
 import FoldersPane from './FoldersPane';
 import DerpiPane from './DerpiPane';
 import PrivacyPane from './PrivacyPane';
 import { dropQueuedFavoritesAddress, favoritesTabs, landingTab, replaceFavoritesAddress } from './tabs';
-import { useShowPrivacyTab } from './privacyTabHint';
 
 const TAB_ROW_LABEL = '收藏';
 
@@ -27,8 +26,9 @@ const TAB_ROW_LABEL = '收藏';
  * (`my:faves`) and **隐私空间** (offered while 显示隐私空间 is on). The header counts what you have.
  *
  * Signed out it is the one sign-in state (decision 4, R5-021): nothing opens by itself, and no
- * tab claims an empty list. While the session is unknown the screen shows its own shape — the
- * header, the tab row, the folder cards — with nothing in between (R5-022).
+ * tab claims an empty list. While the session is unknown (`!ready`) the screen holds its heading
+ * and footer with a delayed `PageLoadingIndicator` rather than flashing speculative logged-in
+ * folder chrome to signed-out visitors.
  *
  * The panes lean (decision 25): each is static once its first read is in, and a pane still on its
  * first-load placeholder marks it (`data-page-loading`), which the lean stands down for.
@@ -56,39 +56,15 @@ function FavoritesSession() {
   return <FavoritesScreen key={token} token={token} />;
 }
 
-/* The tab labels' own widths at `title-s`: three Han characters, ten Latin letters, four Han. */
-const TAB_LABEL_WIDTHS = ['w-10', 'w-19', 'w-14'] as const;
-
 /**
- * The screen's own shape while the session is unknown: the header, the tab row, the cards. The
- * row is the tabs' own — a label per tab, 48dp tall over the divider — not a filled box: an
- * underline row has no container, and the box became three words and a line when it landed
- * (G3-028).
+ * Session hydration gate while login state is unknown: keeps the page heading and footer hold
+ * active without flashing a speculative logged-in folder skeleton to signed-out visitors.
  */
 function FavoritesSkeleton() {
-  /* The server's count until hydration has run: the row it drew is the row that stays. */
-  const showPrivacy = useShowPrivacyTab(useSyncedSetting('showPrivacyFaves'));
   return (
-    <div className="mx-auto max-w-7xl" data-page-loading="">
-      <div className="mb-6 flex flex-col gap-2">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-      <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
-        {TAB_LABEL_WIDTHS.slice(0, favoritesTabs(showPrivacy).length).map((width) => (
-          <div key={width} className="px-4">
-            <Skeleton className={`h-4 ${width}`} />
-          </div>
-        ))}
-      </div>
-      <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
-        <Skeleton className="h-4 w-48 max-w-full" />
-        <div className="flex shrink-0 items-center gap-2">
-          <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
-          <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
-        </div>
-      </div>
-      <FolderGridSkeleton />
+    <div className="mx-auto max-w-7xl">
+      <PageHeader title="我的收藏" />
+      <PageLoadingIndicator size="page" holdFooter delay={160} label="正在加载我的收藏…" />
     </div>
   );
 }
@@ -149,7 +125,9 @@ function FavoritesScreen({ token }: { token: string }) {
         title="我的收藏"
         subtitle={
           total === undefined ? (
-            <span>正在加载收藏…</span>
+            index.error ? undefined : (
+              <Skeleton className="inline-block h-4 w-32 align-middle" aria-hidden="true" />
+            )
           ) : (
             <span className="tabular-nums">
               共 {formatCount(total)} 张收藏{folderCount !== undefined ? `，${formatCount(folderCount)} 个收藏夹` : ''}

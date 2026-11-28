@@ -24,6 +24,7 @@ import Card from '@/components/Card';
 import FadeInImage from '@/components/FadeInImage';
 import ProgressBar from '@/components/ProgressBar';
 import RoleBadge from '@/components/RoleBadge';
+import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import Skeleton from '@/components/Skeleton';
 import UserBadge from '@/components/UserBadge';
 import ButtonLink from '@/components/ButtonLink';
@@ -48,7 +49,13 @@ const BANNER_BOX = 'aspect-[3/1] sm:aspect-[4/1] max-h-80 rounded-2xl sm:rounded
  * the avatar's glyph right above the avatar.
  */
 function Banner({ profile }: { profile: ProfileUser | undefined }) {
-  if (!profile) return <Skeleton className={`w-full ${BANNER_BOX}`} />;
+  if (!profile) {
+    return (
+      <div aria-hidden="true" className={`relative w-full overflow-hidden bg-surface-container-high ${BANNER_BOX}`}>
+        <MediaLoadingPlaceholder variant="contained" size="md" />
+      </div>
+    );
+  }
   const src = profile.banner ? getAssetUrl(profile.banner) : '';
   if (!src) return <div aria-hidden="true" className="h-24 w-full rounded-2xl bg-primary-container sm:h-32 sm:rounded-3xl" />;
   return (

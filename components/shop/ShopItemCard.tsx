@@ -4,7 +4,6 @@ import { MdAddShoppingCart, MdCardGiftcard, MdLogin, MdToll } from 'react-icons/
 import Button from '@/components/Button';
 import Card from '@/components/Card';
 import FadeInImage from '@/components/FadeInImage';
-import Skeleton from '@/components/Skeleton';
 import type { ShopItem } from '@/lib/api/shop';
 import { formatCount, formatExactCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
@@ -151,37 +150,6 @@ export default function ShopItemCard({
             </Button>
           )}
         </div>
-      </div>
-    </Card>
-  );
-}
-
-/**
- * A card's placeholder, in the card's own geometry: the square, the name, two lines of
- * description, then the price, stock and cart lines at their own line heights, and the button.
- */
-export function ShopItemCardSkeleton({ index }: { index: number }) {
-  const delay = (index % 4) * 60;
-  return (
-    <Card variant="filled" padding="none" className="flex flex-col overflow-hidden" aria-hidden="true">
-      <Skeleton className="aspect-square w-full rounded-none" delay={delay} />
-      <div className="flex flex-1 flex-col p-4">
-        <Skeleton className="h-6 w-3/4" delay={delay} />
-        {/* Two lines of the description's `body-s`, the height it usually takes. */}
-        <div className="mt-1 flex h-9 flex-col justify-center gap-2">
-          <Skeleton className="h-3 w-full" delay={delay} />
-          <Skeleton className="h-3 w-2/3" delay={delay} />
-        </div>
-        <div className="mt-auto pt-3">
-          <div className="flex h-6 items-center">
-            <Skeleton className="h-5 w-16" delay={delay} />
-          </div>
-          <div className="mt-1 flex h-4 items-center">
-            <Skeleton className="h-3 w-12" delay={delay} />
-          </div>
-          <div className="min-h-4" />
-        </div>
-        <Skeleton className="mt-2 h-10 w-full rounded-full" delay={delay} />
       </div>
     </Card>
   );

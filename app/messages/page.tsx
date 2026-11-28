@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
-import Skeleton from '@/components/Skeleton';
 import { useSession } from '@/lib/hooks';
 import MessagesScreen from './MessagesScreen';
-import { ListRowsSkeleton } from './Skeletons';
 
 /**
  * /messages. The screen is split by what it holds — `MessagesScreen` (tabs, the choice of tab,
@@ -31,14 +30,7 @@ export default function MessagesPage() {
     return (
       <div className="mx-auto max-w-4xl">
         <PageHeader title="消息" />
-        <div className="mb-6 flex h-12 items-center border-b border-outline-variant" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="px-4">
-              <Skeleton className="h-4 w-8" />
-            </div>
-          ))}
-        </div>
-        <ListRowsSkeleton />
+        <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />
       </div>
     );
   }

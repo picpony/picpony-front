@@ -99,12 +99,8 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     }
     return (
       <div data-page-loading="">
-        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+        <div className="mb-4 flex min-h-10 items-center" aria-hidden="true">
           <Skeleton className="h-4 w-48 max-w-full" />
-          <div className="flex shrink-0 items-center gap-2">
-            <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
-            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
-          </div>
         </div>
         <FolderGridSkeleton />
       </div>

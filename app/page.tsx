@@ -9,7 +9,6 @@ import { searchPage } from '@/lib/searchState';
 import { readRoutePolicyOnce, ssrImageLine } from '@/lib/imageLine.server';
 import { FeaturedBannerSkeleton } from '@/components/FeaturedBanner';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
-import Skeleton from '@/components/Skeleton';
 import HomeTabSkeleton from '@/components/forum/HomeTabSkeleton';
 import { readForumFirstPage } from '@/lib/forum.server';
 
@@ -72,9 +71,9 @@ function HomeGallerySkeleton() {
   return (
     <div className="max-w-7xl mx-auto">
       <FeaturedBannerSkeleton />
-      <div className="mb-4 flex h-12 items-center gap-6 border-b border-outline-variant sm:mb-6" aria-hidden="true">
-        <Skeleton className="h-4 w-10" />
-        <Skeleton className="h-4 w-16" delay={60} />
+      <div className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6" aria-hidden="true">
+        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">全部</span>
+        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">本站讨论</span>
       </div>
       <ImageGridSkeleton />
     </div>

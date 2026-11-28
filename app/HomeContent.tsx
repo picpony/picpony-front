@@ -46,7 +46,6 @@ import TabPanes, { TabPane, tabId } from '@/components/TabPanes';
 import Tabs from '@/components/Tabs';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
-import Skeleton from '@/components/Skeleton';
 
 type HomeTab = 'gallery' | 'forum';
 
@@ -239,7 +238,19 @@ function PagedImages<T>({
   const noData = data === undefined && !read.error;
   const [firstPaint, setFirstPaint] = useState(() => !mounted && noData);
   if (firstPaint && !noData) setFirstPaint(false);
-  const deferredSkeleton = useDeferredLoading(noData);
+  /* Clicking 重试 after an error forces a fresh network read: show the loading grid immediately
+     rather than hiding behind the 180ms warm-cache deferral (which blanked the list under the
+     reloading banner). Cleared once data lands or the user switches list/filter. */
+  const [retryState, setRetryState] = useState<{ key: string; immediate: boolean }>({ key: listKey, immediate: false });
+  const retrying = retryState.key === listKey && retryState.immediate;
+  if (retryState.key !== listKey) {
+    setRetryState({ key: listKey, immediate: data === undefined && Boolean(read.error) });
+  } else if (data !== undefined && retryState.immediate) {
+    setRetryState({ key: listKey, immediate: false });
+  } else if (data === undefined && Boolean(read.error) && !retryState.immediate) {
+    setRetryState({ key: listKey, immediate: true });
+  }
+  const deferredSkeleton = useDeferredLoading(noData && !retrying);
 
   const images = useMemo(() => (data === undefined ? [] : pick(data)), [data, pick]);
   const sequence = useMemo(
@@ -273,10 +284,10 @@ function PagedImages<T>({
        the arriving pane at 0px, so the tab machinery clamped the page to that length and pulled
        it up — from 411 to 51 at 1440, to the very top on a phone. Hidden until the moment passes,
        so a warm answer still never flashes a skeleton; its fade starts when it is shown. */
-    const visible = firstPaint || deferredSkeleton;
+    const visible = firstPaint || retrying || deferredSkeleton;
     return (
       <div className={visible ? undefined : 'invisible'}>
-        <ImageGridSkeleton entrance={visible} />
+        <ImageGridSkeleton entrance={visible} paused={!visible} />
       </div>
     );
   }
@@ -834,9 +845,12 @@ export default function HomeContentRoot({
       fallback={
         <div className="max-w-7xl mx-auto">
           <FeaturedBannerSkeleton />
-          <div className="mb-4 flex h-12 items-center gap-6 border-b border-outline-variant sm:mb-6" aria-hidden="true">
-            <Skeleton className="h-4 w-10" />
-            <Skeleton className="h-4 w-16" delay={60} />
+          <div className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6" aria-hidden="true">
+            {VIEW_TABS.map(({ value, label }) => (
+              <span key={value} className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">
+                {label}
+              </span>
+            ))}
           </div>
           <ImageGridSkeleton />
         </div>

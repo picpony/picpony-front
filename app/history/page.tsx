@@ -9,12 +9,12 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import FadeInImage from '@/components/FadeInImage';
 import IconButton from '@/components/IconButton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import PresenceBlock from '@/components/PresenceBlock';
 import PresenceList from '@/components/PresenceList';
 import Pagination from '@/components/Pagination';
 import SignInRequired from '@/components/SignInRequired';
-import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import SectionHeading from '@/components/SectionHeading';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -68,22 +68,7 @@ function decodeStill(url: string | undefined) {
 const ROW = 'm3-row group relative bg-surface-container-low';
 
 function HistorySkeleton() {
-  return (
-    <div data-page-loading aria-hidden="true">
-      <Skeleton className="mb-2 ml-1 h-5 w-12" />
-      <div>
-        {Array.from({ length: PAGE_SIZE }, (_, i) => (
-          <div key={i} className="m3-row flex items-center gap-4 bg-surface-container-low p-4">
-            <Skeleton className="size-14 shrink-0 rounded-sm" delay={Math.min(i, 8) * 70} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-4 w-24" delay={Math.min(i, 8) * 70 + 40} />
-              <Skeleton className="h-3 w-12" delay={Math.min(i, 8) * 70 + 80} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载浏览历史…" />;
 }
 
 function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
@@ -392,14 +377,9 @@ export default function HistoryPage() {
     <PageHeader
       title="浏览历史"
       actions={
-        !ready ? (
-          <div className="flex items-center gap-2" aria-hidden="true">
-            <Skeleton className="h-10 w-28 rounded-full" />
-            <Skeleton className="h-10 w-10 rounded-full sm:w-28" />
-          </div>
-        ) : token ? (
+        ready && token ? (
           <>
-            {firstLoad ? <Skeleton className="h-10 w-28 rounded-full" aria-hidden="true" /> : filter}
+            {!firstLoad && filter}
             <Button
               variant="danger-text"
               onClick={() => void handleClear()}
@@ -417,7 +397,9 @@ export default function HistoryPage() {
   );
 
   let body;
-  if (!ready || firstLoad) {
+  if (!ready) {
+    body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
+  } else if (firstLoad) {
     body = <HistorySkeleton />;
   } else if (!token) {
     body = <SignInRequired description="登录后即可在不同设备上查看浏览记录" />;

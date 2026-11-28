@@ -301,7 +301,7 @@ function AuthModal({
                   <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
                     {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
                   </h2>
-                  <LoadingIndicator variant="contained" size="md" label="加载中" paused={!isOpen} />
+                  <LoadingIndicator variant="contained" size="md" label="加载中" paused={!isOpen} delay={120} />
                 </div>
               }>
                 <AuthForms {...shared} view={view} onSuccess={onClose} />

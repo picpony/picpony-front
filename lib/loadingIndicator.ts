@@ -468,6 +468,7 @@ interface VisibilityPool {
 }
 
 const subscribers = new Set<LoadingSubscriber>();
+const paintedSubscribers = new WeakSet<LoadingSubscriber>();
 const ancestorWatchers = new Map<Element, { observer: MutationObserver; count: number }>();
 const subscriberAncestors = new WeakMap<LoadingSubscriber, Element[]>();
 const visibilityPools = new Map<Element | null, VisibilityPool>();
@@ -475,6 +476,7 @@ const subscriberVisibility = new WeakMap<LoadingSubscriber, { root: Element | nu
 let rafId = 0;
 let originTime = 0;
 let lastActiveTime = 0;
+let pausedElapsedMs = 0;
 let hadActive = false;
 let attrObserver: MutationObserver | null = null;
 let visibilityBound = false;
@@ -636,19 +638,48 @@ function unwatchVisibility(sub: LoadingSubscriber) {
   }
 }
 
+function hasMountedPaintedSubscriber(): boolean {
+  for (const sub of subscribers) {
+    if (paintedSubscribers.has(sub)) return true;
+  }
+  return false;
+}
+
+function isDomEligible(sub: LoadingSubscriber): boolean {
+  const el = sub.path;
+  if (!isDomElement(el)) return true;
+  if (!el.isConnected) return false;
+  if (insideConcealedPane(el)) return false;
+  if (el.closest('[inert], [hidden]')) return false;
+  return true;
+}
+
 function noteIdle(now: number) {
   if (hadActive) {
     hadActive = false;
     lastActiveTime = now;
+    pausedElapsedMs = originTime && hasMountedPaintedSubscriber() ? Math.max(0, now - originTime) : 0;
+  } else if (!hasMountedPaintedSubscriber()) {
+    pausedElapsedMs = 0;
   }
 }
 
-function ensureOrigin(now: number): number {
-  if (!originTime || (!hadActive && lastActiveTime > 0 && now - lastActiveTime > CLOCK_RESET_IDLE_MS)) {
+function ensureOrigin(now: number, targets: readonly LoadingSubscriber[]): number {
+  if (!originTime) {
     originTime = now;
+  } else if (!hadActive) {
+    // Resuming an already-painted indicator after a temporary pause (inert overlay, background
+    // tab, or off-screen scroll) continues from its paused morph phase instead of snapping to 0°.
+    const resumingPainted = pausedElapsedMs > 0 && targets.some((sub) => paintedSubscribers.has(sub));
+    if (resumingPainted) {
+      originTime = now - pausedElapsedMs;
+    } else if (lastActiveTime > 0 && now - lastActiveTime > CLOCK_RESET_IDLE_MS) {
+      originTime = now;
+    }
   }
   hadActive = true;
   lastActiveTime = 0;
+  pausedElapsedMs = 0;
   return originTime;
 }
 
@@ -656,7 +687,9 @@ function resetSubscribersToStatic() {
   for (const sub of subscribers) {
     sub.path.setAttribute('d', INITIAL_LOADING_PATH);
     sub.group.removeAttribute('transform');
+    paintedSubscribers.delete(sub);
   }
+  pausedElapsedMs = 0;
 }
 
 function stopLoop() {
@@ -666,14 +699,19 @@ function stopLoop() {
   }
 }
 
-function paintSubscribers(targets: readonly LoadingSubscriber[], now: number, tier: MotionTier) {
-  const origin = ensureOrigin(now);
-  const frame = sampleLoadingFrame(now - origin, tier === 'reduced');
+function paintAtElapsed(targets: readonly LoadingSubscriber[], elapsedMs: number, tier: MotionTier) {
+  const frame = sampleLoadingFrame(elapsedMs, tier === 'reduced');
   const rotate = `rotate(${frame.rotationDeg.toFixed(1)} 50 50)`;
   for (const sub of targets) {
     sub.path.setAttribute('d', frame.path);
     sub.group.setAttribute('transform', rotate);
+    paintedSubscribers.add(sub);
   }
+}
+
+function paintSubscribers(targets: readonly LoadingSubscriber[], now: number, tier: MotionTier) {
+  const origin = ensureOrigin(now, targets);
+  paintAtElapsed(targets, now - origin, tier);
 }
 
 function paintActiveSubscribers(now: number, tier: MotionTier): number {
@@ -789,20 +827,35 @@ export function subscribeLoadingIndicator(subscriber: LoadingSubscriber): () => 
   watchVisibility(subscriber);
   const tier = currentTier();
   const docHidden = typeof document !== 'undefined' && document.hidden;
-  // When the loop is already running, paint this new sibling immediately so it enters in phase.
-  // When stopped (`rafId === 0`), `syncDriver()` below performs the single initial paint.
-  if (rafId !== 0 && !docHidden && typeof performance !== 'undefined' && tier !== 'off' && isSubscriberActive(subscriber)) {
-    paintSubscribers([subscriber], performance.now(), tier);
+  if (!docHidden && typeof performance !== 'undefined' && tier !== 'off') {
+    const now = performance.now();
+    if (rafId !== 0 && isSubscriberActive(subscriber)) {
+      // Loop already running: paint this new visible sibling immediately so it enters in phase.
+      paintSubscribers([subscriber], now, tier);
+    } else if (
+      originTime > 0 &&
+      subscriberVisibility.has(subscriber) &&
+      isDomEligible(subscriber) &&
+      (rafId !== 0 || (lastActiveTime > 0 && now - lastActiveTime <= CLOCK_RESET_IDLE_MS))
+    ) {
+      // Observed (`autoPause`) handoff (e.g. `ImageGridSkeleton` → `ImageCard`,
+      // `DetailSkeleton` → `DetailImage`, `FeaturedBannerSkeleton` → `FadeInImage`): pre-paint
+      // the live morph phase on frame 0 before IntersectionObserver's async callback lands,
+      // avoiding a 1-frame snap back to `SoftBurst` at 0° while keeping off-screen pause intact.
+      paintAtElapsed([subscriber], now - originTime, tier);
+    }
   }
   syncDriver();
   return () => {
     subscribers.delete(subscriber);
+    paintedSubscribers.delete(subscriber);
     unwatchAncestors(subscriber);
     unwatchVisibility(subscriber);
     if (subscribers.size === 0) {
       stopLoop();
       detachGlobalListeners();
       noteIdle(typeof performance !== 'undefined' ? performance.now() : 0);
+      pausedElapsedMs = 0;
     } else {
       syncDriver();
     }

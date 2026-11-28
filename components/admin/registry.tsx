@@ -1,7 +1,7 @@
 'use client';
 
-import type { ComponentType, ReactNode } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import ErrorRetry from '@/components/ErrorRetry';
 import { ICON } from '@/lib/icons';
 import type { Role } from '@/lib/roles';
 import AdminPaneSkeleton from './AdminPaneSkeleton';
@@ -15,10 +15,11 @@ import { ADMIN_SECTIONS, type AdminSectionId } from './sections';
  * panel pattern (`SectionHeader`, `AdminNote`, `AdminForm`, `DataTable` + `AdminPager`, the
  * inline editor): see the D3 handoff §2 and the note on each of those modules.
  *
- * Panels are `dynamic(…, { ssr: false })`: the console is client-only (it needs the session),
- * and every tab in one chunk would make the first section wait for all of them. The
- * `loading` fallback is the panel's own silhouette, so a first visit to a tab never shows an
- * empty well while its chunk arrives.
+ * Panels load lazily on first visit through a plain client loader rather than `next/dynamic`:
+ * `next/dynamic` wraps `React.lazy` in `<Suspense>`, whose 300ms fallback throttle in React 19
+ * held `AdminPaneSkeleton` on screen long after fast chunks had arrived, causing the pane-level
+ * indicator to appear and then jump down into the panel's own table/settings indicator the moment
+ * the panel mounted.
  */
 
 export interface AdminPanelProps {
@@ -45,8 +46,73 @@ interface AdminTabEntry {
   component: ComponentType<AdminPanelProps>;
 }
 
-const panel = (load: () => Promise<{ default: ComponentType<AdminPanelProps> }>) =>
-  dynamic<AdminPanelProps>(load, { ssr: false, loading: () => <AdminPaneSkeleton /> });
+const panel = (
+  load: () => Promise<{ default: ComponentType<AdminPanelProps> }>,
+  label: string,
+): ComponentType<AdminPanelProps> => {
+  let loaded: ComponentType<AdminPanelProps> | null = null;
+  let pending: Promise<ComponentType<AdminPanelProps>> | null = null;
+  const loadOnce = () => {
+    if (loaded) return Promise.resolve(loaded);
+    if (!pending) {
+      pending = load().then(
+        (mod) => {
+          if (!mod?.default) {
+            pending = null;
+            throw new Error(`Missing admin panel export for ${label}`);
+          }
+          loaded = mod.default;
+          pending = null;
+          return loaded;
+        },
+        (error) => {
+          pending = null;
+          throw error;
+        },
+      );
+    }
+    return pending;
+  };
+  return function LazyAdminPanel(props: AdminPanelProps) {
+    const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>(() => (loaded ? 'ready' : 'loading'));
+    const [attempt, setAttempt] = useState(0);
+
+    useEffect(() => {
+      if (status !== 'loading') return;
+      let alive = true;
+      void loadOnce().then(
+        () => {
+          if (alive) setStatus('ready');
+        },
+        () => {
+          if (alive) setStatus('failed');
+        },
+      );
+      return () => {
+        alive = false;
+      };
+    }, [status, attempt]);
+
+    if (status === 'ready' && loaded) {
+      const Panel = loaded;
+      return <Panel {...props} />;
+    }
+    if (status === 'failed') {
+      return (
+        <ErrorRetry
+          size="pane"
+          title={`${label}加载失败`}
+          message="页面模块未能载入，请检查网络后重试"
+          onRetry={() => {
+            setStatus('loading');
+            setAttempt((count) => count + 1);
+          }}
+        />
+      );
+    }
+    return <AdminPaneSkeleton label={`正在加载${label}…`} />;
+  };
+};
 
 /* Rail glyphs at 24dp: a rail tab is a navigation row (`ICON.standard`, the `Tabs` rail's size). */
 const icon = (Glyph: ComponentType<{ size?: number }>) => <Glyph size={ICON.standard} />;
@@ -70,7 +136,7 @@ const entry = <const Id extends AdminSectionId>(
     icon: icon('outline' in section ? section.outline : section.glyph),
     activeIcon: icon(section.glyph),
     access,
-    component: panel(load),
+    component: panel(load, section.label),
   };
 };
 

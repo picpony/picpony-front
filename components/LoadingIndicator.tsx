@@ -141,8 +141,8 @@ export default function LoadingIndicator({
         contained && 'rounded-full',
         !responsive && !HAS_SIZE.test(className) && (contained ? CONTAINER_SIZE[size] : DEFAULT_SHAPE_SIZE[size]),
         contained ? CONTAINED_TONE[tone] : UNCONTAINED_TONE[tone],
-        delay > 0 && 'transition-opacity spring-fast-effects',
-        delay > 0 && (shown ? 'opacity-100' : 'opacity-0'),
+        delay > 0 && 'm3e-loading-reveal',
+        delay > 0 && (shown ? 'opacity-100 scale-100' : 'opacity-0 scale-90'),
         effectivePaused && 'm3e-loading-paused',
         className,
       )}
@@ -238,8 +238,8 @@ export function MediaLoadingPlaceholder({
           autoPause={autoPause}
           paused={paused || settled}
           className={cn(
-            settled && instantHide ? 'transition-none' : 'transition-opacity spring-fast-effects',
-            settled ? 'opacity-0' : 'opacity-100',
+            settled && instantHide ? 'transition-none' : 'm3e-loading-dismiss',
+            settled ? 'opacity-0 scale-90' : 'opacity-100 scale-100',
           )}
         />
       )}
@@ -250,8 +250,10 @@ export function MediaLoadingPlaceholder({
 interface PageLoadingIndicatorProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   /** Matches `StatusView` enclosure presets so loading and settled states share a calm box. */
   size?: 'page' | 'pane' | 'inline';
-  /** Screen-reader status message (announced once the indicator reveals). */
+  /** Visible loading remark beneath the indicator (also announced via `role="status"` once revealed). */
   label?: string;
+  /** Render `label` visibly beneath the indicator (defaults to `true`; set `false` in ultra-narrow icon rails). */
+  showLabel?: boolean;
   /** Hold the page footer back (`data-page-loading`) while a first-load screen waits. */
   holdFooter?: boolean;
   /** Visual variant; `contained` is M3E's default for page and modal loading states. */
@@ -277,12 +279,13 @@ const PAGE_LOADING_SIZE: Record<'page' | 'pane' | 'inline', { pad: string; floor
 };
 
 /**
- * Centred M3E loading indicator for routes, gates, forms and dialogs where a contrived
- * skeleton adds visual noise without reliably matching the destination layout.
+ * Centred M3E loading indicator with a calm status remark for uncertain-structure views,
+ * routes, gates, forms and dialogs where layout count or geometry is not yet known.
  */
 export function PageLoadingIndicator({
   size = 'pane',
   label = '加载中…',
+  showLabel = true,
   holdFooter = false,
   variant = 'contained',
   indicatorSize,
@@ -292,28 +295,40 @@ export function PageLoadingIndicator({
   ...rest
 }: PageLoadingIndicatorProps) {
   const shown = useRevealDelay(delay, paused);
-  const resolvedSize: LoadingIndicatorSize = indicatorSize ?? (size === 'inline' ? 'sm' : 'md');
+  const resolvedSize: LoadingIndicatorSize = indicatorSize ?? (size === 'page' ? 'lg' : size === 'inline' ? 'sm' : 'md');
   const { pad, floor } = PAGE_LOADING_SIZE[size];
   return (
     <div
       role="status"
       data-page-loading={holdFooter ? '' : undefined}
       className={cn(
-        'flex flex-col items-center justify-center px-4 text-center',
+        'flex flex-col items-center justify-center gap-3 px-4 text-center',
         pad,
         !HAS_MIN_H.test(className) && floor,
         className,
       )}
       {...rest}
     >
-      {shown && <span className="sr-only">{label}</span>}
       <LoadingIndicator
         variant={variant}
         size={resolvedSize}
         decorative
         paused={paused || !shown}
-        className={delay > 0 ? cn('transition-opacity spring-fast-effects', shown ? 'opacity-100' : 'opacity-0') : undefined}
+        className={delay > 0 ? cn('m3e-loading-reveal', shown ? 'opacity-100 scale-100' : 'opacity-0 scale-90') : undefined}
       />
+      {showLabel ? (
+        shown ? (
+          <p className={cn('text-body-m text-on-surface-variant', delay > 0 && 'animate-fade-in')}>{label}</p>
+        ) : (
+          /* Hold the remark's exact single-line height during a delayed grace period without
+             emitting premature live-region text, so revealing the caption never shifts the disc. */
+          <p aria-hidden="true" className="select-none text-body-m text-on-surface-variant opacity-0">
+            &nbsp;
+          </p>
+        )
+      ) : (
+        shown && <span className="sr-only">{label}</span>
+      )}
     </div>
   );
 }

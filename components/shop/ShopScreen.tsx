@@ -7,6 +7,7 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import ButtonLink from '@/components/ButtonLink';
 import { useAuthModal } from '@/components/AuthModal';
@@ -25,7 +26,7 @@ import CartPanel from './CartPanel';
 import { cartPieces, resolveCart, shortfall, type CartSummary } from './cartModel';
 import { addToCart, CART_STORAGE_REFUSED, cartAccount, MAX_LINE_QUANTITY, removeFromCart, setCartQuantity, useCart } from './cartStore';
 import { balanceOf, runCheckout } from './checkout';
-import ShopItemCard, { ShopItemCardSkeleton, type ItemAction } from './ShopItemCard';
+import ShopItemCard, { type ItemAction } from './ShopItemCard';
 
 const loadCartSheet = () => import('@/components/Sheet');
 const Sheet = dynamic(loadCartSheet, { ssr: false, loading: () => null });
@@ -49,9 +50,6 @@ interface SheetView {
   balance: number | null;
   busy: boolean;
 }
-
-/** How many placeholder cards a first load shows: a row and a half at every column count. */
-const SKELETON_CARDS = 6;
 
 /**
  * Whether the column is wide enough to dock the cart. The layout itself is CSS (a container
@@ -252,11 +250,13 @@ export default function ShopScreen() {
   let content: React.ReactNode;
   if (!ready || (items === undefined && read.error === undefined)) {
     content = (
-      <div data-page-loading className="grid grid-cols-2 gap-3 @xl/items:grid-cols-3 @3xl/items:grid-cols-4">
-        {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-          <ShopItemCardSkeleton key={index} index={index} />
-        ))}
-      </div>
+      <PageLoadingIndicator
+        size="page"
+        indicatorSize="lg"
+        holdFooter
+        delay={!ready ? 160 : 0}
+        label={!ready ? '正在读取登录状态…' : '正在加载商品…'}
+      />
     );
   } else if (items === undefined) {
     content = (

@@ -11,7 +11,7 @@ import FollowHeight from '@/components/FollowHeight';
 import Modal from '@/components/Modal';
 import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { showToast } from '@/components/Toast';
 import { SKIP, useResource } from '@/lib/resource';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -112,24 +112,7 @@ export default function FeedbackDialog({
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
           ) : read.data === undefined ? (
-            <div className="space-y-3" aria-hidden="true">
-              {[0, 1, 2].map((index) => (
-                <Card key={index} variant="filled" className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <Skeleton className="h-5 w-2/5" delay={index * 90} />
-                      <Skeleton className="h-4.5 w-1/2" delay={index * 90 + 30} />
-                    </div>
-                    <Skeleton className="h-6 w-14 shrink-0 rounded-xs" delay={index * 90 + 45} />
-                  </div>
-                  <Skeleton className="h-14 w-full rounded-sm" delay={index * 90 + 75} />
-                  <div className="flex justify-end gap-2">
-                    <Skeleton className="h-8 w-14 rounded-full" delay={index * 90 + 100} />
-                    <Skeleton className="h-8 w-28 rounded-full" delay={index * 90 + 120} />
-                  </div>
-                </Card>
-              ))}
-            </div>
+            <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载反馈…" className="min-h-36" />
           ) : rows.length === 0 ? (
             <EmptyState size="inline" title={keyword ? '没有匹配的反馈' : '暂无反馈'} />
           ) : (

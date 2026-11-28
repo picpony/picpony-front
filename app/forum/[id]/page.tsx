@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   MdDeleteOutline,
@@ -18,9 +18,9 @@ import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
 import FadeInImage from '@/components/FadeInImage';
 import IconButton from '@/components/IconButton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Menu, { type MenuAction } from '@/components/Menu';
 import PageBack from '@/components/PageBack';
-import Skeleton, { SkeletonCircle, SkeletonText } from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useAuthModal } from '@/components/AuthModal';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -42,7 +42,6 @@ import { useBackOrParent } from '@/lib/backNavigation';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { useIconToss } from '@/lib/useIconToss';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
-import { forumTeaser } from '@/lib/forumText';
 import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumPreview, rememberForumReturn } from '@/lib/forumTransition';
 import { formatCount, formatDateTime } from '@/lib/format';
 import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
@@ -65,25 +64,11 @@ function replacePage(id: string, page: number) {
   if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
 }
 
-/** The post card before anything is known about the post: its own geometry, holding the footer. */
-function PostSkeleton() {
+/** Shared cold-open placeholder for both the Suspense boundary and the client thread read. */
+function ThreadLoading() {
   return (
-    <div data-page-loading="" aria-hidden="true">
-      <Skeleton className="mb-4 h-8 w-3/4" />
-      <div className="mb-6 flex items-start gap-3">
-        <SkeletonCircle size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-h-8 items-center">
-            <Skeleton className="h-4 w-32" delay={60} />
-          </div>
-          <Skeleton className="my-0.5 h-3.5 w-44 max-w-full" delay={90} />
-        </div>
-      </div>
-      <SkeletonText lines={4} delay={120} />
-      <div className="mt-6 flex items-center gap-2 border-t border-outline-variant pt-4">
-        <Skeleton className="h-10 w-20 rounded-full" delay={160} />
-        <Skeleton className="h-10 w-20 rounded-full" delay={200} />
-      </div>
+    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col page-back-room">
+      <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载帖子…" />
     </div>
   );
 }
@@ -91,15 +76,26 @@ function PostSkeleton() {
 /**
  * A forum thread: the post, its replies, and the composer.
  *
- * **It opens on the list row's own copy of the post** (`readForumPreview`), so the card is
- * complete in the frame the container transform starts and only the replies wait for the network
- * (R6-037). **Nothing reads it ahead of intent**: a thread read counts a view on the server, so
- * there is no hover warm (the list warms on a press) and no page prefetch on the pager.
+ * **It opens complete when a full cached post is already on hand** (`readForumPreview` with
+ * `!summary`), so the container transform grows the list row straight into the finished card
+ * without ever cloning a loading state. Cold opens — direct loads or list clicks before the full
+ * payload arrives — wait calmly on one centred `PageLoadingIndicator` (`ThreadLoading`) and reveal
+ * the full post and replies together once the response lands. **Nothing reads it ahead of
+ * intent**: a thread read counts a view on the server, so there is no hover warm (the list warms
+ * on a press) and no page prefetch on the pager.
  *
  * Every write updates what is on screen and the list the reader returns to in place
  * (`lib/forumCache.ts`) — a like, a reply, a deleted reply or post — rather than reloading.
  */
 export default function ForumThreadPage() {
+  return (
+    <Suspense fallback={<ThreadLoading />}>
+      <ForumThreadContent />
+    </Suspense>
+  );
+}
+
+function ForumThreadContent() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const page = searchPage(useSearchParams().get('page'));
@@ -111,8 +107,13 @@ export default function ForumThreadPage() {
   const titleId = useId();
   const repliesHeadingId = useId();
 
-  /* The row's copy, read once: a preview is what the thread shows while its read is in flight. */
-  const [preview] = useState(() => readForumPreview(id));
+  /* Only a complete (non-summary) preview stands in before the read lands: a truncated list row
+     lacks the full body, embeds and height, and flying a container transform into a loading card
+     would freeze a loading indicator over the post even after the real payload arrives. */
+  const [preview] = useState(() => {
+    const cached = readForumPreview(id);
+    return cached && !cached.summary ? cached : null;
+  });
   /* Signed-in state is only known after hydration; reading before it would read twice (and
      count two views). */
   const read = useResource(forumThread, ready ? { id, page, token } : SKIP, {
@@ -395,15 +396,20 @@ export default function ForumThreadPage() {
     );
   }
 
-  /* While only a summary preview is on screen, do not render a separate cover banner: the cover
-     may already appear inside the full body once it arrives, which would otherwise flash twice. */
+  if (!post) {
+    return (
+      <>
+        {back}
+        <ThreadLoading />
+      </>
+    );
+  }
+
   const coverShown =
-    !data?.post && post?.summary
-      ? null
-      : post?.cover_image && !post.content.includes(post.cover_image)
-        ? post.cover_image
-        : null;
-  const total = data?.total_comments ?? post?.reply_count ?? 0;
+    post.cover_image && !post.content.includes(post.cover_image)
+      ? post.cover_image
+      : null;
+  const total = data?.total_comments ?? post.reply_count ?? 0;
 
   return (
     <>
@@ -416,161 +422,136 @@ export default function ForumThreadPage() {
           variant="elevated"
           padding="lg"
           className="mb-8"
-          aria-labelledby={post ? titleId : undefined}
+          aria-labelledby={titleId}
           role="article"
           /* How the return finds this card in the route's still frame of the page. */
           data-forum-card={id}
         >
           <div>
-            {post ? (
-              <>
-                {(post.is_pinned || post.category !== 'discussion') && (
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    {post.is_pinned && <PinnedBadge size="md" />}
-                    {post.category !== 'discussion' && <CategoryBadge category={post.category} size="md" />}
-                  </div>
-                )}
-                <div className="mb-4 flex items-start gap-2">
-                  <h1 id={titleId} className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s">
-                    {post.title}
-                  </h1>
-                  {moreItems.length > 0 && (
-                    <>
-                      <IconButton
-                        ref={moreButtonRef}
-                        aria-label="更多操作"
-                        aria-haspopup="menu"
-                        aria-expanded={moreOpen}
-                        loading={deletingPost}
-                        icon={<MdMoreVert />}
-                        onClick={() => setMoreOpen((open) => !open)}
-                        className="-me-2 -mt-1 shrink-0"
-                      />
-                      <Menu
-                        open={moreOpen}
-                        onClose={() => setMoreOpen(false)}
-                        anchorRef={moreButtonRef}
-                        aria-label="更多操作"
-                        items={moreItems}
-                        onSelect={onMoreSelect}
-                      />
-                    </>
-                  )}
-                </div>
-                <ForumAuthor
-                  userId={post.user_id}
-                  username={post.username}
-                  avatar={post.avatar}
-                  role={post.role}
-                  experience={post.experience}
-                  badges={post.badges}
-                  meta={
-                    <>
-                      <time dateTime={post.created_at} className="tabular-nums">
-                        {formatDateTime(post.created_at)}
-                      </time>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">浏览 {formatCount(post.views)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">回复 {formatCount(total)}</span>
-                    </>
-                  }
-                  className="mb-6"
-                />
-                {coverShown && (
-                  <div className="relative mb-6 aspect-video overflow-hidden rounded-md bg-surface-container-high sm:aspect-[2/1]">
-                    <FadeInImage
-                      src={getAssetUrl(coverShown)}
-                      alt=""
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 848px"
-                    />
-                  </div>
-                )}
-                {/* An article: `body-l`, and the rich-text rhythm follows in `em`. When opening
-                    from a summary list row, show the plain-text teaser and body skeleton until
-                    the full thread payload arrives (or retry chrome if that read fails). */}
-                <div className="min-w-0 text-body-l text-on-surface wrap-anywhere">
-                  {!data?.post && post.summary ? (
-                    failed && read.error ? (
-                      <ErrorRetry
-                        title="正文加载失败"
-                        message={apiErrorMessage(read.error)}
-                        onRetry={isRetryable(read.error) ? read.refresh : undefined}
-                      />
-                    ) : (
-                      <div className="space-y-3" aria-busy="true">
-                        {forumTeaser(post) && <p className="text-on-surface-variant">{forumTeaser(post)}</p>}
-                        <SkeletonText lines={3} />
-                      </div>
-                    )
-                  ) : (
-                    <ForumPostBody post={post} />
-                  )}
-                </div>
-                <div className="mt-6 flex items-center gap-1 border-t border-outline-variant pt-4">
+            {(post.is_pinned || post.category !== 'discussion') && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {post.is_pinned && <PinnedBadge size="md" />}
+                {post.category !== 'discussion' && <CategoryBadge category={post.category} size="md" />}
+              </div>
+            )}
+            <div className="mb-4 flex items-start gap-2">
+              <h1 id={titleId} className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s">
+                {post.title}
+              </h1>
+              {moreItems.length > 0 && (
+                <>
                   <IconButton
-                    ref={likeButtonRef}
-                    toggle
-                    selected={liked}
-                    selectedTone="tertiary"
-                    aria-label="点赞"
-                    icon={liked ? <MdThumbUp className={cn(likeFillFor === id && 'animate-reaction-fill')} /> : <MdOutlineThumbUp />}
-                    onClick={toggleLike}
-                    className="-ms-2"
-                  />
-                  <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">{formatCount(likeCount)}</span>
-                  <IconButton
-                    ref={shareButtonRef}
-                    aria-label="分享"
+                    ref={moreButtonRef}
+                    aria-label="更多操作"
                     aria-haspopup="menu"
-                    aria-expanded={shareMenu !== null}
-                    loading={sharing}
-                    icon={<MdShare />}
-                    onClick={() =>
-                      setShareMenu((open) => (open ? null : { native: typeof navigator.share === 'function' }))
-                    }
-                    className="ms-auto -me-2"
+                    aria-expanded={moreOpen}
+                    loading={deletingPost}
+                    icon={<MdMoreVert />}
+                    onClick={() => setMoreOpen((open) => !open)}
+                    className="-me-2 -mt-1 shrink-0"
                   />
                   <Menu
-                    open={shareMenu !== null}
-                    onClose={() => setShareMenu(null)}
-                    anchorRef={shareButtonRef}
-                    aria-label="分享"
-                    items={shareItems}
-                    onSelect={onShareSelect}
+                    open={moreOpen}
+                    onClose={() => setMoreOpen(false)}
+                    anchorRef={moreButtonRef}
+                    aria-label="更多操作"
+                    items={moreItems}
+                    onSelect={onMoreSelect}
                   />
-                </div>
-              </>
-            ) : (
-              <PostSkeleton />
+                </>
+              )}
+            </div>
+            <ForumAuthor
+              userId={post.user_id}
+              username={post.username}
+              avatar={post.avatar}
+              role={post.role}
+              experience={post.experience}
+              badges={post.badges}
+              meta={
+                <>
+                  <time dateTime={post.created_at} className="tabular-nums">
+                    {formatDateTime(post.created_at)}
+                  </time>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">浏览 {formatCount(post.views)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">回复 {formatCount(total)}</span>
+                </>
+              }
+              className="mb-6"
+            />
+            {coverShown && (
+              <div className="relative mb-6 aspect-video overflow-hidden rounded-md bg-surface-container-high sm:aspect-[2/1]">
+                <FadeInImage
+                  src={getAssetUrl(coverShown)}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 848px"
+                />
+              </div>
             )}
+            {/* An article: `body-l`, and the rich-text rhythm follows in `em`. */}
+            <div className="min-w-0 text-body-l text-on-surface wrap-anywhere">
+              <ForumPostBody post={post} />
+            </div>
+            <div className="mt-6 flex items-center gap-1 border-t border-outline-variant pt-4">
+              <IconButton
+                ref={likeButtonRef}
+                toggle
+                selected={liked}
+                selectedTone="tertiary"
+                aria-label="点赞"
+                icon={liked ? <MdThumbUp className={cn(likeFillFor === id && 'animate-reaction-fill')} /> : <MdOutlineThumbUp />}
+                onClick={toggleLike}
+                className="-ms-2"
+              />
+              <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">{formatCount(likeCount)}</span>
+              <IconButton
+                ref={shareButtonRef}
+                aria-label="分享"
+                aria-haspopup="menu"
+                aria-expanded={shareMenu !== null}
+                loading={sharing}
+                icon={<MdShare />}
+                onClick={() =>
+                  setShareMenu((open) => (open ? null : { native: typeof navigator.share === 'function' }))
+                }
+                className="ms-auto -me-2"
+              />
+              <Menu
+                open={shareMenu !== null}
+                onClose={() => setShareMenu(null)}
+                anchorRef={shareButtonRef}
+                aria-label="分享"
+                items={shareItems}
+                onSelect={onShareSelect}
+              />
+            </div>
           </div>
         </Card>
 
         {/* Below the post, nothing waits in a placeholder of a guessed height: the replies come
             with the post, and the composer with the replies, so what lands never pushes down
             something already on screen (the footer is held meanwhile). */}
-        {post && (
-          <ThreadComments
-            headingId={repliesHeadingId}
-            comments={data?.comments}
-            total={total}
-            page={data?.page ?? page}
-            totalPages={data?.total_pages ?? 1}
-            error={failed && (data === undefined || read.isPrevious) ? read.error : undefined}
-            onRetry={read.refresh}
-            onPageChange={changePage}
-            canDelete={canDeleteReply}
-            deletingId={deletingReply}
-            onReply={onReply}
-            onDelete={deleteReply}
-            expected={post.reply_count}
-          />
-        )}
+        <ThreadComments
+          headingId={repliesHeadingId}
+          comments={data?.comments}
+          total={total}
+          page={data?.page ?? page}
+          totalPages={data?.total_pages ?? 1}
+          error={failed && (data === undefined || read.isPrevious) ? read.error : undefined}
+          onRetry={read.refresh}
+          onPageChange={changePage}
+          canDelete={canDeleteReply}
+          deletingId={deletingReply}
+          onReply={onReply}
+          onDelete={deleteReply}
+          expected={post.reply_count}
+        />
 
-        {post && (data !== undefined || failed) && (
+        {(data !== undefined || failed) && (
           <ReplyComposer
             threadId={id}
             postId={post.id}

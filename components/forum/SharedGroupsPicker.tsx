@@ -7,7 +7,7 @@ import Badge from '@/components/Badge';
 import Checkbox from '@/components/Checkbox';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import type { SharedBlockGroup, SharedTagGroup, ShareableBlockGroup, ShareableTagGroup } from '@/lib/api/forum';
 import { useResource, SKIP } from '@/lib/resource';
@@ -140,17 +140,7 @@ const SharedGroupsPicker = forwardRef<HTMLFieldSetElement, SharedGroupsPickerPro
         <span className="text-body-s text-on-surface-variant tabular-nums">已选 {chosen.size} 个</span>
       </div>
       {read.data === undefined && !read.error && !kept ? (
-        <div aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="m3-row flex items-start gap-3 bg-surface-container-low p-3">
-              <Skeleton className="mt-0.5 size-4.5 shrink-0 rounded-xs" delay={i * 60} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-4 w-32" delay={i * 60 + 30} />
-                <Skeleton className="h-4 w-48 max-w-full" delay={i * 60 + 60} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载分组…" className="min-h-28" />
       ) : (
         <>
           {read.error !== undefined && (

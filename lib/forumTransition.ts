@@ -8,11 +8,13 @@
  * construction in miniature. Composes with the route cross-fade: the outgoing content is taken
  * from its still frame, so the two are registered to the pixel.
  *
- * **The card opens on the row's own data** (`rememberForumOrigin`'s `preview`). A list row carries
- * the post's header and summary projection — title, author, badges, metadata and teaser — so the
- * thread renders its card immediately with the teaser and body skeleton while the full body and
- * replies arrive. Once the full thread lands, `rememberForumPreview` upgrades the cached entry so
- * `/forum/[id]/edit` opens complete and never edits a summary projection.
+ * **The card flies only when it opens complete** (`rememberForumOrigin`'s non-summary `preview`).
+ * List rows from `GET /forum/posts?summary=1` carry only a truncated summary projection and lack
+ * the full body, embeds and height; flying into a loading card would freeze a loading indicator
+ * over the post even after the real payload arrives. Cold opens wait on one centred indicator,
+ * upgrade the preview cache with `rememberForumPreview` once the full thread lands, and warm
+ * opens (or presses whose `pointerdown` prefetch has already settled) fly straight into the
+ * finished card.
  */
 
 import { heroOwnsScreen } from '@/lib/appScroller';
@@ -66,18 +68,21 @@ export function readForumPreview(id: number | string): ForumPost | null {
 
 /** Call on the press, before pushing the route. Nothing is recorded under `off`, and the
  *  transform plays under `standard` only (under `reduced` the route's own fade is the whole
- *  transition). The preview is recorded on every tier. */
+ *  transition). Only a complete (non-summary) preview is stored and allowed to drive the
+ *  container transform — flying into a truncated loading card would freeze a loading indicator
+ *  over the post and land on the wrong height. */
 export function rememberForumOrigin(id: number | string, row: HTMLElement, preview?: ForumPost) {
-  if (preview) rememberForumPreview(preview);
+  if (preview && !preview.summary) rememberForumPreview(preview);
   if (motionTier('page') !== 'standard') return;
   /* The gesture-driven warm (see facade). Below the tier guard: on the other tiers the
      transform never runs, so warming there would fetch a chunk that is unreachable. */
   ensurePlay();
   pending = boxOf(id, row);
-  /* The card flies only when it opens complete (`readForumPreview`): then the route's fade runs on
-     the container's clock, and waits for the card past the route's fallback, so the row is still
-     there to grow out of. */
-  if (readForumPreview(id)) expectRouteContainer(`/forum/${id}`, ORIGIN_TTL_MS);
+  /* The card flies only when it opens complete (a non-summary preview): then the route's fade
+     runs on the container's clock, and waits for the card past the route's fallback, so the row
+     is still there to grow out of. */
+  const cached = readForumPreview(id);
+  if (cached && !cached.summary) expectRouteContainer(`/forum/${id}`, ORIGIN_TTL_MS);
 }
 
 function fresh(origin: ForumOrigin | null, id: number | string): ForumOrigin | null {

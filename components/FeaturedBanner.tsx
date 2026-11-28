@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
 import Link from 'next/link';
 import { SKIP, useResource } from '@/lib/resource';
 import { featuredImage, useBrowsingFingerprint } from '@/lib/resources';
@@ -26,8 +26,8 @@ import { clearImageSequence } from '@/lib/imageSequence';
 import { GALLERY_BLOCK_SIZES } from '@/lib/masonry';
 import { formatCount } from '@/lib/format';
 import { useTagNames } from '@/components/subscriptions/useTagNames';
+import { cn } from '@/lib/utils';
 import type { FeaturedSeed } from '@/lib/feed.server';
-import type { PonyImage } from '@/lib/types/image';
 
 /* The banner's scrims are drawn over photography, so they must be black in both
    schemes — but "black" should still come from the token, not from a literal,
@@ -36,13 +36,11 @@ const scrim = (alpha: number) =>
   `rgb(var(--md-sys-color-scrim-rgb) / ${alpha})`;
 
 /**
- * The slot's height: balanced so the gallery grid peeks above the fold on mobile while still
- * giving desktop featured art a commanding stage (`max(220px, ...)` prevents flat strips on
- * landscape phones).
+ * Fixed slot height shared by the placeholder, live banner and failure plate so the gallery grid
+ * beneath never shifts regardless of the featured artwork's aspect ratio (`max(220px, ...)`
+ * prevents flat strips on landscape phones).
  */
-const HEIGHT_NORMAL = 'max(220px, min(42dvh, 460px))';
-const HEIGHT_WIDE = 'max(200px, min(36dvh, 380px))';
-const heightFor = (image: PonyImage) => ((image.width || 1) / (image.height || 1) > 1.5 ? HEIGHT_WIDE : HEIGHT_NORMAL);
+const BANNER_HEIGHT = 'max(220px, min(42dvh, 460px))';
 
 /**
  * The banner's placeholder, shared with the home page's Suspense fallback.
@@ -56,7 +54,7 @@ const heightFor = (image: PonyImage) => ((image.width || 1) / (image.height || 1
 export function FeaturedBannerSkeleton({ paused = false }: { paused?: boolean }) {
   return (
     <div className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
-      <div className="relative w-full" style={{ paddingBottom: HEIGHT_NORMAL }}>
+      <div className="relative w-full" style={{ paddingBottom: BANNER_HEIGHT }}>
         <MediaLoadingPlaceholder variant="contained" size="md" paused={paused} className="rounded-lg" />
       </div>
     </div>
@@ -92,6 +90,7 @@ export default function FeaturedBanner({
 }) {
   const heroElementRef = useRef<HTMLDivElement>(null);
   const linkRef = useRef<HTMLAnchorElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { user, ready } = useSession();
   const apiKey = typeof user?.api_key === 'string' && user.api_key ? user.api_key : undefined;
 
@@ -140,6 +139,7 @@ export default function FeaturedBanner({
 
   const spoilers = useSpoilerMatch(featured?.tags);
   const [revealed, setRevealed] = useState<number | null>(null);
+  const [loadedVideoUrl, setLoadedVideoUrl] = useState<string | null>(null);
   const bannerTags = useMemo(() => (featured?.tags ?? []).slice(0, 6), [featured?.tags]);
   const tagName = useTagNames(bannerTags);
   const covered = spoilers.length > 0 && revealed !== featured?.id;
@@ -172,6 +172,19 @@ export default function FeaturedBanner({
     onActivate: () => clearImageSequence(),
   });
 
+  const videoSrc = isVideo ? (playAllowed ? displayVideoUrl : `${displayVideoUrl}#t=0.1`) : '';
+  const videoReady = isVideo && loadedVideoUrl === videoSrc;
+
+  useLayoutEffect(() => {
+    /* Cached frames may decode before React attaches listeners (or across remounts); check
+       synchronously before paint so the video never stays hidden behind its placeholder. */
+    if (!isVideo || !videoSrc) return;
+    const video = videoRef.current;
+    if (video && (video.readyState >= 2 || video.error)) {
+      setLoadedVideoUrl(videoSrc);
+    }
+  }, [isVideo, videoSrc]);
+
   if (!enabled && !featured) return <FeaturedBannerSkeleton paused />;
   if (loading) return <FeaturedBannerSkeleton />;
   if (failed) return <FeaturedFailure onRetry={read.refresh} />;
@@ -184,7 +197,12 @@ export default function FeaturedBanner({
 
   const name = describeImage(featured);
   const teaser = descriptionTeaser(featured.description);
-  const paddingBottom = heightFor(featured);
+  const markVideoReady = (event: SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    if (video === videoRef.current && video.readyState >= 2) {
+      setLoadedVideoUrl(videoSrc);
+    }
+  };
 
   /* Not a list: opening the banner walks no sequence, so a stale one from a grid is dropped. */
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -230,24 +248,46 @@ export default function FeaturedBanner({
           data-image-hero-id={featured.id}
           data-image-hero-source-key={heroSourceKey}
           className="relative w-full overflow-hidden rounded-lg bg-surface-container-high"
-          style={{ paddingBottom }}
+          style={{ paddingBottom: BANNER_HEIGHT }}
         >
           <div className="absolute inset-0">
             {isVideo ? (
-              <video
-                key={playAllowed ? 'play' : 'still'}
-                src={playAllowed ? displayVideoUrl : `${displayVideoUrl}#t=0.1`}
-                autoPlay={playAllowed}
-                loop={playAllowed}
-                muted
-                playsInline
-                disablePictureInPicture
-                aria-hidden="true"
-                tabIndex={-1}
-                /* The still costs its first frame, not the file. */
-                preload={playAllowed ? 'auto' : 'metadata'}
-                className="w-full h-full object-cover"
-              />
+              <div className="relative h-full w-full overflow-hidden">
+                {!covered && (
+                  <MediaLoadingPlaceholder
+                    variant="contained"
+                    size="md"
+                    paused={videoReady}
+                    settled={videoReady}
+                    className={cn(
+                      'rounded-lg transition-opacity spring-default-effects',
+                      videoReady ? 'pointer-events-none opacity-0' : 'opacity-100',
+                    )}
+                  />
+                )}
+                <video
+                  key={`${playAllowed ? 'play' : 'still'}:${videoSrc}`}
+                  ref={videoRef}
+                  src={videoSrc}
+                  autoPlay={playAllowed}
+                  loop={playAllowed}
+                  muted
+                  playsInline
+                  disablePictureInPicture
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  /* The still costs its first frame, not the file. */
+                  preload={playAllowed ? 'auto' : 'metadata'}
+                  onLoadedData={markVideoReady}
+                  onCanPlay={markVideoReady}
+                  onSeeked={markVideoReady}
+                  onError={() => setLoadedVideoUrl(videoSrc)}
+                  className={cn(
+                    'relative h-full w-full object-cover transition-opacity spring-default-effects',
+                    videoReady ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+              </div>
             ) : (
               <FadeInImage
                 src={displayImageUrl}
@@ -372,14 +412,13 @@ export default function FeaturedBanner({
 }
 
 /**
- * A failed featured read, in the banner's own geometry — so the grid under it does not move —
- * with a way to try again. Its height is the skeleton's: the picture it stands in for is not
- * known.
+ * A failed featured read, in the banner's own fixed height (`BANNER_HEIGHT`) — so the grid under
+ * it does not move — with a way to try again.
  */
 function FeaturedFailure({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="mb-6 sm:mb-8 overflow-hidden rounded-lg">
-      <div className="relative w-full" style={{ paddingBottom: HEIGHT_NORMAL }}>
+      <div className="relative w-full" style={{ paddingBottom: BANNER_HEIGHT }}>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-container-high px-6 text-center text-on-surface-variant">
           <MdBrokenImage size={ICON.large} aria-hidden="true" />
           <p className="text-title-m text-on-surface">近日推荐加载失败</p>

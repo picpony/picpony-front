@@ -9,6 +9,7 @@ import Card from '@/components/Card';
 import Collapse from '@/components/Collapse';
 import DataTable, { type Column } from '@/components/DataTable';
 import IconButton from '@/components/IconButton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Select from '@/components/Select';
 import SearchInput from '@/components/SearchInput';
 import SectionHeading from '@/components/SectionHeading';
@@ -30,7 +31,7 @@ import type { AdminPanelProps } from '../registry';
 import { ConfigEditor, protectedPanel, ReadState } from './common';
 import { semanticConfigQuery, feedbackQuery, useToolPage } from './queries';
 
-function Feedback({ token }: { token: string }) {
+function useFeedbackState(token: string) {
   const [filter, setFilter] = useState<{ status: api.FeedbackStatus; q: string }>({ status: 'new', q: '' });
   const [search, setSearch] = useState('');
   const [selection, setSelection] = useState<{ scope: string; ids: number[] }>({ scope: '', ids: [] });
@@ -41,6 +42,11 @@ function Feedback({ token }: { token: string }) {
   const read = useToolPage(feedbackQuery, token, { ...filter, before: pages.cursor }, `${filter.status}:${filter.q}`);
   if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
   if (read.data && !read.isPrevious && !read.isLoading && !read.error && !read.data.rows.length && pages.page > 1) pages.setPage(pages.page - 1);
+  return { filter, setFilter, search, setSearch, selection, setSelection, pages, scope, read };
+}
+
+function Feedback({ token, state }: { token: string; state: ReturnType<typeof useFeedbackState> }) {
+  const { filter, setFilter, search, setSearch, selection, setSelection, pages, scope, read } = state;
   const archive = useAdminMutation(token), remove = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const locked = read.isPrevious || read.isLoading || remove.busy || archive.busy;
@@ -101,6 +107,10 @@ const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
 
 function SemanticTab({ token }: AdminPanelProps) {
   const read = useAdminQuery(semanticConfigQuery, token);
+  const feedback = useFeedbackState(token);
+  const [initialSettled, setInitialSettled] = useState(() => !read.loading && !feedback.read.loading);
+  if (!initialSettled && !read.loading && !feedback.read.loading) setInitialSettled(true);
+  const initialLoading = !initialSettled && (read.loading || feedback.read.loading);
   const test = useAdminMutation(token);
   const [result, setResult] = useState<api.CloudTest | null>(null);
   const [shownResult, setShownResult] = useState<api.CloudTest | null>(null);
@@ -121,42 +131,48 @@ function SemanticTab({ token }: AdminPanelProps) {
     return () => clearTimeout(timer);
   }, [result, shownResult]);
   return <div className="space-y-6">
-    <SectionHeader section="semantic" onRefresh={() => { read.refresh(); feedbackQuery.invalidate(); }} isLoading={read.refreshing} />
-    <ReadState title="智能搜索设置加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
-      {read.data && <>
-        <ConfigEditor title="搜索解析方式" token={token} initial={read.data.mode} fields={modeFields} validate={(v) => fieldsPayload(modeFields, v)} save={(v) => api.saveSemanticMode(token, v)} refresh={(data) => {
-          const mode = text(data.semantic_search_mode);
-          publishSavedSiteStatus({ semantic: { availability: mode === 'off' ? 'off' : 'on' } });
-          refresh();
-        }} confirmation={() => '确定要修改全站搜索解析方式吗？之后的搜索将使用新规则。'} />
-        <ConfigEditor title="云端模型" token={token} initial={read.data.cloud} fields={cloudFields} validate={cloudPayload} save={(v) => api.saveSemanticCloud(token, v)} refresh={(data, values) => {
-          publishSavedSiteStatus({ semantic: savedSemanticTiming(values, data, read.data?.hasKey ?? false) });
-          refresh();
-        }} confirmation={(v) => `确定要保存云端模型设置吗？${v.semantic_cloud_clear_key ? '已保存的模型密钥将被清除。' : '设置将用于全站智能搜索。'}`}>
-          <AdminNote>{keyNote(read.data)}</AdminNote>
-        </ConfigEditor>
-        <div>
-          <Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testSemanticCloud(token), (d) => { setShownResult(d); setResult(d); }, '测试失败'), { tone: 'filled' })}>测试云端连接</Button>
-          <Collapse
-            open={Boolean(result)}
-            onTransitionEnd={(event) => {
-              if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !result) {
-                setShownResult(null);
-              }
-            }}
-          >
-            {shownResult && (
-              <div className="pt-3">
-                <Card variant="filled" padding="sm" className="max-w-2xl space-y-2">
-                  <p role="status" className="text-body-m tabular-nums">{shownResult.ok ? `连接正常：${shownResult.model || '已保存的模型'}，耗时 ${shownResult.latency_ms} 毫秒` : `模型服务返回 HTTP ${shownResult.http_status}（${shownResult.model || '已保存的模型'}，耗时 ${shownResult.latency_ms} 毫秒）`}</p>
-                </Card>
-              </div>
-            )}
-          </Collapse>
-        </div>
-      </>}
-    </ReadState>
-    <Feedback token={token} />
+    <SectionHeader section="semantic" onRefresh={() => { read.refresh(); feedbackQuery.invalidate(); }} isLoading={read.refreshing || feedback.read.refreshing} />
+    {initialLoading ? (
+      <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载智能搜索设置…" className="min-h-60" />
+    ) : (
+      <>
+        <ReadState title="智能搜索设置加载失败" loading={read.loading} error={read.error} retry={read.retryable ? read.refresh : undefined}>
+          {read.data && <>
+            <ConfigEditor title="搜索解析方式" token={token} initial={read.data.mode} fields={modeFields} validate={(v) => fieldsPayload(modeFields, v)} save={(v) => api.saveSemanticMode(token, v)} refresh={(data) => {
+              const mode = text(data.semantic_search_mode);
+              publishSavedSiteStatus({ semantic: { availability: mode === 'off' ? 'off' : 'on' } });
+              refresh();
+            }} confirmation={() => '确定要修改全站搜索解析方式吗？之后的搜索将使用新规则。'} />
+            <ConfigEditor title="云端模型" token={token} initial={read.data.cloud} fields={cloudFields} validate={cloudPayload} save={(v) => api.saveSemanticCloud(token, v)} refresh={(data, values) => {
+              publishSavedSiteStatus({ semantic: savedSemanticTiming(values, data, read.data?.hasKey ?? false) });
+              refresh();
+            }} confirmation={(v) => `确定要保存云端模型设置吗？${v.semantic_cloud_clear_key ? '已保存的模型密钥将被清除。' : '设置将用于全站智能搜索。'}`}>
+              <AdminNote>{keyNote(read.data)}</AdminNote>
+            </ConfigEditor>
+            <div>
+              <Button variant="tonal" loading={test.busy} onClick={() => confirmThen('确认测试云端模型', '确定要使用已保存的配置发送一次测试请求吗？测试可能消耗服务额度。', () => void test.run(() => api.testSemanticCloud(token), (d) => { setShownResult(d); setResult(d); }, '测试失败'), { tone: 'filled' })}>测试云端连接</Button>
+              <Collapse
+                open={Boolean(result)}
+                onTransitionEnd={(event) => {
+                  if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !result) {
+                    setShownResult(null);
+                  }
+                }}
+              >
+                {shownResult && (
+                  <div className="pt-3">
+                    <Card variant="filled" padding="sm" className="max-w-2xl space-y-2">
+                      <p role="status" className="text-body-m tabular-nums">{shownResult.ok ? `连接正常：${shownResult.model || '已保存的模型'}，耗时 ${shownResult.latency_ms} 毫秒` : `模型服务返回 HTTP ${shownResult.http_status}（${shownResult.model || '已保存的模型'}，耗时 ${shownResult.latency_ms} 毫秒）`}</p>
+                    </Card>
+                  </div>
+                )}
+              </Collapse>
+            </div>
+          </>}
+        </ReadState>
+        <Feedback token={token} state={feedback} />
+      </>
+    )}
     {confirmDialog}
   </div>;
 }

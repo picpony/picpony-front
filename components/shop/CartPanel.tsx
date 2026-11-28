@@ -8,8 +8,7 @@ import IconButton from '@/components/IconButton';
 import PresenceBlock from '@/components/PresenceBlock';
 import PresenceList from '@/components/PresenceList';
 import ScrollArea from '@/components/ScrollArea';
-import Skeleton from '@/components/Skeleton';
-import { statusViewBox } from '@/components/StatusView';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ButtonLink from '@/components/ButtonLink';
 import { formatExactCount } from '@/lib/format';
 import { ICON } from '@/lib/icons';
@@ -231,50 +230,11 @@ function CartFooter({
 }
 
 /**
- * The placeholder in the shape of what will land, so the landing changes the surface as little as
- * the content allows: the lines and the footer for a stored cart, the empty state's two lines for
- * an empty one. No `data-page-loading`: the item list's own placeholder holds the footer.
+ * Placeholder while item prices and availability for the cart are unresolved.
+ * No `data-page-loading`: the item list's own placeholder holds the footer.
  */
-function CartSkeleton({ storedLines, tone }: { storedLines: number; tone: string }) {
-  if (storedLines === 0) {
-    return (
-      <div className={statusViewBox('inline')} aria-hidden="true">
-        <div className="text-body-m"><Skeleton className="inline-block h-3 w-24 align-middle" /></div>
-        <div className="text-body-m"><Skeleton className="inline-block h-3 w-36 align-middle" /></div>
-      </div>
-    );
-  }
-  return (
-    <div aria-hidden="true">
-      <ul className={DIVIDED}>
-        {Array.from({ length: Math.min(storedLines, 4) }, (_, index) => (
-          <li key={index} className="flex items-start gap-3 py-3">
-            {/* The thumbnail's own corner (G3-021). */}
-            <Skeleton className="size-12 shrink-0 rounded-sm" delay={index * 60} />
-            <div className="min-w-0 flex-1">
-              <div className="text-body-m"><Skeleton className="inline-block h-3 w-2/3 align-middle" delay={index * 60} /></div>
-              <div className="text-body-s"><Skeleton className="inline-block h-2.5 w-1/3 align-middle" delay={index * 60} /></div>
-              <div className="mt-1 flex h-8 items-center justify-between gap-3">
-                <Skeleton className="h-8 w-26 rounded-full" delay={index * 60} />
-                <Skeleton className="h-3 w-14" delay={index * 60} />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <div className={cn('mt-2 border-t border-outline-variant pt-3 pb-1', tone)}>
-        <div className="flex h-6 items-center justify-between">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-        <div className="mt-1 flex h-4.5 items-center justify-between">
-          <Skeleton className="h-2.5 w-12" />
-          <Skeleton className="h-2.5 w-10" />
-        </div>
-        <Skeleton className="mt-3 h-10 w-full rounded-full" />
-      </div>
-    </div>
-  );
+function CartSkeleton() {
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载购物车…" className="min-h-36" />;
 }
 
 /**
@@ -303,7 +263,6 @@ function CartSkeleton({ storedLines, tone }: { storedLines: number; tone: string
 export default function CartPanel({
   summary,
   itemsFailed,
-  storedLines,
   balance,
   busy,
   onQuantity,
@@ -342,7 +301,7 @@ export default function CartPanel({
   if (summary === null && itemsFailed) {
     body = <p className="py-3 text-body-m text-on-surface-variant">商品信息未能加载，暂时无法结算</p>;
   } else if (summary === null) {
-    body = <CartSkeleton storedLines={storedLines} tone={footerTone} />;
+    body = <CartSkeleton />;
   } else {
     const entries = summary.entries;
     body = (

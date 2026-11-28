@@ -8,7 +8,7 @@ import type { ForumPost } from '@/lib/types/forum';
 import FadeInImage from '@/components/FadeInImage';
 import Pagination from '@/components/Pagination';
 import Avatar from '@/components/Avatar';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { CategoryBadge, PinnedBadge } from '@/components/forum/ForumBadges';
 import { readForumLeft, rememberForumOrigin } from '@/lib/forumTransition';
 import { forumThread } from '@/lib/resources';
@@ -16,7 +16,6 @@ import { prefetchRoutePayload } from '@/lib/routePayload';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
 import { isPlainActivation } from '@/lib/richTextLinks';
 import { forumTeaser } from '@/lib/forumText';
-import { FORUM_PAGE_SIZE } from '@/lib/api/forum';
 import { formatCompactDate, formatCount, formatDate, formatDateTime } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -65,7 +64,10 @@ function ForumRow({ post, token, now }: { post: ForumPost; token: string | null;
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     /* A modified click — a new tab, a new window — is the browser's; only a plain one flies. */
     if (!isPlainActivation(event)) return;
-    rememberForumOrigin(post.id, event.currentTarget, post);
+    /* Prefer a full thread already warmed by `pointerdown` prefetch or cache; `rememberForumOrigin`
+       ignores truncated `summary` list rows so a cold open never flies into a loading card. */
+    const warmed = forumThread.peek({ id: String(post.id), page: 1, token }).data?.post;
+    rememberForumOrigin(post.id, event.currentTarget, warmed ?? post);
   };
 
   return (
@@ -225,43 +227,10 @@ export default function ForumPostList({
 }
 
 /**
- * The list before its first answer: a page of rows (the page size, 20) in the row's own grid,
- * with and without a cover as the real list alternates — a short skeleton let the footer land
- * mid-screen and then shoved it off when the rows arrived (CLS 0.14–0.18, R6-022).
- *
- * `data-page-loading` holds the page footer while it is on screen, and tells the tab strip's
- * lean that this pane is a placeholder: a 图库 ⇄ 论坛 switch made now slides it as one plane
- * rather than leaning rows the answer is about to replace.
+ * Placeholder while a forum list's row count and item heights are unknown.
+ * `holdFooter` (`data-page-loading`) holds the footer back and lets tab transitions treat the
+ * loading pane as one calm plane until the real rows arrive.
  */
 export function ForumListSkeleton() {
-  return (
-    <div data-page-loading="" aria-hidden="true" className="mb-8">
-      {Array.from({ length: FORUM_PAGE_SIZE }, (_, i) => {
-        const delay = Math.min(i, 6) * 80;
-        const covered = i % 3 === 1;
-        return (
-          <div key={i} className={cn('m3-row bg-surface-container-low', ROW_GRID)}>
-            <div className="row-span-3 self-start">
-              <SkeletonCircle size={40} delay={delay} />
-            </div>
-            <div className="col-start-2 flex h-6 items-center">
-              <Skeleton className="h-4 w-3/5" delay={delay + 40} />
-            </div>
-            {covered && (
-              <div className="col-start-3 row-span-2 row-start-1">
-                <Skeleton className="size-14 rounded-sm" delay={delay + 40} />
-              </div>
-            )}
-            <div className={cn('col-start-2 flex items-start pt-1', TEASER_HEIGHT)}>
-              <Skeleton className="h-3.5 w-11/12" delay={delay + 80} />
-            </div>
-            <div className="col-span-2 col-start-2 mt-1 flex h-[18px] items-center gap-3">
-              <Skeleton className="h-3 w-28" delay={delay + 120} />
-              <Skeleton className="ms-auto h-3 w-24" delay={delay + 120} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载帖子…" />;
 }

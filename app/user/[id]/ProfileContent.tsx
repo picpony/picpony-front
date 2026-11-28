@@ -9,9 +9,8 @@ import { isNotFound, isRetryable } from '@/lib/api/errors';
 import { useNow, useSession } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import { defaultProfileTab, withSettings, type ProfileTab } from '@/lib/profiles';
-import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import BadgeEquipDialog from '@/components/BadgeEquipDialog';
-import Skeleton from '@/components/Skeleton';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import ProfileHeader from './ProfileHeader';
@@ -127,19 +126,10 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
               </TabPanes>
             </div>
           ) : (
-            /* The tab row's own height, then the landing pane's grid, so nothing moves when the
-               record lands. */
-            <div className="mt-8" aria-hidden="true">
-              <div className="mb-6 flex h-12 items-center gap-6 border-b border-outline-variant">
-                {[16, 12, 10, 10].map((width, index) => (
-                  <Skeleton key={index} className="h-4 shrink-0" style={{ width: `${width * 4}px` }} delay={index * 60} />
-                ))}
-              </div>
-              <div className="mb-4 flex h-10 items-center justify-between gap-4">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-28 rounded-full" delay={60} />
-              </div>
-              <ImageGridSkeleton count={12} entrance={false} />
+            /* Tabs depend on the profile and viewer's permissions; wait with one centred
+               indicator under the fixed profile header until the record confirms the layout. */
+            <div className="mt-8">
+              <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载用户内容…" />
             </div>
           )}
         </div>

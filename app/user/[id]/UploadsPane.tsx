@@ -30,10 +30,9 @@ export const UPLOADS_PER_PAGE = 12;
 
 function UploadsSkeleton() {
   return (
-    <div aria-hidden="true">
-      <div className="mb-4 flex h-10 items-center justify-between gap-4">
+    <div>
+      <div className="mb-4 flex h-10 items-center" aria-hidden="true">
         <Skeleton className="h-4 w-20" />
-        <Skeleton className="h-8 w-28 rounded-full" delay={60} />
       </div>
       <ImageGridSkeleton count={UPLOADS_PER_PAGE} entrance={false} />
     </div>

@@ -26,6 +26,7 @@ Forum, folder and flightless detail share `containerTransformPlay.ts`; route con
 - Use the shared content-fade windows sequentially, so outgoing and incoming text do not double.
 - Start the route's compositor fade with the container through `playUnderContainer`.
 - `expectRouteContainer` holds the old page past `data-route-fallback` while the destination arrives, within its existing bound.
+- Forum thread opening arms a container transform only when a complete (non-summary) post preview is cached, so cold opens show the route loading indicator instead of morphing into a loading card; warm clones retain cached images (`keepImages`).
 - Warm a client page's complete route payload through `prefetchRoutePayload`. Domain-data prefetch still follows [Data requests](data-requests.md#prefetch-and-scheduling).
 - Start each leg pending, so the first presented frame shows its first pose rather than elapsed pre-paint work.
 - A return uses the visible portion of its source. An off-screen or concealed destination falls back to the route fade.
@@ -107,7 +108,7 @@ The footer travels with its page during route changes. Tabs alone hold it with `
 
 ## Admin panes and inline editors
 
-`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts. On wide layouts the vertical rail stays sticky inside an inner `ScrollArea` so long tables keep navigation reachable without stretching short panes.
+`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts. Lazy panels load through a plain client `import()` loader rather than `next/dynamic`'s `<Suspense>` boundary so fast chunks mount immediately without React's 300ms fallback throttle pushing a pane indicator down into a panel's inner loader. On wide layouts the vertical rail stays sticky inside an inner `ScrollArea` so long tables keep navigation reachable without stretching short panes.
 
 `sections.ts` owns section names and icons; `SectionHeader` consumes them. Shared reads use `sharedQueries.ts` and `useAdminSelect`, preserving derived-view identity.
 

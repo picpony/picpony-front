@@ -5,7 +5,7 @@ import Card from '@/components/Card';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import SectionHeading from '@/components/SectionHeading';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { useEscapeBack } from '@/lib/hooks';
 
@@ -74,30 +74,7 @@ export function TeamCard({ children }: { children: ReactNode }) {
 export const ROSTER_GRID =
   'grid grid-cols-1 gap-y-1 @[26rem]/roster:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] @[26rem]/roster:gap-x-4 @[26rem]/roster:gap-y-2';
 
-/**
- * The roster's placeholder in the loaded state's own shape: group headings over the same grid of
- * member cells. A flat row with a different gap and no headings made the list re-space and grow
- * two heading rows when data landed.
- */
+/** Placeholder while dynamic team roster groups and member counts are loading. */
 export function TeamSkeleton() {
-  return (
-    <div className="space-y-5" aria-hidden="true">
-      {[0, 1].map((g) => (
-        <div key={g}>
-          <Skeleton className="mb-3 h-5 w-20" delay={g * 120} />
-          <div className={ROSTER_GRID}>
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex min-w-0 items-center gap-3 p-2">
-                <SkeletonCircle size={48} delay={g * 120 + i * 80} />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Skeleton className="h-4 w-16 max-w-full" delay={g * 120 + i * 80 + 40} />
-                  <Skeleton className="h-3 w-20 max-w-full" delay={g * 120 + i * 80 + 80} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="md" label="正在加载团队成员…" className="min-h-48" />;
 }

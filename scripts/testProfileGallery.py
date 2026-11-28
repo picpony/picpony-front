@@ -469,7 +469,7 @@ def run_profile(browser, name, width, motion):
         page.goto(BASE + '/user/1', wait_until='domcontentloaded')
         wait_pending(page, fixtures.pending_uploads, 'profile uploads')
         assert all('uploader_id:' in query for query in fixtures.upload_queries), fixtures.upload_queries
-        expect(page.locator('[data-tab-pane-active] .skeleton')).to_have_count(12)
+        expect(page.locator('[data-tab-pane-active] [data-grid-loading]')).to_have_count(1)
         fixtures.release_uploads()
         page.wait_for_load_state('networkidle')
         inspect_grid(page, 12, baseline)

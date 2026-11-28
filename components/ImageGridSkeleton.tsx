@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useLayoutEffect, useMemo, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import {
   clampedCardAspect,
@@ -10,93 +10,59 @@ import {
   noteSkeletonReplaced,
 } from '@/lib/masonry';
 import type { FolderSeedCover } from '@/lib/folderTransit';
-import { getAppScroller } from '@/lib/appScroller';
 import FadeInImage from '@/components/FadeInImage';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 
 /**
- * Fixed aspect-ratio sequence (height over width), not random values, so server and client render
- * the same thing and the placeholder fills a real page's depth. **Its mean is a real page's**:
- * 0.93 over 250 recent and top-scored safe uploads (derpibooru, 2026-09). It was 1.17 — a quarter
- * taller — so a grid shrank by a quarter of its length the moment its pictures replaced it.
- */
-const RATIOS = [
-  1.06, 0.62, 1.2, 0.8, 0.94, 0.58, 1.13, 0.76, 1, 1.3, 0.67, 0.88, 1.1, 0.72, 1.24, 0.84, 0.64,
-  1.02, 0.9, 1.17, 0.7, 1.08, 0.82, 1.26,
-];
-
-const PAUSED_SWEEP = 'after:[animation-play-state:paused]';
-
-/**
- * The grid's placeholder, placed by the grid's own rule (`lib/masonry.ts`) and the same CSS —
- * so it has the right column count in the server's HTML too. It used to share the grid's
- * script-chosen count and painted four columns on every phone until hydration.
+ * Placeholder for a masonry image collection before its item list arrives.
  *
- * `data-page-loading` holds the page footer back while this is up (see the page-chrome rules
- * in globals.css): under a placeholder shorter than the viewport the footer was painted at the
- * bottom of the screen and thrown off it when the content landed.
+ * Because the result count and each picture's aspect ratio are unknown until the list responds,
+ * this never fabricates guessed masonry tiles that jump once data lands. It shows a single
+ * centred large M3E loading indicator (`PageLoadingIndicator`) while holding the page footer back
+ * (`data-page-loading`); once the API confirms the structure, `MasonryGrid` decomposes into the
+ * real cards in their exact final positions and sizes (inheriting the active shared morph clock).
  *
- * The page size varies by list; pass the request's own.
+ * The one known-geometry exception is a cold folder open carrying `seedCover` from a pressed
+ * folder card: slot #0's exact picture and aspect ratio are already known, so that single cover
+ * renders in place for the container-transform handoff alongside the centred indicator below.
  */
 export default function ImageGridSkeleton({
-  count = 50,
   entrance = true,
+  paused = false,
   seedCover,
 }: {
+  /** Retained for caller compatibility; unknown-structure grids render one centred indicator. */
   count?: number;
   entrance?: boolean;
+  /** Pause the indicator while held invisible during a warm-cache deferral. */
+  paused?: boolean;
   /** Known cover for slot #0 (carried from a pressed folder card) so a cold folder open lands on
       its exact aspect ratio and keeps the picture painted until the real grid arrives. */
   seedCover?: FolderSeedCover;
 }) {
-  const gridRef = useRef<HTMLDivElement>(null);
   const seedW = seedCover ? seedCover.width || 1 : 1;
   const seedH = seedCover ? seedCover.height || 1 : 1;
   const seedRatio = seedCover ? clampedCardAspect(seedW, seedH) : null;
   const seedCroppedTall = seedCover ? seedH / seedW > MASONRY_MAX_RATIO : false;
-  const layout = useMemo(
-    () =>
-      masonryLayout(
-        Array.from({ length: count }, (_, id) => ({
-          width: 1,
-          height: id === 0 && seedRatio !== null ? seedRatio : RATIOS[id % RATIOS.length],
-        })),
-      ),
-    [count, seedRatio],
+  const seedLayout = useMemo(
+    () => (seedRatio !== null ? masonryLayout([{ width: 1, height: seedRatio }]) : null),
+    [seedRatio],
   );
 
-  /* Reported on the way out, so the grid mounting in the same commit knows it is taking over
-     from a placeholder that was already saying "arriving" — and skips its own entrance. */
+  /* Reported on the way out so the decomposing `MasonryGrid` mounting in the same commit appears
+     at once and hands off cleanly on the active shared M3E morph clock. */
   useLayoutEffect(() => () => noteSkeletonReplaced(), []);
 
-  /* One observer for the whole loading page. Off-screen sweeps cannot be composited and
-     otherwise restyle dozens of tiles per frame; the quiet placeholder keeps its exact
-     geometry and colour. No observer support means the same static placeholders. */
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) entry.target.classList.toggle(PAUSED_SWEEP, !entry.isIntersecting);
-    }, {
-      root: grid.closest('[data-app-scroll-container]') ?? getAppScroller(),
-      rootMargin: '240px 0px',
-    });
-    for (const placeholder of grid.querySelectorAll('[data-grid-placeholder]')) observer.observe(placeholder);
-    return () => observer.disconnect();
-  }, [layout]);
-
-  return (
-    <div
-      data-page-loading
-      className={cn('masonry', entrance && 'animate-fade-in')}
-      aria-hidden="true"
-    >
-      <div ref={gridRef} className="masonry-grid" style={layout.grid as CSSProperties}>
-        {layout.items.map((placement, index) => (
-          /* The slot is its own box, as it is for a card: the placeholder's own class positions
-             it relatively for the sweep, and the slot must be the absolutely placed one. */
-          <div key={index} className="masonry-item" style={placement as CSSProperties}>
-            {index === 0 && seedCover && seedRatio !== null ? (
+  if (seedCover && seedRatio !== null && seedLayout) {
+    return (
+      <div
+        data-page-loading=""
+        data-grid-loading=""
+        className={cn('space-y-6', entrance && 'animate-fade-in')}
+      >
+        <div className="masonry" aria-hidden="true">
+          <div className="masonry-grid" style={seedLayout.grid as CSSProperties}>
+            <div className="masonry-item" style={seedLayout.items[0] as CSSProperties}>
               <div
                 data-folder-seed-cover={seedCover.id}
                 className="relative w-full overflow-hidden rounded-lg bg-surface-container-high"
@@ -116,25 +82,28 @@ export default function ImageGridSkeleton({
                   className={seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
                 />
               </div>
-            ) : (
-              <Skeleton
-                data-grid-placeholder
-                className={cn('w-full rounded-lg', PAUSED_SWEEP)}
-                style={{
-                  aspectRatio: `1 / ${RATIOS[index % RATIOS.length]}`,
-                  /* Diagonal stagger so the shimmer sweeps the grid as one wave; capped — a slow
-                     tail reads as broken, not loading. Column and row come from the phone
-                     layout, the one where the eye takes the grid in as a single wave. */
-                  animationDelay: `${Math.min(
-                    (Number(placement['--mc2']) + Number(placement['--mk2'])) * 90,
-                    900,
-                  )}ms`,
-                }}
-              />
-            )}
+            </div>
           </div>
-        ))}
+        </div>
+        <PageLoadingIndicator
+          size="inline"
+          indicatorSize="lg"
+          paused={paused}
+          label="正在加载图片…"
+        />
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <PageLoadingIndicator
+      size="pane"
+      indicatorSize="lg"
+      holdFooter
+      paused={paused}
+      label="正在加载图片…"
+      data-grid-loading=""
+      className={cn(entrance && 'animate-fade-in')}
+    />
   );
 }

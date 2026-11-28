@@ -17,8 +17,7 @@ import Badge from '@/components/Badge';
 import Card from '@/components/Card';
 import CheckGlyph from '@/components/CheckGlyph';
 import FadeInImage from '@/components/FadeInImage';
-import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
-import Skeleton from '@/components/Skeleton';
+import { MediaLoadingPlaceholder, PageLoadingIndicator } from '@/components/LoadingIndicator';
 
 /* Two columns on a narrow container, three from 520px, four from 820px — matching `MasonryGrid`'s
    container thresholds so the docked desktop drawer never squeezes cards into narrow strips. */
@@ -263,21 +262,7 @@ export function FolderBadges({ isDefault, isPublic }: { isDefault: boolean; isPu
   );
 }
 
-/** The cards' own shape while the list loads: a 4:3 cover and two lines. */
-export function FolderGridSkeleton({ count = 4 }: { count?: number }) {
-  return (
-    <div className="@container/folders" data-page-loading="" aria-hidden="true">
-      <ul className={FOLDER_GRID}>
-        {Array.from({ length: count }, (_, index) => (
-          <li key={index} className="overflow-hidden rounded-md bg-surface-container-highest">
-            <Skeleton className="aspect-4/3 w-full rounded-none" delay={index * 80} />
-            <div className="flex flex-col gap-1.5 px-3 py-3">
-              <Skeleton className="h-4 w-3/5" delay={index * 80 + 40} />
-              <Skeleton className="h-4 w-2/5" delay={index * 80 + 80} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+/** Placeholder while the folder list's count and items are unknown. */
+export function FolderGridSkeleton() {
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载收藏夹…" />;
 }

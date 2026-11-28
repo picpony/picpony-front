@@ -21,6 +21,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import FailedTurnHold from '@/components/FailedTurnHold';
 import ImageGridSkeleton from '@/components/ImageGridSkeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import MasonryGrid from '@/components/MasonryGrid';
 import Pagination from '@/components/Pagination';
 import Skeleton from '@/components/Skeleton';
@@ -173,15 +174,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         />
       );
     }
-    return (
-      <div data-page-loading="">
-        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-10 w-36 rounded-full" />
-        </div>
-        <ImageGridSkeleton count={PER_PAGE} entrance={false} />
-      </div>
-    );
+    return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载账号信息…" />;
   }
   if (apiKey === null) {
     return (
@@ -211,9 +204,8 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
     }
     return (
       <div data-page-loading="">
-        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+        <div className="mb-4 flex min-h-10 items-center" aria-hidden="true">
           <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-10 w-36 rounded-full" />
         </div>
         <ImageGridSkeleton count={PER_PAGE} entrance={false} />
       </div>

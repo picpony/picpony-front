@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Checkbox from './Checkbox';
-import Skeleton from './Skeleton';
+import { PageLoadingIndicator } from './LoadingIndicator';
 import ErrorRetry from './ErrorRetry';
 import EmptyState from './EmptyState';
 import UserBadge from './UserBadge';
@@ -169,19 +169,7 @@ export default function BadgeEquipDialog({ open, onClose, token, profileId, now 
           onRetry={isRetryable(read.error) ? read.refresh : undefined}
         />
       ) : source === null ? (
-        /* The rows' own shape: an 18dp checkbox, the 24dp badge, its validity and the footer count. */
-        <div aria-hidden="true">
-          <ul className="mt-4 flex flex-col gap-1">
-            {Array.from({ length: 3 }, (_, index) => (
-              <li key={index} className="flex min-h-12 items-center gap-3">
-                <Skeleton className="size-4.5 shrink-0 rounded-xs" delay={index * 80} />
-                <Skeleton className="h-6 w-20 rounded-xs" delay={index * 80 + 40} />
-                <Skeleton className="h-4 w-16" delay={index * 80 + 80} />
-              </li>
-            ))}
-          </ul>
-          <Skeleton className="mt-3 h-4.5 w-20" delay={240} />
-        </div>
+        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载徽章…" className="mt-4 min-h-32" />
       ) : held.length === 0 ? (
         <EmptyState size="inline" className="mt-4" title="暂无徽章" />
       ) : (

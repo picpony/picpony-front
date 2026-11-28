@@ -6,7 +6,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import FollowHeight from '@/components/FollowHeight';
 import Modal from '@/components/Modal';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { SKIP, useResource } from '@/lib/resource';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { tagCategoryChip } from '@/lib/tagCategories';
@@ -62,32 +62,7 @@ export default function HistoryDialog({
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
         ) : read.data === undefined ? (
-          <div className="space-y-4" aria-hidden="true">
-            <div>
-              {[0, 1, 2].map((index) => (
-                <div key={index} className="m3-row flex flex-col gap-0.5 bg-surface-container-highest p-4">
-                  <Skeleton className="h-5 w-40" delay={index * 80} />
-                  <Skeleton className="h-4.5 w-24" delay={index * 80 + 60} />
-                </div>
-              ))}
-            </div>
-            <div className="grid gap-x-6 gap-y-3 rounded-md bg-surface-container-highest p-4 sm:grid-cols-2">
-              <div className="space-y-1 sm:col-span-2">
-                <Skeleton className="h-4.5 w-16" delay={240} />
-                <Skeleton className="h-5 w-44" delay={270} />
-              </div>
-              {[0, 1, 2, 3].map((index) => (
-                <div key={index} className="space-y-1">
-                  <Skeleton className="h-4.5 w-16" delay={300 + index * 30} />
-                  <Skeleton className="h-5 w-28" delay={320 + index * 30} />
-                </div>
-              ))}
-              <div className="space-y-1 sm:col-span-2">
-                <Skeleton className="h-4.5 w-12" delay={440} />
-                <Skeleton className="h-10 w-full" delay={470} />
-              </div>
-            </div>
-          </div>
+          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载编辑历史…" className="min-h-40" />
         ) : records.length === 0 ? (
           <EmptyState size="inline" title="暂无编辑记录" />
         ) : (

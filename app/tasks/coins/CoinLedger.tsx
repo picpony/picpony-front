@@ -4,11 +4,11 @@ import { useEffect } from 'react';
 import { MdReceiptLong } from 'react-icons/md';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageBack from '@/components/PageBack';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import SignInRequired from '@/components/SignInRequired';
-import Skeleton from '@/components/Skeleton';
 import SectionHeading from '@/components/SectionHeading';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import type { CoinTransaction } from '@/lib/api/tasks';
@@ -44,20 +44,7 @@ function byDay(rows: readonly CoinTransaction[], now: number | null) {
 }
 
 function LedgerSkeleton() {
-  return (
-    <div data-page-loading aria-hidden="true">
-      <Skeleton className="mb-2 ml-1 h-5 w-12" />
-      {Array.from({ length: 12 }, (_, i) => (
-        <div key={i} className="m3-row flex min-h-16 items-center gap-4 bg-surface-container-low px-4 py-3">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <Skeleton className="h-4.5 w-40 max-w-full" delay={Math.min(i, 8) * 70} />
-            <Skeleton className="h-3.5 w-12" delay={Math.min(i, 8) * 70 + 40} />
-          </div>
-          <Skeleton className="h-5 w-12 shrink-0" delay={Math.min(i, 8) * 70 + 80} />
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载金币明细…" />;
 }
 
 /**
@@ -94,17 +81,17 @@ export default function CoinLedger() {
     <PageHeader
       title="金币明细"
       subtitle={
-        !ready ? (
-          <Skeleton className="inline-block h-4 w-32 align-middle" aria-hidden="true" />
-        ) : token && Number.isFinite(balance) ? (
-          `当前余额 ${formatExactCount(Math.max(0, balance))} 金币`
-        ) : undefined
+        ready && token && Number.isFinite(balance)
+          ? `当前余额 ${formatExactCount(Math.max(0, balance))} 金币`
+          : undefined
       }
     />
   );
 
   let body;
-  if (!ready || (token && data === undefined && read.error === undefined)) {
+  if (!ready) {
+    body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
+  } else if (token && data === undefined && read.error === undefined) {
     body = <LedgerSkeleton />;
   } else if (!token) {
     body = <SignInRequired description="登录后可查看金币收支明细" />;

@@ -211,7 +211,7 @@ function loadDataTable(tier = 'standard') {
     '@/lib/springTiming': { springTiming: () => ({ duration: 100, easing: 'linear' }) },
     '@/lib/tabPaneVisibility': { insideConcealedPane: () => false },
     '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], markLayoutOwned: stub, precedersOf: () => [], startMove: stub },
-    './Skeleton': stub, './EmptyState': stub, './ErrorRetry': stub,
+    './LoadingIndicator': { PageLoadingIndicator: stub }, './EmptyState': stub, './ErrorRetry': stub,
   };
   vm.runInNewContext(code, { exports, document: {}, require: (name) => {
     assert.ok(name in modules, `unmocked dependency: ${name}`);
@@ -524,4 +524,80 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   while (frames.length) frames.shift()?.();
   assert.equal(animations.length, beforePrime + 1, 'playing a primed taller tab expands immediately');
   assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '552px' }, { height: '1100px' }]);
+});
+
+test('admin registry loads panels lazily without Suspense throttling and recovers on chunk failure', async () => {
+  const source = readFileSync(path.join(root, 'components/admin/registry.tsx'), 'utf8');
+  assert.equal(/from ['"]next\/dynamic['"]/.test(source), false, 'registry avoids next/dynamic Suspense 300ms fallback throttle');
+
+  const states = [];
+  let cursor = 0;
+  let pendingEffects = [];
+  const react = {
+    useState(initial) {
+      const idx = cursor++;
+      if (!(idx in states)) states[idx] = typeof initial === 'function' ? initial() : initial;
+      return [states[idx], (next) => { states[idx] = typeof next === 'function' ? next(states[idx]) : next; }];
+    },
+    useEffect(effect) { pendingEffects.push(effect); },
+  };
+  const jsx = (type, props) => ({ type, props });
+  const exports = {};
+  const code = ts.transpileModule(source + '\nexports._panel = panel;', {
+    fileName: 'registry.tsx',
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const sections = load('components/admin/sections.ts', {
+    'react-icons/md': new Proxy({}, { get: (_, name) => name }),
+  });
+  vm.runInNewContext(code, {
+    exports,
+    require: (name) => {
+      if (name === 'react') return react;
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' };
+      if (name === '@/components/ErrorRetry') return { default: 'ErrorRetry' };
+      if (name === './AdminPaneSkeleton') return { default: 'AdminPaneSkeleton' };
+      if (name === './sections') return sections;
+      if (name === '@/lib/icons') return { ICON: { standard: 24 } };
+      return new Proxy({}, { get: (_, k) => (k === '__esModule' ? true : String(k)) });
+    },
+  }, { filename: 'registry.tsx' });
+
+  let calls = 0;
+  let resolveSecond;
+  const Loaded = function LoadedTab() { return 'loaded'; };
+  const Lazy = exports._panel(() => {
+    calls += 1;
+    if (calls === 1) return Promise.reject(new Error('offline'));
+    return new Promise((resolve) => { resolveSecond = () => resolve({ default: Loaded }); });
+  }, '商店管理');
+
+  const render = () => {
+    cursor = 0;
+    pendingEffects = [];
+    const tree = Lazy({ token: 't', role: 'super_admin', viewerId: 1, openTab() {} });
+    const run = pendingEffects.splice(0);
+    run.forEach((fn) => fn());
+    return tree;
+  };
+
+  /* Initial render shows the section-labelled skeleton, then surfaces ErrorRetry when chunk fails. */
+  const first = render();
+  assert.equal(first.type, 'AdminPaneSkeleton');
+  assert.equal(first.props.label, '正在加载商店管理…');
+  await Promise.resolve();
+  await Promise.resolve();
+  const failed = render();
+  assert.equal(failed.type, 'ErrorRetry');
+  assert.equal(failed.props.title, '商店管理加载失败');
+
+  /* Retrying restarts the import and switches straight to the loaded component on resolve. */
+  failed.props.onRetry();
+  const retrying = render();
+  assert.equal(retrying.type, 'AdminPaneSkeleton');
+  resolveSecond();
+  await Promise.resolve();
+  await Promise.resolve();
+  const ready = render();
+  assert.equal(ready.type, Loaded);
 });

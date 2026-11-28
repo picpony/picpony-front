@@ -66,5 +66,5 @@ export const CHECK_SNAP_DELAY_MS = 100;
 export const LOOP_EASE = {
   loop: 'cubic-bezier(0.4, 0, 0.6, 1)',
   sweep: 'cubic-bezier(0, 0, 0.58, 1)',
-  skeleton: 'cubic-bezier(0.25, -0.00, 0.00, 1.00)',
+  skeleton: 'cubic-bezier(0.35, 0, 0.25, 1)',
 } as const;

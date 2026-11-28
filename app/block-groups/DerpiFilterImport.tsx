@@ -6,8 +6,8 @@ import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Modal from '@/components/Modal';
-import Skeleton from '@/components/Skeleton';
 import StatusView from '@/components/StatusView';
 import { settingsHref } from '@/app/settings/tabs';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -49,19 +49,7 @@ interface DerpiFilterImportProps {
 }
 
 function FilterRows() {
-  return (
-    <div aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="m3-row flex items-center gap-4 bg-surface-container-highest p-4">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-32" delay={i * 90} />
-            <Skeleton className="h-3 w-48" delay={i * 90 + 40} />
-          </div>
-          <Skeleton className="h-8 w-16 rounded-full" delay={i * 90 + 80} />
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载过滤规则…" className="min-h-36" />;
 }
 
 /**

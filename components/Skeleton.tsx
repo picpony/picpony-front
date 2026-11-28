@@ -14,7 +14,8 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
 
 /**
  * The single loading placeholder; `.skeleton` (globals.css) owns the sweep and
- * reads `animation-delay: inherit`, which is what lets `delay` stagger a group.
+ * reads `--skeleton-delay` to compute a zero-lag negative phase offset so staggered
+ * groups start smoothly in motion from frame zero without an initial frozen pause.
  *
  * **Radius and background overrides are conditional.** `cn` is a plain join that
  * does not resolve Tailwind conflicts, so detecting unconditional `rounded*` or
@@ -23,18 +24,25 @@ interface SkeletonProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'>
  */
 const HAS_RADIUS = /(?:^|\s)rounded(?:-\S+)?/;
 const HAS_BG = /(?:^|\s)bg-\S+/;
+/** Matches `--motion-base-sweep` (1600 ms) so negative phase offsets stay within one cycle. */
+const SWEEP_CYCLE_MS = 1600;
 
 export default function Skeleton({ className = '', delay, style, variant = 'surface', ...rest }: SkeletonProps) {
+  const phase = delay && delay > 0 ? delay % SWEEP_CYCLE_MS : 0;
+  const mergedStyle = phase
+    ? ({ '--skeleton-delay': `${phase}ms`, ...style } as CSSProperties)
+    : style;
   return (
     <div
       aria-hidden="true"
       className={cn(
         'skeleton',
+        variant === 'overlay' && 'skeleton-overlay',
         variant === 'surface' && !HAS_BG.test(className) && 'bg-surface-container-high',
         !HAS_RADIUS.test(className) && 'rounded-sm',
         className,
       )}
-      style={delay ? { animationDelay: `${delay}ms`, ...style } : style}
+      style={mergedStyle}
       {...rest}
     />
   );

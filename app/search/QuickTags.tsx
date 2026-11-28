@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import Chip from '@/components/Chip';
 import ErrorRetry from '@/components/ErrorRetry';
 import SectionHeading from '@/components/SectionHeading';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { QUICK_TAG_GROUPS, type QuickTag, type QuickTagGroup } from '@/lib/api/semantic';
 import { useResource } from '@/lib/resource';
@@ -19,22 +19,9 @@ const GROUP_LABELS: Record<QuickTagGroup, string> = {
   general: '常规',
 };
 
-/** The rows' own geometry while they load: four one-line rows of chips. */
+/** Placeholder while quick-tag categories and dynamic chip widths load. */
 export function QuickTagsSkeleton() {
-  return (
-    <div className="flex flex-col gap-2 pointer-coarse:gap-3" aria-hidden="true">
-      {QUICK_TAG_GROUPS.map((group, row) => (
-        <div key={group} className="flex h-10 min-w-0 items-center gap-3">
-          <Skeleton className="h-4 w-8 shrink-0" delay={row * 90} />
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-8 w-16 shrink-0" delay={row * 90 + index * 40} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载快捷标签…" className="min-h-28" />;
 }
 
 function QuickTagRow({

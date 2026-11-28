@@ -7,6 +7,7 @@ import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import IconButton from '@/components/IconButton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import PresenceBlock from '@/components/PresenceBlock';
 import PresenceList from '@/components/PresenceList';
@@ -31,19 +32,7 @@ import { useTagNames } from './useTagNames';
 const ROW = 'm3-row flex min-h-18 items-center bg-surface-container-low';
 
 function RowsSkeleton() {
-  return (
-    <ul data-page-loading aria-hidden="true">
-      {Array.from({ length: 5 }, (_, index) => (
-        <li key={index} className={`${ROW} gap-4 py-3 pr-2 pl-4`}>
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-5 w-1/3" delay={index * 60} />
-            <Skeleton className="h-3.5 w-1/2" delay={index * 60} />
-          </div>
-          <Skeleton className="size-10 shrink-0 rounded-full" delay={index * 60} />
-        </li>
-      ))}
-    </ul>
-  );
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载标签订阅…" />;
 }
 
 /**
@@ -158,7 +147,7 @@ export default function SubscriptionsScreen() {
   };
 
   let body: React.ReactNode;
-  if (!ready) body = <RowsSkeleton />;
+  if (!ready) body = <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />;
   else if (!token) body = <SignInRequired description="登录后即可订阅标签并追踪新图片" />;
   else if (list === undefined && read.error !== undefined) {
     body = (
@@ -216,11 +205,7 @@ export default function SubscriptionsScreen() {
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader title="标签订阅" />
       {/* Keyed on the session: a field typed into under one account starts empty under the next. */}
-      {!ready ? (
-        <Skeleton className="mb-6 h-14 w-full rounded-full" aria-hidden="true" />
-      ) : (
-        token && <SubscribeField key={token} token={token} />
-      )}
+      {ready && token && <SubscribeField key={token} token={token} />}
       {body}
       {confirmDialog}
     </div>

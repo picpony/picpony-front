@@ -412,6 +412,11 @@
   --md-sys-ripple-opacity: 0.14;
   --md-sys-chart-area-opacity: 0.09;
   --md-sys-chart-halo-opacity: 0.18;
+  /* Skeleton light sheen: a soft specular highlight over Tone 92 surface containers in light
+     mode (avoiding a dark grey smudge) and a translucent ink sweep for transparent `overlay`
+     skeletons drawn over Tone 98 chart surfaces. */
+  --md-sys-skeleton-sheen: rgb(var(--md-sys-color-on-media-rgb) / 52%);
+  --md-sys-skeleton-overlay-sheen: rgb(var(--md-sys-color-on-surface-rgb) / 7%);
 
   /* Elevation. Two-layer shadows per M3, **alpha constant, only the geometry grows** — how
      M3 specifies the ladder; a ramping alpha makes one level indistinguishable from the next.
@@ -444,6 +449,9 @@
   /* Light ink on dark ground needs slightly more alpha to match light-mode weight (AOSP dark
      ripple alpha, matching the heavier dark elevation ladder below). */
   --md-sys-ripple-opacity: 0.18;
+  /* Palette-tinted highlight over Tone 17 dark containers; shared by surface and overlay sweeps. */
+  --md-sys-skeleton-sheen: rgb(var(--md-sys-color-on-surface-rgb) / 9%);
+  --md-sys-skeleton-overlay-sheen: rgb(var(--md-sys-color-on-surface-rgb) / 9%);
 
   /* Deliberate divergence — the dark ladder keeps its own alpha ramp (heavier than light's
      constant 0.15/0.10): on a near-black ground, shadow is almost invisible and *tonal* steps
@@ -1188,7 +1196,7 @@ body {
   --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
   --motion-base-sweep: 1.6s;
   --ease-sweep: cubic-bezier(0, 0, 0.58, 1);
-  --ease-skeleton-sweep: cubic-bezier(0.25, -0.00, 0.00, 1.00);
+  --ease-skeleton-sweep: cubic-bezier(0.35, 0, 0.25, 1);
 
   /* Travel and arrival scale (`TRAVEL_PX` / `ENTER_SCALE` in lib/motionTokens.ts). */
   --motion-travel: 16px;
@@ -1807,6 +1815,7 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   .skeleton {
     position: relative;
     overflow: hidden;
+    --skeleton-duration: calc(var(--motion-base-sweep) * var(--motion-scale));
   }
 
   .skeleton::after {
@@ -1814,25 +1823,35 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgb(var(--md-sys-color-on-surface-rgb) / 7%),
-      transparent
+    background-image: linear-gradient(
+      105deg,
+      transparent 0%,
+      transparent 18%,
+      var(--md-sys-skeleton-sheen) 50%,
+      transparent 82%,
+      transparent 100%
     );
-    /* **Fast through the pass, easing out of the exit.** One of the app's two sweeps that take a
-       one-sided curve — the semantic line's own sentence is the other, `.text-shimmer` below —
-       and it is geometry rather than taste: the band is wholly outside the box it is clipped to
-       at *both* ends of the cycle (`translateX(∓100%)`), so the wrap is drawn nowhere and the
-       velocity step `--ease-loop` exists to hide is not on screen. What is on screen is the
-       pass, and easing out of it reads as light going past rather than a conveyor belt.
-       Not a decelerating curve: one that spends most of its travel in the first tenth, which
-       over a 1.6s pass is a flash and then a stall. */
-    animation: shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-skeleton-sweep) infinite;
-    /* Pseudo-elements do not inherit animation-delay implicitly; this lets a per-tile
-       inline delay on the skeleton element stagger the sweep. */
-    animation-delay: inherit;
+    /* Calm angled highlight sweep with a bell-curve feather. Using a negative phase offset
+       (`--skeleton-delay - --skeleton-duration`) keeps staggered groups moving in one continuous
+       wave from frame zero instead of pausing frozen before their first pass. */
+    animation: shimmer var(--skeleton-duration) var(--ease-skeleton-sweep) infinite;
+    animation-delay: calc(var(--skeleton-delay, 0ms) * var(--motion-scale) - var(--skeleton-duration));
   }
+
+  .skeleton-overlay::after {
+    background-image: linear-gradient(
+      105deg,
+      transparent 0%,
+      transparent 18%,
+      var(--md-sys-skeleton-overlay-sheen) 50%,
+      transparent 82%,
+      transparent 100%
+    );
+  }
+}
+
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced']) .skeleton {
+  --skeleton-duration: calc(var(--motion-base-sweep) * 1.5 * var(--motion-scale));
 }
 
 @keyframes shimmer {
@@ -2222,6 +2241,13 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
     animation: m3-progress-rotate 4s linear infinite;
     transform-origin: center;
   }
+
+  /* Under `off`, reveal/dismiss transitions drop scale so indicators never snap in size. */
+  & .m3e-loading-reveal,
+  & .m3e-loading-dismiss {
+    scale: 1 !important;
+    transition-property: opacity !important;
+  }
 }
 
 .m3e-loading-paused .m3e-loading-shape,
@@ -2230,8 +2256,35 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 [hidden] .m3e-loading-shape,
 [data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
   .m3e-loading-shape,
-[data-tab-pane][data-tab-pane-done] .m3e-loading-shape {
+[data-tab-pane][data-tab-pane-done] .m3e-loading-shape,
+[inert] .skeleton::after,
+[hidden] .skeleton::after,
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+  .skeleton::after,
+[data-tab-pane][data-tab-pane-done] .skeleton::after,
+[inert] .text-shimmer,
+[hidden] .text-shimmer,
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+  .text-shimmer,
+[data-tab-pane][data-tab-pane-done] .text-shimmer {
   animation-play-state: paused !important;
+}
+
+/* Split-clock Material 3 Expressive reveal and dismissal for loading indicators:
+   arrival uses `fastEffects` for opacity and `fastSpatial` for scale; dismissal retreats
+   promptly on `fastEffects` so settled artwork never shows a lingering shape behind it. */
+@layer components {
+  .m3e-loading-reveal {
+    transition-property: opacity, scale;
+    transition-duration: var(--duration-spring-fast-effects), var(--duration-spring-fast-spatial);
+    transition-timing-function: var(--ease-spring-effects), var(--ease-spring-fast-spatial);
+  }
+
+  .m3e-loading-dismiss {
+    transition-property: opacity, scale;
+    transition-duration: var(--duration-spring-fast-effects), var(--duration-spring-fast-effects);
+    transition-timing-function: var(--ease-spring-effects), var(--ease-spring-effects);
+  }
 }
 
 /* 2D container-query sizing for `MediaLoadingPlaceholder`: requires both axes to meet each

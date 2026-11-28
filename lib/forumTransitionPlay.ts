@@ -74,7 +74,7 @@ export function playForumContainerTransform(card: HTMLElement, origin: ForumOrig
     const rowCopy = crossFade?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(origin.id)}"]`);
     const rowBox = rowCopy ? rectOf(rowCopy) : null;
     const fromBox = rowBox && view ? visibleBox(rowBox, view) : null;
-    const incoming = fromBox && toBox && crossFade ? captureVisualClone(card, crossFade) : null;
+    const incoming = fromBox && toBox && crossFade ? captureVisualClone(card, crossFade, { keepImages: true }) : null;
     if (!rowCopy || !rowBox || !fromBox || !toBox || !incoming) {
       reveal(hidden);
       return;
@@ -146,7 +146,7 @@ export function playForumReturn(row: HTMLElement, origin: ForumOrigin): () => vo
   const fromBox = visibleBox(cardBox, view);
   /* A row the restored offset leaves off screen has nowhere to be flown to: the route's fade. */
   if (!fromBox || !rowShown) return () => {};
-  const incoming = captureVisualClone(row, crossFade);
+  const incoming = captureVisualClone(row, crossFade, { keepImages: true });
   if (!incoming) return () => {};
   const hidden: Hidden[] = [];
   const outgoing = cardCopy.cloneNode(true) as HTMLElement;

@@ -6,7 +6,7 @@ import { motionTier } from '@/lib/appearance';
 import { springTiming } from '@/lib/springTiming';
 import { insideConcealedPane } from '@/lib/tabPaneVisibility';
 import { dropMove, followersOf, markLayoutOwned, precedersOf, startMove } from '@/components/admin/tableMotion';
-import Skeleton from './Skeleton';
+import { PageLoadingIndicator } from './LoadingIndicator';
 import EmptyState from './EmptyState';
 import ErrorRetry from './ErrorRetry';
 
@@ -51,6 +51,7 @@ interface DataTableProps<T> {
    * when the empty body genuinely needs custom content.
    */
   empty?: string | ReactNode;
+  /** Retained for caller compatibility; loading renders one centred `PageLoadingIndicator` row. */
   skeletonRows?: number;
   className?: string;
   /** Renders an optional editor/details row immediately below its data row. */
@@ -191,8 +192,8 @@ const RETIRED = ['borderRadius', 'marginTop', 'marginBottom', 'height', 'pointer
  * on (`surface-container-low`); on the same step the rows were the panel, and only
  * the header was visible.
  *
- * Owns the loading state as row-shaped skeletons (a `{loading ? <Spinner/> : rows}`
- * ternary collapses the list to nothing and snaps it back).
+ * Owns the loading state as a centred `PageLoadingIndicator` row inside the grouped block
+ * (with a brief reveal delay so fast reads never flash an indicator before rows mount).
  *
  * **Rows come and go with presence** — `PresenceList`'s behaviour, on a table: a deleted row fades
  * where it was while the rows after it, and whatever follows the table, glide up into its place; an
@@ -560,7 +561,7 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
   }
 
   render() {
-    const { columns, loading = false, error, errorDetail, onRetry, empty, skeletonRows = 6, className = '', surface = 'panel' } = this.props;
+    const { columns, loading = false, error, errorDetail, onRetry, empty, className = '', surface = 'panel' } = this.props;
     const rowTone = surface === 'dialog' ? 'bg-surface-container-highest' : 'bg-surface-container';
     const headerTone = surface === 'dialog' ? 'bg-surface-container' : 'bg-surface-container-high';
     const leading = columns.filter(isLeading);
@@ -712,42 +713,14 @@ export default class DataTable<T> extends Component<DataTableProps<T>, State<T>>
             )}
           </div>
 
-          {/* ---- Loading: rows in the row's own geometry ----
-               Each placeholder is laid out exactly as a row is — the same cells in the same
-               subgrid tracks when wide, the same wrapping heading/labelled pairs/actions when
-               narrow, the same padding and tone — so the list does not re-space when its rows
-               land. They sit directly in the container: wrapping them in a <div> would break
-               the `.m3-row` sibling chain and give the header row the "last row" corner. */}
-          {loading &&
-            Array.from({ length: skeletonRows }, (_, i) => (
-              <div
-                key={`skeleton-${i}`}
-                aria-hidden="true"
-                className={cn('m3-row p-4 @2xl/table:items-center', rowLayout, rowTone)}
-              >
-                {leading.length > 0 && (
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Skeleton className="size-5 rounded-xs" delay={i * 80} />
-                  </div>
-                )}
-                {heading && (
-                  <div className={cn('min-w-0', !leading.length && details.length > 0 && 'basis-full @2xl/table:basis-auto')}>
-                    <Skeleton className="h-5 w-32 max-w-full" delay={i * 80} />
-                  </div>
-                )}
-                {details.map((col, j) => (
-                  <div key={col.key} className="min-w-0">
-                    <Skeleton className="h-5 w-20 max-w-full" delay={i * 80 + 40 + j * 20} />
-                  </div>
-                ))}
-                {actions.length > 0 && (
-                  <div className="ml-auto flex items-center justify-end gap-2 @2xl/table:ml-0 @2xl/table:justify-self-end">
-                    <Skeleton className="size-8 rounded-full" delay={i * 80 + 60} />
-                    <Skeleton className="size-8 rounded-full" delay={i * 80 + 80} />
-                  </div>
-                )}
-              </div>
-            ))}
+          {/* ---- Loading: one centred indicator row inside the grouped block ----
+               Row count and heights are unknown before the read lands, so the table keeps its
+               fixed header track and shows a single calm indicator row until real rows arrive. */}
+          {loading && (
+            <div className={cn('m3-row @2xl/table:col-span-full', rowTone)}>
+              <PageLoadingIndicator size="inline" indicatorSize="md" delay={120} label="正在加载列表…" className="min-h-40" />
+            </div>
+          )}
 
           {/* ---- The failure, the empty row and the rows: one continuous cut block,
                like a settings list, whose entries come and go with presence. ---- */}

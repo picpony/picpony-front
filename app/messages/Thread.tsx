@@ -8,8 +8,8 @@ import Button from '@/components/Button';
 import ChatBubble, { ChatRun, markRuns } from '@/components/ChatBubble';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ScrollArea from '@/components/ScrollArea';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
 import Spinner from '@/components/Spinner';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatClock, formatDate, formatDayLabel, formatDateTime, parseBackendTime } from '@/lib/format';
@@ -338,8 +338,8 @@ export default function Thread({
               ) : null}
             </div>
           )}
-          {/* Short conversations sit at the bottom; empty and error states centre in the pane. */}
-          <div className={cn('flex flex-col', entries.length > 0 || loading ? 'mt-auto' : 'my-auto')}>{body}</div>
+          {/* Short conversations sit at the bottom; loading, empty and error states centre in the pane. */}
+          <div className={cn('flex flex-col', entries.length > 0 ? 'mt-auto' : 'my-auto')}>{body}</div>
           <div ref={endRef} aria-hidden="true" />
         </div>
       </ScrollArea>
@@ -409,26 +409,7 @@ function deliveryStatus(
  * column — so its arrival cannot move the footer, and holding the footer back would only make
  * it blink when a conversation is opened.
  */
-const THREAD_SKELETON_RUNS = [
-  { own: false, widths: ['w-40', 'w-24'] },
-  { own: true, widths: ['w-32'] },
-  { own: false, widths: ['w-52'] },
-  { own: true, widths: ['w-20'] },
-] as const;
-
+/** Placeholder while conversation message count and bubble heights are unknown. */
 export function ThreadSkeleton() {
-  return (
-    <div className="flex flex-1 flex-col justify-end gap-3" aria-hidden="true">
-      {THREAD_SKELETON_RUNS.map((run, i) => (
-        <div key={i} className={cn('flex items-start gap-2', run.own ? 'flex-row-reverse' : 'flex-row')}>
-          <SkeletonCircle size={32} delay={i * 80} />
-          <div className={cn('flex flex-1 flex-col gap-0.5', run.own ? 'items-end' : 'items-start')}>
-            {run.widths.map((width, j) => (
-              <Skeleton key={width} className={cn('h-10 rounded-lg', width)} delay={i * 80 + 40 + j * 40} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载消息…" className="min-h-48" />;
 }

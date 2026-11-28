@@ -372,7 +372,7 @@ test('BadgeEquipDialog updates sessionUser cache after equipping badges', async 
     './Modal': { default: 'Modal' },
     './Button': { default: 'Button' },
     './Checkbox': { default: 'Checkbox' },
-    './Skeleton': { default: 'Skeleton' },
+    './LoadingIndicator': { PageLoadingIndicator: 'PageLoadingIndicator' },
     './ErrorRetry': { default: 'ErrorRetry' },
     './EmptyState': { default: 'EmptyState' },
     './UserBadge': { default: 'UserBadge' },

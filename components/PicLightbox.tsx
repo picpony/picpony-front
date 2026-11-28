@@ -12,7 +12,7 @@ import type { ControllerRef, Slide, SlideshowRef } from 'yet-another-react-light
 /* The library's stylesheet travels with this module — it is only ever needed once the viewer is
    open, and this module is the lazily loaded one. */
 import 'yet-another-react-lightbox/styles.css';
-import Spinner from '@/components/Spinner';
+import LoadingIndicator from '@/components/LoadingIndicator';
 import { MOTION_SPEED_SCALE, useMotionScale } from '@/lib/appearance';
 import { COMPONENT_SPRING_MS, SPRING_MS, springLinear } from '@/lib/spring';
 import { useHistoryLayer } from '@/lib/historyLayers';
@@ -252,14 +252,11 @@ export default function PicLightbox({
       carousel={{
         finite: true,
       }}
-      /* Replace the library's own loading ring with `Spinner` like everything
-         else; `tone="inherit"` because this sits on media-stage whose ink is
-         `on-media`, which neither other tone names. */
+      /* Replace the library's own loading ring with the M3E media loading indicator (`on-media`
+         tone over the dark media stage) so fullscreen media loading matches detail and card wells. */
       render={{
         iconLoading: () => (
-          <span className="text-on-media">
-            <Spinner size="lg" tone="inherit" track />
-          </span>
+          <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />
         ),
         /* One picture has nowhere to go: the library would still draw both arrows,
            disabled, at the two edges (R4-034). */

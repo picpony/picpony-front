@@ -10,7 +10,7 @@ import Card from '@/components/Card';
 import PresenceList from '@/components/PresenceList';
 import Chip from '@/components/Chip';
 import CheckGlyph from '@/components/CheckGlyph';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Pagination from '@/components/Pagination';
 import ErrorRetry from '@/components/ErrorRetry';
 import EmptyState from '@/components/EmptyState';
@@ -335,19 +335,7 @@ function Lineup({
   );
 }
 
-/** The loaded rows' shapes: the status row, then the chooser with its toolbar and one page of cards. */
+/** Placeholder while the dynamic desktop pony catalog and user selection load. */
 function ChooserSkeleton() {
-  return <div aria-busy="true" aria-label="正在加载桌面小马" data-page-loading="">
-    <div className={ROW_STACK_CLASS}>
-      <div className="min-w-0"><Skeleton className="h-5 w-24" /><Skeleton className="mt-1.5 h-4 w-48 max-w-full" /></div>
-      <div className={styles.lineup}>{Array.from({ length: MAX_PONIES }, (_, i) => <Skeleton key={i} className="aspect-square w-full rounded-md" />)}</div>
-    </div>
-    <div className={cn(ROW_STACK_CLASS, styles.chooser)}>
-      <div className="flex items-center gap-3"><Skeleton className="h-10 min-w-0 flex-1 rounded-full" /><Skeleton className="h-8 w-20 rounded-sm" /></div>
-      <Skeleton className="h-5 w-16" />
-      <div className={styles.grid}>{Array.from({ length: PONY_PAGE_SIZE }, (_, i) => <div key={i} className={cn(styles.choice, 'rounded-md bg-surface-container-highest p-3')}>
-        <div className={styles.preview}><Skeleton className="size-16" /></div><Skeleton className="h-5 w-24 max-w-full" /><Skeleton className="h-4 w-12 max-w-full" />
-      </div>)}</div>
-    </div>
-  </div>;
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载桌面小马…" />;
 }

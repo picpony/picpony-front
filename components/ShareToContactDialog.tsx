@@ -11,7 +11,7 @@ import FadeInImage from './FadeInImage';
 import Modal from './Modal';
 import SearchInput from './SearchInput';
 import SignInRequired from './SignInRequired';
-import Skeleton, { SkeletonCircle } from './Skeleton';
+import { PageLoadingIndicator } from './LoadingIndicator';
 import Spinner from './Spinner';
 import { showToast } from './Toast';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -319,15 +319,5 @@ function SearchStatus({
 }
 
 function PersonRowsSkeleton() {
-  return (
-    <div className="flex flex-col gap-0.5" aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex min-h-14 items-center gap-3 px-3 py-2">
-          <SkeletonCircle size={40} delay={i * 80} />
-          <Skeleton className="h-4 w-1/2" delay={i * 80 + 40} />
-          <SkeletonCircle size={20} className="ms-auto" delay={i * 80 + 80} />
-        </div>
-      ))}
-    </div>
-  );
+  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载联系人…" className="min-h-36" />;
 }

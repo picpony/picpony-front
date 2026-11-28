@@ -2,7 +2,7 @@
 
 import Chip from '@/components/Chip';
 import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import type { QuickTagGroup } from '@/lib/api/semantic';
 import { useResource } from '@/lib/resource';
@@ -51,16 +51,7 @@ export default function UploadQuickTags({
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
         ) : (
-          <div className="space-y-3" aria-hidden="true">
-            {GROUPS.map(({ group }, row) => (
-              <div key={group} className="flex flex-wrap items-center gap-2">
-                <Skeleton className="h-4 w-8" delay={row * 90} />
-                {Array.from({ length: 4 }, (_, index) => (
-                  <Skeleton key={index} className="h-8 w-16 rounded-sm pointer-coarse:my-1" delay={row * 90 + index * 40} />
-                ))}
-              </div>
-            ))}
-          </div>
+          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载快捷标签…" className="min-h-28" />
         )
       ) : (
         <div className="space-y-3">

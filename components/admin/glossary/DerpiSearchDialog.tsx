@@ -9,7 +9,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import FollowHeight from '@/components/FollowHeight';
 import { Input } from '@/components/Input';
 import Modal from '@/components/Modal';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { SKIP, useResource } from '@/lib/resource';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatCount } from '@/lib/format';
@@ -86,16 +86,7 @@ export default function DerpiSearchDialog({
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
           ) : read.data === undefined ? (
-            <div aria-hidden="true">
-              {[0, 1, 2, 3].map((index) => (
-                <div key={index} className="m3-row flex items-center gap-3 bg-surface-container-highest p-3">
-                  <Skeleton className="h-5 w-16 shrink-0 rounded-xs" delay={index * 80} />
-                  <Skeleton className="h-5 w-40 max-w-full flex-1" delay={index * 80 + 40} />
-                  <Skeleton className="h-4.5 w-16 shrink-0" delay={index * 80 + 60} />
-                  <Skeleton className="h-8 w-18 shrink-0 rounded-full" delay={index * 80 + 80} />
-                </div>
-              ))}
-            </div>
+            <PageLoadingIndicator size="inline" indicatorSize="md" label="正在搜索原站标签…" className="min-h-36" />
           ) : rows.length === 0 ? (
             <EmptyState size="inline" title="原站没有匹配的标签" />
           ) : (

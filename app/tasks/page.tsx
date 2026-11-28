@@ -7,6 +7,7 @@ import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
 import Card from '@/components/Card';
 import ErrorRetry from '@/components/ErrorRetry';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import PageHeader from '@/components/PageHeader';
 import ProgressBar from '@/components/ProgressBar';
 import SignInRequired from '@/components/SignInRequired';
@@ -310,7 +311,7 @@ export default function TasksPage() {
 
   const read = useResource(tasks, token ? { token } : SKIP);
   const doc = read.data;
-  const loading = !ready || (Boolean(token) && doc === undefined && read.error === undefined);
+  const loading = ready && Boolean(token) && doc === undefined && read.error === undefined;
   const claimedNow = receipt && receipt.document === doc ? receipt.ids : null;
 
   const session = useMemo(() => ({
@@ -358,7 +359,16 @@ export default function TasksPage() {
 
   const header = <PageHeader title="等级与任务" />;
 
-  if (ready && !token) {
+  if (!ready) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        {header}
+        <PageLoadingIndicator size="page" holdFooter delay={160} label="正在读取登录状态…" />
+      </div>
+    );
+  }
+
+  if (!token) {
     return (
       <div className="mx-auto max-w-4xl">
         {header}

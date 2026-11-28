@@ -8,7 +8,7 @@ import SectionHeading from '@/components/SectionHeading';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import ForumAuthor from '@/components/forum/ForumAuthor';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { formatCompactDateTime, formatDate, formatDateTime } from '@/lib/format';
@@ -95,24 +95,9 @@ const ReplyRow = memo(function ReplyRow({
   );
 });
 
-/** The replies' first-load placeholder, in the row's own geometry. */
-function RepliesSkeleton({ rows }: { rows: number }) {
-  return (
-    <div data-page-loading="" aria-hidden="true">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="m3-row flex gap-3 bg-surface-container-low p-3 sm:p-4">
-          <SkeletonCircle size={40} delay={i * 80} />
-          <div className="min-w-0 flex-1">
-            <div className="flex h-8 items-center">
-              <Skeleton className="h-4 w-28" delay={i * 80 + 40} />
-            </div>
-            <Skeleton className="h-3 w-20" delay={i * 80 + 60} />
-            <Skeleton className="mt-3 h-4 w-11/12" delay={i * 80 + 80} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+/** Placeholder while reply count and body heights are unknown. */
+function RepliesSkeleton() {
+  return <PageLoadingIndicator size="inline" indicatorSize="md" holdFooter label="正在加载回复…" className="min-h-36" />;
 }
 
 interface ThreadCommentsProps {
@@ -151,7 +136,6 @@ export default function ThreadComments({
   deletingId,
   onReply,
   onDelete,
-  expected,
 }: ThreadCommentsProps) {
   const now = useNow();
   const failed = error !== undefined && error !== null;
@@ -169,7 +153,7 @@ export default function ThreadComments({
         </div>
       )}
       {comments === undefined ? (
-        !failed && <RepliesSkeleton rows={Math.min(Math.max(expected, 1), 5)} />
+        !failed && <RepliesSkeleton />
       ) : comments.length === 0 ? (
         <EmptyState size="inline" title="暂无回复" />
       ) : (

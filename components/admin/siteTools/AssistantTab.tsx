@@ -200,13 +200,14 @@ function Providers({
 function AssistantTab({ token }: AdminPanelProps) {
   const providers = useAdminQuery(assistantQuery, token);
   const quota = useAdminQuery(quotaQuery, token);
-  /* Coalesce initial dual loading into a single centred indicator so opening 彩彩 AI never stacks
-     two spinning loaders vertically; once either settles, each section reports its own state. */
-  const bothLoading = providers.loading && quota.loading;
+  /* Hold initial dual loading behind a single centred indicator until both parallel reads settle
+     (data or error), so whichever answers first never paints above the other's indicator and
+     shoves it downward mid-load. Refreshes keep `loading` false and never hide settled content. */
+  const initialLoading = providers.loading || quota.loading;
   return <div className="space-y-6">
     <SectionHeader section="ai-assistant" onRefresh={() => { providers.refresh(); quota.refresh(); }} isLoading={providers.refreshing || quota.refreshing} />
-    {bothLoading ? (
-      <PageLoadingIndicator size="pane" holdFooter label="正在加载彩彩 AI 设置…" className="min-h-60" />
+    {initialLoading ? (
+      <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载彩彩 AI 设置…" className="min-h-60" />
     ) : (
       <>
         <Providers token={token} read={providers} />

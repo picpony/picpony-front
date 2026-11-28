@@ -192,23 +192,30 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
     const handoffTransform = groupEl2.getAttribute('transform');
     assert.ok(handoffTransform && handoffTransform !== 'rotate(0.0 50 50)', `handoff kept phase (${handoffTransform})`);
 
-    // 4. Opening an overlay sets `inert` on [data-app-root]: rAF stops; closing clears `inert`: rAF wakes!
+    // 4. Opening an overlay sets `inert` on [data-app-root]: rAF stops; closing clears `inert`
+    // even after > 120 ms and resumes from the paused morph phase without snapping back to 0°.
+    const transformBeforeInert = groupEl2.getAttribute('transform');
     appRoot.setAttribute('inert', '');
     for (const obs of observers) obs.trigger(appRoot);
     assert.deepEqual(indicator.getLoadingIndicatorStats(), { subscribers: 1, active: 0, running: false });
     assert.equal(rafCallbacks.size, 0, 'inert ancestor pauses rAF immediately');
 
-    now = 1390;
+    now = 3390; // > CLOCK_RESET_IDLE_MS (120 ms) while overlay was open
     appRoot.removeAttribute('inert');
     for (const obs of observers) obs.trigger(appRoot);
     assert.deepEqual(indicator.getLoadingIndicatorStats(), { subscribers: 1, active: 1, running: true });
     assert.equal(rafCallbacks.size, 1, 'removing inert wakes rAF immediately');
+    assert.equal(
+      groupEl2.getAttribute('transform'),
+      transformBeforeInert,
+      'resuming a paused live indicator continues smoothly from its paused phase instead of snapping to 0°',
+    );
 
     // Same for `[hidden]` toggling on an ancestor.
     appRoot.setAttribute('hidden', '');
     for (const obs of observers) obs.trigger(appRoot);
     assert.equal(indicator.getLoadingIndicatorStats().running, false);
-    now = 1430;
+    now = 3430;
     appRoot.removeAttribute('hidden');
     for (const obs of observers) obs.trigger(appRoot);
     assert.equal(indicator.getLoadingIndicatorStats().running, true);
@@ -301,6 +308,23 @@ test('shared clock suspends and wakes cleanly across concealed panes, inert/hidd
       assert.equal(hostB.hasAttribute('data-m3e-offscreen'), true);
       assert.deepEqual(indicator.getLoadingIndicatorStats(), { subscribers: 2, active: 1, running: true });
       assert.ok(groupA.getAttribute('transform')?.startsWith('rotate('));
+
+      // Advance active clock so hostA moves off 0°, then mount an observed handoff sibling:
+      // it must pre-paint the live morph phase on frame 0 before IntersectionObserver fires.
+      now = 15325;
+      for (const [id, cb] of [...rafCallbacks.entries()]) {
+        rafCallbacks.delete(id);
+        cb(now);
+      }
+      const liveTransform = groupA.getAttribute('transform');
+      assert.ok(liveTransform && liveTransform !== 'rotate(0.0 50 50)');
+      const hostC = new FakeElement({}, scroller);
+      const pathC = new FakeElement({}, hostC);
+      const groupC = new FakeElement({}, hostC);
+      const unsubC = indicator.subscribeLoadingIndicator({ path: pathC, group: groupC, observe: hostC });
+      assert.equal(groupC.getAttribute('transform'), liveTransform, 'observed handoff pre-paints live phase on frame 0');
+      assert.equal(hostC.hasAttribute('data-m3e-offscreen'), true, 'still waits for IO before marking inView');
+      unsubC();
 
       // Scrolling hostA back out pauses rAF and restores data-m3e-offscreen.
       ioInstances[0].emit([{ target: hostA, isIntersecting: false }]);
@@ -408,14 +432,29 @@ test('LoadingIndicator, MediaLoadingPlaceholder and PageLoadingIndicator honour 
   assert.match(settledHtml, /opacity-0/);
   assert.match(settledHtml, /m3e-loading-paused/);
 
-  // Immediate PageLoadingIndicator announces label, applies default floor, and holds footer on SSR.
+  // Settled MediaLoadingPlaceholder without instantHide uses split dismissal class and scales down gently.
+  const smoothSettledHtml = renderToStaticMarkup(
+    React.createElement(MediaLoadingPlaceholder, { settled: true }),
+  );
+  assert.match(smoothSettledHtml, /m3e-loading-dismiss/);
+  assert.match(smoothSettledHtml, /scale-90/);
+  assert.match(smoothSettledHtml, /opacity-0/);
+
+  // Immediate PageLoadingIndicator renders its visible loading remark, defaults `page` to `lg` (64dp), and holds footer on SSR.
   const pageHtml = renderToStaticMarkup(
     React.createElement(PageLoadingIndicator, { size: 'page', holdFooter: true, label: '正在加载页面…' }),
   );
   assert.match(pageHtml, /role="status"/);
   assert.match(pageHtml, /data-page-loading=""/);
   assert.match(pageHtml, /min-h-\[50dvh\]/);
-  assert.match(pageHtml, /正在加载页面…/);
+  assert.match(pageHtml, /size-16/);
+  assert.match(pageHtml, /<p[^>]*text-body-m[^>]*>正在加载页面…<\/p>/);
+
+  // `showLabel: false` keeps accessible speech in `sr-only` for ultra-narrow rails.
+  const compactRailHtml = renderToStaticMarkup(
+    React.createElement(PageLoadingIndicator, { size: 'inline', showLabel: false, label: '正在加载联系人…' }),
+  );
+  assert.match(compactRailHtml, /class="sr-only">正在加载联系人…<\/span>/);
 
   // Caller `min-h-*` overrides default `min-h-[32dvh]` cleanly (no Tailwind v4 arbitrary-utility conflict).
   const overrideMinH = renderToStaticMarkup(
@@ -424,13 +463,66 @@ test('LoadingIndicator, MediaLoadingPlaceholder and PageLoadingIndicator honour 
   assert.match(overrideMinH, /\bmin-h-80\b/);
   assert.doesNotMatch(overrideMinH, /min-h-\[32dvh\]/);
 
-  // Delayed PageLoadingIndicator holds layout box and footer while withholding premature live-region speech and glyph flash.
+  // Delayed PageLoadingIndicator holds layout box, remark line height and footer while withholding premature live-region speech and glyph flash.
   const delayedPageHtml = renderToStaticMarkup(
     React.createElement(PageLoadingIndicator, { size: 'pane', holdFooter: true, delay: 160, label: '正在加载设置…' }),
   );
   assert.match(delayedPageHtml, /role="status"/);
   assert.match(delayedPageHtml, /data-page-loading=""/);
   assert.doesNotMatch(delayedPageHtml, /正在加载设置…/);
+  assert.match(delayedPageHtml, /m3e-loading-reveal/);
+  assert.match(delayedPageHtml, /scale-90/);
   assert.match(delayedPageHtml, /opacity-0/);
   assert.match(delayedPageHtml, /m3e-loading-paused/);
+  assert.match(delayedPageHtml, /<p aria-hidden="true"[^>]*opacity-0/);
+
+  // Skeleton emits zero-lag negative phase custom property (`--skeleton-delay`) and `skeleton-overlay` for overlay sweeps.
+  const skeletonMod = loadComponent('components/Skeleton.tsx', {
+    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
+  });
+  const Skeleton = skeletonMod.default;
+  const staggeredSkeletonHtml = renderToStaticMarkup(
+    React.createElement(Skeleton, { delay: 1720, className: 'h-4 w-24' }),
+  );
+  assert.match(staggeredSkeletonHtml, /--skeleton-delay:120ms/);
+  assert.match(staggeredSkeletonHtml, /bg-surface-container-high/);
+
+  const overlaySkeletonHtml = renderToStaticMarkup(
+    React.createElement(Skeleton, { variant: 'overlay', className: 'absolute inset-0' }),
+  );
+  assert.match(overlaySkeletonHtml, /skeleton-overlay/);
+  assert.doesNotMatch(overlaySkeletonHtml, /bg-surface-container-high/);
+
+  // ImageGridSkeleton renders one centred large indicator with a visible remark (no guessed masonry tiles),
+  // and keeps only slot #0's known cover alongside the indicator when `seedCover` is provided.
+  const gridSkeletonMod = loadComponent('components/ImageGridSkeleton.tsx', {
+    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
+    '@/lib/masonry': {
+      clampedCardAspect: () => 0.75,
+      MASONRY_CARD_SIZES: '200px',
+      MASONRY_MAX_RATIO: 2.2,
+      masonryLayout: (items) => ({ grid: {}, items: items.map(() => ({})) }),
+      noteSkeletonReplaced: () => {},
+    },
+    '@/components/FadeInImage': { default: ({ src }) => React.createElement('img', { src, alt: '' }) },
+    '@/components/LoadingIndicator': mod,
+  });
+  const ImageGridSkeleton = gridSkeletonMod.default;
+  const gridHtml = renderToStaticMarkup(React.createElement(ImageGridSkeleton, { count: 50 }));
+  assert.match(gridHtml, /data-grid-loading=""/);
+  assert.match(gridHtml, /data-page-loading=""/);
+  assert.match(gridHtml, /size-16/);
+  assert.match(gridHtml, /正在加载图片…/);
+  assert.doesNotMatch(gridHtml, /data-grid-placeholder/);
+  assert.doesNotMatch(gridHtml, /\bskeleton\b/);
+
+  const seededGridHtml = renderToStaticMarkup(
+    React.createElement(ImageGridSkeleton, {
+      count: 50,
+      seedCover: { id: 42, src: 'https://example.invalid/42.png', width: 1600, height: 1200, animated: false },
+    }),
+  );
+  assert.match(seededGridHtml, /data-folder-seed-cover="42"/);
+  assert.match(seededGridHtml, /正在加载图片…/);
+  assert.doesNotMatch(seededGridHtml, /data-grid-placeholder/);
 });

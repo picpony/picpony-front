@@ -88,13 +88,8 @@ export default function PrivacyPane({ token, active }: { token: string; active: 
   } else if (!space.images) {
     face = (
       <div data-page-loading="">
-        <div className="mb-4 flex min-h-10 items-center justify-between gap-4" aria-hidden="true">
+        <div className="mb-4 flex min-h-10 items-center" aria-hidden="true">
           <Skeleton className="h-4 w-20" />
-          <div className="flex shrink-0 items-center gap-2">
-            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
-            <Skeleton className="h-10 w-10 rounded-full sm:w-20" />
-            <Skeleton className="size-10 rounded-full" />
-          </div>
         </div>
         <ImageGridSkeleton count={FAVE_PAGE_SIZE} entrance={false} />
       </div>

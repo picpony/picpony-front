@@ -11,7 +11,7 @@ import ErrorRetry from '@/components/ErrorRetry';
 import { Input } from '@/components/Input';
 import PresenceList from '@/components/PresenceList';
 import SectionHeading from '@/components/SectionHeading';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
@@ -174,9 +174,11 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
       </AdminNote>
       {read.error && !read.data ? (
         <ErrorRetry size="pane" {...retryError('屏蔽标签加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} />
+      ) : !read.data ? (
+        <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载屏蔽标签…" className="min-h-60" />
       ) : (
         <div className="space-y-4">
-          {BLOCK_FILTER_KEYS.map((key, index) => {
+          {BLOCK_FILTER_KEYS.map((key) => {
             const tags = groups[key] ?? [];
             const open = adding === key;
             const mounted = open || closing?.key === key;
@@ -196,7 +198,6 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                         icon={<MdAdd />}
                         aria-expanded={open}
                         aria-controls={collapseId}
-                        disabled={!read.data}
                         onClick={() => toggleAdding(key)}
                       >
                         添加标签
@@ -248,35 +249,27 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                     )}
                   </Collapse>
                 </div>
-                {!read.data ? (
-                  <div className="flex flex-wrap gap-2" aria-hidden="true">
-                    {[64, 88, 72, 96, 56].map((width, chip) => (
-                      <Skeleton key={chip} className="h-8 rounded-sm" style={{ width }} delay={index * 90 + chip * 40} />
-                    ))}
-                  </div>
-                ) : (
-                  <PresenceList items={tags} getKey={(tag) => tag.id} variant="grid">
-                    {(entries, ref) =>
-                      entries.length === 0 ? (
-                        <EmptyState size="inline" title="暂无标签" />
-                      ) : (
-                        <ul ref={ref} className="relative flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
-                          {entries.map(({ item: tag, key: entryKey, leaving }) => (
-                            <li key={entryKey} data-presence-key={entryKey}>
-                              <Chip
-                                disabled={leaving || removeMutation.pendingKeys.has(tag.id)}
-                                onRemove={() => remove(key, tag)}
-                                removeLabel={`从「${RULES[key].name}」中移除 ${tag.tag_name}`}
-                              >
-                                {tag.tag_name}
-                              </Chip>
-                            </li>
-                          ))}
-                        </ul>
-                      )
-                    }
-                  </PresenceList>
-                )}
+                <PresenceList items={tags} getKey={(tag) => tag.id} variant="grid">
+                  {(entries, ref) =>
+                    entries.length === 0 ? (
+                      <EmptyState size="inline" title="暂无标签" />
+                    ) : (
+                      <ul ref={ref} className="relative flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
+                        {entries.map(({ item: tag, key: entryKey, leaving }) => (
+                          <li key={entryKey} data-presence-key={entryKey}>
+                            <Chip
+                              disabled={leaving || removeMutation.pendingKeys.has(tag.id)}
+                              onRemove={() => remove(key, tag)}
+                              removeLabel={`从「${RULES[key].name}」中移除 ${tag.tag_name}`}
+                            >
+                              {tag.tag_name}
+                            </Chip>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  }
+                </PresenceList>
               </Card>
             );
           })}

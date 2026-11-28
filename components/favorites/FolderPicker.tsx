@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Button from '@/components/Button';
 import ErrorRetry from '@/components/ErrorRetry';
-import Skeleton from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { showToast } from '@/components/Toast';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveFolders, faveIds } from '@/lib/resources';
@@ -162,15 +162,7 @@ export default function FolderPicker({
         />
       ) : !ready || !folders ? (
         <>
-          <ul className="flex flex-col" aria-hidden="true">
-            {Array.from({ length: 3 }, (_, row) => (
-              <li key={row} className="flex min-h-12 items-center gap-3">
-                <Skeleton className="size-4.5 rounded-xs" />
-                <Skeleton className="h-4 flex-1" />
-                <Skeleton className="h-3.5 w-10" />
-              </li>
-            ))}
-          </ul>
+          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
           <NewFolderRow token={token} disabled onBusyChange={setCreating} onCreated={(folder) => toggle(folder.id, true)} />
         </>
       ) : (

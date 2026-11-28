@@ -5,7 +5,7 @@ import { MdMoreVert } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import IconButton from '@/components/IconButton';
 import Menu, { type MenuAction } from '@/components/Menu';
-import Skeleton, { SkeletonCircle } from '@/components/Skeleton';
+import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import { cn } from '@/lib/utils';
 
 /**
@@ -167,29 +167,7 @@ export function TagMarks({
   );
 }
 
-/** The list while it is read, row for row in the loaded list's geometry. */
-export function GroupRowsSkeleton({ control }: { control: 'switch' | 'button' }) {
-  return (
-    <div data-page-loading aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="m3-row bg-surface-container-low p-4">
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1 space-y-1.5 py-0.5">
-              <Skeleton className="h-5 w-36 max-w-full" delay={i * 90} />
-              <Skeleton className="h-4 w-24 max-w-full" delay={i * 90 + 40} />
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Skeleton className={cn('rounded-full', control === 'switch' ? 'h-8 w-13' : 'h-10 w-10 sm:w-24')} delay={i * 90 + 60} />
-              <SkeletonCircle size={40} delay={i * 90 + 80} />
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {['w-16', 'w-12', 'w-20', 'w-10'].map((width, j) => (
-              <Skeleton key={width} className={cn('h-5 rounded-xs', width)} delay={i * 90 + 100 + j * 30} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+/** Placeholder while the group list's row count and tag chip wrapping are unknown. */
+export function GroupRowsSkeleton() {
+  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载列表…" />;
 }

@@ -59,6 +59,7 @@ export function ReadState({
       <PageLoadingIndicator
         size="pane"
         holdFooter
+        delay={120}
         label={variant === 'table' ? '正在加载列表…' : '正在加载设置…'}
         className="min-h-60"
       />
