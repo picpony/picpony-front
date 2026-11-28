@@ -528,6 +528,11 @@ function prepareTabRun(
       primeWatch?.();
       panel.removeAttribute('data-tab-primed');
       suspendFloor(panel);
+      /* Release any enclosing `FollowHeight` prime hold synchronously before `commit()` writes
+         `scroller.scrollTop = next`, so a shorter held height never clamps a restored offset. */
+      if (typeof CustomEvent === 'function') {
+        panel.dispatchEvent(new CustomEvent('picpony:tab-play', { bubbles: true, detail: { scrollTop: next } }));
+      }
       commit();
       go();
       handle.play(offsetY);

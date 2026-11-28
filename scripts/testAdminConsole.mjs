@@ -585,60 +585,88 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
     observe() {}
     disconnect() {}
   }
-  const makeNode = (height, attrs = {}) => ({
-    _height: height,
-    _attrs: new Set(
-      Object.entries(attrs)
-        .filter(([, v]) => v)
-        .map(([k]) => k),
-    ),
-    style: { height: '', clipPath: '' },
-    parentElement: { _minHeight: 552, _pad: 0 },
-    getBoundingClientRect() {
-      const parsed = parseFloat(this.style.height);
-      return { height: Number.isFinite(parsed) ? parsed : this._height };
-    },
-    setAttribute(name) {
-      this._attrs.add(name);
-    },
-    removeAttribute(name) {
-      this._attrs.delete(name);
-    },
-    hasAttribute(name) {
-      return this._attrs.has(name);
-    },
-    querySelector(sel) {
-      if (sel === '[data-tab-primed]') return this._attrs.has('data-tab-primed') ? this : null;
-      if (sel === '[data-tab-pane-leaving]') return this._attrs.has('data-tab-pane-leaving') ? this : null;
-      if (sel === '[data-layout-owned]') return null;
-      return null;
-    },
-    querySelectorAll(sel) {
-      if (sel === '[data-page-loading]')
-        return this._attrs.has('data-page-loading') ? [{ checkVisibility: () => true }] : [];
-      return [];
-    },
-    animate(keyframes) {
-      let resolveFinish;
-      const finished = new Promise((r) => {
-        resolveFinish = r;
-      });
-      const anim = {
-        keyframes,
-        cancelled: false,
-        cancel() {
-          this.cancelled = true;
-          resolveFinish();
-        },
-        finish() {
-          resolveFinish();
-        },
-        finished,
-      };
-      animations.push(anim);
-      return anim;
-    },
-  });
+  const makeNode = (height, attrs = {}, opts = {}) => {
+    const listeners = new Map();
+    const scroller = opts.scroller ?? null;
+    const parentElement = opts.parentElement ?? { _minHeight: 552, _pad: 0 };
+    return {
+      _height: height,
+      _top: opts.top ?? 112,
+      _attrs: new Set(
+        Object.entries(attrs)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+      ),
+      style: { height: '', clipPath: '' },
+      parentElement,
+      get offsetHeight() {
+        const parsed = parseFloat(this.style.height);
+        return Number.isFinite(parsed) ? parsed : this._height;
+      },
+      getBoundingClientRect() {
+        const parsed = parseFloat(this.style.height);
+        const h = Number.isFinite(parsed) ? parsed : this._height;
+        const top = this._top - (scroller?.scrollTop ?? 0);
+        return { top, bottom: top + h, height: h };
+      },
+      closest(sel) {
+        return sel === '.app-scroller' ? scroller : null;
+      },
+      addEventListener(type, fn) {
+        listeners.set(type, [...(listeners.get(type) ?? []), fn]);
+      },
+      removeEventListener(type, fn) {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((f) => f !== fn),
+        );
+      },
+      dispatchEvent(event) {
+        for (const fn of listeners.get(event.type) ?? []) fn(event);
+        return true;
+      },
+      setAttribute(name) {
+        this._attrs.add(name);
+      },
+      removeAttribute(name) {
+        this._attrs.delete(name);
+      },
+      hasAttribute(name) {
+        return this._attrs.has(name);
+      },
+      querySelector(sel) {
+        if (sel === '[data-tab-primed]') return this._attrs.has('data-tab-primed') ? this : null;
+        if (sel === '[data-tab-pane-leaving]') return this._attrs.has('data-tab-pane-leaving') ? this : null;
+        if (sel === '[data-layout-owned]') return null;
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel === '[data-page-loading]')
+          return this._attrs.has('data-page-loading') ? [{ checkVisibility: () => true }] : [];
+        return [];
+      },
+      animate(keyframes) {
+        let resolveFinish;
+        const finished = new Promise((r) => {
+          resolveFinish = r;
+        });
+        const anim = {
+          keyframes,
+          cancelled: false,
+          cancel() {
+            this.cancelled = true;
+            resolveFinish();
+          },
+          finish() {
+            resolveFinish();
+          },
+          finished,
+        };
+        animations.push(anim);
+        return anim;
+      },
+    };
+  };
   const source = readFileSync(path.join(root, 'components/FollowHeight.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     fileName: 'FollowHeight.tsx',
@@ -670,8 +698,8 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
       MutationObserver: FakeMutationObserver,
       getComputedStyle: (el) => ({
         minHeight: `${el._minHeight ?? 0}px`,
-        paddingTop: '0px',
-        paddingBottom: '0px',
+        paddingTop: `${(el._pad ?? 0) / 2}px`,
+        paddingBottom: `${(el._pad ?? 0) / 2}px`,
       }),
       requestAnimationFrame: (fn) => {
         frames.push(fn);
@@ -760,6 +788,63 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   while (frames.length) frames.shift()?.();
   assert.equal(animations.length, beforePrime + 1, 'playing a primed taller tab expands immediately');
   assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '552px' }, { height: '1100px' }]);
+  animations.at(-1).finish();
+  await Promise.resolve();
+
+  /* 5. Sibling sticky rail floor (`data-follow-height-floor`) prevents mid-card slicing between
+     tabs shorter than the rail, and starts taller growths from the rail's actual bottom edge. */
+  const railFloor = { getBoundingClientRect: () => ({ height: 860 }) };
+  const rowParent = {
+    _minHeight: 600,
+    _pad: 48,
+    parentElement: {
+      querySelectorAll: (sel) => (sel === ':scope > * > [data-follow-height-floor]' ? [railFloor] : []),
+    },
+    contains: () => false,
+  };
+  const scroller = {
+    scrollTop: 0,
+    clientHeight: 900,
+    get scrollHeight() {
+      return outerRail.offsetHeight + 160;
+    },
+    getBoundingClientRect: () => ({ top: 64, bottom: 964 }),
+  };
+  const fhRail = new FollowHeight({ track: true, children: null });
+  const outerRail = makeNode(400, {}, { parentElement: rowParent, scroller });
+  const innerRail = makeNode(400, {}, { parentElement: rowParent, scroller });
+  fhRail.setNode(outerRail);
+  fhRail.setInner(innerRail);
+  fhRail.componentDidMount();
+  const resizeRail = (h) => {
+    innerRail._height = h;
+    outerRail._height = h;
+    resizeCallbacks.at(-1)([{ borderBoxSize: [{ blockSize: h }], contentRect: { height: h } }]);
+  };
+  const beforeRail = animations.length;
+  /* Two tabs both under the 812px rail content floor (860 - 48): zero animation, zero clipping. */
+  resizeRail(750);
+  assert.equal(animations.length, beforeRail, 'tabs within the sticky rail floor never clip or animate');
+  /* Growing past the rail floor animates from 812px (true card bottom), never 552px. */
+  resizeRail(1300);
+  assert.equal(animations.length, beforeRail + 1);
+  assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '812px' }, { height: '1300px' }]);
+  animations.at(-1).finish();
+  await Promise.resolve();
+  /* Returning to a primed tall tab with restored scrollTop=500 releases synchronously via
+     `picpony:tab-play` without clamping below the restored viewport reach. */
+  resizeRail(400);
+  animations.at(-1).finish();
+  await Promise.resolve();
+  innerRail.setAttribute('data-tab-primed');
+  innerRail.setAttribute('data-tab-pane-leaving');
+  resizeRail(1500);
+  const beforePlay = animations.length;
+  innerRail.removeAttribute('data-tab-primed');
+  innerRail.dispatchEvent({ type: 'picpony:tab-play', detail: { scrollTop: 500 } });
+  assert.equal(animations.length, beforePlay + 1, 'picpony:tab-play releases primed hold synchronously');
+  const playStart = parseFloat(animations.at(-1).keyframes[0].height);
+  assert.ok(playStart >= 1350, `restored scroll floor (${playStart}px) keeps scrollTop=500 reachable`);
 });
 
 test('admin registry loads panels lazily without Suspense throttling and recovers on chunk failure', async () => {
@@ -861,12 +946,13 @@ test('admin registry loads panels lazily without Suspense throttling and recover
   assert.equal(ready.type, Loaded);
 });
 
-test('admin console renders TabPanes unclipped without FollowHeight and restores scroll only for sticky-rail top-level panels', () => {
+test('admin console wraps TabPanes in FollowHeight floored by the sticky rail and restores scroll for top-level panels', () => {
   const adminPage = readFileSync(path.join(root, 'app/admin/page.tsx'), 'utf8');
-  assert.doesNotMatch(
+  assert.match(adminPage, /<FollowHeight track>/, 'admin TabPanes uses FollowHeight track to avoid height snaps');
+  assert.match(
     adminPage,
-    /<FollowHeight\b/,
-    'admin TabPanes must not wrap in FollowHeight (which clips taller arriving tabs at min-h floor)',
+    /data-follow-height-floor=""/,
+    'wide sticky rail declares data-follow-height-floor so FollowHeight never slices at min-h-150',
   );
   assert.match(adminPage, /data-tab-window-sticky-rail=\{wide \? '' : undefined\}/);
 

@@ -5,6 +5,7 @@ import { MdDashboard, MdHome } from 'react-icons/md';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
+import FollowHeight from '@/components/FollowHeight';
 import ScrollArea from '@/components/ScrollArea';
 import SignInRequired from '@/components/SignInRequired';
 import { PageLoadingIndicator } from '@/components/LoadingIndicator';
@@ -213,7 +214,7 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
           className={wide ? 'w-48 shrink-0 border-r border-outline-variant' : 'min-w-0 border-b border-outline-variant'}
         >
           {wide ? (
-            <div className="sticky top-4 sm:top-6">
+            <div data-follow-height-floor="" className="sticky top-4 sm:top-6">
               <ScrollArea
                 axis="y"
                 viewportClassName="popover-scrollbar max-h-[calc(100dvh-var(--app-chrome-bottom,4rem)-2rem)] overflow-y-auto overscroll-contain sm:max-h-[calc(100dvh-var(--app-chrome-bottom,4rem)-3rem)]"
@@ -230,22 +231,25 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
             past the card. The sections' own sub-tabs slide past it too. On wide layouts the rail
             is sticky inside its own `ScrollArea`, so `data-tab-window-sticky-rail` lets top-level
             section switches restore each tab's own scroll offset (or open fresh sections at 0)
-            without disturbing the rail, while `<TabPanes>` renders panes unclipped at full height
-            per docs/transitions.md#height-and-footer. */}
+            without disturbing the rail, while `FollowHeight track` (floored by the sibling rail's
+            `data-follow-height-floor`) smoothly follows genuine height changes without mid-card
+            clipping or single-frame bottom-edge snaps. */}
         <div
           data-tab-window=""
           data-tab-window-sticky-rail={wide ? '' : undefined}
           className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}
         >
-          <TabPanes value={shown}>
-            {offered.map(({ id, component: Panel }) =>
-              visited.has(id) ? (
-                <TabPane key={id} value={id}>
-                  <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
-                </TabPane>
-              ) : null,
-            )}
-          </TabPanes>
+          <FollowHeight track>
+            <TabPanes value={shown}>
+              {offered.map(({ id, component: Panel }) =>
+                visited.has(id) ? (
+                  <TabPane key={id} value={id}>
+                    <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
+                  </TabPane>
+                ) : null,
+              )}
+            </TabPanes>
+          </FollowHeight>
         </div>
       </div>
     </ConsoleColumn>

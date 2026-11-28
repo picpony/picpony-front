@@ -114,19 +114,50 @@ function hasOwnedLayoutMotion(root: HTMLElement): boolean {
 }
 
 /**
- * The minimum content height the parent container already reserves (for example the admin panel's
- * `min-h-150` / `min-h-96` less its vertical padding). Clamping tracked endpoints against this
- * floor prevents slicing an arriving taller pane inside space the card already occupies, and skips
- * dead-zone animations between two short panes whose enclosing card never changes height.
+ * The minimum content height the parent container already reserves — both CSS `min-height`
+ * (`min-h-150` / `min-h-96`) and any sibling floor marker (`[data-follow-height-floor]`, such as
+ * the desktop admin console's sticky rail stretching its flex row). Clamping tracked endpoints
+ * against this true floor prevents slicing an arriving taller pane inside space the card already
+ * occupies, and skips dead-zone animations between two short panes whose enclosing card never
+ * changes height.
  */
 function parentFloorHeight(node: HTMLElement): number {
   const parent = node.parentElement;
   if (!parent || typeof getComputedStyle !== 'function') return 0;
   const style = getComputedStyle(parent);
-  const min = parseFloat(style.minHeight) || 0;
-  if (min <= 0) return 0;
+  let floor = parseFloat(style.minHeight) || 0;
+  const row = parent.parentElement;
+  if (row && typeof row.querySelectorAll === 'function') {
+    for (const marker of row.querySelectorAll<HTMLElement>(':scope > * > [data-follow-height-floor]')) {
+      if (typeof parent.contains === 'function' && parent.contains(marker)) continue;
+      floor = Math.max(floor, marker.getBoundingClientRect().height);
+    }
+  }
+  if (floor <= 0) return 0;
   const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-  return Math.max(0, min - pad);
+  return Math.max(0, floor - pad);
+}
+
+/**
+ * When a growing transition happens while the page scroller is scrolled down (for example returning
+ * to a previously scrolled tall tab), never pin the box shorter than what the active scroll offset
+ * needs — doing so would both clamp `scrollTop` back toward 0 and clip content visible in the
+ * viewport.
+ */
+function requiredScrollFloor(node: HTMLElement, targetScrollTop?: number): number {
+  if (typeof node.closest !== 'function') return 0;
+  const scroller = node.closest<HTMLElement>('.app-scroller');
+  if (!scroller) return 0;
+  const scrollTop = targetScrollTop ?? scroller.scrollTop;
+  if (scrollTop <= 0) return 0;
+  const scrollerRect = scroller.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+  /* `nodeRect.top` reflects `scroller.scrollTop`; adjust if a primed switch is about to scroll to `scrollTop`. */
+  const shift = scrollTop - scroller.scrollTop;
+  const visibleReach = Math.ceil(scrollerRect.bottom - (nodeRect.top - shift));
+  const outside = scroller.scrollHeight - node.offsetHeight;
+  const scrollNeed = Math.ceil(scrollTop + scroller.clientHeight - outside);
+  return Math.max(0, visibleReach, scrollNeed);
 }
 
 export default class FollowHeight extends Component<FollowHeightProps> {
@@ -149,6 +180,7 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
   private holdFrame = 0;
   private mutations: MutationObserver | null = null;
+  private stopTabPlay: (() => void) | null = null;
 
   componentDidMount() {
     if (this.props.track) this.observe();
@@ -194,8 +226,11 @@ export default class FollowHeight extends Component<FollowHeightProps> {
       this.settled = to;
       if (from === null) return this.stop();
       const floor = parentFloorHeight(node);
-      const start = Math.max(from, floor);
       const end = Math.max(to, floor);
+      let start = Math.max(from, floor);
+      if (end > start) {
+        start = Math.min(end, Math.max(start, requiredScrollFloor(node)));
+      }
       if (Math.abs(end - start) < 0.5) return this.stop();
       if (hasPrimedTab(inner) || (unsettled(inner) && end <= start)) {
         return this.hold(node, inner, start);
@@ -234,6 +269,17 @@ export default class FollowHeight extends Component<FollowHeightProps> {
       }, HOLD_MAX_MS);
     };
     armTimer();
+    if (typeof inner.addEventListener === 'function') {
+      /* Release a primed hold synchronously when the tab starts playing, before `tabs.ts` writes
+         any restored scroll offset so a shorter held height never clamps `scroller.scrollTop`. */
+      const onTabPlay = (event: Event) => {
+        if (!this.holding) return;
+        const targetScroll = (event as CustomEvent<{ scrollTop?: number }>).detail?.scrollTop;
+        if (this.shouldReleaseHold(inner)) this.release(targetScroll);
+      };
+      inner.addEventListener('picpony:tab-play', onTabPlay);
+      this.stopTabPlay = () => inner.removeEventListener('picpony:tab-play', onTabPlay);
+    }
     if (typeof MutationObserver === 'undefined') return;
     const mutations = new MutationObserver(() => {
       if (this.holdFrame) return;
@@ -257,18 +303,22 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   }
 
   /** The content has settled (or the hold ran out): spring from the held height to it. */
-  private release() {
+  private release(targetScrollTop?: number) {
     const node = this.node;
     const inner = this.inner;
     const wasHolding = this.holding;
     this.endHold();
     if (!wasHolding || !node || !inner) return;
     const floor = parentFloorHeight(node);
-    const from = Math.max(node.getBoundingClientRect().height, floor);
+    const held = Math.max(node.getBoundingClientRect().height, floor);
     node.style.height = '';
     const to = inner.getBoundingClientRect().height;
     this.settled = to;
     const end = Math.max(to, floor);
+    let from = held;
+    if (end > from) {
+      from = Math.min(end, Math.max(from, requiredScrollFloor(node, targetScrollTop)));
+    }
     if (Math.abs(end - from) < 0.5) {
       node.style.clipPath = '';
       return;
@@ -284,6 +334,8 @@ export default class FollowHeight extends Component<FollowHeightProps> {
     this.holdTimer = null;
     if (this.holdFrame) cancelAnimationFrame(this.holdFrame);
     this.holdFrame = 0;
+    this.stopTabPlay?.();
+    this.stopTabPlay = null;
     this.mutations?.disconnect();
     this.mutations = null;
   }
