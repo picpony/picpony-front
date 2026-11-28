@@ -7,8 +7,8 @@
 // because a tile shows a theme that is not the active one and every token is the active one's; a
 // file of its own, because only /settings draws tiles and `themeColors.ts` is in every route.
 
-import type { ThemeFace } from '../paletteSpec';
-import type { BuiltInPaletteId } from './themeColors';
+import type { FaceScheme, ThemeFace } from '../paletteSpec';
+import type { BuiltInPaletteId, SkyPhaseId } from './themeColors';
 
 export const THEME_FACES: Record<BuiltInPaletteId, ThemeFace> = {
   default: {
@@ -51,4 +51,15 @@ export const THEME_FACES: Record<BuiltInPaletteId, ThemeFace> = {
     light: { page: '#ffffff', pick: '#cce7f4', accent: '#1e819f', monoPage: '#ffffff', monoPick: '#fed9e6' },
     dark: { page: '#130c0f', pick: '#314a55', accent: '#7ed1f3', monoPage: '#130c0f', monoPick: '#593f4a' },
   },
+};
+
+export const SKY_FACES: Record<SkyPhaseId, FaceScheme> = {
+  midnight: { page: '#0c0f10', pick: '#3d4565', accent: '#d5bded', monoPage: '#090f11', monoPick: '#334a51' },
+  predawn: { page: '#100d11', pick: '#364955', accent: '#f9b3cc', monoPage: '#110d12', monoPick: '#514154' },
+  dawn: { page: '#ffffff', pick: '#d4e5ef', accent: '#a06b42', monoPage: '#ffffff', monoPick: '#fed9e6' },
+  morning: { page: '#ffffff', pick: '#f6dce6', accent: '#6476a3', monoPage: '#ffffff', monoPick: '#cde7eb' },
+  afternoon: { page: '#ffffff', pick: '#fbddc9', accent: '#547f77', monoPage: '#ffffff', monoPick: '#d7e3f7' },
+  sunset: { page: '#ffffff', pick: '#dfe1f7', accent: '#9e6684', monoPage: '#ffffff', monoPick: '#ffdbc9' },
+  twilight: { page: '#0d0e12', pick: '#5d3c55', accent: '#feb68f', monoPage: '#0d0e13', monoPick: '#434659' },
+  starlight: { page: '#0c0e11', pick: '#4b4163', accent: '#97d0d6', monoPage: '#0b0e12', monoPick: '#3b4857' },
 };

@@ -72,19 +72,28 @@ import ButtonLink from '@/components/ButtonLink';
    to the 关闭 tier's own behaviour until the chunk lands. See `lib/motionLazy.tsx`. */
 import {
   changeScheme,
+  changeSkyPhase,
   DrawerSwipe,
   setTabIntent,
   startTabTransition,
   warmMotion,
 } from '@/lib/motionLazy';
 import {
+  DEFAULT_PALETTE,
   MOTION_SPEED_SCALE,
+  SKY_PALETTE,
+  commitSkyPhase,
+  currentSkyPhase,
   recoverCustomPalette,
   refreshSystemMotion,
+  syncSkyPhaseCookies,
+  usePalette,
   useScheme,
   useSchemeSetting,
   type ColorScheme,
+  type PaletteId,
 } from '@/lib/appearance';
+import { msUntilNextSkyPhase, skyPhaseAt } from '@/lib/skyPalette';
 import { HANDOFF_MS } from '@/lib/motionTokens';
 import { SPRING_MS } from '@/lib/spring';
 import { heroOwnsScreen } from '@/lib/appScroller';
@@ -449,6 +458,7 @@ export default function AppLayout({
   overlay,
   initialSidebarMode,
   initialScheme,
+  initialPalette = DEFAULT_PALETTE,
   devBannerVisible,
   maintenance: initialMaintenance = false,
 }: {
@@ -458,6 +468,8 @@ export default function AppLayout({
   initialSidebarMode: SidebarMode;
   /** The scheme the server painted, from the cookie — the theme glyph's first render. */
   initialScheme: ColorScheme;
+  /** The palette the server painted, from the cookie — keeps scheme-lock chrome aligned on hydration. */
+  initialPalette?: PaletteId;
   /** Whether the server rendered the dev banner (its dismissal is mirrored into a cookie). */
   devBannerVisible: boolean;
   /** Maintenance is on and this device is rendered the app as staff: the chrome says so. */
@@ -473,6 +485,8 @@ export default function AppLayout({
      on `<html>`, all owned by `lib/appearance`; these hooks are a view onto that store, which
      is what keeps the app bar's glyph and /settings' dropdown from disagreeing. The server
      value is the cookie's scheme, so the glyph the server paints is the one hydration keeps. */
+  const palette = usePalette(initialPalette);
+  const skyLocked = palette === SKY_PALETTE;
   const schemeSetting = useSchemeSetting();
   const scheme = useScheme(initialScheme);
   const nextScheme: ColorScheme = scheme === 'dark' ? 'light' : 'dark';
@@ -698,14 +712,54 @@ export default function AppLayout({
 
   /* While following the system, an OS-level scheme flip re-runs the wipe — the one theme
      change reachable with no user input, which is why `circularReveal` consults
-     `heroOwnsScreen()` before freezing rendering. */
+     `heroOwnsScreen()` before freezing rendering. Suspended while 天空 owns the scheme. */
   useEffect(() => {
-    if (schemeSetting !== 'system') return;
+    if (schemeSetting !== 'system' || skyLocked) return;
     const mediaQuery = window.matchMedia(MEDIA.dark);
     const handler = () => changeScheme('system', getRevealOrigin());
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [schemeSetting, getRevealOrigin]);
+  }, [schemeSetting, skyLocked, getRevealOrigin]);
+
+  /* While 天空 is active, follow the local clock across hour boundaries and catch up on
+     tab return after sleep. */
+  useEffect(() => {
+    if (!skyLocked) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const syncNow = (animate: boolean) => {
+      const live = skyPhaseAt().id;
+      if (currentSkyPhase() !== live) {
+        if (animate && document.visibilityState === 'visible') {
+          changeSkyPhase(live, getRevealOrigin());
+        } else {
+          commitSkyPhase(live);
+        }
+      } else {
+        syncSkyPhaseCookies();
+      }
+    };
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        syncNow(true);
+        arm();
+      }, msUntilNextSkyPhase());
+    };
+    const onReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      syncNow(false);
+      arm();
+    };
+    syncNow(false);
+    arm();
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, [skyLocked, getRevealOrigin]);
 
   /* The same for the motion tier, the other `system`-resolved preference: without it,
      turning on the OS's reduce-motion setting changed nothing until a reload (the store
@@ -774,6 +828,7 @@ export default function AppLayout({
      relative to what is visible. 跟随系统 lives in /settings: here it made a three-way
      cycle over a two-way picture, where one press in three changed only the glyph. */
   const toggleScheme = () => {
+    if (skyLocked) return;
     setSwapTo(nextScheme);
     changeScheme(nextScheme, getRevealOrigin());
   };
@@ -1090,10 +1145,15 @@ export default function AppLayout({
               ref={themeButtonRef}
               variant="on-primary"
               size="md"
-              onClick={toggleScheme}
+              disabled={skyLocked}
+              onClick={skyLocked ? undefined : toggleScheme}
               /* States the scheme on screen and the one a press gives — the tooltip follows
-                 from the label. */
-              aria-label={`${SCHEME_LABEL[scheme]}，切换为${SCHEME_LABEL[nextScheme]}`}
+                 from the label. Disabled under 天空, where the time of day owns light/dark. */
+              aria-label={
+                skyLocked
+                  ? '天空配色下已禁用深浅切换，随时间自动变化'
+                  : `${SCHEME_LABEL[scheme]}，切换为${SCHEME_LABEL[nextScheme]}`
+              }
               className="ml-1 touch-size"
               icon={
                 <span

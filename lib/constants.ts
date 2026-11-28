@@ -194,6 +194,8 @@ export const COOKIE_KEYS = {
   spoilerTags: 'spoilerTags',
   sidebarCollapsed: 'sidebarCollapsed',
   palette: 'palette',
+  /** Active time-of-day phase (`SkyPhaseId`) while `palette` is `sky`, for SSR first paint. */
+  skyPhase: 'skyPhase',
   /**
    * The custom palette's spec (seed and 副色相, the storage key's format), so the server can
    * derive its declarations and put them in `<head>` before the first paint instead of

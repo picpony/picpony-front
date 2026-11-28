@@ -36,10 +36,18 @@ export type { MotionSpeed, MotionTier } from './motionPreferences';
 import {
   CUSTOM_PALETTE,
   DEFAULT_PALETTE,
+  DEFAULT_SKY_PHASE,
   PALETTES,
+  SKY_LABEL,
+  SKY_PALETTE,
+  SKY_PHASES,
   isPaletteId,
+  isSkyPhaseId,
   type PaletteId,
+  type SkyPhaseEntry,
+  type SkyPhaseId,
 } from './generated/themeColors';
+import { skyPhaseAt, skyPhaseEntry } from './skyPalette';
 import {
   formatCustomSpec,
   packTones,
@@ -56,8 +64,30 @@ import {
   type ThemeFace,
 } from './paletteSpec';
 
-export { CUSTOM_PALETTE, DEFAULT_PALETTE, PALETTES, packTones, unpackCustomTones };
-export type { AccentChoice, CustomSpec, CustomTones, FaceScheme, PaletteHues, PaletteId, PaletteTone, ThemeFace };
+export {
+  CUSTOM_PALETTE,
+  DEFAULT_PALETTE,
+  DEFAULT_SKY_PHASE,
+  PALETTES,
+  SKY_LABEL,
+  SKY_PALETTE,
+  SKY_PHASES,
+  isSkyPhaseId,
+  packTones,
+  unpackCustomTones,
+};
+export type {
+  AccentChoice,
+  CustomSpec,
+  CustomTones,
+  FaceScheme,
+  PaletteHues,
+  PaletteId,
+  PaletteTone,
+  SkyPhaseEntry,
+  SkyPhaseId,
+  ThemeFace,
+};
 
 export type ColorScheme = 'light' | 'dark';
 export type SchemeSetting = ColorScheme | 'system';
@@ -167,9 +197,20 @@ export function currentPalette(): PaletteId {
   return isPaletteId(value) ? value : DEFAULT_PALETTE;
 }
 
+/** Whether light/dark scheme switching is locked by the active palette (`sky` owns its scheme). */
+export function isSchemeLocked(palette: PaletteId = currentPalette()): boolean {
+  return palette === SKY_PALETTE;
+}
+
+/** Active 天空 time-of-day phase on `<html>`, falling back to the local clock when unset. */
+export function currentSkyPhase(): SkyPhaseId {
+  const value = root()?.dataset.skyPhase;
+  return isSkyPhaseId(value) ? value : skyPhaseAt().id;
+}
+
 /** The seed behind the custom palette, or null when none is installed — read off `<html>` like
  * `currentPalette`: the attribute is what the injected `<style>` was built from, so it is what is
- * painted. Non-null even while another theme is in force (the eleventh tile's data). */
+ * painted. Non-null even while another theme is in force (the custom tile's data). */
 export function currentCustomSeed(): string | null {
   return root()?.dataset.paletteSeed ?? null;
 }
@@ -302,9 +343,53 @@ export function applyScheme(scheme: ColorScheme) {
 export function applyPalette(id: PaletteId) {
   const el = root();
   if (!el) return;
+  const wasSky = el.dataset.palette === SKY_PALETTE || 'skyPhase' in el.dataset;
   el.dataset.palette = id;
   writeCookie(COOKIE_KEYS.palette, id);
+  if (id === SKY_PALETTE) {
+    const phase = skyPhaseAt();
+    el.dataset.skyPhase = phase.id;
+    el.classList.toggle('dark', phase.scheme === 'dark');
+    writeCookie(COOKIE_KEYS.skyPhase, phase.id);
+    writeCookie(COOKIE_KEYS.darkMode, String(phase.scheme === 'dark'));
+    applyThemeColorMeta(SKY_PALETTE, phase.scheme, phase.id);
+    return;
+  }
+  delete el.dataset.skyPhase;
+  if (wasSky) {
+    const restored = resolveScheme(readSchemeSetting());
+    el.classList.toggle('dark', restored === 'dark');
+    writeCookie(COOKIE_KEYS.darkMode, String(restored === 'dark'));
+    applyThemeColorMeta(id, restored);
+    return;
+  }
   applyThemeColorMeta(id, currentScheme());
+}
+
+/** Update the active 天空 phase and its locked scheme on `<html>`. No-op outside `sky`. */
+export function applySkyPhase(phaseId: SkyPhaseId) {
+  const el = root();
+  if (!el || currentPalette() !== SKY_PALETTE) return;
+  const phase = skyPhaseEntry(phaseId);
+  el.dataset.skyPhase = phase.id;
+  el.classList.toggle('dark', phase.scheme === 'dark');
+  writeCookie(COOKIE_KEYS.skyPhase, phase.id);
+  writeCookie(COOKIE_KEYS.darkMode, String(phase.scheme === 'dark'));
+  applyThemeColorMeta(SKY_PALETTE, phase.scheme, phase.id);
+}
+
+/** Keep SSR sky cookies aligned after the pre-paint script corrected the phase on cold load. */
+export function syncSkyPhaseCookies() {
+  if (currentPalette() !== SKY_PALETTE) return;
+  const phase = skyPhaseEntry(currentSkyPhase());
+  writeCookie(COOKIE_KEYS.palette, SKY_PALETTE);
+  writeCookie(COOKIE_KEYS.skyPhase, phase.id);
+  writeCookie(COOKIE_KEYS.darkMode, String(phase.scheme === 'dark'));
+}
+
+/** Notify `useSkyPhase` subscribers across hour boundaries while another palette is active. */
+export function notifySkyClock() {
+  emit();
 }
 
 /**
@@ -425,10 +510,12 @@ export function applyEntranceMode(mode: EntranceMode) {
  * palette is not in `PALETTES`, so it reads the tones `applyCustomPalette` parked on `<html>`;
  * the `?? PALETTES[0]` fallback guards unknown ids.
  */
-export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme) {
-  const custom = id === CUSTOM_PALETTE ? currentCustomTones() : null;
+export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme, skyPhase?: SkyPhaseId) {
   const color =
-    custom?.[scheme].primary ?? (PALETTES.find((p) => p.id === id) ?? PALETTES[0])[scheme].primary;
+    id === SKY_PALETTE
+      ? skyPhaseEntry(skyPhase ?? currentSkyPhase()).primary
+      : (id === CUSTOM_PALETTE ? currentCustomTones()?.[scheme].primary : null) ??
+        (PALETTES.find((p) => p.id === id) ?? PALETTES[0])[scheme].primary;
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.removeAttribute('media');
     meta.content = color;
@@ -498,6 +585,7 @@ export function setMotionScaleListener(fn: (scale: number) => void) {
    snapshots a frame where only one has. --- */
 
 export function commitScheme(setting: SchemeSetting) {
+  if (isSchemeLocked()) return;
   writeStored(LS_KEYS.followSystemScheme, String(setting === 'system'));
   if (setting !== 'system') writeStored(LS_KEYS.darkMode, String(setting === 'dark'));
   applyScheme(resolveScheme(setting));
@@ -507,6 +595,12 @@ export function commitScheme(setting: SchemeSetting) {
 export function commitPalette(id: PaletteId) {
   writeStored(LS_KEYS.palette, id);
   applyPalette(id);
+  flushSync(emit);
+}
+
+export function commitSkyPhase(phaseId: SkyPhaseId) {
+  if (currentPalette() !== SKY_PALETTE) return;
+  applySkyPhase(phaseId);
   flushSync(emit);
 }
 
@@ -612,7 +706,10 @@ export const useSchemeSetting = () => useAppearance(readSchemeSetting, 'system' 
  *  hydration instead of correcting itself after it. */
 export const useScheme = (serverValue: ColorScheme = 'light') =>
   useAppearance(currentScheme, serverValue);
-export const usePalette = () => useAppearance(currentPalette, DEFAULT_PALETTE);
+export const usePalette = (serverValue: PaletteId = DEFAULT_PALETTE) =>
+  useAppearance(currentPalette, serverValue);
+export const useSkyPhase = (serverValue: SkyPhaseId = DEFAULT_SKY_PHASE) =>
+  useAppearance(currentSkyPhase, serverValue);
 export const useCustomSeed = () => useAppearance(currentCustomSeed, null as string | null);
 export const useCustomAccent = () => useAppearance(currentCustomAccent, null as AccentChoice);
 export const useCustomTonesRaw = () => useAppearance(currentCustomTonesRaw, null as string | null);

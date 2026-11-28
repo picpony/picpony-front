@@ -12,19 +12,23 @@ import { ICON } from '@/lib/icons';
 import { changeSyncedSetting, useSyncedSetting, type DetailLayout } from '@/lib/settingsSync';
 import { cn } from '@/lib/utils';
 import {
+  SKY_PALETTE,
   commitMotion,
   useMotionSetting,
   useMotionSpeed,
   useMotionTier,
   useMotionMode,
   useMotionEnabled,
+  usePalette,
   useScheme,
   useSchemeSetting,
+  useSkyPhase,
   type ColorScheme,
   type EntranceMode,
   type MotionSetting,
   type MotionSpeed,
 } from '@/lib/appearance';
+import { skyPhaseEntry } from '@/lib/skyPalette';
 import { ROW_STACK_CLASS, RowButton, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
 import { MOTION_PRESETS, MOTION_EFFECTS } from '@/lib/motionPreferences';
 import { MotionSpeedDialog, MotionEffectsDialog } from './MotionPreferencesDialog';
@@ -372,6 +376,9 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
  * which turns the switch off — the same model.
  */
 export function ModeAndMotionSection() {
+  const palette = usePalette();
+  const skyLocked = palette === SKY_PALETTE;
+  const skyPhase = useSkyPhase();
   const schemeSetting = useSchemeSetting();
   /* The scheme in force (the root class), which is what the disabled mode displays. */
   const scheme = useScheme();
@@ -388,17 +395,22 @@ export function ModeAndMotionSection() {
      the clock. Disabled rather than hidden when 动画效果 is off — a control that vanishes is a
      control the user has to rediscover. */
   const speedAvailable = useMotionEnabled();
+  const skySchemeNotice = skyLocked
+    ? `当前使用天空配色（${skyPhaseEntry(skyPhase).label}），深浅模式随时间自动切换`
+    : undefined;
 
   return (
     <SettingsSection title="模式与动画" icon={<MdBrightness6 size={ICON.control} />} subtitle="仅保存在本设备">
       {/* One block: 跟随系统 controls whether 主题模式 is active, so it leads the mode selector
-          above an inner rule. */}
+          above an inner rule. Both lock while 天空 owns the colour scheme. */}
       <div className={ROW_STACK_CLASS}>
         <ToggleSwitch
           layout="row"
           checked={followsSystem}
+          disabled={skyLocked}
           onChange={(on) => changeScheme(on ? 'system' : scheme)}
           label="跟随系统"
+          description={skySchemeNotice}
         />
         <div className="border-outline-variant flex items-center gap-4 border-t pt-4">
           <p className="text-label-l text-on-surface min-w-0 flex-1">主题模式</p>
@@ -406,7 +418,7 @@ export function ModeAndMotionSection() {
             size="sm"
             value={scheme}
             onChange={(v) => changeScheme(v as ColorScheme)}
-            disabled={followsSystem}
+            disabled={followsSystem || skyLocked}
             aria-label="主题模式"
             options={[
               { value: 'light', label: '月之亮面' },

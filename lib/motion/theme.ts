@@ -5,19 +5,24 @@ import {
   commitPalette,
   commitPaletteHues,
   commitScheme,
+  commitSkyPhase,
   currentCustomAccent,
   currentCustomSeed,
   currentPalette,
   currentPaletteHues,
   currentScheme,
+  currentSkyPhase,
+  isSchemeLocked,
   motionTier,
   resolveScheme,
   scaledMs,
   CUSTOM_PALETTE,
+  SKY_PALETTE,
   type CustomPaletteInstall,
   type PaletteHues,
   type PaletteId,
   type SchemeSetting,
+  type SkyPhaseId,
 } from '@/lib/appearance';
 import { heroOwnsScreen } from '@/lib/appScroller';
 import { SPRINGS, springDurationMs, springEase } from '@/lib/spring';
@@ -306,6 +311,7 @@ export function circularReveal(applyChange: () => void, origin?: { x: number; y:
  * ------------------------------------------------------------------------ */
 
 export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: number }) {
+  if (isSchemeLocked(pendingPalette ?? currentPalette())) return;
   const next = resolveScheme(setting);
   if (next === currentScheme()) {
     commitScheme(setting);
@@ -322,10 +328,12 @@ export function changeScheme(setting: SchemeSetting, origin?: { x: number; y: nu
  * and left the selection on the one the first wipe was heading to. The guard reads the target.
  */
 let pendingPalette: PaletteId | null = null;
+let pendingSkyPhase: SkyPhaseId | null = null;
 
 export function changePalette(id: PaletteId, origin?: { x: number; y: number }) {
   if (id === (pendingPalette ?? currentPalette())) return;
   pendingPalette = id;
+  pendingSkyPhase = null;
   circularReveal(() => {
     /* A superseded wipe still runs its callback (skipping never drops the change), so only the
        wipe that is still the target lets go of it. */
@@ -334,8 +342,23 @@ export function changePalette(id: PaletteId, origin?: { x: number; y: number }) 
   }, origin);
 }
 
+/** A time-of-day sky phase transition as a gentle circular reveal while `sky` is active. */
+export function changeSkyPhase(phaseId: SkyPhaseId, origin?: { x: number; y: number }) {
+  if (
+    (pendingPalette ?? currentPalette()) !== SKY_PALETTE ||
+    phaseId === (pendingSkyPhase ?? currentSkyPhase())
+  ) {
+    return;
+  }
+  pendingSkyPhase = phaseId;
+  circularReveal(() => {
+    if (pendingSkyPhase === phaseId) pendingSkyPhase = null;
+    commitSkyPhase(phaseId);
+  }, origin);
+}
+
 /**
- * The eleventh palette, as a wipe. Its own entry point rather than a branch in
+ * The custom palette, as a wipe. Its own entry point rather than a branch in
  * `changePalette`: that guard is on the id, and for the custom palette the id is
  * constant while the *colour* is what moves — so the guard here is the spec, the
  * seed and its 副色相. The derivation is the caller's (`resolveCustomPalette`
@@ -346,13 +369,18 @@ export function changeCustomPalette(
   origin?: { x: number; y: number },
 ) {
   if (
-    currentPalette() === CUSTOM_PALETTE &&
+    (pendingPalette ?? currentPalette()) === CUSTOM_PALETTE &&
     currentCustomSeed() === install.seed &&
     currentCustomAccent() === install.accent
   ) {
     return;
   }
-  circularReveal(() => commitCustomPalette(install), origin);
+  pendingPalette = CUSTOM_PALETTE;
+  pendingSkyPhase = null;
+  circularReveal(() => {
+    if (pendingPalette === CUSTOM_PALETTE) pendingPalette = null;
+    commitCustomPalette(install);
+  }, origin);
 }
 
 /** 配色方案, as a wipe: every selection container and accent moment changes at once. */

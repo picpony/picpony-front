@@ -80,6 +80,7 @@ import {
   CUSTOM_PALETTE,
   DEFAULT_PALETTE,
   PALETTES,
+  SKY_PALETTE,
   commitCustomPalette,
   commitPalette,
   commitPaletteHues,
@@ -314,7 +315,7 @@ const isFullRecord = (account: AccountRecord | null) => !account || 'birthday' i
 // The registry
 // ---------------------------------------------------------------------------
 
-const BUILT_IN_PALETTES: readonly string[] = PALETTES.map((palette) => palette.id);
+const BUILT_IN_PALETTES: readonly string[] = [...PALETTES.map((palette) => palette.id), SKY_PALETTE];
 
 interface PaletteChoice {
   id: PaletteId;

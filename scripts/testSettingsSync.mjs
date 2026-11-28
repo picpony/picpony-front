@@ -218,6 +218,17 @@ test('a palette picked here is noticed through the appearance store and sent as 
   sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'pinkie' } }, Date.now() + 1);
   assert.equal(values.get(LS_KEYS.palette), 'pinkie');
   assert.equal(sync.settingsSyncSnapshot().pending.palette, undefined);
+
+  /* The dynamic sky palette syncs through the same theme key. */
+  appearance.commitPalette('sky');
+  assert.ok(sync.settingsSyncSnapshot().pending.palette);
+  await settle();
+  assert.equal(writes.at(-1).theme, 'sky');
+  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'default' } }, Date.now() + 2);
+  assert.equal(values.get(LS_KEYS.palette), 'default');
+  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'sky' } }, Date.now() + 3);
+  assert.equal(values.get(LS_KEYS.palette), 'sky');
+  assert.equal(sync.settingsSyncSnapshot().pending.palette, undefined);
 });
 
 test('a record without settings is no base: nothing is written over it', async () => {

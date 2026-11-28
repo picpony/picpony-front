@@ -43,7 +43,25 @@ globalThis.window = {
 };
 const cookies = new Map();
 const styles = new Map();
-const root = { dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} } };
+const classes = new Set();
+const themeColorMeta = {
+  content: '',
+  removeAttribute() {},
+};
+const root = {
+  dataset: {},
+  classList: {
+    contains: (name) => classes.has(name),
+    add: (name) => { classes.add(name); },
+    remove: (name) => { classes.delete(name); },
+    toggle: (name, force) => {
+      const next = force === undefined ? !classes.has(name) : Boolean(force);
+      if (next) classes.add(name);
+      else classes.delete(name);
+      return next;
+    },
+  },
+};
 globalThis.document = {
   ...on(new Map()),
   visibilityState: 'visible',
@@ -57,7 +75,7 @@ globalThis.document = {
     cookies.set(pair.slice(0, at), pair.slice(at + 1));
   },
   querySelector: () => null,
-  querySelectorAll: () => [],
+  querySelectorAll: (selector) => (selector === 'meta[name="theme-color"]' ? [themeColorMeta] : []),
   getElementById: (id) => styles.get(id) ?? null,
   createElement: () => ({ id: '', textContent: '' }),
   head: {
@@ -69,6 +87,7 @@ globalThis.document = {
 
 const spec = await import('../lib/paletteSpec.ts');
 const rule = await import('../lib/paletteRule.ts');
+const sky = await import('../lib/skyPalette.ts');
 const quantize = await import('../lib/quantize.ts');
 const appearance = await import('../lib/appearance.ts');
 const { COOKIE_KEYS, LS_KEYS } = await import('../lib/constants.ts');
@@ -206,7 +225,7 @@ test('every palette’s blocks declare one set of names per pair, and 单色 car
   assert.equal(rule.paletteBlocksCss('default', d, { multi: false }).includes("html[data-palette='default'] {"), false);
 });
 
-test('the generated file keeps the invariant for the ten', () => {
+test('the generated file keeps the invariant for the ten static themes and eight sky phases', () => {
   const css = readFileSync(new URL('../app/theme-palettes.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks = new Map(
     [...css.matchAll(/(html[^{]+)\{([^}]*)\}/g)].map(([, selector, body]) => [
@@ -215,13 +234,126 @@ test('the generated file keeps the invariant for the ten', () => {
     ]),
   );
   let pairs = 0;
+  let skyMultiBlocks = 0;
+  let skyMonoBlocks = 0;
   for (const [selector, names] of blocks) {
+    if (selector.includes("data-palette='sky'")) {
+      if (selector.includes("data-palette-hues='mono'")) {
+        skyMonoBlocks += 1;
+        assert.ok(names.length > 0, `${selector} carries mono overrides`);
+      } else {
+        skyMultiBlocks += 1;
+        assert.ok(names.includes('primary') && names.includes('on-surface-rgb'), `${selector} declares full sky theme`);
+      }
+      continue;
+    }
     if (selector.startsWith('html.dark')) continue;
     const twin = selector.replace(/^html/, 'html.dark');
     assert.deepEqual(blocks.get(twin), names, `${selector} and its dark twin differ`);
     pairs += 1;
   }
   assert.equal(pairs, 19, 'nine themes × two 配色方案, and the default’s 单色');
+  assert.equal(skyMultiBlocks, appearance.SKY_PHASES.length, 'one multi block per sky phase');
+  assert.equal(skyMonoBlocks, appearance.SKY_PHASES.length, 'one mono delta block per sky phase');
+});
+
+test('sky phase scheduling covers all 24 hours cleanly and computes exact next boundaries', () => {
+  const seen = new Set();
+  for (let hour = 0; hour < 24; hour += 1) {
+    const phase = sky.skyPhaseForHour(hour);
+    assert.ok(hour >= phase.startHour && hour < phase.endHour, `hour ${hour} falls inside ${phase.id}`);
+    seen.add(phase.id);
+  }
+  assert.equal(seen.size, appearance.SKY_PHASES.length, 'every sky phase is reachable across 24 hours');
+  assert.equal(sky.skyPhaseForHour(-1).id, 'starlight', 'negative hour wraps cleanly');
+  assert.equal(sky.skyPhaseForHour(24).id, 'midnight', 'hour 24 wraps to midnight');
+  assert.equal(sky.skyPhaseAtBeijing(new Date('2026-11-28T06:00:00Z')).id, 'afternoon', '14:00 Beijing is 晴午');
+  assert.equal(sky.skyPhaseAtBeijing(new Date('2026-11-28T13:30:00Z')).id, 'starlight', '21:30 Beijing is 星夜');
+  assert.equal(sky.skyPhaseRangeLabel(sky.skyPhaseEntry('morning')), '09:00–13:00');
+  const nearEnd = new Date(2026, 10, 28, 12, 59, 50, 0);
+  const waitMs = sky.msUntilNextSkyPhase(nearEnd);
+  assert.ok(waitMs >= 10_000 && waitMs <= 11_000, `10s before 13:00 boundary waits ~10.25s, got ${waitMs}`);
+  const nearMidnight = new Date(2026, 10, 28, 23, 59, 30, 0);
+  const midnightWait = sky.msUntilNextSkyPhase(nearMidnight);
+  assert.ok(midnightWait >= 30_000 && midnightWait <= 31_000, `30s before midnight waits ~30.25s, got ${midnightWait}`);
+  assert.equal(sky.skyPrePaintSchedule().length, appearance.SKY_PHASES.length);
+  assert.equal(sky.SKY_PHASES_DAY_FIRST[0].id, 'dawn');
+  assert.equal(sky.SKY_PHASES_DAY_FIRST.at(-1).id, 'predawn');
+});
+
+test('sky palette locks light/dark switching without overwriting stored scheme, and restores it on exit', () => {
+  /* Save an explicit dark preference before entering sky. */
+  appearance.commitPalette('default');
+  appearance.commitScheme('dark');
+  assert.equal(appearance.currentScheme(), 'dark');
+  assert.equal(values.get(LS_KEYS.darkMode), 'true');
+  assert.equal(values.get(LS_KEYS.followSystemScheme), 'false');
+
+  /* Switching to sky sets data-sky-phase, locks scheme to the active phase, and updates cookies & theme-color. */
+  appearance.commitPalette(appearance.SKY_PALETTE);
+  assert.equal(appearance.currentPalette(), 'sky');
+  assert.equal(appearance.isSchemeLocked(), true);
+  assert.ok(appearance.isSkyPhaseId(root.dataset.skyPhase));
+  const initialPhase = sky.skyPhaseEntry(root.dataset.skyPhase);
+  assert.equal(appearance.currentScheme(), initialPhase.scheme);
+  assert.equal(cookies.get(COOKIE_KEYS.skyPhase), initialPhase.id);
+  assert.equal(themeColorMeta.content, initialPhase.primary);
+
+  /* Explicit phase transitions update scheme, cookie, and theme-color cleanly. */
+  appearance.commitSkyPhase('morning');
+  assert.equal(root.dataset.skyPhase, 'morning');
+  assert.equal(appearance.currentScheme(), 'light');
+  assert.equal(cookies.get(COOKIE_KEYS.darkMode), 'false');
+  assert.equal(themeColorMeta.content, sky.skyPhaseEntry('morning').primary);
+
+  /* Attempting to change scheme while on sky is a no-op and preserves stored localStorage scheme. */
+  appearance.commitScheme('light');
+  assert.equal(values.get(LS_KEYS.darkMode), 'true', 'stored darkMode preference was not overwritten');
+  assert.equal(values.get(LS_KEYS.followSystemScheme), 'false');
+  appearance.commitScheme('system');
+  assert.equal(values.get(LS_KEYS.followSystemScheme), 'false', 'system switch ignored while sky is locked');
+  assert.equal(appearance.currentScheme(), 'light');
+
+  /* Night phase flips root to dark automatically. */
+  appearance.commitSkyPhase('twilight');
+  assert.equal(root.dataset.skyPhase, 'twilight');
+  assert.equal(appearance.currentScheme(), 'dark');
+  assert.equal(cookies.get(COOKIE_KEYS.darkMode), 'true');
+  assert.equal(themeColorMeta.content, sky.skyPhaseEntry('twilight').primary);
+
+  /* syncSkyPhaseCookies restores palette, skyPhase and darkMode cookies cleanly. */
+  cookies.clear();
+  appearance.syncSkyPhaseCookies();
+  assert.equal(cookies.get(COOKIE_KEYS.palette), 'sky');
+  assert.equal(cookies.get(COOKIE_KEYS.skyPhase), 'twilight');
+  assert.equal(cookies.get(COOKIE_KEYS.darkMode), 'true');
+
+  /* Switching back to a light phase then leaving sky restores the user's saved dark preference. */
+  appearance.commitSkyPhase('afternoon');
+  assert.equal(appearance.currentScheme(), 'light');
+  appearance.commitPalette('default');
+  assert.equal(appearance.isSchemeLocked(), false);
+  assert.equal('skyPhase' in root.dataset, false, 'leaving sky clears data-sky-phase');
+  assert.equal(appearance.currentScheme(), 'dark', 'saved dark scheme restored on leaving sky');
+  assert.equal(cookies.get(COOKIE_KEYS.darkMode), 'true');
+  /* Leaving sky into a custom palette also clears data-sky-phase and restores the saved dark scheme. */
+  appearance.commitPalette(appearance.SKY_PALETTE);
+  appearance.commitSkyPhase('afternoon');
+  assert.equal(appearance.currentScheme(), 'light');
+  const derivedCustom = rule.deriveTheme('#7e9ed4');
+  appearance.commitCustomPalette({
+    seed: '#7e9ed4',
+    accent: null,
+    css: rule.paletteBlocksCss(appearance.CUSTOM_PALETTE, derivedCustom),
+    tones: rule.paletteTones(derivedCustom),
+  });
+  assert.equal(appearance.currentPalette(), 'custom');
+  assert.equal('skyPhase' in root.dataset, false, 'leaving sky to custom clears data-sky-phase');
+  assert.equal(appearance.currentScheme(), 'dark', 'leaving sky to custom restores saved dark scheme');
+  assert.equal(themeColorMeta.content, derivedCustom.dark.primary);
+  /* Reset to clean light state for subsequent tests. */
+  appearance.commitPalette('default');
+  appearance.commitScheme('light');
 });
 
 test('an image’s combinations pair each seed with the picture’s own far, clean, chromatic partner', () => {
