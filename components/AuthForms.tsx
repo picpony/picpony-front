@@ -12,12 +12,10 @@ import {
 import { MdArrowBack } from 'react-icons/md';
 import CodeInput from './CodeInput';
 /**
- * The captcha is behind `dynamic()` and behind a "has ever opened" flag, and the
- * second half is what makes the first one work: the modal was rendered
- * unconditionally with `isOpen={false}`, so `dynamic()` alone would have fetched
- * the chunk the moment the sign-in dialog mounted. `captchaMounted` is a one-way
- * latch, so the chunk arrives on the first challenge and the element then *stays*
- * mounted — which is what `Modal`'s exit animation needs.
+ * The captcha is behind `dynamic()` and behind a "has ever opened" latch: the modal with
+ * `isOpen={false}` would otherwise fetch the chunk the moment the sign-in dialog mounted.
+ * `useCaptchaChallenge` waits for that chunk before it opens the window, so the dialog beneath
+ * never makes room for a surface that is not there yet.
  */
 const CaptchaModal = dynamic(() => import('./CaptchaModal'), { ssr: false, loading: () => null });
 import Button from './Button';
@@ -252,12 +250,46 @@ function useFocusOnMount(
   return viewRef;
 }
 
+/**
+ * The challenge window. Its chunk is the only slow part before anything exists, so the dialog
+ * keeps its size until the window can render, and the button that asked reports the wait.
+ * `mounted` is a one-way latch: `Modal`'s exit animation needs the element to stay.
+ */
+function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrentFlow: () => boolean) {
+  const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  return {
+    mounted,
+    open,
+    preparing,
+    request() {
+      setPreparing(true);
+      void import('./CaptchaModal').then(
+        () => {
+          setPreparing(false);
+          if (!isCurrentFlow()) return;
+          setMounted(true);
+          setOpen(true);
+          onCaptchaChange(true);
+        },
+        () => {
+          setPreparing(false);
+          showToast('安全验证加载失败，请重试', 'error');
+        },
+      );
+    },
+    close() {
+      setOpen(false);
+      onCaptchaChange(false);
+    },
+  };
+}
+
 /** A failed request's sentence: the server's own words (`error.message`), or the fallback. */
 function failureOf(error: unknown, fallback: string) {
   return apiErrorMessage(error, fallback);
-}
-
-/** Only the adapter's captcha refusal codes require a new proof. */
+}/** Only the adapter's captcha refusal codes require a new proof. */
 const needsNewProof = (error: unknown) => isRefusal(error, ...CAPTCHA_RETRY_CODES);
 
 /**
@@ -306,7 +338,6 @@ function LoginForm({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const form = useFieldErrors<'username' | 'password'>(() => [
     ['username', validateRequired(username, '请输入用户名或邮箱')],
@@ -318,27 +349,19 @@ function LoginForm({
   useReportDirty(Boolean(username || password), onDirtyChange);
   const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
 
-  /* One-way: once the challenge has been shown the element stays mounted, so its
-     exit animation has something to run on. See the note on the import. */
-  const [captchaMounted, setCaptchaMounted] = useState(false);
-
-  const setCaptcha = (open: boolean) => {
-    if (open) setCaptchaMounted(true);
-    setShowCaptchaModal(open);
-    onCaptchaChange(open);
-  };
+  const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!isCurrentFlow() || operation.busy()) return;
     if (!form.check()) return;
-    setCaptcha(true);
+    captcha.request();
   };
 
   const onCaptchaVerify = async (proof: string) => {
     const pending = operation.begin();
     if (!pending) return;
-    setCaptcha(false);
+    captcha.close();
     setIsLoading(true);
     try {
       const grant = await login({ account: username.trim(), password, captchaProof: proof });
@@ -350,7 +373,7 @@ function LoginForm({
       if (!operation.current(pending)) return;
       showToast(failureOf(err, '登录失败，请检查用户名和密码'), 'error');
       /* The proof was spent or lapsed before the request: the challenge again, nothing else. */
-      if (needsNewProof(err)) setCaptcha(true);
+      if (needsNewProof(err)) captcha.request();
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
     }
@@ -408,14 +431,14 @@ function LoginForm({
             忘记密码？
           </Button>
         </div>
-        {captchaMounted && (
+        {captcha.mounted && (
           <CaptchaModal
-            isOpen={showCaptchaModal}
-            onClose={() => setCaptcha(false)}
+            isOpen={captcha.open}
+            onClose={captcha.close}
             onVerify={onCaptchaVerify}
           />
         )}
-        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
+        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
           登录
         </Button>
       </form>
@@ -464,7 +487,6 @@ function RegisterDetails({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const form = useFieldErrors<'username' | 'email' | 'password'>(() => [
     ['username', validateUsername(username)],
@@ -476,25 +498,17 @@ function RegisterDetails({
   useReportDirty(Boolean(username || email || password), onDirtyChange);
   const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
 
-  /* One-way: once the challenge has been shown the element stays mounted, so its exit animation
-     has something to run on. See the note on the import. */
-  const [captchaMounted, setCaptchaMounted] = useState(false);
-
-  const setCaptcha = (open: boolean) => {
-    if (open) setCaptchaMounted(true);
-    setShowCaptchaModal(open);
-    onCaptchaChange(open);
-  };
+  const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!isCurrentFlow() || operation.busy()) return;
     if (!form.check()) return;
-    setCaptcha(true);
+    captcha.request();
   };
 
   const onCaptchaVerify = async (proof: string) => {
-    setCaptcha(false);
+    captcha.close();
     const pending = operation.begin();
     if (!pending) return;
     setIsLoading(true);
@@ -511,7 +525,7 @@ function RegisterDetails({
     } catch (err) {
       if (!operation.current(pending)) return;
       showToast(failureOf(err, '注册失败，请检查填写的内容'), 'error');
-      if (needsNewProof(err)) setCaptcha(true);
+      if (needsNewProof(err)) captcha.request();
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
     }
@@ -577,14 +591,14 @@ function RegisterDetails({
             form.clear('password');
           }}
         />
-        {captchaMounted && (
+        {captcha.mounted && (
           <CaptchaModal
-            isOpen={showCaptchaModal}
-            onClose={() => setCaptcha(false)}
+            isOpen={captcha.open}
+            onClose={captcha.close}
             onVerify={onCaptchaVerify}
           />
         )}
-        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
+        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
           注册
         </Button>
       </form>
@@ -630,14 +644,7 @@ function VerifyEmail({
   const [isResending, setIsResending] = useState(false);
   const codeRef = useRef<HTMLDivElement | null>(null);
   const cooldown = useCooldown(registrationCooldownKey(registration.email));
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
-  /* One-way, as in the other forms: a resend asks for a fresh challenge. */
-  const [captchaMounted, setCaptchaMounted] = useState(false);
-  const setCaptcha = (open: boolean) => {
-    if (open) setCaptchaMounted(true);
-    setShowCaptchaModal(open);
-    onCaptchaChange(open);
-  };
+  const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
   const form = useFieldErrors<'code'>(() => [['code', validateCode(code)]]);
   const codeField = form.field('code');
 
@@ -673,7 +680,7 @@ function VerifyEmail({
 
   /** A resend replaces the request: the new `verification` is the one the code belongs to. */
   const resend = async (proof: string) => {
-    setCaptcha(false);
+    captcha.close();
     const pending = operation.begin();
     if (!pending) return;
     setIsResending(true);
@@ -686,7 +693,7 @@ function VerifyEmail({
     } catch (err) {
       if (!operation.current(pending)) return;
       showToast(failureOf(err, '验证码发送失败，请稍后再试'), 'error');
-      if (needsNewProof(err)) setCaptcha(true);
+      if (needsNewProof(err)) captcha.request();
     } finally {
       if (operation.finish(pending)) setIsResending(false);
     }
@@ -742,14 +749,14 @@ function VerifyEmail({
         </Button>
         <ResendButton
           seconds={cooldown.remaining}
-          busy={isResending}
+          busy={isResending || captcha.preparing}
           onResend={() => {
-            if (isCurrentFlow() && !operation.busy()) setCaptcha(true);
+            if (isCurrentFlow() && !operation.busy()) captcha.request();
           }}
         />
       </div>
-      {captchaMounted && (
-        <CaptchaModal isOpen={showCaptchaModal} onClose={() => setCaptcha(false)} onVerify={(proof) => void resend(proof)} />
+      {captcha.mounted && (
+        <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={(proof) => void resend(proof)} />
       )}
     </div>
   );
@@ -784,16 +791,10 @@ function ResetForm({
   const [verification, setVerification] = useState(restored?.verification ?? '');
   /** Whether the open challenge is for a resend (stay on the code step) or the first send. */
   const [captchaFor, setCaptchaFor] = useState<'send' | 'resend'>('send');
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
-  const [captchaMounted, setCaptchaMounted] = useState(false);
-  const setCaptcha = (open: boolean) => {
-    if (open) setCaptchaMounted(true);
-    setShowCaptchaModal(open);
-    onCaptchaChange(open);
-  };
+  const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
   const askProof = (purpose: 'send' | 'resend') => {
     setCaptchaFor(purpose);
-    setCaptcha(true);
+    captcha.request();
   };
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -842,7 +843,7 @@ function ResetForm({
    * fresh `verification` either way, so nothing here can tell whether the address has an account.
    */
   const sendCode = async (resend: boolean, proof: string) => {
-    setCaptcha(false);
+    captcha.close();
     if (!isCurrentFlow() || operation.busy()) return;
     const pending = operation.begin();
     if (!pending) return;
@@ -934,7 +935,7 @@ function ResetForm({
                   requestForm.clear('account');
                 }}
               />
-              <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading}>
+              <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
                 发送验证码
               </Button>
             </form>
@@ -1017,10 +1018,10 @@ function ResetForm({
           </>
         )}
       </div>
-      {captchaMounted && (
+      {captcha.mounted && (
         <CaptchaModal
-          isOpen={showCaptchaModal}
-          onClose={() => setCaptcha(false)}
+          isOpen={captcha.open}
+          onClose={captcha.close}
           onVerify={(proof) => void sendCode(captchaFor === 'resend', proof)}
         />
       )}
