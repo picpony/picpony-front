@@ -860,3 +860,36 @@ test('admin registry loads panels lazily without Suspense throttling and recover
   const ready = render();
   assert.equal(ready.type, Loaded);
 });
+
+test('admin console renders TabPanes unclipped without FollowHeight and restores scroll only for sticky-rail top-level panels', () => {
+  const adminPage = readFileSync(path.join(root, 'app/admin/page.tsx'), 'utf8');
+  assert.doesNotMatch(
+    adminPage,
+    /<FollowHeight\b/,
+    'admin TabPanes must not wrap in FollowHeight (which clips taller arriving tabs at min-h floor)',
+  );
+  assert.match(adminPage, /data-tab-window-sticky-rail=\{wide \? '' : undefined\}/);
+
+  const tabScroll = {};
+  const scrollSource = ts.transpileModule(readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(scrollSource, {
+    exports: tabScroll,
+    require: () => ({ getAppScroller: () => null }),
+  });
+
+  const scroller = { scrollTop: 400, getBoundingClientRect: () => ({ top: 0 }) };
+  const makePanel = ({ stickyRail, top }) => ({
+    closest: (selector) =>
+      selector === '[data-tab-window]'
+        ? { hasAttribute: (attr) => stickyRail && attr === 'data-tab-window-sticky-rail' }
+        : null,
+    nextElementSibling: null,
+    getBoundingClientRect: () => ({ top: top - scroller.scrollTop }),
+  });
+
+  assert.equal(tabScroll.tabMayRestore(makePanel({ stickyRail: true, top: 48 }), scroller), true);
+  assert.equal(tabScroll.tabMayRestore(makePanel({ stickyRail: true, top: 140 }), scroller), false);
+  assert.equal(tabScroll.tabMayRestore(makePanel({ stickyRail: false, top: 48 }), scroller), false);
+});

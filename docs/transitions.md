@@ -108,7 +108,7 @@ The footer travels with its page during route changes. Tabs alone hold it with `
 
 ## Admin panes and inline editors
 
-`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts. Lazy panels load through a plain client `import()` loader rather than `next/dynamic`'s `<Suspense>` boundary so fast chunks mount immediately without React's 300ms fallback throttle pushing a pane indicator down into a panel's inner loader. On wide layouts the vertical rail stays sticky inside an inner `ScrollArea` so long tables keep navigation reachable without stretching short panes.
+`components/admin/registry.tsx` owns panels and role gates; the rail uses manual activation. Unvisited panels do not read, and visited panels retain drafts. Lazy panels load through a plain client `import()` loader rather than `next/dynamic`'s `<Suspense>` boundary so fast chunks mount immediately without React's 300ms fallback throttle pushing a pane indicator down into a panel's inner loader. Admin `<TabPanes>` renders directly inside `[data-tab-window]` without an enclosing `FollowHeight track`, so entering tabs arrive unclipped at full height per `#height-and-footer`. On wide layouts the vertical rail stays sticky inside an inner `ScrollArea` and marks `[data-tab-window-sticky-rail]` so top-level section switches restore per-section scroll offsets (or open fresh sections at `0`) while nested sub-tabs keep the current offset.
 
 `sections.ts` owns section names and icons; `SectionHeader` consumes them. Shared reads use `sharedQueries.ts` and `useAdminSelect`, preserving derived-view identity.
 

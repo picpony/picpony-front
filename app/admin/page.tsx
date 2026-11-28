@@ -5,7 +5,6 @@ import { MdDashboard, MdHome } from 'react-icons/md';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import EmptyState from '@/components/EmptyState';
-import FollowHeight from '@/components/FollowHeight';
 import ScrollArea from '@/components/ScrollArea';
 import SignInRequired from '@/components/SignInRequired';
 import { PageLoadingIndicator } from '@/components/LoadingIndicator';
@@ -228,24 +227,25 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
         </div>
         {/* The window a section switch slides past (`data-tab-window`): the panel's own region,
             not the scroller — sliding the scroller's width swept the panes across the rail and out
-            past the card. The sections' own sub-tabs slide past it too. */}
-        <div data-tab-window="" className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
-          {/* The card's height follows the section on screen instead of jumping to it. A switch
-              stacks both panes in one cell for its run and conceals the leaving one at settle — by
-              attribute, outside React — and a section's first read swaps its skeleton for rows of
-              another height; each of those snapped the card's bottom edge (and the page under it)
-              by the difference in one frame. `track` follows every such change, not only commits. */}
-          <FollowHeight track>
-            <TabPanes value={shown}>
-              {offered.map(({ id, component: Panel }) =>
-                visited.has(id) ? (
-                  <TabPane key={id} value={id}>
-                    <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
-                  </TabPane>
-                ) : null,
-              )}
-            </TabPanes>
-          </FollowHeight>
+            past the card. The sections' own sub-tabs slide past it too. On wide layouts the rail
+            is sticky inside its own `ScrollArea`, so `data-tab-window-sticky-rail` lets top-level
+            section switches restore each tab's own scroll offset (or open fresh sections at 0)
+            without disturbing the rail, while `<TabPanes>` renders panes unclipped at full height
+            per docs/transitions.md#height-and-footer. */}
+        <div
+          data-tab-window=""
+          data-tab-window-sticky-rail={wide ? '' : undefined}
+          className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}
+        >
+          <TabPanes value={shown}>
+            {offered.map(({ id, component: Panel }) =>
+              visited.has(id) ? (
+                <TabPane key={id} value={id}>
+                  <Panel token={token} role={role} viewerId={viewerId} openTab={select} />
+                </TabPane>
+              ) : null,
+            )}
+          </TabPanes>
         </div>
       </div>
     </ConsoleColumn>

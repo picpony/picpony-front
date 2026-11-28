@@ -88,14 +88,16 @@ export function tabPanelTop(panel: HTMLElement, scroller: HTMLElement) {
 /**
  * Whether a switch on this panel may move the page to the arriving tab's own offset: only when the
  * panel *is* the page — no more than an app bar of shared chrome above it — and it is neither in a
- * bounded region (`data-tab-window`) nor paired with shared controls below it (`data-tab-follower`).
- * The admin console's panel sits beside its rail inside one card near the top of the page, so on a
- * wide screen it passed the first test: every section switch threw the page — rail and all — back
- * to that section's last offset, or to the top for one never scrolled. The rail is the page there,
- * not the panel, so the offset is kept.
+ * bounded region (`data-tab-window`, unless that region's rail is sticky via
+ * `data-tab-window-sticky-rail`, where switching top-level sections leaves the rail anchored) nor
+ * paired with shared controls below it (`data-tab-follower`). Nested sub-tabs inside a sticky-rail
+ * window still sit below their section header (`tabPanelTop > TAB_SHARED_CHROME_PX`) and therefore
+ * keep the scroller still.
  */
 export function tabMayRestore(panel: HTMLElement, scroller: HTMLElement) {
-  if (panel.closest('[data-tab-window]') || panel.nextElementSibling?.hasAttribute('data-tab-follower')) return false;
+  const bounded = panel.closest<HTMLElement>('[data-tab-window]');
+  if (bounded && !bounded.hasAttribute?.('data-tab-window-sticky-rail')) return false;
+  if (panel.nextElementSibling?.hasAttribute('data-tab-follower')) return false;
   return tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX;
 }
 
