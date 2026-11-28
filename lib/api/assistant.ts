@@ -249,12 +249,14 @@ export async function assistantChat(
 }
 
 /** Validate one `data:` frame. An unknown type is ignored so the browser can outlive the server. */
-function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
+export function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const event = raw as Record<string, unknown>;
   const id = typeof event.id === 'string' ? event.id.slice(0, 128) : '';
   const name = typeof event.name === 'string' ? event.name.slice(0, 64) : '';
   switch (event.type) {
+    case 'sync':
+      return { type: 'sync' };
     case 'reset':
       return { type: 'reset' };
     case 'thinking':
@@ -281,10 +283,65 @@ function parseStreamEvent(raw: unknown): AssistantStreamEvent | null {
 }
 
 /**
+ * Stateful WHATWG SSE frame reader supporting multi-line `data:` payloads, `\r\n` endings,
+ * comments (`:`), and final EOF flushing without dropping trailing bytes.
+ */
+export function createSseParser(onEvent: (event: AssistantStreamEvent) => void) {
+  let buffer = '';
+  let dataLines: string[] = [];
+
+  const dispatch = () => {
+    if (!dataLines.length) return;
+    const payload = dataLines.join('\n').trim();
+    dataLines = [];
+    if (!payload) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return;
+    }
+    const event = parseStreamEvent(parsed);
+    if (event) onEvent(event);
+  };
+
+  const processLine = (rawLine: string) => {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (line === '') {
+      dispatch();
+      return;
+    }
+    if (line.startsWith(':')) return;
+    if (line.startsWith('data:')) {
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
+    }
+  };
+
+  return {
+    push(chunk: string) {
+      buffer += chunk;
+      for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        processLine(line);
+      }
+    },
+    finish() {
+      if (buffer.length > 0) {
+        processLine(buffer);
+        buffer = '';
+      }
+      dispatch();
+    },
+  };
+}
+
+/**
  * `GET /me/assistant/tasks/{task_id}/events` — the turn's live text and tool calls. The turn
  * still persists its answer and the panel still polls `state`; this only removes the wait from
  * what the user sees. Reading stops when the server closes the stream, the signal aborts, or the
- * connection drops — the caller treats all three the same and keeps polling.
+ * connection drops — the caller treats all three the same and keeps polling / reconnecting.
  */
 export async function streamAssistantTask(
   token: string,
@@ -300,33 +357,24 @@ export async function streamAssistantTask(
     cache: 'no-store',
     headers: { Accept: 'text/event-stream' },
   });
-  if (!response.ok || !response.body) {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!response.ok || !response.body || !contentType.includes('text/event-stream')) {
     void response.body?.cancel().catch(() => {});
     throw new ApiError('http', { status: response.status, serverMessage: '实时回复暂不可用' });
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  const parser = createSseParser(onEvent);
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
-        const line = buffer.slice(0, newline).replace(/\r$/, '');
-        buffer = buffer.slice(newline + 1);
-        if (!line.startsWith('data:')) continue;
-        const data = line.slice(5).trim();
-        if (!data) continue;
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(data);
-        } catch {
-          continue;
-        }
-        const event = parseStreamEvent(parsed);
-        if (event) onEvent(event);
+      if (done) {
+        const tail = decoder.decode();
+        if (tail) parser.push(tail);
+        parser.finish();
+        break;
       }
+      parser.push(decoder.decode(value, { stream: true }));
     }
   } finally {
     void reader.cancel().catch(() => {});

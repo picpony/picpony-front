@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MdAdd, MdDeleteOutline, MdEdit } from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
@@ -24,6 +24,7 @@ import {
   providerPayload,
   providerValues,
   quotaFields,
+  validateModelName,
   type Values,
 } from '@/lib/adminSiteTools/model';
 import * as api from '@/lib/api/adminSiteTools';
@@ -58,6 +59,7 @@ function ProviderEditor({
   const [values, setValues] = useState<Values>(() => providerValues(provider));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
+  const probeAbortRef = useRef<AbortController | null>(null);
   const save = useAdminMutation(token),
     probe = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
@@ -71,12 +73,22 @@ function ProviderEditor({
     provider?.id ?? 'new',
     20,
   );
+  const selectedModel = typeof values.model === 'string' ? values.model.trim() : '';
+  const keyReady = Boolean(provider?.has_key && provider.key_available);
   const unsaved =
     !provider ||
     providerType !== provider.provider_type ||
     values.base_url !== provider.base_url ||
     Boolean(values.api_key) ||
     values.clear_key === true;
+  const unsavedModel = Boolean(provider && selectedModel !== provider.model);
+  useEffect(
+    () => () => {
+      probeAbortRef.current?.abort();
+      probeAbortRef.current = null;
+    },
+    [token, provider?.id],
+  );
   const change = (next: Values) => {
     const nextType = normalizeProviderType(next.provider_type);
     const adjusted =
@@ -116,10 +128,14 @@ function ProviderEditor({
       { tone: draft.clear_key ? 'danger' : 'filled' },
     );
   };
-  const run = (kind: 'discover' | 'benchmark', model?: string) => {
+  const run = (kind: 'discover' | 'benchmark', model?: string, pendingKey?: string) => {
     if (busy || !provider) return;
+    probeAbortRef.current?.abort();
+    const abortController = new AbortController();
+    probeAbortRef.current = abortController;
+    const providerId = provider.id;
     void probe.run(
-      () => api.probeProvider(token, provider.id, config.revision, kind, model),
+      () => api.probeProvider(token, providerId, config.revision, kind, model, abortController.signal),
       (d) =>
         setNotice(
           d.ok
@@ -129,14 +145,35 @@ function ProviderEditor({
             : `${kind === 'discover' ? '获取模型列表' : `测试 ${model} `}失败：${d.failure}`,
         ),
       kind === 'discover' ? '模型列表获取失败' : '模型连接测试失败',
-      /* Every finished probe changes the global revision; the next one names the new list's. */
-      { key: model ?? kind, onCommitted: () => assistantQuery.invalidate(token) },
+      {
+        key: pendingKey ?? (kind === 'discover' ? 'discover' : `benchmark:${model ?? ''}`),
+        /* Optimistically advance the cached revision (and discovered catalogue) before re-reading so
+           back-to-back probes or saves never collide with a stale revision 409. */
+        onCommitted: (d) => {
+          const current = assistantQuery.peek(token).data;
+          if (current && typeof d.revision === 'number') {
+            assistantQuery.write(token, {
+              ...current,
+              revision: d.revision,
+              providers:
+                d.ok && kind === 'discover' && Array.isArray(d.result.models)
+                  ? current.providers.map((item) =>
+                      item.id === providerId ? { ...item, model_catalog: d.result.models! } : item,
+                    )
+                  : current.providers,
+            });
+          }
+          assistantQuery.invalidate(token);
+        },
+      },
     );
   };
+  const isDefaultPresetName = (name: unknown) =>
+    typeof name !== 'string' || !name.trim() || name === '绘云彩彩中转站' || name === 'Google Gemini';
   const presetGateway = () =>
     change({
       ...values,
-      name: values.name || '绘云彩彩中转站',
+      name: isDefaultPresetName(values.name) ? '绘云彩彩中转站' : values.name,
       provider_type: 'openai_compatible',
       base_url: GATEWAY,
       thinking: coerceThinkingForProvider('openai_compatible', values.thinking),
@@ -144,7 +181,7 @@ function ProviderEditor({
   const presetGemini = () =>
     change({
       ...values,
-      name: values.name || 'Google Gemini',
+      name: isDefaultPresetName(values.name) ? 'Google Gemini' : values.name,
       provider_type: 'gemini',
       base_url: GEMINI_API_BASE,
       thinking: coerceThinkingForProvider('gemini', values.thinking),
@@ -181,27 +218,34 @@ function ProviderEditor({
               type="button"
               variant="tonal"
               loading={probe.pendingKeys.has('discover')}
-              disabled={busy || unsaved || !provider.has_key}
+              disabled={busy || unsaved || !keyReady}
               onClick={() =>
-                confirmThen('确认获取模型列表', '确定要使用已保存的地址与密钥获取模型列表吗？', () => run('discover'), {
-                  tone: 'filled',
-                })
+                confirmThen(
+                  '确认获取模型列表',
+                  '确定要使用已保存的地址与密钥获取模型列表吗？',
+                  () => run('discover', undefined, 'discover'),
+                  { tone: 'filled' },
+                )
               }
             >
               获取模型列表
             </Button>
-            {typeof values.model === 'string' && values.model.trim() && (
+            {selectedModel && (
               <Button
                 type="button"
                 variant="surface"
-                loading={probe.pendingKeys.has(values.model.trim())}
-                disabled={busy || unsaved || !provider.has_key}
+                loading={probe.pendingKeys.has('benchmark-current')}
+                disabled={busy || unsaved || !keyReady}
                 onClick={() => {
-                  const target = String(values.model).trim();
+                  const problem = validateModelName(providerType, selectedModel);
+                  if (problem) {
+                    setErrors((prev) => ({ ...prev, model: problem }));
+                    return;
+                  }
                   confirmThen(
                     '确认测试模型',
-                    `确定要向「${target}」发送一次测试请求吗？测试可能消耗服务额度。`,
-                    () => run('benchmark', target),
+                    `确定要向「${selectedModel}」发送一次测试请求吗？测试可能消耗服务额度。`,
+                    () => run('benchmark', selectedModel, 'benchmark-current'),
                     { tone: 'filled' },
                   );
                 }}
@@ -210,9 +254,19 @@ function ProviderEditor({
               </Button>
             )}
           </div>
-          {unsaved && (
+          {unsaved ? (
             <p className="text-body-s text-on-surface-variant">请先保存当前接口协议、地址与密钥，再获取模型或测试。</p>
-          )}
+          ) : !keyReady ? (
+            <p className="text-body-s text-on-surface-variant">
+              {provider.has_key
+                ? '当前服务器无法解密已保存的密钥，请重新填写并保存后再测试。'
+                : '请先保存密钥再获取模型或测试。'}
+            </p>
+          ) : unsavedModel ? (
+            <p className="text-body-s text-on-surface-variant">
+              模型名称已修改但尚未保存，点击下方「保存模型配置」后生效。
+            </p>
+          ) : null}
           <AdminListAnchor>
             <DataTable
               rows={modelRows.rows}
@@ -228,9 +282,9 @@ function ProviderEditor({
                   render: (r) => (
                     <span className="inline-flex flex-wrap items-center gap-2">
                       <span>{r.name}</span>
-                      {values.model === r.name && (
+                      {selectedModel === r.name && (
                         <Badge tone="success" size="sm">
-                          当前选用
+                          {provider.model === r.name ? '当前选用' : '当前选用（未保存）'}
                         </Badge>
                       )}
                     </span>
@@ -245,23 +299,23 @@ function ProviderEditor({
                       <Button
                         type="button"
                         size="xs"
-                        variant={values.model === r.name ? 'text' : 'tonal'}
-                        disabled={busy || values.model === r.name}
+                        variant={selectedModel === r.name ? 'text' : 'tonal'}
+                        disabled={busy || selectedModel === r.name}
                         onClick={() => change({ ...values, model: r.name })}
                       >
-                        {values.model === r.name ? '已选用' : '选用'}
+                        {selectedModel === r.name ? '已选用' : '选用'}
                       </Button>
                       <Button
                         type="button"
                         size="xs"
                         variant="text"
-                        loading={probe.pendingKeys.has(r.name)}
-                        disabled={busy || unsaved || !provider.has_key}
+                        loading={probe.pendingKeys.has(`benchmark:${r.name}`)}
+                        disabled={busy || unsaved || !keyReady}
                         onClick={() =>
                           confirmThen(
                             '确认测试模型',
                             `确定要向「${r.name}」发送一次测试请求吗？测试可能消耗服务额度。`,
-                            () => run('benchmark', r.name),
+                            () => run('benchmark', r.name, `benchmark:${r.name}`),
                             { tone: 'filled' },
                           )
                         }
@@ -305,14 +359,19 @@ const COLLAPSE_WATCHDOG_MS = Math.ceil(1000 * MOTION_SPEED_SCALE.slow);
 
 function Providers({ token, read }: { token: string; read: ReturnType<typeof useAdminQuery<Config>> }) {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
-  /* Hold the last edited target while `Collapse` glides closed so its height contracts smoothly. */
+  /* Hold the last edited target (and provider snapshot if deleted) while `Collapse` glides closed. */
   const [shownEditing, setShownEditing] = useState<string | 'new' | null>(null);
+  const [cachedProvider, setCachedProvider] = useState<api.Provider | null>(null);
   const remove = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   const config = read.data;
-  const shownProvider =
+  const liveShownProvider =
     config && shownEditing && shownEditing !== 'new'
       ? (config.providers.find((p) => p.id === shownEditing) ?? null)
+      : null;
+  const shownProvider =
+    shownEditing && shownEditing !== 'new'
+      ? (liveShownProvider ?? (cachedProvider?.id === shownEditing ? cachedProvider : null))
       : null;
   const editorOpen = Boolean(
     config && editing && (editing === 'new' || config.providers.some((p) => p.id === editing)),
@@ -321,25 +380,39 @@ function Providers({ token, read }: { token: string; read: ReturnType<typeof use
   const openOrToggle = (target: string | 'new') => {
     if (editing === target) {
       setEditing(null);
-      if (motionTier('list') === 'off') setShownEditing(null);
+      if (motionTier('list') === 'off') {
+        setShownEditing(null);
+        setCachedProvider(null);
+      }
       return;
     }
+    const found = target === 'new' ? null : (config?.providers.find((p) => p.id === target) ?? null);
+    setCachedProvider(found);
     setShownEditing(target);
     setEditing(target);
   };
 
   const closeEditor = () => {
     setEditing(null);
-    if (motionTier('list') === 'off') setShownEditing(null);
+    if (motionTier('list') === 'off') {
+      setShownEditing(null);
+      setCachedProvider(null);
+    }
   };
 
   useEffect(() => {
     if (editorOpen || !shownEditing) return;
     if (motionTier('list') === 'off') {
-      const frame = requestAnimationFrame(() => setShownEditing(null));
+      const frame = requestAnimationFrame(() => {
+        setShownEditing(null);
+        setCachedProvider(null);
+      });
       return () => cancelAnimationFrame(frame);
     }
-    const timer = setTimeout(() => setShownEditing(null), COLLAPSE_WATCHDOG_MS);
+    const timer = setTimeout(() => {
+      setShownEditing(null);
+      setCachedProvider(null);
+    }, COLLAPSE_WATCHDOG_MS);
     return () => clearTimeout(timer);
   }, [editorOpen, shownEditing]);
 
@@ -481,6 +554,7 @@ function Providers({ token, read }: { token: string; read: ReturnType<typeof use
                   !editorOpen
                 ) {
                   setShownEditing(null);
+                  setCachedProvider(null);
                 }
               }}
             >

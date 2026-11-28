@@ -185,6 +185,19 @@ test('numeric settings reject blank, fractions, exponent notation and unsafe val
   assert.equal(geminiDraft.thinking, 'xhigh');
   assert.equal(geminiDraft.temperature, null);
   assert.equal(model.normalizeThinking('gemini', 'minimum'), 'minimal');
+  assert.equal(
+    model.providerPayload({
+      ...provider,
+      provider_type: 'gemini',
+      base_url: 'HTTPS://generativelanguage.googleapis.com/v1beta',
+      model: 'gemini-3-flash',
+      thinking: 'minimum',
+    }).thinking,
+    'minimal',
+  );
+  assert.equal(model.validateModelName('gemini', 'bad/model') !== null, true);
+  assert.equal(model.validateModelName('openai_compatible', 'a'.repeat(161)) !== null, true);
+  assert.throws(() => model.providerPayload({ ...provider, base_url: `https://example.test/${'a'.repeat(2040)}` }));
   assert.equal(model.coerceThinkingForProvider('gemini', 'off'), 'minimal');
   assert.equal(model.coerceThinkingForProvider('gemini', 'max'), 'xhigh');
   assert.throws(() =>

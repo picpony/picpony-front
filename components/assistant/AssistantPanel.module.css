@@ -52,3 +52,37 @@
     outline-offset: 2px;
   }
 }
+
+/* Subtle pulsing bar at the foot of an actively streaming Markdown block so visitors can tell
+   tokens are still arriving even between brief pauses in generation. */
+.streamCaret {
+  display: inline-block;
+  width: 0.375rem;
+  height: 1em;
+  vertical-align: -0.15em;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-primary);
+  animation: stream-caret-pulse 1s ease-in-out infinite;
+}
+
+@keyframes stream-caret-pulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streamCaret {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+:global([data-motion='off']) .streamCaret {
+  animation: none;
+  opacity: 0.7;
+}

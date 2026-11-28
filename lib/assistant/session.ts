@@ -45,18 +45,23 @@ import {
   type AssistantMessage,
   type AssistantReceipt,
   type AssistantTask,
+  type AssistantTaskPoll,
   type JsonObject,
 } from './protocol';
 
 /** One piece of the live reply, in the order the turn produced it. */
 export type AssistantLiveBlock =
-  { type: 'thinking'; text: string } | { type: 'text'; text: string } | { type: 'tool'; tool: AssistantLiveTool };
+  | { type: 'thinking'; id: number; text: string }
+  | { type: 'text'; text: string }
+  | { type: 'tool'; tool: AssistantLiveTool };
 
 export interface AssistantSnapshot {
   ready: boolean;
   available: boolean;
   loading: boolean;
   busy: boolean;
+  /** True while an SSE connection is actively tailing a running turn (including after page reload). */
+  streamingActive: boolean;
   messages: AssistantMessage[];
   draft: string;
   pending: PendingChat | null;
@@ -79,6 +84,7 @@ const INITIAL: AssistantSnapshot = {
   available: false,
   loading: false,
   busy: false,
+  streamingActive: false,
   messages: [],
   draft: '',
   pending: null,
@@ -95,25 +101,17 @@ const INITIAL: AssistantSnapshot = {
 const POLL_MS = 900;
 /** Past the backend's own budget (up to 180s per model call / 360s turn) the panel stops waiting and offers 核对任务. */
 const POLL_LIMIT_MS = 360_000;
+/** Maximum automatic SSE reconnect attempts per model round after unexpected mid-turn drops. */
+const MAX_STREAM_RECONNECTS = 5;
 const ENDED: Record<string, string> = {
   failed: '彩彩 AI 未能完成此次请求，请稍后再试',
   cancelled: '已取消此操作',
   interrupted: '对话已中断，可重新发送',
 };
-/** The status while a turn is still running. The panel sweeps this exact line. */
+/** The status while a turn is reasoning or waiting for the first reply token. */
 export const THINKING_STATUS = '彩彩 AI 正在思考…';
-const wait = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(new DOMException('Session closed', 'AbortError'));
-      },
-      { once: true },
-    );
-  });
+/** The status once visible answer text has started streaming. */
+export const REPLYING_STATUS = '彩彩 AI 正在回复…';
 
 /**
  * The panel's conversation with the Rust backend's legacy bridge. A sent message queues a turn
@@ -126,13 +124,13 @@ const wait = (ms: number, signal: AbortSignal) =>
  * settle no quota: the turn settles once when it ends, and the panel re-reads the quota then.
  */
 /**
- * A reply worth putting in the thread. Blank output, or output with no letter, digit or Han
- * character, is a failed answer — a stray `.` or `—` is not something the visitor can read.
+ * A reply worth putting in the thread. Blank output, or output with no letter, digit, Han
+ * character, or emoji, is a failed answer — a stray `.` or `—` is not something the visitor can read.
  */
-function usableReply(raw: string): string {
+export function usableReply(raw: string): string {
   const text = raw.trim();
   if (!text) return '';
-  return /[\p{L}\p{N}]/u.test(text) ? text : '';
+  return /[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(text) ? text : '';
 }
 
 export function createAssistantSession(
@@ -154,6 +152,54 @@ export function createAssistantSession(
   const handled = new Set<string>();
   /** The live reply stream for the turn being followed; the poll below remains authoritative. */
   let live: AbortController | null = null;
+  let liveTaskId = '';
+  let nextThinkingId = 1;
+  let pendingThinking = '';
+  let pendingDelta = '';
+  let flushHandle: number | ReturnType<typeof setTimeout> | null = null;
+  let flushKind: 'raf' | 'timer' | null = null;
+  let pollWake: (() => void) | null = null;
+  const wakePoll = () => {
+    const wake = pollWake;
+    pollWake = null;
+    wake?.();
+  };
+  const sleepPoll = (ms: number, signal: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException('Session closed', 'AbortError'));
+        return;
+      }
+      let settled = false;
+      const finish = (cb: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal.removeEventListener('abort', onAbort);
+        if (pollWake === onWake) pollWake = null;
+        cb();
+      };
+      const onWake = () => finish(resolve);
+      const onAbort = () => finish(() => reject(new DOMException('Session closed', 'AbortError')));
+      const timer = setTimeout(() => finish(resolve), ms);
+      pollWake = onWake;
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  const cancelScheduledFlush = () => {
+    if (flushHandle === null) return;
+    if (flushKind === 'raf' && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(flushHandle as number);
+    } else {
+      clearTimeout(flushHandle);
+    }
+    flushHandle = null;
+    flushKind = null;
+  };
+  const clearPendingDeltas = () => {
+    cancelScheduledFlush();
+    pendingThinking = '';
+    pendingDelta = '';
+  };
   const isActive = () => (active || continuingNavigation) && env.active();
   const journal = createReceiptJournal(localStorage, accountId);
   const assertCurrent = () => {
@@ -218,56 +264,167 @@ export function createAssistantSession(
   }
 
   /** Append a thinking delta to the trailing thinking block, starting a new block after text or tools. */
-  function appendThinking(live: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
-    if (!text) return live;
-    const last = live[live.length - 1];
+  function appendThinking(blocks: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
+    if (!text) return blocks;
+    const last = blocks[blocks.length - 1];
     if (last?.type === 'thinking') {
-      return [...live.slice(0, -1), { type: 'thinking', text: last.text + text }];
+      return [...blocks.slice(0, -1), { ...last, text: last.text + text }];
     }
-    return [...live, { type: 'thinking', text }];
+    return [...blocks, { type: 'thinking', id: nextThinkingId++, text }];
   }
 
-  /** Append a delta to the text run it belongs to, starting a new run after a tool call. */
-  function appendText(live: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
-    if (!text) return live;
-    const last = live[live.length - 1];
+  /**
+   * Append a delta to the text run it belongs to, starting a new run after a thinking block or tool call.
+   * Leading whitespace-only deltas before any visible character are ignored so a newline emitted
+   * immediately after reasoning does not prematurely collapse the live thinking disclosure.
+   */
+  function appendText(blocks: AssistantLiveBlock[], text: string): AssistantLiveBlock[] {
+    if (!text) return blocks;
+    const last = blocks[blocks.length - 1];
     if (last?.type === 'text') {
-      return [...live.slice(0, -1), { type: 'text', text: last.text + text }];
+      return [...blocks.slice(0, -1), { type: 'text', text: last.text + text }];
     }
-    return [...live, { type: 'text', text }];
+    const stripped = text.replace(/^\s+/, '');
+    if (!stripped) return blocks;
+    return [...blocks, { type: 'text', text: stripped }];
   }
 
   /** The first fragment and the completed call are one block, at the point the call began. */
-  function mergeLiveTool(live: AssistantLiveBlock[], tool: AssistantLiveTool): AssistantLiveBlock[] {
-    const index = live.findIndex((block) => block.type === 'tool' && block.tool.id === tool.id);
-    if (index < 0) return [...live, { type: 'tool', tool }];
-    return live.map((block, at) =>
+  function mergeLiveTool(blocks: AssistantLiveBlock[], tool: AssistantLiveTool): AssistantLiveBlock[] {
+    const index = blocks.findIndex((block) => block.type === 'tool' && block.tool.id === tool.id);
+    if (index < 0) return [...blocks, { type: 'tool', tool }];
+    return blocks.map((block, at) =>
       at === index && block.type === 'tool'
         ? { type: 'tool', tool: { ...block.tool, ...tool, ok: tool.ok ?? block.tool.ok } }
         : block,
     );
   }
 
-  /** Tail the turn's events. A stream failure costs the live view only; `follow` keeps polling. */
-  function startStream(taskId: string) {
+  function flushPendingDeltas() {
+    cancelScheduledFlush();
+    if ((!pendingThinking && !pendingDelta) || disposed) {
+      pendingThinking = '';
+      pendingDelta = '';
+      return;
+    }
+    const thinkingChunk = pendingThinking;
+    const deltaChunk = pendingDelta;
+    pendingThinking = '';
+    pendingDelta = '';
+    let nextLive = snapshot.live;
+    if (thinkingChunk) nextLive = appendThinking(nextLive, thinkingChunk);
+    const beforeDelta = nextLive;
+    if (deltaChunk) nextLive = appendText(nextLive, deltaChunk);
+    const textAppended = nextLive !== beforeDelta;
+    if (nextLive === snapshot.live) return;
+    const hasVisibleText = nextLive.some((block) => block.type === 'text' && block.text.length > 0);
+    const patch: Partial<AssistantSnapshot> = { live: nextLive };
+    if (textAppended) patch.streaming = snapshot.streaming + deltaChunk;
+    if (hasVisibleText && snapshot.status === THINKING_STATUS) {
+      patch.status = REPLYING_STATUS;
+    }
+    publish(patch);
+  }
+
+  function scheduleFlush() {
+    if (flushHandle !== null || disposed) return;
+    if (typeof requestAnimationFrame === 'function' && (typeof document === 'undefined' || !document.hidden)) {
+      flushKind = 'raf';
+      flushHandle = requestAnimationFrame(() => {
+        flushHandle = null;
+        flushKind = null;
+        flushPendingDeltas();
+      });
+    } else {
+      flushKind = 'timer';
+      flushHandle = setTimeout(() => {
+        flushHandle = null;
+        flushKind = null;
+        flushPendingDeltas();
+      }, 32);
+    }
+  }
+
+  function settleTurn(turn: AssistantTaskPoll) {
+    flushPendingDeltas();
+    const finished = turn.status === 'done';
+    const text = finished ? usableReply(turn.reply) : '';
+    const liveThinking = snapshot.live
+      .flatMap((block) => (block.type === 'thinking' ? [block.text] : []))
+      .join('\n\n')
+      .trim();
+    const thinking = finished ? turn.thinking.trim() || liveThinking : '';
+    const tools = snapshot.live.flatMap((block) => (block.type === 'tool' ? [block.tool] : []));
+    if (text || tools.length) add('assistant', text, '', tools, thinking || undefined);
+    publish({
+      task: null,
+      streaming: '',
+      streamingActive: false,
+      tools: [],
+      live: [],
+      status: '',
+      /* A turn that ends without readable words is a failure, not an empty bubble. A failed
+         or cancelled turn names its state; a "done" turn with nothing usable says so. */
+      error: finished
+        ? text || tools.length
+          ? ''
+          : '彩彩 AI 未返回有效回复，请重新发送'
+        : (ENDED[turn.status] ?? '彩彩 AI 未能完成此次请求，请稍后再试'),
+    });
+    stopStream();
+  }
+
+  /** Settle a turn that finished while tailed passively after `restore()` (outside `follow()`). */
+  async function settleRestoredTurn(taskId: string) {
+    if (disposed || snapshot.busy || snapshot.task?.id !== taskId) return;
+    try {
+      assertCurrent();
+      const turn = await pollAssistantTask(token, taskId, controller.signal);
+      assertCurrent();
+      if (disposed || snapshot.busy || snapshot.task?.id !== taskId) return;
+      if (!ACTIVE_STATES.includes(turn.status)) {
+        settleTurn(turn);
+        assistantQuota.expire({ token });
+      }
+    } catch {
+      /* User can still click 核对任务 if the settle poll fails transiently. */
+    }
+  }
+
+  /** Tail the turn's events. A stream failure costs the live view only; `follow` keeps polling and reconnecting. */
+  function startStream(taskId: string, options: { preserveIfOpen?: boolean } = {}) {
+    if (options.preserveIfOpen && live && liveTaskId === taskId && !live.signal.aborted) {
+      return;
+    }
     live?.abort();
+    clearPendingDeltas();
     const stream = new AbortController();
     live = stream;
-    /* Keep tool blocks across a resumed stream (a confirmation parks and restarts the turn).
-       A new turn clears them in `send`; a finished turn clears them in `follow`. */
-    publish({ streaming: '' });
+    liveTaskId = taskId;
+    publish({ streamingActive: true });
     void streamAssistantTask(
       token,
       taskId,
       (event) => {
         if (stream.signal.aborted || disposed) return;
         if (event.type === 'thinking') {
-          publish({ live: appendThinking(snapshot.live, event.text) });
-        } else if (event.type === 'delta') {
-          publish({
-            streaming: snapshot.streaming + event.text,
-            live: appendText(snapshot.live, event.text),
-          });
+          if (pendingDelta) flushPendingDeltas();
+          pendingThinking += event.text;
+          scheduleFlush();
+          return;
+        }
+        if (event.type === 'delta') {
+          if (pendingThinking) flushPendingDeltas();
+          pendingDelta += event.text;
+          scheduleFlush();
+          return;
+        }
+        /* Flush queued thinking/text tokens before any structural event so block order is exact. */
+        flushPendingDeltas();
+        if (event.type === 'sync') {
+          /* Authoritative replay from server history (on reconnect or lag recovery): replace local
+             live state cleanly so replayed thinking/text/tools never duplicate. */
+          publish({ streaming: '', tools: [], live: [] });
         } else if (event.type === 'tool') {
           const tool = { id: event.id, name: event.name, arguments: event.arguments };
           publish({
@@ -284,44 +441,77 @@ export function createAssistantSession(
             ),
           });
         } else if (event.type === 'reset') {
-          /* A new model round (or a fallback attempt) starts. Any trailing partial thinking/text
-           belongs to the attempt that just reset; earlier tool calls and content before them stay. */
+          /* A fallback attempt starts after a failed provider call: drop trailing partial thinking,
+             text, and any uncompleted tool calls (`ok === undefined`) emitted by that attempt while
+             keeping earlier completed tool rounds intact. */
           let end = snapshot.live.length;
-          while (end > 0 && snapshot.live[end - 1].type !== 'tool') end -= 1;
+          while (end > 0) {
+            const tail = snapshot.live[end - 1];
+            if (tail.type === 'tool' && tail.tool.ok !== undefined) break;
+            end -= 1;
+          }
+          const nextLive = end === snapshot.live.length ? snapshot.live : snapshot.live.slice(0, end);
+          const keptTools = nextLive.flatMap((block) => (block.type === 'tool' ? [block.tool] : []));
           publish({
             streaming: '',
-            live: end === snapshot.live.length ? snapshot.live : snapshot.live.slice(0, end),
+            tools: keptTools,
+            live: nextLive,
           });
-        }
-        /* The turn is over or parked: stop reading rather than hold a keep-alive connection open.
-         `done` keeps the text — `follow` replaces it with the persisted message a poll later. */
-        else if (event.type === 'done') stream.abort();
-        else if (event.type === 'paused' || event.type === 'failed') {
-          /* Parked or terminal: stop the stream, keep what the turn already showed. The pending
-           card or the final reply sits below the tool calls that led to it. */
-          publish({ streaming: '' });
+        } else if (event.type === 'done') {
+          /* Surface non-streamed fallback reply/thinking immediately before `follow` settles. */
+          let nextLive = snapshot.live;
+          if (event.thinking?.trim() && !nextLive.some((block) => block.type === 'thinking')) {
+            nextLive = appendThinking(nextLive, event.thinking);
+          }
+          if (event.reply?.trim() && !nextLive.some((block) => block.type === 'text')) {
+            nextLive = appendText(nextLive, event.reply);
+          }
+          if (nextLive !== snapshot.live) {
+            publish({ live: nextLive, streaming: event.reply });
+          }
           stream.abort();
+          wakePoll();
+          if (!snapshot.busy) void settleRestoredTurn(taskId);
+        } else if (event.type === 'paused') {
+          /* Parked for client tool or confirmation: stop the stream, keep prior blocks visible. */
+          publish({ streaming: '', streamingActive: false });
+          stream.abort();
+          wakePoll();
+        } else if (event.type === 'failed') {
+          publish({ streaming: '', streamingActive: false });
+          stream.abort();
+          wakePoll();
+          if (!snapshot.busy) void settleRestoredTurn(taskId);
         }
       },
       stream.signal,
     )
       .catch(() => {
-        /* polling is the source of truth */
+        /* polling is the source of truth; `follow` reconnects while the turn remains active */
       })
       .finally(() => {
-        if (live === stream) live = null;
+        flushPendingDeltas();
+        if (live === stream) {
+          live = null;
+          liveTaskId = '';
+          if (!disposed) publish({ streamingActive: false });
+        }
       });
   }
   function stopStream() {
+    clearPendingDeltas();
     live?.abort();
     live = null;
-    publish({ streaming: '' });
+    liveTaskId = '';
+    publish({ streaming: '', streamingActive: false });
   }
 
   /** Poll one turn until it ends, parks on a confirmation, or outlives the backend's budget. */
   async function follow(taskId: string) {
-    startStream(taskId);
+    startStream(taskId, { preserveIfOpen: true });
     const started = Date.now();
+    let streamReconnects = 0;
+    let nextReconnectAt = 0;
     for (;;) {
       assertCurrent();
       const turn = await pollAssistantTask(token, taskId, controller.signal);
@@ -349,7 +539,12 @@ export function createAssistantSession(
           release();
           return;
         }
-        await wait(POLL_MS, controller.signal);
+        /* The final receipt reopened the turn on the backend: reconnect SSE immediately so the
+           resumed model generation streams live instead of waiting for the final poll. */
+        streamReconnects = 0;
+        nextReconnectAt = 0;
+        startStream(taskId);
+        await sleepPoll(POLL_MS, controller.signal);
         continue;
       }
       if (ACTIVE_STATES.includes(turn.status)) {
@@ -361,34 +556,27 @@ export function createAssistantSession(
           });
           return;
         }
-        publish({ task: following(taskId, turn.status), status: THINKING_STATUS });
-        await wait(POLL_MS, controller.signal);
+        /* Reconnect SSE with bounded backoff if a proxy idle timeout or transient network drop
+           closed the stream while the turn is still running on the server. */
+        if (
+          turn.status !== 'waiting_confirmation' &&
+          !live &&
+          streamReconnects < MAX_STREAM_RECONNECTS &&
+          Date.now() >= nextReconnectAt
+        ) {
+          streamReconnects += 1;
+          nextReconnectAt = Date.now() + Math.min(4000, 500 * 2 ** (streamReconnects - 1));
+          startStream(taskId);
+        }
+        const hasVisibleText = snapshot.live.some((block) => block.type === 'text' && block.text.length > 0);
+        const nextStatus = hasVisibleText ? REPLYING_STATUS : THINKING_STATUS;
+        if (snapshot.task?.id !== taskId || snapshot.task?.status !== turn.status || snapshot.status !== nextStatus) {
+          publish({ task: following(taskId, turn.status), status: nextStatus });
+        }
+        await sleepPoll(POLL_MS, controller.signal);
         continue;
       }
-      const finished = turn.status === 'done';
-      const text = finished ? usableReply(turn.reply) : '';
-      const liveThinking = snapshot.live
-        .flatMap((block) => (block.type === 'thinking' ? [block.text] : []))
-        .join('\n\n')
-        .trim();
-      const thinking = finished ? turn.thinking.trim() || liveThinking : '';
-      const tools = snapshot.live.flatMap((block) => (block.type === 'tool' ? [block.tool] : []));
-      if (text || tools.length) add('assistant', text, '', tools, thinking || undefined);
-      publish({
-        task: null,
-        streaming: '',
-        tools: [],
-        live: [],
-        status: '',
-        /* A turn that ends without readable words is a failure, not an empty bubble. A failed
-           or cancelled turn names its state; a "done" turn with nothing usable says so. */
-        error: finished
-          ? text || tools.length
-            ? ''
-            : '彩彩 AI 未返回有效回复，请重新发送'
-          : (ENDED[turn.status] ?? '彩彩 AI 未能完成此次请求，请稍后再试'),
-      });
-      stopStream();
+      settleTurn(turn);
       return;
     }
   }
@@ -732,8 +920,11 @@ export function createAssistantSession(
     },
     dispose() {
       disposed = true;
+      clearPendingDeltas();
+      wakePoll();
       live?.abort();
       live = null;
+      liveTaskId = '';
       controller.abort();
       listeners.clear();
     },

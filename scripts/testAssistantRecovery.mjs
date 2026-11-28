@@ -442,3 +442,45 @@ test('assistant state parses persisted thinking traces and raises reply/thinking
   assert.equal('thinking' in state.messages[0], false, 'blank thinking is omitted');
   assert.equal(state.messages[1].thinking, '先读取任务列表，再汇总奖励');
 });
+
+test('SSE parser supports comments, multi-line data frames, sync events, and EOF flush', async () => {
+  const { createSseParser } = await import('../lib/api/assistant.ts');
+  const received = [];
+  const parser = createSseParser((event) => received.push(event));
+  parser.push(': connected\r\n\r\n');
+  parser.push('data: {"type":"sync"}\r\n\r\n');
+  parser.push('data: {\n');
+  parser.push('data: "type":"thinking","text":"先想"\n');
+  parser.push('data: }\n\n');
+  parser.push('data: {"type":"delta","text":"你好"}');
+  parser.finish();
+  assert.deepEqual(received, [{ type: 'sync' }, { type: 'thinking', text: '先想' }, { type: 'delta', text: '你好' }]);
+});
+
+test('assistant Markdown formatter protects code blocks, inline code, tables, and trailing streaming pipes', async () => {
+  const { formatAssistantMarkdown, splitStreamingMarkdown } = await import('../lib/assistant/format.ts');
+  assert.equal(formatAssistantMarkdown('第一句||第二句'), '第一句\n\n第二句');
+  assert.equal(formatAssistantMarkdown('用 `a || b` 或 || 换段'), '用 `a || b` 或 \n\n 换段');
+  const fenced = '前文||后文\n```js\nconst ok = a || b;\n```\n结尾||再见';
+  assert.equal(formatAssistantMarkdown(fenced), '前文\n\n后文\n```js\nconst ok = a || b;\n```\n结尾\n\n再见');
+  const table = '| A | B |\n|---|---|\n| 1 || 2 |';
+  assert.equal(formatAssistantMarkdown(table), table, 'GFM table rows are untouched');
+  assert.equal(formatAssistantMarkdown('你好|', true), '你好', 'holds back trailing single pipe while streaming');
+  assert.equal(formatAssistantMarkdown('你好|', false), '你好|', 'keeps trailing single pipe when settled');
+
+  const split = splitStreamingMarkdown('第一段\n\n```ts\nconst x = 1;\n\nconst y = 2;\n```\n\n正在输出');
+  assert.deepEqual(split.settled, ['第一段', '```ts\nconst x = 1;\n\nconst y = 2;\n```']);
+  assert.equal(split.active, '正在输出');
+
+  const withRef = splitStreamingMarkdown('见 [官网][1]\n\n[1]: https://example.test');
+  assert.deepEqual(withRef.settled, []);
+  assert.equal(withRef.active, '见 [官网][1]\n\n[1]: https://example.test');
+});
+
+test('usableReply accepts emoji replies while still rejecting stray punctuation', async () => {
+  const { usableReply } = await import('../lib/assistant/session.ts');
+  assert.equal(usableReply('🦄✨'), '🦄✨');
+  assert.equal(usableReply('你好'), '你好');
+  assert.equal(usableReply('...'), '');
+  assert.equal(usableReply('—'), '');
+});

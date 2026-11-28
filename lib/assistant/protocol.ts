@@ -93,6 +93,7 @@ export interface AssistantLiveTool {
  * `reset` starts a provider attempt or a tool round; `paused` parks the stream for a decision.
  */
 export type AssistantStreamEvent =
+  | { type: 'sync' }
   | { type: 'reset' }
   | { type: 'thinking'; text: string }
   | { type: 'delta'; text: string }

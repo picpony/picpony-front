@@ -299,8 +299,12 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD' && request.body !== null;
   /* A live reply is a stream the client reads as it arrives: the ordinary total timeout would
-     cut it at 30s, and a buffered or compressed response would defeat it entirely. */
+     cut it at 30s, and a buffered or compressed response would defeat it entirely. Requesting
+     `identity` stops upstream proxies from gzip-buffering SSE frames before flushing. */
   const eventStream = request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false;
+  if (eventStream) {
+    headers.set('accept-encoding', 'identity');
+  }
 
   /* A small body is read whole so it goes upstream with a Content-Length, never chunked
      (see `BUFFERED_BODY_MAX`). */
@@ -348,6 +352,16 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   if (streamed && declaredLength !== null && /^\d+$/.test(declaredLength)) {
     headers.set('content-length', declaredLength);
   }
+  /* Bound the SSE response-headers handshake to `UPSTREAM_TIMEOUT_MS` so a dead upstream cannot
+     hold a Node socket open forever, then clear the timer as soon as headers arrive so the live
+     stream itself stays open for the turn's full duration. */
+  const sseConnectController = eventStream && !paceController ? new AbortController() : null;
+  const sseConnectTimer = sseConnectController
+    ? setTimeout(
+        () => sseConnectController.abort(new DOMException('upstream did not answer', 'TimeoutError')),
+        UPSTREAM_TIMEOUT_MS,
+      )
+    : null;
   let upstream: Response;
   try {
     const init: RequestInit & { duplex: 'half' } = {
@@ -361,12 +375,14 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       cache: 'no-store',
       signal: paceController
         ? AbortSignal.any([request.signal, paceController.signal, AbortSignal.timeout(BODY_TOTAL_MS)])
-        : eventStream
-          ? request.signal
+        : sseConnectController
+          ? AbortSignal.any([request.signal, sseConnectController.signal])
           : AbortSignal.any([request.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     };
     upstream = await fetch(target, init);
+    if (sseConnectTimer) clearTimeout(sseConnectTimer);
   } catch {
+    if (sseConnectTimer) clearTimeout(sseConnectTimer);
     paced?.done();
     /* The client's own body stopped arriving while its connection stayed open (review P4-O2): that
        is the visitor's network, not ours, and a 502 read as 「服务暂时不可用」. A 408 is the honest

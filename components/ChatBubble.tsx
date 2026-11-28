@@ -102,7 +102,7 @@ export default function ChatBubble({
       <div
         className={cn(
           'flex min-w-0 flex-col',
-          plain ? 'max-w-full' : 'max-w-[85%] @lg/bubble:max-w-[70%]',
+          plain ? 'w-full max-w-full' : 'max-w-[85%] @lg/bubble:max-w-[70%]',
           own ? 'items-end' : 'items-start',
         )}
       >
@@ -118,6 +118,7 @@ export default function ChatBubble({
                  `pre-wrap` keeps the sender's line breaks and spaces; the words
                  still wrap at the bubble's edge. */
               'text-body-m min-w-0 max-w-full wrap-anywhere',
+              plain && 'w-full',
               !rich && 'whitespace-pre-wrap',
               /* Everything that makes a row a bubble. A plain row keeps only the text. */
               !plain && 'rounded-lg px-4 py-2',

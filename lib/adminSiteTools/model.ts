@@ -364,7 +364,7 @@ export const OPENAI_THINKING_OPTIONS: { value: OpenAiThinkingLevel; label: strin
 ];
 
 export const GEMINI_THINKING_OPTIONS: { value: GeminiThinkingLevel; label: string }[] = [
-  { value: 'minimal', label: '最低（minimum）' },
+  { value: 'minimal', label: '最低（minimal）' },
   { value: 'low', label: '低（low）' },
   { value: 'medium', label: '中（medium）' },
   { value: 'high', label: '高（high）' },
@@ -433,6 +433,7 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       key: 'base_url',
       label: '模型服务地址',
       kind: 'url',
+      max: 2048,
       helper:
         providerType === 'gemini'
           ? '须为 HTTPS 地址，例如 https://generativelanguage.googleapis.com/v1beta'
@@ -551,16 +552,28 @@ export function providerValues(source: Omit<ProviderDraft, 'api_key' | 'clear_ke
   };
 }
 
+export function validateModelName(providerType: ProviderType, model: string): string | null {
+  const trimmed = model.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 160) return '模型名称最多 160 个字符';
+  if (providerType === 'gemini' && (!/^[A-Za-z0-9._-]+$/.test(trimmed) || trimmed.includes('..'))) {
+    return 'Gemini 模型名称只能包含字母、数字、点、短横线或下划线';
+  }
+  return null;
+}
+
 export function providerPayload(values: Values): ProviderDraft {
   const providerType = normalizeProviderType(values.provider_type);
-  const body = fieldsPayload(providerFieldsFor(providerType), values);
+  const rawThinking = typeof values.thinking === 'string' ? values.thinking.trim().toLowerCase() : values.thinking;
+  const normalizedValues: Values = rawThinking === 'minimum' ? { ...values, thinking: 'minimal' } : values;
+  const body = fieldsPayload(providerFieldsFor(providerType), normalizedValues);
   const problems: Record<string, string> = {};
   const model = text(body.model);
   if (body.enabled === true && !model) problems.model = '启用配置前请填写模型名称';
-  if (providerType === 'gemini' && model && (!/^[A-Za-z0-9._-]+$/.test(model) || model.includes('..'))) {
-    problems.model = 'Gemini 模型名称只能包含字母、数字、点、短横线或下划线';
-  }
-  if (text(body.base_url) && !text(body.base_url).startsWith('https://')) problems.base_url = '请填写 HTTPS 地址';
+  const modelProblem = validateModelName(providerType, model);
+  if (modelProblem) problems.model = modelProblem;
+  if (text(body.base_url) && !text(body.base_url).toLowerCase().startsWith('https://'))
+    problems.base_url = '请填写 HTTPS 地址';
   if (body.clear_key && body.api_key) problems.api_key = '清除密钥时请先清空新密钥';
   if (Object.keys(problems).length) throw new FormProblem(problems);
   return {

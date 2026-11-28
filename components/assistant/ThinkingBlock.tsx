@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { MdExpandMore, MdPsychology } from 'react-icons/md';
 import Collapse from '@/components/Collapse';
 import LoadingIndicator from '@/components/LoadingIndicator';
@@ -28,19 +28,27 @@ export interface ThinkingBlockProps {
 export default function ThinkingBlock({ text, isActive = false, paused = false, className = '' }: ThinkingBlockProps) {
   const contentId = useId();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  const open = userOpen ?? isActive;
+  const displayText = isActive ? text.replace(/^\n+/, '') : text.trim();
+  const expandable = displayText.length > 0;
+  const open = expandable && (userOpen ?? isActive);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+  const programmaticScrollRef = useRef(false);
 
-  const displayText = isActive ? text.replace(/^\n+/, '') : text.trim();
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isActive || !open || !nearBottomRef.current) return;
     const node = scrollerRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    if (!node) return;
+    programmaticScrollRef.current = true;
+    node.scrollTop = node.scrollHeight;
+    lastScrollTopRef.current = node.scrollTop;
+    queueMicrotask(() => {
+      programmaticScrollRef.current = false;
+    });
   }, [displayText, isActive, open]);
 
-  if (!isActive && !displayText) return null;
+  if (!isActive && !expandable) return null;
 
   return (
     <div
@@ -51,16 +59,20 @@ export default function ThinkingBlock({ text, isActive = false, paused = false, 
     >
       <button
         type="button"
-        aria-expanded={open}
-        aria-controls={displayText ? contentId : undefined}
-        data-ripple=""
-        onClick={() => setUserOpen(!open)}
+        aria-expanded={expandable ? open : undefined}
+        aria-controls={expandable ? contentId : undefined}
+        data-ripple={expandable ? 'inner' : undefined}
+        onClick={() => {
+          if (expandable) setUserOpen(!open);
+        }}
         className={cn(
-          'state-layer touch-target-block flex min-h-10 w-full cursor-pointer select-none touch-manipulation items-center gap-2 px-3 py-2 text-left',
+          'touch-target-block flex min-h-10 w-full select-none touch-manipulation items-center gap-2 px-3 py-2 text-left',
           'transition-[color,background-color] spring-fast-effects focus-visible:outline-hidden focus-visible:ring-2 focus-ring',
-          open && displayText ? 'rounded-t-md' : 'rounded-md',
+          expandable ? 'state-layer cursor-pointer' : 'cursor-default',
+          open ? 'rounded-t-md' : 'rounded-md',
         )}
       >
+        {expandable && <span data-ripple-host="" aria-hidden="true" />}
         {isActive ? (
           <LoadingIndicator
             size="xs"
@@ -78,17 +90,19 @@ export default function ThinkingBlock({ text, isActive = false, paused = false, 
         >
           {isActive ? '正在思考…' : '思考过程'}
         </span>
-        <MdExpandMore
-          size={ICON.control}
-          aria-hidden="true"
-          className={cn(
-            'shrink-0 text-on-surface-variant transition-[rotate] spring-fast-spatial',
-            open && 'rotate-180',
-          )}
-        />
+        {expandable && (
+          <MdExpandMore
+            size={ICON.control}
+            aria-hidden="true"
+            className={cn(
+              'shrink-0 text-on-surface-variant transition-[rotate] spring-fast-spatial',
+              open && 'rotate-180',
+            )}
+          />
+        )}
       </button>
 
-      {displayText ? (
+      {expandable ? (
         <Collapse id={contentId} open={open}>
           <div className="border-t border-outline-variant">
             <ScrollArea
@@ -98,7 +112,18 @@ export default function ThinkingBlock({ text, isActive = false, paused = false, 
               viewportProps={{
                 onScroll: (event) => {
                   const node = event.currentTarget;
-                  nearBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
+                  if (programmaticScrollRef.current) {
+                    lastScrollTopRef.current = node.scrollTop;
+                    return;
+                  }
+                  const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
+                  const scrolledUp = node.scrollTop < lastScrollTopRef.current - 2;
+                  lastScrollTopRef.current = node.scrollTop;
+                  if (distance < 24) {
+                    nearBottomRef.current = true;
+                  } else if (scrolledUp) {
+                    nearBottomRef.current = false;
+                  }
                 },
               }}
             >

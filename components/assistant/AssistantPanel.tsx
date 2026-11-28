@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   MdArrowDownward,
@@ -43,7 +43,8 @@ import { MEDIA } from '@/lib/constants';
 import { formatExactCount } from '@/lib/format';
 import { motionTier } from '@/lib/appearance';
 import { useOverlayScrollbar } from '@/lib/overlayScrollbar';
-import { createAssistantSession, THINKING_STATUS } from '@/lib/assistant/session';
+import { createAssistantSession, REPLYING_STATUS, THINKING_STATUS } from '@/lib/assistant/session';
+import { formatAssistantMarkdown, splitStreamingMarkdown } from '@/lib/assistant/format';
 import { actionLabel, actionSupported, toolLabel } from '@/lib/assistant/actions';
 import { assistantQuota } from '@/lib/assistant/queries';
 import { useJournalText } from '@/lib/assistant/useJournal';
@@ -102,8 +103,28 @@ function starterIcon(kind: StarterIcon) {
   }
 }
 
-function formatMessageText(raw: string): string {
-  return raw.replaceAll('||', '\n\n');
+const MemoizedMarkdownBlock = memo(function MemoizedMarkdownBlock({ content }: { content: string }) {
+  return <MarkdownRenderer content={content} />;
+});
+
+/**
+ * Incremental Markdown renderer for live assistant replies.
+ *
+ * Completed paragraphs/blocks stay memoized so incoming SSE tokens only re-parse the trailing
+ * active block instead of re-running remark/rehype over the full reply on every frame.
+ */
+function StreamingMarkdown({ content, active }: { content: string; active: boolean }) {
+  const formatted = formatAssistantMarkdown(content, active);
+  const { settled, active: tail } = splitStreamingMarkdown(formatted);
+  return (
+    <div className="max-w-full min-w-0 space-y-2 text-body-m wrap-anywhere">
+      {settled.map((block, idx) => (
+        <MemoizedMarkdownBlock key={idx} content={block} />
+      ))}
+      {tail ? <MarkdownRenderer content={tail} /> : null}
+      {active && <span className={styles.streamCaret} aria-hidden="true" />}
+    </div>
+  );
 }
 
 /** Compact interactive quota summary pill in the top bar. */
@@ -311,6 +332,8 @@ function Conversation({
   const focusPending = useRef(false);
   const interacted = useRef(false);
   const nearEnd = useRef(true);
+  const lastScrollTop = useRef(0);
+  const programmaticScroll = useRef(false);
   const attached = useRef(false);
 
   const text = state.pending?.message ?? state.draft;
@@ -361,10 +384,15 @@ function Conversation({
     if (isOpen && quota.data && (!quota.data.enabled || !quota.data.user_enabled)) onClose();
   }, [isOpen, quota.data, onClose]);
 
-  useEffect(() => {
-    if (nearEnd.current && log.current) {
-      log.current.scrollTop = log.current.scrollHeight;
-    }
+  useLayoutEffect(() => {
+    if (!nearEnd.current || !log.current) return;
+    const node = log.current;
+    programmaticScroll.current = true;
+    node.scrollTop = node.scrollHeight;
+    lastScrollTop.current = node.scrollTop;
+    queueMicrotask(() => {
+      programmaticScroll.current = false;
+    });
   }, [
     isOpen,
     state.messages,
@@ -581,7 +609,7 @@ function Conversation({
           const own = message.role === 'user';
           const startOfRun = index === 0 || messages[index - 1].role !== message.role;
           const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
-          const formatted = formatMessageText(message.content);
+          const formatted = own ? message.content : formatAssistantMarkdown(message.content);
           const deleteAction = message.id ? (
             <IconButton
               size="sm"
@@ -741,8 +769,18 @@ function Conversation({
           viewportProps={{
             onScroll: (event) => {
               const node = event.currentTarget;
+              if (programmaticScroll.current) {
+                lastScrollTop.current = node.scrollTop;
+                return;
+              }
               const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
-              nearEnd.current = distance < 64;
+              const scrolledUp = node.scrollTop < lastScrollTop.current - 2;
+              lastScrollTop.current = node.scrollTop;
+              if (distance < 48) {
+                nearEnd.current = true;
+              } else if (scrolledUp) {
+                nearEnd.current = false;
+              }
               setShowScrollDown(distance > 120);
             },
           }}
@@ -755,7 +793,7 @@ function Conversation({
                 unconfirmed outcome adds a calm tinted recovery card underneath it. */}
             {state.pending && (
               <div className="flex flex-col gap-2">
-                <ChatBubble own>{formatMessageText(state.pending.message)}</ChatBubble>
+                <ChatBubble own>{state.pending.message}</ChatBubble>
                 {!state.busy && (
                   <div className="ml-auto flex max-w-full flex-col items-end gap-2 rounded-md bg-warning-container p-3 text-on-warning-container forced-boundary">
                     <p className="text-end text-body-s">此条消息的执行状态尚未确认，草稿已保留</p>
@@ -793,34 +831,35 @@ function Conversation({
                 <AssistantEyebrow />
                 {state.live.length > 0 ? (
                   state.live.map((block, index) => {
+                    const isStreamingTurn = state.busy || state.streamingActive;
+                    const isTail = index === state.live.length - 1;
                     if (block.type === 'thinking') {
-                      const isActive = state.busy && index === state.live.length - 1;
                       return (
                         <ThinkingBlock
-                          key={`thinking-${index}`}
+                          key={`thinking-${block.id}`}
                           text={block.text}
-                          isActive={isActive}
+                          isActive={isStreamingTurn && isTail}
                           paused={!isOpen}
                         />
                       );
                     }
                     if (block.type === 'text') {
                       return (
-                        <div key={`text-${index}`} className="max-w-full min-w-0 text-body-m wrap-anywhere">
-                          <MarkdownRenderer content={formatMessageText(block.text)} />
-                        </div>
+                        <StreamingMarkdown
+                          key={`text-${index}`}
+                          content={block.text}
+                          active={isStreamingTurn && isTail}
+                        />
                       );
                     }
                     return (
                       <div key={`tool-${block.tool.id}`} className="flex">
-                        <LiveToolRow tool={block.tool} running={state.busy} />
+                        <LiveToolRow tool={block.tool} running={isStreamingTurn} />
                       </div>
                     );
                   })
                 ) : (
-                  <div className="max-w-full min-w-0 text-body-m wrap-anywhere">
-                    <MarkdownRenderer content={formatMessageText(state.streaming)} />
-                  </div>
+                  <StreamingMarkdown content={state.streaming} active={state.busy || state.streamingActive} />
                 )}
               </div>
             )}
@@ -933,7 +972,7 @@ function Conversation({
       >
         <div className="mb-2 flex min-h-5 items-center justify-between gap-2">
           <div role="status" aria-live="polite" className="flex min-w-0 flex-1 items-center gap-1.5">
-            {state.status === THINKING_STATUS ? (
+            {state.status === THINKING_STATUS || state.status === REPLYING_STATUS ? (
               <>
                 <LoadingIndicator
                   size="xs"
@@ -954,7 +993,7 @@ function Conversation({
                   type="button"
                   disabled={exchangeBusy}
                   onClick={openExchange}
-                  className="prose-link shrink-0 cursor-pointer rounded-xs text-label-m focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+                  className="prose-link shrink-0 cursor-pointer rounded-xs text-label-m focus-visible:outline-hidden focus-visible:ring-2 focus-ring disabled:cursor-not-allowed disabled:disabled-content"
                 >
                   兑换额度
                 </button>
