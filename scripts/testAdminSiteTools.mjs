@@ -468,7 +468,7 @@ for (const [method, args, verb, route, body] of mutations)
     assert.equal(f.fetches.length, 0, 'nothing bypasses the transport');
   });
 test('assistant provider writes name the global revision and carry the backend retry key', async () => {
-  const configuration = { revision: 5, default_system_prompt: '默认', providers: [] };
+  const configuration = { revision: 5, providers: [] };
   const f = fixture(() => ({ saved_id: 'p1', configuration }));
   const draft = model.providerPayload(provider);
   const saved = await f.api.saveAssistantProvider('fixture-token', 4, draft);

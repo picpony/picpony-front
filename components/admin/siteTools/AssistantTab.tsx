@@ -198,7 +198,6 @@ function ProviderEditor({
       {provider && (
         <div className="space-y-4">
           <SectionHeading as="h3">可用模型列表</SectionHeading>
-          <AdminNote>获取模型列表后可直接点「选用」填入上方模型名称，或点「测试」检查单个模型的连通性。</AdminNote>
           <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -241,17 +240,13 @@ function ProviderEditor({
             )}
           </div>
           {unsaved ? (
-            <p className="text-body-s text-on-surface-variant">请先保存当前接口协议、地址与密钥，再获取模型或测试。</p>
+            <p className="text-body-s text-on-surface-variant">请先保存当前配置再获取或测试。</p>
           ) : !keyReady ? (
             <p className="text-body-s text-on-surface-variant">
-              {provider.has_key
-                ? '当前服务器无法解密已保存的密钥，请重新填写并保存后再测试。'
-                : '请先保存密钥再获取模型或测试。'}
+              {provider.has_key ? '密钥无法解密，请重新填写并保存。' : '请先保存密钥再测试。'}
             </p>
           ) : unsavedModel ? (
-            <p className="text-body-s text-on-surface-variant">
-              模型名称已修改但尚未保存，点击下方「保存模型配置」后生效。
-            </p>
+            <p className="text-body-s text-on-surface-variant">模型已变更，保存后生效。</p>
           ) : null}
           <AdminListAnchor>
             <DataTable

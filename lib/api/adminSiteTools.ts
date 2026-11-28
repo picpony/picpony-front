@@ -685,18 +685,13 @@ function provider(row: WireProvider): Provider {
     thinking: normalizeThinking(providerType, row.thinking),
   };
 }
-function assistantConfig(d: {
-  revision: number;
-  default_system_prompt: string;
-  providers: WireProvider[];
-}): AssistantConfig<Provider> {
+function assistantConfig(d: { revision: number; providers: WireProvider[] }): AssistantConfig<Provider> {
   return {
     revision: d.revision,
-    defaultPrompt: d.default_system_prompt,
     providers: d.providers.map(provider),
   };
 }
-/** The global revision every provider write names, the default persona, and the providers (primary first). */
+/** The global revision every provider write names and the configured providers (primary first). */
 export async function readAssistantConfig(token: string, signal?: AbortSignal) {
   return assistantConfig(await api('GET', '/admin/assistant/providers', { token, signal, ...READ }));
 }
@@ -721,7 +716,7 @@ export async function saveAssistantProvider(
   const d = await catalogWrite(() =>
     api<{
       saved_id: string;
-      configuration: { revision: number; default_system_prompt: string; providers: WireProvider[] };
+      configuration: { revision: number; providers: WireProvider[] };
     }>(
       providerId ? 'PUT' : 'POST',
       providerId ? `/admin/assistant/providers/${seg(providerId)}` : '/admin/assistant/providers',

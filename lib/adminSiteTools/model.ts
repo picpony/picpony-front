@@ -339,7 +339,6 @@ export function textTranslationPayload(values: Values): Row {
 /** The provider list as `readAssistantConfig` answers it. */
 export interface AssistantConfig<P> {
   revision: number;
-  defaultPrompt: string;
   providers: P[];
 }
 
@@ -424,27 +423,19 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       key: 'provider_type',
       label: '接口协议',
       options: PROVIDER_TYPE_OPTIONS,
-      helper:
-        providerType === 'gemini'
-          ? '原生 Gemini REST API（使用 x-goog-api-key 认证与 thinkingConfig）'
-          : 'OpenAI Chat Completions 兼容接口（使用 Bearer 认证）',
     },
     {
       key: 'base_url',
       label: '模型服务地址',
       kind: 'url',
       max: 2048,
-      helper:
-        providerType === 'gemini'
-          ? '须为 HTTPS 地址，例如 https://generativelanguage.googleapis.com/v1beta'
-          : '须为 HTTPS 地址，模型列表地址将由服务自动推导',
+      helper: '须以 https:// 开头',
     },
     {
       key: 'model',
       label: '模型名称',
       optional: true,
       max: 160,
-      helper: '启用配置时必填；也可先保存地址与密钥后点击「获取模型列表」直接选用',
     },
     {
       key: 'api_key',
@@ -452,7 +443,7 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       kind: 'password',
       optional: true,
       max: 400,
-      helper: '留空保留已保存的密钥',
+      helper: '留空保留现有密钥',
     },
     {
       key: 'timeout_seconds',
@@ -468,7 +459,7 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       kind: 'number',
       min: 1,
       max: MAX_OUTPUT_K,
-      helper: `单位为 K（1K = ${TOKENS_PER_K} Token），最大 ${MAX_OUTPUT_K}K；思考内容会占用输出额度`,
+      helper: `1～${MAX_OUTPUT_K}K（含思考输出）`,
     },
     {
       key: 'temperature',
@@ -478,7 +469,7 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       max: 2,
       decimal: true,
       optional: true,
-      helper: '留空则不传递温度参数，使用模型默认值',
+      helper: '0～2，留空不传',
     },
     {
       key: 'thinking',
@@ -499,15 +490,9 @@ export function providerFieldsFor(providerType: ProviderType): FieldSpec[] {
       kind: 'textarea',
       optional: true,
       max: 12000,
-      helper: '留空使用默认角色词',
     },
-    { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '启用前须填写模型名称并已保存密钥' },
-    {
-      key: 'is_primary',
-      label: '设为主模型',
-      kind: 'boolean',
-      helper: '已有主模型时，原主模型改为备用',
-    },
+    { key: 'enabled', label: '启用此配置', kind: 'boolean', helper: '需已填模型并保存密钥' },
+    { key: 'is_primary', label: '设为主模型', kind: 'boolean' },
     { key: 'clear_key', label: '清除已保存的密钥', kind: 'boolean' },
   ];
 }
