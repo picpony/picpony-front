@@ -168,23 +168,23 @@ export function captureVisualClone(
   { keepLoading = false, keepImages = false }: { keepLoading?: boolean; keepImages?: boolean } = {},
 ): RouteSnapshot | null {
   /* Which tab panes are concealed, found before the budget below.
-    *
-    * `STRIP_ATTRS` removes the tab markers so a query cannot resolve into the clone — and
-    * with them the only thing concealing the inactive pane. The panel no longer holds the
-    * panes in one cell, so the clone stacks them as ordinary blocks with none concealed;
-    * `clip-path` then keeps whatever band was on screen, now always the first pane in
-    * document order (leave the forum tab for /search and the clone that slides out is the
-    * *gallery*). So which pane is concealed must be baked in before the markers go.
-    *
-    * Pruned to 0×0 spacers rather than carried as inline `display: none`: a concealed pane
-    * contributes nothing to layout either way, but this way it is not *cloned* — the home
-    * route mounts its forum pane ahead of the tap, so `cloneNode` was copying a whole second
-    * page, counting against `MAX_CLONE_NODES`, and going over the budget is a cliff (capture
-    * returns `null`, no transition at all).
-    *
-    * Computed style off the live source rather than re-deriving the CSS here: the rule
-    * has four conditions across two selectors, and a duplicate would drift.
-    */
+   *
+   * `STRIP_ATTRS` removes the tab markers so a query cannot resolve into the clone — and
+   * with them the only thing concealing the inactive pane. The panel no longer holds the
+   * panes in one cell, so the clone stacks them as ordinary blocks with none concealed;
+   * `clip-path` then keeps whatever band was on screen, now always the first pane in
+   * document order (leave the forum tab for /search and the clone that slides out is the
+   * *gallery*). So which pane is concealed must be baked in before the markers go.
+   *
+   * Pruned to 0×0 spacers rather than carried as inline `display: none`: a concealed pane
+   * contributes nothing to layout either way, but this way it is not *cloned* — the home
+   * route mounts its forum pane ahead of the tap, so `cloneNode` was copying a whole second
+   * page, counting against `MAX_CLONE_NODES`, and going over the budget is a cliff (capture
+   * returns `null`, no transition at all).
+   *
+   * Computed style off the live source rather than re-deriving the CSS here: the rule
+   * has four conditions across two selectors, and a duplicate would drift.
+   */
   const hiddenPanes: HTMLElement[] = [];
   for (const panel of source.querySelectorAll<HTMLElement>('[data-tab-panel]')) {
     for (const pane of panel.querySelectorAll<HTMLElement>(':scope > [data-tab-pane]')) {
@@ -267,7 +267,8 @@ export function captureVisualClone(
     } else if (element.tagName === 'IMG') {
       const img = element as HTMLImageElement;
       if (img.complete && img.naturalWidth > 0) imgSrcByIndex.set(i, img.currentSrc);
-      else if (keepImages && (img.hasAttribute('src') || img.hasAttribute('srcset'))) loadingImgIndices.push(i);
+      else if (keepImages && (img.hasAttribute('src') || img.hasAttribute('srcset')))
+        loadingImgIndices.push(i);
       else if (keepLoading && !img.complete && img.loading !== 'lazy') loadingImgIndices.push(i);
       else imgSrcByIndex.set(i, null);
     }
@@ -377,12 +378,12 @@ export function captureVisualClone(
   }
 
   /* A ripple mid-press must not be carried into the clone: the wave is sized to reach its
-    * host's farthest corner and kept inside it by the clipping the ripple host supplies —
-    * but that attribute is stripped below (it must be: a clone may not answer a press), and
-    * a wave that had been growing invisibly inside a 254px card lands as an 853px disc
-    * across the page on the frame the clone appears. Removing it is right rather than
-    * merely expedient: the press belongs to the page being left, its wave is 120ms from the
-    * fade that erases it, and the live element keeps its own ripple. */
+   * host's farthest corner and kept inside it by the clipping the ripple host supplies —
+   * but that attribute is stripped below (it must be: a clone may not answer a press), and
+   * a wave that had been growing invisibly inside a 254px card lands as an 853px disc
+   * across the page on the frame the clone appears. Removing it is right rather than
+   * merely expedient: the press belongs to the page being left, its wave is 120ms from the
+   * fade that erases it, and the live element keeps its own ripple. */
   clone.querySelectorAll('.ripple, .os-scrollbar').forEach((node) => node.remove());
 
   const walker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
@@ -431,15 +432,15 @@ export function captureVisualClone(
   clone.style.flex = 'none';
 
   /* Crop it to the band that was actually on screen. The clone is the page's full height and
-    * the host layer only clips it where it currently sits; the moment a shared-axis run
-    * slides it a whole window upwards, the strip below the fold (the 200px of real content
-    * `PRUNE_MARGIN_PX` deliberately keeps, then blank spacers) is dragged through the
-    * viewport. `clip-path` rather than a wrapper that clips, because it is expressed in the
-    * element's own box edges and therefore travels with the transform — the band stays
-    * exactly the pixels the user was looking at for the whole flight. Horizontal needs no
-    * crop — the page is never wider than its window — but the same edge offsets cover it
-    * for free if that ever changes.
-    */
+   * the host layer only clips it where it currently sits; the moment a shared-axis run
+   * slides it a whole window upwards, the strip below the fold (the 200px of real content
+   * `PRUNE_MARGIN_PX` deliberately keeps, then blank spacers) is dragged through the
+   * viewport. `clip-path` rather than a wrapper that clips, because it is expressed in the
+   * element's own box edges and therefore travels with the transform — the band stays
+   * exactly the pixels the user was looking at for the whole flight. Horizontal needs no
+   * crop — the page is never wider than its window — but the same edge offsets cover it
+   * for free if that ever changes.
+   */
   const visibleTop = Math.max(0, hostRect.top - sourceRect.top);
   const visibleBottom = Math.min(sourceRect.height, hostRect.bottom - sourceRect.top);
   clone.style.clipPath = `inset(${visibleTop}px 0px ${Math.max(0, sourceRect.height - visibleBottom)}px 0px)`;

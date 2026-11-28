@@ -1,7 +1,14 @@
 'use client';
 
 import Image, { type ImageProps } from 'next/image';
-import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { MdBrokenImage } from '@/components/icons/shell';
 import {
   createInitialAttempt,
@@ -31,7 +38,10 @@ import { cn } from '@/lib/utils';
  * each cost the browser an intersection pass apiece on every frame the page moves (R12-010).
  * A picture is watched until it first comes near, then forgotten.
  */
-const nearWatchers = new Map<Element | null, { observer: IntersectionObserver; waiting: Map<Element, () => void> }>();
+const nearWatchers = new Map<
+  Element | null,
+  { observer: IntersectionObserver; waiting: Map<Element, () => void> }
+>();
 
 function whenNear(target: Element, root: Element | null, onNear: () => void): () => void {
   let watcher = nearWatchers.get(root);
@@ -142,7 +152,14 @@ function initialState(
 ): LoadState {
   const attempt: LoadAttempt = useLayers
     ? createInitialAttempt(getRawImageUrl(src), { thumb, line, optimize })
-    : { url: src, optimized: optimize && OPTIMIZER_ACTIVE, tier: 2, retries: 0, giveUp: false, delayMs: 0 };
+    : {
+        url: src,
+        optimized: optimize && OPTIMIZER_ACTIVE,
+        tier: 2,
+        retries: 0,
+        giveUp: false,
+        delayMs: 0,
+      };
   return { attempt, shown: attempt, generation: 0 };
 }
 
@@ -212,7 +229,11 @@ function FadeInImageInner({
           : state.attempt.optimized
             ? { ...state.attempt, optimized: false }
             : { ...state.attempt, giveUp: true };
-      return { ...state, attempt: next, shown: next.delayMs > 0 && !next.giveUp ? state.shown : next };
+      return {
+        ...state,
+        attempt: next,
+        shown: next.delayMs > 0 && !next.giveUp ? state.shown : next,
+      };
     });
   };
 
@@ -245,7 +266,9 @@ function FadeInImageInner({
     const root =
       img.closest<HTMLElement>('[data-app-scroll-container]') ??
       document.querySelector<HTMLElement>('[data-image-hero-gallery-scroll]');
-    return whenNear(img, root?.contains(img) ? root : null, () => startTransition(() => setArmed(true)));
+    return whenNear(img, root?.contains(img) ? root : null, () =>
+      startTransition(() => setArmed(true)),
+    );
   }, [armed, givenUp, displayKey]);
 
   // 单次加载超时保护：超时未 onload 视同失败，走降级链
@@ -280,7 +303,10 @@ function FadeInImageInner({
       setHeldOffline(false);
       setLoad((state) =>
         state.attempt.giveUp
-          ? { ...initialState(src, useLayers, !unoptimized, proxyThumb, null), generation: state.generation + 1 }
+          ? {
+              ...initialState(src, useLayers, !unoptimized, proxyThumb, null),
+              generation: state.generation + 1,
+            }
           : { ...state, generation: state.generation + 1 },
       );
     };
@@ -343,7 +369,8 @@ function FadeInImageInner({
 
   if (givenUp) {
     /* The caller draws its own plate over this quiet surface. */
-    if (onGiveUp) return <div aria-hidden="true" className="h-full w-full bg-surface-container-high" />;
+    if (onGiveUp)
+      return <div aria-hidden="true" className="h-full w-full bg-surface-container-high" />;
     return <FailurePlate label={props.alt} fill={Boolean(props.fill)} />;
   }
 
@@ -399,7 +426,10 @@ function FailurePlate({ label, fill }: { label?: string; fill: boolean }) {
       aria-label={label ? `${label}（图片加载失败）` : '图片加载失败'}
       /* The container is transparent; the plate inside it only exists from 48px, so an avatar
          keeps showing its own glyph rather than a grey disc. */
-      className={cn('@container relative h-full w-full overflow-hidden', fill && 'absolute inset-0')}
+      className={cn(
+        '@container relative h-full w-full overflow-hidden',
+        fill && 'absolute inset-0',
+      )}
     >
       <div
         aria-hidden="true"

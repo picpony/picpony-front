@@ -76,7 +76,8 @@ export default function ContactList({
   const { data, error } = contacts;
 
   const rows = (() => {
-    if (data === undefined && error === undefined) return <ContactRowsSkeleton flow={!rail} faded={collapsed} />;
+    if (data === undefined && error === undefined)
+      return <ContactRowsSkeleton flow={!rail} faded={collapsed} />;
     if (data === undefined) {
       /* Collapsed, the rail is 80px wide and a status block wraps to a column of two-character
          lines, so the state is the one control it is about: retry, named by the failure. */
@@ -122,7 +123,9 @@ export default function ContactList({
               collapsed={collapsed}
               spring={spring}
               now={now}
-              onSelect={() => onSelect({ id: contact.id, username: contact.username, avatar: contact.avatar })}
+              onSelect={() =>
+                onSelect({ id: contact.id, username: contact.username, avatar: contact.avatar })
+              }
             />
           </li>
         ))}
@@ -181,7 +184,9 @@ export default function ContactList({
         axis="y"
         enabled={rail}
         className="flex min-h-0 flex-1 flex-col"
-        viewportClassName={cn(rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2')}
+        viewportClassName={cn(
+          rail && 'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2',
+        )}
       >
         {rows}
       </ScrollArea>
@@ -208,7 +213,9 @@ function ContactRow({
   const name = unread > 0 ? `${contact.username}，${unread} 条未读` : contact.username;
   /* Collapsed, the row is its portrait: the name comes back as the plain tooltip. */
   const { anchorRef, anchorProps, tooltip } = useTooltip(collapsed ? contact.username : undefined);
-  const preview = contact.last_message ? contactPreview(contact.last_message, contact.last_message_truncated) : '';
+  const preview = contact.last_message
+    ? contactPreview(contact.last_message, contact.last_message_truncated)
+    : '';
   /* The open row's supporting lines take its container's ink: under forced colors the row wears
      the system's selection pair, and a line keeping its own ink read dim on it. */
   const supporting = active ? undefined : 'text-on-surface-variant';
@@ -244,12 +251,25 @@ function ContactRow({
         </span>
         {/* Faded, never unmounted: removing it on the first frame made the row change height the
             instant the toggle was pressed. */}
-        <span aria-hidden="true" className={cn('flex min-w-0 flex-1 flex-col transition-opacity', spring, collapsed && 'opacity-0')}>
+        <span
+          aria-hidden="true"
+          className={cn(
+            'flex min-w-0 flex-1 flex-col transition-opacity',
+            spring,
+            collapsed && 'opacity-0',
+          )}
+        >
           <span className="flex items-baseline gap-2">
-            <span className="text-label-l-emphasized min-w-0 flex-1 truncate">{contact.username}</span>
-            {time && <span className={cn('text-label-s shrink-0 tabular-nums', supporting)}>{time}</span>}
+            <span className="text-label-l-emphasized min-w-0 flex-1 truncate">
+              {contact.username}
+            </span>
+            {time && (
+              <span className={cn('text-label-s shrink-0 tabular-nums', supporting)}>{time}</span>
+            )}
           </span>
-          {preview && <span className={cn('text-body-s mt-0.5 truncate', supporting)}>{preview}</span>}
+          {preview && (
+            <span className={cn('text-body-s mt-0.5 truncate', supporting)}>{preview}</span>
+          )}
         </span>
       </button>
       {tooltip}

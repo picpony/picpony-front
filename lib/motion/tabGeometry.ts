@@ -34,7 +34,13 @@ export type PaneClip = { top: number; bottom: number };
  * is (`playSharedAxis`). `shiftY` is where the pane will sit for the run relative to where it is
  * measured (a scroll restore moves the arriving pane). Reads only.
  */
-export function paneClip(pane: HTMLElement, viewTop: number, viewBottom: number, shiftY: number, margin: number): PaneClip | null {
+export function paneClip(
+  pane: HTMLElement,
+  viewTop: number,
+  viewBottom: number,
+  shiftY: number,
+  margin: number,
+): PaneClip | null {
   const rect = pane.getBoundingClientRect();
   const top = Math.max(0, Math.floor(viewTop - margin - (rect.top + shiftY)));
   const bottom = Math.max(0, Math.floor(rect.bottom + shiftY - (viewBottom + margin)));
@@ -81,7 +87,10 @@ type BoxChild = { el: HTMLElement; rect: DOMRect; style: CSSStyleDeclaration };
  *  box at all (`boxes`) — through wrappers without one (`display: contents`), past anything not
  *  rendered, and never into a concealed pane, whose geometry would be laid out just to answer. A
  *  child out of view costs a rect and nothing more: a fifty-card grid reads ten styles, not fifty. */
-function boxChildren(node: Element, inView: (rect: DOMRect) => boolean): { kids: BoxChild[]; boxes: number } {
+function boxChildren(
+  node: Element,
+  inView: (rect: DOMRect) => boolean,
+): { kids: BoxChild[]; boxes: number } {
   const kids: BoxChild[] = [];
   let boxes = 0;
   for (const child of node.children) {
@@ -92,7 +101,11 @@ function boxChildren(node: Element, inView: (rect: DOMRect) => boolean): { kids:
     if (rect.width > 0 && rect.height > 0) {
       boxes += 1;
       if (inView(rect)) kids.push({ el: child, rect, style: getComputedStyle(child) });
-    } else if (rect.width === 0 && rect.height === 0 && getComputedStyle(child).display === 'contents') {
+    } else if (
+      rect.width === 0 &&
+      rect.height === 0 &&
+      getComputedStyle(child).display === 'contents'
+    ) {
       const inner = boxChildren(child, inView);
       kids.push(...inner.kids);
       boxes += inner.boxes;
@@ -158,20 +171,36 @@ function anyOverlap(kids: BoxChild[]): boolean {
  * 12ms late as a whole: a slow start rather than a lean. The slope stays one view height to the
  * longest lag, so a panel with less of itself on screen leans less rather than more steeply.
  */
-export function leanPlan(pane: HTMLElement, viewTop: number, viewBottom: number, shiftY: number, leadTop: number): LeanPlan {
+export function leanPlan(
+  pane: HTMLElement,
+  viewTop: number,
+  viewBottom: number,
+  shiftY: number,
+  leadTop: number,
+): LeanPlan {
   const height = viewBottom - viewTop;
   const blocks: LeanBlock[] = [];
   const lift: LeanPlan['lift'] = [];
-  const inView = (rect: DOMRect) => rect.bottom + shiftY > viewTop && rect.top + shiftY < viewBottom;
+  const inView = (rect: DOMRect) =>
+    rect.bottom + shiftY > viewTop && rect.top + shiftY < viewBottom;
   const visit = (kids: BoxChild[], depth: number) => {
     for (const kid of kids) {
-      if (depth < LEAN_DESCEND_LIMIT && kid.rect.height > LEAN_SPLIT_MIN_PX && isBareWrapper(kid.style)) {
+      if (
+        depth < LEAN_DESCEND_LIMIT &&
+        kid.rect.height > LEAN_SPLIT_MIN_PX &&
+        isBareWrapper(kid.style)
+      ) {
         const { kids: inner, boxes } = boxChildren(kid.el, inView);
         /* A wrapper around a single child adds nothing — unless it is a positioned stacking
            context (a masonry slot, which contains its layout): then it is the unit its parent
            stacks, and the one that has to paint last (`LeanPlan`). */
-        const single = boxes === 1 && !(kid.style.position !== 'static' && isStackingContext(kid.style));
-        if (inner.length > 0 && blocks.length + inner.length <= LEAN_BLOCK_CAP && (single || (boxes > 1 && !anyOverlap(inner)))) {
+        const single =
+          boxes === 1 && !(kid.style.position !== 'static' && isStackingContext(kid.style));
+        if (
+          inner.length > 0 &&
+          blocks.length + inner.length <= LEAN_BLOCK_CAP &&
+          (single || (boxes > 1 && !anyOverlap(inner)))
+        ) {
           visit(inner, depth + 1);
           continue;
         }
@@ -179,7 +208,8 @@ export function leanPlan(pane: HTMLElement, viewTop: number, viewBottom: number,
       const blockDepth = leanDepth(kid.rect.top + shiftY, leadTop, height);
       if (blockDepth > 0 && blocks.length < LEAN_BLOCK_CAP) {
         blocks.push({ el: kid.el, depth: blockDepth, base: kid.style.transform });
-        if (kid.style.zIndex === 'auto') lift.push({ el: kid.el, position: kid.style.position === 'static' });
+        if (kid.style.zIndex === 'auto')
+          lift.push({ el: kid.el, position: kid.style.position === 'static' });
       }
     }
   };
@@ -199,7 +229,12 @@ export function leanPlan(pane: HTMLElement, viewTop: number, viewBottom: number,
  * A placeholder inside a concealed pane is skipped by its attributes before any geometry is
  * read. Reads only.
  */
-export function loadingInView(pane: HTMLElement, viewTop: number, viewBottom: number, shiftY: number): boolean {
+export function loadingInView(
+  pane: HTMLElement,
+  viewTop: number,
+  viewBottom: number,
+  shiftY: number,
+): boolean {
   for (const el of pane.querySelectorAll('[data-page-loading]')) {
     let concealed = false;
     for (let node: Element | null = el; node && node !== pane; node = node.parentElement) {
@@ -210,7 +245,12 @@ export function loadingInView(pane: HTMLElement, viewTop: number, viewBottom: nu
     }
     if (concealed) continue;
     const rect = el.getBoundingClientRect();
-    if ((rect.width > 0 || rect.height > 0) && rect.bottom + shiftY > viewTop && rect.top + shiftY < viewBottom) return true;
+    if (
+      (rect.width > 0 || rect.height > 0) &&
+      rect.bottom + shiftY > viewTop &&
+      rect.top + shiftY < viewBottom
+    )
+      return true;
   }
   return false;
 }
@@ -227,6 +267,8 @@ function isStackingContext(style: CSSStyleDeclaration): boolean {
     style.isolation === 'isolate' ||
     style.mixBlendMode !== 'normal' ||
     /layout|paint|strict|content/.test(style.contain) ||
-    (style.containerType !== undefined && style.containerType !== '' && style.containerType !== 'normal')
+    (style.containerType !== undefined &&
+      style.containerType !== '' &&
+      style.containerType !== 'normal')
   );
 }

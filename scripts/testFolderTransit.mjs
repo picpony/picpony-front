@@ -74,8 +74,16 @@ test('a flight let go of while its element stays carries on: React’s developme
   const target = element();
   const flight = route.trackFlight(handle, { key: 'folder:/a', leg: 'open', target });
   route.release(flight);
-  assert.deepEqual(calls, ['suspend'], 'stops landing on a scroll at once, before a route change restores one');
-  assert.equal(route.flightOn(target), flight, 'a second attach adopts it rather than starting another');
+  assert.deepEqual(
+    calls,
+    ['suspend'],
+    'stops landing on a scroll at once, before a route change restores one',
+  );
+  assert.equal(
+    route.flightOn(target),
+    flight,
+    'a second attach adopts it rather than starting another',
+  );
   await microtask();
   assert.deepEqual(calls, ['suspend', 'resume']);
   frame();
@@ -113,11 +121,18 @@ test('the page coming in claims it, turns it onto its own element, and it stops 
   await microtask();
   frame();
   const card = element();
-  const turn = { to: { box: { left: 0, top: 0, width: 10, height: 10 }, radii: [12, 12, 12, 12], colour: 'red' }, hidden: [] };
+  const turn = {
+    to: { box: { left: 0, top: 0, width: 10, height: 10 }, radii: [12, 12, 12, 12], colour: 'red' },
+    hidden: [],
+  };
   assert.equal(route.turnFlight(flight, 'back', card, turn), true);
   assert.deepEqual(calls.at(-1), ['turn', turn]);
   assert.equal(flight.leg, 'back');
-  assert.equal(route.flightOn(card), flight, 'it now lands on the card, and the card’s own attach adopts it');
+  assert.equal(
+    route.flightOn(card),
+    flight,
+    'it now lands on the card, and the card’s own attach adopts it',
+  );
   frame();
   frame();
   frame();
@@ -132,8 +147,15 @@ test('a claim in the same commit, before the release’s microtask, holds', asyn
   page.isConnected = false;
   route.release(flight);
   const row = element();
-  assert.equal(route.claimable('forum:7', 'back'), flight, 'an element removed in this commit is gone already');
-  route.turnFlight(flight, 'back', row, { to: { box: { left: 0, top: 0, width: 1, height: 1 }, radii: [0, 0, 0, 0], colour: '' }, hidden: [] });
+  assert.equal(
+    route.claimable('forum:7', 'back'),
+    flight,
+    'an element removed in this commit is gone already',
+  );
+  route.turnFlight(flight, 'back', row, {
+    to: { box: { left: 0, top: 0, width: 1, height: 1 }, radii: [0, 0, 0, 0], colour: '' },
+    hidden: [],
+  });
   await microtask();
   assert.ok(!flight.orphaned, 'its new element is there, so it is not an orphan');
   assert.equal(calls.at(-1), 'resume');
@@ -151,7 +173,13 @@ test('a flight that cannot be turned fades where it is', async () => {
   route.release(flight);
   await microtask();
   const card = element();
-  assert.equal(route.turnFlight(flight, 'back', card, { to: { box: { left: 0, top: 0, width: 1, height: 1 }, radii: [0, 0, 0, 0], colour: '' }, hidden: [] }), false);
+  assert.equal(
+    route.turnFlight(flight, 'back', card, {
+      to: { box: { left: 0, top: 0, width: 1, height: 1 }, radii: [0, 0, 0, 0], colour: '' },
+      hidden: [],
+    }),
+    false,
+  );
   assert.ok(calls.includes('fadeOut'));
   assert.equal(route.claimable('folder:/a', 'back'), null);
   assert.equal(route.flightOn(card), null);
@@ -170,7 +198,11 @@ test('letting go twice orphans once, and a finished flight is let go of quietly'
   assert.equal(calls.filter((call) => call === 'fadeOut').length, 1);
 
   const second = standIn();
-  const other = route.trackFlight(second.handle, { key: 'folder:/b', leg: 'back', target: element() });
+  const other = route.trackFlight(second.handle, {
+    key: 'folder:/b',
+    leg: 'back',
+    target: element(),
+  });
   second.handle.finish();
   route.untrackFlight(other);
   route.release(other);
@@ -188,12 +220,22 @@ test('a folder page left on screen is remembered for its card, under the standar
   for (const tier of ['reduced', 'off']) {
     root.dataset.motion = tier;
     transit.rememberFolderReturn('/favorites/folder/3', page);
-    assert.equal(transit.readFolderReturn(), null, `${tier}: the route's own fade is the whole transition`);
+    assert.equal(
+      transit.readFolderReturn(),
+      null,
+      `${tier}: the route's own fade is the whole transition`,
+    );
   }
   root.dataset.motion = 'standard';
 
-  transit.rememberFolderReturn('/favorites/folder/3', { getBoundingClientRect: () => ({ top: -900, bottom: 0 }) });
-  assert.equal(transit.readFolderReturn(), null, 'a page scrolled off screen has nothing to carry back');
+  transit.rememberFolderReturn('/favorites/folder/3', {
+    getBoundingClientRect: () => ({ top: -900, bottom: 0 }),
+  });
+  assert.equal(
+    transit.readFolderReturn(),
+    null,
+    'a page scrolled off screen has nothing to carry back',
+  );
 });
 
 test('a remembered page goes stale with its navigation, and stands down while a flight owns the screen', () => {
@@ -209,7 +251,11 @@ test('a remembered page goes stale with its navigation, and stands down while a 
     assert.equal(transit.readFolderReturn(), null, 'a picture flying owns those pixels');
     setHeroBusyCheck(null);
     now += 200;
-    assert.equal(transit.readFolderReturn(), null, 'three seconds: a Back much later replays nothing');
+    assert.equal(
+      transit.readFolderReturn(),
+      null,
+      'three seconds: a Back much later replays nothing',
+    );
   } finally {
     performance.now = realNow;
   }
@@ -221,22 +267,40 @@ test('a press on a card, and the page left for its list, tell that one route cha
   const card = { getBoundingClientRect: () => ({ width: 240, height: 220 }) };
   try {
     transit.rememberFolderOrigin('/favorites/folder/3', card);
-    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), true, 'the change to the page it opens');
-    assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'read once, by that change');
+    assert.equal(
+      takeRouteContainerExpectation('/favorites/folder/3'),
+      true,
+      'the change to the page it opens',
+    );
+    assert.equal(
+      takeRouteContainerExpectation('/favorites/folder/3'),
+      false,
+      'read once, by that change',
+    );
 
     transit.rememberFolderOrigin('/favorites/folder/3', card);
-    assert.equal(takeRouteContainerExpectation('/search'), false, 'a change elsewhere rides nothing');
+    assert.equal(
+      takeRouteContainerExpectation('/search'),
+      false,
+      'a change elsewhere rides nothing',
+    );
     assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'and spends it');
 
     /* Leaving the page expects the list it was opened from. */
     window.location.pathname = '/favorites/folder/3';
-    transit.rememberFolderReturn('/favorites/folder/3', { getBoundingClientRect: () => ({ top: 100, bottom: 900 }) });
+    transit.rememberFolderReturn('/favorites/folder/3', {
+      getBoundingClientRect: () => ({ top: 100, bottom: 900 }),
+    });
     assert.equal(takeRouteContainerExpectation('/favorites'), true);
 
     for (const tier of ['reduced', 'off']) {
       root.dataset.motion = tier;
       transit.rememberFolderOrigin('/favorites/folder/3', card);
-      assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, `${tier}: the route's own fade`);
+      assert.equal(
+        takeRouteContainerExpectation('/favorites/folder/3'),
+        false,
+        `${tier}: the route's own fade`,
+      );
     }
     root.dataset.motion = 'standard';
 
@@ -246,17 +310,39 @@ test('a press on a card, and the page left for its list, tell that one route cha
     try {
       transit.rememberFolderOrigin('/favorites/folder/3', card);
       now += 3100;
-      assert.equal(takeRouteContainerExpectation('/favorites/folder/3'), false, 'a navigation much later rides nothing');
+      assert.equal(
+        takeRouteContainerExpectation('/favorites/folder/3'),
+        false,
+        'a navigation much later rides nothing',
+      );
     } finally {
       performance.now = realNow;
     }
 
-    const cover = { id: 3002, src: 'https://derpicdn.net/3002/medium.png', width: 1600, height: 900, animated: false };
+    const cover = {
+      id: 3002,
+      src: 'https://derpicdn.net/3002/medium.png',
+      width: 1600,
+      height: 900,
+      animated: false,
+    };
     transit.rememberFolderOrigin('/favorites/folder/2', card, cover);
-    assert.deepEqual(transit.readFolderSeedCover('/favorites/folder/2', 3002), cover, 'seed cover matches latestImageId');
-    assert.equal(transit.readFolderSeedCover('/favorites/folder/2', 9999), undefined, 'stale latestImageId does not match');
+    assert.deepEqual(
+      transit.readFolderSeedCover('/favorites/folder/2', 3002),
+      cover,
+      'seed cover matches latestImageId',
+    );
+    assert.equal(
+      transit.readFolderSeedCover('/favorites/folder/2', 9999),
+      undefined,
+      'stale latestImageId does not match',
+    );
     transit.rememberFolderOrigin('/favorites/folder/2', card);
-    assert.equal(transit.readFolderSeedCover('/favorites/folder/2', 3002), undefined, 'a coverless press clears any old seed');
+    assert.equal(
+      transit.readFolderSeedCover('/favorites/folder/2', 3002),
+      undefined,
+      'a coverless press clears any old seed',
+    );
   } finally {
     delete window.location;
     transit.clearFolderReturn();

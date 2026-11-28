@@ -15,7 +15,10 @@ import { readToken } from '@/lib/hooks';
  * stays mounted once shown for its exit animation. `loading` keeps the suspension on the dialog
  * rather than the route.
  */
-const CaptchaModal = dynamic(() => import('@/components/CaptchaModal'), { ssr: false, loading: () => null });
+const CaptchaModal = dynamic(() => import('@/components/CaptchaModal'), {
+  ssr: false,
+  loading: () => null,
+});
 
 /** Queries reported in this session, so coming back to one does not offer the button again. */
 const reported = new Set<string>();

@@ -155,10 +155,21 @@ test('completed cuts keep their frame verdict without inventing a failed respons
     const cut = report.summarize(id, [sample], interval);
     assert.equal(cut.summary.latencyMs, null);
     assert.equal(cut.summary.verdict, 'smooth', `${id}: no flight is not a timeout`);
-    assert.equal(report.summarize(id, [{ ...sample, completed: false }], interval).summary.verdict, 'janky');
+    assert.equal(
+      report.summarize(id, [{ ...sample, completed: false }], interval).summary.verdict,
+      'janky',
+    );
     const stalled = { ...sample, frames: stats.frameStats(frames(20, interval * 3), interval) };
-    assert.equal(report.summarize(id, [stalled], interval).summary.verdict, 'janky', 'real dropped frames still count');
-    assert.equal(report.summarize(id, [sample, { ...sample, latencyMs: 250 }], interval).summary.verdict, 'janky', 'a measured slow response still counts');
+    assert.equal(
+      report.summarize(id, [stalled], interval).summary.verdict,
+      'janky',
+      'real dropped frames still count',
+    );
+    assert.equal(
+      report.summarize(id, [sample, { ...sample, latencyMs: 250 }], interval).summary.verdict,
+      'janky',
+      'a measured slow response still counts',
+    );
   }
 });
 
@@ -172,8 +183,14 @@ test('a completed report survives blocked storage and takes precedence over an o
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
-      getItem() { if (denied) throw new Error('Storage blocked'); return stored; },
-      setItem(_key, value) { if (denied) throw new Error('Quota exceeded'); stored = value; },
+      getItem() {
+        if (denied) throw new Error('Storage blocked');
+        return stored;
+      },
+      setItem(_key, value) {
+        if (denied) throw new Error('Quota exceeded');
+        stored = value;
+      },
     },
   });
   try {
@@ -181,7 +198,11 @@ test('a completed report survives blocked storage and takes precedence over an o
     denied = true;
     assert.equal(report.loadReport(), null, 'a cold read also tolerates denied storage');
     report.saveReport(current);
-    assert.equal(report.loadReport(), current, 'navigation can render and export the in-memory run');
+    assert.equal(
+      report.loadReport(),
+      current,
+      'navigation can render and export the in-memory run',
+    );
     denied = false;
     assert.deepEqual(JSON.parse(stored), previous);
     assert.equal(report.loadReport(), current, 'the stale stored run must not replace the new one');
@@ -196,16 +217,35 @@ test('a completed report survives blocked storage and takes precedence over an o
 
 test('the stress run keeps pass/fail on correctness and reports its frames as a verdict of their own', () => {
   const interval = 1000 / 60;
-  const glitches = { actions: 4, vanishedFrames: 0, vanishes: 0, cuts: 0, stuck: 0, leftPage: 0, events: [] };
+  const glitches = {
+    actions: 4,
+    vanishedFrames: 0,
+    vanishes: 0,
+    cuts: 0,
+    stuck: 0,
+    leftPage: 0,
+    events: [],
+  };
   const jankyFrames = stats.frameStats(
     Array.from({ length: 20 }, (_, i) => i * interval * 3),
     interval,
   );
-  const sample = { latencyMs: null, settleMs: 300, frames: jankyFrames, longFrames: stats.longFrameStats([]), completed: true, glitches };
+  const sample = {
+    latencyMs: null,
+    settleMs: 300,
+    frames: jankyFrames,
+    longFrames: stats.longFrameStats([]),
+    completed: true,
+    glitches,
+  };
   const stress = report.summarize('stress', [sample, sample], interval);
   assert.equal(stress.summary.verdict, 'smooth');
   assert.equal(stress.summary.frameVerdict, 'janky');
   assert.equal(report.overallVerdict([stress]), 'smooth');
-  const open = report.summarize('open', [{ ...sample, glitches: undefined, latencyMs: 40 }], interval);
+  const open = report.summarize(
+    'open',
+    [{ ...sample, glitches: undefined, latencyMs: 40 }],
+    interval,
+  );
   assert.equal(open.summary.frameVerdict, undefined);
 });

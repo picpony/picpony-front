@@ -42,32 +42,52 @@ after(() => {
 });
 
 const ORIGIN = 'https://picpony.top';
-const plain = (tokens) => tokens.map((token) => (token.type === 'text' ? token.text : `<${token.type}>`)).join('');
+const plain = (tokens) =>
+  tokens.map((token) => (token.type === 'text' ? token.text : `<${token.type}>`)).join('');
 
 test('a direct message is plain text: line breaks and Markdown characters survive as typed', () => {
   const tokens = text.messageTokens('1. 早上好\n# 这不是标题\n> 这不是引用\n**加粗**', ORIGIN);
-  assert.deepEqual(tokens, [{ type: 'text', text: '1. 早上好\n# 这不是标题\n> 这不是引用\n**加粗**' }]);
+  assert.deepEqual(tokens, [
+    { type: 'text', text: '1. 早上好\n# 这不是标题\n> 这不是引用\n**加粗**' },
+  ]);
 });
 
 test('links are found in running text and end at Chinese punctuation and sentence ends', () => {
-  const tokens = text.messageTokens('地址：https://dev.picpony.top/，测试 see https://example.com/a. 和 (https://en.wikipedia.org/wiki/Pony_(horse))', ORIGIN);
+  const tokens = text.messageTokens(
+    '地址：https://dev.picpony.top/，测试 see https://example.com/a. 和 (https://en.wikipedia.org/wiki/Pony_(horse))',
+    ORIGIN,
+  );
   const links = tokens.filter((token) => token.type === 'link');
-  assert.deepEqual(links.map((link) => link.text), [
-    'https://dev.picpony.top/',
-    'https://example.com/a',
-    'https://en.wikipedia.org/wiki/Pony_(horse)',
-  ]);
+  assert.deepEqual(
+    links.map((link) => link.text),
+    [
+      'https://dev.picpony.top/',
+      'https://example.com/a',
+      'https://en.wikipedia.org/wiki/Pony_(horse)',
+    ],
+  );
   assert.equal(links[1].internal, false);
   assert.equal(plain(tokens), '地址：<link>，测试 see <link>. 和 (<link>)');
 });
 
 test('PicPony pages and mirrored Derpibooru pictures open in the app; other schemes are never links', () => {
-  assert.deepEqual(text.resolveLink('https://picpony.top/pic/12', ORIGIN), { href: '/pic/12', internal: true });
-  assert.deepEqual(text.resolveLink('https://www.picpony.top/forum/5/', ORIGIN), { href: '/forum/5', internal: true });
-  assert.deepEqual(text.resolveLink('https://derpibooru.org/images/3456', ORIGIN), { href: '/pic/3456', internal: true });
+  assert.deepEqual(text.resolveLink('https://picpony.top/pic/12', ORIGIN), {
+    href: '/pic/12',
+    internal: true,
+  });
+  assert.deepEqual(text.resolveLink('https://www.picpony.top/forum/5/', ORIGIN), {
+    href: '/forum/5',
+    internal: true,
+  });
+  assert.deepEqual(text.resolveLink('https://derpibooru.org/images/3456', ORIGIN), {
+    href: '/pic/3456',
+    internal: true,
+  });
   assert.equal(text.resolveLink('https://picpony.top/admin', ORIGIN).internal, false);
   assert.equal(text.resolveLink('javascript:alert(1)', ORIGIN), null);
-  assert.deepEqual(text.messageTokens('javascript:alert(1)', ORIGIN), [{ type: 'text', text: 'javascript:alert(1)' }]);
+  assert.deepEqual(text.messageTokens('javascript:alert(1)', ORIGIN), [
+    { type: 'text', text: 'javascript:alert(1)' },
+  ]);
 });
 
 test('emoji markers draw as pictures; a marker naming no picture stays text', () => {
@@ -85,60 +105,141 @@ test('the original front end’s BBCode reads into the same plain model', () => 
     ORIGIN,
   );
   assert.equal(plain(tokens), '第一行\n第二行\n第三行\n<image>\n<link>');
-  assert.deepEqual(tokens.find((token) => token.type === 'image'), { type: 'image', src: 'https://derpicdn.net/a.png' });
-  assert.deepEqual(tokens.find((token) => token.type === 'link'), { type: 'link', text: '帖子', href: '/forum/5', internal: true });
+  assert.deepEqual(
+    tokens.find((token) => token.type === 'image'),
+    { type: 'image', src: 'https://derpicdn.net/a.png' },
+  );
+  assert.deepEqual(
+    tokens.find((token) => token.type === 'link'),
+    { type: 'link', text: '帖子', href: '/forum/5', internal: true },
+  );
   /* A digit-only paragraph is text, not a hole the sentinels left behind. */
   assert.equal(plain(text.messageTokens('[p]12345[/p]', ORIGIN)), '12345');
   assert.equal(plain(text.messageTokens('[p][img]javascript:alert(1)[/img]x[/p]', ORIGIN)), 'x');
 });
 
 test('a contact row’s preview is one line: cards by their summary, emoji by their name', () => {
-  assert.equal(text.messagePreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fa.png]'), '[图片]');
-  assert.equal(text.messagePreview(`看$emoji_${PONY_EMOJI[0].name}$\n第二行`), `看[${PONY_EMOJI[0].label}] 第二行`);
+  assert.equal(
+    text.messagePreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fa.png]'),
+    '[图片]',
+  );
+  assert.equal(
+    text.messagePreview(`看$emoji_${PONY_EMOJI[0].name}$\n第二行`),
+    `看[${PONY_EMOJI[0].label}] 第二行`,
+  );
   assert.equal(text.messagePreview('[p]旧消息[/p]'), '旧消息');
 });
 
 test('a cut contact preview (/me/contacts sends 120 characters) never shows half a card, marker or entity', () => {
-  assert.equal(text.contactPreview('你好 &amp; 再见'), '你好 & 再见', 'an uncut preview is the usual line, entities decoded');
-  assert.equal(text.contactPreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026', true), '[图片]');
+  assert.equal(
+    text.contactPreview('你好 &amp; 再见'),
+    '你好 & 再见',
+    'an uncut preview is the usual line, entities decoded',
+  );
+  assert.equal(
+    text.contactPreview('[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026', true),
+    '[图片]',
+  );
   assert.equal(text.contactPreview('[fave_folder_share:alice:3:%E6%94%B6', true), '[收藏夹]');
   assert.equal(text.contactPreview('[privacy_space_share:7:ali', true), '[隐私空间]');
   assert.equal(text.contactPreview('猫 &am', true), '猫…');
-  assert.equal(text.contactPreview('猫 &amp;', true), '猫 &…', 'a complete entity right at the cut decodes normally');
-  assert.equal(text.contactPreview('猫 &#x2', true), '猫…', 'a truncated hex entity tail is dropped');
-  assert.equal(text.contactPreview('R&D 讨论', true), 'R&D 讨论…', 'non-entity ampersand text survives intact');
+  assert.equal(
+    text.contactPreview('猫 &amp;', true),
+    '猫 &…',
+    'a complete entity right at the cut decodes normally',
+  );
+  assert.equal(
+    text.contactPreview('猫 &#x2', true),
+    '猫…',
+    'a truncated hex entity tail is dropped',
+  );
+  assert.equal(
+    text.contactPreview('R&D 讨论', true),
+    'R&D 讨论…',
+    'non-entity ampersand text survives intact',
+  );
   assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name.slice(0, 2)}`, true), '看…');
-  assert.equal(text.contactPreview(`看$emoji_${PONY_EMOJI[0].name}$然后`, true), `看[${PONY_EMOJI[0].label}]然后…`);
-  assert.equal(text.contactPreview('[p]看图[img]https://derpicdn.net/img/2026/1/1', true), '看图[图片]…');
+  assert.equal(
+    text.contactPreview(`看$emoji_${PONY_EMOJI[0].name}$然后`, true),
+    `看[${PONY_EMOJI[0].label}]然后…`,
+  );
+  assert.equal(
+    text.contactPreview('[p]看图[img]https://derpicdn.net/img/2026/1/1', true),
+    '看图[图片]…',
+  );
   assert.equal(text.contactPreview('说到 [url=https://exa', true), '说到…');
 });
 
 test('decodeSanitizedText decodes serializer entities once and strips only incomplete trailing entities when truncated', () => {
   assert.equal(
     sanitized.decodeSanitizedText('&amp;&lt;&gt;&quot;&nbsp;&#39;&#x27;'),
-    '&<>"\u00a0\'\'',
+    "&<>\"\u00a0''",
   );
   assert.equal(
     sanitized.decodeSanitizedText('&amp;lt; &amp;amp; &amp;#39; &amp;#x27;'),
     '&lt; &amp; &#39; &#x27;',
     'single-pass decode never double-decodes literal entity text',
   );
-  for (const tail of ['&', '&a', '&am', '&amp', '&l', '&lt', '&g', '&gt', '&q', '&qu', '&quo', '&quot', '&n', '&nb', '&nbs', '&nbsp', '&#', '&#3', '&#39', '&#x', '&#x2', '&#x27']) {
-    assert.equal(sanitized.stripTruncatedSanitizedEntity(`hi ${tail}`), 'hi ', `strips truncated ${tail}`);
+  for (const tail of [
+    '&',
+    '&a',
+    '&am',
+    '&amp',
+    '&l',
+    '&lt',
+    '&g',
+    '&gt',
+    '&q',
+    '&qu',
+    '&quo',
+    '&quot',
+    '&n',
+    '&nb',
+    '&nbs',
+    '&nbsp',
+    '&#',
+    '&#3',
+    '&#39',
+    '&#x',
+    '&#x2',
+    '&#x27',
+  ]) {
+    assert.equal(
+      sanitized.stripTruncatedSanitizedEntity(`hi ${tail}`),
+      'hi ',
+      `strips truncated ${tail}`,
+    );
     assert.equal(sanitized.decodeSanitizedText(`A &amp; B ${tail}`, { truncated: true }), 'A & B ');
   }
   assert.equal(sanitized.decodeSanitizedText('A &amp;', { truncated: true }), 'A &');
   assert.equal(sanitized.decodeSanitizedText('R&D', { truncated: true }), 'R&D');
-  assert.equal(sanitized.decodeSanitizedText('hi &am'), 'hi &am', 'untruncated text keeps incomplete tails intact');
+  assert.equal(
+    sanitized.decodeSanitizedText('hi &am'),
+    'hi &am',
+    'untruncated text keeps incomplete tails intact',
+  );
 });
 
 test('notification link markers become links, the tag-subscription marker its subscription', () => {
-  const tokens = text.notificationTokens('[user:12|小马] 回复了 [post:5|帖子]：[image:9|图片] [tag_subscription|oc:nyx] https://example.com', ORIGIN);
+  const tokens = text.notificationTokens(
+    '[user:12|小马] 回复了 [post:5|帖子]：[image:9|图片] [tag_subscription|oc:nyx] https://example.com',
+    ORIGIN,
+  );
   const links = tokens.filter((token) => token.type === 'link');
-  assert.deepEqual(links.map((link) => link.href), ['/user/12', '/forum/5', '/pic/9', '/subscriptions/oc%3Anyx', 'https://example.com/']);
-  assert.deepEqual(links[3], { type: 'link', text: 'oc:nyx', href: '/subscriptions/oc%3Anyx', internal: true });
+  assert.deepEqual(
+    links.map((link) => link.href),
+    ['/user/12', '/forum/5', '/pic/9', '/subscriptions/oc%3Anyx', 'https://example.com/'],
+  );
+  assert.deepEqual(links[3], {
+    type: 'link',
+    text: 'oc:nyx',
+    href: '/subscriptions/oc%3Anyx',
+    internal: true,
+  });
   /* Any tag name survives its path segment, a slash included. */
-  const [slashed] = text.notificationTokens('[tag_subscription|80s/90s style]').filter((token) => token.type === 'link');
+  const [slashed] = text
+    .notificationTokens('[tag_subscription|80s/90s style]')
+    .filter((token) => token.type === 'link');
   assert.equal(slashed.href, '/subscriptions/80s%2F90s%20style');
 });
 
@@ -174,12 +275,27 @@ test('the composer’s undo coalesces typing and keeps an insertion its own step
 });
 
 test('share cards are the original front end’s wire format, byte for byte', () => {
-  const image = { kind: 'image', imageId: 3456, thumbUrl: 'https://derpicdn.net/img/2024/1/1/3456/small.png' };
-  assert.equal(messaging.encodeShare(image), '[image_share:3456:https%3A%2F%2Fderpicdn.net%2Fimg%2F2024%2F1%2F1%2F3456%2Fsmall.png]');
+  const image = {
+    kind: 'image',
+    imageId: 3456,
+    thumbUrl: 'https://derpicdn.net/img/2024/1/1/3456/small.png',
+  };
+  assert.equal(
+    messaging.encodeShare(image),
+    '[image_share:3456:https%3A%2F%2Fderpicdn.net%2Fimg%2F2024%2F1%2F1%2F3456%2Fsmall.png]',
+  );
   assert.deepEqual(messaging.parseShare(messaging.encodeShare(image)), image);
 
-  const folder = { kind: 'fave-folder', ownerUsername: 'pony: 小马', folderId: 7, folderName: '最爱:第一' };
-  assert.equal(messaging.encodeShare(folder), '[fave_folder_share:pony%3A%20%E5%B0%8F%E9%A9%AC:7:%E6%9C%80%E7%88%B1%3A%E7%AC%AC%E4%B8%80]');
+  const folder = {
+    kind: 'fave-folder',
+    ownerUsername: 'pony: 小马',
+    folderId: 7,
+    folderName: '最爱:第一',
+  };
+  assert.equal(
+    messaging.encodeShare(folder),
+    '[fave_folder_share:pony%3A%20%E5%B0%8F%E9%A9%AC:7:%E6%9C%80%E7%88%B1%3A%E7%AC%AC%E4%B8%80]',
+  );
   assert.deepEqual(messaging.parseShare(messaging.encodeShare(folder)), folder);
 
   const privacy = { kind: 'privacy-space', ownerId: 12, ownerName: '小马' };
@@ -188,7 +304,11 @@ test('share cards are the original front end’s wire format, byte for byte', ()
 
   assert.equal(messaging.parseShare('看 [image_share:1:x]'), null, 'a card is the whole message');
   assert.equal(messaging.parseShare('[image_share:abc:x]'), null);
-  assert.deepEqual(messaging.parseShare('[image_share:5:javascript%3Aalert(1)]'), { kind: 'image', imageId: 5, thumbUrl: '' });
+  assert.deepEqual(messaging.parseShare('[image_share:5:javascript%3Aalert(1)]'), {
+    kind: 'image',
+    imageId: 5,
+    thumbUrl: '',
+  });
 
   assert.equal(messaging.shareHref(image), '/pic/3456');
   assert.equal(messaging.shareHref(folder), '/favorites/shared/pony%3A%20%E5%B0%8F%E9%A9%AC/7');
@@ -196,59 +316,133 @@ test('share cards are the original front end’s wire format, byte for byte', ()
 });
 
 test('a card’s thumbnail is the small rendition, absolute and off any image line', () => {
-  assert.equal(messaging.shareThumbUrl({ small: '//derpicdn.net/a/small.png', thumb: '//derpicdn.net/a/thumb.png' }), 'https://derpicdn.net/a/small.png');
-  assert.equal(messaging.shareThumbUrl({ thumb: '/img/a/thumb.png' }), 'https://derpibooru.org/img/a/thumb.png');
   assert.equal(
-    messaging.shareThumbUrl({ medium: `https://wsrv.nl/?url=${encodeURIComponent('https://derpicdn.net/a/medium.png')}` }),
+    messaging.shareThumbUrl({
+      small: '//derpicdn.net/a/small.png',
+      thumb: '//derpicdn.net/a/thumb.png',
+    }),
+    'https://derpicdn.net/a/small.png',
+  );
+  assert.equal(
+    messaging.shareThumbUrl({ thumb: '/img/a/thumb.png' }),
+    'https://derpibooru.org/img/a/thumb.png',
+  );
+  assert.equal(
+    messaging.shareThumbUrl({
+      medium: `https://wsrv.nl/?url=${encodeURIComponent('https://derpicdn.net/a/medium.png')}`,
+    }),
     'https://derpicdn.net/a/medium.png',
   );
   assert.equal(messaging.shareThumbUrl(null), '');
 });
 
 const message = (id, sender, extra = {}) => ({
-  id, sender_id: sender, receiver_id: sender === 2 ? 1 : 2, content: `m${id}`, is_read: 0,
-  created_at: '2026-09-24 12:00:00', sender_name: '', sender_avatar: null, ...extra,
+  id,
+  sender_id: sender,
+  receiver_id: sender === 2 ? 1 : 2,
+  content: `m${id}`,
+  is_read: 0,
+  created_at: '2026-09-24 12:00:00',
+  sender_name: '',
+  sender_avatar: null,
+  ...extra,
 });
 const isOwn = (m) => m.sender_id !== 2;
 
 test('pages merge into one thread: repeats once, a later copy wins, oldest first', () => {
   const page1 = [message(3, 2), message(4, 1)];
   const merged = model.mergeMessages([], page1);
-  assert.deepEqual(merged.map((m) => m.id), [3, 4]);
-  assert.equal(model.mergeMessages(merged, [message(3, 2)]), merged, 'nothing new keeps the identity');
+  assert.deepEqual(
+    merged.map((m) => m.id),
+    [3, 4],
+  );
+  assert.equal(
+    model.mergeMessages(merged, [message(3, 2)]),
+    merged,
+    'nothing new keeps the identity',
+  );
   const withOlder = model.mergeMessages(merged, [message(1, 1), message(2, 2), message(3, 2)]);
-  assert.deepEqual(withOlder.map((m) => m.id), [1, 2, 3, 4]);
+  assert.deepEqual(
+    withOlder.map((m) => m.id),
+    [1, 2, 3, 4],
+  );
   const read = model.mergeMessages(withOlder, [message(4, 1, { is_read: 1 })]);
   assert.equal(read.find((m) => m.id === 4).is_read, 1);
 });
 
 test('已读 sits under the newest message they have read, 已送达 under a newer one', () => {
-  assert.deepEqual(model.receiptPlacement([message(1, 1, { is_read: 1 }), message(2, 2), message(3, 1)], isOwn), { readId: 1, deliveredId: 3 });
-  assert.deepEqual(model.receiptPlacement([message(1, 1), message(2, 1, { is_read: 1 })], isOwn), { readId: 2, deliveredId: null });
-  assert.deepEqual(model.receiptPlacement([message(1, 2)], isOwn), { readId: null, deliveredId: null });
+  assert.deepEqual(
+    model.receiptPlacement([message(1, 1, { is_read: 1 }), message(2, 2), message(3, 1)], isOwn),
+    { readId: 1, deliveredId: 3 },
+  );
+  assert.deepEqual(model.receiptPlacement([message(1, 1), message(2, 1, { is_read: 1 })], isOwn), {
+    readId: 2,
+    deliveredId: null,
+  });
+  assert.deepEqual(model.receiptPlacement([message(1, 2)], isOwn), {
+    readId: null,
+    deliveredId: null,
+  });
 });
 
 test('a turn breaks at a five-minute pause and at midnight', () => {
   const a = message(1, 1, { created_at: '2026-09-24 12:00:00' });
   assert.equal(model.breaksRun(a, message(2, 1, { created_at: '2026-09-24 12:04:59' })), false);
   assert.equal(model.breaksRun(a, message(2, 1, { created_at: '2026-09-24 12:05:00' })), true);
-  assert.equal(model.breaksRun(message(1, 1, { created_at: '2026-09-24 23:59:00' }), message(2, 1, { created_at: '2026-09-25 00:00:30' })), true);
+  assert.equal(
+    model.breaksRun(
+      message(1, 1, { created_at: '2026-09-24 23:59:00' }),
+      message(2, 1, { created_at: '2026-09-25 00:00:30' }),
+    ),
+    true,
+  );
 });
 
 test('an outgoing message leaves the screen when its server copy arrives, and only then', () => {
-  const item = (localId, content, status, afterId = 10) => ({ localId, contactId: 2, content, status, afterId, createdAt: '' });
-  const outgoing = [item('a', '你好', 'sent'), item('b', '再见', 'sending'), item('c', '失败', 'failed')];
-  assert.deepEqual(model.matchOutgoing([message(9, 1, { content: '你好' })], outgoing, isOwn), {
-    pending: outgoing, arrived: [],
-  }, 'a message older than the send is not its copy');
-  const server = [message(11, 1, { content: '你好' }), message(12, 1, { content: '再见' }), message(13, 2, { content: '失败' })];
+  const item = (localId, content, status, afterId = 10) => ({
+    localId,
+    contactId: 2,
+    content,
+    status,
+    afterId,
+    createdAt: '',
+  });
+  const outgoing = [
+    item('a', '你好', 'sent'),
+    item('b', '再见', 'sending'),
+    item('c', '失败', 'failed'),
+  ];
+  assert.deepEqual(
+    model.matchOutgoing([message(9, 1, { content: '你好' })], outgoing, isOwn),
+    {
+      pending: outgoing,
+      arrived: [],
+    },
+    'a message older than the send is not its copy',
+  );
+  const server = [
+    message(11, 1, { content: '你好' }),
+    message(12, 1, { content: '再见' }),
+    message(13, 2, { content: '失败' }),
+  ];
   const matched = model.matchOutgoing(server, outgoing, isOwn);
   assert.deepEqual(matched.arrived, ['a', 'b']);
-  assert.deepEqual(matched.pending.map((entry) => entry.localId), ['c'], 'a failure stays until it is retried or deleted');
+  assert.deepEqual(
+    matched.pending.map((entry) => entry.localId),
+    ['c'],
+    'a failure stays until it is retried or deleted',
+  );
   /* A server that normalises what it stores still settles an accepted message, in order. */
-  const normalised = model.matchOutgoing([message(11, 1, { content: '你好 ' })], [item('a', '你好', 'sent'), item('b', '你好', 'sending')], isOwn);
+  const normalised = model.matchOutgoing(
+    [message(11, 1, { content: '你好 ' })],
+    [item('a', '你好', 'sent'), item('b', '你好', 'sending')],
+    isOwn,
+  );
   assert.deepEqual(normalised.arrived, ['a']);
-  assert.deepEqual(normalised.pending.map((entry) => entry.localId), ['b']);
+  assert.deepEqual(
+    normalised.pending.map((entry) => entry.localId),
+    ['b'],
+  );
 });
 
 test('a visit opens on the tab with something unread', () => {
@@ -275,13 +469,26 @@ test('signed out, the row is 公告 and 系统 and a personal link lands on 系�
   const choose = (requested, stored) =>
     model.chooseInitialTab({ requested, stored, unread: null, signedIn: false });
   assert.equal(choose('chat', null), 'notification');
-  assert.equal(choose('interaction', 'announcement'), 'notification', 'the link outranks the last tab');
+  assert.equal(
+    choose('interaction', 'announcement'),
+    'notification',
+    'the link outranks the last tab',
+  );
   assert.equal(choose('announcement', null), 'announcement');
   assert.equal(choose(null, 'announcement'), 'announcement');
-  assert.equal(choose(null, 'chat'), 'notification', 'a remembered personal tab is not offered either');
+  assert.equal(
+    choose(null, 'chat'),
+    'notification',
+    'a remembered personal tab is not offered either',
+  );
   assert.equal(choose(null, null), 'announcement', 'a bare visit opens on 公告');
   assert.equal(
-    model.chooseInitialTab({ requested: null, stored: null, unread: { notification: 0, interaction: 3, chat: 2 }, signedIn: false }),
+    model.chooseInitialTab({
+      requested: null,
+      stored: null,
+      unread: { notification: 0, interaction: 3, chat: 2 },
+      signedIn: false,
+    }),
     'announcement',
     'no unread count can pick a tab the row does not have',
   );
@@ -290,8 +497,16 @@ test('signed out, the row is 公告 and 系统 and a personal link lands on 系�
 test('a signed-out link keeps what only an account can show', () => {
   assert.deepEqual(model.personalRequest('chat', null), { tab: 'chat', user: null });
   assert.deepEqual(model.personalRequest('interaction', null), { tab: 'interaction', user: null });
-  assert.deepEqual(model.personalRequest(null, 42), { tab: 'chat', user: 42 }, 'a person opens their conversation');
-  assert.deepEqual(model.personalRequest('announcement', 42), { tab: 'chat', user: 42 }, 'the person wins, as signed in');
+  assert.deepEqual(
+    model.personalRequest(null, 42),
+    { tab: 'chat', user: 42 },
+    'a person opens their conversation',
+  );
+  assert.deepEqual(
+    model.personalRequest('announcement', 42),
+    { tab: 'chat', user: 42 },
+    'the person wins, as signed in',
+  );
   assert.equal(model.personalRequest('notification', null), null);
   assert.equal(model.personalRequest('announcement', null), null);
   assert.equal(model.personalRequest(null, null), null);
@@ -308,8 +523,13 @@ test('a contact row prints the clock today and a day label otherwise', () => {
 
 test('inbox reads speak /api/v1: keyset pages read by number, rows mapped field for field', async () => {
   const message = (id, sender, read) => ({
-    id, sender_id: sender, receiver_id: sender === 2 ? 1 : 2, content: `m${id}`, read_at: read ? '2026-10-01T00:00:00Z' : null,
-    created_at: '2026-10-01T00:00:00Z', sender: { id: sender, username: `u${sender}`, avatar: null },
+    id,
+    sender_id: sender,
+    receiver_id: sender === 2 ? 1 : 2,
+    content: `m${id}`,
+    read_at: read ? '2026-10-01T00:00:00Z' : null,
+    created_at: '2026-10-01T00:00:00Z',
+    sender: { id: sender, username: `u${sender}`, avatar: null },
   });
   respond = ({ url, init }) => {
     if (init.method === 'POST') return Response.json({ marked: 1 });
@@ -318,7 +538,11 @@ test('inbox reads speak /api/v1: keyset pages read by number, rows mapped field 
       : Response.json({ messages: [message(7, 2, false), message(8, 1, false)], next_cursor: 7 });
   };
   const first = await messaging.readConversation('t', 2, 1);
-  assert.deepEqual(first.messages.map((m) => m.id), [7, 8], 'the backend’s order, oldest first');
+  assert.deepEqual(
+    first.messages.map((m) => m.id),
+    [7, 8],
+    'the backend’s order, oldest first',
+  );
   assert.equal(first.hasMore, true);
   assert.equal(first.messages[0].sender_name, 'u2');
   assert.equal(first.messages[0].is_read, 0);
@@ -327,63 +551,149 @@ test('inbox reads speak /api/v1: keyset pages read by number, rows mapped field 
   assert.equal(read.init.cache, 'no-store', 'a poll must never be answered from a cache');
   const receipt = calls.find((call) => call.init.method === 'POST');
   assert.equal(receipt.url.pathname, '/api/v1/me/conversations/2/read-receipts');
-  assert.deepEqual(JSON.parse(receipt.init.body), { up_to: 7 }, 'page 1 marks their newest unread message read');
+  assert.deepEqual(
+    JSON.parse(receipt.init.body),
+    { up_to: 7 },
+    'page 1 marks their newest unread message read',
+  );
 
   calls.length = 0;
   const second = await messaging.readConversation('t', 2, 2);
   assert.equal(calls[0].url.searchParams.get('before'), '7', 'page 2 starts where page 1 ended');
-  assert.deepEqual(second.messages.map((m) => m.id), [5, 6]);
+  assert.deepEqual(
+    second.messages.map((m) => m.id),
+    [5, 6],
+  );
   assert.equal(second.hasMore, false);
-  assert.equal(calls.some((call) => call.init.method === 'POST'), false, 'only page 1 sends a receipt');
+  assert.equal(
+    calls.some((call) => call.init.method === 'POST'),
+    false,
+    'only page 1 sends a receipt',
+  );
 
-  respond = () => Response.json({ users: [{ id: 7, username: '七', avatar: null, experience: 3 }], next_cursor: null });
-  assert.deepEqual(await messaging.searchUsers('t', '七'), [{ id: 7, username: '七', avatar: null }]);
+  respond = () =>
+    Response.json({
+      users: [{ id: 7, username: '七', avatar: null, experience: 3 }],
+      next_cursor: null,
+    });
+  assert.deepEqual(await messaging.searchUsers('t', '七'), [
+    { id: 7, username: '七', avatar: null },
+  ]);
   assert.equal(calls.at(-1).url.pathname, '/api/v1/users');
   assert.equal(calls.at(-1).url.searchParams.get('keyword'), '七');
 
-  respond = () => Response.json({
-    notifications: [
-      { id: 3, kind: 'announcement', title: 'a', content: 'c', important: true, broadcast: true, created_at: 'x', read: false },
-      { id: 1, kind: 'system', title: 't', content: 'c', important: false, broadcast: true, created_at: 'x', read: true },
-    ],
-    next_cursor: null,
-  });
+  respond = () =>
+    Response.json({
+      notifications: [
+        {
+          id: 3,
+          kind: 'announcement',
+          title: 'a',
+          content: 'c',
+          important: true,
+          broadcast: true,
+          created_at: 'x',
+          read: false,
+        },
+        {
+          id: 1,
+          kind: 'system',
+          title: 't',
+          content: 'c',
+          important: false,
+          broadcast: true,
+          created_at: 'x',
+          read: true,
+        },
+      ],
+      next_cursor: null,
+    });
   const guest = await messaging.readNotifications(null, 'system', 1);
-  assert.deepEqual(guest.notifications.map((n) => n.id), [3, 1], 'the backend leaves the interactions out; every row it sends is shown');
+  assert.deepEqual(
+    guest.notifications.map((n) => n.id),
+    [3, 1],
+    'the backend leaves the interactions out; every row it sends is shown',
+  );
   assert.equal(guest.notifications[1].is_read, 1);
   assert.equal(guest.totalPages, 1);
   assert.equal(calls.at(-1).url.searchParams.has('kind'), false);
-  assert.equal(calls.at(-1).url.searchParams.get('exclude_kind'), 'interaction', '系统 is asked for as `exclude_kind=interaction`');
-  assert.equal(new Headers(calls.at(-1).init.headers).has('Authorization'), false, 'the public list is read without a token');
+  assert.equal(
+    calls.at(-1).url.searchParams.get('exclude_kind'),
+    'interaction',
+    '系统 is asked for as `exclude_kind=interaction`',
+  );
+  assert.equal(
+    new Headers(calls.at(-1).init.headers).has('Authorization'),
+    false,
+    'the public list is read without a token',
+  );
   await messaging.readNotifications('t', 'interaction', 1);
   assert.equal(calls.at(-1).url.searchParams.get('kind'), 'interaction');
   assert.equal(calls.at(-1).url.searchParams.has('exclude_kind'), false);
 
-  respond = () => Response.json({ contacts: [{
-    id: 90, user_id: 3, username: '三', avatar: null, experience: 0, last_message_at: 'y', unread_count: 2,
-    last_message: { id: 90, sender_id: 3, preview: '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png', truncated: true, created_at: 'y' },
-  }], next_cursor: null });
-  assert.deepEqual(await messaging.readRecentContacts('t'), [{
-    id: 3, username: '三', avatar: null, last_msg_time: 'y', unread_count: 2,
-    last_message: '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png', last_message_truncated: true,
-  }]);
+  respond = () =>
+    Response.json({
+      contacts: [
+        {
+          id: 90,
+          user_id: 3,
+          username: '三',
+          avatar: null,
+          experience: 0,
+          last_message_at: 'y',
+          unread_count: 2,
+          last_message: {
+            id: 90,
+            sender_id: 3,
+            preview:
+              '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png',
+            truncated: true,
+            created_at: 'y',
+          },
+        },
+      ],
+      next_cursor: null,
+    });
+  assert.deepEqual(await messaging.readRecentContacts('t'), [
+    {
+      id: 3,
+      username: '三',
+      avatar: null,
+      last_msg_time: 'y',
+      unread_count: 2,
+      last_message:
+        '[image_share:12:https%3A%2F%2Fderpicdn.net%2Fimg%2F2026%2F1%2F1%2F12%2Fsmall.png',
+      last_message_truncated: true,
+    },
+  ]);
 });
 
 test('sending is one JSON write with an Idempotency-Key, whose refusal is its own sentence', async () => {
-  respond = () => Response.json({ id: 1, content: '你好', notification_queued: false }, { status: 201 });
+  respond = () =>
+    Response.json({ id: 1, content: '你好', notification_queued: false }, { status: 201 });
   await messaging.sendMessage('t', 2, '你好', 'key-1');
   const { url, init } = calls.at(-1);
   assert.equal(url.pathname, '/api/v1/me/conversations/2/messages');
   assert.equal(init.method, 'POST');
   assert.deepEqual(JSON.parse(init.body), { content: '你好' });
   assert.equal(new Headers(init.headers).get('Idempotency-Key'), 'key-1');
-  respond = () => Response.json({ error: { code: 'BLOCKED', message: '对方已将你屏蔽' } }, { status: 403 });
-  await assert.rejects(messaging.sendMessage('t', 2, '你好'), (error) => error instanceof ApiError && error.message === '对方已将你屏蔽');
+  respond = () =>
+    Response.json({ error: { code: 'BLOCKED', message: '对方已将你屏蔽' } }, { status: 403 });
+  await assert.rejects(
+    messaging.sendMessage('t', 2, '你好'),
+    (error) => error instanceof ApiError && error.message === '对方已将你屏蔽',
+  );
 });
 
 test('the emoji table is current: every picture has a name, every name a picture', () => {
   const root = path.resolve(import.meta.dirname, '..');
-  execFileSync(process.execPath, [path.join(root, 'scripts', 'emoji.mjs'), '--check'], { cwd: root, stdio: 'pipe' });
+  execFileSync(process.execPath, [path.join(root, 'scripts', 'emoji.mjs'), '--check'], {
+    cwd: root,
+    stdio: 'pipe',
+  });
   assert.equal(new Set(PONY_EMOJI.map((emoji) => emoji.name)).size, PONY_EMOJI.length);
-  assert.ok(PONY_EMOJI.every((emoji) => /^[一-鿿·]/.test(emoji.label)), 'names are Chinese');
+  assert.ok(
+    PONY_EMOJI.every((emoji) => /^[一-鿿·]/.test(emoji.label)),
+    'names are Chinese',
+  );
 });

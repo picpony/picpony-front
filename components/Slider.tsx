@@ -2,11 +2,19 @@
 
 import { useId, useRef, type InputHTMLAttributes, type PointerEvent } from 'react';
 import { cn, clamp01 } from '@/lib/utils';
-import { SLIDER_INPUT, SliderHandle, SliderPaint, SliderRail, SliderTrack } from '@/components/slider/paint';
+import {
+  SLIDER_INPUT,
+  SliderHandle,
+  SliderPaint,
+  SliderRail,
+  SliderTrack,
+} from '@/components/slider/paint';
 import { useSliderPaint } from '@/components/slider/useSliderPaint';
 
-interface SliderProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange' | 'size'> {
+interface SliderProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'value' | 'onChange' | 'size'
+> {
   value: number;
   onValueChange: (value: number) => void;
   min?: number;
@@ -49,7 +57,10 @@ export default function Slider({
   const generatedId = useId();
   const pointer = useRef<{ id: number; x: number; y: number } | null>(null);
   const fraction = max > min ? clamp01((value - min) / (max - min)) : 0;
-  const { railRef, positionRef, activeRef, inactiveRef, queueJump, stop, pose } = useSliderPaint(fraction, disabled);
+  const { railRef, positionRef, activeRef, inactiveRef, queueJump, stop, pose } = useSliderPaint(
+    fraction,
+    disabled,
+  );
 
   function resetPointer(event: PointerEvent<HTMLInputElement>) {
     if (pointer.current?.id !== event.pointerId) return;
@@ -60,7 +71,11 @@ export default function Slider({
   return (
     <div
       data-slider=""
-      className={cn('relative flex h-12 w-full min-w-0 select-none items-center', disabled && 'disabled-content', className)}
+      className={cn(
+        'relative flex h-12 w-full min-w-0 select-none items-center',
+        disabled && 'disabled-content',
+        className,
+      )}
     >
       <input
         {...rest}
@@ -82,7 +97,8 @@ export default function Slider({
           if (!rail || !position || rail.width <= 0) return;
           pointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
           const halfThumb = (event.currentTarget.getBoundingClientRect().width - rail.width) / 2;
-          const onThumb = Math.abs(event.clientX - (rail.left + fraction * rail.width)) <= halfThumb;
+          const onThumb =
+            Math.abs(event.clientX - (rail.left + fraction * rail.width)) <= halfThumb;
           queueJump(onThumb ? null : [clamp01((position.left - rail.left) / rail.width)]);
           if (onThumb) stop();
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -90,7 +106,12 @@ export default function Slider({
         onPointerMove={(event) => {
           onPointerMove?.(event);
           const held = pointer.current;
-          if (!held || held.id !== event.pointerId || (held.x === event.clientX && held.y === event.clientY)) return;
+          if (
+            !held ||
+            held.id !== event.pointerId ||
+            (held.x === event.clientX && held.y === event.clientY)
+          )
+            return;
           queueJump(null);
           stop();
         }}
@@ -112,7 +133,10 @@ export default function Slider({
         }}
         onKeyDown={(event) => {
           onKeyDown?.(event);
-          if (!event.defaultPrevented && /^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(event.key)) {
+          if (
+            !event.defaultPrevented &&
+            /^(Arrow(Left|Right|Up|Down)|Home|End|PageUp|PageDown)$/.test(event.key)
+          ) {
             queueJump(null);
             stop();
           }
@@ -123,10 +147,7 @@ export default function Slider({
           stop();
           onBlur?.(event);
         }}
-        className={cn(
-          SLIDER_INPUT,
-          disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-        )}
+        className={cn(SLIDER_INPUT, disabled ? 'cursor-not-allowed' : 'cursor-pointer')}
       />
       <SliderPaint nativeFeedback disabled={disabled}>
         {/* Keep the translated paint clipped without clipping the native input's hit region. */}

@@ -1,9 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { clamp01, cn } from '@/lib/utils';
-import { SLIDER_INPUT, SliderHandle, SliderPaint, SliderRail, SliderTrack } from '@/components/slider/paint';
-import { moveRangeHandle, normalizeRange, sameRange, snapRangeValue, type RangeHandle, type RangeValue } from '@/components/slider/range';
+import {
+  SLIDER_INPUT,
+  SliderHandle,
+  SliderPaint,
+  SliderRail,
+  SliderTrack,
+} from '@/components/slider/paint';
+import {
+  moveRangeHandle,
+  normalizeRange,
+  sameRange,
+  snapRangeValue,
+  type RangeHandle,
+  type RangeValue,
+} from '@/components/slider/range';
 import { useSliderPaint } from '@/components/slider/useSliderPaint';
 
 export type RangeSliderValue = RangeValue;
@@ -64,12 +86,24 @@ export default function RangeSlider({
   const increment = step > 0 ? step : 1;
   const { start: sourceStart, end: sourceEnd } = value;
   const external = normalizeRange(value, min, upper, increment);
-  const [state, setState] = useState(() => ({ min, max: upper, step: increment, sourceStart, sourceEnd, draft: external }));
-  const sourceChanged = state.min !== min || state.max !== upper || state.step !== increment ||
-    state.sourceStart !== sourceStart || state.sourceEnd !== sourceEnd;
+  const [state, setState] = useState(() => ({
+    min,
+    max: upper,
+    step: increment,
+    sourceStart,
+    sourceEnd,
+    draft: external,
+  }));
+  const sourceChanged =
+    state.min !== min ||
+    state.max !== upper ||
+    state.step !== increment ||
+    state.sourceStart !== sourceStart ||
+    state.sourceEnd !== sourceEnd;
   // Guard by primitive source values, not object identity: parent rerenders must not erase a draft.
   const shown = sourceChanged ? external : state.draft;
-  if (sourceChanged) setState({ min, max: upper, step: increment, sourceStart, sourceEnd, draft: external });
+  if (sourceChanged)
+    setState({ min, max: upper, step: increment, sourceStart, sourceEnd, draft: external });
 
   const generatedId = useId();
   const startRef = useRef<HTMLInputElement>(null);
@@ -82,26 +116,39 @@ export default function RangeSlider({
   const transferringFocus = useRef(false);
   const [focusVisible, setFocusVisible] = useState<RangeHandle | null>(null);
   const [dragging, setDragging] = useState<RangeHandle | null>(null);
-  const fraction = (number: number) => upper > min ? clamp01((number - min) / (upper - min)) : 0;
+  const fraction = (number: number) => (upper > min ? clamp01((number - min) / (upper - min)) : 0);
   const startFraction = fraction(shown.start);
   const endFraction = fraction(shown.end);
   const {
-    railRef, positionRef, endPositionRef, activeRef, inactiveRef, inactiveStartRef,
-    queueJump, cancelJump, pose,
+    railRef,
+    positionRef,
+    endPositionRef,
+    activeRef,
+    inactiveRef,
+    inactiveStartRef,
+    queueJump,
+    cancelJump,
+    pose,
   } = useSliderPaint(startFraction, disabled, endFraction);
 
-  const apply = useCallback((next: RangeValue) => {
-    if (sameRange(draftRef.current, next)) return;
-    draftRef.current = next;
-    setState((previous) => ({ ...previous, draft: next }));
-    onValueChange?.(next);
-  }, [onValueChange]);
+  const apply = useCallback(
+    (next: RangeValue) => {
+      if (sameRange(draftRef.current, next)) return;
+      draftRef.current = next;
+      setState((previous) => ({ ...previous, draft: next }));
+      onValueChange?.(next);
+    },
+    [onValueChange],
+  );
 
-  const commit = useCallback((next: RangeValue) => {
-    if (sameRange(committedRef.current, next)) return;
-    committedRef.current = { ...next };
-    onCommit(next);
-  }, [onCommit]);
+  const commit = useCallback(
+    (next: RangeValue) => {
+      if (sameRange(committedRef.current, next)) return;
+      committedRef.current = { ...next };
+      onCommit(next);
+    },
+    [onCommit],
+  );
 
   const clearPointer = useCallback(() => {
     const held = pointer.current;
@@ -127,30 +174,41 @@ export default function RangeSlider({
     transferringFocus.current = false;
   }, []);
 
-  const moveHandle = useCallback((handle: RangeHandle, number: number) => {
-    const moved = moveRangeHandle(draftRef.current, handle, snapRangeValue(number, min, upper, increment));
-    apply(moved.value);
-    if (moved.handle !== handle) {
-      if (pointer.current) {
-        pointer.current.handle = moved.handle;
-        setDragging(moved.handle);
+  const moveHandle = useCallback(
+    (handle: RangeHandle, number: number) => {
+      const moved = moveRangeHandle(
+        draftRef.current,
+        handle,
+        snapRangeValue(number, min, upper, increment),
+      );
+      apply(moved.value);
+      if (moved.handle !== handle) {
+        if (pointer.current) {
+          pointer.current.handle = moved.handle;
+          setDragging(moved.handle);
+        }
+        focusHandle(moved.handle);
+        if (pointer.current) setFocusVisible(null);
       }
-      focusHandle(moved.handle);
-      if (pointer.current) setFocusVisible(null);
-    }
-    return moved.value;
-  }, [apply, focusHandle, min, upper, increment]);
+      return moved.value;
+    },
+    [apply, focusHandle, min, upper, increment],
+  );
 
   useLayoutEffect(() => {
     const next = normalizeRange({ start: sourceStart, end: sourceEnd }, min, upper, increment);
-    const limitsChanged = limitsRef.current.min !== min || limitsRef.current.max !== upper || limitsRef.current.step !== increment;
+    const limitsChanged =
+      limitsRef.current.min !== min ||
+      limitsRef.current.max !== upper ||
+      limitsRef.current.step !== increment;
     const echo = sameRange(next, draftRef.current);
     if (limitsChanged || !echo) {
       clearPointer();
       cancelJump();
     }
     // A live controlled echo must not make release look already committed or stop a select jump.
-    if (limitsChanged || !echo || (!pointer.current && !nativeCommitPending.current)) committedRef.current = next;
+    if (limitsChanged || !echo || (!pointer.current && !nativeCommitPending.current))
+      committedRef.current = next;
     draftRef.current = next;
     limitsRef.current = { min, max: upper, step: increment };
   }, [sourceStart, sourceEnd, min, upper, increment, clearPointer, cancelJump]);
@@ -164,7 +222,9 @@ export default function RangeSlider({
       cancelGesture();
       setFocusVisible(null);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [disabled, cancelGesture]);
 
   useEffect(() => {
@@ -176,16 +236,24 @@ export default function RangeSlider({
     return () => window.removeEventListener('blur', onWindowBlur);
   }, [cancelGesture]);
 
-  useEffect(() => () => {
-    const held = pointer.current;
-    pointer.current = null;
-    releasePointer(held);
-  }, []);
+  useEffect(
+    () => () => {
+      const held = pointer.current;
+      pointer.current = null;
+      releasePointer(held);
+    },
+    [],
+  );
 
   function indexAt(clientX: number) {
     const rail = railRef.current?.getBoundingClientRect();
     if (!rail || rail.width <= 0) return null;
-    return snapRangeValue(min + clamp01((clientX - rail.left) / rail.width) * (upper - min), min, upper, increment);
+    return snapRangeValue(
+      min + clamp01((clientX - rail.left) / rail.width) * (upper - min),
+      min,
+      upper,
+      increment,
+    );
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -197,13 +265,19 @@ export default function RangeSlider({
     if (!rail || rail.width <= 0 || !startPosition || !endPosition || index === null) return;
     event.preventDefault();
     const current = draftRef.current;
-    const handle = Math.abs(index - current.start) <= Math.abs(index - current.end) ? 'start' : 'end';
+    const handle =
+      Math.abs(index - current.start) <= Math.abs(index - current.end) ? 'start' : 'end';
     const center = rail.left + fraction(current[handle]) * rail.width;
     const halfThumb = (event.currentTarget.getBoundingClientRect().width - rail.width) / 2;
     const onThumb = Math.abs(event.clientX - center) <= halfThumb;
     pointer.current = {
-      id: event.pointerId, handle, x: event.clientX, y: event.clientY,
-      grabOffset: onThumb ? event.clientX - center : 0, origin: { ...current }, target: event.currentTarget,
+      id: event.pointerId,
+      handle,
+      x: event.clientX,
+      y: event.clientY,
+      grabOffset: onThumb ? event.clientX - center : 0,
+      origin: { ...current },
+      target: event.currentTarget,
     };
     focusHandle(handle);
     setFocusVisible(null);
@@ -221,7 +295,12 @@ export default function RangeSlider({
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const held = pointer.current;
-    if (!held || held.id !== event.pointerId || (held.x === event.clientX && held.y === event.clientY)) return;
+    if (
+      !held ||
+      held.id !== event.pointerId ||
+      (held.x === event.clientX && held.y === event.clientY)
+    )
+      return;
     held.x = event.clientX;
     held.y = event.clientY;
     cancelJump();
@@ -270,7 +349,9 @@ export default function RangeSlider({
             setFocusVisible(handle);
           }
         }}
-        onFocus={(event) => setFocusVisible(event.currentTarget.matches(':focus-visible') ? handle : null)}
+        onFocus={(event) =>
+          setFocusVisible(event.currentTarget.matches(':focus-visible') ? handle : null)
+        }
         onBlur={() => {
           setFocusVisible(null);
           if (!transferringFocus.current) cancelGesture();
@@ -284,7 +365,13 @@ export default function RangeSlider({
   }
 
   return (
-    <div data-slider="" data-range-slider="" role="group" aria-label={ariaLabel} className={cn('w-full min-w-0', disabled && 'disabled-content', className)}>
+    <div
+      data-slider=""
+      data-range-slider=""
+      role="group"
+      aria-label={ariaLabel}
+      className={cn('w-full min-w-0', disabled && 'disabled-content', className)}
+    >
       <div
         className={cn(
           'relative flex h-12 w-full select-none items-center [touch-action:pan-y_pinch-zoom]',
@@ -300,11 +387,33 @@ export default function RangeSlider({
         {renderInput('end', endLabel)}
         <SliderPaint>
           <SliderRail ref={railRef}>
-            <SliderTrack ref={inactiveStartRef} part="inactive-start" clip={pose.inactiveStart} stopIndicator="start" />
+            <SliderTrack
+              ref={inactiveStartRef}
+              part="inactive-start"
+              clip={pose.inactiveStart}
+              stopIndicator="start"
+            />
             <SliderTrack ref={activeRef} part="active" clip={pose.active} />
-            <SliderTrack ref={inactiveRef} part="inactive" clip={pose.inactive} stopIndicator="end" />
-            <SliderHandle ref={positionRef} handle="start" transform={pose.transform} focused={focusVisible === 'start'} pressed={dragging === 'start'} />
-            <SliderHandle ref={endPositionRef} handle="end" transform={pose.endTransform} focused={focusVisible === 'end'} pressed={dragging === 'end'} />
+            <SliderTrack
+              ref={inactiveRef}
+              part="inactive"
+              clip={pose.inactive}
+              stopIndicator="end"
+            />
+            <SliderHandle
+              ref={positionRef}
+              handle="start"
+              transform={pose.transform}
+              focused={focusVisible === 'start'}
+              pressed={dragging === 'start'}
+            />
+            <SliderHandle
+              ref={endPositionRef}
+              handle="end"
+              transform={pose.endTransform}
+              focused={focusVisible === 'end'}
+              pressed={dragging === 'end'}
+            />
           </SliderRail>
         </SliderPaint>
       </div>

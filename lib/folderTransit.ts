@@ -98,7 +98,10 @@ export function rememberFolderOrigin(href: string, card: HTMLElement, seedCover?
 }
 
 /** The pressed card's cover picture for `href`, when it still matches `latestImageId`. */
-export function readFolderSeedCover(href: string, latestImageId?: number | null): FolderSeedCover | undefined {
+export function readFolderSeedCover(
+  href: string,
+  latestImageId?: number | null,
+): FolderSeedCover | undefined {
   const cover = seedCovers.get(href);
   if (!cover) return undefined;
   if (latestImageId !== undefined && cover.id !== latestImageId) return undefined;
@@ -205,7 +208,11 @@ export function useFolderPage(href: string) {
 export function useFolderReturn(root: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const back = left && performance.now() - left.at <= ORIGIN_TTL_MS ? left.key : null;
-    const link = back ? root.current?.querySelector<HTMLElement>(`[data-folder-card="${CSS.escape(back)}"] > a[href]`) : null;
+    const link = back
+      ? root.current?.querySelector<HTMLElement>(
+          `[data-folder-card="${CSS.escape(back)}"] > a[href]`,
+        )
+      : null;
     if (!link) return;
     link.setAttribute('data-return-focus', '');
     return () => link.removeAttribute('data-return-focus');
@@ -216,7 +223,9 @@ export function useFolderReturn(root: RefObject<HTMLElement | null>) {
     if (!origin) return;
     let stop: (() => void) | null = null;
     const frame = requestAnimationFrame(() => {
-      const card = root.current?.querySelector<HTMLElement>(`[data-folder-card="${CSS.escape(origin.key)}"]`);
+      const card = root.current?.querySelector<HTMLElement>(
+        `[data-folder-card="${CSS.escape(origin.key)}"]`,
+      );
       clearFolderReturn();
       if (card) stop = playFolderReturn(card, origin);
     });

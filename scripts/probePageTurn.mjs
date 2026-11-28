@@ -1,5 +1,5 @@
 /* What is actually on screen during a gallery page turn: scroll offset, how many cards exist,
-   and how many of them have a decoded image inside the viewport. Scratch probe. */import { spawn } from 'node:child_process';
+   and how many of them have a decoded image inside the viewport. Scratch probe. */ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,7 +7,9 @@ import { createServer } from 'node:http';
 import { stubFor } from './netAuditFixtures.mjs';
 
 const ROOT = process.cwd();
-const PORT = 3958, UP = 3959, CDP = 9345;
+const PORT = 3958,
+  UP = 3959,
+  CDP = 9345;
 
 const upstream = createServer((req, res) => {
   const asUpstream = req.url?.startsWith('/api/v1/json')
@@ -15,36 +17,62 @@ const upstream = createServer((req, res) => {
     : `http://127.0.0.1:${UP}${req.url}`;
   const stub = stubFor(asUpstream, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));
 
 const NEXT_BIN = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
 const server = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(PORT)], {
-  cwd: ROOT, stdio: 'ignore',
-  env: { ...process.env,
+  cwd: ROOT,
+  stdio: 'ignore',
+  env: {
+    ...process.env,
     PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${UP}`,
-    PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json` },
+    PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json`,
+  },
 });
 const until = async (fn, ms = 40000) => {
   const end = Date.now() + ms;
-  while (Date.now() < end) { try { if (await fn()) return true; } catch {} await new Promise((r) => setTimeout(r, 200)); }
+  while (Date.now() < end) {
+    try {
+      if (await fn()) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
+  throw new Error('no server');
 
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-page-'));
-const browser = spawn(EDGE, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${CDP}`,
-  `--user-data-dir=${profile}`, '--window-size=1440,900', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+const browser = spawn(
+  EDGE,
+  [
+    '--headless=new',
+    '--disable-gpu',
+    `--remote-debugging-port=${CDP}`,
+    `--user-data-dir=${profile}`,
+    '--window-size=1440,900',
+    '--no-first-run',
+    'about:blank',
+  ],
+  { stdio: 'ignore' },
+);
 
 let page;
-if (!(await until(async () => {
-  const list = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
-  page = list.find((t) => t.type === 'page');
-  return Boolean(page);
-}))) throw new Error('no cdp');
+if (
+  !(await until(async () => {
+    const list = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
+    page = list.find((t) => t.type === 'page');
+    return Boolean(page);
+  }))
+)
+  throw new Error('no cdp');
 
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
@@ -53,14 +81,27 @@ const pending = new Map();
 const onEvent = [];
 ws.onmessage = (m) => {
   const msg = JSON.parse(m.data);
-  if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); return; }
+  if (msg.id && pending.has(msg.id)) {
+    pending.get(msg.id)(msg);
+    pending.delete(msg.id);
+    return;
+  }
   if (msg.method) onEvent.forEach((fn) => fn(msg));
 };
 const send = (method, params = {}) =>
-  new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  new Promise((r) => {
+    const i = ++id;
+    pending.set(i, r);
+    ws.send(JSON.stringify({ id: i, method, params }));
+  });
 const evalIn = async (expr) => {
-  const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
+  const r = await send('Runtime.evaluate', {
+    expression: expr,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (r.result?.exceptionDetails)
+    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 400));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');
@@ -75,7 +116,7 @@ onEvent.push(async (msg) => {
   if (msg.method !== 'Fetch.requestPaused') return;
   const { requestId, request } = msg.params;
   /* A relay or proxy line carries the real target in `?url=`; `stubFor` wants that, not the
-     wrapper. */  let target = request.url;
+     wrapper. */ let target = request.url;
   try {
     const inner = new URL(request.url).searchParams.get('url');
     if (inner) target = inner;
@@ -262,15 +303,22 @@ else {
   console.log('clicked:', out.clicked, ' pager buttons:', out.pagerButtons);
   console.log('page state:', JSON.stringify(out.trace));
   console.log('cards hidden after a cold paint:', out.cascadeSeen ? 'YES' : 'no');
-console.log('feed requests:', JSON.stringify(out.feedRequests, null, 1));
+  console.log('feed requests:', JSON.stringify(out.feedRequests, null, 1));
   for (const [label, rows] of Object.entries(out).filter(([k]) => k === 'fwd' || k === 'back')) {
     if (!Array.isArray(rows) || !rows.length || typeof rows[0] !== 'object') continue;
     console.log(`
 ${label === 'fwd' ? '下一页' : '上一页 (already fetched)'}`);
-    if (typeof rows === 'string') { console.log('  ' + rows); continue; }
-    console.log('  t(ms)  scrollTop  scrollH  cards  inView  shimmer  plate  visible  HIDDEN   BARE  first');
+    if (typeof rows === 'string') {
+      console.log('  ' + rows);
+      continue;
+    }
+    console.log(
+      '  t(ms)  scrollTop  scrollH  cards  inView  shimmer  plate  visible  HIDDEN   BARE  first',
+    );
     for (const r of rows) {
-      console.log(`  ${String(r.t).padStart(5)}  ${String(r.scrollTop).padStart(9)}  ${String(r.h).padStart(7)}  ${String(r.cards).padStart(5)}  ${String(r.inView).padStart(6)}  ${String(r.shimmering).padStart(7)}  ${String(r.plate).padStart(5)}  ${String(r.visible).padStart(7)}  ${String(r.HIDDEN).padStart(6)}  ${String(r.BARE).padStart(5)}  ${r.first}`);
+      console.log(
+        `  ${String(r.t).padStart(5)}  ${String(r.scrollTop).padStart(9)}  ${String(r.h).padStart(7)}  ${String(r.cards).padStart(5)}  ${String(r.inView).padStart(6)}  ${String(r.shimmering).padStart(7)}  ${String(r.plate).padStart(5)}  ${String(r.visible).padStart(7)}  ${String(r.HIDDEN).padStart(6)}  ${String(r.BARE).padStart(5)}  ${r.first}`,
+      );
     }
   }
 }
@@ -289,18 +337,28 @@ for (const rows of Object.values(out)) {
   for (const r of rows) worst = Math.max(worst, (r.BARE ?? r.bare ?? 0) + (r.HIDDEN ?? 0));
 }
 const hiddenAfterPaint = out && typeof out === 'object' && out.cascadeSeen === true;
-console.log(worst === 0
-  ? '\nevery card in view showed a shimmer or a plate; none was blank'
-  : `
-FAIL: up to ${worst} card(s) in view were blank: no shimmer, no image, no plate`);
+console.log(
+  worst === 0
+    ? '\nevery card in view showed a shimmer or a plate; none was blank'
+    : `
+FAIL: up to ${worst} card(s) in view were blank: no shimmer, no image, no plate`,
+);
 if (hiddenAfterPaint) {
   console.log(
-    'FAIL: a card was hidden after the cold load had already painted it. The entrance cascade is'
-      + ' running over server-rendered content — check that StaggerGrid still decides readiness'
-      + ' once at mount rather than waiting for the motion chunk.',
+    'FAIL: a card was hidden after the cold load had already painted it. The entrance cascade is' +
+      ' running over server-rendered content — check that StaggerGrid still decides readiness' +
+      ' once at mount rather than waiting for the motion chunk.',
   );
 }
 const failed = worst !== 0 || hiddenAfterPaint;
 
-ws.close(); browser.kill(); server.kill(); upstream.close();
-setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(failed ? 1 : 0); }, 500);
+ws.close();
+browser.kill();
+server.kill();
+upstream.close();
+setTimeout(() => {
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {}
+  process.exit(failed ? 1 : 0);
+}, 500);

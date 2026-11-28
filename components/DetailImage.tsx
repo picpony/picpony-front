@@ -221,7 +221,8 @@ export default function DetailImage({
   }, [finalSrc, isPainted]);
   /* While a Hero flight carries the card's preview (`heroActive && hasPreview`), the flyer and
      cached preview own the pixels — never paint a contained disc behind a transparent vector. */
-  const showPlaceholder = placeholderGone !== finalSrc && !finalGivenUp && !(heroActive && hasPreview);
+  const showPlaceholder =
+    placeholderGone !== finalSrc && !finalGivenUp && !(heroActive && hasPreview);
 
   /* The translation layer: decoded before it is shown, so the swap is a fade, not a load. */
   const [translationDecoded, setTranslationDecoded] = useState<string | null>(null);
@@ -464,7 +465,9 @@ export default function DetailImage({
     const { attempt, shown } = current;
     if (attempt === shown || attempt.giveUp) return;
     const timer = window.setTimeout(() => {
-      setLadder((state) => (state.src === finalSrc && state.attempt === attempt ? { ...state, shown: attempt } : state));
+      setLadder((state) =>
+        state.src === finalSrc && state.attempt === attempt ? { ...state, shown: attempt } : state,
+      );
     }, attempt.delayMs);
     return () => window.clearTimeout(timer);
   }, [current, finalSrc]);
@@ -480,7 +483,11 @@ export default function DetailImage({
     const onOnline = () => {
       setHeldOfflineSrc(null);
       finalFailedRef.current = false;
-      setLadder((state) => (state.attempt.giveUp ? freshLadder(state.src, state.generation + 1) : { ...state, generation: state.generation + 1 }));
+      setLadder((state) =>
+        state.attempt.giveUp
+          ? freshLadder(state.src, state.generation + 1)
+          : { ...state, generation: state.generation + 1 },
+      );
     };
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
@@ -492,9 +499,14 @@ export default function DetailImage({
       return;
     }
     setLadder((state) => {
-      if (state.src !== finalSrc || state.attempt !== state.shown || state.attempt.giveUp) return state;
+      if (state.src !== finalSrc || state.attempt !== state.shown || state.attempt.giveUp)
+        return state;
       const next = resolveNextAttempt(getRawImageUrl(state.src), state.attempt);
-      return { ...state, attempt: next, shown: next.delayMs > 0 && !next.giveUp ? state.shown : next };
+      return {
+        ...state,
+        attempt: next,
+        shown: next.delayMs > 0 && !next.giveUp ? state.shown : next,
+      };
     });
   }, [finalSrc]);
 
@@ -552,7 +564,9 @@ export default function DetailImage({
           )
             return;
           markPreviewReady();
-          setPainted((state) => (state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' }));
+          setPainted((state) =>
+            state?.src === finalSrc ? state : { src: finalSrc, at: 'preview' },
+          );
         });
       })();
     },
@@ -680,7 +694,9 @@ export default function DetailImage({
       )}
       {/* Hover veil, and nothing else — `pointer-events-none` so it never eats
           the press the media box below it is listening for. */}
-      {!failedWithNothing && <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />}
+      {!failedWithNothing && (
+        <div className="media-hover-scrim pointer-events-none absolute inset-0 z-20" />
+      )}
       {!failedWithNothing && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex items-center justify-between gap-2">
           {finalGivenUp && isPainted ? (
@@ -696,7 +712,9 @@ export default function DetailImage({
               }}
               className="pointer-events-auto"
             />
-          ) : <span />}
+          ) : (
+            <span />
+          )}
           {/* The zoom affordance is a real control on the media plate, in the corner
               rather than over the picture, present on compact and touch screens and
               hover-revealed on desktop — the same rule the gallery captions follow. The box click

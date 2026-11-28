@@ -37,7 +37,9 @@ type BadgeLink = adminApi.AdminBadgeLink;
 
 type SubTab = 'grant' | 'links' | 'badge-dictionary';
 
-const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', (token, signal) => adminApi.adminGetBadgeLinks(token, signal));
+const linksQuery = defineAdminQuery<BadgeLink[]>('badge-links', (token, signal) =>
+  adminApi.adminGetBadgeLinks(token, signal),
+);
 
 const SUB_TABS: { value: SubTab; label: string }[] = [
   { value: 'grant', label: '授予徽章' },
@@ -64,12 +66,19 @@ export default function BadgesTab({ token }: AdminPanelProps) {
 
   return (
     <div className="space-y-6">
-      <SectionHeader section="badges"
+      <SectionHeader
+        section="badges"
         onRefresh={sub === 'links' ? links.refresh : undefined}
         refreshLabel="刷新链接"
         isLoading={links.refreshing}
       />
-      <Tabs value={sub} onChange={setSub} activation="manual" label="徽章管理分区" tabs={SUB_TABS} />
+      <Tabs
+        value={sub}
+        onChange={setSub}
+        activation="manual"
+        label="徽章管理分区"
+        tabs={SUB_TABS}
+      />
       <TabPanes value={sub}>
         <TabPane value="grant">
           <GrantPane token={token} />
@@ -119,28 +128,33 @@ function GrantPane({ token }: { token: string }) {
     if (form.target === 'dates') {
       if (!form.startDate) next.startDate = '请选择起始日期';
       if (!form.endDate) next.endDate = '请选择截止日期';
-      if (form.startDate && form.endDate && form.startDate > form.endDate) next.endDate = '截止日期不能早于起始日期';
+      if (form.startDate && form.endDate && form.startDate > form.endDate)
+        next.endDate = '截止日期不能早于起始日期';
     }
     if (!form.permanent && !form.expiresAt) next.expiresAt = '请选择徽章的到期日期';
-    else if (!form.permanent) next.expiresAt = badgeDateProblems({ badgeExpiresAt: form.expiresAt }).badgeExpiresAt ?? next.expiresAt;
+    else if (!form.permanent)
+      next.expiresAt =
+        badgeDateProblems({ badgeExpiresAt: form.expiresAt }).badgeExpiresAt ?? next.expiresAt;
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
 
     const name = form.name.trim();
-    const audience = form.target === 'users'
-      ? `${ids?.length ?? 0} 位用户`
-      : `${formatDate(form.startDate)} 至 ${formatDate(form.endDate)} 期间注册的所有用户`;
+    const audience =
+      form.target === 'users'
+        ? `${ids?.length ?? 0} 位用户`
+        : `${formatDate(form.startDate)} 至 ${formatDate(form.endDate)} 期间注册的所有用户`;
     confirmThen(
       '确认授予徽章',
       `确定要向 ${audience}授予徽章「${name}」吗？`,
-      () => void mutation.run(
-        () => adminApi.adminGrantBadge(token, grantPayload(form)),
-        () => {
-          showToast(`已授予徽章「${name}」`, 'success');
-          setForm((previous) => ({ ...EMPTY_GRANT, color: previous.color }));
-        },
-        '授予失败',
-      ),
+      () =>
+        void mutation.run(
+          () => adminApi.adminGrantBadge(token, grantPayload(form)),
+          () => {
+            showToast(`已授予徽章「${name}」`, 'success');
+            setForm((previous) => ({ ...EMPTY_GRANT, color: previous.color }));
+          },
+          '授予失败',
+        ),
       { tone: form.target === 'dates' ? 'danger' : 'filled' },
     );
   };
@@ -168,8 +182,22 @@ function GrantPane({ token }: { token: string }) {
         <fieldset className="min-w-0 space-y-3 border-0 p-0">
           <legend className="text-label-l text-on-surface-variant">授予对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Radio name="badge-target" value="users" label="指定用户" checked={form.target === 'users'} disabled={busy} onChange={() => set('target', 'users')} />
-            <Radio name="badge-target" value="dates" label="按注册日期" checked={form.target === 'dates'} disabled={busy} onChange={() => set('target', 'dates')} />
+            <Radio
+              name="badge-target"
+              value="users"
+              label="指定用户"
+              checked={form.target === 'users'}
+              disabled={busy}
+              onChange={() => set('target', 'users')}
+            />
+            <Radio
+              name="badge-target"
+              value="dates"
+              label="按注册日期"
+              checked={form.target === 'dates'}
+              disabled={busy}
+              onChange={() => set('target', 'dates')}
+            />
           </div>
           <FollowHeight watch={form.target}>
             <SwapContent contentKey={form.target} side="left">
@@ -208,8 +236,22 @@ function GrantPane({ token }: { token: string }) {
         <fieldset className="min-w-0 border-0 p-0">
           <legend className="mb-3 text-label-l text-on-surface-variant">有效期</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Radio name="badge-duration" value="permanent" label="永久有效" checked={form.permanent} disabled={busy} onChange={() => set('permanent', true)} />
-            <Radio name="badge-duration" value="expiring" label="设定到期日期" checked={!form.permanent} disabled={busy} onChange={() => set('permanent', false)} />
+            <Radio
+              name="badge-duration"
+              value="permanent"
+              label="永久有效"
+              checked={form.permanent}
+              disabled={busy}
+              onChange={() => set('permanent', true)}
+            />
+            <Radio
+              name="badge-duration"
+              value="expiring"
+              label="设定到期日期"
+              checked={!form.permanent}
+              disabled={busy}
+              onChange={() => set('permanent', false)}
+            />
           </div>
           <Collapse open={!form.permanent}>
             <div className="pt-3">
@@ -274,13 +316,19 @@ function LinksPane({
   const { confirmThen, confirmDialog } = useConfirm();
   const { prompt, promptDialog } = usePrompt();
   const [form, setForm] = useState<LinkForm>(EMPTY_LINK);
-  const [errors, setErrors] = useState<{ name?: string; color?: string; badgeExpiresAt?: string; linkExpiresAt?: string }>({});
+  const [errors, setErrors] = useState<{
+    name?: string;
+    color?: string;
+    badgeExpiresAt?: string;
+    linkExpiresAt?: string;
+  }>({});
   const creating = createMutation.busy;
   const paged = usePagedRows(links.data ?? [], token);
 
   const set = <K extends keyof LinkForm>(field: K, value: LinkForm[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
-    if (field === 'name' || field === 'color') setErrors((previous) => ({ ...previous, [field]: undefined }));
+    if (field === 'name' || field === 'color')
+      setErrors((previous) => ({ ...previous, [field]: undefined }));
   };
 
   const create = () => {
@@ -288,19 +336,23 @@ function LinksPane({
     const next = {
       name: form.name.trim() ? undefined : '请输入徽章名称',
       color: isHexColor(form.color) ? undefined : '请输入 #RRGGBB 格式的颜色',
-      ...badgeDateProblems({ badgeExpiresAt: form.badgeExpiresAt, linkExpiresAt: form.linkExpiresAt }),
+      ...badgeDateProblems({
+        badgeExpiresAt: form.badgeExpiresAt,
+        linkExpiresAt: form.linkExpiresAt,
+      }),
     };
     setErrors(next);
     if (next.name || next.color || next.badgeExpiresAt || next.linkExpiresAt) return;
     void createMutation.run(
-      () => adminApi.adminCreateBadgeLink(token, {
-        name: form.name.trim(),
-        color: form.color,
-        badge_expires_on: form.badgeExpiresAt || undefined,
-        link_expires_on: form.linkExpiresAt || undefined,
-        required_location: form.location.trim() || undefined,
-        location_error_message: form.locationMessage.trim() || undefined,
-      }),
+      () =>
+        adminApi.adminCreateBadgeLink(token, {
+          name: form.name.trim(),
+          color: form.color,
+          badge_expires_on: form.badgeExpiresAt || undefined,
+          link_expires_on: form.linkExpiresAt || undefined,
+          required_location: form.location.trim() || undefined,
+          location_error_message: form.locationMessage.trim() || undefined,
+        }),
       (data) => {
         setForm((previous) => ({ ...EMPTY_LINK, color: previous.color }));
         void reveal(String(data.token), '已生成领取链接');
@@ -318,38 +370,57 @@ function LinksPane({
       showToast(`${done}并已复制链接`, 'success');
       return;
     }
-    void prompt({ title: done, label: '领取链接', defaultValue: url, message: '链接仅显示一次，请立即复制保存', confirmLabel: '完成', allowEmpty: true });
+    void prompt({
+      title: done,
+      label: '领取链接',
+      defaultValue: url,
+      message: '链接仅显示一次，请立即复制保存',
+      confirmLabel: '完成',
+      allowEmpty: true,
+    });
   };
 
   const rotate = (link: BadgeLink) =>
     confirmThen(
       '确认重新生成链接',
       `确定要重新生成徽章「${link.name}」的领取链接吗？原链接将立即失效，新链接仅在生成时显示一次。`,
-      () => void rotateMutation.run(
-        () => adminApi.adminRotateBadgeLink(token, link.id),
-        (data) => void reveal(String(data.token), '已重新生成领取链接'),
-        '重新生成失败',
-        { key: link.id },
-      ),
+      () =>
+        void rotateMutation.run(
+          () => adminApi.adminRotateBadgeLink(token, link.id),
+          (data) => void reveal(String(data.token), '已重新生成领取链接'),
+          '重新生成失败',
+          { key: link.id },
+        ),
     );
 
   const toggle = (link: BadgeLink) => {
     const enabling = !link.active;
-    const run = () => void toggleMutation.run(
-      () => adminApi.adminToggleBadgeLink(token, link.id, enabling),
-      () => showToast(enabling ? '已启用领取链接' : '已停用领取链接', 'success'),
-      enabling ? '启用失败' : '停用失败',
-      {
-        key: link.id,
-        onCommitted: () => {
-          linksQuery.write(token, (previous) =>
-            previous?.map((row) => (row.id === link.id ? { ...row, active: enabling } : row)) ?? []);
-          links.refresh();
+    const run = () =>
+      void toggleMutation.run(
+        () => adminApi.adminToggleBadgeLink(token, link.id, enabling),
+        () => showToast(enabling ? '已启用领取链接' : '已停用领取链接', 'success'),
+        enabling ? '启用失败' : '停用失败',
+        {
+          key: link.id,
+          onCommitted: () => {
+            linksQuery.write(
+              token,
+              (previous) =>
+                previous?.map((row) => (row.id === link.id ? { ...row, active: enabling } : row)) ??
+                [],
+            );
+            links.refresh();
+          },
         },
-      },
-    );
+      );
     if (enabling) run();
-    else confirmThen('确认停用链接', `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`, run, { tone: 'filled' });
+    else
+      confirmThen(
+        '确认停用链接',
+        `确定要停用徽章「${link.name}」的领取链接吗？停用后该链接将无法再领取徽章。`,
+        run,
+        { tone: 'filled' },
+      );
   };
 
   const expiry = (link: BadgeLink) =>
@@ -373,13 +444,21 @@ function LinksPane({
         </Badge>
       ),
     },
-    { key: 'expiry', header: '有效期', width: 'minmax(0, 2fr)', className: 'tabular-nums', render: (link) => <span className="text-on-surface-variant">{expiry(link)}</span> },
+    {
+      key: 'expiry',
+      header: '有效期',
+      width: 'minmax(0, 2fr)',
+      className: 'tabular-nums',
+      render: (link) => <span className="text-on-surface-variant">{expiry(link)}</span>,
+    },
     {
       key: 'location',
       header: '地区限制',
       width: 'minmax(0, 1fr)',
       render: (link) => (
-        <span className="text-on-surface-variant">{link.required_location ? `仅限 ${link.required_location}` : '不限'}</span>
+        <span className="text-on-surface-variant">
+          {link.required_location ? `仅限 ${link.required_location}` : '不限'}
+        </span>
       ),
     },
     {
@@ -403,7 +482,13 @@ function LinksPane({
           >
             {link.active ? '停用' : '启用'}
           </Button>
-          <DeleteBadgeLinkAction token={token} id={link.id} name={link.name} disabled={toggleMutation.busy} onDeleted={links.refresh} />
+          <DeleteBadgeLinkAction
+            token={token}
+            id={link.id}
+            name={link.name}
+            disabled={toggleMutation.busy}
+            onDeleted={links.refresh}
+          />
         </>
       ),
     },
@@ -421,7 +506,13 @@ function LinksPane({
             error={errors.name}
             onChange={(event) => set('name', event.target.value)}
           />
-          <ColorField label="徽章颜色" value={form.color} disabled={creating} error={errors.color} onChange={(value) => set('color', value)} />
+          <ColorField
+            label="徽章颜色"
+            value={form.color}
+            disabled={creating}
+            error={errors.color}
+            onChange={(value) => set('color', value)}
+          />
           <DateInput
             label="徽章到期日期"
 
@@ -462,7 +553,9 @@ function LinksPane({
         </FormActions>
       </AdminForm>
       <section aria-labelledby="admin-badge-links-heading" className="space-y-4">
-        <SectionHeading as="h3" id="admin-badge-links-heading">已生成的链接</SectionHeading>
+        <SectionHeading as="h3" id="admin-badge-links-heading">
+          已生成的链接
+        </SectionHeading>
         <BadgeLinkDeleteScope token={token} onDeleted={links.refresh}>
           <AdminListAnchor>
             <DataTable<BadgeLink>
@@ -476,7 +569,11 @@ function LinksPane({
               onRetry={links.retryable ? links.refresh : undefined}
               empty="暂无领取链接"
             />
-            <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
+            <AdminPager
+              page={paged.page}
+              totalPages={paged.totalPages}
+              onPageChange={paged.setPage}
+            />
           </AdminListAnchor>
         </BadgeLinkDeleteScope>
       </section>

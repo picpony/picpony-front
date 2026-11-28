@@ -97,11 +97,7 @@ function getFlightGeometryFrames(leg: HeroLeg): readonly FlightGeometryFrame[] {
     ({ offset, progress }) => ({
       offset,
       rect: lerpHeroRectArc(arc, progress),
-      radius: interpolate(
-        leg.fromRadius,
-        leg.toRadius,
-        radiusProgress(progress, leg.direction),
-      ),
+      radius: interpolate(leg.fromRadius, leg.toRadius, radiusProgress(progress, leg.direction)),
     }),
   );
   geometryFrames.set(leg, frames);

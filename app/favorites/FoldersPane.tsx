@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MdChecklist, MdCreateNewFolder, MdDeleteOutline, MdDeselect, MdFolder, MdMerge, MdSelectAll, MdTune } from 'react-icons/md';
+import {
+  MdChecklist,
+  MdCreateNewFolder,
+  MdDeleteOutline,
+  MdDeselect,
+  MdFolder,
+  MdMerge,
+  MdSelectAll,
+  MdTune,
+} from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { faveFolders, folderCovers, useBrowsingFingerprint } from '@/lib/resources';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -24,9 +33,18 @@ import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { useConfirm, usePrompt } from '@/components/ConfirmDialog';
 import SelectionBar, { type SelectionCommand } from '@/components/favorites/SelectionBar';
-import { FOLDER_GRID, FolderBadges, FolderCard, FolderGridSkeleton } from '@/components/favorites/FolderCard';
+import {
+  FOLDER_GRID,
+  FolderBadges,
+  FolderCard,
+  FolderGridSkeleton,
+} from '@/components/favorites/FolderCard';
 import { MergeDialog } from '@/components/favorites/FolderDialogs';
-import { FolderMenuButton, isFolderPublic, useFolderCommands } from '@/components/favorites/useFolderCommands';
+import {
+  FolderMenuButton,
+  isFolderPublic,
+  useFolderCommands,
+} from '@/components/favorites/useFolderCommands';
 import { settingsHref } from '@/app/settings/tabs';
 
 /**
@@ -44,9 +62,17 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const defaultFolder = useDefaultFaveFolder(token, folders);
 
   const coverIds = folders
-    ? [...new Set(folders.map((folder) => folder.latestImageId).filter((cover): cover is number => cover !== null))]
+    ? [
+        ...new Set(
+          folders
+            .map((folder) => folder.latestImageId)
+            .filter((cover): cover is number => cover !== null),
+        ),
+      ]
     : [];
-  const covers = useResource(folderCovers, coverIds.length > 0 ? { ids: coverIds, fp } : SKIP, { keepPrevious: fp });
+  const covers = useResource(folderCovers, coverIds.length > 0 ? { ids: coverIds, fp } : SKIP, {
+    keepPrevious: fp,
+  });
 
   const selectRef = useRef<HTMLButtonElement>(null);
   const createRef = useRef<HTMLButtonElement>(null);
@@ -68,8 +94,14 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const rootRef = useRef<HTMLDivElement>(null);
   useFolderReturn(rootRef);
   const { prompt, promptDialog } = usePrompt();
-  const order = useMemo(() => (folders ?? []).filter((folder) => !folder.isMain).map((folder) => folder.id), [folders]);
-  const selection = useSelectionMode({ order, restoreFocus: () => selectRef.current?.disabled ? createRef.current : selectRef.current });
+  const order = useMemo(
+    () => (folders ?? []).filter((folder) => !folder.isMain).map((folder) => folder.id),
+    [folders],
+  );
+  const selection = useSelectionMode({
+    order,
+    restoreFocus: () => (selectRef.current?.disabled ? createRef.current : selectRef.current),
+  });
   const [creating, setCreating] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -119,7 +151,12 @@ export default function FoldersPane({ token, active }: { token: string; active: 
     });
     if (!ok || readToken() !== token) return;
     setBusy(true);
-    const outcome = await settled(deleteFolders(token, chosen.map((folder) => folder.id)));
+    const outcome = await settled(
+      deleteFolders(
+        token,
+        chosen.map((folder) => folder.id),
+      ),
+    );
     setBusy(false);
     if (!outcome.ok) {
       showToast(apiErrorMessage(outcome.error, '删除失败'), 'error');
@@ -132,7 +169,11 @@ export default function FoldersPane({ token, active }: { token: string; active: 
   const merge = async (targetId: number) => {
     const target = folders.find((folder) => folder.id === targetId);
     if (!target) return false;
-    const ok = await confirm({ title: '确认合并收藏夹', message: `确定要将已选的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。`, tone: 'danger' });
+    const ok = await confirm({
+      title: '确认合并收藏夹',
+      message: `确定要将已选的 ${chosen.length} 个收藏夹合并到「${folderLabel(target)}」吗？其余 ${chosen.length - 1} 个收藏夹将被删除。`,
+      tone: 'danger',
+    });
     if (!ok || readToken() !== token) return false;
     const outcome = await settled(
       mergeFolders(
@@ -153,14 +194,23 @@ export default function FoldersPane({ token, active }: { token: string; active: 
 
   const create = async () => {
     if (creating) return;
-    const name = await prompt({ title: '新建收藏夹', label: '名称', rows: 1, confirmLabel: '创建' });
+    const name = await prompt({
+      title: '新建收藏夹',
+      label: '名称',
+      rows: 1,
+      confirmLabel: '创建',
+    });
     if (!name || readToken() !== token) return;
     setCreating(true);
     const result = await settled(createFolder(token, name));
     setCreating(false);
     if (readToken() !== token) return;
     if (!result.ok) showToast(apiErrorMessage(result.error, '创建失败'), 'error');
-    else showToast(result.value ? `已创建「${name}」` : `已创建「${name}」，收藏夹列表更新失败`, result.value ? 'success' : 'warning');
+    else
+      showToast(
+        result.value ? `已创建「${name}」` : `已创建「${name}」，收藏夹列表更新失败`,
+        result.value ? 'success' : 'warning',
+      );
   };
 
   const barCommands: SelectionCommand[] = [
@@ -202,7 +252,10 @@ export default function FoldersPane({ token, active }: { token: string; active: 
             frame beside a bar that glides (M1-002). */}
         <div
           inert={selection.active}
-          className={cn('flex shrink-0 items-center gap-2 transition-opacity spring-fast-effects', selection.active && 'opacity-0')}
+          className={cn(
+            'flex shrink-0 items-center gap-2 transition-opacity spring-fast-effects',
+            selection.active && 'opacity-0',
+          )}
         >
           <Button
             ref={createRef}
@@ -234,14 +287,17 @@ export default function FoldersPane({ token, active }: { token: string; active: 
           </ButtonLink>
         </div>
       )}
-      {Boolean(list.error) && <ErrorRetry size="inline" className="mb-4" title="收藏夹更新失败" message={apiErrorMessage(list.error)}
-        onRetry={isRetryable(list.error) ? list.refresh : undefined} />}
-      {folders.length === 0 ? (
-        <EmptyState
-          size="pane"
-          icon={<MdFolder size={ICON.display} />}
-          title="暂无收藏夹"
+      {Boolean(list.error) && (
+        <ErrorRetry
+          size="inline"
+          className="mb-4"
+          title="收藏夹更新失败"
+          message={apiErrorMessage(list.error)}
+          onRetry={isRetryable(list.error) ? list.refresh : undefined}
         />
+      )}
+      {folders.length === 0 ? (
+        <EmptyState size="pane" icon={<MdFolder size={ICON.display} />} title="暂无收藏夹" />
       ) : (
         /* A folder deleted or merged away fades where it was while the cards after it glide into
            their new cells, and a new one grows into its own — the grid never reflows in a frame
@@ -262,12 +318,20 @@ export default function FoldersPane({ token, active }: { token: string; active: 
                     <FolderCard
                       folder={folder}
                       href={faveFolderHref(folder.id)}
-                      cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
-                      coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
+                      cover={
+                        folder.latestImageId !== null
+                          ? covers.data?.[folder.latestImageId]
+                          : undefined
+                      }
+                      coverPending={
+                        folder.latestImageId !== null && covers.data === undefined && !covers.error
+                      }
                       badges={
                         <FolderBadges
                           isDefault={folder.id === defaultFolder.id}
-                          isPublic={commands.showFaves && isFolderPublic(folder.id, commands.publicIds)}
+                          isPublic={
+                            commands.showFaves && isFolderPublic(folder.id, commands.publicIds)
+                          }
                         />
                       }
                       menu={
@@ -301,7 +365,12 @@ export default function FoldersPane({ token, active }: { token: string; active: 
         onExit={exit}
       />
       {promptDialog}
-      <MergeDialog open={mergeOpen} folders={chosen} onClose={() => setMergeOpen(false)} onConfirm={merge} />
+      <MergeDialog
+        open={mergeOpen}
+        folders={chosen}
+        onClose={() => setMergeOpen(false)}
+        onConfirm={merge}
+      />
       {commands.dialogs}
       {confirmDialog}
     </div>

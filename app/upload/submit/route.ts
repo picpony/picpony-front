@@ -69,7 +69,10 @@ const EXTRA_SKIPPED_HEADERS: ReadonlySet<string> = new Set([
 const takeSubmit = createRateLimiter({ limit: 30, windowMs: 10 * 60_000 });
 
 function answer(status: number, message: string): Response {
-  return Response.json({ success: false, message }, { status, headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json(
+    { success: false, message },
+    { status, headers: { 'Cache-Control': 'private, no-store' } },
+  );
 }
 
 /** An absolute http(s) URL with no credentials, within `UPLOAD_MAX_SOURCE_URL` characters — or `null`. The
@@ -120,7 +123,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   let body: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return answer(400, '请求无效');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return answer(400, '请求无效');
     body = parsed as Record<string, unknown>;
   } catch {
     return answer(400, '请求无效');
@@ -133,7 +137,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   const tagInput = typeof body.tag_input === 'string' ? body.tag_input.trim() : '';
   if (!tagInput || tagInput.length > MAX_TAG_INPUT) return answer(400, '标签无效');
   const sourceRaw = body.source_url;
-  const source = sourceRaw === undefined || sourceRaw === null || sourceRaw === '' ? undefined : webUrl(sourceRaw);
+  const source =
+    sourceRaw === undefined || sourceRaw === null || sourceRaw === ''
+      ? undefined
+      : webUrl(sourceRaw);
   if (source === null) return answer(400, '来源链接无效');
   const description = optionalText(body.description, UPLOAD_MAX_DESCRIPTION_BYTES);
   if (description === null) return answer(400, '作品描述无效');
@@ -171,7 +178,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   } catch (error) {
     /* Our own deadline: the relay held the request, so it may have reached Derpibooru. A refused
        connection never left this server. The form tells the two apart by status. */
-    const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+    const timedOut =
+      error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
     return timedOut ? answer(504, '上传线路响应超时') : answer(502, '上传线路不可用');
   }
 
@@ -195,7 +203,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   headers.set('Cache-Control', 'private, no-store');
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Content-Security-Policy', "sandbox; default-src 'none'; frame-ancestors 'none'");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export const dynamic = 'force-dynamic';

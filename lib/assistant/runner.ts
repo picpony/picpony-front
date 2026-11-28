@@ -1,12 +1,27 @@
 import { actionIsWrite, validateSiteSpec } from './actions';
-import { obj, receiptData, str, uuid, type AssistantAction, type AssistantReceipt, type JsonObject, type PermissionMode } from './protocol';
+import {
+  obj,
+  receiptData,
+  str,
+  uuid,
+  type AssistantAction,
+  type AssistantReceipt,
+  type JsonObject,
+  type PermissionMode,
+} from './protocol';
 import type { createReceiptJournal } from './journal';
 
 /** Tools the server dispatches to the client (`assistant_runner::CLIENT_TOOLS`). */
-export const CLIENT_CALLS: readonly string[] = ['call_site_api', 'get_page_controls', 'interact_page'];
+export const CLIENT_CALLS: readonly string[] = [
+  'call_site_api',
+  'get_page_controls',
+  'interact_page',
+];
 
 export class UncertainAction extends Error {
-  constructor(message = '操作结果尚未确认，已停止重复提交，请先核对站内结果后再继续') { super(message); }
+  constructor(message = '操作结果尚未确认，已停止重复提交，请先核对站内结果后再继续') {
+    super(message);
+  }
 }
 export interface ActionDependencies {
   assertCurrent(): void;
@@ -22,13 +37,33 @@ export interface ActionDependencies {
 /** One task/call promise per document; durable intents and server claims survive reload. */
 export function createActionRunner(deps: ActionDependencies) {
   const running = new Map<string, Promise<AssistantReceipt>>();
-  function receipt(action: AssistantAction, taskId: string, fields: Partial<AssistantReceipt>): AssistantReceipt {
-    return { task_id: taskId, call_id: action.call_id, name: action.name, action: action.name, ok: false, summary: '', data: {}, ...fields };
+  function receipt(
+    action: AssistantAction,
+    taskId: string,
+    fields: Partial<AssistantReceipt>,
+  ): AssistantReceipt {
+    return {
+      task_id: taskId,
+      call_id: action.call_id,
+      name: action.name,
+      action: action.name,
+      ok: false,
+      summary: '',
+      data: {},
+      ...fields,
+    };
   }
-  async function settle(action: AssistantAction, taskId: string, approved: boolean): Promise<AssistantReceipt> {
+  async function settle(
+    action: AssistantAction,
+    taskId: string,
+    approved: boolean,
+  ): Promise<AssistantReceipt> {
     deps.assertCurrent();
     if (!uuid(taskId) || !/^[A-Za-z0-9._:-]{1,160}$/.test(action.call_id)) {
-      return receipt(action, taskId, { summary: '任务信息不完整，未执行', error: 'missing_identity' });
+      return receipt(action, taskId, {
+        summary: '任务信息不完整，未执行',
+        error: 'missing_identity',
+      });
     }
     /* Every call the server dispatches to the browser (`assistant_runner::CLIENT_TOOLS`) is an issued
        `assistant_client_calls` row: it is claimed before it runs and answered with a receipt, which is
@@ -41,31 +76,54 @@ export function createActionRunner(deps: ActionDependencies) {
     }
     const write = actionIsWrite(action);
     if (write) {
-      const permission = await deps.permission(); deps.assertCurrent();
+      const permission = await deps.permission();
+      deps.assertCurrent();
       if (!approved && !(permission === 'full' && action.approval_granted)) {
-        return receipt(action, taskId, { summary: '此操作尚未得到确认，未执行', error: 'confirmation_required' });
+        return receipt(action, taskId, {
+          summary: '此操作尚未得到确认，未执行',
+          error: 'confirmation_required',
+        });
       }
     }
     let claim: JsonObject = {};
     if (claimed) {
-      claim = await deps.claim(taskId, action.call_id); deps.assertCurrent();
+      claim = await deps.claim(taskId, action.call_id);
+      deps.assertCurrent();
       if (claim.cached === true) {
         /* `{cached, result:{name, call_id (the model's), ok, summary, data, source}}`, where `data`
            is the receipt this client sent — its own task and call ids identify it. */
-        const cached = obj(claim.result), sent = obj(cached.data);
-        if (sent.task_id !== taskId || sent.call_id !== action.call_id || typeof cached.ok !== 'boolean') throw new UncertainAction('服务器返回的结果与此操作不一致，未重复执行');
-        const result = receipt(action, taskId, { ok: cached.ok, summary: str(cached.summary, 1000), data: receiptData(sent.data), ...(typeof sent.error === 'string' ? { error: str(sent.error, 100) } : {}) });
-        deps.journal.save(result); return result;
+        const cached = obj(claim.result),
+          sent = obj(cached.data);
+        if (
+          sent.task_id !== taskId ||
+          sent.call_id !== action.call_id ||
+          typeof cached.ok !== 'boolean'
+        )
+          throw new UncertainAction('服务器返回的结果与此操作不一致，未重复执行');
+        const result = receipt(action, taskId, {
+          ok: cached.ok,
+          summary: str(cached.summary, 1000),
+          data: receiptData(sent.data),
+          ...(typeof sent.error === 'string' ? { error: str(sent.error, 100) } : {}),
+        });
+        deps.journal.save(result);
+        return result;
       }
       /* Review P5-F6: a recorded start is uncertainty only for a write. A read left `started` (the
          page went away while it was out) is asked again — it changes nothing — where it used to
          throw on every 核对任务, so the task could never finish. */
       if (write && previous?.state === 'started') throw new UncertainAction();
       if (action.name === 'call_site_api') {
-        try { validateSiteSpec(action, claim.request); }
-        catch (e) {
-          const denied = receipt(action, taskId, { summary: deps.failure(e), error: 'unsupported_action' });
-          deps.journal.save(denied); await save(denied); return denied;
+        try {
+          validateSiteSpec(action, claim.request);
+        } catch (e) {
+          const denied = receipt(action, taskId, {
+            summary: deps.failure(e),
+            error: 'unsupported_action',
+          });
+          deps.journal.save(denied);
+          await save(denied);
+          return denied;
         }
       }
     } else if (write && previous?.state === 'started') throw new UncertainAction();
@@ -73,12 +131,14 @@ export function createActionRunner(deps: ActionDependencies) {
     deps.journal.start(taskId, action.call_id);
     let result: AssistantReceipt;
     try {
-      const value = await deps.dispatch(action, claim); deps.assertCurrent();
+      const value = await deps.dispatch(action, claim);
+      deps.assertCurrent();
       result = receipt(action, taskId, value);
     } catch (e) {
       deps.assertCurrent();
       // Any thrown write may already have reached the backend. Keep the durable intent.
-      if (write && !deps.definitive(e)) throw new UncertainAction(deps.failure(e) + '；结果尚未确认，不会重复提交');
+      if (write && !deps.definitive(e))
+        throw new UncertainAction(deps.failure(e) + '；结果尚未确认，不会重复提交');
       result = receipt(action, taskId, { summary: deps.failure(e), error: 'client_action_failed' });
     }
     deps.journal.save(result);
@@ -87,8 +147,10 @@ export function createActionRunner(deps: ActionDependencies) {
   }
   async function save(value: AssistantReceipt) {
     deps.assertCurrent();
-    const saved = await deps.save(value); deps.assertCurrent();
-    if (saved.success !== true || !saved.result) throw new UncertainAction('操作已完成，状态同步尚未确认');
+    const saved = await deps.save(value);
+    deps.assertCurrent();
+    if (saved.success !== true || !saved.result)
+      throw new UncertainAction('操作已完成，状态同步尚未确认');
     deps.journal.acknowledge(value.task_id, value.call_id);
   }
   return {
@@ -97,7 +159,8 @@ export function createActionRunner(deps: ActionDependencies) {
       const active = running.get(key);
       if (active) return active;
       const pending = settle(action, taskId, approved).finally(() => running.delete(key));
-      running.set(key, pending); return pending;
+      running.set(key, pending);
+      return pending;
     },
   };
 }

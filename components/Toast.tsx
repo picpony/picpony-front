@@ -98,7 +98,12 @@ export function ToastContainer() {
         if (same) {
           return prev.map((item) =>
             item === same
-              ? { ...item, action: toast.action, duration: toast.duration, version: item.version + 1 }
+              ? {
+                  ...item,
+                  action: toast.action,
+                  duration: toast.duration,
+                  version: item.version + 1,
+                }
               : item,
           );
         }
@@ -185,12 +190,21 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       ...arrival.spatial,
       fill: 'backwards',
     });
-    const fadeIn = card.animate([{ opacity: 0 }, { opacity: 1 }], { ...arrival.effects, fill: 'backwards' });
+    const fadeIn = card.animate([{ opacity: 0 }, { opacity: 1 }], {
+      ...arrival.effects,
+      fill: 'backwards',
+    });
     running.current.push(fadeIn);
-    fadeIn.finished.then(() => fadeIn.cancel(), () => {});
+    fadeIn.finished.then(
+      () => fadeIn.cancel(),
+      () => {},
+    );
     running.current.push(enter);
     // The ordinary styles are the resting pose; no layer stays promoted while it is read.
-    enter.finished.then(() => enter.cancel(), () => {});
+    enter.finished.then(
+      () => enter.cancel(),
+      () => {},
+    );
     const list = running.current;
     return () => {
       for (const animation of list) animation.cancel();
@@ -218,10 +232,13 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
     const leaveSpatial = springTiming('fastSpatial', 'overlay');
     const leaveFade = springTiming('fastEffects', 'overlay');
     running.current.forEach((animation) => animation.cancel());
-    const exit = card.animate([{ transform: from.transform }, { transform: `translateY(${-TRAVEL_PX.small}px)` }], {
-      ...leaveSpatial,
-      fill: 'forwards',
-    });
+    const exit = card.animate(
+      [{ transform: from.transform }, { transform: `translateY(${-TRAVEL_PX.small}px)` }],
+      {
+        ...leaveSpatial,
+        fill: 'forwards',
+      },
+    );
     const fadeOut = card.animate([{ opacity: from.opacity }, { opacity: 0 }], {
       ...leaveFade,
       fill: 'forwards',
@@ -244,7 +261,10 @@ function ToastItem({ toast, onGone }: { toast: ToastMessage; onGone: (id: number
       fill: 'forwards',
     });
     running.current = [exit, fadeOut, collapse];
-    collapse.finished.then(() => onGone(toast.id), () => {});
+    collapse.finished.then(
+      () => onGone(toast.id),
+      () => {},
+    );
   }, [onGone, toast.id]);
 
   /* Reading time is not motion, so only the entrance goes through `scaledMs`. Restarted

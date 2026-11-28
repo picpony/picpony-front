@@ -18,16 +18,25 @@ type StatsSection = {
 
 export const STATS_SECTIONS = [
   {
-    value: 'stats-users', label: '用户', heading: '用户趋势', kind: 'growth',
+    value: 'stats-users',
+    label: '用户',
+    heading: '用户趋势',
+    kind: 'growth',
     metrics: [{ key: 'users', label: '用户数', tone: 'primary' }],
   },
   {
-    value: 'stats-tags', label: '中文词条', heading: '中文词条趋势', kind: 'growth',
+    value: 'stats-tags',
+    label: '中文词条',
+    heading: '中文词条趋势',
+    kind: 'growth',
     note: '按首次获得中文译名的时间计入',
     metrics: [{ key: 'chinese_tags', label: '中文词条数', tone: 'primary' }],
   },
   {
-    value: 'stats-visits', label: '访客与浏览量', heading: '访问趋势', kind: 'traffic',
+    value: 'stats-visits',
+    label: '访客与浏览量',
+    heading: '访问趋势',
+    kind: 'traffic',
     note: '访客按时段匿名计数，访问数据仅保留最近 90 天',
     metrics: [
       { key: 'visitors', label: '访客数', tone: 'primary' },
@@ -35,7 +44,10 @@ export const STATS_SECTIONS = [
     ],
   },
   {
-    value: 'stats-community', label: '社区内容', heading: '社区内容趋势', kind: 'growth',
+    value: 'stats-community',
+    label: '社区内容',
+    heading: '社区内容趋势',
+    kind: 'growth',
     metrics: [
       { key: 'posts', label: '帖子', tone: 'primary' },
       { key: 'comments', label: '评论', tone: 'secondary' },
@@ -55,8 +67,10 @@ export function periodWord(granularity: StatsGranularity): string {
 export function chartBuckets(data: SiteStats): ChartBucket[] {
   return data.series.map(({ date }) => {
     const [year, month, day] = date.split('-').map(Number);
-    if (data.granularity === 'month') return { key: date, tick: `${year}/${month}`, detail: `${year}年${month}月` };
-    const detail = data.granularity === 'week' ? `${formatChineseDay(date)}当周` : formatChineseDay(date);
+    if (data.granularity === 'month')
+      return { key: date, tick: `${year}/${month}`, detail: `${year}年${month}月` };
+    const detail =
+      data.granularity === 'week' ? `${formatChineseDay(date)}当周` : formatChineseDay(date);
     return { key: date, tick: `${month}/${day}`, detail };
   });
 }
@@ -76,11 +90,15 @@ export function chartMetrics(section: StatsSection, data: SiteStats, view: Chart
 
   const cumulative = view === 'total';
   const series: ChartSeries[] = section.metrics.map(({ key, label, tone }) => {
-    const field = cumulative ? `total_${key}` as const : `new_${key}` as const;
+    const field = cumulative ? (`total_${key}` as const) : (`new_${key}` as const);
     const values = data.series.map((point) => point[field]);
     const last = values.at(-1);
     // The final bucket is the cumulative snapshot within this window, not today's site total.
-    const summary = cumulative ? last : values.length ? values.reduce((sum, value) => sum + value, 0) : undefined;
+    const summary = cumulative
+      ? last
+      : values.length
+        ? values.reduce((sum, value) => sum + value, 0)
+        : undefined;
     return { key: field, label, tone, values, summary: summary ?? null };
   });
   return {

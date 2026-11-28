@@ -45,10 +45,13 @@ export function useConfirm() {
   const [isOpen, setIsOpen] = useState(false);
   const resolveRef = useRef<((confirmed: boolean) => void) | null>(null);
 
-  useEffect(() => () => {
-    resolveRef.current?.(false);
-    resolveRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      resolveRef.current?.(false);
+      resolveRef.current = null;
+    },
+    [],
+  );
 
   const confirm = useCallback((next: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
@@ -112,7 +115,10 @@ export function useConfirm() {
         </>
       }
     >
-      <div id={messageId} className="text-body-m text-on-surface-variant whitespace-pre-line wrap-anywhere">
+      <div
+        id={messageId}
+        className="text-body-m text-on-surface-variant whitespace-pre-line wrap-anywhere"
+      >
         {options?.message}
       </div>
     </Modal>
@@ -149,10 +155,13 @@ export function usePrompt() {
   const [value, setValue] = useState('');
   const resolveRef = useRef<((value: string | null) => void) | null>(null);
 
-  useEffect(() => () => {
-    resolveRef.current?.(null);
-    resolveRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      resolveRef.current?.(null);
+      resolveRef.current = null;
+    },
+    [],
+  );
 
   const prompt = useCallback((next: PromptOptions) => {
     return new Promise<string | null>((resolve) => {

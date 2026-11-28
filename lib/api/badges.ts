@@ -22,14 +22,23 @@ export interface ClaimBadgeResult {
  */
 export async function claimBadge(userToken: string, claimToken: string): Promise<ClaimBadgeResult> {
   try {
-    const claimed = await api<{ id: number; name: string }>('POST', `/me/badges/claims/${seg(claimToken)}`, {
-      token: userToken,
-    });
+    const claimed = await api<{ id: number; name: string }>(
+      'POST',
+      `/me/badges/claims/${seg(claimToken)}`,
+      {
+        token: userToken,
+      },
+    );
     return { success: true, badge_name: claimed.name };
   } catch (error) {
     if (
-      isApiError(error) && error.kind === 'http' && error.status !== undefined &&
-      error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 429
+      isApiError(error) &&
+      error.kind === 'http' &&
+      error.status !== undefined &&
+      error.status >= 400 &&
+      error.status < 500 &&
+      error.status !== 401 &&
+      error.status !== 429
     ) {
       return { success: false, error: error.serverMessage ?? error.message };
     }

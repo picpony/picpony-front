@@ -3,7 +3,13 @@
 import { useRef, useState } from 'react';
 import { MdRefresh } from '@/components/icons/common';
 import { MdAutoAwesome } from '@/components/icons/settings';
-import { SettingsSection, SettingsRow, SwitchRow, ROW_CLASS, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
+import {
+  SettingsSection,
+  SettingsRow,
+  SwitchRow,
+  ROW_CLASS,
+  ROW_STACK_CLASS,
+} from '@/app/settings/SettingsRow';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import Select from '@/components/Select';
@@ -17,7 +23,12 @@ import { useResource } from '@/lib/resource';
 import { assistantPermission, assistantQuota } from '@/lib/assistant/queries';
 import { useJournalText } from '@/lib/assistant/useJournal';
 import { newRequestId, parseExchange, writeJournalText } from '@/lib/assistant/journal';
-import { AssistantRefusal, setAssistantEnabled, setAssistantPermission, exchangeAssistantQuota } from '@/lib/api/assistant';
+import {
+  AssistantRefusal,
+  setAssistantEnabled,
+  setAssistantPermission,
+  exchangeAssistantQuota,
+} from '@/lib/api/assistant';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
 import { tasks, coinTransactions } from '@/lib/resources';
 import type { AssistantQuota, PermissionMode } from '@/lib/assistant/protocol';
@@ -45,10 +56,15 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   /* 启用彩彩 AI moves when it is pressed and is sent after (the block-group switch's arrangement):
      the switch shows the press while the request is out, and a run of presses sends the last. */
   const [enabledShown, setEnabledShown] = useState<boolean | null>(null);
-  const enabling = useRef<{ inFlight: boolean; next: boolean | null }>({ inFlight: false, next: null });
+  const enabling = useRef<{ inFlight: boolean; next: boolean | null }>({
+    inFlight: false,
+    next: null,
+  });
   const current = () => readToken() === token;
   /* Report success with the shared toast (docs/design/primitives.md#status-lists-and-media). */
-  const setNotice = (message: string) => { if (current()) showToast(message, 'success'); };
+  const setNotice = (message: string) => {
+    if (current()) showToast(message, 'success');
+  };
   function applyQuota(value: AssistantQuota) {
     if (!current()) return;
     assistantQuota.write({ token }, value);
@@ -59,10 +75,13 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
      its work (`settle`) and branches on the outcome — the same paths, the same order. */
   async function mutate(run: () => Promise<void>) {
     if (lock.current || !current()) return;
-    lock.current = true; setBusy(true); setError(undefined);
+    lock.current = true;
+    setBusy(true);
+    setError(undefined);
     const outcome = await settle(run());
     if (!outcome.ok && current()) setError(outcome.error);
-    lock.current = false; setBusy(false);
+    lock.current = false;
+    setBusy(false);
   }
   /** One press sent and applied — a failure of either is the press failing. */
   async function sendEnabled(want: boolean) {
@@ -103,71 +122,179 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
   }
   async function changePermission(mode: PermissionMode) {
     if (busy || !permission.data || mode === permission.data) return;
-    if (mode === 'full' && !await confirm({
-      title: '确认开启完全权限', tone: 'danger',
-      message: '开启后，彩彩 AI 将不再逐次请求确认，直接执行修改、删除或消耗金币等操作。部分操作可能无法撤销。\n确定要开启完全权限吗？',
-    })) return;
+    if (
+      mode === 'full' &&
+      !(await confirm({
+        title: '确认开启完全权限',
+        tone: 'danger',
+        message:
+          '开启后，彩彩 AI 将不再逐次请求确认，直接执行修改、删除或消耗金币等操作。部分操作可能无法撤销。\n确定要开启完全权限吗？',
+      }))
+    )
+      return;
     if (!current()) return;
     await mutate(async () => {
       const saved = await setAssistantPermission(token, mode);
       if (!current()) return;
-      assistantPermission.write({ token }, saved); setNotice('已保存权限规则');
+      assistantPermission.write({ token }, saved);
+      setNotice('已保存权限规则');
     });
   }
   async function exchangeCoins() {
     const amount = exchange?.coins ?? Number(coins);
     /* The dialog already refuses these on its field and disables 确认兑换, so reaching here with one
        is a race rather than a user error — there is nothing to announce. */
-    if (busy || !quota.data || !Number.isSafeInteger(amount) || amount < 1 || amount > 100000) return;
+    if (busy || !quota.data || !Number.isSafeInteger(amount) || amount < 1 || amount > 100000)
+      return;
     if (!exchange && amount > quota.data.coins) return;
     if (!current()) return;
     await mutate(async () => {
-      const pending = exchange ?? { coins: amount, requestId: newRequestId(), revision: quota.data!.revision, configRevision: quota.data!.config_revision, pointsPerCoin: quota.data!.points_per_coin };
+      const pending = exchange ?? {
+        coins: amount,
+        requestId: newRequestId(),
+        revision: quota.data!.revision,
+        configRevision: quota.data!.config_revision,
+        pointsPerCoin: quota.data!.points_per_coin,
+      };
       writeJournalText(accountId, 'exchange', JSON.stringify(pending));
       const outcome = await settle(exchangeAssistantQuota(token, pending));
       if (!outcome.ok) {
         /* A refusal is the server's answer, so nothing is left to check; anything else keeps the
            journal for 核对兑换. Thrown on, for `mutate` to show. */
-        if (current() && outcome.error instanceof AssistantRefusal) writeJournalText(accountId, 'exchange', null);
+        if (current() && outcome.error instanceof AssistantRefusal)
+          writeJournalText(accountId, 'exchange', null);
         throw outcome.error;
       }
       if (!current()) return;
-      applyQuota(outcome.value); writeJournalText(accountId, 'exchange', null);
-      tasks.expire({ token }); coinTransactions.expire(); setNotice('已兑换额度'); setExchangeOpen(false);
+      applyQuota(outcome.value);
+      writeJournalText(accountId, 'exchange', null);
+      tasks.expire({ token });
+      coinTransactions.expire();
+      setNotice('已兑换额度');
+      setExchangeOpen(false);
     });
   }
   const problem = quota.error ?? permission.error;
   const refreshing = quota.isLoading || permission.isLoading;
-  const refresh = () => { void quota.refresh(); void permission.refresh(); };
+  const refresh = () => {
+    void quota.refresh();
+    void permission.refresh();
+  };
   const hasRows = Boolean(quota.data && permission.data);
-  const statusNotice = (problem !== undefined || (error !== undefined && !exchangeOpen)) ? (
-    <div className={hasRows ? 'mb-4 space-y-2' : 'space-y-2'}>
-      {problem !== undefined && <ErrorRetry size="inline" title="彩彩 AI 设置加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
-      {error !== undefined && !exchangeOpen && <ErrorRetry size="inline" title="操作未完成" message={apiErrorMessage(error)} />}
-    </div>
-  ) : undefined;
-  return <>
-    {/* Busy actions retain focus and material while blocking duplicate activation.
+  const statusNotice =
+    problem !== undefined || (error !== undefined && !exchangeOpen) ? (
+      <div className={hasRows ? 'mb-4 space-y-2' : 'space-y-2'}>
+        {problem !== undefined && (
+          <ErrorRetry
+            size="inline"
+            title="彩彩 AI 设置加载失败"
+            message={apiErrorMessage(problem)}
+            onRetry={isRetryable(problem) ? refresh : undefined}
+          />
+        )}
+        {error !== undefined && !exchangeOpen && (
+          <ErrorRetry size="inline" title="操作未完成" message={apiErrorMessage(error)} />
+        )}
+      </div>
+    ) : undefined;
+  return (
+    <>
+      {/* Busy actions retain focus and material while blocking duplicate activation.
         See docs/design/primitives.md#buttons-icons-and-semantics. */}
-    <SettingsSection
-      title="彩彩 AI"
-      icon={<MdAutoAwesome size={ICON.control} />}
-      actions={<IconButton aria-label="刷新彩彩 AI 设置" loading={refreshing} onClick={refresh} icon={<MdRefresh />} />}
-      status={statusNotice}
-    >
-      {!quota.data || !permission.data ? !problem && <AssistantSettingsSkeleton /> : <>
-        <SwitchRow label="启用彩彩 AI" checked={enabledShown ?? quota.data.user_enabled} onChange={enabled => void changeEnabled(enabled)} description={!quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'} />
-        <SettingsRow label="权限规则" supporting={permission.data === 'full' ? '直接执行指令，不再逐次确认' : '执行写入、发送和删除操作前需确认'}
-          action={<Select aria-label="彩彩 AI 权限规则" size="sm" value={permission.data} options={[{ value: 'default', label: '默认模式' }, { value: 'full', label: '完全权限' }]} onChange={mode => void changePermission(mode)} />} />
-        <QuotaRow quota={quota.data} />
-        <SettingsRow label="兑换额度"
-          supporting={exchange ? '上次兑换结果尚未确认，可点击核对' : <>现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span> 金币 · <span className="tabular-nums">1 金币兑换 {quota.data.points_per_coin} 点</span></>}
-          action={<Button variant="tonal" onClick={() => { if (busy) return; setError(undefined); setCoins('1'); setExchangeOpen(true); }}>{exchange ? '核对兑换' : '兑换'}</Button>} />
-      </>}
-    </SettingsSection>
-    {quota.data && <QuotaExchangeDialog isOpen={exchangeOpen} onClose={() => { if (!lock.current) setExchangeOpen(false); }} quota={quota.data} pending={exchange} coins={coins} onCoinsChange={setCoins} busy={busy} error={error} onSubmit={() => void exchangeCoins()} />}
-    {confirmDialog}
-  </>;
+      <SettingsSection
+        title="彩彩 AI"
+        icon={<MdAutoAwesome size={ICON.control} />}
+        actions={
+          <IconButton
+            aria-label="刷新彩彩 AI 设置"
+            loading={refreshing}
+            onClick={refresh}
+            icon={<MdRefresh />}
+          />
+        }
+        status={statusNotice}
+      >
+        {!quota.data || !permission.data ? (
+          !problem && <AssistantSettingsSkeleton />
+        ) : (
+          <>
+            <SwitchRow
+              label="启用彩彩 AI"
+              checked={enabledShown ?? quota.data.user_enabled}
+              onChange={(enabled) => void changeEnabled(enabled)}
+              description={
+                !quota.data.enabled ? '功能暂未开放，你的设置会保留' : '开启后可长按吉祥物打开对话'
+              }
+            />
+            <SettingsRow
+              label="权限规则"
+              supporting={
+                permission.data === 'full'
+                  ? '直接执行指令，不再逐次确认'
+                  : '执行写入、发送和删除操作前需确认'
+              }
+              action={
+                <Select
+                  aria-label="彩彩 AI 权限规则"
+                  size="sm"
+                  value={permission.data}
+                  options={[
+                    { value: 'default', label: '默认模式' },
+                    { value: 'full', label: '完全权限' },
+                  ]}
+                  onChange={(mode) => void changePermission(mode)}
+                />
+              }
+            />
+            <QuotaRow quota={quota.data} />
+            <SettingsRow
+              label="兑换额度"
+              supporting={
+                exchange ? (
+                  '上次兑换结果尚未确认，可点击核对'
+                ) : (
+                  <>
+                    现有 <span className="tabular-nums">{formatExactCount(quota.data.coins)}</span>{' '}
+                    金币 ·{' '}
+                    <span className="tabular-nums">1 金币兑换 {quota.data.points_per_coin} 点</span>
+                  </>
+                )
+              }
+              action={
+                <Button
+                  variant="tonal"
+                  onClick={() => {
+                    if (busy) return;
+                    setError(undefined);
+                    setCoins('1');
+                    setExchangeOpen(true);
+                  }}
+                >
+                  {exchange ? '核对兑换' : '兑换'}
+                </Button>
+              }
+            />
+          </>
+        )}
+      </SettingsSection>
+      {quota.data && (
+        <QuotaExchangeDialog
+          isOpen={exchangeOpen}
+          onClose={() => {
+            if (!lock.current) setExchangeOpen(false);
+          }}
+          quota={quota.data}
+          pending={exchange}
+          coins={coins}
+          onCoinsChange={setCoins}
+          busy={busy}
+          error={error}
+          onSubmit={() => void exchangeCoins()}
+        />
+      )}
+      {confirmDialog}
+    </>
+  );
 }
 
 /**
@@ -181,14 +308,17 @@ function AccountAssistantSettings({ token, accountId }: { token: string; account
  * body-s footnote under itself — four type treatments for one number.
  */
 function QuotaRow({ quota }: { quota: AssistantQuota }) {
-  const gift = quota.daily_points > 0 ? Math.round((quota.daily_remaining / quota.daily_points) * 100) : 0;
+  const gift =
+    quota.daily_points > 0 ? Math.round((quota.daily_remaining / quota.daily_points) * 100) : 0;
   return (
     <SettingsRow
       label="可用额度"
       supporting="成功回复扣 1 点，成功任务共扣 2 点"
       action={
         <span className="flex items-baseline gap-1">
-          <span className="text-title-m-emphasized text-on-surface tabular-nums">{formatExactCount(quota.remaining)}</span>
+          <span className="text-title-m-emphasized text-on-surface tabular-nums">
+            {formatExactCount(quota.remaining)}
+          </span>
           <span className="text-body-s text-on-surface-variant">点</span>
         </span>
       }
@@ -202,7 +332,11 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
                 {formatExactCount(quota.daily_remaining)} / {formatExactCount(quota.daily_points)}
               </dd>
             </div>
-            <ProgressBar className="mt-2" value={gift} label={`今日赠送额度剩余 ${quota.daily_remaining} / ${quota.daily_points} 点`} />
+            <ProgressBar
+              className="mt-2"
+              value={gift}
+              label={`今日赠送额度剩余 ${quota.daily_remaining} / ${quota.daily_points} 点`}
+            />
           </div>
         ) : (
           <div className="flex items-baseline justify-between gap-3">
@@ -212,12 +346,16 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
         )}
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-on-surface-variant">兑换余额 · 不会清零</dt>
-          <dd className="shrink-0 tabular-nums text-on-surface">{formatExactCount(quota.purchased_remaining)}</dd>
+          <dd className="shrink-0 tabular-nums text-on-surface">
+            {formatExactCount(quota.purchased_remaining)}
+          </dd>
         </div>
         {quota.reserved > 0 && (
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-on-surface-variant">执行中预留</dt>
-            <dd className="shrink-0 tabular-nums text-on-surface">{formatExactCount(quota.reserved)}</dd>
+            <dd className="shrink-0 tabular-nums text-on-surface">
+              {formatExactCount(quota.reserved)}
+            </dd>
           </div>
         )}
       </dl>
@@ -227,36 +365,38 @@ function QuotaRow({ quota }: { quota: AssistantQuota }) {
 
 /** The loaded rows' own shapes, in one run, so nothing re-spaces when the data lands. */
 function AssistantSettingsSkeleton() {
-  return <div role="group" aria-label="正在加载彩彩 AI 设置" aria-busy="true" data-page-loading="">
-    {[0, 1].map(i => (
-      <div key={i} className={ROW_CLASS}>
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <Skeleton className="h-5 w-28 max-w-full" />
-          <Skeleton className="h-4.5 w-44 max-w-full" />
+  return (
+    <div role="group" aria-label="正在加载彩彩 AI 设置" aria-busy="true" data-page-loading="">
+      {[0, 1].map((i) => (
+        <div key={i} className={ROW_CLASS}>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Skeleton className="h-5 w-28 max-w-full" />
+            <Skeleton className="h-4.5 w-44 max-w-full" />
+          </div>
+          <Skeleton className={i === 0 ? 'h-8 w-13 shrink-0 rounded-full' : 'h-10 w-28 shrink-0'} />
         </div>
-        <Skeleton className={i === 0 ? 'h-8 w-13 shrink-0 rounded-full' : 'h-10 w-28 shrink-0'} />
+      ))}
+      <div className={ROW_STACK_CLASS}>
+        <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Skeleton className="h-5 w-20 max-w-full" />
+            <Skeleton className="h-4.5 w-48 max-w-full" />
+          </div>
+          <Skeleton className="h-6 w-14 shrink-0" />
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-1 w-full rounded-full" />
+          <Skeleton className="h-4 w-full" />
+        </div>
       </div>
-    ))}
-    <div className={ROW_STACK_CLASS}>
-      <div className="flex items-center gap-4">
+      <div className={ROW_CLASS}>
         <div className="min-w-0 flex-1 space-y-0.5">
           <Skeleton className="h-5 w-20 max-w-full" />
-          <Skeleton className="h-4.5 w-48 max-w-full" />
+          <Skeleton className="h-4.5 w-40 max-w-full" />
         </div>
-        <Skeleton className="h-6 w-14 shrink-0" />
-      </div>
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-1 w-full rounded-full" />
-        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-10 w-18 shrink-0 rounded-full" />
       </div>
     </div>
-    <div className={ROW_CLASS}>
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Skeleton className="h-5 w-20 max-w-full" />
-        <Skeleton className="h-4.5 w-40 max-w-full" />
-      </div>
-      <Skeleton className="h-10 w-18 shrink-0 rounded-full" />
-    </div>
-  </div>;
+  );
 }

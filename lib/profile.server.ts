@@ -54,10 +54,10 @@ export const readUserProfile = createServerMemo({
   load: async (id: string): Promise<ProfileSeed | typeof PROFILE_MISSING | null> => {
     if (!isProfileId(id)) return PROFILE_MISSING;
     try {
-      const res = await fetch(
-        `${UPSTREAM_ORIGIN}/api/v1/users/${encodeURIComponent(id)}`,
-        { next: { revalidate: cacheSeconds(REVALIDATE_S) }, signal: AbortSignal.timeout(TIMEOUT_MS) },
-      );
+      const res = await fetch(`${UPSTREAM_ORIGIN}/api/v1/users/${encodeURIComponent(id)}`, {
+        next: { revalidate: cacheSeconds(REVALIDATE_S) },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
       /* The backend answers an unknown id with 404 `USER_NOT_FOUND`; that is its answer, not a
          fault. */
       if (res.status === 404) {

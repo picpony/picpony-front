@@ -2,7 +2,7 @@
 /* `'use no memo'` for the same reason `lib/motion.ts` carries it: this component passes a
    hand-tuned `useGSAP` dependency list and deliberately omits `revertOnUpdate`, so it sits on the
    one path where a change in memoised identity changes when the GSAP context is torn down. Lift
-   it with the tab and hero probes as guardrails. */'use no memo';
+   it with the tab and hero probes as guardrails. */ 'use no memo';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -204,12 +204,13 @@ export default function Sheet({
            (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
            on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
            `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
-        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const timing = isOpen
+          ? spring('defaultSpatial', 'overlay')
+          : spring('fastEffects', 'overlay');
         const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { y: isOpen ? 0 : '100%', ...timing, overwrite: true });
         /* The panel's clock: the scrim is the other half of this same movement. */
-        if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
+        if (scrim) gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();
@@ -273,7 +274,9 @@ export default function Sheet({
           return;
         }
 
-        const panelRelease = dismiss ? spring('fastEffects', 'overlay') : spring('defaultSpatial', 'overlay');
+        const panelRelease = dismiss
+          ? spring('fastEffects', 'overlay')
+          : spring('defaultSpatial', 'overlay');
         const scrimRelease = spring('defaultEffects', 'overlay');
 
         if (scrim)
@@ -382,106 +385,112 @@ export default function Sheet({
 
   return createPortal(
     <OverlayLayerContext.Provider value={layer}>
-    <div
-      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
-      /* A sheet is a dialog that docks to the bottom edge, so it shares the
+      <div
+        style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
+        /* A sheet is a dialog that docks to the bottom edge, so it shares the
          dialog layer — see the stacking-order block in globals.css. */
-      className={cn('fixed inset-0 flex flex-col justify-end z-dialog')}
-      onPointerDown={(event) => {
-        pressOnScrim.current = event.target === scrimRef.current;
-      }}
-      /* `inert` while leaving — same reason as `Modal`'s: the panel outlives its
+        className={cn('fixed inset-0 flex flex-col justify-end z-dialog')}
+        onPointerDown={(event) => {
+          pressOnScrim.current = event.target === scrimRef.current;
+        }}
+        /* `inert` while leaving — same reason as `Modal`'s: the panel outlives its
          own `isOpen` so the exit tween has a target, and `pointer-events` alone
          would leave a focusable, screen-reader-visible subtree on screen for
          those 200ms. */
-      inert={!isOpen}
-    >
-      <div
-        ref={scrimRef}
-        className="bg-scrim-veil absolute inset-0"
-        onClick={
-          closeOnOverlayClick
-            ? () => {
-                const started = pressOnScrim.current;
-                pressOnScrim.current = false;
-                if (started) handleClose();
-              }
-            : undefined
-        }
-      />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : (ariaLabel ?? '对话框')}
-        tabIndex={-1}
-        className={cn(
-          'relative flex w-full flex-col overflow-hidden focus-visible:outline-hidden',
-          /* M3 puts the modal bottom sheet at elevation level 1 (`edge-skirt-b` carries
+        inert={!isOpen}
+      >
+        <div
+          ref={scrimRef}
+          className="bg-scrim-veil absolute inset-0"
+          onClick={
+            closeOnOverlayClick
+              ? () => {
+                  const started = pressOnScrim.current;
+                  pressOnScrim.current = false;
+                  if (started) handleClose();
+                }
+              : undefined
+          }
+        />
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? titleId : undefined}
+          aria-label={title ? undefined : (ariaLabel ?? '对话框')}
+          tabIndex={-1}
+          className={cn(
+            'relative flex w-full flex-col overflow-hidden focus-visible:outline-hidden',
+            /* M3 puts the modal bottom sheet at elevation level 1 (`edge-skirt-b` carries
              `--shadow-e1` alongside the bottom skirt). Level 3 is the dialog/FAB/search
              step — a heavier shadow than the thing a sheet is a quieter alternative to. */
-          'bg-surface-container-low text-on-surface rounded-t-2xl edge-skirt-b forced-boundary',
-          // A sheet on a tablet or a desktop window should not run the whole
-          // width of a 1600px screen; it stays a phone-width dock, centred.
-          'mx-auto sm:max-w-lg',
-          maxHeight,
-          className,
-        )}
-      >
-        {(!hideHandle || title) && (
-          <div
-            ref={headerRef}
-            className="relative shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
-          >
-            {!hideHandle && (
-              /* M3's drag handle: a 32×4dp bar in `on-surface-variant`, inside a 48dp
+            'bg-surface-container-low text-on-surface rounded-t-2xl edge-skirt-b forced-boundary',
+            // A sheet on a tablet or a desktop window should not run the whole
+            // width of a 1600px screen; it stays a phone-width dock, centred.
+            'mx-auto sm:max-w-lg',
+            maxHeight,
+            className,
+          )}
+        >
+          {(!hideHandle || title) && (
+            <div
+              ref={headerRef}
+              className="relative shrink-0 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+            >
+              {!hideHandle && (
+                /* M3's drag handle: a 32×4dp bar in `on-surface-variant`, inside a 48dp
                  touch strip — the spec's unmodified `OnSurfaceVariant` (no alpha) at
                  the touch-target floor, so the one affordance telling a phone user
                  this panel can be pushed back down is at full strength. */
-              /* No browser touch action on the strip or the title: the drag is the
+                /* No browser touch action on the strip or the title: the drag is the
                  sheet's, and a downward pan that reached the browser as well would start
                  its overscroll glow or pull-to-refresh under the finger. */
-              <div className="flex h-12 shrink-0 touch-none items-center justify-center" aria-hidden="true">
-                <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
-              </div>
-            )}
-            {title && (
-              <h2
-                id={titleId}
-                className={cn('text-title-l text-on-surface min-w-0 shrink-0 touch-none wrap-anywhere px-6 pb-2', hideHandle ? 'pt-6' : 'pt-1')}
-              >
-                {title}
-              </h2>
-            )}
-          </div>
-        )}
-        <ScrollArea
-          axis="both"
-          enabled={bodyScrollable}
-          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
-          slotProps={{ 'data-os-round-top': hideHandle && !title ? '' : undefined }}
-          viewportRef={bodyRef}
-          /* `data-app-scroll-container`, like `Modal`'s body: this is the box that
+                <div
+                  className="flex h-12 shrink-0 touch-none items-center justify-center"
+                  aria-hidden="true"
+                >
+                  <span className="bg-on-surface-variant h-1 w-8 rounded-full" />
+                </div>
+              )}
+              {title && (
+                <h2
+                  id={titleId}
+                  className={cn(
+                    'text-title-l text-on-surface min-w-0 shrink-0 touch-none wrap-anywhere px-6 pb-2',
+                    hideHandle ? 'pt-6' : 'pt-1',
+                  )}
+                >
+                  {title}
+                </h2>
+              )}
+            </div>
+          )}
+          <ScrollArea
+            axis="both"
+            enabled={bodyScrollable}
+            className="os-slot-overlay flex min-h-0 flex-1 flex-col"
+            slotProps={{ 'data-os-round-top': hideHandle && !title ? '' : undefined }}
+            viewportRef={bodyRef}
+            /* `data-app-scroll-container`, like `Modal`'s body: this is the box that
              scrolls, so anything inside that wants to scroll to an element has to
              find this rather than the page behind the sheet. */
-          viewportProps={{ 'data-app-scroll-container': '' }}
-          /* Overscroll is contained: a list that reaches its end keeps the rest of
+            viewportProps={{ 'data-app-scroll-container': '' }}
+            /* Overscroll is contained: a list that reaches its end keeps the rest of
              the fling rather than handing it to the page (or the browser) beneath. */
-          viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1',
-            bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
-            bodyClassName || cn('px-6', !hideHandle || title ? 'pt-2' : 'pt-6'),
-          )}
-        >
-          {children}
-        </ScrollArea>
-        {/* The dock sits against the screen edge, so it owns the home-indicator
+            viewportClassName={cn(
+              'popover-scrollbar min-h-0 flex-1',
+              bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
+              bodyClassName || cn('px-6', !hideHandle || title ? 'pt-2' : 'pt-6'),
+            )}
+          >
+            {children}
+          </ScrollArea>
+          {/* The dock sits against the screen edge, so it owns the home-indicator
             inset. `max()` rather than a flat value: on a device with no inset
             the sheet would otherwise carry 34px of dead space. */}
-        <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
+          <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
+        </div>
       </div>
-    </div>
     </OverlayLayerContext.Provider>,
     document.body,
   );

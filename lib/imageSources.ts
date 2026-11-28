@@ -8,7 +8,8 @@
  * themselves: the bidirectional overrides, embeddings and isolates, the zero-width marks and
  * joiners, and the C0/C1 controls.
  */
-const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+const INVISIBLE =
+  /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 
 /**
  * A URL as a person reads it: percent-escapes decoded where they decode cleanly — **except** an
@@ -29,7 +30,10 @@ export function readableSourceUrl(url: string): string {
 }
 
 /** Only links a browser should follow: an `http(s)` URL, nothing a record could smuggle in. */
-export function sourceLinksOf(image: { source_url?: string | null; source_urls?: readonly string[] | null }): string[] {
+export function sourceLinksOf(image: {
+  source_url?: string | null;
+  source_urls?: readonly string[] | null;
+}): string[] {
   const all = [...(image.source_urls ?? []), image.source_url ?? ''];
   const seen = new Set<string>();
   const out: string[] = [];

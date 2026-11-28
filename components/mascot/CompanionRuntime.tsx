@@ -11,7 +11,11 @@ import { useAuthModal } from '@/components/AuthModal';
 import { SKIP, useResource } from '@/lib/resource';
 import { myPonies } from '@/lib/desktopPonies/queries';
 import { getAppScroller } from '@/lib/appScroller';
-import { bindAssistantSlideshow, type AssistantSlideshowRequest, type AssistantSlideshowReceipt } from '@/lib/assistant/slideshow';
+import {
+  bindAssistantSlideshow,
+  type AssistantSlideshowRequest,
+  type AssistantSlideshowReceipt,
+} from '@/lib/assistant/slideshow';
 import { settleHistoryLayers } from '@/lib/historyLayers';
 import { apiErrorMessage, isAborted } from '@/lib/api/errors';
 import { showToast } from '@/components/Toast';
@@ -20,9 +24,15 @@ import { showToast } from '@/components/Toast';
    still mounts this runtime for its ponies and the slideshow, and used to fetch the mascot's code
    and stylesheet regardless. */
 const Mascot = dynamic(() => import('./Mascot'), { ssr: false, loading: () => null });
-const PoniesRuntime = dynamic(() => import('@/components/desktopPonies/PoniesRuntime'), { ssr: false });
-const AssistantPanel = dynamic(() => import('@/components/assistant/AssistantPanel'), { ssr: false });
-const FolderSlideshow = dynamic(() => import('@/components/assistant/FolderSlideshow'), { ssr: false });
+const PoniesRuntime = dynamic(() => import('@/components/desktopPonies/PoniesRuntime'), {
+  ssr: false,
+});
+const AssistantPanel = dynamic(() => import('@/components/assistant/AssistantPanel'), {
+  ssr: false,
+});
+const FolderSlideshow = dynamic(() => import('@/components/assistant/FolderSlideshow'), {
+  ssr: false,
+});
 interface SlideshowJob {
   request: AssistantSlideshowRequest;
   preparing: boolean;
@@ -53,44 +63,84 @@ export default function CompanionRuntime() {
   if (token && poniesFor !== token && (selection.data?.length ?? 0) > 0) setPoniesFor(token);
   const onChat = () => {
     const current = readToken();
-    if (!current) { openAuth('login'); return; }
+    if (!current) {
+      openAuth('login');
+      return;
+    }
     setChat({ token: current, open: true });
   };
   const close = useCallback(() => {
     if (job.current?.preparing) job.current.fail(new DOMException('Cancelled', 'AbortError'));
-    setChat(previous => previous ? { ...previous, open: false } : null);
+    setChat((previous) => (previous ? { ...previous, open: false } : null));
   }, []);
   const prepareViewer = useCallback(async () => {
     if (job.current) job.current.preparing = false;
-    setChat(previous => previous ? { ...previous, open: false } : null);
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    setChat((previous) => (previous ? { ...previous, open: false } : null));
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
     await settleHistoryLayers();
   }, []);
   const closeSlideshow = useCallback(() => {
     const current = job.current;
     if (current && !current.started) current.fail(new DOMException('Cancelled', 'AbortError'));
-    job.current = null; setSlideshow(null);
+    job.current = null;
+    setSlideshow(null);
   }, []);
-  useEffect(() => bindAssistantSlideshow(request => new Promise((resolve, reject) => {
-    if (readToken() !== request.token || job.current) { reject(new Error('当前会话无法开始新的放映')); return; }
-    const next: SlideshowJob = {
-      request, preparing: true, started: false,
-      resolve: receipt => { next.started = true; resolve(receipt); },
-      fail: error => {
-        reject(error);
-        if (job.current === next) { job.current = null; setSlideshow(null); }
-        if (!isAborted(error) && readToken() === request.token) showToast(apiErrorMessage(error), 'warning');
-      },
-    };
-    job.current = next; setSlideshow(next);
-  })), []);
+  useEffect(
+    () =>
+      bindAssistantSlideshow(
+        (request) =>
+          new Promise((resolve, reject) => {
+            if (readToken() !== request.token || job.current) {
+              reject(new Error('当前会话无法开始新的放映'));
+              return;
+            }
+            const next: SlideshowJob = {
+              request,
+              preparing: true,
+              started: false,
+              resolve: (receipt) => {
+                next.started = true;
+                resolve(receipt);
+              },
+              fail: (error) => {
+                reject(error);
+                if (job.current === next) {
+                  job.current = null;
+                  setSlideshow(null);
+                }
+                if (!isAborted(error) && readToken() === request.token)
+                  showToast(apiErrorMessage(error), 'warning');
+              },
+            };
+            job.current = next;
+            setSlideshow(next);
+          }),
+      ),
+    [],
+  );
   useEffect(() => {
-    if (job.current && job.current.request.token !== token) job.current.fail(new DOMException('Account changed', 'AbortError'));
+    if (job.current && job.current.request.token !== token)
+      job.current.fail(new DOMException('Account changed', 'AbortError'));
   }, [token]);
-  return createPortal(<>
-    {poniesAllowed && token && poniesFor === token && <PoniesRuntime key={token} token={token} paused={away} />}
-    {shown && <Mascot onChat={onChat} active={present && !away} />}
-    {chat && chat.token === token && <AssistantPanel isOpen={chat.open} onClose={close} />}
-    {slideshow && slideshow.request.token === token && <FolderSlideshow request={slideshow.request} onReady={prepareViewer} onStarted={slideshow.resolve} onError={slideshow.fail} onClose={closeSlideshow} />}
-  </>, host);
+  return createPortal(
+    <>
+      {poniesAllowed && token && poniesFor === token && (
+        <PoniesRuntime key={token} token={token} paused={away} />
+      )}
+      {shown && <Mascot onChat={onChat} active={present && !away} />}
+      {chat && chat.token === token && <AssistantPanel isOpen={chat.open} onClose={close} />}
+      {slideshow && slideshow.request.token === token && (
+        <FolderSlideshow
+          request={slideshow.request}
+          onReady={prepareViewer}
+          onStarted={slideshow.resolve}
+          onError={slideshow.fail}
+          onClose={closeSlideshow}
+        />
+      )}
+    </>,
+    host,
+  );
 }

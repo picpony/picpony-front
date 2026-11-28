@@ -49,7 +49,8 @@ export function javaRandom(seed: number) {
   };
   return {
     nextInt(bound: number): number {
-      if ((bound & -bound) === bound) return Number((BigInt(bound) * BigInt(next(31))) >> THIRTY_ONE);
+      if ((bound & -bound) === bound)
+        return Number((BigInt(bound) * BigInt(next(31))) >> THIRTY_ONE);
       let bits: number;
       let value: number;
       /* Java rejects a draw whose `bits - value + (bound - 1)` overflows an int. */
@@ -94,7 +95,9 @@ function quantizeWsmeans(inputPixels: number[], startingClusters: number[], maxC
   const clusterIndices = Array.from({ length: pointCount }, () => random.nextInt(clusterCount));
   /* Distance between every pair of clusters, indexed by cluster; a cluster's own entry stays -1,
      so the pruning below never skips it. */
-  const between = Array.from({ length: clusterCount }, () => new Array<number>(clusterCount).fill(-1));
+  const between = Array.from({ length: clusterCount }, () =>
+    new Array<number>(clusterCount).fill(-1),
+  );
   const pixelCountSums = new Array<number>(clusterCount).fill(0);
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -121,8 +124,10 @@ function quantizeWsmeans(inputPixels: number[], startingClusters: number[], maxC
           newClusterIndex = j;
         }
       }
-      if (newClusterIndex !== -1 &&
-        Math.abs(Math.sqrt(minimumDistance) - Math.sqrt(previousDistance)) > MIN_MOVEMENT_DISTANCE) {
+      if (
+        newClusterIndex !== -1 &&
+        Math.abs(Math.sqrt(minimumDistance) - Math.sqrt(previousDistance)) > MIN_MOVEMENT_DISTANCE
+      ) {
         pointsMoved++;
         clusterIndices[i] = newClusterIndex;
       }

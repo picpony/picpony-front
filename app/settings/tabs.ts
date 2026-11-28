@@ -19,7 +19,11 @@ export type SettingsTab = 'preferences' | 'account' | 'personalise';
 
 export const ACCOUNT_TAB_SIGNED_OUT: 'hidden' | 'prompt' = 'hidden';
 
-const LABELS: Record<SettingsTab, string> = { preferences: '偏好', account: '账户', personalise: '个性化' };
+const LABELS: Record<SettingsTab, string> = {
+  preferences: '偏好',
+  account: '账户',
+  personalise: '个性化',
+};
 
 export function isSettingsTab(value: unknown): value is SettingsTab {
   return value === 'preferences' || value === 'account' || value === 'personalise';
@@ -28,7 +32,9 @@ export function isSettingsTab(value: unknown): value is SettingsTab {
 /** The row, in the owner's order. */
 export function settingsTabs(signedIn: boolean): { value: SettingsTab; label: string }[] {
   const offered: SettingsTab[] =
-    signedIn || ACCOUNT_TAB_SIGNED_OUT === 'prompt' ? ['preferences', 'account', 'personalise'] : ['preferences', 'personalise'];
+    signedIn || ACCOUNT_TAB_SIGNED_OUT === 'prompt'
+      ? ['preferences', 'account', 'personalise']
+      : ['preferences', 'personalise'];
   return offered.map((value) => ({ value, label: LABELS[value] }));
 }
 
@@ -79,7 +85,8 @@ function writeQueued() {
   else params.set('tab', tab);
   const query = params.toString();
   const href = query ? `/settings?${query}` : '/settings';
-  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`)
+    window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting write goes with it. */

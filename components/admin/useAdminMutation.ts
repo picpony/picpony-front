@@ -48,7 +48,8 @@ export function useAdminMutation(token: string) {
     locked.current.add(key);
     setPending({ token, keys: new Set(locked.current) });
     const started = generation.current;
-    const isCurrent = () => active.current && generation.current === started && readToken() === token;
+    const isCurrent = () =>
+      active.current && generation.current === started && readToken() === token;
     try {
       const answer = await request(isCurrent);
       if (answer === null || readToken() !== token) return;
@@ -67,7 +68,8 @@ export function useAdminMutation(token: string) {
     }
   }
 
-  const pendingKeys: ReadonlySet<MutationKey> = pending.token === token ? pending.keys : EMPTY_PENDING;
+  const pendingKeys: ReadonlySet<MutationKey> =
+    pending.token === token ? pending.keys : EMPTY_PENDING;
   return {
     busy: pendingKeys.size > 0,
     pendingKeys,

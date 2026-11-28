@@ -10,10 +10,18 @@ function load(file, globals = {}, imports = {}) {
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  vm.runInNewContext(code, { exports, ...globals, require: (name) => {
-    assert.ok(name in imports, `Unexpected import: ${name}`);
-    return imports[name];
-  } }, { filename: file });
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      ...globals,
+      require: (name) => {
+        assert.ok(name in imports, `Unexpected import: ${name}`);
+        return imports[name];
+      },
+    },
+    { filename: file },
+  );
   return exports;
 }
 
@@ -28,7 +36,7 @@ function interpolate(samples, time) {
   if (index <= 0) return samples[0].progress;
   const a = samples[index - 1];
   const b = samples[index];
-  return a.progress + (b.progress - a.progress) * (time - a.offset) / (b.offset - a.offset);
+  return a.progress + ((b.progress - a.progress) * (time - a.offset)) / (b.offset - a.offset);
 }
 
 function bezier(easing, time) {
@@ -56,8 +64,12 @@ test('spring fits bound displacement error and never add bounce to effects', () 
     for (let i = 0; i <= 1000; i++) {
       const t = i / 1000;
       const value = bezier(fallback, t);
-      assert.ok(Math.abs(value - legacy.springEase(spec)(t)) < (shape === 'spatialFast' ? 0.051 : 0.020), `${shape} at ${t}`);
-      if (shape === 'effects') assert.ok(value >= previous && value <= 1, 'Effects must be monotone');
+      assert.ok(
+        Math.abs(value - legacy.springEase(spec)(t)) < (shape === 'spatialFast' ? 0.051 : 0.02),
+        `${shape} at ${t}`,
+      );
+      if (shape === 'effects')
+        assert.ok(value >= previous && value <= 1, 'Effects must be monotone');
       previous = value;
       peak = Math.max(peak, value);
     }
@@ -67,10 +79,15 @@ test('spring fits bound displacement error and never add bounce to effects', () 
 
 test('legacy tracks keep overshoot, reversals and return-to-origin motion', () => {
   const samples = [
-    { offset: 0, progress: 0 }, { offset: 0.25, progress: 1.1 },
-    { offset: 0.6, progress: -0.2 }, { offset: 1, progress: 0 },
+    { offset: 0, progress: 0 },
+    { offset: 0.25, progress: 1.1 },
+    { offset: 0.6, progress: -0.2 },
+    { offset: 1, progress: 0 },
   ];
-  for (const [from, to] of [[0, 240], [240, 0]]) {
+  for (const [from, to] of [
+    [0, 240],
+    [240, 0],
+  ]) {
     const frame = (p) => ({ transform: `translateX(${from + (to - from) * p}px)` });
     const native = motion(true).sampledTrack(samples, frame);
     const legacy = motion(false).sampledTrack(samples, frame);

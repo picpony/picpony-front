@@ -12,7 +12,13 @@ const backgrounds = new Map<string, Readonly<ImageHeroBackgroundLocation>>();
 function routeIdentity(value: unknown, depth = 0): unknown {
   if (depth > 40 || !Array.isArray(value) || value.length < 2) return null;
   const [segment, routes] = value;
-  if ((typeof segment !== 'string' && !Array.isArray(segment)) || !routes || typeof routes !== 'object' || Array.isArray(routes)) return null;
+  if (
+    (typeof segment !== 'string' && !Array.isArray(segment)) ||
+    !routes ||
+    typeof routes !== 'object' ||
+    Array.isArray(routes)
+  )
+    return null;
   const children: Record<string, unknown> = Object.create(null);
   for (const name of Object.keys(routes).sort()) {
     const child = routeIdentity(routes[name], depth + 1);
@@ -28,9 +34,11 @@ function keys(pathname: string): string[] {
   // A temporary drawer/dialog entry is not another picture entry. Its open view retains the
   // current background, and the history layer returns to the saved entry on dismissal.
   if (isHistoryLayerState(state)) return [];
-  const navigation = (window as unknown as {
-    navigation?: { currentEntry?: { key?: string } | null };
-  }).navigation;
+  const navigation = (
+    window as unknown as {
+      navigation?: { currentEntry?: { key?: string } | null };
+    }
+  ).navigation;
   if (navigation?.currentEntry?.key) return [`entry:${navigation.currentEntry.key}`];
   try {
     // No history writes. A URL alone conflates one picture opened over different lists or
@@ -44,7 +52,9 @@ function keys(pathname: string): string[] {
   }
 }
 
-export function readDetailBackground(pathname: string): Readonly<ImageHeroBackgroundLocation> | null {
+export function readDetailBackground(
+  pathname: string,
+): Readonly<ImageHeroBackgroundLocation> | null {
   for (const key of keys(pathname)) {
     const remembered = backgrounds.get(key);
     if (remembered) return remembered;
@@ -53,7 +63,10 @@ export function readDetailBackground(pathname: string): Readonly<ImageHeroBackgr
 }
 
 /** Record after the router commits its entry; a render may run before that URL is written. */
-export function rememberDetailBackground(pathname: string, background: ImageHeroBackgroundLocation): void {
+export function rememberDetailBackground(
+  pathname: string,
+  background: ImageHeroBackgroundLocation,
+): void {
   const remembered = Object.freeze({ pathname: background.pathname, search: background.search });
   for (const key of keys(pathname)) backgrounds.set(key, remembered);
 }

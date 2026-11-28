@@ -11,7 +11,10 @@ import { cn } from '@/lib/utils';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
 
 /* The viewer, whole, behind its own boundary: only a press on a picture fetches it. */
-const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false, loading: () => null });
+const PicLightbox = dynamic(() => import('@/components/PicLightbox'), {
+  ssr: false,
+  loading: () => null,
+});
 
 interface BBCodeRendererProps {
   content: string;
@@ -38,7 +41,13 @@ function richImage(src: string): RichImageAttributes {
   const own = url.hostname === 'picpony.top';
   const derpi = url.hostname === 'derpicdn.net' && url.pathname.startsWith('/img/') && !url.search;
   if (url.protocol !== 'https:' || !(own || derpi) || /\.gif$/i.test(url.pathname)) return { src };
-  const { props } = getImageProps({ src, alt: '', fill: true, sizes: RICH_IMAGE_SIZES, quality: 75 });
+  const { props } = getImageProps({
+    src,
+    alt: '',
+    fill: true,
+    sizes: RICH_IMAGE_SIZES,
+    quality: 75,
+  });
   return { src: props.src, srcSet: props.srcSet, sizes: props.sizes };
 }
 
@@ -81,22 +90,29 @@ function settleImage(img: HTMLImageElement, failed: boolean) {
  */
 export default function BBCodeRenderer({ content, className }: BBCodeRendererProps) {
   const html = useMemo(
-    () => bbcodeToSafeHtml(content, { image: richImage, zoomable: true, isInternal: isInternalHref }),
+    () =>
+      bbcodeToSafeHtml(content, { image: richImage, zoomable: true, isInternal: isInternalHref }),
     [content],
   );
   const ref = useRef<HTMLDivElement>(null);
   useRichTextScrollbars(ref, html);
   const router = useRouter();
-  const [viewer, setViewer] = useState<{ slides: PicLightboxSlide[]; index: number; open: boolean } | null>(null);
+  const [viewer, setViewer] = useState<{
+    slides: PicLightboxSlide[];
+    index: number;
+    open: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
     const onLoad = (event: Event) => {
-      if (event.target instanceof HTMLImageElement && root.contains(event.target)) settleImage(event.target, false);
+      if (event.target instanceof HTMLImageElement && root.contains(event.target))
+        settleImage(event.target, false);
     };
     const onError = (event: Event) => {
-      if (event.target instanceof HTMLImageElement && root.contains(event.target)) settleImage(event.target, true);
+      if (event.target instanceof HTMLImageElement && root.contains(event.target))
+        settleImage(event.target, true);
     };
     root.addEventListener('load', onLoad, true);
     root.addEventListener('error', onError, true);

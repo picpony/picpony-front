@@ -33,23 +33,23 @@ Known boundaries:
 
 Most probes drive Edge over CDP. Browser setup and CI entry points are described in the [architecture guide](architecture-guide.md#verification). Read a probe's argument handling before supplying optional flags.
 
-| Command | Measures |
-| --- | --- |
-| `bun run perf:weight` | Document script URLs, raw bytes and Brotli bytes |
-| `bun run perf:metrics` | Cold-load and tab-switch `Performance.getMetrics` deltas |
-| `bun run perf:hydration` | Server-rendered content and hydration warnings |
-| `bun run perf:motion` | Lazy motion warmup, indicator and route clone |
-| `bun run perf:hero` | Hero performance scenarios |
-| `bun run perf:hero-pending` | Input and scrolling while a Hero leg is pending |
-| `bun run perf:hero-gestures` | Hero gesture scenarios |
-| `bun run perf:sw` | Worker control, caches and dead-origin navigation |
-| `bun run perf:ripple` | Per-frame ripple opacity; peak matches `--md-sys-ripple-opacity` |
-| `bun run perf:pageturn` | Scroll and visible-card content during page turns |
-| `bun run perf:tab-latency` | Release-to-first-frame tab latency and travel |
-| `bun run perf:sharpness` | Flight bitmap resolution against painted bounds |
-| `bun run perf:sharpness:assert` | Controlled-CDN sharpness assertions |
-| `bun run perf:glass` | CPU-rendered inspection of the about-page glass |
-| `bun run net:tabnav` | Tab → detail → Back state and offset |
+| Command                         | Measures                                                         |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `bun run perf:weight`           | Document script URLs, raw bytes and Brotli bytes                 |
+| `bun run perf:metrics`          | Cold-load and tab-switch `Performance.getMetrics` deltas         |
+| `bun run perf:hydration`        | Server-rendered content and hydration warnings                   |
+| `bun run perf:motion`           | Lazy motion warmup, indicator and route clone                    |
+| `bun run perf:hero`             | Hero performance scenarios                                       |
+| `bun run perf:hero-pending`     | Input and scrolling while a Hero leg is pending                  |
+| `bun run perf:hero-gestures`    | Hero gesture scenarios                                           |
+| `bun run perf:sw`               | Worker control, caches and dead-origin navigation                |
+| `bun run perf:ripple`           | Per-frame ripple opacity; peak matches `--md-sys-ripple-opacity` |
+| `bun run perf:pageturn`         | Scroll and visible-card content during page turns                |
+| `bun run perf:tab-latency`      | Release-to-first-frame tab latency and travel                    |
+| `bun run perf:sharpness`        | Flight bitmap resolution against painted bounds                  |
+| `bun run perf:sharpness:assert` | Controlled-CDN sharpness assertions                              |
+| `bun run perf:glass`            | CPU-rendered inspection of the about-page glass                  |
+| `bun run net:tabnav`            | Tab → detail → Back state and offset                             |
 
 Do not treat every probe as an assertion suite. `perf:pageturn` asserts that visible cards are not blank and painted cold-load cards are not hidden. Sharpness assertions require the controlled CDN mode; ordinary real-network samples only report what they measured.
 

@@ -49,44 +49,103 @@ interface TaskDefinition {
  * figures, which are its own: what a claim actually pays is the server's, and its receipt is what
  * the toast reports. 累计任务 is not offered (R5-032): the original listed it as 暂未开发 too.
  */
-const CATEGORIES: { id: TaskCategory; label: string; subtitle: string; tasks: TaskDefinition[] }[] = [
-  {
-    id: 'novice',
-    label: '新手任务',
-    subtitle: '仅限完成一次',
-    tasks: [
-      { key: 'bind_api', claimId: 'novice_bind_api', name: '首次绑定 API Key', xp: 100, coins: 5, target: 1, href: settingsHref('account') },
-      { key: 'verify_api', claimId: 'novice_verify_api', name: '首次核验 API Key', xp: 100, coins: 10, target: 1, href: settingsHref('account') },
-      { key: 'set_bg', claimId: 'novice_set_bg', name: '首次设置主页横幅', xp: 30, coins: 2, target: 1, href: settingsHref('account') },
-    ],
-  },
-  {
-    id: 'daily',
-    label: '每日任务',
-    subtitle: '每天零点（北京时间）刷新进度',
-    tasks: [
-      { key: 'login', claimId: 'login', name: '每日登录', xp: 10, coins: 1, target: 1 },
-      { key: 'fav', claimId: 'fav', name: '每日收藏 5 张图片', xp: 15, coins: 2, target: 5, href: '/' },
-      { key: 'share', claimId: 'share', name: '每日分享 5 张图片', xp: 15, coins: 3, target: 5, href: '/' },
-      { key: 'comment', claimId: 'comment', name: '每日评论 5 次', xp: 15, coins: 3, target: 5, href: '/' },
-    ],
-  },
-  {
-    id: 'weekly',
-    label: '每周任务',
-    subtitle: '每周刷新进度',
-    tasks: [
-      { key: 'upload', claimId: 'weekly_upload', name: '每周通过 PicPony 上传 5 次作品', xp: 15, coins: 5, target: 5, href: '/upload' },
-    ],
-  },
-];
+const CATEGORIES: { id: TaskCategory; label: string; subtitle: string; tasks: TaskDefinition[] }[] =
+  [
+    {
+      id: 'novice',
+      label: '新手任务',
+      subtitle: '仅限完成一次',
+      tasks: [
+        {
+          key: 'bind_api',
+          claimId: 'novice_bind_api',
+          name: '首次绑定 API Key',
+          xp: 100,
+          coins: 5,
+          target: 1,
+          href: settingsHref('account'),
+        },
+        {
+          key: 'verify_api',
+          claimId: 'novice_verify_api',
+          name: '首次核验 API Key',
+          xp: 100,
+          coins: 10,
+          target: 1,
+          href: settingsHref('account'),
+        },
+        {
+          key: 'set_bg',
+          claimId: 'novice_set_bg',
+          name: '首次设置主页横幅',
+          xp: 30,
+          coins: 2,
+          target: 1,
+          href: settingsHref('account'),
+        },
+      ],
+    },
+    {
+      id: 'daily',
+      label: '每日任务',
+      subtitle: '每天零点（北京时间）刷新进度',
+      tasks: [
+        { key: 'login', claimId: 'login', name: '每日登录', xp: 10, coins: 1, target: 1 },
+        {
+          key: 'fav',
+          claimId: 'fav',
+          name: '每日收藏 5 张图片',
+          xp: 15,
+          coins: 2,
+          target: 5,
+          href: '/',
+        },
+        {
+          key: 'share',
+          claimId: 'share',
+          name: '每日分享 5 张图片',
+          xp: 15,
+          coins: 3,
+          target: 5,
+          href: '/',
+        },
+        {
+          key: 'comment',
+          claimId: 'comment',
+          name: '每日评论 5 次',
+          xp: 15,
+          coins: 3,
+          target: 5,
+          href: '/',
+        },
+      ],
+    },
+    {
+      id: 'weekly',
+      label: '每周任务',
+      subtitle: '每周刷新进度',
+      tasks: [
+        {
+          key: 'upload',
+          claimId: 'weekly_upload',
+          name: '每周通过 PicPony 上传 5 次作品',
+          xp: 15,
+          coins: 5,
+          target: 5,
+          href: '/upload',
+        },
+      ],
+    },
+  ];
 
 type CategoryId = TaskCategory;
 
 /** A figure the session carries, read the way the document's are. */
 function sessionFigure(value: unknown): number | null {
   const n = Number(value);
-  return value !== null && value !== undefined && value !== '' && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(n)
+    ? Math.max(0, Math.floor(n))
+    : null;
 }
 
 function LevelCard({
@@ -95,7 +154,12 @@ function LevelCard({
   loading,
 }: {
   document: TaskDocument | undefined;
-  session: { level: number | null; experience: number | null; coins: number | null; equippedBadges: EquippedBadge[] };
+  session: {
+    level: number | null;
+    experience: number | null;
+    coins: number | null;
+    equippedBadges: EquippedBadge[];
+  };
   loading: boolean;
 }) {
   const now = useNow();
@@ -103,7 +167,10 @@ function LevelCard({
      a figure made up for an answer that carried none (R5-031). The level follows from the
      experience by the site's own rule where only that is known. */
   const experience = document?.experience ?? session.experience;
-  const level = document?.level ?? session.level ?? (experience !== null ? Math.floor(experience / 100) + 1 : null);
+  const level =
+    document?.level ??
+    session.level ??
+    (experience !== null ? Math.floor(experience / 100) + 1 : null);
   const coins = document?.coins ?? session.coins;
   const progress = experience !== null ? experience % 100 : null;
   /* The tasks document carries no badges; the session's own equipped set is the account's. */
@@ -132,7 +199,12 @@ function LevelCard({
               </span>
             )}
             {worn.map((badge) => (
-              <UserBadge key={badge.badge_name} name={badge.badge_name} color={badge.badge_color} size="md" />
+              <UserBadge
+                key={badge.badge_name}
+                name={badge.badge_name}
+                color={badge.badge_color}
+                size="md"
+              />
             ))}
           </div>
         </div>
@@ -140,7 +212,9 @@ function LevelCard({
           scroll={false}
           href="/tasks/coins"
           data-ripple=""
-          aria-label={coins !== null && !loading ? `金币 ${formatExactCount(coins)}，查看明细` : '金币明细'}
+          aria-label={
+            coins !== null && !loading ? `金币 ${formatExactCount(coins)}，查看明细` : '金币明细'
+          }
           className="state-layer -mx-3 -my-2 block touch-manipulation rounded-sm px-3 py-2 text-right text-on-surface focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
         >
           <span className="flex items-center justify-end text-label-l text-on-surface-variant">
@@ -151,7 +225,9 @@ function LevelCard({
             {loading ? (
               <Skeleton className="h-8 w-16" delay={60} />
             ) : (
-              <span className="text-headline-s-emphasized tabular-nums">{coins !== null ? formatExactCount(coins) : '—'}</span>
+              <span className="text-headline-s-emphasized tabular-nums">
+                {coins !== null ? formatExactCount(coins) : '—'}
+              </span>
             )}
           </span>
         </Link>
@@ -190,8 +266,16 @@ function LevelMeter({ level, progress }: { level: number | null; progress: numbe
   const [shown, setShown] = useState({ level, progress, epoch: 0, rolling: false });
   if (!shown.rolling && (shown.level !== level || shown.progress !== progress)) {
     const levelledUp =
-      shown.level !== null && level !== null && level > shown.level && typeof document !== 'undefined' && motionTier() !== 'off';
-    setShown(levelledUp ? { level: shown.level, progress: 100, epoch: shown.epoch, rolling: true } : { ...shown, level, progress });
+      shown.level !== null &&
+      level !== null &&
+      level > shown.level &&
+      typeof document !== 'undefined' &&
+      motionTier() !== 'off';
+    setShown(
+      levelledUp
+        ? { level: shown.level, progress: 100, epoch: shown.epoch, rolling: true }
+        : { ...shown, level, progress },
+    );
   }
   /* The figures the rollover lands on, read when it ends rather than when it began. */
   const latest = useRef({ level, progress });
@@ -207,7 +291,9 @@ function LevelMeter({ level, progress }: { level: number | null; progress: numbe
     const timer = window.setTimeout(() => {
       setShown((current) => ({ ...current, progress: 0, epoch: current.epoch + 1 }));
       frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => setShown((current) => ({ ...latest.current, epoch: current.epoch, rolling: false })));
+        frame = requestAnimationFrame(() =>
+          setShown((current) => ({ ...latest.current, epoch: current.epoch, rolling: false })),
+        );
       });
     }, scaledMs(COMPONENT_SPRING_MS.progress));
     return () => {
@@ -216,7 +302,14 @@ function LevelMeter({ level, progress }: { level: number | null; progress: numbe
     };
   }, [shown.rolling]);
   /* A new bar for the empty frame: remounted at 0 it has no transition to run backwards on. */
-  return <ProgressBar key={shown.epoch} value={shown.progress} tone="tertiary" label={level != null ? `等级 ${level} 经验进度` : '等级经验进度'} />;
+  return (
+    <ProgressBar
+      key={shown.epoch}
+      value={shown.progress}
+      tone="tertiary"
+      label={level != null ? `等级 ${level} 经验进度` : '等级经验进度'}
+    />
+  );
 }
 
 function TaskRow({
@@ -261,7 +354,11 @@ function TaskRow({
             /* One tone in every state (D1-004): the trailing control already says claimable or
                claimed, and the severity fills read as a warning when something good was ready —
                and on the dark track they all but vanished (1.9:1). */
-            <ProgressBar value={(progress / target) * 100} label={`${task.name} 进度`} className="w-auto flex-1" />
+            <ProgressBar
+              value={(progress / target) * 100}
+              label={`${task.name} 进度`}
+              className="w-auto flex-1"
+            />
           )}
           <div className="flex h-4.5 w-12 shrink-0 items-center justify-end text-body-s tabular-nums text-on-surface-variant">
             {loading ? <Skeleton className="h-3 w-8" /> : `${progress} / ${target}`}
@@ -274,8 +371,17 @@ function TaskRow({
         {loading ? (
           <Skeleton className="h-8 w-full rounded-full" />
         ) : isClaimed ? (
-          <span className={cn('flex h-8 items-center gap-1 text-label-m text-success', landed && 'animate-fade-in')}>
-            <MdCheckCircle size={ICON.dense} aria-hidden="true" className={cn(landed && 'animate-control-pop')} />
+          <span
+            className={cn(
+              'flex h-8 items-center gap-1 text-label-m text-success',
+              landed && 'animate-fade-in',
+            )}
+          >
+            <MdCheckCircle
+              size={ICON.dense}
+              aria-hidden="true"
+              className={cn(landed && 'animate-control-pop')}
+            />
             已领取
           </span>
         ) : canClaim ? (
@@ -283,12 +389,7 @@ function TaskRow({
             领取
           </Button>
         ) : task.href ? (
-          <ButtonLink
-            href={task.href}
-            variant="tonal"
-            size="xs"
-            fullWidth
-          >
+          <ButtonLink href={task.href} variant="tonal" size="xs" fullWidth>
             去完成
           </ButtonLink>
         ) : (
@@ -307,19 +408,25 @@ export default function TasksPage() {
   const [claiming, setClaiming] = useState<ReadonlySet<string>>(() => new Set());
   const claimPending = useRef(new Set<string>());
   /* A claim the server acknowledged, shown until the next document arrives — which carries it. */
-  const [receipt, setReceipt] = useState<{ document: TaskDocument | undefined; ids: Set<string> } | null>(null);
+  const [receipt, setReceipt] = useState<{
+    document: TaskDocument | undefined;
+    ids: Set<string>;
+  } | null>(null);
 
   const read = useResource(tasks, token ? { token } : SKIP);
   const doc = read.data;
   const loading = ready && Boolean(token) && doc === undefined && read.error === undefined;
   const claimedNow = receipt && receipt.document === doc ? receipt.ids : null;
 
-  const session = useMemo(() => ({
-    level: sessionFigure(user?.level),
-    experience: sessionFigure(user?.experience),
-    coins: sessionFigure(user?.coins),
-    equippedBadges: parseEquippedBadges(user?.equipped_badges),
-  }), [user?.level, user?.experience, user?.coins, user?.equipped_badges]);
+  const session = useMemo(
+    () => ({
+      level: sessionFigure(user?.level),
+      experience: sessionFigure(user?.experience),
+      coins: sessionFigure(user?.coins),
+      equippedBadges: parseEquippedBadges(user?.equipped_badges),
+    }),
+    [user?.level, user?.experience, user?.coins, user?.equipped_badges],
+  );
 
   /* The document is the newest word on the account's level and coins: the drawer reads them from
      the session, so a claim shows there too. */
@@ -342,7 +449,9 @@ export default function TasksPage() {
         const shownDoc = tasks.peek({ token }).data;
         setReceipt((previous) => ({
           document: shownDoc,
-          ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(task.claimId),
+          ids: new Set(previous && previous.document === shownDoc ? previous.ids : []).add(
+            task.claimId,
+          ),
         }));
         updateUserInfo(token, { coins: paid.balance });
         showToast(`已领取，经验 +${paid.experience}，金币 +${paid.coins}`, 'success');

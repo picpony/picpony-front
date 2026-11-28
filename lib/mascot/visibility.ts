@@ -8,7 +8,12 @@ function subscribeVisible(listener: () => void) {
   document.addEventListener('visibilitychange', listener);
   return () => document.removeEventListener('visibilitychange', listener);
 }
-export const useDocumentVisible = () => useSyncExternalStore(subscribeVisible, () => !document.hidden, () => false);
+export const useDocumentVisible = () =>
+  useSyncExternalStore(
+    subscribeVisible,
+    () => !document.hidden,
+    () => false,
+  );
 /* The keyboard inset and the lightbox's presence are cached and refreshed only by their own
    events. `useSyncExternalStore` calls `getSnapshot` on every render of every subscriber (and
    again after each commit), and reading `innerHeight`/`visualViewport` there forced a layout
@@ -16,7 +21,9 @@ export const useDocumentVisible = () => useSyncExternalStore(subscribeVisible, (
    that mount the detail route. */
 function viewportBottom() {
   const viewport = window.visualViewport;
-  return viewport ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop)) : 0;
+  return viewport
+    ? Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
+    : 0;
 }
 let keyboardInset = 0;
 const viewportListeners = new Set<() => void>();
@@ -42,7 +49,12 @@ function subscribeViewport(listener: () => void) {
     window.removeEventListener('resize', updateKeyboardInset);
   };
 }
-export const useKeyboardInset = () => useSyncExternalStore(subscribeViewport, () => keyboardInset, () => 0);
+export const useKeyboardInset = () =>
+  useSyncExternalStore(
+    subscribeViewport,
+    () => keyboardInset,
+    () => 0,
+  );
 let lightboxOpen = false;
 const mediaListeners = new Set<() => void>();
 let mediaObserver: MutationObserver | null = null;
@@ -80,8 +92,16 @@ export function useCompanionPresence(): { present: boolean; away: boolean } {
   const pathname = usePathname();
   const present = useDocumentVisible();
   const modal = useSyncExternalStore(subscribeModalLayers, hasModalLayer, () => false);
-  const media = useSyncExternalStore(subscribeImageHeroRuntime, () => getImageHeroRuntime().imageId !== null, () => false);
-  const lightbox = useSyncExternalStore(subscribeMedia, () => lightboxOpen, () => false);
+  const media = useSyncExternalStore(
+    subscribeImageHeroRuntime,
+    () => getImageHeroRuntime().imageId !== null,
+    () => false,
+  );
+  const lightbox = useSyncExternalStore(
+    subscribeMedia,
+    () => lightboxOpen,
+    () => false,
+  );
   const keyboard = useKeyboardInset() > 80;
   const away =
     modal ||

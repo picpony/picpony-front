@@ -34,6 +34,8 @@ export function splitTags(text: string): string[] {
 /** The term the dictionary is asked about: two characters of Latin text, or one of Chinese. */
 export function lookupTerm(text: string): string {
   const parts = text.split(/[,，、\n]/);
-  const last = normalizeTag(parts[parts.length - 1] ?? '').replace(/["()[\]{}*]/g, '').trim();
+  const last = normalizeTag(parts[parts.length - 1] ?? '')
+    .replace(/["()[\]{}*]/g, '')
+    .trim();
   return last.length >= 2 || /[㐀-鿿]/.test(last) ? last : '';
 }

@@ -132,7 +132,15 @@ export class ZipWriter {
       .u16(extraLength)
       .bytes(encodedName);
     if (zip64) header.u16(0x0001).u16(16).u64(data.length).u64(data.length);
-    this.entries.push({ name: encodedName, crc, size: data.length, offset: this.offset, time, date, zip64 });
+    this.entries.push({
+      name: encodedName,
+      crc,
+      size: data.length,
+      offset: this.offset,
+      time,
+      date,
+      zip64,
+    });
     this.parts.push(header.buffer as Uint8Array<ArrayBuffer>, data as Uint8Array<ArrayBuffer>);
     this.offset += header.buffer.length + data.length;
   }
@@ -185,7 +193,10 @@ export class ZipWriter {
         .u64(directorySize)
         .u64(directoryOffset);
       const locator = new Bytes(20).u32(ZIP64_LOCATOR).u32(0).u64(zip64EndOffset).u32(1);
-      this.parts.push(record.buffer as Uint8Array<ArrayBuffer>, locator.buffer as Uint8Array<ArrayBuffer>);
+      this.parts.push(
+        record.buffer as Uint8Array<ArrayBuffer>,
+        locator.buffer as Uint8Array<ArrayBuffer>,
+      );
     }
     const end = new Bytes(22)
       .u32(END_OF_CENTRAL)
@@ -223,14 +234,20 @@ export function uniqueEntryName(url: string, fallback: string, taken: Set<string
   } catch {
     /* A malformed escape: the raw segment, made safe below. */
   }
-  const clean = (value: string) => value.replace(UNSAFE, '_').trim().slice(0, MAX_NAME).replace(/[. ]+$/, '');
+  const clean = (value: string) =>
+    value
+      .replace(UNSAFE, '_')
+      .trim()
+      .slice(0, MAX_NAME)
+      .replace(/[. ]+$/, '');
   let safe = clean(decoded) || clean(fallback) || 'picture';
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safe)) safe = `_${safe}`;
   const dot = safe.lastIndexOf('.');
   const stem = dot > 0 ? safe.slice(0, dot) : safe;
   const extension = dot > 0 ? safe.slice(dot) : '';
   let candidate = safe;
-  for (let n = 2; taken.has(candidate.toLowerCase()); n += 1) candidate = `${stem}_${n}${extension}`;
+  for (let n = 2; taken.has(candidate.toLowerCase()); n += 1)
+    candidate = `${stem}_${n}${extension}`;
   taken.add(candidate.toLowerCase());
   return candidate;
 }

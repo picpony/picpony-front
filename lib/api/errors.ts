@@ -39,7 +39,8 @@
  * - `aborted`: the caller cancelled. Adapters rethrow the caller's own `AbortError` rather than
  *   constructing one of these; the kind exists so `isAborted` has one answer for both.
  */
-export type ApiErrorKind = 'network' | 'timeout' | 'http' | 'envelope' | 'invalid' | 'syntax' | 'aborted';
+export type ApiErrorKind =
+  'network' | 'timeout' | 'http' | 'envelope' | 'invalid' | 'syntax' | 'aborted';
 
 export interface ApiErrorInit {
   status?: number;
@@ -71,7 +72,9 @@ export class ApiError extends Error {
     const status = init.status;
     const serverMessage = usableServerMessage(init.serverMessage);
     const notFound = init.notFound ?? (kind === 'http' && status === 404);
-    super(init.message ?? describeFailure(kind, status, serverMessage, notFound), { cause: init.cause });
+    super(init.message ?? describeFailure(kind, status, serverMessage, notFound), {
+      cause: init.cause,
+    });
     this.kind = kind;
     this.status = status;
     this.code = init.code;
@@ -89,7 +92,11 @@ function usableServerMessage(value: unknown): string | undefined {
   return text;
 }
 
-function defaultRetryable(kind: ApiErrorKind, status: number | undefined, notFound: boolean): boolean {
+function defaultRetryable(
+  kind: ApiErrorKind,
+  status: number | undefined,
+  notFound: boolean,
+): boolean {
   if (notFound || kind === 'syntax' || kind === 'aborted') return false;
   /* A refusal about *this* request or *this* credential answers the same every time: a bad
      request, a dead session (the shell signs out on it) and a permission refusal. */
@@ -138,12 +145,18 @@ function describeFailure(
   notFound: boolean,
 ): string {
   switch (kind) {
-    case 'network': return FAILURE_MESSAGES.network;
-    case 'timeout': return FAILURE_MESSAGES.timeout;
-    case 'syntax': return FAILURE_MESSAGES.syntax;
-    case 'aborted': return FAILURE_MESSAGES.aborted;
-    case 'invalid': return FAILURE_MESSAGES.invalid;
-    case 'envelope': return serverMessage ?? (notFound ? FAILURE_MESSAGES.notFound : FAILURE_MESSAGES.generic);
+    case 'network':
+      return FAILURE_MESSAGES.network;
+    case 'timeout':
+      return FAILURE_MESSAGES.timeout;
+    case 'syntax':
+      return FAILURE_MESSAGES.syntax;
+    case 'aborted':
+      return FAILURE_MESSAGES.aborted;
+    case 'invalid':
+      return FAILURE_MESSAGES.invalid;
+    case 'envelope':
+      return serverMessage ?? (notFound ? FAILURE_MESSAGES.notFound : FAILURE_MESSAGES.generic);
     case 'http':
       if (notFound) return FAILURE_MESSAGES.notFound;
       /* A rate limit and an outage are facts about the service, whatever the body says; a
@@ -195,7 +208,10 @@ const HAN = /[㐀-鿿]/;
  * `SyntaxError` from a JSON parse) never reaches the UI — those become the network sentence
  * or `fallback`.
  */
-export function apiErrorMessage(error: unknown, fallback: string = FAILURE_MESSAGES.generic): string {
+export function apiErrorMessage(
+  error: unknown,
+  fallback: string = FAILURE_MESSAGES.generic,
+): string {
   if (error instanceof ApiError) return error.message;
   if (isAborted(error)) return FAILURE_MESSAGES.aborted;
   if (error instanceof TypeError) return FAILURE_MESSAGES.network;
@@ -215,6 +231,7 @@ export function toApiError(error: unknown, timedOut = false): unknown {
   if (error instanceof ApiError) return error;
   if (timedOut) return new ApiError('timeout', { cause: error });
   if (isAborted(error)) return error;
-  if (error instanceof Error && error.name === 'TimeoutError') return new ApiError('timeout', { cause: error });
+  if (error instanceof Error && error.name === 'TimeoutError')
+    return new ApiError('timeout', { cause: error });
   return new ApiError('network', { cause: error });
 }

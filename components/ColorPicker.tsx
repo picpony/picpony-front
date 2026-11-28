@@ -152,7 +152,16 @@ export interface ColorPickerProps {
   preview?: boolean;
 }
 
-export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, onExited, title, preview = true }: ColorPickerProps) {
+export default function ColorPicker({
+  isOpen,
+  onClose,
+  initial,
+  hues,
+  onPick,
+  onExited,
+  title,
+  preview = true,
+}: ColorPickerProps) {
   const tools = usePaletteTools(isOpen);
   return (
     <PickerDialog
@@ -174,7 +183,15 @@ export default function ColorPicker({ isOpen, onClose, initial, hues, onPick, on
  * 70+ individual swatch skeletons inside the modal.
  */
 function PickerSkeleton({ paused }: { paused: boolean }) {
-  return <PageLoadingIndicator size="pane" paused={paused} delay={120} label="正在加载取色器…" className="min-h-80" />;
+  return (
+    <PageLoadingIndicator
+      size="pane"
+      paused={paused}
+      delay={120}
+      label="正在加载取色器…"
+      className="min-h-80"
+    />
+  );
 }
 
 /**
@@ -220,9 +237,8 @@ function PickerDialog({
     mode: modeOf(initial.accent),
     hue: typeof initial.accent === 'number' ? initial.accent : null,
   }));
-  const { hex, hue, cell } = pick ?? (tools
-    ? pickFrom(tools, initialSeed, 0)
-    : { hex: initialSeed, hue: 0, cell: null });
+  const { hex, hue, cell } =
+    pick ?? (tools ? pickFrom(tools, initialSeed, 0) : { hex: initialSeed, hue: 0, cell: null });
 
   /** The stored form of a mode. 自选 before a hue is chosen starts where 自动 is. */
   const choiceFor = (mode: AccentMode, customHue: number | null): AccentChoice => {
@@ -235,7 +251,10 @@ function PickerDialog({
   const chooseMode = (mode: AccentMode) =>
     setAccent((current) => ({
       mode,
-      hue: mode === 'custom' && current.hue === null ? (choiceFor('custom', null) as number) : current.hue,
+      hue:
+        mode === 'custom' && current.hue === null
+          ? (choiceFor('custom', null) as number)
+          : current.hue,
     }));
 
   const onModeKey = (event: KeyboardEvent, index: number) => {
@@ -321,7 +340,10 @@ function PickerDialog({
     let target: [number, number] | null = null;
     if (move[event.key]) {
       const [dr, dc] = move[event.key]!;
-      target = [(row + dr + TONES.length) % TONES.length, (column + dc + CHROMAS.length) % CHROMAS.length];
+      target = [
+        (row + dr + TONES.length) % TONES.length,
+        (column + dc + CHROMAS.length) % CHROMAS.length,
+      ];
     } else if (event.key === 'Home') target = [row, 0];
     else if (event.key === 'End') target = [row, CHROMAS.length - 1];
     if (!target) return;
@@ -353,7 +375,9 @@ function PickerDialog({
       onExited={onExited}
       footer={
         <>
-          <Button variant="text" onClick={onClose}>取消</Button>
+          <Button variant="text" onClick={onClose}>
+            取消
+          </Button>
           <Button
             variant="filled"
             disabled={!tools || Boolean(error)}
@@ -374,7 +398,11 @@ function PickerDialog({
           {preview && (
             <div className={PREVIEW_DOCK}>
               {/* Cached: the chosen 副色相 tile below derives the same spec. */}
-              <PalettePreview derived={tools.deriveCustomThemeCached({ seed: hex, accent: choice })} hues={hues} caption={hex} />
+              <PalettePreview
+                derived={tools.deriveCustomThemeCached({ seed: hex, accent: choice })}
+                hues={hues}
+                caption={hex}
+              />
             </div>
           )}
 
@@ -450,7 +478,10 @@ function PickerDialog({
               >
                 <span />
                 {CHROMAS.map((x) => (
-                  <span key={x} className="text-label-s text-on-surface-variant text-center tabular-nums">
+                  <span
+                    key={x}
+                    className="text-label-s text-on-surface-variant text-center tabular-nums"
+                  >
                     {Math.round(x * 100)}%
                   </span>
                 ))}
@@ -509,7 +540,10 @@ function PickerDialog({
                 {ACCENT_MODES.map(({ mode, label, caption }, index) => {
                   const on = accent.mode === mode;
                   const tones = tools.paletteTones(
-                    tools.deriveCustomThemeCached({ seed: hex, accent: choiceFor(mode, accent.hue) }),
+                    tools.deriveCustomThemeCached({
+                      seed: hex,
+                      accent: choiceFor(mode, accent.hue),
+                    }),
                   );
                   return (
                     <button
@@ -535,10 +569,20 @@ function PickerDialog({
                     >
                       {/* Concentric inside the 12dp tile with 8dp inset: 12 − 8 = 4dp (`rounded-xs`). */}
                       <span className="forced-boundary forced-color-adjust-auto relative -z-10 h-9 w-12 shrink-0 overflow-hidden rounded-xs">
-                        <PaletteTileFace size="compact" tone={tones[scheme]} face={tones.face[scheme]} hues="multi" />
+                        <PaletteTileFace
+                          size="compact"
+                          tone={tones[scheme]}
+                          face={tones.face[scheme]}
+                          hues="multi"
+                        />
                       </span>
                       <span className="text-label-l">{label}</span>
-                      <span className={cn('text-label-s', on ? 'text-on-secondary-container' : 'text-on-surface-variant')}>
+                      <span
+                        className={cn(
+                          'text-label-s',
+                          on ? 'text-on-secondary-container' : 'text-on-surface-variant',
+                        )}
+                      >
                         {caption}
                       </span>
                     </button>
@@ -583,14 +627,18 @@ function PickerDialog({
 }
 
 /** The rail stop nearest a hue — where 自选 starts from 自动. */
-const nearestStop = (h: number) => HUE_STOPS.reduce((best, s) =>
-  Math.abs(((h - s + 540) % 360) - 180) < Math.abs(((h - best + 540) % 360) - 180) ? s : best);
+const nearestStop = (h: number) =>
+  HUE_STOPS.reduce((best, s) =>
+    Math.abs(((h - s + 540) % 360) - 180) < Math.abs(((h - best + 540) % 360) - 180) ? s : best,
+  );
 
 /** A labelled block. Not `Input`'s `Field`, which wraps one control rather than a group. */
 function Group({ label, id, children }: { label: string; id?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <p id={id} className="text-label-m text-on-surface-variant">{label}</p>
+      <p id={id} className="text-label-m text-on-surface-variant">
+        {label}
+      </p>
       {children}
     </div>
   );

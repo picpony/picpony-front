@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MdCalendarToday, MdClose, MdDeleteOutline, MdDeleteSweep, MdHistory, MdImage, MdPerson } from 'react-icons/md';
+import {
+  MdCalendarToday,
+  MdClose,
+  MdDeleteOutline,
+  MdDeleteSweep,
+  MdHistory,
+  MdImage,
+  MdPerson,
+} from 'react-icons/md';
 import Button from '@/components/Button';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
@@ -68,10 +76,17 @@ function decodeStill(url: string | undefined) {
 const ROW = 'm3-row group relative bg-surface-container-low';
 
 function HistorySkeleton() {
-  return <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载浏览历史…" />;
+  return (
+    <PageLoadingIndicator size="page" indicatorSize="lg" holdFooter label="正在加载浏览历史…" />
+  );
 }
 
-function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
+function HistoryRow({
+  entry,
+  presenceKey,
+  sequence,
+  onDelete,
+}: {
   entry: HistoryEntry;
   presenceKey: string;
   /** The list 上一张 / 下一张 walk once this row opens its picture (`useHistorySequence`). */
@@ -101,7 +116,12 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
     /* `data-detail-origin`: the row is what the picture grows out of and shrinks back into — a
        history row has no shared picture to fly (its thumbnail is a 56px crop of a picture of
        unknown shape), so it takes the forum's container transform (`lib/detailTransit.ts`). */
-    <div role="listitem" className={ROW} data-detail-origin={entry.id} data-presence-key={presenceKey}>
+    <div
+      role="listitem"
+      className={ROW}
+      data-detail-origin={entry.id}
+      data-presence-key={presenceKey}
+    >
       {/* The row is one control (R5-026): the link fills it, so its state layer and its target
           are the same box. The delete is a sibling laid over the row's trailing edge — never a
           control inside the link — revealed by hover under a pointer and always there under a
@@ -118,7 +138,13 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
           intent.onPointerDown(event);
         }}
         onClick={(event) => {
-          if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+          if (
+            event.button === 0 &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.shiftKey &&
+            !event.altKey
+          ) {
             /* The list first, then the origin — both synchronously, before the link navigates:
                the viewer's 上一张 / 下一张 walk this list, and the overlay grows out of this row.
                A modified click opens a new tab and leaves this one's list alone. */
@@ -186,7 +212,12 @@ function HistoryRow({ entry, presenceKey, sequence, onDelete }: {
  * button's leading edge, so the picker opens where the button is; once a day is chosen the button
  * names it as the list's day headings do, and a cross beside it clears it.
  */
-function DateFilter({ value, max, now, onChange }: {
+function DateFilter({
+  value,
+  max,
+  now,
+  onChange,
+}: {
   value: string;
   max: string | undefined;
   now: number | null;
@@ -205,7 +236,11 @@ function DateFilter({ value, max, now, onChange }: {
       field.click();
     }
   };
-  const label = value ? (now !== null ? formatDayLabel(value, now, { clock: false }) : formatDate(value)) : '按日期筛选';
+  const label = value
+    ? now !== null
+      ? formatDayLabel(value, now, { clock: false })
+      : formatDate(value)
+    : '按日期筛选';
   return (
     <div className="relative flex items-center gap-1">
       <Button
@@ -227,7 +262,14 @@ function DateFilter({ value, max, now, onChange }: {
         onChange={(event) => onChange(event.target.value)}
         className="pointer-events-none absolute bottom-0 left-0 size-px opacity-0"
       />
-      {value && <IconButton dismiss aria-label="清除日期筛选" icon={<MdClose />} onClick={() => onChange('')} />}
+      {value && (
+        <IconButton
+          dismiss
+          aria-label="清除日期筛选"
+          icon={<MdClose />}
+          onClick={() => onChange('')}
+        />
+      )}
     </div>
   );
 }
@@ -251,7 +293,10 @@ export default function HistoryPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const emptyRef = useRef<HTMLDivElement>(null);
   const landing = useCallback(
-    () => emptyRef.current?.querySelector<HTMLElement>('h2') ?? rootRef.current?.querySelector<HTMLElement>('h1') ?? null,
+    () =>
+      emptyRef.current?.querySelector<HTMLElement>('h2') ??
+      rootRef.current?.querySelector<HTMLElement>('h1') ??
+      null,
     [],
   );
   /* 撤销 is pressed in the toast, which then leaves with the focus: the commit that brings the rows
@@ -268,7 +313,13 @@ export default function HistoryPage() {
     if (!pending) return;
     restored.current = null;
     const active = document.activeElement;
-    if (active instanceof HTMLElement && active !== document.body && active.isConnected && active !== pending.pressed) return;
+    if (
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active.isConnected &&
+      active !== pending.pressed
+    )
+      return;
     for (const id of pending.ids) {
       const link = findDetailOriginLink(id);
       if (link) {
@@ -299,8 +350,12 @@ export default function HistoryPage() {
     if (!clearedRef.current || !showEmpty) return;
     clearedRef.current = false;
     const active = document.activeElement;
-    const lost = !(active instanceof HTMLElement) || active === document.body || !active.isConnected ||
-      Boolean(active.closest('[inert]')) || active.matches(':disabled');
+    const lost =
+      !(active instanceof HTMLElement) ||
+      active === document.body ||
+      !active.isConnected ||
+      Boolean(active.closest('[inert]')) ||
+      active.matches(':disabled');
     const target = lost ? landing() : null;
     if (target) focusLanding(target);
   }, [showEmpty, data, landing]);
@@ -338,11 +393,14 @@ export default function HistoryPage() {
 
   const handleClear = async () => {
     if (!token || readToken() !== token || clearing) return;
-    if (!(await confirm({
-      title: '确认清空',
-      message: '确定要清空全部浏览历史吗？此操作无法恢复。',
-      tone: 'danger',
-    }))) return;
+    if (
+      !(await confirm({
+        title: '确认清空',
+        message: '确定要清空全部浏览历史吗？此操作无法恢复。',
+        tone: 'danger',
+      }))
+    )
+      return;
     if (readToken() !== token) return;
     setClearing(true);
     const cleared = await settle(clearBrowsingHistory(token));
@@ -421,11 +479,19 @@ export default function HistoryPage() {
         icon={<MdHistory size={ICON.display} />}
         title="此日没有浏览记录"
         description="可选择其他日期，或清除日期筛选查看全部"
-        action={<Button variant="tonal" onClick={() => changeDate('')}>清除筛选</Button>}
+        action={
+          <Button variant="tonal" onClick={() => changeDate('')}>
+            清除筛选
+          </Button>
+        }
       />
     ) : page > 1 ? (
       /* Its rows deleted, with 撤销 still on offer: the history is not empty, and the pager stays. */
-      <EmptyState entrance={!hadRows} icon={<MdHistory size={ICON.display} />} title="此页没有浏览记录" />
+      <EmptyState
+        entrance={!hadRows}
+        icon={<MdHistory size={ICON.display} />}
+        title="此页没有浏览记录"
+      />
     ) : (
       <EmptyState
         entrance={!hadRows}
@@ -450,7 +516,12 @@ export default function HistoryPage() {
             `gap`, not `space-y`: a leaving day is taken out of the flow, and a sibling margin
             would keep its space until it was gone. A removal's focus goes to the row now in its
             place, else the one before it — across a day that leaves — else to `landing`. */}
-        <PresenceList items={byDay(entries, now)} getKey={(day) => day.key} resetKey={data} fallbackFocus={landing}>
+        <PresenceList
+          items={byDay(entries, now)}
+          getKey={(day) => day.key}
+          resetKey={data}
+          fallbackFocus={landing}
+        >
           {(days, ref) => (
             /* Positioned for the empty state, which leaves where it stood as a row comes back. */
             <div className="relative">
@@ -490,7 +561,10 @@ export default function HistoryPage() {
                   out, and a focus on its heading goes on to the rows that returned. */}
               <PresenceBlock
                 show={showEmpty}
-                fallbackFocus={() => rootRef.current?.querySelector<HTMLElement>('[data-detail-origin] a[href]') ?? null}
+                fallbackFocus={() =>
+                  rootRef.current?.querySelector<HTMLElement>('[data-detail-origin] a[href]') ??
+                  null
+                }
               >
                 <div ref={emptyRef} className={cn(hadRows && 'animate-page-transition')}>
                   {empty}
@@ -504,7 +578,9 @@ export default function HistoryPage() {
             currentPage={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            onPrefetchPage={(next) => token && browsingHistory.prefetch({ token, page: next, date: date || null })}
+            onPrefetchPage={(next) =>
+              token && browsingHistory.prefetch({ token, page: next, date: date || null })
+            }
             className="mt-8"
           />
         )}

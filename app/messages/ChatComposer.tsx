@@ -163,7 +163,8 @@ function render(root: HTMLElement, pieces: readonly ComposerPiece[]) {
   root.replaceChildren(...nodesOf(pieces));
   /* A final empty line needs a box to hold the caret. */
   const last = pieces[pieces.length - 1];
-  if (last?.type === 'text' && last.text.endsWith('\n')) root.appendChild(document.createElement('br'));
+  if (last?.type === 'text' && last.text.endsWith('\n'))
+    root.appendChild(document.createElement('br'));
 }
 
 /** Units a child spans: its text length, or one for an emoji or a line break. */
@@ -181,7 +182,8 @@ function unitsAt(root: HTMLElement, node: Node, offset: number): number {
     return units;
   }
   for (const child of children) {
-    if (child === node) return units + (node.nodeType === Node.TEXT_NODE ? offset : offset > 0 ? unitsOf(child) : 0);
+    if (child === node)
+      return units + (node.nodeType === Node.TEXT_NODE ? offset : offset > 0 ? unitsOf(child) : 0);
     /* Inside something the engine nested (flattened on the next input): its start. */
     if (child.contains(node)) return units;
     units += unitsOf(child);
@@ -216,7 +218,8 @@ function positionOf(root: HTMLElement, caret: number): { node: Node; offset: num
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     const units = unitsOf(child);
-    if (child.nodeType === Node.TEXT_NODE && remaining <= units) return { node: child, offset: remaining };
+    if (child.nodeType === Node.TEXT_NODE && remaining <= units)
+      return { node: child, offset: remaining };
     if (remaining < units || (remaining === 0 && units > 0)) return { node: root, offset: i };
     remaining -= units;
   }
@@ -241,7 +244,10 @@ function totalUnits(pieces: readonly ComposerPiece[]): number {
 }
 
 /** Split pieces at a unit offset. */
-function splitAt(pieces: readonly ComposerPiece[], caret: number): [ComposerPiece[], ComposerPiece[]] {
+function splitAt(
+  pieces: readonly ComposerPiece[],
+  caret: number,
+): [ComposerPiece[], ComposerPiece[]] {
   const before: ComposerPiece[] = [];
   const after: ComposerPiece[] = [];
   let remaining = caret;
@@ -267,7 +273,17 @@ function joinPieces(...groups: ComposerPiece[][]): ComposerPiece[] {
 }
 
 const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
-  { initialValue, placeholder, label, onChange, onSubmit, onFocus, onEscape, autoFocus = false, id },
+  {
+    initialValue,
+    placeholder,
+    label,
+    onChange,
+    onSubmit,
+    onFocus,
+    onEscape,
+    autoFocus = false,
+    id,
+  },
   ref,
 ) {
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -324,63 +340,73 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   }, []);
 
   /** Replace the whole value — undo, redo, a flatten, an insertion — and put the caret back. */
-  const apply = useCallback((pieces: readonly ComposerPiece[], at: number, focusIt: boolean) => {
-    const root = rootRef.current;
-    if (!root) return '';
-    render(root, pieces);
-    caret.current = at;
-    if (focusIt || document.activeElement === root) placeCaret(root, at);
-    return publish(pieces);
-  }, [publish]);
+  const apply = useCallback(
+    (pieces: readonly ComposerPiece[], at: number, focusIt: boolean) => {
+      const root = rootRef.current;
+      if (!root) return '';
+      render(root, pieces);
+      caret.current = at;
+      if (focusIt || document.activeElement === root) placeCaret(root, at);
+      return publish(pieces);
+    },
+    [publish],
+  );
 
-  const insertPieces = useCallback((inserted: ComposerPiece[]) => {
-    const root = rootRef.current;
-    const record = history.current;
-    if (!root || !record || inserted.length === 0) return;
-    const focused = document.activeElement === root;
-    const current = readPieces(root);
-    const end = totalUnits(current);
-    /* Focused, at the selection — which the insertion replaces, as typing would. Otherwise
+  const insertPieces = useCallback(
+    (inserted: ComposerPiece[]) => {
+      const root = rootRef.current;
+      const record = history.current;
+      if (!root || !record || inserted.length === 0) return;
+      const focused = document.activeElement === root;
+      const current = readPieces(root);
+      const end = totalUnits(current);
+      /* Focused, at the selection — which the insertion replaces, as typing would. Otherwise
        (a tap on the picker took focus, or a phone's picker keeps the keyboard down) at the
        caret the field last had. */
-    const live = focused ? selectionOf(root) : null;
-    const start = Math.min(live ? Math.min(live.start, live.end) : caret.current ?? end, end);
-    const stop = Math.min(live ? Math.max(live.start, live.end) : start, end);
-    const [before] = splitAt(current, start);
-    const [, after] = splitAt(current, stop);
-    const next = joinPieces(before, inserted, after);
-    const nextCaret = start + totalUnits(inserted);
-    const value = apply(next, nextCaret, focused);
-    record.record({ value, caret: nextCaret }, 'insert', Date.now());
-  }, [apply]);
+      const live = focused ? selectionOf(root) : null;
+      const start = Math.min(live ? Math.min(live.start, live.end) : (caret.current ?? end), end);
+      const stop = Math.min(live ? Math.max(live.start, live.end) : start, end);
+      const [before] = splitAt(current, start);
+      const [, after] = splitAt(current, stop);
+      const next = joinPieces(before, inserted, after);
+      const nextCaret = start + totalUnits(inserted);
+      const value = apply(next, nextCaret, focused);
+      record.record({ value, caret: nextCaret }, 'insert', Date.now());
+    },
+    [apply],
+  );
 
-  useImperativeHandle(ref, () => ({
-    focus() {
-      const root = rootRef.current;
-      if (!root) return;
-      root.focus({ preventScroll: true });
-      placeCaret(root, caret.current ?? totalUnits(readPieces(root)));
-    },
-    insertEmoji(name) {
-      if (EMOJI_BY_NAME.has(name)) insertPieces([{ type: 'emoji', name }]);
-    },
-    insertText(text) {
-      if (text) insertPieces(parseComposerValue(text));
-    },
-    clear() {
-      const root = rootRef.current;
-      if (!root) return;
-      render(root, []);
-      caret.current = 0;
-      history.current?.reset({ value: '', caret: 0 });
-      if (document.activeElement === root) placeCaret(root, 0);
-      publish([]);
-    },
-    value() {
-      const root = rootRef.current;
-      return root ? serializePieces(readPieces(root)) : '';
-    },
-  }), [insertPieces, publish]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus() {
+        const root = rootRef.current;
+        if (!root) return;
+        root.focus({ preventScroll: true });
+        placeCaret(root, caret.current ?? totalUnits(readPieces(root)));
+      },
+      insertEmoji(name) {
+        if (EMOJI_BY_NAME.has(name)) insertPieces([{ type: 'emoji', name }]);
+      },
+      insertText(text) {
+        if (text) insertPieces(parseComposerValue(text));
+      },
+      clear() {
+        const root = rootRef.current;
+        if (!root) return;
+        render(root, []);
+        caret.current = 0;
+        history.current?.reset({ value: '', caret: 0 });
+        if (document.activeElement === root) placeCaret(root, 0);
+        publish([]);
+      },
+      value() {
+        const root = rootRef.current;
+        return root ? serializePieces(readPieces(root)) : '';
+      },
+    }),
+    [insertPieces, publish],
+  );
 
   const restore = (snapshot: { value: string; caret: number } | null | undefined) => {
     if (!snapshot) return;
@@ -446,7 +472,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
       latest.current.onSubmit();
       return;
     }
-    pendingEdit.current = type.startsWith('delete') ? 'delete' : type === 'insertFromDrop' ? 'insert' : 'type';
+    pendingEdit.current = type.startsWith('delete')
+      ? 'delete'
+      : type === 'insertFromDrop'
+        ? 'insert'
+        : 'type';
   };
 
   /* React's synthetic `onBeforeInput` is a legacy polyfill without `inputType`; listen natively. */

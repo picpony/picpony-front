@@ -57,7 +57,11 @@ export function parseHeldBadges(value: unknown): HeldBadge[] {
 
 /** The equipped set, in its order. A list that is not one (a source without badges) is empty. */
 export function parseEquippedBadges(value: unknown): EquippedBadge[] {
-  return rows(value).map((badge) => ({ id: badge.id, badge_name: badge.name, badge_color: badge.color }));
+  return rows(value).map((badge) => ({
+    id: badge.id,
+    badge_name: badge.name,
+    badge_color: badge.color,
+  }));
 }
 
 /** Whether a badge's expiry has passed at `now`. A badge with no expiry never lapses. */
@@ -67,7 +71,10 @@ export function isBadgeExpired(expiresAt: string | null | undefined, now: number
 }
 
 /** What a badge's validity reads as: 永久有效, 有效期至 2026/10/01, or 已过期. */
-export function badgeValidity(expiresAt: string | null | undefined, now: number): { expired: boolean; text: string } {
+export function badgeValidity(
+  expiresAt: string | null | undefined,
+  now: number,
+): { expired: boolean; text: string } {
   const end = parseBackendTime(expiresAt);
   if (!end) return { expired: false, text: '永久有效' };
   if (now > end.getTime()) return { expired: true, text: '已过期' };
@@ -79,7 +86,11 @@ export function badgeValidity(expiresAt: string | null | undefined, now: number)
  * held copy has lapsed, capped at the limit. A badge the wall does not list is kept — the wall
  * is only known on a profile, and every other screen has the equipped set alone.
  */
-export function wornBadges(equipped: readonly EquippedBadge[], held: readonly HeldBadge[], now: number): EquippedBadge[] {
+export function wornBadges(
+  equipped: readonly EquippedBadge[],
+  held: readonly HeldBadge[],
+  now: number,
+): EquippedBadge[] {
   const expiry = new Map(held.map((badge) => [badge.name, badge.expiresAt]));
   return equipped
     .filter((badge) => !isBadgeExpired(expiry.get(badge.badge_name) ?? null, now))
@@ -88,5 +99,7 @@ export function wornBadges(equipped: readonly EquippedBadge[], held: readonly He
 
 /** Two equipped sets name the same badges in the same order. */
 export function sameEquipped(a: readonly EquippedBadge[], b: readonly EquippedBadge[]): boolean {
-  return a.length === b.length && a.every((badge, index) => badge.badge_name === b[index]?.badge_name);
+  return (
+    a.length === b.length && a.every((badge, index) => badge.badge_name === b[index]?.badge_name)
+  );
 }

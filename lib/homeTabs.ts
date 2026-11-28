@@ -68,8 +68,11 @@ function isGalleryEntry(url: string | null | undefined): boolean {
   if (!url) return false;
   try {
     const parsed = new URL(url, window.location.origin);
-    return parsed.origin === window.location.origin && parsed.pathname === '/' &&
-      homeTabOf(parsed.search) === 'gallery';
+    return (
+      parsed.origin === window.location.origin &&
+      parsed.pathname === '/' &&
+      homeTabOf(parsed.search) === 'gallery'
+    );
   } catch {
     return false;
   }

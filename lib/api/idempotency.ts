@@ -20,7 +20,8 @@ export function createRetryKeys() {
       return {
         key,
         settle(error?: unknown) {
-          if (error !== undefined && !isDefiniteRefusal(error)) pending.set(scope, { body: text, key });
+          if (error !== undefined && !isDefiniteRefusal(error))
+            pending.set(scope, { body: text, key });
           else pending.delete(scope);
         },
       };
@@ -30,6 +31,7 @@ export function createRetryKeys() {
 
 /** A 4xx other than 408 / 429 is the backend's verdict: nothing was written. */
 export function isDefiniteRefusal(error: unknown): boolean {
-  if (!(error instanceof ApiError) || error.kind !== 'http' || error.status === undefined) return false;
+  if (!(error instanceof ApiError) || error.kind !== 'http' || error.status === undefined)
+    return false;
   return error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
 }

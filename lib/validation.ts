@@ -99,7 +99,10 @@ export function validatePrivacyPassword(value: string): string | null {
 }
 
 /** The second copy of a new password. */
-export function validatePasswordConfirmation(password: string, confirmation: string): string | null {
+export function validatePasswordConfirmation(
+  password: string,
+  confirmation: string,
+): string | null {
   if (!confirmation) return '请再次输入密码';
   if (confirmation !== password) return '两次输入的密码不一致';
   return null;
@@ -126,7 +129,8 @@ export function validateRequired(value: string, message: string): string | null 
 export function validateCode(value: string): string | null {
   const code = value.trim();
   if (!code) return '请输入验证码';
-  if (!new RegExp(`^\\d{${CODE_LENGTH}}$`).test(code)) return `请输入完整的 ${CODE_LENGTH} 位验证码`;
+  if (!new RegExp(`^\\d{${CODE_LENGTH}}$`).test(code))
+    return `请输入完整的 ${CODE_LENGTH} 位验证码`;
   return null;
 }
 

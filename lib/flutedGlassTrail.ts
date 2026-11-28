@@ -124,7 +124,8 @@ export class FlutedGlassTrail {
       this.advance(dt);
     }
     this.encode();
-    this.quiet = !this.depositing() && this.peakDensity < REST_DENSITY && this.peakVelocity < REST_VELOCITY;
+    this.quiet =
+      !this.depositing() && this.peakDensity < REST_DENSITY && this.peakVelocity < REST_VELOCITY;
     return true;
   }
 

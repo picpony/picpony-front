@@ -63,7 +63,9 @@ export default function FolderPicker({
     if (!folders || !index.data) return new Set<number>();
     const main = folders.find((folder) => folder.isMain)?.id;
     if (faved) {
-      const known = (index.data.folders[imageId] ?? []).filter((id) => folders.some((folder) => folder.id === id));
+      const known = (index.data.folders[imageId] ?? []).filter((id) =>
+        folders.some((folder) => folder.id === id),
+      );
       return new Set(known.length > 0 ? known : main !== undefined ? [main] : []);
     }
     const target = defaultFolder.id;
@@ -71,7 +73,8 @@ export default function FolderPicker({
   })();
   const checked = edited ?? initial;
   const clearing = faved && checked.size === 0;
-  const unchanged = !edited || (edited.size === initial.size && [...edited].every((id) => initial.has(id)));
+  const unchanged =
+    !edited || (edited.size === initial.size && [...edited].every((id) => initial.has(id)));
 
   const close = () => {
     if (busy || creating) return;
@@ -115,8 +118,12 @@ export default function FolderPicker({
         },
       });
     } else if (!faved) {
-      const names = folders.filter((folder) => checked.has(folder.id)).map((folder) => `「${folderLabel(folder)}」`);
-      showToast(names.length <= 2 ? `已收藏到${names.join('、')}` : `已收藏到 ${names.length} 个收藏夹`);
+      const names = folders
+        .filter((folder) => checked.has(folder.id))
+        .map((folder) => `「${folderLabel(folder)}」`);
+      showToast(
+        names.length <= 2 ? `已收藏到${names.join('、')}` : `已收藏到 ${names.length} 个收藏夹`,
+      );
     } else {
       showToast('已更新收藏夹');
     }
@@ -162,13 +169,28 @@ export default function FolderPicker({
         />
       ) : !ready || !folders ? (
         <>
-          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
-          <NewFolderRow token={token} disabled onBusyChange={setCreating} onCreated={(folder) => toggle(folder.id, true)} />
+          <PageLoadingIndicator
+            size="inline"
+            indicatorSize="md"
+            label="正在加载收藏夹…"
+            className="min-h-32"
+          />
+          <NewFolderRow
+            token={token}
+            disabled
+            onBusyChange={setCreating}
+            onCreated={(folder) => toggle(folder.id, true)}
+          />
         </>
       ) : (
         <>
           <FolderChecklist folders={folders} checked={checked} onChange={toggle} disabled={busy} />
-          <NewFolderRow token={token} disabled={busy} onBusyChange={setCreating} onCreated={(folder) => toggle(folder.id, true)} />
+          <NewFolderRow
+            token={token}
+            disabled={busy}
+            onBusyChange={setCreating}
+            onCreated={(folder) => toggle(folder.id, true)}
+          />
         </>
       )}
     </ChoiceSurface>

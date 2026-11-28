@@ -29,7 +29,9 @@ export const usersQuery = defineAdminQuery<AdminUsers>('users', async (token, si
 export type ReportStatus = adminApi.ReportStatus;
 export type Report = adminApi.AdminReport;
 
-export const reportsQuery = defineAdminQuery<Report[]>('reports', (token, signal) => adminApi.adminGetReports(token, signal));
+export const reportsQuery = defineAdminQuery<Report[]>('reports', (token, signal) =>
+  adminApi.adminGetReports(token, signal),
+);
 
 export interface SiteStatus {
   maintenanceMode: boolean;
@@ -40,13 +42,19 @@ export interface SiteStatus {
  * The maintenance switch, the console's one read of it (G2-019): 其他功能's switch and the overview
  * take its two fields. The failure carries no noun — each panel prints it under its own title.
  */
-export const siteStatusQuery: Resource<string, SiteStatus> = defineAdminQuery<SiteStatus>('site-status', async (token, signal): Promise<SiteStatus> => {
-  const data = await adminApi.getMaintenanceStatus(token, signal);
-  return { maintenanceMode: data.maintenance_mode, maintenanceMessage: data.maintenance_message };
-});
+export const siteStatusQuery: Resource<string, SiteStatus> = defineAdminQuery<SiteStatus>(
+  'site-status',
+  async (token, signal): Promise<SiteStatus> => {
+    const data = await adminApi.getMaintenanceStatus(token, signal);
+    return { maintenanceMode: data.maintenance_mode, maintenanceMessage: data.maintenance_message };
+  },
+);
 
 /**
  * Image translation as the console sees it (`GET /admin/translation`): 其他功能's switch and 数据维护's
  * queue counts, one read.
  */
-export const translationQuery: Resource<string, adminApi.AdminTranslation> = defineAdminQuery('translation', adminApi.adminGetTranslation);
+export const translationQuery: Resource<string, adminApi.AdminTranslation> = defineAdminQuery(
+  'translation',
+  adminApi.adminGetTranslation,
+);

@@ -1,6 +1,13 @@
 'use client';
 
-import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import EmptyState from '@/components/EmptyState';
 import Skeleton from '@/components/Skeleton';
 import SwapContent from '@/components/SwapContent';
@@ -84,7 +91,8 @@ function tickIndexes(count: number, limit: number): number[] {
   for (let index = 0; index < count; index += stride) indexes.push(index);
   const last = indexes[indexes.length - 1];
   if (last !== count - 1) {
-    if (count - 1 - last <= stride * 0.75 && indexes.length > 1) indexes[indexes.length - 1] = count - 1;
+    if (count - 1 - last <= stride * 0.75 && indexes.length > 1)
+      indexes[indexes.length - 1] = count - 1;
     else indexes.push(count - 1);
   }
   return indexes;
@@ -94,7 +102,11 @@ const subscribeNothing = () => () => {};
 const onClient = () => true;
 const onServer = () => false;
 
-function StatSeriesPaint({ dataKey, active, children }: {
+function StatSeriesPaint({
+  dataKey,
+  active,
+  children,
+}: {
   dataKey: string;
   active: boolean;
   children: ReactNode;
@@ -102,7 +114,10 @@ function StatSeriesPaint({ dataKey, active, children }: {
   const groupRef = useRef<SVGGElement>(null);
   const clientMounted = useSyncExternalStore(subscribeNothing, onClient, onServer);
   const canEnter = useRef(clientMounted);
-  const [event, setEvent] = useState({ key: dataKey, category: 'entrance' as 'entrance' | 'feedback' });
+  const [event, setEvent] = useState({
+    key: dataKey,
+    category: 'entrance' as 'entrance' | 'feedback',
+  });
   if (event.key !== dataKey) setEvent({ key: dataKey, category: 'feedback' });
   const pending = useRef({ event, value: true });
   const previousMode = useRef<string | null>(null);
@@ -117,12 +132,14 @@ function StatSeriesPaint({ dataKey, active, children }: {
     const changed = pending.current.event !== event;
     const mode = `${active}:${tier}:${scale}`;
     if (changed) pending.current = { event, value: true };
-    else if (previousMode.current !== null && previousMode.current !== mode) pending.current.value = false;
+    else if (previousMode.current !== null && previousMode.current !== mode)
+      pending.current.value = false;
     previousMode.current = mode;
     const current = pending.current;
     const group = groupRef.current;
     const plot = group?.ownerSVGElement?.parentElement;
-    const blockedEntrance = event.category === 'entrance' &&
+    const blockedEntrance =
+      event.category === 'entrance' &&
       (!canEnter.current || !entranceMotion() || (plot && routeTransitActive(plot)));
     if (!group || !active || group.closest('[inert]') || tier === 'off' || blockedEntrance) {
       current.value = false;
@@ -132,23 +149,39 @@ function StatSeriesPaint({ dataKey, active, children }: {
 
     // Percent-based clips follow resizing without restarting. Hydration is not an entrance;
     // StrictMode's setup/cleanup/setup may replay an unfinished event before its first paint.
-    const frames = tier === 'standard'
-      ? [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }]
-      : [{ opacity: 0 }, { opacity: 1 }];
+    const frames =
+      tier === 'standard'
+        ? [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }]
+        : [{ opacity: 0 }, { opacity: 1 }];
     const animation = group.animate(frames, {
       ...springTiming('defaultEffects', event.category),
       delay: event.category === 'feedback' ? scaledMs(HANDOFF_MS, 'feedback') : 0,
       fill: 'backwards',
     });
-    animation.onfinish = () => { current.value = false; };
-    return () => { animation.cancel(); };
+    animation.onfinish = () => {
+      current.value = false;
+    };
+    return () => {
+      animation.cancel();
+    };
   }, [event, active, tier, scale]);
 
-  return <g ref={groupRef} data-stat-series="">{children}</g>;
+  return (
+    <g ref={groupRef} data-stat-series="">
+      {children}
+    </g>
+  );
 }
 
 export default function StatChart({
-  series, buckets, overviewLabel, detailQualifier, ariaLabel, loading = false, active: isActive = true, className = '',
+  series,
+  buckets,
+  overviewLabel,
+  detailQualifier,
+  ariaLabel,
+  loading = false,
+  active: isActive = true,
+  className = '',
 }: StatChartProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
@@ -167,14 +200,20 @@ export default function StatChart({
   const yTicks = [0, step, step * 2, step * 3, step * 4];
   const xTicks = tickIndexes(count, Math.min(7, Math.max(2, Math.floor(plotWidth / 72))));
   // Never carry a hovered bucket into another view or revive it on returning to a tab.
-  const valid = selection && isActive && !loading && selection.key === contentKey && selection.index < count;
+  const valid =
+    selection && isActive && !loading && selection.key === contentKey && selection.index < count;
   if (selection && !valid) setSelection(null);
   const active = valid ? selection.index : null;
   const bucket = active === null ? null : buckets[active];
-  const pointX = (index: number) => PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
-  const linePath = (item: ChartSeries) => item.values.map((value, index) =>
-    `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`,
-  ).join(' ');
+  const pointX = (index: number) =>
+    PAD.left + (count <= 1 ? plotWidth / 2 : (index / (count - 1)) * plotWidth);
+  const linePath = (item: ChartSeries) =>
+    item.values
+      .map(
+        (value, index) =>
+          `${index === 0 ? 'M' : 'L'}${pointX(index).toFixed(1)},${pointY(value, max).toFixed(1)}`,
+      )
+      .join(' ');
 
   // Keep axis type at CSS-pixel size without forcing layout in concealed tab panes.
   useLayoutEffect(() => {
@@ -182,7 +221,7 @@ export default function StatChart({
     if (!plot || !isActive) return;
     const measure = (pixels: number) => {
       const next = Math.round(pixels);
-      if (next > 0) setWidth((current) => current === next ? current : next);
+      if (next > 0) setWidth((current) => (current === next ? current : next));
     };
     measure(plot.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => measure(entry.contentRect.width));
@@ -192,7 +231,8 @@ export default function StatChart({
 
   function inspect(index: number, source: Inspection['source'], toggle = false) {
     setSelection((current) => {
-      if (current?.key === contentKey && current.index === index && current.source === source) return toggle ? null : current;
+      if (current?.key === contentKey && current.index === index && current.source === source)
+        return toggle ? null : current;
       return { key: contentKey, index, source };
     });
   }
@@ -217,19 +257,38 @@ export default function StatChart({
         >
           <p className="text-label-m text-on-surface-variant tabular-nums">
             {bucket ? (
-              <><time dateTime={bucket.key}>{bucket.detail}</time>{detailQualifier && ` · ${detailQualifier}`}</>
-            ) : overviewLabel}
+              <>
+                <time dateTime={bucket.key}>{bucket.detail}</time>
+                {detailQualifier && ` · ${detailQualifier}`}
+              </>
+            ) : (
+              overviewLabel
+            )}
           </p>
-          <dl className={cn(
-            'mt-2 grid gap-x-4 gap-y-2',
-            series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
-          )}>
+          <dl
+            className={cn(
+              'mt-2 grid gap-x-4 gap-y-2',
+              series.length > 2
+                ? 'grid-cols-2 @lg:grid-cols-4'
+                : series.length === 2 && 'grid-cols-2',
+            )}
+          >
             {series.map((item, seriesIndex) => {
-              const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
+              const dash =
+                series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
               return (
                 <div key={item.key} className="min-w-0">
                   <dt className="text-label-m text-on-surface-variant flex items-center gap-2">
-                    <svg width={18} height={6} viewBox="0 0 18 6" className={cn('shrink-0 forced-colors:text-[color:CanvasText]', TONE[item.tone])} aria-hidden="true">
+                    <svg
+                      width={18}
+                      height={6}
+                      viewBox="0 0 18 6"
+                      className={cn(
+                        'shrink-0 forced-colors:text-[color:CanvasText]',
+                        TONE[item.tone],
+                      )}
+                      aria-hidden="true"
+                    >
                       <line
                         x1={1}
                         x2={17}
@@ -254,10 +313,14 @@ export default function StatChart({
       ) : loading ? (
         <div aria-hidden="true" className="mb-4 border-b border-outline-variant pb-3">
           <Skeleton className="h-4 w-24" />
-          <div className={cn(
-            'mt-2 grid gap-x-4 gap-y-2',
-            series.length > 2 ? 'grid-cols-2 @lg:grid-cols-4' : series.length === 2 && 'grid-cols-2',
-          )}>
+          <div
+            className={cn(
+              'mt-2 grid gap-x-4 gap-y-2',
+              series.length > 2
+                ? 'grid-cols-2 @lg:grid-cols-4'
+                : series.length === 2 && 'grid-cols-2',
+            )}
+          >
             {(series.length > 0 ? series : [{ key: 'placeholder' }]).map((item, idx) => (
               <div key={item.key} className="min-w-0">
                 <Skeleton className="h-4 w-16" delay={idx * 40} />
@@ -280,10 +343,13 @@ export default function StatChart({
                 if (event.pointerType !== 'touch') selectAt(event.clientX, 'hover');
               }}
               onPointerDown={(event) => {
-                if (event.isPrimary && event.button === 0) selectAt(event.clientX, 'select', event.pointerType === 'touch');
+                if (event.isPrimary && event.button === 0)
+                  selectAt(event.clientX, 'select', event.pointerType === 'touch');
               }}
               onPointerCancel={() => setSelection(null)}
-              onPointerLeave={() => setSelection((current) => current?.source === 'hover' ? null : current)}
+              onPointerLeave={() =>
+                setSelection((current) => (current?.source === 'hover' ? null : current))
+              }
               onFocus={() => setFocused(true)}
               onBlur={() => {
                 setFocused(false);
@@ -298,8 +364,10 @@ export default function StatChart({
                 }
                 if (loading) return;
                 let next: number;
-                if (event.key === 'ArrowLeft') next = active === null ? count - 1 : Math.max(0, active - 1);
-                else if (event.key === 'ArrowRight') next = active === null ? 0 : Math.min(count - 1, active + 1);
+                if (event.key === 'ArrowLeft')
+                  next = active === null ? count - 1 : Math.max(0, active - 1);
+                else if (event.key === 'ArrowRight')
+                  next = active === null ? 0 : Math.min(count - 1, active + 1);
                 else if (event.key === 'Home') next = 0;
                 else if (event.key === 'End') next = count - 1;
                 else return;
@@ -307,11 +375,27 @@ export default function StatChart({
                 inspect(next, 'select');
               }}
             >
-              <svg viewBox={`0 0 ${width} ${HEIGHT}`} className="h-60 w-full" focusable="false" aria-hidden="true">
+              <svg
+                viewBox={`0 0 ${width} ${HEIGHT}`}
+                className="h-60 w-full"
+                focusable="false"
+                aria-hidden="true"
+              >
                 {series.length === 1 && (
                   <defs>
-                    <linearGradient id={areaGradId} x1="0" y1="0" x2="0" y2="1" className={TONE[series[0].tone]}>
-                      <stop offset="0%" stopColor="currentColor" style={{ stopOpacity: 'var(--md-sys-chart-area-opacity)' }} />
+                    <linearGradient
+                      id={areaGradId}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                      className={TONE[series[0].tone]}
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="currentColor"
+                        style={{ stopOpacity: 'var(--md-sys-chart-area-opacity)' }}
+                      />
                       <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
                     </linearGradient>
                   </defs>
@@ -332,14 +416,27 @@ export default function StatChart({
                         vectorEffect="non-scaling-stroke"
                         className={baseline ? 'text-outline' : 'text-outline-variant'}
                       />
-                      <text x={PAD.left - 8} y={y + 4} textAnchor="end" fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
+                      <text
+                        x={PAD.left - 8}
+                        y={y + 4}
+                        textAnchor="end"
+                        fill="currentColor"
+                        className="text-label-s text-on-surface-variant tabular-nums"
+                      >
                         {axisValue(value)}
                       </text>
                     </g>
                   );
                 })}
                 {xTicks.map((index) => (
-                  <text key={index} x={pointX(index)} y={HEIGHT - 8} textAnchor={index === 0 ? 'start' : index === count - 1 ? 'end' : 'middle'} fill="currentColor" className="text-label-s text-on-surface-variant tabular-nums">
+                  <text
+                    key={index}
+                    x={pointX(index)}
+                    y={HEIGHT - 8}
+                    textAnchor={index === 0 ? 'start' : index === count - 1 ? 'end' : 'middle'}
+                    fill="currentColor"
+                    className="text-label-s text-on-surface-variant tabular-nums"
+                  >
                     {buckets[index].tick}
                   </text>
                 ))}
@@ -355,7 +452,8 @@ export default function StatChart({
                     const path = linePath(item);
                     const lastX = pointX(count - 1);
                     const lastY = pointY(item.values[count - 1] ?? 0, max);
-                    const dash = series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
+                    const dash =
+                      series.length > 1 ? SERIES_DASH[seriesIndex % SERIES_DASH.length] : undefined;
                     return (
                       <g key={item.key} className={TONE[item.tone]}>
                         <path
@@ -375,11 +473,31 @@ export default function StatChart({
                 </StatSeriesPaint>
                 {active !== null && (
                   <>
-                    <line x1={pointX(active)} x2={pointX(active)} y1={PAD.top} y2={HEIGHT - PAD.bottom} stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" className="text-outline" />
+                    <line
+                      x1={pointX(active)}
+                      x2={pointX(active)}
+                      y1={PAD.top}
+                      y2={HEIGHT - PAD.bottom}
+                      stroke="currentColor"
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                      className="text-outline"
+                    />
                     {series.map((item) => (
                       <g key={item.key} className={TONE[item.tone]}>
-                        <circle cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={7} fill="currentColor" style={{ fillOpacity: 'var(--md-sys-chart-halo-opacity)' }} />
-                        <circle cx={pointX(active)} cy={pointY(item.values[active] ?? 0, max)} r={3.5} fill="currentColor" />
+                        <circle
+                          cx={pointX(active)}
+                          cy={pointY(item.values[active] ?? 0, max)}
+                          r={7}
+                          fill="currentColor"
+                          style={{ fillOpacity: 'var(--md-sys-chart-halo-opacity)' }}
+                        />
+                        <circle
+                          cx={pointX(active)}
+                          cy={pointY(item.values[active] ?? 0, max)}
+                          r={3.5}
+                          fill="currentColor"
+                        />
                       </g>
                     ))}
                   </>
@@ -397,12 +515,19 @@ export default function StatChart({
             <Skeleton className="h-60 w-full rounded-sm" />
           ) : (
             <div className="flex h-60 items-center justify-center">
-              <EmptyState size="inline" title="此时间范围暂无数据" description="请选择其他日期范围" entrance={false} />
+              <EmptyState
+                size="inline"
+                title="此时间范围暂无数据"
+                description="请选择其他日期范围"
+                entrance={false}
+              />
             </div>
           )}
         </SwapContent>
       </div>
-      <p id={hintId} className="sr-only">使用左右方向键查看各时段的数据，Home 和 End 跳至首尾，Esc 返回汇总。</p>
+      <p id={hintId} className="sr-only">
+        使用左右方向键查看各时段的数据，Home 和 End 跳至首尾，Esc 返回汇总。
+      </p>
     </figure>
   );
 }

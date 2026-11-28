@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { MdPerson, MdShield } from '@/components/icons/shell';
 import { MdEdit, MdImage, MdLock } from '@/components/icons/common';
-import { MdLink, MdLinkOff, MdMarkEmailRead, MdPhotoCamera, MdVerifiedUser } from '@/components/icons/settings';
+import {
+  MdLink,
+  MdLinkOff,
+  MdMarkEmailRead,
+  MdPhotoCamera,
+  MdVerifiedUser,
+} from '@/components/icons/settings';
 import Avatar from '@/components/Avatar';
 import Badge from '@/components/Badge';
 import ErrorRetry from '@/components/ErrorRetry';
@@ -34,7 +40,14 @@ import PasswordDialog from './PasswordDialog';
 import ProfileDialog, { profileOf } from './ProfileDialog';
 import UsernameDialog from './UsernameDialog';
 import { RowButton, SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
-import { emailVerified, pendingEmailChange, saveAccountFields, text, useAccount, type Account } from './useAccount';
+import {
+  emailVerified,
+  pendingEmailChange,
+  saveAccountFields,
+  text,
+  useAccount,
+  type Account,
+} from './useAccount';
 import AssistantSettings from '@/components/assistant/AssistantSettings';
 
 type DialogKind = 'username' | 'password' | 'email' | 'profile' | 'apikey';
@@ -50,14 +63,16 @@ function credentialFields(credential: UpstreamCredential): Record<string, unknow
   const verified = identity.status === 'verified' && identity.id !== null;
   return {
     derpi_user_id: verified ? String(identity.id) : '',
-    derpi_username: verified ? identity.name ?? '' : '',
+    derpi_username: verified ? (identity.name ?? '') : '',
     ...(credential.has_key ? {} : { api_key: '' }),
   };
 }
 
 /** `abcd••••••••wxyz` — the key's ends, enough to recognise it, never the whole. */
 function maskKey(key: string): string {
-  return key.length > 8 ? `${key.slice(0, 4)}${'•'.repeat(8)}${key.slice(-4)}` : '•'.repeat(key.length);
+  return key.length > 8
+    ? `${key.slice(0, 4)}${'•'.repeat(8)}${key.slice(-4)}`
+    : '•'.repeat(key.length);
 }
 
 /**
@@ -112,7 +127,7 @@ function AccountSections({ account }: { account: Account }) {
   const bound = credential ? credential.has_key : apiKey !== '';
   const identified = credential?.identity.status === 'verified';
   const derpiName = credential?.identity.name ?? '';
-  const keyLabel = apiKey ? maskKey(apiKey) : credential?.key_hint ?? '';
+  const keyLabel = apiKey ? maskKey(apiKey) : (credential?.key_hint ?? '');
   const profile = profileOf(record);
   /* A field the stored session does not hold is unknown until the read answers — shown as a
      placeholder while it loads and as unreadable if it failed, never as "not set". */
@@ -120,14 +135,19 @@ function AccountSections({ account }: { account: Account }) {
   const unknown = (field: string) => !has(field) && status !== 'ready';
   /* A placeholder on screen marks the pane as loading: the tab switch then slides it as one
      plane rather than leaning rows whose values are about to land, and the footer waits. */
-  const reading = (status === 'loading' && ['username', 'bio', 'email'].some((field) => !has(field))) ||
+  const reading =
+    (status === 'loading' && ['username', 'bio', 'email'].some((field) => !has(field))) ||
     (credential === null && credentialError === null);
 
   /* Each dialog mounts on its first opening and remounts on every later one — the remount is its
      reset — and stays mounted through its exit animation. */
   const [open, setOpen] = useState<DialogKind | null>(null);
   const [opens, setOpens] = useState<Record<DialogKind, number>>({
-    username: 0, password: 0, email: 0, profile: 0, apikey: 0,
+    username: 0,
+    password: 0,
+    email: 0,
+    profile: 0,
+    apikey: 0,
   });
   const [emailStep, setEmailStep] = useState<EmailStep>('change');
   const emailAction = useRef<HTMLButtonElement>(null);
@@ -138,7 +158,11 @@ function AccountSections({ account }: { account: Account }) {
      to the row's remaining action instead of falling to the page. A dialog's handoff is settled
      when it closes (its opener still there: the overlay's own return stands); 解除绑定's when the
      request ends, and only if nothing else has taken the focus meanwhile. */
-  const handoff = useRef<{ from: Element | null; to: RefObject<HTMLButtonElement | null>; dialog: boolean } | null>(null);
+  const handoff = useRef<{
+    from: Element | null;
+    to: RefObject<HTMLButtonElement | null>;
+    dialog: boolean;
+  } | null>(null);
   useEffect(() => {
     const pending = handoff.current;
     if (!pending || (pending.dialog && open !== null)) return;
@@ -147,7 +171,8 @@ function AccountSections({ account }: { account: Account }) {
       return;
     }
     handoff.current = null;
-    if (pending.dialog || document.activeElement === document.body) pending.to.current?.focus({ preventScroll: true });
+    if (pending.dialog || document.activeElement === document.body)
+      pending.to.current?.focus({ preventScroll: true });
   });
   const show = (kind: DialogKind) => {
     const to = kind === 'email' ? emailAction : kind === 'apikey' ? keyAction : null;
@@ -182,9 +207,13 @@ function AccountSections({ account }: { account: Account }) {
   const upload = (kind: 'avatar' | 'banner') => async (blob: Blob) => {
     if (uploading) return;
     setUploading(kind);
-    const file = new File([blob], `${kind}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type });
+    const file = new File([blob], `${kind}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, {
+      type: blob.type,
+    });
     try {
-      const data = await (kind === 'avatar' ? uploadAvatar(token, file) : uploadBanner(token, file));
+      const data = await (kind === 'avatar'
+        ? uploadAvatar(token, file)
+        : uploadBanner(token, file));
       if (readToken() !== token) return;
       saveAccountFields(token, { [kind]: data.url });
       if (kind === 'avatar') setAvatarPick(null);
@@ -192,7 +221,10 @@ function AccountSections({ account }: { account: Account }) {
       showToast(kind === 'avatar' ? '已更换头像' : '已更换横幅', 'success');
     } catch (error) {
       if (readToken() === token) {
-        showToast(apiErrorMessage(error, kind === 'avatar' ? '头像上传失败' : '横幅上传失败'), 'error');
+        showToast(
+          apiErrorMessage(error, kind === 'avatar' ? '头像上传失败' : '横幅上传失败'),
+          'error',
+        );
       }
     } finally {
       setUploading(null);
@@ -214,8 +246,10 @@ function AccountSections({ account }: { account: Account }) {
       const next = await verifyUpstreamCredential(token, credential.revision);
       if (readToken() !== token) return;
       adoptCredential(next);
-      if (next.identity.status === 'verified') showToast(`已核验，Derpibooru 账号为 ${next.identity.name}`, 'success');
-      else if (next.identity.status === 'no_activity') showToast('该账号暂无上传或评论，无法确认 Derpibooru 用户名', 'info');
+      if (next.identity.status === 'verified')
+        showToast(`已核验，Derpibooru 账号为 ${next.identity.name}`, 'success');
+      else if (next.identity.status === 'no_activity')
+        showToast('该账号暂无上传或评论，无法确认 Derpibooru 用户名', 'info');
       else showToast('该 API Key 已失效或没有访问权限，请重新绑定', 'error');
     } catch (error) {
       credentialFailed(error, '核验失败');
@@ -337,7 +371,13 @@ function AccountSections({ account }: { account: Account }) {
           label="用户名"
           supporting={unknown('username') ? placeholder : username || unreadable}
           action={
-            <RowButton label="修改用户名" icon={<MdEdit />} onClick={() => show('username')} disabled={!username} collapse={false}>
+            <RowButton
+              label="修改用户名"
+              icon={<MdEdit />}
+              onClick={() => show('username')}
+              disabled={!username}
+              collapse={false}
+            >
               修改
             </RowButton>
           }
@@ -345,12 +385,19 @@ function AccountSections({ account }: { account: Account }) {
         <SettingsRow
           label="个人资料"
           supporting={
-            unknown('bio') ? placeholder : (
+            unknown('bio') ? (
+              placeholder
+            ) : (
               <span className="line-clamp-1">{profile.bio || '简介、性别、生日与种族'}</span>
             )
           }
           action={
-            <RowButton label="编辑个人资料" icon={<MdEdit />} onClick={() => show('profile')} collapse={false}>
+            <RowButton
+              label="编辑个人资料"
+              icon={<MdEdit />}
+              onClick={() => show('profile')}
+              collapse={false}
+            >
               编辑
             </RowButton>
           }
@@ -362,7 +409,12 @@ function AccountSections({ account }: { account: Account }) {
           label="密码"
           supporting="修改后需要重新登录"
           action={
-            <RowButton label="修改密码" icon={<MdEdit />} onClick={() => show('password')} collapse={false}>
+            <RowButton
+              label="修改密码"
+              icon={<MdEdit />}
+              onClick={() => show('password')}
+              collapse={false}
+            >
               修改
             </RowButton>
           }
@@ -494,19 +546,28 @@ function AccountSections({ account }: { account: Account }) {
         />
       </SettingsSection>
 
-      <SettingsSection
-        title="隐私"
-        icon={<MdShield size={ICON.control} />}
-      >
-        <SwitchRow label="公开我的上传" checked={showUploads} onChange={(v) => changeSyncedSetting('showUploads', v)} />
+      <SettingsSection title="隐私" icon={<MdShield size={ICON.control} />}>
+        <SwitchRow
+          label="公开我的上传"
+          checked={showUploads}
+          onChange={(v) => changeSyncedSetting('showUploads', v)}
+        />
         <SwitchRow
           label="公开我的收藏"
           description="仅在开启后于个人主页显示公开收藏夹"
           checked={showFaves}
           onChange={(v) => changeSyncedSetting('showFaves', v)}
         />
-        <SwitchRow label="公开我的帖子" checked={showPosts} onChange={(v) => changeSyncedSetting('showPosts', v)} />
-        <SwitchRow label="公开我的评论" checked={showComments} onChange={(v) => changeSyncedSetting('showComments', v)} />
+        <SwitchRow
+          label="公开我的帖子"
+          checked={showPosts}
+          onChange={(v) => changeSyncedSetting('showPosts', v)}
+        />
+        <SwitchRow
+          label="公开我的评论"
+          checked={showComments}
+          onChange={(v) => changeSyncedSetting('showComments', v)}
+        />
         <SwitchRow
           label="隐藏 IP 属地"
           checked={hideIpLocation}
@@ -540,10 +601,22 @@ function AccountSections({ account }: { account: Account }) {
       />
 
       {opens.username > 0 && (
-        <UsernameDialog key={opens.username} open={open === 'username'} token={token} current={username} onClose={closeDialog} />
+        <UsernameDialog
+          key={opens.username}
+          open={open === 'username'}
+          token={token}
+          current={username}
+          onClose={closeDialog}
+        />
       )}
       {opens.password > 0 && (
-        <PasswordDialog key={opens.password} open={open === 'password'} token={token} username={username} onClose={closeDialog} />
+        <PasswordDialog
+          key={opens.password}
+          open={open === 'password'}
+          token={token}
+          username={username}
+          onClose={closeDialog}
+        />
       )}
       {opens.email > 0 && (
         <EmailDialog
@@ -556,7 +629,13 @@ function AccountSections({ account }: { account: Account }) {
         />
       )}
       {opens.profile > 0 && (
-        <ProfileDialog key={opens.profile} open={open === 'profile'} token={token} saved={profile} onClose={closeDialog} />
+        <ProfileDialog
+          key={opens.profile}
+          open={open === 'profile'}
+          token={token}
+          saved={profile}
+          onClose={closeDialog}
+        />
       )}
       {opens.apikey > 0 && (
         <ApiKeyDialog

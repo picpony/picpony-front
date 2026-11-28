@@ -7,17 +7,25 @@ import ts from 'typescript';
 
 function load(file, dependencies = {}, globals = {}) {
   const source = ts.transpileModule(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, {
-    exports,
-    require(name) {
-      assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
-      return dependencies[name];
+  vm.runInNewContext(
+    source,
+    {
+      exports,
+      require(name) {
+        assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
+        return dependencies[name];
+      },
+      ...globals,
     },
-    ...globals,
-  }, { filename: file });
+    { filename: file },
+  );
   return exports;
 }
 
@@ -26,14 +34,25 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 // A picture opened without a hero flight still remembers its original list after visiting
 // another route. The shell must not reinterpret the route just left as the picture's source.
 test('plain detail origins follow history entries across a visit to another page', () => {
-  const window = { location: { pathname: '/pic/7', search: '' }, history: { state: { tree: ['search', 'q=pony'] } },
-    navigation: { currentEntry: { key: 'picture-a' } } };
-  const memory = load('lib/detailBackground.ts', { '@/lib/historyLayers': { isHistoryLayerState: s => Boolean(s?.layer) } }, { window });
+  const window = {
+    location: { pathname: '/pic/7', search: '' },
+    history: { state: { tree: ['search', 'q=pony'] } },
+    navigation: { currentEntry: { key: 'picture-a' } },
+  };
+  const memory = load(
+    'lib/detailBackground.ts',
+    { '@/lib/historyLayers': { isHistoryLayerState: (s) => Boolean(s?.layer) } },
+    { window },
+  );
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=pony&page=3' });
   window.location.pathname = '/admin';
   window.navigation.currentEntry.key = 'admin';
   memory.rememberDetailBackground('/pic/7', { pathname: '/admin', search: '' });
-  assert.equal(memory.readDetailBackground('/pic/7'), null, 'a pending old render cannot name a new entry');
+  assert.equal(
+    memory.readDetailBackground('/pic/7'),
+    null,
+    'a pending old render cannot name a new entry',
+  );
   window.location.pathname = '/pic/7';
   window.navigation.currentEntry.key = 'picture-a';
   window.history.state = { tree: ['search', 'q=pony'], replaced: true };
@@ -48,8 +67,15 @@ test('plain detail origins follow history entries across a visit to another page
 });
 
 test('without Navigation API, opaque restored state separates one picture opened from two queries', () => {
-  const window = { location: { pathname: '/pic/7', search: '' }, history: { state: { tree: ['search', { q: 'first' }] } } };
-  const memory = load('lib/detailBackground.ts', { '@/lib/historyLayers': { isHistoryLayerState: s => Boolean(s?.layer) } }, { window });
+  const window = {
+    location: { pathname: '/pic/7', search: '' },
+    history: { state: { tree: ['search', { q: 'first' }] } },
+  };
+  const memory = load(
+    'lib/detailBackground.ts',
+    { '@/lib/historyLayers': { isHistoryLayerState: (s) => Boolean(s?.layer) } },
+    { window },
+  );
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=first' });
   window.history.state = { tree: ['search', { q: 'second' }] };
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=second' });
@@ -58,26 +84,85 @@ test('without Navigation API, opaque restored state separates one picture opened
   assert.equal(memory.readDetailBackground('/pic/7').search, 'q=first');
   window.history.state = { layer: true, tree: ['search', { q: 'first' }] };
   memory.rememberDetailBackground('/pic/7', { pathname: '/admin', search: '' });
-  assert.equal(memory.readDetailBackground('/pic/7'), null, 'modal entries have no origin of their own');
+  assert.equal(
+    memory.readDetailBackground('/pic/7'),
+    null,
+    'modal entries have no origin of their own',
+  );
   window.history.state = { tree: ['search', { q: 'first' }] };
   assert.equal(memory.readDetailBackground('/pic/7').search, 'q=first');
 });
 
 test('server rendering never reads or records another browser document’s detail origin', () => {
-  const memory = load('lib/detailBackground.ts', { '@/lib/historyLayers': { isHistoryLayerState: () => false } });
+  const memory = load('lib/detailBackground.ts', {
+    '@/lib/historyLayers': { isHistoryLayerState: () => false },
+  });
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=private' });
   assert.equal(memory.readDetailBackground('/pic/7'), null);
 });
 
 test('Next restored-tree refresh hints cannot change a no-Navigation-API detail origin', () => {
-  const state = (query, restored = false) => ({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: {
-    tree: ['', {
-      children: ['search', { children: [`__PAGE__?${JSON.stringify({ q: query })}`, {}, restored ? [`/search?q=${query}`, `?q=${query}`] : null, null, 4096] }, null, null, 4096],
-      imageDetail: ['(__SLOT__)', { children: ['(.)pic', { children: [['id', '7', 'd', []], { children: ['__PAGE__', {}, null, null, 4096] }, null, null, 4096] }, null, null, 4096] }, null, null, 4096],
-    }, null, null, restored ? 4116 : 4096], renderedSearch: '',
-  } });
-  const window = { location: { pathname: '/pic/7', search: '' }, history: { state: state('first') } };
-  const memory = load('lib/detailBackground.ts', { '@/lib/historyLayers': { isHistoryLayerState: () => false } }, { window });
+  const state = (query, restored = false) => ({
+    __NA: true,
+    __PRIVATE_NEXTJS_INTERNALS_TREE: {
+      tree: [
+        '',
+        {
+          children: [
+            'search',
+            {
+              children: [
+                `__PAGE__?${JSON.stringify({ q: query })}`,
+                {},
+                restored ? [`/search?q=${query}`, `?q=${query}`] : null,
+                null,
+                4096,
+              ],
+            },
+            null,
+            null,
+            4096,
+          ],
+          imageDetail: [
+            '(__SLOT__)',
+            {
+              children: [
+                '(.)pic',
+                {
+                  children: [
+                    ['id', '7', 'd', []],
+                    { children: ['__PAGE__', {}, null, null, 4096] },
+                    null,
+                    null,
+                    4096,
+                  ],
+                },
+                null,
+                null,
+                4096,
+              ],
+            },
+            null,
+            null,
+            4096,
+          ],
+        },
+        null,
+        null,
+        restored ? 4116 : 4096,
+      ],
+      renderedSearch: '',
+    },
+  });
+  const window = {
+    location: { pathname: '/pic/7', search: '' },
+    history: { state: state('first') },
+  };
+  const memory = load(
+    'lib/detailBackground.ts',
+    { '@/lib/historyLayers': { isHistoryLayerState: () => false } },
+    { window },
+  );
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=first' });
   window.history.state = state('second');
   memory.rememberDetailBackground('/pic/7', { pathname: '/search', search: 'q=second' });
@@ -90,7 +175,11 @@ test('Next restored-tree refresh hints cannot change a no-Navigation-API detail 
 // --- lib/masonry.ts -----------------------------------------------------------------------
 
 test('masonry places every card for all three column counts, shortest column first', () => {
-  const { masonryLayout, MASONRY_COLUMN_COUNTS } = load('lib/masonry.ts', { '@/lib/utils': { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) } }, { queueMicrotask });
+  const { masonryLayout, MASONRY_COLUMN_COUNTS } = load(
+    'lib/masonry.ts',
+    { '@/lib/utils': { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) } },
+    { queueMicrotask },
+  );
   assert.deepEqual([...MASONRY_COLUMN_COUNTS], [2, 3, 4]);
   // Aspect ratios (height / width): 1, 2, 0.5, 1, 1.5
   const items = [
@@ -104,16 +193,28 @@ test('masonry places every card for all three column counts, shortest column fir
   assert.equal(placed.length, items.length);
 
   // Two columns: 0→c0, 1→c1, 2→c0 (1 < 2), 3→c0 (1.5 < 2), 4→c1 (2 < 2.5).
-  assert.deepEqual(placed.map((p) => p['--mc2']), ['0', '1', '0', '0', '1']);
-  assert.deepEqual(placed.map((p) => p['--ma2']), ['0', '0', '1', '1.5', '2']);
-  assert.deepEqual(placed.map((p) => p['--mk2']), ['0', '0', '1', '2', '1']);
+  assert.deepEqual(
+    placed.map((p) => p['--mc2']),
+    ['0', '1', '0', '0', '1'],
+  );
+  assert.deepEqual(
+    placed.map((p) => p['--ma2']),
+    ['0', '0', '1', '1.5', '2'],
+  );
+  assert.deepEqual(
+    placed.map((p) => p['--mk2']),
+    ['0', '0', '1', '2', '1'],
+  );
   assert.equal(
     grid['--mh2'],
     'max(calc(2.5 * var(--masonry-w) + 2 * var(--masonry-gap)), calc(3.5 * var(--masonry-w) + 1 * var(--masonry-gap)))',
   );
 
   // Four columns: the first four take one column each (ties go left), the fifth the shortest.
-  assert.deepEqual(placed.map((p) => p['--mc4']), ['0', '1', '2', '3', '2']);
+  assert.deepEqual(
+    placed.map((p) => p['--mc4']),
+    ['0', '1', '2', '3', '2'],
+  );
   assert.equal(placed[4]['--ma4'], '0.5');
   assert.equal(placed[4]['--mk4'], '1');
 
@@ -122,10 +223,20 @@ test('masonry places every card for all three column counts, shortest column fir
 });
 
 test('masonry treats a card without dimensions as square and an empty grid as zero height', () => {
-  const { masonryLayout } = load('lib/masonry.ts', { '@/lib/utils': { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) } }, { queueMicrotask });
+  const { masonryLayout } = load(
+    'lib/masonry.ts',
+    { '@/lib/utils': { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) } },
+    { queueMicrotask },
+  );
   const { grid, items } = masonryLayout([{}, { width: 0, height: 0 }]);
-  assert.deepEqual(items.map((p) => p['--mc2']), ['0', '1']);
-  assert.equal(grid['--mh3'], 'max(calc(1 * var(--masonry-w) + 0 * var(--masonry-gap)), calc(1 * var(--masonry-w) + 0 * var(--masonry-gap)))');
+  assert.deepEqual(
+    items.map((p) => p['--mc2']),
+    ['0', '1'],
+  );
+  assert.equal(
+    grid['--mh3'],
+    'max(calc(1 * var(--masonry-w) + 0 * var(--masonry-gap)), calc(1 * var(--masonry-w) + 0 * var(--masonry-gap)))',
+  );
   assert.equal(masonryLayout([]).grid['--mh2'], '0px');
   const one = masonryLayout([{ width: 100, height: 50 }]);
   assert.equal(one.grid['--mh4'], 'calc(0.5 * var(--masonry-w) + 0 * var(--masonry-gap))');
@@ -140,11 +251,17 @@ function fakeBrowser(entries, index) {
   const origin = 'http://app.test';
   const location = {
     origin,
-    get pathname() { return new URL(list[index].url, origin).pathname; },
-    get search() { return new URL(list[index].url, origin).search; },
+    get pathname() {
+      return new URL(list[index].url, origin).pathname;
+    },
+    get search() {
+      return new URL(list[index].url, origin).search;
+    },
   };
   const history = {
-    get length() { return list.length; },
+    get length() {
+      return list.length;
+    },
     pushState(_state, _title, url) {
       calls.push(['push', url]);
       list.splice(index + 1, Infinity, { url });
@@ -164,11 +281,20 @@ function fakeBrowser(entries, index) {
     location,
     history,
     navigation: {
-      get currentEntry() { return { url: new URL(list[index].url, origin).href, index }; },
+      get currentEntry() {
+        return { url: new URL(list[index].url, origin).href, index };
+      },
       entries: () => list.map((entry, i) => ({ url: new URL(entry.url, origin).href, index: i })),
     },
-    addEventListener(type, fn) { listeners.set(type, [...(listeners.get(type) ?? []), fn]); },
-    removeEventListener(type, fn) { listeners.set(type, (listeners.get(type) ?? []).filter((f) => f !== fn)); },
+    addEventListener(type, fn) {
+      listeners.set(type, [...(listeners.get(type) ?? []), fn]);
+    },
+    removeEventListener(type, fn) {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((f) => f !== fn),
+      );
+    },
     /* A frame and a task, each one turn of the event loop here — the write waits for both. */
     requestAnimationFrame: (fn) => setImmediate(fn),
     cancelAnimationFrame: (handle) => clearImmediate(handle),
@@ -185,10 +311,14 @@ const settle = async () => {
 };
 
 function loadHomeTabs(browser) {
-  return load('lib/homeTabs.ts', {
-    '@/lib/afterFirstFrame': load('lib/afterFirstFrame.ts', {}, { window: browser.window }),
-    '@/lib/historyLayers': { settleHistoryLayers: () => Promise.resolve() },
-  }, { window: browser.window, URL, URLSearchParams });
+  return load(
+    'lib/homeTabs.ts',
+    {
+      '@/lib/afterFirstFrame': load('lib/afterFirstFrame.ts', {}, { window: browser.window }),
+      '@/lib/historyLayers': { settleHistoryLayers: () => Promise.resolve() },
+    },
+    { window: browser.window, URL, URLSearchParams },
+  );
 }
 
 test('the home pill pushes 论坛 once and goes back to 图库, never accumulating entries', async () => {
@@ -242,7 +372,11 @@ test('the next input writes a waiting URL at once, before its own handlers run',
   await Promise.resolve();
   await Promise.resolve();
   browser.dispatch('pointerdown');
-  assert.deepEqual(browser.calls, [['push', '/?tab=forum']], 'written synchronously by the pointerdown');
+  assert.deepEqual(
+    browser.calls,
+    [['push', '/?tab=forum']],
+    'written synchronously by the pointerdown',
+  );
   await settle();
   assert.equal(browser.calls.length, 1, 'and only once');
 });
@@ -258,7 +392,11 @@ test('a traversal before the frame cancels the waiting write', async () => {
   assert.deepEqual(browser.calls, [], 'the entry it was meant for is gone');
   tabs.writeHomeTab('forum');
   await settle();
-  assert.deepEqual(browser.calls, [['push', '/?tab=forum']], 'and the next request writes normally');
+  assert.deepEqual(
+    browser.calls,
+    [['push', '/?tab=forum']],
+    'and the next request writes normally',
+  );
 });
 
 test('a cold entry at /?tab=forum gets the gallery put beneath it, once', async () => {
@@ -266,7 +404,10 @@ test('a cold entry at /?tab=forum gets the gallery put beneath it, once', async 
   const tabs = loadHomeTabs(browser);
   tabs.ensureHomeBackStack();
   await flush();
-  assert.deepEqual(browser.calls, [['replace', '/?sort=score'], ['push', '/?tab=forum&sort=score']]);
+  assert.deepEqual(browser.calls, [
+    ['replace', '/?sort=score'],
+    ['push', '/?tab=forum&sort=score'],
+  ]);
   tabs.ensureHomeBackStack();
   await flush();
   assert.equal(browser.calls.length, 2, 'idempotent: the forum entry is no longer the first');
@@ -321,16 +462,28 @@ test('the tab strip leaves at its fastest without lunging, and only slows from t
      speed for 34ms: an even glide that was halfway only after 82ms, which read on a phone as the
      page dragging behind the finger. Thrown at 4.5 over 300ms it moved 22.7% in its first frame and
      was 90% there by 133ms: a lunge. Between the two, and never gaining speed. */
-  assert.ok(frames[0] >= 0.13 && frames[0] <= 0.18, `first frame ${(frames[0] * 100).toFixed(1)}% of the window`);
+  assert.ok(
+    frames[0] >= 0.13 && frames[0] <= 0.18,
+    `first frame ${(frames[0] * 100).toFixed(1)}% of the window`,
+  );
   for (let k = 1; k < frames.length; k += 1) {
-    assert.ok(frames[k] <= frames[k - 1] + 1e-12, `frame ${k + 1} carries no more than frame ${k}: ${frames.slice(0, 8).map((v) => (v * 100).toFixed(1)).join(' ')}%`);
+    assert.ok(
+      frames[k] <= frames[k - 1] + 1e-12,
+      `frame ${k + 1} carries no more than frame ${k}: ${frames
+        .slice(0, 8)
+        .map((v) => (v * 100).toFixed(1))
+        .join(' ')}%`,
+    );
   }
   let half = null;
   let most = null;
   let previous = 0;
   for (let ms = 0; ms <= full; ms += 0.5) {
     const { p } = strip.stripPose(leg, ms);
-    assert.ok(p >= previous - 1e-12 && p <= 1 + 1e-12, `monotone and never past its end, at ${ms}ms`);
+    assert.ok(
+      p >= previous - 1e-12 && p <= 1 + 1e-12,
+      `monotone and never past its end, at ${ms}ms`,
+    );
     if (half === null && p >= 0.5) half = ms;
     if (most === null && p >= 0.9) most = ms;
     previous = p;
@@ -366,14 +519,20 @@ test('a second tap turns the strip from where it is, the other way at once', () 
     assert.ok(Math.abs(next.from - before.p) < 1e-12, `continuous at ${elapsed}ms`);
     assert.equal(next.to, 0);
     for (let ms = 0; ms <= next.duration; ms += 2) {
-      assert.ok(strip.stripPose(next, ms).p <= before.p + 1e-12, `never the old way, ${elapsed}ms in`);
+      assert.ok(
+        strip.stripPose(next, ms).p <= before.p + 1e-12,
+        `never the old way, ${elapsed}ms in`,
+      );
     }
     if (before.p >= 0.3) {
       const start = strip.stripPose(next, 0).speed;
       /* Or as fast as a leg of that length can leave without overshooting the side it returns to:
          a tap's launch over a short way back would pass the critically damped ceiling. */
       const ceiling = strip.stripPose({ ...next, launch: strip.STRIP_MAX_LAUNCH }, 0).speed;
-      assert.ok(start >= Math.min(fresh, ceiling) * 0.99, `leaves at a fresh tap's speed or more, ${elapsed}ms in`);
+      assert.ok(
+        start >= Math.min(fresh, ceiling) * 0.99,
+        `leaves at a fresh tap's speed or more, ${elapsed}ms in`,
+      );
       assert.ok(start >= before.speed * 0.95, `and no slower than it was going, ${elapsed}ms in`);
       /* `Animation.reverse` played a late tap back through the tail: 1–1.6% per frame. */
       assert.ok(framesOf(strip, next, 1)[0] >= 0.05, `moves in its first frame, ${elapsed}ms in`);
@@ -389,7 +548,10 @@ test('rapid alternation starts every leg moving', () => {
     leg = strip.turnStrip(leg, gap, full);
     const [first] = framesOf(strip, leg, 1);
     const remaining = Math.abs(leg.to - leg.from);
-    assert.ok(first >= Math.min(0.05, remaining * 0.2), `first frame ${(first * 100).toFixed(1)}% of ${(remaining * 100).toFixed(0)}% to go`);
+    assert.ok(
+      first >= Math.min(0.05, remaining * 0.2),
+      `first frame ${(first * 100).toFixed(1)}% of ${(remaining * 100).toFixed(0)}% to go`,
+    );
   }
 });
 
@@ -409,14 +571,29 @@ test('on a wide screen the strip slides past the column and a faded margin, out 
   assert.equal(strip.columnWindow(centred(1012, 964), inner(1012)), null);
   /* Each side is out of sight at its end of the run: the arriving pane starts its own reach past
      the window, the leaving one ends there — however wide the column, a gutter's bleed included. */
-  for (const [scroller, column] of [[1588, 896], [1588, 1280], [2248, 896], [1116, 896], [1012, 896]]) {
+  for (const [scroller, column] of [
+    [1588, 896],
+    [1588, 1280],
+    [2248, 896],
+    [1116, 896],
+    [1012, 896],
+  ]) {
     const at = centred(scroller, column);
     const window = strip.columnWindow(at, inner(scroller));
     if (!window) continue;
     const bleed = strip.STRIP_EDGE_CLEAR;
-    assert.ok(at.left + window.width - bleed >= at.right + window.reach, `${column} in ${scroller}: arrives from out of sight`);
-    assert.ok(at.right - window.width + bleed <= at.left - window.reach, `${column} in ${scroller}: leaves out of sight`);
-    assert.ok(at.left - window.reach >= 0 && at.right + window.reach <= scroller, `${column} in ${scroller}: inside the scroller`);
+    assert.ok(
+      at.left + window.width - bleed >= at.right + window.reach,
+      `${column} in ${scroller}: arrives from out of sight`,
+    );
+    assert.ok(
+      at.right - window.width + bleed <= at.left - window.reach,
+      `${column} in ${scroller}: leaves out of sight`,
+    );
+    assert.ok(
+      at.left - window.reach >= 0 && at.right + window.reach <= scroller,
+      `${column} in ${scroller}: inside the scroller`,
+    );
   }
 });
 
@@ -433,7 +610,10 @@ test('a block leans by a small continuous function of its height, top first', ()
     previous = depth;
   }
   /* Tops within a band — masonry cards that read as one row — move together. */
-  assert.equal(strip.leanDepth(64 + 640, view.top, view.height), strip.leanDepth(64 + 660, view.top, view.height));
+  assert.equal(
+    strip.leanDepth(64 + 640, view.top, view.height),
+    strip.leanDepth(64 + 660, view.top, view.height),
+  );
 });
 
 /** A block's lag, linear between its samples. */
@@ -464,7 +644,10 @@ test('a leaning block eases after its pane: it moves at once, leans, and lands f
      full speed; smoothing moves it from the first frame. */
   const frame = 1000 / 60;
   const moved = strip.stripAt(history, frame) - lagOf(samples, frame);
-  assert.ok(moved > 0.25 * strip.stripAt(history, frame), `the bottom of the view moves in the first frame: ${(moved * 100).toFixed(1)}%`);
+  assert.ok(
+    moved > 0.25 * strip.stripAt(history, frame),
+    `the bottom of the view moves in the first frame: ${(moved * 100).toFixed(1)}%`,
+  );
   let behind = 0;
   let ahead = 0;
   for (const [, value] of samples) {
@@ -478,7 +661,10 @@ test('a leaning block eases after its pane: it moves at once, leans, and lands f
   assert.ok(ahead > -1e-9, `never ahead of its pane (${(ahead * 100).toFixed(3)}%)`);
   /* Straight lines between the samples stay within the run's pixel and a half of the lag itself. */
   for (let t = 0; t <= end; t += 0.5) {
-    assert.ok(Math.abs(lagOf(samples, t) - lagOf(fine, t)) / px < 1.6, `within tolerance at ${t}ms`);
+    assert.ok(
+      Math.abs(lagOf(samples, t) - lagOf(fine, t)) / px < 1.6,
+      `within tolerance at ${t}ms`,
+    );
   }
   /* Lower down, further behind: each depth leans further, and the lowest lands last. */
   let previous = { behind: 0, end: 0 };
@@ -523,19 +709,28 @@ test('a turn carries every leaning block on from where it is, top first', () => 
   for (const at of [40, 100, 200, 330]) {
     const turned = strip.turnStrip(fresh, at, full);
     const before = strip.lagSampler([{ leg: fresh, start: 0 }], 0);
-    const history = [{ leg: fresh, start: 0 }, { leg: turned, start: at }];
+    const history = [
+      { leg: fresh, start: 0 },
+      { leg: turned, start: at },
+    ];
     const after = strip.lagSampler(history, at);
     for (const depth of [0.25, 0.5, 1]) {
       const was = lagOf(before(depth, 0.02 * px), at);
       const samples = after(depth, 0.5 * px);
       /* The block's own position is continuous through the tap. */
-      assert.ok(Math.abs(samples[0][1] - was) < 2 * px, `no jump at the turn (${at}ms, depth ${depth})`);
+      assert.ok(
+        Math.abs(samples[0][1] - was) < 2 * px,
+        `no jump at the turn (${at}ms, depth ${depth})`,
+      );
       assert.equal(samples.at(-1)[1], 0, 'landing on its pane');
       if (at <= 100 && depth === 1) {
         /* Mid-flight, the lowest block is still behind its pane, so it goes on the old way until
            the pane comes back past it: the lean reverses top first. */
         const position = (t) => strip.stripAt(history, t) - lagOf(samples, t);
-        assert.ok(position(at + 4) >= position(at) - 1e-9, `still leaving just after the tap (${at}ms)`);
+        assert.ok(
+          position(at + 4) >= position(at) - 1e-9,
+          `still leaving just after the tap (${at}ms)`,
+        );
         assert.ok(position(at + 120) < position(at + 4), `and on its way back after (${at}ms)`);
       }
     }
@@ -571,17 +766,34 @@ test('leanPlan ignores zero-height sticky slots while still descending through d
       };
       this.children = children;
     }
-    hasAttribute() { return false; }
-    getBoundingClientRect() { return this.rect; }
+    hasAttribute() {
+      return false;
+    }
+    getBoundingClientRect() {
+      return this.rect;
+    }
   }
-  const rect = (top, height, width = 358) => ({ left: 16, right: 16 + width, top, bottom: top + height, width, height });
+  const rect = (top, height, width = 358) => ({
+    left: 16,
+    right: 16 + width,
+    top,
+    bottom: top + height,
+    width,
+    height,
+  });
   const surface = { backgroundColor: 'rgb(245, 240, 240)' };
   const row1 = new FakeElement('row1', rect(200, 120), surface);
   const row2 = new FakeElement('row2', rect(330, 120), surface);
   const row3 = new FakeElement('row3', rect(460, 120), surface);
-  const contentsWrap = new FakeElement('contents', rect(0, 0, 0), { display: 'contents' }, [row2, row3]);
+  const contentsWrap = new FakeElement('contents', rect(0, 0, 0), { display: 'contents' }, [
+    row2,
+    row3,
+  ]);
   const grid = new FakeElement('grid', rect(200, 900), {}, [row1, contentsWrap]);
-  const stickySlot = new FakeElement('sticky-slot', rect(700, 0), { position: 'sticky', zIndex: '20' });
+  const stickySlot = new FakeElement('sticky-slot', rect(700, 0), {
+    position: 'sticky',
+    zIndex: '20',
+  });
   const header = new FakeElement('header', rect(120, 40), surface);
   const root = new FakeElement('root', rect(120, 1000), {}, [header, grid, stickySlot]);
   const pane = new FakeElement('pane', rect(120, 1000), {}, [root]);
@@ -592,8 +804,13 @@ test('leanPlan ignores zero-height sticky slots while still descending through d
     { HTMLElement: FakeElement, getComputedStyle: (el) => el.style },
   );
   const plan = leanPlan(pane, 64, 844, 0, 120);
-  assert.deepEqual(Array.from(plan.blocks, (block) => block.el.name), ['row1', 'row2', 'row3']);
-  assert.ok(plan.blocks[0].depth < plan.blocks[1].depth && plan.blocks[1].depth < plan.blocks[2].depth);
+  assert.deepEqual(
+    Array.from(plan.blocks, (block) => block.el.name),
+    ['row1', 'row2', 'row3'],
+  );
+  assert.ok(
+    plan.blocks[0].depth < plan.blocks[1].depth && plan.blocks[1].depth < plan.blocks[2].depth,
+  );
 });
 
 // --- lib/maintenance.server.ts ------------------------------------------------------------
@@ -604,13 +821,24 @@ function loadMaintenance({ respond, env = {}, cookie } = {}) {
     requests.push({ url, revalidate: init?.next?.revalidate, hasSignal: Boolean(init?.signal) });
     return respond();
   };
-  const module = load('lib/maintenance.server.ts', {
-    react: { cache: (fn) => fn },
-    'next/headers': { cookies: async () => ({ get: (name) => (name === 'devMaintenancePreview' && cookie !== undefined ? { value: cookie } : undefined) }) },
-    '@/lib/constants': { SITE_STATUS_CACHE_TAG: 'site-status' },
-    '@/lib/serverMemo': { cacheSeconds: (s) => s },
-    '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
-  }, { fetch, AbortSignal, process: { env: { NODE_ENV: 'production', ...env } } });
+  const module = load(
+    'lib/maintenance.server.ts',
+    {
+      react: { cache: (fn) => fn },
+      'next/headers': {
+        cookies: async () => ({
+          get: (name) =>
+            name === 'devMaintenancePreview' && cookie !== undefined
+              ? { value: cookie }
+              : undefined,
+        }),
+      },
+      '@/lib/constants': { SITE_STATUS_CACHE_TAG: 'site-status' },
+      '@/lib/serverMemo': { cacheSeconds: (s) => s },
+      '@/lib/upstream.server': { upstreamOrigin: () => 'https://picpony.top' },
+    },
+    { fetch, AbortSignal, process: { env: { NODE_ENV: 'production', ...env } } },
+  );
   return { readMaintenance: module.readMaintenance, requests };
 }
 
@@ -621,7 +849,11 @@ test('the maintenance read reports the switch and the trimmed message', async ()
     respond: () => json({ maintenance_mode: true, maintenance_message: '  正在维护……  ' }),
   });
   assert.deepEqual({ ...(await readMaintenance()) }, { active: true, message: '正在维护……' });
-  assert.equal(requests[0].url, 'https://picpony.top/api/v1/maintenance-status', 'the public status (`site::public_maintenance`): the server has no session');
+  assert.equal(
+    requests[0].url,
+    'https://picpony.top/api/v1/maintenance-status',
+    'the public status (`site::public_maintenance`): the server has no session',
+  );
   assert.equal(requests[0].revalidate, 30);
   assert.ok(requests[0].hasSignal, 'bounded by a timeout');
 });
@@ -631,8 +863,15 @@ test('the maintenance read fails open', async () => {
     () => json({ maintenance_mode: false, maintenance_message: '' }),
     () => json({ error: { code: 'DATABASE_UNAVAILABLE', message: '数据库暂时不可用' } }, false),
     () => json({}, false),
-    () => { throw new Error('offline'); },
-    () => ({ ok: true, json: async () => { throw new SyntaxError('html'); } }),
+    () => {
+      throw new Error('offline');
+    },
+    () => ({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('html');
+      },
+    }),
   ];
   for (const respond of cases) {
     const { readMaintenance } = loadMaintenance({ respond });
@@ -641,12 +880,23 @@ test('the maintenance read fails open', async () => {
 });
 
 test('the development preview cookie is honoured in development only', async () => {
-  const dev = loadMaintenance({ env: { NODE_ENV: 'development' }, cookie: encodeURIComponent('预计 30 分钟'), respond: () => json({}) });
+  const dev = loadMaintenance({
+    env: { NODE_ENV: 'development' },
+    cookie: encodeURIComponent('预计 30 分钟'),
+    respond: () => json({}),
+  });
   assert.deepEqual({ ...(await dev.readMaintenance()) }, { active: true, message: '预计 30 分钟' });
   assert.equal(dev.requests.length, 0);
-  const malformed = loadMaintenance({ env: { NODE_ENV: 'development' }, cookie: '%E4%', respond: () => json({}) });
+  const malformed = loadMaintenance({
+    env: { NODE_ENV: 'development' },
+    cookie: '%E4%',
+    respond: () => json({}),
+  });
   assert.equal((await malformed.readMaintenance()).message, '%E4%');
-  const prod = loadMaintenance({ cookie: '1', respond: () => json({ maintenance_mode: false, maintenance_message: '' }) });
+  const prod = loadMaintenance({
+    cookie: '1',
+    respond: () => json({ maintenance_mode: false, maintenance_message: '' }),
+  });
   assert.equal((await prod.readMaintenance()).active, false);
 });
 
@@ -679,7 +929,13 @@ function makeFakeBar(classes = []) {
   };
 }
 
-function makeFakeViewport({ clientW = 1280, clientH = 668, scrollW = 1280, scrollH = 3409, isConnected = true } = {}) {
+function makeFakeViewport({
+  clientW = 1280,
+  clientH = 668,
+  scrollW = 1280,
+  scrollH = 3409,
+  isConnected = true,
+} = {}) {
   const attrs = new Map();
   return {
     isConnected,
@@ -716,7 +972,10 @@ test('syncScrollbarGeometry nudges native update without force when total height
   const calls = [];
   const instance = {
     state: () => state,
-    elements: () => ({ scrollbarHorizontal: { scrollbar: hBar }, scrollbarVertical: { scrollbar: vBar } }),
+    elements: () => ({
+      scrollbarHorizontal: { scrollbar: hBar },
+      scrollbarVertical: { scrollbar: vBar },
+    }),
     update: (force) => {
       calls.push(Boolean(force));
       // Simulate OverlayScrollbars' content MutationObserver reading the sync attribute
@@ -743,7 +1002,11 @@ test('syncScrollbarGeometry nudges native update without force when total height
   assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
   assert.equal(viewport.getAttribute('data-os-sync'), '0');
   assert.equal(state.hasOverflow.y, false);
-  assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), false, 'off-axis overflow does not loop');
+  assert.equal(
+    syncScrollbarGeometry(viewport, instance, 'y'),
+    false,
+    'off-axis overflow does not loop',
+  );
 });
 
 test('syncScrollbarGeometry preserves auto-hide classes when falling back to forced refresh', () => {
@@ -760,7 +1023,10 @@ test('syncScrollbarGeometry preserves auto-hide classes when falling back to for
   const calls = [];
   const instance = {
     state: () => state,
-    elements: () => ({ scrollbarHorizontal: { scrollbar: hBar }, scrollbarVertical: { scrollbar: vBar } }),
+    elements: () => ({
+      scrollbarHorizontal: { scrollbar: hBar },
+      scrollbarVertical: { scrollbar: vBar },
+    }),
     update: (force) => {
       calls.push(Boolean(force));
       if (force) {
@@ -777,7 +1043,11 @@ test('syncScrollbarGeometry preserves auto-hide classes when falling back to for
   assert.equal(syncScrollbarGeometry(viewport, instance, 'y'), true);
   assert.deepEqual(calls, [false, true]);
   assert.equal(vBar.classes.has('os-scrollbar-auto-hide'), true, 'keeps auto-hide active');
-  assert.equal(vBar.classes.has('os-scrollbar-auto-hide-hidden'), false, 'does not hide active bar');
+  assert.equal(
+    vBar.classes.has('os-scrollbar-auto-hide-hidden'),
+    false,
+    'does not hide active bar',
+  );
   assert.equal(hBar.classes.has('os-scrollbar-auto-hide'), true);
   assert.equal(hBar.classes.has('os-scrollbar-auto-hide-hidden'), true);
 });
@@ -793,7 +1063,10 @@ test('syncScrollbarGeometry respects fractional-DPR tolerance and skips hidden v
       overflowAmount: { x: 0, y: 0 },
       hasOverflow: { x: false, y: false },
     }),
-    elements: () => ({ scrollbarHorizontal: { scrollbar: makeFakeBar() }, scrollbarVertical: { scrollbar: makeFakeBar() } }),
+    elements: () => ({
+      scrollbarHorizontal: { scrollbar: makeFakeBar() },
+      scrollbarVertical: { scrollbar: makeFakeBar() },
+    }),
     update: () => {
       updates += 1;
       return true;
@@ -816,6 +1089,9 @@ test('syncScrollbarGeometry respects fractional-DPR tolerance and skips hidden v
       hasOverflow: { x: false, y: false },
     }),
   };
-  assert.equal(syncScrollbarGeometry(makeFakeViewport({ clientH: 668, scrollH: 3000 }), sleeping, 'y'), false);
+  assert.equal(
+    syncScrollbarGeometry(makeFakeViewport({ clientH: 668, scrollH: 3000 }), sleeping, 'y'),
+    false,
+  );
   assert.equal(updates, 0);
 });

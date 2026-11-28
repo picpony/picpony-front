@@ -24,7 +24,10 @@ export default function MessagesPage() {
   const { token, ready } = useSession();
   const [account, setAccount] = useState({ token, generation: 0 });
   if (account.token !== token) {
-    setAccount({ token, generation: account.token === null ? account.generation : account.generation + 1 });
+    setAccount({
+      token,
+      generation: account.token === null ? account.generation : account.generation + 1,
+    });
   }
   if (!ready) {
     return (

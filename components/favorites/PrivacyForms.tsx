@@ -12,7 +12,12 @@ import { showToast } from '@/components/Toast';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { isRefusal } from '@/lib/api/favorites';
 import { PRIVACY_UNLOCK_SECONDS, parseUnlockSeconds, settled, unlockLabel } from '@/lib/favorites';
-import { changePrivacyPassword, createPrivacyPassword, resetPrivacy, unlockPrivacy } from '@/lib/favoritesPrivacy';
+import {
+  changePrivacyPassword,
+  createPrivacyPassword,
+  resetPrivacy,
+  unlockPrivacy,
+} from '@/lib/favoritesPrivacy';
 import { ICON } from '@/lib/icons';
 import { readToken } from '@/lib/hooks';
 import { changeSyncedSetting, useSyncedSetting } from '@/lib/settingsSync';
@@ -38,7 +43,16 @@ import {
 
 /** Whose space this is, for a password manager — never shown. */
 function SpaceIdentity({ username }: { username: string }) {
-  return <input type="text" name="username" autoComplete="username" value={`${username} 的隐私空间`} readOnly hidden />;
+  return (
+    <input
+      type="text"
+      name="username"
+      autoComplete="username"
+      value={`${username} 的隐私空间`}
+      readOnly
+      hidden
+    />
+  );
 }
 
 /** The gate's frame: a card in the pane, its glyph, its words and its form. */
@@ -153,7 +167,9 @@ export function PrivacyUnlockForm({
 }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const form = useFieldErrors<'password'>(() => [['password', validateRequired(password, '请输入隐私密码')]]);
+  const form = useFieldErrors<'password'>(() => [
+    ['password', validateRequired(password, '请输入隐私密码')],
+  ]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -219,7 +235,9 @@ export function PrivacyResetDialog({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const formId = useId();
-  const form = useFieldErrors<'password'>(() => [['password', validateRequired(password, '请输入账号密码')]]);
+  const form = useFieldErrors<'password'>(() => [
+    ['password', validateRequired(password, '请输入账号密码')],
+  ]);
 
   /* Emptied once the dialog has left (`Modal`'s `onExited`), never in the commit that closes it:
      the field and its floated label hold through the exit, and the next opening starts clean. A
@@ -278,7 +296,14 @@ export function PrivacyResetDialog({
           重置将清空隐私空间中的所有图片并清除隐私密码，请输入账号密码确认
         </p>
         {/* The account's own credential: its username, its current password. */}
-        <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={username}
+          readOnly
+          hidden
+        />
         <Input
           {...form.field('password')}
           label="账号密码"
@@ -317,7 +342,10 @@ export function PrivacyPasswordDialog({
   const formId = useId();
   const form = useFieldErrors<'current' | 'next' | 'confirm'>(() => [
     ['current', validateRequired(current, '请输入当前隐私密码')],
-    ['next', validatePrivacyPassword(next) ?? (next === current ? '新密码不能与当前密码相同' : null)],
+    [
+      'next',
+      validatePrivacyPassword(next) ?? (next === current ? '新密码不能与当前密码相同' : null),
+    ],
     ['confirm', validatePasswordConfirmation(next, confirm)],
   ]);
 
@@ -351,10 +379,12 @@ export function PrivacyPasswordDialog({
     }
   };
 
-  const edit = (field: 'current' | 'next' | 'confirm', set: (value: string) => void) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    set(event.target.value);
-    form.clear(field);
-  };
+  const edit =
+    (field: 'current' | 'next' | 'confirm', set: (value: string) => void) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      set(event.target.value);
+      form.clear(field);
+    };
 
   return (
     <Modal
@@ -448,7 +478,10 @@ export function PrivacySettingsDialog({ open, onClose }: { open: boolean; onClos
           label="离开后保持解锁"
           value={String(value)}
           onChange={(next) => changeSyncedSetting('privacyUnlockDurationSeconds', Number(next))}
-          options={PRIVACY_UNLOCK_SECONDS.map((option) => ({ value: String(option), label: unlockLabel(option) }))}
+          options={PRIVACY_UNLOCK_SECONDS.map((option) => ({
+            value: String(option),
+            label: unlockLabel(option),
+          }))}
         />
       </div>
     </Modal>

@@ -19,7 +19,7 @@ function boundedRangeProgress(from: readonly number[], to: readonly number[], pr
     high = Math.min(high, Math.max(atMin, atMax));
   }
   const gap = from[1] - from[0];
-  const gapChange = (to[1] - to[0]) - gap;
+  const gapChange = to[1] - to[0] - gap;
   if (gapChange > 0) low = Math.max(low, -gap / gapChange);
   else if (gapChange < 0) high = Math.min(high, -gap / gapChange);
   return clamp(progress, low, high);
@@ -73,10 +73,11 @@ export function useSliderPaint(fraction: number, disabled: boolean, endFraction?
     const bounded = range
       ? (progress: number) => boundedRangeProgress(from, [fraction, endFraction], progress)
       : (progress: number) => (clamp01(from[0] + distance * progress) - from[0]) / distance;
-    const poseAt = (progress: number) => sliderPose(
-      from[0] + distance * progress,
-      range ? from[1] + endDistance * progress : undefined,
-    );
+    const poseAt = (progress: number) =>
+      sliderPose(
+        from[0] + distance * progress,
+        range ? from[1] + endDistance * progress : undefined,
+      );
     const timing = springTiming('fastSpatial', 'feedback');
     const tracks: [HTMLElement, (progress: number) => Keyframe][] = [
       [position, (progress) => ({ transform: poseAt(progress).transform })],

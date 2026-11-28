@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type SyntheticEvent,
+} from 'react';
 import Link from 'next/link';
 import { SKIP, useResource } from '@/lib/resource';
 import { featuredImage, useBrowsingFingerprint } from '@/lib/resources';
@@ -32,8 +40,7 @@ import type { FeaturedSeed } from '@/lib/feed.server';
 /* The banner's scrims are drawn over photography, so they must be black in both
    schemes — but "black" should still come from the token, not from a literal,
    or a change to `scrim` silently skips these two gradients. */
-const scrim = (alpha: number) =>
-  `rgb(var(--md-sys-color-scrim-rgb) / ${alpha})`;
+const scrim = (alpha: number) => `rgb(var(--md-sys-color-scrim-rgb) / ${alpha})`;
 
 /**
  * Fixed slot height shared by the placeholder, live banner and failure plate so the gallery grid
@@ -55,7 +62,12 @@ export function FeaturedBannerSkeleton({ paused = false }: { paused?: boolean })
   return (
     <div className="mb-6 sm:mb-8 overflow-hidden rounded-lg" aria-hidden="true">
       <div className="relative w-full" style={{ paddingBottom: BANNER_HEIGHT }}>
-        <MediaLoadingPlaceholder variant="contained" size="md" paused={paused} className="rounded-lg" />
+        <MediaLoadingPlaceholder
+          variant="contained"
+          size="md"
+          paused={paused}
+          className="rounded-lg"
+        />
       </div>
     </div>
   );
@@ -149,7 +161,11 @@ export default function FeaturedBanner({
   const playAllowed = mounted && tier === 'standard' && !saveDataRequested();
 
   const fullUrl = featured?.representations?.full || featured?.view_url || '';
-  const imgFormat = (featured?.format || fullUrl.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
+  const imgFormat = (
+    featured?.format ||
+    fullUrl.split(/[?#]/)[0].split('.').pop() ||
+    ''
+  ).toLowerCase();
   const isVideo = imgFormat === 'webm' || imgFormat === 'mp4';
   const displayImageUrl =
     featured?.representations?.large ||
@@ -163,7 +179,11 @@ export default function FeaturedBanner({
     featured?.representations?.thumb_small ||
     featured?.representations?.thumb ||
     fullUrl;
-  const { sourceKey: heroSourceKey, onClick: heroClick, ...heroLinkProps } = useHeroLink({
+  const {
+    sourceKey: heroSourceKey,
+    onClick: heroClick,
+    ...heroLinkProps
+  } = useHeroLink({
     image: featured,
     sourceRef: heroElementRef,
     previewSrc: isVideo ? displayVideoUrl : displayImageUrl,
@@ -206,7 +226,13 @@ export default function FeaturedBanner({
 
   /* Not a list: opening the banner walks no sequence, so a stale one from a grid is dropped. */
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    if (
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
       clearImageSequence();
     }
     heroClick(event);
@@ -351,7 +377,13 @@ export default function FeaturedBanner({
             {bannerTags.length > 0 && (
               <div className="mb-2 flex max-w-2xl flex-nowrap items-center gap-1.5 overflow-hidden sm:mb-3">
                 {bannerTags.map((tag, tagIndex) => (
-                  <Badge key={tag} tone="media" className={tagIndex >= 4 ? 'max-w-36 shrink-0 max-sm:hidden' : 'max-w-36 shrink-0'}>
+                  <Badge
+                    key={tag}
+                    tone="media"
+                    className={
+                      tagIndex >= 4 ? 'max-w-36 shrink-0 max-sm:hidden' : 'max-w-36 shrink-0'
+                    }
+                  >
                     {tagName(tag) || tag}
                   </Badge>
                 ))}
@@ -403,7 +435,9 @@ export default function FeaturedBanner({
         >
           <MdVisibilityOff size={ICON.large} aria-hidden="true" />
           <span className="text-title-m text-on-surface">近日推荐含剧透内容</span>
-          <span className="line-clamp-2 max-w-md text-body-m break-words">{spoilers.join('、')}</span>
+          <span className="line-clamp-2 max-w-md text-body-m break-words">
+            {spoilers.join('、')}
+          </span>
           <span className="text-label-l">点按显示</span>
         </button>
       )}

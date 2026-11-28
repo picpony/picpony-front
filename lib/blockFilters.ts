@@ -1,16 +1,40 @@
 /** Public search rules from `GET /api/v1/filters/block-tags`. No account data lives here. */
-export const BLOCK_FILTER_KEYS = ['safe', 'spoilers', 'banAnthro', 'banDiscomfort', 'onlyPony'] as const;
-export type BlockFilterKey = typeof BLOCK_FILTER_KEYS[number];
+export const BLOCK_FILTER_KEYS = [
+  'safe',
+  'spoilers',
+  'banAnthro',
+  'banDiscomfort',
+  'onlyPony',
+] as const;
+export type BlockFilterKey = (typeof BLOCK_FILTER_KEYS)[number];
 export type BlockFilters = Record<BlockFilterKey, string[]>;
 
 /** Offline fallback transcribed from the public, unauthenticated backend response on
  * 2026-09-12. These are the site's existing definitions, not a new moderation policy.
  * A successful server response replaces all five groups, including deliberately empty ones. */
 export const DEFAULT_BLOCK_FILTERS: BlockFilters = {
-  safe: ['explicit', 'questionable', 'suggestive', 'grotesque', 'grimdark', 'spoiler', 'islamic state', 'politics', 'semi-grimdark'],
+  safe: [
+    'explicit',
+    'questionable',
+    'suggestive',
+    'grotesque',
+    'grimdark',
+    'spoiler',
+    'islamic state',
+    'politics',
+    'semi-grimdark',
+  ],
   spoilers: ['explicit', 'questionable', 'grotesque', 'grimdark', 'islamic state'],
   banAnthro: ['anthro', 'humanized', 'morbidly obese'],
-  banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
+  banDiscomfort: [
+    'overweight',
+    'obese',
+    'obesity',
+    'nightmare fuel',
+    'politics',
+    'watersports',
+    'poofy diaper',
+  ],
   onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
 };
 

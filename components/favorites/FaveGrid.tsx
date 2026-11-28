@@ -6,10 +6,19 @@ import { SKIP, useResource } from '@/lib/resource';
 import { favePictures, useBrowsingFingerprint } from '@/lib/resources';
 import { getBrowsingSettings, readHiddenTags } from '@/lib/api/client';
 import { currentBlockFilters, currentPublicBlacklist } from '@/lib/blockFilters';
-import { clearImageSequence, createPagedSequence, type ImageSequenceSource } from '@/lib/imageSequence';
+import {
+  clearImageSequence,
+  createPagedSequence,
+  type ImageSequenceSource,
+} from '@/lib/imageSequence';
 import { useListReveal } from '@/lib/listReveal';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import { FAVE_PAGE_SIZE, withheldSentence, withholdFromDevice, type FilteredPage } from '@/lib/favorites';
+import {
+  FAVE_PAGE_SIZE,
+  withheldSentence,
+  withholdFromDevice,
+  type FilteredPage,
+} from '@/lib/favorites';
 import type { FolderSeedCover } from '@/lib/folderTransit';
 import type { PonyImage } from '@/lib/types/image';
 import MasonryGrid, { type GridSelection } from '@/components/MasonryGrid';
@@ -40,7 +49,8 @@ export function useDeviceRules() {
   return useMemo(
     () => ({
       fp,
-      withhold: (found: readonly PonyImage[], asked: readonly number[]) => withholdNow(found, asked),
+      withhold: (found: readonly PonyImage[], asked: readonly number[]) =>
+        withholdNow(found, asked),
     }),
     [fp],
   );
@@ -103,8 +113,13 @@ export function useFavePage({
 }): FavePageState {
   const rules = useDeviceRules();
   const totalPages = Math.max(1, Math.ceil((ids?.length ?? 0) / FAVE_PAGE_SIZE));
-  const pageIds = useMemo(() => ids?.slice((page - 1) * FAVE_PAGE_SIZE, page * FAVE_PAGE_SIZE) ?? [], [ids, page]);
-  const read = useResource(favePictures, pageIds.length > 0 ? { ids: pageIds } : SKIP, { keepPrevious: listKey });
+  const pageIds = useMemo(
+    () => ids?.slice((page - 1) * FAVE_PAGE_SIZE, page * FAVE_PAGE_SIZE) ?? [],
+    [ids, page],
+  );
+  const read = useResource(favePictures, pageIds.length > 0 ? { ids: pageIds } : SKIP, {
+    keepPrevious: listKey,
+  });
 
   const inList = useMemo(() => new Set(ids ?? []), [ids]);
   const data = read.data;
@@ -139,7 +154,10 @@ export function useFavePage({
     },
     [ids],
   );
-  const readPage = useCallback(async (target: number) => (await pageOf(target)).map((image) => image.id), [pageOf]);
+  const readPage = useCallback(
+    async (target: number) => (await pageOf(target)).map((image) => image.id),
+    [pageOf],
+  );
   const reveal = useListReveal(readPage, page, setPage, () => paneOf(listKey));
 
   const shownImages = shown?.images;
@@ -149,7 +167,11 @@ export function useFavePage({
         ? createPagedSequence({
             key: listKey,
             page: dataPage,
-            current: { ids: shownImages.map((image) => image.id), previews: shownImages, totalPages },
+            current: {
+              ids: shownImages.map((image) => image.id),
+              previews: shownImages,
+              totalPages,
+            },
             pageSize: FAVE_PAGE_SIZE,
             fetchPage: async (target) => {
               const kept = await pageOf(target);
@@ -211,17 +233,26 @@ export function useLocalFavePage({
   const shown = useMemo(() => {
     if (!images) return undefined;
     const slice = images.slice((page - 1) * FAVE_PAGE_SIZE, page * FAVE_PAGE_SIZE);
-    return rules.withhold(slice, slice.map((image) => image.id));
+    return rules.withhold(
+      slice,
+      slice.map((image) => image.id),
+    );
   }, [images, page, rules]);
 
   const pageOf = useCallback(
     (target: number) => {
       const slice = (images ?? []).slice((target - 1) * FAVE_PAGE_SIZE, target * FAVE_PAGE_SIZE);
-      return rules.withhold(slice, slice.map((image) => image.id)).images;
+      return rules.withhold(
+        slice,
+        slice.map((image) => image.id),
+      ).images;
     },
     [images, rules],
   );
-  const readPage = useCallback(async (target: number) => pageOf(target).map((image) => image.id), [pageOf]);
+  const readPage = useCallback(
+    async (target: number) => pageOf(target).map((image) => image.id),
+    [pageOf],
+  );
   const reveal = useListReveal(readPage, page, setPage, () => paneOf(listKey));
 
   const shownImages = shown?.images;
@@ -231,7 +262,11 @@ export function useLocalFavePage({
         ? createPagedSequence({
             key: listKey,
             page,
-            current: { ids: shownImages.map((image) => image.id), previews: shownImages, totalPages },
+            current: {
+              ids: shownImages.map((image) => image.id),
+              previews: shownImages,
+              totalPages,
+            },
             pageSize: FAVE_PAGE_SIZE,
             fetchPage: async (target) => {
               const kept = pageOf(target);
@@ -325,8 +360,16 @@ export function FaveGridView({
       );
     }
     const count =
-      placeholderCount && placeholderCount > 0 ? Math.min(FAVE_PAGE_SIZE, placeholderCount) : FAVE_PAGE_SIZE;
-    return <ImageGridSkeleton count={count} entrance={entrance} seedCover={page === 1 ? seedCover : undefined} />;
+      placeholderCount && placeholderCount > 0
+        ? Math.min(FAVE_PAGE_SIZE, placeholderCount)
+        : FAVE_PAGE_SIZE;
+    return (
+      <ImageGridSkeleton
+        count={count}
+        entrance={entrance}
+        seedCover={page === 1 ? seedCover : undefined}
+      />
+    );
   }
 
   /* A failed read the screen owes an answer for: a turn whose rows are still another page's, or a

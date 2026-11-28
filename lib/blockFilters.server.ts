@@ -73,7 +73,7 @@ async function readBlockFiltersFresh(): Promise<BlockFilters> {
   /* A read begun before a successful edit cannot seed the old rules after the edit. The retry
      calls this function, never the cached export: a cached call from inside its own pending
      promise would await itself. */
-  return started === generation ? result ?? DEFAULT_BLOCK_FILTERS : readBlockFiltersFresh();
+  return started === generation ? (result ?? DEFAULT_BLOCK_FILTERS) : readBlockFiltersFresh();
 }
 
 /**
@@ -104,10 +104,16 @@ const readBlacklist = createServerMemo({
     try {
       const signal = AbortSignal.timeout(1500);
       return await readWholeBlacklist(async (page) => {
-        const response = await fetch(`${UPSTREAM}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`, {
-          signal,
-          next: { revalidate: cacheSeconds(BLACKLIST_REVALIDATE_SECONDS), tags: [PUBLIC_BLACKLIST_CACHE_TAG] },
-        });
+        const response = await fetch(
+          `${UPSTREAM}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`,
+          {
+            signal,
+            next: {
+              revalidate: cacheSeconds(BLACKLIST_REVALIDATE_SECONDS),
+              tags: [PUBLIC_BLACKLIST_CACHE_TAG],
+            },
+          },
+        );
         return response.ok ? response.json() : null;
       });
     } catch {
@@ -124,7 +130,7 @@ async function readPublicBlacklistFresh(): Promise<PublicBlacklist> {
   }
   const started = blacklistGeneration;
   const result = await readBlacklist();
-  return started === blacklistGeneration ? result ?? [] : readPublicBlacklistFresh();
+  return started === blacklistGeneration ? (result ?? []) : readPublicBlacklistFresh();
 }
 
 /** Once per request, for the same reason as `readBlockFilters`. */

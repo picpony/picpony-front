@@ -150,8 +150,10 @@ export default function DetailVideo({
     const previewImg = previewImgRef.current;
     const ready = Boolean(
       (finalEl && finalEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !finalEl.error) ||
-        (previewVid && previewVid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !previewVid.error) ||
-        (previewImg && previewImg.complete && previewImg.naturalWidth > 0),
+      (previewVid &&
+        previewVid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        !previewVid.error) ||
+      (previewImg && previewImg.complete && previewImg.naturalWidth > 0),
     );
     if (ready) {
       setPaintedSrc(finalSrc);
@@ -167,7 +169,8 @@ export default function DetailVideo({
     return () => window.clearTimeout(timer);
   }, [finalSrc, isPainted]);
   const showFailure = finalFailed;
-  const showPlaceholder = placeholderGone !== finalSrc && !finalFailed && !(heroActive && hasPreview);
+  const showPlaceholder =
+    placeholderGone !== finalSrc && !finalFailed && !(heroActive && hasPreview);
 
   const cancelFinalReady = useCallback((owner?: HTMLVideoElement) => {
     const lease = finalFrameLeaseRef.current;

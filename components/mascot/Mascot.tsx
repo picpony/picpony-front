@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react';
 import { MdClose, MdExpandMore } from 'react-icons/md';
 import IconButton from '@/components/IconButton';
 import ScrollArea from '@/components/ScrollArea';
@@ -88,7 +97,13 @@ const dwellFor = (text: string) => Math.min(12_000, Math.max(4_500, 3_000 + text
  * gaps between wing and tail are the page's — and it says where the head is, which is where the
  * speech bubble's tail points. Until it lands, or if it never does, an ellipse over the art stands in.
  */
-export default function Mascot({ onChat, active = true }: { onChat: () => void; active?: boolean }) {
+export default function Mascot({
+  onChat,
+  active = true,
+}: {
+  onChat: () => void;
+  active?: boolean;
+}) {
   const selected = useSyncedSetting('mascotId');
   const config = useResource(mascotConfig, { selected }, { keepPrevious: 'mascot-runtime' });
   const desktopSize = useSyncedSetting('mascotSizeDesktop');
@@ -123,8 +138,22 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
   const bubbleKind = useRef<Bubble['kind'] | null>(null);
   const holdFill = useRef<HTMLDivElement | null>(null);
   const meter = useRef<Animation | null>(null);
-  const hold = useRef<{ pointer: number; x: number; y: number; timer: number; hint: number; started: number; hinted: boolean } | null>(null);
-  const press = useRef<{ pointer: number; x: number; y: number; timer: number; shown: boolean } | null>(null);
+  const hold = useRef<{
+    pointer: number;
+    x: number;
+    y: number;
+    timer: number;
+    hint: number;
+    started: number;
+    hinted: boolean;
+  } | null>(null);
+  const press = useRef<{
+    pointer: number;
+    x: number;
+    y: number;
+    timer: number;
+    shown: boolean;
+  } | null>(null);
   /* When the squash went on, and when it lets go: the hop of a tap waits for the release. */
   const pressedAt = useRef(0);
   const releaseAt = useRef(0);
@@ -155,12 +184,30 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
   const open = bubbleOpen && shown && !collapsed;
   const resolvedShape = embeddedShape ?? shape.data ?? null;
   /* An outline of another shape is another picture's (a stale answer, a rotated file): not used. */
-  const outline = ready && art && resolvedShape && Math.abs(resolvedShape.w / resolvedShape.h - aspect) < 0.05 ? resolvedShape : null;
-  const hitPath = outline ? shapePath(outline, artW, artH, coarse ? HIT_PAD.coarse : HIT_PAD.fine) : null;
+  const outline =
+    ready && art && resolvedShape && Math.abs(resolvedShape.w / resolvedShape.h - aspect) < 0.05
+      ? resolvedShape
+      : null;
+  const hitPath = outline
+    ? shapePath(outline, artW, artH, coarse ? HIT_PAD.coarse : HIT_PAD.fine)
+    : null;
   const head = outline ? shapeHead(outline) : null;
   const reach = Math.max(0, ((coarse ? TOUCH_FLOOR.coarse : TOUCH_FLOOR.fine) - TOOLS_PX) / 2);
   const toolsLift = outline
-    ? Math.ceil(shapeLift(outline, artW, artH, { left: artW + TOOLS_OUT - TOOLS_PX - reach, right: artW + TOOLS_OUT + reach, top: -TOOLS_OUT - reach, bottom: TOOLS_PX - TOOLS_OUT + reach }, TOOLS_GAP))
+    ? Math.ceil(
+        shapeLift(
+          outline,
+          artW,
+          artH,
+          {
+            left: artW + TOOLS_OUT - TOOLS_PX - reach,
+            right: artW + TOOLS_OUT + reach,
+            top: -TOOLS_OUT - reach,
+            bottom: TOOLS_PX - TOOLS_OUT + reach,
+          },
+          TOOLS_GAP,
+        ),
+      )
     : 0;
 
   useLayoutEffect(() => {
@@ -184,9 +231,13 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     const frame = requestAnimationFrame(() => {
       if (skip) setInstant(true);
       setShown(true);
-      if (skip) settle = requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
+      if (skip)
+        settle = requestAnimationFrame(() => requestAnimationFrame(() => setInstant(false)));
     });
-    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(settle); };
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(settle);
+    };
   }, [visible]);
 
   /* Away (another route's media, a dialog, the keyboard) or collapsed, nothing is in progress.
@@ -194,26 +245,48 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
      an effect reading a function before its declaration is a bail-out for the React Compiler. */
   useEffect(() => {
     if (active && !collapsed) return;
-    if (hold.current) { clearTimeout(hold.current.timer); clearTimeout(hold.current.hint); hold.current = null; }
-    if (press.current) { clearTimeout(press.current.timer); press.current = null; }
-    if (pending.current) { clearTimeout(pending.current.timer); pending.current = null; }
+    if (hold.current) {
+      clearTimeout(hold.current.timer);
+      clearTimeout(hold.current.hint);
+      hold.current = null;
+    }
+    if (press.current) {
+      clearTimeout(press.current.timer);
+      press.current = null;
+    }
+    if (pending.current) {
+      clearTimeout(pending.current.timer);
+      pending.current = null;
+    }
     clearTimeout(releaseTimer.current);
     clearTimeout(hopTimer.current);
     clearTimeout(dismissTimer.current);
     releaseAt.current = 0;
     pressedAt.current = 0;
-    if (openNow.current) { openNow.current = false; closedAt.current = performance.now(); }
-    queueMicrotask(() => { setPressed(false); setBubbleOpen(false); });
+    if (openNow.current) {
+      openNow.current = false;
+      closedAt.current = performance.now();
+    }
+    queueMicrotask(() => {
+      setPressed(false);
+      setBubbleOpen(false);
+    });
   }, [active, collapsed]);
 
-  useEffect(() => () => {
-    if (hold.current) { clearTimeout(hold.current.timer); clearTimeout(hold.current.hint); }
-    if (press.current) clearTimeout(press.current.timer);
-    if (pending.current) clearTimeout(pending.current.timer);
-    clearTimeout(releaseTimer.current);
-    clearTimeout(hopTimer.current);
-    clearTimeout(dismissTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (hold.current) {
+        clearTimeout(hold.current.timer);
+        clearTimeout(hold.current.hint);
+      }
+      if (press.current) clearTimeout(press.current.timer);
+      if (pending.current) clearTimeout(pending.current.timer);
+      clearTimeout(releaseTimer.current);
+      clearTimeout(hopTimer.current);
+      clearTimeout(dismissTimer.current);
+    },
+    [],
+  );
 
   /* Where the bubble stands, measured each time it is given something to say, since its own width
      decides it: centred over the head where the scroller allows, never past the art's right edge,
@@ -240,7 +313,8 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       if (TOOLS_REACH <= most && fromRight - TOOLS_REACH >= TAIL_INSET - 1) right = TOOLS_REACH;
       else bottom = above;
     }
-    const tail = width > TAIL_INSET * 2 ? clamp(fromRight - right, TAIL_INSET, width - TAIL_INSET) : width / 2;
+    const tail =
+      width > TAIL_INSET * 2 ? clamp(fromRight - right, TAIL_INSET, width - TAIL_INSET) : width / 2;
     node.style.setProperty('--bubble-right', `${right}px`);
     node.style.setProperty('--bubble-bottom', `${bottom}px`);
     node.style.setProperty('--bubble-tail', `${tail}px`);
@@ -248,7 +322,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
 
   function closeBubble() {
     clearTimeout(dismissTimer.current);
-    if (pending.current) { clearTimeout(pending.current.timer); pending.current = null; }
+    if (pending.current) {
+      clearTimeout(pending.current.timer);
+      pending.current = null;
+    }
     if (!openNow.current) return;
     openNow.current = false;
     closedAt.current = performance.now();
@@ -300,14 +377,22 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     for (const running of node.getAnimations()) running.cancel();
     const up = springTiming('fastSpatial', 'ambient');
     const down = springTiming('fastSpatial', 'ambient');
-    const lift = node.animate([{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }], { duration: up.duration, easing: up.easing, fill: 'forwards' });
+    const lift = node.animate(
+      [{ transform: 'none' }, { transform: 'translateY(-6px) scale(1.05)' }],
+      { duration: up.duration, easing: up.easing, fill: 'forwards' },
+    );
     lift.finished
       .then(() => {
-        const land = node.animate([{ transform: 'translateY(-6px) scale(1.05)' }, { transform: 'none' }], { duration: down.duration, easing: down.easing });
+        const land = node.animate(
+          [{ transform: 'translateY(-6px) scale(1.05)' }, { transform: 'none' }],
+          { duration: down.duration, easing: down.easing },
+        );
         lift.cancel();
         return land.finished;
       })
-      .catch(() => { /* Cancelled by the next hop, which has already taken over. */ });
+      .catch(() => {
+        /* Cancelled by the next hop, which has already taken over. */
+      });
   }
   function hop() {
     clearTimeout(hopTimer.current);
@@ -358,7 +443,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
       if (event.target === node && event.propertyName === 'transform') greet();
     };
     node?.addEventListener('transitionend', onEnd);
-    const bound = window.setTimeout(greet, motionTier('ambient') === 'off' ? 0 : SPRING_MS.defaultSpatial * MOTION_SPEED_SCALE.slow + 50);
+    const bound = window.setTimeout(
+      greet,
+      motionTier('ambient') === 'off' ? 0 : SPRING_MS.defaultSpatial * MOTION_SPEED_SCALE.slow + 50,
+    );
   }
 
   /* ---- The hold: 1.5s to 彩彩 AI ------------------------------------------------------------- */
@@ -403,7 +491,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
     const current = hold.current;
     if (!fill || !open || bubble?.kind !== 'hold' || !current) return;
     meter.current?.cancel();
-    const animation = fill.animate([{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }], { duration: HOLD_MS, easing: 'linear', fill: 'forwards' });
+    const animation = fill.animate(
+      [{ transform: 'translateX(-100%)' }, { transform: 'translateX(0)' }],
+      { duration: HOLD_MS, easing: 'linear', fill: 'forwards' },
+    );
     animation.currentTime = Math.min(HOLD_MS, performance.now() - current.started);
     meter.current = animation;
     /* Let go, the meter stays where the hold left it while the bubble fades: cancelled, it snapped
@@ -430,8 +521,18 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
   function beginPress(event: PointerEvent<HTMLElement>) {
     endPress('cancel');
     const touch = event.pointerType === 'touch';
-    const current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, timer: 0, shown: !touch };
-    if (touch) current.timer = window.setTimeout(() => { current.shown = true; pressIn(); }, TOUCH_PRESS_DELAY_MS);
+    const current = {
+      pointer: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: 0,
+      shown: !touch,
+    };
+    if (touch)
+      current.timer = window.setTimeout(() => {
+        current.shown = true;
+        pressIn();
+      }, TOUCH_PRESS_DELAY_MS);
     else pressIn();
     press.current = current;
   }
@@ -504,13 +605,20 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
 
   function onClick(event: MouseEvent<HTMLButtonElement>) {
     if (event.detail === 0) swallow.current = false;
-    if (swallow.current) { swallow.current = false; return; }
+    if (swallow.current) {
+      swallow.current = false;
+      return;
+    }
     if (collapsed) expand();
     else speak();
   }
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === 'Enter') swallow.current = false;
-    if (event.key === 'Escape') { endHold(); closeBubble(); return; }
+    if (event.key === 'Escape') {
+      endHold();
+      closeBubble();
+      return;
+    }
     if (event.key === ' ' && !collapsed) {
       event.preventDefault();
       if (event.repeat) return;
@@ -542,29 +650,43 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
           data-speaking={open ? '' : undefined}
           aria-hidden={!shown || undefined}
           inert={!shown || undefined}
-          className={cn(styles.stage, collapsed ? styles.collapsed : styles.expanded, instant && styles.instant, 'group')}
-          style={{
-            '--box-w': `${artW}px`,
-            '--box-h': `${artH}px`,
-            '--plate': `${PLATE_PX}px`,
-            '--art-w': `${artW}px`,
-            '--art-h': `${artH}px`,
-            '--peek': String(peek),
-            '--peek-x': `${peekX}px`,
-            '--peek-y': `${peekY}px`,
-            '--tools-lift': `${toolsLift}px`,
-          } as CSSProperties}
+          className={cn(
+            styles.stage,
+            collapsed ? styles.collapsed : styles.expanded,
+            instant && styles.instant,
+            'group',
+          )}
+          style={
+            {
+              '--box-w': `${artW}px`,
+              '--box-h': `${artH}px`,
+              '--plate': `${PLATE_PX}px`,
+              '--art-w': `${artW}px`,
+              '--art-h': `${artH}px`,
+              '--peek': String(peek),
+              '--peek-x': `${peekX}px`,
+              '--peek-y': `${peekY}px`,
+              '--tools-lift': `${toolsLift}px`,
+            } as CSSProperties
+          }
         >
           <div
             ref={bubbleNode}
             data-open={open ? 'true' : 'false'}
             inert={!open || undefined}
             aria-hidden={!open || undefined}
-            className={cn(styles.bubble, 'rounded-lg bg-surface-container text-on-surface forced-boundary')}
+            className={cn(
+              styles.bubble,
+              'rounded-lg bg-surface-container text-on-surface forced-boundary',
+            )}
             onPointerEnter={() => clearTimeout(dismissTimer.current)}
-            onPointerLeave={() => { if (bubble?.kind === 'tip' && openNow.current) scheduleDismiss(bubble.text); }}
+            onPointerLeave={() => {
+              if (bubble?.kind === 'tip' && openNow.current) scheduleDismiss(bubble.text);
+            }}
             onFocus={() => clearTimeout(dismissTimer.current)}
-            onBlur={() => { if (bubble?.kind === 'tip' && openNow.current) scheduleDismiss(bubble.text); }}
+            onBlur={() => {
+              if (bubble?.kind === 'tip' && openNow.current) scheduleDismiss(bubble.text);
+            }}
           >
             {bubble?.kind === 'hold' ? (
               <div className="w-56 max-w-full px-4 py-3">
@@ -579,11 +701,20 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
                   as="p"
                   axis="y"
                   className="flex min-w-0 flex-1"
-                  viewportClassName={cn(styles.bubbleBody, 'popover-scrollbar min-w-0 flex-1 overscroll-y-contain py-1.5 text-body-m wrap-anywhere')}
+                  viewportClassName={cn(
+                    styles.bubbleBody,
+                    'popover-scrollbar min-w-0 flex-1 overscroll-y-contain py-1.5 text-body-m wrap-anywhere',
+                  )}
                 >
                   {bubble?.text}
                 </ScrollArea>
-                <IconButton dismiss size="sm" aria-label="关闭吉祥物对话" onClick={closeBubble} icon={<MdClose />} />
+                <IconButton
+                  dismiss
+                  size="sm"
+                  aria-label="关闭吉祥物对话"
+                  onClick={closeBubble}
+                  icon={<MdClose />}
+                />
               </div>
             )}
           </div>
@@ -595,7 +726,10 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             /* The ring keeps a band of the page's surface inside it: the figure stands over whatever
                the page shows, a picture included, and the band gives the ring the edge it has
                everywhere else (docs/design/colour.md#focus). */
-            className={cn(styles.control, 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
+            className={cn(
+              styles.control,
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring',
+            )}
             aria-label={collapsed ? '展开吉祥物' : '吉祥物（长按或按住空格打开彩彩 AI）'}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -607,13 +741,19 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
             onClick={onClick}
             onKeyDown={onKeyDown}
             onKeyUp={onKeyUp}
-            onBlur={() => { endHold(); endPress('cancel'); }}
+            onBlur={() => {
+              endHold();
+              endPress('cancel');
+            }}
           >
             {/* The plate is the collapsed control's ripple host, aligned with `IconButton variant="quiet"`:
                 neutral circle at rest, tonal rounded square under a pointer, tighter corners on press. */}
             <span
               data-ripple-host=""
-              className={cn(styles.plate, 'bg-surface-container-highest text-on-surface forced-boundary shadow-e2')}
+              className={cn(
+                styles.plate,
+                'bg-surface-container-highest text-on-surface forced-boundary shadow-e2',
+              )}
               aria-hidden="true"
             />
             <span
@@ -657,10 +797,18 @@ export default function Mascot({ onChat, active = true }: { onChat: () => void; 
           {/* Tucks the figure into its plate: aligned with the detail page's pinned page actions
               (`quiet`, neutral disc at rest becoming the tonal rounded square under a pointer). */}
           <div className={cn(styles.tools, 'hover-reveal')} inert={collapsed || undefined}>
-            <IconButton variant="quiet" size="sm" aria-label="收起吉祥物" onClick={collapse} icon={<MdExpandMore />} />
+            <IconButton
+              variant="quiet"
+              size="sm"
+              aria-label="收起吉祥物"
+              onClick={collapse}
+              icon={<MdExpandMore />}
+            />
           </div>
 
-          <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
+          <p className="sr-only" role="status" aria-live="polite">
+            {announcement}
+          </p>
         </div>
       </div>
     </div>

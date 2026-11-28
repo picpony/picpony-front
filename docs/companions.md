@@ -53,16 +53,16 @@ Use the elevation filter tokens for alpha-shaped silhouettes and bubble tails. D
 
 The original Browser Ponies engine runs in the sandboxed opaque-origin `public/companions/ponies-frame.*` frame.
 
-| Concern | Contract |
-| --- | --- |
-| Frame scheme | Keep `color-scheme: light` on the iframe so its canvas stays transparent |
-| Layer geometry | Follow the content-area box; `z-companions` stays below page chrome |
-| Frame geometry | Keep the frame window-sized; send a stage resize after two stable frames |
-| Selection | Apply a configuration diff; retained ponies continue where they are |
-| Pause | Keep independent `away` and keyboard-focus reasons; queue changes while held |
-| Teardown | Hidden document, leaving the standard tier, or account change |
-| Empty selection | Keep the frame for `EMPTY_GRACE_MS` so clear and undo retain continuity |
-| Return | A pony returning within one minute reuses its saved position |
+| Concern         | Contract                                                                     |
+| --------------- | ---------------------------------------------------------------------------- |
+| Frame scheme    | Keep `color-scheme: light` on the iframe so its canvas stays transparent     |
+| Layer geometry  | Follow the content-area box; `z-companions` stays below page chrome          |
+| Frame geometry  | Keep the frame window-sized; send a stage resize after two stable frames     |
+| Selection       | Apply a configuration diff; retained ponies continue where they are          |
+| Pause           | Keep independent `away` and keyboard-focus reasons; queue changes while held |
+| Teardown        | Hidden document, leaving the standard tier, or account change                |
+| Empty selection | Keep the frame for `EMPTY_GRACE_MS` so clear and undo retain continuity      |
+| Return          | A pony returning within one minute reuses its saved position                 |
 
 Do not resize the iframe on each drawer-animation frame. Ponies move with the content area's leading edge; out-of-stage ponies return into bounds.
 

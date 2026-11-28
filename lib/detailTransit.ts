@@ -96,9 +96,15 @@ export function opensFromDetailOrigin(id: number | string): boolean {
 
 /** The row a picture was opened from, while it is in the list on screen. */
 export function findDetailOriginRow(id: number | string): HTMLElement | null {
-  const row = document.querySelector<HTMLElement>(`[data-detail-origin="${CSS.escape(String(id))}"]`);
+  const row = document.querySelector<HTMLElement>(
+    `[data-detail-origin="${CSS.escape(String(id))}"]`,
+  );
   if (!row?.isConnected || row.getClientRects().length === 0) return null;
-  for (let pane = row.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
+  for (
+    let pane = row.closest('[data-tab-pane]');
+    pane;
+    pane = pane.parentElement?.closest('[data-tab-pane]') ?? null
+  ) {
     if (!pane.hasAttribute('data-tab-pane-active')) return null;
   }
   return row;
@@ -148,7 +154,10 @@ export function playDetailEntrance(section: HTMLElement): () => void {
        its rise on the slow spatial spring and its fade on the slow effects one. */
     const { spatial, effects } = surfaceArrival('slow', 'image');
     const fade = section.animate([{ opacity: 0 }, { opacity: 1 }], effects);
-    const rise = section.animate([{ transform: `translateY(${TRAVEL_PX.standard}px)` }, { transform: 'none' }], spatial);
+    const rise = section.animate(
+      [{ transform: `translateY(${TRAVEL_PX.standard}px)` }, { transform: 'none' }],
+      spatial,
+    );
     stop = () => {
       fade.cancel();
       rise.cancel();
@@ -193,7 +202,12 @@ export function captureDetailExit(): DetailExitSnapshot | null {
   node.style.opacity = '';
   node.removeAttribute('inert');
   unsealDetailCopy(node);
-  return { id: section.getAttribute('data-image-hero-route-id') ?? '', snapshot, parent, box: section.getBoundingClientRect() };
+  return {
+    id: section.getAttribute('data-image-hero-route-id') ?? '',
+    snapshot,
+    parent,
+    box: section.getBoundingClientRect(),
+  };
 }
 
 /**

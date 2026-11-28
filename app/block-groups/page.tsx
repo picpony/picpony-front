@@ -81,7 +81,9 @@ export default function BlockGroupsPage() {
 
   /** After a create or an import: the list as the server now has it (its fetch puts it in force). */
   const reread = useCallback(async (owner: string) => {
-    await blockGroups.read({ token: owner }, { force: true }).catch(() => blockGroups.expire({ token: owner }));
+    await blockGroups
+      .read({ token: owner }, { force: true })
+      .catch(() => blockGroups.expire({ token: owner }));
     shareableGroups.invalidate({ token: owner });
   }, []);
 
@@ -90,8 +92,15 @@ export default function BlockGroupsPage() {
     setSaving(true);
     /* An edit carries the version the list holds and keeps the switch where it is (the backend
        writes `active` with every save). */
-    const held = input.id ? blockGroups.peek({ token }).data?.find((group) => group.id === input.id) : undefined;
-    const saved = await settle(saveBlockGroup(token, held ? { ...input, revision: held.revision, active: held.active } : input));
+    const held = input.id
+      ? blockGroups.peek({ token }).data?.find((group) => group.id === input.id)
+      : undefined;
+    const saved = await settle(
+      saveBlockGroup(
+        token,
+        held ? { ...input, revision: held.revision, active: held.active } : input,
+      ),
+    );
     if (!saved.ok) {
       if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
     } else if (readToken() === token) {
@@ -101,14 +110,27 @@ export default function BlockGroupsPage() {
         const hidden = [...input.hidden];
         const spoilered = [...input.spoilered];
         const { revision } = saved.value;
-        writeGroups(token, (list) => list.map((group) => (group.id === input.id
-          ? { ...group, name: input.name, hidden_tags: hidden, spoilered_tags: spoilered, revision }
-          : group)));
+        writeGroups(token, (list) =>
+          list.map((group) =>
+            group.id === input.id
+              ? {
+                  ...group,
+                  name: input.name,
+                  hidden_tags: hidden,
+                  spoilered_tags: spoilered,
+                  revision,
+                }
+              : group,
+          ),
+        );
         blockGroups.expire({ token });
       } else {
         await reread(token);
       }
-      if (readToken() !== token) { setSaving(false); return; }
+      if (readToken() !== token) {
+        setSaving(false);
+        return;
+      }
       setEditorOpen(false);
       showToast(input.id ? '已保存屏蔽组' : '已创建屏蔽组', 'success');
     }
@@ -121,79 +143,98 @@ export default function BlockGroupsPage() {
    * so the server ends where the switch does; a refusal puts the switch back where the server last
    * agreed and says why.
    */
-  const toggle = useCallback((group: BlockGroup, active: boolean) => {
-    if (!token || readToken() !== token) return;
-    const flip = (value: boolean) =>
-      writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, active: value } : item)));
-    /* Each switch carries the group's version; every accepted one moves it on. */
-    const heldRevision = () => blockGroups.peek({ token }).data?.find((item) => item.id === group.id)?.revision ?? group.revision;
-    const current = toggles.current.get(group.id);
-    const state = current ?? { confirmed: group.active, wanted: active };
-    state.wanted = active;
-    flip(active);
-    if (current) return;
-    toggles.current.set(group.id, state);
-    void (async () => {
-      let sentAny = false;
-      while (readToken() === token && state.confirmed !== state.wanted) {
-        const sending = state.wanted;
-        const sent = await settle(toggleBlockGroup(token, group.id, sending, heldRevision()));
-        if (!sent.ok) {
-          state.wanted = state.confirmed;
-          if (readToken() === token) {
-            flip(state.confirmed);
-            showToast(apiErrorMessage(sent.error, '切换失败'), 'error');
+  const toggle = useCallback(
+    (group: BlockGroup, active: boolean) => {
+      if (!token || readToken() !== token) return;
+      const flip = (value: boolean) =>
+        writeGroups(token, (list) =>
+          list.map((item) => (item.id === group.id ? { ...item, active: value } : item)),
+        );
+      /* Each switch carries the group's version; every accepted one moves it on. */
+      const heldRevision = () =>
+        blockGroups.peek({ token }).data?.find((item) => item.id === group.id)?.revision ??
+        group.revision;
+      const current = toggles.current.get(group.id);
+      const state = current ?? { confirmed: group.active, wanted: active };
+      state.wanted = active;
+      flip(active);
+      if (current) return;
+      toggles.current.set(group.id, state);
+      void (async () => {
+        let sentAny = false;
+        while (readToken() === token && state.confirmed !== state.wanted) {
+          const sending = state.wanted;
+          const sent = await settle(toggleBlockGroup(token, group.id, sending, heldRevision()));
+          if (!sent.ok) {
+            state.wanted = state.confirmed;
+            if (readToken() === token) {
+              flip(state.confirmed);
+              showToast(apiErrorMessage(sent.error, '切换失败'), 'error');
+            }
+            break;
           }
-          break;
+          state.confirmed = sending;
+          sentAny = true;
+          const { revision } = sent.value;
+          if (readToken() === token) {
+            writeGroups(token, (list) =>
+              list.map((item) => (item.id === group.id ? { ...item, revision } : item)),
+            );
+          }
         }
-        state.confirmed = sending;
-        sentAny = true;
-        const { revision } = sent.value;
-        if (readToken() === token) {
-          writeGroups(token, (list) => list.map((item) => (item.id === group.id ? { ...item, revision } : item)));
-        }
-      }
-      toggles.current.delete(group.id);
-      /* A list read that was already out when the switch flipped answers with the old state and
+        toggles.current.delete(group.id);
+        /* A list read that was already out when the switch flipped answers with the old state and
          replaces the flip — on screen and in the device's mirror — after which nothing put it
          back (review P4-F8). Once the server has the last word, the list is asked again. */
-      if (sentAny && readToken() === token) blockGroups.expire({ token });
-    })();
-  }, [token]);
+        if (sentAny && readToken() === token) blockGroups.expire({ token });
+      })();
+    },
+    [token],
+  );
 
-  const remove = useCallback(async (group: BlockGroup) => {
-    if (!token || readToken() !== token || deleting.has(group.id)) return;
-    /* The question comes first; nothing on the card changes until it is answered (R5-039). */
-    if (!(await confirm({
-      title: '确认删除',
-      message: `确定要删除屏蔽组「${group.name || '未命名屏蔽组'}」吗？`,
-      tone: 'danger',
-    }))) return;
-    if (readToken() !== token) return;
-    setDeleting((previous) => new Set(previous).add(group.id));
-    const deleted = await settle(deleteBlockGroup(token, group.id));
-    if (readToken() === token) {
-      if (deleted.ok) {
-        /* The user's removal: if the confirmation has not given the focus back to the row by the
+  const remove = useCallback(
+    async (group: BlockGroup) => {
+      if (!token || readToken() !== token || deleting.has(group.id)) return;
+      /* The question comes first; nothing on the card changes until it is answered (R5-039). */
+      if (
+        !(await confirm({
+          title: '确认删除',
+          message: `确定要删除屏蔽组「${group.name || '未命名屏蔽组'}」吗？`,
+          tone: 'danger',
+        }))
+      )
+        return;
+      if (readToken() !== token) return;
+      setDeleting((previous) => new Set(previous).add(group.id));
+      const deleted = await settle(deleteBlockGroup(token, group.id));
+      if (readToken() === token) {
+        if (deleted.ok) {
+          /* The user's removal: if the confirmation has not given the focus back to the row by the
            time it leaves, the list still places it (`PresenceList`'s `claimFocus`). */
-        presence.current?.claimFocus([group.id]);
-        writeGroups(token, (list) => list.filter((item) => item.id !== group.id));
-        blockGroups.expire({ token });
-        showToast('已删除屏蔽组', 'success');
-      } else {
-        showToast(apiErrorMessage(deleted.error, '删除失败'), 'error');
+          presence.current?.claimFocus([group.id]);
+          writeGroups(token, (list) => list.filter((item) => item.id !== group.id));
+          blockGroups.expire({ token });
+          showToast('已删除屏蔽组', 'success');
+        } else {
+          showToast(apiErrorMessage(deleted.error, '删除失败'), 'error');
+        }
       }
-    }
-    setDeleting((previous) => {
-      const next = new Set(previous);
-      next.delete(group.id);
-      return next;
-    });
-  }, [token, confirm, deleting]);
+      setDeleting((previous) => {
+        const next = new Set(previous);
+        next.delete(group.id);
+        return next;
+      });
+    },
+    [token, confirm, deleting],
+  );
 
   const importFilter = async (result: FilterImport) => {
     if (!token || readToken() !== token) return;
-    await saveBlockGroup(token, { name: result.name, hidden: result.hidden, spoilered: result.spoilered });
+    await saveBlockGroup(token, {
+      name: result.name,
+      hidden: result.hidden,
+      spoilered: result.spoilered,
+    });
     if (readToken() !== token) return;
     await reread(token);
     if (readToken() !== token) return;
@@ -213,20 +254,32 @@ export default function BlockGroupsPage() {
         loading ? (
           <Skeleton className="h-5 w-40" />
         ) : signedIn && groups ? (
-          full
-            ? `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组（已达上限）`
-            : `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组`
+          full ? (
+            `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组（已达上限）`
+          ) : (
+            `已创建 ${count} / ${MAX_BLOCK_GROUPS} 个屏蔽组`
+          )
         ) : undefined
       }
       actions={
         signedIn && groups ? (
           <>
-            <Button variant="tonal" icon={<MdDownload />} responsiveLabel onClick={() => setImportOpen(true)}>
+            <Button
+              variant="tonal"
+              icon={<MdDownload />}
+              responsiveLabel
+              onClick={() => setImportOpen(true)}
+            >
               从 Derpibooru 导入
             </Button>
             {/* While empty, the empty state carries 新建 — one primary action, not two (R5-041). */}
             {count > 0 && (
-              <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
+              <Button
+                variant="filled"
+                icon={<MdAdd />}
+                disabled={full}
+                onClick={() => openEditor(null)}
+              >
                 新建
               </Button>
             )}

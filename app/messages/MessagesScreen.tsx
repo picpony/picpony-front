@@ -32,7 +32,11 @@ import {
 const TAB_CHOICE_WAIT_MS = 800;
 
 function byTab(counts: UnreadBreakdown): UnreadByTab {
-  return { notification: counts.notifications, interaction: counts.interactions, chat: counts.messages };
+  return {
+    notification: counts.notifications,
+    interaction: counts.interactions,
+    chat: counts.messages,
+  };
 }
 
 /** A positive user id off the address, or `null`. */
@@ -69,7 +73,12 @@ function replaceMessagesUrl(update: (params: URLSearchParams) => void) {
 
 function writeQueuedAddress() {
   const here = window.location.pathname === '/messages';
-  if (here && queuedAddress.length && isHistoryLayerState(window.history.state) && hasModalLayer()) {
+  if (
+    here &&
+    queuedAddress.length &&
+    isHistoryLayerState(window.history.state) &&
+    hasModalLayer()
+  ) {
     stopWaiting ??= subscribeScreenQuiet(writeQueuedAddress);
     return;
   }
@@ -82,7 +91,8 @@ function writeQueuedAddress() {
   for (const update of updates) update(params);
   const query = params.toString();
   const href = query ? `/messages?${query}` : '/messages';
-  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`)
+    window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting writes go with it: the next one decides its own address. */
@@ -137,9 +147,12 @@ export default function MessagesScreen({ token }: { token: string | null }) {
 
   const [tab, setTab] = useState<MessagesTab | null>(() => {
     const requested = linkedUser !== null ? 'chat' : requestedTab;
-    if (!token || requested) return chooseInitialTab({ requested, stored: storedTab, unread: null, signedIn });
+    if (!token || requested)
+      return chooseInitialTab({ requested, stored: storedTab, unread: null, signedIn });
     const known = unreadCounts.peek({ token }).data;
-    return known ? chooseInitialTab({ requested: null, stored: storedTab, unread: byTab(known), signedIn }) : null;
+    return known
+      ? chooseInitialTab({ requested: null, stored: storedTab, unread: byTab(known), signedIn })
+      : null;
   });
   /* Waiting on the counts: choose the moment they (or their failure) arrive… */
   if (tab === null && (counts !== null || unread.error !== undefined)) {

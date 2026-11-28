@@ -77,7 +77,9 @@ export default function AnnouncementsPane({ active }: { active: boolean }) {
                       {item.version}
                     </Badge>
                   )}
-                  <h2 className="text-title-m-emphasized text-on-surface min-w-0 wrap-anywhere">{item.title}</h2>
+                  <h2 className="text-title-m-emphasized text-on-surface min-w-0 wrap-anywhere">
+                    {item.title}
+                  </h2>
                 </div>
                 <time
                   dateTime={stamp?.toISOString()}

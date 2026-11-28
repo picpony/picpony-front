@@ -13,18 +13,30 @@ export function sameRange(a: RangeValue, b: RangeValue) {
 
 /** Match native range's step grid, including a maximum which is not itself on the grid. */
 export function snapRangeValue(value: number, min: number, max: number, step: number) {
-  const index = Math.min(Math.round((clamp(value, min, max) - min) / step), Math.floor((max - min) / step + 1e-10));
+  const index = Math.min(
+    Math.round((clamp(value, min, max) - min) / step),
+    Math.floor((max - min) / step + 1e-10),
+  );
   return clamp(Number((min + index * step).toPrecision(15)), min, max);
 }
 
-export function normalizeRange(value: RangeValue, min: number, max: number, step: number): RangeValue {
+export function normalizeRange(
+  value: RangeValue,
+  min: number,
+  max: number,
+  step: number,
+): RangeValue {
   const start = snapRangeValue(value.start, min, max, step);
   const end = snapRangeValue(value.end, min, max, step);
   return start <= end ? { start, end } : { start: end, end: start };
 }
 
 /** Switch the active role at a crossing; the stationary physical handle must not drift. */
-export function moveRangeHandle(value: RangeValue, handle: RangeHandle, next: number): { value: RangeValue; handle: RangeHandle } {
+export function moveRangeHandle(
+  value: RangeValue,
+  handle: RangeHandle,
+  next: number,
+): { value: RangeValue; handle: RangeHandle } {
   if (handle === 'start') {
     return next > value.end
       ? { value: { start: value.end, end: next }, handle: 'end' }

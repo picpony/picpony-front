@@ -4,7 +4,8 @@ import path from 'node:path';
 import ts from 'typescript';
 
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
-const isSource = (file) => EXTENSIONS.some((ext) => file.endsWith(ext)) && !/\.d\.[cm]?ts$/.test(file);
+const isSource = (file) =>
+  EXTENSIONS.some((ext) => file.endsWith(ext)) && !/\.d\.[cm]?ts$/.test(file);
 
 export function readSources(root) {
   const sources = new Map();
@@ -20,9 +21,13 @@ export function readSources(root) {
 function typeOnly(node) {
   if (node.isTypeOnly || node.importClause?.isTypeOnly) return true;
   const bindings = node.importClause?.namedBindings ?? node.exportClause;
-  return !node.importClause?.name && bindings &&
+  return (
+    !node.importClause?.name &&
+    bindings &&
     (ts.isNamedImports(bindings) || ts.isNamedExports(bindings)) &&
-    bindings.elements.length > 0 && bindings.elements.every((item) => item.isTypeOnly);
+    bindings.elements.length > 0 &&
+    bindings.elements.every((item) => item.isTypeOnly)
+  );
 }
 
 export function buildGraph(sources) {
@@ -33,14 +38,28 @@ export function buildGraph(sources) {
     const add = (literal, dynamic = false) => {
       if (!literal || !ts.isStringLiteralLike(literal)) return;
       const specifier = literal.text;
-      const local = specifier.startsWith('@/') ? specifier.slice(2) :
-        specifier.startsWith('.') ? path.posix.join(path.posix.dirname(file), specifier) : null;
+      const local = specifier.startsWith('@/')
+        ? specifier.slice(2)
+        : specifier.startsWith('.')
+          ? path.posix.join(path.posix.dirname(file), specifier)
+          : null;
       // TypeScript resolves an explicit JS extension to its source TS file too.
       const stem = local?.replace(/\.[cm]?jsx?$/, '');
-      const candidates = local === null ? [] : [local, ...EXTENSIONS.map((ext) => stem + ext),
-        ...EXTENSIONS.map((ext) => `${local}/index${ext}`)];
+      const candidates =
+        local === null
+          ? []
+          : [
+              local,
+              ...EXTENSIONS.map((ext) => stem + ext),
+              ...EXTENSIONS.map((ext) => `${local}/index${ext}`),
+            ];
       const target = candidates.find((candidate) => sources.has(candidate)) ?? local ?? specifier;
-      edges.push({ target, specifier, dynamic, line: ast.getLineAndCharacterOfPosition(literal.getStart(ast)).line + 1 });
+      edges.push({
+        target,
+        specifier,
+        dynamic,
+        line: ast.getLineAndCharacterOfPosition(literal.getStart(ast)).line + 1,
+      });
     };
     const visit = (node) => {
       if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
@@ -48,19 +67,25 @@ export function buildGraph(sources) {
         return;
       }
       if (ts.isImportEqualsDeclaration(node)) {
-        if (!node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference)) add(node.moduleReference.expression);
+        if (!node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference))
+          add(node.moduleReference.expression);
         return;
       }
       if (ts.isCallExpression(node)) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword) add(node.arguments[0], true);
-        else if (ts.isIdentifier(node.expression) && node.expression.text === 'require') add(node.arguments[0]);
+        else if (ts.isIdentifier(node.expression) && node.expression.text === 'require')
+          add(node.arguments[0]);
       }
       ts.forEachChild(node, visit);
     };
     visit(ast);
     graph.set(file, {
-      client: ast.statements.some((node) => ts.isExpressionStatement(node) &&
-        ts.isStringLiteral(node.expression) && node.expression.text === 'use client'),
+      client: ast.statements.some(
+        (node) =>
+          ts.isExpressionStatement(node) &&
+          ts.isStringLiteral(node.expression) &&
+          node.expression.text === 'use client',
+      ),
       edges,
     });
   }
@@ -98,7 +123,8 @@ export function findCycles(graph) {
     if (done.has(file)) return;
     active.set(file, stack.length);
     stack.push(file);
-    for (const edge of graph.get(file)?.edges ?? []) if (!edge.dynamic && graph.has(edge.target)) visit(edge.target);
+    for (const edge of graph.get(file)?.edges ?? [])
+      if (!edge.dynamic && graph.has(edge.target)) visit(edge.target);
     stack.pop();
     active.delete(file);
     done.add(file);

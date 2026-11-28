@@ -35,12 +35,20 @@ function Tile({
   children?: ReactNode;
 }) {
   const open = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
     event.preventDefault();
     openTab(tab);
   };
   return (
-    <Card as="a" interactive variant="filled" href={adminHref(tab)} onClick={open} className="flex flex-col gap-1">
+    <Card
+      as="a"
+      interactive
+      variant="filled"
+      href={adminHref(tab)}
+      onClick={open}
+      className="flex flex-col gap-1"
+    >
       <span className="text-label-l text-on-surface-variant">{label}</span>
       <div className="text-headline-s tabular-nums text-on-surface">
         {value === undefined ? <Skeleton className="h-8 w-20" /> : value}
@@ -63,11 +71,24 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
   const status = useAdminQuery(siteStatusQuery, admin ? token : '');
   /* The glossary feedback queue's own first page — the same key the feedback dialog opens on. The
      backend counts nothing, so a full first page with a next one reads 「40+」. */
-  const feedback = useResource(tagFeedback, token ? { token, status: 'pending', keyword: '' } : SKIP);
+  const feedback = useResource(
+    tagFeedback,
+    token ? { token, status: 'pending', keyword: '' } : SKIP,
+  );
   /* A one-row page: the statistics ride on any dictionary read. */
   const dictionary = useResource(
     dictionaryPage,
-    token ? { token, page: 1, limit: 1, keyword: '', sort: 'count_desc', category: 'all', untranslated: false } : SKIP,
+    token
+      ? {
+          token,
+          page: 1,
+          limit: 1,
+          keyword: '',
+          sort: 'count_desc',
+          category: 'all',
+          untranslated: false,
+        }
+      : SKIP,
   );
 
   const pendingReports = reports.data?.filter((report) => report.status === 'pending').length;
@@ -77,16 +98,20 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
 
   return (
     <div className="@container space-y-6">
-      <SectionHeader section="welcome"
-        subtitle="待处理的事项与站点状态"
-      />
+      <SectionHeader section="welcome" subtitle="待处理的事项与站点状态" />
       <ul className="grid grid-cols-1 gap-3 @md:grid-cols-2" aria-label="待办事项">
         {admin && (
           <li className="grid">
             <Tile
               tab="reports"
               label="待处理的举报"
-              value={reports.error ? failed : pendingReports === undefined ? undefined : formatCount(pendingReports)}
+              value={
+                reports.error
+                  ? failed
+                  : pendingReports === undefined
+                    ? undefined
+                    : formatCount(pendingReports)
+              }
               caption="前往举报处理"
               openTab={openTab}
             />
@@ -96,7 +121,13 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
           <Tile
             tab="glossary"
             label="待处理的词库反馈"
-            value={feedback.error && !feedback.data ? failed : feedback.data ? `${formatCount(feedback.data.rows.length)}${feedback.data.next === null ? '' : '+'}` : undefined}
+            value={
+              feedback.error && !feedback.data
+                ? failed
+                : feedback.data
+                  ? `${formatCount(feedback.data.rows.length)}${feedback.data.next === null ? '' : '+'}`
+                  : undefined
+            }
             caption="前往词库编辑"
             openTab={openTab}
           />
@@ -109,10 +140,16 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
               dictionary.error && !dictionary.data
                 ? failed
                 : dictionary.data
-                  ? share === null ? '暂无标签' : `${share.toFixed(2)}%`
+                  ? share === null
+                    ? '暂无标签'
+                    : `${share.toFixed(2)}%`
                   : undefined
             }
-            caption={stats ? `已翻译 ${formatCount(stats.translated)} / 共 ${formatCount(stats.total)} 个标签` : '前往词库编辑'}
+            caption={
+              stats
+                ? `已翻译 ${formatCount(stats.translated)} / 共 ${formatCount(stats.total)} 个标签`
+                : '前往词库编辑'
+            }
             openTab={openTab}
           >
             {dictionary.data === undefined && !dictionary.error ? (
@@ -127,7 +164,15 @@ export default function WelcomeTab({ token, role, openTab }: AdminPanelProps) {
             <Tile
               tab="other"
               label="维护模式"
-              value={status.error && !status.data ? failed : status.data ? (status.data.maintenanceMode ? '已开启' : '未开启') : undefined}
+              value={
+                status.error && !status.data
+                  ? failed
+                  : status.data
+                    ? status.data.maintenanceMode
+                      ? '已开启'
+                      : '未开启'
+                    : undefined
+              }
               caption={status.data?.maintenanceMode ? '访客现在只能看到维护提示' : '前往其他功能'}
               openTab={openTab}
             />

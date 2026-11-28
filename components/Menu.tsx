@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type ReactNode, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { cn } from '@/lib/utils';
 import Popover, { estimateMenuHeight, type PopoverHandle } from './Popover';
 import { moveFocusFrom } from '@/lib/overlay';
@@ -64,12 +73,23 @@ export default function Menu({
   const [chosenIndex, setChosenIndex] = useState(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const popoverRef = useRef<PopoverHandle | null>(null);
-  useImperativeHandle(handleRef, () => ({
-    get element() { return popoverRef.current?.element ?? null; },
-    get scroller() { return popoverRef.current?.scroller ?? null; },
-  }), []);
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      get element() {
+        return popoverRef.current?.element ?? null;
+      },
+      get scroller() {
+        return popoverRef.current?.scroller ?? null;
+      },
+    }),
+    [],
+  );
 
-  const firstEnabled = Math.max(0, items.findIndex((i) => !i.disabled));
+  const firstEnabled = Math.max(
+    0,
+    items.findIndex((i) => !i.disabled),
+  );
   const activeIndex = chosenIndex < 0 ? firstEnabled : chosenIndex;
 
   /* Closing forgets the caret, so the next open starts at the top again. In the
@@ -184,7 +204,11 @@ export default function Menu({
           onClick={() => run(item)}
           onKeyDown={onKeyDown}
           onPointerEnter={() => {
-            if (!item.disabled && (focusOnOpen || popoverRef.current?.element?.contains(document.activeElement))) setChosenIndex(index);
+            if (
+              !item.disabled &&
+              (focusOnOpen || popoverRef.current?.element?.contains(document.activeElement))
+            )
+              setChosenIndex(index);
           }}
           data-ripple=""
           /* An 8dp row corner inside the panel's 16dp corner and 8dp inset.
@@ -197,11 +221,17 @@ export default function Menu({
             'spring-fast-effects transition-[color,box-shadow,opacity] focus-visible:inset-ring-2 focus-visible:focus-ring-inset',
             item.disabled
               ? 'cursor-not-allowed disabled-content'
-              : cn('cursor-pointer state-layer', item.destructive ? 'text-error' : 'text-on-surface'),
+              : cn(
+                  'cursor-pointer state-layer',
+                  item.destructive ? 'text-error' : 'text-on-surface',
+                ),
           )}
         >
           {item.icon && (
-            <span className="grid size-6 shrink-0 place-items-center [&_svg]:block [&_svg]:size-6" aria-hidden="true">
+            <span
+              className="grid size-6 shrink-0 place-items-center [&_svg]:block [&_svg]:size-6"
+              aria-hidden="true"
+            >
               {item.icon}
             </span>
           )}

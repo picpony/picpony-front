@@ -28,7 +28,12 @@ export function MessageTokens({ tokens }: { tokens: readonly MessageToken[] }) {
         );
       case 'link':
         return token.internal ? (
-          <Link key={index} scroll={false} href={token.href} className="prose-link focus-visible:ring-2 focus-ring">
+          <Link
+            key={index}
+            scroll={false}
+            href={token.href}
+            className="prose-link focus-visible:ring-2 focus-ring"
+          >
             {token.text}
           </Link>
         ) : (
@@ -92,14 +97,21 @@ const JUMBO_LIMIT = 3;
  * A message's body, and whether it is an attachment (no bubble around it): a share card, or a
  * message of one to three emoji alone, drawn large.
  */
-export function renderMessageBody(content: string, own: boolean): { attachment: boolean; node: ReactNode } {
+export function renderMessageBody(
+  content: string,
+  own: boolean,
+): { attachment: boolean; node: ReactNode } {
   const share = parseShare(content);
   if (share) return { attachment: true, node: <ShareCard target={share} own={own} /> };
   const origin = typeof window === 'undefined' ? undefined : window.location.origin;
   const tokens = messageTokens(content, origin);
   const emoji = tokens.filter((token) => token.type === 'emoji');
-  const onlyEmoji = emoji.length > 0 && emoji.length <= JUMBO_LIMIT &&
-    tokens.every((token) => token.type === 'emoji' || (token.type === 'text' && token.text.trim() === ''));
+  const onlyEmoji =
+    emoji.length > 0 &&
+    emoji.length <= JUMBO_LIMIT &&
+    tokens.every(
+      (token) => token.type === 'emoji' || (token.type === 'text' && token.text.trim() === ''),
+    );
   if (onlyEmoji) {
     return {
       attachment: true,

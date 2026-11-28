@@ -104,7 +104,13 @@ export function prefetchRoute(href: string) {
     userProfile.prefetch({ id });
     /* `fp` spelled out, the same string the profile passes: a key function must not read
        storage itself, and the warm entry has to land under the key the screen will read. */
-    userUploads.prefetch({ id, page: 1, perPage: PROFILE_PER_PAGE, token, fp: browsingFingerprint() });
+    userUploads.prefetch({
+      id,
+      page: 1,
+      perPage: PROFILE_PER_PAGE,
+      token,
+      fp: browsingFingerprint(),
+    });
     return;
   }
 

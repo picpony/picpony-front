@@ -1,6 +1,17 @@
 'use client';
 
-import { createContext, lazy, Suspense, useCallback, useContext, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { MdClose } from '@/components/icons/shell';
 import IconButton from './IconButton';
 import Modal from './Modal';
@@ -213,7 +224,8 @@ function AuthModal({
      reports its own state after it mounts. */
   const [dirtyFlow, setDirtyFlow] = useState<number | null>(null);
   const onDirtyChange = useCallback(
-    (dirty: boolean) => setDirtyFlow((current) => (dirty ? flow : current === flow ? null : current)),
+    (dirty: boolean) =>
+      setDirtyFlow((current) => (dirty ? flow : current === flow ? null : current)),
     [flow],
   );
   const dirty = dirtyFlow === flow;
@@ -273,7 +285,9 @@ function AuthModal({
               /* Explicit width: `LottieIcon` centres its fallback in a shrink-to-fit grid cell,
                  so a percentage width on `.logo-mask` resolved to 0px while loading or if
                  loading fails. */
-              fallback={<Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />}
+              fallback={
+                <Logo className="h-auto w-56 max-w-full text-on-surface" interactive={false} />
+              }
             />
           )}
         </div>
@@ -296,14 +310,22 @@ function AuthModal({
               /* A view switch owns this fade; opening the dialog already fades its panel. */
               className={cn(switched && 'animate-page-transition')}
             >
-              <Suspense fallback={
-                <div className="flex min-h-72 items-center justify-center">
-                  <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
-                    {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
-                  </h2>
-                  <LoadingIndicator variant="contained" size="md" label="加载中" paused={!isOpen} delay={120} />
-                </div>
-              }>
+              <Suspense
+                fallback={
+                  <div className="flex min-h-72 items-center justify-center">
+                    <h2 id={headingId} tabIndex={-1} data-autofocus className="sr-only">
+                      {view === 'login' ? '登录' : view === 'register' ? '注册' : '找回密码'}
+                    </h2>
+                    <LoadingIndicator
+                      variant="contained"
+                      size="md"
+                      label="加载中"
+                      paused={!isOpen}
+                      delay={120}
+                    />
+                  </div>
+                }
+              >
                 <AuthForms {...shared} view={view} onSuccess={onClose} />
               </Suspense>
             </div>

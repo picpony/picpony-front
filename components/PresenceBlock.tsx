@@ -5,7 +5,8 @@ import { focusLanding } from '@/lib/focusLanding';
 import { springTiming } from '@/lib/springTiming';
 
 /** A control that takes the focus as itself; anything else is focused as a landing. */
-const CONTROL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const CONTROL =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * One block that leaves where it stood — the single-block twin of `PresenceList`, for the empty
@@ -58,13 +59,18 @@ export default function PresenceBlock({
         else focusLanding(target);
       }
     }
-    const fade = node.animate([{ opacity: 1 }, { opacity: 0 }], { ...springTiming('fastEffects', 'list'), fill: 'forwards' });
+    const fade = node.animate([{ opacity: 1 }, { opacity: 0 }], {
+      ...springTiming('fastEffects', 'list'),
+      fill: 'forwards',
+    });
     fade.finished.then(
       () => {
         setHeld(null);
         setLeaving(false);
       },
-      () => { /* Shown again before it had gone: it stays. */ },
+      () => {
+        /* Shown again before it had gone: it stays. */
+      },
     );
     return () => fade.cancel();
   }, [leaving]);

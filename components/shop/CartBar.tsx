@@ -122,7 +122,8 @@ export default function CartBar({
   useLayoutEffect(() => {
     const spacer = roomRef.current;
     if (active || !roomHeld) return;
-    const scroller = spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+    const scroller =
+      spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
     /* Below the viewport (or with no box at all — the docked layout hides it), the room can go:
        the page under the reader does not change, and nothing clamps the offset. */
     const free = () => {
@@ -155,7 +156,10 @@ export default function CartBar({
           chrome (G3-026). Sticky 80px higher than the bar's bottom edge, since the bar hangs 24px
           below it: floating, the bar's bottom is 16px above the viewport's; at the page end it
           rests in its room. */}
-      <div ref={slotRef} className="pointer-events-none sticky bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] z-page-chrome h-0 @4xl/shop:hidden">
+      <div
+        ref={slotRef}
+        className="pointer-events-none sticky bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] z-page-chrome h-0 @4xl/shop:hidden"
+      >
         <div className="absolute inset-x-0 top-6 flex justify-center px-2">
           {/* The fade: one opacity, on the effects spring both ways. */}
           <div
@@ -175,12 +179,22 @@ export default function CartBar({
                 'transition-[translate]',
                 active
                   ? 'translate-y-0 spring-default-spatial'
-                  : cn(tier === 'reduced' ? 'translate-y-2' : 'translate-y-4', 'spring-fast-effects'),
+                  : cn(
+                      tier === 'reduced' ? 'translate-y-2' : 'translate-y-4',
+                      'spring-fast-effects',
+                    ),
               )}
             >
-              <span className="relative inline-flex shrink-0 text-on-surface-variant" aria-hidden="true">
+              <span
+                className="relative inline-flex shrink-0 text-on-surface-variant"
+                aria-hidden="true"
+              >
                 <MdShoppingCart size={ICON.standard} />
-                <CountBadge key={appearance} count={shown.pieces} className="absolute -top-1.5 -right-2.5" />
+                <CountBadge
+                  key={appearance}
+                  count={shown.pieces}
+                  className="absolute -top-1.5 -right-2.5"
+                />
               </span>
               <span className="min-w-0 flex-1 truncate text-body-m whitespace-nowrap text-on-surface tabular-nums">
                 {shown.summary}

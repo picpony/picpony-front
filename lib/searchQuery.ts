@@ -209,7 +209,10 @@ export function blacklistBeyondQuery(blacklist: PublicBlacklist): Set<number> {
 }
 
 /** `images` without the blacklisted ids the query could not carry. Same array when none apply. */
-export function withoutOverflowBlacklisted<T extends { id: number }>(images: T[], blacklist: PublicBlacklist): T[] {
+export function withoutOverflowBlacklisted<T extends { id: number }>(
+  images: T[],
+  blacklist: PublicBlacklist,
+): T[] {
   const rest = blacklistBeyondQuery(blacklist);
   return rest.size ? images.filter((image) => !rest.has(image.id)) : images;
 }
@@ -220,7 +223,10 @@ export function withoutOverflowBlacklisted<T extends { id: number }>(images: T[]
  * terms, the image-search results' client-side check and /search's quick tags, so a tag the
  * feed hides can never be offered or shown somewhere else.
  */
-export function excludedTagsFrom(s: QuerySettings, filters: BlockFilters = DEFAULT_BLOCK_FILTERS): Set<string> {
+export function excludedTagsFrom(
+  s: QuerySettings,
+  filters: BlockFilters = DEFAULT_BLOCK_FILTERS,
+): Set<string> {
   const contentFilter = parseContentFilter(s.contentFilter);
   const excluded = new Set<string>(contentFilter === 'developer' ? [] : filters[contentFilter]);
   if (s.banAnthro) for (const tag of filters.banAnthro) excluded.add(tag);
@@ -270,7 +276,10 @@ export function buildSearchQueryFrom(
  * server keys a first-time visitor's feed on `''` while their browser keys the identical query
  * on `safe|-|d|-|` and the seed does not apply.
  */
-export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint('safe|-|d|-|', DEFAULT_BLOCK_FILTERS);
+export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint(
+  'safe|-|d|-|',
+  DEFAULT_BLOCK_FILTERS,
+);
 
 /**
  * The home feed's sort fields, and the only ones allowed to reach an upstream URL. The value
@@ -283,13 +292,7 @@ export const DEFAULT_BROWSING_FINGERPRINT = withBlockFiltersFingerprint('safe|-|
  * pictures while claiming 相关度 — and a feed has no query to be relevant *to*. A stored legacy
  * value falls back to the default here, like any other unknown one.
  */
-export const SORT_FIELDS = [
-  'created_at',
-  'updated_at',
-  'score',
-  'wilson_score',
-  'random',
-] as const;
+export const SORT_FIELDS = ['created_at', 'updated_at', 'score', 'wilson_score', 'random'] as const;
 
 export function parseSortField(raw: string | undefined | null): string {
   return raw && (SORT_FIELDS as readonly string[]).includes(raw) ? raw : 'created_at';
@@ -325,7 +328,9 @@ export function parseFingerprintCookie(raw: string | undefined): string {
  * defaults — what a visitor who has never opened /settings has anyway.
  */
 export function parseBrowsingFingerprint(raw: string | undefined): QuerySettings {
-  const [contentFilter = 'safe', anthro = '-', discomfort = 'd', pony = '-', hidden = ''] = (raw ?? '').split('|');
+  const [contentFilter = 'safe', anthro = '-', discomfort = 'd', pony = '-', hidden = ''] = (
+    raw ?? ''
+  ).split('|');
   return {
     contentFilter: parseContentFilter(contentFilter),
     banAnthro: anthro === 'a',
@@ -367,7 +372,11 @@ export function isSemanticText(text: string): boolean {
  * An empty result means there is nothing to search for.
  */
 export function normalizeSearchText(text: string): string {
-  return text.trim().replace(/，/g, ',').replace(/[,\s]+$/, '').trim();
+  return text
+    .trim()
+    .replace(/，/g, ',')
+    .replace(/[,\s]+$/, '')
+    .trim();
 }
 
 /**
@@ -471,7 +480,11 @@ export const SINCE_TERMS: Record<SinceFilter, string> = {
 
 /** Case and the spacing around `:` and parentheses do not change what a term means. */
 function canonicalTerm(term: string): string {
-  return term.toLowerCase().replace(/\s+/g, ' ').replace(/\s*([:()])\s*/g, '$1').trim();
+  return term
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([:()])\s*/g, '$1')
+    .trim();
 }
 
 function lookupTerm<K extends string>(table: Record<K, string>, canonical: string): K | null {
@@ -494,7 +507,10 @@ export function parseSearchFilters(query: string): { terms: string[]; filters: S
     const canonical = canonicalTerm(term);
     const count = /^(upvotes|score)\.(gte|lt):(-?\d{1,9})$/.exec(canonical);
     if (count) {
-      filters[count[1] as 'upvotes' | 'score'] = { op: count[2] as FilterComparison, value: Number(count[3]) };
+      filters[count[1] as 'upvotes' | 'score'] = {
+        op: count[2] as FilterComparison,
+        value: Number(count[3]),
+      };
       continue;
     }
     const aspect = lookupTerm(ASPECT_TERMS, canonical);
@@ -502,7 +518,8 @@ export function parseSearchFilters(query: string): { terms: string[]; filters: S
       filters.aspect = aspect;
       continue;
     }
-    const media = lookupTerm(MEDIA_TERMS, canonical) ??
+    const media =
+      lookupTerm(MEDIA_TERMS, canonical) ??
       (canonical === '(mime_type:video/mp4 or mime_type:video/webm)' ? 'video' : null);
     if (media) {
       filters.media = media;
@@ -545,11 +562,42 @@ export function composeQuery(terms: readonly string[], filters: SearchFilters): 
  * namespaced tag (`artist:…`, `oc:…`, `spoiler:…`).
  */
 const IMAGE_FIELDS = new Set([
-  'id', 'score', 'upvotes', 'downvotes', 'faves', 'width', 'height', 'aspect_ratio', 'pixels', 'size',
-  'duration', 'animated', 'mime_type', 'original_format', 'created_at', 'updated_at', 'first_seen_at',
-  'comment_count', 'tag_count', 'source_count', 'source_url', 'description', 'uploader', 'uploader_id',
-  'true_uploader', 'true_uploader_id', 'faved_by', 'faved_by_id', 'gallery_id', 'gallery_position',
-  'sha512_hash', 'orig_sha512_hash', 'wilson_score', 'my', 'processed', 'thumbnails_generated',
+  'id',
+  'score',
+  'upvotes',
+  'downvotes',
+  'faves',
+  'width',
+  'height',
+  'aspect_ratio',
+  'pixels',
+  'size',
+  'duration',
+  'animated',
+  'mime_type',
+  'original_format',
+  'created_at',
+  'updated_at',
+  'first_seen_at',
+  'comment_count',
+  'tag_count',
+  'source_count',
+  'source_url',
+  'description',
+  'uploader',
+  'uploader_id',
+  'true_uploader',
+  'true_uploader_id',
+  'faved_by',
+  'faved_by_id',
+  'gallery_id',
+  'gallery_position',
+  'sha512_hash',
+  'orig_sha512_hash',
+  'wilson_score',
+  'my',
+  'processed',
+  'thumbnails_generated',
 ]);
 
 /**
@@ -565,7 +613,11 @@ export function isSingleTagQuery(query: string): boolean {
   if (/[*?"()^~]|\|\||&&|\s(?:AND|OR)\s/.test(term)) return false;
   const colon = term.indexOf(':');
   if (colon !== -1) {
-    const field = term.slice(0, colon).trim().toLowerCase().replace(/\.(?:gte|gt|lte|lt)$/, '');
+    const field = term
+      .slice(0, colon)
+      .trim()
+      .toLowerCase()
+      .replace(/\.(?:gte|gt|lte|lt)$/, '');
     if (IMAGE_FIELDS.has(field)) return false;
   }
   return true;
@@ -579,7 +631,8 @@ export function isSingleTagQuery(query: string): boolean {
 export function excludedTermsIn(query: string, excluded: ReadonlySet<string>): string[] {
   if (/(?:^|[\s(,])(?:OR|\|\|)(?=[\s(]|$)/.test(query)) return [];
   return splitQueryTerms(query).filter(
-    (term) => !/^[-!(]/.test(term) && !/^not\s/i.test(term) && excluded.has(term.trim().toLowerCase()),
+    (term) =>
+      !/^[-!(]/.test(term) && !/^not\s/i.test(term) && excluded.has(term.trim().toLowerCase()),
   );
 }
 

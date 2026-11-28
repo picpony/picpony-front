@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  useRef,
-  type CSSProperties,
-  type HTMLAttributes,
-  type ReactNode,
-  type Ref,
-} from 'react';
+import { useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from 'react';
 import {
   useOverlayScrollbar,
   type ScrollbarAutoHide,

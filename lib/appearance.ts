@@ -26,10 +26,25 @@ import { flushSync } from 'react-dom';
 
 import { COOKIE_KEYS, LS_KEYS, MEDIA } from './constants';
 import {
-  MOTION_SPEEDS, MOTION_SPEED_SCALE, formatMotionCustom, motionCustomStyle, motionPreset,
-  parseMotionCustom, type MotionCategory, type MotionCustomSpeeds, type MotionSpeed,
-  MOTION_CATEGORIES, isMotionTier, motionEffectPreset, parseMotionEffects, formatMotionEffects,
-  motionEffectsAttributes, motionEffectsStyle, type MotionCustomEffects, type MotionMode, type MotionTier,
+  MOTION_SPEEDS,
+  MOTION_SPEED_SCALE,
+  formatMotionCustom,
+  motionCustomStyle,
+  motionPreset,
+  parseMotionCustom,
+  type MotionCategory,
+  type MotionCustomSpeeds,
+  type MotionSpeed,
+  MOTION_CATEGORIES,
+  isMotionTier,
+  motionEffectPreset,
+  parseMotionEffects,
+  formatMotionEffects,
+  motionEffectsAttributes,
+  motionEffectsStyle,
+  type MotionCustomEffects,
+  type MotionMode,
+  type MotionTier,
 } from './motionPreferences';
 export { MOTION_SPEED_SCALE } from './motionPreferences';
 export type { MotionSpeed, MotionTier } from './motionPreferences';
@@ -107,7 +122,13 @@ export const DEFAULT_ENTRANCE_MODE: EntranceMode = 'non-blocking';
 
 /* `SchemeSetting` needs no validation list — derived from two booleans, not read as a string;
    the other two come straight out of storage. */
-const MOTION_SETTINGS: readonly MotionSetting[] = ['off', 'reduced', 'standard', 'system', 'custom'];
+const MOTION_SETTINGS: readonly MotionSetting[] = [
+  'off',
+  'reduced',
+  'standard',
+  'system',
+  'custom',
+];
 
 /* --- Storage: both halves are wrapped (localStorage throws in a private window in some
    engines; a failed persist must not take the page down). --- */
@@ -322,7 +343,8 @@ function motionSpeedScale(category: MotionCategory = 'feedback'): number {
 }
 
 /** `ms` at the current speed, for a WAAPI `duration` or a GSAP seconds value. */
-export const scaledMs = (ms: number, category: MotionCategory = 'feedback') => ms * motionScale(category);
+export const scaledMs = (ms: number, category: MotionCategory = 'feedback') =>
+  ms * motionScale(category);
 
 /** GSAP already scales its global clock by feedback; a gesture needs only this relative factor. */
 export function motionRatio(category: MotionCategory): number {
@@ -485,8 +507,10 @@ function applyMotionEffects(effects: MotionCustomEffects) {
   const raw = formatMotionEffects(effects);
   const valid = parseMotionEffects(raw);
   el.dataset.motionEffects = raw;
-  for (const [name, value] of Object.entries(motionEffectsAttributes(valid))) el.setAttribute(name, value);
-  for (const [name, value] of Object.entries(motionEffectsStyle(valid))) el.style.setProperty(name, String(value));
+  for (const [name, value] of Object.entries(motionEffectsAttributes(valid)))
+    el.setAttribute(name, value);
+  for (const [name, value] of Object.entries(motionEffectsStyle(valid)))
+    el.style.setProperty(name, String(value));
   writeCookie(COOKIE_KEYS.motionEffects, raw);
 }
 
@@ -514,8 +538,8 @@ export function applyThemeColorMeta(id: PaletteId, scheme: ColorScheme, skyPhase
   const color =
     id === SKY_PALETTE
       ? skyPhaseEntry(skyPhase ?? currentSkyPhase()).primary
-      : (id === CUSTOM_PALETTE ? currentCustomTones()?.[scheme].primary : null) ??
-        (PALETTES.find((p) => p.id === id) ?? PALETTES[0])[scheme].primary;
+      : ((id === CUSTOM_PALETTE ? currentCustomTones()?.[scheme].primary : null) ??
+        (PALETTES.find((p) => p.id === id) ?? PALETTES[0])[scheme].primary);
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     meta.removeAttribute('media');
     meta.content = color;
@@ -644,8 +668,12 @@ export function recoverCustomPalette(): void {
     .then(({ resolveCustomPalette }) => resolveCustomPalette(spec))
     .then((install) => {
       /* The user may have picked another palette while the chunk was on its way. */
-      if (!install || readStored(LS_KEYS.palette) !== CUSTOM_PALETTE
-        || !sameCustomSpec(parseCustomSpec(readStored(LS_KEYS.paletteCustom)), spec)) return;
+      if (
+        !install ||
+        readStored(LS_KEYS.palette) !== CUSTOM_PALETTE ||
+        !sameCustomSpec(parseCustomSpec(readStored(LS_KEYS.paletteCustom)), spec)
+      )
+        return;
       commitCustomPalette(install);
     })
     .catch(() => {
@@ -717,10 +745,13 @@ export const usePaletteHues = () => useAppearance(currentPaletteHues, 'multi' as
 export const useMotionSetting = () => useAppearance(readMotionSetting, 'system' as MotionSetting);
 export const useMotionSpeed = () => useAppearance(motionSpeed, 'default' as MotionSpeed);
 export const useMotionCustom = () => parseMotionCustom(useAppearance(currentMotionCustomRaw, ''));
-export const useMotionEffects = () => parseMotionEffects(useAppearance(currentMotionEffectsRaw, ''));
+export const useMotionEffects = () =>
+  parseMotionEffects(useAppearance(currentMotionEffectsRaw, ''));
 export const useMotionMode = () => useAppearance(motionMode, 'standard' as MotionMode);
-export const useMotionEnabled = () => useAppearance(() => MOTION_CATEGORIES.some(({ id }) => motionTier(id) !== 'off'), true);
-export const useMotionScale = (category: MotionCategory) => useAppearance(() => motionScale(category), 1);
+export const useMotionEnabled = () =>
+  useAppearance(() => MOTION_CATEGORIES.some(({ id }) => motionTier(id) !== 'off'), true);
+export const useMotionScale = (category: MotionCategory) =>
+  useAppearance(() => motionScale(category), 1);
 export const useEntranceMotion = () => useAppearance(entranceMotion, true);
 export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANCE_MODE);
 
@@ -730,9 +761,9 @@ export const useEntranceMode = () => useAppearance(entranceMode, DEFAULT_ENTRANC
  * fresher. Server value `standard` matches the CSS, which only opts out under an attribute the
  * server sets, so the first paint cannot disagree.
  */
-export const useMotionTier = (category: MotionCategory = 'feedback') => useAppearance(() => motionTier(category), 'standard' as MotionTier);
+export const useMotionTier = (category: MotionCategory = 'feedback') =>
+  useAppearance(() => motionTier(category), 'standard' as MotionTier);
 
 /** `version` is exported for tests and for a dev-tools panel; nothing in the app reads it. */
 export const appearanceVersion = () => version;
 export { subscribe as subscribeAppearance };
-

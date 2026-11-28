@@ -11,10 +11,20 @@ import { AdminNote } from '../AdminForm';
 import { tableError } from '../queries';
 
 /** Keep the request's try/finally outside the component so its guarded callbacks compile. */
-async function checkLines(token: string, signal: AbortSignal, report: (row: LineCheck) => void, failed: (error: unknown) => void, complete: () => void) {
-  try { await checkServiceLines(token, signal, report); }
-  catch (error) { failed(error); }
-  finally { complete(); }
+async function checkLines(
+  token: string,
+  signal: AbortSignal,
+  report: (row: LineCheck) => void,
+  failed: (error: unknown) => void,
+  complete: () => void,
+) {
+  try {
+    await checkServiceLines(token, signal, report);
+  } catch (error) {
+    failed(error);
+  } finally {
+    complete();
+  }
 }
 
 export default function ServiceChecks({ token }: { token: string }) {
@@ -31,22 +41,84 @@ export default function ServiceChecks({ token }: { token: string }) {
     if (controller.current || readToken() !== token) return;
     const id = ++runs.current;
     const runController = new AbortController();
-    controller.current = runController; setBusy(true); setError(''); setChecks([]);
-    await checkLines(token, runController.signal,
-      (row) => { if (runs.current === id) setChecks((previous) => [...previous, row]); },
-      (error) => { if (!isAborted(error) && readToken() === token) setError(apiErrorMessage(error, '线路检测失败')); },
+    controller.current = runController;
+    setBusy(true);
+    setError('');
+    setChecks([]);
+    await checkLines(
+      token,
+      runController.signal,
+      (row) => {
+        if (runs.current === id) setChecks((previous) => [...previous, row]);
+      },
+      (error) => {
+        if (!isAborted(error) && readToken() === token)
+          setError(apiErrorMessage(error, '线路检测失败'));
+      },
       () => {
         if (controller.current === runController) controller.current = null;
         if (runs.current === id && readToken() === token) setBusy(false);
-      });
+      },
+    );
   };
-  return <div className="space-y-6">
-    <AdminNote>从当前设备发起匿名检测，每条线路最多等待 5 秒。</AdminNote>
-    <div className="flex flex-wrap gap-3"><Button variant="tonal" loading={busy} onClick={() => void run()}>检测线路</Button>{busy && <Button variant="text" onClick={() => { controller.current?.abort(); controller.current = null; setBusy(false); }}>停止检测</Button>}</div>
-    <DataTable rows={checks} rowKey={(r) => r.name} loading={busy && !checks.length} {...tableError('线路检测失败', error || undefined)} empty={<EmptyState size="inline" title="按下「检测线路」查看当前状态" />} columns={[
-      { key: 'name', header: '线路', primary: true, width: 'minmax(0, 1.2fr)', render: (r) => r.name },
-      { key: 'status', header: '状态', width: 'minmax(0, 2fr)', className: 'tabular-nums', render: (r) => r.error ?? (r.status === 'decoded' ? '图片可正常加载' : r.status === null ? '已收到响应，状态码不可读' : r.status >= 200 && r.status < 400 ? `连接正常（${r.status}）` : `返回异常（${r.status}）`) },
-      { key: 'latency', header: '耗时', width: 'auto', className: 'tabular-nums', render: (r) => `${r.latency} 毫秒` },
-    ]} />
-  </div>;
+  return (
+    <div className="space-y-6">
+      <AdminNote>从当前设备发起匿名检测，每条线路最多等待 5 秒。</AdminNote>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="tonal" loading={busy} onClick={() => void run()}>
+          检测线路
+        </Button>
+        {busy && (
+          <Button
+            variant="text"
+            onClick={() => {
+              controller.current?.abort();
+              controller.current = null;
+              setBusy(false);
+            }}
+          >
+            停止检测
+          </Button>
+        )}
+      </div>
+      <DataTable
+        rows={checks}
+        rowKey={(r) => r.name}
+        loading={busy && !checks.length}
+        {...tableError('线路检测失败', error || undefined)}
+        empty={<EmptyState size="inline" title="按下「检测线路」查看当前状态" />}
+        columns={[
+          {
+            key: 'name',
+            header: '线路',
+            primary: true,
+            width: 'minmax(0, 1.2fr)',
+            render: (r) => r.name,
+          },
+          {
+            key: 'status',
+            header: '状态',
+            width: 'minmax(0, 2fr)',
+            className: 'tabular-nums',
+            render: (r) =>
+              r.error ??
+              (r.status === 'decoded'
+                ? '图片可正常加载'
+                : r.status === null
+                  ? '已收到响应，状态码不可读'
+                  : r.status >= 200 && r.status < 400
+                    ? `连接正常（${r.status}）`
+                    : `返回异常（${r.status}）`),
+          },
+          {
+            key: 'latency',
+            header: '耗时',
+            width: 'auto',
+            className: 'tabular-nums',
+            render: (r) => `${r.latency} 毫秒`,
+          },
+        ]}
+      />
+    </div>
+  );
 }

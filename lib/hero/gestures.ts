@@ -139,7 +139,9 @@ export function bindHeroDismissGesture({
 
   const releaseVelocity = (event?: PointerEvent) =>
     tracker.velocity(
-      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
+      event
+        ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY }
+        : undefined,
     );
 
   const finishGesture = (
@@ -182,7 +184,8 @@ export function bindHeroDismissGesture({
 
   /** Feed every coalesced position to the tracker; publish only the newest pose. */
   const track = (event: PointerEvent) => {
-    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    const coalesced =
+      typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
     for (const point of coalesced.length ? coalesced : [event]) {
       tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
     }

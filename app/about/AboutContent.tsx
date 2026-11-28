@@ -30,7 +30,10 @@ import AboutFrame, { ROSTER_GRID, TeamCard, TeamSkeleton } from './AboutFrame';
 
 /* Module scope: the React Compiler does not lower a dynamic `import()` inside a component. */
 const loadTrace = () =>
-  Promise.all([loadLottiePlayer(), import('@/lib/lottie/logoNonParallel.json').then((m) => m.default)]);
+  Promise.all([
+    loadLottiePlayer(),
+    import('@/lib/lottie/logoNonParallel.json').then((m) => m.default),
+  ]);
 
 /** The Lottie composition's own frame, so the reserved box matches what lands. */
 const TRACE_ASPECT = '3000 / 1053';
@@ -68,35 +71,37 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
     if (traceUnavailable) return;
     let animation: AnimationItem | null = null;
     let cancelled = false;
-    loadTrace().then(([player, data]) => {
-      const host = hostRef.current;
-      if (cancelled || !host) return;
-      const instance = player.default.loadAnimation({
-        container: host,
-        renderer: 'svg',
-        loop: false, // 单次播放
-        autoplay: false,
-        animationData: data as object,
-      });
-      animation = instance;
-      animationRef.current = instance;
-      const apply = () => {
-        if (cancelled) return;
-        const lastFrame = Math.max(0, instance.totalFrames - 1);
-        if (motionTier('ambient') === 'standard' && entranceMotion()) {
-          instance.setSpeed(1 / motionScale('ambient'));
-          instance.goToAndPlay(0, true);
-        } else {
-          /* Below `standard` (or with entrance motion off), hold the colour wordmark
+    loadTrace()
+      .then(([player, data]) => {
+        const host = hostRef.current;
+        if (cancelled || !host) return;
+        const instance = player.default.loadAnimation({
+          container: host,
+          renderer: 'svg',
+          loop: false, // 单次播放
+          autoplay: false,
+          animationData: data as object,
+        });
+        animation = instance;
+        animationRef.current = instance;
+        const apply = () => {
+          if (cancelled) return;
+          const lastFrame = Math.max(0, instance.totalFrames - 1);
+          if (motionTier('ambient') === 'standard' && entranceMotion()) {
+            instance.setSpeed(1 / motionScale('ambient'));
+            instance.goToAndPlay(0, true);
+          } else {
+            /* Below `standard` (or with entrance motion off), hold the colour wordmark
              statically on its final frame without playback. */
-          instance.goToAndStop(lastFrame, true);
-        }
-      };
-      if (instance.isLoaded) apply();
-      else instance.addEventListener('DOMLoaded', apply);
-    }).catch(() => {
-      if (!cancelled) setTraceUnavailable(true);
-    });
+            instance.goToAndStop(lastFrame, true);
+          }
+        };
+        if (instance.isLoaded) apply();
+        else instance.addEventListener('DOMLoaded', apply);
+      })
+      .catch(() => {
+        if (!cancelled) setTraceUnavailable(true);
+      });
     return () => {
       cancelled = true;
       animation?.destroy();
@@ -167,7 +172,11 @@ function TraceHeader({ onActivate }: { onActivate?: () => void }) {
      press. The guide stays a pointer gesture by design — an easter egg — so it has no keyboard
      path; giving it a real entry point is the owner's call. */
   return (
-    <div className={`select-none ${MARK_WIDTH}`} onMouseDown={(e) => e.preventDefault()} onClick={handleClick}>
+    <div
+      className={`select-none ${MARK_WIDTH}`}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={handleClick}
+    >
       <div
         ref={hostRef}
         role="img"
@@ -187,9 +196,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 // 头像选择：account_avatar 优先，为 null 时降级 avatar_url（getAssetUrl：/api/v1/ 媒体走同源代理）
-function resolveMemberAvatar(
-  m: Pick<TeamMember, 'account_avatar' | 'avatar_url'>,
-): string | null {
+function resolveMemberAvatar(m: Pick<TeamMember, 'account_avatar' | 'avatar_url'>): string | null {
   const url = m.account_avatar || m.avatar_url;
   if (!url) return null;
   return getAssetUrl(url);
@@ -200,7 +207,9 @@ function resolveMemberAvatar(
  * `link_url` — which the backend only accepts as an http(s) page address (`team::link`), opened
  * in a new tab. `null`: no link.
  */
-function resolveMemberLink(m: Pick<TeamMember, 'user_id' | 'link_url'>): { href: string; external: boolean } | null {
+function resolveMemberLink(
+  m: Pick<TeamMember, 'user_id' | 'link_url'>,
+): { href: string; external: boolean } | null {
   if (m.user_id !== null && m.user_id > 0) return { href: `/user/${m.user_id}`, external: false };
   return /^https?:\/\//i.test(m.link_url) ? { href: m.link_url, external: true } : null;
 }
@@ -241,7 +250,9 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
         />
       )}
 
-      {!loading && !error && groups.length === 0 && <EmptyState size="inline" title="暂无团队成员" />}
+      {!loading && !error && groups.length === 0 && (
+        <EmptyState size="inline" title="暂无团队成员" />
+      )}
 
       {!loading && !error && groups.length > 0 && (
         <div className="space-y-5">
@@ -262,29 +273,58 @@ function TeamSection({ teamSeed }: { teamSeed: TeamSeed | null }) {
                             whole text still in `title`. A long Latin handle breaks inside the
                             word rather than overflowing; the grid stretches every cell in a row to
                             the tallest and each centres on its avatar, so the avatars stay level. */}
-                        <p className="line-clamp-2 wrap-anywhere text-label-l text-on-surface" title={m.name}>{m.name}</p>
+                        <p
+                          className="line-clamp-2 wrap-anywhere text-label-l text-on-surface"
+                          title={m.name}
+                        >
+                          {m.name}
+                        </p>
                         {/* One line, its whole text in `title` (D1-008): wrapped in a narrow cell,
                             a role left one character on a line of its own (「小马维基数据支 / 持」). */}
-                        <p className="mt-0.5 truncate text-body-s text-on-surface-variant" title={m.role}>
+                        <p
+                          className="mt-0.5 truncate text-body-s text-on-surface-variant"
+                          title={m.role}
+                        >
                           {m.role}
                         </p>
                       </div>
                       {link && (
-                        <span className="shrink-0 text-on-surface-variant [&>svg]:block" aria-hidden="true">
-                          {link.external ? <MdOpenInNew size={ICON.dense} /> : <MdChevronRight size={ICON.dense} />}
+                        <span
+                          className="shrink-0 text-on-surface-variant [&>svg]:block"
+                          aria-hidden="true"
+                        >
+                          {link.external ? (
+                            <MdOpenInNew size={ICON.dense} />
+                          ) : (
+                            <MdChevronRight size={ICON.dense} />
+                          )}
                         </span>
                       )}
                     </>
                   );
                   /* Focus ring and ripple, like every other interactive row in the app — without
                      them a keyboard user could reach this link and see no indication they had. */
-                  const rowLink = 'flex min-w-0 items-center gap-3 rounded-md p-2 transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring';
+                  const rowLink =
+                    'flex min-w-0 items-center gap-3 rounded-md p-2 transition-ui state-layer focus-visible:outline-hidden focus-visible:ring-2 focus-ring';
                   return link?.external ? (
-                    <a key={m.id} href={link.href} target="_blank" rel="noopener noreferrer" data-ripple className={rowLink}>
+                    <a
+                      key={m.id}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-ripple
+                      className={rowLink}
+                    >
                       {inner}
                     </a>
                   ) : link ? (
-                    <Link scroll={false} key={m.id} href={link.href} data-ripple className={rowLink}>
+                    <Link
+                      scroll={false}
+                      key={m.id}
+                      href={link.href}
+                      data-ripple
+                      className={rowLink}
+                    >
                       {inner}
                     </Link>
                   ) : (

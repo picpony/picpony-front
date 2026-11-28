@@ -167,8 +167,7 @@ function trailSample(ux, uy, out) {
     const b = trail.pixels[(y0 * TRAIL_SIZE + x1) * 4 + c];
     const d = trail.pixels[(y1 * TRAIL_SIZE + x0) * 4 + c];
     const e = trail.pixels[(y1 * TRAIL_SIZE + x1) * 4 + c];
-    out[c] =
-      (a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + d * (1 - tx) * ty + e * tx * ty) / 255;
+    out[c] = (a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + d * (1 - tx) * ty + e * tx * ty) / 255;
   }
 }
 
@@ -179,7 +178,12 @@ function trailAt(ux, uy, out) {
   const o = 1 / TRAIL_SIZE;
   trailSample(ux, uy, tapA);
   for (let c = 0; c < 3; c += 1) out[c] = tapA[c];
-  for (const [dx, dy] of [[o, 0], [-o, 0], [0, o], [0, -o]]) {
+  for (const [dx, dy] of [
+    [o, 0],
+    [-o, 0],
+    [0, o],
+    [0, -o],
+  ]) {
     trailSample(ux + dx, uy + dy, tapB);
     for (let c = 0; c < 3; c += 1) out[c] += tapB[c];
   }
@@ -189,10 +193,8 @@ function trailAt(ux, uy, out) {
 /* --- Swirl --- */
 function swirlField(ux, uy, t) {
   const s = cfg.detail;
-  const ax =
-    ux + Math.sin(uy * s * 1.7 + t * 0.8) * 0.12 + Math.cos(ux * s * 0.9 - t * 0.5) * 0.05;
-  const ay =
-    uy + Math.cos(ux * s * 1.3 - t * 0.6) * 0.12 + Math.sin(uy * s * 1.1 + t * 0.7) * 0.05;
+  const ax = ux + Math.sin(uy * s * 1.7 + t * 0.8) * 0.12 + Math.cos(ux * s * 0.9 - t * 0.5) * 0.05;
+  const ay = uy + Math.cos(ux * s * 1.3 - t * 0.6) * 0.12 + Math.sin(uy * s * 1.1 + t * 0.7) * 0.05;
   const o = Math.sin(ax * s * 2.1 + ay * s * 1.8 + t * 0.4);
 
   const u2 = s * 2.1;
@@ -257,8 +259,7 @@ const trailVec = [0, 0, 0];
       for (let c = 0; c < 3; c += 1) {
         const swirl = (colorA[c] + (colorB[c] - colorA[c]) * y) * shimmer;
         const directional =
-          ((ink.left[c] * wL + ink.right[c] * wR) * hw +
-            (ink.up[c] * wU + ink.down[c] * wD) * vw) /
+          ((ink.left[c] * wL + ink.right[c] * wR) * hw + (ink.up[c] * wU + ink.down[c] * wD) * vw) /
           sw;
         const tint = ink.base[c] + (directional - ink.base[c]) * k;
         backdrop[i + c] = Math.max(
@@ -272,7 +273,7 @@ const trailVec = [0, 0, 0];
 
 /* The shader's mirror, then a bilinear fetch and a decode back to linear. */
 function mirror(u) {
-  const m = ((u * 0.5) % 1 + 1) % 1;
+  const m = (((u * 0.5) % 1) + 1) % 1;
   return 1 - Math.abs(m * 2 - 1);
 }
 function backdropAt(px, py, out) {
@@ -315,7 +316,7 @@ const col = [0, 0, 0];
 for (let py = 0; py < H; py += 1) {
   for (let px = 0; px < W; px += 1) {
     const across = (px * cosA + py * sinA) / H;
-    const u = ((across * cfg.frequency - fluteOffset) % 1 + 1) % 1;
+    const u = (((across * cfg.frequency - fluteOffset) % 1) + 1) % 1;
     const r = (u - 0.5) * 2;
     const slope = fluteSlope(r, exponent);
     const shift = -slope * cfg.refraction * halfFlute;
@@ -340,10 +341,7 @@ for (let py = 0; py < H; py += 1) {
        negative and the field read as a diagonal weave rather than as noise. */
     const hash = Math.sin(px * 12.9898 + py * 78.233) * 43758.5453;
     const noise = (hash - Math.floor(hash)) * 2 - 1;
-    const lum = Math.max(
-      0,
-      Math.min(1, col[0] * 0.2126 + col[1] * 0.7152 + col[2] * 0.0722),
-    );
+    const lum = Math.max(0, Math.min(1, col[0] * 0.2126 + col[1] * 0.7152 + col[2] * 0.0722));
     const grain = noise * Math.pow(1 - lum + 1e-6, cfg.bias) * cfg.strength * 0.1;
 
     const i = (py * W + px) * 3;
@@ -395,7 +393,11 @@ const plateCode = srgbEncode(linearLuminance(colorA)) * 255;
 const toHex = (c) =>
   '#' +
   c
-    .map((v) => Math.max(0, Math.min(255, Math.round(srgbEncode(v) * 255))).toString(16).padStart(2, '0'))
+    .map((v) =>
+      Math.max(0, Math.min(255, Math.round(srgbEncode(v) * 255)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
     .join('');
 const ramp = ['base', 'left', 'down', 'right', 'up']
   .map((k) => `${k} ${Math.round(srgbEncode(linearLuminance(ink[k])) * 255)} ${toHex(ink[k])}`)
@@ -414,7 +416,9 @@ console.log(
     `  plate ${plateCode.toFixed(0)} → ${(srgbEncode(linearLuminance(colorB)) * 255).toFixed(0)} ` +
     `(field ${Math.abs(srgbEncode(linearLuminance(colorB)) * 255 - plateCode).toFixed(0)} codes)  ` +
     `ink ${ramp}  ` +
-    `(offsets 0/${Object.values(INK_STOPS).map((s) => s.offset).join('/')})`,
+    `(offsets 0/${Object.values(INK_STOPS)
+      .map((s) => s.offset)
+      .join('/')})`,
 );
 
 function encodePng(width, height, rgb) {

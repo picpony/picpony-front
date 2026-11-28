@@ -76,105 +76,131 @@ export default function TagGroupsPage() {
     if (!token || saving || readToken() !== token) return;
     setSaving(true);
     /* An edit carries the version the list holds; a group changed elsewhere since is refused. */
-    const revision = input.id ? tagGroups.peek({ token }).data?.find((group) => group.id === input.id)?.revision : undefined;
+    const revision = input.id
+      ? tagGroups.peek({ token }).data?.find((group) => group.id === input.id)?.revision
+      : undefined;
     const saved = await settle(saveTagGroup(token, { ...input, revision }));
     if (!saved.ok) {
       if (readToken() === token) showToast(apiErrorMessage(saved.error, '保存失败'), 'error');
     } else if (readToken() === token) {
       if (input.id) {
         const { revision: next } = saved.value;
-        writeGroups(token, (list) => list.map((group) => (group.id === input.id ? { ...group, name: input.name, tags: [...input.tags], revision: next } : group)));
+        writeGroups(token, (list) =>
+          list.map((group) =>
+            group.id === input.id
+              ? { ...group, name: input.name, tags: [...input.tags], revision: next }
+              : group,
+          ),
+        );
         tagGroups.expire({ token });
       } else {
         /* A new group waits for the list, so the card arrives as the dialog leaves. */
         await tagGroups.read({ token }, { force: true }).catch(() => tagGroups.expire({ token }));
         shareableGroups.invalidate({ token });
       }
-      if (readToken() !== token) { setSaving(false); return; }
+      if (readToken() !== token) {
+        setSaving(false);
+        return;
+      }
       setEditorOpen(false);
       showToast(input.id ? '已保存标签组' : '已创建标签组', 'success');
     }
     setSaving(false);
   };
 
-  const remove = useCallback(async (group: TagGroup) => {
-    if (!token || readToken() !== token || deleting.has(group.id)) return;
-    if (!(await confirm({
-      title: '确认删除',
-      message: `确定要删除标签组「${group.name || '未命名标签组'}」吗？`,
-      tone: 'danger',
-    }))) return;
-    if (readToken() !== token) return;
-    setDeleting((previous) => new Set(previous).add(group.id));
-    const deleted = await settle(deleteTagGroup(token, group.id));
-    if (readToken() === token) {
-      if (deleted.ok) {
-        /* The user's removal: the list places a focus the confirmation has not returned yet. */
-        presence.current?.claimFocus([group.id]);
-        writeGroups(token, (list) => list.filter((item) => item.id !== group.id));
-        tagGroups.expire({ token });
-        showToast('已删除标签组', 'success');
-      } else {
-        showToast(apiErrorMessage(deleted.error, '删除失败'), 'error');
+  const remove = useCallback(
+    async (group: TagGroup) => {
+      if (!token || readToken() !== token || deleting.has(group.id)) return;
+      if (
+        !(await confirm({
+          title: '确认删除',
+          message: `确定要删除标签组「${group.name || '未命名标签组'}」吗？`,
+          tone: 'danger',
+        }))
+      )
+        return;
+      if (readToken() !== token) return;
+      setDeleting((previous) => new Set(previous).add(group.id));
+      const deleted = await settle(deleteTagGroup(token, group.id));
+      if (readToken() === token) {
+        if (deleted.ok) {
+          /* The user's removal: the list places a focus the confirmation has not returned yet. */
+          presence.current?.claimFocus([group.id]);
+          writeGroups(token, (list) => list.filter((item) => item.id !== group.id));
+          tagGroups.expire({ token });
+          showToast('已删除标签组', 'success');
+        } else {
+          showToast(apiErrorMessage(deleted.error, '删除失败'), 'error');
+        }
       }
-    }
-    setDeleting((previous) => {
-      const next = new Set(previous);
-      next.delete(group.id);
-      return next;
-    });
-  }, [token, confirm, deleting]);
+      setDeleting((previous) => {
+        const next = new Set(previous);
+        next.delete(group.id);
+        return next;
+      });
+    },
+    [token, confirm, deleting],
+  );
 
   /**
    * 分享 — the original's contract: a link to the group's search (`createShareLink`), naming who
    * shared it, copied. A copy the browser refuses once the link has been made
    * (the gesture can be spent by then) is offered again as the toast's 复制.
    */
-  const share = useCallback(async (group: TagGroup) => {
-    if (!token || readToken() !== token || sharePending.current || group.tags.length === 0) return;
-    sharePending.current = true;
-    shareRequest.current?.abort();
-    const controller = new AbortController();
-    shareRequest.current = controller;
-    const current = () => !controller.signal.aborted && readToken() === token && window.location.pathname === '/tag-groups';
-    setSharing(group.id);
-    const username = readUserInfo()?.username;
-    const sharer = (typeof username === 'string' && username.trim()) || ANONYMOUS;
-    const target = new URL(tagGroupSearchHref(group.tags), window.location.origin);
-    target.searchParams.set(SHARED_BY_PARAM, sharer);
-    const link = await settle(createShareLink(
-      {
-        targetUrl: target.href,
-        title: `分享标签组：${group.name || '未命名标签组'}`,
-        desc: `包含标签：${group.tags.join('、')}\n点击链接即可在 PicPony 中搜索此标签组`,
-      },
-      { token, signal: controller.signal },
-    ));
-    sharePending.current = false;
-    setSharing(null);
-    if (!current()) return;
-    if (!link.ok) {
-      showToast(apiErrorMessage(link.error, '分享失败'), 'error');
-      return;
-    }
-    const url = link.value.url;
-    const copyLink = async () => {
-      if (!current() || !(await copyText(url)) || !current()) return false;
-      showToast('已复制分享链接', 'success');
-      return true;
-    };
-    if (await copyLink() || !current()) return;
-    showToast('已生成分享链接', 'info', {
-      action: {
-        label: '复制',
-        onClick: () => {
-          void copyLink().then((copied) => {
-            if (!copied && current()) showToast('复制失败，请检查剪贴板权限', 'error');
-          });
+  const share = useCallback(
+    async (group: TagGroup) => {
+      if (!token || readToken() !== token || sharePending.current || group.tags.length === 0)
+        return;
+      sharePending.current = true;
+      shareRequest.current?.abort();
+      const controller = new AbortController();
+      shareRequest.current = controller;
+      const current = () =>
+        !controller.signal.aborted &&
+        readToken() === token &&
+        window.location.pathname === '/tag-groups';
+      setSharing(group.id);
+      const username = readUserInfo()?.username;
+      const sharer = (typeof username === 'string' && username.trim()) || ANONYMOUS;
+      const target = new URL(tagGroupSearchHref(group.tags), window.location.origin);
+      target.searchParams.set(SHARED_BY_PARAM, sharer);
+      const link = await settle(
+        createShareLink(
+          {
+            targetUrl: target.href,
+            title: `分享标签组：${group.name || '未命名标签组'}`,
+            desc: `包含标签：${group.tags.join('、')}\n点击链接即可在 PicPony 中搜索此标签组`,
+          },
+          { token, signal: controller.signal },
+        ),
+      );
+      sharePending.current = false;
+      setSharing(null);
+      if (!current()) return;
+      if (!link.ok) {
+        showToast(apiErrorMessage(link.error, '分享失败'), 'error');
+        return;
+      }
+      const url = link.value.url;
+      const copyLink = async () => {
+        if (!current() || !(await copyText(url)) || !current()) return false;
+        showToast('已复制分享链接', 'success');
+        return true;
+      };
+      if ((await copyLink()) || !current()) return;
+      showToast('已生成分享链接', 'info', {
+        action: {
+          label: '复制',
+          onClick: () => {
+            void copyLink().then((copied) => {
+              if (!copied && current()) showToast('复制失败，请检查剪贴板权限', 'error');
+            });
+          },
         },
-      },
-    });
-  }, [token]);
+      });
+    },
+    [token],
+  );
 
   const signedIn = ready && Boolean(token);
   const loading = signedIn && groups === undefined && read.error === undefined;
@@ -185,15 +211,22 @@ export default function TagGroupsPage() {
         loading ? (
           <Skeleton className="h-5 w-40" />
         ) : signedIn && groups ? (
-          full
-            ? `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组（已达上限）`
-            : `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组`
+          full ? (
+            `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组（已达上限）`
+          ) : (
+            `已创建 ${count} / ${MAX_TAG_GROUPS} 个标签组`
+          )
         ) : undefined
       }
       actions={
         signedIn && groups && count > 0 ? (
           /* While empty, the empty state carries 新建 — one primary action, not two. */
-          <Button variant="filled" icon={<MdAdd />} disabled={full} onClick={() => openEditor(null)}>
+          <Button
+            variant="filled"
+            icon={<MdAdd />}
+            disabled={full}
+            onClick={() => openEditor(null)}
+          >
             新建
           </Button>
         ) : undefined

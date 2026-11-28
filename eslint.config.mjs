@@ -9,12 +9,15 @@ const eslintConfig = defineConfig([
     files: ['**/*.ts', '**/*.tsx'],
     linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
-      '@typescript-eslint/consistent-type-imports': ['error', {
-        prefer: 'type-imports',
-        fixStyle: 'inline-type-imports',
-        // Lazy facades use typeof import() to describe modules without loading them.
-        disallowTypeAnnotations: false,
-      }],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+          fixStyle: 'inline-type-imports',
+          // Lazy facades use typeof import() to describe modules without loading them.
+          disallowTypeAnnotations: false,
+        },
+      ],
       'no-duplicate-imports': ['error', { allowSeparateTypeImports: true }],
     },
   },

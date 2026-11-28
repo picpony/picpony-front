@@ -105,20 +105,31 @@ function resolve(specifier, parent) {
   if (/\.(css|json)$/.test(specifier)) return 'virtual:empty';
   if (specifier in virtual) return 'virtual:' + specifier;
   if (specifier in packageFiles) return path.join(root, 'node_modules', packageFiles[specifier]);
-  let file = specifier.startsWith('@/') ? path.join(root, specifier.slice(2)) :
-    specifier.startsWith('.') ? path.resolve(path.dirname(parent), specifier) : null;
+  let file = specifier.startsWith('@/')
+    ? path.join(root, specifier.slice(2))
+    : specifier.startsWith('.')
+      ? path.resolve(path.dirname(parent), specifier)
+      : null;
   if (!file) throw new Error(`Unmapped dependency ${specifier} from ${parent}`);
-  if (!path.extname(file)) file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
+  if (!path.extname(file))
+    file = ['.tsx', '.ts', '.js', '/index.js'].map((ext) => file + ext).find(existsSync);
   if (!file || !existsSync(file)) throw new Error(`Missing dependency ${specifier}`);
   return file;
 }
 function bundle(id, source) {
   if (modules.has(id)) return;
   modules.set(id, '');
-  let code = source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
-  if (source !== undefined || /\.tsx?$/.test(id)) code = ts.transpileModule(code, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-  }).outputText;
+  let code =
+    source ?? (id.startsWith('virtual:') ? virtual[id.slice(8)] : readFileSync(id, 'utf8'));
+  if (source !== undefined || /\.tsx?$/.test(id))
+    code = ts.transpileModule(code, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true,
+      },
+    }).outputText;
   code = code.replace(/require\(["']([^"']+)["']\)/g, (_, specifier) => {
     const child = resolve(specifier, id);
     bundle(child);
@@ -130,8 +141,10 @@ bundle('entry', entry);
 const js = `(()=>{const process={env:{NODE_ENV:'production'}};const modules={${[...modules].map(([id, code]) => `${JSON.stringify(id)}:(module,exports,require)=>{${code}\n}`).join(',')}};const cache={};function require(id){if(cache[id])return cache[id].exports;const m={exports:{}};cache[id]=m;modules[id](m,m.exports,require);return m.exports;}require('entry')})();`;
 new Script(js, { filename: 'presence-bundle' });
 const server = createServer((req, res) => {
-  if (req.url === '/app.js') return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(`<!doctype html><html lang="zh-CN"><head><style>
+  if (req.url === '/app.js')
+    return void res.writeHead(200, { 'content-type': 'text/javascript' }).end(js);
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    .end(`<!doctype html><html lang="zh-CN"><head><style>
     #batch-list { margin: 0; padding: 0; list-style: none; width: 500px; }
     .batch-row { box-sizing: border-box; height: 32px; }
     .batch-row.m3-row { margin-top: 2px; border-radius: 4px; }
@@ -325,7 +338,10 @@ print(json.dumps({'ok':True,'checks':checks},ensure_ascii=False))
 `;
 try {
   const code = await new Promise((ok, fail) => {
-    const child = spawn('python', ['-c', python, `http://127.0.0.1:${server.address().port}/`], { stdio: 'inherit', windowsHide: true });
+    const child = spawn('python', ['-c', python, `http://127.0.0.1:${server.address().port}/`], {
+      stdio: 'inherit',
+      windowsHide: true,
+    });
     child.on('error', fail);
     child.on('exit', ok);
   });

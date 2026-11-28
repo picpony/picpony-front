@@ -95,7 +95,8 @@ const VARIANTS: Record<IconButtonVariant, string> = {
   /* `forced-boundary` wherever there is a container to lose: forced colors flattens it
      to the canvas (the outlined variant's border survives on its own). */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
-  tonal: 'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
+  tonal:
+    'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
   /* A leading action on a plain page surface keeps its distance until it is reached for. At rest
      it wears the neutral container `Button variant="surface"` wears — one material for a neutral
      surface control across both primitives, round because a circle is what the page's own
@@ -105,10 +106,8 @@ const VARIANTS: Record<IconButtonVariant, string> = {
      something stuck on the frame. This is `DetailBack`, the back affordance.
      Shape is resolved with the other corners below so press state and caller-owned corners
      take precedence over hover; see docs/design/primitives.md#buttons-icons-and-semantics. */
-  quiet:
-    'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
-  outlined:
-    'border border-outline bg-transparent text-on-surface-variant focus-ring',
+  quiet: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
+  outlined: 'border border-outline bg-transparent text-on-surface-variant focus-ring',
   /* A destructive icon-only action, and the only reason it is a variant rather
      than a `className` at the call site is that `cn` is a plain join: the upload
      page's remove badge was passing `bg-error-fill text-on-fill shadow-e3`, so
@@ -146,7 +145,8 @@ const VARIANTS: Record<IconButtonVariant, string> = {
 /* Interactive hover styles kept separate from `VARIANTS` so `loading` buttons
    (which stay natively `:enabled` to hold focus) never recolour on hover. */
 const VARIANT_HOVER: Partial<Record<IconButtonVariant, string>> = {
-  quiet: 'enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container enabled:hover:ripple-secondary',
+  quiet:
+    'enabled:hover:bg-secondary-container enabled:hover:text-on-secondary-container enabled:hover:ripple-secondary',
   outlined: 'enabled:hover:border-primary-ink',
   'danger-quiet': 'enabled:hover:text-error enabled:group-hover:text-error',
 };
@@ -332,9 +332,7 @@ export function iconButtonClasses({
     /* One indicator, and the width has to agree with the colour: `media` sets
        `--tw-inset-ring-color`, so pairing it with the outset `ring-2` would leave
        that ring at `currentcolor` and draw two. */
-    variant === 'media'
-      ? 'focus-visible:inset-ring-2'
-      : 'focus-visible:ring-2',
+    variant === 'media' ? 'focus-visible:inset-ring-2' : 'focus-visible:ring-2',
     !isDisabled && 'state-layer',
     disabled && !loading && 'disabled-content',
     /* Rotate only the glyph on dismiss (via `group/dismiss`) rather than the whole button, so
@@ -375,7 +373,9 @@ export function iconButtonClasses({
           shape === 'round' &&
           !isSelected &&
           !isDisabled &&
-          (size === 'lg' ? 'enabled:hover:not-data-pressed:rounded-lg' : 'enabled:hover:not-data-pressed:rounded-md'),
+          (size === 'lg'
+            ? 'enabled:hover:not-data-pressed:rounded-lg'
+            : 'enabled:hover:not-data-pressed:rounded-md'),
         /* The M3 Expressive press morph (`IconButtonDefaults`' pressed shape): under the finger
            the container draws its corners in, on the default effects spring like the selected
            corner (`transition-icon-button`; `IconButton.kt` — no bounce in a shape morph). `data-pressed` comes from `RippleLayer`. */
@@ -438,7 +438,8 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
   /* A copy riding along on an animation is `aria-hidden` and must not describe
      itself; nor must a disabled control, which has nothing to offer on hover. */
   const inert = rest['aria-hidden'] === true || rest['aria-hidden'] === 'true';
-  const label = tooltip === false || inert || isDisabled ? undefined : (tooltip ?? title ?? rest['aria-label']);
+  const label =
+    tooltip === false || inert || isDisabled ? undefined : (tooltip ?? title ?? rest['aria-label']);
   const { anchorRef, anchorProps, tooltip: bubble } = useTooltip(label);
 
   return (
@@ -492,7 +493,9 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
         onClick={loading ? blockActivation : onClick}
         aria-pressed={rest['aria-pressed'] ?? (toggle ? Boolean(selected) : undefined)}
         aria-disabled={loading || rest['aria-disabled'] || undefined}
-        aria-describedby={[describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined}
+        aria-describedby={
+          [describedBy, anchorProps['aria-describedby']].filter(Boolean).join(' ') || undefined
+        }
         aria-busy={loading || rest['aria-busy'] || undefined}
       >
         <span data-ripple-host="" aria-hidden="true" />
@@ -510,7 +513,9 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
           >
             {icon}
           </span>
-        ) : icon}
+        ) : (
+          icon
+        )}
       </button>
       {bubble}
     </>

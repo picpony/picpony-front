@@ -17,7 +17,12 @@ import { describeImage } from '@/lib/imageDescription';
 import { openFromSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { pickRendition } from '@/lib/imageLoader';
 import { formatCount } from '@/lib/format';
-import { clampedCardAspect, estimateCardWidth, MASONRY_CARD_SIZES, MASONRY_MAX_RATIO } from '@/lib/masonry';
+import {
+  clampedCardAspect,
+  estimateCardWidth,
+  MASONRY_CARD_SIZES,
+  MASONRY_MAX_RATIO,
+} from '@/lib/masonry';
 import { useMounted } from '@/lib/overlay';
 
 interface ImageCardProps {
@@ -64,7 +69,8 @@ function animatedRendition(image: ImagePreview): string {
     image.representations as unknown as Record<string, string>,
     image.width || 0,
     image.height || 0,
-    estimateCardWidth(window.innerWidth) * Math.min(window.devicePixelRatio || 1, ANIMATED_MAX_DENSITY),
+    estimateCardWidth(window.innerWidth) *
+      Math.min(window.devicePixelRatio || 1, ANIMATED_MAX_DENSITY),
   );
 }
 
@@ -122,7 +128,11 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
   const rendition = animated && hydrated ? animatedRendition(image) : '';
   const animatedSrc = rendition || thumbUrl;
 
-  const { sourceKey: heroSourceKey, onClick: heroClick, ...heroLinkProps } = useHeroLink({
+  const {
+    sourceKey: heroSourceKey,
+    onClick: heroClick,
+    ...heroLinkProps
+  } = useHeroLink({
     image,
     sourceRef: heroElementRef,
     previewSrc: isVideo ? mediaUrl : animatedSrc,
@@ -136,7 +146,13 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
      press and Enter on the link all arrive as one. A modified click opens a new tab and leaves
      this one's list alone. */
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    if (
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
       openFromSequence(sequence);
     }
     heroClick(event);
@@ -205,7 +221,9 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
               width={aspectW}
               height={aspectH}
               quality={82}
-              className={croppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
+              className={
+                croppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'
+              }
               draggable={false}
               sizes={MASONRY_CARD_SIZES}
               /* Below the first row the picture is not what the page is waiting for. */
@@ -242,7 +260,12 @@ export default memo(function ImageCard({ image, index, sequence, siteComments }:
               {(comments !== null || onSite > 0) && (
                 /* Derpibooru's count, then PicPony's own as `+n` — the original front end's
                    reading, and the one the detail's merged comment list adds up to. */
-                <Badge tone="media" size="sm" icon={<MdComment />} className="ms-auto rounded-br-sm">
+                <Badge
+                  tone="media"
+                  size="sm"
+                  icon={<MdComment />}
+                  className="ms-auto rounded-br-sm"
+                >
                   {formatCount(comments ?? 0)}
                   {onSite > 0 && `+${formatCount(onSite)}`}
                 </Badge>

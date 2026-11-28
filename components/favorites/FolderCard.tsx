@@ -21,7 +21,8 @@ import { MediaLoadingPlaceholder, PageLoadingIndicator } from '@/components/Load
 
 /* Two columns on a narrow container, three from 520px, four from 820px — matching `MasonryGrid`'s
    container thresholds so the docked desktop drawer never squeezes cards into narrow strips. */
-export const FOLDER_GRID = 'grid grid-cols-2 gap-2 @[520px]/folders:grid-cols-3 @[520px]/folders:gap-4 @[820px]/folders:grid-cols-4';
+export const FOLDER_GRID =
+  'grid grid-cols-2 gap-2 @[520px]/folders:grid-cols-3 @[520px]/folders:gap-4 @[820px]/folders:grid-cols-4';
 
 /**
  * A folder's cover: its newest picture, or `null` for the plain face. Nothing the viewer's
@@ -34,7 +35,11 @@ export function folderCoverSource(image: PonyImage | undefined, spoilered: boole
   const format = (image.format || '').toUpperCase();
   if (format === 'WEBM' || format === 'MP4') return null;
   const representations = image.representations;
-  return (format === 'GIF' ? representations?.thumb : representations?.medium || representations?.small) || null;
+  return (
+    (format === 'GIF'
+      ? representations?.thumb
+      : representations?.medium || representations?.small) || null
+  );
 }
 
 export interface FolderCardSelection {
@@ -90,13 +95,16 @@ export const FolderCard = memo(function FolderCard({
   const src = folderCoverSource(cover, spoilers.length > 0);
   const animated =
     Boolean(cover) &&
-    ((cover as { animated?: unknown }).animated === true || (cover?.format || '').toUpperCase() === 'GIF');
+    ((cover as { animated?: unknown }).animated === true ||
+      (cover?.format || '').toUpperCase() === 'GIF');
   const name = folderLabel(folder);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const checkboxRef = useRef<HTMLButtonElement>(null);
   const selecting = selection?.active ?? false;
   const selected = selection?.selected ?? false;
-  const longPress = useFolderLongPress(selection?.selectable && !selecting ? () => selection.onLongPress?.(folder.id) : undefined);
+  const longPress = useFolderLongPress(
+    selection?.selectable && !selecting ? () => selection.onLongPress?.(folder.id) : undefined,
+  );
 
   /* The face the mode leaves with; brought up to date once the fade is over, out of sight. */
   const [shownSelected, setShownSelected] = useState(selected);
@@ -112,7 +120,15 @@ export const FolderCard = memo(function FolderCard({
   /* A plain click navigates in the app, without the router's own scroll (docs/scrolling.md#scroll-ownership), and
      names the card the page grows out of. */
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
     event.preventDefault();
     const card = event.currentTarget.closest<HTMLElement>('[data-folder-card]');
     const seed =
@@ -165,8 +181,15 @@ export const FolderCard = memo(function FolderCard({
           ) : coverPending ? (
             <MediaLoadingPlaceholder />
           ) : (
-            <span className="flex h-full items-center justify-center text-on-surface-variant" aria-hidden="true">
-              {folder.isMain ? <MdFolderSpecial size={ICON.large} /> : <MdFolder size={ICON.large} />}
+            <span
+              className="flex h-full items-center justify-center text-on-surface-variant"
+              aria-hidden="true"
+            >
+              {folder.isMain ? (
+                <MdFolderSpecial size={ICON.large} />
+              ) : (
+                <MdFolder size={ICON.large} />
+              )}
             </span>
           )}
         </span>
@@ -187,7 +210,10 @@ export const FolderCard = memo(function FolderCard({
       {menu && (
         <div
           inert={selecting}
-          className={cn('absolute right-1 bottom-2.5 transition-opacity spring-fast-effects', selecting && 'opacity-0')}
+          className={cn(
+            'absolute right-1 bottom-2.5 transition-opacity spring-fast-effects',
+            selecting && 'opacity-0',
+          )}
         >
           {menu}
         </div>
@@ -204,7 +230,12 @@ export const FolderCard = memo(function FolderCard({
           data-ripple=""
           onClick={(event) => selection.onToggle(folder.id, event.shiftKey)}
           onTransitionEnd={(event) => {
-            if (!selecting && event.target === event.currentTarget && event.propertyName === 'opacity') setShownSelected(selected);
+            if (
+              !selecting &&
+              event.target === event.currentTarget &&
+              event.propertyName === 'opacity'
+            )
+              setShownSelected(selected);
           }}
           className={cn(
             'group absolute inset-0 z-10 block overflow-hidden rounded-md select-none touch-manipulation',
@@ -237,7 +268,11 @@ export const FolderCard = memo(function FolderCard({
                   strokeDasharray: '10.5',
                   strokeDashoffset: ticked ? 0 : 10.5,
                   className: 'spring-fast-effects transition-[stroke-dashoffset]',
-                  style: { transitionDelay: ticked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
+                  style: {
+                    transitionDelay: ticked
+                      ? 'calc(var(--motion-base-handoff) * var(--motion-scale))'
+                      : '0ms',
+                  },
                 }}
               />
             )}

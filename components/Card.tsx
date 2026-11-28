@@ -25,20 +25,19 @@ interface CardAppearanceProps {
  * always renders a button; a card containing its own controls stays a plain div.
  * The state layer and ripple provide press feedback without moving its bounds.
  */
-type CardProps = CardAppearanceProps & (
-  | (Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
-      as?: 'div';
-      interactive?: false;
-    })
-  | (Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & (
-      | { as: 'button'; interactive?: boolean }
-      | { as?: undefined; interactive: true }
-    ))
-  | (Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'children'> & {
-      as: 'a';
-      interactive?: boolean;
-    })
-);
+type CardProps = CardAppearanceProps &
+  (
+    | (Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+        as?: 'div';
+        interactive?: false;
+      })
+    | (Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> &
+        ({ as: 'button'; interactive?: boolean } | { as?: undefined; interactive: true }))
+    | (Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'children'> & {
+        as: 'a';
+        interactive?: boolean;
+      })
+  );
 
 /**
  * The one card surface.
@@ -74,7 +73,8 @@ const PADDINGS: Record<CardPadding, string> = {
 /* Unconditional overrides stand down the control defaults so `cn` never emits competing
    display/width utilities (e.g. `ShareCard`'s fixed width or `WelcomeTab`'s flex column). */
 const HAS_WIDTH = /(?:^|\s)w-\S+/;
-const HAS_DISPLAY = /(?:^|\s)(?:block|inline-block|inline|flex|inline-flex|grid|inline-grid|table|contents|hidden)(?=\s|$)/;
+const HAS_DISPLAY =
+  /(?:^|\s)(?:block|inline-block|inline|flex|inline-flex|grid|inline-grid|table|contents|hidden)(?=\s|$)/;
 
 const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   const {
@@ -133,13 +133,21 @@ const Card = forwardRef<HTMLElement, CardProps>(function Card(props, ref) {
   }
   if (resolved === 'a') {
     return (
-      <a {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)} {...presentation} ref={ref as Ref<HTMLAnchorElement>}>
+      <a
+        {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)}
+        {...presentation}
+        ref={ref as Ref<HTMLAnchorElement>}
+      >
         {children}
       </a>
     );
   }
   return (
-    <div {...(rest as HTMLAttributes<HTMLDivElement>)} {...presentation} ref={ref as Ref<HTMLDivElement>}>
+    <div
+      {...(rest as HTMLAttributes<HTMLDivElement>)}
+      {...presentation}
+      ref={ref as Ref<HTMLDivElement>}
+    >
       {children}
     </div>
   );

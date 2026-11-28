@@ -17,7 +17,8 @@ const COLLAPSED_MAX_HEIGHT = 160;
 /** The folded height fades out rather than stopping mid-line: the mask is alpha, not colour, and
  *  unfolding carries its stop down to the bottom edge so the fade leaves with the clip. Two
  *  two-stop gradients interpolate, so this rides the height's own transition. */
-const fadeMask = (open: boolean) => `linear-gradient(to bottom, black ${open ? 100 : 65}%, transparent)`;
+const fadeMask = (open: boolean) =>
+  `linear-gradient(to bottom, black ${open ? 100 : 65}%, transparent)`;
 
 /**
  * The picture's description, rendered — Derpibooru writes Markdown, with its own picture
@@ -38,7 +39,9 @@ export default function DetailDescription({ description }: { description?: strin
   const open = expanded === text;
   const [overflowing, setOverflowing] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
-  const translation = useTextTranslation(plainTextOf(text), (message) => showToast(message, 'error'));
+  const translation = useTextTranslation(plainTextOf(text), (message) =>
+    showToast(message, 'error'),
+  );
 
   /* Whether the folded card hides anything, and how tall it stands unfolded — re-measured when
      its width changes, when a picture inside the description finishes loading and grows it, and
@@ -65,9 +68,7 @@ export default function DetailDescription({ description }: { description?: strin
      * state writes it fed re-rendered the card before that frame painted. One task later the
      * browser has laid it out anyway and the read is free. The fold is 160px until the answer
      * arrives, so nothing on screen depends on it landing in the commit. */
-    const idleCallback = window.requestIdleCallback as
-      | Window['requestIdleCallback']
-      | undefined;
+    const idleCallback = window.requestIdleCallback as Window['requestIdleCallback'] | undefined;
     const schedule = () => {
       if (cancelled || frame || idle || timer) return;
       frame = requestAnimationFrame(() => {
@@ -109,7 +110,13 @@ export default function DetailDescription({ description }: { description?: strin
           简介
         </h2>
         {text && (
-          <Button variant="text" size="xs" icon={<MdTranslate />} loading={translation.busy} onClick={translation.toggle}>
+          <Button
+            variant="text"
+            size="xs"
+            icon={<MdTranslate />}
+            loading={translation.busy}
+            onClick={translation.toggle}
+          >
             {translation.translation !== null ? '隐藏译文' : '翻译'}
           </Button>
         )}

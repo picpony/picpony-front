@@ -41,8 +41,16 @@ function target(raw: string | null): URL | null {
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:' || url.hostname !== ASSET_HOST || url.port !== '' || url.username || url.password) return null;
-  if (url.search || url.hash || !(IMAGE_PATH.test(url.pathname) || UPLOAD_PATH.test(url.pathname))) return null;
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname !== ASSET_HOST ||
+    url.port !== '' ||
+    url.username ||
+    url.password
+  )
+    return null;
+  if (url.search || url.hash || !(IMAGE_PATH.test(url.pathname) || UPLOAD_PATH.test(url.pathname)))
+    return null;
   return url;
 }
 
@@ -54,9 +62,18 @@ function source(href: string): string {
 }
 
 async function readImage(url: string): Promise<Uint8Array | null> {
-  const response = await fetch(url, { redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const response = await fetch(url, {
+    redirect: 'error',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
   const type = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() ?? '';
-  if (!response.ok || !response.body || !type.startsWith('image/') || Number(response.headers.get('content-length') ?? 0) > MAX_BYTES) {
+  if (
+    !response.ok ||
+    !response.body ||
+    !type.startsWith('image/') ||
+    Number(response.headers.get('content-length') ?? 0) > MAX_BYTES
+  ) {
     void response.body?.cancel().catch(() => {});
     return null;
   }
@@ -99,7 +116,13 @@ async function silhouette(bytes: Uint8Array): Promise<MascotShape | null> {
   const scale = MASCOT_SHAPE_GRID / Math.max(width, height);
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
-  const alpha = await image.rotate().resize(w, h, { fit: 'fill' }).ensureAlpha().extractChannel(3).raw().toBuffer();
+  const alpha = await image
+    .rotate()
+    .resize(w, h, { fit: 'fill' })
+    .ensureAlpha()
+    .extractChannel(3)
+    .raw()
+    .toBuffer();
   if (alpha.length !== w * h) return null;
   return { w, h, rows: shapeRows(alpha, w, h) };
 }
@@ -148,7 +171,9 @@ function assetHref(value: string): string | null {
   const raw = value.trim();
   if (!raw) return null;
   try {
-    const url = /^https?:\/\//.test(raw) ? new URL(raw) : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
+    const url = /^https?:\/\//.test(raw)
+      ? new URL(raw)
+      : new URL(`${PICPONY_API_ORIGIN}/${raw.replace(/^\/+/, '')}`);
     return url.href;
   } catch {
     return null;
@@ -160,7 +185,11 @@ const configuredImages = createServerMemo<[], Set<string>>({
   keyOf: () => 'all',
   load: async () => {
     try {
-      const response = await fetch(`${upstreamOrigin()}/api/v1/mascots`, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS) });
+      const response = await fetch(`${upstreamOrigin()}/api/v1/mascots`, {
+        cache: 'no-store',
+        redirect: 'error',
+        signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
+      });
       if (!response.ok) return null;
       const data = (await response.json()) as { mascots: { image_url: string }[] };
       const images = new Set<string>();
@@ -193,14 +222,22 @@ async function isConfigured(href: string): Promise<boolean> {
 export async function GET(request: NextRequest): Promise<Response> {
   const url = target(request.nextUrl.searchParams.get('src'));
   if (!url || !(await isConfigured(url.href))) {
-    return Response.json({ success: false, message: '不是可读取的吉祥物图片' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    return Response.json(
+      { success: false, message: '不是可读取的吉祥物图片' },
+      { status: 400, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
   const shape = await shapeOf(url.href);
   if (!shape) {
-    return Response.json({ success: false, message: '吉祥物图片暂时无法读取' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
+    return Response.json(
+      { success: false, message: '吉祥物图片暂时无法读取' },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
   /* An upload's address names its content, so an answer holds for as long as the address does. */
-  return Response.json(shape, { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } });
+  return Response.json(shape, {
+    headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' },
+  });
 }
 
 export const dynamic = 'force-dynamic';

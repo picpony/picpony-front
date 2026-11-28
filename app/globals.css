@@ -442,7 +442,8 @@
      tail a box-shadow cannot follow (the bubble's shadow stopped at its edge and left the tail
      flat). The ladder's two layers as two drop-shadows, per scheme like the ladder; a filter takes
      no spread, so the ambient layer is its blur alone. */
-  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.15)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.1));
+  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.15))
+    drop-shadow(0 2px 6px rgb(0 0 0 / 0.1));
 }
 
 .dark {
@@ -462,7 +463,8 @@
   --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.28), 0 1px 3px 0 rgb(0 0 0 / 0.4);
   --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.3), 0 2px 3px 0 rgb(0 0 0 / 0.4);
   --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.32), 0 4px 4px 0 rgb(0 0 0 / 0.45);
-  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.25));
+  --md-sys-elevation-filter-2: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35))
+    drop-shadow(0 2px 6px rgb(0 0 0 / 0.25));
 }
 
 /* The UA's own parts — form-control internals, autofill, a scroller without one of the app's
@@ -1181,12 +1183,24 @@ body {
      1.4 for the three speed tiers and **0** for off, collapsing every duration; the reduced tier
      does not touch it — it decides what kind of motion plays (no overshoot), not how long it
      takes. Scaling a spring's clock uniformly is the same spring at another speed. */
-  --duration-spring-fast-spatial: calc(var(--motion-base-spring-fast-spatial) * var(--motion-scale));
-  --duration-spring-default-spatial: calc(var(--motion-base-spring-default-spatial) * var(--motion-scale));
-  --duration-spring-slow-spatial: calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale));
-  --duration-spring-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale));
-  --duration-spring-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale));
-  --duration-spring-slow-effects: calc(var(--motion-base-spring-slow-effects) * var(--motion-scale));
+  --duration-spring-fast-spatial: calc(
+    var(--motion-base-spring-fast-spatial) * var(--motion-scale)
+  );
+  --duration-spring-default-spatial: calc(
+    var(--motion-base-spring-default-spatial) * var(--motion-scale)
+  );
+  --duration-spring-slow-spatial: calc(
+    var(--motion-base-spring-slow-spatial) * var(--motion-scale)
+  );
+  --duration-spring-fast-effects: calc(
+    var(--motion-base-spring-fast-effects) * var(--motion-scale)
+  );
+  --duration-spring-default-effects: calc(
+    var(--motion-base-spring-default-effects) * var(--motion-scale)
+  );
+  --duration-spring-slow-effects: calc(
+    var(--motion-base-spring-slow-effects) * var(--motion-scale)
+  );
   --duration-spring-layout: calc(var(--motion-base-spring-layout) * var(--motion-scale));
 
   /* **Not motion to a target, so not springs** — the only curves left. An indeterminate
@@ -1217,23 +1231,27 @@ body {
      because one shorthand carries one clock). Deliberately not gated on the entrance preference —
      opening a picture is a gesture the user asked for. */
   --animate-detail-arrive:
-    fadeIn calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects) both,
-    detailRise calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-image)) var(--ease-spring-default-spatial) both;
+    fadeIn calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects) both,
+    detailRise calc(var(--motion-base-spring-default-spatial) * var(--motion-scale-image))
+      var(--ease-spring-default-spatial) both;
   /* A page, or a pane's content, arriving: Material's *fade through* — it waits for the leaving
      page's fast-effects fade to be mostly gone (`--motion-base-handoff`, generated as half of
      that spring) and fades in on the full-screen effects spring. Opacity only: see `pageIn`.
      Both halves go through the motion scale — a backwards fill holds the element at the *from*
      state for the delay, so collapsing only the duration showed a blank page. Not gated on the
      entrance preference; the switch is read at the call sites. */
-  --animate-page-transition: pageIn calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-page)) var(--ease-spring-effects)
-    calc(var(--motion-base-handoff) * var(--motion-scale-page)) both;
+  --animate-page-transition: pageIn
+    calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-page))
+    var(--ease-spring-effects) calc(var(--motion-base-handoff) * var(--motion-scale-page)) both;
   /* ── Micro-interactions, as named animations ────────────────────────────
    *
    * A control or mark *arriving in place* (a tick, a badge, a reaction) takes the fast spatial
    * spring — what "it popped in" means — so its overshoot is the spring's own and the reduced
    * tier's shape substitution removes it like every other. The dot bounce keeps the loop curve
    * because it repeats and has no arrival. All go through the motion scale. */
-  --animate-control-pop: control-pop var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial) both;
+  --animate-control-pop: control-pop var(--duration-spring-fast-spatial)
+    var(--ease-spring-fast-spatial) both;
   /* Two animations on one class: the glyph's *geometry* and its *fade* are two springs, and one
      shorthand carries one clock (an opacity on ζ0.6 is clipped above 1). */
   --animate-icon-swap:
@@ -1241,7 +1259,8 @@ body {
     icon-swap-fade var(--duration-spring-fast-effects) var(--ease-spring-effects) both;
   /* A reaction filling in (收藏's star, 点赞's thumb): the fast spatial spring's own overshoot,
      not a scale written into keyframes, which no tier could take out. Transform only. */
-  --animate-reaction-fill: reaction-fill var(--duration-spring-fast-spatial) var(--ease-spring-fast-spatial) both;
+  --animate-reaction-fill: reaction-fill var(--duration-spring-fast-spatial)
+    var(--ease-spring-fast-spatial) both;
   /* **Unscaled**, a documented exception: the "加载更多" dots are an indeterminate progress
      indicator — at scale 0 they would freeze into three static dots claiming the fetch had
      stopped. Slowed under the off tier instead, beside the other progress keyframes. */
@@ -1277,8 +1296,6 @@ body {
       translate: none;
     }
   }
-
-
 }
 
 /* --- The Chinese face, per platform ----------------------------------------
@@ -1300,7 +1317,8 @@ body {
  * `data-os` is set from the request in `app/layout.tsx` and confirmed by the pre-paint script.
  */
 :root {
-  --font-han: 'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif, var(--font-noto-sc);
+  --font-han:
+    'PingFang SC', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif, var(--font-noto-sc);
   --font-han-mono: 'Noto Sans Mono CJK SC', monospace;
 }
 
@@ -1337,23 +1355,41 @@ html[data-os='windows'] {
   --motion-enabled-scroll: 1;
   --motion-enabled-ambient: 1;
   --motion-ratio-page: 1;
-  --motion-scale-page: calc(var(--motion-base-scale) * var(--motion-ratio-page) * var(--motion-enabled-page));
+  --motion-scale-page: calc(
+    var(--motion-base-scale) * var(--motion-ratio-page) * var(--motion-enabled-page)
+  );
   --motion-ratio-tabs: 1;
-  --motion-scale-tabs: calc(var(--motion-base-scale) * var(--motion-ratio-tabs) * var(--motion-enabled-tabs));
+  --motion-scale-tabs: calc(
+    var(--motion-base-scale) * var(--motion-ratio-tabs) * var(--motion-enabled-tabs)
+  );
   --motion-ratio-overlay: 1;
-  --motion-scale-overlay: calc(var(--motion-base-scale) * var(--motion-ratio-overlay) * var(--motion-enabled-overlay));
+  --motion-scale-overlay: calc(
+    var(--motion-base-scale) * var(--motion-ratio-overlay) * var(--motion-enabled-overlay)
+  );
   --motion-ratio-image: 1;
-  --motion-scale-image: calc(var(--motion-base-scale) * var(--motion-ratio-image) * var(--motion-enabled-image));
+  --motion-scale-image: calc(
+    var(--motion-base-scale) * var(--motion-ratio-image) * var(--motion-enabled-image)
+  );
   --motion-ratio-list: 1;
-  --motion-scale-list: calc(var(--motion-base-scale) * var(--motion-ratio-list) * var(--motion-enabled-list));
+  --motion-scale-list: calc(
+    var(--motion-base-scale) * var(--motion-ratio-list) * var(--motion-enabled-list)
+  );
   --motion-ratio-entrance: 1;
-  --motion-scale-entrance: calc(var(--motion-base-scale) * var(--motion-ratio-entrance) * var(--motion-enabled-entrance));
+  --motion-scale-entrance: calc(
+    var(--motion-base-scale) * var(--motion-ratio-entrance) * var(--motion-enabled-entrance)
+  );
   --motion-ratio-theme: 1;
-  --motion-scale-theme: calc(var(--motion-base-scale) * var(--motion-ratio-theme) * var(--motion-enabled-theme));
+  --motion-scale-theme: calc(
+    var(--motion-base-scale) * var(--motion-ratio-theme) * var(--motion-enabled-theme)
+  );
   --motion-ratio-scroll: 1;
-  --motion-scale-scroll: calc(var(--motion-base-scale) * var(--motion-ratio-scroll) * var(--motion-enabled-scroll));
+  --motion-scale-scroll: calc(
+    var(--motion-base-scale) * var(--motion-ratio-scroll) * var(--motion-enabled-scroll)
+  );
   --motion-ratio-ambient: 1;
-  --motion-scale-ambient: calc(var(--motion-base-scale) * var(--motion-ratio-ambient) * var(--motion-enabled-ambient));
+  --motion-scale-ambient: calc(
+    var(--motion-base-scale) * var(--motion-ratio-ambient) * var(--motion-enabled-ambient)
+  );
 }
 
 html[data-motion-speed='fast'] {
@@ -1369,7 +1405,9 @@ html[data-motion-speed='custom'] {
   --motion-ratio-overlay: calc(var(--motion-custom-overlay, 1) / var(--motion-custom-feedback, 1));
   --motion-ratio-image: calc(var(--motion-custom-image, 1) / var(--motion-custom-feedback, 1));
   --motion-ratio-list: calc(var(--motion-custom-list, 1) / var(--motion-custom-feedback, 1));
-  --motion-ratio-entrance: calc(var(--motion-custom-entrance, 1) / var(--motion-custom-feedback, 1));
+  --motion-ratio-entrance: calc(
+    var(--motion-custom-entrance, 1) / var(--motion-custom-feedback, 1)
+  );
   --motion-ratio-theme: calc(var(--motion-custom-theme, 1) / var(--motion-custom-feedback, 1));
   --motion-ratio-scroll: calc(var(--motion-custom-scroll, 1) / var(--motion-custom-feedback, 1));
   --motion-ratio-ambient: calc(var(--motion-custom-ambient, 1) / var(--motion-custom-feedback, 1));
@@ -1464,7 +1502,6 @@ html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='re
   --ease-spring-slow-spatial: var(--motion-shape-effects);
 }
 
-
 html[data-motion='custom'] [data-motion-category='ambient'] {
   --ease-spring-fast-spatial: var(--motion-shape-spatial-fast);
   --ease-spring-default-spatial: var(--motion-shape-spatial);
@@ -1486,7 +1523,6 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 }
 
 /* --- Motion primitives --------------------------------------------------- */
-
 
 /* The wordmark, as a mask. One artwork (`picpony-g.svg`): the glyph is alpha, the colour is
  * the element's own text colour, so every context gets the value its text role already
@@ -1523,13 +1559,21 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   margin-top: -0.2314%;
   opacity: 0;
   pointer-events: none;
-  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-spring-effects);
+  transition: opacity
+    calc(
+      var(--motion-base-spring-fast-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))
+    )
+    var(--ease-spring-effects);
 }
 
 .logo-trace[data-shown] {
   opacity: 1;
   /* A mark drawing itself on: the full-screen fade's spring, the slowest effects role. */
-  transition: opacity calc(var(--motion-base-spring-slow-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))) var(--ease-spring-effects);
+  transition: opacity
+    calc(
+      var(--motion-base-spring-slow-effects) * var(--logo-motion-scale, var(--motion-scale-ambient))
+    )
+    var(--ease-spring-effects);
 }
 
 /* The hairline keeping the colour mark legible where its hues sit close to what is behind
@@ -1589,7 +1633,8 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 
 .logo-intro[data-settled] .logo-mask {
   opacity: 0;
-  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects);
+  transition: opacity calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-entrance))
+    var(--ease-spring-effects);
 }
 
 /* --- The splash: 入场动画's 阻塞 and 不阻塞 ------------------------------------
@@ -1614,10 +1659,17 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   display: none;
 }
 
-:where(html:not([data-entrance='off']):is([data-motion='standard'], [data-motion='custom'][data-motion-entrance='standard'])) .app-splash {
+:where(
+    html:not([data-entrance='off']):is(
+        [data-motion='standard'],
+        [data-motion='custom'][data-motion-entrance='standard']
+      )
+  )
+  .app-splash {
   display: flex;
-  animation: app-splash-lift calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects)
-    var(--app-splash-deadline, 2500ms) forwards;
+  animation: app-splash-lift
+    calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance))
+    var(--ease-spring-effects) var(--app-splash-deadline, 2500ms) forwards;
 }
 
 .app-splash[data-held] {
@@ -1625,8 +1677,9 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
 }
 
 .app-splash[data-leaving] {
-  animation: app-splash-leave calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance)) var(--ease-spring-effects)
-    forwards;
+  animation: app-splash-leave
+    calc(var(--motion-base-spring-default-effects) * var(--motion-scale-entrance))
+    var(--ease-spring-effects) forwards;
 }
 
 @keyframes app-splash-lift {
@@ -1737,7 +1790,11 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
   z-index: -1;
   border-radius: 9999px;
   color: var(--ripple-color, currentColor);
-  background-image: radial-gradient(closest-side, currentColor var(--ripple-core, 74%), transparent 100%);
+  background-image: radial-gradient(
+    closest-side,
+    currentColor var(--ripple-core, 74%),
+    transparent 100%
+  );
   opacity: var(--md-sys-ripple-opacity);
   pointer-events: none;
   will-change: transform, opacity;
@@ -1835,7 +1892,9 @@ html[data-motion='custom'][data-motion-overlay='reduced'] [data-motion-spring='o
        (`--skeleton-delay - --skeleton-duration`) keeps staggered groups moving in one continuous
        wave from frame zero instead of pausing frozen before their first pass. */
     animation: shimmer var(--skeleton-duration) var(--ease-skeleton-sweep) infinite;
-    animation-delay: calc(var(--skeleton-delay, 0ms) * var(--motion-scale) - var(--skeleton-duration));
+    animation-delay: calc(
+      var(--skeleton-delay, 0ms) * var(--motion-scale) - var(--skeleton-duration)
+    );
   }
 
   .skeleton-overlay::after {
@@ -1893,7 +1952,8 @@ html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='re
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: text-shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep) infinite;
+    animation: text-shimmer calc(var(--motion-base-sweep) * var(--motion-scale)) var(--ease-sweep)
+      infinite;
   }
 }
 
@@ -2026,7 +2086,6 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
   transition: none;
 }
 
-
 /* Hover feedback over photography, as one value (three surfaces used to answer this three
  * ways, so a thumbnail responded differently depending on the page).
  *
@@ -2045,7 +2104,9 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 .media-hover-scrim {
   /* One targeted tone for pointer hover and keyboard focus. The hover token plus two
      points gives a photograph the same readable feedback as a flat surface. */
-  --media-targeted-scrim: rgb(var(--md-sys-color-scrim-rgb) / calc(var(--md-sys-state-hover-opacity) + 0.02));
+  --media-targeted-scrim: rgb(
+    var(--md-sys-color-scrim-rgb) / calc(var(--md-sys-state-hover-opacity) + 0.02)
+  );
   background-color: transparent;
   /* The state layer's own clock (fast effects): the veil is the whole of a tile's hover —
      the tile no longer scales and has no caption to fade (R4-051) — which makes it a photograph's
@@ -2089,7 +2150,8 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
   );
   transform: translate3d(0, 0, 0);
   will-change: transform;
-  animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale-ambient)) linear infinite;
+  animation: scrim-hatch calc(var(--motion-base-sweep) * 4 * var(--motion-scale-ambient)) linear
+    infinite;
 }
 
 @keyframes scrim-hatch {
@@ -2099,19 +2161,21 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-page='off']) .pa
 }
 
 html:is(
-  [data-motion='reduced'],
-  [data-motion='custom'][data-motion-ambient='reduced'],
-  [data-motion='custom'][data-motion-overlay='reduced']
-) .danger-scrim::before {
+    [data-motion='reduced'],
+    [data-motion='custom'][data-motion-ambient='reduced'],
+    [data-motion='custom'][data-motion-overlay='reduced']
+  )
+  .danger-scrim::before {
   animation: none;
 }
 
 /* Under off, remove the decorative hatch altogether while keeping the red veil. */
 html:is(
-  [data-motion='off'],
-  [data-motion='custom'][data-motion-ambient='off'],
-  [data-motion='custom'][data-motion-overlay='off']
-) .danger-scrim::before {
+    [data-motion='off'],
+    [data-motion='custom'][data-motion-ambient='off'],
+    [data-motion='custom'][data-motion-overlay='off']
+  )
+  .danger-scrim::before {
   display: none;
 }
 
@@ -2254,17 +2318,23 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
 [data-m3e-offscreen] .m3e-loading-shape,
 [inert] .m3e-loading-shape,
 [hidden] .m3e-loading-shape,
-[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+    [data-tab-pane-entering]
+  )
   .m3e-loading-shape,
 [data-tab-pane][data-tab-pane-done] .m3e-loading-shape,
 [inert] .skeleton::after,
 [hidden] .skeleton::after,
-[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+    [data-tab-pane-entering]
+  )
   .skeleton::after,
 [data-tab-pane][data-tab-pane-done] .skeleton::after,
 [inert] .text-shimmer,
 [hidden] .text-shimmer,
-[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not([data-tab-pane-entering])
+[data-tab-pane]:not([data-tab-pane-active]):not([data-tab-pane-leaving]):not(
+    [data-tab-pane-entering]
+  )
   .text-shimmer,
 [data-tab-pane][data-tab-pane-done] .text-shimmer {
   animation-play-state: paused !important;
@@ -2464,7 +2534,9 @@ html:is([data-motion='off'], [data-motion='custom'][data-motion-feedback='off'])
   /* Through the token, so the lightbox's fades answer the animation preference with
      everything else. The library's two *loading* keyframes stay unscaled — they are an
      indeterminate progress indicator, which is the documented exception. */
-  --yarl__fade_animation_duration: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image));
+  --yarl__fade_animation_duration: calc(
+    var(--motion-base-spring-default-effects) * var(--motion-scale-image)
+  );
   --yarl__fade_animation_timing_function: var(--ease-spring-effects);
   --yarl__slide_icon_loading_color: var(--md-sys-color-on-media);
   --yarl__slide_icon_error_color: var(--md-sys-color-error-fill);
@@ -2556,9 +2628,12 @@ body[data-lightbox-backdrop] {
   opacity: 1;
   transform-origin: 50% 50%;
   transition:
-    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
-    border-radius calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects),
+    border-radius calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects);
 }
 
 [data-app-root][data-lightbox-depth] {
@@ -2571,7 +2646,8 @@ body[data-lightbox-backdrop] {
     calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale-image)),
     calc(var(--motion-base-spring-slow-spatial) * var(--motion-scale-image)),
     calc(var(--motion-base-spring-slow-effects) * var(--motion-scale-image));
-  transition-timing-function: var(--motion-shape-spatial), var(--ease-spring-effects), var(--ease-spring-effects);
+  transition-timing-function:
+    var(--motion-shape-spatial), var(--ease-spring-effects), var(--ease-spring-effects);
 }
 
 /* The portal moves as one surface; slides retain the zoom/pager plugin's transforms.
@@ -2581,8 +2657,10 @@ body[data-lightbox-backdrop] {
   transform: translateY(var(--pic-lightbox-travel));
   box-shadow: 0 10vh 0 0 var(--md-sys-color-media-stage);
   transition:
-    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects),
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image)) var(--ease-spring-effects);
+    transform calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-image))
+      var(--ease-spring-effects);
 }
 
 .pic-lightbox.yarl__portal_open {
@@ -2593,18 +2671,26 @@ body[data-lightbox-backdrop] {
   transition-timing-function: var(--motion-shape-spatial), var(--ease-spring-effects);
 }
 
-html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][data-motion-image='reduced'], [data-motion='custom'][data-motion-image='off']) [data-app-root][data-lightbox-depth] {
+html:is(
+    [data-motion='reduced'],
+    [data-motion='off'],
+    [data-motion='custom'][data-motion-image='reduced'],
+    [data-motion='custom'][data-motion-image='off']
+  )
+  [data-app-root][data-lightbox-depth] {
   transform: none;
   border-radius: 0;
   opacity: 1;
 }
 
-html:is([data-motion='reduced'], [data-motion='custom'][data-motion-image='reduced']) .pic-lightbox.yarl__portal {
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-image='reduced'])
+  .pic-lightbox.yarl__portal {
   --pic-lightbox-travel: var(--motion-travel-small);
   transition-timing-function: var(--ease-spring-effects);
 }
 
-html:is([data-motion='off'], [data-motion='custom'][data-motion-image='off']) .pic-lightbox.yarl__portal {
+html:is([data-motion='off'], [data-motion='custom'][data-motion-image='off'])
+  .pic-lightbox.yarl__portal {
   --pic-lightbox-travel: 0px;
 }
 
@@ -3508,8 +3594,14 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
     max-width: 56rem;
   }
 
-  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-rows > :first-child,
-  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-rows > :last-child {
+  html[data-detail-layout='split']
+    .image-detail-overlay-content
+    .image-detail-header-rows
+    > :first-child,
+  html[data-detail-layout='split']
+    .image-detail-overlay-content
+    .image-detail-header-rows
+    > :last-child {
     justify-content: flex-start;
   }
 
@@ -3520,7 +3612,10 @@ a:has([data-image-hero-role='thumbnail']):focus-visible::after {
     letter-spacing: var(--text-body-s--letter-spacing);
   }
 
-  html[data-detail-layout='split'] .image-detail-overlay-content .image-detail-header-caption > :first-child {
+  html[data-detail-layout='split']
+    .image-detail-overlay-content
+    .image-detail-header-caption
+    > :first-child {
     color: inherit;
   }
 
@@ -3882,7 +3977,8 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
 [data-image-detail-overlay][data-image-hero-leaving]
   :is(.pointer-events-auto, .image-detail-back, .image-detail-final),
 [data-image-detail-overlay][data-image-hero-leaving]
-  [data-dropzone-content] :is(a, button, input, select, textarea, [tabindex]) {
+  [data-dropzone-content]
+  :is(a, button, input, select, textarea, [tabindex]) {
   pointer-events: none !important;
 }
 
@@ -3920,7 +4016,13 @@ html[data-image-hero-transition] :is([data-image-detail-zoom], [data-image-detai
  * Keeping the flight out of the reduced tier is deliberate: it is the most expensive thing
  * the app does (measured 36fps on a machine that idles at 60), and the tier's audience is a
  * device that cannot afford it. */
-html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][data-motion-image='reduced'], [data-motion='custom'][data-motion-image='off']) .image-detail-route {
+html:is(
+    [data-motion='reduced'],
+    [data-motion='off'],
+    [data-motion='custom'][data-motion-image='reduced'],
+    [data-motion='custom'][data-motion-image='off']
+  )
+  .image-detail-route {
   animation: var(--animate-detail-arrive);
 }
 
@@ -4199,7 +4301,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   /* Asymmetric effects clocks bound to the scroll category: crisp FastEffects arrival on
      hover/scroll, gentle DefaultEffects fade-out on auto-hide. */
   --os-fast-effects: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-scroll));
-  --os-default-effects: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-scroll));
+  --os-default-effects: calc(
+    var(--motion-base-spring-default-effects) * var(--motion-scale-scroll)
+  );
   transition:
     opacity var(--os-default-effects) var(--ease-spring-effects),
     visibility var(--os-default-effects) var(--ease-spring-effects),
@@ -4404,14 +4508,18 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   .os-scrollbar-horizontal .os-scrollbar-handle {
     left: auto;
     transform: translateX(
-      calc(var(--os-scroll-percent-directional) * 100cqw + var(--os-scroll-percent-directional) * -100%)
+      calc(
+        var(--os-scroll-percent-directional) * 100cqw + var(--os-scroll-percent-directional) * -100%
+      )
     );
   }
 
   .os-scrollbar-vertical .os-scrollbar-handle {
     top: auto;
     transform: translateY(
-      calc(var(--os-scroll-percent-directional) * 100cqh + var(--os-scroll-percent-directional) * -100%)
+      calc(
+        var(--os-scroll-percent-directional) * 100cqh + var(--os-scroll-percent-directional) * -100%
+      )
     );
   }
 }
@@ -4488,7 +4596,8 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
   --os-handle-interactive-area-offset: 6px;
 }
 
-:is(.os-slot-page, .os-detail-slot, .os-slot-maintenance) > .os-scrollbar-vertical.os-theme-picpony {
+:is(.os-slot-page, .os-detail-slot, .os-slot-maintenance)
+  > .os-scrollbar-vertical.os-theme-picpony {
   padding-bottom: max(var(--os-padding-axis), env(safe-area-inset-bottom, 0px));
 }
 
@@ -4509,7 +4618,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 @media (width >= 48rem) {
   .app-sidebar {
     --sidebar-layout-duration: calc(var(--motion-base-spring-layout) * var(--motion-scale-overlay));
-    --sidebar-label-duration: calc(var(--motion-base-spring-default-effects) * var(--motion-scale-overlay));
+    --sidebar-label-duration: calc(
+      var(--motion-base-spring-default-effects) * var(--motion-scale-overlay)
+    );
   }
   .sidebar-row-layout {
     transition:
@@ -4556,7 +4667,9 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
       translate var(--sidebar-layout-duration) var(--ease-spring-effects);
   }
   .app-sidebar:not([data-sidebar-mode='expanded']) {
-    --sidebar-label-duration: calc(var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay));
+    --sidebar-label-duration: calc(
+      var(--motion-base-spring-fast-effects) * var(--motion-scale-overlay)
+    );
   }
   .app-sidebar:not([data-sidebar-mode='expanded']) .sidebar-row-layout {
     padding-right: 1rem;
@@ -4668,7 +4781,11 @@ html:is([data-motion='reduced'], [data-motion='off'], [data-motion='custom'][dat
 }
 
 /* Horizontal rich-text code listings and tables: clear `rounded-xs` corners cleanly. */
-:is(.os-rich-block, .bbcode-content [data-overlayscrollbars~='host'], .rich-text-content [data-overlayscrollbars~='host'])
+:is(
+    .os-rich-block,
+    .bbcode-content [data-overlayscrollbars~='host'],
+    .rich-text-content [data-overlayscrollbars~='host']
+  )
   > .os-scrollbar-horizontal.os-theme-picpony {
   --os-padding-axis: 6px;
 }
@@ -4753,8 +4870,8 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-effects), var(--ease-spring-effects), var(--ease-spring-effects),
     var(--ease-spring-fast-spatial), var(--ease-spring-fast-spatial),
-    var(--ease-spring-fast-spatial), var(--ease-spring-fast-spatial),
-    var(--ease-spring-effects), var(--ease-spring-effects);
+    var(--ease-spring-fast-spatial), var(--ease-spring-fast-spatial), var(--ease-spring-effects),
+    var(--ease-spring-effects);
   transition-duration:
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
     var(--duration-spring-fast-effects), var(--duration-spring-fast-effects),
@@ -4786,8 +4903,10 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 .m3-collapse {
   grid-template-rows: 1fr;
   transition:
-    grid-template-rows calc(var(--motion-base-spring-layout) * var(--motion-scale-list)) var(--ease-spring-effects),
-    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-list)) var(--ease-spring-effects);
+    grid-template-rows calc(var(--motion-base-spring-layout) * var(--motion-scale-list))
+      var(--ease-spring-effects),
+    opacity calc(var(--motion-base-spring-default-effects) * var(--motion-scale-list))
+      var(--ease-spring-effects);
 }
 
 .m3-collapse[data-open='false'] {
@@ -4842,13 +4961,19 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
  * fall inside the panel, so at rest the skirt is entirely off screen. Each carries the panel's
  * level-1 elevation, which it replaces. */
 @utility edge-skirt-b {
-  box-shadow: 0 1.5rem 0 0 var(--color-surface-container-low), var(--shadow-e1);
+  box-shadow:
+    0 1.5rem 0 0 var(--color-surface-container-low),
+    var(--shadow-e1);
 }
 @utility edge-skirt-l {
-  box-shadow: -1.5rem 0 0 0 var(--color-surface-container-low), var(--shadow-e1);
+  box-shadow:
+    -1.5rem 0 0 0 var(--color-surface-container-low),
+    var(--shadow-e1);
 }
 @utility edge-skirt-r {
-  box-shadow: 1.5rem 0 0 0 var(--color-surface-container-low), var(--shadow-e1);
+  box-shadow:
+    1.5rem 0 0 0 var(--color-surface-container-low),
+    var(--shadow-e1);
 }
 /* A surface docked to a screen edge arriving — the phone's modal navigation drawer — on
  * **defaultSpatial**, as `ModalNavigationDrawer`'s `openMotion` (and `Sheet` / `SidePanel`) do;
@@ -5364,7 +5489,8 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 
 @media (hover: hover) {
-  .m3-field:not([data-labelled]):hover:not(:focus-within):not(:has(> :is(input, textarea):disabled)) > fieldset::before {
+  .m3-field:not([data-labelled]):hover:not(:focus-within):not(:has(> :is(input, textarea):disabled))
+    > fieldset::before {
     opacity: var(--md-sys-state-hover-opacity);
   }
 }
@@ -5588,7 +5714,10 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
    this control's focus indicator (see `Input.tsx`). Scoped to the labelled variant — these
    three rules *are* the outlined language, and an unlabelled field no longer speaks it. */
 @media (hover: hover) {
-  .m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]):not(:has(> :is(input, textarea, button):disabled)) > fieldset {
+  .m3-field[data-labelled]:hover:not(:focus-within):not([data-invalid]):not(
+      :has(> :is(input, textarea, button):disabled)
+    )
+    > fieldset {
     border-color: var(--md-sys-color-on-surface);
   }
 }
@@ -6080,7 +6209,8 @@ html[data-image-hero-transition] .os-detail-slot > .os-scrollbar,
 }
 
 /* The bar's travel is 16px, and the reduced tier's is 8px, as every travel there is. */
-html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced']) [data-selection-travel][data-hidden] {
+html:is([data-motion='reduced'], [data-motion='custom'][data-motion-feedback='reduced'])
+  [data-selection-travel][data-hidden] {
   translate: 0 0.5rem;
 }
 

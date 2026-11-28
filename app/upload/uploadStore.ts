@@ -100,7 +100,13 @@ function owned(owner: string | null): boolean {
 
 /** A draft with anything in it — what a reload would lose. */
 export function draftHasContent(draft: UploadDraft): boolean {
-  return Boolean(draft.file || draft.rating || draft.tags.length || draft.source.trim() || draft.description.trim());
+  return Boolean(
+    draft.file ||
+    draft.rating ||
+    draft.tags.length ||
+    draft.source.trim() ||
+    draft.description.trim(),
+  );
 }
 
 function inFlight(job: UploadJob | null): boolean {
@@ -133,8 +139,14 @@ const SERVER_SNAPSHOT: State = { owner: null, draft: EMPTY_DRAFT, job: null };
 
 /** The current session's draft and job. */
 export function useUpload(owner: string | null): { draft: UploadDraft; job: UploadJob | null } {
-  const snapshot = useSyncExternalStore(subscribe, () => state, () => SERVER_SNAPSHOT);
-  return owner !== null && snapshot.owner === owner ? { draft: snapshot.draft, job: snapshot.job } : { draft: EMPTY_DRAFT, job: null };
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    () => state,
+    () => SERVER_SNAPSHOT,
+  );
+  return owner !== null && snapshot.owner === owner
+    ? { draft: snapshot.draft, job: snapshot.job }
+    : { draft: EMPTY_DRAFT, job: null };
 }
 
 /** Change the draft. A different session's leftovers are dropped first. */
@@ -205,7 +217,13 @@ export interface UploadRequest {
  * Stage the draft's file (unless this very file was staged moments ago), then hand it to
  * Derpibooru. Never throws; the outcome lands on the job.
  */
-export async function startUpload({ owner, apiKey, username, tagInput, navigate }: UploadRequest): Promise<void> {
+export async function startUpload({
+  owner,
+  apiKey,
+  username,
+  tagInput,
+  navigate,
+}: UploadRequest): Promise<void> {
   if (readToken() !== owner || !owned(owner) || inFlight(state.job)) return;
   const { file, source, description } = state.draft;
   if (!file) return;
@@ -221,7 +239,8 @@ export async function startUpload({ owner, apiKey, username, tagInput, navigate 
     if (current()) setJob(owner, null);
     return true;
   };
-  let url = staged && staged.file === file && Date.now() - staged.at < STAGED_REUSE_MS ? staged.url : null;
+  let url =
+    staged && staged.file === file && Date.now() - staged.at < STAGED_REUSE_MS ? staged.url : null;
 
   if (!url) {
     setJob(owner, { phase: 'staging', progress: null, outcome: null });
@@ -246,10 +265,16 @@ export async function startUpload({ owner, apiKey, username, tagInput, navigate 
       setJob(owner, {
         phase: 'settled',
         progress: null,
-        outcome: { kind: 'rejected', fields: {}, message: apiErrorMessage(error, '作品暂存失败，请重试') },
+        outcome: {
+          kind: 'rejected',
+          fields: {},
+          message: apiErrorMessage(error, '作品暂存失败，请重试'),
+        },
       });
       if (screens === 0 && readToken() === owner) {
-        showToast('作品发布失败', 'error', { action: { label: '查看', onClick: () => navigate('/upload') } });
+        showToast('作品发布失败', 'error', {
+          action: { label: '查看', onClick: () => navigate('/upload') },
+        });
       }
       return;
     }
@@ -268,7 +293,11 @@ export async function startUpload({ owner, apiKey, username, tagInput, navigate 
   });
   if (stale()) return;
 
-  if (outcome.kind === 'rejected' && unconfirmedFile === file && outcome.fields.image === DUPLICATE_COMPLAINT) {
+  if (
+    outcome.kind === 'rejected' &&
+    unconfirmedFile === file &&
+    outcome.fields.image === DUPLICATE_COMPLAINT
+  ) {
     outcome = { kind: 'unconfirmed', message: LANDED };
   } else if (outcome.kind === 'rejected' && outcome.fields.image) {
     /* A file Derpibooru could not fetch or read is staged again on the next attempt. */
@@ -279,7 +308,10 @@ export async function startUpload({ owner, apiKey, username, tagInput, navigate 
     staged = null;
     /* Counts toward the weekly task — fire-and-forget, only for an upload Derpibooru confirmed,
        naming the id it gave (the backend counts each image once). */
-    void recordWeeklyUpload(owner, outcome.imageId).then(() => tasks.expire({ token: owner }), () => {});
+    void recordWeeklyUpload(owner, outcome.imageId).then(
+      () => tasks.expire({ token: owner }),
+      () => {},
+    );
     emit({ owner, draft: EMPTY_DRAFT, job: { phase: 'settled', progress: 1, outcome } });
     if (screens === 0) {
       showToast(`已发布作品，图片 ID：${outcome.imageId}`, 'success', {

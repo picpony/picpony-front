@@ -24,9 +24,12 @@ export function byDay(entries: readonly HistoryEntry[], now: number | null): His
     const key = beijingDateKey(entry.viewedAt) ?? 'unknown';
     let day = days.get(key);
     if (!day) {
-      const label = key === 'unknown'
-        ? '时间未知'
-        : now !== null ? formatDayLabel(entry.viewedAt, now, { clock: false }) : formatDate(entry.viewedAt);
+      const label =
+        key === 'unknown'
+          ? '时间未知'
+          : now !== null
+            ? formatDayLabel(entry.viewedAt, now, { clock: false })
+            : formatDate(entry.viewedAt);
       day = { key, label, entries: [] };
       days.set(key, day);
     }

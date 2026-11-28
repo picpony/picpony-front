@@ -44,7 +44,13 @@ export default function AdminPage() {
   return (
     /* `useSearchParams` needs a boundary above it; the fallback is the console's own arrival
        state, so the shell does not jump. */
-    <Suspense fallback={<ConsoleColumn><ConsoleSkeleton /></ConsoleColumn>}>
+    <Suspense
+      fallback={
+        <ConsoleColumn>
+          <ConsoleSkeleton />
+        </ConsoleColumn>
+      }
+    >
       <AdminGate />
     </Suspense>
   );
@@ -55,7 +61,13 @@ export default function AdminPage() {
  * well as staff (G4-005: only the staff branch had it). The rail names the sections, so the page's
  * own name serves the outline and is where focus lands after a navigation (R3-042).
  */
-function ConsoleColumn({ children, ref }: { children: React.ReactNode; ref?: React.Ref<HTMLDivElement> }) {
+function ConsoleColumn({
+  children,
+  ref,
+}: {
+  children: React.ReactNode;
+  ref?: React.Ref<HTMLDivElement>;
+}) {
   return (
     <div ref={ref} className="@container mx-auto max-w-6xl">
       <h1 className="sr-only">管理面板</h1>
@@ -71,7 +83,12 @@ function ConsoleSkeleton() {
 
 function AdminGate() {
   const { user, token, ready } = useSession();
-  if (!ready) return <ConsoleColumn><ConsoleSkeleton /></ConsoleColumn>;
+  if (!ready)
+    return (
+      <ConsoleColumn>
+        <ConsoleSkeleton />
+      </ConsoleColumn>
+    );
   if (!token) {
     return (
       <ConsoleColumn>
@@ -88,11 +105,7 @@ function AdminGate() {
           title="没有访问权限"
           description="管理面板仅限管理员与小编使用；若权限刚刚变更，请重新登录"
           action={
-            <ButtonLink
-              href="/"
-              variant="filled"
-              icon={<MdHome />}
-            >
+            <ButtonLink href="/" variant="filled" icon={<MdHome />}>
               回到首页
             </ButtonLink>
           }
@@ -203,7 +216,13 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
           wide, the vertical rail sticks inside the viewport so 25 sections never stretch a short
           panel into blank space or scroll away while working down a long table. */}
       <div className={`bg-surface-container-low rounded-md flex ${wide ? 'flex-row' : 'flex-col'}`}>
-        <div className={wide ? 'w-48 shrink-0 border-r border-outline-variant' : 'min-w-0 border-b border-outline-variant'}>
+        <div
+          className={
+            wide
+              ? 'w-48 shrink-0 border-r border-outline-variant'
+              : 'min-w-0 border-b border-outline-variant'
+          }
+        >
           {wide ? (
             <div className="sticky top-4 sm:top-6">
               <ScrollArea
@@ -220,7 +239,10 @@ function AdminConsole({ token, role, viewerId }: { token: string; role: Role; vi
         {/* The window a section switch slides past (`data-tab-window`): the panel's own region,
             not the scroller — sliding the scroller's width swept the panes across the rail and out
             past the card. The sections' own sub-tabs slide past it too. */}
-        <div data-tab-window="" className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}>
+        <div
+          data-tab-window=""
+          className={`min-w-0 flex-1 p-4 sm:p-6 ${wide ? 'min-h-150' : 'min-h-96'}`}
+        >
           {/* The card's height follows the section on screen instead of jumping to it. A switch
               stacks both panes in one cell for its run and conceals the leaving one at settle — by
               attribute, outside React — and a section's first read swaps its skeleton for rows of

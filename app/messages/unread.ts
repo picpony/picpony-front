@@ -28,11 +28,14 @@ export function markRead(token: string, tab: Tab, amount?: number) {
   if (!previous) return;
   const cleared = Math.min(previous[field], amount ?? previous[field]);
   if (cleared <= 0) return;
-  unreadCounts.write({ token }, {
-    ...previous,
-    [field]: previous[field] - cleared,
-    total: Math.max(0, previous.total - cleared),
-  });
+  unreadCounts.write(
+    { token },
+    {
+      ...previous,
+      [field]: previous[field] - cleared,
+      total: Math.max(0, previous.total - cleared),
+    },
+  );
   void unreadCounts.read({ token }, { force: true }).catch(() => {});
 }
 
@@ -46,7 +49,9 @@ export function markConversationRead(token: string, contactId: number, seenUnrea
   const row = recentContacts.peek({ token }).data?.find((contact) => contact.id === contactId);
   if (row && row.unread_count > 0) {
     recentContacts.write({ token }, (previous) =>
-      (previous ?? []).map((contact) => (contact.id === contactId ? { ...contact, unread_count: 0 } : contact)),
+      (previous ?? []).map((contact) =>
+        contact.id === contactId ? { ...contact, unread_count: 0 } : contact,
+      ),
     );
   }
   markRead(token, 'chat', Math.max(row?.unread_count ?? 0, seenUnread));

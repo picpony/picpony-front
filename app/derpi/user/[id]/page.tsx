@@ -87,11 +87,7 @@ function Award({ award }: { award: DerpiProfileAward }) {
         className="touch-target inline-flex min-w-8 items-center justify-center rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- remote award artwork, an SVG off the optimizer's whitelist */}
-        <img
-          src={src}
-          alt={title}
-          className="h-8 rounded-xs"
-        />
+        <img src={src} alt={title} className="h-8 rounded-xs" />
       </span>
       {tooltip}
     </li>
@@ -105,7 +101,9 @@ export default function DerpiUserPage({ params }: { params: Promise<{ id: string
   const scope = `${userId}:${contentFilter}`;
 
   /* A filter change must adopt its own remembered page before starting a read. */
-  return <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />;
+  return (
+    <DerpiUserContent key={scope} scope={scope} userId={userId} contentFilter={contentFilter} />
+  );
 }
 
 /**
@@ -120,7 +118,11 @@ export default function DerpiUserPage({ params }: { params: Promise<{ id: string
  * their count is labelled as the filtered one beside the account's own total (R7-022). A numeric
  * route id is the account id, and the grid's read starts beside the profile's rather than after it.
  */
-function DerpiUserContent({ userId, contentFilter, scope }: {
+function DerpiUserContent({
+  userId,
+  contentFilter,
+  scope,
+}: {
   userId: string;
   contentFilter: ReturnType<typeof parseContentFilter>;
   scope: string;
@@ -140,7 +142,9 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
   const fp = useBrowsingFingerprint();
   const uploadsRead = useResource(
     derpiUserUploads,
-    accountId !== null && !missing ? { id: accountId, page: uploadsPage, perPage: PER_PAGE, contentFilter, fp } : SKIP,
+    accountId !== null && !missing
+      ? { id: accountId, page: uploadsPage, perPage: PER_PAGE, contentFilter, fp }
+      : SKIP,
     { keepPrevious: `${scope}\n${fp}` },
   );
 
@@ -158,14 +162,23 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
   const [rows, setRows] = useState<HTMLDivElement | null>(null);
   const failureRef = useRef<HTMLDivElement>(null);
   const [dataPage, setDataPage] = useState(uploadsPage);
-  if (uploadsRead.data !== undefined && !uploadsRead.isPrevious && dataPage !== uploadsPage) setDataPage(uploadsPage);
+  if (uploadsRead.data !== undefined && !uploadsRead.isPrevious && dataPage !== uploadsPage)
+    setDataPage(uploadsPage);
 
   const listKey = `derpi-uploads:${accountId ?? userId}:${contentFilter}:${fp}`;
   const readPage = useCallback(
     async (target: number) =>
       accountId === null
         ? []
-        : (await derpiUserUploads.read({ id: accountId, page: target, perPage: PER_PAGE, contentFilter, fp })).images.map((image) => image.id),
+        : (
+            await derpiUserUploads.read({
+              id: accountId,
+              page: target,
+              perPage: PER_PAGE,
+              contentFilter,
+              fp,
+            })
+          ).images.map((image) => image.id),
     [accountId, contentFilter, fp],
   );
   const reveal = useListReveal(readPage, uploadsPage, setUploadsPage, () => grid);
@@ -181,7 +194,13 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             current: { ids: images.map((image) => image.id), previews: images, totalPages },
             pageSize: PER_PAGE,
             fetchPage: async (target) => {
-              const result = await derpiUserUploads.read({ id: accountId, page: target, perPage: PER_PAGE, contentFilter, fp });
+              const result = await derpiUserUploads.read({
+                id: accountId,
+                page: target,
+                perPage: PER_PAGE,
+                contentFilter,
+                fp,
+              });
               return {
                 ids: result.images.map((image) => image.id),
                 previews: result.images,
@@ -206,11 +225,7 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             title="用户不存在"
             description="此 Derpibooru 账号不存在或链接地址有误"
             action={
-              <ButtonLink
-                href="/"
-                variant="filled"
-                icon={<MdHome />}
-              >
+              <ButtonLink href="/" variant="filled" icon={<MdHome />}>
                 回到首页
               </ButtonLink>
             }
@@ -277,7 +292,9 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 {profile ? (
                   <>
                     <span className="min-w-0 max-w-full wrap-anywhere">{profile.name}</span>
-                    <span className="text-body-m tabular-nums text-on-surface-variant">#{profile.id}</span>
+                    <span className="text-body-m tabular-nums text-on-surface-variant">
+                      #{profile.id}
+                    </span>
                   </>
                 ) : (
                   'Derpibooru 用户'
@@ -313,7 +330,10 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             {profile ? (
               <>
                 <Button
-                  onClick={() => uploaderQuery && router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })}
+                  onClick={() =>
+                    uploaderQuery &&
+                    router.push(`/search?q=${encodeURIComponent(uploaderQuery)}`, { scroll: false })
+                  }
                   variant="filled"
                   size="lg"
                   className="@lg:flex-1"
@@ -370,7 +390,11 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                 <EmptyState
                   size="pane"
                   title="此页没有图片"
-                  action={<Button variant="tonal" onClick={() => setUploadsPage(1)}>回到第一页</Button>}
+                  action={
+                    <Button variant="tonal" onClick={() => setUploadsPage(1)}>
+                      回到第一页
+                    </Button>
+                  }
                 />
               ) : (
                 <EmptyState
@@ -387,7 +411,11 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
             ) : (
               /* The anchor wraps the grid *and* its pager: `Pagination` reaches it with
                  `closest()`, so one that sits beside the pager is one it cannot see. */
-              <div ref={setGrid} data-pagination-anchor aria-busy={uploadsRead.isLoading || undefined}>
+              <div
+                ref={setGrid}
+                data-pagination-anchor
+                aria-busy={uploadsRead.isLoading || undefined}
+              >
                 {failedTurn && (
                   <div ref={failureRef} className="mb-4">
                     <ErrorRetry
@@ -404,7 +432,11 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                     uploadsRead.isLoading ? 'paging-dim' : 'opacity-100'
                   }`}
                 >
-                  <MasonryGrid images={uploadsRead.data.images} sequence={sequence} listKey={listKey} />
+                  <MasonryGrid
+                    images={uploadsRead.data.images}
+                    sequence={sequence}
+                    listKey={listKey}
+                  />
                 </div>
                 {totalPages > 1 && (
                   <Pagination
@@ -413,7 +445,13 @@ function DerpiUserContent({ userId, contentFilter, scope }: {
                     onPageChange={setUploadsPage}
                     onPrefetchPage={(next) =>
                       accountId !== null &&
-                      derpiUserUploads.prefetch({ id: accountId, page: next, perPage: PER_PAGE, contentFilter, fp })
+                      derpiUserUploads.prefetch({
+                        id: accountId,
+                        page: next,
+                        perPage: PER_PAGE,
+                        contentFilter,
+                        fp,
+                      })
                     }
                     disabled={uploadsRead.isLoading}
                   />

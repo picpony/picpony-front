@@ -12,7 +12,13 @@ import { useBackOrParent } from '@/lib/backNavigation';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { cn } from '@/lib/utils';
 import SectionHeading from '@/components/SectionHeading';
-import { dropQueuedPolicyAddress, isPolicyTab, policyHref, replacePolicyAddress, type PolicyTab } from './address';
+import {
+  dropQueuedPolicyAddress,
+  isPolicyTab,
+  policyHref,
+  replacePolicyAddress,
+  type PolicyTab,
+} from './address';
 
 type PolicyKey = PolicyTab;
 
@@ -36,7 +42,11 @@ const TABS: TabItem<PolicyKey>[] = [
  * (D1-022), and supporting ink is for the lines around them, like the revision date.
  */
 function P({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'warning' }) {
-  return <p className={cn('text-body-m', tone === 'warning' ? 'text-warning' : 'text-on-surface')}>{children}</p>;
+  return (
+    <p className={cn('text-body-m', tone === 'warning' ? 'text-warning' : 'text-on-surface')}>
+      {children}
+    </p>
+  );
 }
 
 /** A document's numbered section: the level under the page's own `<h1>` (axe `heading-order`). */
@@ -54,7 +64,11 @@ function Revised() {
 }
 
 function UL({ children }: { children: ReactNode }) {
-  return <ul className="mt-2 list-disc space-y-2 pl-6 text-body-m text-on-surface marker:text-on-surface-variant">{children}</ul>;
+  return (
+    <ul className="mt-2 list-disc space-y-2 pl-6 text-body-m text-on-surface marker:text-on-surface-variant">
+      {children}
+    </ul>
+  );
 }
 
 function Code({ children }: { children: ReactNode }) {
@@ -85,66 +99,88 @@ function CookiePolicy() {
       <Revised />
       <div className="mt-3 space-y-3">
         <P>
-          PicPony（中文小马图库）使用必要的会话 Cookie 与浏览器本地存储，以维持登录状态、保存浏览偏好并保障站点安全。
+          PicPony（中文小马图库）使用必要的会话 Cookie
+          与浏览器本地存储，以维持登录状态、保存浏览偏好并保障站点安全。
         </P>
         <H2>1. Cookie、Session 与本地存储</H2>
         <P>
           <strong>Cookie：</strong>由网站写入浏览器的文本数据，用于在不同页面间维持会话状态。
         </P>
         <P>
-          <strong>Session（服务器会话）：</strong>保存在服务端的临时会话状态。登录时站点会设置仅限 HTTP 访问（HttpOnly）的会话绑定 Cookie（<Code>auth_bind</Code>），将登录凭证与当前浏览器绑定，并配合 CSRF 校验令牌防止跨站请求伪造。
+          <strong>Session（服务器会话）：</strong>保存在服务端的临时会话状态。登录时站点会设置仅限
+          HTTP 访问（HttpOnly）的会话绑定 Cookie（<Code>auth_bind</Code>
+          ），将登录凭证与当前浏览器绑定，并配合 CSRF 校验令牌防止跨站请求伪造。
         </P>
         <P>
-          <strong>本地存储（Local Storage）：</strong>保存在浏览器本地的数据，不会随每次请求发送至服务器。
+          <strong>本地存储（Local Storage）：</strong>
+          保存在浏览器本地的数据，不会随每次请求发送至服务器。
         </P>
         <H2>2. 使用用途</H2>
         <P>
-          PicPony 主要依赖浏览器本地存储和必要的会话 Cookie，不用于跨站追踪浏览记录，也不会向第三方出售相关数据，仅用于维持登录状态、记住浏览设置及接口安全防护。
+          PicPony 主要依赖浏览器本地存储和必要的会话
+          Cookie，不用于跨站追踪浏览记录，也不会向第三方出售相关数据，仅用于维持登录状态、记住浏览设置及接口安全防护。
         </P>
         <H2>3. 存储的数据内容</H2>
         <UL>
           <li>
-            <strong>账号与身份认证（本地存储）：</strong>包括登录令牌（Token）、脱敏显示的 Derpibooru API Key（如 <Code>abc********rst</Code>）、用户名及头像链接，以便再次打开网站时保持登录状态。
+            <strong>账号与身份认证（本地存储）：</strong>包括登录令牌（Token）、脱敏显示的
+            Derpibooru API Key（如 <Code>abc********rst</Code>
+            ）、用户名及头像链接，以便再次打开网站时保持登录状态。
           </li>
           <li>
-            <strong>会话与安全防护（Session / Cookie）：</strong>保存服务端临时会话凭证、CSRF 校验令牌及请求频率限制计数。
+            <strong>会话与安全防护（Session / Cookie）：</strong>保存服务端临时会话凭证、CSRF
+            校验令牌及请求频率限制计数。
           </li>
           <li>
-            <strong>内容筛选与偏好（本地存储）：</strong>包括「内容分级」设置（如 Safe 或 Spoilers）、「隐藏类人生物」、「屏蔽敏感或不适内容」、「只看小马（含类马）」开关，以及自定义屏蔽组与标签组。
+            <strong>内容筛选与偏好（本地存储）：</strong>包括「内容分级」设置（如 Safe 或
+            Spoilers）、「隐藏类人生物」、「屏蔽敏感或不适内容」、「只看小马（含类马）」开关，以及自定义屏蔽组与标签组。
           </li>
           <li>
-            <strong>界面与线路偏好（本地存储）：</strong>包括「显示标签数量」、「显示中文标签」、「启用图片 CDN 加速」、「启用 PicPony 加速服务器」、「启用 PicPony API」、「启用 API 加速」等设置项。
+            <strong>界面与线路偏好（本地存储）：</strong>
+            包括「显示标签数量」、「显示中文标签」、「启用图片 CDN 加速」、「启用 PicPony
+            加速服务器」、「启用 PicPony API」、「启用 API 加速」等设置项。
           </li>
           <li>
-            <strong>历史与缓存（本地存储）：</strong>在本地保存「搜索历史」、浏览记录与少量页面缓存，用于减少重复加载。
+            <strong>历史与缓存（本地存储）：</strong>
+            在本地保存「搜索历史」、浏览记录与少量页面缓存，用于减少重复加载。
           </li>
         </UL>
         <H2>4. 验证与第三方服务</H2>
         <UL>
           <li>
-            <strong>本地滑块验证：</strong>在登录、注册或找回密码时完成拼图验证，系统仅在浏览器端短暂采集本次拖动轨迹用于服务端即时校验。<strong>轨迹数据完成核验后即刻丢弃，不在服务端持久化保存。</strong>
+            <strong>本地滑块验证：</strong>
+            在登录、注册或找回密码时完成拼图验证，系统仅在浏览器端短暂采集本次拖动轨迹用于服务端即时校验。
+            <strong>轨迹数据完成核验后即刻丢弃，不在服务端持久化保存。</strong>
           </li>
           <li>
-            <strong>图片与资源加速服务：</strong>在设置中开启「启用图片 CDN 加速」或「启用 PicPony 加速服务器」后，站点通过加速节点与代理服务（如 <Code>wsrv.nl</Code>）拉取资源，不会写入追踪 Cookie。
+            <strong>图片与资源加速服务：</strong>在设置中开启「启用图片 CDN 加速」或「启用 PicPony
+            加速服务器」后，站点通过加速节点与代理服务（如 <Code>wsrv.nl</Code>
+            ）拉取资源，不会写入追踪 Cookie。
           </li>
           <li>
-            <strong>第三方翻译引擎：</strong>评论翻译通过第三方翻译接口（如 Lingva API 或 MyMemory API）完成，不使用追踪 Cookie。
+            <strong>第三方翻译引擎：</strong>评论翻译通过第三方翻译接口（如 Lingva API 或 MyMemory
+            API）完成，不使用追踪 Cookie。
           </li>
         </UL>
         <H2>5. 管理与清除</H2>
         <UL>
           <li>
-            <strong>站内清除：</strong>可在搜索页清空搜索历史，在「设置」中解除 API Key 绑定，或在侧边栏点击「登出」销毁当前设备上的登录 Token、本地配置及服务端 Session。
+            <strong>站内清除：</strong>可在搜索页清空搜索历史，在「设置」中解除 API Key
+            绑定，或在侧边栏点击「登出」销毁当前设备上的登录 Token、本地配置及服务端 Session。
           </li>
           <li>
-            <strong>浏览器清除：</strong>可通过浏览器的「隐私与安全」设置随时清除 PicPony 的 Cookie 与站点数据。
+            <strong>浏览器清除：</strong>可通过浏览器的「隐私与安全」设置随时清除 PicPony 的 Cookie
+            与站点数据。
           </li>
         </UL>
         <P tone="warning">
-          <strong>注意：</strong>在浏览器中禁用 Cookie 或本地存储，将导致登录、偏好保存、安全验证与云端收藏等功能无法正常使用。
+          <strong>注意：</strong>在浏览器中禁用 Cookie
+          或本地存储，将导致登录、偏好保存、安全验证与云端收藏等功能无法正常使用。
         </P>
         <H2>6. 联系方式</H2>
-        <P>如对本《Cookie 与本地存储政策》有疑问，可通过官方交流群（QQ 群：1074070030）联系管理团队。</P>
+        <P>
+          如对本《Cookie 与本地存储政策》有疑问，可通过官方交流群（QQ 群：1074070030）联系管理团队。
+        </P>
       </div>
     </div>
   );
@@ -154,14 +190,27 @@ function CookiePolicy() {
  * A reference from one document to another, as a link to that tab: followed in place (the tab
  * switches, the reader is brought to its top) and, opened in a new tab, the address itself.
  */
-function DocumentLink({ tab, onOpen, children }: { tab: PolicyKey; onOpen: (tab: PolicyKey) => void; children: ReactNode }) {
+function DocumentLink({
+  tab,
+  onOpen,
+  children,
+}: {
+  tab: PolicyKey;
+  onOpen: (tab: PolicyKey) => void;
+  children: ReactNode;
+}) {
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
     event.preventDefault();
     onOpen(tab);
   };
   return (
-    <a href={policyHref(tab)} onClick={follow} className="prose-link focus-visible:ring-2 focus-ring">
+    <a
+      href={policyHref(tab)}
+      onClick={follow}
+      className="prose-link focus-visible:ring-2 focus-ring"
+    >
       {children}
     </a>
   );
@@ -174,19 +223,36 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
       <Revised />
       <div className="mt-3 space-y-3">
         <P>
-          使用 PicPony（以下称「本站」）前，请阅读本《PicPony 用户服务协议》（以下称「本协议」）。注册、登录或使用本站即视为同意接受本协议约束。
+          使用 PicPony（以下称「本站」）前，请阅读本《PicPony
+          用户服务协议》（以下称「本协议」）。注册、登录或使用本站即视为同意接受本协议约束。
         </P>
         <H2>1. 服务说明与平台性质</H2>
         <P>1.1 本站是面向《我的小马驹》（My Little Pony）同人社区的中文镜像站点。</P>
-        <P>1.2 本站的图片、标签库与基础评论数据均通过公共 API 来源于海外平台（Derpibooru / Trixiebooru）。本站仅提供本地化展示、中英标签词库、搜索增强与云端收藏服务，不直接托管原站高清图片文件。</P>
+        <P>
+          1.2 本站的图片、标签库与基础评论数据均通过公共 API 来源于海外平台（Derpibooru /
+          Trixiebooru）。本站仅提供本地化展示、中英标签词库、搜索增强与云端收藏服务，不直接托管原站高清图片文件。
+        </P>
         <P>1.3 本站为非营利性质的同人交流平台。</P>
         <H2>2. 账号注册、API 凭证与安全</H2>
-        <P>2.1 注册本站账号须绑定有效电子邮箱，该邮箱用于密码找回及安全通知。用户应妥善保管账号与密码，并对该账号下的全部操作承担责任。</P>
-        <P>2.2 绑定 Derpibooru API Key 后，本站将在服务端加密存储该凭证，并在界面中脱敏显示（如 <Code>abc********rst</Code>）。用户应妥善保管个人凭证；因自身保管不善导致泄露的，相关责任由用户自行承担。</P>
+        <P>
+          2.1
+          注册本站账号须绑定有效电子邮箱，该邮箱用于密码找回及安全通知。用户应妥善保管账号与密码，并对该账号下的全部操作承担责任。
+        </P>
+        <P>
+          2.2 绑定 Derpibooru API Key 后，本站将在服务端加密存储该凭证，并在界面中脱敏显示（如{' '}
+          <Code>abc********rst</Code>
+          ）。用户应妥善保管个人凭证；因自身保管不善导致泄露的，相关责任由用户自行承担。
+        </P>
         <P>2.3 若发现账号或 API Key 异常，请立即在「设置」中解除绑定并修改密码。</P>
         <H2>3. 用户行为规范</H2>
-        <P>3.1 使用本站须遵守《中华人民共和国网络安全法》等中国法律法规，不得利用本站从事违法违规行为。</P>
-        <P>3.2 <strong>内容发布规范：</strong>在评论、发帖、反馈及个人资料等互动功能中，严禁发布、传播包含以下内容的信息：</P>
+        <P>
+          3.1
+          使用本站须遵守《中华人民共和国网络安全法》等中国法律法规，不得利用本站从事违法违规行为。
+        </P>
+        <P>
+          3.2 <strong>内容发布规范：</strong>
+          在评论、发帖、反馈及个人资料等互动功能中，严禁发布、传播包含以下内容的信息：
+        </P>
         <ol className="space-y-2 pl-4 text-body-m text-on-surface">
           <li>（1）反对宪法所确定的基本原则的；</li>
           <li>（2）危害国家安全，泄露国家秘密，颠覆国家政权，破坏国家统一的；</li>
@@ -194,41 +260,90 @@ function AgreementPolicy({ onOpen }: { onOpen: (tab: PolicyKey) => void }) {
           <li>（4）煽动民族仇恨、民族歧视，破坏民族团结的；</li>
           <li>（5）破坏国家宗教政策，宣扬邪教和封建迷信的；</li>
           <li>（6）散布谣言，扰乱社会秩序，破坏社会稳定的；</li>
-          <li>（7）散布淫秽、色情、赌博、暴力、凶杀、恐怖或者教唆犯罪的（包括但不限于违反相关管理规定的成人、血腥等限制级内容）；</li>
+          <li>
+            （7）散布淫秽、色情、赌博、暴力、凶杀、恐怖或者教唆犯罪的（包括但不限于违反相关管理规定的成人、血腥等限制级内容）；
+          </li>
           <li>（8）侮辱或者诽谤他人，侵害他人合法权益的；</li>
           <li>（9）含有法律、行政法规禁止的其他内容的。</li>
         </ol>
-        <P>本站对评论区、论坛及反馈内容配置了自动 HTML 净化过滤（XSS 防护）。严禁尝试注入恶意 JavaScript、HTML 片段或发起 CSRF 攻击。</P>
-        <P>3.3 <strong>作品上传规范：</strong>上传作品须为本人原创或已获得原作者明确授权，严禁盗图、恶意篡改他人作品或发布与 MLP 社区无关的内容。</P>
-        <H2>4. 内容过滤与安全限制</H2>
-        <P>4.1 为遵守相关法律法规并保护未成年人，本站默认开启「内容分级」中的「完全安全（Safe）」过滤限制级内容。</P>
-        <P>4.2 不得通过技术手段绕过本站的内容过滤或安全限制。</P>
-        <P>4.3 <strong>防刷与速率限制：</strong>为保障服务可用性，本站接口配置了请求频率限制与拼图验证，禁止使用自动化脚本、连点器或多线程爬虫高频请求或批量抓取。检测到异常请求或异常验证轨迹时，系统将限制访问或封禁对应账号与 IP。</P>
-        <P>4.4 本站保留对站内评论、帖子、反馈及上传内容的审核权。发现违规时，本站可不经事先通知直接删除违规内容、封禁账号或限制访问。</P>
-        <H2>5. 知识产权</H2>
-        <P>5.1 本站页面设计、前端代码等知识产权归开发团队所有，中英翻译词库数据归词库小编团队所有；部分译名参考了 MLP 中文维基与其他网络来源，并遵循{' '}
-          <OutLink href="https://creativecommons.org/licenses/by-sa/3.0/deed.en">知识共享 署名-相同方式共享 3.0</OutLink>。
-        </P>
-        <P>5.2 本站展示的画作、图片及相关衍生内容的著作权归原作者及原发布平台所有，本站不主张任何所有权。</P>
-        <P>5.3 如需转载或商用本站展示的作品，请前往原站（Derpibooru）查阅原作者的许可声明，本站无权代为授权。</P>
         <P>
-          5.4 桌面小马功能的动画引擎为 Browser Ponies（Mathias Panzenböck，MIT 许可证，许可声明随代码保留）；角色素材来源于 Desktop Ponies 社区项目（GitHub 仓库：
-          <OutLink href="https://github.com/RoosterDragon/Desktop-Ponies">RoosterDragon/Desktop-Ponies</OutLink>
-          ），各素材著作权归原作者所有，本站不主张所有权或代为授权。My Little Pony 角色相关权利归其权利人所有。
+          本站对评论区、论坛及反馈内容配置了自动 HTML 净化过滤（XSS 防护）。严禁尝试注入恶意
+          JavaScript、HTML 片段或发起 CSRF 攻击。
+        </P>
+        <P>
+          3.3 <strong>作品上传规范：</strong>
+          上传作品须为本人原创或已获得原作者明确授权，严禁盗图、恶意篡改他人作品或发布与 MLP
+          社区无关的内容。
+        </P>
+        <H2>4. 内容过滤与安全限制</H2>
+        <P>
+          4.1
+          为遵守相关法律法规并保护未成年人，本站默认开启「内容分级」中的「完全安全（Safe）」过滤限制级内容。
+        </P>
+        <P>4.2 不得通过技术手段绕过本站的内容过滤或安全限制。</P>
+        <P>
+          4.3 <strong>防刷与速率限制：</strong>
+          为保障服务可用性，本站接口配置了请求频率限制与拼图验证，禁止使用自动化脚本、连点器或多线程爬虫高频请求或批量抓取。检测到异常请求或异常验证轨迹时，系统将限制访问或封禁对应账号与
+          IP。
+        </P>
+        <P>
+          4.4
+          本站保留对站内评论、帖子、反馈及上传内容的审核权。发现违规时，本站可不经事先通知直接删除违规内容、封禁账号或限制访问。
+        </P>
+        <H2>5. 知识产权</H2>
+        <P>
+          5.1
+          本站页面设计、前端代码等知识产权归开发团队所有，中英翻译词库数据归词库小编团队所有；部分译名参考了
+          MLP 中文维基与其他网络来源，并遵循{' '}
+          <OutLink href="https://creativecommons.org/licenses/by-sa/3.0/deed.en">
+            知识共享 署名-相同方式共享 3.0
+          </OutLink>
+          。
+        </P>
+        <P>
+          5.2
+          本站展示的画作、图片及相关衍生内容的著作权归原作者及原发布平台所有，本站不主张任何所有权。
+        </P>
+        <P>
+          5.3
+          如需转载或商用本站展示的作品，请前往原站（Derpibooru）查阅原作者的许可声明，本站无权代为授权。
+        </P>
+        <P>
+          5.4 桌面小马功能的动画引擎为 Browser Ponies（Mathias Panzenböck，MIT
+          许可证，许可声明随代码保留）；角色素材来源于 Desktop Ponies 社区项目（GitHub 仓库：
+          <OutLink href="https://github.com/RoosterDragon/Desktop-Ponies">
+            RoosterDragon/Desktop-Ponies
+          </OutLink>
+          ），各素材著作权归原作者所有，本站不主张所有权或代为授权。My Little Pony
+          角色相关权利归其权利人所有。
         </P>
         <H2>6. 免责声明</H2>
-        <P>6.1 <strong>数据来源免责：</strong>本站展示的原站内容由 Derpibooru API 提供，无法对全部外部数据进行实时事前审查。如发现违规或侵权内容，请通过「举报」功能反馈，管理团队将在核实后于本站内屏蔽处理；原站数据源内容本身的责任由原平台与发布者承担。</P>
-        <P>6.2 <strong>服务可用性免责：</strong>因网络波动、不可抗力、跨境链路状况或原站 API 限流、熔断与规则调整导致的服务中断、加载失败或功能异常，本站不承担违约或赔偿责任。</P>
-        <P>6.3 <strong>数据丢失免责：</strong>本站会采取合理措施保护云端收藏、历史记录及会话安全，但仍建议自行备份重要内容；因不可抗力或服务器故障导致的数据丢失，本站免责。</P>
+        <P>
+          6.1 <strong>数据来源免责：</strong>本站展示的原站内容由 Derpibooru API
+          提供，无法对全部外部数据进行实时事前审查。如发现违规或侵权内容，请通过「举报」功能反馈，管理团队将在核实后于本站内屏蔽处理；原站数据源内容本身的责任由原平台与发布者承担。
+        </P>
+        <P>
+          6.2 <strong>服务可用性免责：</strong>因网络波动、不可抗力、跨境链路状况或原站 API
+          限流、熔断与规则调整导致的服务中断、加载失败或功能异常，本站不承担违约或赔偿责任。
+        </P>
+        <P>
+          6.3 <strong>数据丢失免责：</strong>
+          本站会采取合理措施保护云端收藏、历史记录及会话安全，但仍建议自行备份重要内容；因不可抗力或服务器故障导致的数据丢失，本站免责。
+        </P>
         <H2>7. 协议的变更与终止</H2>
-        <P>7.1 本站可根据法律法规变化或运营需要修改本协议，修改后的协议将在站内公布并自公布时生效。</P>
+        <P>
+          7.1 本站可根据法律法规变化或运营需要修改本协议，修改后的协议将在站内公布并自公布时生效。
+        </P>
         <P>7.2 若不同意修改后的协议，应停止使用本站服务；继续使用即视为接受修改后的协议。</P>
         <P>7.3 如严重违反本协议，本站可随时终止提供服务并封禁账号。</P>
         <H2>8. 其他</H2>
         <P>8.1 本协议的成立、生效、履行、解释及纠纷解决，适用中华人民共和国大陆地区法律。</P>
         <P>
           8.2 关于个人信息的收集与使用规则，请参阅
-          <DocumentLink tab="privacy" onOpen={onOpen}>《PicPony 隐私政策》</DocumentLink>。
+          <DocumentLink tab="privacy" onOpen={onOpen}>
+            《PicPony 隐私政策》
+          </DocumentLink>
+          。
         </P>
         <P>8.3 如对本协议有疑问，可通过官方交流群（QQ 群：1074070030）联系管理团队。</P>
       </div>
@@ -243,37 +358,91 @@ function PrivacyPolicy() {
       <Revised />
       <div className="mt-3 space-y-3">
         <P>
-          本《隐私政策》说明 PicPony 在提供服务过程中如何收集、使用、存储与保护用户相关信息。请在使用本站服务前仔细阅读。
+          本《隐私政策》说明 PicPony
+          在提供服务过程中如何收集、使用、存储与保护用户相关信息。请在使用本站服务前仔细阅读。
         </P>
         <H2>1. 收集的信息及用途</H2>
         <UL>
-          <li><strong>账号注册与登录信息：</strong>注册时收集用户名、密码及绑定的邮箱地址，用于身份验证、找回密码验证码发送及安全系统通知。</li>
-          <li><strong>Derpibooru API Key：</strong>绑定 Derpibooru API Key 后，本站将在服务端加密存储并在界面中脱敏显示（如 <Code>abc********rst</Code>），仅用于代表用户与原站同步设置及核验身份，不作其他用途。</li>
-          <li><strong>安全验证滑动轨迹：</strong>在登录、注册或重置密码时拖动滑块拼图，系统会在浏览器端短暂收集本次拖动轨迹并加密提交至后端用于防自动化脚本校验。<strong>校验完成后轨迹数据即刻在内存中销毁，不写入持久化数据库。</strong></li>
-          <li><strong>用户互动数据：</strong>使用收藏、评论、论坛、标签反馈或上传功能时，图片 ID、文本内容、标签及媒体文件将被提交至本站后台或 Derpibooru 原站；所有评论与反馈在存储前均经过自动 HTML 净化处理。</li>
-          <li><strong>彩彩 AI 对话：</strong>当使用彩彩 AI 助手时，输入的对话内容、当前页面的基本信息（页面地址与可用入口），以及助手为完成请求而读取的站内信息（如收藏夹、任务进度、最近联系人与私信摘要），会发送至本站后台，并转交已配置的大语言模型服务（可能为第三方服务商）生成回复。涉及写入的操作须经确认或设置授权方可执行。请勿在对话中输入密码、API Key 等敏感信息。</li>
-          <li><strong>以图搜图上传文件：</strong>使用「以图搜图」上传本地图片时，图片仅用于即时相似度比对，服务器不保留所上传的图片。</li>
-          <li><strong>本地偏好与缓存数据：</strong>内容分级、线路加速开关、屏蔽组、标签组、搜索历史及 API Key 历史等偏好以 localStorage 保存在浏览器中，不上传至服务器。登录后设置的会话绑定 Cookie <Code>auth_bind</Code> 仅用于校验请求来源，登出时清除。</li>
+          <li>
+            <strong>账号注册与登录信息：</strong>
+            注册时收集用户名、密码及绑定的邮箱地址，用于身份验证、找回密码验证码发送及安全系统通知。
+          </li>
+          <li>
+            <strong>Derpibooru API Key：</strong>绑定 Derpibooru API Key
+            后，本站将在服务端加密存储并在界面中脱敏显示（如 <Code>abc********rst</Code>
+            ），仅用于代表用户与原站同步设置及核验身份，不作其他用途。
+          </li>
+          <li>
+            <strong>安全验证滑动轨迹：</strong>
+            在登录、注册或重置密码时拖动滑块拼图，系统会在浏览器端短暂收集本次拖动轨迹并加密提交至后端用于防自动化脚本校验。
+            <strong>校验完成后轨迹数据即刻在内存中销毁，不写入持久化数据库。</strong>
+          </li>
+          <li>
+            <strong>用户互动数据：</strong>使用收藏、评论、论坛、标签反馈或上传功能时，图片
+            ID、文本内容、标签及媒体文件将被提交至本站后台或 Derpibooru
+            原站；所有评论与反馈在存储前均经过自动 HTML 净化处理。
+          </li>
+          <li>
+            <strong>彩彩 AI 对话：</strong>当使用彩彩 AI
+            助手时，输入的对话内容、当前页面的基本信息（页面地址与可用入口），以及助手为完成请求而读取的站内信息（如收藏夹、任务进度、最近联系人与私信摘要），会发送至本站后台，并转交已配置的大语言模型服务（可能为第三方服务商）生成回复。涉及写入的操作须经确认或设置授权方可执行。请勿在对话中输入密码、API
+            Key 等敏感信息。
+          </li>
+          <li>
+            <strong>以图搜图上传文件：</strong>
+            使用「以图搜图」上传本地图片时，图片仅用于即时相似度比对，服务器不保留所上传的图片。
+          </li>
+          <li>
+            <strong>本地偏好与缓存数据：</strong>内容分级、线路加速开关、屏蔽组、标签组、搜索历史及
+            API Key 历史等偏好以 localStorage 保存在浏览器中，不上传至服务器。登录后设置的会话绑定
+            Cookie <Code>auth_bind</Code> 仅用于校验请求来源，登出时清除。
+          </li>
         </UL>
         <H2>2. 第三方服务与数据交互</H2>
         <P>运行过程中涉及与以下外部或第三方服务的数据交互：</P>
         <UL>
-          <li><strong>Derpibooru / Trixiebooru：</strong>核心图片、标签库与基础评论数据来源于 trixiebooru.org；搜索、API Key 核验及图片上传均直接与原站服务器交互。</li>
-          <li><strong>图片与资源加速服务：</strong>开启「启用图片 CDN 加速」或「启用 PicPony 加速服务器」时，通过加速节点与代理服务（如 <Code>wsrv.nl</Code>）拉取图片资源。</li>
-          <li><strong>大语言模型服务：</strong>彩彩 AI 的回复由后台配置的大语言模型服务生成，对话内容及前文所述的站内上下文会经本站后台发送至该服务。</li>
-          <li><strong>第三方翻译引擎：</strong>点击评论区的「翻译」按钮时，评论原文会发送至第三方翻译接口（如 Lingva API 或 MyMemory API）以获取中文翻译。</li>
+          <li>
+            <strong>Derpibooru / Trixiebooru：</strong>核心图片、标签库与基础评论数据来源于
+            trixiebooru.org；搜索、API Key 核验及图片上传均直接与原站服务器交互。
+          </li>
+          <li>
+            <strong>图片与资源加速服务：</strong>开启「启用图片 CDN 加速」或「启用 PicPony
+            加速服务器」时，通过加速节点与代理服务（如 <Code>wsrv.nl</Code>）拉取图片资源。
+          </li>
+          <li>
+            <strong>大语言模型服务：</strong>彩彩 AI
+            的回复由后台配置的大语言模型服务生成，对话内容及前文所述的站内上下文会经本站后台发送至该服务。
+          </li>
+          <li>
+            <strong>第三方翻译引擎：</strong>
+            点击评论区的「翻译」按钮时，评论原文会发送至第三方翻译接口（如 Lingva API 或 MyMemory
+            API）以获取中文翻译。
+          </li>
         </UL>
         <H2>3. 数据存储与安全</H2>
-        <P>本站采用对称加密、账号哈希与 XSS 自动净化机制等合理技术手段，保护账号密码与 API 凭证等敏感数据。</P>
-        <P>登录凭证、部分偏好设置及搜索历史保存在浏览器的本地存储（localStorage）中，可随时通过浏览器清除站点数据，或在站内点击「登出」、「解除绑定」与清空搜索历史予以删除。</P>
+        <P>
+          本站采用对称加密、账号哈希与 XSS 自动净化机制等合理技术手段，保护账号密码与 API
+          凭证等敏感数据。
+        </P>
+        <P>
+          登录凭证、部分偏好设置及搜索历史保存在浏览器的本地存储（localStorage）中，可随时通过浏览器清除站点数据，或在站内点击「登出」、「解除绑定」与清空搜索历史予以删除。
+        </P>
         <H2>4. 用户权利</H2>
         <UL>
-          <li><strong>访问与修改：</strong>可随时在「设置」的账号面板中修改用户名、密码及更新头像。</li>
-          <li><strong>解除绑定：</strong>可随时在 API Key 设置中点击「解除绑定」，移除已保存的凭证并停止同步。</li>
-          <li><strong>数据删除：</strong>可随时删除自己在本站发布的评论。</li>
+          <li>
+            <strong>访问与修改：</strong>可随时在「设置」的账号面板中修改用户名、密码及更新头像。
+          </li>
+          <li>
+            <strong>解除绑定：</strong>可随时在 API Key
+            设置中点击「解除绑定」，移除已保存的凭证并停止同步。
+          </li>
+          <li>
+            <strong>数据删除：</strong>可随时删除自己在本站发布的评论。
+          </li>
         </UL>
         <H2>5. 内容分级与未成年人保护</H2>
-        <P>本站内置「内容分级」过滤并默认处于「完全安全（Safe）」状态，用于过滤暴力、色情等限制级内容。</P>
+        <P>
+          本站内置「内容分级」过滤并默认处于「完全安全（Safe）」状态，用于过滤暴力、色情等限制级内容。
+        </P>
         <P>如发现违规内容，可通过图片或评论旁的「举报」功能向管理团队反馈。</P>
         <H2>6. 政策更新与联系方式</H2>
         <P>本隐私政策可能随站点功能调整而修订；如有重要变更，将通过站内公告或消息通知。</P>
@@ -298,7 +467,9 @@ function Faq() {
       q: '绑定 API Key 是否安全？',
       a: (
         <>
-          本站对用户绑定的 API Key 在服务端采用对称加密存储，界面与后台均以脱敏形式展示（例如 <Code>abc********rst</Code>），无法查看完整明文。API Key 仅用于代表用户向原站（Derpibooru）发起授权请求，不作其他用途。
+          本站对用户绑定的 API Key 在服务端采用对称加密存储，界面与后台均以脱敏形式展示（例如{' '}
+          <Code>abc********rst</Code>），无法查看完整明文。API Key
+          仅用于代表用户向原站（Derpibooru）发起授权请求，不作其他用途。
         </>
       ),
     },
@@ -318,7 +489,11 @@ function Faq() {
       q: '如何获取 API Key？',
       a: (
         <>
-          注册并登录 Derpibooru（<OutLink href="https://trixiebooru.org/sessions/new">trixiebooru.org/sessions/new</OutLink>），进入 Account Settings 页面，在 API Key 区域点击「Click to show」即可查看并复制。
+          注册并登录 Derpibooru（
+          <OutLink href="https://trixiebooru.org/sessions/new">
+            trixiebooru.org/sessions/new
+          </OutLink>
+          ），进入 Account Settings 页面，在 API Key 区域点击「Click to show」即可查看并复制。
         </>
       ),
     },
@@ -354,7 +529,9 @@ function Faq() {
       q: '我是原作者，作品未经允许被上传了怎么办？',
       a: (
         <>
-          若你的 Derpibooru 账号已认证该图的 <Code>artist:</Code> 标签，可前往 Derpibooru 原图页面点击「Report」，选择一般举报中的「Takedown request」，并填写「I am the artist of this image, and I want to take it down.」。
+          若你的 Derpibooru 账号已认证该图的 <Code>artist:</Code> 标签，可前往 Derpibooru
+          原图页面点击「Report」，选择一般举报中的「Takedown request」，并填写「I am the artist of
+          this image, and I want to take it down.」。
         </>
       ),
     },
@@ -370,7 +547,9 @@ function Faq() {
       q: '申请下架后仍有用户重复上传我的作品怎么办？',
       a: (
         <>
-          完成 Derpibooru 画师认证后，可访问 <OutLink href="https://trixiebooru.org/dnp/new">trixiebooru.org/dnp/new</OutLink>，将画师标签设置为仅允许本人发布。
+          完成 Derpibooru 画师认证后，可访问{' '}
+          <OutLink href="https://trixiebooru.org/dnp/new">trixiebooru.org/dnp/new</OutLink>
+          ，将画师标签设置为仅允许本人发布。
         </>
       ),
     },
@@ -380,9 +559,7 @@ function Faq() {
     <dl className="space-y-5">
       {items.map((item, i) => (
         <div key={i}>
-          <dt className="text-title-m text-on-surface">
-            Q：{item.q}
-          </dt>
+          <dt className="text-title-m text-on-surface">Q：{item.q}</dt>
           <dd className="mt-1 text-body-m text-on-surface">A：{item.a}</dd>
         </div>
       ))}
@@ -440,48 +617,42 @@ export default function PolicyScreen({ initialTab }: { initialTab: PolicyKey }) 
     <>
       <PageBack onClick={handleBack} />
       <div className="mx-auto max-w-4xl page-back-room">
-      <PageHeader title="声明与政策" />
+        <PageHeader title="声明与政策" />
 
-      {/* 板块切换，样式与消息/通知页一致 */}
-      <div ref={rowRef}>
-        <Tabs
-          tabs={TABS}
-          value={active}
-          onChange={select}
-          label="声明与政策"
-          className="mb-6"
-        />
-      </div>
+        {/* 板块切换，样式与消息/通知页一致 */}
+        <div ref={rowRef}>
+          <Tabs tabs={TABS} value={active} onChange={select} label="声明与政策" className="mb-6" />
+        </div>
 
-      {/* The card is *inside* each pane, not around all of them: the shared axis
+        {/* The card is *inside* each pane, not around all of them: the shared axis
           translates the panes a full window sideways, and a pane nested inside a card
           would slide out of a surface that stayed put. Every other screen slides content
           blocks *including* their surfaces. `lean`: the layered departure — the card, a
           surface, leans as one block. It is the article surface a forum thread's post sits
           on (`elevated`, D1-022): a long text on the heaviest tone step read as a block of
           colour with words in it. */}
-      <TabPanes value={active} lean>
-        <TabPane value="cookie">
-          <Card variant="elevated" padding="lg">
-            <CookiePolicy />
-          </Card>
-        </TabPane>
-        <TabPane value="agreement">
-          <Card variant="elevated" padding="lg">
-            <AgreementPolicy onOpen={open} />
-          </Card>
-        </TabPane>
-        <TabPane value="privacy">
-          <Card variant="elevated" padding="lg">
-            <PrivacyPolicy />
-          </Card>
-        </TabPane>
-        <TabPane value="faq">
-          <Card variant="elevated" padding="lg">
-            <Faq />
-          </Card>
-        </TabPane>
-      </TabPanes>
+        <TabPanes value={active} lean>
+          <TabPane value="cookie">
+            <Card variant="elevated" padding="lg">
+              <CookiePolicy />
+            </Card>
+          </TabPane>
+          <TabPane value="agreement">
+            <Card variant="elevated" padding="lg">
+              <AgreementPolicy onOpen={open} />
+            </Card>
+          </TabPane>
+          <TabPane value="privacy">
+            <Card variant="elevated" padding="lg">
+              <PrivacyPolicy />
+            </Card>
+          </TabPane>
+          <TabPane value="faq">
+            <Card variant="elevated" padding="lg">
+              <Faq />
+            </Card>
+          </TabPane>
+        </TabPanes>
       </div>
     </>
   );

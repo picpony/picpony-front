@@ -36,7 +36,9 @@ export function safeUrl(raw: string): string | null {
   /* A browser reads `\` as `/` in a URL, so `/\evil.example` is protocol-relative — another host
      — while it looks root-relative (review P2-F5's follow-up). Normalised here, the one boundary
      every rich-text link passes, so what is emitted says what the browser will do. */
-  const normalised = /^[/\\]/.test(url) ? url.replace(/^[/\\]+/, (lead) => '/'.repeat(Math.min(lead.length, 2))) : url;
+  const normalised = /^[/\\]/.test(url)
+    ? url.replace(/^[/\\]+/, (lead) => '/'.repeat(Math.min(lead.length, 2)))
+    : url;
   // Root-relative (`/foo`) and protocol-relative (`//host/foo`) carry no scheme.
   if (normalised.startsWith('/')) return normalised;
   const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(url);
@@ -86,7 +88,8 @@ export function htmlToBBCode(html: string | null | undefined): string {
   /** A value the renderer may accept: nothing that could close the tag it sits in. */
   const colourValue = (value: string) => {
     const colour = value.trim();
-    if (!colour || colour === 'initial' || colour === 'inherit' || colour === 'transparent') return '';
+    if (!colour || colour === 'initial' || colour === 'inherit' || colour === 'transparent')
+      return '';
     return /^[#a-z0-9(),.%\s/-]+$/i.test(colour) ? colour : '';
   };
   /** `[`, `]`, quotes and whitespace percent-encoded: none of them may end an `[url=…]`. */
@@ -232,8 +235,32 @@ type BBNode = string | BBElement;
 type Piece = { kind: 'inline' | 'block' | 'paragraph'; html: string };
 
 const TAGS = new Set([
-  'b', 'i', 'u', 's', 'color', 'bg', 'center', 'right', 'url', 'quote', 'code', 'img', 'list',
-  'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'table', 'tr', 'td', 'th',
+  'b',
+  'i',
+  'u',
+  's',
+  'color',
+  'bg',
+  'center',
+  'right',
+  'url',
+  'quote',
+  'code',
+  'img',
+  'list',
+  'div',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'span',
+  'table',
+  'tr',
+  'td',
+  'th',
 ]);
 const PARAMETERISED = new Set(['color', 'bg', 'url', 'quote', 'list']);
 
@@ -253,7 +280,9 @@ function parseBBCode(source: string): BBNode[] {
     cursor = match.index + match[0].length;
     const [, closing, name, parameter] = match;
     const tag = name.toLowerCase();
-    const literal = parent.tag === 'code' || parent.tag === 'img' ||
+    const literal =
+      parent.tag === 'code' ||
+      parent.tag === 'img' ||
       (parent.tag === 'url' && parent.parameter === undefined);
     if (literal) {
       if (closing && tag === parent.tag && parameter === undefined) {
@@ -309,15 +338,21 @@ function parseBBCode(source: string): BBNode[] {
 
 /** `style` wraps every line of text in one span carrying it — the editor presentation's marks. */
 function textPieces(text: string, style = ''): Piece[] {
-  return text.split(/(\n[ \t]*\n+)/).map((part, index) => index % 2
-    ? { kind: 'paragraph', html: '' }
-    : {
-        kind: 'inline',
-        html: part
-          .split('\n')
-          .map((line) => (line && style ? `<span style="${style}">${escapeHTML(line)}</span>` : escapeHTML(line)))
-          .join('<br />'),
-      });
+  return text.split(/(\n[ \t]*\n+)/).map((part, index) =>
+    index % 2
+      ? { kind: 'paragraph', html: '' }
+      : {
+          kind: 'inline',
+          html: part
+            .split('\n')
+            .map((line) =>
+              line && style
+                ? `<span style="${style}">${escapeHTML(line)}</span>`
+                : escapeHTML(line),
+            )
+            .join('<br />'),
+        },
+  );
 }
 
 /** Leading and trailing breaks and whitespace, which never carry meaning at a block's edge. */
@@ -356,9 +391,11 @@ function wrapInline(pieces: Piece[], open: string, close: string, links = false)
     if (piece.kind === 'inline') run += piece.html;
     else {
       flush();
-      result.push(links && piece.kind === 'block'
-        ? { kind: 'block', html: open + piece.html + close }
-        : piece);
+      result.push(
+        links && piece.kind === 'block'
+          ? { kind: 'block', html: open + piece.html + close }
+          : piece,
+      );
     }
   }
   flush();
@@ -415,7 +452,8 @@ function imageHtml(url: string, inLink: boolean, { editor, options }: Presentati
   const attributes = options.image?.(url) ?? { src: url };
   const src = safeUrl(attributes.src) ?? url;
   const srcSet = attributes.srcSet ? ` srcset="${escapeHTML(attributes.srcSet)}"` : '';
-  const sizes = attributes.srcSet && attributes.sizes ? ` sizes="${escapeHTML(attributes.sizes)}"` : '';
+  const sizes =
+    attributes.srcSet && attributes.sizes ? ` sizes="${escapeHTML(attributes.sizes)}"` : '';
   const img = `<img src="${escapeHTML(src)}"${srcSet}${sizes} alt="" loading="lazy" decoding="async" data-loading="" />`;
   return options.zoomable && !inLink
     ? `<button type="button" class="rt-image" data-rt-zoom="" aria-label="查看大图">${img}</button>`
@@ -427,13 +465,21 @@ function alignOpenings(html: string, side: 'center' | 'right'): string {
   return html.replace(/<(p|h[1-6])>/g, `<$1 style="text-align:${side};">`);
 }
 
-function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentation, marks: Marks = {}): Piece[] {
+function renderNodes(
+  nodes: BBNode[],
+  inLink: boolean,
+  presentation: Presentation,
+  marks: Marks = {},
+): Piece[] {
   const { editor, options } = presentation;
   const style = editor ? markStyle(marks) : '';
   return nodes.flatMap((node): Piece[] => {
     if (typeof node === 'string') return textPieces(node, style);
     if (!node.closed) {
-      return [...textPieces(node.opening, style), ...renderNodes(node.children, inLink, presentation, marks)];
+      return [
+        ...textPieces(node.opening, style),
+        ...renderNodes(node.children, inLink, presentation, marks),
+      ];
     }
     const { tag, parameter, children } = node;
     if (tag === 'br') return [{ kind: 'inline', html: '<br />' }];
@@ -448,7 +494,9 @@ function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentatio
     if (tag === 'url') {
       const bare = parameter === undefined;
       const url = safeUrl(bare ? children.join('') : parameter);
-      const content = bare ? textPieces(children.join(''), style) : renderNodes(children, true, presentation, marks);
+      const content = bare
+        ? textPieces(children.join(''), style)
+        : renderNodes(children, true, presentation, marks);
       if (!url || inLink) return content;
       const internal = !editor && options.isInternal?.(url) === true;
       const attributes = internal ? '' : ' target="_blank" rel="noopener noreferrer"';
@@ -456,14 +504,22 @@ function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentatio
     }
     if (tag === 'color' || tag === 'bg') {
       const color = safeColor(parameter || '');
-      if (editor) return renderNodes(children, inLink, presentation, color ? { ...marks, [tag]: color } : marks);
+      if (editor)
+        return renderNodes(
+          children,
+          inLink,
+          presentation,
+          color ? { ...marks, [tag]: color } : marks,
+        );
       const content = renderNodes(children, inLink, presentation, marks);
       if (!color) return content;
       const [open, close] = inkSpan(tag, color);
       return wrapInline(content, open, close);
     }
     const content = tag === 'list' ? [] : renderNodes(children, inLink, presentation, marks);
-    const inlineTag = ({ b: 'strong', i: 'em', u: 'u', s: 's', span: 'span' } as Record<string, string>)[tag];
+    const inlineTag = (
+      { b: 'strong', i: 'em', u: 'u', s: 's', span: 'span' } as Record<string, string>
+    )[tag];
     if (inlineTag) return wrapInline(content, `<${inlineTag}>`, `</${inlineTag}>`);
     if (tag === 'quote') {
       const who = parameter?.replace(/^"|"$/g, '').trim();
@@ -473,18 +529,26 @@ function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentatio
          paragraphs. The editor still does not preserve citation metadata. */
       const body = flow(content, !editor);
       if (!body && !who) return [];
-      return [{ kind: 'block', html: `<blockquote>${who ? `<cite>${escapeHTML(who)}</cite>` : ''}${body}</blockquote>` }];
+      return [
+        {
+          kind: 'block',
+          html: `<blockquote>${who ? `<cite>${escapeHTML(who)}</cite>` : ''}${body}</blockquote>`,
+        },
+      ];
     }
     if (tag === 'list') {
       const listTag = parameter === '1' ? 'ol' : 'ul';
       // Only items may be direct list children; preserve any text before [*].
-      const items = children.flatMap((child) => {
-        if (typeof child === 'string' && !child.trim()) return [];
-        const rendered = flow(renderNodes([child], inLink, presentation, marks), false);
-        if (!rendered) return [];
-        return [typeof child !== 'string' && child.tag === 'li'
-          ? rendered : `<li>${rendered}</li>`];
-      }).join('');
+      const items = children
+        .flatMap((child) => {
+          if (typeof child === 'string' && !child.trim()) return [];
+          const rendered = flow(renderNodes([child], inLink, presentation, marks), false);
+          if (!rendered) return [];
+          return [
+            typeof child !== 'string' && child.tag === 'li' ? rendered : `<li>${rendered}</li>`,
+          ];
+        })
+        .join('');
       return items ? [{ kind: 'block', html: `<${listTag}>${items}</${listTag}>` }] : [];
     }
     if (tag === 'li') {
@@ -494,20 +558,24 @@ function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentatio
     if (tag === 'table') {
       const rows = flow(content, false);
       if (!rows) return [];
-      return [{
-        kind: 'block',
-        html: editor
-          ? `<table><tbody>${rows}</tbody></table>`
-          : `<div class="popover-scrollbar overflow-x-auto"><table>${rows}</table></div>`,
-      }];
+      return [
+        {
+          kind: 'block',
+          html: editor
+            ? `<table><tbody>${rows}</tbody></table>`
+            : `<div class="popover-scrollbar overflow-x-auto"><table>${rows}</table></div>`,
+        },
+      ];
     }
     if (tag === 'center' || tag === 'right') {
       const body = flow(content);
       if (!body) return [];
-      return [{
-        kind: 'block',
-        html: editor ? alignOpenings(body, tag) : `<div style="text-align:${tag};">${body}</div>`,
-      }];
+      return [
+        {
+          kind: 'block',
+          html: editor ? alignOpenings(body, tag) : `<div style="text-align:${tag};">${body}</div>`,
+        },
+      ];
     }
     if (tag === 'p' || /^h[1-6]$/.test(tag)) {
       // Malformed input can place blocks inside a paragraph/heading. Lift those
@@ -531,11 +599,16 @@ function renderNodes(nodes: BBNode[], inLink: boolean, presentation: Presentatio
 
 /** Both presentations share parsing, URL validation and every escaping boundary. */
 function renderBBCode(bbcode: string | null | undefined, presentation: Presentation): string {
-  return bbcode ? flow(renderNodes(parseBBCode(bbcode.replace(/\r\n?/g, '\n')), false, presentation)) : '';
+  return bbcode
+    ? flow(renderNodes(parseBBCode(bbcode.replace(/\r\n?/g, '\n')), false, presentation))
+    : '';
 }
 
 /** The published presentation. */
-export function bbcodeToSafeHtml(bbcode: string | null | undefined, options: BBCodeRenderOptions = {}): string {
+export function bbcodeToSafeHtml(
+  bbcode: string | null | undefined,
+  options: BBCodeRenderOptions = {},
+): string {
   return renderBBCode(bbcode, { editor: false, options });
 }
 
@@ -611,7 +684,10 @@ function plainNodes(nodes: BBNode[], options: PlainTextOptions): string {
         text += `\n${node.children.join('')}\n`;
         break;
       case 'url':
-        text += node.parameter === undefined ? node.children.join('') : plainNodes(node.children, options);
+        text +=
+          node.parameter === undefined
+            ? node.children.join('')
+            : plainNodes(node.children, options);
         break;
       case 'li':
       case 'p':
@@ -647,7 +723,10 @@ function plainNodes(nodes: BBNode[], options: PlainTextOptions): string {
  * fixed length landed inside an `[img]` and left it open. Pictures become 「[图片]」, links their
  * text, and the cut falls between characters.
  */
-export function bbcodeToPlainText(bbcode: string | null | undefined, options: PlainTextOptions = {}): string {
+export function bbcodeToPlainText(
+  bbcode: string | null | undefined,
+  options: PlainTextOptions = {},
+): string {
   if (!bbcode) return '';
   const { maxLength, singleLine = true, truncated = false } = options;
   const normalized = bbcode.replace(/\r\n?/g, '\n');
@@ -655,7 +734,11 @@ export function bbcodeToPlainText(bbcode: string | null | undefined, options: Pl
   let text = plainNodes(parseBBCode(source), options);
   text = singleLine
     ? text.replace(/\s+/g, ' ').trim()
-    : text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    : text
+        .replace(/[ \t]+/g, ' ')
+        .replace(/ *\n */g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
   if (maxLength === undefined) return text;
   const chars = Array.from(text);
   return chars.length > maxLength ? `${chars.slice(0, maxLength).join('').trimEnd()}…` : text;

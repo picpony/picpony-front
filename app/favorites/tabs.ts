@@ -11,11 +11,17 @@ import { isHistoryLayerState } from '@/lib/historyLayers';
 import { hasModalLayer, subscribeScreenQuiet } from '@/lib/overlay';
 import { favoritesHref, type FavoritesTab } from '@/lib/favorites';
 
-const LABELS: Record<FavoritesTab, string> = { folders: '收藏夹', derpibooru: 'Derpibooru', privacy: '隐私空间' };
+const LABELS: Record<FavoritesTab, string> = {
+  folders: '收藏夹',
+  derpibooru: 'Derpibooru',
+  privacy: '隐私空间',
+};
 
 /** The row, in its order. */
 export function favoritesTabs(showPrivacy: boolean): { value: FavoritesTab; label: string }[] {
-  const offered: FavoritesTab[] = showPrivacy ? ['folders', 'derpibooru', 'privacy'] : ['folders', 'derpibooru'];
+  const offered: FavoritesTab[] = showPrivacy
+    ? ['folders', 'derpibooru', 'privacy']
+    : ['folders', 'derpibooru'];
   return offered.map((value) => ({ value, label: LABELS[value] }));
 }
 
@@ -49,7 +55,8 @@ function writeQueued() {
   queued = null;
   if (!here || !tab) return;
   const href = favoritesHref(tab);
-  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`)
+    window.history.replaceState(null, '', href);
 }
 
 /** A screen's waiting write goes with it. */

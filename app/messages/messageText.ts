@@ -24,7 +24,9 @@ export type MessageToken =
   | { type: 'link'; text: string; href: string; internal: boolean }
   | { type: 'image'; src: string };
 
-export const EMOJI_BY_NAME: ReadonlyMap<string, PonyEmoji> = new Map(PONY_EMOJI.map((emoji) => [emoji.name, emoji]));
+export const EMOJI_BY_NAME: ReadonlyMap<string, PonyEmoji> = new Map(
+  PONY_EMOJI.map((emoji) => [emoji.name, emoji]),
+);
 
 /** A `$emoji_<name>$` marker. Capturing, so a split keeps the markers as their own pieces. */
 const EMOJI_MARKER = /(\$emoji_[a-zA-Z0-9_]+\$)/;
@@ -33,7 +35,7 @@ const EMOJI_NAME = /^\$emoji_([a-zA-Z0-9_]+)\$$/;
 /** The picture a marker stands for, or `null` for text that only looks like one. */
 export function emojiOfMarker(marker: string): PonyEmoji | null {
   const match = EMOJI_NAME.exec(marker);
-  return match ? EMOJI_BY_NAME.get(match[1]) ?? null : null;
+  return match ? (EMOJI_BY_NAME.get(match[1]) ?? null) : null;
 }
 
 export function emojiMarker(name: string): string {
@@ -81,7 +83,10 @@ const APP_PATH = /^\/(?:pic|forum|user|derpi\/user)\/\d+\/?$/;
  * which this site mirrors (the original front end did the same). Anything else is external.
  * `null` for anything that is not an http(s) URL.
  */
-export function resolveLink(raw: string, origin?: string): { href: string; internal: boolean } | null {
+export function resolveLink(
+  raw: string,
+  origin?: string,
+): { href: string; internal: boolean } | null {
   let url: URL;
   try {
     url = new URL(raw);
@@ -89,17 +94,21 @@ export function resolveLink(raw: string, origin?: string): { href: string; inter
     return null;
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  const sameSite = (origin !== undefined && url.origin === origin) || PICPONY_HOSTS.test(url.hostname);
+  const sameSite =
+    (origin !== undefined && url.origin === origin) || PICPONY_HOSTS.test(url.hostname);
   if (sameSite && APP_PATH.test(url.pathname)) {
     return { href: `${url.pathname.replace(/\/$/, '')}${url.search}`, internal: true };
   }
-  const derpi = DERPI_IMAGE.test(url.hostname) ? /^\/(?:images\/)?(\d+)\/?$/.exec(url.pathname) : null;
+  const derpi = DERPI_IMAGE.test(url.hostname)
+    ? /^\/(?:images\/)?(\d+)\/?$/.exec(url.pathname)
+    : null;
   if (derpi) return { href: `/pic/${derpi[1]}`, internal: true };
   return { href: url.href, internal: false };
 }
 
 /** Where a share card's picture may come from: Derpibooru's own image hosts, and PicPony's. */
-const SHARE_THUMB_HOSTS = /^(?:[a-z0-9-]+\.)*(?:derpicdn\.net|derpibooru\.org|trixiebooru\.org|picpony\.top)$/i;
+const SHARE_THUMB_HOSTS =
+  /^(?:[a-z0-9-]+\.)*(?:derpicdn\.net|derpibooru\.org|trixiebooru\.org|picpony\.top)$/i;
 
 /**
  * The picture a share card may draw, or `''` for none (the card then shows its placeholder).
@@ -114,7 +123,10 @@ export function shareThumbSrc(url: string): string {
   const raw = getRawImageUrl(url.trim());
   try {
     const parsed = new URL(raw);
-    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && SHARE_THUMB_HOSTS.test(parsed.hostname)
+    return parsed.protocol === 'https:' &&
+      !parsed.username &&
+      !parsed.password &&
+      SHARE_THUMB_HOSTS.test(parsed.hostname)
       ? parsed.href
       : '';
   } catch {
@@ -167,7 +179,8 @@ function mergeText(tokens: MessageToken[]): MessageToken[] {
 // ---------------------------------------------------------------------------
 
 /** A block wrapper its editor put around every line — the tell that a message came from it. */
-const LEGACY_BLOCK = /\[(?:p|div|h[1-6]|quote(?:=[^\]]*)?|list(?:=1)?|table|center|right)\]|\[br\]/i;
+const LEGACY_BLOCK =
+  /\[(?:p|div|h[1-6]|quote(?:=[^\]]*)?|list(?:=1)?|table|center|right)\]|\[br\]/i;
 
 export function isLegacyRichText(content: string): boolean {
   return LEGACY_BLOCK.test(content);
@@ -195,12 +208,16 @@ export function legacyTokens(content: string, origin?: string): MessageToken[] {
       const drawable = shareThumbSrc(value);
       if (drawable) return hole({ type: 'image', src: drawable });
       const link = resolveLink(value, origin);
-      return link ? hole({ type: 'link', text: '[图片] ' + value, href: link.href, internal: link.internal }) : '';
+      return link
+        ? hole({ type: 'link', text: '[图片] ' + value, href: link.href, internal: link.internal })
+        : '';
     })
     .replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, (whole, href: string, label: string) => {
       const link = resolveLink(href.trim(), origin);
       const visible = stripInline(label).trim() || href.trim();
-      return link ? hole({ type: 'link', text: visible, href: link.href, internal: link.internal }) : visible;
+      return link
+        ? hole({ type: 'link', text: visible, href: link.href, internal: link.internal })
+        : visible;
     })
     .replace(/\[url\]([\s\S]*?)\[\/url\]/gi, (whole, href: string) => href.trim());
   text = text
@@ -233,7 +250,10 @@ export function legacyTokens(content: string, origin?: string): MessageToken[] {
 
 /** Inline formatting, stripped to its text. */
 function stripInline(text: string): string {
-  return text.replace(/\[\/?(?:b|i|u|s|color(?:=[^\]]*)?|bg(?:=[^\]]*)?|size(?:=[^\]]*)?|font(?:=[^\]]*)?)\]/gi, '');
+  return text.replace(
+    /\[\/?(?:b|i|u|s|color(?:=[^\]]*)?|bg(?:=[^\]]*)?|size(?:=[^\]]*)?|font(?:=[^\]]*)?)\]/gi,
+    '',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +339,12 @@ export function notificationTokens(content: string, origin?: string): MessageTok
       const path = match[1] === 'user' ? 'user' : match[1] === 'post' ? 'forum' : 'pic';
       tokens.push({ type: 'link', text: match[3], href: `/${path}/${match[2]}`, internal: true });
     } else {
-      tokens.push({ type: 'link', text: match[4], href: subscriptionHref(match[4]), internal: true });
+      tokens.push({
+        type: 'link',
+        text: match[4],
+        href: subscriptionHref(match[4]),
+        internal: true,
+      });
     }
     last = start + match[0].length;
   }

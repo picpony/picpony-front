@@ -22,14 +22,19 @@ export function sliderPose(fraction: number, endFraction?: number) {
     transform: `translateX(${fraction * 100}%)`,
     endTransform: `translateX(${(endFraction ?? fraction) * 100}%)`,
     inactiveStart: beforeHandle(fraction),
-    active: endFraction === undefined
-      ? beforeHandle(fraction)
-      : `inset(0 calc(${(1 - endFraction) * 100}% + 0.5rem) 0 calc(${fraction * 100}% + 0.5rem) round 0.125rem)`,
+    active:
+      endFraction === undefined
+        ? beforeHandle(fraction)
+        : `inset(0 calc(${(1 - endFraction) * 100}% + 0.5rem) 0 calc(${fraction * 100}% + 0.5rem) round 0.125rem)`,
     inactive: afterHandle(endFraction ?? fraction),
   };
 }
 
-export function SliderPaint({ children, nativeFeedback = false, disabled = false }: {
+export function SliderPaint({
+  children,
+  nativeFeedback = false,
+  disabled = false,
+}: {
   children: ComponentProps<'div'>['children'];
   nativeFeedback?: boolean;
   disabled?: boolean;
@@ -41,7 +46,9 @@ export function SliderPaint({ children, nativeFeedback = false, disabled = false
         'pointer-events-none absolute inset-0 flex items-center overflow-x-clip',
         nativeFeedback &&
           'peer-focus-visible:[&_[data-slider-thumb]]:ring-2 peer-focus-visible:[&_[data-slider-thumb]]:focus-ring peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-solid peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-2 peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-offset-2 peer-focus-visible:[&_[data-slider-thumb]]:forced-colors:outline-[color:Highlight]',
-        nativeFeedback && !disabled && 'peer-active:[&_[data-slider-ink]]:scale-x-50 peer-focus-visible:[&_[data-slider-ink]]:scale-x-50',
+        nativeFeedback &&
+          !disabled &&
+          'peer-active:[&_[data-slider-ink]]:scale-x-50 peer-focus-visible:[&_[data-slider-ink]]:scale-x-50',
       )}
     >
       {children}
@@ -49,14 +56,26 @@ export function SliderPaint({ children, nativeFeedback = false, disabled = false
   );
 }
 
-export function SliderRail({ children, ref }: {
+export function SliderRail({
+  children,
+  ref,
+}: {
   children: ComponentProps<'div'>['children'];
   ref: Ref<HTMLDivElement>;
 }) {
-  return <div ref={ref} data-slider-rail="" className="absolute inset-x-5.5 flex h-11 items-center">{children}</div>;
+  return (
+    <div ref={ref} data-slider-rail="" className="absolute inset-x-5.5 flex h-11 items-center">
+      {children}
+    </div>
+  );
 }
 
-export function SliderTrack({ ref, clip, part, stopIndicator = false }: {
+export function SliderTrack({
+  ref,
+  clip,
+  part,
+  stopIndicator = false,
+}: {
   ref: Ref<HTMLSpanElement>;
   clip: string;
   part: 'active' | 'inactive' | 'inactive-start';
@@ -85,7 +104,13 @@ export function SliderTrack({ ref, clip, part, stopIndicator = false }: {
   );
 }
 
-export function SliderHandle({ ref, transform, handle, focused = false, pressed = false }: {
+export function SliderHandle({
+  ref,
+  transform,
+  handle,
+  focused = false,
+  pressed = false,
+}: {
   ref: Ref<HTMLSpanElement>;
   transform: string;
   handle?: 'start' | 'end';
@@ -93,12 +118,19 @@ export function SliderHandle({ ref, transform, handle, focused = false, pressed 
   pressed?: boolean;
 }) {
   return (
-    <span ref={ref} data-slider-position="" data-slider-handle={handle} className="absolute inset-0" style={{ transform }}>
+    <span
+      ref={ref}
+      data-slider-position=""
+      data-slider-handle={handle}
+      className="absolute inset-0"
+      style={{ transform }}
+    >
       <span
         data-slider-thumb=""
         className={cn(
           'absolute left-0 h-11 w-1 -translate-x-1/2 rounded-full',
-          focused && 'ring-2 focus-ring forced-colors:outline-solid forced-colors:outline-2 forced-colors:outline-offset-2 forced-colors:outline-[color:Highlight]',
+          focused &&
+            'ring-2 focus-ring forced-colors:outline-solid forced-colors:outline-2 forced-colors:outline-offset-2 forced-colors:outline-[color:Highlight]',
         )}
       >
         <span

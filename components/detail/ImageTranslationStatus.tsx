@@ -7,7 +7,10 @@ import { ICON } from '@/lib/icons';
 import type { ImageTranslation } from '@/lib/translation';
 
 /** What the job is doing, in the original front end's words. */
-function progressText({ phase, queueAhead }: Pick<ImageTranslation, 'phase' | 'queueAhead'>): string {
+function progressText({
+  phase,
+  queueAhead,
+}: Pick<ImageTranslation, 'phase' | 'queueAhead'>): string {
   switch (phase) {
     case 'requesting':
       return '正在提交翻译…';
@@ -32,7 +35,8 @@ function progressText({ phase, queueAhead }: Pick<ImageTranslation, 'phase' | 'q
  */
 export default function ImageTranslationStatus({ translation }: { translation: ImageTranslation }) {
   const { phase, shown, message, toggle } = translation;
-  const busy = phase === 'requesting' || phase === 'queued' || phase === 'translating' || phase === 'loading';
+  const busy =
+    phase === 'requesting' || phase === 'queued' || phase === 'translating' || phase === 'loading';
   const visible = busy || phase === 'failed' || phase === 'stalled' || shown;
 
   return (
@@ -42,9 +46,17 @@ export default function ImageTranslationStatus({ translation }: { translation: I
           {busy ? (
             <Spinner size="sm" />
           ) : phase === 'failed' ? (
-            <MdErrorOutline size={ICON.control} className="shrink-0 text-error" aria-hidden="true" />
+            <MdErrorOutline
+              size={ICON.control}
+              className="shrink-0 text-error"
+              aria-hidden="true"
+            />
           ) : (
-            <MdTranslate size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
+            <MdTranslate
+              size={ICON.control}
+              className="shrink-0 text-primary-ink"
+              aria-hidden="true"
+            />
           )}
           <p className="min-w-0 flex-1 tabular-nums">
             {busy

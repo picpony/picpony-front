@@ -86,13 +86,15 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith('picpony-static-') && key !== STATIC_CACHE)
-          .map((key) => caches.delete(key)),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith('picpony-static-') && key !== STATIC_CACHE)
+            .map((key) => caches.delete(key)),
+        ),
       ),
-    ),
   );
   /* No `clients.claim()`, for the reason above: a page loaded without a controller must stay
      without one for its whole life. */
@@ -152,7 +154,10 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() =>
-        caches.match(OFFLINE_URL).catch(() => undefined).then((cached) => cached ?? Response.error()),
+        caches
+          .match(OFFLINE_URL)
+          .catch(() => undefined)
+          .then((cached) => cached ?? Response.error()),
       ),
     );
     return;
@@ -176,20 +181,23 @@ self.addEventListener('fetch', (event) => {
        either way. What protects a mid-session deploy is the absence of `skipWaiting()`, not this
        branch. Content-hashed URLs are what make the hit branch safe. */
     event.respondWith(
-      caches.match(request).catch(() => undefined).then(
-        (cached) =>
-          cached ??
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              background(
-                event,
-                caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)),
-              );
-            }
-            return response;
-          }),
-      ),
+      caches
+        .match(request)
+        .catch(() => undefined)
+        .then(
+          (cached) =>
+            cached ??
+            fetch(request).then((response) => {
+              if (response.ok) {
+                const copy = response.clone();
+                background(
+                  event,
+                  caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)),
+                );
+              }
+              return response;
+            }),
+        ),
     );
     return;
   }
@@ -212,7 +220,10 @@ self.addEventListener('fetch', (event) => {
         const response = await fetch(request);
         if (cache && response.ok) {
           const copy = response.clone();
-          background(event, cache.put(request, copy).then(() => trimImages(cache)));
+          background(
+            event,
+            cache.put(request, copy).then(() => trimImages(cache)),
+          );
         }
         return response;
       })(),

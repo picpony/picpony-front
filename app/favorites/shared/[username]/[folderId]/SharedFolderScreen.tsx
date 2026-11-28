@@ -5,7 +5,14 @@ import { MdFolderOff, MdPersonOff, MdPhotoLibrary } from 'react-icons/md';
 import { SKIP, useResource } from '@/lib/resource';
 import { profileFaveFolders, sharedFaveIds } from '@/lib/resources';
 import { apiErrorMessage, isApiError, isNotFound, isRetryable } from '@/lib/api/errors';
-import { FAVE_PAGE_SIZE, faveFolderHref, favoritesHref, folderLabel, sharedFolderHref, type FaveOwner } from '@/lib/favorites';
+import {
+  FAVE_PAGE_SIZE,
+  faveFolderHref,
+  favoritesHref,
+  folderLabel,
+  sharedFolderHref,
+  type FaveOwner,
+} from '@/lib/favorites';
 import { useBackOrParent } from '@/lib/backNavigation';
 import { readFolderSeedCover, useFolderPage } from '@/lib/folderTransit';
 import { useEscapeBack, useSession } from '@/lib/hooks';
@@ -52,7 +59,13 @@ function SharedSkeleton() {
  * mounts, rather than from a placeholder that changed shape under the landing when the folder's
  * read came in. The count is then the read's own (the list counts a repeated id twice).
  */
-export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwner; folderId: number }) {
+export default function SharedFolderScreen({
+  owner,
+  folderId,
+}: {
+  owner: FaveOwner;
+  folderId: number;
+}) {
   const router = useRouter();
   const back = useBackOrParent('/');
   useEscapeBack(back);
@@ -68,18 +81,24 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
       : typeof user?.username === 'string' && user.username === username;
   const route = sharedFolderHref(owner, folderId);
   const [page, setPage] = useAddressPage(route, false);
-  const listed = folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
+  const listed =
+    folderId === 0 || !publicList.data || publicList.data.some((folder) => folder.id === folderId);
   const ids = listed ? read.data?.ids : undefined;
   const state = useFavePage({ ids, page, setPage, listKey: `fave-shared:${ownerKey}:${folderId}` });
   if (ids && page > state.totalPages) setPage(state.totalPages);
 
   /* The folder as the public list has it — the card's own name, so the header and the card that
      opened it agree, and what the header is drawn from while the folder's read is on its way. */
-  const entry = folderId > 0 ? publicList.data?.find((folder) => folder.id === folderId) : undefined;
+  const entry =
+    folderId > 0 ? publicList.data?.find((folder) => folder.id === folderId) : undefined;
   const seeded = read.data === undefined && !read.error && entry !== undefined;
   const name = entry ? folderLabel(entry) : folderId === 0 ? '公开收藏' : null;
   const pageRef = useFolderPage(route);
-  useDocumentTitle(read.data && listed ? `${name ?? '收藏夹'} - ${username ? `${username} 的` : ''}收藏 - PicPony` : null);
+  useDocumentTitle(
+    read.data && listed
+      ? `${name ?? '收藏夹'} - ${username ? `${username} 的` : ''}收藏 - PicPony`
+      : null,
+  );
   const folderMissing = isApiError(read.error) && read.error.code === 'FOLDER_NOT_FOUND';
 
   const pageBack = <PageBack onClick={back} />;
@@ -100,7 +119,12 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
         {pageBack}
         <div className={column}>
           {isNotFound(error) ? (
-            <EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" description={username ? `没有名为「${username}」的用户` : '该用户不存在或已注销'} />
+            <EmptyState
+              fill
+              icon={<MdPersonOff size={ICON.display} />}
+              title="用户不存在"
+              description={username ? `没有名为「${username}」的用户` : '该用户不存在或已注销'}
+            />
           ) : (
             <ErrorRetry
               fill
@@ -115,10 +139,23 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
   }
 
   if (folderId > 0 && publicList.data === undefined) {
-    return <>{pageBack}{publicList.error ? (
-      <div className={column}><ErrorRetry fill title="收藏夹加载失败" message={apiErrorMessage(publicList.error)}
-        onRetry={isRetryable(publicList.error) ? publicList.refresh : undefined} /></div>
-    ) : <SharedSkeleton />}</>;
+    return (
+      <>
+        {pageBack}
+        {publicList.error ? (
+          <div className={column}>
+            <ErrorRetry
+              fill
+              title="收藏夹加载失败"
+              message={apiErrorMessage(publicList.error)}
+              onRetry={isRetryable(publicList.error) ? publicList.refresh : undefined}
+            />
+          </div>
+        ) : (
+          <SharedSkeleton />
+        )}
+      </>
+    );
   }
 
   if (!listed || folderMissing) {
@@ -133,7 +170,10 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
             description={username ? `${username} 未公开此收藏夹` : undefined}
             action={
               own ? (
-                <Button variant="tonal" onClick={() => router.push(favoritesHref(), { scroll: false })}>
+                <Button
+                  variant="tonal"
+                  onClick={() => router.push(favoritesHref(), { scroll: false })}
+                >
                   管理我的收藏
                 </Button>
               ) : undefined
@@ -152,14 +192,19 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
           title={name ?? '收藏夹'}
           subtitle={
             <span className="tabular-nums">
-              {username ? `${username} 的收藏夹 · ` : ''}共 {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
+              {username ? `${username} 的收藏夹 · ` : ''}共{' '}
+              {formatCount(read.data?.ids.length ?? entry?.itemCount ?? 0)} 张
             </span>
           }
           actions={
             own ? (
               <Button
                 variant="tonal"
-                onClick={() => router.push(folderId > 0 ? faveFolderHref(folderId) : favoritesHref(), { scroll: false })}
+                onClick={() =>
+                  router.push(folderId > 0 ? faveFolderHref(folderId) : favoritesHref(), {
+                    scroll: false,
+                  })
+                }
               >
                 管理此收藏夹
               </Button>
@@ -175,7 +220,13 @@ export default function SharedFolderScreen({ owner, folderId }: { owner: FaveOwn
             failureTitle="收藏夹加载失败"
             seedCover={entry ? readFolderSeedCover(route, entry.latestImageId) : undefined}
             placeholderCount={read.data?.ids.length ?? entry?.itemCount}
-            empty={<EmptyState size="pane" icon={<MdPhotoLibrary size={ICON.display} />} title="暂无图片" />}
+            empty={
+              <EmptyState
+                size="pane"
+                icon={<MdPhotoLibrary size={ICON.display} />}
+                title="暂无图片"
+              />
+            }
           />
         </div>
       </div>

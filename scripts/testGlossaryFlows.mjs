@@ -17,16 +17,30 @@ const api = async (method, route, options) => {
   return answer;
 };
 const exports = {};
-vm.runInNewContext(code, { exports, crypto, require: (name) => (name === '@/lib/api/http' ? { api } : {}) });
+vm.runInNewContext(code, {
+  exports,
+  crypto,
+  require: (name) => (name === '@/lib/api/http' ? { api } : {}),
+});
 
 /* Every console write carries a fresh v4 Idempotency-Key, and the caller's own options win. */
 answer = { id: 7 };
-assert.deepEqual(await exports.adminWrite('POST', '/admin/dictionary/tags', { token: 't', json: { en: 'pony' } }), { id: 7 });
-assert.match(calls[0].options.idempotencyKey, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+assert.deepEqual(
+  await exports.adminWrite('POST', '/admin/dictionary/tags', { token: 't', json: { en: 'pony' } }),
+  { id: 7 },
+);
+assert.match(
+  calls[0].options.idempotencyKey,
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+);
 assert.equal(calls[0].options.token, 't');
 answer = undefined;
 await exports.adminWrite('DELETE', '/admin/dictionary/tags/7', { token: 't' });
-assert.notEqual(calls[1].options.idempotencyKey, calls[0].options.idempotencyKey, 'one key per press');
+assert.notEqual(
+  calls[1].options.idempotencyKey,
+  calls[0].options.idempotencyKey,
+  'one key per press',
+);
 /* A 204 is a write that happened: `{}`, never `undefined`. */
 answer = undefined;
 assert.equal(JSON.stringify(await exports.adminWrite('PUT', '/admin/x', { token: 't' })), '{}');

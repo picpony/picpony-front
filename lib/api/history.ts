@@ -71,7 +71,11 @@ function noteRevision(token: string, revision: number) {
 async function currentRevision(token: string, fresh = false): Promise<number> {
   const known = revisions.get(token);
   if (known !== undefined && !fresh) return known;
-  const data = await api<{ revision: number }>('GET', '/me/browsing-history', { token, cache: 'no-store', query: { page: 1, limit: 1 } });
+  const data = await api<{ revision: number }>('GET', '/me/browsing-history', {
+    token,
+    cache: 'no-store',
+    query: { page: 1, limit: 1 },
+  });
   noteRevision(token, data.revision);
   return data.revision;
 }
@@ -106,7 +110,9 @@ function versioned(
   const next = previous.then(write, write);
   const tail = next.catch(() => {});
   queues.set(token, tail);
-  void tail.then(() => { if (queues.get(token) === tail) queues.delete(token); });
+  void tail.then(() => {
+    if (queues.get(token) === tail) queues.delete(token);
+  });
   return next;
 }
 
@@ -119,12 +125,16 @@ export async function getBrowsingHistory(
   { page = 1, date }: { page?: number; date?: string | null } = {},
   signal?: AbortSignal,
 ): Promise<HistoryPage> {
-  const data = await api<{ revision: number; entries: HistoryRow[]; total_pages: number }>('GET', '/me/browsing-history', {
-    token,
-    signal,
-    cache: 'no-store',
-    query: { page, date: date || undefined },
-  });
+  const data = await api<{ revision: number; entries: HistoryRow[]; total_pages: number }>(
+    'GET',
+    '/me/browsing-history',
+    {
+      token,
+      signal,
+      cache: 'no-store',
+      query: { page, date: date || undefined },
+    },
+  );
   noteRevision(token, data.revision);
   return { entries: data.entries.map(historyEntryOf), totalPages: Math.max(1, data.total_pages) };
 }
@@ -139,14 +149,22 @@ export async function recordBrowsingHistory(
   token: string,
   visit: { imageId: number; previewUrl?: string | null; uploader?: string | null },
 ): Promise<void> {
-  const preview = visit.previewUrl && /^https:\/\/[^\s#@]+$/i.test(visit.previewUrl) ? visit.previewUrl : undefined;
+  const preview =
+    visit.previewUrl && /^https:\/\/[^\s#@]+$/i.test(visit.previewUrl)
+      ? visit.previewUrl
+      : undefined;
   const uploader = visit.uploader?.trim() || undefined;
   await versioned(token, (revision, key) =>
     api<WriteAnswer>('PUT', `/me/browsing-history/${seg(visit.imageId)}`, {
       token,
-      json: { expected_revision: revision, ...(preview ? { preview_url: preview } : {}), ...(uploader ? { uploader } : {}) },
+      json: {
+        expected_revision: revision,
+        ...(preview ? { preview_url: preview } : {}),
+        ...(uploader ? { uploader } : {}),
+      },
       idempotencyKey: key,
-    }));
+    }),
+  );
 }
 
 /**
@@ -164,7 +182,8 @@ export async function deleteBrowsingHistoryItem(
       json: { expected_revision: revision },
       idempotencyKey: key,
       keepalive: options.keepalive,
-    }));
+    }),
+  );
 }
 
 /**
@@ -172,8 +191,15 @@ export async function deleteBrowsingHistoryItem(
  * (`recordBrowsingHistory`), so it returns at the top with a new time: the backend has no other
  * way back.
  */
-export async function restoreBrowsingHistoryItem(token: string, entry: HistoryEntry): Promise<void> {
-  await recordBrowsingHistory(token, { imageId: entry.id, previewUrl: entry.previewUrl, uploader: entry.uploader });
+export async function restoreBrowsingHistoryItem(
+  token: string,
+  entry: HistoryEntry,
+): Promise<void> {
+  await recordBrowsingHistory(token, {
+    imageId: entry.id,
+    previewUrl: entry.previewUrl,
+    uploader: entry.uploader,
+  });
 }
 
 /** `DELETE /me/browsing-history {expected_revision}` — every row. Throws `ApiError` on a refusal. */
@@ -183,5 +209,6 @@ export async function clearBrowsingHistory(token: string): Promise<void> {
       token,
       json: { expected_revision: revision },
       idempotencyKey: key,
-    }));
+    }),
+  );
 }

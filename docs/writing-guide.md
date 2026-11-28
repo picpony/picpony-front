@@ -15,13 +15,13 @@ Write technical headings, prose, captions, diagram labels and examples in Englis
 
 ## Ownership
 
-| Location | Responsibility |
-| --- | --- |
-| [Project README](../README.md) | Product overview, setup, configuration and deployment |
-| [AGENTS.md](../AGENTS.md) | Global constraints, required checks and topic routing |
-| [CLAUDE.md](../CLAUDE.md) | Import AGENTS.md without duplicating its rules |
-| [Documentation index](README.md) | Current topic navigation |
-| Topic document | Its contracts, interfaces, procedures and verification |
+| Location                                           | Responsibility                                             |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| [Project README](../README.md)                     | Product overview, setup, configuration and deployment      |
+| [AGENTS.md](../AGENTS.md)                          | Global constraints, required checks and topic routing      |
+| [CLAUDE.md](../CLAUDE.md)                          | Import AGENTS.md without duplicating its rules             |
+| [Documentation index](README.md)                   | Current topic navigation                                   |
+| Topic document                                     | Its contracts, interfaces, procedures and verification     |
 | [Asset provenance](../public/companions/ORIGIN.md) | Sources, modifications, attribution and licence boundaries |
 
 Define each rule fully in one owning document. Elsewhere, link to it with only the context the reader needs. Update the index when adding a topic and AGENTS.md when it changes required reading.

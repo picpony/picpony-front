@@ -6,94 +6,94 @@ Compose the existing components; do not copy their class strings or interaction 
 
 ### Fields and choices
 
-| Need | Use |
-| --- | --- |
-| Button | `components/Button.tsx`; commands default to `type="button"` |
-| Navigation action | `ButtonLink`; renders a link with the shared button slots and `scroll={false}` |
-| Text field / textarea | `Input`, `Textarea`, `Field` from `components/Input.tsx` |
-| Search or filter | `SearchInput`: 40 dp `filter` by default, 56 dp standalone `search` |
-| Arbitrary badge colour | `ColorSwatch`; shared `ColorPicker` with `hues="mono"` |
-| Theme selection | `PaletteSwatches`, `ColorPicker`, `ImagePalettePicker` |
-| Checkbox / radio | `Checkbox`, `Radio` |
-| Slider / ordered range | `Slider` / `RangeSlider`; `DateRangeSlider` adapts calendar dates |
-| One-time code | `CodeInput` |
-| On/off setting | `ToggleSwitch`; `layout="row"` in a settings list |
-| Value dropdown | `Select`; `label` selects the outlined form slot |
-| Text suggestions | `useCombobox` with `Popover` and `suggestionRow` |
-| Selection tick | `CheckGlyph` |
-| File drop | `DropZone` with `accept` and rejection handling |
+| Need                   | Use                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| Button                 | `components/Button.tsx`; commands default to `type="button"`                   |
+| Navigation action      | `ButtonLink`; renders a link with the shared button slots and `scroll={false}` |
+| Text field / textarea  | `Input`, `Textarea`, `Field` from `components/Input.tsx`                       |
+| Search or filter       | `SearchInput`: 40 dp `filter` by default, 56 dp standalone `search`            |
+| Arbitrary badge colour | `ColorSwatch`; shared `ColorPicker` with `hues="mono"`                         |
+| Theme selection        | `PaletteSwatches`, `ColorPicker`, `ImagePalettePicker`                         |
+| Checkbox / radio       | `Checkbox`, `Radio`                                                            |
+| Slider / ordered range | `Slider` / `RangeSlider`; `DateRangeSlider` adapts calendar dates              |
+| One-time code          | `CodeInput`                                                                    |
+| On/off setting         | `ToggleSwitch`; `layout="row"` in a settings list                              |
+| Value dropdown         | `Select`; `label` selects the outlined form slot                               |
+| Text suggestions       | `useCombobox` with `Popover` and `suggestionRow`                               |
+| Selection tick         | `CheckGlyph`                                                                   |
+| File drop              | `DropZone` with `accept` and rejection handling                                |
 
 ### Surfaces and navigation
 
-| Need | Use |
-| --- | --- |
-| Card / section | `Card`; `interactive` renders a button, `as="a"` an anchor |
-| Scrollable region | `ScrollArea` (`components/ScrollArea.tsx`); `useOverlayScrollbar` / `useRichTextScrollbars` in `lib/overlayScrollbar.ts` for existing field shells and HTML rich text |
-| Command menu | `Menu` |
-| Floating panel | `Popover` |
-| Dialog | `Modal`; actions use its `footer` |
-| Bottom sheet | `Sheet`; `onExited` for work after departure |
-| Full-height docked surface | `SidePanel` |
-| Confirm / one-value prompt | `useConfirm` / `usePrompt`; `rows: 1` uses Input and Enter confirms |
-| Tabs | `Tabs` with `underline`, `pill` or `rail`; `TabPanes` / `TabPane` for content |
-| Section heading | `SectionHeading`; `level="group"` for subgroups, `aside` for counts |
-| Icon-only control | `IconButton` |
-| Tooltip | Automatic on IconButton; `useTooltip` elsewhere |
-| Hover-revealed caption/control | `hover-reveal` under its group |
-| Account-required screen | `SignInRequired` after session readiness |
-| Overlay behaviour | `lib/overlay.ts`; history through `useHistoryLayer` |
+| Need                           | Use                                                                                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Card / section                 | `Card`; `interactive` renders a button, `as="a"` an anchor                                                                                                            |
+| Scrollable region              | `ScrollArea` (`components/ScrollArea.tsx`); `useOverlayScrollbar` / `useRichTextScrollbars` in `lib/overlayScrollbar.ts` for existing field shells and HTML rich text |
+| Command menu                   | `Menu`                                                                                                                                                                |
+| Floating panel                 | `Popover`                                                                                                                                                             |
+| Dialog                         | `Modal`; actions use its `footer`                                                                                                                                     |
+| Bottom sheet                   | `Sheet`; `onExited` for work after departure                                                                                                                          |
+| Full-height docked surface     | `SidePanel`                                                                                                                                                           |
+| Confirm / one-value prompt     | `useConfirm` / `usePrompt`; `rows: 1` uses Input and Enter confirms                                                                                                   |
+| Tabs                           | `Tabs` with `underline`, `pill` or `rail`; `TabPanes` / `TabPane` for content                                                                                         |
+| Section heading                | `SectionHeading`; `level="group"` for subgroups, `aside` for counts                                                                                                   |
+| Icon-only control              | `IconButton`                                                                                                                                                          |
+| Tooltip                        | Automatic on IconButton; `useTooltip` elsewhere                                                                                                                       |
+| Hover-revealed caption/control | `hover-reveal` under its group                                                                                                                                        |
+| Account-required screen        | `SignInRequired` after session readiness                                                                                                                              |
+| Overlay behaviour              | `lib/overlay.ts`; history through `useHistoryLayer`                                                                                                                   |
 
 ### Status, lists and media
 
-| Need | Use |
-| --- | --- |
-| Tag control | `Chip` |
-| Text/status mark | `Badge`; `tone="media"` over a photograph |
-| Earned badge | `UserBadge`, `BadgeWall`, `BadgeEquipDialog`; parsing in `lib/userBadges.ts` |
-| Thumbnail corner mark | `MediaBadge`; `corner` owns position and concentric shape |
-| Unread count / user role | `CountBadge` / `RoleBadge` |
-| Image collection | `MasonryGrid` and `ImageGridSkeleton` |
-| Image batch selection | `MasonryGrid selection` |
-| Empty / failed state | `EmptyState` / `ErrorRetry`; `statusViewBox` for matching placeholders |
-| Route fallback | `PageFallback` from `components/ImageDetailSlot.tsx` with `PageLoadingIndicator` |
-| Loading indicator | `LoadingIndicator`, `MediaLoadingPlaceholder`, `PageLoadingIndicator` (`components/LoadingIndicator.tsx`) |
-| Loading shapes | `Skeleton`, `SkeletonCircle`, row/grid-specific skeletons |
-| Progress value | `ProgressBar` |
-| Time-series chart | `StatChart`; token-based SVG with a stable exact-value readout |
-| Action progress | `Spinner` or the button's loading state |
-| Record table | `DataTable` |
-| List entries added/removed | `PresenceList`; one departing block uses `PresenceBlock` |
-| Content height | `FollowHeight`; replacement content uses the existing `SizeSwap` |
-| Expand/collapse | `Collapse` |
-| Directional content swap | `SwapContent` |
-| Horizontal row edge fade | `useScrollFade` |
-| Chat message | `ChatBubble` |
-| Avatar | `Avatar` |
-| Floating batch/cart actions | `SelectionBar` / `CartBar` |
-| Transient status | `showToast`; `action` supplies its interactive part |
+| Need                        | Use                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Tag control                 | `Chip`                                                                                                    |
+| Text/status mark            | `Badge`; `tone="media"` over a photograph                                                                 |
+| Earned badge                | `UserBadge`, `BadgeWall`, `BadgeEquipDialog`; parsing in `lib/userBadges.ts`                              |
+| Thumbnail corner mark       | `MediaBadge`; `corner` owns position and concentric shape                                                 |
+| Unread count / user role    | `CountBadge` / `RoleBadge`                                                                                |
+| Image collection            | `MasonryGrid` and `ImageGridSkeleton`                                                                     |
+| Image batch selection       | `MasonryGrid selection`                                                                                   |
+| Empty / failed state        | `EmptyState` / `ErrorRetry`; `statusViewBox` for matching placeholders                                    |
+| Route fallback              | `PageFallback` from `components/ImageDetailSlot.tsx` with `PageLoadingIndicator`                          |
+| Loading indicator           | `LoadingIndicator`, `MediaLoadingPlaceholder`, `PageLoadingIndicator` (`components/LoadingIndicator.tsx`) |
+| Loading shapes              | `Skeleton`, `SkeletonCircle`, row/grid-specific skeletons                                                 |
+| Progress value              | `ProgressBar`                                                                                             |
+| Time-series chart           | `StatChart`; token-based SVG with a stable exact-value readout                                            |
+| Action progress             | `Spinner` or the button's loading state                                                                   |
+| Record table                | `DataTable`                                                                                               |
+| List entries added/removed  | `PresenceList`; one departing block uses `PresenceBlock`                                                  |
+| Content height              | `FollowHeight`; replacement content uses the existing `SizeSwap`                                          |
+| Expand/collapse             | `Collapse`                                                                                                |
+| Directional content swap    | `SwapContent`                                                                                             |
+| Horizontal row edge fade    | `useScrollFade`                                                                                           |
+| Chat message                | `ChatBubble`                                                                                              |
+| Avatar                      | `Avatar`                                                                                                  |
+| Floating batch/cart actions | `SelectionBar` / `CartBar`                                                                                |
+| Transient status            | `showToast`; `action` supplies its interactive part                                                       |
 
 ### Shared operations
 
-| Need | Use |
-| --- | --- |
-| Copy text / random ID / clamp | `copyText`, `randomId`, `clamp` / `clamp01` in `lib/utils.ts` |
-| Share link | `createShareLink` in `lib/api/share.ts`; long-link fallback |
-| Share to a contact | `useShareToContact`; render its `shareDialog` once |
-| User lookup | `useUserSearch` |
-| Tag subscription | `SubscribeButton`; addresses through `subscriptionHref` |
-| Session rendering | `useSession`; gate login prompts on `ready` |
-| Event-time session read / checked update | `readUserInfo`, `readToken`, `updateUserInfo` |
-| Date/time / current clock | `lib/format.ts`; `useNow()` for relative time |
-| Day grouping | `beijingDateKey`, not the displayed day label |
-| Exact / signed count | `formatExactCount` / `formatSignedCount` |
-| Admin numeric field | `figureText` / `figureField`; absent means `—` or empty |
-| Error detail and retry | `apiErrorMessage`, `isRetryable`, `isNotFound` |
-| Gender/race values | `lib/profileFields.ts` |
-| Asset/avatar URL | `getAssetUrl` / `getAvatarUrl` |
-| Admin API | Named adapter exports, or `* as adminApi from '@/lib/api/admin'` in admin panels |
-| Scroll to content | `scrollAppToTop` / `scrollAppToElement` |
-| Motion | Existing spring APIs; [Component motion](../motion.md) |
-| General mount entrance | `Reveal`, subject to the restrictions below |
+| Need                                     | Use                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| Copy text / random ID / clamp            | `copyText`, `randomId`, `clamp` / `clamp01` in `lib/utils.ts`                    |
+| Share link                               | `createShareLink` in `lib/api/share.ts`; long-link fallback                      |
+| Share to a contact                       | `useShareToContact`; render its `shareDialog` once                               |
+| User lookup                              | `useUserSearch`                                                                  |
+| Tag subscription                         | `SubscribeButton`; addresses through `subscriptionHref`                          |
+| Session rendering                        | `useSession`; gate login prompts on `ready`                                      |
+| Event-time session read / checked update | `readUserInfo`, `readToken`, `updateUserInfo`                                    |
+| Date/time / current clock                | `lib/format.ts`; `useNow()` for relative time                                    |
+| Day grouping                             | `beijingDateKey`, not the displayed day label                                    |
+| Exact / signed count                     | `formatExactCount` / `formatSignedCount`                                         |
+| Admin numeric field                      | `figureText` / `figureField`; absent means `—` or empty                          |
+| Error detail and retry                   | `apiErrorMessage`, `isRetryable`, `isNotFound`                                   |
+| Gender/race values                       | `lib/profileFields.ts`                                                           |
+| Asset/avatar URL                         | `getAssetUrl` / `getAvatarUrl`                                                   |
+| Admin API                                | Named adapter exports, or `* as adminApi from '@/lib/api/admin'` in admin panels |
+| Scroll to content                        | `scrollAppToTop` / `scrollAppToElement`                                          |
+| Motion                                   | Existing spring APIs; [Component motion](../motion.md)                           |
+| General mount entrance                   | `Reveal`, subject to the restrictions below                                      |
 
 Do not use browser confirm/prompt, naked clipboard writes, secure-context-only UUID generation, copied option lists or the retired runtime API aggregate.
 
@@ -131,12 +131,12 @@ Name a section from its visible heading with `aria-labelledby`. When `SectionHea
 
 ## Fields
 
-| Role | Treatment |
-| --- | --- |
-| Named form value | Labelled, outlined, 56 dp |
-| Immediate search/filter input | Unlabelled, filled |
-| Standalone search | Pill, 56 dp |
-| Dense filter | Unlabelled 40 dp; one 32 dp trailing action |
+| Role                          | Treatment                                   |
+| ----------------------------- | ------------------------------------------- |
+| Named form value              | Labelled, outlined, 56 dp                   |
+| Immediate search/filter input | Unlabelled, filled                          |
+| Standalone search             | Pill, 56 dp                                 |
+| Dense filter                  | Unlabelled 40 dp; one 32 dp trailing action |
 
 The shared `.m3-field` shell owns geometry. See [Layout](layout.md#control-heights) and [Surfaces](surfaces.md#shape) for sizes and corners.
 
@@ -243,12 +243,12 @@ Choose the loading primitive strictly by target certainty and event semantics:
   - `DetailImage` and `DetailVideo` suppress the media placeholder while a Hero flight carries the card's preview (`heroActive && hasPreview`) or when a layer is already decoded synchronously in `useLayoutEffect`, and continue on the shared clock seamlessly from `DetailSkeleton`.
 - **Event waiters and progress -> `Spinner` / `ProgressBar`**: use `Spinner` (circular progress ring) for user-triggered or in-flight events — sidebar navigation link clicks (`useLinkStatus().pending`), button/icon-button submits (`loading` prop), captcha verification, local file reading/palette extraction, translation jobs, live search-as-you-type and incremental load-more rows. Use `ProgressBar` for measurable linear progress.
 
-| Enclosure | StatusView preset |
-| --- | --- |
-| Page below a header | `size="page"` |
-| Pane or bounded well | `size="pane"` |
-| Small inline result | `size="inline"`, text by default |
-| Entire missing/failed screen | `fill`, with the page's h1 |
+| Enclosure                    | StatusView preset                |
+| ---------------------------- | -------------------------------- |
+| Page below a header          | `size="page"`                    |
+| Pane or bounded well         | `size="pane"`                    |
+| Small inline result          | `size="inline"`, text by default |
+| Entire missing/failed screen | `fill`, with the page's h1       |
 
 A fill state uses a continuous flex-column chain and no competing half-viewport minimum. A list's empty state does not use fill.
 
@@ -321,15 +321,15 @@ Unknown admin-write outcomes use `CatalogOutcomeUnknown` or `WriteOutcomeUnknown
 
 Run `bun run check` and the affected browser suites:
 
-| Change | Command |
-| --- | --- |
-| Primitive behaviour | `bun run test:primitives` |
-| Single slider | `bun run test:slider` |
-| Statistics chart and date range | `bun run test:stats` |
-| Presence and focus | `bun run test:presence` |
-| Drawer | `bun run test:drawer` |
-| Tab press/cancellation | `bun run test:tab-press` |
-| Dialogs and layers | `bun run test:overlays` |
-| Real screen composition | `bun run test:ui` |
+| Change                          | Command                   |
+| ------------------------------- | ------------------------- |
+| Primitive behaviour             | `bun run test:primitives` |
+| Single slider                   | `bun run test:slider`     |
+| Statistics chart and date range | `bun run test:stats`      |
+| Presence and focus              | `bun run test:presence`   |
+| Drawer                          | `bun run test:drawer`     |
+| Tab press/cancellation          | `bun run test:tab-press`  |
+| Dialogs and layers              | `bun run test:overlays`   |
+| Real screen composition         | `bun run test:ui`         |
 
 Use [CSS verification](../css-traps.md) after class changes. Image-detail changes also follow [Hero verification](../hero.md#verification).

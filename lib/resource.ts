@@ -101,7 +101,10 @@ function enqueue(lane: Lane, job: Job) {
       const oldest = state.background.findIndex((queued) => !queued.keep);
       if (oldest !== -1) state.background.splice(oldest, 1)[0].cancel();
       /* With every queued job a kept refresh, a new guess is the one that goes. */
-      else if (!job.keep) { job.cancel(); return; }
+      else if (!job.keep) {
+        job.cancel();
+        return;
+      }
     }
     state.background.push(job);
   }
@@ -350,7 +353,11 @@ export interface Resource<Args, T> {
    * keeps its age; `fresh` stamps it as just read, for an answer that *is* a complete read made
    * outside the resource (the settings sync's own account read).
    */
-  write: (args: Args, update: T | ((previous: T | undefined) => T), options?: { fresh?: boolean }) => void;
+  write: (
+    args: Args,
+    update: T | ((previous: T | undefined) => T),
+    options?: { fresh?: boolean },
+  ) => void;
   /**
    * Install a server-rendered answer as if it had been fetched at `fetchedAt` — the SSR seam.
    *
@@ -404,7 +411,15 @@ export function expireAllResources() {
  * mark the factory call PURE: importing one catalogue member need not retain every adapter.
  */
 export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Resource<Args, T> {
-  const { name, key: keyOf, fetch: fetcher, ttl = 60_000, maxEntries = 32, publishGate, lane = 'picpony' } = options;
+  const {
+    name,
+    key: keyOf,
+    fetch: fetcher,
+    ttl = 60_000,
+    maxEntries = 32,
+    publishGate,
+    lane = 'picpony',
+  } = options;
   const store = new Map<string, Entry<T>>();
   let registered = false;
 
@@ -471,9 +486,8 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
   }
 
   function clear(refetch: boolean, args?: Args) {
-    const entries = args === undefined
-      ? Array.from(store)
-      : [[keyOf(args), store.get(keyOf(args))] as const];
+    const entries =
+      args === undefined ? Array.from(store) : [[keyOf(args), store.get(keyOf(args))] as const];
     for (const [key, entry] of entries) {
       if (!entry) continue;
       discard(key, entry);
@@ -522,8 +536,12 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       if (store.size <= maxEntries) break;
       /* Never evict a key a mounted component is reading, nor an entry with no answer yet —
          dropping an in-flight one would restart it on the next render. */
-      if (key === preserve || entry.listeners.size > 0 ||
-          (!entry.placeholder && (entry.status === 'queued' || entry.status === 'loading'))) continue;
+      if (
+        key === preserve ||
+        entry.listeners.size > 0 ||
+        (!entry.placeholder && (entry.status === 'queued' || entry.status === 'loading'))
+      )
+        continue;
       discard(key, entry);
     }
   }
@@ -547,7 +565,12 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
       priority,
       promise,
       settle: { resolve, reject },
-      snapshot: Object.freeze({ data: undefined, error: undefined, isLoading: true, isStale: false }),
+      snapshot: Object.freeze({
+        data: undefined,
+        error: undefined,
+        isLoading: true,
+        isStale: false,
+      }),
       listeners: new Set(),
     };
     touch(key, entry);
@@ -601,7 +624,10 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     return entry;
   }
 
-  function read(args: Args, { priority = 'immediate', force = false }: { priority?: Priority; force?: boolean } = {}) {
+  function read(
+    args: Args,
+    { priority = 'immediate', force = false }: { priority?: Priority; force?: boolean } = {},
+  ) {
     const key = keyOf(args);
     const stored = store.get(key);
     /* A placeholder is not an answer and not a request — see `Entry.placeholder`. It is replaced
@@ -611,7 +637,11 @@ export function defineResource<Args, T>(options: ResourceOptions<Args, T>): Reso
     if (existing && !force) {
       /* A guess that turns into a real activation is promoted, not re-sent: if queued it moves to
          the front, if already in flight there is nothing to do but wait. */
-      if (priority === 'immediate' && existing.priority === 'background' && existing.status === 'queued') {
+      if (
+        priority === 'immediate' &&
+        existing.priority === 'background' &&
+        existing.status === 'queued'
+      ) {
         existing.priority = 'immediate';
         /* Dropping the queued job runs its `cancel`, which errors the entry and queues a commit
            for it; the replacement takes over that commit's listeners, so the commit is dropped
@@ -1082,20 +1112,25 @@ export function useResource<Args, T>(
 
   const refetchInterval = options?.refetchInterval;
   useEffect(() => {
-    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined') return;
+    if (key === null || !refetchInterval || refetchInterval <= 0 || typeof document === 'undefined')
+      return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastTick = Date.now();
-    const due = () => document.visibilityState === 'visible' &&
+    const due = () =>
+      document.visibilityState === 'visible' &&
       (typeof navigator === 'undefined' || navigator.onLine !== false);
     const tick = () => {
       lastTick = Date.now();
       resource.expire(args as Args);
     };
     const schedule = () => {
-      timer = setTimeout(() => {
-        if (due()) tick();
-        schedule();
-      }, refetchInterval * (0.9 + Math.random() * 0.2));
+      timer = setTimeout(
+        () => {
+          if (due()) tick();
+          schedule();
+        },
+        refetchInterval * (0.9 + Math.random() * 0.2),
+      );
     };
     /* A hidden tab skips its ticks; coming back after one was missed reads at once rather than
        waiting out a fresh interval — and restarts the interval from that read, or the timer
@@ -1137,13 +1172,19 @@ export function useResource<Args, T>(
     scope: boolean | string;
     data: T | undefined;
   }>(() => ({ resource, scope: retentionScope, data: undefined }));
-  const previous = retained.resource === resource && retained.scope === retentionScope
-    ? retained.data
-    : undefined;
-  const nextRetained = keepPrevious && key !== null
-    ? snapshot.data !== undefined ? snapshot.data : previous
-    : undefined;
-  if (retained.resource !== resource || retained.scope !== retentionScope || retained.data !== nextRetained) {
+  const previous =
+    retained.resource === resource && retained.scope === retentionScope ? retained.data : undefined;
+  const nextRetained =
+    keepPrevious && key !== null
+      ? snapshot.data !== undefined
+        ? snapshot.data
+        : previous
+      : undefined;
+  if (
+    retained.resource !== resource ||
+    retained.scope !== retentionScope ||
+    retained.data !== nextRetained
+  ) {
     // Clearing a scope or disabling the read must also clear its retained answer.
     setRetained({ resource, scope: retentionScope, data: nextRetained });
   }

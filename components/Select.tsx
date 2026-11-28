@@ -87,7 +87,8 @@ export default function Select<T extends string = string>({
   const selected = options.find((o) => o.value === value);
   const selectedIndex = options.findIndex((o) => o.value === value);
   const firstEnabled = options.findIndex((option) => !option.disabled);
-  const cursorIndex = options[activeIndex] && !options[activeIndex].disabled ? activeIndex : firstEnabled;
+  const cursorIndex =
+    options[activeIndex] && !options[activeIndex].disabled ? activeIndex : firstEnabled;
 
   // A route-policy update can disable a setting while its menu is open. Close
   // declaratively after commit; commit() also checks disabled for the tiny gap.
@@ -97,7 +98,9 @@ export default function Select<T extends string = string>({
 
   const openMenu = () => {
     if (disabled) return;
-    setActiveIndex(selectedIndex >= 0 && !options[selectedIndex].disabled ? selectedIndex : firstEnabled);
+    setActiveIndex(
+      selectedIndex >= 0 && !options[selectedIndex].disabled ? selectedIndex : firstEnabled,
+    );
     setOpen(true);
   };
 
@@ -156,9 +159,12 @@ export default function Select<T extends string = string>({
       case 'Home':
       case 'End':
         event.preventDefault();
-        if (open) setActiveIndex(event.key === 'Home'
-          ? firstEnabled
-          : options.findLastIndex((option) => !option.disabled));
+        if (open)
+          setActiveIndex(
+            event.key === 'Home'
+              ? firstEnabled
+              : options.findLastIndex((option) => !option.disabled),
+          );
         break;
       case 'Enter':
       case ' ':

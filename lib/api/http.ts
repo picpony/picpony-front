@@ -78,7 +78,8 @@ async function readBody(res: Response): Promise<string> {
   try {
     return await res.text();
   } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError') throw new ApiError('timeout', { cause: error });
+    if (error instanceof Error && error.name === 'TimeoutError')
+      throw new ApiError('timeout', { cause: error });
     throw error;
   }
 }
@@ -232,8 +233,21 @@ function onApiUnauthorized(path: string, token: string) {
  * rejects it before the handler runs, so nothing happened) refreshes the token and is sent once
  * more. Reads are bounded by `READ_DEADLINE_MS`; writes are not, and are never retried otherwise.
  */
-export async function apiRequest(method: string, path: string, options: ApiOptions = {}): Promise<Response> {
-  const { token, query, json, body, timeoutMs, idempotencyKey, notFoundStatuses: _nf, ...init } = options;
+export async function apiRequest(
+  method: string,
+  path: string,
+  options: ApiOptions = {},
+): Promise<Response> {
+  const {
+    token,
+    query,
+    json,
+    body,
+    timeoutMs,
+    idempotencyKey,
+    notFoundStatuses: _nf,
+    ...init
+  } = options;
   void _nf;
   const verb = method.toUpperCase();
   const write = verb !== 'GET' && verb !== 'HEAD';
@@ -262,7 +276,12 @@ export async function apiRequest(method: string, path: string, options: ApiOptio
   };
   let response = await send(token ? storedCsrf(token) : null);
   if (write && token && response.status === 403) {
-    const { code } = apiErrorBody(await response.clone().json().catch(() => null));
+    const { code } = apiErrorBody(
+      await response
+        .clone()
+        .json()
+        .catch(() => null),
+    );
     if (code === 'CSRF_MISMATCH') {
       const fresh = await refreshCsrf(token);
       if (fresh) response = await send(fresh);
@@ -276,7 +295,10 @@ export async function apiRequest(method: string, path: string, options: ApiOptio
  * Decode a new-backend answer. 2xx → the JSON body (`undefined` for 204 / an empty body);
  * anything else → `ApiError` carrying the backend's `error.code` and `error.message`.
  */
-export async function readApi<T>(res: Response, options: { notFoundStatuses?: readonly number[] } = {}): Promise<T> {
+export async function readApi<T>(
+  res: Response,
+  options: { notFoundStatuses?: readonly number[] } = {},
+): Promise<T> {
   const text = await readBody(res);
   let data: unknown = undefined;
   if (text) {
@@ -300,7 +322,9 @@ export async function readApi<T>(res: Response, options: { notFoundStatuses?: re
 
 /** `apiRequest` + `readApi`. */
 export async function api<T>(method: string, path: string, options: ApiOptions = {}): Promise<T> {
-  return readApi<T>(await apiRequest(method, path, options), { notFoundStatuses: options.notFoundStatuses });
+  return readApi<T>(await apiRequest(method, path, options), {
+    notFoundStatuses: options.notFoundStatuses,
+  });
 }
 
 /** A path segment, encoded. */

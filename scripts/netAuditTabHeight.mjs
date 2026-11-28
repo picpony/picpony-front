@@ -51,7 +51,10 @@ const profileDir = mkdtempSync(path.join(tmpdir(), 'picpony-tabh-'));
 const upstream = createHttpServer((req, res) => {
   const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`, req.method);
   if (!stub) return res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(upstreamPort, '127.0.0.1', r));
@@ -404,19 +407,27 @@ const wholePane = async (label) => {
       bad = true;
     }
     if (r.behindCount > 0) {
-      console.error(`\nFAIL: ${r.behindCount} element(s) of the ${r.pane} pane were left behind while it moved: ${r.behind.join(' | ')}`);
+      console.error(
+        `\nFAIL: ${r.behindCount} element(s) of the ${r.pane} pane were left behind while it moved: ${r.behind.join(' | ')}`,
+      );
       bad = true;
     }
     if (r.unmovedCount > 0) {
-      console.error(`\nFAIL: ${r.unmovedCount} element(s) of the ${r.pane} pane hardly moved: ${r.unmoved.join(' | ')}`);
+      console.error(
+        `\nFAIL: ${r.unmovedCount} element(s) of the ${r.pane} pane hardly moved: ${r.unmoved.join(' | ')}`,
+      );
       bad = true;
     }
     if (result.leans && r.lean < 0.03) {
-      console.error(`\nFAIL: the ${r.pane} pane left without a lean (${(r.lean * 100).toFixed(1)}% of the window, 3% wanted)`);
+      console.error(
+        `\nFAIL: the ${r.pane} pane left without a lean (${(r.lean * 100).toFixed(1)}% of the window, 3% wanted)`,
+      );
       bad = true;
     }
     if (result.leans && !(r.stagger >= 4)) {
-      console.error(`\nFAIL: the ${r.pane} pane's lower third did not leave after its upper third (${r.stagger ?? '?'}ms, 4 wanted)`);
+      console.error(
+        `\nFAIL: the ${r.pane} pane's lower third did not leave after its upper third (${r.stagger ?? '?'}ms, 4 wanted)`,
+      );
       bad = true;
     }
   }
@@ -468,8 +479,16 @@ const viewHolds = async (label) => {
   console.log(
     `view row, tap ${label}: scrollTop ${r?.before} -> ${r?.after} (range ${r?.min}..${r?.max} over ${r?.frames} frames), floor ${r?.floor}${r?.error ? ` (${r.error})` : ''}`,
   );
-  if (!r || r.error || Math.abs(r.max - r.before) > 1 || Math.abs(r.min - r.before) > 1 || Math.abs(r.after - r.before) > 1) {
-    console.error(`\nFAIL: the 全部 / 本站讨论 switch moved the page under the reader (${JSON.stringify(r)})`);
+  if (
+    !r ||
+    r.error ||
+    Math.abs(r.max - r.before) > 1 ||
+    Math.abs(r.min - r.before) > 1 ||
+    Math.abs(r.after - r.before) > 1
+  ) {
+    console.error(
+      `\nFAIL: the 全部 / 本站讨论 switch moved the page under the reader (${JSON.stringify(r)})`,
+    );
     return true;
   }
   return false;
@@ -525,7 +544,9 @@ const forum = after.panes.find((p) => p.name === 'forum');
 const gallery = after.panes.find((p) => p.name === 'gallery');
 let failed = paneFailed;
 if (gallery && !gallery.concealed) {
-  console.error(`\nFAIL: the gallery pane is still shown (display ${gallery.display}) after the switch`);
+  console.error(
+    `\nFAIL: the gallery pane is still shown (display ${gallery.display}) after the switch`,
+  );
   failed = true;
 }
 if (forum && Math.abs(after.panelH - forum.h) > 2) {
@@ -554,5 +575,9 @@ if (after.panelInline !== '-') {
   console.error(`\nFAIL: a residual inline height (${after.panelInline}) is pinning the panel`);
   failed = true;
 }
-console.log(failed ? '' : '\nthe whole pane moves, the view row holds the offset, and the panel measures the visible pane');
+console.log(
+  failed
+    ? ''
+    : '\nthe whole pane moves, the view row holds the offset, and the panel measures the visible pane',
+);
 process.exit(failed ? 1 : 0);

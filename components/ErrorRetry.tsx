@@ -69,9 +69,7 @@ export default function ErrorRetry({
             variant="filled"
             className="group/retry"
             icon={
-              <MdRefresh
-                className="transition-[rotate] spring-fast-spatial group-hover/retry:rotate-180 no-motion:group-hover/retry:rotate-0"
-              />
+              <MdRefresh className="transition-[rotate] spring-fast-spatial group-hover/retry:rotate-180 no-motion:group-hover/retry:rotate-0" />
             }
           >
             {retryLabel}

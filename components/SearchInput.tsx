@@ -6,8 +6,10 @@ import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
 import { ICON } from '@/lib/icons';
 
-interface SearchInputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'size' | 'type' | 'className'> {
+interface SearchInputProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'size' | 'type' | 'className'
+> {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -41,7 +43,15 @@ interface SearchInputProps
  * a combobox (`useCombobox`'s `inputProps`, a keyboard handler) can be this field too.
  */
 const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  { value, onChange, placeholder = '搜索…', className = '', variant = 'filter', 'aria-label': ariaLabel, ...rest },
+  {
+    value,
+    onChange,
+    placeholder = '搜索…',
+    className = '',
+    variant = 'filter',
+    'aria-label': ariaLabel,
+    ...rest
+  },
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement | null>(null);

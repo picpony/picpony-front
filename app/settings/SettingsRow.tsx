@@ -27,8 +27,10 @@ import { cn } from '@/lib/utils';
  * **No leading glyphs.** Six rows carried one and the rest did not; the section headings carry
  * the section's glyph, and a row's leading slot is for media only (the avatar, the banner).
  */
-export const ROW_CLASS = 'm3-row @container/row flex min-h-18 items-center gap-4 bg-surface-container-low p-4';
-export const ROW_STACK_CLASS = 'm3-row @container/row flex min-h-18 flex-col items-stretch gap-4 bg-surface-container-low p-4';
+export const ROW_CLASS =
+  'm3-row @container/row flex min-h-18 items-center gap-4 bg-surface-container-low p-4';
+export const ROW_STACK_CLASS =
+  'm3-row @container/row flex min-h-18 flex-col items-stretch gap-4 bg-surface-container-low p-4';
 
 const ACTION_WRAP = {
   sm: { row: '@max-sm/row:flex-wrap', action: '@max-sm/row:basis-full @max-sm/row:justify-end' },
@@ -78,14 +80,26 @@ export function SettingsRow({
     <>
       {leading}
       <div className="min-w-0 flex-1">
-        <p id={labelId} className="text-label-l text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p
+          id={labelId}
+          className="text-label-l text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1"
+        >
           <span className="min-w-0 wrap-anywhere">{label}</span>
           {badge}
         </p>
-        {supporting && <div className="text-body-s text-on-surface-variant mt-0.5 wrap-anywhere">{supporting}</div>}
+        {supporting && (
+          <div className="text-body-s text-on-surface-variant mt-0.5 wrap-anywhere">
+            {supporting}
+          </div>
+        )}
       </div>
       {action && (
-        <div className={cn('flex max-w-full shrink-0 flex-wrap items-center gap-2', wrapClasses?.action)}>
+        <div
+          className={cn(
+            'flex max-w-full shrink-0 flex-wrap items-center gap-2',
+            wrapClasses?.action,
+          )}
+        >
           {action}
         </div>
       )}
@@ -98,16 +112,23 @@ export function SettingsRow({
         aria-hidden={ariaHidden || undefined}
       >
         {/* Wrap classes query `@container/row`, so they must sit on a descendant rather than the container itself. */}
-        <div className={cn('flex min-w-0 flex-1 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
+        <div className={cn('flex min-w-0 flex-1 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>
+          {head}
+        </div>
       </div>
     );
   }
   return (
     <div
-      className={cn('m3-row @container/row flex min-h-18 flex-col items-stretch gap-4 p-4', surfaceBg)}
+      className={cn(
+        'm3-row @container/row flex min-h-18 flex-col items-stretch gap-4 p-4',
+        surfaceBg,
+      )}
       aria-hidden={ariaHidden || undefined}
     >
-      <div className={cn('flex min-w-0 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>{head}</div>
+      <div className={cn('flex min-w-0 items-center gap-x-4 gap-y-3', wrapClasses?.row)}>
+        {head}
+      </div>
       {children}
     </div>
   );
@@ -178,9 +199,14 @@ export const RowButton = forwardRef<
     disabled?: boolean;
     collapse?: boolean;
   }
->(function RowButton({ label, children, icon, onClick, variant = 'tonal', loading, disabled, collapse = true }, ref) {
+>(function RowButton(
+  { label, children, icon, onClick, variant = 'tonal', loading, disabled, collapse = true },
+  ref,
+) {
   const wide = useMediaQuery(MEDIA.sm, true);
-  const { anchorRef, anchorProps, tooltip } = useTooltip(collapse && !wide && !disabled ? label : undefined);
+  const { anchorRef, anchorProps, tooltip } = useTooltip(
+    collapse && !wide && !disabled ? label : undefined,
+  );
   return (
     <>
       <Button

@@ -77,8 +77,11 @@ function runScroll(scroller: HTMLElement, to: number, jump: boolean) {
     const target = event.target;
     /* Editing keys and a range's arrow keys belong to their control, not to
        scrolling. A keyboard page-scroll outside a field takes over as usual. */
-    if (target instanceof HTMLElement &&
-      (target.isContentEditable || target.closest('input, textarea, select, [role="slider"]'))) return;
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.closest('input, textarea, select, [role="slider"]'))
+    )
+      return;
     stop();
   };
   running.set(scroller, stop);

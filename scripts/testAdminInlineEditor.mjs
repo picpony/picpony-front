@@ -16,26 +16,53 @@ import { transformSync } from '@babel/core';
 import compiler from 'babel-plugin-react-compiler';
 import ts from 'typescript';
 
-const source = readFileSync(path.resolve(import.meta.dirname, '../components/InlineEditorPanel.tsx'), 'utf8');
+const source = readFileSync(
+  path.resolve(import.meta.dirname, '../components/InlineEditorPanel.tsx'),
+  'utf8',
+);
 
 /** Keyframes built inside the vm context carry its realm's prototypes; compare their data. */
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-const compiled = ts.transpileModule(transformSync(source, {
-  filename: 'InlineEditorPanel.tsx', configFile: false, babelrc: false,
-  parserOpts: { plugins: ['typescript', 'jsx'] }, plugins: [[compiler, { target: '19' }]],
-}).code, {
-  compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
+const compiled = ts.transpileModule(
+  transformSync(source, {
+    filename: 'InlineEditorPanel.tsx',
+    configFile: false,
+    babelrc: false,
+    parserOpts: { plugins: ['typescript', 'jsx'] },
+    plugins: [[compiler, { target: '19' }]],
+  }).code,
+  {
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  },
+).outputText;
 
 /** A Web Animation as far as the panel reads one: its keyframes, its timing, cancel and finish. */
 function fakeAnimation(el, keyframes, timing, log) {
   let resolve;
-  const finished = new Promise((done) => { resolve = done; });
+  const finished = new Promise((done) => {
+    resolve = done;
+  });
   const animation = {
-    el, keyframes, timing, finished, cancelled: false, playState: 'running',
-    cancel() { animation.cancelled = true; animation.playState = 'idle'; log.push(['cancel', el.name]); },
-    finish() { animation.playState = 'finished'; resolve(animation); },
+    el,
+    keyframes,
+    timing,
+    finished,
+    cancelled: false,
+    playState: 'running',
+    cancel() {
+      animation.cancelled = true;
+      animation.playState = 'idle';
+      log.push(['cancel', el.name]);
+    },
+    finish() {
+      animation.playState = 'finished';
+      resolve(animation);
+    },
   };
   return animation;
 }
@@ -55,7 +82,9 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
       if (clampTo !== null && panelCollapsed() && this.top > clampTo) this.top = clampTo;
       return this.top;
     },
-    set scrollTop(value) { this.top = value; },
+    set scrollTop(value) {
+      this.top = value;
+    },
     getBoundingClientRect: () => ({ top: 100, bottom: 900 }),
   };
   class Element {
@@ -72,15 +101,20 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
       this.classes = [];
       this.classList = { contains: (name) => this.classes.includes(name) };
     }
-    get offsetHeight() { return this.height; }
+    get offsetHeight() {
+      return this.height;
+    }
     getBoundingClientRect() {
       /* A follower moves up by the panel's footprint while the panel is collapsed for a read — or
          by less, when the free space of a short page holds it (`pinned`). */
-      const collapsed = this !== panel && panelCollapsed() && this.follows ? -(this.pinned ?? 589) : 0;
+      const collapsed =
+        this !== panel && panelCollapsed() && this.follows ? -(this.pinned ?? 589) : 0;
       const top = this.top - scroller.scrollTop + (this.drawnY ?? 0) + collapsed;
       return { top, bottom: top + this.height, height: this.height };
     }
-    contains(other) { return other === this || this.children.includes(other); }
+    contains(other) {
+      return other === this || this.children.includes(other);
+    }
     animate(keyframes, timing) {
       const animation = fakeAnimation(this, keyframes, timing, log);
       this.animations.push(animation);
@@ -90,31 +124,57 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
   const motion = { started: [], dropped: [], owned: [], list: [], above: [] };
   Object.defineProperty(motion, 'followers', {
     get: () => motion.list,
-    set: (list) => { motion.list = list; for (const el of list) el.follows = true; },
+    set: (list) => {
+      motion.list = list;
+      for (const el of list) el.follows = true;
+    },
   });
   const effects = [];
   const jsx = (type, props) => ({ type, props });
   const dependencies = {
-    react: { useEffect: () => {}, useLayoutEffect: (effect) => effects.push(effect), useRef: (current) => ({ current }) },
+    react: {
+      useEffect: () => {},
+      useLayoutEffect: (effect) => effects.push(effect),
+      useRef: (current) => ({ current }),
+    },
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    'react/compiler-runtime': { c: (size) => Array(size).fill(Symbol.for('react.memo_cache_sentinel')) },
-    'react-dom': { flushSync: (fn) => { log.push(['flushSync']); fn(); } },
+    'react/compiler-runtime': {
+      c: (size) => Array(size).fill(Symbol.for('react.memo_cache_sentinel')),
+    },
+    'react-dom': {
+      flushSync: (fn) => {
+        log.push(['flushSync']);
+        fn();
+      },
+    },
     '@/lib/appearance': { motionTier: () => tier, scaledMs: (ms) => ms },
     '@/lib/appScroller': { getAppScroller: () => scroller },
-    '@/lib/scrollTo': { scrollAppToElement: () => assert.fail('a visible editor must not start a second scroll') },
-    '@/lib/springTiming': { springTiming: (name) => ({ duration: name === 'fastEffects' ? 108 : 194, easing: `linear(${name})` }) },
+    '@/lib/scrollTo': {
+      scrollAppToElement: () => assert.fail('a visible editor must not start a second scroll'),
+    },
+    '@/lib/springTiming': {
+      springTiming: (name) => ({
+        duration: name === 'fastEffects' ? 108 : 194,
+        easing: `linear(${name})`,
+      }),
+    },
     '@/lib/motionTokens': { TRAVEL_PX: { standard: 16, small: 8 } },
     '@/components/admin/tableMotion': {
       followersOf: () => motion.followers,
       precedersOf: () => motion.above,
       drawnOffsetY: (el) => el.drawnY ?? 0,
-      markLayoutOwned: (el) => { motion.owned.push(el); },
+      markLayoutOwned: (el) => {
+        motion.owned.push(el);
+      },
       startMove: (el, keyframes, timing) => {
         const animation = fakeAnimation(el, keyframes, timing, log);
         motion.started.push(animation);
         return animation;
       },
-      dropMove: (el, animation) => { motion.dropped.push([el, animation]); log.push(['drop', el.name]); },
+      dropMove: (el, animation) => {
+        motion.dropped.push([el, animation]);
+        log.push(['drop', el.name]);
+      },
     },
   };
   const exports = {};
@@ -127,9 +187,17 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
     CSS: { escape: (value) => value },
     getComputedStyle: (el) => el.computed,
     queueMicrotask,
-    setTimeout: (fn) => { timers.push(fn); return timers.length; },
-    clearTimeout: (id) => { timers[id - 1] = null; },
-    require: (id) => { assert.ok(id in dependencies, `unmocked dependency: ${id}`); return dependencies[id]; },
+    setTimeout: (fn) => {
+      timers.push(fn);
+      return timers.length;
+    },
+    clearTimeout: (id) => {
+      timers[id - 1] = null;
+    },
+    require: (id) => {
+      assert.ok(id in dependencies, `unmocked dependency: ${id}`);
+      return dependencies[id];
+    },
   });
 
   let panel = null;
@@ -144,7 +212,14 @@ function harness({ tier = 'standard', clampTo = null } = {}) {
   /** One render and its commit: the refs attached, then the layout effect run (its cleanup returned). */
   const render = (props) => {
     effects.length = 0;
-    const tree = exports.default({ id: panel.id, label: '编辑用户3', isClosing: false, onExitComplete() {}, children: null, ...props });
+    const tree = exports.default({
+      id: panel.id,
+      label: '编辑用户3',
+      isClosing: false,
+      onExitComplete() {},
+      children: null,
+      ...props,
+    });
     tree.props.ref.current = panel;
     tree.props.children.props.ref.current = surface;
     return { tree, commit: () => effects.map((effect) => effect()).find(Boolean) };
@@ -177,13 +252,21 @@ function switchEditor({ replaceRow = false, matchingId = true } = {}) {
 
 test('the component compiles whole: no opt-out, and the compiler kept it', () => {
   assert.doesNotMatch(source, /'use no memo'/, 'the WAAPI version needs no compiler opt-out');
-  assert.match(compiled, /react\/compiler-runtime/, 'the React Compiler bailed out of InlineEditorPanel');
+  assert.match(
+    compiled,
+    /react\/compiler-runtime/,
+    'the React Compiler bailed out of InlineEditorPanel',
+  );
 });
 
 test('R9-038 commit holds the pressed row before paint, including a React replacement node', () => {
   assert.equal(switchEditor(), 450);
   assert.equal(switchEditor({ replaceRow: true }), 450);
-  assert.equal(switchEditor({ replaceRow: true, matchingId: false }), -139, 'a refused earlier open cannot scroll a different editor');
+  assert.equal(
+    switchEditor({ replaceRow: true, matchingId: false }),
+    -139,
+    'a refused earlier open cannot scroll a different editor',
+  );
 });
 
 test('M1-032 opening: a two-box translate clip, the content behind it, what follows on its spring', () => {
@@ -196,16 +279,31 @@ test('M1-032 opening: a two-box translate clip, the content behind it, what foll
   assert.deepEqual(plain(clip.keyframes), [{ translate: '0 -587px' }, { translate: 'none' }]);
   assert.equal(clip.timing.easing, 'linear(layout)');
   const [counter] = h.surface.animations;
-  assert.deepEqual(plain(counter.keyframes), [{ translate: '0 587px' }, { translate: 'none' }], 'the surface stands still while the clip grows over it');
+  assert.deepEqual(
+    plain(counter.keyframes),
+    [{ translate: '0 587px' }, { translate: 'none' }],
+    'the surface stands still while the clip grows over it',
+  );
   const [rise, fadeIn] = h.content.animations;
   assert.equal(rise.timing.delay, 40, 'the content arrives behind the panel');
   assert.equal(rise.timing.fill, 'backwards');
   assert.deepEqual(plain(fadeIn.keyframes), [{ opacity: 0 }, { opacity: 1 }]);
-  assert.equal(fadeIn.timing.easing, 'linear(defaultEffects)', 'opacity on the effects twin, which cannot overshoot');
+  assert.equal(
+    fadeIn.timing.easing,
+    'linear(defaultEffects)',
+    'opacity on the effects twin, which cannot overshoot',
+  );
   /* An open nothing pressed derives the push: everything after moved down by the footprint. */
   assert.equal(h.motion.started.length, 1);
-  assert.deepEqual(plain(h.motion.started[0].keyframes), [{ transform: 'translateY(-589px)' }, { transform: 'none' }]);
-  assert.equal(h.motion.started[0].timing.easing, 'linear(layout)', 'what follows moves on the clip\'s own spring');
+  assert.deepEqual(plain(h.motion.started[0].keyframes), [
+    { transform: 'translateY(-589px)' },
+    { transform: 'none' },
+  ]);
+  assert.equal(
+    h.motion.started[0].timing.easing,
+    'linear(layout)',
+    "what follows moves on the clip's own spring",
+  );
 });
 
 test('M1-032 a follower the press saw higher glides from there, counted against its layout box', () => {
@@ -221,7 +319,10 @@ test('M1-032 a follower the press saw higher glides from there, counted against 
   next.drawnY = 40;
   h.render({}).commit();
   assert.equal(h.motion.started.length, 1);
-  assert.deepEqual(plain(h.motion.started[0].keyframes), [{ transform: 'translateY(-589px)' }, { transform: 'none' }]);
+  assert.deepEqual(plain(h.motion.started[0].keyframes), [
+    { transform: 'translateY(-589px)' },
+    { transform: 'none' },
+  ]);
 });
 
 test('M1-030 a StrictMode remount adopts the running opening instead of landing it', () => {
@@ -236,8 +337,16 @@ test('M1-030 a StrictMode remount adopts the running opening instead of landing 
   const again = h.render({}).commit;
   again();
   h.runTimers();
-  assert.equal(h.log.filter(([kind]) => kind === 'cancel' || kind === 'drop').length, 0, 'nothing was landed or cancelled');
-  assert.equal(h.panel.animations.length + h.log.length, created, 'the second mount started nothing');
+  assert.equal(
+    h.log.filter(([kind]) => kind === 'cancel' || kind === 'drop').length,
+    0,
+    'nothing was landed or cancelled',
+  );
+  assert.equal(
+    h.panel.animations.length + h.log.length,
+    created,
+    'the second mount started nothing',
+  );
   assert.equal(h.motion.started.length, 1, 'the reflow is still running');
 
   /* A real unmount lands everything, its own moves only. */
@@ -245,7 +354,10 @@ test('M1-030 a StrictMode remount adopts the running opening instead of landing 
   last();
   h.runTimers();
   assert.ok(h.panel.animations.every((animation) => animation.cancelled));
-  assert.deepEqual(h.motion.dropped.map(([el, animation]) => [el.name, animation]), [['next', h.motion.started[0]]]);
+  assert.deepEqual(
+    h.motion.dropped.map(([el, animation]) => [el.name, animation]),
+    [['next', h.motion.started[0]]],
+  );
 });
 
 test('M1-032 closing: from the drawn pose, on the layout spring held to the end; moves land before the panel goes', async () => {
@@ -257,8 +369,11 @@ test('M1-032 closing: from the drawn pose, on the layout spring held to the end;
   h.motion.followers = [next, footer];
   const cleanup = h.render({}).commit();
   const opening = h.motion.started[0];
-  assert.deepEqual(plain(h.motion.started[1].keyframes), [{ transform: 'translateY(-137px)' }, { transform: 'none' }],
-    'an open nothing pressed starts each follower where the layout without the panel had it');
+  assert.deepEqual(
+    plain(h.motion.started[1].keyframes),
+    [{ transform: 'translateY(-137px)' }, { transform: 'none' }],
+    'an open nothing pressed starts each follower where the layout without the panel had it',
+  );
 
   /* Half-way through the opening, the user closes it. */
   h.panel.computed = { ...h.panel.computed, translate: '0px -200px' };
@@ -266,23 +381,45 @@ test('M1-032 closing: from the drawn pose, on the layout spring held to the end;
   h.content.computed = { ...h.content.computed, translate: '0px -3px', opacity: '0.4' };
   next.drawnY = -200;
   let exited = false;
-  const { commit } = h.render({ isClosing: true, onExitComplete: () => { exited = true; h.log.push(['exit']); } });
+  const { commit } = h.render({
+    isClosing: true,
+    onExitComplete: () => {
+      exited = true;
+      h.log.push(['exit']);
+    },
+  });
   cleanup();
   commit();
 
   const clip = h.panel.animations.at(-1);
-  assert.deepEqual(plain(clip.keyframes), [{ translate: '0px -200px', opacity: '1' }, { translate: '0 -587px', opacity: 1 }]);
+  assert.deepEqual(plain(clip.keyframes), [
+    { translate: '0px -200px', opacity: '1' },
+    { translate: '0 -587px', opacity: 1 },
+  ]);
   assert.equal(clip.timing.fill, 'forwards');
   assert.equal(clip.timing.easing, 'linear(layout)');
-  assert.deepEqual(plain(h.content.animations.at(-1).keyframes), [{ opacity: '0.4' }, { opacity: 0 }], 'the content leaves from where it is');
+  assert.deepEqual(
+    plain(h.content.animations.at(-1).keyframes),
+    [{ opacity: '0.4' }, { opacity: 0 }],
+    'the content leaves from where it is',
+  );
   assert.equal(h.content.animations.at(-2).timing.delay, undefined, 'a reversal has no lag');
-  assert.ok(h.panel.animations.slice(0, -1).every((animation) => animation.cancelled), 'the opening was cancelled once read');
+  assert.ok(
+    h.panel.animations.slice(0, -1).every((animation) => animation.cancelled),
+    'the opening was cancelled once read',
+  );
   const closing = h.motion.started.at(-2);
-  assert.deepEqual(plain(closing.keyframes), [{ transform: 'translateY(-200px)' }, { transform: 'translateY(-589px)' }]);
+  assert.deepEqual(plain(closing.keyframes), [
+    { transform: 'translateY(-200px)' },
+    { transform: 'translateY(-589px)' },
+  ]);
   assert.equal(closing.timing.fill, 'forwards');
   assert.notEqual(closing, opening);
-  assert.deepEqual(plain(h.motion.started.at(-1).keyframes), [{ transform: 'translateY(0px)' }, { transform: 'translateY(-137px)' }],
-    'a follower the free space holds goes only as far as the layout will put it');
+  assert.deepEqual(
+    plain(h.motion.started.at(-1).keyframes),
+    [{ transform: 'translateY(0px)' }, { transform: 'translateY(-137px)' }],
+    'a follower the free space holds goes only as far as the layout will put it',
+  );
   assert.ok(!h.panel.style.height, 'the collapse for the read is undone');
 
   clip.finish();
@@ -290,7 +427,11 @@ test('M1-032 closing: from the drawn pose, on the layout spring held to the end;
   await Promise.resolve();
   assert.ok(exited);
   const order = h.log.map(([kind]) => kind).filter((kind) => kind !== 'cancel');
-  assert.deepEqual(order.slice(-4), ['drop', 'drop', 'flushSync', 'exit'], 'the moves land in the task that removes the panel');
+  assert.deepEqual(
+    order.slice(-4),
+    ['drop', 'drop', 'flushSync', 'exit'],
+    'the moves land in the task that removes the panel',
+  );
 });
 
 test('a close turned back re-opens every part from its pose on the opening spring', () => {
@@ -308,10 +449,16 @@ test('a close turned back re-opens every part from its pose on the opening sprin
   closed();
   reopening.commit();
   const clip = h.panel.animations.at(-1);
-  assert.deepEqual(plain(clip.keyframes), [{ translate: '0px -300px', opacity: '1' }, { translate: 'none', opacity: 1 }]);
+  assert.deepEqual(plain(clip.keyframes), [
+    { translate: '0px -300px', opacity: '1' },
+    { translate: 'none', opacity: 1 },
+  ]);
   assert.equal(clip.timing.easing, 'linear(layout)');
   assert.equal(clip.timing.fill, undefined);
-  assert.deepEqual(plain(h.motion.started.at(-1).keyframes), [{ transform: 'translateY(-300px)' }, { transform: 'none' }]);
+  assert.deepEqual(plain(h.motion.started.at(-1).keyframes), [
+    { transform: 'translateY(-300px)' },
+    { transform: 'none' },
+  ]);
 });
 
 test('减弱 fades the panel and moves nothing; 关闭 runs nothing and removes the panel in a microtask', async () => {
@@ -321,13 +468,23 @@ test('减弱 fades the panel and moves nothing; 关闭 runs nothing and removes 
   reduced.render({}).commit();
   assert.equal(reduced.panel.animations.length, 1);
   assert.deepEqual(plain(reduced.panel.animations[0].keyframes), [{ opacity: 0 }, { opacity: 1 }]);
-  assert.equal(reduced.surface.animations.length + reduced.content.animations.length + reduced.motion.started.length, 0);
+  assert.equal(
+    reduced.surface.animations.length +
+      reduced.content.animations.length +
+      reduced.motion.started.length,
+    0,
+  );
 
   const off = harness({ tier: 'off' });
   off.panel.previousElementSibling = new off.Element('row', 1881);
   const cleanup = off.render({}).commit();
   let exited = false;
-  const closing = off.render({ isClosing: true, onExitComplete: () => { exited = true; } });
+  const closing = off.render({
+    isClosing: true,
+    onExitComplete: () => {
+      exited = true;
+    },
+  });
   cleanup();
   closing.commit();
   assert.equal(exited, false, 'not inside the commit');
@@ -349,13 +506,27 @@ test('a close at the end of the page carries what precedes the panel down by the
   closing.commit();
   assert.equal(h.scroller.scrollTop, 2000, 'the read put back the offset it clamped');
   const clip = h.panel.animations.at(-1);
-  assert.deepEqual(plain(clip.keyframes).map((frame) => frame.translate), ['none', '0 -287px'], 'the clip closes onto the row above as that row comes down');
-  const moves = Object.fromEntries(h.motion.started.slice(-2).map((animation) => [animation.el.name, plain(animation.keyframes)]));
-  assert.deepEqual(moves.next, [{ transform: 'translateY(0px)' }, { transform: 'translateY(-289px)' }], 'the row after it rises by the footprint less the shift');
-  assert.deepEqual(moves['row-above'], [{ transform: 'translateY(0px)' }, { transform: 'translateY(300px)' }], 'the row above comes down by the shift');
+  assert.deepEqual(
+    plain(clip.keyframes).map((frame) => frame.translate),
+    ['none', '0 -287px'],
+    'the clip closes onto the row above as that row comes down',
+  );
+  const moves = Object.fromEntries(
+    h.motion.started.slice(-2).map((animation) => [animation.el.name, plain(animation.keyframes)]),
+  );
+  assert.deepEqual(
+    moves.next,
+    [{ transform: 'translateY(0px)' }, { transform: 'translateY(-289px)' }],
+    'the row after it rises by the footprint less the shift',
+  );
+  assert.deepEqual(
+    moves['row-above'],
+    [{ transform: 'translateY(0px)' }, { transform: 'translateY(300px)' }],
+    'the row above comes down by the shift',
+  );
 });
 
-test('under the last row, the row\'s bottom corners move with the panel instead of snapping in its commits', async () => {
+test("under the last row, the row's bottom corners move with the panel instead of snapping in its commits", async () => {
   const h = harness();
   const row = new h.Element('row', 1881);
   row.classes = ['m3-row'];
@@ -365,32 +536,55 @@ test('under the last row, the row\'s bottom corners move with the panel instead 
   h.panel.previousElementSibling = row;
   const cleanup = h.render({}).commit();
   const squaring = row.animations.at(-1);
-  assert.deepEqual(plain(squaring.keyframes), [
-    { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
-    { borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px' },
-  ], 'the corners leave the run\'s end as the panel starts to grow under them');
-  assert.equal(squaring.timing.easing, 'linear(layout)', 'on the clip\'s own spring');
+  assert.deepEqual(
+    plain(squaring.keyframes),
+    [
+      { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
+      { borderBottomLeftRadius: '4px', borderBottomRightRadius: '4px' },
+    ],
+    "the corners leave the run's end as the panel starts to grow under them",
+  );
+  assert.equal(squaring.timing.easing, 'linear(layout)', "on the clip's own spring");
 
   /* Closed half-way: the corners leave from where they are drawn, on the close's clock, held to the end. */
   row.computed = { ...row.computed, borderBottomLeftRadius: '9px' };
   let exited = false;
-  const { commit } = h.render({ isClosing: true, onExitComplete: () => { exited = true; h.log.push(['exit']); } });
+  const { commit } = h.render({
+    isClosing: true,
+    onExitComplete: () => {
+      exited = true;
+      h.log.push(['exit']);
+    },
+  });
   cleanup();
   commit();
-  assert.ok(squaring.cancelled, 'the opening\'s track was read, then let go');
+  assert.ok(squaring.cancelled, "the opening's track was read, then let go");
   const rounding = row.animations.at(-1);
   assert.deepEqual(plain(rounding.keyframes), [
     { borderBottomLeftRadius: '9px', borderBottomRightRadius: '9px' },
     { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' },
   ]);
   assert.equal(rounding.timing.easing, 'linear(layout)');
-  assert.equal(rounding.timing.fill, 'forwards', 'held at the run\'s end until the removal gives the row those corners');
+  assert.equal(
+    rounding.timing.fill,
+    'forwards',
+    "held at the run's end until the removal gives the row those corners",
+  );
   h.panel.animations.at(-1).finish();
   await h.panel.animations.at(-1).finished;
   await Promise.resolve();
   assert.ok(exited && rounding.cancelled);
-  const tail = h.log.filter(([kind, name]) => kind === 'flushSync' || kind === 'exit' || (kind === 'cancel' && name === 'row')).map(([kind]) => kind);
-  assert.deepEqual(tail.slice(-3), ['flushSync', 'exit', 'cancel'], 'let go only after the panel is gone, so no frame shows the seam');
+  const tail = h.log
+    .filter(
+      ([kind, name]) =>
+        kind === 'flushSync' || kind === 'exit' || (kind === 'cancel' && name === 'row'),
+    )
+    .map(([kind]) => kind);
+  assert.deepEqual(
+    tail.slice(-3),
+    ['flushSync', 'exit', 'cancel'],
+    'let go only after the panel is gone, so no frame shows the seam',
+  );
 
   /* Under a middle row nothing changes corners, so nothing runs on the row. */
   const m = harness();
@@ -410,7 +604,8 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
   modalScroller.getBoundingClientRect = () => ({ top: 120, bottom: 680, height: 560 });
   const row = new h.Element('row', 2450);
   row.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
-  h.panel.closest = (selector) => (selector === '[data-app-scroll-container]' ? modalScroller : null);
+  h.panel.closest = (selector) =>
+    selector === '[data-app-scroll-container]' ? modalScroller : null;
   h.panel.previousElementSibling = row;
   h.exports.captureInlineEditorLayout({
     closest: (selector) => (selector === '.m3-row' ? row : null),
@@ -418,9 +613,17 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
   });
   row.top = 2000;
   const cleanup = h.render({}).commit();
-  assert.equal(modalScroller.scrollTop, 300 - 450, 'the modal scroll body absorbs the row shift instead of the background page');
+  assert.equal(
+    modalScroller.scrollTop,
+    300 - 450,
+    'the modal scroll body absorbs the row shift instead of the background page',
+  );
   assert.equal(h.scroller.scrollTop, 2000, 'the page scroller behind the modal is untouched');
-  assert.equal(h.motion.owned.length, 1, 'opening signals layout ownership to an enclosing FollowHeight');
+  assert.equal(
+    h.motion.owned.length,
+    1,
+    'opening signals layout ownership to an enclosing FollowHeight',
+  );
 
   const { commit } = h.render({ isClosing: true, onExitComplete() {} });
   cleanup();
@@ -429,5 +632,9 @@ test('inline editors mark FLIP ownership on open/close and anchor against a moda
   clip.finish();
   await clip.finished;
   await Promise.resolve();
-  assert.equal(h.motion.owned.length, 2, 'closing signals layout ownership right before unmounting the panel');
+  assert.equal(
+    h.motion.owned.length,
+    2,
+    'closing signals layout ownership right before unmounting the panel',
+  );
 });

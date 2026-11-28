@@ -67,13 +67,21 @@ interface FocusPlan {
 
 type Snapshot =
   | { concealed: true }
-  | { concealed: false; rects: Map<Element, DOMRect> | null; followers: HTMLElement[]; focus: FocusPlan | null }
+  | {
+      concealed: false;
+      rects: Map<Element, DOMRect> | null;
+      followers: HTMLElement[];
+      focus: FocusPlan | null;
+    }
   | null;
 
 /** One running move per element across every list on the page, so nested lists hand over. */
 const moving = new WeakMap<Element, Animation>();
 
-function entriesFrom<T>(items: readonly T[], getKey: (item: T) => string | number): PresenceEntry<T>[] {
+function entriesFrom<T>(
+  items: readonly T[],
+  getKey: (item: T) => string | number,
+): PresenceEntry<T>[] {
   return items.map((item) => ({ item, key: String(getKey(item)), leaving: false }));
 }
 
@@ -82,7 +90,12 @@ function entriesFrom<T>(items: readonly T[], getKey: (item: T) => string | numbe
  * where it was: after the nearest entry before it that is still there. An entry that comes back
  * (撤销) is simply present again.
  */
-function merge<T>(previous: PresenceEntry<T>[], items: readonly T[], getKey: (item: T) => string | number, keepLeavers: boolean) {
+function merge<T>(
+  previous: PresenceEntry<T>[],
+  items: readonly T[],
+  getKey: (item: T) => string | number,
+  keepLeavers: boolean,
+) {
   const next = entriesFrom(items, getKey);
   if (!keepLeavers) return next;
   const present = new Set(next.map((entry) => entry.key));
@@ -104,15 +117,21 @@ function shapeOf<T>(entries: PresenceEntry<T>[]) {
   return JSON.stringify(entries.map((entry) => (entry.leaving ? [entry.key] : entry.key)));
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Every control an entry has, available now or not: the positions a focus's place is counted in. */
-const CONTROL = 'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])';
+const CONTROL =
+  'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /** Can take a focus now: enabled, rendered, and in no inert, hidden or leaving subtree. */
 function usable(el: HTMLElement): boolean {
-  return !el.matches(':disabled') && !el.closest('[inert], [hidden], [aria-hidden="true"]') &&
-    el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  return (
+    !el.matches(':disabled') &&
+    !el.closest('[inert], [hidden], [aria-hidden="true"]') &&
+    el.getClientRects().length > 0 &&
+    getComputedStyle(el).visibility !== 'hidden'
+  );
 }
 
 /**
@@ -127,14 +146,18 @@ function controlsOf(el: HTMLElement): HTMLElement[] {
 /** The entry's control at `slot`, or — unavailable now — the available one nearest it. */
 function controlAt(el: HTMLElement, slot: number): HTMLElement | null {
   const controls = controlsOf(el);
-  const nearest = controls.map((_, index) => index).sort((a, b) => Math.abs(a - slot) - Math.abs(b - slot) || a - b);
+  const nearest = controls
+    .map((_, index) => index)
+    .sort((a, b) => Math.abs(a - slot) - Math.abs(b - slot) || a - b);
   for (const index of nearest) if (usable(controls[index])) return controls[index];
   return null;
 }
 
 /** A focus nothing holds any more: on the document, detached, or inside an inert subtree. */
 function lostFocus(active: Element | null): boolean {
-  return !active || active === document.body || !active.isConnected || Boolean(active.closest('[inert]'));
+  return (
+    !active || active === document.body || !active.isConnected || Boolean(active.closest('[inert]'))
+  );
 }
 
 /** Focus `target`: a control as itself, anything else as a landing (no ring, no scroll). */
@@ -211,13 +234,25 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
   constructor(props: Props<T>) {
     super(props);
     const entries = entriesFrom(props.items, props.getKey);
-    this.state = { entries, items: props.items, shape: shapeOf(entries), resetKey: props.resetKey, animate: false };
+    this.state = {
+      entries,
+      items: props.items,
+      shape: shapeOf(entries),
+      resetKey: props.resetKey,
+      animate: false,
+    };
   }
 
   static getDerivedStateFromProps<T>(props: Props<T>, state: State<T>): Partial<State<T>> | null {
     if (props.resetKey !== state.resetKey) {
       const entries = entriesFrom(props.items, props.getKey);
-      return { entries, items: props.items, shape: shapeOf(entries), resetKey: props.resetKey, animate: false };
+      return {
+        entries,
+        items: props.items,
+        shape: shapeOf(entries),
+        resetKey: props.resetKey,
+        animate: false,
+      };
     }
     if (props.items === state.items) return null;
     const keepLeavers = typeof document !== 'undefined' && motionTier('list') !== 'off';
@@ -235,7 +270,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
    */
   claimFocus(keys: Iterable<string | number>): () => void {
     const claim = Symbol('claim');
-    const own = [...keys].map(String).filter((key) => this.state.entries.some((entry) => entry.key === key && !entry.leaving));
+    const own = [...keys]
+      .map(String)
+      .filter((key) => this.state.entries.some((entry) => entry.key === key && !entry.leaving));
     for (const key of own) this.claims.set(key, claim);
     return () => {
       for (const key of own) if (this.claims.get(key) === claim) this.claims.delete(key);
@@ -267,7 +304,10 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     if (motionTier('list') === 'off') {
       /* Nothing moves; but an entry that comes back while it is still pinned — the tier went off
          during its fade — is unpinned, or it stays an invisible, inert box in the list. */
-      const back = previous.entries.some((entry) => entry.leaving && this.state.entries.some((now) => now.key === entry.key && !now.leaving));
+      const back = previous.entries.some(
+        (entry) =>
+          entry.leaving && this.state.entries.some((now) => now.key === entry.key && !now.leaving),
+      );
       return focus || back ? { concealed: false, rects: null, followers: [], focus } : null;
     }
     const rects = new Map<Element, DOMRect>();
@@ -284,7 +324,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     }
     const container = this.container;
     if (!snapshot || !container) return;
-    const wasLeaving = new Set(previous.entries.filter((entry) => entry.leaving).map((entry) => entry.key));
+    const wasLeaving = new Set(
+      previous.entries.filter((entry) => entry.leaving).map((entry) => entry.key),
+    );
     const before = new Set(previous.entries.map((entry) => entry.key));
     const byKey = new Map<string, HTMLElement>();
     for (const el of this.elements()) byKey.set(el.dataset.presenceKey ?? '', el);
@@ -297,7 +339,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       this.running.clear();
       /* Under off, removed entries are absent already, rather than marked leaving. Spend the
          claims from the before/after key sets on every tier, without reading a hidden control. */
-      const present = new Set(this.state.entries.filter((entry) => !entry.leaving).map((entry) => entry.key));
+      const present = new Set(
+        this.state.entries.filter((entry) => !entry.leaving).map((entry) => entry.key),
+      );
       for (const entry of previous.entries) {
         if (!entry.leaving && !present.has(entry.key)) this.claims.delete(entry.key);
       }
@@ -347,7 +391,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
         const rect = rects.get(el);
         if (!rect) continue;
         const style = el.classList.contains('m3-row') ? getComputedStyle(el) : null;
-        const radius = style ? `${style.borderTopLeftRadius} ${style.borderTopRightRadius} ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}` : null;
+        const radius = style
+          ? `${style.borderTopLeftRadius} ${style.borderTopRightRadius} ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}`
+          : null;
         frozen.set(el, { rect, radius });
       } else if (!entry.leaving && wasLeaving.has(entry.key)) {
         returning.set(el, el.getAnimations());
@@ -390,7 +436,10 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     }
     /* Only followers with a before-box can glide. Reuse that set instead of measuring them
        again between pinning the rows and cancelling their previous transforms. */
-    const movers = [...this.elements().filter((el) => !leavers.has(el) && !el.inert), ...snapshot.followers.filter((el) => el.isConnected)];
+    const movers = [
+      ...this.elements().filter((el) => !leavers.has(el) && !el.inert),
+      ...snapshot.followers.filter((el) => el.isConnected),
+    ];
     for (const el of movers) moving.get(el)?.cancel();
 
     /* Reads: where everything is now. */
@@ -405,44 +454,78 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
       if (!was) {
         /* Arriving (an entry that was not there before; followers always have a snapshot). */
         if (key !== undefined && !before.has(key)) {
-          this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')));
-          if (grid) this.track(el.animate([{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }], springTiming('defaultSpatial', 'list')));
+          this.track(
+            el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')),
+          );
+          if (grid)
+            this.track(
+              el.animate(
+                [{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }],
+                springTiming('defaultSpatial', 'list'),
+              ),
+            );
         }
         continue;
       }
       const dx = was.left - is.left;
       const dy = was.top - is.top;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
-      const animation = el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], move);
+      const animation = el.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+        move,
+      );
       moving.set(el, animation);
       this.track(animation);
     }
     for (const el of leavers) {
       const key = el.dataset.presenceKey ?? '';
       const fade = el.animate(
-        grid ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `scale(${ENTER_SCALE.item})` }] : [{ opacity: 1 }, { opacity: 0 }],
+        grid
+          ? [
+              { opacity: 1, transform: 'none' },
+              { opacity: 0, transform: `scale(${ENTER_SCALE.item})` },
+            ]
+          : [{ opacity: 1 }, { opacity: 0 }],
         { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
       this.track(fade);
-      fade.finished.then(() => this.drop(key), () => {});
+      fade.finished.then(
+        () => this.drop(key),
+        () => {},
+      );
     }
   }
 
   /** An entry that came back while leaving (撤销): back in the flow and the run, live, fading in. */
   private unpin(el: HTMLElement, animations = el.getAnimations(), fade = true) {
-    for (const prop of ['position', 'left', 'top', 'width', 'height', 'margin', 'pointerEvents', 'borderRadius'] as const) el.style[prop] = '';
+    for (const prop of [
+      'position',
+      'left',
+      'top',
+      'width',
+      'height',
+      'margin',
+      'pointerEvents',
+      'borderRadius',
+    ] as const)
+      el.style[prop] = '';
     if (el.dataset.presenceRow !== undefined) {
       el.classList.add('m3-row');
       delete el.dataset.presenceRow;
     }
     el.inert = false;
     animations.forEach((animation) => animation.cancel());
-    if (fade) this.track(el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')));
+    if (fade)
+      this.track(
+        el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list')),
+      );
   }
 
   /** The entries' elements, in document order. */
   private elements(): HTMLElement[] {
-    return this.container ? [...this.container.querySelectorAll<HTMLElement>(':scope > [data-presence-key]')] : [];
+    return this.container
+      ? [...this.container.querySelectorAll<HTMLElement>(':scope > [data-presence-key]')]
+      : [];
   }
 
   /**
@@ -451,7 +534,9 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
    * entry leaving are spent here, whatever the focus.
    */
   private planFocus(previous: State<T>): FocusPlan | null {
-    const present = new Set(this.state.entries.filter((entry) => !entry.leaving).map((entry) => entry.key));
+    const present = new Set(
+      this.state.entries.filter((entry) => !entry.leaving).map((entry) => entry.key),
+    );
     const order = previous.entries.filter((entry) => !entry.leaving).map((entry) => entry.key);
     const departing = order.filter((key) => !present.has(key));
     if (departing.length === 0) return null;
@@ -461,7 +546,8 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     const active = document.activeElement;
     let from: string | undefined;
     let slot = 0;
-    if (active instanceof HTMLElement) from = departing.find((key) => byKey.get(key)?.contains(active));
+    if (active instanceof HTMLElement)
+      from = departing.find((key) => byKey.get(key)?.contains(active));
     if (from !== undefined) {
       slot = Math.max(0, controlsOf(byKey.get(from)!).indexOf(active as HTMLElement));
     } else if (claimed.length > 0 && lostFocus(active)) {
@@ -472,7 +558,10 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
 
     const at = order.indexOf(from);
     const after = order.slice(at + 1).find((key) => present.has(key));
-    const before = order.slice(0, at).reverse().find((key) => present.has(key));
+    const before = order
+      .slice(0, at)
+      .reverse()
+      .find((key) => present.has(key));
     return { candidates: [after, before].filter((key): key is string => key !== undefined), slot };
   }
 
@@ -496,7 +585,10 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
     while (entry && entry.parentElement !== container) entry = entry.parentElement;
     const key = entry?.dataset.presenceKey;
     if (!entry || key === undefined) return;
-    this.lastFocus = { key, slot: Math.max(0, controlsOf(entry).indexOf(event.target as HTMLElement)) };
+    this.lastFocus = {
+      key,
+      slot: Math.max(0, controlsOf(entry).indexOf(event.target as HTMLElement)),
+    };
   };
 
   /**
@@ -542,7 +634,12 @@ export default class PresenceList<T> extends Component<Props<T>, State<T>> {
   private readonly landMoves = () => {
     for (const animation of this.running) {
       const keyframes = (animation.effect as KeyframeEffect | null)?.getKeyframes?.() ?? [];
-      if (keyframes.some((frame) => typeof frame.transform === 'string' && frame.transform.startsWith('translate'))) animation.finish();
+      if (
+        keyframes.some(
+          (frame) => typeof frame.transform === 'string' && frame.transform.startsWith('translate'),
+        )
+      )
+        animation.finish();
     }
   };
 

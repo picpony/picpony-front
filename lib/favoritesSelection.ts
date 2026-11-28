@@ -134,7 +134,8 @@ export function useSelectionMode({
     if (!wasActive.current) return;
     wasActive.current = false;
     const focused = document.activeElement;
-    if (focused && focused !== document.body && focused.isConnected && !focused.closest('[inert]')) return;
+    if (focused && focused !== document.body && focused.isConnected && !focused.closest('[inert]'))
+      return;
     latest.current.restoreFocus?.()?.focus({ preventScroll: true });
   }, [state.active]);
 
@@ -163,17 +164,30 @@ export function useFolderLongPress(onSelect: (() => void) | undefined) {
     timer.current = null;
     start.current = null;
   };
-  useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
   return {
     onPointerDown: (event: React.PointerEvent) => {
       cancel();
       fired.current = false;
       if (!onSelect || event.pointerType !== 'touch' || !event.isPrimary) return;
       start.current = { x: event.clientX, y: event.clientY };
-      timer.current = setTimeout(() => { timer.current = null; fired.current = true; onSelect(); }, 500);
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        fired.current = true;
+        onSelect();
+      }, 500);
     },
     onPointerMove: (event: React.PointerEvent) => {
-      if (start.current && Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > TOUCH_SLOP_PX) cancel();
+      if (
+        start.current &&
+        Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > TOUCH_SLOP_PX
+      )
+        cancel();
     },
     onPointerUp: cancel,
     onPointerCancel: cancel,
@@ -183,6 +197,8 @@ export function useFolderLongPress(onSelect: (() => void) | undefined) {
       event.preventDefault();
       event.stopPropagation();
     },
-    onContextMenu: (event: React.MouseEvent) => { if (fired.current || start.current) event.preventDefault(); },
+    onContextMenu: (event: React.MouseEvent) => {
+      if (fired.current || start.current) event.preventDefault();
+    },
   };
 }

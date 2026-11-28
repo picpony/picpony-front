@@ -43,7 +43,10 @@ export interface ForumListQuery {
   token?: string | null;
 }
 
-export async function getForumPosts(query: ForumListQuery, signal?: AbortSignal): Promise<ForumPostsResponse> {
+export async function getForumPosts(
+  query: ForumListQuery,
+  signal?: AbortSignal,
+): Promise<ForumPostsResponse> {
   const data = await api<WirePostPage>('GET', '/forum/posts', {
     query: forumListParams({ ...query, summary: true }),
     token: query.token ?? undefined,
@@ -81,12 +84,16 @@ export async function getForumPostDetail(
 ): Promise<ForumPostDetailResponse> {
   const path = `/forum/posts/${seg(id)}`;
   const replies = (at: number) =>
-    api<{ comments: WireComment[]; total: number; total_pages: number }>('GET', `${path}/comments`, {
-      query: { page: at, limit: FORUM_REPLY_PAGE },
-      cache: 'no-store',
-      signal,
-      notFoundStatuses: [400],
-    });
+    api<{ comments: WireComment[]; total: number; total_pages: number }>(
+      'GET',
+      `${path}/comments`,
+      {
+        query: { page: at, limit: FORUM_REPLY_PAGE },
+        cache: 'no-store',
+        signal,
+        notFoundStatuses: [400],
+      },
+    );
   const wanted = Math.max(1, Math.floor(page));
   const [post, first] = await Promise.all([
     api<{ post: WirePost }>('GET', path, {
@@ -138,7 +145,11 @@ function postWire(body: ForumPostInput, expectedRevision?: number) {
 }
 
 /** Publishes a post; resolves with its id. `idempotencyKey` names this one press. */
-export async function createForumPost(token: string, body: ForumPostInput, idempotencyKey: string): Promise<number> {
+export async function createForumPost(
+  token: string,
+  body: ForumPostInput,
+  idempotencyKey: string,
+): Promise<number> {
   const data = await api<{ id: number; revision: number }>('POST', '/forum/posts', {
     token,
     json: postWire(body),
@@ -178,10 +189,17 @@ export interface ReplyBody {
 }
 
 /** Posts a reply. `idempotencyKey` names this one press. */
-export async function createForumComment(token: string, body: ReplyBody, idempotencyKey: string): Promise<void> {
+export async function createForumComment(
+  token: string,
+  body: ReplyBody,
+  idempotencyKey: string,
+): Promise<void> {
   await api('POST', `/forum/posts/${seg(body.postId)}/comments`, {
     token,
-    json: { content: body.content, ...(body.replyToUserId ? { reply_to_user_id: body.replyToUserId } : {}) },
+    json: {
+      content: body.content,
+      ...(body.replyToUserId ? { reply_to_user_id: body.replyToUserId } : {}),
+    },
     idempotencyKey,
   });
 }
@@ -199,10 +217,14 @@ export async function setForumPostLike(
   postId: number,
   liked: boolean,
 ): Promise<{ liked: boolean; count: number }> {
-  const data = await api<{ liked: boolean; like_count: number }>('PUT', `/me/forum/posts/${seg(postId)}/like`, {
-    token,
-    json: { liked },
-  });
+  const data = await api<{ liked: boolean; like_count: number }>(
+    'PUT',
+    `/me/forum/posts/${seg(postId)}/like`,
+    {
+      token,
+      json: { liked },
+    },
+  );
   return { liked: data.liked, count: data.like_count };
 }
 
@@ -245,23 +267,45 @@ export async function getMyShareableGroups(
 ): Promise<{ tagGroups: ShareableTagGroup[]; blockGroups: ShareableBlockGroup[] }> {
   const data = await api<{
     tag_groups: { id: number; name: string; tags: string[]; revision: number }[];
-    block_groups: { id: number; name: string; hidden_tags: string[]; spoilered_tags: string[]; revision: number }[];
+    block_groups: {
+      id: number;
+      name: string;
+      hidden_tags: string[];
+      spoilered_tags: string[];
+      revision: number;
+    }[];
   }>('GET', '/me/shareable-groups', { token, signal });
   return {
     tagGroups: data.tag_groups.map(({ id, name, tags }) => ({ id, name, tags })),
-    blockGroups: data.block_groups.map(({ id, name, hidden_tags, spoilered_tags }) => ({ id, name, hidden_tags, spoilered_tags })),
+    blockGroups: data.block_groups.map(({ id, name, hidden_tags, spoilered_tags }) => ({
+      id,
+      name,
+      hidden_tags,
+      spoilered_tags,
+    })),
   };
 }
 
 /** Saves a shared tag group as one of the viewer's own. */
 export async function importSharedTagGroup(token: string, group: SharedTagGroup): Promise<void> {
-  await api('POST', '/me/tag-group-imports', { token, json: { name: group.name, tags: group.tags } });
+  await api('POST', '/me/tag-group-imports', {
+    token,
+    json: { name: group.name, tags: group.tags },
+  });
 }
 
 /** Saves a shared block group as one of the viewer's own (off until they enable it). */
-export async function importSharedBlockGroup(token: string, group: SharedBlockGroup): Promise<void> {
+export async function importSharedBlockGroup(
+  token: string,
+  group: SharedBlockGroup,
+): Promise<void> {
   await api('POST', '/me/block-group-imports', {
     token,
-    json: { name: group.name, hidden_tags: group.hidden_tags, spoilered_tags: group.spoilered_tags, active: false },
+    json: {
+      name: group.name,
+      hidden_tags: group.hidden_tags,
+      spoilered_tags: group.spoilered_tags,
+      active: false,
+    },
   });
 }

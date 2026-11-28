@@ -220,7 +220,8 @@ const SPACING_BEND = 1.5;
 function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
   const step = 1 / SPACING_STEPS;
   const values = new Float64Array(SPACING_STEPS + 1);
-  for (let index = 0; index <= SPACING_STEPS; index += 1) values[index] = progressAt(model, index * step);
+  for (let index = 0; index <= SPACING_STEPS; index += 1)
+    values[index] = progressAt(model, index * step);
   const measure = new Float64Array(SPACING_STEPS + 1);
   let bend = 0;
   for (let index = 1; index <= SPACING_STEPS; index += 1) {
@@ -228,7 +229,8 @@ function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
     if (index < SPACING_STEPS) {
       bend = Math.sqrt(Math.abs(values[index + 1] - 2 * values[index] + values[index - 1])) / step;
     }
-    measure[index] = measure[index - 1] + Math.max(1, SPACING_BEND * bend, SPACING_TRAVEL * slope) * step;
+    measure[index] =
+      measure[index - 1] + Math.max(1, SPACING_BEND * bend, SPACING_TRAVEL * slope) * step;
   }
   const total = measure[SPACING_STEPS];
   const offsets = [0];
@@ -256,10 +258,7 @@ function sampleOffsets(model: HeroProgressModel, samples: number): number[] {
  * 0.021% / 0.034%, a tenth of the 0.4% `hero:path` tolerance; what sizes the count is the
  * container's anisotropy, not the progress. See `HERO_PROGRESS_SAMPLES`.
  */
-export function sampleProgress(
-  model: HeroProgressModel,
-  count: number,
-): readonly ProgressFrame[] {
+export function sampleProgress(model: HeroProgressModel, count: number): readonly ProgressFrame[] {
   const samples = Math.max(2, Math.round(count));
   const quantized = quantize(model);
   const key = progressKey(quantized, samples);
@@ -272,7 +271,10 @@ export function sampleProgress(
   }
 
   const offsets = sampleOffsets(quantized, samples);
-  const frames: ProgressFrame[] = offsets.map((offset) => ({ offset, progress: progressAt(quantized, offset) }));
+  const frames: ProgressFrame[] = offsets.map((offset) => ({
+    offset,
+    progress: progressAt(quantized, offset),
+  }));
   const table = frames as readonly ProgressFrame[];
   frameCache.set(key, table);
   while (frameCache.size > MAX_CACHED_TABLES) {

@@ -25,7 +25,12 @@ import { heroProbeMark } from './probe';
 
 const PULL_ATTRIBUTE = 'imageHeroPulling';
 const PULL_READY_ATTRIBUTE = 'imageHeroPullReady';
-type PullStyle = { element: HTMLElement; property: 'transform' | 'opacity'; original: string; written: string };
+type PullStyle = {
+  element: HTMLElement;
+  property: 'transform' | 'opacity';
+  original: string;
+  written: string;
+};
 
 export type HeroPullSample = {
   /** Downward finger travel past the touch slop, in px. Drives every derived value. */
@@ -86,7 +91,6 @@ export function createPullSample(rawDistance: number, x = 0): HeroPullSample {
 }
 
 export const PULL_REST = createPullSample(0);
-
 
 /**
  * The dismiss-drag presentation for one detail surface.
@@ -318,7 +322,8 @@ export class HeroPullSurface {
     const scroller = this.background?.parentElement;
     // Keep the sink's pivot when taking over from a flight; changing it at s<1
     // translates the gallery even though the user's hand has only moved vertically.
-    const origin = this.background?.style.transformOrigin ||
+    const origin =
+      this.background?.style.transformOrigin ||
       `center ${scroller ? scroller.scrollTop + scroller.clientHeight / 2 : 0}px`;
     this.active = true;
     this.refreshTargets();
@@ -339,24 +344,25 @@ export class HeroPullSurface {
       this.write(this.latest);
     });
     this.observer.observe(this.nodes.overlay, { childList: true, subtree: true });
-    this.options.mirrors?.().forEach((mirror) =>
-      this.observer?.observe(mirror, { childList: true, subtree: true }),
-    );
+    this.options
+      .mirrors?.()
+      .forEach((mirror) => this.observer?.observe(mirror, { childList: true, subtree: true }));
   }
 
   private refreshTargets() {
     const { overlay, floatingBack } = this.nodes;
     const remember = (element: HTMLElement, property: PullStyle['property']) => {
-      if (this.styles.some((style) => style.element === element && style.property === property)) return;
+      if (this.styles.some((style) => style.element === element && style.property === property))
+        return;
       this.styles.push({ element, property, original: element.style[property], written: '' });
     };
     const surfaces = [overlay, ...(this.options.mirrors?.() ?? [])];
     surfaces.forEach((surface) => {
       const content = surface.querySelector<HTMLElement>('.image-detail-overlay-content');
       if (content) remember(content, 'transform');
-      surface.querySelectorAll<HTMLElement>(
-        `${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`,
-      ).forEach((element) => remember(element, 'opacity'));
+      surface
+        .querySelectorAll<HTMLElement>(`${HERO_REVEAL_SELECTOR}, ${HERO_CHROME_SELECTOR}`)
+        .forEach((element) => remember(element, 'opacity'));
       if (surface !== overlay && !this.markedMirrors.includes(surface)) {
         surface.dataset[PULL_ATTRIBUTE] = '';
         this.markedMirrors.push(surface);

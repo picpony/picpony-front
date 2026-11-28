@@ -126,7 +126,9 @@ export default function ImageCropper({
   // must not each schedule a render.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const panFrom = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
-  const pinchFrom = useRef<{ dist: number; zoom: number; mid: Point; x: number; y: number } | null>(null);
+  const pinchFrom = useRef<{ dist: number; zoom: number; mid: Point; x: number; y: number } | null>(
+    null,
+  );
 
   const outH = outputHeight ?? Math.round(outputWidth / aspect);
 
@@ -216,10 +218,7 @@ export default function ImageCropper({
     [constrainView],
   );
 
-  const nudgeZoom = useCallback(
-    (delta: number) => zoomAt((zoom) => zoom + delta),
-    [zoomAt],
-  );
+  const nudgeZoom = useCallback((delta: number) => zoomAt((zoom) => zoom + delta), [zoomAt]);
 
   /** A client position as a point relative to the crop window's centre. */
   const toStagePoint = useCallback(
@@ -277,7 +276,11 @@ export default function ImageCropper({
     const from = panFrom.current;
     if (!from) return;
     setView((prev) =>
-      constrainView({ ...prev, x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }),
+      constrainView({
+        ...prev,
+        x: from.x + (e.clientX - from.px),
+        y: from.y + (e.clientY - from.py),
+      }),
     );
   };
 
@@ -301,7 +304,10 @@ export default function ImageCropper({
       e.preventDefault();
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
       const rate = e.ctrlKey ? PINCH_WHEEL_ZOOM_RATE : WHEEL_ZOOM_RATE;
-      zoomAt((zoom) => zoom * Math.exp(-e.deltaY * unit * rate), toStagePoint(e.clientX, e.clientY));
+      zoomAt(
+        (zoom) => zoom * Math.exp(-e.deltaY * unit * rate),
+        toStagePoint(e.clientX, e.clientY),
+      );
     };
     stage.addEventListener('wheel', onWheel, { passive: false });
     return () => stage.removeEventListener('wheel', onWheel);
@@ -443,12 +449,25 @@ export default function ImageCropper({
 
         {imageError ? (
           <div className="absolute inset-0 grid place-items-center bg-surface-container-low">
-            <ErrorRetry size="inline" title="图片加载失败" message="无法读取此图片" onRetry={onClose} retryLabel="重新选择" />
+            <ErrorRetry
+              size="inline"
+              title="图片加载失败"
+              message="无法读取此图片"
+              onRetry={onClose}
+              retryLabel="重新选择"
+            />
           </div>
-        ) : !ready && (
-          <div className="absolute inset-0 grid place-items-center">
-            <LoadingIndicator variant="contained" size="md" tone="on-media" label="正在加载图片" />
-          </div>
+        ) : (
+          !ready && (
+            <div className="absolute inset-0 grid place-items-center">
+              <LoadingIndicator
+                variant="contained"
+                size="md"
+                tone="on-media"
+                label="正在加载图片"
+              />
+            </div>
+          )
         )}
 
         {/* Mask. One element with a huge spread shadow rather than four dimming

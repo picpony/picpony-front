@@ -19,7 +19,10 @@ const store = new Map<string, unknown>();
  * app (prefix it with the screen) and must not identify a record when records share a
  * screen — use `useScreenStateFor` for that.
  */
-export function useScreenState<T>(key: string, initial: T): [T, (value: T | ((prev: T) => T)) => void] {
+export function useScreenState<T>(
+  key: string,
+  initial: T,
+): [T, (value: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => (store.has(key) ? (store.get(key) as T) : initial));
 
   const set = useCallback(

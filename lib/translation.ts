@@ -29,7 +29,10 @@ export interface TextTranslation {
  * One passage's translation, shown and hidden in place. Keyed by the text: a different passage
  * (the next picture's description) starts hidden. A failure is reported through `onError`.
  */
-export function useTextTranslation(text: string, onError: (message: string) => void): TextTranslation {
+export function useTextTranslation(
+  text: string,
+  onError: (message: string) => void,
+): TextTranslation {
   const [state, setState] = useState<{ text: string; shown: boolean; busy: boolean }>({
     text,
     shown: false,
@@ -55,10 +58,14 @@ export function useTextTranslation(text: string, onError: (message: string) => v
     translateText(text).then(
       (translation) => {
         textCache.set(text, translation);
-        setState((previous) => (previous.text === text ? { text, shown: true, busy: false } : previous));
+        setState((previous) =>
+          previous.text === text ? { text, shown: true, busy: false } : previous,
+        );
       },
       (error: unknown) => {
-        setState((previous) => (previous.text === text ? { text, shown: false, busy: false } : previous));
+        setState((previous) =>
+          previous.text === text ? { text, shown: false, busy: false } : previous,
+        );
         onErrorRef.current(apiErrorMessage(error, '翻译失败'));
       },
     );
@@ -164,7 +171,10 @@ function waitVisible(ms: number, signal: AbortSignal): Promise<void> {
     };
     const arm = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => (document.visibilityState === 'visible' ? done() : undefined), ms);
+      timer = window.setTimeout(
+        () => (document.visibilityState === 'visible' ? done() : undefined),
+        ms,
+      );
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') arm();
@@ -217,13 +227,17 @@ async function translatePicture(
         patch({ phase: 'stalled' });
         return;
       }
-      patch({ phase: status.state === 'translating' ? 'translating' : 'queued', queueAhead: status.queueAhead });
+      patch({
+        phase: status.state === 'translating' ? 'translating' : 'queued',
+        queueAhead: status.queueAhead,
+      });
       waited = true;
       await waitVisible(POLL_INTERVAL_MS, signal);
       status = await pollImageTranslation(sourceUrl, signal);
     }
   } catch (error) {
-    if (!signal.aborted) patch({ phase: 'failed', message: apiErrorMessage(error, '翻译失败，请稍后再试') });
+    if (!signal.aborted)
+      patch({ phase: 'failed', message: apiErrorMessage(error, '翻译失败，请稍后再试') });
   }
 }
 
@@ -271,7 +285,9 @@ export function useImageTranslation(
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
-    void translatePicture(sourceUrl, controller.signal, patch, () => callbacks.current.onFinished()).then(() => {
+    void translatePicture(sourceUrl, controller.signal, patch, () =>
+      callbacks.current.onFinished(),
+    ).then(() => {
       if (controllerRef.current === controller) controllerRef.current = null;
     });
   }, [patch, sourceUrl]);
@@ -281,7 +297,8 @@ export function useImageTranslation(
       patch({ shown: !current.shown });
       return;
     }
-    if (current.phase === 'idle' || current.phase === 'failed' || current.phase === 'stalled') run();
+    if (current.phase === 'idle' || current.phase === 'failed' || current.phase === 'stalled')
+      run();
   }, [current.phase, current.shown, patch, run]);
 
   const reportBroken = useCallback(() => {

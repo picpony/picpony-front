@@ -103,7 +103,12 @@ export function getRawImageUrl(url: string): string {
 }
 
 // 按层级构建图片 URL；bust 时追加防缓存参数
-export function buildImageUrl(rawUrl: string, tier: ImageTier, bust = false, thumb = false): string {
+export function buildImageUrl(
+  rawUrl: string,
+  tier: ImageTier,
+  bust = false,
+  thumb = false,
+): string {
   let url: string;
   if (tier === 0) {
     url = `${IMAGE_WORKER_BASE}${encodeURIComponent(rawUrl)}${thumb ? '&_thumb=1' : ''}`;
@@ -132,7 +137,12 @@ export function toCurrentImageLine(url: string, thumb = false): string {
 function tierAttempt(
   rawUrl: string,
   tier: ImageTier,
-  { bust = false, thumb = false, retries = 0, delayMs = 0 }: {
+  {
+    bust = false,
+    thumb = false,
+    retries = 0,
+    delayMs = 0,
+  }: {
     bust?: boolean;
     thumb?: boolean;
     retries?: number;
@@ -166,7 +176,10 @@ export interface InitialAttemptOptions {
  * The first attempt: the optimizer on the raw URL when it is live (the same URL on the server
  * and in the browser, so it cannot mismatch at hydration), else the resolved line.
  */
-export function createInitialAttempt(rawUrl: string, options: InitialAttemptOptions = {}): LoadAttempt {
+export function createInitialAttempt(
+  rawUrl: string,
+  options: InitialAttemptOptions = {},
+): LoadAttempt {
   const { thumb = false, line, optimize = true } = options;
   const tier = TIER_OF[line ?? resolveImageLine()];
   if (optimize && OPTIMIZER_ACTIVE) {
@@ -202,12 +215,22 @@ export function resolveNextAttempt(
     if (forcedTier !== attempt.tier) return tierAttempt(rawUrl, forcedTier, { bust: true, thumb });
     if (attempt.retries >= DIRECT_MAX_RETRIES) return { ...attempt, giveUp: true };
     const retries = attempt.retries + 1;
-    return tierAttempt(rawUrl, attempt.tier, { bust: true, thumb, retries, delayMs: backoffDelay(retries) });
+    return tierAttempt(rawUrl, attempt.tier, {
+      bust: true,
+      thumb,
+      retries,
+      delayMs: backoffDelay(retries),
+    });
   }
 
   // 代理/CDN 层先原地重试一次（带防缓存参数，稍候再试）
   if (attempt.retries === 0 && attempt.tier < 2) {
-    return tierAttempt(rawUrl, attempt.tier, { bust: true, thumb, retries: 1, delayMs: jitter(LINE_RETRY_MS) });
+    return tierAttempt(rawUrl, attempt.tier, {
+      bust: true,
+      thumb,
+      retries: 1,
+      delayMs: jitter(LINE_RETRY_MS),
+    });
   }
 
   if (attempt.tier === 0) {

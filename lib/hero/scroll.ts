@@ -96,13 +96,19 @@ export class HeroScrollContinuity {
     const dimensions = this.deltaSources.get(source);
     if (!dimensions) return;
     const input = takeOverHeroReturnInput({
-      source, destination: this.primary,
-      lineHeight: dimensions.lineHeight, pageHeight: dimensions.pageHeight,
+      source,
+      destination: this.primary,
+      lineHeight: dimensions.lineHeight,
+      pageHeight: dimensions.pageHeight,
       onWheel: (left, top) => this.queueWheelResidual(left, top),
       onTouch: (left, top) => {
         this.pendingTouchLeft += left;
         this.pendingTouchTop += top;
-        if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX) this.scheduleWheelResidual();
+        if (
+          Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX ||
+          Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX
+        )
+          this.scheduleWheelResidual();
       },
       onEnd: (reason) => {
         if (this.returnInput !== input) return;
@@ -131,7 +137,10 @@ export class HeroScrollContinuity {
 
   /** Keep only the current input lease alive after its visual session has closed. */
   retire(onReleased: () => void) {
-    if (this.released) { onReleased(); return; }
+    if (this.released) {
+      onReleased();
+      return;
+    }
     this.retired = onReleased;
     this.clearDeltaSources();
     this.finishRetired();
@@ -236,8 +245,15 @@ export class HeroScrollContinuity {
   }
 
   addDeltaSource(element: HTMLElement, initial?: Pick<InputSource, 'lineHeight' | 'pageHeight'>) {
-    if (this.released || this.returnInput || this.peers.has(element) || this.deltaSources.has(element)) return;
-    const computedLineHeight = initial?.lineHeight ?? Number.parseFloat(getComputedStyle(element).lineHeight);
+    if (
+      this.released ||
+      this.returnInput ||
+      this.peers.has(element) ||
+      this.deltaSources.has(element)
+    )
+      return;
+    const computedLineHeight =
+      initial?.lineHeight ?? Number.parseFloat(getComputedStyle(element).lineHeight);
     const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 16;
     const pageHeight = initial?.pageHeight ?? Math.max(1, element.clientHeight);
     const state: DeltaListener = {
@@ -302,7 +318,13 @@ export class HeroScrollContinuity {
    * rescue, so every source is dropped along with any queued residual.
    */
   releaseDeltaSources() {
-    if (this.deltaSources.size === 0 && !this.hasWheelResidual() && !this.wheelRemainderLeft && !this.wheelRemainderTop) return;
+    if (
+      this.deltaSources.size === 0 &&
+      !this.hasWheelResidual() &&
+      !this.wheelRemainderLeft &&
+      !this.wheelRemainderTop
+    )
+      return;
     this.resetWheelResidual();
     this.clearDeltaSources();
   }
@@ -449,13 +471,28 @@ export class HeroScrollContinuity {
     }
 
     // A DOM wheel target is not a compositor handoff. An offset changed by another owner is.
-    if (this.returnManaged && measurement.target === this.inputTarget && this.isForeignScroll(measurement.target)) {
+    if (
+      this.returnManaged &&
+      measurement.target === this.inputTarget &&
+      this.isForeignScroll(measurement.target)
+    ) {
       this.claimNativeInput(measurement.target);
       return;
     }
-    if (Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX || Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX) {
-      const left = clamp((this.touchTargetLeft ?? measurement.left) + this.pendingTouchLeft, 0, measurement.maxLeft);
-      const top = clamp((this.touchTargetTop ?? measurement.top) + this.pendingTouchTop, 0, measurement.maxTop);
+    if (
+      Math.abs(this.pendingTouchLeft) >= SCROLL_EPSILON_PX ||
+      Math.abs(this.pendingTouchTop) >= SCROLL_EPSILON_PX
+    ) {
+      const left = clamp(
+        (this.touchTargetLeft ?? measurement.left) + this.pendingTouchLeft,
+        0,
+        measurement.maxLeft,
+      );
+      const top = clamp(
+        (this.touchTargetTop ?? measurement.top) + this.pendingTouchTop,
+        0,
+        measurement.maxTop,
+      );
       // Keep fractional drag distance even when the browser quantizes its scroll offset.
       this.touchTargetLeft = left;
       this.touchTargetTop = top;
@@ -468,8 +505,16 @@ export class HeroScrollContinuity {
 
     const startLeft = this.residualTargetLeft ?? measurement.left;
     const startTop = this.residualTargetTop ?? measurement.top;
-    this.residualTargetLeft = clamp(startLeft + this.pendingResidualLeft + this.wheelRemainderLeft, 0, measurement.maxLeft);
-    this.residualTargetTop = clamp(startTop + this.pendingResidualTop + this.wheelRemainderTop, 0, measurement.maxTop);
+    this.residualTargetLeft = clamp(
+      startLeft + this.pendingResidualLeft + this.wheelRemainderLeft,
+      0,
+      measurement.maxLeft,
+    );
+    this.residualTargetTop = clamp(
+      startTop + this.pendingResidualTop + this.wheelRemainderTop,
+      0,
+      measurement.maxTop,
+    );
     this.wheelRemainderLeft = 0;
     this.wheelRemainderTop = 0;
     this.pendingResidualLeft = 0;

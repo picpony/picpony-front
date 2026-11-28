@@ -9,7 +9,9 @@ import { createServer } from 'node:http';
 import { stubFor } from './netAuditFixtures.mjs';
 
 const ROOT = process.cwd();
-const PORT = 3954, UP = 3955, CDP = 9341;
+const PORT = 3954,
+  UP = 3955,
+  CDP = 9341;
 
 const upstream = createServer((req, res) => {
   const asUpstream = req.url?.startsWith('/api/v1/json')
@@ -17,37 +19,64 @@ const upstream = createServer((req, res) => {
     : `http://127.0.0.1:${UP}${req.url}`;
   const stub = stubFor(asUpstream, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));
 
 const NEXT_BIN = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
 const server = spawn(process.execPath, [NEXT_BIN, 'start', '-p', String(PORT)], {
-  cwd: ROOT, stdio: 'ignore',
-  env: { ...process.env,
+  cwd: ROOT,
+  stdio: 'ignore',
+  env: {
+    ...process.env,
     PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${UP}`,
-    PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json` },
+    PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json`,
+  },
 });
 const until = async (fn, ms = 40000) => {
   const end = Date.now() + ms;
-  while (Date.now() < end) { try { if (await fn()) return true; } catch {} await new Promise((r) => setTimeout(r, 200)); }
+  while (Date.now() < end) {
+    try {
+      if (await fn()) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
+  throw new Error('no server');
 
 /* `PICPONY_BROWSER`: any Chromium, for a run off Windows (as `net:audit` takes it). */
-const EDGE = process.env.PICPONY_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const EDGE =
+  process.env.PICPONY_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-ripple-'));
-const browser = spawn(EDGE, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${CDP}`,
-  `--user-data-dir=${profile}`, '--window-size=1280,900', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+const browser = spawn(
+  EDGE,
+  [
+    '--headless=new',
+    '--disable-gpu',
+    `--remote-debugging-port=${CDP}`,
+    `--user-data-dir=${profile}`,
+    '--window-size=1280,900',
+    '--no-first-run',
+    'about:blank',
+  ],
+  { stdio: 'ignore' },
+);
 
 let page;
-if (!(await until(async () => {
-  const list = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
-  page = list.find((t) => t.type === 'page');
-  return Boolean(page);
-}))) throw new Error('no cdp');
+if (
+  !(await until(async () => {
+    const list = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
+    page = list.find((t) => t.type === 'page');
+    return Boolean(page);
+  }))
+)
+  throw new Error('no cdp');
 
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
@@ -55,13 +84,25 @@ let id = 0;
 const pending = new Map();
 ws.onmessage = (m) => {
   const msg = JSON.parse(m.data);
-  if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
+  if (msg.id && pending.has(msg.id)) {
+    pending.get(msg.id)(msg);
+    pending.delete(msg.id);
+  }
 };
 const send = (method, params = {}) =>
-  new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+  new Promise((r) => {
+    const i = ++id;
+    pending.set(i, r);
+    ws.send(JSON.stringify({ id: i, method, params }));
+  });
 const evalIn = async (expr) => {
-  const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300));
+  const r = await send('Runtime.evaluate', {
+    expression: expr,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (r.result?.exceptionDetails)
+    throw new Error(JSON.stringify(r.result.exceptionDetails).slice(0, 300));
   return r.result?.result?.value;
 };
 await send('Runtime.enable');
@@ -102,17 +143,25 @@ const out = await evalIn(`(async () => {
 /* A check, not only a report: CI runs this as a gate, so a wave above its token — or a press that
    measured no wave at all — fails the run. */
 let failed = false;
-if (typeof out === 'string') { console.log(`FAIL: ${out}`); failed = true; }
-else {
+if (typeof out === 'string') {
+  console.log(`FAIL: ${out}`);
+  failed = true;
+} else {
   console.log('ripple opacity token:', out.cssOpacityAtStart);
   console.log('ms:opacity  ' + out.samples.map(([t, o]) => t + ':' + o).join('  '));
-  const nums = out.samples.map(([, o]) => (o === 'gone' ? null : Number(o))).filter((n) => n !== null);
+  const nums = out.samples
+    .map(([, o]) => (o === 'gone' ? null : Number(o)))
+    .filter((n) => n !== null);
   const peak = Math.max(...nums);
   const token = Number(out.cssOpacityAtStart);
   console.log('peak opacity:', peak);
-  if (!nums.length) { console.log('FAIL: no wave was sampled'); failed = true; }
-  else if (!(token > 0)) {
-    console.log(`FAIL: could not read the ripple opacity token (got ${JSON.stringify(out.cssOpacityAtStart)})`);
+  if (!nums.length) {
+    console.log('FAIL: no wave was sampled');
+    failed = true;
+  } else if (!(token > 0)) {
+    console.log(
+      `FAIL: could not read the ripple opacity token (got ${JSON.stringify(out.cssOpacityAtStart)})`,
+    );
     failed = true;
   } else if (peak > token + 0.005) {
     console.log(`FAIL: the wave peaked at ${peak}, above its token ${out.cssOpacityAtStart}`);
@@ -123,5 +172,13 @@ else {
   }
 }
 
-ws.close(); browser.kill(); server.kill(); upstream.close();
-setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(failed ? 1 : 0); }, 500);
+ws.close();
+browser.kill();
+server.kill();
+upstream.close();
+setTimeout(() => {
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {}
+  process.exit(failed ? 1 : 0);
+}, 500);

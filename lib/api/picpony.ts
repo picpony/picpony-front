@@ -8,7 +8,12 @@ import type {
   UserPostsResponse,
 } from '@/lib/types/user';
 import { isProfileId, profileFromWire } from '@/lib/profiles';
-import { parseEquippedBadges, parseHeldBadges, type EquippedBadge, type HeldBadge } from '@/lib/userBadges';
+import {
+  parseEquippedBadges,
+  parseHeldBadges,
+  type EquippedBadge,
+  type HeldBadge,
+} from '@/lib/userBadges';
 import type { Comment, PonyImage } from '@/lib/types/image';
 import type { TeamMember } from '@/lib/types/site';
 import type { CaptchaChallenge, CaptchaProof, CaptchaPoint } from '@/lib/types/captcha';
@@ -35,13 +40,20 @@ import { api, apiRequest, readApi, readObject, seg } from './http';
 export function isRefusal(error: unknown, ...codes: string[]): boolean {
   if (!isApiError(error) || error.kind !== 'http' || error.status === undefined) return false;
   if (codes.length) return error.code !== undefined && codes.includes(error.code);
-  return error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 408 && error.status !== 429;
+  return (
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 401 &&
+    error.status !== 408 &&
+    error.status !== 429
+  );
 }
 
 /** A v4 UUID for the backend's `request_id` fields (serde `Uuid`; `randomId` may not be one). */
 export function requestId(): string {
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') crypto.getRandomValues(bytes);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function')
+    crypto.getRandomValues(bytes);
   else for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
@@ -90,7 +102,11 @@ export interface PendingVerification {
 }
 
 /** `POST /auth/session` — `account` is a username or an email. Sets the `auth_bind` cookie. */
-export async function login(data: { account: string; password: string; captchaProof: string }): Promise<SessionGrant> {
+export async function login(data: {
+  account: string;
+  password: string;
+  captchaProof: string;
+}): Promise<SessionGrant> {
   return api<SessionGrant>('POST', '/auth/session', {
     json: { account: data.account, password: data.password, captcha_proof: data.captchaProof },
   });
@@ -104,31 +120,54 @@ export async function register(data: {
   captchaProof: string;
 }): Promise<PendingVerification> {
   return api<PendingVerification>('POST', '/auth/registrations', {
-    json: { username: data.username, email: data.email, password: data.password, captcha_proof: data.captchaProof },
+    json: {
+      username: data.username,
+      email: data.email,
+      password: data.password,
+      captcha_proof: data.captchaProof,
+    },
   });
 }
 
 /** `POST /auth/email-verifications/{verification}/confirmation` — the code signs the new account in. */
-export async function confirmRegistration(verification: string, code: string): Promise<SessionGrant> {
-  return api<SessionGrant>('POST', `/auth/email-verifications/${seg(verification)}/confirmation`, { json: { code } });
-}
-
-/** `…/resends` — a new code, and a new `verification` (the old one is void). Needs a fresh proof. */
-export async function resendRegistrationCode(verification: string, captchaProof: string): Promise<PendingVerification> {
-  return api<PendingVerification>('POST', `/auth/email-verifications/${seg(verification)}/resends`, {
-    json: { captcha_proof: captchaProof },
+export async function confirmRegistration(
+  verification: string,
+  code: string,
+): Promise<SessionGrant> {
+  return api<SessionGrant>('POST', `/auth/email-verifications/${seg(verification)}/confirmation`, {
+    json: { code },
   });
 }
 
+/** `…/resends` — a new code, and a new `verification` (the old one is void). Needs a fresh proof. */
+export async function resendRegistrationCode(
+  verification: string,
+  captchaProof: string,
+): Promise<PendingVerification> {
+  return api<PendingVerification>(
+    'POST',
+    `/auth/email-verifications/${seg(verification)}/resends`,
+    {
+      json: { captcha_proof: captchaProof },
+    },
+  );
+}
+
 /** `POST /auth/password-resets` — always 202 with a fresh `verification`, whether or not the address is known. */
-export async function resetPasswordRequest(email: string, captchaProof: string): Promise<PendingVerification> {
+export async function resetPasswordRequest(
+  email: string,
+  captchaProof: string,
+): Promise<PendingVerification> {
   return api<PendingVerification>('POST', '/auth/password-resets', {
     json: { email: email.trim(), captcha_proof: captchaProof },
   });
 }
 
 /** `PUT /auth/password-resets/{verification}` — every session of the account ends. */
-export async function resetPassword(verification: string, data: { code: string; new_password: string }): Promise<void> {
+export async function resetPassword(
+  verification: string,
+  data: { code: string; new_password: string },
+): Promise<void> {
   await api('PUT', `/auth/password-resets/${seg(verification)}`, { json: data });
 }
 
@@ -209,9 +248,16 @@ export async function readSessionUser(res: Response): Promise<Record<string, unk
  * A public profile (`GET /users/{id}`). An unknown id is the backend's 404 (`USER_NOT_FOUND`) —
  * a `notFound` `ApiError` — and an id that cannot be one is the same answer without asking.
  */
-export async function getUserProfile(userId: string, signal?: AbortSignal): Promise<{ success: true; user: ProfileUser }> {
+export async function getUserProfile(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<{ success: true; user: ProfileUser }> {
   if (!isProfileId(userId)) throw new ApiError('http', { status: 404 });
-  const data = await api<{ user: Parameters<typeof profileFromWire>[0] }>('GET', `/users/${seg(userId)}`, { signal });
+  const data = await api<{ user: Parameters<typeof profileFromWire>[0] }>(
+    'GET',
+    `/users/${seg(userId)}`,
+    { signal },
+  );
   return { success: true, user: profileFromWire(data.user) };
 }
 
@@ -221,11 +267,17 @@ export async function changeUsername(
   newUsername: string,
   expectedRevision: number,
 ): Promise<{ username: string; revision: number }> {
-  return api('PUT', '/me/username', { token, json: { username: newUsername, expected_revision: expectedRevision } });
+  return api('PUT', '/me/username', {
+    token,
+    json: { username: newUsername, expected_revision: expectedRevision },
+  });
 }
 
 /** `PUT /me/password` — every session of the account ends, this one included. */
-export async function changePassword(token: string, data: { old_password: string; new_password: string }): Promise<void> {
+export async function changePassword(
+  token: string,
+  data: { old_password: string; new_password: string },
+): Promise<void> {
   await api('PUT', '/me/password', { token, json: data });
 }
 
@@ -318,7 +370,9 @@ interface WireImageComment {
  * first; every page is read, so a thread that could not be read is never shown as a shorter one.
  */
 export async function getSiteComments(imageId: number, signal?: AbortSignal): Promise<Comment[]> {
-  const rows = await allPages<WireImageComment>(`/images/${seg(imageId)}/comments`, 'comments', { signal });
+  const rows = await allPages<WireImageComment>(`/images/${seg(imageId)}/comments`, 'comments', {
+    signal,
+  });
   return rows
     .map((row): Comment => ({
       id: row.id,
@@ -330,8 +384,9 @@ export async function getSiteComments(imageId: number, signal?: AbortSignal): Pr
       avatar: row.author.avatar || null,
       source: 'picpony',
       experience: row.author.experience,
-      equipped_badges: parseEquippedBadges(row.author.equipped_badges)
-        .map(({ badge_name, badge_color }) => ({ badge_name, badge_color })),
+      equipped_badges: parseEquippedBadges(row.author.equipped_badges).map(
+        ({ badge_name, badge_color }) => ({ badge_name, badge_color }),
+      ),
     }))
     .reverse();
 }
@@ -348,9 +403,20 @@ export async function getUserComments(
   token?: string | null,
 ): Promise<UserCommentsResponse> {
   const data = await api<{
-    comments: { id: number; target_id: number; content: string; created_at: string; kind: 'image' | 'post' }[];
+    comments: {
+      id: number;
+      target_id: number;
+      content: string;
+      created_at: string;
+      kind: 'image' | 'post';
+    }[];
     total_pages: number;
-  }>('GET', `/users/${seg(userId)}/comments`, { token, signal, query: { page }, cache: 'no-store' });
+  }>('GET', `/users/${seg(userId)}/comments`, {
+    token,
+    signal,
+    query: { page },
+    cache: 'no-store',
+  });
   return {
     comments: data.comments.map((row): UserComment => ({
       id: row.id,
@@ -371,7 +437,14 @@ export async function getUserPosts(
   token?: string | null,
 ): Promise<UserPostsResponse> {
   const data = await api<{
-    posts: { id: number; title: string; cover_image: string | null; created_at: string; reply_count: number; like_count: number }[];
+    posts: {
+      id: number;
+      title: string;
+      cover_image: string | null;
+      created_at: string;
+      reply_count: number;
+      like_count: number;
+    }[];
     total_pages: number;
   }>('GET', `/users/${seg(userId)}/posts`, { token, signal, query: { page }, cache: 'no-store' });
   return {
@@ -394,7 +467,10 @@ export async function getUserPosts(
 /** `GET /me/unread-counts` — `{messages, notifications, interactions, forum}`: unread private
  *  messages, system notifications, interactions, and forum posts created since the last
  *  `POST /me/forum/read-receipts`. */
-export async function getUnreadCounts(token: string, signal?: AbortSignal): Promise<UnreadCountsResponse> {
+export async function getUnreadCounts(
+  token: string,
+  signal?: AbortSignal,
+): Promise<UnreadCountsResponse> {
   return api<UnreadCountsResponse>('GET', '/me/unread-counts', { token, signal });
 }
 
@@ -404,7 +480,10 @@ export async function getUnreadCounts(token: string, signal?: AbortSignal): Prom
 
 /** `POST /auth/challenges {}` — a slider challenge; the browser keeps its `picpony_challenge` cookie. */
 export async function captchaGet(): Promise<CaptchaChallenge> {
-  const data = await api<{ challenge: CaptchaChallenge }>('POST', '/auth/challenges', { json: {}, cache: 'no-store' });
+  const data = await api<{ challenge: CaptchaChallenge }>('POST', '/auth/challenges', {
+    json: {},
+    cache: 'no-store',
+  });
   return data.challenge;
 }
 
@@ -413,7 +492,11 @@ export async function captchaGet(): Promise<CaptchaChallenge> {
  * own 310px canvas units, the trace's `t` in milliseconds since the drag began. A miss is a 403
  * `CAPTCHA_MISMATCH`; a spent or expired challenge a 410 `CAPTCHA_EXPIRED`.
  */
-export async function captchaVerify(challengeId: string, x: number, trace: readonly CaptchaPoint[]): Promise<CaptchaProof> {
+export async function captchaVerify(
+  challengeId: string,
+  x: number,
+  trace: readonly CaptchaPoint[],
+): Promise<CaptchaProof> {
   return api<CaptchaProof>('POST', `/auth/challenges/${seg(challengeId)}/verification`, {
     json: { x, trace },
     cache: 'no-store',
@@ -421,7 +504,11 @@ export async function captchaVerify(challengeId: string, x: number, trace: reado
 }
 
 /** Only these refusal codes require a new captcha challenge. */
-export const CAPTCHA_RETRY_CODES = ['CAPTCHA_REQUIRED', 'CAPTCHA_SESSION_REQUIRED', 'CAPTCHA_EXPIRED'] as const;
+export const CAPTCHA_RETRY_CODES = [
+  'CAPTCHA_REQUIRED',
+  'CAPTCHA_SESSION_REQUIRED',
+  'CAPTCHA_EXPIRED',
+] as const;
 
 /**
  * Announcement bodies are admin-authored HTML, and they are sanitised **here**, once, for every
@@ -444,7 +531,13 @@ export async function getAnnouncement(
   options?: { skipVersion?: string | null },
 ): Promise<{ success: true; announcement?: Announcement }> {
   const data = await api<{
-    announcement: { id: number; version: string; title: string; content: string; created_at: string } | null;
+    announcement: {
+      id: number;
+      version: string;
+      title: string;
+      content: string;
+      created_at: string;
+    } | null;
   }>('GET', '/announcements/latest', { signal });
   if (!data.announcement) return { success: true };
   if (options?.skipVersion != null && data.announcement.version === options.skipVersion) {
@@ -475,8 +568,15 @@ export interface UpstreamCredential {
   };
 }
 
-export async function getUpstreamCredential(token: string, signal?: AbortSignal): Promise<UpstreamCredential> {
-  return api<UpstreamCredential>('GET', '/me/upstream-credential', { token, signal, cache: 'no-store' });
+export async function getUpstreamCredential(
+  token: string,
+  signal?: AbortSignal,
+): Promise<UpstreamCredential> {
+  return api<UpstreamCredential>('GET', '/me/upstream-credential', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
 }
 
 /**
@@ -490,12 +590,19 @@ export async function saveApikey(
 ): Promise<UpstreamCredential> {
   return api<UpstreamCredential>('PUT', '/me/upstream-credential', {
     token,
-    json: { request_id: requestId(), expected_revision: data.expected_revision, api_key: data.api_key },
+    json: {
+      request_id: requestId(),
+      expected_revision: data.expected_revision,
+      api_key: data.api_key,
+    },
   });
 }
 
 /** Ask the backend to check the stored key's owner again (`…/verifications`). */
-export async function verifyUpstreamCredential(token: string, expectedRevision: number): Promise<UpstreamCredential> {
+export async function verifyUpstreamCredential(
+  token: string,
+  expectedRevision: number,
+): Promise<UpstreamCredential> {
   return api<UpstreamCredential>('POST', '/me/upstream-credential/verifications', {
     token,
     json: { request_id: requestId(), expected_revision: expectedRevision },
@@ -503,7 +610,10 @@ export async function verifyUpstreamCredential(token: string, expectedRevision: 
 }
 
 /** Unbind the key (`DELETE /me/upstream-credential`). */
-export async function clearUpstreamCredential(token: string, expectedRevision: number): Promise<UpstreamCredential> {
+export async function clearUpstreamCredential(
+  token: string,
+  expectedRevision: number,
+): Promise<UpstreamCredential> {
   return api<UpstreamCredential>('DELETE', '/me/upstream-credential', {
     token,
     json: { request_id: requestId(), expected_revision: expectedRevision },
@@ -518,7 +628,11 @@ export async function clearUpstreamCredential(token: string, expectedRevision: n
 export async function updateSettings(
   token: string,
   data: { settings: Record<string, unknown>; expected_revision: number },
-): Promise<{ settings: Record<string, unknown>; revision: number; adjustments: { field: string; effective: string; reason: string }[] }> {
+): Promise<{
+  settings: Record<string, unknown>;
+  revision: number;
+  adjustments: { field: string; effective: string; reason: string }[];
+}> {
   return api('PUT', '/me/preferences', { token, json: data });
 }
 
@@ -539,12 +653,19 @@ export async function confirmEmailChange(
   verification: string,
   code: string,
 ): Promise<{ email_changed: true; email: string; already_completed?: boolean }> {
-  return api('POST', `/me/email-changes/${seg(verification)}/confirmation`, { token, json: { code } });
+  return api('POST', `/me/email-changes/${seg(verification)}/confirmation`, {
+    token,
+    json: { code },
+  });
 }
 
 /** `POST /images/{id}/reports {reason}` — one report per user and picture (a duplicate is a 409). */
 export async function reportImage(token: string, imageId: number, reason: string): Promise<void> {
-  await api('POST', `/images/${seg(imageId)}/reports`, { token, idempotencyKey: requestId(), json: { reason } });
+  await api('POST', `/images/${seg(imageId)}/reports`, {
+    token,
+    idempotencyKey: requestId(),
+    json: { reason },
+  });
 }
 
 /**
@@ -570,7 +691,9 @@ export async function searchImage(imageFile: File, distance: number, signal?: Ab
   }
   const data = await readObject<Record<string, unknown>>(response);
   if (Array.isArray(data.images)) {
-    data.images = (data.images as PonyImage[]).filter((row) => row && typeof row === 'object').map(applyImageLine);
+    data.images = (data.images as PonyImage[])
+      .filter((row) => row && typeof row === 'object')
+      .map(applyImageLine);
   }
   return data;
 }
@@ -588,7 +711,11 @@ export async function addBrowsingHistory(
   token: string,
   params: { image_id: number; preview_url: string; uploader: string },
 ): Promise<void> {
-  await recordBrowsingHistory(token, { imageId: params.image_id, previewUrl: params.preview_url, uploader: params.uploader });
+  await recordBrowsingHistory(token, {
+    imageId: params.image_id,
+    previewUrl: params.preview_url,
+    uploader: params.uploader,
+  });
 }
 
 /**
@@ -599,7 +726,11 @@ export async function getMyBadges(
   token: string,
   signal?: AbortSignal,
 ): Promise<{ badges: HeldBadge[]; equipped: EquippedBadge[] }> {
-  const data = await api<{ badges: unknown; equipped: unknown }>('GET', '/me/badges', { token, signal, cache: 'no-store' });
+  const data = await api<{ badges: unknown; equipped: unknown }>('GET', '/me/badges', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
   return { badges: parseHeldBadges(data.badges), equipped: parseEquippedBadges(data.equipped) };
 }
 
@@ -618,7 +749,11 @@ export async function equipBadges(token: string, badges: readonly EquippedBadge[
  * badge the administrator has not described has no entry, and the wall says 暂无简介.
  */
 export async function getBadgeDictionary(signal?: AbortSignal): Promise<Record<string, string>> {
-  const data = await api<{ dictionary: { name: string; description: string }[] }>('GET', '/badges/dictionary', { signal });
+  const data = await api<{ dictionary: { name: string; description: string }[] }>(
+    'GET',
+    '/badges/dictionary',
+    { signal },
+  );
   const dictionary: Record<string, string> = {};
   for (const row of data.dictionary) {
     const description = row.description.trim();
@@ -699,24 +834,24 @@ export async function getDictionary(
   },
   signal?: AbortSignal,
 ): Promise<DictionaryResult> {
-  const data = await api<{ tags: WireDictionaryTag[]; total_matches: number | null; stats: DictionaryStats | null }>(
-    'GET',
-    '/dictionary/tags',
-    {
-      token,
-      signal,
-      cache: 'no-store',
-      query: {
-        page: params.page || undefined,
-        limit: params.limit || undefined,
-        keyword: params.keyword || undefined,
-        sort: params.sort || undefined,
-        category: params.category || undefined,
-        untranslated: params.untranslated ? true : undefined,
-        wiki_overlap: params.wiki_overlap ? true : undefined,
-      },
+  const data = await api<{
+    tags: WireDictionaryTag[];
+    total_matches: number | null;
+    stats: DictionaryStats | null;
+  }>('GET', '/dictionary/tags', {
+    token,
+    signal,
+    cache: 'no-store',
+    query: {
+      page: params.page || undefined,
+      limit: params.limit || undefined,
+      keyword: params.keyword || undefined,
+      sort: params.sort || undefined,
+      category: params.category || undefined,
+      untranslated: params.untranslated ? true : undefined,
+      wiki_overlap: params.wiki_overlap ? true : undefined,
     },
-  );
+  });
   return {
     success: true,
     tags: data.tags.map(dictionaryRow),
@@ -731,11 +866,10 @@ export async function getTagTranslations(tags: string[]): Promise<{
   translations: Record<string, string>;
   categories: Record<string, string>;
 }> {
-  const data = await api<{ translations: Record<string, string>; categories: Record<string, string> }>(
-    'POST',
-    '/dictionary/translations',
-    { json: { tags } },
-  );
+  const data = await api<{
+    translations: Record<string, string>;
+    categories: Record<string, string>;
+  }>('POST', '/dictionary/translations', { json: { tags } });
   return { success: true, ...data };
 }
 
@@ -782,7 +916,11 @@ export async function getDeveloperStatus(
   prerequisites: { logged_in?: boolean; api_bound?: boolean; level_gt_3?: boolean };
   state: DeveloperState;
 }> {
-  const state = await api<DeveloperState>('GET', '/me/developer-access', { token, signal, cache: 'no-store' });
+  const state = await api<DeveloperState>('GET', '/me/developer-access', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
   return {
     success: true,
     is_developer: state.active,
@@ -796,8 +934,14 @@ export async function getDeveloperStatus(
  * 输入 8 位维护密码开启开发者模式 (`PUT /me/developer-access/grant`). The write names the access
  * revision and the maintenance code's generation, both read first.
  */
-export async function enableDeveloperMode(token: string, password: string): Promise<DeveloperState> {
-  const state = await api<DeveloperState>('GET', '/me/developer-access', { token, cache: 'no-store' });
+export async function enableDeveloperMode(
+  token: string,
+  password: string,
+): Promise<DeveloperState> {
+  const state = await api<DeveloperState>('GET', '/me/developer-access', {
+    token,
+    cache: 'no-store',
+  });
   return api<DeveloperState>('PUT', '/me/developer-access/grant', {
     token,
     json: {
@@ -811,7 +955,10 @@ export async function enableDeveloperMode(token: string, password: string): Prom
 
 /** 关闭开发者模式 (`DELETE /me/developer-access/grant`). */
 export async function disableDeveloperMode(token: string): Promise<DeveloperState> {
-  const state = await api<DeveloperState>('GET', '/me/developer-access', { token, cache: 'no-store' });
+  const state = await api<DeveloperState>('GET', '/me/developer-access', {
+    token,
+    cache: 'no-store',
+  });
   return api<DeveloperState>('DELETE', '/me/developer-access/grant', {
     token,
     json: { request_id: requestId(), expected_revision: state.revision },
@@ -819,13 +966,20 @@ export async function disableDeveloperMode(token: string): Promise<DeveloperStat
 }
 
 /** `GET /editor/dictionary/duplicates` — every row whose English name another row shares. */
-export async function getDictionaryDuplicates(token: string, signal?: AbortSignal): Promise<DictionaryResult> {
-  const data = await api<{ tags: WireDictionaryTag[]; total_matches: number }>('GET', '/editor/dictionary/duplicates', {
-    token,
-    signal,
-    cache: 'no-store',
-    query: { limit: 200 },
-  });
+export async function getDictionaryDuplicates(
+  token: string,
+  signal?: AbortSignal,
+): Promise<DictionaryResult> {
+  const data = await api<{ tags: WireDictionaryTag[]; total_matches: number }>(
+    'GET',
+    '/editor/dictionary/duplicates',
+    {
+      token,
+      signal,
+      cache: 'no-store',
+      query: { limit: 200 },
+    },
+  );
   return { success: true, tags: data.tags.map(dictionaryRow), total_matches: data.total_matches };
 }
 
@@ -857,9 +1011,14 @@ export async function saveDictionaryTag(
     restricted: data.restricted ?? false,
     expected_revision: data.id ? data.revision : undefined,
   };
-  if (data.id && typeof data.revision !== 'number') throw new ApiError('invalid', { message: '标签版本未知，请刷新后重试' });
+  if (data.id && typeof data.revision !== 'number')
+    throw new ApiError('invalid', { message: '标签版本未知，请刷新后重试' });
   return data.id
-    ? api('PUT', `/editor/dictionary/tags/${seg(data.id)}`, { token, idempotencyKey: requestId(), json: body })
+    ? api('PUT', `/editor/dictionary/tags/${seg(data.id)}`, {
+        token,
+        idempotencyKey: requestId(),
+        json: body,
+      })
     : api('POST', '/editor/dictionary/tags', { token, idempotencyKey: requestId(), json: body });
 }
 
@@ -899,7 +1058,12 @@ export async function getDictionaryTagHistory(
       created_at: string;
       snapshot: WireDictionaryTag;
     }[];
-  }>('GET', `/editor/dictionary/tags/${seg(tagId)}/history`, { token, signal, cache: 'no-store', query: { limit: 100 } });
+  }>('GET', `/editor/dictionary/tags/${seg(tagId)}/history`, {
+    token,
+    signal,
+    cache: 'no-store',
+    query: { limit: 100 },
+  });
   return {
     success: true,
     history: data.history.map((row) => ({
@@ -918,6 +1082,11 @@ export async function getDictionaryTagHistory(
 }
 
 /** The 运营团队 list for /about (`GET /team-members`, public) — every page, in the roster's order. */
-export async function getTeamMembers(signal?: AbortSignal): Promise<{ success: true; members: TeamMember[] }> {
-  return { success: true, members: await allPages<TeamMember>('/team-members', 'members', { signal }) };
+export async function getTeamMembers(
+  signal?: AbortSignal,
+): Promise<{ success: true; members: TeamMember[] }> {
+  return {
+    success: true,
+    members: await allPages<TeamMember>('/team-members', 'members', { signal }),
+  };
 }

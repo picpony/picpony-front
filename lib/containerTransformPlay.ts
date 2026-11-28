@@ -84,10 +84,21 @@ export function surfaceOf(el: Element, box: Box): Surface {
   return { box, radii: radiiOf(style), colour: style.backgroundColor };
 }
 
-const CORNER_PROPS = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius'] as const;
+const CORNER_PROPS = [
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomRightRadius',
+  'borderBottomLeftRadius',
+] as const;
 
 /** The markers a copy must not carry, or a lookup for the live element would resolve into it. */
-const COPY_MARKERS = ['data-forum-row', 'data-forum-card', 'data-detail-origin', 'data-folder-card', 'data-folder-page'];
+const COPY_MARKERS = [
+  'data-forum-row',
+  'data-forum-card',
+  'data-detail-origin',
+  'data-folder-card',
+  'data-folder-page',
+];
 
 export function hide(el: HTMLElement, prop: 'visibility' | 'opacity', hidden: Hidden[]) {
   hidden.push({ el, prop, value: el.style[prop] });
@@ -229,7 +240,14 @@ export interface ContainerHandle {
 }
 
 /** What a run that could not start hands back. */
-const LANDED: ContainerHandle = { finish() {}, suspend() {}, resume() {}, fadeOut() {}, turn: () => false, done: true };
+const LANDED: ContainerHandle = {
+  finish() {},
+  suspend() {},
+  resume() {},
+  fadeOut() {},
+  turn: () => false,
+  done: true,
+};
 
 interface Chain {
   /** The column both ends share, or null for the four-corner chain (`shutterLevels`). */
@@ -244,7 +262,9 @@ const columnOf = (a: Box, b: Box) => (sameColumn(a, b) ? { left: a.left, width: 
 
 /** Whether a chain built for one column carries a pair needing the other. */
 const sameShape = (a: Chain['column'], b: Chain['column']) =>
-  a === null || b === null ? a === b : Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;
+  a === null || b === null
+    ? a === b
+    : Math.abs(a.left - b.left) <= 0.5 && Math.abs(a.width - b.width) <= 0.5;
 
 /** The clip chain for the pair `a` → `b` (`shutterLevels`), corners at `radii`, under `parent`. */
 function buildChain(parent: HTMLElement, a: Box, b: Box, radii: Radii): Chain {
@@ -291,7 +311,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     return LANDED;
   }
   const origin = layer.getBoundingClientRect();
-  const local = (b: Box): Box => ({ left: b.left - origin.left, top: b.top - origin.top, width: b.width, height: b.height });
+  const local = (b: Box): Box => ({
+    left: b.left - origin.left,
+    top: b.top - origin.top,
+    width: b.width,
+    height: b.height,
+  });
   const from = local(run.from.box);
   const to = local(run.to.box);
 
@@ -299,7 +324,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
      where neither content's own box reaches (a row's box is shorter than the card it leaves) and
      between the two windows. A turn that sends it somewhere larger grows it with it. */
   const surface = document.createElement('div');
-  Object.assign(surface.style, { position: 'absolute', left: '0px', top: '0px', backgroundColor: run.from.colour });
+  Object.assign(surface.style, {
+    position: 'absolute',
+    left: '0px',
+    top: '0px',
+    backgroundColor: run.from.colour,
+  });
   const reach = { width: 0, height: 0 };
   const cover = (box: Box) => {
     reach.width = Math.max(reach.width, box.width);
@@ -308,12 +338,30 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
   const leavingShift = run.outgoing ? document.createElement('div') : null;
   if (leavingShift) {
-    Object.assign(leavingShift.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
+    Object.assign(leavingShift.style, {
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      width: '0px',
+      height: '0px',
+    });
   }
   const arrivingShift = document.createElement('div');
-  Object.assign(arrivingShift.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
+  Object.assign(arrivingShift.style, {
+    position: 'absolute',
+    left: '0px',
+    top: '0px',
+    width: '0px',
+    height: '0px',
+  });
   const arriving = document.createElement('div');
-  Object.assign(arriving.style, { position: 'absolute', left: '0px', top: '0px', width: '0px', height: '0px' });
+  Object.assign(arriving.style, {
+    position: 'absolute',
+    left: '0px',
+    top: '0px',
+    width: '0px',
+    height: '0px',
+  });
   /* Both contents are laid out at their own width, so their words wrap exactly as on the page. */
   if (run.outgoing && leavingShift) {
     place(run.outgoing.el, run.outgoing.box, run.from.box, run.from.radii);
@@ -330,7 +378,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
 
   type Shift = { x: number; y: number };
   type SharedPose = { box: Box; radii: Radii; img: Box };
-  let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null = null;
+  let sharedState: { chain: Chain; img: HTMLImageElement; ratio: number; baseW: number } | null =
+    null;
   let sharedEnds: { a: SharedPose; b: SharedPose } | null = null;
   let outSlotOffset: Shift | null = null;
   let inSlotOffset: Shift | null = null;
@@ -341,8 +390,18 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     const sharedFromBox = local(run.shared.from.box);
     const sharedToBox = local(run.shared.to.box);
     const ratio = Number.isFinite(run.shared.ratio) && run.shared.ratio > 0 ? run.shared.ratio : 1;
-    const fromImg = coverImageRect(sharedFromBox.width, sharedFromBox.height, ratio, run.shared.from.anchorY ?? 0.5);
-    const toImg = coverImageRect(sharedToBox.width, sharedToBox.height, ratio, run.shared.to.anchorY ?? 0.5);
+    const fromImg = coverImageRect(
+      sharedFromBox.width,
+      sharedFromBox.height,
+      ratio,
+      run.shared.from.anchorY ?? 0.5,
+    );
+    const toImg = coverImageRect(
+      sharedToBox.width,
+      sharedToBox.height,
+      ratio,
+      run.shared.to.anchorY ?? 0.5,
+    );
     const baseW = Math.max(fromImg.width, toImg.width, 1);
     const baseH = baseW / ratio;
     const sharedChain = buildChain(layer, sharedFromBox, sharedToBox, run.shared.from.radii);
@@ -394,9 +453,10 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   /** The current leg's two ends, for the pose a turn leaves from (`containerPose`). */
   let ends: { a: Surface; b: Surface };
   const legacySamples = supportsLinearEasing() ? null : sampleEasing(forumTransformProgress);
-  const track = (frame: (progress: number) => Keyframe): Keyframe[] => legacySamples
-    ? legacySamples.map(({ offset, progress }) => ({ ...frame(progress), offset }))
-    : [frame(0), frame(1)];
+  const track = (frame: (progress: number) => Keyframe): Keyframe[] =>
+    legacySamples
+      ? legacySamples.map(({ offset, progress }) => ({ ...frame(progress), offset }))
+      : [frame(0), frame(1)];
   const animateShutters = (
     targetChain: Chain,
     aBox: Box,
@@ -410,12 +470,25 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
       const el = targetChain.elements[index];
       const [x0, y0] = level.translate(aBox);
       const [x1, y1] = level.translate(bBox);
-      list.push(el.animate(track((p) => ({ transform: `translate(${x0 + (x1 - x0) * p}px, ${y0 + (y1 - y0) * p}px)` })), timing));
+      list.push(
+        el.animate(
+          track((p) => ({
+            transform: `translate(${x0 + (x1 - x0) * p}px, ${y0 + (y1 - y0) * p}px)`,
+          })),
+          timing,
+        ),
+      );
       /* The corners, on an animation of their own so the transform above stays on the compositor. */
       const corners = level.corners.filter((corner) => aRadii[corner] !== bRadii[corner]);
       if (corners.length > 0) {
-        const at = (radii: Radii) => Object.fromEntries(corners.map((corner) => [CORNER_PROPS[corner], `${radii[corner]}px`]));
-        list.push(el.animate(track((p) => at(radiiAt(aRadii, bRadii, p))), timing));
+        const at = (radii: Radii) =>
+          Object.fromEntries(corners.map((corner) => [CORNER_PROPS[corner], `${radii[corner]}px`]));
+        list.push(
+          el.animate(
+            track((p) => at(radiiAt(aRadii, bRadii, p))),
+            timing,
+          ),
+        );
       }
     });
   };
@@ -425,8 +498,19 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     x: a.x + (b.x - a.x) * p,
     y: a.y + (b.y - a.y) * p,
   });
-  const animateShift = (el: HTMLElement, a: Shift, b: Shift, timing: KeyframeAnimationOptions, list: Animation[]) => {
-    if (Math.abs(a.x) <= 0.01 && Math.abs(a.y) <= 0.01 && Math.abs(b.x) <= 0.01 && Math.abs(b.y) <= 0.01) {
+  const animateShift = (
+    el: HTMLElement,
+    a: Shift,
+    b: Shift,
+    timing: KeyframeAnimationOptions,
+    list: Animation[],
+  ) => {
+    if (
+      Math.abs(a.x) <= 0.01 &&
+      Math.abs(a.y) <= 0.01 &&
+      Math.abs(b.x) <= 0.01 &&
+      Math.abs(b.y) <= 0.01
+    ) {
       el.style.transform = '';
       return;
     }
@@ -447,10 +531,15 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
    */
   const playLeg = (leg: ContainerLeg, a: Surface, b: Surface): Animation[] => {
     ends = { a, b };
-    const timing: KeyframeAnimationOptions = { duration: leg.duration, easing: legacySamples ? 'linear' : FORUM_TRANSFORM_EASING, fill: 'both' };
+    const timing: KeyframeAnimationOptions = {
+      duration: leg.duration,
+      easing: legacySamples ? 'linear' : FORUM_TRANSFORM_EASING,
+      fill: 'both',
+    };
     const list: Animation[] = [];
     animateShutters(chain, a.box, b.box, a.radii, b.radii, timing, list);
-    if (leavingShift && outShiftEnds) animateShift(leavingShift, outShiftEnds.a, outShiftEnds.b, timing, list);
+    if (leavingShift && outShiftEnds)
+      animateShift(leavingShift, outShiftEnds.a, outShiftEnds.b, timing, list);
     if (inShiftEnds) animateShift(arrivingShift, inShiftEnds.a, inShiftEnds.b, timing, list);
     if (sharedState && sharedEnds) {
       const { a: sa, b: sb } = sharedEnds;
@@ -463,15 +552,21 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
         ),
       );
     }
-    if (a.colour !== b.colour) list.push(surface.animate(
-      legacySamples ? track((p) => ({ backgroundColor: colourAt(a.colour, b.colour, p) }))
-        : [{ backgroundColor: a.colour }, { backgroundColor: b.colour }], timing,
-    ));
+    if (a.colour !== b.colour)
+      list.push(
+        surface.animate(
+          legacySamples
+            ? track((p) => ({ backgroundColor: colourAt(a.colour, b.colour, p) }))
+            : [{ backgroundColor: a.colour }, { backgroundColor: b.colour }],
+          timing,
+        ),
+      );
     /* The outgoing content goes over its window and the incoming one comes over its own, on top
        of it, so where the two would meet the newer one is in front. */
-    const fade = (window: FadeWindow, out = false) => legacySamples
-      ? track((p) => ({ opacity: fadeAt(window, leg.from + (leg.to - leg.from) * p, out) }))
-      : fadeTrack(window, leg.from, leg.to, out);
+    const fade = (window: FadeWindow, out = false) =>
+      legacySamples
+        ? track((p) => ({ opacity: fadeAt(window, leg.from + (leg.to - leg.from) * p, out) }))
+        : fadeTrack(window, leg.from, leg.to, out);
     if (run.outgoing) list.push(run.outgoing.el.animate(fade(run.fade.outgoing, true), timing));
     list.push(fading.animate(fade(run.fade.incoming), timing));
     /* One frame ahead: the first frame that shows the container already shows it moving (the
@@ -489,7 +584,11 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
 
   let leg = freshContainerLeg(full);
-  let animations = playLeg(leg, { box: from, radii: run.from.radii, colour: run.from.colour }, { box: to, radii: run.to.radii, colour: run.to.colour });
+  let animations = playLeg(
+    leg,
+    { box: from, radii: run.from.radii, colour: run.from.colour },
+    { box: to, radii: run.to.radii, colour: run.to.colour },
+  );
   let hidden = run.hidden;
 
   let done = false;
@@ -534,7 +633,10 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
   };
   const fadeOff = (onEnd: () => void) => {
     const opacity = getComputedStyle(layer).opacity;
-    retiring = layer.animate([{ opacity }, { opacity: 0 }], { ...springTiming('fastEffects', stage.category), fill: 'forwards' });
+    retiring = layer.animate([{ opacity }, { opacity: 0 }], {
+      ...springTiming('fastEffects', stage.category),
+      fill: 'forwards',
+    });
     retiring.finished.then(onEnd, () => {});
   };
   let leaving = false;
@@ -568,7 +670,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
     );
     window.clearTimeout(watchdog);
     const bound = () => {
-      if (animations === current && !done) watchdog = window.setTimeout(finish, stage.boundMs + 300);
+      if (animations === current && !done)
+        watchdog = window.setTimeout(finish, stage.boundMs + 300);
     };
     if (current[0]) current[0].ready.then(bound, () => {});
     else bound();
@@ -621,7 +724,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
          Nothing it holds is moved or painted again, so the turn's frame commits new animations
          rather than a page's copy re-parented into new layers. */
       chain.levels.forEach((level, index) => {
-        for (const corner of level.corners) chain.elements[index].style[CORNER_PROPS[corner]] = `${now.radii[corner]}px`;
+        for (const corner of level.corners)
+          chain.elements[index].style[CORNER_PROPS[corner]] = `${now.radii[corner]}px`;
       });
     } else {
       /* A clip for the new pair, at the pose it is leaving from, with the contents moved across:
@@ -639,7 +743,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
         if (sameShape(sharedState.chain.column, nextColumn)) {
           sharedState.chain.levels.forEach((level, index) => {
             for (const corner of level.corners) {
-              sharedState!.chain.elements[index].style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
+              sharedState!.chain.elements[index].style[CORNER_PROPS[corner]] =
+                `${nowShared.radii[corner]}px`;
             }
           });
         } else {
@@ -655,7 +760,12 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
           b: {
             box: nextBox,
             radii: target.sharedTo.radii,
-            img: coverImageRect(nextBox.width, nextBox.height, sharedState.ratio, target.sharedTo.anchorY ?? 0.5),
+            img: coverImageRect(
+              nextBox.width,
+              nextBox.height,
+              sharedState.ratio,
+              target.sharedTo.anchorY ?? 0.5,
+            ),
           },
         };
         if (nowOutShift && outSlotOffset) {
@@ -671,7 +781,8 @@ export function playContainerRun(run: ContainerRun, stage: ContainerStage): Cont
           const el = sharedState!.chain.elements[index];
           const [tx, ty] = level.translate(nowShared.box);
           el.style.transform = `translate(${tx}px, ${ty}px)`;
-          for (const corner of level.corners) el.style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
+          for (const corner of level.corners)
+            el.style[CORNER_PROPS[corner]] = `${nowShared.radii[corner]}px`;
         });
         sharedState.img.style.transform = sharedImgTransform(nowShared.img, sharedState.baseW);
         sharedRetiring?.cancel();

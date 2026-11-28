@@ -32,5 +32,6 @@ export function runSummary(verb: string, succeeded: number, failed: number): str
  * step (failed ones included). Curried, for `setProgress(completeProgress(summary))`.
  */
 export function completeProgress(summary: string) {
-  return (state: ProgressState | null): ProgressState | null => (state ? { ...state, done: state.total, summary } : state);
+  return (state: ProgressState | null): ProgressState | null =>
+    state ? { ...state, done: state.total, summary } : state;
 }

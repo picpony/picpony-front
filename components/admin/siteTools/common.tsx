@@ -20,7 +20,8 @@ import { useAdminMutation } from '../useAdminMutation';
 
 export function protectedPanel(Content: ComponentType<AdminPanelProps>) {
   return function SiteToolPanel(props: AdminPanelProps) {
-    if (!props.token || !canAccess('admin', props.role)) return <EmptyState size="pane" title="没有访问权限" />;
+    if (!props.token || !canAccess('admin', props.role))
+      return <EmptyState size="pane" title="没有访问权限" />;
     return <Content key={props.token} {...props} />;
   };
 }
@@ -53,28 +54,44 @@ export function ReadState({
   variant?: 'form' | 'table';
   children?: ReactNode;
 }) {
-  return <>
-    {error && <ErrorRetry size="inline" {...retryError(title, error)} onRetry={retry} />}
-    {loading ? (
-      <PageLoadingIndicator
-        size="pane"
-        holdFooter
-        delay={120}
-        label={variant === 'table' ? '正在加载列表…' : '正在加载设置…'}
-        className="min-h-60"
-      />
-    ) : children}
-  </>;
+  return (
+    <>
+      {error && <ErrorRetry size="inline" {...retryError(title, error)} onRetry={retry} />}
+      {loading ? (
+        <PageLoadingIndicator
+          size="pane"
+          holdFooter
+          delay={120}
+          label={variant === 'table' ? '正在加载列表…' : '正在加载设置…'}
+          className="min-h-60"
+        />
+      ) : (
+        children
+      )}
+    </>
+  );
 }
 export function fieldErrors(error: unknown): Record<string, string> {
   return error instanceof FormProblem ? error.fields : { form: apiErrorMessage(error) };
 }
-export function SettingsFields({ fields, values, onChange, errors = {}, busy = false }: {
-  fields: FieldSpec[]; values: Values; onChange: (next: Values) => void; errors?: Record<string, string>; busy?: boolean;
+export function SettingsFields({
+  fields,
+  values,
+  onChange,
+  errors = {},
+  busy = false,
+}: {
+  fields: FieldSpec[];
+  values: Values;
+  onChange: (next: Values) => void;
+  errors?: Record<string, string>;
+  busy?: boolean;
 }) {
   /* Full-width for multiline/toggle fields and for any trailing odd half-width field in a run so
      no single field sits alone in a 50% orphan column. */
-  const fullSpan = fields.map((f) => ['textarea', 'ips', 'origins'].includes(f.kind ?? '') || f.kind === 'boolean');
+  const fullSpan = fields.map(
+    (f) => ['textarea', 'ips', 'origins'].includes(f.kind ?? '') || f.kind === 'boolean',
+  );
   let run = 0;
   for (let i = 0; i < fields.length; i++) {
     if (fullSpan[i]) {
@@ -86,56 +103,172 @@ export function SettingsFields({ fields, values, onChange, errors = {}, busy = f
   }
   if (run % 2 === 1) fullSpan[fields.length - 1] = true;
 
-  return <FormGrid>{fields.map((f, index) => {
-    const value = values[f.key];
-    const set = (v: string | boolean) => onChange({ ...values, [f.key]: v });
-    const multiline = ['textarea', 'ips', 'origins'].includes(f.kind ?? '');
-    return <div key={f.key} className={fullSpan[index] ? '@lg/form:col-span-2 min-w-0' : 'min-w-0'}>
-      {f.kind === 'boolean' ? <ToggleSwitch layout="row" label={f.label} description={f.helper} checked={value === true} onChange={set} disabled={busy} />
-        : f.options ? <Field helper={f.helper} error={errors[f.key]}><Select label={f.label} value={String(value ?? '')} options={f.options} onChange={set} disabled={busy} /></Field>
-          : multiline ? <Textarea label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} rows={f.key === 'system_prompt' ? 7 : 4} className="resize-none" helper={f.helper} error={errors[f.key]} maxLength={f.max} />
-            : <Input label={f.label} value={String(value ?? '')} onChange={(e) => set(e.target.value)} readOnly={busy} type={f.kind === 'password' ? 'password' : 'text'} inputMode={f.kind === 'number' ? (f.decimal ? 'decimal' : 'numeric') : f.kind === 'url' ? 'url' : 'text'} autoComplete={f.kind === 'password' ? 'new-password' : 'off'} helper={f.helper} error={errors[f.key]} maxLength={f.kind === 'number' ? undefined : f.max} />}
-    </div>;
-  })}</FormGrid>;
+  return (
+    <FormGrid>
+      {fields.map((f, index) => {
+        const value = values[f.key];
+        const set = (v: string | boolean) => onChange({ ...values, [f.key]: v });
+        const multiline = ['textarea', 'ips', 'origins'].includes(f.kind ?? '');
+        return (
+          <div key={f.key} className={fullSpan[index] ? '@lg/form:col-span-2 min-w-0' : 'min-w-0'}>
+            {f.kind === 'boolean' ? (
+              <ToggleSwitch
+                layout="row"
+                label={f.label}
+                description={f.helper}
+                checked={value === true}
+                onChange={set}
+                disabled={busy}
+              />
+            ) : f.options ? (
+              <Field helper={f.helper} error={errors[f.key]}>
+                <Select
+                  label={f.label}
+                  value={String(value ?? '')}
+                  options={f.options}
+                  onChange={set}
+                  disabled={busy}
+                />
+              </Field>
+            ) : multiline ? (
+              <Textarea
+                label={f.label}
+                value={String(value ?? '')}
+                onChange={(e) => set(e.target.value)}
+                readOnly={busy}
+                rows={f.key === 'system_prompt' ? 7 : 4}
+                className="resize-none"
+                helper={f.helper}
+                error={errors[f.key]}
+                maxLength={f.max}
+              />
+            ) : (
+              <Input
+                label={f.label}
+                value={String(value ?? '')}
+                onChange={(e) => set(e.target.value)}
+                readOnly={busy}
+                type={f.kind === 'password' ? 'password' : 'text'}
+                inputMode={
+                  f.kind === 'number'
+                    ? f.decimal
+                      ? 'decimal'
+                      : 'numeric'
+                    : f.kind === 'url'
+                      ? 'url'
+                      : 'text'
+                }
+                autoComplete={f.kind === 'password' ? 'new-password' : 'off'}
+                helper={f.helper}
+                error={errors[f.key]}
+                maxLength={f.kind === 'number' ? undefined : f.max}
+              />
+            )}
+          </div>
+        );
+      })}
+    </FormGrid>
+  );
 }
 
-export function ConfigEditor({ title, token, initial, fields, validate, save, refresh, confirmation, headerActions, children, saved = '已保存设置', readOnly = false }: {
-  title: string; token: string; initial: Values; fields: FieldSpec[]; validate: (v: Values) => unknown;
-  save: (v: Values) => Promise<object>; refresh: (data: Record<string, unknown>, values: Values) => void; confirmation?: (v: Values) => string; headerActions?: ReactNode; children?: ReactNode; saved?: string;
+export function ConfigEditor({
+  title,
+  token,
+  initial,
+  fields,
+  validate,
+  save,
+  refresh,
+  confirmation,
+  headerActions,
+  children,
+  saved = '已保存设置',
+  readOnly = false,
+}: {
+  title: string;
+  token: string;
+  initial: Values;
+  fields: FieldSpec[];
+  validate: (v: Values) => unknown;
+  save: (v: Values) => Promise<object>;
+  refresh: (data: Record<string, unknown>, values: Values) => void;
+  confirmation?: (v: Values) => string;
+  headerActions?: ReactNode;
+  children?: ReactNode;
+  saved?: string;
   /** Shown but not editable (a setting this role may read and not write). */
   readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState<{ values: Values; savedFrom?: Values } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const values = draft && (!draft.savedFrom || draft.savedFrom === initial) ? draft.values : initial;
+  const values =
+    draft && (!draft.savedFrom || draft.savedFrom === initial) ? draft.values : initial;
   const mutation = useAdminMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
   /* The form is named by its heading, not by an `aria-label` restating it (G4-031). */
   const heading = useId();
   const submit = () => {
     if (mutation.isPending() || readOnly) return;
-    try { validate(values); } catch (error) { setErrors(fieldErrors(error)); return; }
+    try {
+      validate(values);
+    } catch (error) {
+      setErrors(fieldErrors(error));
+      return;
+    }
     setErrors({});
     const snapshot = { ...values };
-    const commit = () => void mutation.run(async () => (await save(snapshot)) as Record<string, unknown>, () => {
-      const clean = { ...snapshot };
-      for (const field of fields) {
-        if (field.kind === 'password') clean[field.key] = '';
-        if (field.key.endsWith('clear_key')) clean[field.key] = false;
-      }
-      setDraft({ values: clean, savedFrom: initial }); showToast(saved, 'success');
-    }, `${title}保存失败`, { onCommitted: (data) => refresh(data, snapshot) });
-    if (confirmation) confirmThen(`确认保存${title}`, confirmation(snapshot), commit, { tone: 'filled' });
+    const commit = () =>
+      void mutation.run(
+        async () => (await save(snapshot)) as Record<string, unknown>,
+        () => {
+          const clean = { ...snapshot };
+          for (const field of fields) {
+            if (field.kind === 'password') clean[field.key] = '';
+            if (field.key.endsWith('clear_key')) clean[field.key] = false;
+          }
+          setDraft({ values: clean, savedFrom: initial });
+          showToast(saved, 'success');
+        },
+        `${title}保存失败`,
+        { onCommitted: (data) => refresh(data, snapshot) },
+      );
+    if (confirmation)
+      confirmThen(`确认保存${title}`, confirmation(snapshot), commit, { tone: 'filled' });
     else commit();
   };
-  return <>
-    <AdminForm onSubmit={submit} aria-labelledby={heading}>
-      <SectionHeading as="h3" id={heading} actions={headerActions}>{title}</SectionHeading>
-      {children}
-      <SettingsFields fields={fields} values={values} busy={mutation.busy || readOnly} errors={errors} onChange={(v) => { setDraft({ values: v }); setErrors({}); }} />
-      {errors.form && <p role="alert" className="text-body-s text-error">{errors.form}</p>}
-      {!readOnly && <FormActions><Button type="submit" variant="filled" loading={mutation.busy}>{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button></FormActions>}
-    </AdminForm>
-    {confirmDialog}
-  </>;
+  return (
+    <>
+      <AdminForm onSubmit={submit} aria-labelledby={heading}>
+        <SectionHeading as="h3" id={heading} actions={headerActions}>
+          {title}
+        </SectionHeading>
+        {children}
+        <SettingsFields
+          fields={fields}
+          values={values}
+          busy={mutation.busy || readOnly}
+          errors={errors}
+          onChange={(v) => {
+            setDraft({ values: v });
+            setErrors({});
+          }}
+        />
+        {errors.form && (
+          <p role="alert" className="text-body-s text-error">
+            {errors.form}
+          </p>
+        )}
+        {!readOnly && (
+          <FormActions>
+            <Button
+              type="submit"
+              variant="filled"
+              loading={mutation.busy}
+            >{`保存${/^[A-Za-z]/.test(title) ? ' ' : ''}${title}`}</Button>
+          </FormActions>
+        )}
+      </AdminForm>
+      {confirmDialog}
+    </>
+  );
 }

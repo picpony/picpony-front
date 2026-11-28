@@ -178,7 +178,8 @@ export function captureRouteSnapshot(layer: HTMLElement | null): RouteSnapshot |
      under the overlay, unseen, so an arriving page's back affordance is an arrival. */
   if (snapshot) {
     const slot = overlay ? null : document.querySelector<HTMLElement>('[data-page-back-slot]');
-    snapshot.chrome = slot && slot.childElementCount > 0 ? (captureVisualClone(slot, layer)?.node ?? null) : null;
+    snapshot.chrome =
+      slot && slot.childElementCount > 0 ? (captureVisualClone(slot, layer)?.node ?? null) : null;
   }
   /* getSnapshotBeforeUpdate runs before any incoming child's layout effect.
      The route supplies that page's entrance, so its grid and empty states must
@@ -201,7 +202,8 @@ export function arm(layer: HTMLElement, stop: () => void, allowanceMs = 0) {
   /* Armed on the first frame, which is when the animation's own clock starts. */
   fade.frame = window.requestAnimationFrame(() => {
     fade.frame = 0;
-    if (active === fade) fade.timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS + allowanceMs);
+    if (active === fade)
+      fade.timer = window.setTimeout(cancelRouteCrossFade, MAX_LIFETIME_MS + allowanceMs);
   });
   active = fade;
 }

@@ -1,7 +1,12 @@
 import { cache } from 'react';
 import { SITE_STATUS_CACHE_TAG } from '@/lib/constants';
 import { cacheSeconds } from '@/lib/serverMemo';
-import { semanticConfigFrom, UNKNOWN_SEMANTIC_CONFIG, type SemanticSearchConfig, type SemanticSearchSettings } from '@/lib/semanticConfig';
+import {
+  semanticConfigFrom,
+  UNKNOWN_SEMANTIC_CONFIG,
+  type SemanticSearchConfig,
+  type SemanticSearchSettings,
+} from '@/lib/semanticConfig';
 import { upstreamOrigin } from '@/lib/upstream.server';
 export { semanticConfigFrom } from '@/lib/semanticConfig';
 export type { SemanticSearchConfig } from '@/lib/semanticConfig';

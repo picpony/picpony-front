@@ -37,13 +37,17 @@ function isDetailFinalOf(node: EventTarget | null, imageId: number): node is HTM
  * Stills only: an animated source decodes at frame 0, and repainting a GIF mid-flight would
  * jump frames — those keep the frame the user pressed.
  */
-export function watchImageHeroFlightUpgrade(canvas: HTMLCanvasElement, imageId: number): () => void {
+export function watchImageHeroFlightUpgrade(
+  canvas: HTMLCanvasElement,
+  imageId: number,
+): () => void {
   if (typeof document === 'undefined') return () => {};
   let disposed = false;
 
   const upgrade = (media: HTMLImageElement) => {
     if (disposed || !canvas.isConnected) return;
-    if (isVolatileVisualMedia(media) || isAnimatedVisualSource(media.currentSrc || media.src)) return;
+    if (isVolatileVisualMedia(media) || isAnimatedVisualSource(media.currentSrc || media.src))
+      return;
     repaintHeroFrame(canvas, media);
   };
 

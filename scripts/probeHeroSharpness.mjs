@@ -15,7 +15,9 @@ import { createServer } from 'node:http';
 import { stubFor } from './netAuditFixtures.mjs';
 
 const ROOT = process.cwd();
-const PORT = 3972, UP = 3973, CDP = 9351;
+const PORT = 3972,
+  UP = 3973,
+  CDP = 9351;
 const ARGS = process.argv.slice(2);
 const WIDTH = Number(ARGS.find((a) => /^\d+$/.test(a)) || 1920);
 /* `--fake-cdn` rather than an env var, because an npm script cannot set one portably here. */
@@ -35,7 +37,8 @@ try {
     { signal: AbortSignal.timeout(30000) },
   );
   const text = await res.text();
-  if (!text.startsWith('{')) throw new Error(`derpibooru answered ${res.status} with non-JSON; try again later`);
+  if (!text.startsWith('{'))
+    throw new Error(`derpibooru answered ${res.status} with non-JSON; try again later`);
   live = JSON.parse(text);
   writeFileSync(CACHE, text);
 }
@@ -43,11 +46,18 @@ try {
    that cannot show the defect — and a source with enough pixels to *be* sharp: a picture whose
    own `medium` is 800px wide cannot fill a 1888 device-pixel box however it is fetched. */
 live.images = live.images.filter(
-  (i) => ['png', 'jpg', 'jpeg', 'webp'].includes((i.format || '').toLowerCase()) && (i.width || 0) >= 2400,
+  (i) =>
+    ['png', 'jpg', 'jpeg', 'webp'].includes((i.format || '').toLowerCase()) &&
+    (i.width || 0) >= 2400,
 );
 if (!live.images.length) throw new Error('no large static images in the cached fixture');
 const byId = new Map(live.images.map((i) => [i.id, i]));
-console.log(`live fixture: ${live.images.length} static images, ids ${live.images.slice(0, 3).map((i) => i.id).join(',')}`);
+console.log(
+  `live fixture: ${live.images.length} static images, ids ${live.images
+    .slice(0, 3)
+    .map((i) => i.id)
+    .join(',')}`,
+);
 
 const upstream = createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -60,33 +70,58 @@ const upstream = createServer((req, res) => {
   if (one) return json({ image: byId.get(Number(one[1])) ?? live.images[0] });
   const stub = stubFor(`http://127.0.0.1:${UP}${req.url}`, req.method);
   if (!stub) return void res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(UP, '127.0.0.1', r));
 
-const server = spawn(process.execPath, [path.join(ROOT, 'node_modules/next/dist/bin/next'), 'start', '-p', String(PORT)], {
-  cwd: ROOT, stdio: 'ignore',
-  env: { ...process.env,
-    PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${UP}`,
-    PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json`,
-    /* Or the SSR'd feed comes from `.next/cache/fetch-cache`, which persists on disk between
+const server = spawn(
+  process.execPath,
+  [path.join(ROOT, 'node_modules/next/dist/bin/next'), 'start', '-p', String(PORT)],
+  {
+    cwd: ROOT,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      PICPONY_UPSTREAM_ORIGIN: `http://127.0.0.1:${UP}`,
+      PICPONY_DERPI_ORIGIN: `http://127.0.0.1:${UP}/api/v1/json`,
+      /* Or the SSR'd feed comes from `.next/cache/fetch-cache`, which persists on disk between
        runs — a fixture change is invisible. Same switch `npm run net:audit` uses. */
-    PICPONY_SERVER_MEMO_TTL_MS: '0' },
-});
+      PICPONY_SERVER_MEMO_TTL_MS: '0',
+    },
+  },
+);
 const until = async (fn, ms = 60000) => {
   const e = Date.now() + ms;
-  while (Date.now() < e) { try { if (await fn()) return true; } catch {} await new Promise((r) => setTimeout(r, 250)); }
+  while (Date.now() < e) {
+    try {
+      if (await fn()) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 250));
+  }
   return false;
 };
-if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok)))) throw new Error('no server');
+if (!(await until(() => fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok))))
+  throw new Error('no server');
 
 const profile = mkdtempSync(path.join(tmpdir(), 'pp-sharp-'));
-const browser = spawn('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  ['--headless=new', '--disable-gpu', `--remote-debugging-port=${CDP}`, `--user-data-dir=${profile}`,
-   `--window-size=${WIDTH},1080`,
-   ...(process.env.PROBE_DPR ? [`--force-device-scale-factor=${process.env.PROBE_DPR}`] : []),
-   '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+const browser = spawn(
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  [
+    '--headless=new',
+    '--disable-gpu',
+    `--remote-debugging-port=${CDP}`,
+    `--user-data-dir=${profile}`,
+    `--window-size=${WIDTH},1080`,
+    ...(process.env.PROBE_DPR ? [`--force-device-scale-factor=${process.env.PROBE_DPR}`] : []),
+    '--no-first-run',
+    'about:blank',
+  ],
+  { stdio: 'ignore' },
+);
 let page;
 await until(async () => {
   const l = await (await fetch(`http://127.0.0.1:${CDP}/json/list`)).json();
@@ -95,20 +130,33 @@ await until(async () => {
 });
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
-let id = 0; const pending = new Map();
+let id = 0;
+const pending = new Map();
 const listeners = new Map();
 ws.onmessage = (m) => {
   const x = JSON.parse(m.data);
-  if (x.id && pending.has(x.id)) { pending.get(x.id)(x); pending.delete(x.id); return; }
+  if (x.id && pending.has(x.id)) {
+    pending.get(x.id)(x);
+    pending.delete(x.id);
+    return;
+  }
   if (x.method) listeners.get(x.method)?.forEach((fn) => fn(x.params));
 };
 const on = (method, fn) => {
   if (!listeners.has(method)) listeners.set(method, new Set());
   listeners.get(method).add(fn);
 };
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-const ev = async (e) => (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true })).result?.result?.value;
-await send('Runtime.enable'); await send('Page.enable');
+const send = (method, params = {}) =>
+  new Promise((r) => {
+    const i = ++id;
+    pending.set(i, r);
+    ws.send(JSON.stringify({ id: i, method, params }));
+  });
+const ev = async (e) =>
+  (await send('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true }))
+    .result?.result?.value;
+await send('Runtime.enable');
+await send('Page.enable');
 
 /* `--throttle=<mbps>` shapes the faked CDN only, by delaying each fulfillment in proportion to
  * the rung's weight.
@@ -136,14 +184,18 @@ if (FAKE_CDN) {
   const { deflateSync, crc32 } = await import('node:zlib');
   const png = (w, h) => {
     const chunk = (type, data) => {
-      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length);
       const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-      const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body) >>> 0);
+      const crc = Buffer.alloc(4);
+      crc.writeUInt32BE(crc32(body) >>> 0);
       return Buffer.concat([len, body, crc]);
     };
     const ihdr = Buffer.alloc(13);
-    ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
-    ihdr[8] = 8; ihdr[9] = 2; // 8-bit RGB
+    ihdr.writeUInt32BE(w, 0);
+    ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 2; // 8-bit RGB
     /* A fine checkerboard rather than a flat fill. A flat image is sharp at every scale, so it
        could not distinguish a 304px canvas from a 1152px one by eye — and it also compresses to
        nothing, which would hide any cost the transfer has. */
@@ -152,7 +204,9 @@ if (FAKE_CDN) {
       const row = Buffer.alloc(1 + w * 3);
       for (let x = 0; x < w; x++) {
         const v = ((x >> 1) + (y >> 1)) % 2 ? 235 : 25;
-        row[1 + x * 3] = v; row[2 + x * 3] = v; row[3 + x * 3] = v;
+        row[1 + x * 3] = v;
+        row[2 + x * 3] = v;
+        row[3 + x * 3] = v;
       }
       rows.push(row);
     }
@@ -189,7 +243,11 @@ if (FAKE_CDN) {
       crc.writeUInt32BE(crc32(withType) >>> 0);
       const chunkBuf = Buffer.concat([len, withType, crc]);
       // Before IEND, which is the last 12 bytes.
-      buf = Buffer.concat([buf.subarray(0, buf.length - 12), chunkBuf, buf.subarray(buf.length - 12)]);
+      buf = Buffer.concat([
+        buf.subarray(0, buf.length - 12),
+        chunkBuf,
+        buf.subarray(buf.length - 12),
+      ]);
     }
     const b64 = buf.toString('base64');
     bodies.set(rung.w, b64);
@@ -198,7 +256,9 @@ if (FAKE_CDN) {
   for (const r of RUNGS) bodyFor(r);
   console.log(
     'faking derpicdn: ' +
-      RUNGS.map((r) => `${r.w}px/${Math.round(((bodies.get(r.w).length * 3) / 4) / 1024)}KB`).join(' '),
+      RUNGS.map((r) => `${r.w}px/${Math.round((bodies.get(r.w).length * 3) / 4 / 1024)}KB`).join(
+        ' ',
+      ),
   );
   const arrivals = [];
   on('Fetch.requestPaused', ({ requestId, request }) => {
@@ -355,7 +415,9 @@ const out = await ev(`(async () => {
 if (out?.error) console.log(out.error);
 else {
   const c = out.cardInfo;
-  console.log(`card: ${c.cssWidth}px css, bitmap ${c.naturalWidth}px, aspect ${c.aspect}, dpr ${c.dpr}`);
+  console.log(
+    `card: ${c.cssWidth}px css, bitmap ${c.naturalWidth}px, aspect ${c.aspect}, dpr ${c.dpr}`,
+  );
   console.log('  t(ms)  layer    devicePx  bitmapW  upscale');
   let prevKey = '';
   for (const s of out.samples) {
@@ -363,22 +425,31 @@ else {
     if (key === prevKey) continue;
     prevKey = key;
     const up = s.naturalW ? (s.paintedW / s.naturalW).toFixed(2) : '-';
-    console.log(`  ${String(s.t).padStart(5)}  ${s.layer.padEnd(8)} ${String(s.paintedW).padStart(8)}  ${String(s.naturalW).padStart(7)}  ${String(up).padStart(7)}x`);
+    console.log(
+      `  ${String(s.t).padStart(5)}  ${s.layer.padEnd(8)} ${String(s.paintedW).padStart(8)}  ${String(s.naturalW).padStart(7)}  ${String(up).padStart(7)}x`,
+    );
   }
   if (FAKE_CDN && globalThis.__arrivals?.length) {
     console.log('faked CDN, as served (rung, weight, held before fulfilling):');
     for (const a of globalThis.__arrivals) {
-      console.log(`   ${String(a.w).padStart(4)}px ${String(a.kb).padStart(4)}KB  held ${String(a.ms).padStart(4)}ms`);
+      console.log(
+        `   ${String(a.w).padStart(4)}px ${String(a.kb).padStart(4)}KB  held ${String(a.ms).padStart(4)}ms`,
+      );
     }
   }
   if (out.cdn?.length) {
     console.log('derpicdn fetches (rung, weight, duration):');
-    for (const c of out.cdn) console.log(`   ${c.rung.padEnd(8)} ${String(c.kb).padStart(4)}KB  ${String(c.ms).padStart(4)}ms  (started ${c.start}ms)`);
+    for (const c of out.cdn)
+      console.log(
+        `   ${c.rung.padEnd(8)} ${String(c.kb).padStart(4)}KB  ${String(c.ms).padStart(4)}ms  (started ${c.start}ms)`,
+      );
   }
   console.log('requests during hover:');
   for (const r of (out.hoverRequests || []).slice(0, 8)) console.log('   ...' + r);
   console.log('opened:', JSON.stringify(out.opened));
-  console.log(`after: url=${out.url} overlay=${out.overlay} heroActive=${out.heroActiveAttr} finalReady=${out.finalReady}`);
+  console.log(
+    `after: url=${out.url} overlay=${out.overlay} heroActive=${out.heroActiveAttr} finalReady=${out.finalReady}`,
+  );
   for (const l of out.layers) console.log('   ' + JSON.stringify(l));
   const fly = out.samples.filter((s) => s.layer === 'flyer' && s.naturalW > 0);
   if (fly.length) {
@@ -389,7 +460,10 @@ else {
     );
   } else console.log('\nflight: no flyer canvas sampled (no flight ran)');
   const last = out.samples.at(-1);
-  if (last) console.log(`\nat landing: ${last.paintedW}px painted from a ${last.naturalW}px bitmap = ${(last.paintedW / (last.naturalW || 1)).toFixed(2)}x upscale`);
+  if (last)
+    console.log(
+      `\nat landing: ${last.paintedW}px painted from a ${last.naturalW}px bitmap = ${(last.paintedW / (last.naturalW || 1)).toFixed(2)}x upscale`,
+    );
 }
 
 /* The assertion, and it is on the flyer canvas rather than on any img.
@@ -434,5 +508,13 @@ OK: flight repainted to a ${sharp[0].naturalW}px canvas at t=${sharp[0].t}ms (ca
   }
 }
 
-ws.close(); browser.kill(); server.kill(); upstream.close();
-setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(failed ? 1 : 0); }, 500);
+ws.close();
+browser.kill();
+server.kill();
+upstream.close();
+setTimeout(() => {
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {}
+  process.exit(failed ? 1 : 0);
+}, 500);

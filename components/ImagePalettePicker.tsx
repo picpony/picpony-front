@@ -14,7 +14,12 @@ import Spinner from '@/components/Spinner';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { useScheme, type CustomSpec, type PaletteHues } from '@/lib/appearance';
 import { ICON } from '@/lib/icons';
-import { ImageDecodeError, imageOptions, usePaletteTools, type ImageOption } from '@/lib/paletteLazy';
+import {
+  ImageDecodeError,
+  imageOptions,
+  usePaletteTools,
+  type ImageOption,
+} from '@/lib/paletteLazy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -116,7 +121,9 @@ export default function ImagePalettePicker({
       onExited={onExited}
       footer={
         <>
-          <Button variant="text" onClick={onClose}>取消</Button>
+          <Button variant="text" onClick={onClose}>
+            取消
+          </Button>
           <Button
             variant="filled"
             disabled={!picked}
@@ -155,7 +162,9 @@ export default function ImagePalettePicker({
                   className={cn(dropState !== 'dragging' && 'text-on-surface-variant')}
                 />
               )}
-              <span className={cn('text-body-s', dropState !== 'dragging' && 'text-on-surface-variant')}>
+              <span
+                className={cn('text-body-s', dropState !== 'dragging' && 'text-on-surface-variant')}
+              >
                 {phase === 'reading'
                   ? '正在取色…'
                   : preview
@@ -169,7 +178,9 @@ export default function ImagePalettePicker({
         {phase === 'done' &&
           (options.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <p className="text-label-m text-on-surface-variant">{multi ? '从图片推荐的配色' : '从图片推荐的颜色'}</p>
+              <p className="text-label-m text-on-surface-variant">
+                {multi ? '从图片推荐的配色' : '从图片推荐的颜色'}
+              </p>
               {/* `role="radiogroup"` with a roving tab stop, because a single
                   choice among up to eight is what this is — the same argument
                   `PaletteSwatches` makes about the eleven, and the same tile: each
@@ -196,7 +207,9 @@ export default function ImagePalettePicker({
                       role="radio"
                       aria-checked={on}
                       aria-label={
-                        multi ? `${option.seed}，副色相${option.accent === null ? '自动' : '取自图中'}` : option.seed
+                        multi
+                          ? `${option.seed}，副色相${option.accent === null ? '自动' : '取自图中'}`
+                          : option.seed
                       }
                       tabIndex={on ? 0 : -1}
                       onClick={() => setPicked(option)}
@@ -241,7 +254,6 @@ export default function ImagePalettePicker({
             caption={picked.seed}
           />
         )}
-
       </div>
     </Modal>
   );

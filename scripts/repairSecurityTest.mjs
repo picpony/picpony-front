@@ -74,24 +74,53 @@ const editorSources = [
 /* The converter on its own, for what the editor may hold that BBCode cannot say: styles as the
    CSSOM reports them, a target that would end its own tag, a scheme that must not survive. */
 const conversions = [
-  ['<p style="text-align: center;">居中的段落</p><p style="text-align: right;">右对齐</p>', '[center]居中的段落[/center]\n\n[right]右对齐[/right]'],
-  ['<p><span style="background-color: rgb(216, 68, 147);">高亮文字</span></p>', '[bg=rgb(216, 68, 147)]高亮文字[/bg]'],
-  ['<p><span style="color: rgb(231, 95, 51); background-color: rgb(216, 68, 147);">两者</span></p>', '[bg=rgb(216, 68, 147)][color=rgb(231, 95, 51)]两者[/color][/bg]'],
-  ['<p><span style="color: rgba(1, 2, 3, 0.5);">半透明</span></p>', '[color=rgba(1, 2, 3, 0.5)]半透明[/color]'],
+  [
+    '<p style="text-align: center;">居中的段落</p><p style="text-align: right;">右对齐</p>',
+    '[center]居中的段落[/center]\n\n[right]右对齐[/right]',
+  ],
+  [
+    '<p><span style="background-color: rgb(216, 68, 147);">高亮文字</span></p>',
+    '[bg=rgb(216, 68, 147)]高亮文字[/bg]',
+  ],
+  [
+    '<p><span style="color: rgb(231, 95, 51); background-color: rgb(216, 68, 147);">两者</span></p>',
+    '[bg=rgb(216, 68, 147)][color=rgb(231, 95, 51)]两者[/color][/bg]',
+  ],
+  [
+    '<p><span style="color: rgba(1, 2, 3, 0.5);">半透明</span></p>',
+    '[color=rgba(1, 2, 3, 0.5)]半透明[/color]',
+  ],
   ['<p>第一行<br>第二行</p><p>第二段</p>', '第一行\n第二行\n\n第二段'],
-  ['<p><a href="https://example.test/a]b c">x</a></p>', '[url=https://example.test/a%5Db%20c]x[/url]'],
+  [
+    '<p><a href="https://example.test/a]b c">x</a></p>',
+    '[url=https://example.test/a%5Db%20c]x[/url]',
+  ],
   ['<p><a href="javascript:alert(1)">x</a> <img src="data:image/png;base64,AAAA"></p>', 'x'],
   ['<p><br></p><p>after a blank line</p><p><br></p>', 'after a blank line'],
 ];
 assert.equal(bbcodeToSafeHtml(''), '');
 assert.equal(bbcodeToHtml(''), '<p><br></p>');
-assert.equal(bbcodeToSafeHtml('[b]outer[b]inner[/b]tail[/b]'), '<p><strong>outer<strong>inner</strong>tail</strong></p>');
-assert.equal(bbcodeToSafeHtml('[code][b]literal[/b]\n\n<script>x</script>[/code]'), '<pre><code>[b]literal[/b]\n\n&lt;script&gt;x&lt;/script&gt;</code></pre>');
-assert.equal(bbcodeToSafeHtml('line 1\nline 2\n\nparagraph 2'), '<p>line 1<br />line 2</p><p>paragraph 2</p>');
-assert.equal(bbcodeToSafeHtml('[list][*]first[*]second[/list]'), '<ul><li>first</li><li>second</li></ul>');
+assert.equal(
+  bbcodeToSafeHtml('[b]outer[b]inner[/b]tail[/b]'),
+  '<p><strong>outer<strong>inner</strong>tail</strong></p>',
+);
+assert.equal(
+  bbcodeToSafeHtml('[code][b]literal[/b]\n\n<script>x</script>[/code]'),
+  '<pre><code>[b]literal[/b]\n\n&lt;script&gt;x&lt;/script&gt;</code></pre>',
+);
+assert.equal(
+  bbcodeToSafeHtml('line 1\nline 2\n\nparagraph 2'),
+  '<p>line 1<br />line 2</p><p>paragraph 2</p>',
+);
+assert.equal(
+  bbcodeToSafeHtml('[list][*]first[*]second[/list]'),
+  '<ul><li>first</li><li>second</li></ul>',
+);
 assert.doesNotMatch(outputs[0].html, /<a\b/);
 assert.doesNotMatch(bbcodeToSafeHtml('[color=red;position:fixed]safe[/color]'), /style=/);
-assert.doesNotThrow(() => bbcodeToSafeHtml('[quote]'.repeat(10_000) + 'text' + '[/quote]'.repeat(10_000)));
+assert.doesNotThrow(() =>
+  bbcodeToSafeHtml('[quote]'.repeat(10_000) + 'text' + '[/quote]'.repeat(10_000)),
+);
 
 const realFetch = globalThis.fetch;
 try {
@@ -101,24 +130,41 @@ try {
     return Response.json({ id: 7, name: 'Test badge' });
   };
   /* `POST /me/badges/claims/{token}`: the link token is a path segment, encoded; no body. */
-  assert.deepEqual(await claimBadge('session-token', 'link-token&value'), { success: true, badge_name: 'Test badge' });
+  assert.deepEqual(await claimBadge('session-token', 'link-token&value'), {
+    success: true,
+    badge_name: 'Test badge',
+  });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, '/api/v1/me/badges/claims/link-token%26value');
   assert.equal(calls[0].init.method, 'POST');
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer session-token');
   assert.equal(calls[0].init.body, undefined);
-  globalThis.fetch = async () => Response.json({ error: { code: 'CLAIM_EXPIRED', message: '领取链接已失效' } }, { status: 410 });
-  assert.deepEqual(await claimBadge('session-token', 'expired'), { success: false, error: '领取链接已失效' });
+  globalThis.fetch = async () =>
+    Response.json({ error: { code: 'CLAIM_EXPIRED', message: '领取链接已失效' } }, { status: 410 });
+  assert.deepEqual(await claimBadge('session-token', 'expired'), {
+    success: false,
+    error: '领取链接已失效',
+  });
   globalThis.fetch = async () => new Response('<html>502 Bad Gateway</html>', { status: 502 });
-  await assert.rejects(claimBadge('session-token', 'link-token'), (error) => error?.name === 'ApiError' && error.kind === 'http' && error.status === 502,
-    'an outage is unknown, never a refusal');
+  await assert.rejects(
+    claimBadge('session-token', 'link-token'),
+    (error) => error?.name === 'ApiError' && error.kind === 'http' && error.status === 502,
+    'an outage is unknown, never a refusal',
+  );
   globalThis.fetch = async () => new Response('<html>ok</html>', { status: 200 });
-  await assert.rejects(claimBadge('session-token', 'link-token'), (error) => error?.name === 'ApiError' && error.kind === 'invalid',
-    'an unreadable claim response is unknown, never a refusal');
+  await assert.rejects(
+    claimBadge('session-token', 'link-token'),
+    (error) => error?.name === 'ApiError' && error.kind === 'invalid',
+    'an unreadable claim response is unknown, never a refusal',
+  );
   const failure = new TypeError('Failed to fetch');
-  globalThis.fetch = async () => { throw failure; };
-  await assert.rejects(claimBadge('session-token', 'link-token'), (error) =>
-    error?.name === 'ApiError' && error.kind === 'network' && error.cause === failure);
+  globalThis.fetch = async () => {
+    throw failure;
+  };
+  await assert.rejects(
+    claimBadge('session-token', 'link-token'),
+    (error) => error?.name === 'ApiError' && error.kind === 'network' && error.cause === failure,
+  );
 } finally {
   globalThis.fetch = realFetch;
 }
@@ -182,14 +228,31 @@ with sync_playwright() as p:
         browser.close()
 `;
   const result = spawnSync('python', ['-X', 'utf8', '-c', python], {
-    input: JSON.stringify({ outputs, conversions, samples: outputs.slice(attacks.length), editorSources: editorSources.map((input) => ({ input, html: bbcodeToHtml(input) })), converter: htmlToBBCode.toString(), editorPath: path.resolve('node_modules/@wangeditor/editor/dist/index.js') }),
-    encoding: 'utf8', windowsHide: true, timeout: 45_000,
+    input: JSON.stringify({
+      outputs,
+      conversions,
+      samples: outputs.slice(attacks.length),
+      editorSources: editorSources.map((input) => ({ input, html: bbcodeToHtml(input) })),
+      converter: htmlToBBCode.toString(),
+      editorPath: path.resolve('node_modules/@wangeditor/editor/dist/index.js'),
+    }),
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 45_000,
   });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
   const browser = JSON.parse(result.stdout);
   for (const item of browser.editor.slice(0, -1)) {
-    assert.equal(bbcodeToSafeHtml(item.bbcode), bbcodeToSafeHtml(item.input), `Published content survives an editor round trip: ${item.input}`);
-    assert.equal(bbcodeToHtml(item.bbcode), bbcodeToHtml(item.input), `Editor paragraph boundaries survive serialization: ${item.input}`);
+    assert.equal(
+      bbcodeToSafeHtml(item.bbcode),
+      bbcodeToSafeHtml(item.input),
+      `Published content survives an editor round trip: ${item.input}`,
+    );
+    assert.equal(
+      bbcodeToHtml(item.bbcode),
+      bbcodeToHtml(item.input),
+      `Editor paragraph boundaries survive serialization: ${item.input}`,
+    );
   }
   // Citation metadata was already unsupported by wangEditor. Do not turn that
   // existing limitation into the author's name being inserted into quoted text.
@@ -199,9 +262,19 @@ with sync_playwright() as p:
     assert.equal(actual, expected, `The editor's HTML serialises as written: ${html}`);
   }
   assert.match(browser.roundtrips[5].roundtrip, /\[quote="Alice"\]/);
-  assert.match(browser.roundtrips[5].roundtrip, /\[code\]\[b\]literal\[\/b\]\n\n<script>x<\/script>\[\/code\]/);
+  assert.match(
+    browser.roundtrips[5].roundtrip,
+    /\[code\]\[b\]literal\[\/b\]\n\n<script>x<\/script>\[\/code\]/,
+  );
   /* A row ends its line, as the original front end writes it; the renderer reads both. */
-  assert.match(browser.roundtrips[8].roundtrip, /\[table\]\[tr\]\[th\]heading\[\/th\]\[td\]\[b\]cell\[\/b\]\[\/td\]\[\/tr\]\n?\[\/table\]/);
-  console.log(`Browser parsed both presentations of ${outputs.length} BBCode cases safely; ${browser.editor.length} complete editor roundtrips passed.`);
+  assert.match(
+    browser.roundtrips[8].roundtrip,
+    /\[table\]\[tr\]\[th\]heading\[\/th\]\[td\]\[b\]cell\[\/b\]\[\/td\]\[\/tr\]\n?\[\/table\]/,
+  );
+  console.log(
+    `Browser parsed both presentations of ${outputs.length} BBCode cases safely; ${browser.editor.length} complete editor roundtrips passed.`,
+  );
 }
-console.log('BBCode security, nesting, paragraphs, literal code and badge request regressions passed.');
+console.log(
+  'BBCode security, nesting, paragraphs, literal code and badge request regressions passed.',
+);

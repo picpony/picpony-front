@@ -62,9 +62,12 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
   const dirtyRef = useRef(false);
   /* `session` counts openings, so each one starts from the badge's own values while a closing
      dialog keeps its key (and its exit). */
-  const [badgeEdit, setBadgeEdit] = useState<
-    { badge: AdminUserBadge; owner: { id: number; username: string }; open: boolean; session: number } | null
-  >(null);
+  const [badgeEdit, setBadgeEdit] = useState<{
+    badge: AdminUserBadge;
+    owner: { id: number; username: string };
+    open: boolean;
+    session: number;
+  } | null>(null);
   /* The row an action is running on, and which action — so only the pressed button spins. */
   const [running, setRunning] = useState<{ id: number; action: 'ban' | 'delete' } | null>(null);
 
@@ -73,15 +76,17 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return users;
-    return users.filter((user) =>
-      user.id === editing?.id ||
-      String(user.id) === keyword ||
-      user.username?.toLowerCase().includes(keyword) ||
-      user.email?.toLowerCase().includes(keyword));
+    return users.filter(
+      (user) =>
+        user.id === editing?.id ||
+        String(user.id) === keyword ||
+        user.username?.toLowerCase().includes(keyword) ||
+        user.email?.toLowerCase().includes(keyword),
+    );
   }, [users, query, editing?.id]);
   const paged = usePagedRows(filtered, query.trim());
 
-  const editingUser = editing ? users.find((user) => user.id === editing.id) ?? null : null;
+  const editingUser = editing ? (users.find((user) => user.id === editing.id) ?? null) : null;
   const detail = useResource(userDetail, editing && token ? { token, id: editing.id } : SKIP);
   const setDirty = useCallback((dirty: boolean) => {
     dirtyRef.current = dirty;
@@ -115,28 +120,42 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
       setEditing({ id: user.id, closing: true });
       return;
     }
-    void saveMutation.run(
-      async () => ({ ...(await adminApi.adminUpdateUser(token, user, changes)) }),
-      () => {
-        showToast(`已保存${named(user)}的资料`, 'success');
-        setEditing((current) => (current?.id === user.id ? { id: user.id, closing: true } : current));
-      },
-      '保存失败',
-      {
-        key: user.id,
-        onCommitted: () => {
-          userDetail.invalidate({ token, id: user.id });
-          read.refresh();
+    void saveMutation
+      .run(
+        async () => ({ ...(await adminApi.adminUpdateUser(token, user, changes)) }),
+        () => {
+          showToast(`已保存${named(user)}的资料`, 'success');
+          setEditing((current) =>
+            current?.id === user.id ? { id: user.id, closing: true } : current,
+          );
         },
-      },
-    ).finally(() => userDetail.invalidate({ token, id: user.id }));
+        '保存失败',
+        {
+          key: user.id,
+          onCommitted: () => {
+            userDetail.invalidate({ token, id: user.id });
+            read.refresh();
+          },
+        },
+      )
+      .finally(() => userDetail.invalidate({ token, id: user.id }));
   };
 
-  const runRowAction = (user: AdminUser, action: 'ban' | 'delete', request: () => Promise<Record<string, unknown>>, done: string, failure: string, commit: () => void) => {
+  const runRowAction = (
+    user: AdminUser,
+    action: 'ban' | 'delete',
+    request: () => Promise<Record<string, unknown>>,
+    done: string,
+    failure: string,
+    commit: () => void,
+  ) => {
     if (rowMutation.isPending(user.id)) return;
     setRunning({ id: user.id, action });
     void rowMutation
-      .run(request, () => showToast(done, 'success'), failure, { key: user.id, onCommitted: commit })
+      .run(request, () => showToast(done, 'success'), failure, {
+        key: user.id,
+        onCommitted: commit,
+      })
       .finally(() => setRunning((current) => (current?.id === user.id ? null : current)));
   };
 
@@ -147,20 +166,24 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
       banning
         ? `确定要封禁用户${named(user)}吗？封禁后该用户将在所有设备上退出登录。`
         : `确定要解封用户${named(user)}吗？`,
-      () => runRowAction(
-        user,
-        'ban',
-        () => adminApi.adminSetBanned(token, user.id, banning),
-        banning ? `已封禁${named(user)}` : `已解封${named(user)}`,
-        banning ? '封禁失败' : '解封失败',
-        () => {
-          usersQuery.write(token, (previous) => ({
-            rows: previous?.rows.map((row) => (row.id === user.id ? { ...row, is_banned: banning } : row)) ?? [],
-          }));
-          userDetail.invalidate({ token, id: user.id });
-          read.refresh();
-        },
-      ),
+      () =>
+        runRowAction(
+          user,
+          'ban',
+          () => adminApi.adminSetBanned(token, user.id, banning),
+          banning ? `已封禁${named(user)}` : `已解封${named(user)}`,
+          banning ? '封禁失败' : '解封失败',
+          () => {
+            usersQuery.write(token, (previous) => ({
+              rows:
+                previous?.rows.map((row) =>
+                  row.id === user.id ? { ...row, is_banned: banning } : row,
+                ) ?? [],
+            }));
+            userDetail.invalidate({ token, id: user.id });
+            read.refresh();
+          },
+        ),
       { tone: banning ? 'danger' : 'filled' },
     );
   };
@@ -171,19 +194,20 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
     confirmThen(
       '确认抹除用户',
       `确定要抹除用户${named(user)}吗？该账号将被封禁并清除个人资料、登录状态与私信等数据（仅保留审计与交易记录）。此操作无法恢复。`,
-      () => runRowAction(
-        user,
-        'delete',
-        () => adminApi.adminDeleteUser(token, user.id),
-        `已抹除${named(user)}`,
-        '抹除失败',
-        () => {
-          /* The editor as it is now, not as it was when the confirmation opened (review P6-O14). */
-          setEditing((current) => (current?.id === user.id ? null : current));
-          userDetail.invalidate({ token, id: user.id });
-          read.refresh();
-        },
-      ),
+      () =>
+        runRowAction(
+          user,
+          'delete',
+          () => adminApi.adminDeleteUser(token, user.id),
+          `已抹除${named(user)}`,
+          '抹除失败',
+          () => {
+            /* The editor as it is now, not as it was when the confirmation opened (review P6-O14). */
+            setEditing((current) => (current?.id === user.id ? null : current));
+            userDetail.invalidate({ token, id: user.id });
+            read.refresh();
+          },
+        ),
       { tone: 'danger' },
     );
   };
@@ -192,12 +216,13 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
     confirmThen(
       '确认删除徽章',
       `确定要删除用户${named(owner)}的徽章「${badge.name}」吗？`,
-      () => void badgeMutation.run(
-        () => adminApi.adminDeleteBadge(token, badge.id),
-        () => showToast(`已删除徽章「${badge.name}」`, 'success'),
-        '删除失败',
-        { key: badge.id, onCommitted: () => userDetail.invalidate({ token, id: owner.id }) },
-      ),
+      () =>
+        void badgeMutation.run(
+          () => adminApi.adminDeleteBadge(token, badge.id),
+          () => showToast(`已删除徽章「${badge.name}」`, 'success'),
+          '删除失败',
+          { key: badge.id, onCommitted: () => userDetail.invalidate({ token, id: owner.id }) },
+        ),
       { tone: 'danger' },
     );
   };
@@ -206,13 +231,22 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
     if (!badgeEdit) return;
     const { badge } = badgeEdit;
     void badgeMutation.run(
-      () => adminApi.adminEditBadge(token, { id: badge.id, name: values.name, color: values.color, expires_at: badge.expires_at }),
+      () =>
+        adminApi.adminEditBadge(token, {
+          id: badge.id,
+          name: values.name,
+          color: values.color,
+          expires_at: badge.expires_at,
+        }),
       () => {
         showToast(`已更新徽章「${values.name}」`, 'success');
         setBadgeEdit((current) => (current ? { ...current, open: false } : current));
       },
       '保存失败',
-      { key: badge.id, onCommitted: () => userDetail.invalidate({ token, id: badgeEdit.owner.id }) },
+      {
+        key: badge.id,
+        onCommitted: () => userDetail.invalidate({ token, id: badgeEdit.owner.id }),
+      },
     );
   };
 
@@ -228,8 +262,19 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         </span>
       ),
     },
-    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
-    { key: 'role', header: '角色', width: 'auto', render: (user) => <RoleBadge role={user.role} showUser size="md" /> },
+    {
+      key: 'id',
+      header: 'ID',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (user) => `#${user.id}`,
+    },
+    {
+      key: 'role',
+      header: '角色',
+      width: 'auto',
+      render: (user) => <RoleBadge role={user.role} showUser size="md" />,
+    },
     {
       key: 'email',
       header: '邮箱',
@@ -313,10 +358,18 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
         badgeBusy={(badgeId) => badgeMutation.pendingKeys.has(badgeId)}
         onSave={save}
         onCancel={closeEditor}
-        onExitComplete={() => setEditing((current) => (current?.id === user.id && current.closing ? null : current))}
+        onExitComplete={() =>
+          setEditing((current) => (current?.id === user.id && current.closing ? null : current))
+        }
         onDirtyChange={setDirty}
         onEditBadge={(target, badge) =>
-          setBadgeEdit((current) => ({ badge, owner: target, open: true, session: (current?.session ?? 0) + 1 }))}
+          setBadgeEdit((current) => ({
+            badge,
+            owner: target,
+            open: true,
+            session: (current?.session ?? 0) + 1,
+          }))
+        }
         onDeleteBadge={deleteBadge}
       />
     );
@@ -325,10 +378,7 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
   const keyword = query.trim();
   return (
     <div className="space-y-6">
-      <SectionHeader section="users"
-        onRefresh={read.refresh}
-        isLoading={read.refreshing}
-      />
+      <SectionHeader section="users" onRefresh={read.refresh} isLoading={read.refreshing} />
       <SearchInput value={query} onChange={setQuery} placeholder="搜索用户 ID、用户名或邮箱…" />
       <AdminListAnchor>
         <DataTable<AdminUser>
@@ -350,7 +400,13 @@ export default function UsersTab({ token, role, viewerId }: AdminPanelProps) {
             setEditing(null);
             paged.setPage(page);
           }}
-          summary={read.data ? (keyword ? `找到 ${paged.total} 位用户` : `共 ${paged.total} 位用户`) : undefined}
+          summary={
+            read.data
+              ? keyword
+                ? `找到 ${paged.total} 位用户`
+                : `共 ${paged.total} 位用户`
+              : undefined
+          }
         />
       </AdminListAnchor>
       <BadgeEditDialog

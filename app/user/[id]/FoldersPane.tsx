@@ -16,7 +16,13 @@ import ButtonLink from '@/components/ButtonLink';
    /favorites' card for it does, and the two used to disagree about its name and its count
    (G3-010) — one copy now. */
 import { FOLDER_GRID, FolderCard, FolderGridSkeleton } from '@/components/favorites/FolderCard';
-import { OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
+import {
+  OwnerHiddenNote,
+  PaneFailure,
+  PaneHidden,
+  useVisited,
+  type ProfilePaneProps,
+} from './ProfilePaneStates';
 
 /**
  * 收藏夹 — the user's public favourite folders (decision 15, `get_profile_fave_folders`): the
@@ -33,16 +39,28 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
   const read = useResource(profileFaveFolders, ready && visited && visible ? { ownerId } : SKIP);
   const folders = read.data;
   const coverIds = folders
-    ? [...new Set(folders.map((folder) => folder.latestImageId).filter((cover): cover is number => cover !== null))]
+    ? [
+        ...new Set(
+          folders
+            .map((folder) => folder.latestImageId)
+            .filter((cover): cover is number => cover !== null),
+        ),
+      ]
     : [];
-  const covers = useResource(folderCovers, coverIds.length > 0 ? { ids: coverIds, fp } : SKIP, { keepPrevious: fp });
+  const covers = useResource(folderCovers, coverIds.length > 0 ? { ids: coverIds, fp } : SKIP, {
+    keepPrevious: fp,
+  });
   const rootRef = useRef<HTMLDivElement>(null);
   useFolderReturn(rootRef);
 
   if (!ready) return <FolderGridSkeleton />;
   if (!visible) return <PaneHidden />;
   if (folders === undefined) {
-    return read.error ? <PaneFailure error={read.error} title="收藏夹加载失败" onRetry={read.refresh} /> : <FolderGridSkeleton />;
+    return read.error ? (
+      <PaneFailure error={read.error} title="收藏夹加载失败" onRetry={read.refresh} />
+    ) : (
+      <FolderGridSkeleton />
+    );
   }
   if (folders.length === 0) {
     return own ? (
@@ -51,10 +69,7 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
         icon={<MdFolder size={ICON.display} />}
         title="暂无公开收藏夹"
         action={
-          <ButtonLink
-            href="/favorites"
-            variant="tonal"
-          >
+          <ButtonLink href="/favorites" variant="tonal">
             管理收藏夹
           </ButtonLink>
         }
@@ -73,8 +88,12 @@ export default function FoldersPane({ profile, own, ready, active }: ProfilePane
             <FolderCard
               folder={folder}
               href={sharedFolderHref(ownerId, folder.id)}
-              cover={folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined}
-              coverPending={folder.latestImageId !== null && covers.data === undefined && !covers.error}
+              cover={
+                folder.latestImageId !== null ? covers.data?.[folder.latestImageId] : undefined
+              }
+              coverPending={
+                folder.latestImageId !== null && covers.data === undefined && !covers.error
+              }
             />
           </li>
         ))}

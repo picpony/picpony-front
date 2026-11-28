@@ -8,7 +8,13 @@ import { Input, Textarea } from '@/components/Input';
 import { showToast } from '@/components/Toast';
 import { isRefusal, saveProfile } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { GENDER_OPTIONS, RACE_OPTIONS, normalizeGender, normalizeRace, optionsWith } from '@/lib/profileFields';
+import {
+  GENDER_OPTIONS,
+  RACE_OPTIONS,
+  normalizeGender,
+  normalizeRace,
+  optionsWith,
+} from '@/lib/profileFields';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { enforceContentGate, todayOnBeijingCalendar } from '@/lib/settingsSync';
 import { useFieldErrors } from '@/lib/useFieldErrors';
@@ -16,7 +22,9 @@ import { sessionUser } from '@/lib/resources';
 import { profileRevision, saveAccountFields, text } from './useAccount';
 
 /** The races whose badge the backend awards when one is chosen (`profiles::RACES`). */
-const RACE_BADGES = new Set(RACE_OPTIONS.map((option) => option.value).filter((value) => value && value !== '其他'));
+const RACE_BADGES = new Set(
+  RACE_OPTIONS.map((option) => option.value).filter((value) => value && value !== '其他'),
+);
 
 const BIO_MAX = 500;
 /* By character, as PHP's `mb_strlen` counts (review P5-O8): `.length` counted an emoji as two.
@@ -91,7 +99,10 @@ export default function ProfileDialog({
     }
     setBusy(true);
     try {
-      const data = await saveProfile(token, { ...draft, expected_revision: profileRevision(readUserInfo()) });
+      const data = await saveProfile(token, {
+        ...draft,
+        expected_revision: profileRevision(readUserInfo()),
+      });
       if (readToken() !== token) return;
       saveAccountFields(token, {
         ...data.profile,
@@ -101,7 +112,8 @@ export default function ProfileDialog({
       /* A birthday that no longer allows 中等限制 takes it away now, not on the next load; the
          backend has already done the same to the stored settings (`adjustments`), so read them. */
       enforceContentGate(readUserInfo());
-      if (data.adjustments.length) void sessionUser.read({ token }, { force: true }).catch(() => {});
+      if (data.adjustments.length)
+        void sessionUser.read({ token }, { force: true }).catch(() => {});
       /* Choosing one of the named races awards its badge (and takes the previous one back). */
       const awarded = draft.race !== saved.race && RACE_BADGES.has(draft.race);
       showToast(awarded ? '已保存个人资料，种族徽章已放入徽章墙' : '已保存个人资料', 'success');
@@ -109,7 +121,8 @@ export default function ProfileDialog({
     } catch (error) {
       if (readToken() !== token) return;
       /* Another device saved the profile meanwhile: read it, so the next save names its version. */
-      if (isRefusal(error, 'PROFILE_CONFLICT')) void sessionUser.read({ token }, { force: true }).catch(() => {});
+      if (isRefusal(error, 'PROFILE_CONFLICT'))
+        void sessionUser.read({ token }, { force: true }).catch(() => {});
       showToast(apiErrorMessage(error, '个人资料保存失败'), 'error');
     } finally {
       setBusy(false);

@@ -3,8 +3,20 @@
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { getAppScroller } from '@/lib/appScroller';
 import { captureVisualClone, restoreSnapshotScroll } from '@/lib/pageSnapshot';
-import { FORUM_FADE, FORUM_TRANSFORM_MS, visibleBox, type Box, type Radii } from '@/lib/forumContainer';
-import { hide, playContainerRun, rectOf, surfaceOf, type Hidden } from '@/lib/containerTransformPlay';
+import {
+  FORUM_FADE,
+  FORUM_TRANSFORM_MS,
+  visibleBox,
+  type Box,
+  type Radii,
+} from '@/lib/forumContainer';
+import {
+  hide,
+  playContainerRun,
+  rectOf,
+  surfaceOf,
+  type Hidden,
+} from '@/lib/containerTransformPlay';
 import { unsealDetailCopy, type DetailExitSnapshot } from '@/lib/detailTransit';
 
 /**
@@ -31,9 +43,15 @@ import { unsealDetailCopy, type DetailExitSnapshot } from '@/lib/detailTransit';
 const SQUARE: Radii = [0, 0, 0, 0];
 
 /** The overlay's own surface — its plate is `bg-surface`. */
-const surfaceColour = () => getComputedStyle(document.documentElement).getPropertyValue('--md-sys-color-surface').trim();
+const surfaceColour = () =>
+  getComputedStyle(document.documentElement).getPropertyValue('--md-sys-color-surface').trim();
 
-const boxOf = (rect: DOMRect | Box): Box => ({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+const boxOf = (rect: DOMRect | Box): Box => ({
+  left: rect.left,
+  top: rect.top,
+  width: rect.width,
+  height: rect.height,
+});
 
 /** By the wall-clock rule: the container's leg at the slowest speed. */
 const BOUND_MS = FORUM_TRANSFORM_MS * MOTION_SPEED_SCALE.slow;
@@ -110,7 +128,13 @@ export function playDetailReturn(exit: DetailExitSnapshot, row: HTMLElement): bo
       fade: FORUM_FADE.back,
       hidden: [],
     },
-    { category: 'image', mount: mountBeside(exit.parent), zIndex: 'var(--z-detail-overlay)', scroller, boundMs: BOUND_MS },
+    {
+      category: 'image',
+      mount: mountBeside(exit.parent),
+      zIndex: 'var(--z-detail-overlay)',
+      scroller,
+      boundMs: BOUND_MS,
+    },
   );
   /* The overlay's own column, where the reader had scrolled it: set once the copy is attached. */
   restoreSnapshotScroll(exit.snapshot);

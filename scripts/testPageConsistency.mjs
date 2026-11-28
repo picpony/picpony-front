@@ -10,25 +10,43 @@ const root = path.resolve(import.meta.dirname, '..');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
 function load(file, dependencies, expose = '') {
   const code = ts.transpileModule(readFileSync(path.join(root, file), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code + expose, {
-    exports,
-    require: (name) => {
-      if (name in dependencies) return dependencies[name];
-      if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
-      return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : `${name}:${String(key)}` });
+  vm.runInNewContext(
+    code + expose,
+    {
+      exports,
+      require: (name) => {
+        if (name in dependencies) return dependencies[name];
+        if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
+        return new Proxy(
+          {},
+          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
+        );
+      },
+      URLSearchParams,
+      URL,
+      setTimeout,
+      clearTimeout,
+      queueMicrotask,
+      performance,
+      console: { ...console, error: () => {} },
     },
-    URLSearchParams, URL, setTimeout, clearTimeout, queueMicrotask, performance,
-    console: { ...console, error: () => {} },
-  }, { filename: file });
+    { filename: file },
+  );
   return exports;
 }
 
@@ -37,28 +55,40 @@ function harness() {
   const cleanups = [];
   let cursor = 0;
   let pendingEffects = [];
-  const changed = (previous, next) => !previous || next.some((value, index) => !Object.is(value, previous[index]));
+  const changed = (previous, next) =>
+    !previous || next.some((value, index) => !Object.is(value, previous[index]));
   const react = {
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
-      return [slots[index], (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
+      return [
+        slots[index],
+        (next) => {
+          slots[index] = typeof next === 'function' ? next(slots[index]) : next;
+        },
+      ];
     },
     useRef(initial) {
       const index = cursor++;
-      return slots[index] ??= { current: initial };
+      return (slots[index] ??= { current: initial });
     },
     useMemo(create, deps) {
       const index = cursor++;
-      if (!slots[index] || changed(slots[index].deps, deps)) slots[index] = { deps, value: create() };
+      if (!slots[index] || changed(slots[index].deps, deps))
+        slots[index] = { deps, value: create() };
       return slots[index].value;
     },
-    useCallback(callback, deps) { return react.useMemo(() => callback, deps); },
+    useCallback(callback, deps) {
+      return react.useMemo(() => callback, deps);
+    },
     useEffect(callback, deps) {
       const index = cursor++;
       if (changed(slots[index], deps)) {
         slots[index] = deps;
-        pendingEffects.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
+        pendingEffects.push(() => {
+          cleanups[index]?.();
+          cleanups[index] = callback();
+        });
       }
     },
   };
@@ -67,8 +97,16 @@ function harness() {
   return {
     react,
     dependencies: { react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' } },
-    render: (component) => { cursor = 0; return component(); },
-    effects: async () => { const pending = pendingEffects; pendingEffects = []; pending.forEach((effect) => effect()); await flush(); },
+    render: (component) => {
+      cursor = 0;
+      return component();
+    },
+    effects: async () => {
+      const pending = pendingEffects;
+      pendingEffects = [];
+      pending.forEach((effect) => effect());
+      await flush();
+    },
     dispose: () => cleanups.forEach((cleanup) => cleanup?.()),
   };
 }
@@ -76,7 +114,10 @@ function harness() {
 function find(tree, predicate) {
   if (!tree || typeof tree !== 'object') return undefined;
   if (Array.isArray(tree)) {
-    for (const item of tree) { const result = find(item, predicate); if (result) return result; }
+    for (const item of tree) {
+      const result = find(item, predicate);
+      if (result) return result;
+    }
     return undefined;
   }
   if (!tree.props) return undefined;
@@ -108,16 +149,35 @@ function historyFixture() {
   const notices = [];
   const { default: History } = load('app/history/page.tsx', {
     ...hooks.dependencies,
-    '@/lib/hooks': { useSession: () => ({ token: 'A', ready: true }), readToken: () => account, useNow: () => null },
+    '@/lib/hooks': {
+      useSession: () => ({ token: 'A', ready: true }),
+      readToken: () => account,
+      useNow: () => null,
+    },
     '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
     '@/lib/resource': {
       SKIP: 'skip',
-      useResource: () => ({ data: { entries: [{ id: 7, previewUrl: null, uploader: null, viewedAt: null }], totalPages: 1 } }),
+      useResource: () => ({
+        data: {
+          entries: [{ id: 7, previewUrl: null, uploader: null, viewedAt: null }],
+          totalPages: 1,
+        },
+      }),
     },
     '@/lib/resources': {
-      browsingHistory: { invalidate: () => writes.push('invalidate'), write: (...args) => writes.push(args), prefetch: () => {} },
+      browsingHistory: {
+        invalidate: () => writes.push('invalidate'),
+        write: (...args) => writes.push(args),
+        prefetch: () => {},
+      },
     },
-    './useHistoryDeletes': { useHistoryDeletes: () => ({ hidden: new Set(), remove: () => {}, forget: () => writes.push('forget') }) },
+    './useHistoryDeletes': {
+      useHistoryDeletes: () => ({
+        hidden: new Set(),
+        remove: () => {},
+        forget: () => writes.push('forget'),
+      }),
+    },
     './useHistorySequence': { useHistorySequence: () => undefined },
     './days': load('app/history/days.ts', { '@/lib/format': load('lib/format.ts', {}) }),
     '@/lib/focusLanding': { focusLanding: () => true },
@@ -126,13 +186,31 @@ function historyFixture() {
     '@/lib/settle': settleModule,
     '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
     '@/lib/format': load('lib/format.ts', {}),
-    '@/components/ConfirmDialog': { useConfirm: () => ({ confirm: () => confirmation.promise, confirmDialog: null }) },
+    '@/components/ConfirmDialog': {
+      useConfirm: () => ({ confirm: () => confirmation.promise, confirmDialog: null }),
+    },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    '@/lib/api/history': { clearBrowsingHistory: (token) => { calls.push(token); return response.promise; } },
+    '@/lib/api/history': {
+      clearBrowsingHistory: (token) => {
+        calls.push(token);
+        return response.promise;
+      },
+    },
   });
   const tree = hooks.render(History);
   const clear = find(tree, (node) => node.props.children === '清空记录').props.onClick;
-  return { hooks, confirmation, response, calls, writes, notices, clear, changeAccount: () => { account = 'B'; } };
+  return {
+    hooks,
+    confirmation,
+    response,
+    calls,
+    writes,
+    notices,
+    clear,
+    changeAccount: () => {
+      account = 'B';
+    },
+  };
 }
 
 test('history confirmation cannot clear a newly selected account', async () => {
@@ -167,7 +245,13 @@ test('a confirmed clear publishes the empty answer and reports success once', as
   await flush();
   assert.equal(fixture.writes[0], 'forget');
   assert.equal(fixture.writes[1], 'invalidate');
-  assert.deepEqual(fixture.writes.slice(2).map(([args, value]) => [args.page, args.date, value.entries.length]), [[1, null, 0], [1, null, 0]]);
+  assert.deepEqual(
+    fixture.writes.slice(2).map(([args, value]) => [args.page, args.date, value.entries.length]),
+    [
+      [1, null, 0],
+      [1, null, 0],
+    ],
+  );
   assert.deepEqual(fixture.notices, [['已清空浏览历史', 'success']]);
 });
 
@@ -179,23 +263,51 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
   const notices = [];
   const sessionWrites = [];
   const data = {
-    level: 1, experience: 0, coins: 0,
-    progress: { novice: Object.fromEntries(['bind_api', 'verify_api', 'set_bg'].map(id => [id, { progress: 1, required: 1, claimed: false }])), daily: null, weekly: null },
+    level: 1,
+    experience: 0,
+    coins: 0,
+    progress: {
+      novice: Object.fromEntries(
+        ['bind_api', 'verify_api', 'set_bg'].map((id) => [
+          id,
+          { progress: 1, required: 1, claimed: false },
+        ]),
+      ),
+      daily: null,
+      weekly: null,
+    },
   };
   const { default: Tasks } = load('app/tasks/page.tsx', {
     ...hooks.dependencies,
     '@/lib/hooks': {
-      useSession: () => ({ user: null, token: 'A', ready: true }), readToken: () => 'A',
-      updateUserInfo: (_token, patch) => { sessionWrites.push(patch); }, useNow: () => null,
+      useSession: () => ({ user: null, token: 'A', ready: true }),
+      readToken: () => 'A',
+      updateUserInfo: (_token, patch) => {
+        sessionWrites.push(patch);
+      },
+      useNow: () => null,
     },
     '@/lib/screenState': { useScreenState: (_, initial) => hooks.react.useState(initial) },
     '@/lib/resource': { SKIP: 'skip', useResource: () => ({ data, refresh: () => {} }) },
-    '@/lib/resources': { tasks: { expire: () => { refreshes++; }, peek: () => ({ data }) }, coinTransactions: { invalidate: () => {} } },
+    '@/lib/resources': {
+      tasks: {
+        expire: () => {
+          refreshes++;
+        },
+        peek: () => ({ data }),
+      },
+      coinTransactions: { invalidate: () => {} },
+    },
     '@/lib/settle': settleModule,
     '@/lib/userBadges': { parseEquippedBadges: () => [], wornBadges: () => [] },
     '@/app/settings/tabs': { settingsHref: (tab) => `/settings?tab=${tab}` },
     '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    '@/lib/api/tasks': { claimTask: () => { claims++; return reply.promise; } },
+    '@/lib/api/tasks': {
+      claimTask: () => {
+        claims++;
+        return reply.promise;
+      },
+    },
   });
   const row = (tree) => find(tree, (node) => node.props.task?.claimId === 'novice_bind_api');
   const claim = row(hooks.render(Tasks)).props.onClaim;
@@ -211,7 +323,10 @@ test('task claims reject duplicate clicks and show the acknowledged receipt befo
   assert.equal(after.props.claiming, false);
   assert.equal(refreshes, 1);
   assert.deepEqual(notices, [['已领取，经验 +100，金币 +5', 'success']]);
-  assert.ok(sessionWrites.some((patch) => patch.coins === 5), 'the balance after the claim goes into the session');
+  assert.ok(
+    sessionWrites.some((patch) => patch.coins === 5),
+    'the balance after the claim goes into the session',
+  );
 });
 
 test('Undo during a navigation-triggered history delete waits for the verdict and restores it', async () => {
@@ -220,18 +335,30 @@ test('Undo during a navigation-triggered history delete waits for the verdict an
   const notices = [];
   const restored = [];
   let deletes = 0;
-  const { useHistoryDeletes } = load('app/history/useHistoryDeletes.ts', {
-    ...hooks.dependencies,
-    '@/lib/hooks': { readToken: () => 'A' },
-    '@/lib/api/errors': { apiErrorMessage: () => 'fixture failure' },
-    '@/lib/api/history': {
-      deleteBrowsingHistoryItem: () => { deletes++; return response.promise; },
-      restoreBrowsingHistoryItem: async (token, entry) => { restored.push([token, entry.id]); },
+  const { useHistoryDeletes } = load(
+    'app/history/useHistoryDeletes.ts',
+    {
+      ...hooks.dependencies,
+      '@/lib/hooks': { readToken: () => 'A' },
+      '@/lib/api/errors': { apiErrorMessage: () => 'fixture failure' },
+      '@/lib/api/history': {
+        deleteBrowsingHistoryItem: () => {
+          deletes++;
+          return response.promise;
+        },
+        restoreBrowsingHistoryItem: async (token, entry) => {
+          restored.push([token, entry.id]);
+        },
+      },
+      '@/lib/resources': { browsingHistory: { peek: () => ({}), invalidate() {}, expire() {} } },
+      '@/components/Toast': { showToast: (...args) => notices.push(args) },
+      fixture: {
+        window: { addEventListener() {}, removeEventListener() {} },
+        document: { activeElement: null },
+      },
     },
-    '@/lib/resources': { browsingHistory: { peek: () => ({}), invalidate() {}, expire() {} } },
-    '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    fixture: { window: { addEventListener() {}, removeEventListener() {} }, document: { activeElement: null } },
-  }, 'Object.assign(globalThis, require("fixture"));');
+    'Object.assign(globalThis, require("fixture"));',
+  );
   const view = hooks.render(() => useHistoryDeletes('A', { page: 1, date: null }));
   await hooks.effects();
   view.remove({ id: 7 });
@@ -242,6 +369,11 @@ test('Undo during a navigation-triggered history delete waits for the verdict an
   await flush();
   assert.deepEqual(restored, [], 'do not race a restore ahead of the delete');
   response.resolve();
-  await flush(); await flush();
-  assert.deepEqual(restored, [['A', 7]], 'the offered Undo is not lost while the delete is pending');
+  await flush();
+  await flush();
+  assert.deepEqual(
+    restored,
+    [['A', 7]],
+    'the offered Undo is not lost while the delete is pending',
+  );
 });

@@ -26,10 +26,18 @@ export const MASCOT_KEYS = {
 } as const;
 
 export function readStored(key: string): string | null {
-  try { return typeof window === 'undefined' ? null : localStorage.getItem(key); } catch { return null; }
+  try {
+    return typeof window === 'undefined' ? null : localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 export function writeStored(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* The account copy can still persist. */ }
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* The account copy can still persist. */
+  }
 }
 export function booleanOf(value: unknown): boolean | undefined {
   if (value === true || value === 'true' || value === 1 || value === '1') return true;
@@ -46,7 +54,9 @@ export function introMode(current: unknown, legacy: unknown): EntranceMode {
   return enabled === false ? 'off' : 'non-blocking';
 }
 export function sizeOf(value: unknown): MascotSize | undefined {
-  return value === 'small' || value === 'medium' || value === 'large' || value === 'xlarge' ? value : undefined;
+  return value === 'small' || value === 'medium' || value === 'large' || value === 'xlarge'
+    ? value
+    : undefined;
 }
 export function mascotIdOf(value: unknown): string | undefined {
   if (value === 'auto' || value === '') return 'auto';
@@ -55,15 +65,24 @@ export function mascotIdOf(value: unknown): string | undefined {
 }
 
 function setting<K extends keyof MascotSyncedValues & keyof typeof MASCOT_KEYS>(
-  id: K, fallback: MascotSyncedValues[K], parse: (value: unknown) => MascotSyncedValues[K] | undefined,
+  id: K,
+  fallback: MascotSyncedValues[K],
+  parse: (value: unknown) => MascotSyncedValues[K] | undefined,
   legacyKey?: string,
 ): SyncedSetting<MascotSyncedValues[K]> {
   return {
-    id, cloudKeys: [id], fallback, scope: 'device',
-    read: () => parse(readStored(MASCOT_KEYS[id])) ?? (legacyKey ? parse(readStored(legacyKey)) : undefined) ?? fallback,
-    write: value => writeStored(MASCOT_KEYS[id], String(value)),
-    fromCloud: cloud => parse(cloud[id]) ?? (id.startsWith('mascotSize') ? parse(cloud.mascotSize) : undefined),
-    toCloud: value => ({ [id]: value }),
+    id,
+    cloudKeys: [id],
+    fallback,
+    scope: 'device',
+    read: () =>
+      parse(readStored(MASCOT_KEYS[id])) ??
+      (legacyKey ? parse(readStored(legacyKey)) : undefined) ??
+      fallback,
+    write: (value) => writeStored(MASCOT_KEYS[id], String(value)),
+    fromCloud: (cloud) =>
+      parse(cloud[id]) ?? (id.startsWith('mascotSize') ? parse(cloud.mascotSize) : undefined),
+    toCloud: (value) => ({ [id]: value }),
     equals: (a, b) => a === b,
   };
 }
@@ -85,7 +104,8 @@ const introAnimationSetting: SyncedSetting<EntranceMode> = {
   fallback: 'non-blocking',
   scope: 'device',
   cookie: COOKIE_KEYS.entranceMotion,
-  read: () => introMode(readStored(LS_KEYS.entranceMotion), readStored(LS_KEYS.legacyIntroAnimation)),
+  read: () =>
+    introMode(readStored(LS_KEYS.entranceMotion), readStored(LS_KEYS.legacyIntroAnimation)),
   write: (value) => {
     writeStored(LS_KEYS.legacyIntroAnimation, String(value !== 'off'));
     commitEntranceMode(value);
@@ -98,7 +118,10 @@ const introAnimationSetting: SyncedSetting<EntranceMode> = {
     if (enabled === undefined) return undefined;
     return introAnimationSetting.read() === 'off' ? 'non-blocking' : undefined;
   },
-  toCloud: (value) => ({ introAnimationEnabled: value !== 'off', introAnimationBlocking: value === 'blocking' }),
+  toCloud: (value) => ({
+    introAnimationEnabled: value !== 'off',
+    introAnimationBlocking: value === 'blocking',
+  }),
   equals: (a, b) => a === b,
 };
 

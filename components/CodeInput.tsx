@@ -176,12 +176,18 @@ export default function CodeInput({
             if (typed.length >= length) {
               /* A whole code: autofill writes it into the focused box, over that box's
                  digit (selected on focus) or after it. */
-              fill(typed.length > length && own && typed.startsWith(own) ? typed.slice(own.length) : typed, i);
+              fill(
+                typed.length > length && own && typed.startsWith(own)
+                  ? typed.slice(own.length)
+                  : typed,
+                i,
+              );
               return;
             }
             /* A key press on a filled box replaces it (`onFocus` selected the
                contents); an append the caret was not over reads the same. */
-            const appended = own && typed.length > 1 && typed.startsWith(own) ? typed.slice(own.length) : typed;
+            const appended =
+              own && typed.length > 1 && typed.startsWith(own) ? typed.slice(own.length) : typed;
             if (appended.length <= 1) {
               setAt(i, (appended || typed).slice(-1));
               if (i < length - 1) focusBox(i + 1);

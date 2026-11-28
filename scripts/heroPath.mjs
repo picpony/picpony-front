@@ -41,19 +41,28 @@ const { interpolate } = await import('../lib/hero/spring.ts');
  * `chrome` is the overlay-top-to-media-top distance, matching `HERO_MEDIA_VIEWPORT_CHROME_PX`.
  */
 const DESKTOP = {
-  label: '1440', width: 1440, height: 900,
+  label: '1440',
+  width: 1440,
+  height: 900,
   host: { left: 300, top: 120, width: 1128, height: 768 },
-  chrome: 101, gutter: 8,
+  chrome: 101,
+  gutter: 8,
 };
 const WIDE = {
-  label: '1920', width: 1920, height: 1080,
+  label: '1920',
+  width: 1920,
+  height: 1080,
   host: { left: 300, top: 120, width: 1608, height: 948 },
-  chrome: 101, gutter: 8,
+  chrome: 101,
+  gutter: 8,
 };
 const PHONE = {
-  label: '390', width: 390, height: 844,
+  label: '390',
+  width: 390,
+  height: 844,
   host: { left: 0, top: 108, width: 390, height: 736 },
-  chrome: 118, gutter: 0,
+  chrome: 118,
+  gutter: 0,
 };
 
 /** The media well: the app's own width helper, placed the way the layout places it. */
@@ -98,17 +107,19 @@ const CASES = [
   ['phone, 2nd column', { left: 199, top: 124, width: 175, height: 311 }, PORTRAIT, PHONE],
 ];
 
-
 // ---------------------------------------------------------------------------
 // Checks
 // ---------------------------------------------------------------------------
 
 const EDGES = ['left', 'top', 'right', 'bottom'];
 const edgeOf = (rect, edge) =>
-  edge === 'left' ? rect.left
-  : edge === 'top' ? rect.top
-  : edge === 'right' ? rect.left + rect.width
-  : rect.top + rect.height;
+  edge === 'left'
+    ? rect.left
+    : edge === 'top'
+      ? rect.top
+      : edge === 'right'
+        ? rect.left + rect.width
+        : rect.top + rect.height;
 
 const failures = [];
 function fail(check, message) {
@@ -167,10 +178,7 @@ console.log(
     `crop budget ${(BUDGET * 100).toFixed(1)}% (ceiling ${(CEILING * 100).toFixed(1)}% at ` +
     `${AUDIT_SAMPLES} audit points against the solver's ${constants.HERO_ARC_SOLVE_SAMPLES})`,
 );
-console.log(
-  '\n' +
-    'case                 dir   edges      past-landing   crop    bow',
-);
+console.log('\n' + 'case                 dir   edges      past-landing   crop    bow');
 for (const [name, from, image, viewport] of CASES) {
   const to = destination(image, viewport);
   // `flight.base` is the detail box in both directions, so both legs share its aspect.
@@ -182,16 +190,23 @@ for (const [name, from, image, viewport] of CASES) {
     const audit = auditPath(a, b, baseAspect, createHeroRectArc(a, b, bow));
     const edges =
       audit.reversals === 0 ? 'monotone ' : `FAIL ${String(audit.reversals).padStart(3)}`;
-    const past = audit.pastLanding > 0.05 ? `${audit.pastEdge} +${audit.pastLanding.toFixed(1)}px` : 'none';
+    const past =
+      audit.pastLanding > 0.05 ? `${audit.pastEdge} +${audit.pastLanding.toFixed(1)}px` : 'none';
     const retrace = `${(audit.crop * 100).toFixed(1)}%`;
     console.log(
       `${name.padEnd(20)} ${dir.padEnd(5)} ${edges}  ${past.padEnd(14)} ${retrace.padStart(6)}  ${bow.toFixed(2)}`,
     );
     if (audit.reversals > 0) {
-      fail('a/edges', `${name} ${dir} reverses ${audit.reversals}x, worst ${audit.worstReversal.toFixed(2)}px`);
+      fail(
+        'a/edges',
+        `${name} ${dir} reverses ${audit.reversals}x, worst ${audit.worstReversal.toFixed(2)}px`,
+      );
     }
     if (audit.pastLanding > 0.05) {
-      fail('a/edges', `${name} ${dir} drives ${audit.pastEdge} ${audit.pastLanding.toFixed(1)}px past its landing value`);
+      fail(
+        'a/edges',
+        `${name} ${dir} drives ${audit.pastEdge} ${audit.pastLanding.toFixed(1)}px past its landing value`,
+      );
     }
     if (audit.landingError > 1e-6) {
       fail("a'/landing", `${name} ${dir} lands ${audit.landingError.toExponential(2)}px off`);
@@ -234,7 +249,8 @@ function tableError(model, samples) {
     const a = table[segment];
     const b = table[segment + 1];
     const span = b.offset - a.offset;
-    const lerp = span > 0 ? a.progress + (b.progress - a.progress) * ((t - a.offset) / span) : a.progress;
+    const lerp =
+      span > 0 ? a.progress + (b.progress - a.progress) * ((t - a.offset) / span) : a.progress;
     const error = Math.abs(lerp - progressAt(model, t));
     if (error > worst) {
       worst = error;
@@ -287,9 +303,7 @@ for (const [label, model] of MODELS) {
 
 /** `translate3d(x, y, 0) scale(a, b)` -> {x, y, a, b}. Parsed, not recomputed: see (e/still). */
 function parseTranslateScale(css) {
-  const m = css.match(
-    /^translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\) scale\(([-\d.]+), ([-\d.]+)\)$/,
-  );
+  const m = css.match(/^translate3d\(([-\d.]+)px, ([-\d.]+)px, 0\) scale\(([-\d.]+), ([-\d.]+)\)$/);
   if (!m) throw new Error(`unparsable clip transform: ${css}`);
   return { x: +m[1], y: +m[2], a: +m[3], b: +m[4] };
 }
@@ -377,7 +391,6 @@ for (const [label, card, image, viewport] of CASES) {
         Math.abs(content.y),
       );
 
-
       /* (e/box) The visible box reconstructed from the pose must be the arc's own rect. */
       boxError = Math.max(
         boxError,
@@ -408,7 +421,6 @@ for (const [label, card, image, viewport] of CASES) {
         worstCornerOvershoot = Math.max(worstCornerOvershoot, Math.min(rx, ry) - screenR);
         worstCornerRatio = Math.max(worstCornerRatio, Math.max(rx, ry) / Math.min(rx, ry));
       }
-
     }
 
     /* (e/drift) WAAPI lerps the window's scale and the compensator's reciprocal independently
@@ -430,7 +442,12 @@ for (const [label, card, image, viewport] of CASES) {
         const t = k / 8;
         const lerp = (p, q) => p + (q - p) * t;
         const content = composeContent(
-          { a: lerp(clipA.a, clipB.a), b: lerp(clipA.b, clipB.b), x: lerp(clipA.x, clipB.x), y: lerp(clipA.y, clipB.y) },
+          {
+            a: lerp(clipA.a, clipB.a),
+            b: lerp(clipA.b, clipB.b),
+            x: lerp(clipA.x, clipB.x),
+            y: lerp(clipA.y, clipB.y),
+          },
           { a: lerp(ca.a, cb.a), b: lerp(ca.b, cb.b), x: lerp(ca.x, cb.x), y: lerp(ca.y, cb.y) },
         );
         /* Pinned in px of the 1111-wide reference screen and as a scale fraction. */
@@ -468,7 +485,8 @@ for (const [label, card, image, viewport] of CASES) {
       if (!above) fail('e/clamp', `${label} never expresses a box above the host`);
     }
 
-    if (isotropy > 1e-9) fail('e/still', `${label} ${direction} content moves, off by ${isotropy.toExponential(2)}`);
+    if (isotropy > 1e-9)
+      fail('e/still', `${label} ${direction} content moves, off by ${isotropy.toExponential(2)}`);
     if (boxError > 1e-9) fail('e/box', `${label} ${direction} off by ${boxError.toExponential(2)}`);
     if (capBound) fail('e/corner', `${label} ${direction} needs a radius the browser would clamp`);
 
@@ -487,10 +505,7 @@ console.log(
     `worst corner ellipticity ${worstCornerRatio.toFixed(2)}:1`,
 );
 if (worstDrift > DRIFT_TOLERANCE) {
-  fail(
-    'e/drift',
-    `interpolated pair drifts ${(worstDrift * 100).toFixed(3)}% of the frame`,
-  );
+  fail('e/drift', `interpolated pair drifts ${(worstDrift * 100).toFixed(3)}% of the frame`);
 }
 
 /* The flight answers the press on the next frame, crests in the air and lands at rest — asserted
@@ -526,14 +541,20 @@ if (worstDrift > DRIFT_TOLERANCE) {
      must hold is that it is visibly on its way in the first 60Hz frame. */
   const firstFrame = progressAt(flight, 1000 / 60 / constants.HERO_DURATIONS.forward);
   if (!(launch >= 0 && firstFrame > 0.02)) {
-    fail('d/model', `the flight covers ${(firstFrame * 100).toFixed(1)}% in its first frame: a hang-back`);
+    fail(
+      'd/model',
+      `the flight covers ${(firstFrame * 100).toFixed(1)}% in its first frame: a hang-back`,
+    );
   }
-  if (!(crestAt > 0)) fail('d/model', 'the flight crests at the press, before anyone can see it move');
-  if (!(crestAt <= 0.25)) fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
+  if (!(crestAt > 0))
+    fail('d/model', 'the flight crests at the press, before anyone can see it move');
+  if (!(crestAt <= 0.25))
+    fail('d/model', `the flight crests ${(crestAt * 100).toFixed(0)}% in: a hang-back`);
   if (!oneCrest) fail('d/model', 'the flight changes speed more than once');
   /* At rest within the settle threshold (1/512 of the travel, `lib/spring.ts`): what speed is
      left is a sub-pixel creep the leg's last sample hands to the static pose. */
-  if (!(Math.abs(arrival) < 0.02)) fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
+  if (!(Math.abs(arrival) < 0.02))
+    fail('d/model', `the flight arrives at ${arrival.toFixed(3)}, not at rest`);
 }
 
 // ---------------------------------------------------------------------------
@@ -599,7 +620,9 @@ let worstRawEscape = 0;
 const gaveWay = [];
 
 console.log('\ncontainment — the window gives way, the picture keeps its arc');
-console.log('case                 bow(pic)  bow(win)   escape   picture bow      window bow      was');
+console.log(
+  'case                 bow(pic)  bow(win)   escape   picture bow      window bow      was',
+);
 for (const [name, card, image, viewport] of CASES) {
   const media = destination(image, viewport);
   const host = overlayBox(viewport);
@@ -670,7 +693,10 @@ console.log(
 /* The two shapes the flight flew before, beside it: the evidence for the contract in (d). */
 const PREVIOUS = [
   ['fastOutSlowIn (was)', { kind: 'curve', curve: { x1: 0.4, y1: 0, x2: 0.2, y2: 1 } }],
-  ['launched, 350 (was)', { kind: 'spring', response: { rate: 6.6408, velocity: 3.3204, damping: 1 } }],
+  [
+    'launched, 350 (was)',
+    { kind: 'spring', response: { rate: 6.6408, velocity: 3.3204, damping: 1 } },
+  ],
 ];
 console.log('\nper-tenth travel');
 for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
@@ -706,13 +732,17 @@ for (const [label, model] of [MODELS[0], ...PREVIOUS]) {
     const clip = parseTranslateScale(formatHeroTransform(pose));
     const comp = parseCompensator(formatHeroContainerCompensator(pose));
     const layer = composeContent(clip, comp);
-    for (const p of [{ x: 0, y: 0 }, { x: 120, y: 40 }]) {
+    for (const p of [
+      { x: 0, y: 0 },
+      { x: 120, y: 40 },
+    ]) {
       const sx = layer.x + layer.a * p.x;
       const sy = layer.y + layer.b * p.y;
       worst = Math.max(worst, Math.abs(sx - p.x), Math.abs(sy - p.y));
     }
   }
-  if (worst > 1e-6) fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off under the window`);
+  if (worst > 1e-6)
+    fail('e/gutter', `flight layer lands ${worst.toFixed(3)}px off under the window`);
 }
 
 if (failures.length) {

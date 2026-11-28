@@ -44,7 +44,10 @@ export function isVisitorId(value: unknown): value is string {
  * A fresh anonymous id in the original's shape (`v<time>-<random>-<random>`), its random part
  * from the platform's generator when there is one.
  */
-export function newVisitorId(now: number = Date.now(), random: (bytes: Uint8Array) => void = fillRandom): string {
+export function newVisitorId(
+  now: number = Date.now(),
+  random: (bytes: Uint8Array) => void = fillRandom,
+): string {
   const bytes = new Uint8Array(16);
   random(bytes);
   const alphabet = '0123456789abcdefghijklmnopqrstuvwxyz';

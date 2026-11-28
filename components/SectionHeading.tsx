@@ -88,7 +88,11 @@ export default function SectionHeading({
         )}
         <span className="min-w-0 wrap-anywhere">{children}</span>
       </span>
-      {aside && <span className="text-body-m max-w-full wrap-anywhere tabular-nums text-on-surface-variant">{aside}</span>}
+      {aside && (
+        <span className="text-body-m max-w-full wrap-anywhere tabular-nums text-on-surface-variant">
+          {aside}
+        </span>
+      )}
     </Tag>
   );
 
@@ -98,14 +102,20 @@ export default function SectionHeading({
 
   return (
     <div className={spacing} {...rest}>
-      <div className={cn('flex flex-wrap items-center justify-between', actions && 'gap-x-4 gap-y-3')}>
+      <div
+        className={cn('flex flex-wrap items-center justify-between', actions && 'gap-x-4 gap-y-3')}
+      >
         <div className="min-w-0 max-w-full">
           {heading}
           {subtitle && (
             <p className="text-body-m wrap-anywhere text-on-surface-variant mt-1">{subtitle}</p>
           )}
         </div>
-        {actions && <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">{actions}</div>}
+        {actions && (
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );

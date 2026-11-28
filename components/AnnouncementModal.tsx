@@ -106,7 +106,11 @@ export default function AnnouncementModal() {
           <div
             ref={bodyRef}
             className="rich-text-content text-body-m text-on-surface-variant"
-            style={{ '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)' } as CSSProperties}
+            style={
+              {
+                '--rt-quote-surface': 'var(--md-sys-color-surface-container-highest)',
+              } as CSSProperties
+            }
             dangerouslySetInnerHTML={{ __html: announcement.content }}
           />
         </>

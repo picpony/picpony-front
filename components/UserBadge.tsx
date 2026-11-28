@@ -66,12 +66,7 @@ export default function UserBadge({ name, color, size = 'sm', className = '' }: 
     );
   }
   return (
-    <Badge
-      size={size}
-      tone="custom"
-      className={className}
-      style={paint}
-    >
+    <Badge size={size} tone="custom" className={className} style={paint}>
       {name}
     </Badge>
   );

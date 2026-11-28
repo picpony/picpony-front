@@ -23,14 +23,21 @@ type AuditQuery = { token: string; userId?: number };
 const PAGE_SIZE = 50;
 
 /** One page of the audit, newest first, read by cursor; every read is itself audited by the backend. */
-const messagesQuery = defineResource<AuditQuery & { before?: number }, { rows: AuditMessage[]; next: number | null }>({
+const messagesQuery = defineResource<
+  AuditQuery & { before?: number },
+  { rows: AuditMessage[]; next: number | null }
+>({
   name: 'admin-message-audit',
   key: ({ token, userId, before }) => `${token}:${userId ?? 'all'}:${before ?? ''}`,
   ttl: 60_000,
   maxEntries: 8,
   fetch: async ({ token, userId, before }, signal) => {
     if (readToken() !== token) throw new Error('登录状态已失效，请重新登录');
-    const data = await adminApi.adminGetAllMessages(token, { userId, before, limit: PAGE_SIZE }, signal);
+    const data = await adminApi.adminGetAllMessages(
+      token,
+      { userId, before, limit: PAGE_SIZE },
+      signal,
+    );
     return { rows: data.messages, next: data.next };
   },
 });
@@ -53,14 +60,24 @@ const COLUMNS: Column<AuditMessage>[] = [
     className: 'whitespace-pre-wrap wrap-anywhere',
     render: (message) => <span className="text-on-surface">{message.content}</span>,
   },
-  { key: 'sender', header: '发送方', render: (message) => person(message.sender_name, message.sender_id) },
-  { key: 'receiver', header: '接收方', render: (message) => person(message.receiver_name, message.receiver_id) },
+  {
+    key: 'sender',
+    header: '发送方',
+    render: (message) => person(message.sender_name, message.sender_id),
+  },
+  {
+    key: 'receiver',
+    header: '接收方',
+    render: (message) => person(message.receiver_name, message.receiver_id),
+  },
   {
     key: 'state',
     header: '状态',
     width: 'auto',
     render: (message) => (
-      <Badge tone={message.read_at ? 'neutral' : 'primary'} size="md">{message.read_at ? '已读' : '未读'}</Badge>
+      <Badge tone={message.read_at ? 'neutral' : 'primary'} size="md">
+        {message.read_at ? '已读' : '未读'}
+      </Badge>
     ),
   },
   {
@@ -68,7 +85,9 @@ const COLUMNS: Column<AuditMessage>[] = [
     header: '时间',
     width: 'auto',
     className: 'tabular-nums',
-    render: (message) => <span className="text-on-surface-variant">{formatDateTime(message.created_at)}</span>,
+    render: (message) => (
+      <span className="text-on-surface-variant">{formatDateTime(message.created_at)}</span>
+    ),
   },
 ];
 
@@ -84,7 +103,11 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
   const activeQuery = query?.token === token ? query : null;
   const pageScope = activeQuery ? `${activeQuery.userId ?? 'all'}` : '';
   const pages = useCursorPages(pageScope);
-  const read = useResource(messagesQuery, activeQuery ? { ...activeQuery, before: pages.cursor } : SKIP, { keepPrevious: `${token}:${pageScope}` });
+  const read = useResource(
+    messagesQuery,
+    activeQuery ? { ...activeQuery, before: pages.cursor } : SKIP,
+    { keepPrevious: `${token}:${pageScope}` },
+  );
   const rows = read.data?.rows ?? [];
   if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
   const listKey = useShownListKey(`${pageScope}\n${pages.page}`, read.isPrevious);
@@ -105,11 +128,16 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
     ask(id);
   };
 
-  const scope = activeQuery ? (activeQuery.userId ? `用户 #${activeQuery.userId} 收发的私信` : '全站私信') : null;
+  const scope = activeQuery
+    ? activeQuery.userId
+      ? `用户 #${activeQuery.userId} 收发的私信`
+      : '全站私信'
+    : null;
 
   return (
     <div className="@container space-y-6">
-      <SectionHeader section="messages"
+      <SectionHeader
+        section="messages"
         onRefresh={activeQuery ? read.refresh : undefined}
         isLoading={read.isLoading && read.data !== undefined}
       />
@@ -173,7 +201,12 @@ export default function MessagesAuditTab({ token }: AdminPanelProps) {
           onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
           empty={activeQuery ? '没有找到相关的私信记录' : '输入用户 ID 检索，或查看全站私信'}
         />
-        <AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading} />
+        <AdminPager
+          page={pages.page}
+          totalPages={pages.totalPages}
+          onPageChange={pages.setPage}
+          disabled={read.isLoading}
+        />
       </AdminListAnchor>
     </div>
   );

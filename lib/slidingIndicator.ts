@@ -76,7 +76,14 @@ export function useSlidingIndicator<
 } {
   const containerRef = useRef<C>(null);
   const indicatorRef = useRef<I>(null);
-  const markRef = useRef<Mark>({ placed: false, glide: null, rest: null, boxes: new Map(), value: active, thin: null });
+  const markRef = useRef<Mark>({
+    placed: false,
+    glide: null,
+    rest: null,
+    boxes: new Map(),
+    value: active,
+    thin: null,
+  });
 
   /** Move the mark under `value`: placed on the first call (and under 关闭), glided after it. */
   const moveTo = useCallback((value: string) => {
@@ -110,7 +117,9 @@ export function useSlidingIndicator<
        overshoot included. */
     const flying = mark.glide;
     const progress =
-      flying?.animation.playState === 'running' ? flying.animation.effect?.getComputedTiming().progress : null;
+      flying?.animation.playState === 'running'
+        ? flying.animation.effect?.getComputedTiming().progress
+        : null;
     const from =
       flying && typeof progress === 'number'
         ? {
@@ -172,7 +181,8 @@ export function useSlidingIndicator<
     const measure = () => {
       const boxes = new Map<string, Pose>();
       for (const tab of container.querySelectorAll<HTMLElement>('[data-tab]')) {
-        if (tab.dataset.tab !== undefined) boxes.set(tab.dataset.tab, { x: tab.offsetLeft, width: tab.offsetWidth });
+        if (tab.dataset.tab !== undefined)
+          boxes.set(tab.dataset.tab, { x: tab.offsetLeft, width: tab.offsetWidth });
       }
       mark.boxes = boxes;
       const box = boxes.get(mark.value);

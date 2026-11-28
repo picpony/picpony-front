@@ -41,7 +41,11 @@ import Skeleton from '@/components/Skeleton';
 import SelectionBar, { type SelectionCommand } from '@/components/favorites/SelectionBar';
 import { FolderBadges } from '@/components/favorites/FolderCard';
 import { FaveGridView, useFavePage } from '@/components/favorites/FaveGrid';
-import { FolderMenuButton, isFolderPublic, useFolderCommands } from '@/components/favorites/useFolderCommands';
+import {
+  FolderMenuButton,
+  isFolderPublic,
+  useFolderCommands,
+} from '@/components/favorites/useFolderCommands';
 import { usePictureBatch } from '@/components/favorites/usePictureBatch';
 import { useAddressPage } from '@/components/favorites/useAddressPage';
 
@@ -163,10 +167,19 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
     },
     [forget, exit],
   );
-  const batch = usePictureBatch({ token, source: { kind: 'folder', folderId }, onSettled: settled });
+  const batch = usePictureBatch({
+    token,
+    source: { kind: 'folder', folderId },
+    onSettled: settled,
+  });
 
   const gridSelection = useMemo(
-    () => ({ active: selection.active, selected: selection.selected, onToggle: selection.toggle, onLongPress: enter }),
+    () => ({
+      active: selection.active,
+      selected: selection.selected,
+      onToggle: selection.toggle,
+      onLongPress: enter,
+    }),
     [selection.active, selection.selected, selection.toggle, enter],
   );
 
@@ -205,7 +218,10 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             fill
             title="收藏夹不存在或已被删除"
             action={
-              <Button variant="tonal" onClick={() => router.replace(favoritesHref(), { scroll: false })}>
+              <Button
+                variant="tonal"
+                onClick={() => router.replace(favoritesHref(), { scroll: false })}
+              >
                 返回我的收藏
               </Button>
             }
@@ -217,7 +233,9 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
 
   const name = folderLabel(folder);
   const count = ids?.length ?? folder.itemCount;
-  const selected = [...selection.selected].map((id) => known.get(id)).filter((image): image is PonyImage => Boolean(image));
+  const selected = [...selection.selected]
+    .map((id) => known.get(id))
+    .filter((image): image is PonyImage => Boolean(image));
   const pageIds = pageOrder;
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selection.selected.has(id));
   const none = selected.length === 0 || batch.busy;
@@ -231,8 +249,20 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
       onSelect: () => selection.setMany(pageIds, !allSelected),
       disabled: pageIds.length === 0,
     },
-    { value: 'move', label: '移动到…', icon: <MdDriveFileMove />, onSelect: () => batch.openTransfer('move', selected), disabled: none },
-    { value: 'copy', label: '复制到…', icon: <MdFileCopy />, onSelect: () => batch.openTransfer('copy', selected), disabled: none },
+    {
+      value: 'move',
+      label: '移动到…',
+      icon: <MdDriveFileMove />,
+      onSelect: () => batch.openTransfer('move', selected),
+      disabled: none,
+    },
+    {
+      value: 'copy',
+      label: '复制到…',
+      icon: <MdFileCopy />,
+      onSelect: () => batch.openTransfer('copy', selected),
+      disabled: none,
+    },
     {
       value: 'remove',
       label: '移出收藏夹',
@@ -242,9 +272,23 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
       disabled: none,
     },
     ...(showPrivacy
-      ? [{ value: 'privacy', label: '移入隐私空间', icon: <MdLock />, onSelect: () => void batch.toPrivacy(selected), disabled: none }]
+      ? [
+          {
+            value: 'privacy',
+            label: '移入隐私空间',
+            icon: <MdLock />,
+            onSelect: () => void batch.toPrivacy(selected),
+            disabled: none,
+          },
+        ]
       : []),
-    { value: 'download', label: '下载', icon: <MdDownload />, onSelect: () => void batch.download(selected), disabled: none },
+    {
+      value: 'download',
+      label: '下载',
+      icon: <MdDownload />,
+      onSelect: () => void batch.download(selected),
+      disabled: none,
+    },
     {
       value: 'share',
       label: '分享',
@@ -264,7 +308,11 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
         onClick={selection.active ? exit : back}
         label={selection.active ? '退出选择' : '返回我的收藏'}
       />
-      <div ref={pageRef} data-folder-page={route} className="mx-auto flex w-full max-w-7xl flex-1 flex-col page-back-room-7xl">
+      <div
+        ref={pageRef}
+        data-folder-page={route}
+        className="mx-auto flex w-full max-w-7xl flex-1 flex-col page-back-room-7xl"
+      >
         <PageHeader
           title={name}
           subtitle={
@@ -280,9 +328,19 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             /* Out of the mode's way on the bar's own clock, never in one frame (M1-002). */
             <div
               inert={selection.active}
-              className={cn('flex items-center gap-2 transition-opacity spring-fast-effects', selection.active && 'opacity-0')}
+              className={cn(
+                'flex items-center gap-2 transition-opacity spring-fast-effects',
+                selection.active && 'opacity-0',
+              )}
             >
-              <Button ref={selectRef} variant="text" icon={<MdChecklist />} onClick={() => enter()} disabled={count === 0} responsiveLabel>
+              <Button
+                ref={selectRef}
+                variant="text"
+                icon={<MdChecklist />}
+                onClick={() => enter()}
+                disabled={count === 0}
+                responsiveLabel
+              >
                 选择
               </Button>
               <FolderMenuButton
@@ -293,8 +351,15 @@ function Folder({ folderId, token, back }: { folderId: number; token: string; ba
             </div>
           }
         />
-        {Boolean(index.error) && ids !== undefined && <ErrorRetry size="inline" className="mb-4" title="收藏夹更新失败" message={apiErrorMessage(index.error)}
-          onRetry={isRetryable(index.error) ? index.refresh : undefined} />}
+        {Boolean(index.error) && ids !== undefined && (
+          <ErrorRetry
+            size="inline"
+            className="mb-4"
+            title="收藏夹更新失败"
+            message={apiErrorMessage(index.error)}
+            onRetry={isRetryable(index.error) ? index.refresh : undefined}
+          />
+        )}
         {index.error && ids === undefined ? (
           <ErrorRetry
             size="pane"

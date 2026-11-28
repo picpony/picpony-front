@@ -51,13 +51,22 @@ const BANNER_BOX = 'aspect-[3/1] sm:aspect-[4/1] max-h-80 rounded-2xl sm:rounded
 function Banner({ profile }: { profile: ProfileUser | undefined }) {
   if (!profile) {
     return (
-      <div aria-hidden="true" className={`relative w-full overflow-hidden bg-surface-container-high ${BANNER_BOX}`}>
+      <div
+        aria-hidden="true"
+        className={`relative w-full overflow-hidden bg-surface-container-high ${BANNER_BOX}`}
+      >
         <MediaLoadingPlaceholder variant="contained" size="md" />
       </div>
     );
   }
   const src = profile.banner ? getAssetUrl(profile.banner) : '';
-  if (!src) return <div aria-hidden="true" className="h-24 w-full rounded-2xl bg-primary-container sm:h-32 sm:rounded-3xl" />;
+  if (!src)
+    return (
+      <div
+        aria-hidden="true"
+        className="h-24 w-full rounded-2xl bg-primary-container sm:h-32 sm:rounded-3xl"
+      />
+    );
   return (
     <div className={`relative w-full overflow-hidden bg-surface-container-high ${BANNER_BOX}`}>
       <FadeInImage
@@ -105,7 +114,15 @@ function DerpiAccountCard({ profile, own }: { profile: ProfileUser; own: boolean
   /* A named account is one the backend verified with the owner's key (`upstream_identity`). */
   const href = derpiHref;
   const navigate = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
     event.preventDefault();
     router.push(href, { scroll: false });
   };
@@ -121,11 +138,17 @@ function DerpiAccountCard({ profile, own }: { profile: ProfileUser; own: boolean
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 truncate text-title-s text-on-surface">{profile.derpi_username}</span>
+            <span className="min-w-0 truncate text-title-s text-on-surface">
+              {profile.derpi_username}
+            </span>
           </span>
           <span className="truncate text-body-s text-on-surface-variant">{supporting}</span>
         </span>
-        <MdChevronRight size={ICON.standard} aria-hidden="true" className="shrink-0 text-on-surface-variant" />
+        <MdChevronRight
+          size={ICON.standard}
+          aria-hidden="true"
+          className="shrink-0 text-on-surface-variant"
+        />
       </span>
     </Card>
   );
@@ -154,9 +177,18 @@ interface ProfileHeaderProps {
  * depends on it — 发送私信, 编辑资料, 管理佩戴, the owner's wording — takes space that is already
  * there: the actions sit in the band beside the avatar, the wall's heading row keeps its height.
  */
-export default function ProfileHeader({ profile, own, canMessage, now, onManageBadges }: ProfileHeaderProps) {
+export default function ProfileHeader({
+  profile,
+  own,
+  canMessage,
+  now,
+  onManageBadges,
+}: ProfileHeaderProps) {
   const held = parseHeldBadges(profile?.badges);
-  const worn = profile && now !== null ? wornBadges(parseEquippedBadges(profile.equipped_badges), held, now) : [];
+  const worn =
+    profile && now !== null
+      ? wornBadges(parseEquippedBadges(profile.equipped_badges), held, now)
+      : [];
   const experience = profile && typeof profile.experience === 'number' ? profile.experience : null;
   const level = experience !== null ? Math.floor(experience / 100) + 1 : null;
   const xpInLevel = experience !== null ? ((experience % 100) + 100) % 100 : 0;
@@ -166,7 +198,8 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
   /* A public profile carries no birthday on the Rust backend; the line shows only if one arrives. */
   const birthday = profile ? birthdayLabel(profile.birthday) : null;
   const joined = profile?.created_at ? formatDate(profile.created_at) : '';
-  const seen = profile?.last_online && now !== null ? lastOnlineStatus(profile.last_online, now) : null;
+  const seen =
+    profile?.last_online && now !== null ? lastOnlineStatus(profile.last_online, now) : null;
   const location = profile ? ipLocationOf(profile) : null;
   const bio = profile ? bioOf(profile) : '';
 
@@ -177,7 +210,13 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
         <div className="absolute -top-12 left-4 sm:-top-16 sm:left-6">
           {profile ? (
             /* The page's other large paint: eager, at high priority (R1-028). */
-            <Avatar src={profile.avatar} name={profile.username} size="hero" priority className="border-4 border-surface" />
+            <Avatar
+              src={profile.avatar}
+              name={profile.username}
+              size="hero"
+              priority
+              className="border-4 border-surface"
+            />
           ) : (
             <Skeleton className="size-24 rounded-full border-4 border-surface sm:size-32" />
           )}
@@ -186,20 +225,12 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
             that was already there (48dp band, 40dp control; 64dp from `sm`). */}
         <div className="absolute right-0 top-1 flex gap-2 sm:top-3">
           {profile && own && (
-            <ButtonLink
-              href={settingsHref('account')}
-              variant="tonal"
-              icon={<MdEdit />}
-            >
+            <ButtonLink href={settingsHref('account')} variant="tonal" icon={<MdEdit />}>
               编辑资料
             </ButtonLink>
           )}
           {profile && canMessage && (
-            <ButtonLink
-              href={`/messages?to=${profile.id}`}
-              variant="filled"
-              icon={<MdMessage />}
-            >
+            <ButtonLink href={`/messages?to=${profile.id}`} variant="filled" icon={<MdMessage />}>
               发送私信
             </ButtonLink>
           )}
@@ -208,7 +239,9 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:mt-4">
           <h1
             className={
-              profile ? 'text-headline-s sm:text-headline-m min-w-0 max-w-full wrap-anywhere text-on-surface' : 'sr-only'
+              profile
+                ? 'text-headline-s sm:text-headline-m min-w-0 max-w-full wrap-anywhere text-on-surface'
+                : 'sr-only'
             }
           >
             {profile ? profile.username : '个人资料'}
@@ -226,7 +259,12 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
               )}
               {/* The worn set — what appears beside this name everywhere else. */}
               {worn.map((badge) => (
-                <UserBadge key={badge.badge_name} name={badge.badge_name} color={badge.badge_color} size="md" />
+                <UserBadge
+                  key={badge.badge_name}
+                  name={badge.badge_name}
+                  color={badge.badge_color}
+                  size="md"
+                />
               ))}
             </>
           )}
@@ -238,10 +276,17 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
           <div className="mt-3 max-w-xs">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-label-l tabular-nums text-on-surface">Lv.{level}</span>
-              <span className="text-label-m tabular-nums text-on-surface-variant">经验：{xpInLevel} / 100</span>
+              <span className="text-label-m tabular-nums text-on-surface-variant">
+                经验：{xpInLevel} / 100
+              </span>
             </div>
             {/* The theme's accent: the level is one of 多色's accent moments. */}
-            <ProgressBar value={xpInLevel} tone="tertiary" label={`等级 ${level} 经验进度`} className="mt-1.5" />
+            <ProgressBar
+              value={xpInLevel}
+              tone="tertiary"
+              label={`等级 ${level} 经验进度`}
+              className="mt-1.5"
+            />
           </div>
         ) : (
           !profile && (
@@ -265,13 +310,18 @@ export default function ProfileHeader({ profile, own, canMessage, now, onManageB
               (seen.online ? (
                 /* 在线 is a state, not a time (R7-017). */
                 <span className="flex items-center gap-1.5">
-                  <span aria-hidden="true" className="size-2 rounded-full bg-success-fill forced-mark" />
+                  <span
+                    aria-hidden="true"
+                    className="size-2 rounded-full bg-success-fill forced-mark"
+                  />
                   在线
                 </span>
               ) : (
                 <MetaItem icon={<MdAccessTime size={ICON.dense} />}>上次在线：{seen.text}</MetaItem>
               ))}
-            {location && <MetaItem icon={<MdPlace size={ICON.dense} />}>IP 属地：{location}</MetaItem>}
+            {location && (
+              <MetaItem icon={<MdPlace size={ICON.dense} />}>IP 属地：{location}</MetaItem>
+            )}
           </div>
         ) : (
           <Skeleton className="mt-4 h-5 w-full max-w-md" />

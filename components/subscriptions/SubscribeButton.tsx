@@ -56,7 +56,11 @@ export default function SubscribeButton({
   const listed = Boolean(subscription);
 
   /* What a finished press established, for this session, until the list says the same. */
-  const [settled, setSettled] = useState<{ token: string; subscribed: boolean; tagName: string } | null>(null);
+  const [settled, setSettled] = useState<{
+    token: string;
+    subscribed: boolean;
+    tagName: string;
+  } | null>(null);
   if (settled && (settled.token !== token || settled.subscribed === listed)) setSettled(null);
   const subscribed = settled ? settled.subscribed : listed;
   const tagName = subscription?.tagName ?? settled?.tagName ?? tag;
@@ -125,7 +129,10 @@ export default function SubscribeButton({
         icon={
           /* Nested a level for the turn, so it names its own size (the slot sizes only a glyph
              directly inside it). Keyed on the state: each new glyph mounts, and turns if asked. */
-          <span key={subscribed ? 'on' : 'off'} className={cn('block', turnTo === subscribed && 'animate-icon-swap')}>
+          <span
+            key={subscribed ? 'on' : 'off'}
+            className={cn('block', turnTo === subscribed && 'animate-icon-swap')}
+          >
             <Glyph size={ICON.control} />
           </span>
         }
@@ -133,10 +140,16 @@ export default function SubscribeButton({
         onClick={() => void (subscribed ? unsubscribe() : subscribe())}
       >
         <span className="grid place-items-center">
-          <span aria-hidden={!subscribed || undefined} className={cn('col-start-1 row-start-1', !subscribed && 'invisible')}>
+          <span
+            aria-hidden={!subscribed || undefined}
+            className={cn('col-start-1 row-start-1', !subscribed && 'invisible')}
+          >
             已订阅
           </span>
-          <span aria-hidden={subscribed || undefined} className={cn('col-start-1 row-start-1', subscribed && 'invisible')}>
+          <span
+            aria-hidden={subscribed || undefined}
+            className={cn('col-start-1 row-start-1', subscribed && 'invisible')}
+          >
             订阅
           </span>
         </span>

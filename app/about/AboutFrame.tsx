@@ -47,7 +47,11 @@ export default function AboutFrame({ plate, team }: { plate?: ReactNode; team: R
         </div>
 
         <Card variant="elevated" padding="lg" className="mt-6">
-          <p className="text-body-m text-on-surface-variant">一个看图的网站<br />其中 114514 行代码由 AK 生成</p>
+          <p className="text-body-m text-on-surface-variant">
+            一个看图的网站
+            <br />
+            其中 114514 行代码由 AK 生成
+          </p>
         </Card>
 
         {team}
@@ -76,5 +80,12 @@ export const ROSTER_GRID =
 
 /** Placeholder while dynamic team roster groups and member counts are loading. */
 export function TeamSkeleton() {
-  return <PageLoadingIndicator size="pane" indicatorSize="md" label="正在加载团队成员…" className="min-h-48" />;
+  return (
+    <PageLoadingIndicator
+      size="pane"
+      indicatorSize="md"
+      label="正在加载团队成员…"
+      className="min-h-48"
+    />
+  );
 }

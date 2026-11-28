@@ -23,7 +23,11 @@ import { useCursorPages } from '../paging';
 import { useSettled } from '../useSettled';
 import { tagFeedback, type Feedback, type FeedbackStatus } from './resources';
 
-const STATUS_LABEL: Record<FeedbackStatus, string> = { pending: '待处理', processed: '已采纳', rejected: '已忽略' };
+const STATUS_LABEL: Record<FeedbackStatus, string> = {
+  pending: '待处理',
+  processed: '已采纳',
+  rejected: '已忽略',
+};
 const STATUS_TONE: Record<FeedbackStatus, 'warning' | 'success' | 'neutral'> = {
   pending: 'warning',
   processed: 'success',
@@ -88,120 +92,154 @@ export default function FeedbackDialog({
   const rows = read.data?.rows ?? [];
   /* Handling the last feedback on a later page leaves a page the queue no longer has: move back one
      rather than show 暂无反馈 with the pager gone (review P6-F5). */
-  if (read.data && !read.isPrevious && !read.isLoading && !read.error && !rows.length && current > 1) {
+  if (
+    read.data &&
+    !read.isPrevious &&
+    !read.isLoading &&
+    !read.error &&
+    !rows.length &&
+    current > 1
+  ) {
     pages.setPage(current - 1);
   }
 
   return (
     <>
-    <Modal isOpen={open} onClose={onClose} onExited={() => setLive(false)} title="用户反馈与翻译申请" maxWidth="xl">
-      <div className="space-y-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="搜索标签名或用户名…" />
-        <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
-          {FILTERS.map((value) => (
-            <Chip key={value} variant="filter" selected={status === value} onClick={() => setStatus(value)}>
-              {value === 'all' ? '全部' : STATUS_LABEL[value]}
-            </Chip>
-          ))}
-        </div>
-        <FollowHeight>
-          {read.data === undefined && read.error ? (
-            <ErrorRetry
-              size="inline"
-              {...retryError('反馈加载失败', apiErrorMessage(read.error))}
-              onRetry={isRetryable(read.error) ? read.refresh : undefined}
-            />
-          ) : read.data === undefined ? (
-            <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载反馈…" className="min-h-36" />
-          ) : rows.length === 0 ? (
-            <EmptyState size="inline" title={keyword ? '没有匹配的反馈' : '暂无反馈'} />
-          ) : (
-            <div data-pagination-anchor="" className="space-y-3">
-              {read.isPrevious && Boolean(read.error) && (
-                <ErrorRetry size="inline" title={`反馈第 ${current} 页加载失败`} message={apiErrorMessage(read.error)} onRetry={read.refresh} />
-              )}
-              <ul className="space-y-3">
-                {rows.map((feedback) => (
-                  <li key={feedback.id}>
-                    <Card variant="filled" className="space-y-3">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">{feedback.tag}</p>
-                          <p className="text-body-s tabular-nums text-on-surface-variant">
-                            {`来自：${feedback.username || '访客'} · ${formatDateTime(feedback.created_at)}`}
-                          </p>
+      <Modal
+        isOpen={open}
+        onClose={onClose}
+        onExited={() => setLive(false)}
+        title="用户反馈与翻译申请"
+        maxWidth="xl"
+      >
+        <div className="space-y-4">
+          <SearchInput value={search} onChange={setSearch} placeholder="搜索标签名或用户名…" />
+          <div className="flex flex-wrap gap-2" role="group" aria-label="按处理状态筛选">
+            {FILTERS.map((value) => (
+              <Chip
+                key={value}
+                variant="filter"
+                selected={status === value}
+                onClick={() => setStatus(value)}
+              >
+                {value === 'all' ? '全部' : STATUS_LABEL[value]}
+              </Chip>
+            ))}
+          </div>
+          <FollowHeight>
+            {read.data === undefined && read.error ? (
+              <ErrorRetry
+                size="inline"
+                {...retryError('反馈加载失败', apiErrorMessage(read.error))}
+                onRetry={isRetryable(read.error) ? read.refresh : undefined}
+              />
+            ) : read.data === undefined ? (
+              <PageLoadingIndicator
+                size="inline"
+                indicatorSize="md"
+                label="正在加载反馈…"
+                className="min-h-36"
+              />
+            ) : rows.length === 0 ? (
+              <EmptyState size="inline" title={keyword ? '没有匹配的反馈' : '暂无反馈'} />
+            ) : (
+              <div data-pagination-anchor="" className="space-y-3">
+                {read.isPrevious && Boolean(read.error) && (
+                  <ErrorRetry
+                    size="inline"
+                    title={`反馈第 ${current} 页加载失败`}
+                    message={apiErrorMessage(read.error)}
+                    onRetry={read.refresh}
+                  />
+                )}
+                <ul className="space-y-3">
+                  {rows.map((feedback) => (
+                    <li key={feedback.id}>
+                      <Card variant="filled" className="space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono text-label-l-emphasized text-on-surface wrap-anywhere">
+                              {feedback.tag}
+                            </p>
+                            <p className="text-body-s tabular-nums text-on-surface-variant">
+                              {`来自：${feedback.username || '访客'} · ${formatDateTime(feedback.created_at)}`}
+                            </p>
+                          </div>
+                          <Badge tone={STATUS_TONE[feedback.status]} size="md">
+                            {STATUS_LABEL[feedback.status]}
+                          </Badge>
                         </div>
-                        <Badge tone={STATUS_TONE[feedback.status]} size="md">
-                          {STATUS_LABEL[feedback.status]}
-                        </Badge>
-                      </div>
-                      {/* The user's report, quoted in the app's one quote treatment (the brand rule, a
+                        {/* The user's report, quoted in the app's one quote treatment (the brand rule, a
                           fill one container step from its host, `--rt-quote-surface`). The card is the
                           dialog's top step, so the step is the one below it; on the card's own tone the
                           block had no edge at all, 1.00:1 (G4-008). */}
-                      <div className="rich-text-content text-body-m">
-                        <blockquote className="whitespace-pre-wrap wrap-anywhere">{feedback.content}</blockquote>
-                      </div>
-                      {feedback.status !== 'pending' && (
-                        <p className="text-body-s tabular-nums text-on-surface-variant">
-                          {[
-                            `由 ${feedback.handler_username || '管理员'} 处理`,
-                            feedback.handled_at ? formatDateTime(feedback.handled_at) : null,
-                          ].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {feedback.status === 'pending' ? (
-                          <>
+                        <div className="rich-text-content text-body-m">
+                          <blockquote className="whitespace-pre-wrap wrap-anywhere">
+                            {feedback.content}
+                          </blockquote>
+                        </div>
+                        {feedback.status !== 'pending' && (
+                          <p className="text-body-s tabular-nums text-on-surface-variant">
+                            {[
+                              `由 ${feedback.handler_username || '管理员'} 处理`,
+                              feedback.handled_at ? formatDateTime(feedback.handled_at) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {feedback.status === 'pending' ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="text"
+                                size="xs"
+                                loading={mutation.pendingKeys.has(feedback.id)}
+                                onClick={() => setState(feedback, 'rejected')}
+                              >
+                                忽略
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="filled"
+                                size="xs"
+                                disabled={mutation.pendingKeys.has(feedback.id)}
+                                onClick={() => onHandle(feedback)}
+                              >
+                                处理并编辑标签
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               type="button"
                               variant="text"
                               size="xs"
                               loading={mutation.pendingKeys.has(feedback.id)}
-                              onClick={() => setState(feedback, 'rejected')}
+                              onClick={() => setState(feedback, 'pending')}
                             >
-                              忽略
+                              标记为待处理
                             </Button>
-                            <Button
-                              type="button"
-                              variant="filled"
-                              size="xs"
-                              disabled={mutation.pendingKeys.has(feedback.id)}
-                              onClick={() => onHandle(feedback)}
-                            >
-                              处理并编辑标签
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="text"
-                            size="xs"
-                            loading={mutation.pendingKeys.has(feedback.id)}
-                            onClick={() => setState(feedback, 'pending')}
-                          >
-                            标记为待处理
-                          </Button>
-                        )}
-                      </div>
-                    </Card>
-                  </li>
-                ))}
-              </ul>
-              {pages.totalPages > 1 && (
-                <Pagination
-                  currentPage={current}
-                  totalPages={pages.totalPages}
-                  onPageChange={pages.setPage}
-                  siblings={1}
-                  className="mt-0 w-full"
-                />
-              )}
-            </div>
-          )}
-        </FollowHeight>
-      </div>
-    </Modal>
+                          )}
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+                {pages.totalPages > 1 && (
+                  <Pagination
+                    currentPage={current}
+                    totalPages={pages.totalPages}
+                    onPageChange={pages.setPage}
+                    siblings={1}
+                    className="mt-0 w-full"
+                  />
+                )}
+              </div>
+            )}
+          </FollowHeight>
+        </div>
+      </Modal>
     </>
   );
 }

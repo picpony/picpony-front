@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { MdBlock, MdLockOpen, MdContentCopy, MdPersonAdd, MdRefresh, MdRemoveCircle } from 'react-icons/md';
+import {
+  MdBlock,
+  MdLockOpen,
+  MdContentCopy,
+  MdPersonAdd,
+  MdRefresh,
+  MdRemoveCircle,
+} from 'react-icons/md';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import DataTable, { type Column } from '@/components/DataTable';
@@ -27,12 +34,24 @@ type DeveloperUser = adminApi.DeveloperUser;
 
 /* Revealing the password is a POST the backend audits; this panel is where an administrator asks
    for it, so opening the panel is the request. */
-const passwordQuery = defineAdminQuery<{ password: string; updatedAt: string; expiresAt: string; generation: number }>('developer-password', async (token, signal) => {
+const passwordQuery = defineAdminQuery<{
+  password: string;
+  updatedAt: string;
+  expiresAt: string;
+  generation: number;
+}>('developer-password', async (token, signal) => {
   const data = await adminApi.adminGetDeveloperPassword(token, signal);
-  return { password: data.password, updatedAt: data.updated_at ?? '', expiresAt: data.expires_at ?? '', generation: data.generation };
+  return {
+    password: data.password,
+    updatedAt: data.updated_at ?? '',
+    expiresAt: data.expires_at ?? '',
+    generation: data.generation,
+  };
 });
 
-const usersQuery = defineAdminQuery<DeveloperUser[]>('developer-users', (token, signal) => adminApi.adminGetDeveloperUsers(token, signal));
+const usersQuery = defineAdminQuery<DeveloperUser[]>('developer-users', (token, signal) =>
+  adminApi.adminGetDeveloperUsers(token, signal),
+);
 
 /** The developer-access revision a change to a listed account names (the list's own row). */
 const accessRevision = (token: string, userId: number) =>
@@ -75,7 +94,15 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       showToast('已复制维护密码', 'success');
       return;
     }
-    void prompt({ title: '复制维护密码', label: '维护密码', defaultValue: value, message: '无法自动复制，请手动复制。', confirmLabel: '完成', allowEmpty: true, rows: 1 });
+    void prompt({
+      title: '复制维护密码',
+      label: '维护密码',
+      defaultValue: value,
+      message: '无法自动复制，请手动复制。',
+      confirmLabel: '完成',
+      allowEmpty: true,
+      rows: 1,
+    });
   };
 
   const rotate = () =>
@@ -86,14 +113,21 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         void rotateMutation.run(
           async () => {
             const generation = passwordQuery.peek(token).data?.generation;
-            return generation === undefined ? null : adminApi.adminRefreshDeveloperPassword(token, generation);
+            return generation === undefined
+              ? null
+              : adminApi.adminRefreshDeveloperPassword(token, generation);
           },
           () => showToast('已更新维护密码', 'success'),
           '更新失败',
           {
             onCommitted: (data) => {
               const next = data as unknown as adminApi.MaintenancePassword;
-              passwordQuery.write(token, { password: next.password, updatedAt: next.updated_at ?? '', expiresAt: next.expires_at ?? '', generation: next.generation });
+              passwordQuery.write(token, {
+                password: next.password,
+                updatedAt: next.updated_at ?? '',
+                expiresAt: next.expires_at ?? '',
+                generation: next.generation,
+              });
             },
           },
         ),
@@ -124,20 +158,32 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
   };
 
   const revoke = (user: DeveloperUser) =>
-    confirmThen('确认关闭开发者模式', `确定要关闭用户${named(user)}的开发者模式吗？`, () =>
-      void revokeMutation.run(
-        () => adminApi.adminRevokeDeveloper(token, user.id, accessRevision(token, user.id)),
-        () => showToast(`已关闭${named(user)}的开发者模式`, 'success'),
-        '关闭开发者模式失败',
-        {
-          key: user.id,
-          onCommitted: (data) => {
-            const access = data as unknown as adminApi.DeveloperAccess;
-            usersQuery.write(token, (previous) => previous?.map((row) => (row.id === user.id ? { ...row, developer_access: { ...row.developer_access, ...access } } : row)) ?? []);
-            users.refresh();
+    confirmThen(
+      '确认关闭开发者模式',
+      `确定要关闭用户${named(user)}的开发者模式吗？`,
+      () =>
+        void revokeMutation.run(
+          () => adminApi.adminRevokeDeveloper(token, user.id, accessRevision(token, user.id)),
+          () => showToast(`已关闭${named(user)}的开发者模式`, 'success'),
+          '关闭开发者模式失败',
+          {
+            key: user.id,
+            onCommitted: (data) => {
+              const access = data as unknown as adminApi.DeveloperAccess;
+              usersQuery.write(
+                token,
+                (previous) =>
+                  previous?.map((row) =>
+                    row.id === user.id
+                      ? { ...row, developer_access: { ...row.developer_access, ...access } }
+                      : row,
+                  ) ?? [],
+              );
+              users.refresh();
+            },
           },
-        },
-      ));
+        ),
+    );
 
   const columns: Column<DeveloperUser>[] = [
     {
@@ -145,9 +191,17 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       header: '用户名',
       primary: true,
       width: 'minmax(0, 1.2fr)',
-      render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
+      render: (user) => (
+        <span className="text-body-m-emphasized text-on-surface">{user.username}</span>
+      ),
     },
-    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
+    {
+      key: 'id',
+      header: 'ID',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (user) => `#${user.id}`,
+    },
     {
       key: 'email',
       header: '邮箱',
@@ -162,7 +216,10 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       className: 'wrap-anywhere',
       render: (user) => (
         <span className="text-on-surface-variant">
-          {[user.upstream_identity?.name || '未核验', user.key_hint ? `API Key 已绑定（${user.key_hint}）` : 'API Key 未绑定'].join(' · ')}
+          {[
+            user.upstream_identity?.name || '未核验',
+            user.key_hint ? `API Key 已绑定（${user.key_hint}）` : 'API Key 未绑定',
+          ].join(' · ')}
         </span>
       ),
     },
@@ -171,7 +228,11 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       header: '注册时间',
       width: 'minmax(0, 1.1fr)',
       className: 'tabular-nums',
-      render: (user) => <span className="text-on-surface-variant">{user.created_at ? formatDateTime(user.created_at) : '—'}</span>,
+      render: (user) => (
+        <span className="text-on-surface-variant">
+          {user.created_at ? formatDateTime(user.created_at) : '—'}
+        </span>
+      ),
     },
     {
       key: 'state',
@@ -179,11 +240,17 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       width: 'auto',
       render: (user) =>
         user.developer_access.banned ? (
-          <Badge tone="error" size="md">已封禁</Badge>
+          <Badge tone="error" size="md">
+            已封禁
+          </Badge>
         ) : user.developer_access.active ? (
-          <Badge tone="success" size="md">已开启</Badge>
+          <Badge tone="success" size="md">
+            已开启
+          </Badge>
         ) : user.developer_access.enabled ? (
-          <Badge tone="warning" size="md">已开启（未生效）</Badge>
+          <Badge tone="warning" size="md">
+            已开启（未生效）
+          </Badge>
         ) : (
           <Badge size="md">未开启</Badge>
         ),
@@ -192,44 +259,71 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       key: 'actions',
       header: '操作',
       actions: true,
-      render: (user) =>
+      render: (user) => (
         <>
-        {user.developer_access.enabled && !user.developer_access.banned && (
+          {user.developer_access.enabled && !user.developer_access.banned && (
+            <IconButton
+              size="sm"
+              variant="danger-text"
+              icon={<MdRemoveCircle />}
+              aria-label={`关闭 ${user.username} 的开发者模式`}
+              loading={revokeMutation.pendingKeys.has(user.id)}
+              disabled={user.id === viewerId || banMutation.pendingKeys.has(user.id)}
+              onClick={() => revoke(user)}
+            />
+          )}
           <IconButton
             size="sm"
-            variant="danger-text"
-            icon={<MdRemoveCircle />}
-            aria-label={`关闭 ${user.username} 的开发者模式`}
-            loading={revokeMutation.pendingKeys.has(user.id)}
-            disabled={user.id === viewerId || banMutation.pendingKeys.has(user.id)}
-            onClick={() => revoke(user)}
+            variant={user.developer_access.banned ? 'standard' : 'danger-text'}
+            icon={user.developer_access.banned ? <MdLockOpen /> : <MdBlock />}
+            aria-label={`${user.developer_access.banned ? '解封' : '封禁'} ${user.username} 的开发者权限`}
+            disabled={
+              user.id === viewerId ||
+              ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin') ||
+              revokeMutation.pendingKeys.has(user.id)
+            }
+            loading={banMutation.pendingKeys.has(user.id)}
+            onClick={() => {
+              if (
+                user.id === viewerId ||
+                ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin')
+              )
+                return;
+              const banned = user.developer_access.banned;
+              confirmThen(
+                banned ? '确认解封开发者权限' : '确认封禁开发者权限',
+                `确定要${banned ? '解封' : '封禁'}用户${named(user)}的开发者权限吗？${banned ? '' : '封禁后，该用户将无法自行开启开发者模式。'}`,
+                () =>
+                  void banMutation.run(
+                    () =>
+                      banned
+                        ? adminApi.adminUnbanDeveloper(
+                            token,
+                            user.id,
+                            accessRevision(token, user.id),
+                          )
+                        : adminApi.adminBanDeveloper(
+                            token,
+                            user.id,
+                            accessRevision(token, user.id),
+                          ),
+                    () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
+                    banned ? '开发者权限解封失败' : '开发者权限封禁失败',
+                    { key: user.id, onCommitted: () => usersQuery.invalidate() },
+                  ),
+                { tone: banned ? 'filled' : 'danger' },
+              );
+            }}
           />
-        )}
-        <IconButton size="sm" variant={user.developer_access.banned ? 'standard' : 'danger-text'}
-          icon={user.developer_access.banned ? <MdLockOpen /> : <MdBlock />}
-          aria-label={`${user.developer_access.banned ? '解封' : '封禁'} ${user.username} 的开发者权限`}
-          disabled={user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin') || revokeMutation.pendingKeys.has(user.id)} loading={banMutation.pendingKeys.has(user.id)}
-          onClick={() => {
-            if (user.id === viewerId || ((user.id === 1 || user.role === 'super_admin') && role !== 'super_admin')) return;
-            const banned = user.developer_access.banned;
-            confirmThen(
-              banned ? '确认解封开发者权限' : '确认封禁开发者权限',
-              `确定要${banned ? '解封' : '封禁'}用户${named(user)}的开发者权限吗？${banned ? '' : '封禁后，该用户将无法自行开启开发者模式。'}`,
-              () => void banMutation.run(
-                () => banned ? adminApi.adminUnbanDeveloper(token, user.id, accessRevision(token, user.id)) : adminApi.adminBanDeveloper(token, user.id, accessRevision(token, user.id)),
-                () => showToast(banned ? '已解封开发者权限' : '已封禁开发者权限', 'success'),
-                banned ? '开发者权限解封失败' : '开发者权限封禁失败', { key: user.id, onCommitted: () => usersQuery.invalidate() },
-              ),
-              { tone: banned ? 'filled' : 'danger' },
-            );
-          }} />
-        </>,
+        </>
+      ),
     },
   ];
 
   return (
     <div className="space-y-6">
-      <SectionHeader section="developer"
+      <SectionHeader
+        section="developer"
         onRefresh={() => {
           password.refresh();
           users.refresh();
@@ -237,13 +331,23 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         isLoading={password.refreshing || users.refreshing}
       />
 
-      <section aria-labelledby="admin-maintenance-password-heading" className="@container space-y-4">
-        <SectionHeading as="h3" id="admin-maintenance-password-heading">维护密码</SectionHeading>
+      <section
+        aria-labelledby="admin-maintenance-password-heading"
+        className="@container space-y-4"
+      >
+        <SectionHeading as="h3" id="admin-maintenance-password-heading">
+          维护密码
+        </SectionHeading>
         <AdminNote>
-          系统随机生成的 8 位数字，每 3 天（北京时间早上 8 点）自动更新一次。用户开启开发者模式时需要输入此密码。
+          系统随机生成的 8 位数字，每 3 天（北京时间早上 8
+          点）自动更新一次。用户开启开发者模式时需要输入此密码。
         </AdminNote>
         {password.error && !password.data ? (
-          <ErrorRetry size="inline" {...retryError('维护密码加载失败', password.error)} onRetry={password.retryable ? password.refresh : undefined} />
+          <ErrorRetry
+            size="inline"
+            {...retryError('维护密码加载失败', password.error)}
+            onRetry={password.retryable ? password.refresh : undefined}
+          />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-body-m text-on-surface-variant">当前密码</span>
@@ -280,7 +384,14 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
         )}
         {password.data ? (
           <p className="text-body-s tabular-nums text-on-surface-variant">
-            {[password.data.updatedAt ? `上次更新：${utcTime(password.data.updatedAt)}` : '上次更新：首次生成', password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null].filter(Boolean).join(' · ')}
+            {[
+              password.data.updatedAt
+                ? `上次更新：${utcTime(password.data.updatedAt)}`
+                : '上次更新：首次生成',
+              password.data.expiresAt ? `到期：${utcTime(password.data.expiresAt)}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         ) : !password.error ? (
           <Skeleton className="h-4.5 w-64 max-w-full" delay={80} />
@@ -288,7 +399,9 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
       </section>
 
       <section aria-labelledby="admin-developer-users-heading" className="space-y-4">
-        <SectionHeading as="h3" id="admin-developer-users-heading">开发者用户</SectionHeading>
+        <SectionHeading as="h3" id="admin-developer-users-heading">
+          开发者用户
+        </SectionHeading>
         <AdminForm onSubmit={enable} aria-label="为用户开启开发者模式">
           {/* The button is the field's height (56dp) and shares its top edge: a 40dp button at
               the bottom of a row of labelled fields sat 8px off their line (R9-025). */}
@@ -307,7 +420,13 @@ export default function DeveloperTab({ token, viewerId, role, openTab }: AdminPa
                 setTargetError(null);
               }}
             />
-            <Button type="submit" size="lg" variant="filled" icon={<MdPersonAdd />} loading={enableMutation.busy}>
+            <Button
+              type="submit"
+              size="lg"
+              variant="filled"
+              icon={<MdPersonAdd />}
+              loading={enableMutation.busy}
+            >
               开启开发者模式
             </Button>
           </div>

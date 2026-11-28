@@ -32,7 +32,6 @@ import {
   type BlockFilters,
 } from '@/lib/blockFilters';
 
-
 // --- The catalogue ----------------------------------------------------------
 
 export type ApiLine = 'direct' | 'api_accel' | 'picpony_api' | 'third_party';
@@ -79,7 +78,7 @@ interface LinePrefs {
 function readLinePrefs(): LinePrefs {
   const ls = (k: string, def: string) => {
     try {
-      return typeof localStorage === 'undefined' ? def : localStorage.getItem(k) ?? def;
+      return typeof localStorage === 'undefined' ? def : (localStorage.getItem(k) ?? def);
     } catch {
       return def;
     }
@@ -327,7 +326,11 @@ export function applySavedRoutePolicy(patch: Partial<SiteStatusResponse>): void 
     global_api_third_party_url: policy.thirdPartyUrl,
     global_api_third_party_pass_api_key: policy.thirdPartyPassApiKey,
   };
-  for (const key of ['global_api_route_policy', 'global_image_route_policy', 'global_api_third_party_url'] as const) {
+  for (const key of [
+    'global_api_route_policy',
+    'global_image_route_policy',
+    'global_api_third_party_url',
+  ] as const) {
     if (typeof patch[key] === 'string') merged[key] = patch[key];
   }
   if (typeof patch.global_api_third_party_pass_api_key === 'boolean') {
@@ -374,10 +377,15 @@ async function loadRoutePolicy(): Promise<void> {
     const inlineBlacklist = window.__picponyRoutePolicy?.blacklist;
     /* Each read settles on its own — started inside a promise, so even a transport that throws
        synchronously cannot abort its siblings and settle the policy before its own read lands. */
-    const settle = <T,>(read: () => Promise<T | null>): Promise<T | null> =>
-      Promise.resolve().then(read).catch(() => null);
-    const json = async <T,>(path: string): Promise<T | null> => {
-      const response = await fetch(`${API_V1}${path}`, { cache: 'no-store', signal: timeout(10_000) });
+    const settle = <T>(read: () => Promise<T | null>): Promise<T | null> =>
+      Promise.resolve()
+        .then(read)
+        .catch(() => null);
+    const json = async <T>(path: string): Promise<T | null> => {
+      const response = await fetch(`${API_V1}${path}`, {
+        cache: 'no-store',
+        signal: timeout(10_000),
+      });
       return response.ok ? ((await response.json()) as T) : null;
     };
     const [data, filters, blacklist] = await Promise.all([
@@ -387,7 +395,11 @@ async function loadRoutePolicy(): Promise<void> {
         : settle(async () => parseBlockFilters(await json<unknown>('/filters/block-tags'))),
       Array.isArray(inlineBlacklist)
         ? Promise.resolve(inlineBlacklist)
-        : settle(() => readWholeBlacklist((page) => json<unknown>(`/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`))),
+        : settle(() =>
+            readWholeBlacklist((page) =>
+              json<unknown>(`/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}`),
+            ),
+          ),
     ]);
     if (filters && generation === policyReadGeneration) installBlockFilters(filters);
     if (blacklist && generation === policyReadGeneration) installPublicBlacklist(blacklist);
@@ -777,8 +789,7 @@ export function probeImage(url: string, timeout = PROBE_TIMEOUT_MS): Promise<voi
   });
 }
 
-const probeUrl = (base: string) =>
-  `${base}${encodeURIComponent(IMAGE_PROBE_URL)}&_t=${Date.now()}`;
+const probeUrl = (base: string) => `${base}${encodeURIComponent(IMAGE_PROBE_URL)}&_t=${Date.now()}`;
 
 /**
  * Race the CDN against a direct fetch and keep the winner.
@@ -799,8 +810,12 @@ export function raceImageLines() {
     imageState.raceWinner = winner;
     emit();
   };
-  probeImage(probeUrl(IMAGE_CDN_BASE)).then(() => settle('cdn')).catch(() => {});
-  probeImage(`${IMAGE_PROBE_URL}?_t=${Date.now()}`).then(() => settle('direct')).catch(() => {});
+  probeImage(probeUrl(IMAGE_CDN_BASE))
+    .then(() => settle('cdn'))
+    .catch(() => {});
+  probeImage(`${IMAGE_PROBE_URL}?_t=${Date.now()}`)
+    .then(() => settle('direct'))
+    .catch(() => {});
   window.setTimeout(() => {
     if (decided) return;
     const prefs = readLinePrefs();
@@ -894,4 +909,3 @@ function probeCdnRecovery() {
       window.setTimeout(probeCdnRecovery, CDN_RECOVERY_MS);
     });
 }
-

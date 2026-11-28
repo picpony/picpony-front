@@ -42,7 +42,13 @@ import { useBackOrParent } from '@/lib/backNavigation';
 import { useDocumentTitle } from '@/lib/useDocumentTitle';
 import { useIconToss } from '@/lib/useIconToss';
 import { patchListedPost, patchThreadPage } from '@/lib/forumCache';
-import { playForumContainerTransform, readForumOrigin, readForumPreview, rememberForumPreview, rememberForumReturn } from '@/lib/forumTransition';
+import {
+  playForumContainerTransform,
+  readForumOrigin,
+  readForumPreview,
+  rememberForumPreview,
+  rememberForumReturn,
+} from '@/lib/forumTransition';
 import { formatCount, formatDateTime } from '@/lib/format';
 import { readToken, useEscapeBack, useSession } from '@/lib/hooks';
 import { useResource, SKIP } from '@/lib/resource';
@@ -61,7 +67,8 @@ function replacePage(id: string, page: number) {
   else params.delete('page');
   const query = params.toString();
   const href = `/forum/${id}${query ? `?${query}` : ''}`;
-  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`)
+    window.history.replaceState(null, '', href);
 }
 
 /** Shared cold-open placeholder for both the Suspense boundary and the client thread read. */
@@ -202,7 +209,10 @@ function ForumThreadContent() {
       }
       const patch = { is_liked: outcome.liked, like_count: outcome.count };
       setLikeLocal({ liked: outcome.liked, count: outcome.count });
-      patchThreadPage({ id, page, token: session }, (previous) => ({ ...previous, post: { ...previous.post, ...patch } }));
+      patchThreadPage({ id, page, token: session }, (previous) => ({
+        ...previous,
+        post: { ...previous.post, ...patch },
+      }));
       patchListedPost(post.id, patch);
     });
   };
@@ -214,14 +224,17 @@ function ForumThreadContent() {
   const [sharing, setSharing] = useState(false);
   const shareItems: MenuAction[] = [
     { value: 'copy', label: '复制链接', icon: <MdLink /> },
-    ...(shareMenu?.native ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare /> }] : []),
+    ...(shareMenu?.native
+      ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare /> }]
+      : []),
   ];
   const onShareSelect = (value: string) => {
     setShareMenu(null);
     if (!post) return;
     setSharing(true);
     const done = () => setSharing(false);
-    const run = value === 'native' ? sharePostNatively(post, readToken()) : copyPostLink(post, readToken());
+    const run =
+      value === 'native' ? sharePostNatively(post, readToken()) : copyPostLink(post, readToken());
     void run.then(done, done);
   };
 
@@ -233,13 +246,19 @@ function ForumThreadContent() {
   /* The original front end's rule: the author edits; the author or staff delete. */
   const moreItems: MenuAction[] = [
     ...(own ? [{ value: 'edit', label: '编辑', icon: <MdEdit /> }] : []),
-    ...(own || staff ? [{ value: 'delete', label: '删除', icon: <MdDeleteOutline />, destructive: true }] : []),
+    ...(own || staff
+      ? [{ value: 'delete', label: '删除', icon: <MdDeleteOutline />, destructive: true }]
+      : []),
   ];
 
   const deletePost = async () => {
     const session = readToken();
     if (!session || !post) return;
-    const ok = await confirm({ title: '确认删除', message: '确定要删除此帖子吗？', tone: 'danger' });
+    const ok = await confirm({
+      title: '确认删除',
+      message: '确定要删除此帖子吗？',
+      tone: 'danger',
+    });
     if (!ok) return;
     setDeletingPost(true);
     const outcome = await removePost(session, post.id);
@@ -278,14 +297,20 @@ function ForumThreadContent() {
         openAuth('login');
         return;
       }
-      setReplyTo({ commentId: comment.id, userId: comment.user_id, username: comment.username, content: comment.content });
+      setReplyTo({
+        commentId: comment.id,
+        userId: comment.user_id,
+        username: comment.username,
+        content: comment.content,
+      });
       setFocusRequest((n) => n + 1);
     },
     [openAuth, setReplyTo],
   );
 
   const canDeleteReply = useCallback(
-    (comment: ForumComment) => staff || (Number.isSafeInteger(myId) && myId > 0 && comment.user_id === myId),
+    (comment: ForumComment) =>
+      staff || (Number.isSafeInteger(myId) && myId > 0 && comment.user_id === myId),
     [staff, myId],
   );
 
@@ -293,7 +318,11 @@ function ForumThreadContent() {
     async (comment: ForumComment) => {
       const session = readToken();
       if (!session) return;
-      const ok = await confirm({ title: '确认删除', message: '确定要删除此回复吗？', tone: 'danger' });
+      const ok = await confirm({
+        title: '确认删除',
+        message: '确定要删除此回复吗？',
+        tone: 'danger',
+      });
       if (!ok) return;
       setDeletingReply(comment.id);
       const outcome = await removeComment(session, comment.id);
@@ -307,9 +336,17 @@ function ForumThreadContent() {
       let replies: number | null = null;
       patchThreadPage({ id, page, token: session }, (previous) => {
         const comments = previous.comments.filter((row) => row.id !== comment.id);
-        const total = Math.max(0, previous.total_comments - (previous.comments.length - comments.length));
+        const total = Math.max(
+          0,
+          previous.total_comments - (previous.comments.length - comments.length),
+        );
         replies = total;
-        return { ...previous, comments, total_comments: total, post: { ...previous.post, reply_count: total } };
+        return {
+          ...previous,
+          comments,
+          total_comments: total,
+          post: { ...previous.post, reply_count: total },
+        };
       });
       if (replies !== null) patchListedPost(Number(id), { reply_count: replies });
     },
@@ -325,7 +362,10 @@ function ForumThreadContent() {
         return;
       }
       forumThread.write({ id, page: last.page, token: session }, last);
-      patchListedPost(last.post.id, { reply_count: last.total_comments, updated_at: last.post.updated_at });
+      patchListedPost(last.post.id, {
+        reply_count: last.total_comments,
+        updated_at: last.post.updated_at,
+      });
       const viewer = Number(user?.id);
       const mine = [...last.comments].reverse().find((row) => row.user_id === viewer);
       pendingFocus.current = mine?.id ?? null;
@@ -406,9 +446,7 @@ function ForumThreadContent() {
   }
 
   const coverShown =
-    post.cover_image && !post.content.includes(post.cover_image)
-      ? post.cover_image
-      : null;
+    post.cover_image && !post.content.includes(post.cover_image) ? post.cover_image : null;
   const total = data?.total_comments ?? post.reply_count ?? 0;
 
   return (
@@ -431,11 +469,16 @@ function ForumThreadContent() {
             {(post.is_pinned || post.category !== 'discussion') && (
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {post.is_pinned && <PinnedBadge size="md" />}
-                {post.category !== 'discussion' && <CategoryBadge category={post.category} size="md" />}
+                {post.category !== 'discussion' && (
+                  <CategoryBadge category={post.category} size="md" />
+                )}
               </div>
             )}
             <div className="mb-4 flex items-start gap-2">
-              <h1 id={titleId} className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s">
+              <h1
+                id={titleId}
+                className="min-w-0 flex-1 text-title-l text-on-surface wrap-anywhere sm:text-headline-s"
+              >
                 {post.title}
               </h1>
               {moreItems.length > 0 && (
@@ -503,11 +546,19 @@ function ForumThreadContent() {
                 selected={liked}
                 selectedTone="tertiary"
                 aria-label="点赞"
-                icon={liked ? <MdThumbUp className={cn(likeFillFor === id && 'animate-reaction-fill')} /> : <MdOutlineThumbUp />}
+                icon={
+                  liked ? (
+                    <MdThumbUp className={cn(likeFillFor === id && 'animate-reaction-fill')} />
+                  ) : (
+                    <MdOutlineThumbUp />
+                  )
+                }
                 onClick={toggleLike}
                 className="-ms-2"
               />
-              <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">{formatCount(likeCount)}</span>
+              <span className="min-w-6 text-label-l text-on-surface-variant tabular-nums">
+                {formatCount(likeCount)}
+              </span>
               <IconButton
                 ref={shareButtonRef}
                 aria-label="分享"
@@ -516,7 +567,9 @@ function ForumThreadContent() {
                 loading={sharing}
                 icon={<MdShare />}
                 onClick={() =>
-                  setShareMenu((open) => (open ? null : { native: typeof navigator.share === 'function' }))
+                  setShareMenu((open) =>
+                    open ? null : { native: typeof navigator.share === 'function' },
+                  )
                 }
                 className="ms-auto -me-2"
               />

@@ -37,7 +37,7 @@ import { ZipWriter, uniqueEntryName } from '@/lib/zip';
 const STALL_MS = 20_000;
 const TRANSFER_MS = 45_000;
 /** The slowest average a transfer may keep once past `TRANSFER_MS`: each byte buys this much time. */
-const MIN_RATE_BYTES_PER_MS = 128 * 1024 / 1000;
+const MIN_RATE_BYTES_PER_MS = (128 * 1024) / 1000;
 const PROBE_MS = 8_000;
 
 type Line = 'worker' | 'cdn' | 'direct';
@@ -75,7 +75,9 @@ async function fetchWithin(url: string, ms: number, signal?: AbortSignal): Promi
 export async function batchLines(signal?: AbortSignal): Promise<Line[]> {
   await ensureRoutePolicy();
   const line = resolveImageLine();
-  const preferred: Line[] = isImageForced() ? [line === 'picpony' ? 'worker' : line] : linesFor(line);
+  const preferred: Line[] = isImageForced()
+    ? [line === 'picpony' ? 'worker' : line]
+    : linesFor(line);
   const answering = await probeLines(preferred, signal);
   return [...answering, ...preferred.filter((each) => !answering.includes(each))];
 }
@@ -85,7 +87,11 @@ export async function probeLines(lines: readonly Line[], signal?: AbortSignal): 
   const answers = await Promise.all(
     lines.map(async (line) => {
       try {
-        const response = await fetchWithin(`${onLine(IMAGE_PROBE_URL, line)}${line === 'direct' ? '?' : '&'}_t=${Date.now()}`, PROBE_MS, signal);
+        const response = await fetchWithin(
+          `${onLine(IMAGE_PROBE_URL, line)}${line === 'direct' ? '?' : '&'}_t=${Date.now()}`,
+          PROBE_MS,
+          signal,
+        );
         void response.body?.cancel().catch(() => {});
         return response.ok ? line : null;
       } catch {
@@ -98,7 +104,9 @@ export async function probeLines(lines: readonly Line[], signal?: AbortSignal): 
 
 function isMedia(response: Response): boolean {
   const type = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
-  return type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream';
+  return (
+    type.startsWith('image/') || type.startsWith('video/') || type === 'application/octet-stream'
+  );
 }
 
 /**
@@ -118,9 +126,16 @@ async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array>
   const started = Date.now();
   const timeout = () => controller.abort(new DOMException('timeout', 'TimeoutError'));
   let overall = setTimeout(timeout, transferBudgetMs(0));
-  let stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
+  let stall = setTimeout(
+    () => controller.abort(new DOMException('stalled', 'TimeoutError')),
+    STALL_MS,
+  );
   try {
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit', signal: controller.signal });
+    const response = await fetch(url, {
+      mode: 'cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    });
     if (!response.ok || !isMedia(response)) {
       void response.body?.cancel().catch(() => {});
       throw new Error(`HTTP ${response.status}`);
@@ -137,7 +152,10 @@ async function readBytes(url: string, signal?: AbortSignal): Promise<Uint8Array>
       length += value.length;
       clearTimeout(overall);
       overall = setTimeout(timeout, Math.max(0, started + transferBudgetMs(length) - Date.now()));
-      stall = setTimeout(() => controller.abort(new DOMException('stalled', 'TimeoutError')), STALL_MS);
+      stall = setTimeout(
+        () => controller.abort(new DOMException('stalled', 'TimeoutError')),
+        STALL_MS,
+      );
     }
     const bytes = new Uint8Array(length);
     let at = 0;
@@ -178,7 +196,11 @@ export async function packFavourites(
     signal,
     onProgress,
     lines: given,
-  }: { signal?: AbortSignal; onProgress?: (done: number, failed: number, total: number) => void; lines?: readonly Line[] } = {},
+  }: {
+    signal?: AbortSignal;
+    onProgress?: (done: number, failed: number, total: number) => void;
+    lines?: readonly Line[];
+  } = {},
 ): Promise<ZipOutcome> {
   signal?.throwIfAborted();
   if (images.length === 0) return { packed: 0, failed: 0, cancelled: false, archive: null };
@@ -200,7 +222,8 @@ export async function packFavourites(
         /* The next line, if any. */
       }
     }
-    if (bytes && bytes.length > 0) zip.add(uniqueEntryName(raw, `pony_${image.id}.png`, taken), bytes);
+    if (bytes && bytes.length > 0)
+      zip.add(uniqueEntryName(raw, `pony_${image.id}.png`, taken), bytes);
     else if (!signal?.aborted) failed += 1;
     done += 1;
     onProgress?.(done, failed, images.length);
@@ -230,7 +253,10 @@ export function planArchives<T extends Packable>(images: readonly T[]): T[][] {
   let current: T[] = [];
   let bytes = 0;
   for (const image of images) {
-    const size = typeof image.size === 'number' && Number.isFinite(image.size) && image.size > 0 ? image.size : UNKNOWN_SIZE;
+    const size =
+      typeof image.size === 'number' && Number.isFinite(image.size) && image.size > 0
+        ? image.size
+        : UNKNOWN_SIZE;
     if (current.length > 0 && (current.length >= ARCHIVE_LIMIT || bytes + size > ARCHIVE_BYTES)) {
       plan.push(current);
       current = [];
@@ -283,7 +309,8 @@ export async function packArchives(
     const outcome = await packFavourites(slice, {
       signal,
       lines,
-      onProgress: (done, failed) => onProgress?.(before.done + done, before.failed + failed, images.length),
+      onProgress: (done, failed) =>
+        onProgress?.(before.done + done, before.failed + failed, images.length),
     });
     result.failed += outcome.failed;
     if (outcome.cancelled) {
@@ -322,5 +349,7 @@ export function saveArchive(archive: Blob, name = archiveName(Date.now())) {
 export function packedSentence(packed: number, failed: number, archives = 1): string {
   const split = archives > 1 ? `，分为 ${archives} 个压缩包` : '';
   /* The failure counted as every count sentence counts it (`runSummary`'s `，M 张失败`). */
-  return failed > 0 ? `已打包 ${packed} 张${split}，${failed} 张失败` : `已打包 ${packed} 张${split}`;
+  return failed > 0
+    ? `已打包 ${packed} 张${split}，${failed} 张失败`
+    : `已打包 ${packed} 张${split}`;
 }

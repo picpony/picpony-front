@@ -19,8 +19,15 @@ export const quotaQuery = defineAdminQuery('ai-quota', api.readAiQuota);
 export const assistantQuery = defineAdminQuery('ai-assistant', api.readAssistantConfig);
 export const textTranslationQuery = defineAdminQuery('text-translation', api.readTextTranslation);
 
-function paged<A, T>(name: string, fetcher: (token: string, args: A, signal?: AbortSignal) => Promise<T>) {
-  return defineResource<A & { token: string }, T>({ name: `admin-site-tools-${name}`, key: (args) => JSON.stringify(args), ttl: 60000, maxEntries: 12,
+function paged<A, T>(
+  name: string,
+  fetcher: (token: string, args: A, signal?: AbortSignal) => Promise<T>,
+) {
+  return defineResource<A & { token: string }, T>({
+    name: `admin-site-tools-${name}`,
+    key: (args) => JSON.stringify(args),
+    ttl: 60000,
+    maxEntries: 12,
     fetch: (args, signal) => {
       if (readToken() !== args.token) throw new Error('登录状态已失效，请重新登录');
       return fetcher(args.token, args, signal);
@@ -30,11 +37,29 @@ function paged<A, T>(name: string, fetcher: (token: string, args: A, signal?: Ab
 export const feedbackQuery = paged('feedback', api.readFeedback);
 export const relayStatsQuery = paged('relay-stats', api.readRelayStats);
 export const relayErrorsQuery = paged('relay-errors', api.readRelayErrors);
-export const announcementsQuery = paged('announcements', (_token, args: { page: number }, signal) => api.readAnnouncementHistory(args.page, signal));
-export function useToolPage<A extends object, T>(resource: ReturnType<typeof paged<A, T>>, token: string, args: A, scope: string) {
-  const read = useResource(resource, token ? { ...args, token } : SKIP, { keepPrevious: `${token}:${scope}` });
-  const listKey = useShownListKey(`${scope}
-${JSON.stringify(args)}`, read.isPrevious);
-  return { ...read, listKey, loading: read.data === undefined && !read.error, refreshing: read.isLoading && read.data !== undefined,
-    message: read.error ? apiErrorMessage(read.error) : undefined, retry: read.error && isRetryable(read.error) ? read.refresh : undefined };
+export const announcementsQuery = paged('announcements', (_token, args: { page: number }, signal) =>
+  api.readAnnouncementHistory(args.page, signal),
+);
+export function useToolPage<A extends object, T>(
+  resource: ReturnType<typeof paged<A, T>>,
+  token: string,
+  args: A,
+  scope: string,
+) {
+  const read = useResource(resource, token ? { ...args, token } : SKIP, {
+    keepPrevious: `${token}:${scope}`,
+  });
+  const listKey = useShownListKey(
+    `${scope}
+${JSON.stringify(args)}`,
+    read.isPrevious,
+  );
+  return {
+    ...read,
+    listKey,
+    loading: read.data === undefined && !read.error,
+    refreshing: read.isLoading && read.data !== undefined,
+    message: read.error ? apiErrorMessage(read.error) : undefined,
+    retry: read.error && isRetryable(read.error) ? read.refresh : undefined,
+  };
 }

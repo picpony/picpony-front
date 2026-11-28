@@ -98,8 +98,15 @@ function hasOwnedLayoutMotion(root: HTMLElement): boolean {
   if (root.querySelector('[data-layout-owned]')) return true;
   for (const node of root.querySelectorAll<HTMLElement>('.m3-collapse')) {
     if (typeof node.getAnimations !== 'function') continue;
-    if (node.getAnimations().some((animation) =>
-      animation.playState === 'running' && (animation as CSSTransition).transitionProperty === 'grid-template-rows')) {
+    if (
+      node
+        .getAnimations()
+        .some(
+          (animation) =>
+            animation.playState === 'running' &&
+            (animation as CSSTransition).transitionProperty === 'grid-template-rows',
+        )
+    ) {
       return true;
     }
   }
@@ -304,7 +311,10 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   private animate(node: HTMLDivElement, from: number, to: number) {
     node.setAttribute('data-layout-owned', '');
     node.style.clipPath = 'inset(-100vmax -100vmax 0 -100vmax)';
-    const run = node.animate([{ height: `${from}px` }, { height: `${to}px` }], springTiming(this.props.spring ?? 'layout', 'list'));
+    const run = node.animate(
+      [{ height: `${from}px` }, { height: `${to}px` }],
+      springTiming(this.props.spring ?? 'layout', 'list'),
+    );
     const release = () => {
       if (this.run !== run) return;
       this.run = null;
@@ -337,7 +347,11 @@ export default class FollowHeight extends Component<FollowHeightProps> {
   render() {
     return (
       <div ref={this.setNode} className={this.props.className}>
-        {this.props.track ? <div ref={this.setInner}>{this.props.children}</div> : this.props.children}
+        {this.props.track ? (
+          <div ref={this.setInner}>{this.props.children}</div>
+        ) : (
+          this.props.children
+        )}
       </div>
     );
   }

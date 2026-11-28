@@ -71,7 +71,12 @@ export default function CreateTagDialog({
         {workOrder && (
           <WorkOrderNote
             workOrder={workOrder}
-            onUse={() => setForm((previous) => ({ ...previous, translations: withSuggestion(previous.translations, workOrder.content) }))}
+            onUse={() =>
+              setForm((previous) => ({
+                ...previous,
+                translations: withSuggestion(previous.translations, workOrder.content),
+              }))
+            }
           />
         )}
         <TagFields

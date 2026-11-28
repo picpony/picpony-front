@@ -47,7 +47,13 @@ interface WireContact {
   last_message_at: string;
   unread_count: number;
   /** The conversation's newest message: its first 120 characters, as stored (sanitizer entities included). */
-  last_message: { id: number; sender_id: number; preview: string; truncated: boolean; created_at: string };
+  last_message: {
+    id: number;
+    sender_id: number;
+    preview: string;
+    truncated: boolean;
+    created_at: string;
+  };
 }
 
 interface WireMessage {
@@ -96,14 +102,22 @@ const CONTACT_PAGE = 100;
 // ---------------------------------------------------------------------------
 
 /** 公告: public, paged. Bodies are sanitised here, the same way the pop-up's are. */
-export async function readAnnouncementHistory(page: number, signal?: AbortSignal): Promise<AnnouncementPage> {
-  const result = await pager.read('announcements', page, async (before, s): Promise<CursorPage<WireAnnouncement>> => {
-    const data = await api<Keyset<'announcements', WireAnnouncement>>('GET', '/announcements', {
-      query: { before, limit: ANNOUNCEMENT_PAGE },
-      signal: s,
-    });
-    return { rows: data.announcements, next: data.next_cursor };
-  }, signal);
+export async function readAnnouncementHistory(
+  page: number,
+  signal?: AbortSignal,
+): Promise<AnnouncementPage> {
+  const result = await pager.read(
+    'announcements',
+    page,
+    async (before, s): Promise<CursorPage<WireAnnouncement>> => {
+      const data = await api<Keyset<'announcements', WireAnnouncement>>('GET', '/announcements', {
+        query: { before, limit: ANNOUNCEMENT_PAGE },
+        signal: s,
+      });
+      return { rows: data.announcements, next: data.next_cursor };
+    },
+    signal,
+  );
   const rows: Announcement[] = result.rows.map((row) => ({
     id: row.id,
     version: row.version,
@@ -128,15 +142,24 @@ export async function readNotifications(
   page: number,
   signal?: AbortSignal,
 ): Promise<NotificationPage> {
-  const result = await pager.read(`notifications:${token ?? 'guest'}:${type}`, page, async (before, s) => {
-    const data = await api<Keyset<'notifications', WireNotification>>('GET', '/notifications', {
-      token: token ?? undefined,
-      query: { before, limit: NOTIFICATION_PAGE, ...(type === 'interaction' ? { kind: 'interaction' } : { exclude_kind: 'interaction' }) },
-      cache: 'no-store',
-      signal: s,
-    });
-    return { rows: data.notifications, next: data.next_cursor };
-  }, signal);
+  const result = await pager.read(
+    `notifications:${token ?? 'guest'}:${type}`,
+    page,
+    async (before, s) => {
+      const data = await api<Keyset<'notifications', WireNotification>>('GET', '/notifications', {
+        token: token ?? undefined,
+        query: {
+          before,
+          limit: NOTIFICATION_PAGE,
+          ...(type === 'interaction' ? { kind: 'interaction' } : { exclude_kind: 'interaction' }),
+        },
+        cache: 'no-store',
+        signal: s,
+      });
+      return { rows: data.notifications, next: data.next_cursor };
+    },
+    signal,
+  );
   return {
     notifications: result.rows.map((row): Notification => ({
       id: row.id,
@@ -150,7 +173,10 @@ export async function readNotifications(
 }
 
 /** Marks notices read (1–100 ids, the backend's bound). Resolves with how many changed. */
-export async function markNotificationsRead(token: string, ids: readonly number[]): Promise<number> {
+export async function markNotificationsRead(
+  token: string,
+  ids: readonly number[],
+): Promise<number> {
   if (ids.length === 0) return 0;
   const data = await api<{ marked: number }>('POST', '/me/notifications/read-receipts', {
     token,
@@ -193,22 +219,35 @@ export async function readConversation(
   page: number,
   signal?: AbortSignal,
 ): Promise<ConversationPage> {
-  const result = await pager.read(`conversation:${token}:${withUserId}`, page, async (before, s) => {
-    const data = await api<Keyset<'messages', WireMessage>>('GET', `/me/conversations/${seg(withUserId)}/messages`, {
-      token,
-      query: { before, limit: CONVERSATION_PAGE },
-      cache: 'no-store',
-      signal: s,
-    });
-    return { rows: data.messages, next: data.next_cursor };
-  }, signal);
+  const result = await pager.read(
+    `conversation:${token}:${withUserId}`,
+    page,
+    async (before, s) => {
+      const data = await api<Keyset<'messages', WireMessage>>(
+        'GET',
+        `/me/conversations/${seg(withUserId)}/messages`,
+        {
+          token,
+          query: { before, limit: CONVERSATION_PAGE },
+          cache: 'no-store',
+          signal: s,
+        },
+      );
+      return { rows: data.messages, next: data.next_cursor };
+    },
+    signal,
+  );
   if (result.page === 1) {
     let upTo = 0;
-    for (const row of result.rows) if (row.sender_id === withUserId && row.read_at === null) upTo = Math.max(upTo, row.id);
+    for (const row of result.rows)
+      if (row.sender_id === withUserId && row.read_at === null) upTo = Math.max(upTo, row.id);
     /* Awaited, so the screen's badge correction (and its re-read of the count) comes after the
        receipt rather than racing it; never fatal to the read itself. */
     if (upTo > 0) {
-      await api('POST', `/me/conversations/${seg(withUserId)}/read-receipts`, { token, json: { up_to: upTo } }).catch(() => {});
+      await api('POST', `/me/conversations/${seg(withUserId)}/read-receipts`, {
+        token,
+        json: { up_to: upTo },
+      }).catch(() => {});
     }
   }
   return {
@@ -228,8 +267,15 @@ export async function readConversation(
 }
 
 /** People to start a conversation with, by name. */
-export async function searchUsers(token: string, keyword: string, signal?: AbortSignal): Promise<ChatUser[]> {
-  const data = await api<{ users: (WireUser & { experience: number })[]; next_cursor: number | null }>('GET', '/users', {
+export async function searchUsers(
+  token: string,
+  keyword: string,
+  signal?: AbortSignal,
+): Promise<ChatUser[]> {
+  const data = await api<{
+    users: (WireUser & { experience: number })[];
+    next_cursor: number | null;
+  }>('GET', '/users', {
     token,
     query: { keyword, limit: 20 },
     signal,
@@ -299,7 +345,9 @@ function safeDecode(value: string): string {
  * representation, absolute, and **raw** — the image line (a proxy wrapper) is the sender's, and
  * the recipient's own line is applied when the card is drawn.
  */
-export function shareThumbUrl(representations: Partial<ImageRepresentation> | null | undefined): string {
+export function shareThumbUrl(
+  representations: Partial<ImageRepresentation> | null | undefined,
+): string {
   const chosen = representations?.small || representations?.thumb || representations?.medium || '';
   return absoluteImageUrl(chosen);
 }

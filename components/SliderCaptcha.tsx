@@ -112,7 +112,9 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   useEffect(() => {
     onVerifyRef.current = onVerify;
   }, [onVerify]);
-  useLayoutEffect(() => { activeRef.current = active; }, [active]);
+  useLayoutEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   const setChallengeReady = useCallback((value: boolean) => {
     challengeReadyRef.current = value;
@@ -130,16 +132,22 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       if (fillRef.current) {
         fillRef.current.style.transform = `translateX(${knobX + barButtonWidth - barWidth}px)`;
       }
-      if (pieceRef.current) pieceRef.current.style.transform = `translateX(${(x * imageMaxX) / maxSliderX}px)`;
+      if (pieceRef.current)
+        pieceRef.current.style.transform = `translateX(${(x * imageMaxX) / maxSliderX}px)`;
     },
     [maxSliderX],
   );
 
   const measureLayout = useCallback(() => {
-    const imageWidth = imageRef.current?.clientWidth || containerRef.current?.clientWidth || puzzleWidth;
+    const imageWidth =
+      imageRef.current?.clientWidth || containerRef.current?.clientWidth || puzzleWidth;
     const barWidth = trackRefElement.current?.clientWidth || puzzleWidth;
-    const coarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-    const barButtonWidth = Math.min(barWidth, Math.max((barWidth * pieceSize) / puzzleWidth, coarse ? 48 : 0));
+    const coarse =
+      typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const barButtonWidth = Math.min(
+      barWidth,
+      Math.max((barWidth * pieceSize) / puzzleWidth, coarse ? 48 : 0),
+    );
     const nextLayout = {
       imageWidth,
       imagePieceSize: (imageWidth * pieceSize) / puzzleWidth,
@@ -175,49 +183,49 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
   }, [layout, pieceImage, paint]);
 
   /** Glide the knob (and piece) home instead of teleporting after a miss. */
-  const snapBack = useCallback((onComplete?: () => void) => {
-    snapTweenRef.current?.kill();
-    const from = sliderXRef.current;
-    sliderXRef.current = 0;
-    /* Only `off`. The knob returning home is the control reporting that the
+  const snapBack = useCallback(
+    (onComplete?: () => void) => {
+      snapTweenRef.current?.kill();
+      const from = sliderXRef.current;
+      sliderXRef.current = 0;
+      /* Only `off`. The knob returning home is the control reporting that the
        attempt was rejected — a value snapping back with no travel reads as the
        input never having been registered — so `reduced` keeps the glide. */
-    if (from <= 0 || motionTier() === 'off') {
-      paint(0);
-      onComplete?.();
-      return;
-    }
-    const proxy = { x: from };
-    snapTweenRef.current = gsap.to(proxy, {
-      x: 0,
-      /* `fast-spatial`, the spring `Switch.kt` gives a handle. */
-      ...spring('fastSpatial'),
-      onUpdate: () => {
-        sliderXRef.current = proxy.x;
-        paint(proxy.x);
-      },
-      onComplete: () => {
-        sliderXRef.current = 0;
+      if (from <= 0 || motionTier() === 'off') {
         paint(0);
-        snapTweenRef.current = null;
         onComplete?.();
-      },
-    });
-  }, [paint]);
-
-  useEffect(
-    () => {
-      mountedRef.current = true;
-      return () => {
-        mountedRef.current = false;
-        requestRef.current += 1;
-        snapTweenRef.current?.kill();
-        window.clearTimeout(refetchTimerRef.current);
-        removeDragListenersRef.current?.();
-      };
+        return;
+      }
+      const proxy = { x: from };
+      snapTweenRef.current = gsap.to(proxy, {
+        x: 0,
+        /* `fast-spatial`, the spring `Switch.kt` gives a handle. */
+        ...spring('fastSpatial'),
+        onUpdate: () => {
+          sliderXRef.current = proxy.x;
+          paint(proxy.x);
+        },
+        onComplete: () => {
+          sliderXRef.current = 0;
+          paint(0);
+          snapTweenRef.current = null;
+          onComplete?.();
+        },
+      });
     },
-    [],
+    [paint],
   );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestRef.current += 1;
+      snapTweenRef.current?.kill();
+      window.clearTimeout(refetchTimerRef.current);
+      removeDragListenersRef.current?.();
+    };
+  }, []);
 
   const getClientX = (e: MouseEvent | TouchEvent): number => {
     if ('touches' in e) {
@@ -240,41 +248,44 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
    * rejected attempt is followed by a fresh challenge at once (the old one is spent
    * server-side), and the reason it failed must stay readable while it loads.
    */
-  const fetchCaptcha = useCallback(async ({ keepError = false }: { keepError?: boolean } = {}) => {
-    const request = ++requestRef.current;
-    window.clearTimeout(refetchTimerRef.current);
-    removeDragListenersRef.current?.();
-    snapTweenRef.current?.kill();
-    setLoading(true);
-    setVerifying(false);
-    verifyingRef.current = false;
-    loadingRef.current = true;
-    setChallengeReady(false);
-    sliderXRef.current = 0;
-    paint(0);
-    if (!keepError) setErrorMsg('');
-    setLoadFailed(false);
-    trackRef.current = [];
-    draggingRef.current = false;
-    setIsDragging(false);
-    setBgImage('');
-    setPieceImage('');
-    try {
-      const challenge = await captchaGet();
-      if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
-      challengeIdRef.current = challenge.id;
-      setChallengeReady(true);
-      setBgImage(challenge.background);
-      setPieceImage(challenge.piece);
-      setPieceY(challenge.y);
-    } catch (err) {
-      if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
-      setLoadFailed(true);
-      setErrorMsg(apiErrorMessage(err));
-    }
-    setLoading(false);
-    loadingRef.current = false;
-  }, [paint, setChallengeReady]);
+  const fetchCaptcha = useCallback(
+    async ({ keepError = false }: { keepError?: boolean } = {}) => {
+      const request = ++requestRef.current;
+      window.clearTimeout(refetchTimerRef.current);
+      removeDragListenersRef.current?.();
+      snapTweenRef.current?.kill();
+      setLoading(true);
+      setVerifying(false);
+      verifyingRef.current = false;
+      loadingRef.current = true;
+      setChallengeReady(false);
+      sliderXRef.current = 0;
+      paint(0);
+      if (!keepError) setErrorMsg('');
+      setLoadFailed(false);
+      trackRef.current = [];
+      draggingRef.current = false;
+      setIsDragging(false);
+      setBgImage('');
+      setPieceImage('');
+      try {
+        const challenge = await captchaGet();
+        if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
+        challengeIdRef.current = challenge.id;
+        setChallengeReady(true);
+        setBgImage(challenge.background);
+        setPieceImage(challenge.piece);
+        setPieceY(challenge.y);
+      } catch (err) {
+        if (!mountedRef.current || !activeRef.current || request !== requestRef.current) return;
+        setLoadFailed(true);
+        setErrorMsg(apiErrorMessage(err));
+      }
+      setLoading(false);
+      loadingRef.current = false;
+    },
+    [paint, setChallengeReady],
+  );
 
   useEffect(() => {
     if (!active) {
@@ -289,7 +300,9 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
     if (fetchedRef.current) return;
     fetchedRef.current = true;
     void fetchCaptcha();
-    return () => { fetchedRef.current = false; };
+    return () => {
+      fetchedRef.current = false;
+    };
   }, [active, fetchCaptcha]);
 
   /** Refresh after the handle returns, bounded by docs/motion-system.md#animation-watchdogs. */
@@ -305,7 +318,10 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
         window.clearTimeout(refetchTimerRef.current);
         if (mountedRef.current && activeRef.current) void fetchCaptcha({ keepError: true });
       };
-      refetchTimerRef.current = window.setTimeout(refresh, SPRING_MS.fastSpatial * MOTION_SPEED_SCALE.slow);
+      refetchTimerRef.current = window.setTimeout(
+        refresh,
+        SPRING_MS.fastSpatial * MOTION_SPEED_SCALE.slow,
+      );
       snapBack(refresh);
     },
     [fetchCaptcha, snapBack],
@@ -313,7 +329,13 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
   // Mouse and touch drags send their actual movement in the backend's logical coordinates.
   const submitTrack = useCallback(async () => {
-    if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || !trackRef.current.length) return;
+    if (
+      !challengeReadyRef.current ||
+      loadingRef.current ||
+      verifyingRef.current ||
+      !trackRef.current.length
+    )
+      return;
     const finalX = sliderXRef.current;
     /* A tap, or a jump with no movement in between: no trace the server would accept. */
     if (finalX < 5 || trackRef.current.length < 3) {
@@ -343,7 +365,13 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
 
   const startDrag = useCallback(
     (e: MouseEvent | TouchEvent) => {
-      if (!challengeReadyRef.current || loadingRef.current || verifyingRef.current || draggingRef.current) return;
+      if (
+        !challengeReadyRef.current ||
+        loadingRef.current ||
+        verifyingRef.current ||
+        draggingRef.current
+      )
+        return;
       if ('cancelable' in e && e.cancelable) e.preventDefault();
 
       draggingRef.current = true;
@@ -574,7 +602,12 @@ export default function SliderCaptcha({ onVerify, active }: SliderCaptchaProps) 
       </div>
       {/* The hint, or why the last attempt failed — one line in one place, so a
           failure neither grows the card nor needs a second control to recover from. */}
-      <p className={cn('text-body-s text-center', errorMsg ? 'text-error' : 'text-on-surface-variant')}>
+      <p
+        className={cn(
+          'text-body-s text-center',
+          errorMsg ? 'text-error' : 'text-on-surface-variant',
+        )}
+      >
         {/* Only the failure is announced; the hint coming back after it is not news. */}
         <span aria-live="polite">{errorMsg}</span>
         {!errorMsg && '拖动拼图对齐缺口'}

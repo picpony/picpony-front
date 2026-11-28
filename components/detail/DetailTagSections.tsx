@@ -4,7 +4,13 @@ import type { ReactNode } from 'react';
 import Skeleton from '@/components/Skeleton';
 
 export const DETAIL_TAG_SECTIONS = [
-  { key: 'artists', title: '艺术家', prefix: 'artist:', category: 'artist', more: '显示更多艺术家标签' },
+  {
+    key: 'artists',
+    title: '艺术家',
+    prefix: 'artist:',
+    category: 'artist',
+    more: '显示更多艺术家标签',
+  },
   { key: 'ocs', title: '图中包含的 OC', prefix: 'oc:', category: 'oc', more: '显示更多 OC 标签' },
   { key: 'regular', title: '标签', prefix: '', category: null, more: '显示更多标签' },
 ] as const;

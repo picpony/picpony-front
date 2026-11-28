@@ -37,7 +37,8 @@ function writeQueued() {
   else params.set('tab', tab);
   const query = params.toString();
   const href = query ? `/admin?${query}` : '/admin';
-  if (href !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, '', href);
+  if (href !== `${window.location.pathname}${window.location.search}`)
+    window.history.replaceState(null, '', href);
 }
 
 /** The console's waiting write goes with it. */

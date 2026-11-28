@@ -17,7 +17,11 @@ export const ADMIN_PAGE_SIZE = 50;
  * row of the last page deleted — clamps to the last page.
  */
 export function usePagedRows<T>(rows: readonly T[], resetKey: unknown, pageSize = ADMIN_PAGE_SIZE) {
-  const [state, setState] = useState<{ page: number; key: unknown; filter: number }>({ page: 1, key: resetKey, filter: 0 });
+  const [state, setState] = useState<{ page: number; key: unknown; filter: number }>({
+    page: 1,
+    key: resetKey,
+    filter: 0,
+  });
   const current = Object.is(state.key, resetKey);
   if (!current) setState({ page: 1, key: resetKey, filter: state.filter + 1 });
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -57,7 +61,11 @@ export function useShownListKey(key: string, isPrevious: boolean): string {
  * after it. `scope` is whatever narrows the list: a new one starts again at page 1.
  */
 export function useCursorPages(scope: string) {
-  const [state, setState] = useState<{ scope: string; page: number; cursors: (number | undefined)[] }>({ scope, page: 1, cursors: [undefined] });
+  const [state, setState] = useState<{
+    scope: string;
+    page: number;
+    cursors: (number | undefined)[];
+  }>({ scope, page: 1, cursors: [undefined] });
   const current = state.scope === scope ? state : { scope, page: 1, cursors: [undefined] };
   if (state.scope !== scope) setState(current);
   return {
@@ -65,7 +73,8 @@ export function useCursorPages(scope: string) {
     cursor: current.cursors[current.page - 1],
     /** Pages reachable now: every page read so far, and the next one when the last said there is one. */
     totalPages: current.cursors.length,
-    setPage: (page: number) => setState({ ...current, page: Math.max(1, Math.min(page, current.cursors.length)) }),
+    setPage: (page: number) =>
+      setState({ ...current, page: Math.max(1, Math.min(page, current.cursors.length)) }),
     /** Call during render with the shown page's answer; it extends (or trims) the known pages. */
     learn: (page: number, next: number | null) => {
       if (next != null ? current.cursors[page] === next : current.cursors.length === page) return;
@@ -81,7 +90,13 @@ export function useCursorPages(scope: string) {
  * `closest()`, so the marker has to be an *ancestor* of the pager — a marker on the table with the
  * pager beside it is one the pager cannot see.
  */
-export function AdminListAnchor({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function AdminListAnchor({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div data-pagination-anchor="" className={cn('space-y-4', className)}>
       {children}
@@ -105,7 +120,9 @@ export function AdminPager({
   disabled?: boolean;
 }) {
   if (totalPages <= 1) {
-    return summary ? <p className="text-center text-body-s tabular-nums text-on-surface-variant">{summary}</p> : null;
+    return summary ? (
+      <p className="text-center text-body-s tabular-nums text-on-surface-variant">{summary}</p>
+    ) : null;
   }
   /* The pager is a query container with no intrinsic width of its own, so it takes the full row
      and the summary sits under it. */
@@ -119,7 +136,9 @@ export function AdminPager({
         siblings={1}
         className="mt-0 w-full"
       />
-      {summary && <span className="text-body-s tabular-nums text-on-surface-variant">{summary}</span>}
+      {summary && (
+        <span className="text-body-s tabular-nums text-on-surface-variant">{summary}</span>
+      )}
     </div>
   );
 }

@@ -44,7 +44,16 @@ function familiesOf(clusters: readonly Cluster[], total: number): HueFamily[] {
     // Fixed anchors avoid a chain of neighbours swallowing a distant hue.
     let family = families.find((f) => Math.abs(norm180(f.anchor - cluster.hue)) < 22);
     if (!family) {
-      family = { anchor: cluster.hue, members: [], population: 0, hue: 0, tone: 0, chroma: 0, pictureShare: 0, darkShare: 0 };
+      family = {
+        anchor: cluster.hue,
+        members: [],
+        population: 0,
+        hue: 0,
+        tone: 0,
+        chroma: 0,
+        pictureShare: 0,
+        darkShare: 0,
+      };
       families.push(family);
     }
     family.members.push(cluster);
@@ -57,13 +66,13 @@ function familiesOf(clusters: readonly Cluster[], total: number): HueFamily[] {
     let chroma = 0;
     let dark = 0;
     for (const c of family.members) {
-      x += Math.cos(c.hue * Math.PI / 180) * c.population;
-      y += Math.sin(c.hue * Math.PI / 180) * c.population;
+      x += Math.cos((c.hue * Math.PI) / 180) * c.population;
+      y += Math.sin((c.hue * Math.PI) / 180) * c.population;
       tone += c.tone * c.population;
       chroma += c.chroma * c.population;
       if (c.tone < 50) dark += c.population;
     }
-    family.hue = measured(wrapHue(Math.atan2(y, x) * 180 / Math.PI));
+    family.hue = measured(wrapHue((Math.atan2(y, x) * 180) / Math.PI));
     family.tone = measured(tone / family.population);
     family.chroma = measured(chroma / family.population);
     family.pictureShare = measured(family.population / total);
@@ -73,9 +82,13 @@ function familiesOf(clusters: readonly Cluster[], total: number): HueFamily[] {
 }
 
 function companionOf(family: HueFamily, families: readonly HueFamily[]): number | null {
-  const eligible = families.filter((other) =>
-    other !== family && other.pictureShare >= 0.002 && other.chroma >= READABLE_CHROMA &&
-    Math.abs(norm180(other.hue - family.hue)) >= 45 && !isGuardedHue(Math.round(other.hue) % 360),
+  const eligible = families.filter(
+    (other) =>
+      other !== family &&
+      other.pictureShare >= 0.002 &&
+      other.chroma >= READABLE_CHROMA &&
+      Math.abs(norm180(other.hue - family.hue)) >= 45 &&
+      !isGuardedHue(Math.round(other.hue) % 360),
   );
   if (!eligible.length) return null;
   // Area leads; close populations may prefer the more distinct partner shown in the study.
@@ -85,12 +98,21 @@ function companionOf(family: HueFamily, families: readonly HueFamily[]): number 
   return Math.round(tied[0].hue) % 360;
 }
 
-function recommendation(family: HueFamily, families: readonly HueFamily[], register?: ClearColorRegister): ImageRecommendation {
+function recommendation(
+  family: HueFamily,
+  families: readonly HueFamily[],
+  register?: ClearColorRegister,
+): ImageRecommendation {
   const deep = register ? register === 'deep' : isCool(family.hue) && family.darkShare >= 0.6;
   const yellow = family.hue >= 70 && family.hue < 125;
   const warm = family.hue < 70 || family.hue >= 325;
-  const tone = deep ? clamp(family.tone, 34, 42) : clamp(family.tone, yellow ? 86 : 82, yellow ? 92 : warm ? 86 : 88);
-  return { seed: clearColorAt(family.hue, tone, deep ? 'deep' : 'light'), accent: companionOf(family, families) };
+  const tone = deep
+    ? clamp(family.tone, 34, 42)
+    : clamp(family.tone, yellow ? 86 : 82, yellow ? 92 : warm ? 86 : 88);
+  return {
+    seed: clearColorAt(family.hue, tone, deep ? 'deep' : 'light'),
+    accent: companionOf(family, families),
+  };
 }
 
 /**
@@ -98,7 +120,10 @@ function recommendation(family: HueFamily, families: readonly HueFamily[], regis
  * receive clear light/deep fills. A small vivid detail can be a companion, never a chroma
  * bonus over a larger family. Called only after an image is read, behind the palette seam.
  */
-export function recommendImageColors(pixels: Uint8ClampedArray, desired = MAX_OPTIONS): ImageRecommendation[] {
+export function recommendImageColors(
+  pixels: Uint8ClampedArray,
+  desired = MAX_OPTIONS,
+): ImageRecommendation[] {
   const count = Number.isFinite(desired) ? clamp(Math.trunc(desired), 0, MAX_OPTIONS) : MAX_OPTIONS;
   if (!count) return [];
   const opaque: number[] = [];
@@ -107,14 +132,23 @@ export function recommendImageColors(pixels: Uint8ClampedArray, desired = MAX_OP
     opaque.push((255 << 24) | (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
   }
   if (!opaque.length) return [];
-  const clusters = [...quantizeCelebi(opaque, 128)].map(([argb, population]): Cluster => {
-    const hct = Hct.fromInt(argb);
-    return { argb, population, hue: measured(hct.hue), tone: measured(hct.tone), chroma: measured(hct.chroma) };
-  }).sort((a, b) => b.population - a.population || a.argb - b.argb);
+  const clusters = [...quantizeCelebi(opaque, 128)]
+    .map(([argb, population]): Cluster => {
+      const hct = Hct.fromInt(argb);
+      return {
+        argb,
+        population,
+        hue: measured(hct.hue),
+        tone: measured(hct.tone),
+        chroma: measured(hct.chroma),
+      };
+    })
+    .sort((a, b) => b.population - a.population || a.argb - b.argb);
   const families = familiesOf(clusters, opaque.length);
   const options: ImageRecommendation[] = [];
   const add = (option: ImageRecommendation) => {
-    if (options.length < count && !options.some((o) => o.seed === option.seed)) options.push(option);
+    if (options.length < count && !options.some((o) => o.seed === option.seed))
+      options.push(option);
   };
   if (!families.length) {
     // No reliable hue: retain actual image tones instead of inventing a colourful fallback.

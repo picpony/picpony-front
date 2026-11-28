@@ -60,11 +60,18 @@ export const SINCE_LABELS: Record<SinceFilter, string> = {
 };
 
 /** One active condition as the words a chip says. */
-export function filterChipLabels(filters: SearchFilters): { key: keyof SearchFilters; label: string }[] {
+export function filterChipLabels(
+  filters: SearchFilters,
+): { key: keyof SearchFilters; label: string }[] {
   const out: { key: keyof SearchFilters; label: string }[] = [];
   const sign = (op: FilterComparison) => (op === 'gte' ? '≥' : '<');
-  if (filters.upvotes) out.push({ key: 'upvotes', label: `点赞数 ${sign(filters.upvotes.op)} ${filters.upvotes.value}` });
-  if (filters.score) out.push({ key: 'score', label: `净得分 ${sign(filters.score.op)} ${filters.score.value}` });
+  if (filters.upvotes)
+    out.push({
+      key: 'upvotes',
+      label: `点赞数 ${sign(filters.upvotes.op)} ${filters.upvotes.value}`,
+    });
+  if (filters.score)
+    out.push({ key: 'score', label: `净得分 ${sign(filters.score.op)} ${filters.score.value}` });
   if (filters.aspect) out.push({ key: 'aspect', label: ASPECT_LABELS[filters.aspect].chip });
   if (filters.media) out.push({ key: 'media', label: MEDIA_LABELS[filters.media].chip });
   if (filters.since) out.push({ key: 'since', label: SINCE_LABELS[filters.since] });
@@ -166,7 +173,9 @@ export default function SearchToolbar({
   const draftChanged = filtersKey(pending) !== committedKey;
   const draftEmpty = countSearchFilters(pending) === 0;
 
-  const sortOptions = canRank ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.value !== '_score');
+  const sortOptions = canRank
+    ? SORT_OPTIONS
+    : SORT_OPTIONS.filter((option) => option.value !== '_score');
 
   return (
     <div className="@container">
@@ -279,7 +288,10 @@ export default function SearchToolbar({
                 onChange={(aspect) => edit({ aspect: aspect as Draft['aspect'] })}
                 options={[
                   { value: '', label: '不限比例' },
-                  ...(Object.keys(ASPECT_LABELS) as AspectFilter[]).map((value) => ({ value, label: ASPECT_LABELS[value].option })),
+                  ...(Object.keys(ASPECT_LABELS) as AspectFilter[]).map((value) => ({
+                    value,
+                    label: ASPECT_LABELS[value].option,
+                  })),
                 ]}
               />
               <ChoiceCondition
@@ -288,7 +300,10 @@ export default function SearchToolbar({
                 onChange={(media) => edit({ media: media as Draft['media'] })}
                 options={[
                   { value: '', label: '所有类型' },
-                  ...(Object.keys(MEDIA_LABELS) as MediaFilter[]).map((value) => ({ value, label: MEDIA_LABELS[value].option })),
+                  ...(Object.keys(MEDIA_LABELS) as MediaFilter[]).map((value) => ({
+                    value,
+                    label: MEDIA_LABELS[value].option,
+                  })),
                 ]}
               />
               <ChoiceCondition
@@ -298,7 +313,10 @@ export default function SearchToolbar({
                 onChange={(since) => edit({ since: since as Draft['since'] })}
                 options={[
                   { value: '', label: '不限时间' },
-                  ...(Object.keys(SINCE_LABELS) as SinceFilter[]).map((value) => ({ value, label: SINCE_LABELS[value] })),
+                  ...(Object.keys(SINCE_LABELS) as SinceFilter[]).map((value) => ({
+                    value,
+                    label: SINCE_LABELS[value],
+                  })),
                 ]}
               />
             </div>
@@ -402,7 +420,14 @@ function ChoiceCondition({
   return (
     <div role="group" aria-labelledby={captionId} className={className}>
       <ConditionCaption id={captionId}>{label}</ConditionCaption>
-      <Select value={value} onChange={onChange} size="sm" className="w-full" aria-label={label} options={options} />
+      <Select
+        value={value}
+        onChange={onChange}
+        size="sm"
+        className="w-full"
+        aria-label={label}
+        options={options}
+      />
     </div>
   );
 }

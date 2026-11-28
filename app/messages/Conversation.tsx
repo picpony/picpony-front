@@ -28,7 +28,14 @@ import ChatComposer, { type ChatComposerHandle } from './ChatComposer';
 import { isBlankValue, outgoingValue } from './composerModel';
 import { readDraft, writeDraft } from './drafts';
 import EmojiPicker, { type EmojiPick, type EmojiPickerHandle } from './EmojiPicker';
-import { discardMessage, queueMessage, retryMessage, settleSent, useOutbox, type OutboxItem } from './outbox';
+import {
+  discardMessage,
+  queueMessage,
+  retryMessage,
+  settleSent,
+  useOutbox,
+  type OutboxItem,
+} from './outbox';
 import Thread, { type ThreadEntry } from './Thread';
 import { matchOutgoing, mergeMessages } from './threadModel';
 import { markConversationRead } from './unread';
@@ -112,7 +119,15 @@ export interface ConversationProps {
  * **Reading it marks it read**: the row's count and the app bar's badge go down the moment the
  * conversation is read (and again when a new message from them arrives while it is open).
  */
-export default function Conversation({ token, contact, me, layout, onBack, historyParent = null, active = true }: ConversationProps) {
+export default function Conversation({
+  token,
+  contact,
+  me,
+  layout,
+  onBack,
+  historyParent = null,
+  active = true,
+}: ConversationProps) {
   const contactId = contact.id;
   const first = useResource(
     conversationPage,
@@ -177,7 +192,11 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
   const entries = useMemo<ThreadEntry[]>(
     () => [
       ...thread.messages.map((message) => ({ key: `m${message.id}`, message })),
-      ...pending.map((item) => ({ key: `o${item.localId}`, message: outgoingMessage(item, me), outgoing: item })),
+      ...pending.map((item) => ({
+        key: `o${item.localId}`,
+        message: outgoingMessage(item, me),
+        outgoing: item,
+      })),
     ],
     [thread.messages, pending, me],
   );
@@ -213,7 +232,8 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
     composerRef.current?.clear();
   };
 
-  const newestKnownId = () => latest.current.messages.reduce((max, message) => Math.max(max, message.id), 0);
+  const newestKnownId = () =>
+    latest.current.messages.reduce((max, message) => Math.max(max, message.id), 0);
 
   /* ---- Emoji ---- */
   const wide = useMediaQuery(MEDIA.sm);
@@ -273,7 +293,9 @@ export default function Conversation({ token, contact, me, layout, onBack, histo
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex min-w-0 shrink-0 items-center gap-1 bg-surface-container px-2 py-2 sm:px-3">
-        {layout === 'screen' && <IconButton onClick={onBack} aria-label="返回联系人列表" icon={<MdArrowBack />} />}
+        {layout === 'screen' && (
+          <IconButton onClick={onBack} aria-label="返回联系人列表" icon={<MdArrowBack />} />
+        )}
         {/* Who this is, and the way to their profile. */}
         <Link
           href={`/user/${contactId}`}

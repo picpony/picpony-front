@@ -27,7 +27,10 @@ import path from 'node:path';
 import { stubFor } from './netAuditFixtures.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const CPUS = process.argv.slice(2).map(Number).filter((n) => n > 0);
+const CPUS = process.argv
+  .slice(2)
+  .map(Number)
+  .filter((n) => n > 0);
 if (CPUS.length === 0) CPUS.push(1, 4);
 const WIDTH = 390;
 const HEIGHT = 844;
@@ -52,7 +55,10 @@ const upstream = createHttpServer((req, res) => {
   const target = req.url?.startsWith('/api/v1/json/') ? 'https://trixiebooru.org' : upstreamOrigin;
   const stub = stubFor(`${target}${req.url}`, req.method);
   if (!stub) return res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(upstreamPort, '127.0.0.1', r));
@@ -61,8 +67,13 @@ const server = spawn(
   process.execPath,
   [path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'), 'start', '-p', String(appPort)],
   {
-    cwd: ROOT, stdio: 'ignore', env: { ...process.env, PICPONY_UPSTREAM_ORIGIN: upstreamOrigin,
-      PICPONY_DERPI_ORIGIN: `${upstreamOrigin}/api/v1/json` },
+    cwd: ROOT,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      PICPONY_UPSTREAM_ORIGIN: upstreamOrigin,
+      PICPONY_DERPI_ORIGIN: `${upstreamOrigin}/api/v1/json`,
+    },
   },
 );
 const edge = [
@@ -71,7 +82,14 @@ const edge = [
 ].find((c) => existsSync(c));
 const browser = spawn(
   edge,
-  ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profileDir}`, `--window-size=${WIDTH},${HEIGHT}`, '--no-first-run', 'about:blank'],
+  [
+    '--headless=new',
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${profileDir}`,
+    `--window-size=${WIDTH},${HEIGHT}`,
+    '--no-first-run',
+    'about:blank',
+  ],
   { stdio: 'ignore' },
 );
 
@@ -127,7 +145,8 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: n, method, params }));
   });
 const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result?.value;
+  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }))?.result
+    ?.value;
 
 await send('Page.enable');
 socket.addEventListener('message', async (e) => {
@@ -150,9 +169,16 @@ socket.addEventListener('message', async (e) => {
 await send('Network.enable');
 await send('Network.setBypassServiceWorker', { bypass: true });
 await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
-await send('Emulation.setDeviceMetricsOverride', { width: WIDTH, height: HEIGHT, deviceScaleFactor: 2, mobile: true });
+await send('Emulation.setDeviceMetricsOverride', {
+  width: WIDTH,
+  height: HEIGHT,
+  deviceScaleFactor: 2,
+  mobile: true,
+});
 await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}` });
+await send('Page.addScriptToEvaluateOnNewDocument', {
+  source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}`,
+});
 
 /* The state at rest, read in the page. */
 const STATE = `(() => {
@@ -190,12 +216,17 @@ function check(label, state, expect = {}) {
       if (panel.flagged.length) problems.push(`motion flags left on ${panel.flagged.join(', ')}`);
       if (panel.moved.length) problems.push(`transform or clip left on ${panel.moved.join(', ')}`);
       if (panel.edged) problems.push("the window's widened box or mask left on the panel");
-      if (panel.selected !== null && panel.shown[0] !== panel.selected) problems.push(`shows ${panel.shown[0]} under selected ${panel.selected}`);
+      if (panel.selected !== null && panel.shown[0] !== panel.selected)
+        problems.push(`shows ${panel.shown[0]} under selected ${panel.selected}`);
     }
-    if (expect.selected && !state.panels.some((p) => p.selected === expect.selected)) problems.push(`${expect.selected} is not selected`);
-    if (expect.url && state.url !== expect.url) problems.push(`address ${state.url}, expected ${expect.url}`);
+    if (expect.selected && !state.panels.some((p) => p.selected === expect.selected))
+      problems.push(`${expect.selected} is not selected`);
+    if (expect.url && state.url !== expect.url)
+      problems.push(`address ${state.url}, expected ${expect.url}`);
   }
-  console.log(`${problems.length ? 'FAIL' : ' ok '}  ${label}${problems.length ? ` — ${problems.join('; ')}` : ''}`);
+  console.log(
+    `${problems.length ? 'FAIL' : ' ok '}  ${label}${problems.length ? ` — ${problems.join('; ')}` : ''}`,
+  );
   if (problems.length) failures.push(`${label}: ${problems.join('; ')}`);
 }
 
@@ -209,7 +240,9 @@ const boxOf = (selector, label) =>
 
 /* Every gesture starts with the row on screen: a press that became a scroll moved the page. */
 const toTop = async () => {
-  await evaluate(`(() => { const s = document.querySelector('.app-scroller'); if (s && s.scrollTop > 0) s.scrollTop = 0; return true; })()`);
+  await evaluate(
+    `(() => { const s = document.querySelector('.app-scroller'); if (s && s.scrollTop > 0) s.scrollTop = 0; return true; })()`,
+  );
   await sleep(150);
 };
 
@@ -220,11 +253,17 @@ async function touch(selector, label, options) {
 }
 
 async function touchAt(box, { hold = 90, move = null } = {}) {
-  const down = send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x, y: box.y }] });
+  const down = send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: box.x, y: box.y }],
+  });
   if (move) {
     await sleep(30);
     for (let i = 1; i <= 6; i += 1) {
-      await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: box.x + (move.x * i) / 6, y: box.y + (move.y * i) / 6 }] });
+      await send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: box.x + (move.x * i) / 6, y: box.y + (move.y * i) / 6 }],
+      });
       await sleep(16);
     }
   } else {
@@ -242,9 +281,21 @@ async function mouse(selector, label, options) {
 
 async function mouseAt(box, { hold = 90 } = {}) {
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: box.x,
+    y: box.y,
+    button: 'left',
+    clickCount: 1,
+  });
   await sleep(hold);
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: box.x,
+    y: box.y,
+    button: 'left',
+    clickCount: 1,
+  });
 }
 
 const settle = async (ms = 1500) => {
@@ -312,7 +363,9 @@ async function inputDuringSwitch(switchTab, kind) {
   let point;
   try {
     await switchTab();
-    point = await evaluate(playingPanel(kind === 'pan' ? null : `${VIEWS}[data-tab="home-discussed"]`));
+    point = await evaluate(
+      playingPanel(kind === 'pan' ? null : `${VIEWS}[data-tab="home-discussed"]`),
+    );
     if (point) {
       if (kind === 'pan') await touchAt(point, { move: { x: 0, y: -160 } });
       else if (kind === 'tap') await touchAt(point, { hold: 5 });
@@ -321,22 +374,34 @@ async function inputDuringSwitch(switchTab, kind) {
   } finally {
     await send('Animation.setPlaybackRate', { playbackRate: 1 });
   }
-  const result = point && await evaluate('window.__tabInputResult()');
-  const ok = result && (kind === 'pan' ? result.pointerdown === 'moving' && result.overlap > 8 && result.landed
-    : kind === 'tap' ? result.pointerdown === 'moving' && result.pointerup === 'at rest' : result.pointerdown === 'at rest');
-  const label = kind === 'pan' ? 'a vertical touch scroll leaves the playing strip uninterrupted'
-    : `the arriving gallery button receives a ${kind} with its pane at rest`;
+  const result = point && (await evaluate('window.__tabInputResult()'));
+  const ok =
+    result &&
+    (kind === 'pan'
+      ? result.pointerdown === 'moving' && result.overlap > 8 && result.landed
+      : kind === 'tap'
+        ? result.pointerdown === 'moving' && result.pointerup === 'at rest'
+        : result.pointerdown === 'at rest');
+  const label =
+    kind === 'pan'
+      ? 'a vertical touch scroll leaves the playing strip uninterrupted'
+      : `the arriving gallery button receives a ${kind} with its pane at rest`;
   const detail = result ? JSON.stringify(result) : 'no playing strip with a reachable target';
   console.log(`${ok ? ' ok ' : 'FAIL'}  ${label} — ${detail}`);
   if (!ok) failures.push(`${label}: ${detail}`);
 }
 
-const runs = [...CPUS.map((cpu) => ({ cpu, tier: 'standard' })), { cpu: CPUS[0], tier: 'reduced' }, { cpu: CPUS[0], tier: 'off' }];
+const runs = [
+  ...CPUS.map((cpu) => ({ cpu, tier: 'standard' })),
+  { cpu: CPUS[0], tier: 'reduced' },
+  { cpu: CPUS[0], tier: 'off' },
+];
 let tierScript = null;
 for (const { cpu, tier } of runs) {
   console.log(`\nCPU ${cpu}x slower, ${tier}`);
   await send('Emulation.setCPUThrottlingRate', { rate: cpu });
-  if (tierScript) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: tierScript });
+  if (tierScript)
+    await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: tierScript });
   tierScript = (
     await send('Page.addScriptToEvaluateOnNewDocument', {
       source: `try{localStorage.setItem('picpony_motion',${JSON.stringify(tier)})}catch(e){}`,
@@ -353,7 +418,9 @@ for (const { cpu, tier } of runs) {
 
   await toTop();
   await touch(TAB, '隐私政策', { move: { x: 0, y: -160 } });
-  check('a press that becomes a scroll switches nothing', await settle(), { selected: 'agreement' });
+  check('a press that becomes a scroll switches nothing', await settle(), {
+    selected: 'agreement',
+  });
 
   await toTop();
   await touch(TAB, '常见问题', { hold: 700 });
@@ -364,13 +431,19 @@ for (const { cpu, tier } of runs) {
   await touch(TAB, 'Cookie');
   await sleep(60);
   await touch(TAB, '服务协议');
-  check('two taps in quick succession', await settle(), { selected: 'agreement', url: '/policy?tab=agreement' });
+  check('two taps in quick succession', await settle(), {
+    selected: 'agreement',
+    url: '/policy?tab=agreement',
+  });
 
   await toTop();
   await touch(TAB, '隐私政策');
   await sleep(120);
   await touch(TAB, '服务协议');
-  check('a tap back to the tab being left', await settle(), { selected: 'agreement', url: '/policy?tab=agreement' });
+  check('a tap back to the tab being left', await settle(), {
+    selected: 'agreement',
+    url: '/policy?tab=agreement',
+  });
 
   await toTop();
   await mouse(TAB, '常见问题');
@@ -378,11 +451,17 @@ for (const { cpu, tier } of runs) {
 
   await toTop();
   await mouse(TAB, 'Cookie', { hold: 5 });
-  check('a mouse click quicker than a frame', await settle(), { selected: 'cookie', url: '/policy' });
+  check('a mouse click quicker than a frame', await settle(), {
+    selected: 'cookie',
+    url: '/policy',
+  });
 
   await toTop();
   await touch(TAB, 'Cookie');
-  check('a tap on the tab already selected', await settle(), { selected: 'cookie', url: '/policy' });
+  check('a tap on the tab already selected', await settle(), {
+    selected: 'cookie',
+    url: '/policy',
+  });
 
   await send('Page.navigate', { url: `${origin}/` });
   await sleep(9000);
@@ -400,7 +479,10 @@ for (const { cpu, tier } of runs) {
   }
   const gallery = await settle(2500);
   check('the pill back to 图库', gallery, { selected: 'gallery' });
-  check('the gallery views to 本站讨论', gallery, { selected: 'home-discussed', url: '/?view=discussed' });
+  check('the gallery views to 本站讨论', gallery, {
+    selected: 'home-discussed',
+    url: '/?view=discussed',
+  });
   await touch(VIEWS, '全部');
   check('the gallery views back to 全部', await settle(), { selected: 'home-feed', url: '/' });
 
@@ -411,18 +493,26 @@ for (const { cpu, tier } of runs) {
 
   /* The pill is fixed chrome, so it is pressed from anywhere down the gallery: the forum opens at
      its own top and the gallery comes back to where it was left. */
-  await evaluate(`(() => { document.querySelector('.app-scroller').scrollTop = 1500; return true; })()`);
+  await evaluate(
+    `(() => { document.querySelector('.app-scroller').scrollTop = 1500; return true; })()`,
+  );
   await sleep(400);
   const left = await scrollTop();
   await touch(PILL, '论坛');
-  check('the pill to 论坛 from down the gallery', await settle(), { selected: 'forum', url: '/?tab=forum' });
+  check('the pill to 论坛 from down the gallery', await settle(), {
+    selected: 'forum',
+    url: '/?tab=forum',
+  });
   const atForum = await scrollTop();
   if (atForum > 4) {
     console.log(`FAIL  the forum opened at ${atForum}, not its top`);
     failures.push(`forum offset ${atForum}`);
   }
   await touch(PILL, '图库');
-  check('the pill back to 图库, down the gallery', await settle(), { selected: 'gallery', url: '/' });
+  check('the pill back to 图库, down the gallery', await settle(), {
+    selected: 'gallery',
+    url: '/',
+  });
   const back = await scrollTop();
   if (Math.abs(back - left) > 8) {
     console.log(`FAIL  the gallery came back at ${back}, not ${left}`);
@@ -435,9 +525,16 @@ for (const { cpu, tier } of runs) {
 console.log('\n1920x1080 desktop, a mouse, standard');
 await send('Emulation.setCPUThrottlingRate', { rate: 1 });
 await send('Emulation.setTouchEmulationEnabled', { enabled: false });
-await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+await send('Emulation.setDeviceMetricsOverride', {
+  width: 1920,
+  height: 1080,
+  deviceScaleFactor: 1,
+  mobile: false,
+});
 if (tierScript) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: tierScript });
-await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}` });
+await send('Page.addScriptToEvaluateOnNewDocument', {
+  source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}`,
+});
 
 /* The run as it starts: the strip's travel, and the panel's window. */
 const MID_RUN = `new Promise((resolve) => {
@@ -462,21 +559,40 @@ const MID_RUN = `new Promise((resolve) => {
 const midRun = async (selector, label, name) => {
   const box = await boxOf(selector, label);
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: box.x,
+    y: box.y,
+    button: 'left',
+    clickCount: 1,
+  });
   await sleep(90);
   const running = evaluate(MID_RUN);
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+  await send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: box.x,
+    y: box.y,
+    button: 'left',
+    clickCount: 1,
+  });
   const run = await running;
   const problems = [];
   if (!run) problems.push('no run');
   else {
     if (!run.mask) problems.push('the panel is not masked');
-    if (!(run.reach > 0) || run.padding !== run.reach) problems.push(`box widened by ${run.reach} with ${run.padding} padding`);
-    if (Math.abs(run.travel - run.window) > 1) problems.push(`travels ${run.travel}, the window is ${run.window}`);
-    if (!(run.window <= run.inner)) problems.push(`the window ${run.window} is not inside the scroller's ${run.inner}`);
+    if (!(run.reach > 0) || run.padding !== run.reach)
+      problems.push(`box widened by ${run.reach} with ${run.padding} padding`);
+    if (Math.abs(run.travel - run.window) > 1)
+      problems.push(`travels ${run.travel}, the window is ${run.window}`);
+    if (!(run.window <= run.inner))
+      problems.push(`the window ${run.window} is not inside the scroller's ${run.inner}`);
   }
-  const detail = run ? ` (travel ${Math.round(run.travel)} of ${run.inner}, reach ${run.reach})` : '';
-  console.log(`${problems.length ? 'FAIL' : ' ok '}  ${name}, mid-run${detail}${problems.length ? ` — ${problems.join('; ')}` : ''}`);
+  const detail = run
+    ? ` (travel ${Math.round(run.travel)} of ${run.inner}, reach ${run.reach})`
+    : '';
+  console.log(
+    `${problems.length ? 'FAIL' : ' ok '}  ${name}, mid-run${detail}${problems.length ? ` — ${problems.join('; ')}` : ''}`,
+  );
   if (problems.length) failures.push(`${name}, mid-run: ${problems.join('; ')}`);
 };
 
@@ -488,7 +604,10 @@ check('wide: a click', await settle(), { selected: 'agreement', url: '/policy?ta
 await mouse(TAB, '隐私政策');
 await sleep(120);
 await mouse(TAB, '服务协议');
-check('wide: a click back to the tab being left', await settle(), { selected: 'agreement', url: '/policy?tab=agreement' });
+check('wide: a click back to the tab being left', await settle(), {
+  selected: 'agreement',
+  url: '/policy?tab=agreement',
+});
 
 await send('Page.navigate', { url: `${origin}/` });
 await sleep(9000);
@@ -498,7 +617,10 @@ check('wide: the pill to 论坛', await settle(), { selected: 'forum', url: '/?t
 await inputDuringSwitch(() => mouse(PILL, '图库'), 'click');
 const wideGallery = await settle(2500);
 check('wide: the pill back to 图库', wideGallery, { selected: 'gallery' });
-check('wide: the gallery views to 本站讨论', wideGallery, { selected: 'home-discussed', url: '/?view=discussed' });
+check('wide: the gallery views to 本站讨论', wideGallery, {
+  selected: 'home-discussed',
+  url: '/?view=discussed',
+});
 await mouse(VIEWS, '全部');
 check('wide: the gallery views back to 全部', await settle(), { selected: 'home-feed', url: '/' });
 

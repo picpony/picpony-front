@@ -3,14 +3,30 @@ import { api } from './http';
 import { mascotAsset } from './mascot';
 import { randomId } from '@/lib/utils';
 
-export interface PonyChoice { name: string; path: string }
-export interface PonyCatalog { enabled: boolean; ponies: PonyChoice[] }
-export interface PonyConfig { name: string; ini: string; baseurl: string }
+export interface PonyChoice {
+  name: string;
+  path: string;
+}
+export interface PonyCatalog {
+  enabled: boolean;
+  ponies: PonyChoice[];
+}
+export interface PonyConfig {
+  name: string;
+  ini: string;
+  baseurl: string;
+}
 export const MAX_PONIES = 6;
 
 /** The user's own choice (and the assistant's arguments), not a backend answer: still checked. */
 export function ponyNames(value: unknown): string[] {
-  return Array.isArray(value) ? [...new Set(value.filter((v): v is string => typeof v === 'string' && !!v.trim() && v.length <= 100))].slice(0, MAX_PONIES) : [];
+  return Array.isArray(value)
+    ? [
+        ...new Set(
+          value.filter((v): v is string => typeof v === 'string' && !!v.trim() && v.length <= 100),
+        ),
+      ].slice(0, MAX_PONIES)
+    : [];
 }
 
 /** `GET /ponies` — `{enabled, ponies:[{name,path}]}`; the list is empty while disabled. */
@@ -27,7 +43,8 @@ export async function getMyPonies(token: string, signal?: AbortSignal): Promise<
 
 /** `PUT /me/ponies {ponies}` — replaces the whole selection; needs an Idempotency-Key. */
 export async function saveMyPonies(token: string, ponies: string[]): Promise<void> {
-  if (ponies.length > MAX_PONIES || ponyNames(ponies).length !== ponies.length) throw new ApiError('invalid');
+  if (ponies.length > MAX_PONIES || ponyNames(ponies).length !== ponies.length)
+    throw new ApiError('invalid');
   await api('PUT', '/me/ponies', { token, json: { ponies }, idempotencyKey: randomId() });
 }
 
@@ -40,10 +57,23 @@ export async function saveMyPonies(token: string, ponies: string[]): Promise<voi
 export async function getPonyConfigs(names: string[], signal?: AbortSignal): Promise<PonyConfig[]> {
   const wanted = ponyNames(names);
   if (!wanted.length) return [];
-  const data = await api<{ configs: { name: string; ini: string; baseurl: string }[] }>('POST', '/ponies/configs', { json: { names: wanted }, signal, timeoutMs: 15_000 });
-  return data.configs.flatMap(row => {
+  const data = await api<{ configs: { name: string; ini: string; baseurl: string }[] }>(
+    'POST',
+    '/ponies/configs',
+    { json: { names: wanted }, signal, timeoutMs: 15_000 },
+  );
+  return data.configs.flatMap((row) => {
     const baseurl = mascotAsset(row.baseurl);
-    if (!baseurl || !(baseurl.startsWith('/api/v1/ponies/assets/') || (!baseurl.startsWith('/') && new URL(baseurl).hostname === 'picpony.top'))) return [];
-    return [{ name: row.name, ini: row.ini, baseurl: baseurl.endsWith('/') ? baseurl : baseurl + '/' }];
+    if (
+      !baseurl ||
+      !(
+        baseurl.startsWith('/api/v1/ponies/assets/') ||
+        (!baseurl.startsWith('/') && new URL(baseurl).hostname === 'picpony.top')
+      )
+    )
+      return [];
+    return [
+      { name: row.name, ini: row.ini, baseurl: baseurl.endsWith('/') ? baseurl : baseurl + '/' },
+    ];
   });
 }

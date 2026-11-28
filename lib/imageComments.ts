@@ -88,7 +88,10 @@ function merge(...lists: Comment[][]): Comment[] {
  * row count then never reached the total: 加载更多 stayed offered at the end of the thread, and
  * every press read another empty page. An empty page is the end, whatever the total said.
  */
-export function hasMoreDerpiComments(pages: readonly (readonly Comment[])[], total: number | null): boolean {
+export function hasMoreDerpiComments(
+  pages: readonly (readonly Comment[])[],
+  total: number | null,
+): boolean {
   if (total === null || pages.length === 0 || pages[pages.length - 1].length === 0) return false;
   return pages.length * DERPI_COMMENTS_PER_PAGE < total;
 }
@@ -100,7 +103,9 @@ export function hasMoreDerpiComments(pages: readonly (readonly Comment[])[], tot
  * the body still says what it answers. The backend takes no comment id, so `commentId` is the
  * composer's own record of the answered row.
  */
-export function replyReference(replyTo: { id: number; source: 'picpony' | 'trixiebooru'; userId: number | null } | null): {
+export function replyReference(
+  replyTo: { id: number; source: 'picpony' | 'trixiebooru'; userId: number | null } | null,
+): {
   userId: number | null;
   commentId: number | null;
 } {
@@ -142,16 +147,25 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
     const timer = window.setTimeout(() => setGraceOver(imageId), JOIN_GRACE_MS);
     return () => window.clearTimeout(timer);
   }, [imageId, waiting]);
-  const shown = enabled && ((siteSettled && derpiSettled) || (graceOver === imageId && (siteSettled || derpiSettled)));
+  const shown =
+    enabled &&
+    ((siteSettled && derpiSettled) || (graceOver === imageId && (siteSettled || derpiSettled)));
 
-  const [extra, setExtra] = useState<ExtraPages>({ imageId, pages: NO_PAGES, loading: false, error: undefined });
+  const [extra, setExtra] = useState<ExtraPages>({
+    imageId,
+    pages: NO_PAGES,
+    loading: false,
+    error: undefined,
+  });
   const ownPages = extra.imageId === imageId;
   const extraPages = ownPages ? extra.pages : NO_PAGES;
   const moreLoading = ownPages && extra.loading;
   const moreError = ownPages ? extra.error : undefined;
 
   const derpiTotal = first.data?.total ?? null;
-  const hasMore = first.data !== undefined && hasMoreDerpiComments([first.data.comments, ...extraPages], derpiTotal);
+  const hasMore =
+    first.data !== undefined &&
+    hasMoreDerpiComments([first.data.comments, ...extraPages], derpiTotal);
 
   const pagesLoaded = extraPages.length;
   const loadMore = useCallback(() => {
@@ -167,11 +181,18 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
       (result) =>
         setExtra((state) =>
           state.imageId === imageId && state.pages.length === page - 2
-            ? { imageId, pages: [...state.pages, result.comments], loading: false, error: undefined }
+            ? {
+                imageId,
+                pages: [...state.pages, result.comments],
+                loading: false,
+                error: undefined,
+              }
             : state,
         ),
       (error: unknown) =>
-        setExtra((state) => (state.imageId === imageId ? { ...state, loading: false, error } : state)),
+        setExtra((state) =>
+          state.imageId === imageId ? { ...state, loading: false, error } : state,
+        ),
     );
   }, [hasMore, imageId, moreLoading, pagesLoaded]);
 
@@ -183,7 +204,8 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
   );
 
   const siteCount = siteData ? siteData.length : null;
-  const total = siteCount !== null || derpiTotal !== null ? (siteCount ?? 0) + (derpiTotal ?? 0) : null;
+  const total =
+    siteCount !== null || derpiTotal !== null ? (siteCount ?? 0) + (derpiTotal ?? 0) : null;
 
   const refreshSite = useCallback(() => {
     siteComments.invalidate({ imageId });
@@ -193,7 +215,9 @@ export function useImageComments(imageId: number, enabled: boolean): ImageCommen
 
   const removeSiteComment = useCallback(
     (id: number) => {
-      siteComments.write({ imageId }, (previous) => (previous ?? []).filter((comment) => comment.id !== id));
+      siteComments.write({ imageId }, (previous) =>
+        (previous ?? []).filter((comment) => comment.id !== id),
+      );
       refreshSite();
     },
     [imageId, refreshSite],

@@ -12,7 +12,12 @@ import type { useCatalogMutation } from './useCatalogMutation';
  */
 function focusIsLost(): boolean {
   const active = document.activeElement;
-  return !active || active === document.body || active.matches(':disabled') || Boolean(active.closest('[inert]'));
+  return (
+    !active ||
+    active === document.body ||
+    active.matches(':disabled') ||
+    Boolean(active.closest('[inert]'))
+  );
 }
 
 /**
@@ -27,22 +32,42 @@ function focusIsLost(): boolean {
  * caller names one, else to where focus was when the outcome arrived (`mutation.origin`), if that
  * is still there to take it. A focus the operator has put somewhere else is never taken.
  */
-export default function MutationResult({ mutation, returnFocus }: { mutation: ReturnType<typeof useCatalogMutation>; returnFocus?: () => HTMLElement | null }) {
+export default function MutationResult({
+  mutation,
+  returnFocus,
+}: {
+  mutation: ReturnType<typeof useCatalogMutation>;
+  returnFocus?: () => HTMLElement | null;
+}) {
   const acknowledge = useRef<HTMLButtonElement>(null);
   const held = useRef(false);
   useLayoutEffect(() => {
     /* A layout effect: the press's `disabled` flips in this same commit, so this runs after focus
        has fallen and before the frame shows it fallen. */
-    if (mutation.uncertain && !held.current && focusIsLost()) acknowledge.current?.focus({ preventScroll: true });
+    if (mutation.uncertain && !held.current && focusIsLost())
+      acknowledge.current?.focus({ preventScroll: true });
     if (!mutation.uncertain && held.current && focusIsLost()) {
       const target = returnFocus?.() ?? mutation.origin.current;
-      if (target?.isConnected && !target.matches(':disabled') && !target.closest('[inert]')) target.focus({ preventScroll: true });
+      if (target?.isConnected && !target.matches(':disabled') && !target.closest('[inert]'))
+        target.focus({ preventScroll: true });
     }
     held.current = mutation.uncertain;
   }, [mutation.uncertain, mutation.origin, returnFocus]);
   if (!mutation.error) return null;
-  return <div role="alert">
-    <ErrorRetry size="inline" title={mutation.uncertain ? '操作结果待确认' : '操作未完成'} message={mutation.error}
-      action={mutation.uncertain ? <Button ref={acknowledge} type="button" variant="text" onClick={mutation.acknowledge}>我已核对记录</Button> : undefined} />
-  </div>;
+  return (
+    <div role="alert">
+      <ErrorRetry
+        size="inline"
+        title={mutation.uncertain ? '操作结果待确认' : '操作未完成'}
+        message={mutation.error}
+        action={
+          mutation.uncertain ? (
+            <Button ref={acknowledge} type="button" variant="text" onClick={mutation.acknowledge}>
+              我已核对记录
+            </Button>
+          ) : undefined
+        }
+      />
+    </div>
+  );
 }

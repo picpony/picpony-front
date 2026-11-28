@@ -41,42 +41,79 @@ function LiveToolRow({ tool }: { tool: AssistantLiveTool }) {
   );
 }
 
-export default function AssistantPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function AssistantPanel({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const { token, user } = useSession();
   if (!token || !user?.id) return null;
-  return <Conversation key={token} token={token} accountId={String(user.id)} isOpen={isOpen} onClose={onClose} />;
+  return (
+    <Conversation
+      key={token}
+      token={token}
+      accountId={String(user.id)}
+      isOpen={isOpen}
+      onClose={onClose}
+    />
+  );
 }
 
-function Conversation({ token, accountId, isOpen, onClose }: { token: string; accountId: string; isOpen: boolean; onClose: () => void }) {
+function Conversation({
+  token,
+  accountId,
+  isOpen,
+  onClose,
+}: {
+  token: string;
+  accountId: string;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [session] = useState(() => createAssistantSession(token, accountId, {
-    active: () => !document.hidden && assistantQuota.peek({ token }).data?.user_enabled !== false,
-    navigate: href => {
-      const target = new URL(href, window.location.href);
-      target.searchParams.sort();
-      const arrived = () => {
-        const current = new URL(window.location.href); current.searchParams.sort();
-        return current.pathname === target.pathname && current.search === target.search;
-      };
-      if (arrived()) return Promise.resolve();
-      router.push(href, { scroll: false });
-      const start = performance.now();
-      return new Promise<void>((resolve, reject) => {
-        const check = () => {
-          if (readToken() !== token || document.hidden) { reject(new Error('会话已暂停，未继续执行后续操作')); return; }
-          if (arrived()) { resolve(); return; }
-          if (performance.now() - start > 30000) { reject(new Error('页面尚未完成切换，请先核对当前页面')); return; }
-          requestAnimationFrame(check);
+  const [session] = useState(() =>
+    createAssistantSession(token, accountId, {
+      active: () => !document.hidden && assistantQuota.peek({ token }).data?.user_enabled !== false,
+      navigate: (href) => {
+        const target = new URL(href, window.location.href);
+        target.searchParams.sort();
+        const arrived = () => {
+          const current = new URL(window.location.href);
+          current.searchParams.sort();
+          return current.pathname === target.pathname && current.search === target.search;
         };
-        requestAnimationFrame(check);
-      });
-    },
-  }));
+        if (arrived()) return Promise.resolve();
+        router.push(href, { scroll: false });
+        const start = performance.now();
+        return new Promise<void>((resolve, reject) => {
+          const check = () => {
+            if (readToken() !== token || document.hidden) {
+              reject(new Error('会话已暂停，未继续执行后续操作'));
+              return;
+            }
+            if (arrived()) {
+              resolve();
+              return;
+            }
+            if (performance.now() - start > 30000) {
+              reject(new Error('页面尚未完成切换，请先核对当前页面'));
+              return;
+            }
+            requestAnimationFrame(check);
+          };
+          requestAnimationFrame(check);
+        });
+      },
+    }),
+  );
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   /* The folder names a confirmation card shows instead of bare ids (review P5-O2), read only while
      a card is waiting for an answer. */
   const folderList = useResource(faveFolders, state.task?.pending_id ? { token } : SKIP);
-  const folderName = (id: number) => folderList.data?.folders.find((folder) => folder.id === id)?.name;
+  const folderName = (id: number) =>
+    folderList.data?.folders.find((folder) => folder.id === id)?.name;
   const quota = useResource(assistantQuota, state.available ? { token } : SKIP);
   const desktop = useMediaQuery(MEDIA.sm, true);
   const [history, setHistory] = useState(false);
@@ -87,30 +124,58 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
   const interacted = useRef(false);
   const nearEnd = useRef(true);
   const attached = useRef(false);
-  const close = () => { session.setActive(false); onClose(); };
+  const close = () => {
+    session.setActive(false);
+    onClose();
+  };
   useEffect(() => {
     session.setActive(isOpen);
-    if (isOpen) { focusPending.current = true; interacted.current = false; }
+    if (isOpen) {
+      focusPending.current = true;
+      interacted.current = false;
+    }
     if (isOpen && !session.getSnapshot().ready) void session.restore();
     /* The reply stream is Markdown; start the renderer's chunk while the visitor is still
        typing, so the first delta is formatted rather than waiting on a lazy boundary. */
     if (isOpen) void warmMarkdownDocument();
   }, [session, isOpen]);
   useEffect(() => {
-    if (isOpen && state.available && !state.loading && focusPending.current && !interacted.current) {
-      focusPending.current = false; composer.current?.focus({ preventScroll: true });
+    if (
+      isOpen &&
+      state.available &&
+      !state.loading &&
+      focusPending.current &&
+      !interacted.current
+    ) {
+      focusPending.current = false;
+      composer.current?.focus({ preventScroll: true });
     }
   }, [isOpen, state.available, state.loading]);
   useEffect(() => {
     attached.current = true;
-    return () => { attached.current = false; queueMicrotask(() => { if (!attached.current) session.dispose(); }); };
+    return () => {
+      attached.current = false;
+      queueMicrotask(() => {
+        if (!attached.current) session.dispose();
+      });
+    };
   }, [session]);
   useEffect(() => {
     if (isOpen && quota.data && (!quota.data.enabled || !quota.data.user_enabled)) onClose();
   }, [isOpen, quota.data, onClose]);
   useEffect(() => {
     if (nearEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [state.messages, state.receipts, state.pending, state.task, state.error, state.streaming, state.tools, state.live, history]);
+  }, [
+    state.messages,
+    state.receipts,
+    state.pending,
+    state.task,
+    state.error,
+    state.streaming,
+    state.tools,
+    state.live,
+    history,
+  ]);
   useEffect(() => {
     if (!isOpen) return;
     const root = document.documentElement;
@@ -121,17 +186,27 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       root.style.setProperty('--picpony-assistant-keyboard', `${inset}px`);
       root.style.setProperty('--picpony-assistant-height', `${height - 16}px`);
     };
-    sync(); window.visualViewport?.addEventListener('resize', sync); window.visualViewport?.addEventListener('scroll', sync);
+    sync();
+    window.visualViewport?.addEventListener('resize', sync);
+    window.visualViewport?.addEventListener('scroll', sync);
     window.addEventListener('resize', sync);
     return () => {
-      window.visualViewport?.removeEventListener('resize', sync); window.visualViewport?.removeEventListener('scroll', sync);
+      window.visualViewport?.removeEventListener('resize', sync);
+      window.visualViewport?.removeEventListener('scroll', sync);
       window.removeEventListener('resize', sync);
-      root.style.removeProperty('--picpony-assistant-keyboard'); root.style.removeProperty('--picpony-assistant-height');
+      root.style.removeProperty('--picpony-assistant-keyboard');
+      root.style.removeProperty('--picpony-assistant-height');
     };
   }, [isOpen]);
   const current = () => readToken() === token;
   const messages = history ? state.messages : state.messages.slice(-6);
-  const canSend = state.available && !state.loading && !state.busy && !state.task?.pending_id && quota.data?.user_enabled !== false && (state.pending !== null || quota.data?.remaining !== 0);
+  const canSend =
+    state.available &&
+    !state.loading &&
+    !state.busy &&
+    !state.task?.pending_id &&
+    quota.data?.user_enabled !== false &&
+    (state.pending !== null || quota.data?.remaining !== 0);
   const text = state.pending?.message ?? state.draft;
   /* Treat `!state.ready` as initial loading too so the opening render before `restore()` never
      flashes the empty-conversation prompt for one frame. */
@@ -151,9 +226,19 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
     state.error,
   );
   const thread = isThreadLoading ? (
-    <PageLoadingIndicator size="inline" indicatorSize="md" paused={!isOpen} delay={120} label="正在加载对话…" />
+    <PageLoadingIndicator
+      size="inline"
+      indicatorSize="md"
+      paused={!isOpen}
+      delay={120}
+      label="正在加载对话…"
+    />
   ) : state.ready && !state.available ? (
-    <EmptyState title={state.status || '彩彩 AI 暂不可用'} description="可在设置的账户页签中查看开关与额度" size="inline" />
+    <EmptyState
+      title={state.status || '彩彩 AI 暂不可用'}
+      description="可在设置的账户页签中查看开关与额度"
+      size="inline"
+    />
   ) : !messages.length && !state.pending ? (
     /* A sent-but-unanswered first message is not an empty thread: the pending bubble below is
        the thread, so the invitation would be telling the visitor to do what they just did. */
@@ -171,20 +256,29 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
         const own = message.role === 'user';
         const startOfRun = index === 0 || messages[index - 1].role !== message.role;
         const endOfRun = index === messages.length - 1 || messages[index + 1].role !== message.role;
-        const removeControl = history && message.id ? (
-          <span className="hover-reveal shrink-0">
-            <IconButton
-              size="sm"
-              variant="danger-quiet"
-              aria-label={`删除第 ${index + 1} 条消息`}
-              disabled={state.busy}
-              icon={<MdDeleteOutline />}
-              onClick={async () => {
-                if (await confirm({ title: '确认删除', message: '确定要删除此条聊天记录吗？', tone: 'danger' }) && current()) void session.removeMessage(message.id);
-              }}
-            />
-          </span>
-        ) : null;
+        const removeControl =
+          history && message.id ? (
+            <span className="hover-reveal shrink-0">
+              <IconButton
+                size="sm"
+                variant="danger-quiet"
+                aria-label={`删除第 ${index + 1} 条消息`}
+                disabled={state.busy}
+                icon={<MdDeleteOutline />}
+                onClick={async () => {
+                  if (
+                    (await confirm({
+                      title: '确认删除',
+                      message: '确定要删除此条聊天记录吗？',
+                      tone: 'danger',
+                    })) &&
+                    current()
+                  )
+                    void session.removeMessage(message.id);
+                }}
+              />
+            </span>
+          ) : null;
         return (
           <li
             key={message.id || `${message.role}-${index}`}
@@ -202,11 +296,15 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
               endOfRun={endOfRun}
               className={removeControl ? 'min-w-0 flex-1' : undefined}
             >
-              {own ? message.content.replaceAll('||', '\n\n') : (
+              {own ? (
+                message.content.replaceAll('||', '\n\n')
+              ) : (
                 <>
                   {message.tools?.length ? (
                     <div className="mb-2 flex flex-col gap-1.5">
-                      {message.tools.map(tool => <LiveToolRow key={tool.id} tool={tool} />)}
+                      {message.tools.map((tool) => (
+                        <LiveToolRow key={tool.id} tool={tool} />
+                      ))}
                     </div>
                   ) : null}
                   <MarkdownRenderer content={message.content.replaceAll('||', '\n\n')} />
@@ -219,36 +317,69 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
       })}
     </ol>
   );
-  const content = <div className={styles.conversation} data-assistant-conversation="" onPointerDownCapture={() => { interacted.current = true; }} onKeyDownCapture={event => { if (event.key === 'Tab') interacted.current = true; }}>
-    {/* 全部记录 is a filter over the same thread, so a filter chip: one label, `aria-pressed`
+  const content = (
+    <div
+      className={styles.conversation}
+      data-assistant-conversation=""
+      onPointerDownCapture={() => {
+        interacted.current = true;
+      }}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Tab') interacted.current = true;
+      }}
+    >
+      {/* 全部记录 is a filter over the same thread, so a filter chip: one label, `aria-pressed`
         both ways. It was a text button whose label became the other state's name while it
         reported being pressed. No close control here on a phone: the sheet's handle, its scrim
         and Back close it, as every other sheet's do; the side panel's header has its own. */}
-    <div className="flex flex-wrap items-center gap-2">
-      <Chip variant="filter" selected={history} onClick={() => setHistory(value => !value)}>全部记录</Chip>
-      {history && <Button variant="danger-text" size="xs" disabled={state.busy || !state.messages.length} onClick={async () => {
-        if (await confirm({ title: '确认清空', message: '确定要清空当前会话的全部聊天记录吗？此操作无法恢复。', tone: 'danger' }) && current()) void session.clear();
-      }}>清空</Button>}
-      {quota.data && <span className="ml-auto text-body-s tabular-nums text-on-surface-variant">剩余 {formatExactCount(quota.data.remaining)} 点</span>}
-    </div>
-    <ScrollArea
-      axis="y"
-      className="flex min-h-0 flex-1 flex-col"
-      viewportRef={log}
-      viewportClassName={cn(styles.messages, 'popover-scrollbar')}
-      viewportProps={{
-        onScroll: (event) => {
-          const node = event.currentTarget;
-          nearEnd.current = node.scrollHeight - node.scrollTop - node.clientHeight < 64;
-        },
-      }}
-    >
-      {/* Pinned to the bottom, as a chat is: a short thread sits just above the field instead of
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip variant="filter" selected={history} onClick={() => setHistory((value) => !value)}>
+          全部记录
+        </Chip>
+        {history && (
+          <Button
+            variant="danger-text"
+            size="xs"
+            disabled={state.busy || !state.messages.length}
+            onClick={async () => {
+              if (
+                (await confirm({
+                  title: '确认清空',
+                  message: '确定要清空当前会话的全部聊天记录吗？此操作无法恢复。',
+                  tone: 'danger',
+                })) &&
+                current()
+              )
+                void session.clear();
+            }}
+          >
+            清空
+          </Button>
+        )}
+        {quota.data && (
+          <span className="ml-auto text-body-s tabular-nums text-on-surface-variant">
+            剩余 {formatExactCount(quota.data.remaining)} 点
+          </span>
+        )}
+      </div>
+      <ScrollArea
+        axis="y"
+        className="flex min-h-0 flex-1 flex-col"
+        viewportRef={log}
+        viewportClassName={cn(styles.messages, 'popover-scrollbar')}
+        viewportProps={{
+          onScroll: (event) => {
+            const node = event.currentTarget;
+            nearEnd.current = node.scrollHeight - node.scrollTop - node.clientHeight < 64;
+          },
+        }}
+      >
+        {/* Pinned to the bottom, as a chat is: a short thread sits just above the field instead of
           leaving the panel's height empty under it. An auto margin, not `justify-content`, so a
           long thread still scrolls to its first message. */}
-      <div className="flex min-h-full flex-col gap-3">
-        <div className={isThreadLoading && !hasTrailing ? 'my-auto' : 'mt-auto'}>{thread}</div>
-        {/* **The message you just sent is a message, not a status card.** Until the request
+        <div className="flex min-h-full flex-col gap-3">
+          <div className={isThreadLoading && !hasTrailing ? 'my-auto' : 'mt-auto'}>{thread}</div>
+          {/* **The message you just sent is a message, not a status card.** Until the request
             returns, the text exists only as `pending` — it is not in `messages` — so this is the
             one row that has to stand in for it. It takes the tail of the thread as your own
             bubble, exactly as it will look once it lands in the record, and the wait is left to
@@ -256,88 +387,210 @@ function Conversation({ token, accountId, isOpen, onClose }: { token: string; ac
 
             Only an unconfirmed outcome adds anything under it: the note and its two ways out,
             right-aligned with the bubble so they read as belonging to it. */}
-        {state.pending && <>
-          <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
-          {!state.busy && <div className="flex flex-col items-end gap-1.5">
-            <p className="text-body-s text-on-surface-variant text-end">此条消息的执行状态尚未确认，草稿已保留</p>
-            <div className="-me-4 flex flex-wrap justify-end gap-2">
-              <Button variant="text" onClick={() => void session.restore()}>核对记录</Button>
-              <Button variant="text" onClick={async () => {
-                if (await confirm({ title: '确认保留草稿', message: '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。', tone: 'filled' }) && current()) session.discardPending();
-              }}>保留草稿</Button>
-            </div>
-          </div>}
-        </>}
-        {/* The live turn, in server order: prose and tool calls interleaved, both rendered as
+          {state.pending && (
+            <>
+              <ChatBubble own>{state.pending.message.replaceAll('||', '\n\n')}</ChatBubble>
+              {!state.busy && (
+                <div className="flex flex-col items-end gap-1.5">
+                  <p className="text-body-s text-on-surface-variant text-end">
+                    此条消息的执行状态尚未确认，草稿已保留
+                  </p>
+                  <div className="-me-4 flex flex-wrap justify-end gap-2">
+                    <Button variant="text" onClick={() => void session.restore()}>
+                      核对记录
+                    </Button>
+                    <Button
+                      variant="text"
+                      onClick={async () => {
+                        if (
+                          (await confirm({
+                            title: '确认保留草稿',
+                            message:
+                              '确定要放弃等待确认并保留草稿吗？之前已发送的请求不会重复提交。',
+                            tone: 'filled',
+                          })) &&
+                          current()
+                        )
+                          session.discardPending();
+                      }}
+                    >
+                      保留草稿
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          {/* The live turn, in server order: prose and tool calls interleaved, both rendered as
             they arrive. The persisted reply below replaces this block when the poll sees the
             turn end, so nothing is said twice. */}
-        {(state.live.length > 0 || state.streaming) && (
-          <div role="group" aria-label="彩彩正在回复" className="flex flex-col gap-2">
-            {state.live.length > 0 ? (
-              state.live.map((block, index) =>
-                block.type === 'text' ? (
-                  <div key={`text-${index}`} className="text-body-m min-w-0 max-w-full wrap-anywhere">
-                    <MarkdownRenderer content={block.text.replaceAll('||', '\n\n')} />
-                  </div>
-                ) : (
-                  <LiveToolRow key={`tool-${block.tool.id}`} tool={block.tool} />
-                ),
-              )
-            ) : (
-              <div className="text-body-m min-w-0 max-w-full wrap-anywhere">
-                <MarkdownRenderer content={state.streaming.replaceAll('||', '\n\n')} />
+          {(state.live.length > 0 || state.streaming) && (
+            <div role="group" aria-label="彩彩正在回复" className="flex flex-col gap-2">
+              {state.live.length > 0 ? (
+                state.live.map((block, index) =>
+                  block.type === 'text' ? (
+                    <div
+                      key={`text-${index}`}
+                      className="text-body-m min-w-0 max-w-full wrap-anywhere"
+                    >
+                      <MarkdownRenderer content={block.text.replaceAll('||', '\n\n')} />
+                    </div>
+                  ) : (
+                    <LiveToolRow key={`tool-${block.tool.id}`} tool={block.tool} />
+                  ),
+                )
+              ) : (
+                <div className="text-body-m min-w-0 max-w-full wrap-anywhere">
+                  <MarkdownRenderer content={state.streaming.replaceAll('||', '\n\n')} />
+                </div>
+              )}
+            </div>
+          )}
+          {state.task?.pending_id && (
+            <Card padding="sm">
+              <p className="mb-2 text-title-s text-on-surface">确认操作</p>
+              <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">
+                {state.task.actions.map((action, index) => (
+                  <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>
+                ))}
+              </ul>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="text"
+                  disabled={state.busy}
+                  onClick={() => void session.decide('reject')}
+                >
+                  取消
+                </Button>
+                <Button
+                  variant="filled"
+                  loading={state.busy}
+                  disabled={state.task.actions.some((action) => !actionSupported(action))}
+                  onClick={() => void session.decide('confirm')}
+                >
+                  确认
+                </Button>
               </div>
-            )}
-          </div>
-        )}
-        {state.task?.pending_id && <Card padding="sm">
-          <p className="mb-2 text-title-s text-on-surface">确认操作</p>
-          <ul className="list-disc space-y-2 pl-5 text-body-m text-on-surface">{state.task.actions.map((action, index) => <li key={action.call_id || index}>{actionLabel(action, folderName)}</li>)}</ul>
-          <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="text" disabled={state.busy} onClick={() => void session.decide('reject')}>取消</Button><Button variant="filled" loading={state.busy} disabled={state.task.actions.some(action => !actionSupported(action))} onClick={() => void session.decide('confirm')}>确认</Button></div>
-        </Card>}
-        {state.receipts.length > 0 && <ul className="space-y-2 text-body-s text-on-surface-variant" aria-label="操作结果">{state.receipts.slice(-8).map((receipt, index) => <li key={`${receipt.task_id}:${receipt.call_id}:${index}`}>{receipt.summary}</li>)}</ul>}
-        {state.task && !state.task.pending_id && !state.busy && <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>核对任务</Button>}
-        {state.error && <ErrorRetry size="inline" title="彩彩 AI 操作未完成" message={state.error} onRetry={!state.available && !state.busy ? () => void session.restore() : undefined} />}
-      </div>
-    </ScrollArea>
-    {/* The wait says "still running" the way the semantic parse line does: the shimmer crosses
+            </Card>
+          )}
+          {state.receipts.length > 0 && (
+            <ul className="space-y-2 text-body-s text-on-surface-variant" aria-label="操作结果">
+              {state.receipts.slice(-8).map((receipt, index) => (
+                <li key={`${receipt.task_id}:${receipt.call_id}:${index}`}>{receipt.summary}</li>
+              ))}
+            </ul>
+          )}
+          {state.task && !state.task.pending_id && !state.busy && (
+            <Button variant="tonal" className="self-start" onClick={() => void session.resume()}>
+              核对任务
+            </Button>
+          )}
+          {state.error && (
+            <ErrorRetry
+              size="inline"
+              title="彩彩 AI 操作未完成"
+              message={state.error}
+              onRetry={!state.available && !state.busy ? () => void session.restore() : undefined}
+            />
+          )}
+        </div>
+      </ScrollArea>
+      {/* The wait says "still running" the way the semantic parse line does: the shimmer crosses
         the words themselves (`text-shimmer`), rather than a spinner that would claim a position
         the backend never reported. Only the thinking status sweeps; an operation or a finished
         turn keeps plain ink. */}
-    <p
-      role="status"
-      className={cn('min-h-5 text-body-s text-on-surface-variant', state.status === THINKING_STATUS && 'text-shimmer')}
-    >
-      {state.status || (quota.data?.remaining === 0 ? '当前额度已用完' : '')}
-    </p>
-    {/* Use the shared 48dp composer and controls; text grows to 160px before scrolling.
+      <p
+        role="status"
+        className={cn(
+          'min-h-5 text-body-s text-on-surface-variant',
+          state.status === THINKING_STATUS && 'text-shimmer',
+        )}
+      >
+        {state.status || (quota.data?.remaining === 0 ? '当前额度已用完' : '')}
+      </p>
+      {/* Use the shared 48dp composer and controls; text grows to 160px before scrolling.
         See docs/design/layout.md#dense-rows-and-chat-composer. */}
-    <form onSubmit={event => { event.preventDefault(); if (canSend && current()) { nearEnd.current = true; void session.send(); } }} className="flex shrink-0 items-end gap-2 [--touch-floor:48px]">
-      <Textarea ref={composer} size="sm" rows={1} aria-label="输入消息" placeholder="输入搜图需求或操作指令…" className="max-h-40 resize-none [field-sizing:content]" fieldClassName="min-w-0 flex-1" maxLength={MAX_MESSAGE} value={text} disabled={!state.available} readOnly={state.busy || !!state.pending} data-autofocus="" onChange={event => session.setDraft(event.target.value)} onKeyDown={event => {
-        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && canSend) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
-      }} />
-      <IconButton
-        type="submit"
-        variant="filled"
-        size="md"
-        shape="square"
-        className="touch-size"
-        /* Pressing it must not take focus from the field — that closes a phone's keyboard. */
-        onPointerDown={event => event.preventDefault()}
-        /* **No loading mark on this one.** While 彩彩 is thinking the control has nothing to
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSend && current()) {
+            nearEnd.current = true;
+            void session.send();
+          }
+        }}
+        className="flex shrink-0 items-end gap-2 [--touch-floor:48px]"
+      >
+        <Textarea
+          ref={composer}
+          size="sm"
+          rows={1}
+          aria-label="输入消息"
+          placeholder="输入搜图需求或操作指令…"
+          className="max-h-40 resize-none [field-sizing:content]"
+          fieldClassName="min-w-0 flex-1"
+          maxLength={MAX_MESSAGE}
+          value={text}
+          disabled={!state.available}
+          readOnly={state.busy || !!state.pending}
+          data-autofocus=""
+          onChange={(event) => session.setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Enter' &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229 &&
+              canSend
+            ) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <IconButton
+          type="submit"
+          variant="filled"
+          size="md"
+          shape="square"
+          className="touch-size"
+          /* Pressing it must not take focus from the field — that closes a phone's keyboard. */
+          onPointerDown={(event) => event.preventDefault()}
+          /* **No loading mark on this one.** While 彩彩 is thinking the control has nothing to
            offer, which is exactly what a disabled control is for: the spinner stayed up for as
            long as a reply took and read as "the click is still registering". `state.busy` keeps
            `canSend` false, so the disabled ink is the whole report. */
-        disabled={!canSend || !text.trim()}
-        aria-label={state.pending ? '重试发送' : '发送'}
-        icon={state.pending ? <MdRefresh /> : <MdSend />}
-      />
-    </form>
-  </div>;
-  return <>
-    {desktop
-      ? <SidePanel isOpen={isOpen} onClose={close} title="彩彩 AI" bodyClassName={styles.sideBody} bodyScrollable={false}>{content}</SidePanel>
-      : <Sheet isOpen={isOpen} onClose={close} title="彩彩 AI" className={styles.sheet} bodyClassName={`${styles.sheetBody} px-6 pt-2`} bodyScrollable={false}>{content}</Sheet>}
-    {confirmDialog}
-  </>;
+          disabled={!canSend || !text.trim()}
+          aria-label={state.pending ? '重试发送' : '发送'}
+          icon={state.pending ? <MdRefresh /> : <MdSend />}
+        />
+      </form>
+    </div>
+  );
+  return (
+    <>
+      {desktop ? (
+        <SidePanel
+          isOpen={isOpen}
+          onClose={close}
+          title="彩彩 AI"
+          bodyClassName={styles.sideBody}
+          bodyScrollable={false}
+        >
+          {content}
+        </SidePanel>
+      ) : (
+        <Sheet
+          isOpen={isOpen}
+          onClose={close}
+          title="彩彩 AI"
+          className={styles.sheet}
+          bodyClassName={`${styles.sheetBody} px-6 pt-2`}
+          bodyScrollable={false}
+        >
+          {content}
+        </Sheet>
+      )}
+      {confirmDialog}
+    </>
+  );
 }

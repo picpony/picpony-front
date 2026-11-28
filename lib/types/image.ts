@@ -40,7 +40,8 @@ export interface PonyImage {
 export type ImagePreview = Pick<
   PonyImage,
   'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'
-> & Partial<Omit<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>>;
+> &
+  Partial<Omit<PonyImage, 'id' | 'name' | 'representations' | 'view_url' | 'width' | 'height'>>;
 
 /**
  * The opened picture as a direct `/pic/:id` document read it on the server (`lib/detail.server.ts`),

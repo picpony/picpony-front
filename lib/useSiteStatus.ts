@@ -1,7 +1,11 @@
 'use client';
 
 import { useMemo, useSyncExternalStore } from 'react';
-import { getSavedSiteStatus, getServerSiteStatus, subscribeSavedSiteStatus } from '@/lib/siteStatus';
+import {
+  getSavedSiteStatus,
+  getServerSiteStatus,
+  subscribeSavedSiteStatus,
+} from '@/lib/siteStatus';
 import type { SemanticSearchConfig } from '@/lib/semanticConfig';
 
 function useSavedStatus() {
@@ -14,5 +18,5 @@ export function useMaintenanceStatus(initial: boolean): boolean {
 
 export function useSemanticConfig(initial: SemanticSearchConfig): SemanticSearchConfig {
   const patch = useSavedStatus().semantic;
-  return useMemo(() => patch ? { ...initial, ...patch } : initial, [initial, patch]);
+  return useMemo(() => (patch ? { ...initial, ...patch } : initial), [initial, patch]);
 }

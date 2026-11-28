@@ -28,7 +28,8 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
       data-failed={state === 'failed' ? '' : undefined}
       ref={(img) => {
         /* A picture already in the cache arrives before React attaches its handlers. */
-        if (img?.complete && state === 'loading') setState(img.naturalWidth > 0 ? 'loaded' : 'failed');
+        if (img?.complete && state === 'loading')
+          setState(img.naturalWidth > 0 ? 'loaded' : 'failed');
       }}
       onLoad={() => setState('loaded')}
       onError={() => setState('failed')}
@@ -62,18 +63,28 @@ export default function MarkdownDocument({ content }: { content: string }) {
         rehypePlugins={[rehypeSanitize]}
         components={{
           a: ({ href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
-          img: ({ src, alt }) => (typeof src === 'string' && src ? <MarkdownImage src={src} alt={alt || ''} /> : null),
+          img: ({ src, alt }) =>
+            typeof src === 'string' && src ? <MarkdownImage src={src} alt={alt || ''} /> : null,
           /* The only structural override: a wide table scrolls inside its own box rather than
              widening the page, and `react-markdown` gives no way to add a parent from CSS.
              Everything about how any of this looks is described once in globals.css, alongside
              the BBCode path's, so the two renderers produce one appearance. */
           table: ({ children }) => (
-            <ScrollArea axis="x" className="os-rich-block" viewportClassName="popover-scrollbar overflow-x-auto">
+            <ScrollArea
+              axis="x"
+              className="os-rich-block"
+              viewportClassName="popover-scrollbar overflow-x-auto"
+            >
               <table>{children}</table>
             </ScrollArea>
           ),
           pre: ({ children }) => (
-            <ScrollArea as="pre" axis="x" className="os-rich-block" viewportClassName="popover-scrollbar overflow-x-auto">
+            <ScrollArea
+              as="pre"
+              axis="x"
+              className="os-rich-block"
+              viewportClassName="popover-scrollbar overflow-x-auto"
+            >
               {children}
             </ScrollArea>
           ),

@@ -108,7 +108,7 @@ function isGeometryStale(
     if (
       Math.abs(overflowEdge.x - expectedEdgeX) >= 1 ||
       Math.abs(overflowAmount.x - expectedX) >= 1 ||
-      (expectedX > 0) !== hasOverflow.x
+      expectedX > 0 !== hasOverflow.x
     ) {
       return true;
     }
@@ -122,7 +122,7 @@ function isGeometryStale(
     if (
       Math.abs(overflowEdge.y - expectedEdgeY) >= 1 ||
       Math.abs(overflowAmount.y - expectedY) >= 1 ||
-      (expectedY > 0) !== hasOverflow.y
+      expectedY > 0 !== hasOverflow.y
     ) {
       return true;
     }
@@ -176,10 +176,7 @@ export function syncScrollbarGeometry(
   return true;
 }
 
-function attachTrackSync(
-  instance: OverlayScrollbarsInstance,
-  onSync: () => void,
-): () => void {
+function attachTrackSync(instance: OverlayScrollbarsInstance, onSync: () => void): () => void {
   const { scrollbarHorizontal, scrollbarVertical } = instance.elements();
   const bars = [scrollbarHorizontal.scrollbar, scrollbarVertical.scrollbar];
   for (const bar of bars) {
@@ -237,7 +234,7 @@ export function buildScrollbarOptions(
   const coarse = isCoarsePointer();
   const resolvedAutoHide: ScrollbarsAutoHideBehavior =
     autoHide === 'auto' ? (coarse ? 'scroll' : 'leave') : autoHide;
-  const suspend = coarse ? false : (autoHideSuspend ?? (autoHide === 'auto'));
+  const suspend = coarse ? false : (autoHideSuspend ?? autoHide === 'auto');
 
   return {
     paddingAbsolute: false,
@@ -328,8 +325,7 @@ export function mountSlottedScrollbar(
   let motionWaitObserver: MutationObserver | null = null;
   let frame = 0;
 
-  const ignoreMutations =
-    axis === 'y' && viewport.tagName !== 'P' && !viewport.isContentEditable;
+  const ignoreMutations = axis === 'y' && viewport.tagName !== 'P' && !viewport.isContentEditable;
 
   const isTransitionBusy = () =>
     viewport.hasAttribute('data-axis-running') ||
@@ -624,10 +620,7 @@ export function useOverlayScrollbar(
  * Upgrade horizontal scrollable tables (`.popover-scrollbar`) and `<pre>`
  * code blocks inside a `dangerouslySetInnerHTML` rich-text container.
  */
-export function useRichTextScrollbars(
-  rootRef: RefObject<HTMLElement | null>,
-  contentKey: unknown,
-) {
+export function useRichTextScrollbars(rootRef: RefObject<HTMLElement | null>, contentKey: unknown) {
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;

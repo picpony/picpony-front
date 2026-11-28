@@ -33,7 +33,11 @@ export default function BatchImportDialog({
   const submit = () => {
     if (importing) return;
     if (parsed.tasks.length === 0) {
-      setError(text.trim() ? '没有解析到有效的行，请按「英文标签 = 中文翻译」的格式填写' : '请填写要导入的标签');
+      setError(
+        text.trim()
+          ? '没有解析到有效的行，请按「英文标签 = 中文翻译」的格式填写'
+          : '请填写要导入的标签',
+      );
       return;
     }
     onImport(parsed.tasks, text);

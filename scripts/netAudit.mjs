@@ -152,7 +152,10 @@ const JOURNEYS = [
       { label: 'GET /', navigate: '/', content: GALLERY },
       /* The pill itself, not the drawer's 论坛 row (the old first alternative matched nothing once the
          lean's row marks went, so the step had quietly been clicking the drawer link). */
-      { label: 'tap 论坛', click: '[role="tablist"][aria-label="首页分区"] [role="tab"]:nth-of-type(2)' },
+      {
+        label: 'tap 论坛',
+        click: '[role="tablist"][aria-label="首页分区"] [role="tab"]:nth-of-type(2)',
+      },
     ],
   },
   {
@@ -201,7 +204,9 @@ const JOURNEYS = [
     /* `get_faves` is the page's 已收藏 index (`faveIds` in app/favorites/page.tsx), read beside the
        folder list; the covers wait on the folder list alone. On a cold start it could settle just
        before the cover search started and push it from r2 to r3 with no change in the code. */
-    steps: [{ label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] }],
+    steps: [
+      { label: 'GET /favorites', navigate: '/favorites', content: GALLERY, beside: ['get_faves'] },
+    ],
   },
   {
     name: 'favorites → back → favorites',
@@ -243,7 +248,9 @@ const JOURNEYS = [
     name: 'cold subscriptions',
     why: 'the screen and drawer share one subscription read',
     auth: true,
-    steps: [{ label: 'GET /subscriptions', navigate: '/subscriptions', content: /get_tag_subscriptions/ }],
+    steps: [
+      { label: 'GET /subscriptions', navigate: '/subscriptions', content: /get_tag_subscriptions/ },
+    ],
   },
   {
     name: 'cold tag groups',
@@ -255,7 +262,9 @@ const JOURNEYS = [
     name: 'cold coin ledger',
     why: 'one ledger read, without fetching the parent task screen',
     auth: true,
-    steps: [{ label: 'GET /tasks/coins', navigate: '/tasks/coins', content: /get_coin_transactions/ }],
+    steps: [
+      { label: 'GET /tasks/coins', navigate: '/tasks/coins', content: /get_coin_transactions/ },
+    ],
   },
 ];
 
@@ -324,7 +333,9 @@ class Cdp {
     const socket = new WebSocket(wsUrl);
     await new Promise((resolve, reject) => {
       socket.addEventListener('open', resolve, { once: true });
-      socket.addEventListener('error', () => reject(new Error('CDP socket failed')), { once: true });
+      socket.addEventListener('error', () => reject(new Error('CDP socket failed')), {
+        once: true,
+      });
     });
     return new Cdp(socket);
   }
@@ -408,8 +419,14 @@ class Cdp {
 const NO_SIBLINGS = new Set();
 
 const CHROME_READS = new Set([
-  'get_user', 'get_my_badges', 'get_unread_counts', 'get_announcement', 'get_tag_subscriptions',
-  'get_mascot_config', 'get_mascots_list', 'get_my_ponies',
+  'get_user',
+  'get_my_badges',
+  'get_unread_counts',
+  'get_announcement',
+  'get_tag_subscriptions',
+  'get_mascot_config',
+  'get_mascots_list',
+  'get_my_ponies',
 ]);
 
 /**
@@ -423,7 +440,10 @@ const UNCOUNTED = new Set(['track_visitor']);
 
 /** What the server reads for every document, whatever the route (see the fixture server below). */
 const SERVER_EVERY_ROUTE = new Set([
-  'get_maintenance_status', 'get_public_maintenance_status', 'get_website_routing_policy', 'get_public_blacklist',
+  'get_maintenance_status',
+  'get_public_maintenance_status',
+  'get_website_routing_policy',
+  'get_public_blacklist',
 ]);
 
 /**
@@ -534,7 +554,8 @@ async function runStep(cdp, step, origin, serverReads) {
         activity.touch();
       }
       if (activity.isQuiet()) break;
-      if (performance.now() >= cap) throw new Error(`${step.label} did not settle within ${STEP_CAP_MS}ms`);
+      if (performance.now() >= cap)
+        throw new Error(`${step.label} did not settle within ${STEP_CAP_MS}ms`);
     }
   } finally {
     off();
@@ -546,7 +567,7 @@ async function runStep(cdp, step, origin, serverReads) {
     const groups = new Map();
     for (const e of media) {
       const inner = e.url.searchParams.get('url');
-      const key = `${e.label} ${e.failed ? 'failed' : e.status ?? '…'}${e.fromServiceWorker ? ' via-sw' : ''} ${e.url.pathname}${inner ? ` <- ${inner.slice(0, 90)}` : ''}${e.url.searchParams.get('w') ? ` w=${e.url.searchParams.get('w')}` : ''}`;
+      const key = `${e.label} ${e.failed ? 'failed' : (e.status ?? '…')}${e.fromServiceWorker ? ' via-sw' : ''} ${e.url.pathname}${inner ? ` <- ${inner.slice(0, 90)}` : ''}${e.url.searchParams.get('w') ? ` w=${e.url.searchParams.get('w')}` : ''}`;
       groups.set(key, (groups.get(key) ?? 0) + 1);
     }
     const byLabel = new Map();
@@ -633,7 +654,10 @@ async function installStubs(cdp) {
           { name: 'content-type', value: stub.contentType },
           /* The app's reads are `no-store`, but a stub with no cache header at all lets the browser
              heuristically cache one — which would silently remove the second request of a
-             re-entry journey and report a fix nobody made. */          { name: 'cache-control', value: 'no-store' },
+             re-entry journey and report a fix nobody made. */ {
+            name: 'cache-control',
+            value: 'no-store',
+          },
           { name: 'access-control-allow-origin', value: '*' },
         ],
         body: stub.binary ? stub.body : Buffer.from(stub.body, 'utf8').toString('base64'),
@@ -735,7 +759,9 @@ const upstream = createHttpServer((req, res) => {
     return;
   }
   /* Recorded before the response, so a read still in flight when a step ends is still counted. */
-  const action = req.url?.startsWith('/api/v1/json') ? req.url : (opOf(req.method, asUpstream) ?? req.url ?? '');
+  const action = req.url?.startsWith('/api/v1/json')
+    ? req.url
+    : (opOf(req.method, asUpstream) ?? req.url ?? '');
   /* The maintenance state and the route policy are excluded for the same reason `CHROME_READS`
      excludes `get_user`: the server reads them on every route, so counting them would make
      `serverApi` a function of how many navigations a journey contains rather than of what moved
@@ -745,7 +771,10 @@ const upstream = createHttpServer((req, res) => {
   if (!SERVER_EVERY_ROUTE.has(action) && !UNCOUNTED.has(action)) {
     serverReads.push(action);
   }
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 if (!LIVE) await new Promise((resolve) => upstream.listen(upstreamPort, '127.0.0.1', resolve));
@@ -879,7 +908,8 @@ try {
         const filterReads = serverReads.filter(
           (name) => name === 'get_block_tags' || name === 'get_site_bootstrap',
         ).length;
-        if (filterReads > 1) fail(journey.name, `${result.label} duplicated the public filter-definition read`);
+        if (filterReads > 1)
+          fail(journey.name, `${result.label} duplicated the public filter-definition read`);
         if (step.navigate && filterReads === 0) {
           fail(journey.name, `${result.label} did not read the public filter definitions`);
         }
@@ -914,7 +944,7 @@ try {
   }
 
   if (WRITE && LIVE) {
-    fail('harness', '--write refuses --live: a live run\'s counts are not reproducible');
+    fail('harness', "--write refuses --live: a live run's counts are not reproducible");
   } else if (WRITE && ONLY) {
     /* Or the baseline is silently truncated to whatever `--only` selected, and the next full
        run prints “new journey, nothing to compare” for everything that was dropped and exits
@@ -967,7 +997,9 @@ try {
           (was.serverApi ?? 0) || step.serverApi
             ? `api ${was.api}+${was.serverApi ?? 0}→${step.api}+${step.serverApi}`
             : `api ${was.api}→${step.api}`;
-        console.log(`  ${mark} ${`${name} / ${step.label}`.padEnd(40)} ${apiCell.padEnd(20)} ${roundCell}`);
+        console.log(
+          `  ${mark} ${`${name} / ${step.label}`.padEnd(40)} ${apiCell.padEnd(20)} ${roundCell}`,
+        );
         /* A journey may always get cheaper — that is the work — and may never get dearer, because
            every optimisation here is meant to move a request earlier rather than add one. */
         if (dApi > 0) fail(name, `${step.label} sends ${dApi} more request(s) than the baseline`);
@@ -990,7 +1022,10 @@ try {
            different: it proves this very screen loaded its content on the server. In that case
            an idle announcement missing the observation window cannot make the screen fail. */
         if (was.api > 0 && step.api === 0 && step.contentRound !== 0) {
-          fail(name, `${step.label} now sends no browser requests at all — the screen is not loading`);
+          fail(
+            name,
+            `${step.label} now sends no browser requests at all — the screen is not loading`,
+          );
         } else if (wasTotal > 0 && stepTotal === 0) {
           fail(name, `${step.label} now sends no requests at all — the screen is not loading`);
         }

@@ -66,8 +66,14 @@ export class HeroVelocityTracker {
     const newest = window[window.length - 1].time;
     const times = window.map((sample) => sample.time - newest);
     return {
-      x: slopeAtZero(times, window.map((sample) => sample.x)),
-      y: slopeAtZero(times, window.map((sample) => sample.y)),
+      x: slopeAtZero(
+        times,
+        window.map((sample) => sample.x),
+      ),
+      y: slopeAtZero(
+        times,
+        window.map((sample) => sample.y),
+      ),
     };
   }
 }

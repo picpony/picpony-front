@@ -12,7 +12,17 @@ import type { AssistantQuota } from '@/lib/assistant/protocol';
 import type { PendingExchange } from '@/lib/assistant/journal';
 import { formatExactCount } from '@/lib/format';
 
-export default function QuotaExchangeDialog({ isOpen, onClose, quota, pending, coins, onCoinsChange, busy, error, onSubmit }: {
+export default function QuotaExchangeDialog({
+  isOpen,
+  onClose,
+  quota,
+  pending,
+  coins,
+  onCoinsChange,
+  busy,
+  error,
+  onSubmit,
+}: {
   isOpen: boolean;
   onClose: () => void;
   quota: AssistantQuota;
@@ -29,28 +39,99 @@ export default function QuotaExchangeDialog({ isOpen, onClose, quota, pending, c
   const insufficient = valid && !pending && amount > quota.coins;
   const rate = pending ? pending.pointsPerCoin : quota.points_per_coin;
   const points = valid && rate ? amount * rate : null;
-  const fieldError = !valid && coins !== '' ? '请输入 1 至 100000 的整数' : insufficient ? '金币不足，请减少兑换数量' : undefined;
-  return <Modal isOpen={isOpen} onClose={onClose} title="兑换彩彩额度" maxWidth="sm" closeOnEscape={!busy} closeOnOverlayClick={!busy}
-    footer={<>
-      <Button variant="text" disabled={busy} onClick={onClose}>取消</Button>
-      <Button form={formId} type="submit" variant="filled" disabled={!valid || insufficient} loading={busy}>{pending ? '核对结果' : '兑换'}</Button>
-    </>}>
-    <form id={formId} onSubmit={event => { event.preventDefault(); if (valid && !insufficient && !busy) onSubmit(); }} className="space-y-4">
-      <p className="text-body-m text-on-surface-variant">
-        现有 <span className="text-on-surface tabular-nums">{formatExactCount(quota.coins)}</span> 金币，
-        <span className="tabular-nums">1 金币 = {quota.points_per_coin} 点额度</span>
-      </p>
-      <Input label="使用金币" type="number" inputMode="numeric" min={1} max={100000} step={1} value={pending ? String(pending.coins) : coins} disabled={busy || !!pending} onChange={e => onCoinsChange(e.target.value)} error={fieldError} data-autofocus="" />
-      {/* `filled` is the step for "a distinct block inside this one" (docs/design/colour.md#surface-and-media-roles); the
+  const fieldError =
+    !valid && coins !== ''
+      ? '请输入 1 至 100000 的整数'
+      : insufficient
+        ? '金币不足，请减少兑换数量'
+        : undefined;
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="兑换彩彩额度"
+      maxWidth="sm"
+      closeOnEscape={!busy}
+      closeOnOverlayClick={!busy}
+      footer={
+        <>
+          <Button variant="text" disabled={busy} onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            form={formId}
+            type="submit"
+            variant="filled"
+            disabled={!valid || insufficient}
+            loading={busy}
+          >
+            {pending ? '核对结果' : '兑换'}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !insufficient && !busy) onSubmit();
+        }}
+        className="space-y-4"
+      >
+        <p className="text-body-m text-on-surface-variant">
+          现有 <span className="text-on-surface tabular-nums">{formatExactCount(quota.coins)}</span>{' '}
+          金币，
+          <span className="tabular-nums">1 金币 = {quota.points_per_coin} 点额度</span>
+        </p>
+        <Input
+          label="使用金币"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={100000}
+          step={1}
+          value={pending ? String(pending.coins) : coins}
+          disabled={busy || !!pending}
+          onChange={(e) => onCoinsChange(e.target.value)}
+          error={fieldError}
+          data-autofocus=""
+        />
+        {/* `filled` is the step for "a distinct block inside this one" (docs/design/colour.md#surface-and-media-roles); the
           values take `title-l` so the dialog's own `headline-s` title stays the top of the hierarchy. */}
-      <Card>
-        <dl className="grid grid-cols-2 gap-4">
-          <div className="min-w-0"><dt className="text-body-s text-on-surface-variant">消耗金币</dt><dd className="text-title-l text-on-surface wrap-anywhere tabular-nums mt-1">{valid ? formatExactCount(amount) : '—'}</dd></div>
-          <div className="min-w-0"><dt className="text-body-s text-on-surface-variant">获得额度</dt><dd className="text-title-l text-on-surface wrap-anywhere tabular-nums mt-1">{points === null ? '待核对' : `${formatExactCount(points)} 点`}</dd></div>
-        </dl>
-      </Card>
-      {busy ? <p className="text-body-s text-on-surface-variant">正在核对兑换结果…</p> : pending ? <p className="text-body-s text-on-surface-variant">上次兑换结果尚未确认，将继续核对。<Link href="/tasks/coins" scroll={false} className="prose-link rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-ring">查看金币明细</Link></p> : null}
-      {error !== undefined && <ErrorRetry size="inline" title="兑换未完成" message={apiErrorMessage(error)} />}
-    </form>
-  </Modal>;
+        <Card>
+          <dl className="grid grid-cols-2 gap-4">
+            <div className="min-w-0">
+              <dt className="text-body-s text-on-surface-variant">消耗金币</dt>
+              <dd className="text-title-l text-on-surface wrap-anywhere tabular-nums mt-1">
+                {valid ? formatExactCount(amount) : '—'}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-body-s text-on-surface-variant">获得额度</dt>
+              <dd className="text-title-l text-on-surface wrap-anywhere tabular-nums mt-1">
+                {points === null ? '待核对' : `${formatExactCount(points)} 点`}
+              </dd>
+            </div>
+          </dl>
+        </Card>
+        {busy ? (
+          <p className="text-body-s text-on-surface-variant">正在核对兑换结果…</p>
+        ) : pending ? (
+          <p className="text-body-s text-on-surface-variant">
+            上次兑换结果尚未确认，将继续核对。
+            <Link
+              href="/tasks/coins"
+              scroll={false}
+              className="prose-link rounded-xs focus-visible:outline-hidden focus-visible:ring-2 focus-ring"
+            >
+              查看金币明细
+            </Link>
+          </p>
+        ) : null}
+        {error !== undefined && (
+          <ErrorRetry size="inline" title="兑换未完成" message={apiErrorMessage(error)} />
+        )}
+      </form>
+    </Modal>
+  );
 }

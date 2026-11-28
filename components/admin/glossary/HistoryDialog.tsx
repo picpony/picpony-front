@@ -62,7 +62,12 @@ export default function HistoryDialog({
             onRetry={isRetryable(read.error) ? read.refresh : undefined}
           />
         ) : read.data === undefined ? (
-          <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载编辑历史…" className="min-h-40" />
+          <PageLoadingIndicator
+            size="inline"
+            indicatorSize="md"
+            label="正在加载编辑历史…"
+            className="min-h-40"
+          />
         ) : records.length === 0 ? (
           <EmptyState size="inline" title="暂无编辑记录" />
         ) : (
@@ -84,7 +89,9 @@ export default function HistoryDialog({
                         : 'bg-surface-container-highest text-on-surface',
                     )}
                   >
-                    <span className="text-body-m-emphasized tabular-nums">{historyTime(record.created_at) || '时间未知'}</span>
+                    <span className="text-body-m-emphasized tabular-nums">
+                      {historyTime(record.created_at) || '时间未知'}
+                    </span>
                     <span className={cn('text-body-s', !active && 'text-on-surface-variant')}>
                       {record.editor_username || '未知用户'}
                     </span>
@@ -96,20 +103,28 @@ export default function HistoryDialog({
               <dl className="grid gap-x-6 gap-y-3 rounded-md bg-surface-container-highest p-4 text-body-m sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <dt className="text-label-l text-on-surface-variant">英文标签</dt>
-                  <dd className="font-mono text-on-surface wrap-anywhere">{selected.en_name || '—'}</dd>
+                  <dd className="font-mono text-on-surface wrap-anywhere">
+                    {selected.en_name || '—'}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">中文翻译</dt>
-                  <dd className="text-on-surface wrap-anywhere">{selected.cn_name?.trim() ? selected.cn_name : '未翻译'}</dd>
+                  <dd className="text-on-surface wrap-anywhere">
+                    {selected.cn_name?.trim() ? selected.cn_name : '未翻译'}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">别名</dt>
-                  <dd className="text-on-surface wrap-anywhere">{historyAliases(selected.aliases) || '—'}</dd>
+                  <dd className="text-on-surface wrap-anywhere">
+                    {historyAliases(selected.aliases) || '—'}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-label-l text-on-surface-variant">分类</dt>
                   <dd className="mt-1">
-                    <Badge colors={tagCategoryChip(selected.category || 'general')}>{selected.category || 'general'}</Badge>
+                    <Badge colors={tagCategoryChip(selected.category || 'general')}>
+                      {selected.category || 'general'}
+                    </Badge>
                   </dd>
                 </div>
                 <div>
@@ -118,7 +133,9 @@ export default function HistoryDialog({
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-label-l text-on-surface-variant">简介</dt>
-                  <dd className="whitespace-pre-wrap text-on-surface-variant wrap-anywhere">{selected.description || '—'}</dd>
+                  <dd className="whitespace-pre-wrap text-on-surface-variant wrap-anywhere">
+                    {selected.description || '—'}
+                  </dd>
                 </div>
               </dl>
             )}

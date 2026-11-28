@@ -264,7 +264,8 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
     let next: number | null = null;
-    if (step !== undefined) next = (index + step + DETAIL_LAYOUT_OPTIONS.length) % DETAIL_LAYOUT_OPTIONS.length;
+    if (step !== undefined)
+      next = (index + step + DETAIL_LAYOUT_OPTIONS.length) % DETAIL_LAYOUT_OPTIONS.length;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = DETAIL_LAYOUT_OPTIONS.length - 1;
     if (next === null) return;
@@ -315,10 +316,16 @@ export function DetailLayoutSection({ signedIn }: { signedIn: boolean }) {
                   <DetailLayoutPreview layout={option.value} />
                   <div className="my-auto flex items-center justify-between gap-3 px-2">
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <p id={titleId} className={selected ? 'text-label-l-emphasized' : 'text-label-l'}>
+                      <p
+                        id={titleId}
+                        className={selected ? 'text-label-l-emphasized' : 'text-label-l'}
+                      >
                         {option.label}
                       </p>
-                      <p id={descId} className={cn('text-body-s', !selected && 'text-on-surface-variant')}>
+                      <p
+                        id={descId}
+                        className={cn('text-body-s', !selected && 'text-on-surface-variant')}
+                      >
                         {option.description}
                       </p>
                     </div>
@@ -400,7 +407,11 @@ export function ModeAndMotionSection() {
     : undefined;
 
   return (
-    <SettingsSection title="模式与动画" icon={<MdBrightness6 size={ICON.control} />} subtitle="仅保存在本设备">
+    <SettingsSection
+      title="模式与动画"
+      icon={<MdBrightness6 size={ICON.control} />}
+      subtitle="仅保存在本设备"
+    >
       {/* One block: 跟随系统 controls whether 主题模式 is active, so it leads the mode selector
           above an inner rule. Both lock while 天空 owns the colour scheme. */}
       <div className={ROW_STACK_CLASS}>
@@ -434,7 +445,11 @@ export function ModeAndMotionSection() {
         action={
           <>
             {motionMode === 'custom' && (
-              <RowButton label="配置动画效果" icon={<MdTune />} onClick={() => setEffectsDialogOpen(true)}>
+              <RowButton
+                label="配置动画效果"
+                icon={<MdTune />}
+                onClick={() => setEffectsDialogOpen(true)}
+              >
                 配置
               </RowButton>
             )}
@@ -456,7 +471,12 @@ export function ModeAndMotionSection() {
         action={
           <>
             {motionSpeed === 'custom' && (
-              <RowButton label="配置动画速度" icon={<MdTune />} disabled={!speedAvailable} onClick={() => setSpeedDialogOpen(true)}>
+              <RowButton
+                label="配置动画速度"
+                icon={<MdTune />}
+                disabled={!speedAvailable}
+                onClick={() => setSpeedDialogOpen(true)}
+              >
                 配置
               </RowButton>
             )}
@@ -466,10 +486,7 @@ export function ModeAndMotionSection() {
               disabled={!speedAvailable}
               onChange={(v) => commitMotion(motionSetting, v as MotionSpeed)}
               aria-label="动画速度"
-              options={[
-                ...MOTION_PRESETS,
-                { value: 'custom', label: '自定义' },
-              ]}
+              options={[...MOTION_PRESETS, { value: 'custom', label: '自定义' }]}
             />
           </>
         }

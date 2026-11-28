@@ -22,7 +22,14 @@ export function requestUuid(): string {
  * here retries, so one key per press is the whole contract. A 204 answers `{}`; a refusal throws
  * the transport's `ApiError` (the backend's own `error.message` as its sentence).
  */
-export async function adminWrite<T extends object = AdminRow>(method: string, path: string, options: ApiOptions = {}): Promise<T> {
-  const data = await api<T | undefined>(method, path, { idempotencyKey: requestUuid(), ...options });
+export async function adminWrite<T extends object = AdminRow>(
+  method: string,
+  path: string,
+  options: ApiOptions = {},
+): Promise<T> {
+  const data = await api<T | undefined>(method, path, {
+    idempotencyKey: requestUuid(),
+    ...options,
+  });
   return (data && typeof data === 'object' ? data : {}) as T;
 }

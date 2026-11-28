@@ -32,10 +32,15 @@ export function parseUpstreamOrigin(raw: string | undefined | null): string {
   }
   if (
     (url.protocol !== 'https:' && url.protocol !== 'http:') ||
-    url.username || url.password || url.search || url.hash ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
     (url.pathname !== '/' && url.pathname !== '')
   ) {
-    throw new Error(`PICPONY_UPSTREAM_ORIGIN must be a bare http(s) origin: ${JSON.stringify(value)}`);
+    throw new Error(
+      `PICPONY_UPSTREAM_ORIGIN must be a bare http(s) origin: ${JSON.stringify(value)}`,
+    );
   }
   return url.origin;
 }

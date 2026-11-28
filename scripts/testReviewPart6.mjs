@@ -22,17 +22,44 @@ function loader(overrides = {}, globals = {}) {
     const exports = {};
     cache.set(key, exports);
     const code = ts.transpileModule(readFileSync(path.join(root, key), 'utf8'), {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-    }).outputText;
-    vm.runInNewContext(code, {
-      exports, console, Error, TypeError, Response, Request, File, Blob, FormData, URL, URLSearchParams, AbortController, AbortSignal,
-      TextDecoder, Uint8Array, crypto: webcrypto, setTimeout, clearTimeout, queueMicrotask, process: { env: {} }, ...globals,
-      require: (name) => {
-        if (name in overrides) return overrides[name];
-        const target = name.startsWith('@/') ? name.slice(2) : path.join(path.dirname(key), name);
-        return load(`${target}.ts`);
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
       },
-    }, { filename: key });
+    }).outputText;
+    vm.runInNewContext(
+      code,
+      {
+        exports,
+        console,
+        Error,
+        TypeError,
+        Response,
+        Request,
+        File,
+        Blob,
+        FormData,
+        URL,
+        URLSearchParams,
+        AbortController,
+        AbortSignal,
+        TextDecoder,
+        Uint8Array,
+        crypto: webcrypto,
+        setTimeout,
+        clearTimeout,
+        queueMicrotask,
+        process: { env: {} },
+        ...globals,
+        require: (name) => {
+          if (name in overrides) return overrides[name];
+          const target = name.startsWith('@/') ? name.slice(2) : path.join(path.dirname(key), name);
+          return load(`${target}.ts`);
+        },
+      },
+      { filename: key },
+    );
     return exports;
   };
   return load;
@@ -48,18 +75,35 @@ function loader(overrides = {}, globals = {}) {
 // ---------------------------------------------------------------------------------------------
 
 test('P6-F3: saving a tag without touching its names sends them as stored; 、 is not a separator', () => {
-  const load = loader({ '@/lib/format': { formatDateTime: String, parseBackendUtcTime: () => null } });
+  const load = loader({
+    '@/lib/format': { formatDateTime: String, parseBackendUtcTime: () => null },
+  });
   const model = load('components/admin/glossary/model.ts');
   const plain = (value) => JSON.parse(JSON.stringify(value));
-  const tag = { id: 3, en: 'applejack', cn: '苹果嘉儿、AJ', aliases: ['小苹果，大苹果'], cat: 'character', count: 1, description: '' };
+  const tag = {
+    id: 3,
+    en: 'applejack',
+    cn: '苹果嘉儿、AJ',
+    aliases: ['小苹果，大苹果'],
+    cat: 'character',
+    count: 1,
+    description: '',
+  };
   const form = { ...model.tagFormOf(tag), description: '只改简介' };
   const payload = plain(model.tagSavePayload(form, tag));
   assert.equal(payload.cn, '苹果嘉儿、AJ', 'a name with 、 is one name');
-  assert.deepEqual(payload.aliases, ['小苹果，大苹果'], 'a stored alias with a comma survives a description-only save');
+  assert.deepEqual(
+    payload.aliases,
+    ['小苹果，大苹果'],
+    'a stored alias with a comma survives a description-only save',
+  );
   assert.equal(payload.description, '只改简介');
 
   /* An edited field is parsed — on commas only. */
-  assert.deepEqual(plain(model.parseTranslations('紫悦、暮光闪闪, ts，TS')), { cn: '紫悦、暮光闪闪', aliases: ['ts', 'TS'] });
+  assert.deepEqual(plain(model.parseTranslations('紫悦、暮光闪闪, ts，TS')), {
+    cn: '紫悦、暮光闪闪',
+    aliases: ['ts', 'TS'],
+  });
   const edited = plain(model.tagSavePayload({ ...form, translations: '苹果嘉儿, AJ' }, tag));
   assert.deepEqual([edited.cn, edited.aliases], ['苹果嘉儿', ['AJ']]);
   /* 未翻译 untouched is still no translation — written as 未翻译, since the backend refuses an

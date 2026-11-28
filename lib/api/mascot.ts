@@ -15,7 +15,13 @@ export interface MascotConfig {
 }
 
 /** One row of `GET /mascots`: active mascots only, ordered by id. `tips` is the admin's text, one line each. */
-interface MascotRow { id: number; name: string; image_url: string; tips: string; shape?: unknown }
+interface MascotRow {
+  id: number;
+  name: string;
+  image_url: string;
+  tips: string;
+  shape?: unknown;
+}
 
 /**
  * Admin-uploaded media still has to be a media URL, never a navigation/code scheme. The backend's
@@ -25,15 +31,22 @@ interface MascotRow { id: number; name: string; image_url: string; tips: string;
 export function mascotAsset(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) return '';
   const asset = getAssetUrl(value.trim());
-  if (asset.startsWith('/api/v1/')) return /^\/api\/v1\/[\w\-./%]+$/.test(asset) && !asset.includes('..') ? asset : '';
+  if (asset.startsWith('/api/v1/'))
+    return /^\/api\/v1\/[\w\-./%]+$/.test(asset) && !asset.includes('..') ? asset : '';
   try {
     const url = new URL(asset);
     if (url.protocol !== 'https:' || url.username || url.password) return '';
     return url.href;
-  } catch { return ''; }
+  } catch {
+    return '';
+  }
 }
 
-const lines = (text: string) => text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+const lines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
 /**
  * `GET /mascots` — public `{enabled, revision, tips, mascots:[{id,name,image_url,tips,shape?}]}`. The
@@ -43,17 +56,30 @@ const lines = (text: string) => text.split(/\r?\n/).map(line => line.trim()).fil
  * the site-wide `tips` (a JSON array) are the fallback. Backend-hosted uploads include a precomputed
  * `shape`, validated here via `parseMascotShape` so `Mascot` skips `/mascot-shape`.
  */
-export async function getMascotConfig(selected = 'auto', signal?: AbortSignal): Promise<MascotConfig> {
-  const data = await api<{ enabled: boolean; tips: unknown; mascots: MascotRow[] }>('GET', '/mascots', { signal });
-  const chosen = data.mascots.find(row => String(row.id) === selected)
-    ?? data.mascots[Math.floor(Math.random() * data.mascots.length)];
-  const shared = Array.isArray(data.tips) ? data.tips.filter((v): v is string => typeof v === 'string' && !!v.trim()) : [];
+export async function getMascotConfig(
+  selected = 'auto',
+  signal?: AbortSignal,
+): Promise<MascotConfig> {
+  const data = await api<{ enabled: boolean; tips: unknown; mascots: MascotRow[] }>(
+    'GET',
+    '/mascots',
+    { signal },
+  );
+  const chosen =
+    data.mascots.find((row) => String(row.id) === selected) ??
+    data.mascots[Math.floor(Math.random() * data.mascots.length)];
+  const shared = Array.isArray(data.tips)
+    ? data.tips.filter((v): v is string => typeof v === 'string' && !!v.trim())
+    : [];
   const own = chosen ? lines(chosen.tips) : [];
   const image = mascotAsset(chosen?.image_url);
   return {
-    enabled: data.enabled, id: chosen ? String(chosen.id) : '', name: chosen?.name ?? '绘云彩彩',
-    image, shape: image ? parseMascotShape(chosen?.shape) : null,
-    mascots: data.mascots.map(row => ({ id: String(row.id), name: row.name })),
+    enabled: data.enabled,
+    id: chosen ? String(chosen.id) : '',
+    name: chosen?.name ?? '绘云彩彩',
+    image,
+    shape: image ? parseMascotShape(chosen?.shape) : null,
+    mascots: data.mascots.map((row) => ({ id: String(row.id), name: row.name })),
     tips: own.length ? own : shared,
   };
 }

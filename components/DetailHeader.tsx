@@ -31,7 +31,8 @@ type DetailHeaderProps = {
 };
 
 function getImageFormat(image: ImagePreview) {
-  const source = image.format || (image.representations?.full || image.view_url || '').split(/[?#]/)[0];
+  const source =
+    image.format || (image.representations?.full || image.view_url || '').split(/[?#]/)[0];
   return source.split('.').pop()?.toUpperCase() || '未知';
 }
 
@@ -48,7 +49,10 @@ function MetaValue({
   if (value !== null) return value;
   if (pending) {
     return (
-      <Skeleton data-image-detail-meta-loading className={cn('inline-block h-[0.9em] rounded-xs align-[-0.1em]', width)} />
+      <Skeleton
+        data-image-detail-meta-loading
+        className={cn('inline-block h-[0.9em] rounded-xs align-[-0.1em]', width)}
+      />
     );
   }
   return (
@@ -198,7 +202,12 @@ export default function DetailHeader({
             />
           </div>
         </div>
-        <div className={cn(row, 'image-detail-header-caption shrink-0 text-body-s text-on-surface-variant tabular-nums')}>
+        <div
+          className={cn(
+            row,
+            'image-detail-header-caption shrink-0 text-body-s text-on-surface-variant tabular-nums',
+          )}
+        >
           <span className="min-w-0 truncate">
             <span className="sr-only">尺寸</span>
             {image.width} × {image.height} px

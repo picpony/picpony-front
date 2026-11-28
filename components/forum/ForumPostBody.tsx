@@ -35,8 +35,7 @@ function CommissionLink({ href }: { href: string }) {
   const open = async () => {
     const ok = await confirm({
       title: '确认前往约稿平台',
-      message:
-        'PicPony 仅提供画师约稿信息，不担保交易细节。\n确定要前往此约稿平台吗？',
+      message: 'PicPony 仅提供画师约稿信息，不担保交易细节。\n确定要前往此约稿平台吗？',
       tone: 'filled',
     });
     if (ok) window.open(href, '_blank', 'noopener,noreferrer');
@@ -72,13 +71,16 @@ function TagList({ label, tags }: { label?: string; tags: string[] }) {
         </Badge>
       ))}
       {tags.length > TAG_PREVIEW && (
-        <span className="text-body-s tabular-nums text-on-surface-variant">+{tags.length - TAG_PREVIEW}</span>
+        <span className="text-body-s tabular-nums text-on-surface-variant">
+          +{tags.length - TAG_PREVIEW}
+        </span>
       )}
     </div>
   );
 }
 
-type ImportTarget = { kind: 'tag'; group: SharedTagGroup } | { kind: 'block'; group: SharedBlockGroup };
+type ImportTarget =
+  { kind: 'tag'; group: SharedTagGroup } | { kind: 'block'; group: SharedBlockGroup };
 type Outcome = { ok: true } | { ok: false; message: string };
 
 /* Module scope: the React Compiler does not lower a `try` with a `finally` in a component. */
@@ -124,7 +126,14 @@ function GroupRow({
           已导入
         </Badge>
       ) : (
-        <Button variant="tonal" size="xs" icon={<MdBookmarkAdd />} loading={state === 'busy'} onClick={onImport} className="self-start">
+        <Button
+          variant="tonal"
+          size="xs"
+          icon={<MdBookmarkAdd />}
+          loading={state === 'busy'}
+          onClick={onImport}
+          className="self-start"
+        >
           导入
         </Button>
       )}

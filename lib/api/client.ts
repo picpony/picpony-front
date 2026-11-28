@@ -1,5 +1,10 @@
 import { LS_KEYS } from '@/lib/constants';
-import { buildSearchQueryFrom, parseContentFilter, parseSortField, withDerpiContentFilter } from '@/lib/searchQuery';
+import {
+  buildSearchQueryFrom,
+  parseContentFilter,
+  parseSortField,
+  withDerpiContentFilter,
+} from '@/lib/searchQuery';
 import { defaultSearchSort, searchSort } from '@/lib/searchState';
 import { currentBlockFilters, currentPublicBlacklist } from '@/lib/blockFilters';
 import { toCurrentImageLine } from '@/lib/imageLoader';
@@ -65,15 +70,18 @@ export function getBrowsingSettings(): BrowsingSettings {
 export function applyImageLine<T extends PonyImage>(image: T): T {
   /* Tolerant of a partial row: a merged duplicate can arrive with no representations or a
      null URL, and one such row must not take the whole page down with it. */
-  const representations = image.representations && typeof image.representations === 'object'
-    ? image.representations
-    : {};
+  const representations =
+    image.representations && typeof image.representations === 'object' ? image.representations : {};
   return {
     ...image,
     representations: Object.fromEntries(
-      Object.entries(representations).map(([k, v]) => [k, typeof v === 'string' ? toCurrentImageLine(v) : v]),
+      Object.entries(representations).map(([k, v]) => [
+        k,
+        typeof v === 'string' ? toCurrentImageLine(v) : v,
+      ]),
     ) as unknown as PonyImage['representations'],
-    view_url: typeof image.view_url === 'string' ? toCurrentImageLine(image.view_url) : image.view_url,
+    view_url:
+      typeof image.view_url === 'string' ? toCurrentImageLine(image.view_url) : image.view_url,
   };
 }
 
@@ -140,7 +148,9 @@ export function randomSortParam(): string {
 
 /** `sf=…&sd=…` for a validated sort field; the random sort takes the document's seed and no direction. */
 export function sortQuery(field: string, direction: 'asc' | 'desc' = 'desc'): string {
-  return field === 'random' ? `sf=${randomSortParam()}` : `sf=${field}&sd=${direction === 'asc' ? 'asc' : 'desc'}`;
+  return field === 'random'
+    ? `sf=${randomSortParam()}`
+    : `sf=${field}&sd=${direction === 'asc' ? 'asc' : 'desc'}`;
 }
 
 function getSortParams(isSearch: boolean): string {
@@ -191,13 +201,16 @@ function waitForRoutePolicy(signal?: AbortSignal | null): Promise<void> {
       return;
     }
     signal.addEventListener('abort', cancel, { once: true });
-    ready.then(() => {
-      signal.removeEventListener('abort', cancel);
-      resolve();
-    }, (error) => {
-      signal.removeEventListener('abort', cancel);
-      reject(error);
-    });
+    ready.then(
+      () => {
+        signal.removeEventListener('abort', cancel);
+        resolve();
+      },
+      (error) => {
+        signal.removeEventListener('abort', cancel);
+        reject(error);
+      },
+    );
   });
 }
 
@@ -358,7 +371,12 @@ export async function fetchDerpiImages(
        not parse it — so it becomes a `syntax` error: no 重试, and a message about the query
        rather than the network. Unbalanced parentheses never get this far (see
        `balanceUserQuery`); this covers whatever else the grammar rejects. */
-    if (params.query && error instanceof ApiError && error.kind === 'http' && error.status === 400) {
+    if (
+      params.query &&
+      error instanceof ApiError &&
+      error.kind === 'http' &&
+      error.status === 400
+    ) {
       throw new ApiError('syntax', { status: 400, cause: error });
     }
     throw error;

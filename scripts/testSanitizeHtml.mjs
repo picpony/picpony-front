@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
 const { sanitizeHtml } = await import('../lib/sanitizeHtml.ts');
-const { sanitizeAnnouncementUrl, sanitizeAnnouncementAttr } = await import('../lib/sanitizeHtml.browser.ts');
+const { sanitizeAnnouncementUrl, sanitizeAnnouncementAttr } =
+  await import('../lib/sanitizeHtml.browser.ts');
 const attacks = [
   '<img src=x onerror="globalThis.__reviewExecuted=1">',
   '<a href="javascript:globalThis.__reviewExecuted=1">click</a>',
@@ -14,7 +15,7 @@ const attacks = [
   '<a href="tel:12345">call</a>',
   '<a href="//evil.test/x">proto-rel</a><a href="/\\evil.test/x">backslash</a>',
   '<img src="mailto:a@example.test">',
-  '<img src="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' onload=\'alert(1)\'/>">',
+  "<img src=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' onload='alert(1)'/>\">",
   '<svg><a xlink:href="javascript:alert(1)">SVG</a><script>alert(1)</script></svg>',
   '<math><mtext><table><mglyph><style><!--</style><img title="--><img src=1 onerror=alert(1)>">',
   '<iframe srcdoc="<script>alert(1)</script>"></iframe><object data="/api.php"></object><embed src="/x.swf">',
@@ -27,7 +28,8 @@ const attacks = [
   '<template><img src=x onerror=alert(1)></template>',
   '<title>secret-title</title><textarea>secret-textarea</textarea><xmp>secret-xmp</xmp><p>visible</p>',
 ];
-const article = '<h2>公告</h2><p>正文 <strong>重点</strong> <em>强调</em> <a href="https://example.test/?a=1&amp;b=2">链接</a> <a href=" mailto:hi@picpony.top?subject=Hello World ">邮件</a></p><ul><li>一</li><li>二</li></ul><blockquote>引用</blockquote><table><tr><th colspan="+2">列</th><td colspan=" 2 ">值</td></tr></table>';
+const article =
+  '<h2>公告</h2><p>正文 <strong>重点</strong> <em>强调</em> <a href="https://example.test/?a=1&amp;b=2">链接</a> <a href=" mailto:hi@picpony.top?subject=Hello World ">邮件</a></p><ul><li>一</li><li>二</li></ul><blockquote>引用</blockquote><table><tr><th colspan="+2">列</th><td colspan=" 2 ">值</td></tr></table>';
 assert.equal(sanitizeHtml(''), '');
 assert.match(sanitizeHtml(article), /<h2>公告<\/h2>/);
 assert.match(sanitizeHtml(article), /<strong>重点<\/strong>/);
@@ -37,20 +39,38 @@ assert.match(sanitizeHtml(article), /href="mailto:hi@picpony\.top\?subject=Hello
 assert.match(sanitizeHtml(article), /colspan="2"/);
 assert.doesNotMatch(sanitizeHtml(article), /\+2/);
 assert.equal(sanitizeHtml('<script>bad()</script><p>visible</p>'), '<p>visible</p>');
-assert.equal(sanitizeHtml('<title>a</title><textarea>b</textarea><xmp>c</xmp><p>ok</p>'), '<p>ok</p>');
-assert.doesNotMatch(sanitizeHtml('<a href="//evil.test/x">a</a><a href="/\\evil.test/x">b</a>'), /evil\.test/);
-assert.doesNotMatch(sanitizeHtml('<a id="location" name="document" href="https://example.test">link</a>'), /\b(?:id|name)=/i);
+assert.equal(
+  sanitizeHtml('<title>a</title><textarea>b</textarea><xmp>c</xmp><p>ok</p>'),
+  '<p>ok</p>',
+);
+assert.doesNotMatch(
+  sanitizeHtml('<a href="//evil.test/x">a</a><a href="/\\evil.test/x">b</a>'),
+  /evil\.test/,
+);
+assert.doesNotMatch(
+  sanitizeHtml('<a id="location" name="document" href="https://example.test">link</a>'),
+  /\b(?:id|name)=/i,
+);
 
 // Verify the browser sanitizer's URL & attribute validators in Node as well.
-assert.equal(sanitizeAnnouncementUrl('href', 'https://example.test/?a=1&b=2'), 'https://example.test/?a=1&b=2');
+assert.equal(
+  sanitizeAnnouncementUrl('href', 'https://example.test/?a=1&b=2'),
+  'https://example.test/?a=1&b=2',
+);
 assert.equal(sanitizeAnnouncementUrl('href', 'mailto:hi@picpony.top'), 'mailto:hi@picpony.top');
-assert.equal(sanitizeAnnouncementUrl('href', ' mailto:hi@picpony.top?subject=Hello World '), 'mailto:hi@picpony.top?subject=Hello World');
+assert.equal(
+  sanitizeAnnouncementUrl('href', ' mailto:hi@picpony.top?subject=Hello World '),
+  'mailto:hi@picpony.top?subject=Hello World',
+);
 assert.equal(sanitizeAnnouncementUrl('href', 'tel:12345'), null);
 assert.equal(sanitizeAnnouncementUrl('href', 'java\tscript:alert(1)'), null);
 assert.equal(sanitizeAnnouncementUrl('href', 'java script:alert(1)'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '//evil.test/x'), null);
 assert.equal(sanitizeAnnouncementUrl('href', '/\\evil.test/x'), null);
-assert.equal(sanitizeAnnouncementUrl('src', 'https://picpony.top/a.png'), 'https://picpony.top/a.png');
+assert.equal(
+  sanitizeAnnouncementUrl('src', 'https://picpony.top/a.png'),
+  'https://picpony.top/a.png',
+);
 assert.equal(sanitizeAnnouncementUrl('src', '/uploads/a.png'), '/uploads/a.png');
 assert.equal(sanitizeAnnouncementUrl('src', 'mailto:a@b.c'), null);
 assert.equal(sanitizeAnnouncementUrl('src', 'data:image/svg+xml,<svg/>'), null);
@@ -65,7 +85,7 @@ assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '+2'), null);
 assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '0'), null);
 assert.equal(sanitizeAnnouncementAttr('td', 'colspan', '1001'), null);
 
-const outputs = [...attacks, article].map(input=>({input,html:sanitizeHtml(input)}));
+const outputs = [...attacks, article].map((input) => ({ input, html: sanitizeHtml(input) }));
 
 if (process.argv.includes('--browser')) {
   const browserSanitizerCode = ts.transpileModule(
@@ -130,13 +150,19 @@ with sync_playwright() as p:
   print(json.dumps({'ok':True,**result}))
  finally:browser.close()
 `;
-  const run=spawnSync('python',['-X','utf8','-c',python],{
-    input:JSON.stringify({outputs,inputs:[...attacks,article],article,browserSanitizerCode}),
-    encoding:'utf8',
-    windowsHide:true,
+  const run = spawnSync('python', ['-X', 'utf8', '-c', python], {
+    input: JSON.stringify({
+      outputs,
+      inputs: [...attacks, article],
+      article,
+      browserSanitizerCode,
+    }),
+    encoding: 'utf8',
+    windowsHide: true,
   });
-  if(run.error)throw run.error;
-  process.stdout.write(run.stdout);process.stderr.write(run.stderr);
-  assert.equal(run.status,0,'Browser HTML sanitization checks failed');
+  if (run.error) throw run.error;
+  process.stdout.write(run.stdout);
+  process.stderr.write(run.stderr);
+  assert.equal(run.status, 0, 'Browser HTML sanitization checks failed');
 }
 console.log(`HTML sanitization: ${outputs.length} attack/format fixtures passed`);

@@ -87,7 +87,10 @@ export default function EditForumPostPage() {
             content: sent.content,
             commission_link: sent.commission_link,
             shared_groups: sent.shared_groups
-              ? { tagGroups: sent.shared_groups.tag_groups, blockGroups: sent.shared_groups.block_groups }
+              ? {
+                  tagGroups: sent.shared_groups.tag_groups,
+                  blockGroups: sent.shared_groups.block_groups,
+                }
               : null,
             revision: post.revision + 1,
           };

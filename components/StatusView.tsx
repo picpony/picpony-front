@@ -136,12 +136,23 @@ export default function StatusView({
           a geometrically centred block then reads as sitting high. 24 is the grid
           step that keeps the glyph reading as part of the same object. */}
       {icon && (
-        <span className={cn(ICON_TONES[iconTone], inline ? 'mb-3' : 'mb-6', 'flex w-full min-w-0 justify-center [&>svg]:block')}>
+        <span
+          className={cn(
+            ICON_TONES[iconTone],
+            inline ? 'mb-3' : 'mb-6',
+            'flex w-full min-w-0 justify-center [&>svg]:block',
+          )}
+        >
           {icon}
         </span>
       )}
       {inline ? (
-        <p className={cn('wrap-anywhere', description ? 'text-label-l text-on-surface' : 'text-body-m text-on-surface-variant')}>
+        <p
+          className={cn(
+            'wrap-anywhere',
+            description ? 'text-label-l text-on-surface' : 'text-body-m text-on-surface-variant',
+          )}
+        >
           {title}
         </p>
       ) : (
@@ -150,7 +161,12 @@ export default function StatusView({
       {/* `text-pretty`: a wrapped description ended on a lone glyph (隐私空间's empty
           state, 「片」 by itself on the second line). */}
       {description && (
-        <p className={cn('max-w-md wrap-anywhere text-pretty', inline ? 'mt-1 text-body-s text-on-surface-variant' : 'mt-2 text-body-m')}>
+        <p
+          className={cn(
+            'max-w-md wrap-anywhere text-pretty',
+            inline ? 'mt-1 text-body-s text-on-surface-variant' : 'mt-2 text-body-m',
+          )}
+        >
           {description}
         </p>
       )}
@@ -164,7 +180,9 @@ export default function StatusView({
 
   const shell = cn(
     'text-on-surface-variant',
-    fill ? cn('flex flex-col items-center justify-center text-center', FILL_BOX) : statusViewBox(size),
+    fill
+      ? cn('flex flex-col items-center justify-center text-center', FILL_BOX)
+      : statusViewBox(size),
     className,
   );
   /* Without its own entrance — in a pane, or standing down for the caller's swap — the shell is

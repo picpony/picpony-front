@@ -48,7 +48,14 @@ const previews = new Map<string, { post: ForumPost; at: number }>();
 
 function boxOf(id: number | string, el: HTMLElement): ForumOrigin {
   const rect = el.getBoundingClientRect();
-  return { id: String(id), left: rect.left, top: rect.top, width: rect.width, height: rect.height, at: performance.now() };
+  return {
+    id: String(id),
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+    at: performance.now(),
+  };
 }
 
 /** Hands the thread the row's copy of the post, so it opens complete (see the note above). */

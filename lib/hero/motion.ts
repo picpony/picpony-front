@@ -453,9 +453,7 @@ function readOverlayPoses(overlay: HTMLElement | null, floatingBack: HTMLElement
   const poses = new Map<HTMLElement, OverlayPose>();
   const targets = new Set<HTMLElement>(floatingBack ? [floatingBack] : []);
   overlay
-    ?.querySelectorAll<HTMLElement>(
-      `${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`,
-    )
+    ?.querySelectorAll<HTMLElement>(`${HERO_CONTENT_SELECTOR}, ${HERO_REVEAL_SELECTOR}`)
     .forEach((element) => targets.add(element));
   targets.forEach((element) => {
     poses.set(element, { opacity: numericOpacity(element) });
@@ -539,7 +537,11 @@ function buildContainerAnimations(
  * `sampledTrack` preserves those samples as keyframes on Chrome 109; see
  * docs/motion-system.md#browser-compatibility.
  */
-function animateScalar(element: HTMLElement, track: SampledTrack, duration: number): AnimationOwner {
+function animateScalar(
+  element: HTMLElement,
+  track: SampledTrack,
+  duration: number,
+): AnimationOwner {
   return animateAt(element, track.keyframes, { duration, easing: track.easing });
 }
 
@@ -598,10 +600,12 @@ function buildOverlayAnimations(ctx: OverlayContext, leg: HeroLeg) {
     for (const element of overlay.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)) {
       const current = fromCurrent.get(element);
       if (!current || current.opacity >= 1) continue;
-      owners.push(animateAt(element, [{ opacity: current.opacity }, { opacity: 1 }], {
-        duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
-        easing: REVEAL_EASING,
-      }));
+      owners.push(
+        animateAt(element, [{ opacity: current.opacity }, { opacity: 1 }], {
+          duration: Math.min(duration, scaledMs(REVEAL_CONTENT_DURATION_MS, 'image')),
+          easing: REVEAL_EASING,
+        }),
+      );
     }
   }
   /* The floating back button renders *outside* the overlay, so the mask never reaches it and
@@ -658,10 +662,7 @@ function buildDismissAnimations(
     owners.push(
       animateAt(
         element,
-        [
-          { opacity: liveOpacity?.get(element) ?? numericOpacity(element) },
-          { opacity: 0 },
-        ],
+        [{ opacity: liveOpacity?.get(element) ?? numericOpacity(element) }, { opacity: 0 }],
         // The leg's own duration, not the closing constant: an interrupted reverse runs
         // short, and a fade outliving its own flight left the surface visibly settling
         // after the flyer had landed.
@@ -793,9 +794,12 @@ export class HeroMotion {
   measurePose(): HeroPose {
     const currentTime = this.visual[0]?.animation.currentTime;
     // A pending animation has not presented any travel, even if setup blocked for a whole leg.
-    const elapsed = typeof currentTime === 'number'
-      ? currentTime
-      : this.landedCompletion.settled ? this.leg.duration : 0;
+    const elapsed =
+      typeof currentTime === 'number'
+        ? currentTime
+        : this.landedCompletion.settled
+          ? this.leg.duration
+          : 0;
     return {
       ...evaluateLeg(this.leg, this.leg.startedAt + elapsed),
       pullOffset: this.pullOffset,
@@ -857,7 +861,8 @@ export class HeroMotion {
     if (this.disposed || this.retired || this.sharedReleased || this.choreography === 'dismiss') {
       return null;
     }
-    if (overlay === this.overlay || this.mirrors.some((mirror) => mirror.overlay === overlay)) return null;
+    if (overlay === this.overlay || this.mirrors.some((mirror) => mirror.overlay === overlay))
+      return null;
     const mirror: HeroMirror = {
       overlay,
       floatingBack,
@@ -919,10 +924,14 @@ export class HeroMotion {
         ),
       );
       const scroller = this.windowScrollStart
-        ? mirror.unclip.querySelector<HTMLElement>('.image-detail-overlay-scroll') : null;
+        ? mirror.unclip.querySelector<HTMLElement>('.image-detail-overlay-scroll')
+        : null;
       if (scroller && this.windowScrollStart) {
         mirror.windowScroll = followHeroWindowScroll(
-          this.flight.plane.scroller, mirror.clip, scroller, this.windowScrollStart,
+          this.flight.plane.scroller,
+          mirror.clip,
+          scroller,
+          this.windowScrollStart,
         );
       }
     }
@@ -955,7 +964,9 @@ export class HeroMotion {
   private readSharedPoses() {
     const poses = readOverlayPoses(this.overlay, this.floatingBack);
     this.mirrors.forEach((mirror) => {
-      readOverlayPoses(mirror.overlay, mirror.floatingBack).forEach((pose, element) => poses.set(element, pose));
+      readOverlayPoses(mirror.overlay, mirror.floatingBack).forEach((pose, element) =>
+        poses.set(element, pose),
+      );
     });
     return poses;
   }
@@ -1017,7 +1028,12 @@ export class HeroMotion {
       if (this.containerLeg) {
         const host = hostRect ?? this.containerLeg.host;
         this.containerLeg = {
-          ...this.containerLeg, clipFrom: host, clipTo: host, radiusFrom: 0, radiusTo: 0, host,
+          ...this.containerLeg,
+          clipFrom: host,
+          clipTo: host,
+          radiusFrom: 0,
+          radiusTo: 0,
+          host,
         };
       }
     }
@@ -1468,12 +1484,7 @@ export class HeroMotion {
       if (this.overlay) {
         owners.push(...buildOverlayAnimations({ ...overlayCtx!, liveOpacity }, this.leg));
         heroProbeMark('hx:t:s-overlay');
-        if (
-          this.containerLeg &&
-          this.clip &&
-          this.unclip &&
-          motionTier('image') === 'standard'
-        ) {
+        if (this.containerLeg && this.clip && this.unclip && motionTier('image') === 'standard') {
           this.containerTracks = buildContainerAnimations(
             { clip: this.clip, unclip: this.unclip },
             this.containerLeg,
@@ -1487,7 +1498,12 @@ export class HeroMotion {
                 top: this.preread?.planeScroll?.top ?? plane.scroller.scrollTop,
                 range: plane.maxScrollTop,
               };
-              this.windowScroll = followHeroWindowScroll(plane.scroller, this.clip, scroller, this.windowScrollStart);
+              this.windowScroll = followHeroWindowScroll(
+                plane.scroller,
+                this.clip,
+                scroller,
+                this.windowScrollStart,
+              );
             }
           }
         }

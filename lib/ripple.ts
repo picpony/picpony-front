@@ -125,7 +125,9 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   host.appendChild(ripple);
 
   const fadeIn = scaledMs(FADE_IN_MS);
-  const spread = scaledMs(Math.round(Math.min(SPREAD_MAX_MS, Math.max(SPREAD_MIN_MS, 220 + Math.sqrt(cover) * 10))));
+  const spread = scaledMs(
+    Math.round(Math.min(SPREAD_MAX_MS, Math.max(SPREAD_MIN_MS, 220 + Math.sqrt(cover) * 10))),
+  );
   const fadeOut = scaledMs(FADE_OUT_MS);
   const fadeCancel = scaledMs(FADE_CANCEL_MS);
   const animations: Animation[] = [
@@ -156,7 +158,12 @@ export function spawnRipple(host: HTMLElement, x: number, y: number): RippleHand
   let out: Animation | null = null;
   const leave = (delay: number, duration: number) => {
     if (out || gone) return;
-    out = ripple.animate([{ opacity: 0 }], { duration, delay, easing: RIPPLE_FADE_OUT_EASE, fill: 'forwards' });
+    out = ripple.animate([{ opacity: 0 }], {
+      duration,
+      delay,
+      easing: RIPPLE_FADE_OUT_EASE,
+      fill: 'forwards',
+    });
     out.finished.then(remove, remove);
   };
 

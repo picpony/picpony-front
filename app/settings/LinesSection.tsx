@@ -6,7 +6,12 @@ import { MdSpeed } from '@/components/icons/settings';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
 import { ICON } from '@/lib/icons';
-import { currentLineLabels, raceImageLines, refreshRoutePolicy, subscribeRouteState } from '@/lib/route';
+import {
+  currentLineLabels,
+  raceImageLines,
+  refreshRoutePolicy,
+  subscribeRouteState,
+} from '@/lib/route';
 import { changeSyncedSetting, useSyncedSetting } from '@/lib/settingsSync';
 import { SettingsRow, SettingsSection, SwitchRow } from './SettingsRow';
 
@@ -57,13 +62,14 @@ export default function LinesSection() {
     setRefreshing(false);
   };
 
-  const forced = lines.apiForced && lines.imageForced
-    ? '线路已由管理员统一指定'
-    : lines.apiForced
-      ? 'API 线路已由管理员统一指定'
-      : lines.imageForced
-        ? '图片线路已由管理员统一指定'
-        : undefined;
+  const forced =
+    lines.apiForced && lines.imageForced
+      ? '线路已由管理员统一指定'
+      : lines.apiForced
+        ? 'API 线路已由管理员统一指定'
+        : lines.imageForced
+          ? '图片线路已由管理员统一指定'
+          : undefined;
 
   return (
     <SettingsSection
@@ -71,7 +77,13 @@ export default function LinesSection() {
       icon={<MdSpeed size={ICON.control} />}
       subtitle={forced}
       actions={
-        <Button size="xs" variant="tonal" icon={<MdRefresh />} loading={refreshing} onClick={refresh}>
+        <Button
+          size="xs"
+          variant="tonal"
+          icon={<MdRefresh />}
+          loading={refreshing}
+          onClick={refresh}
+        >
           重新检测
         </Button>
       }
@@ -80,7 +92,13 @@ export default function LinesSection() {
           pin one, and a failover can move it mid-session. The row reports; the switches ask. */}
       <SettingsRow
         label="当前线路"
-        badge={lines.apiForced || lines.imageForced ? <Badge tone="warning" size="sm">全站强制</Badge> : undefined}
+        badge={
+          lines.apiForced || lines.imageForced ? (
+            <Badge tone="warning" size="sm">
+              全站强制
+            </Badge>
+          ) : undefined
+        }
         supporting={lines.ready ? `API：${lines.api} · 图片：${lines.image}` : '检测中…'}
       />
       {!lines.imageForced && (
@@ -115,7 +133,9 @@ export default function LinesSection() {
               gate (a divergence from the original front end): the accel line needs no credential. */}
           <SwitchRow
             label="启用 API 加速"
-            description={relay ? '已优先使用 PicPony API，关闭后此项可选' : '通过备用 API 代理提升请求稳定性'}
+            description={
+              relay ? '已优先使用 PicPony API，关闭后此项可选' : '通过备用 API 代理提升请求稳定性'
+            }
             checked={apiAccel}
             onChange={(on) => changeSyncedSetting('useApiAccel', on)}
             disabled={relay}

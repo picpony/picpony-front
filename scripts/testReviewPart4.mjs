@@ -17,15 +17,24 @@ globalThis.localStorage = {
   removeItem: (key) => values.delete(key),
 };
 globalThis.window = {
-  addEventListener() {}, removeEventListener() {},
-  dispatchEvent() { return true; },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {
+    return true;
+  },
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   location: { origin: 'https://app.invalid', pathname: '/' },
   __picponyRoutePolicy: { api: 'direct', image: 'direct' },
 };
-globalThis.document = { visibilityState: 'visible', hidden: false, cookie: '', addEventListener() {}, removeEventListener() {} };
+globalThis.document = {
+  visibilityState: 'visible',
+  hidden: false,
+  cookie: '',
+  addEventListener() {},
+  removeEventListener() {},
+};
 
 const { balanceUserQuery, buildSearchQueryFrom } = await import('../lib/searchQuery.ts');
 const limits = await import('../lib/uploadLimits.ts');
@@ -42,7 +51,11 @@ const source = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'u
 // ---------------------------------------------------------------------------------------------
 
 const OPERATOR = /^\s+(?:AND|OR|&&|\|\|)\s+/;
-const STOP = (s, i) => s[i] === ',' || OPERATOR.test(s.slice(i)) || /^\s*\)/.test(s.slice(i)) || /^\s*\^[-+]?\d/.test(s.slice(i));
+const STOP = (s, i) =>
+  s[i] === ',' ||
+  OPERATOR.test(s.slice(i)) ||
+  /^\s*\)/.test(s.slice(i)) ||
+  /^\s*\^[-+]?\d/.test(s.slice(i));
 
 /** `dirty_text` from `i`: the end of the term's text, or -1 when it matches nothing. */
 function dirtyText(s, i) {
@@ -74,26 +87,66 @@ function lex(s) {
   let i = 0;
   while (i < s.length) {
     const rest = s.slice(i);
-    if (s[i] === ',') { tokens.push({ type: 'and', at: i }); i += 1; continue; }
-    if (s[i] === '!' || s[i] === '-') { tokens.push({ type: 'not', at: i }); i += 1; continue; }
+    if (s[i] === ',') {
+      tokens.push({ type: 'and', at: i });
+      i += 1;
+      continue;
+    }
+    if (s[i] === '!' || s[i] === '-') {
+      tokens.push({ type: 'not', at: i });
+      i += 1;
+      continue;
+    }
     const operator = OPERATOR.exec(rest);
-    if (operator) { tokens.push({ type: /OR|\|\|/.test(operator[0]) ? 'or' : 'and', at: i }); i += operator[0].length; continue; }
+    if (operator) {
+      tokens.push({ type: /OR|\|\|/.test(operator[0]) ? 'or' : 'and', at: i });
+      i += operator[0].length;
+      continue;
+    }
     const not = /^NOT\s+/.exec(rest);
-    if (not) { tokens.push({ type: 'not', at: i }); i += not[0].length; continue; }
-    if (s[i] === '(') { tokens.push({ type: 'lparen', at: i }); i += 1; continue; }
-    if (s[i] === ')') { tokens.push({ type: 'rparen', at: i }); i += 1; continue; }
+    if (not) {
+      tokens.push({ type: 'not', at: i });
+      i += not[0].length;
+      continue;
+    }
+    if (s[i] === '(') {
+      tokens.push({ type: 'lparen', at: i });
+      i += 1;
+      continue;
+    }
+    if (s[i] === ')') {
+      tokens.push({ type: 'rparen', at: i });
+      i += 1;
+      continue;
+    }
     const boost = /^\^[-+]?\d+(?:\.\d+)?/.exec(rest);
-    if (boost) { i += boost[0].length; continue; }
-    if (/\s/.test(s[i])) { i += 1; continue; }
+    if (boost) {
+      i += boost[0].length;
+      continue;
+    }
+    if (/\s/.test(s[i])) {
+      i += 1;
+      continue;
+    }
     if (s[i] === '"') {
       let j = i + 1;
       let closed = -1;
       while (j < s.length) {
-        if (s[j] === '\\') { j += j + 1 < s.length ? 2 : 1; continue; }
-        if (s[j] === '"') { closed = j; break; }
+        if (s[j] === '\\') {
+          j += j + 1 < s.length ? 2 : 1;
+          continue;
+        }
+        if (s[j] === '"') {
+          closed = j;
+          break;
+        }
         j += 1;
       }
-      if (closed !== -1) { tokens.push({ type: 'term', at: i }); i = closed + 1; continue; }
+      if (closed !== -1) {
+        tokens.push({ type: 'term', at: i });
+        i = closed + 1;
+        continue;
+      }
     }
     const end = dirtyText(s, i);
     if (end === -1) return null;
@@ -107,7 +160,8 @@ function lex(s) {
 function groupHolds(scoped) {
   const query = `(${scoped}), -explicit`;
   const tokens = lex(query);
-  if (!tokens) return true; /* A query Philomena cannot lex is a 400, not a way around the filters. */
+  if (!tokens)
+    return true; /* A query Philomena cannot lex is a 400, not a way around the filters. */
   let depth = 0;
   for (const token of tokens) {
     if (token.type === 'lparen') depth += 1;
@@ -126,22 +180,39 @@ test('P4-F1: a quote in the middle of a term cannot hide the parentheses that cl
   const scoped = balanceUserQuery(exploit);
   assert.notEqual(scoped, exploit);
   assert.equal(groupHolds(scoped), true, scoped);
-  const built = decodeURIComponent(buildSearchQueryFrom(
-    { contentFilter: 'safe', banAnthro: false, onlyPony: false, hiddenTags: [] }, exploit, undefined, [42],
-  ));
+  const built = decodeURIComponent(
+    buildSearchQueryFrom(
+      { contentFilter: 'safe', banAnthro: false, onlyPony: false, hiddenTags: [] },
+      exploit,
+      undefined,
+      [42],
+    ),
+  );
   assert.ok(built.startsWith(`(${scoped}), `), built);
   assert.match(built, /, -explicit/);
   assert.match(built, /, -id:42$/);
 
-  for (const text of ['explicit"), * OR ("', 'a, b"), id.gt:0 OR (c"', 'NOT x"), explicit OR (y"', 'a OR b"), c OR (d"']) {
+  for (const text of [
+    'explicit"), * OR ("',
+    'a, b"), id.gt:0 OR (c"',
+    'NOT x"), explicit OR (y"',
+    'a OR b"), c OR (d"',
+  ]) {
     assert.equal(groupHolds(balanceUserQuery(text)), true, text);
   }
 });
 
 test('P4-F1: quoted terms where Philomena reads them stay as typed', () => {
   for (const text of [
-    '"a (b" OR c', 'a OR "b c"', 'NOT "a b"', '-"a (b"', 'fluttershy, (safe OR "a)b")', 'artist:foo (bar)',
-    'fluttershy OR (rarity, safe)', '"princess luna", safe', 'a && "b)"',
+    '"a (b" OR c',
+    'a OR "b c"',
+    'NOT "a b"',
+    '-"a (b"',
+    'fluttershy, (safe OR "a)b")',
+    'artist:foo (bar)',
+    'fluttershy OR (rarity, safe)',
+    '"princess luna", safe',
+    'a && "b)"',
   ]) {
     assert.equal(balanceUserQuery(text), text, text);
     assert.equal(groupHolds(text), true, text);
@@ -151,7 +222,24 @@ test('P4-F1: quoted terms where Philomena reads them stay as typed', () => {
 });
 
 test('P4-F1: fuzzed text never ends the group early', () => {
-  const pieces = ['a', 'b', ' ', '(', ')', '"', '\\', ',', '-', '!', ' OR ', ' AND ', ' || ', 'NOT ', '^2', 'x:y'];
+  const pieces = [
+    'a',
+    'b',
+    ' ',
+    '(',
+    ')',
+    '"',
+    '\\',
+    ',',
+    '-',
+    '!',
+    ' OR ',
+    ' AND ',
+    ' || ',
+    'NOT ',
+    '^2',
+    'x:y',
+  ];
   let seed = 4;
   const random = () => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -170,17 +258,34 @@ test('P4-F1: fuzzed text never ends the group early', () => {
 // P4-F2 — the upload's limits, counted the way Derpibooru counts them
 // ---------------------------------------------------------------------------------------------
 
-const valid = { key: 'fixtureKey123', url: 'https://picpony.top/uploads/fixture.png', tag_input: 'safe, pony, cute' };
-const submit = (body) => POST(new Request('https://app.invalid/upload/submit', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-}));
+const valid = {
+  key: 'fixtureKey123',
+  url: 'https://picpony.top/uploads/fixture.png',
+  tag_input: 'safe, pony, cute',
+};
+const submit = (body) =>
+  POST(
+    new Request('https://app.invalid/upload/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
 
 test('P4-F2: the description is measured in UTF-8 bytes, on the form and on the hop alike', async () => {
   assert.equal(limits.utf8Length('小马'), 6);
   assert.equal(limits.uploadDescriptionProblem('马'.repeat(16_666)), null, '49,998 bytes fit');
-  assert.match(limits.uploadDescriptionProblem('马'.repeat(20_000)) ?? '', /60000 字节/, '20,000 Chinese characters do not');
+  assert.match(
+    limits.uploadDescriptionProblem('马'.repeat(20_000)) ?? '',
+    /60000 字节/,
+    '20,000 Chinese characters do not',
+  );
   assert.equal(limits.uploadDescriptionProblem('a'.repeat(50_000)), null);
-  assert.equal(limits.uploadDescriptionProblem(` ${'a'.repeat(50_000)} \n`), null, 'measured trimmed, as sent');
+  assert.equal(
+    limits.uploadDescriptionProblem(` ${'a'.repeat(50_000)} \n`),
+    null,
+    'measured trimmed, as sent',
+  );
 
   const previous = globalThis.fetch;
   const forwarded = [];
@@ -223,7 +328,11 @@ test('P4-F2: the form and the hop agree on a source address and on the tag list'
   assert.equal(limits.uploadTagInput(null, ['pony']), 'pony');
 
   const page = source('app/upload/page.tsx');
-  assert.match(page, /uploadSourceUrl\(text\)/, 'the form checks a source with the hop\'s own function');
+  assert.match(
+    page,
+    /uploadSourceUrl\(text\)/,
+    "the form checks a source with the hop's own function",
+  );
   assert.match(page, /uploadDescriptionProblem\(draft\.description\)/);
   assert.match(page, /UPLOAD_MAX_TAG_INPUT/);
   assert.doesNotMatch(page, /Array\.from\(draft\.description\)\.length/, 'no character count left');
@@ -240,8 +349,15 @@ test('P4-F3: a reply that lands keeps the words typed and the target picked whil
   const composer = source('components/forum/ReplyComposer.tsx');
   assert.match(composer, /const sent = content;/);
   assert.match(composer, /setContent\(\(current\) => \(current === sent \? '' : current\)\)/);
-  assert.match(composer, /latestReplyTo\.current\?\.commentId === target\.commentId\) onCancelReply\(\)/);
-  assert.doesNotMatch(composer, /setContent\(''\);\n\s*onCancelReply\(\);/, 'no unconditional clear left');
+  assert.match(
+    composer,
+    /latestReplyTo\.current\?\.commentId === target\.commentId\) onCancelReply\(\)/,
+  );
+  assert.doesNotMatch(
+    composer,
+    /setContent\(''\);\n\s*onCancelReply\(\);/,
+    'no unconditional clear left',
+  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -258,7 +374,9 @@ function fakeEncoder(sizes) {
         const size = sizes[type]?.(quality) ?? 1;
         return { size, type };
       },
-      flatten() { calls.push('flatten'); },
+      flatten() {
+        calls.push('flatten');
+      },
     },
   };
 }
@@ -275,13 +393,23 @@ test('P4-F4: a large PNG is redrawn as a PNG when that fits, and only flattened 
   });
   const jpeg = await encodeWithinLimit(heavy.encoder, 'image/webp');
   assert.equal(jpeg.type, 'image/jpeg');
-  assert.deepEqual(heavy.calls, ['image/png@1', 'flatten', 'image/jpeg@0.9', 'image/jpeg@0.75', 'image/jpeg@0.6']);
+  assert.deepEqual(heavy.calls, [
+    'image/png@1',
+    'flatten',
+    'image/jpeg@0.9',
+    'image/jpeg@0.75',
+    'image/jpeg@0.6',
+  ]);
 
   const photo = fakeEncoder({ 'image/jpeg': () => FORUM_IMAGE_MAX_BYTES * 2 });
   const last = await encodeWithinLimit(photo.encoder, 'image/jpeg');
-  assert.equal(last.type, 'image/jpeg', 'the last step is taken as it is; the caller reports the size');
+  assert.equal(
+    last.type,
+    'image/jpeg',
+    'the last step is taken as it is; the caller reports the size',
+  );
   assert.equal(photo.calls[0], 'flatten', 'a photo never tries PNG');
-  assert.equal(photo.calls.at(-1), 'image/jpeg@0.3', 'the original front end\'s quality floor');
+  assert.equal(photo.calls.at(-1), 'image/jpeg@0.3', "the original front end's quality floor");
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -301,7 +429,9 @@ test('P4-F6: a large original arriving steadily past 45 s is packed; a crawl is 
         const body = new ReadableStream({
           start(controller) {
             /* As a real fetch does: an abort errors the body being read. */
-            init.signal.addEventListener('abort', () => controller.error(init.signal.reason), { once: true });
+            init.signal.addEventListener('abort', () => controller.error(init.signal.reason), {
+              once: true,
+            });
           },
           pull(controller) {
             return new Promise((resolve) => {
@@ -320,8 +450,11 @@ test('P4-F6: a large original arriving steadily past 45 s is packed; a crawl is 
         return new Response(body, { status: 200, headers: { 'content-type': 'image/png' } });
       };
       let done = false;
-      const outcome = packFavourites([{ id: 1, view_url: 'https://derpicdn.net/img/view/1.png' }], { lines: ['direct'] })
-        .finally(() => { done = true; });
+      const outcome = packFavourites([{ id: 1, view_url: 'https://derpicdn.net/img/view/1.png' }], {
+        lines: ['direct'],
+      }).finally(() => {
+        done = true;
+      });
       for (let step = 0; step < 40 && !done; step += 1) {
         await new Promise((resolve) => setImmediate(resolve));
         mock.timers.tick(10_000);
@@ -346,10 +479,14 @@ test('P4-F6: a large original arriving steadily past 45 s is packed; a crawl is 
 // P4-F7 — a share card draws only a Derpibooru or PicPony picture
 // ---------------------------------------------------------------------------------------------
 
-test('P4-F7: a share card\'s thumbnail is drawn only from Derpibooru\'s and PicPony\'s hosts', () => {
+test("P4-F7: a share card's thumbnail is drawn only from Derpibooru's and PicPony's hosts", () => {
   const real = 'https://derpicdn.net/img/2026/1/1/123/small.png';
   assert.equal(shareThumbSrc(real), real);
-  assert.equal(shareThumbSrc(`https://picponyapi.147052.xyz/?url=${encodeURIComponent(real)}`), real, 'a wrapped one is unwrapped');
+  assert.equal(
+    shareThumbSrc(`https://picponyapi.147052.xyz/?url=${encodeURIComponent(real)}`),
+    real,
+    'a wrapped one is unwrapped',
+  );
   for (const hostile of [
     'https://tracker.example/pixel.gif',
     'https://derpicdn.net.example/a.png',
@@ -360,7 +497,10 @@ test('P4-F7: a share card\'s thumbnail is drawn only from Derpibooru\'s and PicP
   ]) {
     assert.equal(shareThumbSrc(hostile), '', hostile);
   }
-  assert.match(source('app/messages/ShareCard.tsx'), /const thumb = shareThumbSrc\(target\.thumbUrl\)/);
+  assert.match(
+    source('app/messages/ShareCard.tsx'),
+    /const thumb = shareThumbSrc\(target\.thumbUrl\)/,
+  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -370,5 +510,8 @@ test('P4-F7: a share card\'s thumbnail is drawn only from Derpibooru\'s and PicP
 test('P4-F8: the switch loop asks for the list again once its writes have landed', () => {
   const page = source('app/block-groups/page.tsx');
   assert.match(page, /sentAny = true;/);
-  assert.match(page, /if \(sentAny && readToken\(\) === token\) blockGroups\.expire\(\{ token \}\);/);
+  assert.match(
+    page,
+    /if \(sentAny && readToken\(\) === token\) blockGroups\.expire\(\{ token \}\);/,
+  );
 });

@@ -21,7 +21,13 @@ import { GENDER_OPTIONS, optionsWith } from '@/lib/profileFields';
 import type { Role } from '@/lib/roles';
 import { copyText } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
-import { validateApiKey, validateEmail, validateNewPassword, validateUsername, PASSWORD_HINT } from '@/lib/validation';
+import {
+  validateApiKey,
+  validateEmail,
+  validateNewPassword,
+  validateUsername,
+  PASSWORD_HINT,
+} from '@/lib/validation';
 import { AdminForm, FormActions, FormGrid } from '../AdminForm';
 import { retryError } from '../queries';
 import Checkbox from '@/components/Checkbox';
@@ -89,24 +95,29 @@ export default function UserEditor({
 }) {
   /* Keep one `InlineEditorPanel` mounted across loading → loaded → revision updates so opening
      a row never plays the inline reveal twice; `FollowHeight` glides the height change in place. */
-  const accountKey = account ? `${account.id}:${account.account_revision}:${account.upstream_credential.revision}` : null;
+  const accountKey = account
+    ? `${account.id}:${account.account_revision}:${account.upstream_credential.revision}`
+    : null;
   const [state, setState] = useState<{
     key: string | null;
     baseline: AdminUserDetail | null;
     form: UserFormValues | null;
     errors: Partial<Record<FieldName, string>>;
-  }>(() => (account
-    ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
-    : { key: null, baseline: null, form: null, errors: {} }));
+  }>(() =>
+    account
+      ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
+      : { key: null, baseline: null, form: null, errors: {} },
+  );
   const badgesHeading = useId();
 
   /* Hold the last loaded snapshot while closing so an invalidated detail read cannot flash back
      to a loading skeleton mid-exit. */
-  const synced = state.key === accountKey || (!account && closing && state.baseline)
-    ? state
-    : (account
-      ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
-      : { key: null, baseline: null, form: null, errors: {} });
+  const synced =
+    state.key === accountKey || (!account && closing && state.baseline)
+      ? state
+      : account
+        ? { key: accountKey, baseline: account, form: initialUserForm(account), errors: {} }
+        : { key: null, baseline: null, form: null, errors: {} };
   if (synced !== state) setState(synced);
 
   const activeAccount = account ?? (closing ? synced.baseline : null);
@@ -116,7 +127,12 @@ export default function UserEditor({
   const choice = activeAccount ? roleChoice(viewer, activeAccount) : null;
   const id = (field: string) => `users-inline-${row.id}-${field}`;
 
-  const dirty = Boolean(baseline && form && choice && userUpdatePayload(baseline, form, choice.locked === null) !== null);
+  const dirty = Boolean(
+    baseline &&
+    form &&
+    choice &&
+    userUpdatePayload(baseline, form, choice.locked === null) !== null,
+  );
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
@@ -124,9 +140,8 @@ export default function UserEditor({
   const set = <K extends keyof UserFormValues>(field: K, value: UserFormValues[K]) => {
     setState((previous) => {
       if (!previous.form) return previous;
-      const nextErrors = field in previous.errors
-        ? { ...previous.errors, [field]: undefined }
-        : previous.errors;
+      const nextErrors =
+        field in previous.errors ? { ...previous.errors, [field]: undefined } : previous.errors;
       return { ...previous, form: { ...previous.form, [field]: value }, errors: nextErrors };
     });
   };
@@ -137,15 +152,20 @@ export default function UserEditor({
     const next: Partial<Record<FieldName, string>> = {};
     /* An unchanged name or address is not re-validated: an account older than a rule must still
        be editable without being renamed. */
-    if (form.username.trim() !== before.username) next.username = validateUsername(form.username) ?? undefined;
-    if (form.email.trim() !== before.email && form.email.trim()) next.email = validateEmail(form.email) ?? undefined;
+    if (form.username.trim() !== before.username)
+      next.username = validateUsername(form.username) ?? undefined;
+    if (form.email.trim() !== before.email && form.email.trim())
+      next.email = validateEmail(form.email) ?? undefined;
     if (form.password) next.password = validateNewPassword(form.password) ?? undefined;
     /* A changed key is held to the rule the user's own 账户 dialog and the upload hop share (review
        P6-F4); clearing it (an unbind) and an unchanged legacy key are not re-validated. */
-    if (form.apiKey.trim() && form.apiKey.trim() !== before.apiKey) next.apiKey = validateApiKey(form.apiKey) ?? undefined;
+    if (form.apiKey.trim() && form.apiKey.trim() !== before.apiKey)
+      next.apiKey = validateApiKey(form.apiKey) ?? undefined;
     if (Object.values(next).some(Boolean)) {
       setState((previous) => ({ ...previous, errors: next }));
-      const first = (['username', 'email', 'password', 'apiKey'] as const).find((field) => next[field]);
+      const first = (['username', 'email', 'password', 'apiKey'] as const).find(
+        (field) => next[field],
+      );
       if (first) document.getElementById(id(first === 'apiKey' ? 'api-key' : first))?.focus();
       return;
     }
@@ -158,19 +178,24 @@ export default function UserEditor({
     showToast((await copyText(password)) ? '已生成随机密码并复制' : '已生成随机密码', 'success');
   };
 
-  const contentState = activeAccount && form && choice ? 'ready' : detailError ? 'error' : 'loading';
+  const contentState =
+    activeAccount && form && choice ? 'ready' : detailError ? 'error' : 'loading';
   const badges = activeAccount ? userBadges(activeAccount.badges) : [];
   const facts = activeAccount
     ? [
         activeAccount.created_at ? `注册于 ${formatDateTime(activeAccount.created_at)}` : null,
         activeAccount.last_online ? `最近在线 ${formatDateTime(activeAccount.last_online)}` : null,
         activeAccount.ip_location ? `IP 属地 ${activeAccount.ip_location}` : null,
-        activeAccount.upstream_credential.upstream_name ? `Derpibooru：${activeAccount.upstream_credential.upstream_name}` : null,
+        activeAccount.upstream_credential.upstream_name
+          ? `Derpibooru：${activeAccount.upstream_credential.upstream_name}`
+          : null,
         activeAccount.active_sessions > 0 ? `${activeAccount.active_sessions} 个登录会话` : null,
       ].filter(Boolean)
     : [];
   const credential = activeAccount?.upstream_credential;
-  const keyState = credential?.has_key ? `当前已绑定${credential.key_hint ? `（${credential.key_hint}）` : ''}` : '当前未绑定';
+  const keyState = credential?.has_key
+    ? `当前已绑定${credential.key_hint ? `（${credential.key_hint}）` : ''}`
+    : '当前未绑定';
 
   return (
     <InlineEditorPanel
@@ -186,7 +211,11 @@ export default function UserEditor({
           <AdminForm onSubmit={submit}>
             <SectionHeading
               as="h3"
-              subtitle={facts.length > 0 ? <span className="tabular-nums">{facts.join(' · ')}</span> : undefined}
+              subtitle={
+                facts.length > 0 ? (
+                  <span className="tabular-nums">{facts.join(' · ')}</span>
+                ) : undefined
+              }
               aside={<RoleBadge role={activeAccount.role} showUser size="md" />}
             >
               <span className="tabular-nums">{`#${activeAccount.id} ${activeAccount.username}`}</span>
@@ -254,7 +283,10 @@ export default function UserEditor({
                     label="解除该用户的 API Key 绑定"
                     checked={form.clearKey}
                     disabled={saving}
-                    onChange={(checked) => { set('clearKey', checked); if (checked) set('apiKey', ''); }}
+                    onChange={(checked) => {
+                      set('clearKey', checked);
+                      if (checked) set('apiKey', '');
+                    }}
                   />
                 )}
               </div>
@@ -294,7 +326,9 @@ export default function UserEditor({
             />
             {badges.length > 0 && (
               <section aria-labelledby={badgesHeading} className="space-y-2">
-                <h4 id={badgesHeading} className="text-label-l text-on-surface-variant">已获得的徽章</h4>
+                <h4 id={badgesHeading} className="text-label-l text-on-surface-variant">
+                  已获得的徽章
+                </h4>
                 <ul className="flex flex-wrap gap-x-4 gap-y-2 pointer-coarse:gap-y-4">
                   {badges.map((badge) => (
                     <li key={badge.id} className="flex items-center gap-1 pointer-coarse:gap-4">

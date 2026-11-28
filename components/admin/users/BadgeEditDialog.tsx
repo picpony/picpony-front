@@ -49,7 +49,9 @@ export default function BadgeEditDialog({
   return (
     <Modal
       isOpen={open}
-      onClose={() => { if (!saving) onClose(); }}
+      onClose={() => {
+        if (!saving) onClose();
+      }}
       closeOnEscape={!saving}
       title="编辑徽章"
       maxWidth="md"
@@ -64,7 +66,12 @@ export default function BadgeEditDialog({
         </>
       }
     >
-      <AdminForm id={formId} onSubmit={submit} className="max-w-none" aria-label={`编辑 ${owner} 的徽章`}>
+      <AdminForm
+        id={formId}
+        onSubmit={submit}
+        className="max-w-none"
+        aria-label={`编辑 ${owner} 的徽章`}
+      >
         <Input
           label="徽章名称"
           value={name}

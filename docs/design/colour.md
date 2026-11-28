@@ -11,16 +11,16 @@ Palette derivation, token use, focus and forced-colour behaviour. Shape and elev
 - Prose links use `link` / `link-hover` with a rest-state underline.
 - Freeform user colours go through the existing colour or rich-text primitives; they are not component theme values.
 
-| Role | Use |
-| --- | --- |
-| `primary` + `on-primary` | Filled controls, active pagination, checked switches and brand containers |
-| `primary-ink` + `on-primary-ink` | Brand-coloured marks on a surface and foreground drawn on them (such as checked checkboxes) |
-| `on-primary-variant` | App-bar icons and wordmark only |
-| `secondary-container` pair | Tonal controls and committed selections |
-| `secondary-ink` | High-chroma ink in `secondary-container`'s hue family, for secondary-container and anticipatory press ripples |
-| `chip-selected` pair | Selected filter chips |
-| `outline-variant` | Dividers |
-| `outline` | Field boundaries |
+| Role                             | Use                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `primary` + `on-primary`         | Filled controls, active pagination, checked switches and brand containers                                     |
+| `primary-ink` + `on-primary-ink` | Brand-coloured marks on a surface and foreground drawn on them (such as checked checkboxes)                   |
+| `on-primary-variant`             | App-bar icons and wordmark only                                                                               |
+| `secondary-container` pair       | Tonal controls and committed selections                                                                       |
+| `secondary-ink`                  | High-chroma ink in `secondary-container`'s hue family, for secondary-container and anticipatory press ripples |
+| `chip-selected` pair             | Selected filter chips                                                                                         |
+| `outline-variant`                | Dividers                                                                                                      |
+| `outline`                        | Field boundaries                                                                                              |
 
 Filled-button labels, selection discs, badges and previews retain `on-primary`; do not use the app bar's quieter ink there.
 
@@ -42,16 +42,16 @@ Built-in source hues and guide citations live beside `THEMES`. Use the character
 
 `sky` (`天空`) adapts across eight contiguous local-time phases covering 00:00–24:00 (`SKY_PHASES` in [scripts/palette.mjs](../../scripts/palette.mjs); scheduling in `lib/skyPalette.ts`):
 
-| Phase | Label | Hours | Scheme |
-| --- | --- | --- | --- |
-| `midnight` | `静夜` | 00:00–04:00 | `dark` |
-| `predawn` | `拂晓` | 04:00–06:00 | `dark` |
-| `dawn` | `晨曦` | 06:00–09:00 | `light` |
-| `morning` | `清昼` | 09:00–13:00 | `light` |
+| Phase       | Label  | Hours       | Scheme  |
+| ----------- | ------ | ----------- | ------- |
+| `midnight`  | `静夜` | 00:00–04:00 | `dark`  |
+| `predawn`   | `拂晓` | 04:00–06:00 | `dark`  |
+| `dawn`      | `晨曦` | 06:00–09:00 | `light` |
+| `morning`   | `清昼` | 09:00–13:00 | `light` |
 | `afternoon` | `晴午` | 13:00–17:00 | `light` |
-| `sunset` | `暮霞` | 17:00–19:00 | `light` |
-| `twilight` | `薄暮` | 19:00–21:00 | `dark` |
-| `starlight` | `星夜` | 21:00–24:00 | `dark` |
+| `sunset`    | `暮霞` | 17:00–19:00 | `light` |
+| `twilight`  | `薄暮` | 19:00–21:00 | `dark`  |
+| `starlight` | `星夜` | 21:00–24:00 | `dark`  |
 
 - Each phase owns a single fixed scheme. While `sky` is active, light/dark switching (`跟随系统`, `主题模式` and the app-bar toggle) is disabled and OS scheme changes are ignored; the user's stored scheme preference is preserved and restored upon switching away from `sky`.
 - Under monochrome harmony (`data-palette-hues="mono"`), each phase follows `SchemeTonalSpot` from its primary hue with tertiary reading secondary.
@@ -67,11 +67,11 @@ Built-in source hues and guide citations live beside `THEMES`. Use the character
 - Measure `rampChroma` at `CHROMA_REFERENCE_TONE`, not the pale fill's own narrow gamut.
 - Stronger foreground derivation applies to built-ins and image recommendations. Manual and saved custom themes retain `exact-custom`.
 
-| Role | Built-in policy | Exact custom policy |
-| --- | --- | --- |
-| `on-primary` | White only if both fills reach 4.5:1; otherwise solve dark ink | Existing white-at-3:1 / P20 rule |
-| `primary-ink` | Target 4.6:1, assert at least 4.5:1 on actual surface/highest/selected containers | Existing page-only 2.9:1 light / 3:1 dark rule |
-| `on-primary-ink` | Solved per scheme against `primary-ink` to clear 4.5:1 (white in light, dark ramp tone in dark) | Same 4.5:1 pairing against `primary-ink` per scheme |
+| Role                 | Built-in policy                                                                                      | Exact custom policy                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `on-primary`         | White only if both fills reach 4.5:1; otherwise solve dark ink                                       | Existing white-at-3:1 / P20 rule                           |
+| `primary-ink`        | Target 4.6:1, assert at least 4.5:1 on actual surface/highest/selected containers                    | Existing page-only 2.9:1 light / 3:1 dark rule             |
+| `on-primary-ink`     | Solved per scheme against `primary-ink` to clear 4.5:1 (white in light, dark ramp tone in dark)      | Same 4.5:1 pairing against `primary-ink` per scheme        |
 | `on-primary-variant` | 75% of on-primary contrast, floored at 4.5:1 and capped at on-primary; near-white tint capped at C22 | Same, or unchanged on-primary when already below the floor |
 
 Keep `BRAND_SEED` / `BRAND_SEED_DARK` distinct from `BRAND_RAMP_SEED`. The first pair is the visible fill; the ramp seed retains the mascot's mane and its chroma basis.
@@ -84,12 +84,12 @@ The generator compares actual library palettes at the used tones. Do not replace
 
 ### Multi-hue harmony
 
-| Family | Meaning |
-| --- | --- |
-| `secondary*` | Character's second colour; broad selections and tracks |
-| `tertiary*` | Small accents: selected favourite/like, level meter and status glyph |
-| `focus`, `chip-selected` | TonalSpot secondary in both harmony modes |
-| Default-theme neutrals | Mascot coat hues on the shared neutral ladders |
+| Family                   | Meaning                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `secondary*`             | Character's second colour; broad selections and tracks               |
+| `tertiary*`              | Small accents: selected favourite/like, level meter and status glyph |
+| `focus`, `chip-selected` | TonalSpot secondary in both harmony modes                            |
+| Default-theme neutrals   | Mascot coat hues on the shared neutral ladders                       |
 
 Second colours may coincide between characters. Keep their documented sources rather than inventing separation.
 
@@ -101,15 +101,15 @@ Severity roles, categorical accents and media roles do not follow the theme. The
 
 One displayed hex is installed exactly. Recommendation generation happens before display, never again during confirmation. Stored seeds, manual choices and saved specs retain their exact derivation.
 
-| Responsibility | Owner |
-| --- | --- |
-| Derivation | `lib/paletteRule.ts`, usable by server and client |
-| Import-free stored format | `lib/paletteSpec.ts` |
-| Exact colour and companion hue | `ColorPicker` |
-| Image recommendations | `ImagePalettePicker`, `lib/imageRecommendations.ts` |
-| Shared result preview | `PalettePreview`, `PaletteTileFace` |
-| Lazy loading | `lib/paletteLazy.ts` |
-| Installation | `applyCustomPalette` in `lib/appearance.ts` |
+| Responsibility                 | Owner                                               |
+| ------------------------------ | --------------------------------------------------- |
+| Derivation                     | `lib/paletteRule.ts`, usable by server and client   |
+| Import-free stored format      | `lib/paletteSpec.ts`                                |
+| Exact colour and companion hue | `ColorPicker`                                       |
+| Image recommendations          | `ImagePalettePicker`, `lib/imageRecommendations.ts` |
+| Shared result preview          | `PalettePreview`, `PaletteTileFace`                 |
+| Lazy loading                   | `lib/paletteLazy.ts`                                |
+| Installation                   | `applyCustomPalette` in `lib/appearance.ts`         |
 
 ### Storage and first paint
 
@@ -155,17 +155,17 @@ Arrow keys choose a palette, Home/End choose endpoints. Guard rapid changes agai
 
 ## Surface and media roles
 
-| Component | Container |
-| --- | --- |
-| Filled Card | `surface-container-highest` |
-| Elevated Card | `surface-container` |
-| Outlined Card | `surface` with `outline-variant` |
-| Dialog | `surface-container-high` |
-| Sheet and drawer | `surface-container-low` |
-| Ordinary menu/popover | `surface-container` |
-| Search suggestions and filled field | `surface-container-highest` |
-| Plain tooltip | `inverse-surface` |
-| Progress/slider track | `secondary-container` |
+| Component                           | Container                        |
+| ----------------------------------- | -------------------------------- |
+| Filled Card                         | `surface-container-highest`      |
+| Elevated Card                       | `surface-container`              |
+| Outlined Card                       | `surface` with `outline-variant` |
+| Dialog                              | `surface-container-high`         |
+| Sheet and drawer                    | `surface-container-low`          |
+| Ordinary menu/popover               | `surface-container`              |
+| Search suggestions and filled field | `surface-container-highest`      |
+| Plain tooltip                       | `inverse-surface`                |
+| Progress/slider track               | `secondary-container`            |
 
 Dialog rows step to `surface-container-highest`, and filled `DropZone` uses `surface="dialog"` to step to `surface-container-highest` inside dialogs. When a dialog row hosts filled `surface-container-highest` controls (such as `SettingsRow surface="dialog"`), the row steps down to `surface-container` instead so its controls keep a distinct edge. Quote surfaces follow their host; see [rich text](typography-and-copy.md#colour-media-and-links). Elevation levels are owned by [Surfaces](surfaces.md#elevation).
 
@@ -191,13 +191,13 @@ Filled-field hover composites the on-surface state layer in `fieldset::before`; 
 
 The ordinary ring is the theme's TonalSpot secondary in both harmony modes. It identifies keyboard position consistently; it is not recoloured for each button variant.
 
-| Context | Treatment |
-| --- | --- |
-| Ordinary control | `focus-visible:ring-2 focus-ring` |
-| App bar | `focus-ring-on-primary` |
-| Photograph | Inset ring with `focus-ring-on-media` over a media plate |
-| Paint-clipped control | `focus-visible:inset-ring-2 focus-visible:focus-ring-inset` |
-| Floating companion without a plate | Shared ring plus 2 px `ring-offset-surface` |
+| Context                            | Treatment                                                   |
+| ---------------------------------- | ----------------------------------------------------------- |
+| Ordinary control                   | `focus-visible:ring-2 focus-ring`                           |
+| App bar                            | `focus-ring-on-primary`                                     |
+| Photograph                         | Inset ring with `focus-ring-on-media` over a media plate    |
+| Paint-clipped control              | `focus-visible:inset-ring-2 focus-visible:focus-ring-inset` |
+| Floating companion without a plate | Shared ring plus 2 px `ring-offset-surface`                 |
 
 An outset ring is over the surrounding page, so filled buttons retain the ordinary ring. The app-bar exception is for controls on the bar.
 

@@ -139,7 +139,11 @@ export class HeroRouteRegistry {
          off to, and that is a final answer rather than a not-yet — so it satisfies the wait.
          `handoffOpening` never reads `route.target`; the closing path does, and already
          falls back to a plain history collapse when it is null. */
-      if (requirePreview && !route.resolvedWithoutMedia && (!route.previewPaintable || !route.target))
+      if (
+        requirePreview &&
+        !route.resolvedWithoutMedia &&
+        (!route.previewPaintable || !route.target)
+      )
         continue;
       if (!candidate || route.epoch > candidate.epoch) candidate = route;
     }
@@ -210,7 +214,11 @@ export class HeroRouteRegistry {
   freeze(
     route: HeroRoute,
     owner: symbol,
-    { deferInert = false, scrollPlane, onShieldTap }: {
+    {
+      deferInert = false,
+      scrollPlane,
+      onShieldTap,
+    }: {
       deferInert?: boolean;
       scrollPlane?: HeroScrollPlane;
       onShieldTap?: (x: number, y: number) => void;
@@ -257,7 +265,9 @@ export class HeroRouteRegistry {
         leaseAttribute(route.overlay, cut, cutValue),
         route.floatingBack ? leaseAttribute(route.floatingBack, cut, cutValue) : null,
         leaseInlineStyles(route.overlay, { pointerEvents: 'none' }),
-        route.floatingBack ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' }) : null,
+        route.floatingBack
+          ? leaseInlineStyles(route.floatingBack, { pointerEvents: 'none' })
+          : null,
       );
       removeShield();
     };
@@ -323,7 +333,6 @@ export class HeroRouteRegistry {
     return seal;
   }
 }
-
 
 /** How long a press that began on a close's shield may take to count as a tap. */
 const SHIELD_TAP_MAX_MS = 600;

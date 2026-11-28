@@ -18,16 +18,26 @@ globalThis.localStorage = {
 const events = [];
 globalThis.window = {
   requestAnimationFrame: (callback) => setTimeout(callback, 0),
-  addEventListener() {}, removeEventListener() {},
-  dispatchEvent(event) { events.push(event.type); return true; },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent(event) {
+    events.push(event.type);
+    return true;
+  },
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
 };
 globalThis.document = {
-  visibilityState: 'visible', hidden: false, activeElement: null, cookie: '',
-  addEventListener() {}, removeEventListener() {},
+  visibilityState: 'visible',
+  hidden: false,
+  activeElement: null,
+  cookie: '',
+  addEventListener() {},
+  removeEventListener() {},
 };
-globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
+globalThis.fetch = async (url) => {
+  throw new Error(`Unexpected network request: ${url}`);
+};
 
 const route = await import('../lib/route.ts');
 const hooks = await import('../lib/hooks.ts');
@@ -40,21 +50,33 @@ const { LS_KEYS } = await import('../lib/constants.ts');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test('P2-F3: only the host is canonicalised, never a query that mentions trixiebooru', () => {
-  const searched = 'https://trixiebooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k';
+  const searched =
+    'https://trixiebooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k';
   assert.equal(
     route.canonicalDerpiUrl(searched),
     'https://derpibooru.org/api/v1/json/search/images?q=source_url%3A*trixiebooru.org*&key=k',
   );
   /* The query used to be rewritten and the host left as it was when the query came first. */
   const queryFirst = 'https://derpibooru.org/api/v1/json/search/images?q=trixiebooru.org';
-  assert.equal(route.canonicalDerpiUrl(queryFirst), queryFirst, 'a canonical URL is left exactly as it is');
-  assert.equal(route.canonicalDerpiUrl('https://www.trixiebooru.org/api/v1/json/images/1'), 'https://derpibooru.org/api/v1/json/images/1');
+  assert.equal(
+    route.canonicalDerpiUrl(queryFirst),
+    queryFirst,
+    'a canonical URL is left exactly as it is',
+  );
+  assert.equal(
+    route.canonicalDerpiUrl('https://www.trixiebooru.org/api/v1/json/images/1'),
+    'https://derpibooru.org/api/v1/json/images/1',
+  );
   assert.equal(route.canonicalDerpiUrl('/relative/trixiebooru.org'), '/relative/trixiebooru.org');
   /* Keyless: a keyed read never takes the third-party worker (review P1-F11 / P2-O1). */
   const accel = route.buildApiLineUrl(searched.replace('&key=k', ''), 'api_accel');
   const inner = decodeURIComponent(accel.slice(accel.indexOf('?url=') + 5));
   assert.equal(new URL(inner).hostname, 'derpibooru.org');
-  assert.match(new URL(inner).searchParams.get('q'), /trixiebooru\.org/, 'the search the user typed reaches the worker intact');
+  assert.match(
+    new URL(inner).searchParams.get('q'),
+    /trixiebooru\.org/,
+    'the search the user typed reaches the worker intact',
+  );
 });
 
 test('P2-F4: a new stay on the backup line checks home after 10s, whatever the last stay reached', async (t) => {
@@ -85,20 +107,38 @@ test('P2-F4: a new stay on the backup line checks home after 10s, whatever the l
   t.mock.timers.tick(10_000);
   await flush();
   assert.equal(probes.length, 5, 'the first check of the new stay is ten seconds in, not 160');
-  globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
+  globalThis.fetch = async (url) => {
+    throw new Error(`Unexpected network request: ${url}`);
+  };
 });
 
 test('P2-F5: a link the browser resolves to another host is never internal', () => {
-  for (const href of ['/\\evil.example/x', '/\t/evil.example', '/\n/evil.example', '//evil.example', 'https://evil.example/forum/1']) {
+  for (const href of [
+    '/\\evil.example/x',
+    '/\t/evil.example',
+    '/\n/evil.example',
+    '//evil.example',
+    'https://evil.example/forum/1',
+  ]) {
     assert.equal(isInternalHref(href), false, JSON.stringify(href));
   }
-  for (const href of ['/forum/12', 'https://picpony.top/forum/5', 'https://www.picpony.top/pic/1?x=1#c']) {
+  for (const href of [
+    '/forum/12',
+    'https://picpony.top/forum/5',
+    'https://www.picpony.top/pic/1?x=1#c',
+  ]) {
     assert.equal(isInternalHref(href), true, href);
   }
-  assert.equal(isInternalHref('relative/path'), false, 'a document-relative link depends on its page');
+  assert.equal(
+    isInternalHref('relative/path'),
+    false,
+    'a document-relative link depends on its page',
+  );
   assert.equal(isInternalHref('/api.php?action=x'), false);
   /* What the published BBCode does with it: an external link opens beside the app, with no opener. */
-  const html = bbcodeToSafeHtml('[url=/\\evil.example/login]登录[/url]', { isInternal: isInternalHref });
+  const html = bbcodeToSafeHtml('[url=/\\evil.example/login]登录[/url]', {
+    isInternal: isInternalHref,
+  });
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 });
 
@@ -116,14 +156,27 @@ test('P2-F10: clearing a session answers true once, even when storage refuses th
   events.length = 0;
   hooks.writeUserInfo({ token: 'stuck', username: 'pony' });
   const stored = globalThis.localStorage;
-  globalThis.localStorage = { ...stored, removeItem: () => { throw new Error('SecurityError'); } };
+  globalThis.localStorage = {
+    ...stored,
+    removeItem: () => {
+      throw new Error('SecurityError');
+    },
+  };
   try {
     assert.equal(hooks.clearUserInfo('stuck'), true, 'the first 401 ends the session');
-    assert.equal(hooks.clearUserInfo('stuck'), false, 'a second 401 for the same token is not a second ending');
+    assert.equal(
+      hooks.clearUserInfo('stuck'),
+      false,
+      'a second 401 for the same token is not a second ending',
+    );
   } finally {
     globalThis.localStorage = stored;
   }
-  assert.equal(events.filter((type) => type === 'user_info_updated').length, 2, 'one for the sign-in, one for the ending');
+  assert.equal(
+    events.filter((type) => type === 'user_info_updated').length,
+    2,
+    'one for the sign-in, one for the ending',
+  );
   /* A new sign-in with the same token (storage that never let go of it) can be ended again. */
   hooks.writeUserInfo({ token: 'stuck', username: 'pony' });
   assert.equal(hooks.clearUserInfo('stuck'), true);
@@ -134,16 +187,30 @@ test('P2-F7: one parser for the upstream origin, failing loudly on a malformed o
   assert.equal(parseUpstreamOrigin('  '), DEFAULT_UPSTREAM_ORIGIN);
   assert.equal(parseUpstreamOrigin('http://127.0.0.1:4100/'), 'http://127.0.0.1:4100');
   assert.equal(parseUpstreamOrigin('https://staging.picpony.top'), 'https://staging.picpony.top');
-  for (const bad of ['picpony.top', 'ftp://x.test', 'https://x.test/api.php', 'https://u:p@x.test', 'https://x.test?a=1']) {
+  for (const bad of [
+    'picpony.top',
+    'ftp://x.test',
+    'https://x.test/api.php',
+    'https://u:p@x.test',
+    'https://x.test?a=1',
+  ]) {
     assert.throws(() => parseUpstreamOrigin(bad), /PICPONY_UPSTREAM_ORIGIN/, bad);
   }
   /* No reader keeps a private copy of the override, or of its default. */
   const readers = [
     /* `app/share.php/route.ts` redirects a short link to the backend's preview page on its origin. */
-    'app/api/v1/[...path]/route.ts', 'app/share.php/route.ts', 'app/mascot-shape/route.ts', 'app/search/semantic.server.ts',
-    'lib/blockFilters.server.ts', 'lib/detail.server.ts',
-    'lib/forum.server.ts', 'lib/maintenance.server.ts', 'lib/profile.server.ts', 'lib/route.server.ts',
-    'lib/team.server.ts', 'next.config.ts',
+    'app/api/v1/[...path]/route.ts',
+    'app/share.php/route.ts',
+    'app/mascot-shape/route.ts',
+    'app/search/semantic.server.ts',
+    'lib/blockFilters.server.ts',
+    'lib/detail.server.ts',
+    'lib/forum.server.ts',
+    'lib/maintenance.server.ts',
+    'lib/profile.server.ts',
+    'lib/route.server.ts',
+    'lib/team.server.ts',
+    'next.config.ts',
   ];
   for (const file of readers) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');

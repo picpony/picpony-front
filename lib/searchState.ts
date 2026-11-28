@@ -7,15 +7,25 @@
  * rank by — see `queryHasRanking`. The list is also the allowlist a URL's `sort=` passes.
  */
 export const SEARCH_SORT_FIELDS = [
-  'created_at', 'updated_at', 'score', '_score', 'wilson_score',
-  'width', 'height', 'size', 'random',
+  'created_at',
+  'updated_at',
+  'score',
+  '_score',
+  'wilson_score',
+  'width',
+  'height',
+  'size',
+  'random',
 ] as const;
 
 /**
  * Values this app wrote before, and what they mean now: `relevance` was always meant to be
  * `_score`; `hotness` had no Philomena equivalent and is simply gone.
  */
-const LEGACY_SORTS: Record<string, string | undefined> = { relevance: '_score', hotness: undefined };
+const LEGACY_SORTS: Record<string, string | undefined> = {
+  relevance: '_score',
+  hotness: undefined,
+};
 
 export function searchSort(value: string | null | undefined, fallback = 'created_at'): string {
   if (!value) return fallback;
@@ -42,10 +52,12 @@ export function defaultSearchSort(value: string | null | undefined): string {
  */
 export function queryHasRanking(query: string | null | undefined): boolean {
   if (!query) return false;
-  return /(?:^|[\s(,])(?:OR|\|\|)(?=[\s(]|$)/.test(query) ||
+  return (
+    /(?:^|[\s(,])(?:OR|\|\|)(?=[\s(]|$)/.test(query) ||
     /\^\s*\d/.test(query) ||
     /~/.test(query) ||
-    /(?:^|[\s(,!-])(?:description|source_url)\s*:/i.test(query);
+    /(?:^|[\s(,!-])(?:description|source_url)\s*:/i.test(query)
+  );
 }
 
 /**
@@ -53,7 +65,11 @@ export function queryHasRanking(query: string | null | undefined): boolean {
  * `fallback` (itself never `_score`). A URL carrying `sort=_score` for a plain tag query then
  * shows and runs the default order, rather than 相关性 that means 最新.
  */
-export function effectiveSearchSort(value: string | null | undefined, fallback: string, query: string): string {
+export function effectiveSearchSort(
+  value: string | null | undefined,
+  fallback: string,
+  query: string,
+): string {
   const safeFallback = defaultSearchSort(fallback);
   const sort = searchSort(value, safeFallback);
   return sort === '_score' && !queryHasRanking(query) ? safeFallback : sort;
@@ -113,9 +129,17 @@ export interface SearchLocation {
 export function readSearchLocation(params: URLSearchParams): SearchLocation {
   const image = params.get('image');
   const pinned = params.get('tags');
-  const tags = pinned === null ? null : [...new Set(
-    pinned.split(',').map((tag) => tag.trim()).filter(Boolean),
-  )].slice(0, MAX_PINNED_TAGS);
+  const tags =
+    pinned === null
+      ? null
+      : [
+          ...new Set(
+            pinned
+              .split(',')
+              .map((tag) => tag.trim())
+              .filter(Boolean),
+          ),
+        ].slice(0, MAX_PINNED_TAGS);
   return {
     query: (params.get('q') ?? '').trim(),
     sort: params.get('sort') ?? '',
@@ -158,7 +182,8 @@ export function searchHref(
  */
 export function legacySharedSearchHref(hash: string): string | null {
   const fragment = hash.replace(/^#/, '');
-  if (!fragment.startsWith('mode=shared_search') && !fragment.startsWith('mode=shared_tag_group')) return null;
+  if (!fragment.startsWith('mode=shared_search') && !fragment.startsWith('mode=shared_tag_group'))
+    return null;
   const params = new URLSearchParams(fragment);
   const query = (params.get('q') ?? '').trim();
   if (!query || query === '*') return '/search';

@@ -2,7 +2,12 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import HomeContent from './HomeContent';
-import { featuredOnImageLine, readFeatured, readHomeFeed, seedOnImageLine } from '@/lib/feed.server';
+import {
+  featuredOnImageLine,
+  readFeatured,
+  readHomeFeed,
+  seedOnImageLine,
+} from '@/lib/feed.server';
 import { COOKIE_KEYS } from '@/lib/constants';
 import { parseFingerprintCookie, parseSortField } from '@/lib/searchQuery';
 import { searchPage } from '@/lib/searchState';
@@ -71,9 +76,16 @@ function HomeGallerySkeleton() {
   return (
     <div className="max-w-7xl mx-auto">
       <FeaturedBannerSkeleton />
-      <div className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6" aria-hidden="true">
-        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">全部</span>
-        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">本站讨论</span>
+      <div
+        className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6"
+        aria-hidden="true"
+      >
+        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">
+          全部
+        </span>
+        <span className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">
+          本站讨论
+        </span>
       </div>
       <ImageGridSkeleton />
     </div>
@@ -109,5 +121,10 @@ async function SeededHome({ searchParams }: { searchParams: HomeSearchParams }) 
     discussed ? Promise.resolve(null) : readHomeFeed(fp, sort, page),
     readFeatured(fp),
   ]);
-  return <HomeContent seed={seedOnImageLine(feed, line)} featured={featuredOnImageLine(featured, line)} />;
+  return (
+    <HomeContent
+      seed={seedOnImageLine(feed, line)}
+      featured={featuredOnImageLine(featured, line)}
+    />
+  );
 }

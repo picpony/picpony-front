@@ -72,7 +72,15 @@ export function GroupRow({
           <h2 className="line-clamp-2 text-title-m wrap-anywhere" title={name}>
             {name}
           </h2>
-          <p className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>{summary}</p>
+          <p
+            className={cn(
+              'text-body-s tabular-nums',
+              STATE_TRANSITION,
+              !active && 'text-on-surface-variant',
+            )}
+          >
+            {summary}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {control}
@@ -120,7 +128,14 @@ export function GroupMenu({
         loading={busy}
         onClick={() => setOpen((value) => !value)}
       />
-      <Menu open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} aria-label={label} items={items} onSelect={onSelect} />
+      <Menu
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={anchorRef}
+        aria-label={label}
+        items={items}
+        onSelect={onSelect}
+      />
     </>
   );
 }
@@ -149,7 +164,14 @@ export function TagMarks({
   return (
     <div className="flex min-w-0 items-start gap-2">
       {icon && (
-        <span className={cn('flex h-5 shrink-0 items-center [&>svg]:block', STATE_TRANSITION, !active && 'text-on-surface-variant')} aria-hidden="true">
+        <span
+          className={cn(
+            'flex h-5 shrink-0 items-center [&>svg]:block',
+            STATE_TRANSITION,
+            !active && 'text-on-surface-variant',
+          )}
+          aria-hidden="true"
+        >
           {icon}
         </span>
       )}
@@ -160,7 +182,15 @@ export function TagMarks({
           </li>
         ))}
         {rest > 0 && (
-          <li className={cn('text-body-s tabular-nums', STATE_TRANSITION, !active && 'text-on-surface-variant')}>+{rest}</li>
+          <li
+            className={cn(
+              'text-body-s tabular-nums',
+              STATE_TRANSITION,
+              !active && 'text-on-surface-variant',
+            )}
+          >
+            +{rest}
+          </li>
         )}
       </ul>
     </div>

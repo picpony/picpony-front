@@ -162,7 +162,9 @@ function readColours(host: HTMLElement, scheme: 'light' | 'dark'): PlateColours 
   const style = getComputedStyle(host);
   const probe = document.createElement('canvas').getContext('2d');
   const token = (name: string, fallback: string) =>
-    probe ? parseColor(probe, style.getPropertyValue(name) || fallback) : ([0, 0, 0] as [number, number, number]);
+    probe
+      ? parseColor(probe, style.getPropertyValue(name) || fallback)
+      : ([0, 0, 0] as [number, number, number]);
   /* The glass body is a token pair rather than a literal, so the band's own background and
      the wordmark's keyline can be painted the same colour — a literal halo around the mark
      read as a visible outline instead. */
@@ -198,7 +200,9 @@ class GlassPlate {
     const vs = compile(gl, gl.VERTEX_SHADER, FLUTED_GLASS_VERTEX_SHADER);
     const backdropFs = compile(gl, gl.FRAGMENT_SHADER, FLUTED_GLASS_BACKDROP_SHADER);
     const glassFs = compile(gl, gl.FRAGMENT_SHADER, FLUTED_GLASS_SHADER);
-    const shaders = [vs, backdropFs, glassFs].filter((shader): shader is WebGLShader => shader !== null);
+    const shaders = [vs, backdropFs, glassFs].filter(
+      (shader): shader is WebGLShader => shader !== null,
+    );
     const backdropProgram = vs && backdropFs ? link(gl, vs, backdropFs) : null;
     const glassProgram = vs && glassFs && backdropProgram ? link(gl, vs, glassFs) : null;
     if (!backdropProgram || !glassProgram) {
@@ -237,7 +241,17 @@ class GlassPlate {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, TRAIL_SIZE, TRAIL_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, neutral);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      TRAIL_SIZE,
+      TRAIL_SIZE,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      neutral,
+    );
 
     /* Pass 1's target. sRGB-encoded 8-bit — see `lib/flutedGlass.ts`: linear in eight bits
        would put the dark scheme's whole plate inside six code values. LINEAR filtering because
@@ -254,17 +268,46 @@ class GlassPlate {
     this.framebuffer = gl.createFramebuffer();
 
     const names = [
-      'uResolution', 'uTrail', 'uColorA', 'uColorB', 'uInkBase', 'uInkLeft', 'uInkRight', 'uInkUp',
-      'uInkDown', 'uDetail', 'uBlend', 'uRamp', 'uStretch', 'uSwirlTime',
+      'uResolution',
+      'uTrail',
+      'uColorA',
+      'uColorB',
+      'uInkBase',
+      'uInkLeft',
+      'uInkRight',
+      'uInkUp',
+      'uInkDown',
+      'uDetail',
+      'uBlend',
+      'uRamp',
+      'uStretch',
+      'uSwirlTime',
     ];
     const glassNames = [
-      'uResolution', 'uBackdrop', 'uHighlightColor', 'uFrequency', 'uCosA', 'uSinA', 'uExponent',
-      'uRefraction', 'uAberration', 'uLightX', 'uLightZ', 'uSpecExponent', 'uHighlight', 'uFlank',
-      'uGrain', 'uGrainBias', 'uFluteOffset', 'uGrainSeed',
+      'uResolution',
+      'uBackdrop',
+      'uHighlightColor',
+      'uFrequency',
+      'uCosA',
+      'uSinA',
+      'uExponent',
+      'uRefraction',
+      'uAberration',
+      'uLightX',
+      'uLightZ',
+      'uSpecExponent',
+      'uHighlight',
+      'uFlank',
+      'uGrain',
+      'uGrainBias',
+      'uFluteOffset',
+      'uGrainSeed',
     ];
     this.uniforms = {};
-    for (const name of names) this.uniforms[`b.${name}`] = gl.getUniformLocation(backdropProgram, name);
-    for (const name of glassNames) this.uniforms[`g.${name}`] = gl.getUniformLocation(glassProgram, name);
+    for (const name of names)
+      this.uniforms[`b.${name}`] = gl.getUniformLocation(backdropProgram, name);
+    for (const name of glassNames)
+      this.uniforms[`g.${name}`] = gl.getUniformLocation(glassProgram, name);
     const u = this.uniforms;
 
     /* --- Pass 1's constants ------------------------------------------------------------ */
@@ -322,7 +365,13 @@ class GlassPlate {
     gl.bindTexture(gl.TEXTURE_2D, this.backdropTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.backdropTexture, 0);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      this.backdropTexture,
+      0,
+    );
     this.complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     if (!this.complete && process.env.NODE_ENV !== 'production' && !gl.isContextLost()) {
@@ -365,7 +414,17 @@ class GlassPlate {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.trailTexture);
     if (trail) {
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TRAIL_SIZE, TRAIL_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, trail);
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0,
+        0,
+        TRAIL_SIZE,
+        TRAIL_SIZE,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        trail,
+      );
     }
     gl.uniform1f(u['b.uSwirlTime'], seconds * SWIRL_DEFAULTS.speed);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -541,7 +600,8 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       const seconds = delta / 1000 / Math.max(scaleRef.current, 0.01);
       const awake = performance.now() < wakeUntil;
       const target = awake ? 1 : 0;
-      rate += (target - rate) * (1 - Math.exp(-seconds / (target > rate ? WAKE_TAU_S : REST_TAU_S)));
+      rate +=
+        (target - rate) * (1 - Math.exp(-seconds / (target > rate ? WAKE_TAU_S : REST_TAU_S)));
       if (!awake && rate < 0.002) rate = 0;
       elapsed += seconds * rate;
       if (pointerDirty) {
@@ -582,7 +642,10 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
       const rect = host.getBoundingClientRect();
       const raw = clamp(window.devicePixelRatio || 1, 1, 2);
       const dpr = Math.min(raw, MAX_DEVICE_WIDTH / Math.max(rect.width, 1));
-      return { w: Math.max(1, Math.round(rect.width * dpr)), h: Math.max(1, Math.round(rect.height * dpr)) };
+      return {
+        w: Math.max(1, Math.round(rect.width * dpr)),
+        h: Math.max(1, Math.round(rect.height * dpr)),
+      };
     };
     const applySize = () => {
       const { w, h } = measure();
@@ -781,7 +844,11 @@ export default function FlutedGlass({ className = '' }: { className?: string }) 
   }, []);
 
   return (
-    <div ref={hostRef} aria-hidden className={cn('pointer-events-none absolute inset-0 rounded-[inherit]', className)}>
+    <div
+      ref={hostRef}
+      aria-hidden
+      className={cn('pointer-events-none absolute inset-0 rounded-[inherit]', className)}
+    >
       <canvas ref={canvasRef} className="block h-full w-full rounded-[inherit]" />
     </div>
   );

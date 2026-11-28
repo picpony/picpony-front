@@ -49,12 +49,7 @@ export { findImageHeroCardLink } from './dom';
 export { warmImageHeroFrame } from './frameCache';
 export { isScrollLikelyActive, isScrollMoving } from './input';
 export { publishWhenHeroSettled } from './publish';
-export {
-  canAnimateImageHero,
-  prepareImageHero,
-  warmImageHero,
-  warmImageHeroSource,
-} from './media';
+export { canAnimateImageHero, prepareImageHero, warmImageHero, warmImageHeroSource } from './media';
 
 // --- Intents -------------------------------------------------------------
 

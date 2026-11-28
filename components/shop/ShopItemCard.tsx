@@ -44,16 +44,36 @@ export function shopImageProps(imageUrl: string): { src: string; unoptimized: bo
 }
 
 /** The item's picture in the card's square, or the gift glyph the original shop drew without one. */
-function ItemPicture({ item, sizes, iconSize = ICON.display }: { item: ShopItem; sizes: string; iconSize?: number }) {
+function ItemPicture({
+  item,
+  sizes,
+  iconSize = ICON.display,
+}: {
+  item: ShopItem;
+  sizes: string;
+  iconSize?: number;
+}) {
   const picture = shopImageProps(item.imageUrl);
   if (!picture) {
     return (
-      <div className="grid h-full w-full place-items-center text-on-surface-variant" aria-hidden="true">
+      <div
+        className="grid h-full w-full place-items-center text-on-surface-variant"
+        aria-hidden="true"
+      >
         <MdCardGiftcard size={iconSize} />
       </div>
     );
   }
-  return <FadeInImage src={picture.src} unoptimized={picture.unoptimized} alt="" fill sizes={sizes} className="object-cover" />;
+  return (
+    <FadeInImage
+      src={picture.src}
+      unoptimized={picture.unoptimized}
+      alt=""
+      fill
+      sizes={sizes}
+      className="object-cover"
+    />
+  );
 }
 
 /** The item's picture at a cart line's 48dp. */
@@ -105,7 +125,10 @@ export default function ShopItemCard({
       <div className="@container/card flex flex-1 flex-col p-4">
         <h3 className="line-clamp-2 wrap-anywhere text-title-m text-on-surface">{item.name}</h3>
         {item.description && (
-          <p className="mt-1 line-clamp-2 wrap-anywhere text-body-s text-on-surface-variant" title={item.description}>
+          <p
+            className="mt-1 line-clamp-2 wrap-anywhere text-body-s text-on-surface-variant"
+            title={item.description}
+          >
             {item.description}
           </p>
         )}
@@ -115,7 +138,11 @@ export default function ShopItemCard({
               to be the glyph's bottom edge, 5px off the stock beside it). */}
           <p className="flex flex-wrap items-baseline gap-x-1">
             <span className="inline-flex items-baseline gap-1 text-title-m-emphasized whitespace-nowrap text-on-surface tabular-nums">
-              <MdToll size={ICON.dense} className="self-center text-primary-ink" aria-hidden="true" />
+              <MdToll
+                size={ICON.dense}
+                className="self-center text-primary-ink"
+                aria-hidden="true"
+              />
               {formatExactCount(item.price)}
             </span>
             <span className={cn('text-body-s text-on-surface-variant', NARROW_UNSEEN)}>金币</span>
@@ -130,7 +157,13 @@ export default function ShopItemCard({
         </div>
         <div className="mt-2">
           {action.kind === 'add' && (
-            <Button variant="tonal" fullWidth icon={<MdAddShoppingCart />} aria-label="加入购物车" onClick={action.onAdd}>
+            <Button
+              variant="tonal"
+              fullWidth
+              icon={<MdAddShoppingCart />}
+              aria-label="加入购物车"
+              onClick={action.onAdd}
+            >
               加入<span className={NARROW_HIDDEN}>购物车</span>
             </Button>
           )}
@@ -145,7 +178,13 @@ export default function ShopItemCard({
             </Button>
           )}
           {action.kind === 'sign-in' && (
-            <Button variant="tonal" fullWidth icon={<MdLogin />} aria-label="登录后购买" onClick={action.onSignIn}>
+            <Button
+              variant="tonal"
+              fullWidth
+              icon={<MdLogin />}
+              aria-label="登录后购买"
+              onClick={action.onSignIn}
+            >
               登录<span className={NARROW_HIDDEN}>后购买</span>
             </Button>
           )}

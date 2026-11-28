@@ -44,17 +44,27 @@ interface Cell {
 const SECTIONS: { title: string; cells: Cell[] }[] = [
   {
     title: '小马表情',
-    cells: PONY_EMOJI.map((emoji) => ({ key: emoji.name, pick: { kind: 'pony', name: emoji.name }, label: emoji.label })),
+    cells: PONY_EMOJI.map((emoji) => ({
+      key: emoji.name,
+      pick: { kind: 'pony', name: emoji.name },
+      label: emoji.label,
+    })),
   },
   {
     title: '常用表情',
-    cells: UNICODE_EMOJI.map((glyph) => ({ key: glyph, pick: { kind: 'unicode', glyph }, label: null })),
+    cells: UNICODE_EMOJI.map((glyph) => ({
+      key: glyph,
+      pick: { kind: 'unicode', glyph },
+      label: null,
+    })),
   },
 ];
 
 const FLAT: Cell[] = SECTIONS.flatMap((section) => section.cells);
 /** Where each section starts in the flat order. */
-const OFFSETS = SECTIONS.map((_, s) => SECTIONS.slice(0, s).reduce((sum, section) => sum + section.cells.length, 0));
+const OFFSETS = SECTIONS.map((_, s) =>
+  SECTIONS.slice(0, s).reduce((sum, section) => sum + section.cells.length, 0),
+);
 /** 44px cells: a 40dp target with 4px between, the picker's own density step. */
 const CELL_PX = 44;
 
@@ -113,9 +123,13 @@ const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function Emo
     cellRefs.current[next]?.focus();
   }, []);
 
-  useImperativeHandle(ref, () => ({
-    focus: () => cellRefs.current[active]?.focus(),
-  }), [active]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => cellRefs.current[active]?.focus(),
+    }),
+    [active],
+  );
 
   /** The cell at `column` of the row `delta` rows away, crossing into the next section. */
   const verticalTarget = (from: number, delta: 1 | -1) => {
@@ -184,10 +198,15 @@ const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function Emo
   };
 
   return (
-    <div ref={rootRef} className={cn('flex min-w-0 flex-col gap-3', className)} onKeyDown={onKeyDown}>
+    <div
+      ref={rootRef}
+      className={cn('flex min-w-0 flex-col gap-3', className)}
+      onKeyDown={onKeyDown}
+    >
       {SECTIONS.map((section, s) => {
         const rows: Cell[][] = [];
-        for (let i = 0; i < section.cells.length; i += columns) rows.push(section.cells.slice(i, i + columns));
+        for (let i = 0; i < section.cells.length; i += columns)
+          rows.push(section.cells.slice(i, i + columns));
         return (
           <div key={section.title} className="flex flex-col gap-1">
             <span aria-hidden="true" className="px-1 text-label-m text-on-surface-variant">
@@ -199,7 +218,11 @@ const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function Emo
                   {row.map((cell, c) => {
                     const index = OFFSETS[s] + r * columns + c;
                     return (
-                      <div role="gridcell" key={cell.key} className="flex size-11 items-center justify-center">
+                      <div
+                        role="gridcell"
+                        key={cell.key}
+                        className="flex size-11 items-center justify-center"
+                      >
                         <button
                           ref={(node) => {
                             cellRefs.current[index] = node;

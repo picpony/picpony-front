@@ -63,7 +63,8 @@ export default function ImportDialog({
   const fallback = folders.some((folder) => folder.id === defaultFolderId)
     ? String(defaultFolderId)
     : String(folders.find((folder) => folder.isMain)?.id ?? folders[0]?.id ?? '');
-  const value = chosen !== null && folders.some((folder) => String(folder.id) === chosen) ? chosen : fallback;
+  const value =
+    chosen !== null && folders.some((folder) => String(folder.id) === chosen) ? chosen : fallback;
   const exited = () => {
     setChosen(null);
     setRun(null);
@@ -82,7 +83,13 @@ export default function ImportDialog({
       maxWidth="sm"
       footer={
         running ? (
-          <StopButton key="stop" state={run} onStop={onStop} autoFocus className="animate-page-transition" />
+          <StopButton
+            key="stop"
+            state={run}
+            onStop={onStop}
+            autoFocus
+            className="animate-page-transition"
+          />
         ) : (
           <>
             <Button key="cancel" variant="text" onClick={onClose}>
@@ -104,13 +111,21 @@ export default function ImportDialog({
         <div
           inert={running}
           aria-hidden={running || undefined}
-          className={cn('col-start-1 row-start-1 transition-opacity spring-fast-effects', running && 'opacity-0')}
+          className={cn(
+            'col-start-1 row-start-1 transition-opacity spring-fast-effects',
+            running && 'opacity-0',
+          )}
         >
           <p className="mb-4 text-body-m text-on-surface-variant tabular-nums">
             本页有 {shownCount} 张图片尚未收藏到云端
           </p>
           {error ? (
-            <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
+            <ErrorRetry
+              size="inline"
+              title="收藏夹加载失败"
+              message={apiErrorMessage(error)}
+              onRetry={onRetry}
+            />
           ) : loading ? (
             <Skeleton className="h-14 w-full rounded-md" />
           ) : folders.length === 0 ? (
@@ -120,7 +135,10 @@ export default function ImportDialog({
               label="收藏到"
               value={value}
               onChange={setChosen}
-              options={folders.map((folder) => ({ value: String(folder.id), label: folderLabel(folder) }))}
+              options={folders.map((folder) => ({
+                value: String(folder.id),
+                label: folderLabel(folder),
+              }))}
             />
           )}
         </div>

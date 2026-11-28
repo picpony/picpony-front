@@ -16,7 +16,9 @@ const NAME_WAIT_MS = 1200;
 /** 显示中文标签, read at event time — `useSyncedSetting`'s own rule (on unless switched off). */
 export function chineseTagNamesShown(): boolean {
   try {
-    return typeof window === 'undefined' || localStorage.getItem(LS_KEYS.showChineseTags) !== 'false';
+    return (
+      typeof window === 'undefined' || localStorage.getItem(LS_KEYS.showChineseTags) !== 'false'
+    );
   } catch {
     return true;
   }
@@ -29,7 +31,10 @@ export function chineseTagNamesShown(): boolean {
  */
 export function warmTagName(tag: string): Promise<void> {
   if (!chineseTagNamesShown()) return Promise.resolve();
-  return loadTagTranslations([tag]).then(() => {}, () => {});
+  return loadTagTranslations([tag]).then(
+    () => {},
+    () => {},
+  );
 }
 
 /** What one screen knows about the names of its tags, for `tagNameOf`. */

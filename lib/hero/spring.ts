@@ -68,9 +68,7 @@ function rawResponse(time: number, response: SpringResponse) {
   if (wd <= 0) return 1 - (1 + (rate - velocity) * time) * Math.exp(-rate * time);
   const a = (response.damping ?? 1) * rate;
   return (
-    1 -
-    Math.exp(-a * time) *
-      (Math.cos(wd * time) + ((a - velocity) / wd) * Math.sin(wd * time))
+    1 - Math.exp(-a * time) * (Math.cos(wd * time) + ((a - velocity) / wd) * Math.sin(wd * time))
   );
 }
 

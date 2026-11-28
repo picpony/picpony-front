@@ -179,8 +179,10 @@ export function useDrawerSwipe({
          * boolean endpoint snapped both of them home under the finger. */
         const pose = getComputedStyle(d);
         const translate = pose.translate.split(' ')[0];
-        const independentX = (parseFloat(translate) || 0) * (translate.endsWith('%') ? width / 100 : 1);
-        const transformX = pose.transform === 'none' ? 0 : new DOMMatrixReadOnly(pose.transform).m41;
+        const independentX =
+          (parseFloat(translate) || 0) * (translate.endsWith('%') ? width / 100 : 1);
+        const transformX =
+          pose.transform === 'none' ? 0 : new DOMMatrixReadOnly(pose.transform).m41;
         startOffset = gsap.utils.clamp(-width, 0, independentX + transformX);
         gsap.killTweensOf(d);
         const s = scrim();
@@ -231,7 +233,9 @@ export function useDrawerSwipe({
         }
 
         const target = toOpen ? 0 : -width;
-        const spec = toOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const spec = toOpen
+          ? spring('defaultSpatial', 'overlay')
+          : spring('fastEffects', 'overlay');
         const scrimSpec = spring('defaultEffects', 'overlay');
 
         settling = toOpen;
@@ -269,7 +273,9 @@ export function useDrawerSwipe({
         settling = openNow;
         /* Opened or closed from elsewhere: the tap's pair — DefaultSpatial open (`openMotion`),
            FastEffects shut (`closeMotion`); the scrim on DefaultEffects. */
-        const spec = openNow ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const spec = openNow
+          ? spring('defaultSpatial', 'overlay')
+          : spring('fastEffects', 'overlay');
         springBoth(
           d,
           s,
@@ -297,8 +303,7 @@ export function useDrawerSwipe({
           // Opening is anchored to the screen edge; closing can start anywhere on
           // the panel, which is the only thing under the finger while it is open.
           // Only a drag that starts on the open panel counts.
-          pending =
-            enabledRef.current && openRef.current && startX <= (drawer()?.offsetWidth ?? 0);
+          pending = enabledRef.current && openRef.current && startX <= (drawer()?.offsetWidth ?? 0);
         },
         onDrag: (self) => {
           if (pending) {
@@ -322,9 +327,7 @@ export function useDrawerSwipe({
              only while more than 1 − ratio of it is on screen: a slow drag commits once it
              has travelled the ratio. (Compared against the ratio itself, a half-way drag —
              which closes every native drawer — sprang back open.) */
-          settle(
-            flick ? self.velocityX > 0 : (x + width) / width > 1 - DRAWER_COMMIT_RATIO,
-          );
+          settle(flick ? self.velocityX > 0 : (x + width) / width > 1 - DRAWER_COMMIT_RATIO);
         },
       });
 

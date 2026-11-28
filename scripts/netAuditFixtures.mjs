@@ -19,22 +19,52 @@ const ORIGIN = 'https://derpicdn.net/img/2024/1/1';
  * Keep this fixture independent of the implementation so reading `tags` as a dictionary fails. */
 export function blockFiltersEnvelope() {
   const rules = {
-    safe: ['explicit', 'questionable', 'suggestive', 'grotesque', 'grimdark', 'spoiler', 'islamic state', 'politics', 'semi-grimdark'],
+    safe: [
+      'explicit',
+      'questionable',
+      'suggestive',
+      'grotesque',
+      'grimdark',
+      'spoiler',
+      'islamic state',
+      'politics',
+      'semi-grimdark',
+    ],
     spoilers: ['explicit', 'questionable', 'grotesque', 'grimdark', 'islamic state'],
     banAnthro: ['anthro', 'humanized', 'morbidly obese'],
-    banDiscomfort: ['overweight', 'obese', 'obesity', 'nightmare fuel', 'politics', 'watersports', 'poofy diaper'],
+    banDiscomfort: [
+      'overweight',
+      'obese',
+      'obesity',
+      'nightmare fuel',
+      'politics',
+      'watersports',
+      'poofy diaper',
+    ],
     onlyPony: ['pony', 'kirin', 'griffon', 'hippogriff', 'changeling', 'zebra'],
   };
   /* The Rust backend's `GET /api/v1/filters/block-tags`: every row, and the five groups as names. */
   let id = 0;
-  const tags = Object.entries(rules).flatMap(([filter, names]) => names.map((tag) => ({ id: ++id, filter, tag })));
-  const filters = Object.fromEntries(Object.entries(rules).map(([key, names]) => [key, [...names]]));
+  const tags = Object.entries(rules).flatMap(([filter, names]) =>
+    names.map((tag) => ({ id: ++id, filter, tag })),
+  );
+  const filters = Object.fromEntries(
+    Object.entries(rules).map(([key, names]) => [key, [...names]]),
+  );
   return { tags, filters };
 }
 
 /** One page of the Rust backend's public blacklist (`GET /api/v1/image-blocklist`). */
 export function publicBlacklistPage(ids = []) {
-  return { revision: 1, blocks: [...ids].sort((a, b) => a - b), page: 1, limit: 1000, total_count: ids.length, total_pages: ids.length ? 1 : 0, has_more: false };
+  return {
+    revision: 1,
+    blocks: [...ids].sort((a, b) => a - b),
+    page: 1,
+    limit: 1000,
+    total_count: ids.length,
+    total_pages: ids.length ? 1 : 0,
+    has_more: false,
+  };
 }
 
 /** One plausible Derpibooru image. Wide by default, so the masonry grid lays out as it would. */
@@ -85,7 +115,14 @@ function imagePage(count, seed = 1000) {
 
 const STAMP = '2024-01-01T00:00:00Z';
 
-const author = (id = 1) => ({ id, username: 'fixture', avatar: null, role: 'user', experience: 1350, equipped_badges: [] });
+const author = (id = 1) => ({
+  id,
+  username: 'fixture',
+  avatar: null,
+  role: 'user',
+  experience: 1350,
+  equipped_badges: [],
+});
 
 /** A forum post as `GET /forum/posts` and `GET /forum/posts/{id}` answer it (`WirePost`). */
 const forumPost = (id) => ({
@@ -137,8 +174,16 @@ const me = () => ({
   upstream_identity: null,
   equipped_badges: [],
   developer_access: {
-    user_id: 1, revision: 1, enabled: false, active: false, banned: false, source: null,
-    maintenance_generation: 0, maintenance_expires_at: null, inactive_reason: null, attempts: 0,
+    user_id: 1,
+    revision: 1,
+    enabled: false,
+    active: false,
+    banned: false,
+    source: null,
+    maintenance_generation: 0,
+    maintenance_expires_at: null,
+    inactive_reason: null,
+    attempts: 0,
   },
 });
 
@@ -167,13 +212,25 @@ const profile = (id) => ({
   upstream_identity: { id: 1, name: 'fixture' },
 });
 
-const folder = (id, name, isMain, count, latest) => ({ id, name, is_main: isMain, created_at: STAMP, image_count: count, latest_image_id: latest });
+const folder = (id, name, isMain, count, latest) => ({
+  id,
+  name,
+  is_main: isMain,
+  created_at: STAMP,
+  image_count: count,
+  latest_image_id: latest,
+});
 
 /** The last path segment as a number — the `{id}` of a resource path. */
 const lastId = (url) => Number(url.pathname.split('/').filter(Boolean).at(-1)) || 1;
 
 const task = (name, period, progress, required, coins) => ({
-  task: name, period, progress, required, claimed: false, reward: { coins, experience: 10 },
+  task: name,
+  period,
+  progress,
+  required,
+  claimed: false,
+  reward: { coins, experience: 10 },
 });
 
 /**
@@ -188,13 +245,23 @@ const PICPONY = {
   get_public_blacklist: () => publicBlacklistPage([]),
   /* `auto` on both axes — what an administrator who has pinned nothing leaves. */
   get_website_routing_policy: () => ({
-    policy: { api_policy: 'auto', media_policy: 'auto', third_party_url: null, third_party_pass_api_key: false },
+    policy: {
+      api_policy: 'auto',
+      media_policy: 'auto',
+      third_party_url: null,
+      third_party_pass_api_key: false,
+    },
     revision: 1,
   }),
   get_public_maintenance_status: () => ({ maintenance_mode: false, maintenance_message: '' }),
   get_site_bootstrap: () => ({
     routing_policy: {
-      policy: { api_policy: 'auto', media_policy: 'auto', third_party_url: null, third_party_pass_api_key: false },
+      policy: {
+        api_policy: 'auto',
+        media_policy: 'auto',
+        third_party_url: null,
+        third_party_pass_api_key: false,
+      },
       revision: 1,
     },
     maintenance: { maintenance_mode: false, maintenance_message: '' },
@@ -219,12 +286,26 @@ const PICPONY = {
   /* The empty /search screen's own first read, and what a `<Link>` to it warms (`prefetchRoute`).
      With no fixture here the warm failed, and a failure is not a cached answer — the screen read
      again and the step cost two requests, which the ledger read as speculation adding one. */
-  get_quick_tags: () => ({ tags: {
-    rating: [{ en: 'safe', cn: '安全', category: 'rating' }, { en: 'suggestive', cn: '性暗示', category: 'rating' }],
-    species: [{ en: 'pony', cn: '小马', category: 'species' }, { en: 'human', cn: '人类', category: 'species' }],
-    character: [{ en: 'twilight sparkle', cn: '暮光闪闪', category: 'character' }, { en: 'rainbow dash', cn: '云宝黛西', category: 'character' }],
-    general: [{ en: 'solo', cn: '单人', category: 'general' }, { en: 'cute', cn: '可爱', category: 'general' }],
-  } }),
+  get_quick_tags: () => ({
+    tags: {
+      rating: [
+        { en: 'safe', cn: '安全', category: 'rating' },
+        { en: 'suggestive', cn: '性暗示', category: 'rating' },
+      ],
+      species: [
+        { en: 'pony', cn: '小马', category: 'species' },
+        { en: 'human', cn: '人类', category: 'species' },
+      ],
+      character: [
+        { en: 'twilight sparkle', cn: '暮光闪闪', category: 'character' },
+        { en: 'rainbow dash', cn: '云宝黛西', category: 'character' },
+      ],
+      general: [
+        { en: 'solo', cn: '单人', category: 'general' },
+        { en: 'cute', cn: '可爱', category: 'general' },
+      ],
+    },
+  }),
   /* The shared journeys have no decorative companion or selected pony. Successful empty
      reads keep a disabled feature cached; the dedicated runtime probes exercise real media. */
   get_mascots_list: () => ({ enabled: false, revision: 1, tips: [], mascots: [] }),
@@ -252,16 +333,28 @@ const PICPONY = {
   }),
   get_forum_post_detail: (url) => ({ post: forumPost(lastId(url)) }),
   get_forum_post_comments: () => ({ comments: [], total: 0, total_pages: 1 }),
-  get_shared_faves: () => ({ image_ids: Array.from({ length: 30 }, (_, i) => 2000 + i), total: 30 }),
+  get_shared_faves: () => ({
+    image_ids: Array.from({ length: 30 }, (_, i) => 2000 + i),
+    total: 30,
+  }),
   get_user_posts: () => ({
     posts: Array.from({ length: 12 }, (_, i) => ({
-      id: 100 + i, title: `帖子 ${100 + i}`, cover_image: null, created_at: STAMP, reply_count: 2, like_count: 0,
+      id: 100 + i,
+      title: `帖子 ${100 + i}`,
+      cover_image: null,
+      created_at: STAMP,
+      reply_count: 2,
+      like_count: 0,
     })),
     total_pages: 2,
   }),
   get_user_comments: () => ({
     comments: Array.from({ length: 12 }, (_, i) => ({
-      id: i + 1, target_id: 1000 + i, content: '评论', created_at: STAMP, kind: 'image',
+      id: i + 1,
+      target_id: 1000 + i,
+      content: '评论',
+      created_at: STAMP,
+      kind: 'image',
     })),
     total_pages: 2,
   }),
@@ -270,20 +363,50 @@ const PICPONY = {
   get_team_members: () => ({
     revision: 1,
     members: [
-      { id: 1, name: 'FixtureDev', role: '开发', category: 'developer', avatar_url: '', account_avatar: null, link_url: '', order_num: 1, user_id: null },
-      { id: 2, name: 'FixtureEditor', role: '编辑', category: 'editor', avatar_url: '', account_avatar: null, link_url: '', order_num: 2, user_id: null },
+      {
+        id: 1,
+        name: 'FixtureDev',
+        role: '开发',
+        category: 'developer',
+        avatar_url: '',
+        account_avatar: null,
+        link_url: '',
+        order_num: 1,
+        user_id: null,
+      },
+      {
+        id: 2,
+        name: 'FixtureEditor',
+        role: '编辑',
+        category: 'editor',
+        avatar_url: '',
+        account_avatar: null,
+        link_url: '',
+        order_num: 2,
+        user_id: null,
+      },
     ],
     total_pages: 1,
   }),
   get_faves: () => ({
-    items: Array.from({ length: 30 }, (_, i) => ({ image_id: 2000 + i, created_at: STAMP, folder_ids: [1] })),
+    items: Array.from({ length: 30 }, (_, i) => ({
+      image_id: 2000 + i,
+      created_at: STAMP,
+      folder_ids: [1],
+    })),
     total: 30,
   }),
   get_fave_folders: () => ({
     folders: [folder(1, '主收藏夹', true, 30, 2029), folder(2, '收藏夹', false, 8, 2014)],
     privacy_space: {
-      owner_id: 1, has_password: false, unlock_seconds: 0, active: false, unlocked: false, expires_at: null,
-      visible: false, image_count: null,
+      owner_id: 1,
+      has_password: false,
+      unlock_seconds: 0,
+      active: false,
+      unlocked: false,
+      expires_at: null,
+      visible: false,
+      image_count: null,
     },
   }),
   get_profile_fave_folders: () => ({ folders: [folder(1, '主收藏夹', true, 30, 2029)] }),
@@ -317,23 +440,58 @@ const PICPONY = {
   get_tag_groups: () => ({ groups: [] }),
   get_tag_subscriptions: () => ({ subscriptions: [] }),
   get_shop_items: () => ({
-    items: [{ id: 4, name: '钥匙扣', description: '现场领取', image_url: null, price: 8, stock: 3, active: true, revision: 1, created_at: STAMP }],
+    items: [
+      {
+        id: 4,
+        name: '钥匙扣',
+        description: '现场领取',
+        image_url: null,
+        price: 8,
+        stock: 3,
+        active: true,
+        revision: 1,
+        created_at: STAMP,
+      },
+    ],
     next_cursor: null,
   }),
   get_coin_transactions: () => ({
-    transactions: [{ id: 1, amount: 10, balance_after: 100, reason: '每日登录', source_type: 'task', source_id: 'login', created_at: STAMP }],
+    transactions: [
+      {
+        id: 1,
+        amount: 10,
+        balance_after: 100,
+        reason: '每日登录',
+        source_type: 'task',
+        source_id: 'login',
+        created_at: STAMP,
+      },
+    ],
     next_cursor: null,
   }),
   get_recent_contacts: () => ({ contacts: [], next_cursor: null }),
   get_notifications: () => ({ notifications: [], next_cursor: null }),
-  get_dictionary: () => ({ tags: [], total_matches: 0, stats: { total: 0, translated: 0, leaderboard: [] } }),
+  get_dictionary: () => ({
+    tags: [],
+    total_matches: 0,
+    stats: { total: 0, translated: 0, leaderboard: [] },
+  }),
   get_comments: () => ({ comments: [], total: 0, total_pages: 1 }),
 };
 
 function assistantQuota() {
   return {
-    enabled: true, user_enabled: true, revision: 1, config_revision: 1, daily_points: 50, points_per_coin: 2,
-    daily_remaining: 50, purchased_remaining: 0, remaining: 50, reserved: 0, coins: 100,
+    enabled: true,
+    user_enabled: true,
+    revision: 1,
+    config_revision: 1,
+    daily_points: 50,
+    points_per_coin: 2,
+    daily_remaining: 50,
+    purchased_remaining: 0,
+    remaining: 50,
+    reserved: 0,
+    coins: 100,
   };
 }
 
@@ -344,15 +502,26 @@ const DERPI = [
   [
     /^\/search\/images$/,
     (params) => {
-      const ids = [...(params.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) => Number(match[1]));
+      const ids = [...(params.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) =>
+        Number(match[1]),
+      );
       if (ids.length) {
         const unique = [...new Set(ids)];
-        return { images: unique.slice(0, Number(params.get('per_page')) || 50).map((id) => image(id)), total: unique.length };
+        return {
+          images: unique.slice(0, Number(params.get('per_page')) || 50).map((id) => image(id)),
+          total: unique.length,
+        };
       }
-      return imagePage(Number(params.get('per_page')) || 50, 1000 + (Number(params.get('page')) || 1) * 1000);
+      return imagePage(
+        Number(params.get('per_page')) || 50,
+        1000 + (Number(params.get('page')) || 1) * 1000,
+      );
     },
   ],
-  [/^\/images\/featured$/, () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] })],
+  [
+    /^\/images\/featured$/,
+    () => ({ image: image(9001, { width: 1920, height: 1080 }), interactions: [] }),
+  ],
   [/^\/images\/\d+$/, (_params, pathname) => ({ image: image(Number(pathname.split('/').pop())) })],
   [/^\/search\/tags$/, () => ({ tags: [], total: 0 })],
   [/^\/profiles\/.+$/, () => ({ user: { id: 1, name: 'fixture', slug: 'fixture', awards: [] } })],
@@ -403,7 +572,10 @@ export function stubFor(rawUrl, method) {
     const pathname = target.pathname.replace('/api/v1/json', '');
     for (const [pattern, build] of DERPI) {
       if (pattern.test(pathname)) {
-        return { body: JSON.stringify(build(target.searchParams, pathname)), contentType: 'application/json' };
+        return {
+          body: JSON.stringify(build(target.searchParams, pathname)),
+          contentType: 'application/json',
+        };
       }
     }
     return { body: JSON.stringify({ images: [], total: 0 }), contentType: 'application/json' };
@@ -417,7 +589,9 @@ export function stubFor(rawUrl, method) {
     if (!build) {
       return {
         status: 404,
-        body: JSON.stringify({ error: { code: 'NO_FIXTURE', message: `no fixture for ${op ?? url.pathname}` } }),
+        body: JSON.stringify({
+          error: { code: 'NO_FIXTURE', message: `no fixture for ${op ?? url.pathname}` },
+        }),
         contentType: 'application/json',
       };
     }

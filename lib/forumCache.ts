@@ -28,9 +28,16 @@ export function patchListedPost(id: number, patch: Partial<ForumPost> | null) {
       if (!previous) return previous as never;
       if (patch === null) {
         const posts = previous.posts.filter((post) => post.id !== id);
-        return { ...previous, posts, total: Math.max(0, previous.total - (previous.posts.length - posts.length)) };
+        return {
+          ...previous,
+          posts,
+          total: Math.max(0, previous.total - (previous.posts.length - posts.length)),
+        };
       }
-      return { ...previous, posts: previous.posts.map((post) => (post.id === id ? { ...post, ...patch } : post)) };
+      return {
+        ...previous,
+        posts: previous.posts.map((post) => (post.id === id ? { ...post, ...patch } : post)),
+      };
     });
   }
   forumPosts.expire();

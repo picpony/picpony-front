@@ -47,12 +47,15 @@ const VARIANTS: Record<ButtonVariant, string> = {
      container to the canvas, and a filled button with no edge is a word. The two text
      variants have no container to lose. */
   filled: 'bg-primary text-on-primary focus-ring forced-boundary',
-  tonal: 'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
+  tonal:
+    'bg-secondary-container text-on-secondary-container ripple-secondary focus-ring forced-boundary',
   // Neutral commands beside fields and dropdowns share their container material.
   surface: 'bg-surface-container-highest text-on-surface focus-ring forced-boundary',
-  accent: 'bg-primary-container text-on-primary-container ripple-primary focus-ring forced-boundary',
+  accent:
+    'bg-primary-container text-on-primary-container ripple-primary focus-ring forced-boundary',
   // Theme accent (`tertiary-container`), matching `IconButton` `selectedTone="tertiary"` toggles.
-  tertiary: 'bg-tertiary-container text-on-tertiary-container ripple-tertiary focus-ring forced-boundary',
+  tertiary:
+    'bg-tertiary-container text-on-tertiary-container ripple-tertiary focus-ring forced-boundary',
   text: 'bg-transparent text-on-surface-variant focus-ring',
   // Unfilled actions inside a tinted container (`secondary-container`, `warning-container`, …)
   // inherit the container's paired `on-*-container` ink for label, state layer and ripple alike.

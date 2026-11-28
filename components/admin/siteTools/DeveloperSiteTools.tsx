@@ -22,7 +22,9 @@ import { accelerationBansQuery } from './queries';
 
 /** The API 加速 rows, from 用户管理's own read (`usersQuery`) rather than a third copy of the whole
  *  account list (G2-019). */
-const accelerationRows = derived(({ rows }: AdminUsers) => rows.map((r) => ({ id: r.id, username: r.username, role: r.role })));
+const accelerationRows = derived(({ rows }: AdminUsers) =>
+  rows.map((r) => ({ id: r.id, username: r.username, role: r.role })),
+);
 
 /**
  * API 加速权限. Who is barred comes from `GET /admin/api-accel-bans`; a row's own re-read
@@ -33,48 +35,165 @@ const accelerationRows = derived(({ rows }: AdminUsers) => rows.map((r) => ({ id
 function DeveloperSiteTools({ token, viewerId, role }: AdminPanelProps) {
   const users = useAdminSelect(usersQuery, token, accelerationRows);
   const bans = useAdminQuery(accelerationBansQuery, token);
-  const ban = useAdminMutation(token), lookup = useAdminMutation(token);
-  const [known, setKnown] = useState<{ token: string; list?: Set<number>; state: Map<number, boolean> }>({ token, state: new Map() });
+  const ban = useAdminMutation(token),
+    lookup = useAdminMutation(token);
+  const [known, setKnown] = useState<{
+    token: string;
+    list?: Set<number>;
+    state: Map<number, boolean>;
+  }>({ token, state: new Map() });
   /* An override holds for the list it was made against; a new answer of the list replaces it. */
-  const overrides = known.token === token && known.list === bans.data ? known.state : new Map<number, boolean>();
-  const bannedOf = (userId: number): boolean | undefined => overrides.get(userId) ?? (bans.data ? bans.data.has(userId) : undefined);
-  const remember = (userId: number, banned: boolean) => setKnown((current) => ({ token, list: bans.data, state: new Map(current.token === token && current.list === bans.data ? current.state : []).set(userId, banned) }));
+  const overrides =
+    known.token === token && known.list === bans.data ? known.state : new Map<number, boolean>();
+  const bannedOf = (userId: number): boolean | undefined =>
+    overrides.get(userId) ?? (bans.data ? bans.data.has(userId) : undefined);
+  const remember = (userId: number, banned: boolean) =>
+    setKnown((current) => ({
+      token,
+      list: bans.data,
+      state: new Map(
+        current.token === token && current.list === bans.data ? current.state : [],
+      ).set(userId, banned),
+    }));
   const [search, setSearch] = useState('');
-  const paged = usePagedRows((users.data ?? []).filter((r) => `${r.id} ${r.username}`.toLowerCase().includes(search.trim().toLowerCase())), search);
+  const paged = usePagedRows(
+    (users.data ?? []).filter((r) =>
+      `${r.id} ${r.username}`.toLowerCase().includes(search.trim().toLowerCase()),
+    ),
+    search,
+  );
   const { confirmThen, confirmDialog } = useConfirm();
-  const change = (r: { id: number; username: string }, banned: boolean) => confirmThen('确认修改 API 加速权限', `确定要${banned ? '禁用' : '恢复'}「${r.username}」（#${r.id}）的 API 加速功能吗？`, () => void ban.run(
-    () => api.toggleAccelerationBan(token, r.id, banned),
-    () => showToast(banned ? '已禁用 API 加速' : '已恢复 API 加速', 'success'),
-    'API 加速权限修改失败',
-    { key: r.id, onCommitted: (d) => { remember(r.id, d.banned); } },
-  ), { tone: banned ? 'danger' : 'filled' });
-  return <div className="space-y-6">
-    <section aria-labelledby="admin-acceleration-heading" className="space-y-4">
-      <SectionHeading as="h3" id="admin-acceleration-heading">API 加速权限</SectionHeading>
-      <AdminNote>状态来自 API 加速禁用名单；可按行重新查询。</AdminNote>
-      {bans.error && <ErrorRetry size="inline" {...retryError('API 加速禁用名单加载失败', bans.error)} onRetry={bans.retryable ? bans.refresh : undefined} />}
-      <SearchInput value={search} onChange={setSearch} placeholder="查找用户…" />
-      <AdminListAnchor>
-        <DataTable rows={paged.rows} listKey={paged.listKey} rowKey={(r) => r.id} loading={users.loading} {...tableError('用户列表加载失败', users.error)} onRetry={users.retryable ? users.refresh : undefined} empty="没有匹配的用户" columns={[
-          { key: 'name', header: '用户', primary: true, className: 'tabular-nums', render: (r) => `${r.username}（#${r.id}）` },
-          { key: 'state', header: 'API 加速', width: 'auto', render: (r) => {
-            const banned = bannedOf(r.id);
-            return banned === undefined ? <Badge tone="neutral" size="md">状态未知</Badge> : <Badge tone={banned ? 'error' : 'success'} size="md">{banned ? '已禁用' : '可使用'}</Badge>;
-          } },
-          { key: 'actions', header: '操作', actions: true, render: (r) => {
-            const locked = r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');
-            const banned = bannedOf(r.id);
-            return <>
-              <IconButton size="sm" icon={<MdRefresh />} aria-label={`查询 ${r.username} 的 API 加速状态`} loading={lookup.pendingKeys.has(r.id)} onClick={() => void lookup.run(async () => ({ banned: await api.readAccelerationBan(token, r.id) }), () => {}, 'API 加速状态加载失败', { key: r.id, onCommitted: (d) => remember(r.id, d.banned) })} />
-              {banned !== true && <IconButton size="sm" icon={<MdBlock />} variant="danger-text" aria-label={`禁用 ${r.username} 的 API 加速`} disabled={locked} loading={ban.pendingKeys.has(r.id)} onClick={() => { if (!locked) change(r, true); }} />}
-              {banned !== false && <IconButton size="sm" icon={<MdLockOpen />} aria-label={`恢复 ${r.username} 的 API 加速`} disabled={locked} loading={ban.pendingKeys.has(r.id)} onClick={() => { if (!locked) change(r, false); }} />}
-            </>;
-          } },
-        ]} />
-        <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={paged.setPage} />
-      </AdminListAnchor>
-    </section>
-    {confirmDialog}
-  </div>;
+  const change = (r: { id: number; username: string }, banned: boolean) =>
+    confirmThen(
+      '确认修改 API 加速权限',
+      `确定要${banned ? '禁用' : '恢复'}「${r.username}」（#${r.id}）的 API 加速功能吗？`,
+      () =>
+        void ban.run(
+          () => api.toggleAccelerationBan(token, r.id, banned),
+          () => showToast(banned ? '已禁用 API 加速' : '已恢复 API 加速', 'success'),
+          'API 加速权限修改失败',
+          {
+            key: r.id,
+            onCommitted: (d) => {
+              remember(r.id, d.banned);
+            },
+          },
+        ),
+      { tone: banned ? 'danger' : 'filled' },
+    );
+  return (
+    <div className="space-y-6">
+      <section aria-labelledby="admin-acceleration-heading" className="space-y-4">
+        <SectionHeading as="h3" id="admin-acceleration-heading">
+          API 加速权限
+        </SectionHeading>
+        <AdminNote>状态来自 API 加速禁用名单；可按行重新查询。</AdminNote>
+        {bans.error && (
+          <ErrorRetry
+            size="inline"
+            {...retryError('API 加速禁用名单加载失败', bans.error)}
+            onRetry={bans.retryable ? bans.refresh : undefined}
+          />
+        )}
+        <SearchInput value={search} onChange={setSearch} placeholder="查找用户…" />
+        <AdminListAnchor>
+          <DataTable
+            rows={paged.rows}
+            listKey={paged.listKey}
+            rowKey={(r) => r.id}
+            loading={users.loading}
+            {...tableError('用户列表加载失败', users.error)}
+            onRetry={users.retryable ? users.refresh : undefined}
+            empty="没有匹配的用户"
+            columns={[
+              {
+                key: 'name',
+                header: '用户',
+                primary: true,
+                className: 'tabular-nums',
+                render: (r) => `${r.username}（#${r.id}）`,
+              },
+              {
+                key: 'state',
+                header: 'API 加速',
+                width: 'auto',
+                render: (r) => {
+                  const banned = bannedOf(r.id);
+                  return banned === undefined ? (
+                    <Badge tone="neutral" size="md">
+                      状态未知
+                    </Badge>
+                  ) : (
+                    <Badge tone={banned ? 'error' : 'success'} size="md">
+                      {banned ? '已禁用' : '可使用'}
+                    </Badge>
+                  );
+                },
+              },
+              {
+                key: 'actions',
+                header: '操作',
+                actions: true,
+                render: (r) => {
+                  const locked =
+                    r.id === viewerId || (r.role === 'super_admin' && role !== 'super_admin');
+                  const banned = bannedOf(r.id);
+                  return (
+                    <>
+                      <IconButton
+                        size="sm"
+                        icon={<MdRefresh />}
+                        aria-label={`查询 ${r.username} 的 API 加速状态`}
+                        loading={lookup.pendingKeys.has(r.id)}
+                        onClick={() =>
+                          void lookup.run(
+                            async () => ({ banned: await api.readAccelerationBan(token, r.id) }),
+                            () => {},
+                            'API 加速状态加载失败',
+                            { key: r.id, onCommitted: (d) => remember(r.id, d.banned) },
+                          )
+                        }
+                      />
+                      {banned !== true && (
+                        <IconButton
+                          size="sm"
+                          icon={<MdBlock />}
+                          variant="danger-text"
+                          aria-label={`禁用 ${r.username} 的 API 加速`}
+                          disabled={locked}
+                          loading={ban.pendingKeys.has(r.id)}
+                          onClick={() => {
+                            if (!locked) change(r, true);
+                          }}
+                        />
+                      )}
+                      {banned !== false && (
+                        <IconButton
+                          size="sm"
+                          icon={<MdLockOpen />}
+                          aria-label={`恢复 ${r.username} 的 API 加速`}
+                          disabled={locked}
+                          loading={ban.pendingKeys.has(r.id)}
+                          onClick={() => {
+                            if (!locked) change(r, false);
+                          }}
+                        />
+                      )}
+                    </>
+                  );
+                },
+              },
+            ]}
+          />
+          <AdminPager
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+          />
+        </AdminListAnchor>
+      </section>
+      {confirmDialog}
+    </div>
+  );
 }
 export default protectedPanel(DeveloperSiteTools);

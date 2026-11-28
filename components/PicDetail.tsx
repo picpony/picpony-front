@@ -17,13 +17,7 @@ import {
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useOffline } from 'next/offline';
-import {
-  MdChevronLeft,
-  MdChevronRight,
-  MdIosShare,
-  MdLink,
-  MdSend,
-} from 'react-icons/md';
+import { MdChevronLeft, MdChevronRight, MdIosShare, MdLink, MdSend } from 'react-icons/md';
 import type { PicLightboxSlide } from '@/components/PicLightbox';
 import { useAuthModal } from '@/components/AuthModal';
 import Button from '@/components/Button';
@@ -64,9 +58,25 @@ import { shareThumbUrl } from '@/lib/api/messages';
 import { addBrowsingHistory, reportImage } from '@/lib/api/picpony';
 import { addPrivacyFave } from '@/lib/api/favorites';
 import { getBrowsingSettings } from '@/lib/api/client';
-import { favoritesHref, goesToPrivacySpace, resolveDefaultFolder, type DefaultFolder } from '@/lib/favorites';
-import { favouriteImage, favouritesChanged, restoreFavourite, unfavouriteImage } from '@/lib/favoritesActions';
-import { addPrivacyPictures, isInPrivacySpace, removeFromPrivacy, restoreToPrivacy, usePrivacyFaved } from '@/lib/favoritesPrivacy';
+import {
+  favoritesHref,
+  goesToPrivacySpace,
+  resolveDefaultFolder,
+  type DefaultFolder,
+} from '@/lib/favorites';
+import {
+  favouriteImage,
+  favouritesChanged,
+  restoreFavourite,
+  unfavouriteImage,
+} from '@/lib/favoritesActions';
+import {
+  addPrivacyPictures,
+  isInPrivacySpace,
+  removeFromPrivacy,
+  restoreToPrivacy,
+  usePrivacyFaved,
+} from '@/lib/favoritesPrivacy';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import FolderPicker from '@/components/favorites/FolderPicker';
 import { createShareLink } from '@/lib/api/share';
@@ -89,7 +99,11 @@ import { getRawImageUrl } from '@/lib/imageLoader';
 import { sourceLinksOf } from '@/lib/imageSources';
 import { getHeroMediaStyle } from '@/lib/hero/mediaBox';
 import { useDetailStep } from '@/lib/hero/useDetailStep';
-import { findDetailOriginLink, opensFromDetailOrigin, playDetailEntrance } from '@/lib/detailTransit';
+import {
+  findDetailOriginLink,
+  opensFromDetailOrigin,
+  playDetailEntrance,
+} from '@/lib/detailTransit';
 import {
   bindImageHeroDismissGesture,
   findImageHeroCardLink,
@@ -118,7 +132,11 @@ import { faveFolders, faveIds as faveIdsResource, translateSwitch } from '@/lib/
 import { warmMarkdownDocument } from '@/components/MarkdownRenderer';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { loadTagCounts } from '@/lib/tagCounts';
-import { loadTagTranslations, peekTagTranslations, rememberTagTranslations } from '@/lib/tagTranslations';
+import {
+  loadTagTranslations,
+  peekTagTranslations,
+  rememberTagTranslations,
+} from '@/lib/tagTranslations';
 import { prefetchImageComments } from '@/lib/imageComments';
 import { useImageTranslation } from '@/lib/translation';
 import { useIconToss } from '@/lib/useIconToss';
@@ -128,7 +146,10 @@ import { cn, copyText } from '@/lib/utils';
 /* The whole lightbox — core, plugins and stylesheet — behind one boundary (see `PicLightbox`).
    `loading` keeps the first open from suspending to the route's boundary, which would replace
    the whole detail with the route skeleton while the chunk arrives. */
-const PicLightbox = dynamic(() => import('@/components/PicLightbox'), { ssr: false, loading: () => null });
+const PicLightbox = dynamic(() => import('@/components/PicLightbox'), {
+  ssr: false,
+  loading: () => null,
+});
 
 /**
  * The detail's lazy code a first open would otherwise fetch mid-flight — the description's
@@ -204,9 +225,16 @@ function prepareTagBatch(
     work.push(loadTagTranslations(tags, (part) => Object.assign(out.translations, part)));
   }
   const regular = tags.filter(isRegularTag);
-  if (counts && regular.length > 0) work.push(loadTagCounts(regular, (part) => Object.assign(out.counts, part)));
+  if (counts && regular.length > 0)
+    work.push(loadTagCounts(regular, (part) => Object.assign(out.counts, part)));
   const cap = new Promise<void>((resolve) => setTimeout(resolve, SHOW_MORE_WAIT_MS));
-  return Promise.race([Promise.all(work).then(() => undefined, () => undefined), cap]).then(() => out);
+  return Promise.race([
+    Promise.all(work).then(
+      () => undefined,
+      () => undefined,
+    ),
+    cap,
+  ]).then(() => out);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +301,11 @@ async function copyImageLink(image: ImagePreview, token: string | null): Promise
 /** 分享到其他应用: the system share sheet, with the same link and words. */
 async function shareImageNatively(image: ImagePreview, token: string | null): Promise<void> {
   const url = await imageShareLink(image, token);
-  const data: ShareData = { title: shareTitle(image.id), text: shareDescription(image.description), url };
+  const data: ShareData = {
+    title: shareTitle(image.id),
+    text: shareDescription(image.description),
+    url,
+  };
   const open = () =>
     navigator.share(data).then(
       () => {},
@@ -283,7 +315,9 @@ async function shareImageNatively(image: ImagePreview, token: string | null): Pr
         if (name === 'AbortError') return;
         /* The gesture was spent waiting for the link: offer the sheet again, from a fresh tap. */
         if (name === 'NotAllowedError') {
-          showToast('已生成分享链接', 'info', { action: { label: '分享', onClick: () => void open() } });
+          showToast('已生成分享链接', 'info', {
+            action: { label: '分享', onClick: () => void open() },
+          });
           return;
         }
         void copyImageLink(image, token);
@@ -332,9 +366,19 @@ async function sendFavePress(
       return { ok: true, kind: 'privacy-removed' };
     }
     const contentFilter = getBrowsingSettings().contentFilter;
-    if (goesToPrivacySpace({ alreadyFaved: faved, autoPrivacy: choice.autoPrivacy, contentFilter, tags: image.tags })) {
+    if (
+      goesToPrivacySpace({
+        alreadyFaved: faved,
+        autoPrivacy: choice.autoPrivacy,
+        contentFilter,
+        tags: image.tags,
+      })
+    ) {
       await addPrivacyFave(token, image);
-      if (readToken() === token) { addPrivacyPictures(token, [image]); favouritesChanged(token); }
+      if (readToken() === token) {
+        addPrivacyPictures(token, [image]);
+        favouritesChanged(token);
+      }
       return { ok: true, kind: 'privacy' };
     }
     if (!choice.oneTap) return { ok: true, kind: 'picker' };
@@ -345,7 +389,8 @@ async function sendFavePress(
     /* A chosen folder that has since gone falls back to the main folder, as the list says. */
     let target = choice.defaultFolder;
     if (target.id > 0) {
-      const list = faveFolders.peek({ token }).data ?? (await faveFolders.read({ token }).catch(() => null));
+      const list =
+        faveFolders.peek({ token }).data ?? (await faveFolders.read({ token }).catch(() => null));
       if (list) target = resolveDefaultFolder(list.folders, target);
     }
     await favouriteImage(token, image.id, target.id);
@@ -467,9 +512,16 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   /* The session id alone: every other runtime field changes several times per flight and on
      every step, and this is the largest tree on screen — subscribed to the whole runtime, it
      re-rendered at the press of every 上一张 / 下一张, in the frame the step starts. */
-  const heroSessionId = useSyncExternalStore(subscribeImageHeroRuntime, readHeroSessionId, readHeroSessionId);
+  const heroSessionId = useSyncExternalStore(
+    subscribeImageHeroRuntime,
+    readHeroSessionId,
+    readHeroSessionId,
+  );
   const routeInstanceId = useId();
-  const surfaceId = useMemo(() => `hero-route:${imageId}:${routeInstanceId}`, [imageId, routeInstanceId]);
+  const surfaceId = useMemo(
+    () => `hero-route:${imageId}:${routeInstanceId}`,
+    [imageId, routeInstanceId],
+  );
   // Latch the seed for this route id: a live read would flip to null when the module
   // snapshot expires and remount the media mid-view. Re-read on a new runtime session,
   // when a fresh controller-owned snapshot may exist for this otherwise stable route id.
@@ -490,7 +542,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
      a record already read is kept): see `primeImageDetailFromRow`. Same render-phase precedent. */
   if (heroSeed?.image.id === imageId) primeImageDetailFromRow(heroSeed.image);
 
-  const subscribeDetail = useCallback((listener: () => void) => subscribeImageDetail(imageId, listener), [imageId]);
+  const subscribeDetail = useCallback(
+    (listener: () => void) => subscribeImageDetail(imageId, listener),
+    [imageId],
+  );
   const readDetail = useCallback(() => peekImageDetail(imageId), [imageId]);
   const readDetailError = useCallback(() => peekImageDetailError(imageId), [imageId]);
   const prefetchedDetail = useSyncExternalStore(subscribeDetail, readDetail, getServerDetail);
@@ -506,7 +561,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
    * Set during render rather than in an effect, so a new route id never paints a frame at
    * the previous image's aspect ratio.
    */
-  const [latchedMedia, setLatchedMedia] = useState<{ id: number; width: number; height: number } | null>(null);
+  const [latchedMedia, setLatchedMedia] = useState<{
+    id: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const seedWidth = heroSeed?.image.width || image?.width || 0;
   const seedHeight = heroSeed?.image.height || image?.height || 0;
   if (seedWidth > 0 && seedHeight > 0 && latchedMedia?.id !== imageId) {
@@ -539,7 +598,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const preloadFinal = Boolean(heroSeed);
   const finalReady = finalReadyId === imageId;
   const deferredBodyReady = deferredBodyId === imageId;
-  const visibleTagLimits = visibleTags.imageId === imageId ? visibleTags : initialTagLimits(imageId);
+  const visibleTagLimits =
+    visibleTags.imageId === imageId ? visibleTags : initialTagLimits(imageId);
 
   /* What the screen is: the picture, a picture that does not exist, a read that failed, or the
      read still on its way. A deleted picture is not an outage — it gets no 重试. */
@@ -552,7 +612,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
      does, so its placeholders give way to saying so, and the read runs again on reconnect. */
   const offline = useOffline();
   // Prerender the below-fold tail without effects or layout during the flight.
-  const bodyPrerender = !deferredBodyReady && heroSeed?.image.id === imageId && image !== null && !offline;
+  const bodyPrerender =
+    !deferredBodyReady && heroSeed?.image.id === imageId && image !== null && !offline;
   const recordPending = record === null && recordError === null && !offline;
   // Keep the first layout of tag values and the tail in separate frames.
   const [bodyTailReady, setBodyTailReady] = useState(deferredBodyReady);
@@ -567,7 +628,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     return () => cancelAnimationFrame(frame);
   }, [deferredBodyReady, imageId]);
 
-  const favesRead = useResource(faveIdsResource, deferredBodyReady && session.token ? { token: session.token } : SKIP);
+  const favesRead = useResource(
+    faveIdsResource,
+    deferredBodyReady && session.token ? { token: session.token } : SKIP,
+  );
   /* In the privacy space counts: the auto-privacy rule sends an explicit picture there rather than
      to a folder, and the star went on reading 未收藏 after it. */
   const privacyFaved = usePrivacyFaved(session.token, imageId);
@@ -713,7 +777,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
    * for two failures: no picture at all (the record failed and no row stands in for it), and
    * both media layers reporting they will never paint.
    */
-  const resolvedWithoutMedia = presentation === 'overlay' && (notFound || loadFailed || mediaUnavailable);
+  const resolvedWithoutMedia =
+    presentation === 'overlay' && (notFound || loadFailed || mediaUnavailable);
   useEffect(() => {
     if (!resolvedWithoutMedia) return;
     markImageHeroRouteResolvedWithoutMedia(surfaceId);
@@ -761,11 +826,16 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
      so reading the cache here cannot disagree with server HTML). The rest arrive below. */
   const [tagData, setTagData] = useState<TagData>(() => ({
     imageId,
-    translations: presentation === 'overlay' ? peekTagTranslations(tags ?? []) : { ...(seedTranslations ?? {}) },
+    translations:
+      presentation === 'overlay'
+        ? peekTagTranslations(tags ?? [])
+        : { ...(seedTranslations ?? {}) },
     counts: {},
   }));
   const currentTagData =
-    tagData.imageId === imageId ? tagData : { imageId, translations: peekTagTranslations(tags ?? []), counts: {} };
+    tagData.imageId === imageId
+      ? tagData
+      : { imageId, translations: peekTagTranslations(tags ?? []), counts: {} };
   if (tagData.imageId !== imageId) setTagData(currentTagData);
   const [preparing, setPreparing] = useState<{ imageId: number; section: TagSection } | null>(null);
 
@@ -785,7 +855,10 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     let cancelPublish: (() => void) | null = null;
     /* Requested as soon as the tags are known — the flight's window included — but written to
        state only once the flight has landed: this is the largest tree on screen. */
-    const collect = (kind: 'translations' | 'counts', part: Record<string, string | number | null>) => {
+    const collect = (
+      kind: 'translations' | 'counts',
+      part: Record<string, string | number | null>,
+    ) => {
       if (cancelled) return;
       if (!pending) pending = { translations: {}, counts: {} };
       Object.assign(pending[kind], part);
@@ -804,7 +877,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   translations: Object.keys(next.translations).length
                     ? { ...state.translations, ...next.translations }
                     : state.translations,
-                  counts: Object.keys(next.counts).length ? { ...state.counts, ...next.counts } : state.counts,
+                  counts: Object.keys(next.counts).length
+                    ? { ...state.counts, ...next.counts }
+                    : state.counts,
                 },
           );
         },
@@ -813,7 +888,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     };
     if (showChineseTags) void loadTagTranslations(visible, (part) => collect('translations', part));
     const regular = visible.filter(isRegularTag);
-    if (showTagCounts && regular.length > 0) void loadTagCounts(regular, (part) => collect('counts', part));
+    if (showTagCounts && regular.length > 0)
+      void loadTagCounts(regular, (part) => collect('counts', part));
     return () => {
       cancelled = true;
       cancelPublish?.();
@@ -830,19 +906,21 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     const added = visibleTagsOf(groups, next).filter((tag) => !shown.has(tag));
     const targetId = imageId;
     setPreparing({ imageId: targetId, section });
-    void prepareTagBatch(added, { translations: showChineseTags, counts: showTagCounts }).then((data) => {
-      setPreparing((current) => (current?.imageId === targetId ? null : current));
-      setTagData((state) =>
-        state.imageId !== targetId
-          ? state
-          : {
-              imageId: targetId,
-              translations: { ...state.translations, ...data.translations },
-              counts: { ...state.counts, ...data.counts },
-            },
-      );
-      setVisibleTags(next);
-    });
+    void prepareTagBatch(added, { translations: showChineseTags, counts: showTagCounts }).then(
+      (data) => {
+        setPreparing((current) => (current?.imageId === targetId ? null : current));
+        setTagData((state) =>
+          state.imageId !== targetId
+            ? state
+            : {
+                imageId: targetId,
+                translations: { ...state.translations, ...data.translations },
+                counts: { ...state.counts, ...data.counts },
+              },
+        );
+        setVisibleTags(next);
+      },
+    );
   };
 
   // ---- The record, and the body under the picture ----
@@ -869,16 +947,19 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   // Only values and rich content wait for the flight. Fixed chrome stays visible throughout;
   // see docs/hero.md#data-and-handoff. A transition lets fresh input preempt tag layout.
   useEffect(() => {
-    return publishWhenHeroSettled(() => {
-      heroProbeMark('hx:t:body-publish');
-      startTransition(() => setDeferredBodyId(imageId));
-    }, {
-      idle: false,
-      canPublish: () => {
-        if (!isImageHeroDetailDataPublishable(imageId)) return false;
-        return isImageHeroDetailBodyPublishable();
+    return publishWhenHeroSettled(
+      () => {
+        heroProbeMark('hx:t:body-publish');
+        startTransition(() => setDeferredBodyId(imageId));
       },
-    });
+      {
+        idle: false,
+        canPublish: () => {
+          if (!isImageHeroDetailDataPublishable(imageId)) return false;
+          return isImageHeroDetailBodyPublishable();
+        },
+      },
+    );
   }, [imageId]);
 
   /* The thread under the picture, read once the body is out rather than when the reader scrolls
@@ -891,7 +972,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   // Fade newly published tail blocks in place. Tag rows instead use FollowHeight to move the
   // content below them; neither restarts the fixed chrome's entrance or the picture's flight.
   const bodyContentRef = useRef<HTMLDivElement>(null);
-  const bodySeenRef = useRef<{ imageId: number; visible: boolean; blocks: WeakSet<Element> } | null>(null);
+  const bodySeenRef = useRef<{
+    imageId: number;
+    visible: boolean;
+    blocks: WeakSet<Element>;
+  } | null>(null);
   useLayoutEffect(() => {
     const root = bodyContentRef.current;
     const previous = bodySeenRef.current;
@@ -1004,7 +1089,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
 
   useEffect(() => {
     if (presentation !== 'overlay' || !mobilePullDismiss) return;
-    return bindImageHeroDismissGesture(surfaceId, () => dismissCanStartRef.current(), heroNavigation);
+    return bindImageHeroDismissGesture(
+      surfaceId,
+      () => dismissCanStartRef.current(),
+      heroNavigation,
+    );
   }, [heroNavigation, mobilePullDismiss, presentation, surfaceId]);
 
   /* Escape leaves the screen — unless something is layered over it, which owns the key and
@@ -1031,7 +1120,8 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   // ---- The one-click image translation (decision 15) ----
   const facts = image ? mediaFacts(image) : null;
   /* The service keys its cache on the original's raw URL — the same string on every line. */
-  const translationSource = facts && !facts.isVideo && image?.view_url ? getRawImageUrl(image.view_url) : null;
+  const translationSource =
+    facts && !facts.isVideo && image?.view_url ? getRawImageUrl(image.view_url) : null;
   const translationEnabled = useSyncExternalStore(
     (listener) => translateSwitch.subscribe({}, listener),
     () => translateSwitch.peek({}).data,
@@ -1093,49 +1183,61 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     /* Cleared on an un-fave, so a failed one putting the star back is not a press. */
     setFaveFillFor(isFaved ? null : targetId);
     setFavePending({ imageId: targetId, token });
-    void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then((outcome) => {
-      setFavePending((current) => (current?.imageId === targetId && current.token === token ? null : current));
-      if (readToken() !== token || !outcome.ok || (outcome.kind !== 'unfaved' && outcome.kind !== 'privacy-removed')) cancelToss?.();
-      /* A different account now: nothing of this answer is said to it. */
-      if (readToken() !== token) return;
-      if (!outcome.ok) {
-        showToast(outcome.message, 'error');
-        return;
-      }
-      if (outcome.kind === 'picker') {
-        setPickerFor(targetId);
-      } else if (outcome.kind === 'privacy') {
-        showToast('露骨图片已自动收藏到隐私空间', 'info', {
-          action: showPrivacySpace
-            ? { label: '查看', onClick: () => router.push(favoritesHref('privacy'), { scroll: false }) }
-            : { label: '设置', onClick: () => router.push('/settings', { scroll: false }) },
-        });
-      } else if (outcome.kind === 'privacy-removed') {
-        showToast('已从隐私空间取消收藏', 'success', {
-          action: {
-            label: '撤销',
-            onClick: () =>
-              void restoreToPrivacy(token, target).catch((error: unknown) =>
-                showToast(apiErrorMessage(error, '撤销失败'), 'error'),
-              ),
-          },
-        });
-      } else if (outcome.kind === 'faved') {
-        showToast(`已收藏到「${outcome.folderName}」`, 'success', {
-          action: { label: '更改', onClick: () => setPickerFor(targetId) },
-        });
-      } else {
-        showToast('已取消收藏', 'success', {
-          action: {
-            label: '撤销',
-            onClick: () =>
-              void restoreFavourite(token, targetId, outcome.previous, defaultFolder.id).catch((error: unknown) =>
-                showToast(apiErrorMessage(error, '撤销失败'), 'error'),
-              ),
-          },
-        });
-      }
-    });
+    void sendFavePress(token, target, { oneTap: oneTapFave, defaultFolder, autoPrivacy }).then(
+      (outcome) => {
+        setFavePending((current) =>
+          current?.imageId === targetId && current.token === token ? null : current,
+        );
+        if (
+          readToken() !== token ||
+          !outcome.ok ||
+          (outcome.kind !== 'unfaved' && outcome.kind !== 'privacy-removed')
+        )
+          cancelToss?.();
+        /* A different account now: nothing of this answer is said to it. */
+        if (readToken() !== token) return;
+        if (!outcome.ok) {
+          showToast(outcome.message, 'error');
+          return;
+        }
+        if (outcome.kind === 'picker') {
+          setPickerFor(targetId);
+        } else if (outcome.kind === 'privacy') {
+          showToast('露骨图片已自动收藏到隐私空间', 'info', {
+            action: showPrivacySpace
+              ? {
+                  label: '查看',
+                  onClick: () => router.push(favoritesHref('privacy'), { scroll: false }),
+                }
+              : { label: '设置', onClick: () => router.push('/settings', { scroll: false }) },
+          });
+        } else if (outcome.kind === 'privacy-removed') {
+          showToast('已从隐私空间取消收藏', 'success', {
+            action: {
+              label: '撤销',
+              onClick: () =>
+                void restoreToPrivacy(token, target).catch((error: unknown) =>
+                  showToast(apiErrorMessage(error, '撤销失败'), 'error'),
+                ),
+            },
+          });
+        } else if (outcome.kind === 'faved') {
+          showToast(`已收藏到「${outcome.folderName}」`, 'success', {
+            action: { label: '更改', onClick: () => setPickerFor(targetId) },
+          });
+        } else {
+          showToast('已取消收藏', 'success', {
+            action: {
+              label: '撤销',
+              onClick: () =>
+                void restoreFavourite(token, targetId, outcome.previous, defaultFolder.id).catch(
+                  (error: unknown) => showToast(apiErrorMessage(error, '撤销失败'), 'error'),
+                ),
+            },
+          });
+        }
+      },
+    );
   };
 
   const handleOpenFolderPicker = () => {
@@ -1150,13 +1252,18 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     if (!image) return;
     const token = readToken();
     if (value === 'contact') {
-      shareToContact({ kind: 'image', imageId: image.id, thumbUrl: shareThumbUrl(image.representations) });
+      shareToContact({
+        kind: 'image',
+        imageId: image.id,
+        thumbUrl: shareThumbUrl(image.representations),
+      });
       return;
     }
     const targetId = image.id;
     const done = () => setSharingId((current) => (current === targetId ? null : current));
     setSharingId(targetId);
-    const task = value === 'native' ? shareImageNatively(image, token) : copyImageLink(image, token);
+    const task =
+      value === 'native' ? shareImageNatively(image, token) : copyImageLink(image, token);
     void task.then(done, done);
   };
 
@@ -1177,7 +1284,12 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
           label: '在新标签页打开',
           /* The visitor's own line first (review P3-O4): with an image line forced site-wide
              the raw derpicdn address is the one this visitor cannot reach. */
-          onClick: () => window.open(downloadCandidates(source.url)[0] ?? getRawImageUrl(source.url), '_blank', 'noopener,noreferrer'),
+          onClick: () =>
+            window.open(
+              downloadCandidates(source.url)[0] ?? getRawImageUrl(source.url),
+              '_blank',
+              'noopener,noreferrer',
+            ),
         },
       });
     });
@@ -1209,14 +1321,17 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
         return;
       }
       showToast('已提交举报', 'success');
-      setReport((current) => (current.imageId === targetId ? { imageId: targetId, open: false, reason: '' } : current));
+      setReport((current) =>
+        current.imageId === targetId ? { imageId: targetId, open: false, reason: '' } : current,
+      );
     });
   };
 
   // ---- Lightbox slides ----
   const lightboxSlides: PicLightboxSlide[] = [];
   if (image && facts?.fullSrc) {
-    const videoType = facts.format === 'webm' ? 'video/webm' : facts.format === 'mp4' ? 'video/mp4' : null;
+    const videoType =
+      facts.format === 'webm' ? 'video/webm' : facts.format === 'mp4' ? 'video/mp4' : null;
     if (facts.isVideo && videoType) {
       lightboxSlides.push({
         type: 'video' as const,
@@ -1334,7 +1449,11 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
             `buildContainerAnimations` drives them. */}
         <div data-image-detail-clip className="image-detail-clip absolute inset-0">
           <div data-image-detail-unclip className="image-detail-unclip absolute inset-0">
-            <div ref={overlaySurfaceRef} data-image-detail-surface className="absolute inset-0 bg-surface" />
+            <div
+              ref={overlaySurfaceRef}
+              data-image-detail-surface
+              className="absolute inset-0 bg-surface"
+            />
             <ScrollArea
               axis="y"
               defer
@@ -1344,22 +1463,39 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
             >
               <div
                 ref={overlayContentRef}
-                className={cn('image-detail-overlay-content relative min-h-full w-full', centred && 'flex flex-col')}
+                className={cn(
+                  'image-detail-overlay-content relative min-h-full w-full',
+                  centred && 'flex flex-col',
+                )}
               >
                 {/* The container transform's cross-fade block — see HERO_CONTENT_SELECTOR — and
                     what a step's shared axis moves (`useDetailStep`); the two never run together. */}
-                <div ref={stepContentRef} data-image-detail-crossfade className={cn('w-full', centred && 'flex flex-1 flex-col')}>
+                <div
+                  ref={stepContentRef}
+                  data-image-detail-crossfade
+                  className={cn('w-full', centred && 'flex flex-1 flex-col')}
+                >
                   {content}
                 </div>
               </div>
               {/* The flight's plane once the route owns an open's scroll: the flyer is planted
                   here and rides the route's own native scroll (`HeroController.promoteAdoption`),
                   as on the Stage's anchor before it. Empty otherwise; the controller owns it. */}
-              <div ref={overlayAnchorRef} data-image-hero-route-anchor aria-hidden="true" className="image-hero-stage-anchor" />
+              <div
+                ref={overlayAnchorRef}
+                data-image-hero-route-anchor
+                aria-hidden="true"
+                className="image-hero-stage-anchor"
+              />
             </ScrollArea>
             {/* Non-scrolling plane for sticky split targets — mirrors `HeroStage`'s copy so
                 `promoteAdoption` can replant a mid-flight flyer without leaving sticky space. */}
-            <div ref={overlayFixedAnchorRef} data-image-hero-fixed-anchor aria-hidden="true" className="image-hero-stage-anchor" />
+            <div
+              ref={overlayFixedAnchorRef}
+              data-image-hero-fixed-anchor
+              aria-hidden="true"
+              className="image-hero-stage-anchor"
+            />
           </div>
         </div>
       </section>
@@ -1370,7 +1506,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   if (isLoading) {
     /* Never a landing target — the flight is over before this can mount — so it is free to
        carry the vertical padding the real render must not. */
-    return renderDetailShell(<DetailSkeleton gutter={overlayGutter} page={presentation === 'page'} />);
+    return renderDetailShell(
+      <DetailSkeleton gutter={overlayGutter} page={presentation === 'page'} />,
+    );
   }
 
   // --- A picture that does not exist, or a read that failed ---
@@ -1417,7 +1555,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
     );
   }
 
-  const detailHeroStyle = getHeroMediaStyle(latchedMediaBox ?? { width: image.width, height: image.height });
+  const detailHeroStyle = getHeroMediaStyle(
+    latchedMediaBox ?? { width: image.width, height: image.height },
+  );
   /* A direct load has no card to borrow a bitmap from: the record's thumbnail stands in until
      the full picture is decoded (a still — an animated thumbnail would restart the animation). */
   const directPreview = heroSeed ? undefined : detailStillPreview(image);
@@ -1429,12 +1569,20 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
   const hasInfo = infoReady && (hasDescription || detailSources.length > 0);
   const shareItems: MenuAction[] = [
     { value: 'copy', label: '复制链接', icon: <MdLink size={ICON.standard} /> },
-    ...(shareMenu?.native ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare size={ICON.standard} /> }] : []),
+    ...(shareMenu?.native
+      ? [{ value: 'native', label: '分享到其他应用', icon: <MdIosShare size={ICON.standard} /> }]
+      : []),
     { value: 'contact', label: '分享给联系人', icon: <MdSend size={ICON.standard} /> },
   ];
 
   return renderDetailShell(
-    <div className={cn('image-detail-page mx-auto max-w-5xl', presentation === 'page' && 'page-back-room-5xl', overlayGutter)}>
+    <div
+      className={cn(
+        'image-detail-page mx-auto max-w-5xl',
+        presentation === 'page' && 'page-back-room-5xl',
+        overlayGutter,
+      )}
+    >
       <div className="image-detail-shell flex flex-col rounded-md bg-transparent">
         {/* Title and measurements. The back affordance is `renderDetailShell`'s, both
             presentations — an inline copy would be a second one. */}
@@ -1544,13 +1692,18 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                 onDownload={handleDownload}
                 onFave={handleToggleFave}
                 onPickFolder={handleOpenFolderPicker}
-                onShare={() => setShareMenu(shareOpen ? null : { imageId, native: typeof navigator.share === 'function' })}
+                onShare={() =>
+                  setShareMenu(
+                    shareOpen ? null : { imageId, native: typeof navigator.share === 'function' },
+                  )
+                }
                 onTranslate={handleTranslate}
                 onReport={handleReportPress}
                 center={
-                  recordPending || (typeof record?.upvotes === 'number' && typeof record?.downvotes === 'number')
-                    ? <DetailVotes image={record} pending={recordPending} />
-                    : undefined
+                  recordPending ||
+                  (typeof record?.upvotes === 'number' && typeof record?.downvotes === 'number') ? (
+                    <DetailVotes image={record} pending={recordPending} />
+                  ) : undefined
                 }
               >
                 <Menu
@@ -1563,7 +1716,9 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                 />
               </DetailActions>
               {canTranslate && <ImageTranslationStatus translation={imageTranslation} />}
-              <FollowHeight watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}>
+              <FollowHeight
+                watch={infoReady ? JSON.stringify([image.description, detailSources]) : 'pending'}
+              >
                 {hasInfo && (
                   <div className="space-y-5 pt-5">
                     {hasDescription && <DetailDescription description={image.description} />}
@@ -1593,27 +1748,34 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
                   message={isNotFound(bodyError) ? undefined : apiErrorMessage(bodyError)}
                   onRetry={isRetryable(bodyError) ? retryRecord : undefined}
                 />
-              ) : (deferredBodyReady || bodyPrerender) && (
-                <Activity mode={bodyTailReady ? 'visible' : 'hidden'}>
-                  <div ref={bodyContentRef}>
-                    <CommentSection
-                      imageId={imageId}
-                      derpiCount={record?.comment_count}
-                      replyTo={replyTo}
-                      onReply={handleReply}
-                      onCancelReply={() => setReplyTo(null)}
-                      composerRef={composerRef}
-                      scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
-                    />
-                  </div>
-                </Activity>
+              ) : (
+                (deferredBodyReady || bodyPrerender) && (
+                  <Activity mode={bodyTailReady ? 'visible' : 'hidden'}>
+                    <div ref={bodyContentRef}>
+                      <CommentSection
+                        imageId={imageId}
+                        derpiCount={record?.comment_count}
+                        replyTo={replyTo}
+                        onReply={handleReply}
+                        onCancelReply={() => setReplyTo(null)}
+                        composerRef={composerRef}
+                        scrollerRef={presentation === 'overlay' ? overlayScrollerRef : null}
+                      />
+                    </div>
+                  </Activity>
+                )
               )}
             </div>
           </div>
         </div>
       </div>
       {isLightboxOpen && (
-        <PicLightbox open={isLightboxOpen} close={handleCloseLightbox} slides={lightboxSlides} onDownload={handleDownload} />
+        <PicLightbox
+          open={isLightboxOpen}
+          close={handleCloseLightbox}
+          slides={lightboxSlides}
+          onDownload={handleDownload}
+        />
       )}
       <TagInfoModal tag={selectedTag} onClose={() => setSelectedTag(null)} />
       <ReportDialog
@@ -1626,7 +1788,13 @@ export default function PicDetail({ presentation = 'page', seed = null }: PicDet
       />
       {shareDialog}
       {session.token && (
-        <FolderPicker key={`${session.token}:${imageId}`} open={pickerOpen} token={session.token} imageId={imageId} onClose={() => setPickerFor((current) => current === imageId ? null : current)} />
+        <FolderPicker
+          key={`${session.token}:${imageId}`}
+          open={pickerOpen}
+          token={session.token}
+          imageId={imageId}
+          onClose={() => setPickerFor((current) => (current === imageId ? null : current))}
+        />
       )}
     </div>,
   );

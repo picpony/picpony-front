@@ -43,10 +43,19 @@ export default function TagFields({
             error={errors.en}
             readOnly={busy}
             onChange={(en) => onChange({ en })}
-            onPick={(tag: DerpiTagRow) => onChange({ en: tag.name, cat: tag.category || 'general', count: tag.images || 0 })}
+            onPick={(tag: DerpiTagRow) =>
+              onChange({ en: tag.name, cat: tag.category || 'general', count: tag.images || 0 })
+            }
           />
         ) : (
-          <Input id={`${prefix}-en`} label="英文标签" value={form.en} readOnly className="font-mono" helper="英文标签不可修改" />
+          <Input
+            id={`${prefix}-en`}
+            label="英文标签"
+            value={form.en}
+            readOnly
+            className="font-mono"
+            helper="英文标签不可修改"
+          />
         )}
         <Select
           label="分类"
@@ -98,7 +107,9 @@ export function WorkOrderNote({ workOrder, onUse }: { workOrder: Feedback; onUse
         <p className="text-label-l tabular-nums text-on-surface">
           {`正在处理反馈 #${workOrder.id} · ${workOrder.username || '访客'}`}
         </p>
-        <p className="mt-0.5 whitespace-pre-wrap wrap-anywhere text-body-m text-on-surface-variant">{workOrder.content}</p>
+        <p className="mt-0.5 whitespace-pre-wrap wrap-anywhere text-body-m text-on-surface-variant">
+          {workOrder.content}
+        </p>
       </div>
       <Button type="button" variant="tonal" size="xs" icon={<MdArrowDownward />} onClick={onUse}>
         填入中文翻译

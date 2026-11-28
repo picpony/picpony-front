@@ -13,7 +13,8 @@ const { buildFlightKeyframes, createHeroLeg, evaluateLeg } = await import('../li
 const { heroRectCenterDistance } = await import('../lib/hero/geometry.ts');
 const { getHeroRestingDetailRect } = await import('../lib/hero/dom.ts');
 const { velocityAt } = await import('../lib/hero/progress.ts');
-const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } = await import('../lib/hero/constants.ts');
+const { HERO_DURATIONS, HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS } =
+  await import('../lib/hero/constants.ts');
 const { LS_KEYS } = await import('../lib/constants.ts');
 const { clamp, clamp01 } = await import('../lib/utils.ts');
 const utils = { clamp, clamp01 };
@@ -24,14 +25,18 @@ function load(file, dependencies, globals) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, {
-    exports,
-    require(name) {
-      assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
-      return dependencies[name];
+  vm.runInNewContext(
+    source,
+    {
+      exports,
+      require(name) {
+        assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
+        return dependencies[name];
+      },
+      ...globals,
     },
-    ...globals,
-  }, { filename: file });
+    { filename: file },
+  );
   return exports;
 }
 
@@ -61,7 +66,11 @@ class Scroller extends EventTarget {
 
   removeEventListener(type, listener, options) {
     // Node 24 does not normalize the boolean capture shorthand like browser EventTarget.
-    super.removeEventListener(type, listener, typeof options === 'boolean' ? { capture: options } : options);
+    super.removeEventListener(
+      type,
+      listener,
+      typeof options === 'boolean' ? { capture: options } : options,
+    );
   }
 
   scrollTo(top) {
@@ -74,27 +83,40 @@ function scrollHarness(t, top = 200) {
   let now = 1000;
   let nextFrame = 1;
   const frames = new Map();
-  const scheduler = load('lib/hero/scheduler.ts', {}, {
-    requestAnimationFrame(callback) {
-      const id = nextFrame++;
-      frames.set(id, callback);
-      return id;
+  const scheduler = load(
+    'lib/hero/scheduler.ts',
+    {},
+    {
+      requestAnimationFrame(callback) {
+        const id = nextFrame++;
+        frames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame(id) {
+        frames.delete(id);
+      },
     },
-    cancelAnimationFrame(id) { frames.delete(id); },
-  }).heroFrameScheduler;
-  const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
-    './input': { noteHeroInteraction() {} },
-    './scheduler': { heroFrameScheduler: scheduler },
-    './returnInput': { takeOverHeroReturnInput: () => null },
-    '@/lib/utils': utils,
-  }, {
-    WheelEvent: TestWheelEvent,
-    performance: { now: () => now },
-    getComputedStyle: () => ({ lineHeight: '24px' }),
-  });
+  ).heroFrameScheduler;
+  const { HeroScrollContinuity } = load(
+    'lib/hero/scroll.ts',
+    {
+      './input': { noteHeroInteraction() {} },
+      './scheduler': { heroFrameScheduler: scheduler },
+      './returnInput': { takeOverHeroReturnInput: () => null },
+      '@/lib/utils': utils,
+    },
+    {
+      WheelEvent: TestWheelEvent,
+      performance: { now: () => now },
+      getComputedStyle: () => ({ lineHeight: '24px' }),
+    },
+  );
   const destination = new Scroller(top);
   const continuity = new HeroScrollContinuity(destination);
-  t.after(() => { continuity.release(); scheduler.dispose(); });
+  t.after(() => {
+    continuity.release();
+    scheduler.dispose();
+  });
 
   const frame = () => {
     now += 16;
@@ -121,14 +143,34 @@ test('detail landing measurements remove interpolated window drift without losin
     { left: 0, top: 64, width: 390, height: 780 },
   ]) {
     for (const scroll of [0, 128.5]) {
-      const expected = { left: host.left + 24.25, top: host.top + 78 - scroll,
-        width: host.width - 48.5, height: 285.75 };
-      for (const [sx, sy, dx, dy] of [[1.0015, 1.003, 0.17, -0.048], [1.02, 1.04, -3.5, 2.5], [1, 1, 0, 0]]) {
-        const projected = { left: host.left + dx, top: host.top + dy, width: host.width * sx, height: host.height * sy };
-        const measured = { left: projected.left + (expected.left - host.left) * sx,
-          top: projected.top + (expected.top - host.top) * sy, width: expected.width * sx, height: expected.height * sy };
+      const expected = {
+        left: host.left + 24.25,
+        top: host.top + 78 - scroll,
+        width: host.width - 48.5,
+        height: 285.75,
+      };
+      for (const [sx, sy, dx, dy] of [
+        [1.0015, 1.003, 0.17, -0.048],
+        [1.02, 1.04, -3.5, 2.5],
+        [1, 1, 0, 0],
+      ]) {
+        const projected = {
+          left: host.left + dx,
+          top: host.top + dy,
+          width: host.width * sx,
+          height: host.height * sy,
+        };
+        const measured = {
+          left: projected.left + (expected.left - host.left) * sx,
+          top: projected.top + (expected.top - host.top) * sy,
+          width: expected.width * sx,
+          height: expected.height * sy,
+        };
         const target = { getBoundingClientRect: () => measured };
-        const unclip = { contains: (node) => node === target, getBoundingClientRect: () => projected };
+        const unclip = {
+          contains: (node) => node === target,
+          getBoundingClientRect: () => projected,
+        };
         const overlay = { getBoundingClientRect: () => host, querySelector: () => unclip };
         const actual = getHeroRestingDetailRect(target, overlay);
         for (const key of ['left', 'top', 'width', 'height']) {
@@ -144,8 +186,20 @@ test('adopting a measured scroller does not flush layout again to establish its 
   const next = new Scroller(120);
   let reads = 0;
   Object.defineProperties(next, {
-    scrollLeft: { configurable: true, get() { reads += 1; return 0; } },
-    scrollTop: { configurable: true, get() { reads += 1; return 120; } },
+    scrollLeft: {
+      configurable: true,
+      get() {
+        reads += 1;
+        return 0;
+      },
+    },
+    scrollTop: {
+      configurable: true,
+      get() {
+        reads += 1;
+        return 120;
+      },
+    },
   });
   continuity.replacePeers(next, { left: 0, top: 120 });
   assert.equal(reads, 0);
@@ -162,21 +216,46 @@ test('a measured scroll follower starts without reads and preserves a clamped ta
   let keys;
   let cancelled = false;
   const source = {
-    get scrollTop() { reads += 1; return 80; },
-    get scrollHeight() { reads += 1; return 600; },
-    get clientHeight() { reads += 1; return 400; },
+    get scrollTop() {
+      reads += 1;
+      return 80;
+    },
+    get scrollHeight() {
+      reads += 1;
+      return 600;
+    },
+    get clientHeight() {
+      reads += 1;
+      return 400;
+    },
   };
   const target = {
-    get scrollTop() { reads += 1; return top; },
-    set scrollTop(value) { writes += 1; top = Math.min(40, value); },
+    get scrollTop() {
+      reads += 1;
+      return top;
+    },
+    set scrollTop(value) {
+      writes += 1;
+      top = Math.min(40, value);
+    },
   };
-  const node = { animate(value) {
-    keys = value;
-    return { cancel() { cancelled = true; } };
-  } };
-  const { followHeroScroll } = load('lib/hero/follow.ts', {}, {
-    window: { ScrollTimeline: class {} },
-  });
+  const node = {
+    animate(value) {
+      keys = value;
+      return {
+        cancel() {
+          cancelled = true;
+        },
+      };
+    },
+  };
+  const { followHeroScroll } = load(
+    'lib/hero/follow.ts',
+    {},
+    {
+      window: { ScrollTimeline: class {} },
+    },
+  );
   const still = followHeroScroll(source, target, node, { source: 0, target: 0, range: 200 });
   assert.equal(reads, 0);
   assert.equal(writes, 0);
@@ -202,19 +281,43 @@ test('scroll-driven follow animates multiple scrolling blocks on one timeline in
       const entry = { frames, timing, cancelled: false };
       records.push(entry);
       return {
-        effect: { setKeyframes(next) { entry.frames = next; } },
-        cancel() { entry.cancelled = true; },
+        effect: {
+          setKeyframes(next) {
+            entry.frames = next;
+          },
+        },
+        cancel() {
+          entry.cancelled = true;
+        },
       };
     },
   });
   const header = makeNode();
   const body = makeNode();
-  const { followHeroScroll } = load('lib/hero/follow.ts', {}, {
-    window: { ScrollTimeline: class { constructor(options) { Object.assign(this, options); } } },
+  const { followHeroScroll } = load(
+    'lib/hero/follow.ts',
+    {},
+    {
+      window: {
+        ScrollTimeline: class {
+          constructor(options) {
+            Object.assign(this, options);
+          }
+        },
+      },
+    },
+  );
+  const follow = followHeroScroll(source, target, [header, body], {
+    source: 0,
+    target: 0,
+    range: 400,
   });
-  const follow = followHeroScroll(source, target, [header, body], { source: 0, target: 0, range: 400 });
   assert.equal(records.length, 2);
-  assert.equal(records[0].timing.timeline, records[1].timing.timeline, 'header and body share one ScrollTimeline');
+  assert.equal(
+    records[0].timing.timeline,
+    records[1].timing.timeline,
+    'header and body share one ScrollTimeline',
+  );
   assert.equal(records[0].frames[1].transform, 'translate3d(0, -400.000px, 0)');
   assert.equal(records[1].frames[1].transform, 'translate3d(0, -400.000px, 0)');
 
@@ -226,7 +329,10 @@ test('scroll-driven follow animates multiple scrolling blocks on one timeline in
   source.scrollTop = 180;
   follow.commit();
   assert.equal(target.scrollTop, 180);
-  assert.equal(records.every((entry) => entry.cancelled), true);
+  assert.equal(
+    records.every((entry) => entry.cancelled),
+    true,
+  );
 });
 
 test('a returning window follows gallery scroll without moving its content, and releases the fallback', () => {
@@ -235,7 +341,11 @@ test('a returning window follows gallery scroll without moving its content, and 
   const content = { style: { translate: '' } };
   const { followHeroWindowScroll } = load('lib/hero/follow.ts', {}, { window: {} });
   const follow = followHeroWindowScroll(source, clip, content, { top: 200, range: 5200 });
-  assert.equal(clip.style.translate, '0 -140px', 'a remounted window adopts scroll that already happened');
+  assert.equal(
+    clip.style.translate,
+    '0 -140px',
+    'a remounted window adopts scroll that already happened',
+  );
   assert.equal(content.style.translate, '0 140px');
   assert.equal(follow.offset(), -140, 'a reversal must capture the scrolled position');
   source.scrollTo(400);
@@ -253,18 +363,39 @@ test('a returning window uses one native scroll timeline and leaves no scroll an
   const source = new Scroller(200);
   const calls = [];
   let cancelled = 0;
-  const node = () => ({ style: { translate: '' }, animate(keys, timing) {
-    calls.push({ keys, timing });
-    return { cancel() { cancelled += 1; } };
-  } });
-  const { followHeroWindowScroll } = load('lib/hero/follow.ts', {}, {
-    window: { ScrollTimeline: class { constructor(options) { Object.assign(this, options); } } },
+  const node = () => ({
+    style: { translate: '' },
+    animate(keys, timing) {
+      calls.push({ keys, timing });
+      return {
+        cancel() {
+          cancelled += 1;
+        },
+      };
+    },
   });
+  const { followHeroWindowScroll } = load(
+    'lib/hero/follow.ts',
+    {},
+    {
+      window: {
+        ScrollTimeline: class {
+          constructor(options) {
+            Object.assign(this, options);
+          }
+        },
+      },
+    },
+  );
   const follow = followHeroWindowScroll(source, node(), node(), { top: 200, range: 5200 });
   assert.equal(calls.length, 2);
   assert.equal(calls[0].timing.timeline, calls[1].timing.timeline);
   assert.equal(calls[0].timing.timeline.source, source);
-  assert.equal(getEventListeners(source, 'scroll').length, 0, 'native scroll must stay on the compositor');
+  assert.equal(
+    getEventListeners(source, 'scroll').length,
+    0,
+    'native scroll must stay on the compositor',
+  );
   follow.release();
   follow.release();
   assert.equal(cancelled, 2, 'each track is released exactly once');
@@ -288,15 +419,27 @@ for (const input of ['wheel', 'pointerdown', 'touchstart']) {
     assert.equal(await transferred, true);
     assert.equal(getEventListeners(abort.signal, 'abort').length, 0);
     drain();
-    assert.equal(destination.scrollTop, beforeInput, 'no queued write may precede native scrolling');
+    assert.equal(
+      destination.scrollTop,
+      beforeInput,
+      'no queued write may precede native scrolling',
+    );
 
     destination.scrollTo(beforeInput + 60);
     const staleWheel = new TestWheelEvent();
     outgoing.dispatchEvent(staleWheel);
     outgoing.scrollTo(1100);
     drain();
-    assert.equal(destination.scrollTop, beforeInput + 60, 'old momentum cannot overwrite new input');
-    assert.equal(staleWheel.defaultPrevented, false, 'the old receiver no longer captures wheel input');
+    assert.equal(
+      destination.scrollTop,
+      beforeInput + 60,
+      'old momentum cannot overwrite new input',
+    );
+    assert.equal(
+      staleWheel.defaultPrevented,
+      false,
+      'the old receiver no longer captures wheel input',
+    );
     assertNoScrollerListeners(outgoing);
   });
 }
@@ -312,7 +455,11 @@ test('ctrl-wheel zoom does not claim native scrolling or cancel a live handoff',
   assert.equal(continuity.hasNativeInput, false);
   assert.equal(zoom.defaultPrevented, false);
   drain();
-  assert.equal(destination.scrollTop, 280, 'the existing wheel stream still reaches its destination');
+  assert.equal(
+    destination.scrollTop,
+    280,
+    'the existing wheel stream still reaches its destination',
+  );
 });
 
 test('route can claim input after Stage scrolls between addPeer and setInputTarget', async (t) => {
@@ -404,7 +551,8 @@ function transferClock() {
   const clearTimeout = (id) => timers.delete(id);
   const advanceTo = async (target, afterTimer) => {
     for (let count = 0; count < 1000; count += 1) {
-      const next = [...timers.values()].filter(timer => timer.at <= target)
+      const next = [...timers.values()]
+        .filter((timer) => timer.at <= target)
         .sort((a, b) => a.at - b.at || a.id - b.id)[0];
       if (!next) {
         now = Math.max(now, target);
@@ -420,15 +568,30 @@ function transferClock() {
     assert.fail('timer work failed to settle');
   };
   return {
-    timers, frames, reads, performance, flush, setTimeout, clearTimeout, advanceTo,
-    get now() { return now; },
-    requestAnimationFrame(callback) { const id = ++sequence; frames.set(id, callback); return id; },
-    cancelAnimationFrame(id) { frames.delete(id); },
+    timers,
+    frames,
+    reads,
+    performance,
+    flush,
+    setTimeout,
+    clearTimeout,
+    advanceTo,
+    get now() {
+      return now;
+    },
+    requestAnimationFrame(callback) {
+      const id = ++sequence;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame(id) {
+      frames.delete(id);
+    },
     async frame(afterFrame) {
       now += 16;
       const pending = [...frames.values()];
       frames.clear();
-      pending.forEach(callback => callback(now));
+      pending.forEach((callback) => callback(now));
       afterFrame?.();
       await flush();
     },
@@ -439,21 +602,40 @@ function transferClock() {
 function returnInputHarness(t) {
   const clock = transferClock();
   const window = Object.assign(new Scroller(), {
-    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, innerWidth: 1440, innerHeight: 900,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+    innerWidth: 1440,
+    innerHeight: 900,
   });
   const document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
-  const globals = { window, document, performance: clock.performance, Node: Scroller,
-    WheelEvent: TestWheelEvent, getComputedStyle: () => ({ lineHeight: '24px' }),
-    requestAnimationFrame: clock.requestAnimationFrame, cancelAnimationFrame: clock.cancelAnimationFrame };
+  const globals = {
+    window,
+    document,
+    performance: clock.performance,
+    Node: Scroller,
+    WheelEvent: TestWheelEvent,
+    getComputedStyle: () => ({ lineHeight: '24px' }),
+    requestAnimationFrame: clock.requestAnimationFrame,
+    cancelAnimationFrame: clock.cancelAnimationFrame,
+  };
   const input = load('lib/hero/input.ts', {}, globals);
   input.initializeHeroInput();
   const relay = load('lib/hero/returnInput.ts', { './input': input }, globals);
   const scheduler = load('lib/hero/scheduler.ts', {}, globals).heroFrameScheduler;
-  const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
-    './input': input, './returnInput': relay, './scheduler': { heroFrameScheduler: scheduler }, '@/lib/utils': utils,
-  }, globals);
-  const destination = new Scroller(200), source = new Scroller(100), leaf = new Scroller();
-  source.contains = node => node === source || node === leaf;
+  const { HeroScrollContinuity } = load(
+    'lib/hero/scroll.ts',
+    {
+      './input': input,
+      './returnInput': relay,
+      './scheduler': { heroFrameScheduler: scheduler },
+      '@/lib/utils': utils,
+    },
+    globals,
+  );
+  const destination = new Scroller(200),
+    source = new Scroller(100),
+    leaf = new Scroller();
+  source.contains = (node) => node === source || node === leaf;
   const dispatch = (target, event) => {
     Object.defineProperties(event, { target: { value: target }, timeStamp: { value: clock.now } });
     if (target.isConnected) window.dispatchEvent(event);
@@ -463,17 +645,48 @@ function returnInputHarness(t) {
   const wheel = (target, options) => dispatch(target, new TestWheelEvent(options));
   const touch = (type, y, ended = false) => {
     const contact = { identifier: 5, clientX: 10, clientY: y, target: leaf };
-    return dispatch(leaf, Object.assign(new Event(type), { touches: ended ? [] : [contact], changedTouches: [contact] }));
+    return dispatch(
+      leaf,
+      Object.assign(new Event(type), {
+        touches: ended ? [] : [contact],
+        changedTouches: [contact],
+      }),
+    );
   };
   const continuity = new HeroScrollContinuity(destination);
-  const begin = () => { continuity.addDeltaSource(source); continuity.takeOverReturnInput(source); };
-  const frame = async () => { await clock.advanceTo(clock.now + 16); await clock.frame(); };
-  const drain = async () => { for (let i=0; clock.frames.size && i<100; i++) await frame(); };
-  t.after(() => { continuity.release(); window.dispatchEvent(new Event('blur')); });
-  return { clock, window, input, source, leaf, destination, continuity, dispatch, wheel, touch, begin, frame, drain };
+  const begin = () => {
+    continuity.addDeltaSource(source);
+    continuity.takeOverReturnInput(source);
+  };
+  const frame = async () => {
+    await clock.advanceTo(clock.now + 16);
+    await clock.frame();
+  };
+  const drain = async () => {
+    for (let i = 0; clock.frames.size && i < 100; i++) await frame();
+  };
+  t.after(() => {
+    continuity.release();
+    window.dispatchEvent(new Event('blur'));
+  });
+  return {
+    clock,
+    window,
+    input,
+    source,
+    leaf,
+    destination,
+    continuity,
+    dispatch,
+    wheel,
+    touch,
+    begin,
+    frame,
+    drain,
+  };
 }
 
-test('one wheel flow survives route removal and 200ms gaps without mistaking its own scroll writes for native input', async t => {
+test('one wheel flow survives route removal and 200ms gaps without mistaking its own scroll writes for native input', async (t) => {
   const h = returnInputHarness(t);
   h.wheel(h.leaf, { deltaY: 10 });
   h.begin();
@@ -481,12 +694,16 @@ test('one wheel flow survives route removal and 200ms gaps without mistaking its
   let released = 0;
   h.continuity.retire(() => released++);
   h.source.isConnected = h.leaf.isConnected = false;
-  for (let i=0; i<30; i++) {
+  for (let i = 0; i < 30; i++) {
     await h.clock.advanceTo(h.clock.now + 200);
     h.wheel(h.destination, { deltaY: 20 });
     await h.frame();
     h.destination.dispatchEvent(new Event('scroll'));
-    assert.equal(h.continuity.hasNativeInput, false, 'retargeted DOM events and own writes are not compositor takeover');
+    assert.equal(
+      h.continuity.hasNativeInput,
+      false,
+      'retargeted DOM events and own writes are not compositor takeover',
+    );
     assert.equal(released, 0, 'the active flow must not expire with the old visual session');
   }
   assert.ok(h.destination.scrollTop > 700, h.destination.scrollTop);
@@ -494,18 +711,26 @@ test('one wheel flow survives route removal and 200ms gaps without mistaking its
   await h.clock.advanceTo(h.clock.now + 400);
   assert.equal(released, 1);
   assert.equal(h.clock.frames.size, 0);
-  assert.equal(getEventListeners(h.window, 'wheel').length, 1, 'only the shared input monitor remains');
+  assert.equal(
+    getEventListeners(h.window, 'wheel').length,
+    1,
+    'only the shared input monitor remains',
+  );
   assert.equal(getEventListeners(h.leaf, 'wheel').length, 0);
   assertNoScrollerListeners(h.destination);
 });
 
-test('an opening handoff can acquire a wheel stream after its active flag clears', async t => {
+test('an opening handoff can acquire a wheel stream after its active flag clears', async (t) => {
   const h = returnInputHarness(t);
   h.wheel(h.leaf, { deltaY: 10 });
   await h.clock.advanceTo(h.clock.now + 200);
   assert.equal(h.input.isHeroInteractionQuiet(), true);
   h.begin();
-  assert.equal(h.continuity.canCompleteReturn, true, 'quiet input can still belong to the outgoing scroller');
+  assert.equal(
+    h.continuity.canCompleteReturn,
+    true,
+    'quiet input can still belong to the outgoing scroller',
+  );
   h.source.isConnected = h.leaf.isConnected = false;
   h.continuity.retire(() => {});
   h.wheel(h.destination, { deltaY: 80 });
@@ -513,12 +738,14 @@ test('an opening handoff can acquire a wheel stream after its active flag clears
   assert.equal(h.destination.scrollTop, 280);
 });
 
-test('a close inherits an opening wheel stream after its Stage has unmounted', async t => {
+test('a close inherits an opening wheel stream after its Stage has unmounted', async (t) => {
   const h = returnInputHarness(t);
   h.wheel(h.leaf, { deltaY: 10 });
   h.begin();
   let openingReleased = false;
-  h.continuity.retire(() => { openingReleased = true; });
+  h.continuity.retire(() => {
+    openingReleased = true;
+  });
   h.source.isConnected = h.leaf.isConnected = false;
   h.source.clientHeight = 0;
   const gallery = new Scroller(500);
@@ -536,14 +763,19 @@ test('a close inherits an opening wheel stream after its Stage has unmounted', a
 });
 
 for (const takeover of ['pointer', 'ctrl-wheel', 'native-scroll', 'native-before-event']) {
-  test(`a ${takeover} takeover cancels pending old-flow writes`, async t => {
+  test(`a ${takeover} takeover cancels pending old-flow writes`, async (t) => {
     const h = returnInputHarness(t);
-    h.wheel(h.leaf, { deltaY: 10 }); h.begin();
+    h.wheel(h.leaf, { deltaY: 10 });
+    h.begin();
     let released = false;
-    h.continuity.retire(() => { released = true; });
+    h.continuity.retire(() => {
+      released = true;
+    });
     h.wheel(h.destination, { deltaY: 100 });
-    if (takeover === 'pointer') h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'mouse' }));
-    else if (takeover === 'ctrl-wheel') assert.equal(h.wheel(h.destination, { ctrlKey: true }).defaultPrevented, false);
+    if (takeover === 'pointer')
+      h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'mouse' }));
+    else if (takeover === 'ctrl-wheel')
+      assert.equal(h.wheel(h.destination, { ctrlKey: true }).defaultPrevented, false);
     else {
       h.destination.scrollTop += 30;
       if (takeover === 'native-scroll') h.destination.dispatchEvent(new Event('scroll'));
@@ -556,18 +788,25 @@ for (const takeover of ['pointer', 'ctrl-wheel', 'native-scroll', 'native-before
   });
 }
 
-test('a detached touch target keeps direct drag input alive beyond the safety window and clears all input on end', async t => {
+test('a detached touch target keeps direct drag input alive beyond the safety window and clears all input on end', async (t) => {
   const h = returnInputHarness(t);
-  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
-  h.touch('touchstart', 600); h.begin();
+  h.dispatch(
+    h.leaf,
+    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }),
+  );
+  h.touch('touchstart', 600);
+  h.begin();
   let released = false;
-  h.continuity.retire(() => { released = true; });
+  h.continuity.retire(() => {
+    released = true;
+  });
   h.source.isConnected = h.leaf.isConnected = false;
-  for (let i=1; i<=60; i++) {
+  for (let i = 1; i <= 60; i++) {
     await h.clock.advanceTo(h.clock.now + 100);
-    h.touch('touchmove', 600-i*3); await h.frame();
+    h.touch('touchmove', 600 - i * 3);
+    await h.frame();
     h.destination.dispatchEvent(new Event('scroll'));
-    assert.equal(h.destination.scrollTop, 200+i*3);
+    assert.equal(h.destination.scrollTop, 200 + i * 3);
     assert.equal(h.input.hasActiveHeroInput(), true);
     assert.equal(released, false);
   }
@@ -582,14 +821,21 @@ test('a detached touch target keeps direct drag input alive beyond the safety wi
   assert.equal(h.destination.scrollTop, 380);
 });
 
-test('fractional touch movement survives native scroll offset rounding', async t => {
+test('fractional touch movement survives native scroll offset rounding', async (t) => {
   const h = returnInputHarness(t);
   let top = 200;
-  Object.defineProperty(h.destination, 'scrollTop', { get: () => top, set: value => { top = Math.round(value); } });
-  h.touch('touchstart', 600); h.begin();
+  Object.defineProperty(h.destination, 'scrollTop', {
+    get: () => top,
+    set: (value) => {
+      top = Math.round(value);
+    },
+  });
+  h.touch('touchstart', 600);
+  h.begin();
   h.source.isConnected = h.leaf.isConnected = false;
-  for (let i=1; i<=20; i++) {
-    h.touch('touchmove', 600-i*.1); await h.frame();
+  for (let i = 1; i <= 20; i++) {
+    h.touch('touchmove', 600 - i * 0.1);
+    await h.frame();
     h.destination.dispatchEvent(new Event('scroll'));
     assert.equal(h.continuity.hasNativeInput, false);
   }
@@ -597,43 +843,61 @@ test('fractional touch movement survives native scroll offset rounding', async t
   h.touch('touchend', 598, true);
 });
 
-test('fractional wheel packets accumulate across native scroll offset rounding in both directions', async t => {
+test('fractional wheel packets accumulate across native scroll offset rounding in both directions', async (t) => {
   const h = returnInputHarness(t);
   let top = 200;
-  Object.defineProperty(h.destination, 'scrollTop', { get: () => top, set: value => { top = Math.round(value); } });
-  h.wheel(h.leaf, { deltaY: 10 }); h.begin();
-  for (const direction of [1,-1]) {
-    for (let i=0; i<20; i++) {
-      h.wheel(h.destination, { deltaY: direction*.1 }); await h.frame();
+  Object.defineProperty(h.destination, 'scrollTop', {
+    get: () => top,
+    set: (value) => {
+      top = Math.round(value);
+    },
+  });
+  h.wheel(h.leaf, { deltaY: 10 });
+  h.begin();
+  for (const direction of [1, -1]) {
+    for (let i = 0; i < 20; i++) {
+      h.wheel(h.destination, { deltaY: direction * 0.1 });
+      await h.frame();
       h.destination.dispatchEvent(new Event('scroll'));
       assert.equal(h.continuity.hasNativeInput, false);
     }
-    assert.equal(top, direction===1 ? 202 : 200);
+    assert.equal(top, direction === 1 ? 202 : 200);
   }
 });
 
-test('blurring the departing detail control does not cancel its ongoing wheel flow', async t => {
+test('blurring the departing detail control does not cancel its ongoing wheel flow', async (t) => {
   const h = returnInputHarness(t);
   const before = getEventListeners(h.window, 'blur');
-  h.wheel(h.leaf, { deltaY: 10 }); h.begin();
+  h.wheel(h.leaf, { deltaY: 10 });
+  h.begin();
   let released = false;
-  h.continuity.retire(() => { released = true; });
+  h.continuity.retire(() => {
+    released = true;
+  });
   const controlBlur = new Event('blur');
   Object.defineProperty(controlBlur, 'target', { value: h.leaf });
   // Element blur only reaches a window capture listener; the shared window-blur monitor
   // must not receive this simulated capture dispatch.
-  for (const listener of getEventListeners(h.window, 'blur').filter(fn => !before.includes(fn))) listener(controlBlur);
+  for (const listener of getEventListeners(h.window, 'blur').filter((fn) => !before.includes(fn)))
+    listener(controlBlur);
   assert.equal(released, false);
-  h.wheel(h.destination, { deltaY: 40 }); await h.drain();
+  h.wheel(h.destination, { deltaY: 40 });
+  await h.drain();
   assert.ok(h.destination.scrollTop > 220);
   h.window.dispatchEvent(new Event('blur'));
   assert.equal(released, true);
 });
 
 function beginDetachedTouch(h) {
-  h.dispatch(h.leaf, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }));
+  h.dispatch(
+    h.leaf,
+    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 9 }),
+  );
   h.touch('touchstart', 600);
-  h.dispatch(h.leaf, Object.assign(new Event('pointercancel'), { pointerType: 'touch', pointerId: 9 }));
+  h.dispatch(
+    h.leaf,
+    Object.assign(new Event('pointercancel'), { pointerType: 'touch', pointerId: 9 }),
+  );
   h.begin();
   h.continuity.retire(() => {});
   h.source.isConnected = h.leaf.isConnected = false;
@@ -645,13 +909,16 @@ function assertNoTouchTargetListeners(h) {
   }
 }
 
-for (const detached of [false,true]) {
-  for (const end of ['touchend','touchcancel']) {
-    test(`a ${detached ? 'detached' : 'connected'} ${end} before the next frame ${end === 'touchend' ? 'drains' : 'cancels'} its pending movement`, async t => {
+for (const detached of [false, true]) {
+  for (const end of ['touchend', 'touchcancel']) {
+    test(`a ${detached ? 'detached' : 'connected'} ${end} before the next frame ${end === 'touchend' ? 'drains' : 'cancels'} its pending movement`, async (t) => {
       const h = returnInputHarness(t);
-      h.touch('touchstart', 600); h.begin();
+      h.touch('touchstart', 600);
+      h.begin();
       let released = false;
-      h.continuity.retire(() => { released = true; });
+      h.continuity.retire(() => {
+        released = true;
+      });
       if (detached) h.source.isConnected = h.leaf.isConnected = false;
       h.touch('touchmove', 580);
       h.touch(end, 576, true);
@@ -667,43 +934,71 @@ for (const detached of [false,true]) {
 }
 
 for (const end of ['touchend', 'touchcancel']) {
-  test(`a navigation or new Hero can release movement before the detached ${end} without losing input state`, async t => {
+  test(`a navigation or new Hero can release movement before the detached ${end} without losing input state`, async (t) => {
     const h = returnInputHarness(t);
     beginDetachedTouch(h);
-    h.touch('touchmove', 580); await h.frame();
+    h.touch('touchmove', 580);
+    await h.frame();
     h.continuity.release();
     const top = h.destination.scrollTop;
-    h.touch('touchmove', 570); await h.frame();
-    assert.equal(h.destination.scrollTop, top, 'the cancelled relay must not keep moving the gallery');
+    h.touch('touchmove', 570);
+    await h.frame();
+    assert.equal(
+      h.destination.scrollTop,
+      top,
+      'the cancelled relay must not keep moving the gallery',
+    );
     assert.equal(h.input.hasActiveHeroInput(), true, 'the original finger is still held');
     assert.equal(h.input.readHeroScrollInput().touches[0].clientY, 570);
     h.touch(end, 570, true);
-    assert.equal(h.input.hasActiveHeroInput(), false, 'the real ending must not wait for the safety timer');
+    assert.equal(
+      h.input.hasActiveHeroInput(),
+      false,
+      'the real ending must not wait for the safety timer',
+    );
     assert.equal(h.input.readHeroScrollInput().touches.length, 0);
     assertNoTouchTargetListeners(h);
     assert.equal(h.clock.frames.size, 0);
   });
 }
 
-test('an ended detached touch does not clear the new touch that superseded its relay', async t => {
+test('an ended detached touch does not clear the new touch that superseded its relay', async (t) => {
   const h = returnInputHarness(t);
   beginDetachedTouch(h);
   const oldTouch = { identifier: 5, clientX: 10, clientY: 600, target: h.leaf };
   const newTouch = { identifier: 6, clientX: 30, clientY: 40, target: h.destination };
-  h.dispatch(h.destination, Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 10 }));
-  h.dispatch(h.destination, Object.assign(new Event('touchstart'), { touches: [oldTouch,newTouch], changedTouches: [newTouch] }));
-  h.dispatch(h.leaf, Object.assign(new Event('touchend'), { touches: [newTouch], changedTouches: [oldTouch] }));
+  h.dispatch(
+    h.destination,
+    Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 10 }),
+  );
+  h.dispatch(
+    h.destination,
+    Object.assign(new Event('touchstart'), {
+      touches: [oldTouch, newTouch],
+      changedTouches: [newTouch],
+    }),
+  );
+  h.dispatch(
+    h.leaf,
+    Object.assign(new Event('touchend'), { touches: [newTouch], changedTouches: [oldTouch] }),
+  );
   assert.equal(h.input.hasActiveHeroInput(), true);
-  assert.deepEqual(Array.from(h.input.readHeroScrollInput().touches, touch => touch.identifier), [6]);
+  assert.deepEqual(
+    Array.from(h.input.readHeroScrollInput().touches, (touch) => touch.identifier),
+    [6],
+  );
   assertNoTouchTargetListeners(h);
-  h.dispatch(h.destination, Object.assign(new Event('touchend'), { touches: [], changedTouches: [newTouch] }));
+  h.dispatch(
+    h.destination,
+    Object.assign(new Event('touchend'), { touches: [], changedTouches: [newTouch] }),
+  );
   assert.equal(h.input.hasActiveHeroInput(), false);
   assert.equal(h.clock.frames.size, 0);
 });
 
-for (const releaseFirst of [false,true]) {
-  for (const stop of ['blur','timeout']) {
-    test(`${stop} clears detached touch observers and cancels pending movement ${releaseFirst ? 'after release' : 'during relay'}`, async t => {
+for (const releaseFirst of [false, true]) {
+  for (const stop of ['blur', 'timeout']) {
+    test(`${stop} clears detached touch observers and cancels pending movement ${releaseFirst ? 'after release' : 'during relay'}`, async (t) => {
       const h = returnInputHarness(t);
       beginDetachedTouch(h);
       h.touch('touchmove', 580);
@@ -717,7 +1012,11 @@ for (const releaseFirst of [false,true]) {
       assertNoScrollerListeners(h.destination);
       // Cancelling one owner leaves the shared scheduler's already-requested empty flush.
       await h.frame();
-      assert.equal(h.destination.scrollTop, top, 'cancelled movement must not run in the pending frame');
+      assert.equal(
+        h.destination.scrollTop,
+        top,
+        'cancelled movement must not run in the pending frame',
+      );
       assert.equal(h.clock.frames.size, 0);
     });
   }
@@ -727,38 +1026,78 @@ for (const releaseFirst of [false,true]) {
 function inputTransferHarness(t, history = {}) {
   const clock = transferClock();
   const window = Object.assign(new EventTarget(), {
-    setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, innerWidth: 1440, innerHeight: 900,
+    setTimeout: clock.setTimeout,
+    clearTimeout: clock.clearTimeout,
+    innerWidth: 1440,
+    innerHeight: 900,
   });
   const document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
-  const globals = { window, document, performance: clock.performance, AbortController,
-    requestAnimationFrame: clock.requestAnimationFrame, cancelAnimationFrame: clock.cancelAnimationFrame,
-    WheelEvent: TestWheelEvent, getComputedStyle: () => ({ lineHeight: '24px' }) };
+  const globals = {
+    window,
+    document,
+    performance: clock.performance,
+    AbortController,
+    requestAnimationFrame: clock.requestAnimationFrame,
+    cancelAnimationFrame: clock.cancelAnimationFrame,
+    WheelEvent: TestWheelEvent,
+    getComputedStyle: () => ({ lineHeight: '24px' }),
+  };
   const scheduler = load('lib/hero/scheduler.ts', {}, globals).heroFrameScheduler;
   const input = load('lib/hero/input.ts', {}, globals);
   input.initializeHeroInput();
-  const sessionHelpers = load('lib/hero/session.ts', {
-    './scheduler': { heroFrameScheduler: scheduler },
-  }, globals);
-  const { HeroScrollContinuity } = load('lib/hero/scroll.ts', {
-    './input': input, './scheduler': { heroFrameScheduler: scheduler }, '@/lib/utils': utils,
-    './returnInput': { takeOverHeroReturnInput: () => null },
-  }, globals);
+  const sessionHelpers = load(
+    'lib/hero/session.ts',
+    {
+      './scheduler': { heroFrameScheduler: scheduler },
+    },
+    globals,
+  );
+  const { HeroScrollContinuity } = load(
+    'lib/hero/scroll.ts',
+    {
+      './input': input,
+      './scheduler': { heroFrameScheduler: scheduler },
+      '@/lib/utils': utils,
+      './returnInput': { takeOverHeroReturnInput: () => null },
+    },
+    globals,
+  );
   const quietWaits = [];
-  const dependencies = Object.fromEntries([
-    './dom', './frameCache', './geometry', './gestures', './history', './motion',
-    './plane', './flight', './pull', './upgrade',
-  ].map(name => [name, {}]));
+  const dependencies = Object.fromEntries(
+    [
+      './dom',
+      './frameCache',
+      './geometry',
+      './gestures',
+      './history',
+      './motion',
+      './plane',
+      './flight',
+      './pull',
+      './upgrade',
+    ].map((name) => [name, {}]),
+  );
   dependencies['./probe'] = { heroProbeMark() {}, heroProbeDisabled: () => false };
   Object.assign(dependencies, {
     './history': { imageHeroHistory: history },
-    './constants': { HERO_INPUT_TRANSFER_MAX_MS, HERO_ROUTE_TIMEOUT_MS, HERO_INPUT_TRANSFER_QUIET_MS: 320 },
-    './input': { ...input, waitForHeroInteractionQuiet(signal, quietFor, budget) {
-      const before = new Set(clock.timers.keys());
-      const promise = input.waitForHeroInteractionQuiet(signal, quietFor, budget);
-      quietWaits.push({ signal, budget,
-        timerIds: [...clock.timers.keys()].filter(id => !before.has(id)) });
-      return promise;
-    } },
+    './constants': {
+      HERO_INPUT_TRANSFER_MAX_MS,
+      HERO_ROUTE_TIMEOUT_MS,
+      HERO_INPUT_TRANSFER_QUIET_MS: 320,
+    },
+    './input': {
+      ...input,
+      waitForHeroInteractionQuiet(signal, quietFor, budget) {
+        const before = new Set(clock.timers.keys());
+        const promise = input.waitForHeroInteractionQuiet(signal, quietFor, budget);
+        quietWaits.push({
+          signal,
+          budget,
+          timerIds: [...clock.timers.keys()].filter((id) => !before.has(id)),
+        });
+        return promise;
+      },
+    },
     './routes': { HeroRouteRegistry: class {} },
     // The real store; binding would initialise a second controller against this stub window.
     './runtime': { ...load('lib/hero/runtime.ts', {}, globals), bindImageHeroEngine() {} },
@@ -774,19 +1113,32 @@ function inputTransferHarness(t, history = {}) {
   const controller = new HeroController();
   const destination = new Scroller();
   const continuity = new HeroScrollContinuity(destination);
-  const session = { abort: new AbortController(), retired: false, reversing: false, scrollContinuity: continuity };
+  const session = {
+    abort: new AbortController(),
+    retired: false,
+    reversing: false,
+    scrollContinuity: continuity,
+  };
   controller.foreground = session;
   const beginInput = () => {
     const event = Object.assign(new Event('pointerdown'), { pointerType: 'touch', pointerId: 1 });
     window.dispatchEvent(event); // A held touch keeps the quiet wait pending beyond its budget.
   };
   const assertClean = () => {
-    assert.equal(getEventListeners(session.abort.signal, 'abort').length, 0, 'session abort listener leaked');
-    assert.equal(getEventListeners(controller.lifecycleAbort.signal, 'abort').length, 0,
-      'lifecycle abort listener leaked');
+    assert.equal(
+      getEventListeners(session.abort.signal, 'abort').length,
+      0,
+      'session abort listener leaked',
+    );
+    assert.equal(
+      getEventListeners(controller.lifecycleAbort.signal, 'abort').length,
+      0,
+      'lifecycle abort listener leaked',
+    );
     for (const wait of quietWaits) {
       assert.equal(getEventListeners(wait.signal, 'abort').length, 0, 'losing race waiter leaked');
-      for (const id of wait.timerIds) assert.equal(clock.timers.has(id), false, 'quiet timer leaked');
+      for (const id of wait.timerIds)
+        assert.equal(clock.timers.has(id), false, 'quiet timer leaked');
     }
   };
   t.after(() => {
@@ -796,29 +1148,72 @@ function inputTransferHarness(t, history = {}) {
     window.dispatchEvent(new Event('blur'));
     scheduler.dispose();
   });
-  return { clock, controller, session, continuity, destination, input, window, quietWaits, beginInput, assertClean,
-    wait: () => controller.waitForInputTransfer(session) };
+  return {
+    clock,
+    controller,
+    session,
+    continuity,
+    destination,
+    input,
+    window,
+    quietWaits,
+    beginInput,
+    assertClean,
+    wait: () => controller.waitForInputTransfer(session),
+  };
 }
 
 function closingFallbackHarness(t, collapse) {
   const calls = [];
   const h = inputTransferHarness(t, { ensureBackground: collapse });
   Object.assign(h.session, {
-    kind: 'closing', record: {}, owner: Symbol('closing'),
-    route: { pull: { reset() { calls.push('pull'); } } },
-    motion: { dispose() { calls.push('motion'); } },
-    scrollContinuity: { release() { calls.push('scroll'); } },
-    shared: { dispose() { calls.push('shared'); } },
-    visual: { dispose() { calls.push('visual'); } },
-    resolveClose: outcome => calls.push(outcome),
+    kind: 'closing',
+    record: {},
+    owner: Symbol('closing'),
+    route: {
+      pull: {
+        reset() {
+          calls.push('pull');
+        },
+      },
+    },
+    motion: {
+      dispose() {
+        calls.push('motion');
+      },
+    },
+    scrollContinuity: {
+      release() {
+        calls.push('scroll');
+      },
+    },
+    shared: {
+      dispose() {
+        calls.push('shared');
+      },
+    },
+    visual: {
+      dispose() {
+        calls.push('visual');
+      },
+    },
+    resolveClose: (outcome) => calls.push(outcome),
   });
   Object.assign(h.controller, {
-    routes: { seal() { calls.push('seal'); } },
+    routes: {
+      seal() {
+        calls.push('seal');
+      },
+    },
     exposeGallery() {},
-    clearBackgroundVisual() { calls.push('background'); },
+    clearBackgroundVisual() {
+      calls.push('background');
+    },
     isRecordBackground: () => true,
-    setPhase: phase => calls.push(phase),
-    reconcileIdleLocation() { calls.push('reconcile'); },
+    setPhase: (phase) => calls.push(phase),
+    reconcileIdleLocation() {
+      calls.push('reconcile');
+    },
   });
   return { ...h, calls };
 }
@@ -827,8 +1222,14 @@ test('a failed reopening disposes its flight and scroll owner before collapsing 
   const h = closingFallbackHarness(t, async () => {
     assert.equal(h.session.motion, null);
     assert.equal(h.session.scrollContinuity, null);
-    assert.deepEqual([...h.calls].sort(), ['seal', 'pull', 'motion', 'scroll', 'shared', 'visual', 'background'].sort());
-    assert.ok(h.calls.indexOf('seal') < h.calls.indexOf('motion'), 'seal the route before cancelling its window');
+    assert.deepEqual(
+      [...h.calls].sort(),
+      ['seal', 'pull', 'motion', 'scroll', 'shared', 'visual', 'background'].sort(),
+    );
+    assert.ok(
+      h.calls.indexOf('seal') < h.calls.indexOf('motion'),
+      'seal the route before cancelling its window',
+    );
     return true;
   });
   await h.controller.abandonToCollapse(h.session);
@@ -841,7 +1242,9 @@ test('an old fallback cannot reset a newer flight when its history traversal com
   let finish, current;
   const h = closingFallbackHarness(t, (_record, owns) => {
     current = owns;
-    return new Promise(resolve => { finish = resolve; });
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
   });
   const pending = h.controller.abandonToCollapse(h.session);
   assert.equal(h.controller.foreground, null);
@@ -852,7 +1255,7 @@ test('an old fallback cannot reset a newer flight when its history traversal com
   finish(true);
   await pending;
   assert.equal(h.controller.foreground, next);
-  assert.equal(h.calls.filter(call => call === 'background').length, 1);
+  assert.equal(h.calls.filter((call) => call === 'background').length, 1);
   assert.equal(h.calls.includes('gallery-idle'), false);
   assert.equal(h.calls.includes('reconcile'), false);
   assert.equal(h.calls.at(-1), 'handled');
@@ -862,7 +1265,9 @@ test('a newer flight finishing does not give an old fallback ownership again', a
   let finish, current;
   const h = closingFallbackHarness(t, (_record, owns) => {
     current = owns;
-    return new Promise(resolve => { finish = resolve; });
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
   });
   const pending = h.controller.abandonToCollapse(h.session);
   h.controller.sessionSequence += 1;
@@ -892,7 +1297,9 @@ test('quiet wait reports quiet, expired and aborted separately and cleans up eac
 
   const quiet = new AbortController();
   const pending = h.input.waitForHeroInteractionQuiet(quiet.signal, 100, 500.9);
-  h.window.dispatchEvent(Object.assign(new Event('pointerup'), { pointerType: 'touch', pointerId: 1 }));
+  h.window.dispatchEvent(
+    Object.assign(new Event('pointerup'), { pointerType: 'touch', pointerId: 1 }),
+  );
   await h.clock.advanceTo(h.clock.now + 110);
   assert.equal(await pending, 'quiet');
   assert.equal(getEventListeners(quiet.signal, 'abort').length, 0);
@@ -906,7 +1313,9 @@ test('controller completes a fractional budget even when its timer fires before 
   const pending = h.wait();
   const deadline = h.clock.reads[0] + HERO_INPUT_TRANSFER_MAX_MS;
   const wait = h.quietWaits[0];
-  const expiry = wait.timerIds.map(id => h.clock.timers.get(id)).find(timer => timer.delay === wait.budget);
+  const expiry = wait.timerIds
+    .map((id) => h.clock.timers.get(id))
+    .find((timer) => timer.delay === wait.budget);
   assert.notEqual(wait.budget, Math.trunc(wait.budget), 'the regression needs a fractional budget');
   assert.ok(expiry.at < deadline, 'the browser timer truncates the delay before this deadline');
   await h.clock.advanceTo(expiry.at);
@@ -919,18 +1328,27 @@ test('controller completes a fractional budget even when its timer fires before 
 test('a released native receiver waits on the existing quiet budget without retrying or failing early', async (t) => {
   const h = inputTransferHarness(t);
   h.beginInput();
-  let nativeWaits = 0, result;
+  let nativeWaits = 0,
+    result;
   h.session.scrollContinuity = {
     hasNativeInput: false,
-    waitForNativeInput: () => { nativeWaits += 1; return Promise.resolve(false); },
+    waitForNativeInput: () => {
+      nativeWaits += 1;
+      return Promise.resolve(false);
+    },
   };
-  const pending = h.wait().then(value => { result = value; return value; });
+  const pending = h.wait().then((value) => {
+    result = value;
+    return value;
+  });
   await h.clock.flush();
   assert.equal(result, undefined, 'receiver release is neither expiry nor successful transfer');
   assert.equal(nativeWaits, 1);
   assert.equal(h.quietWaits.length, 1, 'keep the original budget rather than creating a busy loop');
   const wait = h.quietWaits[0];
-  const expiry = wait.timerIds.map(id => h.clock.timers.get(id)).find(timer => timer.delay === wait.budget);
+  const expiry = wait.timerIds
+    .map((id) => h.clock.timers.get(id))
+    .find((timer) => timer.delay === wait.budget);
   await h.clock.advanceTo(expiry.at);
   assert.equal(await pending, true);
   assert.equal(nativeWaits, 1);
@@ -944,7 +1362,10 @@ test('native input wins the race and removes the quiet budget after a confirmati
   h.destination.dispatchEvent(new TestWheelEvent());
   await h.clock.flush();
   assert.equal(h.clock.frames.size, 1);
-  assert.equal(h.quietWaits[0].timerIds.some(id => h.clock.timers.has(id)), false);
+  assert.equal(
+    h.quietWaits[0].timerIds.some((id) => h.clock.timers.has(id)),
+    false,
+  );
   await h.clock.frame();
   assert.equal(await pending, true);
   h.assertClean();
@@ -962,10 +1383,18 @@ for (const owner of ['session', 'lifecycle']) {
         abort.abort();
       } else {
         const wait = h.quietWaits[0];
-        const expiry = wait.timerIds.map(id => h.clock.timers.get(id)).find(timer => timer.delay === wait.budget);
-        await h.clock.advanceTo(expiry.at, timer => { if (timer.id === expiry.id) abort.abort(); });
+        const expiry = wait.timerIds
+          .map((id) => h.clock.timers.get(id))
+          .find((timer) => timer.delay === wait.budget);
+        await h.clock.advanceTo(expiry.at, (timer) => {
+          if (timer.id === expiry.id) abort.abort();
+        });
       }
-      assert.equal(await pending, false, 'an abort remains authoritative while owns() is still true');
+      assert.equal(
+        await pending,
+        false,
+        'an abort remains authoritative while owns() is still true',
+      );
       assert.equal(h.controller.foreground, h.session);
       h.assertClean();
     });
@@ -988,7 +1417,9 @@ test('a suspended confirmation frame expires without abandoning a live handoff',
   const pending = h.wait();
   await h.clock.flush();
   assert.equal(h.clock.frames.size, 1);
-  const expiry = [...h.clock.timers.values()].find(timer => timer.delay === HERO_ROUTE_TIMEOUT_MS);
+  const expiry = [...h.clock.timers.values()].find(
+    (timer) => timer.delay === HERO_ROUTE_TIMEOUT_MS,
+  );
   assert.ok(expiry, 'the frame confirmation is bounded independently of rAF');
   await h.clock.advanceTo(expiry.at); // Simulate a hidden tab: timers advance, rAF does not.
   assert.equal(await pending, true);
@@ -1014,8 +1445,16 @@ function close(actual, expected, message) {
 test('concentric zoom retains nonzero speed and carries it into an interrupted leg', () => {
   const from = { left: 200, top: 200, width: 200, height: 200 };
   const to = { left: 0, top: 0, width: 600, height: 600 };
-  const options = { from, to, fromRadius: 20, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
-    startedAt: 1000, baseAspect: 1 };
+  const options = {
+    from,
+    to,
+    fromRadius: 20,
+    toRadius: 16,
+    direction: 'forward',
+    duration: HERO_DURATIONS.forward,
+    startedAt: 1000,
+    baseAspect: 1,
+  };
   const leg = createHeroLeg(options);
   /** A fifth of the way in, wherever the leg's own length puts that. */
   const caughtAt = 1000 + HERO_DURATIONS.forward * 0.2;
@@ -1023,29 +1462,50 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
   const distance = Math.hypot(200, 200);
   close(heroRectCenterDistance(from, to), distance, 'half-size change contributes to travel');
   assert.ok(caught.speed > 0, 'a centered resize is still visibly moving');
-  close(caught.speed, distance * velocityAt(leg.progress, 0.2) / HERO_DURATIONS.forward, 'pose uses leg distance units');
+  close(
+    caught.speed,
+    (distance * velocityAt(leg.progress, 0.2)) / HERO_DURATIONS.forward,
+    'pose uses leg distance units',
+  );
   /* A fresh flight is moving in the frame after the press — not `fastOutSlowIn`'s hang-back — and
      builds to one crest early in the leg, not at the press, then only slows, landing at rest. */
   const launch = evaluateLeg(leg, 1000).speed;
-  close(launch, distance * velocityAt(leg.progress, 0) / HERO_DURATIONS.forward, 'pose speed at the press');
+  close(
+    launch,
+    (distance * velocityAt(leg.progress, 0)) / HERO_DURATIONS.forward,
+    'pose speed at the press',
+  );
   const speeds = [];
-  for (let step = 0; step <= 100; step += 1) speeds.push(evaluateLeg(leg, 1000 + (HERO_DURATIONS.forward * step) / 100).speed);
+  for (let step = 0; step <= 100; step += 1)
+    speeds.push(evaluateLeg(leg, 1000 + (HERO_DURATIONS.forward * step) / 100).speed);
   const crest = Math.max(...speeds);
   const crestAt = speeds.indexOf(crest);
   /* A spring from rest: no speed at the instant of release but its greatest acceleration, so it is
      visibly on its way in the first frame (Compose's shared-element spring). */
-  const firstFrame = heroRectCenterDistance(from, evaluateLeg(leg, 1000 + 1000 / 60).rect) / distance;
-  assert.ok(launch >= 0 && firstFrame > 0.02, `a fresh flight leaves at once (${(firstFrame * 100).toFixed(1)}% in the first frame, crest ${crest.toFixed(2)})`);
+  const firstFrame =
+    heroRectCenterDistance(from, evaluateLeg(leg, 1000 + 1000 / 60).rect) / distance;
+  assert.ok(
+    launch >= 0 && firstFrame > 0.02,
+    `a fresh flight leaves at once (${(firstFrame * 100).toFixed(1)}% in the first frame, crest ${crest.toFixed(2)})`,
+  );
   assert.ok(crestAt > 0 && crestAt <= 25, `and crests in the air, early (${crestAt}% in)`);
   for (let step = 1; step <= 100; step += 1) {
     const rising = step <= crestAt;
-    assert.ok(rising ? speeds[step] >= speeds[step - 1] - 1e-9 : speeds[step] <= speeds[step - 1] + 1e-9,
-      `one crest: ${rising ? 'speeds up to it' : 'only slows after it'} (${step}%)`);
+    assert.ok(
+      rising ? speeds[step] >= speeds[step - 1] - 1e-9 : speeds[step] <= speeds[step - 1] + 1e-9,
+      `one crest: ${rising ? 'speeds up to it' : 'only slows after it'} (${step}%)`,
+    );
   }
   close(evaluateLeg(leg, 1000 + HERO_DURATIONS.forward).speed, 0, 'a fresh flight arrives at rest');
 
-  const continued = createHeroLeg({ ...options, from: caught.rect, fromRadius: caught.radius,
-    duration: 150, startedAt: caughtAt, speed: caught.speed });
+  const continued = createHeroLeg({
+    ...options,
+    from: caught.rect,
+    fromRadius: caught.radius,
+    duration: 150,
+    startedAt: caughtAt,
+    speed: caught.speed,
+  });
   close(evaluateLeg(continued, caughtAt).speed, caught.speed, 'rebuilding retains launch speed');
   assertRectClose(evaluateLeg(continued, caughtAt).rect, caught.rect, 'continued start');
   assertRectClose(evaluateLeg(continued, caughtAt + 150).rect, to, 'continued landing');
@@ -1056,11 +1516,24 @@ test('concentric zoom retains nonzero speed and carries it into an interrupted l
   for (const share of [0.05, 0.1, 0.15, 0.2, 0.25, 0.35, 0.5]) {
     const at = 1000 + HERO_DURATIONS.forward * share;
     const pose = evaluateLeg(leg, at);
-    const rebuilt = createHeroLeg({ ...options, from: pose.rect, fromRadius: pose.radius,
-      duration: HERO_DURATIONS.forward * (1 - share), startedAt: at, speed: pose.speed });
+    const rebuilt = createHeroLeg({
+      ...options,
+      from: pose.rect,
+      fromRadius: pose.radius,
+      duration: HERO_DURATIONS.forward * (1 - share),
+      startedAt: at,
+      speed: pose.speed,
+    });
     const kept = evaluateLeg(rebuilt, at).speed / pose.speed;
-    assert.ok(Math.abs(kept - 1) < 0.01, `a rebuild ${share * 100}% in keeps its speed (${(kept * 100).toFixed(1)}%)`);
-    assertRectClose(evaluateLeg(rebuilt, 1000 + HERO_DURATIONS.forward).rect, to, `and lands (${share * 100}%)`);
+    assert.ok(
+      Math.abs(kept - 1) < 0.01,
+      `a rebuild ${share * 100}% in keeps its speed (${(kept * 100).toFixed(1)}%)`,
+    );
+    assertRectClose(
+      evaluateLeg(rebuilt, 1000 + HERO_DURATIONS.forward).rect,
+      to,
+      `and lands (${share * 100}%)`,
+    );
   }
 });
 
@@ -1071,8 +1544,17 @@ test('launch speed uses the same units for translation, resizing, and combined t
     { left: 0, top: 0, width: 600, height: 600 },
     { left: 300, top: 100, width: 600, height: 400 },
   ]) {
-    const leg = createHeroLeg({ from, to, fromRadius: 20, toRadius: 16, direction: 'forward',
-      duration: 160, startedAt: 1000, baseAspect: to.width / to.height, speed: 0.5 });
+    const leg = createHeroLeg({
+      from,
+      to,
+      fromRadius: 20,
+      toRadius: 16,
+      direction: 'forward',
+      duration: 160,
+      startedAt: 1000,
+      baseAspect: to.width / to.height,
+      speed: 0.5,
+    });
     close(evaluateLeg(leg, 1000).speed, 0.5, `launch speed for ${JSON.stringify(to)}`);
   }
 });
@@ -1082,23 +1564,45 @@ test('a reversal leaves at the speed it was caught at, and carries on before it 
      start, so a caught flyer stood still for a frame or two and restarted from rest. */
   const from = { left: 1620, top: 650, width: 256, height: 197 };
   const to = { left: 632, top: 221, width: 944, height: 531 };
-  const options = { from, to, fromRadius: 16, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
-    startedAt: 1000, baseAspect: to.width / to.height };
+  const options = {
+    from,
+    to,
+    fromRadius: 16,
+    toRadius: 16,
+    direction: 'forward',
+    duration: HERO_DURATIONS.forward,
+    startedAt: 1000,
+    baseAspect: to.width / to.height,
+  };
   const outbound = createHeroLeg(options);
   for (const at of [1040, 1070, 1100]) {
     const caught = evaluateLeg(outbound, at);
     assert.ok(caught.speed > 0.5, `the outbound leg is moving fast at ${at}ms (${caught.speed})`);
-    const back = createHeroLeg({ ...options, from: caught.rect, to: from, fromRadius: caught.radius,
-      direction: 'back', duration: 200, startedAt: at, speed: -caught.speed });
+    const back = createHeroLeg({
+      ...options,
+      from: caught.rect,
+      to: from,
+      fromRadius: caught.radius,
+      direction: 'back',
+      duration: 200,
+      startedAt: at,
+      speed: -caught.speed,
+    });
     /* Velocity continuity: the new leg leaves at the caught speed, sign included — up to the
        spring's floor of −3 in normalised units (a dip of ≈10% of the way home), which only a
        catch in the first few frames of a leg reaches. */
     const home = heroRectCenterDistance(caught.rect, from);
     const floor = Math.min(caught.speed, (3 * home) / 200);
     const launch = evaluateLeg(back, at).speed;
-    assert.ok(launch < 0 && -launch >= 0.98 * floor && -launch <= 1.05 * caught.speed,
-      `launch ${launch} continues the caught ${-caught.speed} (floor ${-floor}) at ${at}ms`);
-    assertRectClose(evaluateLeg(back, at).rect, caught.rect, `the reversal starts where it was caught (${at}ms)`);
+    assert.ok(
+      launch < 0 && -launch >= 0.98 * floor && -launch <= 1.05 * caught.speed,
+      `launch ${launch} continues the caught ${-caught.speed} (floor ${-floor}) at ${at}ms`,
+    );
+    assertRectClose(
+      evaluateLeg(back, at).rect,
+      caught.rect,
+      `the reversal starts where it was caught (${at}ms)`,
+    );
     /* The dip: for a few ms the flyer is still travelling the way it was heading (toward `to`),
        and it turns within a frame — measured, because its depth goes as the caught speed and a
        faster flight now leaves less of it. */
@@ -1130,17 +1634,27 @@ function waapiFlyerRect(flight, keyframes, offset) {
   const left = Math.max(0, right - 1);
   const a = keyframes[left];
   const b = keyframes[right];
-  const fraction = left === right ? 0 : Math.max(0, Math.min(1, (offset - a.offset) / (b.offset - a.offset)));
+  const fraction =
+    left === right ? 0 : Math.max(0, Math.min(1, (offset - a.offset) / (b.offset - a.offset)));
   const start = transform(a.transform);
   const finish = transform(b.transform);
-  const [x, y, scaleX, scaleY] = start.map((value, index) => value + (finish[index] - value) * fraction);
-  return { left: x, top: y, width: flight.base.width * scaleX, height: flight.base.height * scaleY };
+  const [x, y, scaleX, scaleY] = start.map(
+    (value, index) => value + (finish[index] - value) * fraction,
+  );
+  return {
+    left: x,
+    top: y,
+    width: flight.base.width * scaleX,
+    height: flight.base.height * scaleY,
+  };
 }
 
 function assertRectClose(actual, expected, label) {
   for (const axis of ['left', 'top', 'width', 'height']) {
-    assert.ok(Math.abs(actual[axis] - expected[axis]) < 1e-7,
-      `${label} ${axis}: ${actual[axis]} vs ${expected[axis]}`);
+    assert.ok(
+      Math.abs(actual[axis] - expected[axis]) < 1e-7,
+      `${label} ${axis}: ${actual[axis]} vs ${expected[axis]}`,
+    );
   }
 }
 
@@ -1149,10 +1663,22 @@ const interruptionTo = { left: 632, top: 221, width: 944, height: 531 };
 function interruptionFixture(duration, speed, direction = 'forward') {
   const from = direction === 'forward' ? interruptionFrom : interruptionTo;
   const to = direction === 'forward' ? interruptionTo : interruptionFrom;
-  const leg = createHeroLeg({ from, to,
-    fromRadius: 16, toRadius: 16, direction, duration, startedAt: 1000,
-    baseAspect: interruptionTo.width / interruptionTo.height, speed });
-  const flight = { base: interruptionTo, layer: {}, plane: { host: { width: 1920, height: 1080 } } };
+  const leg = createHeroLeg({
+    from,
+    to,
+    fromRadius: 16,
+    toRadius: 16,
+    direction,
+    duration,
+    startedAt: 1000,
+    baseAspect: interruptionTo.width / interruptionTo.height,
+    speed,
+  });
+  const flight = {
+    base: interruptionTo,
+    layer: {},
+    plane: { host: { width: 1920, height: 1080 } },
+  };
   return { leg, flight, keyframes: buildFlightKeyframes(flight, leg).flyer };
 }
 
@@ -1162,17 +1688,34 @@ test('settled spring legs stay at rest and do not lend residual velocity to a re
       const { leg, flight } = interruptionFixture(duration, speed);
       assert.equal(leg.progress.kind, 'spring');
       const landedAt = leg.startedAt + duration;
-      assert.ok(evaluateLeg(leg, landedAt - 0.01).speed > 0, 'the spring is moving just before landing');
+      assert.ok(
+        evaluateLeg(leg, landedAt - 0.01).speed > 0,
+        'the spring is moving just before landing',
+      );
       for (const at of [landedAt, landedAt + 0.001, landedAt + 1000]) {
         const pose = evaluateLeg(leg, at);
         assertRectClose(pose.rect, leg.to, `spring endpoint ${duration}ms/${speed} at ${at}`);
-        assert.equal(pose.speed, 0, 'a filled endpoint is stationary even when the normalized spring has a tail');
+        assert.equal(
+          pose.speed,
+          0,
+          'a filled endpoint is stationary even when the normalized spring has a tail',
+        );
         const reversed = createHeroLeg({
-          from: pose.rect, to: leg.from, fromRadius: pose.radius, toRadius: leg.fromRadius,
-          direction: 'back', duration, startedAt: at,
-          baseAspect: flight.base.width / flight.base.height, speed: -pose.speed,
+          from: pose.rect,
+          to: leg.from,
+          fromRadius: pose.radius,
+          toRadius: leg.fromRadius,
+          direction: 'back',
+          duration,
+          startedAt: at,
+          baseAspect: flight.base.width / flight.base.height,
+          speed: -pose.speed,
         });
-        assert.equal(evaluateLeg(reversed, at).speed, 0, 'a late reverse must not manufacture a catch/overshoot');
+        assert.equal(
+          evaluateLeg(reversed, at).speed,
+          0,
+          'a late reverse must not manufacture a catch/overshoot',
+        );
       }
     }
   }
@@ -1184,9 +1727,15 @@ test('negative launch is caught at the presented box before analytic progress be
   // the continuous negative spring progress still clamps the analytic corner arc to p=0.
   const elapsed = 8.975;
   const expected = waapiFlyerRect(flight, keyframes, elapsed / leg.duration);
-  assert.ok(Math.abs(expected.left - interruptionFrom.left) > 1, 'the regression point is already moving');
+  assert.ok(
+    Math.abs(expected.left - interruptionFrom.left) > 1,
+    'the regression point is already moving',
+  );
   assertRectClose(evaluateLeg(leg, leg.startedAt + elapsed).rect, expected, 'negative launch');
-  assert.ok(evaluateLeg(leg, leg.startedAt).speed < 0, 'the signed interruption model is preserved');
+  assert.ok(
+    evaluateLeg(leg, leg.startedAt).speed < 0,
+    'the signed interruption model is preserved',
+  );
 });
 
 test('interruption boxes match emitted WAAPI tracks at 120Hz and 144Hz across speed tiers', () => {
@@ -1199,13 +1748,20 @@ test('interruption boxes match emitted WAAPI tracks at 120Hz and 144Hz across sp
           for (const phase of [0, 3.27]) {
             for (let elapsed = phase; elapsed < duration; elapsed += 1000 / hz) {
               const expected = waapiFlyerRect(flight, keyframes, elapsed / duration);
-              assertRectClose(evaluateLeg(leg, leg.startedAt + elapsed).rect, expected,
-                `${direction} ${hz}Hz ${duration}ms speed=${speed} t=${elapsed}`);
+              assertRectClose(
+                evaluateLeg(leg, leg.startedAt + elapsed).rect,
+                expected,
+                `${direction} ${hz}Hz ${duration}ms speed=${speed} t=${elapsed}`,
+              );
             }
           }
         }
         assertRectClose(evaluateLeg(leg, leg.startedAt - 30).rect, leg.from, 'before launch');
-        assertRectClose(evaluateLeg(leg, leg.startedAt + duration + 30).rect, leg.to, 'after landing');
+        assertRectClose(
+          evaluateLeg(leg, leg.startedAt + duration + 30).rect,
+          leg.to,
+          'after landing',
+        );
       }
     }
   }
@@ -1254,9 +1810,18 @@ test('a finger moving back up reports a negative release speed', () => {
 
 // --- Display clock ---------------------------------------------------------------------------
 test('a pending first frame cannot spend the flight while the main thread is busy', () => {
-  const dependencies = Object.fromEntries([
-    './constants', './geometry', './plane', './progress', './spring', './probe', './follow', '@/lib/appearance',
-  ].map(name => [name, {}]));
+  const dependencies = Object.fromEntries(
+    [
+      './constants',
+      './geometry',
+      './plane',
+      './progress',
+      './spring',
+      './probe',
+      './follow',
+      '@/lib/appearance',
+    ].map((name) => [name, {}]),
+  );
   dependencies['./flight'] = { evaluateLeg };
   dependencies['@/lib/utils'] = utils;
   dependencies['@/lib/sampledAnimation'] = sampling;
@@ -1266,12 +1831,21 @@ test('a pending first frame cannot spend the flight while the main thread is bus
   const leg = createHeroLeg({
     from: { left: 30, top: 200, width: 180, height: 140 },
     to: { left: 300, top: 80, width: 720, height: 540 },
-    fromRadius: 16, toRadius: 16, direction: 'forward', duration: HERO_DURATIONS.forward,
-    startedAt: 1000, baseAspect: 4 / 3,
+    fromRadius: 16,
+    toRadius: 16,
+    direction: 'forward',
+    duration: HERO_DURATIONS.forward,
+    startedAt: 1000,
+    baseAspect: 4 / 3,
   });
   const motion = Object.create(HeroMotion.prototype);
-  Object.assign(motion, { leg, visual: [{ animation: { currentTime: null } }],
-    landedCompletion: { settled: false }, pullOffset: 0, pullOffsetX: 0 });
+  Object.assign(motion, {
+    leg,
+    visual: [{ animation: { currentTime: null } }],
+    landedCompletion: { settled: false },
+    pullOffset: 0,
+    pullOffsetX: 0,
+  });
   assert.equal(motion.measurePose().elapsed, 0);
   assert.deepEqual(motion.measurePose().rect, leg.from);
   motion.visual[0].animation.currentTime = 42;
@@ -1292,11 +1866,31 @@ test('a dismiss released towards the card leaves at the finger speed; away from 
   assert.equal(releaseSpeedAlong({ x: 0, y: 1.8 }, from, above), undefined);
   assert.equal(releaseSpeedAlong({ x: 0, y: 0.05 }, from, below), undefined);
   assert.equal(releaseSpeedAlong({ x: 0, y: 40 }, from, below), 4);
-  const leg = createHeroLeg({ from, to: below, fromRadius: 0, toRadius: 16, direction: 'back',
-    duration: 300, startedAt: 0, baseAspect: 1, speed: toward });
-  const rest = createHeroLeg({ from, to: below, fromRadius: 0, toRadius: 16, direction: 'back',
-    duration: 300, startedAt: 0, baseAspect: 1 });
-  assert.ok(velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0), 'a throw leaves faster than a let-go');
+  const leg = createHeroLeg({
+    from,
+    to: below,
+    fromRadius: 0,
+    toRadius: 16,
+    direction: 'back',
+    duration: 300,
+    startedAt: 0,
+    baseAspect: 1,
+    speed: toward,
+  });
+  const rest = createHeroLeg({
+    from,
+    to: below,
+    fromRadius: 0,
+    toRadius: 16,
+    direction: 'back',
+    duration: 300,
+    startedAt: 0,
+    baseAspect: 1,
+  });
+  assert.ok(
+    velocityAt(leg.progress, 0) > velocityAt(rest.progress, 0),
+    'a throw leaves faster than a let-go',
+  );
 });
 
 function historyHarness() {
@@ -1304,12 +1898,18 @@ function historyHarness() {
   let index = 0;
   const traversals = [];
   const window = Object.assign(new EventTarget(), {
-    location: new URL(entries[0].href), setTimeout, clearTimeout,
+    location: new URL(entries[0].href),
+    setTimeout,
+    clearTimeout,
   });
   const harness = { afterGo: null };
-  const select = () => { window.location = new URL(entries[index].href); };
+  const select = () => {
+    window.location = new URL(entries[index].href);
+  };
   window.history = {
-    get state() { return entries[index].state; },
+    get state() {
+      return entries[index].state;
+    },
     pushState(state, _title, href) {
       entries.splice(index + 1);
       entries.push({ state, href: new URL(href, window.location.href).href });
@@ -1333,18 +1933,37 @@ function historyHarness() {
       });
     },
   };
-  const { imageHeroHistory: history } = load('lib/hero/history.ts', {
-    '@/lib/historyLayers': { consumeHistoryLayerPop: () => false, historyLayerBeneath: () => null,
-      setHistoryLayerGate() {}, settleHistoryLayers: async () => {} },
-    '@/lib/utils': { randomId: () => 'history-test' },
-  }, { window, URL, MessageChannel: undefined });
+  const { imageHeroHistory: history } = load(
+    'lib/hero/history.ts',
+    {
+      '@/lib/historyLayers': {
+        consumeHistoryLayerPop: () => false,
+        historyLayerBeneath: () => null,
+        setHistoryLayerGate() {},
+        settleHistoryLayers: async () => {},
+      },
+      '@/lib/utils': { randomId: () => 'history-test' },
+    },
+    { window, URL, MessageChannel: undefined },
+  );
   history.initialize(() => {});
-  const record = history.createRecord({ image: { id: 7 } }, { pathname: '/user/1', search: '' }, '/pic/7', 1);
+  const record = history.createRecord(
+    { image: { id: 7 } },
+    { pathname: '/user/1', search: '' },
+    '/pic/7',
+    1,
+  );
   assert.equal(history.claim(record), true);
   window.history.pushState(window.history.state, '', '/pic/7');
   assert.equal(history.install(record), true);
-  return Object.assign(harness, { history, record, window, entries, traversals,
-    getIndex: () => index });
+  return Object.assign(harness, {
+    history,
+    record,
+    window,
+    entries,
+    traversals,
+    getIndex: () => index,
+  });
 }
 
 test('re-entering the same detail guard does not add another history rung', () => {
@@ -1369,7 +1988,7 @@ test('a superseded queued close cannot perform a second Back', async () => {
 test('Back cancels a queued guard restore before it can reopen the detail', async () => {
   const h = historyHarness();
   h.window.history.go(-1);
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   const previous = h.history.restoreGuard(h.record, () => false);
   const closing = h.history.ensureBackground(h.record);
   assert.equal(await previous, false);
@@ -1382,7 +2001,9 @@ test('a guard restore superseded after reaching the base does not traverse again
   const h = historyHarness();
   await h.history.ensureBackground(h.record);
   let current = true;
-  h.afterGo = () => { current = false; };
+  h.afterGo = () => {
+    current = false;
+  };
   assert.equal(await h.history.restoreGuard(h.record, () => current), false);
   assert.deepEqual(h.traversals, [-3, 2]);
   assert.equal(h.getIndex(), 2);
@@ -1393,7 +2014,7 @@ test('a guard restore superseded after reaching the base does not traverse again
 test('reopening from the provisional rung restores the original guard without adding entries', async () => {
   const h = historyHarness();
   h.window.history.go(-2);
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(await h.history.restoreGuard(h.record), true);
   assert.deepEqual(h.traversals, [-2, 1, 1]);
   assert.equal(h.entries.length, 4);
@@ -1403,7 +2024,12 @@ test('reopening from the provisional rung restores the original guard without ad
 test('an unfinished opening cannot restore a guard that has not been installed', async () => {
   const h = historyHarness();
   await h.history.ensureBackground(h.record);
-  const pending = h.history.createRecord({ image: { id: 8 } }, { pathname: '/user/1', search: '' }, '/pic/8', 2);
+  const pending = h.history.createRecord(
+    { image: { id: 8 } },
+    { pathname: '/user/1', search: '' },
+    '/pic/8',
+    2,
+  );
   assert.equal(h.history.claim(pending), true);
   assert.equal(await h.history.restoreGuard(pending), false);
   assert.deepEqual(h.traversals, [-3]);
@@ -1414,9 +2040,11 @@ test('an unfinished opening cannot restore a guard that has not been installed',
 test('a guard confirmation cannot complete an already superseded turn', async () => {
   const h = historyHarness();
   h.window.history.go(-1);
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   let current = true;
-  h.afterGo = () => { current = false; };
+  h.afterGo = () => {
+    current = false;
+  };
   assert.equal(await h.history.restoreGuard(h.record, () => current), false);
   assert.equal(await h.history.ensureBackground(h.record), true);
   assert.equal(h.getIndex(), 0);

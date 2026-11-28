@@ -12,7 +12,13 @@
  */
 
 const ENTITIES: Record<string, string> = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  '#39': "'",
+  nbsp: ' ',
 };
 
 function decodeEntities(text: string): string {
@@ -29,7 +35,10 @@ function stripInline(line: string): string {
   return (
     line
       // Escaped characters are placeholders first, so the rules below cannot eat them.
-      .replace(/\\([\\`*_{}[\]()#+\-.!|>~"@=])/g, (_, ch: string) => `\u0000${ch.charCodeAt(0)}\u0000`)
+      .replace(
+        /\\([\\`*_{}[\]()#+\-.!|>~"@=])/g,
+        (_, ch: string) => `\u0000${ch.charCodeAt(0)}\u0000`,
+      )
       // Spoilers: Markdown `||…||` and the Textile/BBCode `[spoiler]…[/spoiler]`.
       .replace(/\|\|[\s\S]*?\|\|/g, '')
       .replace(/\[spoiler\][\s\S]*?\[\/spoiler\]/gi, '')
@@ -86,7 +95,12 @@ export function descriptionTeaser(markup: string | null | undefined, max = 150):
     );
     if (!text) continue;
     const chars = Array.from(text);
-    return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : text;
+    return chars.length > max
+      ? `${chars
+          .slice(0, max - 1)
+          .join('')
+          .trimEnd()}…`
+      : text;
   }
   return '';
 }

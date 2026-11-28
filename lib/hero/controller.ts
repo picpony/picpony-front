@@ -82,11 +82,7 @@ import {
   readHeroBackgroundAmount,
   readHeroOverlayOpacities,
 } from './motion';
-import {
-  getElementScrollPlane,
-  getGalleryScrollPlane,
-  type HeroScrollPlane,
-} from './plane';
+import { getElementScrollPlane, getGalleryScrollPlane, type HeroScrollPlane } from './plane';
 import { createHeroFlight, type HeroFlight } from './flight';
 import { watchImageHeroFlightUpgrade } from './upgrade';
 import { HeroPullSurface } from './pull';
@@ -1688,7 +1684,11 @@ export class HeroController {
     this.scheduleOpeningBindings(session, stage, motion);
   }
 
-  private scheduleOpeningBindings(session: OpeningSession, stage: HeroStageNodes, motion: HeroMotion) {
+  private scheduleOpeningBindings(
+    session: OpeningSession,
+    stage: HeroStageNodes,
+    motion: HeroMotion,
+  ) {
     /* **The picture's first frame before anything else.** Its tracks are created above and go
        to the compositor with the frame that ends this task; binding the scroll follow and the
        dismiss recognisers here put their peer animations, leases and listeners (~15ms at 4×
@@ -1710,12 +1710,15 @@ export class HeroController {
     this.dropPreparedFlight(previous);
     const stage = this.stage?.sessionId === previous.id ? this.stage.nodes : null;
     const motion = previous.motion;
-    const measured = motion && stage ? {
-      destination: getHeroRect(stage.target),
-      plane: getOpeningPlane(stage, stage.target),
-      pose: motion.measurePose(),
-      inputs: motion.readReverseInputs(),
-    } : null;
+    const measured =
+      motion && stage
+        ? {
+            destination: getHeroRect(stage.target),
+            plane: getOpeningPlane(stage, stage.target),
+            pose: motion.measurePose(),
+            inputs: motion.readReverseInputs(),
+          }
+        : null;
     const session: OpeningSession = {
       ...previous,
       intent: { ...previous.intent, source: intent.source, navigation: intent.navigation },
@@ -1752,8 +1755,11 @@ export class HeroController {
     this.foreground = session;
     this.pendingOpen = null;
     if (motion && measured) {
-      void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
-        .catch(() => { if (this.owns(session)) void this.reverseOpening(session, false); });
+      void motion
+        .reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
+        .catch(() => {
+          if (this.owns(session)) void this.reverseOpening(session, false);
+        });
       setStageReady(stage!, true);
       session.viewportBaseline = {
         destination: measured.destination,
@@ -1784,7 +1790,10 @@ export class HeroController {
       session.provisionalClaimed = true;
       this.startRouteNavigation(session);
     }
-    const committed = await this.waitForRouterCommit(session.record.detailHref, session.abort.signal);
+    const committed = await this.waitForRouterCommit(
+      session.record.detailHref,
+      session.abort.signal,
+    );
     if (!this.owns(session)) return false;
     session.resuming = false;
     return committed;
@@ -2052,9 +2061,12 @@ export class HeroController {
       const revealNodes = sticky
         ? [...route.content.querySelectorAll<HTMLElement>(HERO_REVEAL_SELECTOR)]
         : [];
-      const followTarget: HTMLElement | readonly HTMLElement[] = revealNodes.length > 0 ? revealNodes : node;
+      const followTarget: HTMLElement | readonly HTMLElement[] =
+        revealNodes.length > 0 ? revealNodes : node;
       follow = bridge.follow(route.scroller, route.content, followTarget, {
-        source: scroll.top, target: scroll.routeTop, range: scroll.range,
+        source: scroll.top,
+        target: scroll.routeTop,
+        range: scroll.range,
       });
       if (!follow) return false;
     }
@@ -2147,9 +2159,15 @@ export class HeroController {
     // A wheel may pause past its active flag while the browser still owns the same stream.
     // Preserve that stream independently of the Stage's visual lifetime.
     const input = readHeroScrollInput();
-    session.scrollBridge?.own(route.scroller, route.content, Boolean(input.wheel || input.touches.length), {
-      left: scroll.routeLeft, top: parked,
-    });
+    session.scrollBridge?.own(
+      route.scroller,
+      route.content,
+      Boolean(input.wheel || input.touches.length),
+      {
+        left: scroll.routeLeft,
+        top: parked,
+      },
+    );
     this.bindOpeningPullRecognizer(session, route.overlay, route.scroller, parked);
     heroProbeMark('hx:t:promote');
     this.events.notify();
@@ -2162,9 +2180,10 @@ export class HeroController {
     const inContent = (target: EventTarget | null) =>
       target instanceof Node && route.scroller.contains(target);
     const press = (event: PointerEvent) => {
-      held = !this.isPublicationQuiet() && inContent(event.target)
-        ? { id: event.pointerId, at: performance.now() }
-        : null;
+      held =
+        !this.isPublicationQuiet() && inContent(event.target)
+          ? { id: event.pointerId, at: performance.now() }
+          : null;
     };
     const cancel = (event: PointerEvent) => {
       if (held?.id === event.pointerId) held = null;
@@ -2172,7 +2191,9 @@ export class HeroController {
     const handle = (event: MouseEvent) => {
       // Back lives outside the scroller and must remain available during a reopening turn.
       if (!inContent(event.target)) return;
-      const tail = event.detail !== 0 && held !== null &&
+      const tail =
+        event.detail !== 0 &&
+        held !== null &&
         performance.now() - held.at <= HERO_PRESS_TAIL_MS &&
         (!(event instanceof PointerEvent) || event.pointerId === held.id);
       held = null;
@@ -2695,7 +2716,8 @@ export class HeroController {
       session.provisionalClaimed &&
       session.routeNavigationStarted &&
       navigationHandled &&
-      currentRole !== 'base' && currentRole !== 'guard' &&
+      currentRole !== 'base' &&
+      currentRole !== 'guard' &&
       (currentHref === expectedBackground || currentHref === session.record.detailHref)
     ) {
       // Supersede the still-pending App Router replace immediately. Waiting for
@@ -2704,7 +2726,8 @@ export class HeroController {
     }
 
     const galleryScroller = measurement?.plane?.scroller ?? getGalleryScrollPlane()?.scroller;
-    if (galleryScroller) session.scrollBridge?.returnToGallery(galleryScroller, measurement?.inputSource);
+    if (galleryScroller)
+      session.scrollBridge?.returnToGallery(galleryScroller, measurement?.inputSource);
     this.setPhase('reversing', session, session.intent.background!);
     session.shared.dispose();
 
@@ -2715,14 +2738,18 @@ export class HeroController {
     }
     if (this.foreground !== session) return;
 
-    const onBackground = await this.returnToBackground(session, navigationHandled, () => this.foreground === session);
+    const onBackground = await this.returnToBackground(
+      session,
+      navigationHandled,
+      () => this.foreground === session,
+    );
     if (this.foreground !== session) return;
 
     // An unclaimed touch still holds its flyer. A managed return can settle the pixels while
     // its input lease keeps carrying that finger independently of the old Stage.
     const continuity = session.scrollContinuity;
     const preserveInput = Boolean(onBackground && continuity?.canCompleteReturn);
-    const released = preserveInput || await waitForHeroInputRelease(this.lifecycleAbort.signal);
+    const released = preserveInput || (await waitForHeroInputRelease(this.lifecycleAbort.signal));
     if (!released || this.foreground !== session) return;
 
     this.concealRetainedStage(session.id);
@@ -3065,9 +3092,10 @@ export class HeroController {
       resolveClose,
       retirement: null,
       routeScroll: { left: route.scroller.scrollLeft, top: route.scroller.scrollTop },
-      detailRect: intent.cause === 'dismiss'
-        ? getHeroRectWithoutAncestorTransform(route.target, route.content)
-        : launchGeometry.from,
+      detailRect:
+        intent.cause === 'dismiss'
+          ? getHeroRectWithoutAncestorTransform(route.target, route.content)
+          : launchGeometry.from,
       launchGeometry,
     };
     this.foreground = session;
@@ -3283,7 +3311,10 @@ export class HeroController {
 
   private retainReturnInput(scroll: HeroScrollContinuity | null) {
     if (!scroll) return;
-    if (!scroll.canCompleteReturn) { scroll.release(); return; }
+    if (!scroll.canCompleteReturn) {
+      scroll.release();
+      return;
+    }
     this.releaseReturnedScroll();
     this.returnedScroll = scroll;
     scroll.retire(() => {
@@ -3309,7 +3340,8 @@ export class HeroController {
     this.foreground = null;
     const sequence = this.sessionSequence;
     const lifecycle = this.lifecycleAbort.signal;
-    const current = () => this.foreground === null && this.sessionSequence === sequence && !lifecycle.aborted;
+    const current = () =>
+      this.foreground === null && this.sessionSequence === sequence && !lifecycle.aborted;
     this.events.notify();
     const closed = await imageHeroHistory.ensureBackground(session.record, current);
     if (!current()) {
@@ -3352,12 +3384,16 @@ export class HeroController {
   private resumeClosing(previous: ClosingSession): ClosingSession {
     if (this.foreground !== previous || !previous.reversing) return previous;
     const motion = previous.motion;
-    const measured = motion ? {
-      destination: previous.thumbnail.isConnected ? getGalleryLandingRect(previous.thumbnail) : undefined,
-      plane: getGalleryScrollPlane() ?? undefined,
-      pose: motion.measurePose(),
-      inputs: motion.readReverseInputs(),
-    } : null;
+    const measured = motion
+      ? {
+          destination: previous.thumbnail.isConnected
+            ? getGalleryLandingRect(previous.thumbnail)
+            : undefined,
+          plane: getGalleryScrollPlane() ?? undefined,
+          pose: motion.measurePose(),
+          inputs: motion.readReverseInputs(),
+        }
+      : null;
     const plane = measured?.plane ?? motion?.flight.plane;
     const continuity = plane ? new HeroScrollContinuity(plane.scroller) : null;
     continuity?.addDeltaSource(previous.route.scroller);
@@ -3380,7 +3416,8 @@ export class HeroController {
     this.pendingOpen = null;
     this.freezeClosingRoute(session, measured?.plane ?? motion?.flight.plane);
     if (motion && measured) {
-      void motion.reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
+      void motion
+        .reverse(measured.destination, measured.plane, measured.pose, measured.inputs)
         .catch((error) => this.failClosing(session, error));
     }
     this.setPhase('closing.flight', session, session.record.background);
@@ -3395,18 +3432,17 @@ export class HeroController {
       return;
     }
     const routeTarget = session.route.target;
-    const measurement =
-      session.motion
-        ? {
-            // A cancelled dismiss lands at the resting slot, without the finger's translation.
-            destination: routeTarget?.isConnected
-              ? getHeroRectWithoutAncestorTransform(routeTarget, session.route.content)
-              : session.detailRect,
-            pose: session.motion.measurePose(),
-            // Before the phase write below, which would otherwise force these reads' style pass.
-            inputs: session.motion.readReverseInputs(),
-          }
-        : null;
+    const measurement = session.motion
+      ? {
+          // A cancelled dismiss lands at the resting slot, without the finger's translation.
+          destination: routeTarget?.isConnected
+            ? getHeroRectWithoutAncestorTransform(routeTarget, session.route.content)
+            : session.detailRect,
+          pose: session.motion.measurePose(),
+          // Before the phase write below, which would otherwise force these reads' style pass.
+          inputs: session.motion.readReverseInputs(),
+        }
+      : null;
 
     session.reversing = true;
     session.abort.abort();
@@ -3449,9 +3485,14 @@ export class HeroController {
         signal: this.lifecycleAbort.signal,
         read: () => {
           if (this.foreground !== session) return false;
-          const current = this.routes.findByImage(session.record.imageId, session.record.detailHref);
-          return current && (current.resolvedWithoutMedia || (current.previewPaintable && current.target))
-            ? current : null;
+          const current = this.routes.findByImage(
+            session.record.imageId,
+            session.record.detailHref,
+          );
+          return current &&
+            (current.resolvedWithoutMedia || (current.previewPaintable && current.target))
+            ? current
+            : null;
         },
       });
       if (this.foreground !== session) return;
@@ -3591,9 +3632,7 @@ export class HeroController {
     let following: HeroScrollFollow | null = null;
     let released = false;
     const resizeObserver =
-      typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => syncHeight(true));
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => syncHeight(true));
 
     const sync = () => {
       if (released || !this.owns(session)) return;
@@ -3917,8 +3956,12 @@ export class HeroController {
     const foreground = this.foreground;
 
     if (foreground?.kind === 'opening') {
-      if (navigation.programmatic && foreground.resuming &&
-        navigation.programmaticToken === foreground.record.token) return;
+      if (
+        navigation.programmatic &&
+        foreground.resuming &&
+        navigation.programmaticToken === foreground.record.token
+      )
+        return;
       const background = normalizeHeroHref(backgroundHref(foreground.intent.background!));
       if (navigation.href === background) {
         const ownsParallelCollapse = Boolean(
@@ -4173,12 +4216,20 @@ export class HeroController {
   private async restoreGuardStrict(record: HeroHistoryRecord, current: () => boolean = () => true) {
     if (!current()) return false;
     // Queue even when the guard is current: a previous turn may already be traversing away.
-    if ((await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record)) {
+    if (
+      (await imageHeroHistory.restoreGuard(record, current)) &&
+      current() &&
+      imageHeroHistory.isGuard(record)
+    ) {
       return true;
     }
     if (!(await imageHeroHistory.waitForStable()) || !current()) return false;
     if (imageHeroHistory.isGuard(record)) return true;
-    return (await imageHeroHistory.restoreGuard(record, current)) && current() && imageHeroHistory.isGuard(record);
+    return (
+      (await imageHeroHistory.restoreGuard(record, current)) &&
+      current() &&
+      imageHeroHistory.isGuard(record)
+    );
   }
 
   /** Derive phase purely from the observable location, with no session running. */
@@ -4335,10 +4386,7 @@ export class HeroController {
     };
   }
 
-  private applyViewportMeasurement(
-    session: HeroSession,
-    measurement: ViewportMeasurement | null,
-  ) {
+  private applyViewportMeasurement(session: HeroSession, measurement: ViewportMeasurement | null) {
     if (!measurement || !this.owns(session) || !session.motion) return;
     const baseline = session.viewportBaseline;
     const scrollTop = measurement.plane.scrollTop;

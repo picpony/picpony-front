@@ -19,7 +19,12 @@ const EMPTY_GRACE_MS = 10_000;
 /** Frames the content area must hold its size for before the frame is told its new stage. */
 const SETTLE_FRAMES = 2;
 
-interface Rect { x: number; y: number; width: number; height: number }
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /**
  * The account's chosen ponies, kept on the page while the selection changes underneath them.
@@ -40,17 +45,22 @@ interface Rect { x: number; y: number; width: number; height: number }
 export default function PoniesRuntime({ token, paused }: { token: string; paused: boolean }) {
   const catalog = useResource(ponyCatalog, {});
   const chosen = useResource(myPonies, { token });
-  const names = catalog.data?.enabled ? (chosen.data ?? []).filter(name => catalog.data!.ponies.some(p => p.name === name)) : [];
+  const names = catalog.data?.enabled
+    ? (chosen.data ?? []).filter((name) => catalog.data!.ponies.some((p) => p.name === name))
+    : [];
   const [loaded, setLoaded] = useState<readonly PonyConfig[]>([]);
   const [merged, setMerged] = useState<readonly PonyConfig[] | undefined>();
-  const missing = names.filter(name => !loaded.some(config => config.name === name));
+  const missing = names.filter((name) => !loaded.some((config) => config.name === name));
   const read = useResource(ponyConfigs, missing.length ? { names: missing } : SKIP);
   if (read.data && read.data !== merged) {
     const fresh = read.data;
     setMerged(fresh);
-    setLoaded(previous => [...previous.filter(config => !fresh.some(item => item.name === config.name)), ...fresh]);
+    setLoaded((previous) => [
+      ...previous.filter((config) => !fresh.some((item) => item.name === config.name)),
+      ...fresh,
+    ]);
   }
-  const configs = names.flatMap(name => loaded.find(config => config.name === name) ?? []);
+  const configs = names.flatMap((name) => loaded.find((config) => config.name === name) ?? []);
   const [held, setHeld] = useState(false);
   if (configs.length > 0 && !held) setHeld(true);
   const empty = configs.length === 0;
@@ -97,7 +107,13 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   const speed = useMotionScale('ambient');
   const initialized = useRef(false);
   const warned = useRef(false);
-  const gesture = useRef<{ pointerId: number; name: string; x: number; y: number; moved: boolean } | null>(null);
+  const gesture = useRef<{
+    pointerId: number;
+    name: string;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
   const focused = useRef<string | null>(null);
   const suppressClick = useRef(false);
   const current = useRef(configs);
@@ -106,7 +122,10 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   const stage = useRef<{ width: number; height: number } | null>(null);
 
   function send(type: string, payload: Record<string, unknown> = {}) {
-    frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type, ...payload }, '*');
+    frame.current?.contentWindow?.postMessage(
+      { source: 'picpony-companions', channel, type, ...payload },
+      '*',
+    );
   }
   function pointer(type: string, name: string, x: number, y: number) {
     const bounds = layer.current?.getBoundingClientRect();
@@ -121,11 +140,20 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
     button.style.width = `${rect.width}px`;
     button.style.height = `${rect.height}px`;
   }, []);
-  const track = useCallback((name: string, on: boolean) => {
-    const button = targets.current.get(name);
-    if (on) { tracked.current.add(name); place(name); button?.setAttribute('data-active', ''); }
-    else { tracked.current.delete(name); button?.removeAttribute('data-active'); }
-  }, [place]);
+  const track = useCallback(
+    (name: string, on: boolean) => {
+      const button = targets.current.get(name);
+      if (on) {
+        tracked.current.add(name);
+        place(name);
+        button?.setAttribute('data-active', '');
+      } else {
+        tracked.current.delete(name);
+        button?.removeAttribute('data-active');
+      }
+    },
+    [place],
+  );
 
   /* **The stage is the layer's box, told to the frame once it settles — the frame is never
      resized for it.** The layer follows the content area by the stylesheet (less the home pill's
@@ -143,28 +171,44 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
     if (!node) return;
     /* `quiet` counts the frames since the area last changed: the rAF below counts one up, and
        the observer — which reports after that frame's layout — sets it back. */
-    const run = { size: null as { width: number; height: number } | null, first: true, quiet: 0, wait: 0 };
+    const run = {
+      size: null as { width: number; height: number } | null,
+      first: true,
+      quiet: 0,
+      wait: 0,
+    };
     const apply = () => {
       run.wait = 0;
       if (!run.size) return;
       stage.current = run.size;
       run.size = null;
-      if (initialized.current) frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'stage', ...stage.current }, '*');
+      if (initialized.current)
+        frame.current?.contentWindow?.postMessage(
+          { source: 'picpony-companions', channel, type: 'stage', ...stage.current },
+          '*',
+        );
     };
     const settle = () => {
       run.quiet += 1;
       if (run.quiet >= SETTLE_FRAMES) apply();
       else run.wait = requestAnimationFrame(settle);
     };
-    const observer = new ResizeObserver(entries => {
+    const observer = new ResizeObserver((entries) => {
       const box = entries[entries.length - 1].contentRect;
       run.size = { width: box.width, height: box.height };
       run.quiet = 0;
-      if (run.first) { run.first = false; apply(); return; }
+      if (run.first) {
+        run.first = false;
+        apply();
+        return;
+      }
       if (!run.wait) run.wait = requestAnimationFrame(settle);
     });
     observer.observe(node);
-    return () => { observer.disconnect(); cancelAnimationFrame(run.wait); };
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(run.wait);
+    };
   }, [channel]);
 
   /* A fine pointer finds its pony by arithmetic over the stored rects — no hit target is needed
@@ -178,9 +222,11 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
       if (pausedNow.current) return;
       const bounds = layer.current?.getBoundingClientRect();
       if (!bounds || !last) return;
-      const x = last.x - bounds.x, y = last.y - bounds.y;
+      const x = last.x - bounds.x,
+        y = last.y - bounds.y;
       for (const [name, rect] of rects.current) {
-        const over = x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+        const over =
+          x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
         const held = gesture.current?.name === name || focused.current === name;
         if (over && !tracked.current.has(name)) track(name, true);
         else if (!over && !held && tracked.current.has(name)) track(name, false);
@@ -192,7 +238,10 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
       if (!frameId) frameId = requestAnimationFrame(check);
     };
     window.addEventListener('pointermove', move, { passive: true });
-    return () => { window.removeEventListener('pointermove', move); cancelAnimationFrame(frameId); };
+    return () => {
+      window.removeEventListener('pointermove', move);
+      cancelAnimationFrame(frameId);
+    };
   }, [track]);
 
   /* A change of selection after the frame has started is sent as a diff (see `ponies-frame.js`);
@@ -200,13 +249,19 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
      list; a pony that left takes its rect and its tracking with it. */
   useEffect(() => {
     current.current = configs;
-    const key = JSON.stringify(configs.map(config => config.name));
+    const key = JSON.stringify(configs.map((config) => config.name));
     for (const name of [...rects.current.keys()]) {
-      if (!configs.some(config => config.name === name)) { rects.current.delete(name); tracked.current.delete(name); }
+      if (!configs.some((config) => config.name === name)) {
+        rects.current.delete(name);
+        tracked.current.delete(name);
+      }
     }
     if (!initialized.current || key === sent.current) return;
     sent.current = key;
-    frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'configs', configs }, '*');
+    frame.current?.contentWindow?.postMessage(
+      { source: 'picpony-companions', channel, type: 'configs', configs },
+      '*',
+    );
   }, [configs, channel]);
 
   useEffect(() => {
@@ -234,35 +289,69 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
         motion: motionScale('ambient'),
       };
     };
-    const sendToFrame = (type: string, payload: Record<string, unknown> = {}) => target?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type, ...payload }, '*');
+    const sendToFrame = (type: string, payload: Record<string, unknown> = {}) =>
+      target?.contentWindow?.postMessage(
+        { source: 'picpony-companions', channel, type, ...payload },
+        '*',
+      );
     const receive = (event: MessageEvent) => {
       if (event.source !== target?.contentWindow || event.data?.source !== 'picpony-ponies') return;
       if (event.data.type === 'ready') {
         if (initialized.current) return; // the frame answers both its own load and the ping
         initialized.current = true;
-        sent.current = JSON.stringify(current.current.map(config => config.name));
-        sendToFrame('init', { configs: current.current, speed: BASE_SPEED / (speed || 1), theme: theme(), paused: pausedNow.current, stage: stage.current }); return;
+        sent.current = JSON.stringify(current.current.map((config) => config.name));
+        sendToFrame('init', {
+          configs: current.current,
+          speed: BASE_SPEED / (speed || 1),
+          theme: theme(),
+          paused: pausedNow.current,
+          stage: stage.current,
+        });
+        return;
       }
       if (event.data.channel !== channel) return;
-      if (event.data.type === 'error' && !warned.current) { warned.current = true; showToast('桌面小马暂时无法加载，可在设置中重新选择', 'warning'); }
+      if (event.data.type === 'error' && !warned.current) {
+        warned.current = true;
+        showToast('桌面小马暂时无法加载，可在设置中重新选择', 'warning');
+      }
       if (event.data.type !== 'rects' || !Array.isArray(event.data.rects)) return;
       for (const rect of event.data.rects.slice(0, 6)) {
-        if (typeof rect?.name !== 'string' || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) continue;
-        if (!current.current.some(config => config.name === rect.name)) continue; // a pony that has since left
+        if (
+          typeof rect?.name !== 'string' ||
+          ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
+          rect.width <= 0 ||
+          rect.height <= 0
+        )
+          continue;
+        if (!current.current.some((config) => config.name === rect.name)) continue; // a pony that has since left
         const first = !rects.current.has(rect.name);
-        rects.current.set(rect.name, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+        rects.current.set(rect.name, {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        });
         /* Placed once so the keyboard can reach it; after that only while it is tracked. */
-        if (first) { place(rect.name); targets.current.get(rect.name)?.setAttribute('data-placed', ''); }
-        else if (tracked.current.has(rect.name)) place(rect.name);
+        if (first) {
+          place(rect.name);
+          targets.current.get(rect.name)?.setAttribute('data-placed', '');
+        } else if (tracked.current.has(rect.name)) place(rect.name);
       }
     };
     window.addEventListener('message', receive);
     const stopTheme = subscribeAppearance(() => sendToFrame('theme', { theme: theme() }));
-    return () => { window.removeEventListener('message', receive); stopTheme(); };
+    return () => {
+      window.removeEventListener('message', receive);
+      stopTheme();
+    };
   }, [channel, place, speed]);
 
   useEffect(() => {
-    if (initialized.current) frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: 'speed', speed: BASE_SPEED / (speed || 1) }, '*');
+    if (initialized.current)
+      frame.current?.contentWindow?.postMessage(
+        { source: 'picpony-companions', channel, type: 'speed', speed: BASE_SPEED / (speed || 1) },
+        '*',
+      );
   }, [channel, speed]);
 
   /* Covered, the engine stops where it is and the layer fades on FastEffects; uncovered, it walks
@@ -270,40 +359,119 @@ function PonyFrame({ configs, paused }: { configs: PonyConfig[]; paused: boolean
   useEffect(() => {
     pausedNow.current = paused;
     if (paused) for (const name of [...tracked.current]) track(name, false);
-    if (initialized.current) frame.current?.contentWindow?.postMessage({ source: 'picpony-companions', channel, type: paused ? 'pause' : 'resume' }, '*');
+    if (initialized.current)
+      frame.current?.contentWindow?.postMessage(
+        { source: 'picpony-companions', channel, type: paused ? 'pause' : 'resume' },
+        '*',
+      );
   }, [channel, paused, track]);
 
   if (!host) return null;
-  return createPortal(<div ref={layer} data-desktop-ponies="" data-paused={paused || undefined} inert={paused || undefined} className={cn(styles.layer, 'z-companions')}>
-    <iframe ref={frame} title="桌面小马动画" src="/companions/ponies-frame.html" sandbox="allow-scripts" referrerPolicy="no-referrer" tabIndex={-1} aria-hidden="true" className={styles.frame}
-      onLoad={() => send('ping')} />
-    {configs.map(config => <button
-      key={config.name}
-      type="button"
-      ref={node => { if (node) targets.current.set(config.name, node); else targets.current.delete(config.name); }}
-      /* A band of the page's surface inside the ring: a pony walks over anything, pictures included
+  return createPortal(
+    <div
+      ref={layer}
+      data-desktop-ponies=""
+      data-paused={paused || undefined}
+      inert={paused || undefined}
+      className={cn(styles.layer, 'z-companions')}
+    >
+      <iframe
+        ref={frame}
+        title="桌面小马动画"
+        src="/companions/ponies-frame.html"
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        tabIndex={-1}
+        aria-hidden="true"
+        className={styles.frame}
+        onLoad={() => send('ping')}
+      />
+      {configs.map((config) => (
+        <button
+          key={config.name}
+          type="button"
+          ref={(node) => {
+            if (node) targets.current.set(config.name, node);
+            else targets.current.delete(config.name);
+          }}
+          /* A band of the page's surface inside the ring: a pony walks over anything, pictures included
          (G1-022; the mascot's control does the same). */
-      className={cn(styles.target, 'rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring')}
-      aria-label={`${config.name}，方向键移动，回车播放台词`}
-      onFocus={() => { focused.current = config.name; track(config.name, true); if (!gesture.current) send('focus', { name: config.name }); }}
-      onBlur={() => { focused.current = null; if (gesture.current?.name !== config.name) track(config.name, false); send('blur', { name: config.name }); }}
-      onKeyDown={event => {
-        const directions: Record<string, [number, number]> = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
-        const direction = directions[event.key]; if (direction) { event.preventDefault(); send('nudge', { name: config.name, dx: direction[0], dy: direction[1] }); }
-      }}
-      onPointerEnter={event => pointer('mouseover', config.name, event.clientX, event.clientY)}
-      onPointerLeave={event => { if (!gesture.current) pointer('mouseout', config.name, event.clientX, event.clientY); }}
-      onPointerDown={event => {
-        if (!event.isPrimary || event.button !== 0) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
-        suppressClick.current = false;
-        gesture.current = { pointerId: event.pointerId, name: config.name, x: event.clientX, y: event.clientY, moved: false };
-        pointer('mousedown', config.name, event.clientX, event.clientY);
-      }}
-      onPointerMove={event => { if (gesture.current?.pointerId === event.pointerId) { if (Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 8) gesture.current.moved = true; pointer('mousemove', config.name, event.clientX, event.clientY); } }}
-      onPointerUp={event => { pointer('mouseup', config.name, event.clientX, event.clientY); suppressClick.current = gesture.current?.moved ?? false; gesture.current = null; }}
-      onPointerCancel={event => { pointer('mouseup', config.name, event.clientX, event.clientY); suppressClick.current = true; gesture.current = null; }}
-      onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } send('speak', { name: config.name }); }}
-    />)}
-  </div>, host);
+          className={cn(
+            styles.target,
+            'rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-ring',
+          )}
+          aria-label={`${config.name}，方向键移动，回车播放台词`}
+          onFocus={() => {
+            focused.current = config.name;
+            track(config.name, true);
+            if (!gesture.current) send('focus', { name: config.name });
+          }}
+          onBlur={() => {
+            focused.current = null;
+            if (gesture.current?.name !== config.name) track(config.name, false);
+            send('blur', { name: config.name });
+          }}
+          onKeyDown={(event) => {
+            const directions: Record<string, [number, number]> = {
+              ArrowLeft: [-16, 0],
+              ArrowRight: [16, 0],
+              ArrowUp: [0, -16],
+              ArrowDown: [0, 16],
+            };
+            const direction = directions[event.key];
+            if (direction) {
+              event.preventDefault();
+              send('nudge', { name: config.name, dx: direction[0], dy: direction[1] });
+            }
+          }}
+          onPointerEnter={(event) =>
+            pointer('mouseover', config.name, event.clientX, event.clientY)
+          }
+          onPointerLeave={(event) => {
+            if (!gesture.current) pointer('mouseout', config.name, event.clientX, event.clientY);
+          }}
+          onPointerDown={(event) => {
+            if (!event.isPrimary || event.button !== 0) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            suppressClick.current = false;
+            gesture.current = {
+              pointerId: event.pointerId,
+              name: config.name,
+              x: event.clientX,
+              y: event.clientY,
+              moved: false,
+            };
+            pointer('mousedown', config.name, event.clientX, event.clientY);
+          }}
+          onPointerMove={(event) => {
+            if (gesture.current?.pointerId === event.pointerId) {
+              if (
+                Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 8
+              )
+                gesture.current.moved = true;
+              pointer('mousemove', config.name, event.clientX, event.clientY);
+            }
+          }}
+          onPointerUp={(event) => {
+            pointer('mouseup', config.name, event.clientX, event.clientY);
+            suppressClick.current = gesture.current?.moved ?? false;
+            gesture.current = null;
+          }}
+          onPointerCancel={(event) => {
+            pointer('mouseup', config.name, event.clientX, event.clientY);
+            suppressClick.current = true;
+            gesture.current = null;
+          }}
+          onClick={() => {
+            if (suppressClick.current) {
+              suppressClick.current = false;
+              return;
+            }
+            send('speak', { name: config.name });
+          }}
+        />
+      ))}
+    </div>,
+    host,
+  );
 }

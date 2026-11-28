@@ -9,7 +9,14 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { MdClose, MdDeleteSweep, MdHistory, MdImageSearch, MdSearch, MdWarningAmber } from 'react-icons/md';
+import {
+  MdClose,
+  MdDeleteSweep,
+  MdHistory,
+  MdImageSearch,
+  MdSearch,
+  MdWarningAmber,
+} from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton from '@/components/IconButton';
 import { Input } from '@/components/Input';
@@ -51,7 +58,9 @@ function termAt(value: string, caret: number) {
 
 /** What to ask the dictionary for: two characters of Latin text, or one of Chinese. */
 function keywordAt(value: string, caret: number): string {
-  const tag = termAt(value, caret).tag.replace(/["()[\]{}*]/g, '').trim();
+  const tag = termAt(value, caret)
+    .tag.replace(/["()[\]{}*]/g, '')
+    .trim();
   return tag.length >= 2 || hasCjk(tag) ? tag : '';
 }
 
@@ -108,14 +117,19 @@ export default function SearchField({
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, { keepPrevious: 'search-field' });
+  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, {
+    keepPrevious: 'search-field',
+  });
   const empty = value.trim() === '';
   const suggestions = keyword ? read.data : undefined;
 
   const options = useMemo<FieldOption[]>(() => {
     if (empty) {
       return recents.length > 0
-        ? [...recents.map((query): FieldOption => ({ kind: 'recent', query })), { kind: 'clear-recent' }]
+        ? [
+            ...recents.map((query): FieldOption => ({ kind: 'recent', query })),
+            { kind: 'clear-recent' },
+          ]
         : [];
     }
     return (suggestions ?? []).map((tag): FieldOption => ({ kind: 'tag', tag }));
@@ -184,7 +198,8 @@ export default function SearchField({
       setListOpen(open);
     },
     onSelect: pick,
-    onCompositionEnd: (committed) => lookUp(committed, inputRef.current?.selectionStart ?? committed.length),
+    onCompositionEnd: (committed) =>
+      lookUp(committed, inputRef.current?.selectionStart ?? committed.length),
     resetKey: empty ? '' : keyword,
   });
 
@@ -202,8 +217,11 @@ export default function SearchField({
        list, when open, has already taken the key. Never during a composition: an IME's
        cancel arrives as Escape. */
     if (
-      event.key === 'Escape' && !event.defaultPrevented && value &&
-      !event.nativeEvent.isComposing && event.keyCode !== 229
+      event.key === 'Escape' &&
+      !event.defaultPrevented &&
+      value &&
+      !event.nativeEvent.isComposing &&
+      event.keyCode !== 229
     ) {
       event.preventDefault();
       clearTimeout(timer.current);
@@ -299,7 +317,13 @@ export default function SearchField({
       >
         {options.map((option, index) => (
           <div
-            key={option.kind === 'tag' ? `tag:${option.tag.en}` : option.kind === 'recent' ? `recent:${option.query}` : 'clear'}
+            key={
+              option.kind === 'tag'
+                ? `tag:${option.tag.en}`
+                : option.kind === 'recent'
+                  ? `recent:${option.query}`
+                  : 'clear'
+            }
             {...box.getOptionProps(index)}
             className={cn(ROW.className, box.optionClassName(index))}
           >
@@ -315,7 +339,10 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
   if (option.kind === 'recent') {
     return (
       <>
-        <span className="grid size-6 shrink-0 place-items-center text-on-surface-variant" aria-hidden="true">
+        <span
+          className="grid size-6 shrink-0 place-items-center text-on-surface-variant"
+          aria-hidden="true"
+        >
           <MdHistory size={ICON.standard} />
         </span>
         <span className="min-w-0 flex-1 truncate text-body-l text-on-surface">{option.query}</span>
@@ -325,10 +352,15 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
   if (option.kind === 'clear-recent') {
     return (
       <>
-        <span className="grid size-6 shrink-0 place-items-center text-on-surface-variant" aria-hidden="true">
+        <span
+          className="grid size-6 shrink-0 place-items-center text-on-surface-variant"
+          aria-hidden="true"
+        >
           <MdDeleteSweep size={ICON.standard} />
         </span>
-        <span className="min-w-0 flex-1 truncate text-body-l text-on-surface-variant">清空搜索历史</span>
+        <span className="min-w-0 flex-1 truncate text-body-l text-on-surface-variant">
+          清空搜索历史
+        </span>
       </>
     );
   }
@@ -348,7 +380,11 @@ function OptionRow({ option, safeMode }: { option: FieldOption; safeMode: boolea
         </span>
       </span>
       {restricted && (
-        <span className="shrink-0 text-warning" role="img" aria-label="安全模式下不显示此标签的图片">
+        <span
+          className="shrink-0 text-warning"
+          role="img"
+          aria-label="安全模式下不显示此标签的图片"
+        >
           <MdWarningAmber size={ICON.dense} aria-hidden="true" />
         </span>
       )}

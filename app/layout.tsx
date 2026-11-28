@@ -19,8 +19,15 @@ import { COOKIE_KEYS } from '@/lib/constants';
 import { SPRING_MS } from '@/lib/spring';
 import { parseSidebarMode } from '@/lib/sidebarMode';
 import {
-  MOTION_SPEEDS, formatMotionCustom, motionCustomBootScript, motionCustomStyle, parseMotionCustom,
-  formatMotionEffects, motionEffectsAttributes, motionEffectsStyle, parseMotionEffects,
+  MOTION_SPEEDS,
+  formatMotionCustom,
+  motionCustomBootScript,
+  motionCustomStyle,
+  parseMotionCustom,
+  formatMotionEffects,
+  motionEffectsAttributes,
+  motionEffectsStyle,
+  parseMotionEffects,
 } from '@/lib/motionPreferences';
 import { CUSTOM_PALETTE, PALETTES, SKY_PALETTE, isSkyPhaseId } from '@/lib/generated/themeColors';
 import { skyPhaseAtBeijing, skyPhaseEntry, skyPrePaintSchedule } from '@/lib/skyPalette';
@@ -242,7 +249,9 @@ export default async function RootLayout({
   const onSky = paletteCookie === SKY_PALETTE;
   const skyPhaseCookie = cookieStore.get(COOKIE_KEYS.skyPhase)?.value;
   const skyPhase = onSky
-    ? (isSkyPhaseId(skyPhaseCookie) ? skyPhaseEntry(skyPhaseCookie) : skyPhaseAtBeijing())
+    ? isSkyPhaseId(skyPhaseCookie)
+      ? skyPhaseEntry(skyPhaseCookie)
+      : skyPhaseAtBeijing()
     : null;
   const onCustom = !onSky && paletteCookie === CUSTOM_PALETTE ? custom : null;
   const paletteId = onSky ? SKY_PALETTE : onCustom ? CUSTOM_PALETTE : builtIn.id;
@@ -284,7 +293,8 @@ export default async function RootLayout({
      不阻塞 — the direction a default should fail in for something whose absence is the normal
      state, and the one that holds the page back least. */
   const entranceCookie = cookieStore.get(COOKIE_KEYS.entranceMotion)?.value;
-  const entrance = entranceCookie === 'off' || entranceCookie === 'blocking' ? entranceCookie : undefined;
+  const entrance =
+    entranceCookie === 'off' || entranceCookie === 'blocking' ? entranceCookie : undefined;
   /* 单色 only on an explicit `mono`: a corrupt cookie means 多色, the default and the CSS's own
      attribute-free state. */
   const mono = cookieStore.get(COOKIE_KEYS.paletteHues)?.value === 'mono';
@@ -293,7 +303,8 @@ export default async function RootLayout({
   const splitDetailLayout = cookieStore.get(COOKIE_KEYS.detailLayout)?.value === 'split';
   /* 窄屏详情页左右切换按钮: hidden only on an explicit `false`, so a missing or corrupt cookie
      keeps the default shown state. */
-  const hideMobileDetailStep = cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
+  const hideMobileDetailStep =
+    cookieStore.get(COOKIE_KEYS.detailMobileStepButtons)?.value === 'false';
 
   return (
     <html
@@ -394,7 +405,9 @@ export default async function RootLayout({
           scripting off (`SplashScreen`). Not over the maintenance screen: there is no app behind
           it to enter. */}
       <body className="h-full flex flex-col overflow-hidden">
-        {entrance !== 'off' && entranceTier === 'standard' && !maintenanceLocked && <SplashScreen />}
+        {entrance !== 'off' && entranceTier === 'standard' && !maintenanceLocked && (
+          <SplashScreen />
+        )}
         <NextTopLoader
           /* Rides the chrome's bottom edge (`--app-chrome-bottom`, set in globals.css), where
              M3 puts a top app bar's linear indicator — and so below the dev banner and the

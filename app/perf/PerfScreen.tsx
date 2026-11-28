@@ -15,7 +15,12 @@ import { PageLoadingIndicator } from '@/components/LoadingIndicator';
 import Tabs, { type TabItem } from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import { showToast } from '@/components/Toast';
-import { ROW_STACK_CLASS, SettingsRow, SettingsSection, SwitchRow } from '@/app/settings/SettingsRow';
+import {
+  ROW_STACK_CLASS,
+  SettingsRow,
+  SettingsSection,
+  SwitchRow,
+} from '@/app/settings/SettingsRow';
 import { LS_KEYS } from '@/lib/constants';
 import { useEscapeBack } from '@/lib/hooks';
 import { ICON } from '@/lib/icons';
@@ -61,7 +66,10 @@ const GROUPS: Array<{ id: PerfRunGroup; label: string; description: string }> = 
 /** Status steps a run of these groups announces; `perfRunSteps` in the runner, which loads late. */
 function runSteps(rounds: number, include: Record<PerfRunGroup, boolean>) {
   return (
-    2 + (include.scroll ? rounds : 0) + (include.hero ? rounds * 3 : 0) + (include.stress ? rounds * 4 : 0)
+    2 +
+    (include.scroll ? rounds : 0) +
+    (include.hero ? rounds * 3 : 0) +
+    (include.stress ? rounds * 4 : 0)
   );
 }
 
@@ -275,13 +283,7 @@ function PerfReady() {
         )}
       </Collapse>
 
-      <Tabs
-        tabs={PERF_TABS}
-        value={tab}
-        onChange={setTab}
-        label="性能测试视图"
-        className="mb-6"
-      />
+      <Tabs tabs={PERF_TABS} value={tab} onChange={setTab} label="性能测试视图" className="mb-6" />
 
       <TabPanes value={tab}>
         <TabPane value="perf-setup" inertWhenInactive>
@@ -329,9 +331,7 @@ function PerfReady() {
           <SettingsSection title="本机信息" icon={<MdMemory size={ICON.control} />}>
             <div className="m3-row @container/specs bg-surface-container-low p-4">
               <dl className="grid grid-cols-1 gap-x-6 gap-y-3 @md/specs:grid-cols-2">
-                <Fact label="GPU">
-                  {hardware ? (hardware.gpu ?? '浏览器未提供') : '检测中…'}
-                </Fact>
+                <Fact label="GPU">{hardware ? (hardware.gpu ?? '浏览器未提供') : '检测中…'}</Fact>
                 {hardware?.os && <Fact label="系统 / 架构">{hardware.os}</Fact>}
                 {hardware?.socGuess && <Fact label="芯片">{hardware.socGuess}</Fact>}
                 {hardware?.model && <Fact label="机型代号">{hardware.model}</Fact>}

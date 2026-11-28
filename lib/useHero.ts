@@ -113,7 +113,8 @@ let detailCodeWarmScheduled = false;
 function scheduleDetailCodeWarm(href: string) {
   if (detailCodeWarmScheduled || typeof window === 'undefined') return;
   detailCodeWarmScheduled = true;
-  const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] }).requestIdleCallback;
+  const idle = (window as { requestIdleCallback?: Window['requestIdleCallback'] })
+    .requestIdleCallback;
   const later = (run: () => void) => {
     if (idle) idle.call(window, run, { timeout: 4000 });
     else setTimeout(run, 1500);
@@ -126,7 +127,9 @@ function scheduleDetailCodeWarm(href: string) {
       warmHeroEngine()
         .then((engine) => engine?.warmImageHero())
         .then((detail) =>
-          (detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined)?.warmDetailDeferredCode?.(),
+          (
+            detail as { warmDetailDeferredCode?: () => Promise<unknown> } | undefined
+          )?.warmDetailDeferredCode?.(),
         ),
     () => {
       const family = getComputedStyle(document.body).fontFamily;

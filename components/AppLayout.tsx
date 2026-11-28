@@ -13,7 +13,12 @@ import {
   useSyncExternalStore,
 } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegments } from 'next/navigation';
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+  useSelectedLayoutSegments,
+} from 'next/navigation';
 import {
   MdMenu,
   MdSearch,
@@ -107,7 +112,15 @@ import {
   writeHomeTab,
   type HomeTab,
 } from '@/lib/homeTabs';
-import { clearUserInfo, readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, useMediaQuery, useSession } from '@/lib/hooks';
+import {
+  clearUserInfo,
+  readToken,
+  readUserInfo,
+  resolveDerpiCredentials,
+  updateUserInfo,
+  useMediaQuery,
+  useSession,
+} from '@/lib/hooks';
 import { ensureRoutePolicy, setLineNotifier } from '@/lib/route';
 import { showToast } from '@/components/Toast';
 import { cn, runWhenIdle } from '@/lib/utils';
@@ -126,7 +139,9 @@ import { parseSidebarMode, type SidebarMode } from '@/lib/sidebarMode';
  * A prefetch of the whole route, page and all (`lib/routePayload.ts`). The router takes it as the
  * `kind` its own `prefetch` declares, whose enum Next does not export; this is its `full` member.
  */
-const FULL_PREFETCH = 'full' as NonNullable<Parameters<ReturnType<typeof useRouter>['prefetch']>[1]>['kind'];
+const FULL_PREFETCH = 'full' as NonNullable<
+  Parameters<ReturnType<typeof useRouter>['prefetch']>[1]
+>['kind'];
 
 /**
  * The account's Derpibooru key, mirrored where the request layer reads it. Outside the component
@@ -157,7 +172,9 @@ function SearchBar() {
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     if (pathname === '/search') {
-      const field = document.querySelector<HTMLInputElement>('[data-page-content] input[data-search-field]');
+      const field = document.querySelector<HTMLInputElement>(
+        '[data-page-content] input[data-search-field]',
+      );
       if (field) {
         scrollAppToElement(field, { offset: 16 });
         field.focus({ preventScroll: true });
@@ -211,7 +228,6 @@ function persistDockedMode(mode: SidebarMode) {
     /* Nothing left to carry it; the drawer simply opens expanded next time. */
   }
 }
-
 
 /** How long a route change's landing waits for the incoming page to be focusable: the whole
  *  route entrance at the slowest speed. The page is hidden only for the fade's opening overlap,
@@ -346,7 +362,8 @@ function TabNavBar({
       const height = Math.round(node.offsetHeight);
       // A hidden band measures 0: keep the last real height rather than restyling to it.
       if (height > 0) measuredHeight.current = height;
-      if (measuredHeight.current > 0) setBottomChrome(owner, measuredHeight.current, shownRef.current);
+      if (measuredHeight.current > 0)
+        setBottomChrome(owner, measuredHeight.current, shownRef.current);
     };
     write();
     const observer = new ResizeObserver(write);
@@ -537,7 +554,9 @@ export default function AppLayout({
      record there kept `/` as the background of the next page — 主页 highlighted and the home
      pill floating over /search (R12-018). */
   const browserLeftDetail =
-    isImageDetailOpen && typeof window !== 'undefined' && !/^\/pic\/[^/]+$/.test(window.location.pathname);
+    isImageDetailOpen &&
+    typeof window !== 'undefined' &&
+    !/^\/pic\/[^/]+$/.test(window.location.pathname);
   /* A close holds the gallery exactly as it was under the detail until its flight is on the
      compositor (`galleryExposed`, see `HeroController.exposeGallery`): the restyle that lifting
      `inert` costs then runs under a moving picture instead of in front of it. */
@@ -553,8 +572,7 @@ export default function AppLayout({
      latched onto the non-scrollable host and stayed there after the flight landed — and the
      close holds the gallery as it is until its flight is running, so the restyle lands under the
      moving picture (`closeHoldsGallery` below, `HeroController.exposeGallery`). */
-  const detailCovers =
-    isImageDetailOpen && (!imageHeroRuntime.back || closeHoldsGallery);
+  const detailCovers = isImageDetailOpen && (!imageHeroRuntime.back || closeHoldsGallery);
   /* And not in the commit that settles it either, but two frames later: that commit is the one
      that shows the detail, and the gallery's restyle in it held the detail's first settled frame
      back by ~50ms on a phone at 4× CPU. Nothing reaches the gallery meanwhile — the detail covers
@@ -608,8 +626,11 @@ export default function AppLayout({
   // guessing '/' changes the content key and remounts a multi-page favourites
   // list or clears a search query beneath the overlay.
   const [lastPageLocation, setLastPageLocation] = useState({ pathname, search: liveSearch });
-  if (!isImageDetailOpen && !imageHeroRuntime.background &&
-    (lastPageLocation.pathname !== pathname || lastPageLocation.search !== liveSearch)) {
+  if (
+    !isImageDetailOpen &&
+    !imageHeroRuntime.background &&
+    (lastPageLocation.pathname !== pathname || lastPageLocation.search !== liveSearch)
+  ) {
     setLastPageLocation({ pathname, search: liveSearch });
   }
   /* A navigation away from an open detail — a drawer row, a link inside it — commits before the
@@ -619,7 +640,8 @@ export default function AppLayout({
      compared the list with itself. With no detail open, a record whose page is not the one
      being rendered is already stale. (A close lands on its record's own page, so it keeps it.) */
   const recordedBackground =
-    imageHeroRuntime.background && (isImageDetailOpen || imageHeroRuntime.background.pathname === pathname)
+    imageHeroRuntime.background &&
+    (isImageDetailOpen || imageHeroRuntime.background.pathname === pathname)
       ? imageHeroRuntime.background
       : null;
   const imageHeroBackground =
@@ -627,7 +649,7 @@ export default function AppLayout({
     (browserLeftDetail
       ? { pathname: window.location.pathname, search: window.location.search }
       : null) ??
-    (isImageDetailOpen ? readDetailBackground(pathname) ?? lastPageLocation : null);
+    (isImageDetailOpen ? (readDetailBackground(pathname) ?? lastPageLocation) : null);
   const backgroundPathname = imageHeroBackground?.pathname ?? pathname;
   const frozenBackgroundSearch = imageHeroBackground?.search ?? null;
   /* **Frozen only once it differs from the live URL.** A picture's open records its background
@@ -644,7 +666,10 @@ export default function AppLayout({
     // The browser URL may still be the source during render; Next writes it during commit.
     // The helper checks the committed pathname, so do not gate on the render-time URL here.
     if (isImageDetailOpen && frozenBackgroundSearch !== null) {
-      rememberDetailBackground(pathname, { pathname: backgroundPathname, search: frozenBackgroundSearch });
+      rememberDetailBackground(pathname, {
+        pathname: backgroundPathname,
+        search: frozenBackgroundSearch,
+      });
     }
   }, [isImageDetailOpen, pathname, backgroundPathname, frozenBackgroundSearch]);
   const onHome = backgroundPathname === '/';
@@ -657,7 +682,9 @@ export default function AppLayout({
      picture used to cut straight to the next page. A close never gets here — it lands on its
      record's own page, so the background does not change. */
   const crossFadeEnabled =
-    (imageHeroRuntime.settle === 'gallery-idle' && !imageHeroRuntime.background && !isImageDetailOpen) ||
+    (imageHeroRuntime.settle === 'gallery-idle' &&
+      !imageHeroRuntime.background &&
+      !isImageDetailOpen) ||
     (imageHeroRuntime.settle === 'detail-idle' && !isImageDetailOpen);
 
   useEffect(() => {
@@ -792,10 +819,14 @@ export default function AppLayout({
    * interaction*, which is at minimum a user gesture away, so neither belongs in the
    * document. `runWhenIdle` avoids competing with hydration; each has a documented
    * no-animation fallback if somebody beats it. */
-  useEffect(() => runWhenIdle(() => {
-    warmMotion();
-    warmRouteCrossFade();
-  }), []);
+  useEffect(
+    () =>
+      runWhenIdle(() => {
+        warmMotion();
+        warmRouteCrossFade();
+      }),
+    [],
+  );
 
   /* **`--app-chrome-bottom`**: the viewport y of the chrome's bottom edge — the dev banner,
      the app bar, the offline banner and the top safe-area inset — which toasts hang below and
@@ -880,7 +911,11 @@ export default function AppLayout({
      force-reads the same resource entry, and this component is subscribed to it. */
   const totalUnread = token ? (unread.data?.total ?? 0) : 0;
   const messagesLabel = totalUnread > 0 ? `消息（${totalUnread} 条未读）` : '消息';
-  const { anchorRef: messagesAnchorRef, anchorProps: messagesAnchorProps, tooltip: messagesTooltip } = useTooltip(messagesLabel);
+  const {
+    anchorRef: messagesAnchorRef,
+    anchorProps: messagesAnchorProps,
+    tooltip: messagesTooltip,
+  } = useTooltip(messagesLabel);
   /* 论坛's own badge: posts created since the last forum read receipt (`ForumPane` sends it). */
   const forumUnread = token ? (unread.data?.forum ?? 0) : 0;
 
@@ -912,7 +947,10 @@ export default function AppLayout({
       token: stored.token,
       /* One rule for every merge of a Derpibooru binding (review P2-F9's follow-up): absent or
          null keeps what is stored, only an explicit empty string clears it. */
-      ...resolveDerpiCredentials(result.user as unknown as Record<string, unknown>, stored as unknown as Record<string, unknown>),
+      ...resolveDerpiCredentials(
+        result.user as unknown as Record<string, unknown>,
+        stored as unknown as Record<string, unknown>,
+      ),
     };
     updateUserInfo(stored.token, merged);
   }, [session.data, token]);
@@ -936,12 +974,19 @@ export default function AppLayout({
   const compactSidebar = !isOverlayDrawer && dockedMode === 'icons';
   const drawerVisible = isOverlayDrawer ? modalOpen : dockedVisible;
   const sidebarAction = isOverlayDrawer
-    ? (modalOpen ? '收起侧边栏' : '展开侧边栏')
+    ? modalOpen
+      ? '收起侧边栏'
+      : '展开侧边栏'
     : dockedMode === 'expanded'
       ? '侧边栏仅显示图标'
-      : dockedMode === 'icons' ? '收起侧边栏' : '展开侧边栏';
-  const { anchorRef: accountRef, anchorProps: accountTooltipProps, tooltip: accountTooltip } =
-    useTooltip(compactSidebar ? (userInfo ? userInfo.username : '点击登录') : undefined);
+      : dockedMode === 'icons'
+        ? '收起侧边栏'
+        : '展开侧边栏';
+  const {
+    anchorRef: accountRef,
+    anchorProps: accountTooltipProps,
+    tooltip: accountTooltip,
+  } = useTooltip(compactSidebar ? (userInfo ? userInfo.username : '点击登录') : undefined);
 
   /* Persisted outside the state updater (an updater runs twice under StrictMode and must be
      pure) and only for the docked drawer: a phone's open drawer is not a desktop preference. */
@@ -950,7 +995,8 @@ export default function AppLayout({
       setModalOpen((open) => !open);
       return;
     }
-    const next: SidebarMode = dockedMode === 'expanded' ? 'icons' : dockedMode === 'icons' ? 'hidden' : 'expanded';
+    const next: SidebarMode =
+      dockedMode === 'expanded' ? 'icons' : dockedMode === 'icons' ? 'hidden' : 'expanded';
     setDockedMode(next);
     persistDockedMode(next);
   };
@@ -1041,7 +1087,10 @@ export default function AppLayout({
           back.removeAttribute('data-return-focus');
           return;
         }
-        if (getComputedStyle(back).visibility === 'hidden' && performance.now() < started + RETURN_WAIT_MS) {
+        if (
+          getComputedStyle(back).visibility === 'hidden' &&
+          performance.now() < started + RETURN_WAIT_MS
+        ) {
           frame = requestAnimationFrame(land);
           return;
         }
@@ -1085,7 +1134,9 @@ export default function AppLayout({
     [],
   );
   const coveredHomeGallery =
-    isImageDetailOpen && onHome && new URLSearchParams(frozenBackgroundSearch ?? '').get('tab') !== 'forum';
+    isImageDetailOpen &&
+    onHome &&
+    new URLSearchParams(frozenBackgroundSearch ?? '').get('tab') !== 'forum';
 
   return (
     <BackgroundLocationProvider frozenSearch={providedBackgroundSearch}>
@@ -1181,13 +1232,18 @@ export default function AppLayout({
             {/* The count stays outside the anchor's ripple and hugs the bell's shoulder. */}
             <span className="relative ml-1 flex shrink-0">
               <Link
-                ref={(node) => { messagesAnchorRef.current = node; }}
+                ref={(node) => {
+                  messagesAnchorRef.current = node;
+                }}
                 {...messagesAnchorProps}
                 scroll={false}
                 href="/messages"
                 aria-label={messagesLabel}
                 data-ripple="inner"
-                className={cn(iconButtonClasses({ variant: 'on-primary', size: 'md' }), 'touch-size')}
+                className={cn(
+                  iconButtonClasses({ variant: 'on-primary', size: 'md' }),
+                  'touch-size',
+                )}
               >
                 <span data-ripple-host="" aria-hidden="true" />
                 <MdNotifications aria-hidden="true" />
@@ -1450,7 +1506,10 @@ export default function AppLayout({
                           prose beside it (clears the 3:1 non-text bar). Not interactive:
                           nobody points at a footer mark to see it draw. */}
                       <Logo className="h-8 w-auto text-outline" interactive={false} />
-                      <nav aria-label="站内导航" className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-label-l">
+                      <nav
+                        aria-label="站内导航"
+                        className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-label-l"
+                      >
                         <Link
                           scroll={false}
                           href="/about"

@@ -48,7 +48,13 @@ const ROW = suggestionRow({ variant: 'search' });
  * fragments never trigger a lookup. While the live count is read and the subscription written
  * the submit is busy; the field clears once it has landed.
  */
-export default function SubscribeField({ token, onSubscribed }: { token: string; onSubscribed?: (tag: string) => void }) {
+export default function SubscribeField({
+  token,
+  onSubscribed,
+}: {
+  token: string;
+  onSubscribed?: (tag: string) => void;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
@@ -58,8 +64,13 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, { keepPrevious: 'subscribe-field' });
-  const options = useMemo<TagSuggestion[]>(() => (keyword ? read.data ?? [] : []), [keyword, read.data]);
+  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, {
+    keepPrevious: 'subscribe-field',
+  });
+  const options = useMemo<TagSuggestion[]>(
+    () => (keyword ? (read.data ?? []) : []),
+    [keyword, read.data],
+  );
 
   const lookUp = (text: string) => {
     clearTimeout(timer.current);
@@ -155,7 +166,13 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
                   }}
                 />
               )}
-              <Button type="submit" variant="filled" icon={<MdNotificationAdd />} loading={busy} responsiveLabel>
+              <Button
+                type="submit"
+                variant="filled"
+                icon={<MdNotificationAdd />}
+                loading={busy}
+                responsiveLabel
+              >
                 订阅
               </Button>
             </>
@@ -174,12 +191,18 @@ export default function SubscribeField({ token, onSubscribed }: { token: string;
         {options.map((option, index) => {
           const category = tagCategory(option.category);
           return (
-            <div key={option.en} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
+            <div
+              key={option.en}
+              {...box.getOptionProps(index)}
+              className={cn(ROW.className, box.optionClassName(index))}
+            >
               <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
                 <span className={cn('size-2.5 rounded-full', tagCategoryDot(option.category))} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-body-l text-on-surface">{option.cn || option.en}</span>
+                <span className="block truncate text-body-l text-on-surface">
+                  {option.cn || option.en}
+                </span>
                 <span className="block truncate text-body-s text-on-surface-variant">
                   {option.cn ? `${option.en} · ${category.label}` : category.label}
                 </span>

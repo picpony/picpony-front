@@ -2,13 +2,7 @@
 
 import dynamic from 'next/dynamic';
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { MdArrowBack } from 'react-icons/md';
 import CodeInput from './CodeInput';
 /**
@@ -35,7 +29,13 @@ import {
 } from '@/lib/api/picpony';
 import { apiErrorMessage } from '@/lib/api/errors';
 import { sessionUser } from '@/lib/resources';
-import { readToken, readUserInfo, resolveDerpiCredentials, updateUserInfo, writeUserInfo } from '@/lib/hooks';
+import {
+  readToken,
+  readUserInfo,
+  resolveDerpiCredentials,
+  updateUserInfo,
+  writeUserInfo,
+} from '@/lib/hooks';
 import { LS_KEYS } from '@/lib/constants';
 import { startCooldown, useCooldown } from '@/lib/useCooldown';
 import { focusField, useFieldErrors } from '@/lib/useFieldErrors';
@@ -51,7 +51,12 @@ import {
   validateUsername,
 } from '@/lib/validation';
 
-import type { AuthView, PendingRegistration, ViewSwitch, AuthFormProps as ViewProps } from './AuthModal';
+import type {
+  AuthView,
+  PendingRegistration,
+  ViewSwitch,
+  AuthFormProps as ViewProps,
+} from './AuthModal';
 
 /**
  * A password reset whose code is on its way. It outlives the dialog the same way a pending
@@ -84,7 +89,9 @@ function readPendingReset(): PendingReset | null {
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<PendingReset> | null;
     if (
-      value && typeof value.account === 'string' && typeof value.verification === 'string' &&
+      value &&
+      typeof value.account === 'string' &&
+      typeof value.verification === 'string' &&
       typeof value.sentAt === 'number'
     ) {
       const age = Date.now() - value.sentAt;
@@ -133,9 +140,21 @@ function BackToLogin({ onSwitch }: { onSwitch: (next: ViewSwitch) => void }) {
 }
 
 /** A view's title. `h2`: the dialog sits under the page's own `h1`, and names itself by it. */
-function ViewHeading({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
+function ViewHeading({
+  id,
+  children,
+  className,
+}: {
+  id: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <h2 id={id} tabIndex={-1} className={cn('text-headline-s text-on-surface focus-visible:outline-hidden', className)}>
+    <h2
+      id={id}
+      tabIndex={-1}
+      className={cn('text-headline-s text-on-surface focus-visible:outline-hidden', className)}
+    >
       {children}
     </h2>
   );
@@ -198,15 +217,22 @@ function useAuthOperation(isCurrentFlow: () => boolean) {
       return next;
     },
     current(pending: AuthOperation) {
-      return mounted.current && isCurrentFlow() && operation.current === pending &&
-        !pending.cancelled && readToken() === pending.expectedToken;
+      return (
+        mounted.current &&
+        isCurrentFlow() &&
+        operation.current === pending &&
+        !pending.cancelled &&
+        readToken() === pending.expectedToken
+      );
     },
     finish(pending: AuthOperation) {
       if (operation.current !== pending) return false;
       operation.current = null;
       return mounted.current && isCurrentFlow();
     },
-    busy() { return operation.current !== null; },
+    busy() {
+      return operation.current !== null;
+    },
   };
 }
 
@@ -255,7 +281,10 @@ function useFocusOnMount(
  * keeps its size until the window can render, and the button that asked reports the wait.
  * `mounted` is a one-way latch: `Modal`'s exit animation needs the element to stay.
  */
-function useCaptchaChallenge(onCaptchaChange: (open: boolean) => void, isCurrentFlow: () => boolean) {
+function useCaptchaChallenge(
+  onCaptchaChange: (open: boolean) => void,
+  isCurrentFlow: () => boolean,
+) {
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -323,7 +352,10 @@ async function establishSession(
       updateUserInfo(base.token, {
         ...result.user,
         ...base,
-        ...resolveDerpiCredentials(result.user as unknown as Record<string, unknown>, readUserInfo()),
+        ...resolveDerpiCredentials(
+          result.user as unknown as Record<string, unknown>,
+          readUserInfo(),
+        ),
       });
     }
   } catch {
@@ -355,7 +387,13 @@ function LoginForm({
   const passwordField = form.field('password');
 
   useReportDirty(Boolean(username || password), onDirtyChange);
-  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
+  const viewRef = useFocusOnMount(
+    focusOnMount,
+    finePointer,
+    headingId,
+    () => usernameRef.current,
+    isCurrentFlow,
+  );
 
   const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
@@ -389,7 +427,9 @@ function LoginForm({
 
   return (
     <div ref={viewRef}>
-      <ViewHeading id={headingId} className="mb-8">登录</ViewHeading>
+      <ViewHeading id={headingId} className="mb-8">
+        登录
+      </ViewHeading>
       <form className="space-y-4" onSubmit={handleSubmit} noValidate>
         <Input
           {...usernameField}
@@ -434,24 +474,32 @@ function LoginForm({
             type="button"
             variant="text"
             className="-mr-4"
-            onClick={() => onSwitch({ view: 'reset', account: username.includes('@') ? username.trim() : undefined })}
+            onClick={() =>
+              onSwitch({
+                view: 'reset',
+                account: username.includes('@') ? username.trim() : undefined,
+              })
+            }
           >
             忘记密码？
           </Button>
         </div>
         {captcha.mounted && (
-          <CaptchaModal
-            isOpen={captcha.open}
-            onClose={captcha.close}
-            onVerify={onCaptchaVerify}
-          />
+          <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />
         )}
-        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
+        <Button
+          type="submit"
+          variant="filled"
+          size="lg"
+          fullWidth
+          loading={isLoading || captcha.preparing}
+        >
           登录
         </Button>
       </form>
       <p className="mt-6 text-center text-body-m text-on-surface-variant">
-        还没有账号？<InlineSwitch onClick={() => onSwitch({ view: 'register' })}>立即注册</InlineSwitch>
+        还没有账号？
+        <InlineSwitch onClick={() => onSwitch({ view: 'register' })}>立即注册</InlineSwitch>
       </p>
     </div>
   );
@@ -470,7 +518,10 @@ function RegisterForm(props: ViewProps) {
   };
   const stepProps = { ...props, onPendingChange, focusOnMount: props.focusOnMount || arrived };
   return (
-    <div key={props.pending ? 'verify' : 'details'} className={cn(arrived && 'animate-page-transition')}>
+    <div
+      key={props.pending ? 'verify' : 'details'}
+      className={cn(arrived && 'animate-page-transition')}
+    >
       {props.pending ? (
         <VerifyEmail {...stepProps} pending={props.pending} />
       ) : (
@@ -504,7 +555,13 @@ function RegisterDetails({
   const usernameField = form.field('username');
 
   useReportDirty(Boolean(username || email || password), onDirtyChange);
-  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => usernameRef.current, isCurrentFlow);
+  const viewRef = useFocusOnMount(
+    focusOnMount,
+    finePointer,
+    headingId,
+    () => usernameRef.current,
+    isCurrentFlow,
+  );
 
   const captcha = useCaptchaChallenge(onCaptchaChange, isCurrentFlow);
 
@@ -525,7 +582,12 @@ function RegisterDetails({
     try {
       /* The account exists once this answers, unverified; it signs in with the e-mail's code. A
          repeat of the same three fields resumes that registration (`mail.status: existing`). */
-      const data = await register({ username: name, email: address, password, captchaProof: proof });
+      const data = await register({
+        username: name,
+        email: address,
+        password,
+        captchaProof: proof,
+      });
       if (!operation.current(pending)) return;
       if (data.mail?.status !== 'existing') startCooldown(registrationCooldownKey(address));
       onPendingChange({ verification: data.verification, username: name, email: address });
@@ -542,7 +604,9 @@ function RegisterDetails({
   return (
     <div ref={viewRef}>
       <BackToLogin onSwitch={onSwitch} />
-      <ViewHeading id={headingId} className="mb-8">注册</ViewHeading>
+      <ViewHeading id={headingId} className="mb-8">
+        注册
+      </ViewHeading>
       <form className="space-y-4" onSubmit={handleSubmit} noValidate>
         <Input
           {...usernameField}
@@ -600,13 +664,15 @@ function RegisterDetails({
           }}
         />
         {captcha.mounted && (
-          <CaptchaModal
-            isOpen={captcha.open}
-            onClose={captcha.close}
-            onVerify={onCaptchaVerify}
-          />
+          <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={onCaptchaVerify} />
         )}
-        <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
+        <Button
+          type="submit"
+          variant="filled"
+          size="lg"
+          fullWidth
+          loading={isLoading || captcha.preparing}
+        >
           注册
         </Button>
       </form>
@@ -628,7 +694,14 @@ function ResendButton({
   onResend: () => void;
 }) {
   return (
-    <Button type="button" variant="text" className="tabular-nums" disabled={seconds > 0} loading={busy} onClick={onResend}>
+    <Button
+      type="button"
+      variant="text"
+      className="tabular-nums"
+      disabled={seconds > 0}
+      loading={busy}
+      onClick={onResend}
+    >
       {seconds > 0 ? `重新发送（${seconds} 秒）` : '重新发送验证码'}
     </Button>
   );
@@ -657,7 +730,13 @@ function VerifyEmail({
   const codeField = form.field('code');
 
   useReportDirty(code.length > 0, onDirtyChange);
-  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () => codeRef.current, isCurrentFlow);
+  const viewRef = useFocusOnMount(
+    focusOnMount,
+    finePointer,
+    headingId,
+    () => codeRef.current,
+    isCurrentFlow,
+  );
 
   const verify = async (value: string) => {
     if (!isCurrentFlow() || operation.busy()) return;
@@ -679,7 +758,8 @@ function VerifyEmail({
     } catch (err) {
       if (!operation.current(pending)) return;
       /* The server read the code and refused it (or the request lapsed): the answer goes under it. */
-      if (isRefusal(err, 'EMAIL_CODE_MISMATCH', 'EMAIL_PROOF_INVALID')) form.set('code', failureOf(err, '验证码错误，请重新输入'));
+      if (isRefusal(err, 'EMAIL_CODE_MISMATCH', 'EMAIL_PROOF_INVALID'))
+        form.set('code', failureOf(err, '验证码错误，请重新输入'));
       else showToast(failureOf(err, '邮箱验证失败，请稍后再试'), 'error');
     } finally {
       if (operation.finish(pending)) setIsVerifying(false);
@@ -710,9 +790,12 @@ function VerifyEmail({
   return (
     <div ref={viewRef}>
       <BackToLogin onSwitch={onSwitch} />
-      <ViewHeading id={headingId} className="mb-2">验证邮箱</ViewHeading>
+      <ViewHeading id={headingId} className="mb-2">
+        验证邮箱
+      </ViewHeading>
       <p className="text-body-m text-on-surface-variant mb-6">
-        验证码已发送至 <span className="text-on-surface wrap-anywhere">{registration.email}</span>，10 分钟内有效
+        验证码已发送至 <span className="text-on-surface wrap-anywhere">{registration.email}</span>
+        ，10 分钟内有效
       </p>
       <form
         className="space-y-4"
@@ -722,7 +805,12 @@ function VerifyEmail({
           void verify(code);
         }}
       >
-        <div ref={(element) => { codeRef.current = element; codeField.ref(element); }}>
+        <div
+          ref={(element) => {
+            codeRef.current = element;
+            codeField.ref(element);
+          }}
+        >
           <Field error={codeField.error}>
             <CodeInput
               value={code}
@@ -764,7 +852,11 @@ function VerifyEmail({
         />
       </div>
       {captcha.mounted && (
-        <CaptchaModal isOpen={captcha.open} onClose={captcha.close} onVerify={(proof) => void resend(proof)} />
+        <CaptchaModal
+          isOpen={captcha.open}
+          onClose={captcha.close}
+          onVerify={(proof) => void resend(proof)}
+        />
       )}
     </div>
   );
@@ -788,7 +880,8 @@ function ResetForm({
     if (typeof window === 'undefined') return null;
     const stored = readPendingReset();
     if (!stored) return null;
-    if (prefillAccount && resetCooldownKey(prefillAccount) !== resetCooldownKey(stored.account)) return null;
+    if (prefillAccount && resetCooldownKey(prefillAccount) !== resetCooldownKey(stored.account))
+      return null;
     return stored;
   });
   const [step, setStep] = useState<'request' | 'reset'>(restored ? 'reset' : 'request');
@@ -831,8 +924,11 @@ function ResetForm({
   const codeField = resetForm.field('code');
 
   useReportDirty(Boolean(accountInput || code || newPassword || confirmPassword), onDirtyChange);
-  const viewRef = useFocusOnMount(focusOnMount, finePointer, headingId, () =>
-    step === 'reset' ? codeRef.current : accountRef.current,
+  const viewRef = useFocusOnMount(
+    focusOnMount,
+    finePointer,
+    headingId,
+    () => (step === 'reset' ? codeRef.current : accountRef.current),
     isCurrentFlow,
   );
 
@@ -863,7 +959,10 @@ function ResetForm({
       cooldown.start();
       setVerification(data.verification);
       writePendingReset({ account, verification: data.verification, sentAt: Date.now() });
-      showToast(data.message ?? (resend ? '已重新发送验证码' : '已发送验证码至注册邮箱'), 'success');
+      showToast(
+        data.message ?? (resend ? '已重新发送验证码' : '已发送验证码至注册邮箱'),
+        'success',
+      );
       if (!resend) goTo('reset');
     } catch (err) {
       if (!operation.current(pending)) return;
@@ -904,7 +1003,8 @@ function ResetForm({
     } catch (err) {
       if (!operation.current(pending)) return;
       /* One answer for a wrong code, a lapsed request and an unknown address, on purpose. */
-      if (isRefusal(err, 'PASSWORD_RESET_INVALID')) resetForm.set('code', failureOf(err, '验证码错误或已失效'));
+      if (isRefusal(err, 'PASSWORD_RESET_INVALID'))
+        resetForm.set('code', failureOf(err, '验证码错误或已失效'));
       else showToast(failureOf(err, '密码重置失败，请检查验证码'), 'error');
     } finally {
       if (operation.finish(pending)) setIsLoading(false);
@@ -943,7 +1043,13 @@ function ResetForm({
                   requestForm.clear('account');
                 }}
               />
-              <Button type="submit" variant="filled" size="lg" fullWidth loading={isLoading || captcha.preparing}>
+              <Button
+                type="submit"
+                variant="filled"
+                size="lg"
+                fullWidth
+                loading={isLoading || captcha.preparing}
+              >
                 发送验证码
               </Button>
             </form>
@@ -952,12 +1058,25 @@ function ResetForm({
           <>
             {/* 「如果」: the backend does not say whether the address has an account, by design. */}
             <p className="text-body-m text-on-surface-variant mb-6">
-              如果 <span className="text-on-surface wrap-anywhere">{account}</span> 已注册，验证码已发送至该邮箱，10 分钟内有效
+              如果 <span className="text-on-surface wrap-anywhere">{account}</span>{' '}
+              已注册，验证码已发送至该邮箱，10 分钟内有效
             </p>
             <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               {/* Tells a password manager whose password the new one is. */}
-              <input type="text" name="username" autoComplete="username" value={account} readOnly hidden />
-              <div ref={(element) => { codeRef.current = element; codeField.ref(element); }}>
+              <input
+                type="text"
+                name="username"
+                autoComplete="username"
+                value={account}
+                readOnly
+                hidden
+              />
+              <div
+                ref={(element) => {
+                  codeRef.current = element;
+                  codeField.ref(element);
+                }}
+              >
                 <Field error={codeField.error}>
                   <CodeInput
                     value={code}

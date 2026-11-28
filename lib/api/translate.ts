@@ -79,7 +79,10 @@ type QueueAnswer =
   | { status: 'not_found' };
 
 /** The two 503s that say the image translation cannot take work at all (switch off, line not migrated). */
-const UNAVAILABLE_CODES = new Set(['IMAGE_TRANSLATION_DISABLED', 'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE']);
+const UNAVAILABLE_CODES = new Set([
+  'IMAGE_TRANSLATION_DISABLED',
+  'IMAGE_TRANSLATION_PROVIDER_UNAVAILABLE',
+]);
 
 /** The finished file is served by the backend under `/api/v1/translation/files/…`: through the
     same-origin proxy, like every other `/api/v1` read. */
@@ -90,15 +93,28 @@ function pictureUrl(url: string): string {
 
 function readStatus(data: QueueAnswer): ImageTranslationStatus {
   /* The queue no longer knows the picture (it keeps 2000 finished jobs): asking again re-queues it. */
-  if (data.status === 'not_found') return { state: 'failed', translatedUrl: null, queueAhead: 0, message: '翻译任务已失效，请重新翻译' };
+  if (data.status === 'not_found')
+    return {
+      state: 'failed',
+      translatedUrl: null,
+      queueAhead: 0,
+      message: '翻译任务已失效，请重新翻译',
+    };
   const translatedUrl = data.translated_url ? pictureUrl(data.translated_url) : null;
   const queueAhead = data.queue_ahead > 0 ? data.queue_ahead : 0;
   switch (data.status) {
     case 'completed':
       /* A completed job without its file cannot be shown: keep waiting rather than show nothing. */
-      return translatedUrl ? { state: 'completed', translatedUrl, queueAhead } : { state: 'pending', translatedUrl, queueAhead };
+      return translatedUrl
+        ? { state: 'completed', translatedUrl, queueAhead }
+        : { state: 'pending', translatedUrl, queueAhead };
     case 'failed':
-      return { state: 'failed', translatedUrl, queueAhead, message: data.error_message ?? undefined };
+      return {
+        state: 'failed',
+        translatedUrl,
+        queueAhead,
+        message: data.error_message ?? undefined,
+      };
     case 'translating':
       return { state: 'translating', translatedUrl, queueAhead };
     default:
@@ -136,7 +152,11 @@ export async function requestImageTranslation(imageUrl: string, signal?: AbortSi
 /** Read the queued job for the picture. */
 export async function pollImageTranslation(imageUrl: string, signal?: AbortSignal) {
   return readStatus(
-    await api<QueueAnswer>('GET', '/translation/requests', { query: { image: imageUrl }, cache: 'no-store', signal }),
+    await api<QueueAnswer>('GET', '/translation/requests', {
+      query: { image: imageUrl },
+      cache: 'no-store',
+      signal,
+    }),
   );
 }
 

@@ -86,42 +86,44 @@ export default function LottieIcon({
     let animation: AnimationItem | null = null;
     const started = performance.now();
 
-    void Promise.all([loadLottiePlayer(), loadRef.current()]).then(([player, data]) => {
-      const host = hostRef.current;
-      const liveMode = motionTier('ambient') === 'standard' ? 'play' : staticModeRef.current;
-      if (cancelled || !host || liveMode === 'fallback') return;
-      const instance = player.default.loadAnimation({
-        container: host,
-        renderer: 'svg',
-        loop: false,
-        autoplay: false,
-        animationData: data as object,
+    void Promise.all([loadLottiePlayer(), loadRef.current()])
+      .then(([player, data]) => {
+        const host = hostRef.current;
+        const liveMode = motionTier('ambient') === 'standard' ? 'play' : staticModeRef.current;
+        if (cancelled || !host || liveMode === 'fallback') return;
+        const instance = player.default.loadAnimation({
+          container: host,
+          renderer: 'svg',
+          loop: false,
+          autoplay: false,
+          animationData: data as object,
+        });
+        animation = instance;
+        animationRef.current = instance;
+        const ready = () => {
+          const currentMode = motionTier('ambient') === 'standard' ? 'play' : staticModeRef.current;
+          if (cancelled || currentMode === 'fallback') return;
+          const lastFrame = lastFrameOf(instance);
+          if (currentMode === 'last-frame') {
+            instance.goToAndStop(lastFrame, true);
+          } else {
+            const scale = motionScale('ambient');
+            instance.setSpeed(1 / scale);
+            // The entrance clock starts with the view. A late chunk catches up to
+            // that clock instead of starting a second entrance on a settled page.
+            const frame = ((performance.now() - started) * instance.frameRate) / (1000 * scale);
+            if (frame >= lastFrame) instance.goToAndStop(lastFrame, true);
+            else instance.goToAndPlay(frame, true);
+          }
+          setPlayback({ loaded: true, ready: true });
+        };
+        if (instance.isLoaded) ready();
+        else instance.addEventListener('DOMLoaded', ready);
+      })
+      .catch(() => {
+        // A decorative chunk must never replace the fallback with a blank box.
+        if (!cancelled) setPlayback({ loaded: shouldLoad, ready: false });
       });
-      animation = instance;
-      animationRef.current = instance;
-      const ready = () => {
-        const currentMode = motionTier('ambient') === 'standard' ? 'play' : staticModeRef.current;
-        if (cancelled || currentMode === 'fallback') return;
-        const lastFrame = lastFrameOf(instance);
-        if (currentMode === 'last-frame') {
-          instance.goToAndStop(lastFrame, true);
-        } else {
-          const scale = motionScale('ambient');
-          instance.setSpeed(1 / scale);
-          // The entrance clock starts with the view. A late chunk catches up to
-          // that clock instead of starting a second entrance on a settled page.
-          const frame = (performance.now() - started) * instance.frameRate / (1000 * scale);
-          if (frame >= lastFrame) instance.goToAndStop(lastFrame, true);
-          else instance.goToAndPlay(frame, true);
-        }
-        setPlayback({ loaded: true, ready: true });
-      };
-      if (instance.isLoaded) ready();
-      else instance.addEventListener('DOMLoaded', ready);
-    }).catch(() => {
-      // A decorative chunk must never replace the fallback with a blank box.
-      if (!cancelled) setPlayback({ loaded: shouldLoad, ready: false });
-    });
 
     return () => {
       cancelled = true;
@@ -142,7 +144,8 @@ export default function LottieIcon({
   }, [mode]);
 
   useEffect(() => {
-    if (motionTier('ambient') === 'standard') animationRef.current?.setSpeed(1 / motionScale('ambient'));
+    if (motionTier('ambient') === 'standard')
+      animationRef.current?.setSpeed(1 / motionScale('ambient'));
   }, [speed]);
 
   const ready = playback.ready && playback.loaded === shouldLoad && shouldLoad;

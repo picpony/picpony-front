@@ -41,7 +41,12 @@ function deliver(listener: ToastListener, toast: ToastNotice) {
 }
 
 /** M3's snackbar dwell runs 4–10s. A status report reads in four; a problem gets six. */
-const BASE_DWELL: Record<ToastType, number> = { success: 4000, info: 4000, warning: 6000, error: 6000 };
+const BASE_DWELL: Record<ToastType, number> = {
+  success: 4000,
+  info: 4000,
+  warning: 6000,
+  error: 6000,
+};
 const PER_CHARACTER_MS = 60;
 const MAX_DWELL = 10000;
 

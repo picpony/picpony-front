@@ -10,9 +10,14 @@ const root = path.resolve(import.meta.dirname, '..');
 const graph = buildGraph(readSources(root));
 const explain = (chains) => chains.map((chain) => chain.join(' -> ')).join('\n');
 const builtins = new Set(builtinModules);
-const serverOnly = (file) => /\.server\.[cm]?[jt]sx?$/.test(file) ||
-  /^app\/(?:.*\/)?route\.[cm]?[jt]sx?$/.test(file) || file === 'lib/serverMemo.ts' ||
-  file === 'next/headers' || file === 'server-only' || file.startsWith('node:') || builtins.has(file);
+const serverOnly = (file) =>
+  /\.server\.[cm]?[jt]sx?$/.test(file) ||
+  /^app\/(?:.*\/)?route\.[cm]?[jt]sx?$/.test(file) ||
+  file === 'lib/serverMemo.ts' ||
+  file === 'next/headers' ||
+  file === 'server-only' ||
+  file.startsWith('node:') ||
+  builtins.has(file);
 
 test('runtime graph follows aliases, relative imports and re-exports, excluding type-only edges', () => {
   const sample = fixture({
@@ -25,10 +30,14 @@ test('runtime graph follows aliases, relative imports and re-exports, excluding 
     'lib/leaf.ts': 'export const value = 1;',
     'lib/types.ts': '',
   });
-  assert.deepEqual(sample.get('lib/start.ts').edges.map((edge) => edge.target),
-    ['lib/sideEffect', 'lib/empty', 'lib/emptyExport', 'lib/barrel.ts']);
-  assert.deepEqual(findPath(sample, 'lib/start.ts', (file) => file === 'lib/leaf.ts'),
-    ['lib/start.ts', 'lib/barrel.ts', 'lib/leaf.ts']);
+  assert.deepEqual(
+    sample.get('lib/start.ts').edges.map((edge) => edge.target),
+    ['lib/sideEffect', 'lib/empty', 'lib/emptyExport', 'lib/barrel.ts'],
+  );
+  assert.deepEqual(
+    findPath(sample, 'lib/start.ts', (file) => file === 'lib/leaf.ts'),
+    ['lib/start.ts', 'lib/barrel.ts', 'lib/leaf.ts'],
+  );
 });
 
 test('lazy imports defer code but do not permit a client to load server-only code', () => {
@@ -37,19 +46,31 @@ test('lazy imports defer code but do not permit a client to load server-only cod
     'lib/private.server.ts': 'export const value = 1;',
   });
   assert.equal(findPath(sample, 'components/Client.tsx', serverOnly), null);
-  assert.deepEqual(findPath(sample, 'components/Client.tsx', serverOnly, true),
-    ['components/Client.tsx', 'lib/private.server.ts']);
+  assert.deepEqual(findPath(sample, 'components/Client.tsx', serverOnly, true), [
+    'components/Client.tsx',
+    'lib/private.server.ts',
+  ]);
 });
 
 test('static cycles include re-exports and require, while a lazy binding back to its runtime is allowed', () => {
-  assert.deepEqual(findCycles(fixture({
-    'lib/a.ts': `export * from './b';`,
-    'lib/b.ts': `const a = require('./a');`,
-  })), [['lib/a.ts', 'lib/b.ts', 'lib/a.ts']]);
-  assert.deepEqual(findCycles(fixture({
-    'lib/a.ts': `const load = () => import('./b');`,
-    'lib/b.ts': `import './a';`,
-  })), []);
+  assert.deepEqual(
+    findCycles(
+      fixture({
+        'lib/a.ts': `export * from './b';`,
+        'lib/b.ts': `const a = require('./a');`,
+      }),
+    ),
+    [['lib/a.ts', 'lib/b.ts', 'lib/a.ts']],
+  );
+  assert.deepEqual(
+    findCycles(
+      fixture({
+        'lib/a.ts': `const load = () => import('./b');`,
+        'lib/b.ts': `import './a';`,
+      }),
+    ),
+    [],
+  );
 });
 
 test('application modules have no static runtime cycles', () => {
@@ -58,8 +79,10 @@ test('application modules have no static runtime cycles', () => {
 });
 
 test('client module graphs cannot reach server-only modules, including through lazy imports', () => {
-  const violations = [...graph].filter(([, node]) => node.client)
-    .map(([file]) => findPath(graph, file, serverOnly, true)).filter(Boolean);
+  const violations = [...graph]
+    .filter(([, node]) => node.client)
+    .map(([file]) => findPath(graph, file, serverOnly, true))
+    .filter(Boolean);
   assert.equal(violations.length, 0, explain(violations));
 });
 
@@ -67,8 +90,10 @@ test('domain libraries do not import route implementations or the retired API ag
   const violations = [];
   for (const [file, { edges }] of graph) {
     for (const { target, line } of edges) {
-      if (/^lib\/api(?:\.[cm]?[jt]s)?$/.test(target) ||
-        (file.startsWith('lib/') && target.startsWith('app/'))) {
+      if (
+        /^lib\/api(?:\.[cm]?[jt]s)?$/.test(target) ||
+        (file.startsWith('lib/') && target.startsWith('app/'))
+      ) {
         violations.push(`${file}:${line} -> ${target}`);
       }
     }
@@ -85,7 +110,12 @@ test('libraries do not depend on components except the viewer code warmup', () =
       // This import deliberately preloads the destination's code on gallery intent.
       // It never renders a component; replacing it with registration would add a
       // mount-order requirement to the first press. Keep the exception exact.
-      if (file === 'lib/hero/media.ts' && edge.target === 'components/PicDetail.tsx' && edge.dynamic) continue;
+      if (
+        file === 'lib/hero/media.ts' &&
+        edge.target === 'components/PicDetail.tsx' &&
+        edge.dynamic
+      )
+        continue;
       violations.push(`${file}:${edge.line} -> ${edge.target}`);
     }
   }
@@ -107,7 +137,10 @@ test('motion implementations depend only on their owned collaborators, never the
     if (!file.startsWith('lib/motion/')) continue;
     assert.ok(allowed.has(file), `declare the collaborators of ${file}`);
     for (const { target, line } of edges) {
-      if ((target === 'lib/motion.ts' || target.startsWith('lib/motion/')) && !allowed.get(file).includes(target)) {
+      if (
+        (target === 'lib/motion.ts' || target.startsWith('lib/motion/')) &&
+        !allowed.get(file).includes(target)
+      ) {
         violations.push(`${file}:${line} -> ${target}`);
       }
     }
@@ -116,7 +149,9 @@ test('motion implementations depend only on their owned collaborators, never the
 });
 
 test('WAAPI motion modules and route cross-fade never reach GSAP', () => {
-  const gsapTarget = (file) => file === 'lib/motion/engine.ts' || file === 'lib/motion.ts' ||
+  const gsapTarget = (file) =>
+    file === 'lib/motion/engine.ts' ||
+    file === 'lib/motion.ts' ||
     /^(?:gsap|@gsap\/react)(?:\/|$)/.test(file);
   const gsapFree = [
     'lib/motion/tabs.ts',
@@ -127,18 +162,31 @@ test('WAAPI motion modules and route cross-fade never reach GSAP', () => {
     'lib/routeCrossFade.ts',
     'lib/routeCrossFadePlay.ts',
   ];
-  const violations = gsapFree.map((file) => findPath(graph, file, gsapTarget, true)).filter(Boolean);
+  const violations = gsapFree
+    .map((file) => findPath(graph, file, gsapTarget, true))
+    .filter(Boolean);
   assert.equal(violations.length, 0, explain(violations));
 });
 
 test('the shared shell keeps motion, hero, detail stage, icons, Markdown, palette and admin code behind their boundaries', () => {
   const deferred = new Set([
-    'lib/motion.ts', 'lib/hero/index.ts', 'lib/hero/controller.ts',
-    'components/HeroStageActive.tsx', 'components/DetailHeader.tsx', 'components/detail/DetailActions.tsx',
-    'components/MarkdownDocument.tsx', 'components/AuthForms.tsx', 'lib/paletteRule.ts',
+    'lib/motion.ts',
+    'lib/hero/index.ts',
+    'lib/hero/controller.ts',
+    'components/HeroStageActive.tsx',
+    'components/DetailHeader.tsx',
+    'components/detail/DetailActions.tsx',
+    'components/MarkdownDocument.tsx',
+    'components/AuthForms.tsx',
+    'lib/paletteRule.ts',
   ]);
-  const heavy = (file) => deferred.has(file) || file.startsWith('lib/motion/') || /^lib\/api\/admin/.test(file) ||
-    /^(?:gsap|@gsap\/react|react-icons|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(file);
+  const heavy = (file) =>
+    deferred.has(file) ||
+    file.startsWith('lib/motion/') ||
+    /^lib\/api\/admin/.test(file) ||
+    /^(?:gsap|@gsap\/react|react-icons|react-markdown|@material\/material-color-utilities)(?:\/|$)/.test(
+      file,
+    );
   // All client roots installed by the server layout, not the server-only palette derivation.
   const shell = graph.get('app/layout.tsx').edges.filter((edge) => graph.get(edge.target)?.client);
   assert.ok(shell.length > 0, 'the shell scan must inspect actual client entry points');
@@ -148,7 +196,13 @@ test('the shared shell keeps motion, hero, detail stage, icons, Markdown, palett
 
 test('gallery and core routes keep the Hero engine and react-icons/md out of their initial static graphs', () => {
   const heroEngine = (file) => file === 'lib/hero/index.ts' || file === 'lib/hero/controller.ts';
-  const heroViolations = ['lib/detail.ts', 'lib/useHero.ts', 'app/page.tsx', 'app/messages/page.tsx', 'app/settings/page.tsx']
+  const heroViolations = [
+    'lib/detail.ts',
+    'lib/useHero.ts',
+    'app/page.tsx',
+    'app/messages/page.tsx',
+    'app/settings/page.tsx',
+  ]
     .map((entry) => findPath(graph, entry, heroEngine))
     .filter(Boolean);
   assert.equal(heroViolations.length, 0, explain(heroViolations));

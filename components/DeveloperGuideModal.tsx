@@ -118,7 +118,9 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
     setError('');
     try {
       /* Throws `ApiError` with the backend's sentence (a wrong code, a cooldown, the prerequisites). */
-      const state = await (enabled ? enableDeveloperMode(token, password) : disableDeveloperMode(token));
+      const state = await (enabled
+        ? enableDeveloperMode(token, password)
+        : disableDeveloperMode(token));
       if (readToken() !== token) return;
       /* The stored flag can be on while access is not (an expired maintenance grant): the answer's
          `active` is what the device mirrors. */
@@ -169,8 +171,9 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
       title="开发者模式"
       maxWidth="sm"
       closeOnOverlayClick={false}
-      footer={status === 'ready' && (
-        isDeveloper ? (
+      footer={
+        status === 'ready' &&
+        (isDeveloper ? (
           <Button variant="tonal" onClick={() => changeMode(false)} loading={submitting}>
             关闭开发者模式
           </Button>
@@ -183,13 +186,19 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
           >
             确认开启
           </Button>
-        ) : null
-      )}
+        ) : null)
+      }
     >
       <FollowHeight>
         <div className="space-y-4">
           {status === 'loading' && (
-            <PageLoadingIndicator size="inline" paused={!isOpen} delay={120} label="正在读取开发者状态…" className="min-h-28" />
+            <PageLoadingIndicator
+              size="inline"
+              paused={!isOpen}
+              delay={120}
+              label="正在读取开发者状态…"
+              className="min-h-28"
+            />
           )}
 
           {status === 'banned' && (
@@ -211,7 +220,11 @@ export default function DeveloperGuideModal({ isOpen, onClose }: DeveloperGuideM
                 <div className="space-y-4">
                   {/* The sentence is text on the surface; the brand ink is for the mark. */}
                   <div className="flex items-center gap-2 text-body-m text-on-surface">
-                    <MdConstruction size={ICON.control} className="shrink-0 text-primary-ink" aria-hidden="true" />
+                    <MdConstruction
+                      size={ICON.control}
+                      className="shrink-0 text-primary-ink"
+                      aria-hidden="true"
+                    />
                     当前已处于开发者模式
                   </div>
                 </div>

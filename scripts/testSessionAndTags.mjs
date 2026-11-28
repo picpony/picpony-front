@@ -10,10 +10,18 @@ function moduleAt(file, dependencies, globals) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, { exports, require: (name) => {
-    if (!(name in dependencies)) throw new Error(`Unexpected dependency ${name}`);
-    return dependencies[name];
-  }, ...globals }, { filename: file });
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      require: (name) => {
+        if (!(name in dependencies)) throw new Error(`Unexpected dependency ${name}`);
+        return dependencies[name];
+      },
+      ...globals,
+    },
+    { filename: file },
+  );
   return exports;
 }
 const values = new Map();
@@ -23,9 +31,22 @@ const storage = {
   removeItem: (key) => values.delete(key),
 };
 let announcements = 0;
-const session = moduleAt('lib/hooks.ts', { './hero/runtime': { getImageHeroRuntime: () => null, interruptImageHero: () => false, subscribeImageHeroRuntime: () => () => {} }, react: {}, './constants': {
-  LS_KEYS: { userInfo: 'user_info', derpiApiKey: 'derpi_api_key' }, MEDIA: {},
-} }, { window: { dispatchEvent: () => announcements++ }, localStorage: storage, Event });
+const session = moduleAt(
+  'lib/hooks.ts',
+  {
+    './hero/runtime': {
+      getImageHeroRuntime: () => null,
+      interruptImageHero: () => false,
+      subscribeImageHeroRuntime: () => () => {},
+    },
+    react: {},
+    './constants': {
+      LS_KEYS: { userInfo: 'user_info', derpiApiKey: 'derpi_api_key' },
+      MEDIA: {},
+    },
+  },
+  { window: { dispatchEvent: () => announcements++ }, localStorage: storage, Event },
+);
 values.set('user_info', JSON.stringify({ token: 'B', username: 'account B' }));
 assert.equal(session.updateUserInfo('A', { username: 'late A' }), false);
 assert.equal(session.clearUserInfo('A'), false);
@@ -41,22 +62,28 @@ assert.equal(announcements, 1, 'unchanged values do not publish again');
 // the same resolver before publishing both the session and resource answer.
 session.updateUserInfo('B', { derpi_user_id: '42', derpi_username: 'saved-owner' });
 const credentials = session.resolveDerpiCredentials(
-  { username: 'updated profile', has_api_key: true }, session.readUserInfo(),
+  { username: 'updated profile', has_api_key: true },
+  session.readUserInfo(),
 );
 assert.equal(credentials.api_key, 'new-key');
 assert.equal(credentials.derpi_user_id, '42');
 assert.equal(credentials.derpi_username, 'saved-owner');
 session.updateUserInfo('B', credentials);
 assert.equal(storage.getItem('derpi_api_key'), 'new-key');
-assert.equal(session.resolveDerpiCredentials({ api_key: null }, session.readUserInfo()).api_key, 'new-key');
+assert.equal(
+  session.resolveDerpiCredentials({ api_key: null }, session.readUserInfo()).api_key,
+  'new-key',
+);
 const verified = session.resolveDerpiCredentials(
-  { api_key: 'verified-key', derpi_user_id: 73, derpi_username: 'verified-owner' }, session.readUserInfo(),
+  { api_key: 'verified-key', derpi_user_id: 73, derpi_username: 'verified-owner' },
+  session.readUserInfo(),
 );
 session.updateUserInfo('B', verified);
 assert.equal(session.readUserInfo().derpi_user_id, '73');
 assert.equal(storage.getItem('derpi_api_key'), 'verified-key');
 const unbound = session.resolveDerpiCredentials(
-  { api_key: '', derpi_user_id: '', derpi_username: '' }, session.readUserInfo(),
+  { api_key: '', derpi_user_id: '', derpi_username: '' },
+  session.readUserInfo(),
 );
 session.updateUserInfo('B', unbound);
 assert.equal(session.readUserInfo().api_key, '');
@@ -76,16 +103,25 @@ values.clear();
 let calls = 0;
 let now = Date.now();
 let fail = false;
-const makeTags = () => moduleAt('lib/tagTranslations.ts', {
-  '@/lib/api/picpony': { getTagTranslations: async () => {
-    calls++;
-    if (fail) throw new TypeError('offline');
-    return { success: true, translations: { pony: '小马' } };
-  } },
-}, { window: {}, localStorage: storage, Date: { now: () => now } });
+const makeTags = () =>
+  moduleAt(
+    'lib/tagTranslations.ts',
+    {
+      '@/lib/api/picpony': {
+        getTagTranslations: async () => {
+          calls++;
+          if (fail) throw new TypeError('offline');
+          return { success: true, translations: { pony: '小马' } };
+        },
+      },
+    },
+    { window: {}, localStorage: storage, Date: { now: () => now } },
+  );
 let tags = makeTags();
 let partial;
-await tags.loadTagTranslations(['species:pony', 'unknown'], (value) => { partial = value; });
+await tags.loadTagTranslations(['species:pony', 'unknown'], (value) => {
+  partial = value;
+});
 assert.equal(partial.pony, '小马');
 assert.equal(partial.unknown, null, 'a miss is published, so the view stops asking');
 await tags.loadTagTranslations(['unknown']);
@@ -97,10 +133,15 @@ now += 24 * 60 * 60 * 1000 + 1;
 await tags.loadTagTranslations(['unknown']);
 assert.equal(calls, 2, 'negative TTL expires within the same session');
 fail = true;
-await tags.loadTagTranslations(['offline'], (value) => { partial = value; });
+await tags.loadTagTranslations(['offline'], (value) => {
+  partial = value;
+});
 assert.equal(partial.offline, null);
-assert.equal(JSON.parse(storage.getItem('picpony_tag_translations_v1')).offline, undefined,
-  'a network failure does not poison the persistent dictionary cache');
+assert.equal(
+  JSON.parse(storage.getItem('picpony_tag_translations_v1')).offline,
+  undefined,
+  'a network failure does not poison the persistent dictionary cache',
+);
 fail = false;
 await tags.loadTagTranslations(['offline']);
 assert.equal(calls, 4, 'later visits can retry a failed request');

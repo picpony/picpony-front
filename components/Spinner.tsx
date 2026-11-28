@@ -98,7 +98,14 @@ export default function Spinner({
            reads as a direction of travel without the dash moving. `userSpaceOnUse` keeps the
            ramp the same at every size, since the viewBox is always 100 units. */
         <defs>
-          <linearGradient id={fadeId} x1="0" y1="50" x2="100" y2="50" gradientUnits="userSpaceOnUse">
+          <linearGradient
+            id={fadeId}
+            x1="0"
+            y1="50"
+            x2="100"
+            y2="50"
+            gradientUnits="userSpaceOnUse"
+          >
             <stop offset="0" stopColor="currentColor" stopOpacity="0" />
             <stop offset="1" stopColor="currentColor" stopOpacity="1" />
           </linearGradient>
@@ -127,7 +134,9 @@ export default function Spinner({
         // are radius-independent.
         pathLength={100}
         className={cn(!determinate && 'm3-progress-arc')}
-        style={determinate ? undefined : ({ '--spinner-arc-fade': `url(#${fadeId})` } as CSSProperties)}
+        style={
+          determinate ? undefined : ({ '--spinner-arc-fade': `url(#${fadeId})` } as CSSProperties)
+        }
         strokeDasharray={determinate ? `${pct} ${100 - pct}` : undefined}
       />
     </svg>
@@ -138,7 +147,9 @@ export default function Spinner({
       <div
         className={cn(
           'flex items-center justify-center gap-2',
-          tone === 'on-primary' ? 'text-on-primary' : tone === 'primary' && 'text-on-surface-variant',
+          tone === 'on-primary'
+            ? 'text-on-primary'
+            : tone === 'primary' && 'text-on-surface-variant',
           className,
         )}
       >
@@ -148,7 +159,11 @@ export default function Spinner({
     );
   }
 
-  return <span className={cn('inline-flex items-center justify-center [&>svg]:block', className)}>{circle}</span>;
+  return (
+    <span className={cn('inline-flex items-center justify-center [&>svg]:block', className)}>
+      {circle}
+    </span>
+  );
 }
 
 /* The linear progress indicator lives in `components/ProgressBar.tsx` — a bar

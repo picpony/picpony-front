@@ -32,7 +32,9 @@ const STAT_FIELDS = [
   { key: 'comments', label: '评论总数' },
 ] as const;
 
-const statsQuery = defineAdminQuery<SiteStats>('site-stats', (_token, signal) => adminApi.getSiteStats(signal));
+const statsQuery = defineAdminQuery<SiteStats>('site-stats', (_token, signal) =>
+  adminApi.getSiteStats(signal),
+);
 
 /** The longest notice the maintenance screen shows; the server cuts anything past it. */
 const MESSAGE_MAX = 500;
@@ -45,7 +47,15 @@ const messageLength = (text: string) => Array.from(text).length;
  * description are the row's real words, and hiding the whole row left a screen reader with nothing
  * where the two switches are (G4-021).
  */
-function RowSkeleton({ icon, label, description }: { icon: ReactNode; label: string; description: string }) {
+function RowSkeleton({
+  icon,
+  label,
+  description,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+}) {
   return (
     <div className="flex items-center gap-4">
       <div className="min-w-0 flex-1">
@@ -59,10 +69,8 @@ function RowSkeleton({ icon, label, description }: { icon: ReactNode; label: str
   );
 }
 
-const MAINTENANCE_COPY =
-  '开启后，普通用户与访客仅可见维护提示页面；管理员仍可正常访问网站。';
-const TRANSLATE_COPY =
-  '控制图片详情中的「一键翻译」。关闭后，用户将无法发起新的图片翻译。';
+const MAINTENANCE_COPY = '开启后，普通用户与访客仅可见维护提示页面；管理员仍可正常访问网站。';
+const TRANSLATE_COPY = '控制图片详情中的「一键翻译」。关闭后，用户将无法发起新的图片翻译。';
 
 /**
  * 其他功能: the site's two switches and its statistics.
@@ -89,16 +97,25 @@ export default function OtherTab({ token }: AdminPanelProps) {
 
   const current = status.data;
   const message = draft ?? current?.maintenanceMessage ?? '';
-  const messageError = messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 个字符` : undefined;
+  const messageError =
+    messageLength(message) > MESSAGE_MAX ? `提示文字最多 ${MESSAGE_MAX} 个字符` : undefined;
 
   const commitMaintenance = (enabled: boolean) => {
     if (!current || messageError) return;
     void maintenanceMutation.run(
-      () => adminApi.adminToggleMaintenance(token, { maintenance_mode: enabled, maintenance_message: message }),
+      () =>
+        adminApi.adminToggleMaintenance(token, {
+          maintenance_mode: enabled,
+          maintenance_message: message,
+        }),
       () => {
         setDraft(null);
         showToast(
-          enabled === current.maintenanceMode ? '已保存维护提示' : enabled ? '已开启维护模式' : '已关闭维护模式',
+          enabled === current.maintenanceMode
+            ? '已保存维护提示'
+            : enabled
+              ? '已开启维护模式'
+              : '已关闭维护模式',
           'success',
         );
       },
@@ -106,7 +123,11 @@ export default function OtherTab({ token }: AdminPanelProps) {
       {
         onCommitted: () => {
           publishSavedSiteStatus({ maintenance: enabled });
-          statusQuery.write(token, (previous) => ({ ...(previous ?? current), maintenanceMode: enabled, maintenanceMessage: message }));
+          statusQuery.write(token, (previous) => ({
+            ...(previous ?? current),
+            maintenanceMode: enabled,
+            maintenanceMessage: message,
+          }));
           status.refresh();
         },
       },
@@ -134,7 +155,11 @@ export default function OtherTab({ token }: AdminPanelProps) {
       '图片翻译设置保存失败',
       {
         onCommitted: () => {
-          if (translationQuery.peek(token).data) translationQuery.write(token, (previous) => ({ ...previous!, translate_enabled: enabled }));
+          if (translationQuery.peek(token).data)
+            translationQuery.write(token, (previous) => ({
+              ...previous!,
+              translate_enabled: enabled,
+            }));
           translateSwitch.write({}, enabled);
         },
       },
@@ -147,9 +172,17 @@ export default function OtherTab({ token }: AdminPanelProps) {
     <div className="space-y-6">
       <SectionHeader section="other" />
 
-      <section aria-label="站点开关" aria-busy={!current && !status.error ? true : undefined} className="space-y-4">
+      <section
+        aria-label="站点开关"
+        aria-busy={!current && !status.error ? true : undefined}
+        className="space-y-4"
+      >
         {status.error && !current ? (
-          <ErrorRetry size="inline" {...retryError('站点状态加载失败', status.error)} onRetry={status.retryable ? status.refresh : undefined} />
+          <ErrorRetry
+            size="inline"
+            {...retryError('站点状态加载失败', status.error)}
+            onRetry={status.retryable ? status.refresh : undefined}
+          />
         ) : null}
         <Card variant="filled" className="space-y-4">
           {current ? (
@@ -224,7 +257,11 @@ export default function OtherTab({ token }: AdminPanelProps) {
               description={TRANSLATE_COPY}
             />
           ) : translation.error ? (
-            <ErrorRetry size="inline" {...retryError('图片翻译状态加载失败', translation.error)} onRetry={translation.retryable ? translation.refresh : undefined} />
+            <ErrorRetry
+              size="inline"
+              {...retryError('图片翻译状态加载失败', translation.error)}
+              onRetry={translation.retryable ? translation.refresh : undefined}
+            />
           ) : (
             <RowSkeleton
               icon={<MdTranslate size={ICON.control} aria-hidden="true" />}
@@ -246,13 +283,29 @@ export default function OtherTab({ token }: AdminPanelProps) {
         <SectionHeading
           as="h3"
           icon={<MdBarChart size={ICON.control} />}
-          actions={<RefreshButton onClick={statistics.refresh} label="刷新统计" loading={statistics.refreshing} />}
+          actions={
+            <RefreshButton
+              onClick={statistics.refresh}
+              label="刷新统计"
+              loading={statistics.refreshing}
+            />
+          }
         >
           <span id="admin-site-statistics-heading">全站数据统计</span>
         </SectionHeading>
-        {statistics.error && stats && <ErrorRetry size="inline" {...retryError('全站统计加载失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />}
+        {statistics.error && stats && (
+          <ErrorRetry
+            size="inline"
+            {...retryError('全站统计加载失败', statistics.error)}
+            onRetry={statistics.retryable ? statistics.refresh : undefined}
+          />
+        )}
         {statistics.error && !stats ? (
-          <ErrorRetry size="inline" {...retryError('全站统计加载失败', statistics.error)} onRetry={statistics.retryable ? statistics.refresh : undefined} />
+          <ErrorRetry
+            size="inline"
+            {...retryError('全站统计加载失败', statistics.error)}
+            onRetry={statistics.retryable ? statistics.refresh : undefined}
+          />
         ) : (
           <>
             <dl className="grid grid-cols-1 gap-3 @md:grid-cols-3">
@@ -267,7 +320,9 @@ export default function OtherTab({ token }: AdminPanelProps) {
             </dl>
             {stats ? (
               <p className="text-body-s tabular-nums text-on-surface-variant">
-                {stats.updated_at ? `统计更新于 ${formatDateTime(stats.updated_at)}` : '暂无统计更新时间'}
+                {stats.updated_at
+                  ? `统计更新于 ${formatDateTime(stats.updated_at)}`
+                  : '暂无统计更新时间'}
               </p>
             ) : (
               <Skeleton className="h-4.5 w-44" />
@@ -277,20 +332,25 @@ export default function OtherTab({ token }: AdminPanelProps) {
         <Button
           variant="tonal"
           loading={syncMutation.busy}
-          onClick={() => confirmThen(
-            '确认同步全站统计',
-            '确定要从 Derpibooru 同步图片、标签与评论总数吗？',
-            () => void syncMutation.run(
-              async (isCurrent) => {
-                const counts = await collectSiteStats(token, isCurrent);
-                return counts && isCurrent() ? adminApi.adminSyncSiteStats(token, counts) : null;
-              },
-              () => showToast('已同步全站统计', 'success'),
-              '全站统计同步失败',
-              { onCommitted: () => statsQuery.invalidate() },
-            ),
-            { tone: 'filled' },
-          )}
+          onClick={() =>
+            confirmThen(
+              '确认同步全站统计',
+              '确定要从 Derpibooru 同步图片、标签与评论总数吗？',
+              () =>
+                void syncMutation.run(
+                  async (isCurrent) => {
+                    const counts = await collectSiteStats(token, isCurrent);
+                    return counts && isCurrent()
+                      ? adminApi.adminSyncSiteStats(token, counts)
+                      : null;
+                  },
+                  () => showToast('已同步全站统计', 'success'),
+                  '全站统计同步失败',
+                  { onCommitted: () => statsQuery.invalidate() },
+                ),
+              { tone: 'filled' },
+            )
+          }
         >
           同步全站统计
         </Button>

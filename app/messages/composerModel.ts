@@ -38,13 +38,19 @@ function appendText(pieces: ComposerPiece[], text: string) {
 
 /** Pieces back into the wire format. */
 export function serializePieces(pieces: readonly ComposerPiece[]): string {
-  return pieces.map((piece) => (piece.type === 'text' ? piece.text : emojiMarker(piece.name))).join('');
+  return pieces
+    .map((piece) => (piece.type === 'text' ? piece.text : emojiMarker(piece.name)))
+    .join('');
 }
 
 /** What a person reads: an emoji as its name in brackets — the clipboard's plain text. */
 export function readablePieces(pieces: readonly ComposerPiece[]): string {
   return pieces
-    .map((piece) => (piece.type === 'text' ? piece.text : `[${EMOJI_BY_NAME.get(piece.name)?.label ?? piece.name}]`))
+    .map((piece) =>
+      piece.type === 'text'
+        ? piece.text
+        : `[${EMOJI_BY_NAME.get(piece.name)?.label ?? piece.name}]`,
+    )
     .join('');
 }
 
@@ -93,7 +99,12 @@ export function createComposerHistory(initial: ComposerSnapshot, limit = 100) {
         stack[index] = snapshot;
         return;
       }
-      const burst = kind !== 'insert' && kind === lastKind && now - lastAt < COALESCE_MS && index === stack.length - 1 && index > 0;
+      const burst =
+        kind !== 'insert' &&
+        kind === lastKind &&
+        now - lastAt < COALESCE_MS &&
+        index === stack.length - 1 &&
+        index > 0;
       stack = stack.slice(0, index + 1);
       if (burst) stack[index] = snapshot;
       else {

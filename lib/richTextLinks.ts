@@ -32,7 +32,9 @@ export function isInternalHref(href: string): boolean {
   if (!href.startsWith('/') && !/^[a-z][a-z0-9+.-]*:/i.test(href)) return false;
   try {
     const url = new URL(href, 'https://picpony.top');
-    return /^https?:$/.test(url.protocol) && SITE_HOSTS.has(url.hostname) && isAppPath(url.pathname);
+    return (
+      /^https?:$/.test(url.protocol) && SITE_HOSTS.has(url.hostname) && isAppPath(url.pathname)
+    );
   } catch {
     return false;
   }
@@ -73,6 +75,12 @@ export function inAppHref(href: string, origin?: string): string | null {
 }
 
 /** A click the browser should keep: another button, a modifier, a new-tab gesture. */
-export function isPlainActivation(event: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+export function isPlainActivation(event: {
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}): boolean {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }

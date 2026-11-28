@@ -8,13 +8,13 @@ Service Worker caching, offline navigation and installation. Resource caching re
 
 Non-GET requests return without `respondWith`, leaving writes to the browser's normal transport.
 
-| Request | Policy |
-| --- | --- |
-| Documents and navigations | Network only; on failure serve `/offline.html` |
-| `/_next/static/*` | Cache first, with network fallback |
-| `/_next/image*` | Stale-while-revalidate, LRU 120, unversioned cache |
-| `/api/v1`, `/relay`, `/search-api/*`, RSC payloads | Do not intercept |
-| `derpicdn.net`, `wsrv.nl`, `147052.xyz` | Do not intercept |
+| Request                                            | Policy                                             |
+| -------------------------------------------------- | -------------------------------------------------- |
+| Documents and navigations                          | Network only; on failure serve `/offline.html`     |
+| `/_next/static/*`                                  | Cache first, with network fallback                 |
+| `/_next/image*`                                    | Stale-while-revalidate, LRU 120, unversioned cache |
+| `/api/v1`, `/relay`, `/search-api/*`, RSC payloads | Do not intercept                                   |
+| `derpicdn.net`, `wsrv.nl`, `147052.xyz`            | Do not intercept                                   |
 
 The exclusions preserve request identity:
 

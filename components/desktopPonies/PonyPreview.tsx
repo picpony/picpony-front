@@ -24,27 +24,33 @@ export default function PonyPreview({ pony }: { pony: PonyChoice }) {
     setStatus(ready ? { src, kind: 'loaded' } : null);
   }, [src]);
 
-  return <span className={styles.preview} aria-hidden="true">
-    {!src || failed ? <span className="flex flex-col items-center gap-2 text-on-surface-variant">
-      <MdImageNotSupported size={ICON.standard} />
-      <span className="text-body-s">预览暂不可用</span>
-    </span> : <>
-      {!loaded && <LoadingIndicator size="sm" tone="inherit" decorative autoPause />}
-      {/* Original sprite pixels, decoded once to PNG; no engine or animated GIF is loaded. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={src}
-        alt=""
-        width={112}
-        height={96}
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        className={`${styles.sprite} ${loaded ? '' : 'invisible'}`}
-        onLoad={() => setStatus({ src, kind: 'loaded' })}
-        onError={() => setStatus({ src, kind: 'failed' })}
-      />
-    </>}
-  </span>;
+  return (
+    <span className={styles.preview} aria-hidden="true">
+      {!src || failed ? (
+        <span className="flex flex-col items-center gap-2 text-on-surface-variant">
+          <MdImageNotSupported size={ICON.standard} />
+          <span className="text-body-s">预览暂不可用</span>
+        </span>
+      ) : (
+        <>
+          {!loaded && <LoadingIndicator size="sm" tone="inherit" decorative autoPause />}
+          {/* Original sprite pixels, decoded once to PNG; no engine or animated GIF is loaded. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            ref={imgRef}
+            src={src}
+            alt=""
+            width={112}
+            height={96}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            className={`${styles.sprite} ${loaded ? '' : 'invisible'}`}
+            onLoad={() => setStatus({ src, kind: 'loaded' })}
+            onError={() => setStatus({ src, kind: 'failed' })}
+          />
+        </>
+      )}
+    </span>
+  );
 }

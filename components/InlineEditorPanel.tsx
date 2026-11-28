@@ -7,7 +7,14 @@ import { getAppScroller } from '@/lib/appScroller';
 import { scrollAppToElement } from '@/lib/scrollTo';
 import { springTiming } from '@/lib/springTiming';
 import { TRAVEL_PX } from '@/lib/motionTokens';
-import { dropMove, drawnOffsetY, followersOf, markLayoutOwned, precedersOf, startMove } from '@/components/admin/tableMotion';
+import {
+  dropMove,
+  drawnOffsetY,
+  followersOf,
+  markLayoutOwned,
+  precedersOf,
+  startMove,
+} from '@/components/admin/tableMotion';
 
 interface InlineEditorPanelProps {
   id: string;
@@ -59,8 +66,15 @@ export function captureInlineEditorLayout(trigger: Element) {
   }
   const view = window.innerHeight;
   const tops = new Map<HTMLElement, number>();
-  for (const el of followersOf(row, { top: -view, bottom: view * 2 })) tops.set(el, el.getBoundingClientRect().top);
-  pending = { editorId: trigger.getAttribute('aria-controls'), row, at: performance.now(), rowTop: row.getBoundingClientRect().top, tops };
+  for (const el of followersOf(row, { top: -view, bottom: view * 2 }))
+    tops.set(el, el.getBoundingClientRect().top);
+  pending = {
+    editorId: trigger.getAttribute('aria-controls'),
+    row,
+    at: performance.now(),
+    rowTop: row.getBoundingClientRect().top,
+    tops,
+  };
 }
 
 /**
@@ -72,14 +86,19 @@ export function captureInlineEditorLayout(trigger: Element) {
  */
 function takeCapture(panel: HTMLElement): Capture | null {
   const capture = pending;
-  if (!capture || (capture.editorId !== panel.id && capture.row !== panel.previousElementSibling)) return null;
+  if (!capture || (capture.editorId !== panel.id && capture.row !== panel.previousElementSibling))
+    return null;
   pending = null;
   return performance.now() - capture.at <= CAPTURE_TTL_MS ? capture : null;
 }
 
 /** Nearest scroll container: the dialog/sheet body when nested inside one, else the app scroller. */
 function scrollerOf(el: Element): HTMLElement | null {
-  return (typeof el.closest === 'function' ? el.closest<HTMLElement>('[data-app-scroll-container]') : null) ?? getAppScroller();
+  return (
+    (typeof el.closest === 'function'
+      ? el.closest<HTMLElement>('[data-app-scroll-container]')
+      : null) ?? getAppScroller()
+  );
 }
 
 /**
@@ -166,10 +185,13 @@ function cornerRow(panel: HTMLElement): { row: HTMLElement; end: string; seam: s
 
 /** The row's bottom corners from one radius to the other, on the clock of the gesture they belong to. */
 function cornerTrack(row: HTMLElement, from: string, to: string, timing: KeyframeAnimationOptions) {
-  return row.animate([
-    { borderBottomLeftRadius: from, borderBottomRightRadius: from },
-    { borderBottomLeftRadius: to, borderBottomRightRadius: to },
-  ], timing);
+  return row.animate(
+    [
+      { borderBottomLeftRadius: from, borderBottomRightRadius: from },
+      { borderBottomLeftRadius: to, borderBottomRightRadius: to },
+    ],
+    timing,
+  );
 }
 
 /** Where `el` is drawn now by its own tracks — running animations included. */
@@ -226,7 +248,9 @@ export default function InlineEditorPanel({
       /* Closing takes the panel's controls away (it goes inert at once): focus that was inside
          returns to the control that opened it, rather than falling to the page. */
       if (panel.contains(document.activeElement)) {
-        const trigger = document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(panel.id)}"]`);
+        const trigger = document.querySelector<HTMLElement>(
+          `[aria-controls="${CSS.escape(panel.id)}"]`,
+        );
         trigger?.focus({ preventScroll: true });
       }
       const run = turn(panel, surface, tier, previous ?? null, 'close');
@@ -243,12 +267,13 @@ export default function InlineEditorPanel({
         run.corner?.cancel();
       };
       if (run.own.length) run.own[0].finished.then(finish, () => {});
-      else queueMicrotask(() => {
-        if (runs.get(panel) === run) {
-          markLayoutOwned(panel.parentElement);
-          onExitCompleteRef.current();
-        }
-      });
+      else
+        queueMicrotask(() => {
+          if (runs.get(panel) === run) {
+            markLayoutOwned(panel.parentElement);
+            onExitCompleteRef.current();
+          }
+        });
     } else {
       markLayoutOwned(panel.parentElement ?? panel);
       runs.set(panel, turn(panel, surface, tier, previous ?? null, 'open'));
@@ -305,7 +330,10 @@ function footprint(panel: HTMLElement) {
  * The panel is collapsed for the one read rather than hidden — a focused field inside it keeps its
  * box, so it keeps focus — and the scroll offset the read clamped is put back.
  */
-function layoutWithout(panel: HTMLElement, targets: HTMLElement[]): { tops: number[]; shift: number } {
+function layoutWithout(
+  panel: HTMLElement,
+  targets: HTMLElement[],
+): { tops: number[]; shift: number } {
   const scroller = scrollerOf(panel);
   const scrollTop = scroller?.scrollTop ?? 0;
   const { height, marginTop } = panel.style;
@@ -326,7 +354,12 @@ function layoutWithout(panel: HTMLElement, targets: HTMLElement[]): { tops: numb
  * opacity on the effects twin, which cannot overshoot). 减弱 fades the panel in and moves nothing —
  * the reflow is a long travel, which that tier drops; 关闭 appears outright.
  */
-function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, capture: Capture | null): Run {
+function open(
+  panel: HTMLElement,
+  surface: HTMLElement,
+  tier: MotionTier,
+  capture: Capture | null,
+): Run {
   const run: Run = { phase: 'open', own: [], moved: [], corner: null, landing: null };
   if (tier === 'off') return run;
   const corners = cornerRow(panel);
@@ -345,7 +378,9 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
      pressed, where it is drawn with the panel taking no room — measured against where the layout
      has it now (its box less any move it is still drawn at, which the new move replaces). */
   const targets = followersOf(panel, { top: -distance, bottom: window.innerHeight + distance });
-  const before = targets.some((el) => !capture?.tops.has(el)) ? layoutWithout(panel, targets).tops : null;
+  const before = targets.some((el) => !capture?.tops.has(el))
+    ? layoutWithout(panel, targets).tops
+    : null;
   const offsets = targets.map((el, index) => {
     const drawn = el.getBoundingClientRect().top;
     return (capture?.tops.get(el) ?? before?.[index] ?? drawn) - (drawn - drawnOffsetY(el));
@@ -359,8 +394,16 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
   if (corners) run.corner = cornerTrack(corners.row, corners.end, corners.seam, spatial);
   for (const child of Array.from(surface.children)) {
     run.own.push(
-      child.animate([{ translate: `0 ${-CONTENT_TRAVEL}px` }, { translate: 'none' }], { ...spatial, delay: lag, fill: 'backwards' }),
-      child.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, delay: lag, fill: 'backwards' }),
+      child.animate([{ translate: `0 ${-CONTENT_TRAVEL}px` }, { translate: 'none' }], {
+        ...spatial,
+        delay: lag,
+        fill: 'backwards',
+      }),
+      child.animate([{ opacity: 0 }, { opacity: 1 }], {
+        ...effects,
+        delay: lag,
+        fill: 'backwards',
+      }),
     );
   }
   targets.forEach((el, index) => {
@@ -368,7 +411,14 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
       dropMove(el);
       return;
     }
-    run.moved.push([el, startMove(el, [{ transform: `translateY(${offsets[index]}px)` }, { transform: 'none' }], spatial)]);
+    run.moved.push([
+      el,
+      startMove(
+        el,
+        [{ transform: `translateY(${offsets[index]}px)` }, { transform: 'none' }],
+        spatial,
+      ),
+    ]);
   });
   return run;
 }
@@ -385,22 +435,32 @@ function open(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, captur
  * Re-opening: the same parts back to rest on the opening's spring. 减弱 fades the panel alone; 关闭
  * runs nothing, and a close removes the panel in a microtask.
  */
-function turn(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, previous: Run | null, phase: 'open' | 'close'): Run {
+function turn(
+  panel: HTMLElement,
+  surface: HTMLElement,
+  tier: MotionTier,
+  previous: Run | null,
+  phase: 'open' | 'close',
+): Run {
   const run: Run = { phase, own: [], moved: [], corner: null, landing: null };
   const closing = phase === 'close';
   const { height, distance } = footprint(panel);
   const content = Array.from(surface.children);
   const view = window.innerHeight;
-  const moved = [...new Set([
-    ...(previous?.moved ?? []).map(([el]) => el),
-    ...followersOf(panel, { top: -distance, bottom: view + distance }),
-  ])].filter((el) => el.isConnected);
+  const moved = [
+    ...new Set([
+      ...(previous?.moved ?? []).map(([el]) => el),
+      ...followersOf(panel, { top: -distance, bottom: view + distance }),
+    ]),
+  ].filter((el) => el.isConnected);
   /* Reads, then the previous run goes: its tracks are cancelled only once their pose is known. A
      close sends each follower to where it will be drawn once the panel is gone, and what precedes
      the panel down by the page's shift. */
   const without = closing && tier === 'standard' ? layoutWithout(panel, moved) : null;
   const shift = without && without.shift >= 0.5 ? without.shift : 0;
-  const above = shift ? precedersOf(panel, { top: -shift, bottom: view }).filter((el) => !moved.includes(el)) : [];
+  const above = shift
+    ? precedersOf(panel, { top: -shift, bottom: view }).filter((el) => !moved.includes(el))
+    : [];
   const targets = [...moved, ...above];
   const panelPose = poseOf(panel);
   const surfacePose = poseOf(surface);
@@ -412,7 +472,10 @@ function turn(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, previo
   });
   /* The row's corners leave from where they are drawn — a turned run's track included — and their
      rest is read once that track is gone. */
-  const cornerFrom = panel.previousElementSibling instanceof HTMLElement ? getComputedStyle(panel.previousElementSibling).borderBottomLeftRadius : null;
+  const cornerFrom =
+    panel.previousElementSibling instanceof HTMLElement
+      ? getComputedStyle(panel.previousElementSibling).borderBottomLeftRadius
+      : null;
   for (const animation of previous?.own ?? []) animation.cancel();
   previous?.corner?.cancel();
   const corners = cornerRow(panel);
@@ -420,30 +483,68 @@ function turn(panel: HTMLElement, surface: HTMLElement, tier: MotionTier, previo
   if (tier !== 'standard') {
     for (const [el, animation] of previous?.moved ?? []) dropMove(el, animation);
     if (tier === 'reduced') {
-      const fade: KeyframeAnimationOptions = { ...springTiming('fastEffects', 'list'), fill: closing ? 'forwards' : 'auto' };
-      run.own.push(panel.animate([{ opacity: panelPose.opacity }, { opacity: closing ? 0 : 1 }], fade));
-      if (corners && cornerFrom) run.corner = cornerTrack(corners.row, cornerFrom, closing ? corners.end : corners.seam, fade);
+      const fade: KeyframeAnimationOptions = {
+        ...springTiming('fastEffects', 'list'),
+        fill: closing ? 'forwards' : 'auto',
+      };
+      run.own.push(
+        panel.animate([{ opacity: panelPose.opacity }, { opacity: closing ? 0 : 1 }], fade),
+      );
+      if (corners && cornerFrom)
+        run.corner = cornerTrack(
+          corners.row,
+          cornerFrom,
+          closing ? corners.end : corners.seam,
+          fade,
+        );
     }
     return run;
   }
-  const timing: KeyframeAnimationOptions = closing ? { ...springTiming('layout', 'list'), fill: 'forwards' } : springTiming('layout', 'list');
-  const fade: KeyframeAnimationOptions = closing ? { ...springTiming('fastEffects', 'list'), fill: 'forwards' } : springTiming('defaultEffects', 'list');
+  const timing: KeyframeAnimationOptions = closing
+    ? { ...springTiming('layout', 'list'), fill: 'forwards' }
+    : springTiming('layout', 'list');
+  const fade: KeyframeAnimationOptions = closing
+    ? { ...springTiming('fastEffects', 'list'), fill: 'forwards' }
+    : springTiming('defaultEffects', 'list');
   run.own.push(
-    panel.animate([{ translate: panelPose.translate, opacity: panelPose.opacity }, { translate: closing ? `0 ${shift - height}px` : 'none', opacity: 1 }], timing),
-    surface.animate([{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }], timing),
+    panel.animate(
+      [
+        { translate: panelPose.translate, opacity: panelPose.opacity },
+        { translate: closing ? `0 ${shift - height}px` : 'none', opacity: 1 },
+      ],
+      timing,
+    ),
+    surface.animate(
+      [{ translate: surfacePose.translate }, { translate: closing ? `0 ${height}px` : 'none' }],
+      timing,
+    ),
   );
   content.forEach((child, index) => {
     run.own.push(
-      child.animate([{ translate: contentPoses[index].translate }, { translate: closing ? `0 ${-CONTENT_TRAVEL}px` : 'none' }], timing),
+      child.animate(
+        [
+          { translate: contentPoses[index].translate },
+          { translate: closing ? `0 ${-CONTENT_TRAVEL}px` : 'none' },
+        ],
+        timing,
+      ),
       child.animate([{ opacity: contentPoses[index].opacity }, { opacity: closing ? 0 : 1 }], fade),
     );
   });
-  if (corners && cornerFrom) run.corner = cornerTrack(corners.row, cornerFrom, closing ? corners.end : corners.seam, timing);
+  if (corners && cornerFrom)
+    run.corner = cornerTrack(corners.row, cornerFrom, closing ? corners.end : corners.seam, timing);
   targets.forEach((el, index) => {
-    run.moved.push([el, startMove(el, [
-      { transform: `translateY(${offsets[index]}px)` },
-      { transform: ends[index] ? `translateY(${ends[index]}px)` : 'none' },
-    ], timing)]);
+    run.moved.push([
+      el,
+      startMove(
+        el,
+        [
+          { transform: `translateY(${offsets[index]}px)` },
+          { transform: ends[index] ? `translateY(${ends[index]}px)` : 'none' },
+        ],
+        timing,
+      ),
+    ]);
   });
   return run;
 }

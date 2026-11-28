@@ -22,7 +22,9 @@ const on = (target) => ({
     if (!target.has(type)) target.set(type, new Set());
     target.get(type).add(listener);
   },
-  removeEventListener(type, listener) { target.get(type)?.delete(listener); },
+  removeEventListener(type, listener) {
+    target.get(type)?.delete(listener);
+  },
   dispatchEvent(event) {
     for (const listener of [...(target.get(event.type) ?? [])]) listener(event);
     return true;
@@ -30,20 +32,35 @@ const on = (target) => ({
 });
 const documentListeners = new Map();
 globalThis.window = {
-  ...on(listeners), setTimeout, clearTimeout, requestAnimationFrame: (cb) => setTimeout(cb, 0),
+  ...on(listeners),
+  setTimeout,
+  clearTimeout,
+  requestAnimationFrame: (cb) => setTimeout(cb, 0),
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
 };
-const root = { dataset: {}, classList: { contains: () => false, add() {}, remove() {}, toggle() {} }, style: { setProperty() {} } };
+const root = {
+  dataset: {},
+  classList: { contains: () => false, add() {}, remove() {}, toggle() {} },
+  style: { setProperty() {} },
+};
 globalThis.document = {
-  ...on(documentListeners), visibilityState: 'visible', documentElement: root, cookie: '',
-  querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, head: { appendChild() {} }, createElement: () => ({ setAttribute() {} }),
+  ...on(documentListeners),
+  visibilityState: 'visible',
+  documentElement: root,
+  cookie: '',
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  getElementById: () => null,
+  head: { appendChild() {} },
+  createElement: () => ({ setAttribute() {} }),
 };
 
 const writes = [];
 let failNext = 0;
 globalThis.fetch = async (url, init = {}) => {
   const target = new URL(String(url), 'https://app.invalid');
-  if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT') throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
+  if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT')
+    throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
   if (failNext > 0) {
     failNext -= 1;
     throw new TypeError('Failed to fetch');
@@ -51,7 +68,11 @@ globalThis.fetch = async (url, init = {}) => {
   const body = JSON.parse(init.body);
   writes.push(body.settings);
   /* `PUT /me/preferences` answers with what it stored and the next revision. */
-  return Response.json({ settings: body.settings, revision: body.expected_revision + 1, adjustments: [] });
+  return Response.json({
+    settings: body.settings,
+    revision: body.expected_revision + 1,
+    adjustments: [],
+  });
 };
 
 const sync = await import('../lib/settingsSync.ts');
@@ -71,7 +92,9 @@ sync.bindSettingsSync({
     await new Promise((resolve) => setTimeout(resolve, 5));
     sync.adoptCloudSettings(token, structuredClone(serverUser), startedAt);
   },
-  writeSession: (_token, settings) => { serverUser = { ...serverUser, settings: structuredClone(settings) }; },
+  writeSession: (_token, settings) => {
+    serverUser = { ...serverUser, settings: structuredClone(settings) };
+  },
   afterBrowsingChange: () => {},
 });
 
@@ -89,11 +112,23 @@ function signOut() {
 }
 
 const ACCOUNT = {
-  id: 7, token: 'token-a', username: 'pony', birthday: '2000-01-01', settings_revision: 0,
+  id: 7,
+  token: 'token-a',
+  username: 'pony',
+  birthday: '2000-01-01',
+  settings_revision: 0,
 };
 const CLOUD = {
-  contentFilter: 'spoilers', banAnthro: true, onlyPony: true, useCdn: true, theme: 'rarity',
-  showFaves: false, hideIpLocation: true, mascotId: '12', publicFaveFolderIds: [3, 4], defaultFaveFolderName: '主收藏夹',
+  contentFilter: 'spoilers',
+  banAnthro: true,
+  onlyPony: true,
+  useCdn: true,
+  theme: 'rarity',
+  showFaves: false,
+  hideIpLocation: true,
+  mascotId: '12',
+  publicFaveFolderIds: [3, 4],
+  defaultFaveFolderName: '主收藏夹',
 };
 
 test('signing in restores the account: device values replaced, account values from the copy or the backend default', async () => {
@@ -102,13 +137,25 @@ test('signing in restores the account: device values replaced, account values fr
   signIn({ id: 7, token: 'token-a', username: 'pony' });
   serverUser = { ...ACCOUNT, settings: structuredClone(CLOUD) };
   sync.adoptCloudSettings('token-a', structuredClone(serverUser), Date.now());
-  assert.equal(values.get(LS_KEYS.contentFilter), 'spoilers', 'a 26-year-old account keeps 中等限制');
+  assert.equal(
+    values.get(LS_KEYS.contentFilter),
+    'spoilers',
+    'a 26-year-old account keeps 中等限制',
+  );
   assert.equal(values.get(LS_KEYS.banAnthro), 'true');
   assert.equal(values.get(LS_KEYS.useCdn), 'true');
   assert.equal(values.get(LS_KEYS.showFaves), 'false');
   assert.equal(values.get(LS_KEYS.hideIpLocation), 'true');
-  assert.equal(values.has(LS_KEYS.showUploads), false, 'an account key the copy lacks is the backend default');
-  assert.equal(values.has(LS_KEYS.emailNotifMessage), false, 'a missing key is the backend default (on)');
+  assert.equal(
+    values.has(LS_KEYS.showUploads),
+    false,
+    'an account key the copy lacks is the backend default',
+  );
+  assert.equal(
+    values.has(LS_KEYS.emailNotifMessage),
+    false,
+    'a missing key is the backend default (on)',
+  );
   assert.equal(values.get(LS_KEYS.palette), 'rarity', 'the theme is the palette');
   assert.equal(writes.length, 0, 'adopting writes nothing back');
 });
@@ -137,11 +184,19 @@ test('a local change is newer than a read that started before it, even after its
   await settle();
   assert.equal(writes.at(-1).onlyPony, false);
   /* The slow read comes back with the old value. */
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...CLOUD, onlyPony: true } }, startedBefore);
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...CLOUD, onlyPony: true } },
+    startedBefore,
+  );
   assert.equal(values.get(LS_KEYS.onlyPony), 'false');
   /* A read sent after the change speaks for it: another device turned it back on. */
   await wait(2);
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, onlyPony: true } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, onlyPony: true } },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.onlyPony), 'true');
 });
 
@@ -156,7 +211,11 @@ test('a failed write keeps the local value, says so once, and is retried', async
   assert.ok(sync.settingsSyncSnapshot().pending.useCdn, 'still pending');
   assert.ok(JSON.parse(values.get(LS_KEYS.settingsSyncPending)).pending.useCdn, 'and persisted');
   /* A read while pending cannot undo it. */
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, useCdn: true } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, useCdn: true } },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.useCdn), 'false');
   await settle(); // the read scheduled a retry, which fails again
   assert.equal(notices.length, 1, 'one notice per run of failures');
@@ -181,41 +240,85 @@ test('a stale copy is read again before it becomes the base of a write', async (
     Date.now = realNow;
   }
   assert.equal(reads, readsBefore + 1);
-  assert.equal(writes.at(-1).mascotSizeMobile, 'large', 'the other device’s change survives our write');
+  assert.equal(
+    writes.at(-1).mascotSizeMobile,
+    'large',
+    'the other device’s change survives our write',
+  );
   assert.equal(writes.at(-1).showChineseTags, false);
 });
 
 test('the content filter stays inside its gate', async () => {
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, birthday: '2015-06-01', settings: { ...serverUser.settings, contentFilter: 'spoilers' } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    {
+      ...ACCOUNT,
+      birthday: '2015-06-01',
+      settings: { ...serverUser.settings, contentFilter: 'spoilers' },
+    },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.contentFilter), 'safe', 'too young for 中等限制');
   assert.equal(sync.spoilersBlockedBy({ birthday: '' }), 'no-birthday');
   assert.equal(sync.spoilersBlockedBy(null), 'signed-out');
   assert.equal(sync.ageFrom('2010-02-30'), null, 'not a real date');
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, is_developer: 1, settings: { ...serverUser.settings, contentFilter: 'developer' } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    {
+      ...ACCOUNT,
+      is_developer: 1,
+      settings: { ...serverUser.settings, contentFilter: 'developer' },
+    },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.developer), 'true', 'developer mode is the backend’s word');
   assert.equal(values.get(LS_KEYS.contentFilter), 'developer');
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, is_developer: 0, settings: { ...serverUser.settings, contentFilter: 'developer' } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    {
+      ...ACCOUNT,
+      is_developer: 0,
+      settings: { ...serverUser.settings, contentFilter: 'developer' },
+    },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.contentFilter), 'safe');
 });
 
 test('the palette travels as the original front end’s theme', async () => {
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'auto' } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'auto' } },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.palette), 'default', 'auto reads as the default palette');
   sync.changeSyncedSetting('banAnthro', false);
   await settle();
-  assert.equal(writes.at(-1).theme, 'auto', 'and is not rewritten while the default is what is chosen');
+  assert.equal(
+    writes.at(-1).theme,
+    'auto',
+    'and is not rewritten while the default is what is chosen',
+  );
 });
 
 test('a palette picked here is noticed through the appearance store and sent as the theme', async () => {
   appearance.commitPalette('luna'); // what the palette chips' wipe ends in
   assert.ok(sync.settingsSyncSnapshot().pending.palette, 'noticed as a change');
   /* A read that still says the old theme cannot undo it. */
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'rarity' } }, Date.now());
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'rarity' } },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.palette), 'luna');
   await settle();
   assert.equal(writes.at(-1).theme, 'luna');
   /* The engine's own adoption is not a change. */
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'pinkie' } }, Date.now() + 1);
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'pinkie' } },
+    Date.now() + 1,
+  );
   assert.equal(values.get(LS_KEYS.palette), 'pinkie');
   assert.equal(sync.settingsSyncSnapshot().pending.palette, undefined);
 
@@ -224,9 +327,17 @@ test('a palette picked here is noticed through the appearance store and sent as 
   assert.ok(sync.settingsSyncSnapshot().pending.palette);
   await settle();
   assert.equal(writes.at(-1).theme, 'sky');
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'default' } }, Date.now() + 2);
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'default' } },
+    Date.now() + 2,
+  );
   assert.equal(values.get(LS_KEYS.palette), 'default');
-  sync.adoptCloudSettings('token-a', { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'sky' } }, Date.now() + 3);
+  sync.adoptCloudSettings(
+    'token-a',
+    { ...ACCOUNT, settings: { ...serverUser.settings, theme: 'sky' } },
+    Date.now() + 3,
+  );
   assert.equal(values.get(LS_KEYS.palette), 'sky');
   assert.equal(sync.settingsSyncSnapshot().pending.palette, undefined);
 });
@@ -234,7 +345,11 @@ test('a palette picked here is noticed through the appearance store and sent as 
 test('a record without settings is no base: nothing is written over it', async () => {
   const before = writes.length;
   signIn({ id: 8, token: 'token-b', username: 'zebra' });
-  sync.adoptCloudSettings('token-b', { id: 8, token: 'token-b', username: 'zebra', birthday: '' }, Date.now());
+  sync.adoptCloudSettings(
+    'token-b',
+    { id: 8, token: 'token-b', username: 'zebra', birthday: '' },
+    Date.now(),
+  );
   serverUser = { id: 8, username: 'zebra', birthday: '' };
   sync.changeSyncedSetting('banAnthro', true);
   await settle();
@@ -258,22 +373,46 @@ test('signing out drops unconfirmed changes and returns account settings to thei
 
 test('signing out ends developer mode, and the developer filter returns to 完全安全', async () => {
   signIn({ ...ACCOUNT, id: 9, token: 'token-dev', username: 'dev' });
-  sync.adoptCloudSettings('token-dev', {
-    ...ACCOUNT, id: 9, token: 'token-dev', username: 'dev', is_developer: 1, settings: { contentFilter: 'developer' },
-  }, Date.now());
+  sync.adoptCloudSettings(
+    'token-dev',
+    {
+      ...ACCOUNT,
+      id: 9,
+      token: 'token-dev',
+      username: 'dev',
+      is_developer: 1,
+      settings: { contentFilter: 'developer' },
+    },
+    Date.now(),
+  );
   assert.equal(values.get(LS_KEYS.developer), 'true');
-  assert.equal(values.get(LS_KEYS.contentFilter), 'developer', 'signed in as a developer, the filter is theirs');
+  assert.equal(
+    values.get(LS_KEYS.contentFilter),
+    'developer',
+    'signed in as a developer, the filter is theirs',
+  );
   signOut();
   /* The owner's report: the developer filter chosen while signed in was still on after signing out. */
-  assert.equal(values.has(LS_KEYS.developer), false, 'developer mode is the account’s, not the device’s');
-  assert.equal(values.get(LS_KEYS.contentFilter), 'safe', 'signed out, the developer filter is not available');
+  assert.equal(
+    values.has(LS_KEYS.developer),
+    false,
+    'developer mode is the account’s, not the device’s',
+  );
+  assert.equal(
+    values.get(LS_KEYS.contentFilter),
+    'safe',
+    'signed out, the developer filter is not available',
+  );
 });
-
 
 test('an old account custom palette cannot install after a different account adopts its theme', async () => {
   signOut();
   signIn(ACCOUNT);
-  sync.adoptCloudSettings(ACCOUNT.token, { ...ACCOUNT, settings: { theme: 'custom', themeCustomSeed: '#aa3355' } }, Date.now() + 1);
+  sync.adoptCloudSettings(
+    ACCOUNT.token,
+    { ...ACCOUNT, settings: { theme: 'custom', themeCustomSeed: '#aa3355' } },
+    Date.now() + 1,
+  );
   const next = { ...ACCOUNT, id: 88, token: 'palette-next', settings: { theme: 'luna' } };
   signIn(next);
   sync.adoptCloudSettings(next.token, next, Date.now() + 1);
@@ -290,7 +429,10 @@ test('a finishing old-account write releases the new account pending settings', 
   globalThis.fetch = async (_url, init) => {
     const token = new Headers(init.headers).get('authorization');
     sent.push(token);
-    if (token === 'Bearer token-a') return new Promise((resolve) => { release = resolve; });
+    if (token === 'Bearer token-a')
+      return new Promise((resolve) => {
+        release = resolve;
+      });
     return Response.json({ settings: {}, revision: 1, adjustments: [] });
   };
   try {
@@ -301,14 +443,22 @@ test('a finishing old-account write releases the new account pending settings', 
     await settle();
     assert.equal(typeof release, 'function');
     const next = { ...ACCOUNT, id: 88, token: 'flush-next', settings: { showFaves: true } };
-    signIn(next); serverUser = next;
+    signIn(next);
+    serverUser = next;
     sync.adoptCloudSettings(next.token, next, Date.now() + 1);
     sync.changeSyncedSetting('showFaves', false);
     release(Response.json({ settings: {}, revision: 1, adjustments: [] }));
     await settle();
     assert.deepEqual(sent, ['Bearer token-a', 'Bearer flush-next']);
-    assert.equal(values.has(LS_KEYS.settingsSyncPending), false, 'new-account changes were acknowledged');
-  } finally { signOut(); globalThis.fetch = fetchBefore; }
+    assert.equal(
+      values.has(LS_KEYS.settingsSyncPending),
+      false,
+      'new-account changes were acknowledged',
+    );
+  } finally {
+    signOut();
+    globalThis.fetch = fetchBefore;
+  }
 });
 
 test('a stale revision is read again and the change laid over the newer copy, once', async () => {
@@ -319,12 +469,21 @@ test('a stale revision is read again and the change laid over the newer copy, on
     const body = JSON.parse(init.body);
     sent.push(body);
     if (body.expected_revision !== 5) {
-      return Response.json({ error: { code: 'PREFERENCES_CONFLICT', message: '设置已在其他设备更新' } }, { status: 409 });
+      return Response.json(
+        { error: { code: 'PREFERENCES_CONFLICT', message: '设置已在其他设备更新' } },
+        { status: 409 },
+      );
     }
     return Response.json({ settings: body.settings, revision: 6, adjustments: [] });
   };
   try {
-    const account = { ...ACCOUNT, id: 91, token: 'token-conflict', settings_revision: 4, settings: { mascotId: '1' } };
+    const account = {
+      ...ACCOUNT,
+      id: 91,
+      token: 'token-conflict',
+      settings_revision: 4,
+      settings: { mascotId: '1' },
+    };
     signIn(account);
     serverUser = account;
     sync.adoptCloudSettings(account.token, structuredClone(account), Date.now() + 1);
@@ -332,11 +491,21 @@ test('a stale revision is read again and the change laid over the newer copy, on
     serverUser = { ...account, settings_revision: 5, settings: { mascotId: '2' } };
     sync.changeSyncedSetting('showFaves', false);
     await settle();
-    assert.deepEqual(sent.map((body) => body.expected_revision), [4, 5]);
-    assert.equal(sent[1].settings.mascotId, '2', 'the other device’s copy is the base of the second send');
+    assert.deepEqual(
+      sent.map((body) => body.expected_revision),
+      [4, 5],
+    );
+    assert.equal(
+      sent[1].settings.mascotId,
+      '2',
+      'the other device’s copy is the base of the second send',
+    );
     assert.equal(sent[1].settings.showFaves, false);
     assert.deepEqual(sync.settingsSyncSnapshot().pending, {});
-  } finally { signOut(); globalThis.fetch = fetchBefore; }
+  } finally {
+    signOut();
+    globalThis.fetch = fetchBefore;
+  }
 });
 
 test('detailLayout syncs to storage, cookie, html dataset, cloud and cross-tab storage events', async () => {
@@ -355,7 +524,13 @@ test('detailLayout syncs to storage, cookie, html dataset, cloud and cross-tab s
   assert.match(document.cookie, /detailLayout=;.*max-age=0/);
 
   /* Cloud adoption installs split layout and dataset attribute. */
-  const account = { ...ACCOUNT, id: 92, token: 'token-layout', settings_revision: 1, settings: { detailLayout: 'split' } };
+  const account = {
+    ...ACCOUNT,
+    id: 92,
+    token: 'token-layout',
+    settings_revision: 1,
+    settings: { detailLayout: 'split' },
+  };
   signIn(account);
   serverUser = account;
   sync.adoptCloudSettings(account.token, structuredClone(account), Date.now() + 1);
@@ -364,7 +539,11 @@ test('detailLayout syncs to storage, cookie, html dataset, cloud and cross-tab s
 
   /* Cross-tab storage event updates the root dataset and cookie in the background tab. */
   values.delete(LS_KEYS.detailLayout);
-  const storageEvent = Object.assign(new Event('storage'), { key: LS_KEYS.detailLayout, oldValue: 'split', newValue: null });
+  const storageEvent = Object.assign(new Event('storage'), {
+    key: LS_KEYS.detailLayout,
+    oldValue: 'split',
+    newValue: null,
+  });
   window.dispatchEvent(storageEvent);
   assert.equal(root.dataset.detailLayout, undefined);
   assert.match(document.cookie, /detailLayout=;.*max-age=0/);

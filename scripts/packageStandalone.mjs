@@ -90,7 +90,10 @@ const buildId = existsSync(buildIdFile) ? readFileSync(buildIdFile, 'utf8').trim
  */
 const packageFile = path.join(out, 'package.json');
 const { name, version, engines } = JSON.parse(readFileSync(packageFile, 'utf8'));
-writeFileSync(packageFile, `${JSON.stringify({ name, version, private: true, engines }, null, 2)}\n`);
+writeFileSync(
+  packageFile,
+  `${JSON.stringify({ name, version, private: true, engines }, null, 2)}\n`,
+);
 
 const launch = windows ? 'run.cmd' : 'sh run.sh';
 const portExample = windows ? 'set PORT=8080 && run.cmd' : 'PORT=8080 sh run.sh';

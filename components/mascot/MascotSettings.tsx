@@ -14,7 +14,10 @@ import { ICON } from '@/lib/icons';
 import type { MascotSize } from '@/lib/mascot/settings';
 
 const SIZES: { value: MascotSize; label: string }[] = [
-  { value: 'small', label: '小' }, { value: 'medium', label: '中' }, { value: 'large', label: '大' }, { value: 'xlarge', label: '特大' },
+  { value: 'small', label: '小' },
+  { value: 'medium', label: '中' },
+  { value: 'large', label: '大' },
+  { value: 'xlarge', label: '特大' },
 ];
 
 export default function MascotSettings() {
@@ -25,9 +28,12 @@ export default function MascotSettings() {
   // The catalogue is shared by every character. Keep its controls in place while a new
   // character's first request resolves; the runtime uses that same keyed response.
   const config = useResource(mascotConfig, { selected }, { keepPrevious: 'mascot-catalog' });
-  const options = [{ value: 'auto', label: '自动 / 随机' }, ...(config.data?.mascots.map(m => ({ value: m.id, label: m.name })) ?? [])];
+  const options = [
+    { value: 'auto', label: '自动 / 随机' },
+    ...(config.data?.mascots.map((m) => ({ value: m.id, label: m.name })) ?? []),
+  ];
   const available = config.data?.enabled === true;
-  if (!options.some(o => o.value === selected)) {
+  if (!options.some((o) => o.value === selected)) {
     options.push({ value: selected, label: config.isPrevious ? '已选角色' : '已下线的角色' });
   }
   return (
@@ -36,16 +42,23 @@ export default function MascotSettings() {
     <SettingsSection
       title="吉祥物"
       icon={<MdEmojiEmotions size={ICON.control} />}
-      status={config.data === undefined && config.error !== undefined && (
-        <ErrorRetry
-          size="inline"
-          title="吉祥物配置加载失败"
-          message={apiErrorMessage(config.error)}
-          onRetry={isRetryable(config.error) ? () => void config.refresh() : undefined}
-        />
-      )}
+      status={
+        config.data === undefined &&
+        config.error !== undefined && (
+          <ErrorRetry
+            size="inline"
+            title="吉祥物配置加载失败"
+            message={apiErrorMessage(config.error)}
+            onRetry={isRetryable(config.error) ? () => void config.refresh() : undefined}
+          />
+        )
+      }
     >
-      <SwitchRow label="显示吉祥物" checked={shown} onChange={v => changeSyncedSetting('showMascot', v)} />
+      <SwitchRow
+        label="显示吉祥物"
+        checked={shown}
+        onChange={(v) => changeSyncedSetting('showMascot', v)}
+      />
       {config.data === undefined ? (
         /* Direct siblings, not wrapped: `.m3-row`'s corners and 2px seams are scoped per parent
            (`app/globals.css`), so a wrapper around the placeholder rows turned 显示吉祥物 into a
@@ -54,9 +67,22 @@ export default function MascotSettings() {
            Skeletons are decorative either way. See `app/settings/SettingsRow.tsx`'s own contract. */
         config.error === undefined && (
           <>
-            <SettingsRow label="选择角色" aria-hidden="true" leading={<Skeleton className="h-12 w-12 rounded-md" data-page-loading="" />} action={<Skeleton className="h-10 w-32" />} />
-            <SettingsRow label="桌面端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
-            <SettingsRow label="移动端大小" aria-hidden="true" action={<Skeleton className="h-10 w-20" />} />
+            <SettingsRow
+              label="选择角色"
+              aria-hidden="true"
+              leading={<Skeleton className="h-12 w-12 rounded-md" data-page-loading="" />}
+              action={<Skeleton className="h-10 w-32" />}
+            />
+            <SettingsRow
+              label="桌面端大小"
+              aria-hidden="true"
+              action={<Skeleton className="h-10 w-20" />}
+            />
+            <SettingsRow
+              label="移动端大小"
+              aria-hidden="true"
+              action={<Skeleton className="h-10 w-20" />}
+            />
           </>
         )
       ) : !available ? (
@@ -68,15 +94,42 @@ export default function MascotSettings() {
           <SettingsRow
             label="选择角色"
             leading={<MascotThumb src={config.data.image} />}
-            action={<Select aria-label="选择吉祥物" size="sm" disabled={!shown} value={selected} options={options} onChange={value => changeSyncedSetting('mascotId', value)} />}
+            action={
+              <Select
+                aria-label="选择吉祥物"
+                size="sm"
+                disabled={!shown}
+                value={selected}
+                options={options}
+                onChange={(value) => changeSyncedSetting('mascotId', value)}
+              />
+            }
           />
           <SettingsRow
             label="桌面端大小"
-            action={<Select aria-label="吉祥物桌面端大小" size="sm" disabled={!shown} value={desktop} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeDesktop', value)} />}
+            action={
+              <Select
+                aria-label="吉祥物桌面端大小"
+                size="sm"
+                disabled={!shown}
+                value={desktop}
+                options={SIZES}
+                onChange={(value) => changeSyncedSetting('mascotSizeDesktop', value)}
+              />
+            }
           />
           <SettingsRow
             label="移动端大小"
-            action={<Select aria-label="吉祥物移动端大小" size="sm" disabled={!shown} value={mobile} options={SIZES} onChange={value => changeSyncedSetting('mascotSizeMobile', value)} />}
+            action={
+              <Select
+                aria-label="吉祥物移动端大小"
+                size="sm"
+                disabled={!shown}
+                value={mobile}
+                options={SIZES}
+                onChange={(value) => changeSyncedSetting('mascotSizeMobile', value)}
+              />
+            }
           />
         </>
       )}
@@ -90,7 +143,13 @@ function MascotThumb({ src }: { src: string }) {
     <span className="relative block h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-container-highest">
       {src && (
         /* eslint-disable-next-line @next/next/no-img-element -- administrator-configured art, served without a referrer like the figure itself. */
-        <img src={src} alt="" referrerPolicy="no-referrer" decoding="async" className="absolute inset-0 h-full w-full object-contain p-1" />
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-contain p-1"
+        />
       )}
     </span>
   );

@@ -7,23 +7,32 @@ requireTypeStripping('testResources');
 const frames = [];
 globalThis.window = { requestAnimationFrame: (callback) => frames.push(callback) };
 globalThis.document = { visibilityState: 'visible', addEventListener() {} };
-const { defineResource, clearAllResources, expireAllResources } = await import('../lib/resource.ts');
+const { defineResource, clearAllResources, expireAllResources } =
+  await import('../lib/resource.ts');
 const tick = async () => {
   await new Promise((resolve) => setImmediate(resolve));
   while (frames.length) frames.shift()();
 };
 const deferred = () => {
   let resolve;
-  const promise = new Promise((settle) => { resolve = settle; });
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
   return { promise, resolve };
 };
 
 // Declaring or inspecting an unused resource must not install global lifecycle work.
 // This is the contract behind the catalogue's PURE annotations, not a claim that reads are pure.
 {
-  const unused = defineResource({ name: 'unused', key: () => 'one', fetch: async () => 'unexpected' });
+  const unused = defineResource({
+    name: 'unused',
+    key: () => 'one',
+    fetch: async () => 'unexpected',
+  });
   let expirations = 0;
-  unused.expire = () => { expirations += 1; };
+  unused.expire = () => {
+    expirations += 1;
+  };
   unused.peek({});
   unused.peekKey('one');
   const browser = globalThis.window;
@@ -35,15 +44,30 @@ const deferred = () => {
   }
   expireAllResources();
   clearAllResources();
-  assert.equal(expirations, 0, 'construction, pure peeks and a server seed never register a resource');
-  assert.equal(unused.peek({}).data, undefined, 'SSR must not put an account into a process-wide store');
+  assert.equal(
+    expirations,
+    0,
+    'construction, pure peeks and a server seed never register a resource',
+  );
+  assert.equal(
+    unused.peek({}).data,
+    undefined,
+    'SSR must not put an account into a process-wide store',
+  );
 }
 
 // Every way a dormant resource gains data must participate in logout and global refresh.
 for (const firstUse of ['read', 'prefetch', 'seed', 'write']) {
   let fetches = 0;
-  const owned = defineResource({ name: `first-${firstUse}`, key: () => 'account',
-    ttl: 60_000, fetch: async () => { fetches += 1; return 'private'; } });
+  const owned = defineResource({
+    name: `first-${firstUse}`,
+    key: () => 'account',
+    ttl: 60_000,
+    fetch: async () => {
+      fetches += 1;
+      return 'private';
+    },
+  });
   if (firstUse === 'read') await owned.read({});
   else if (firstUse === 'prefetch') owned.prefetch({});
   else if (firstUse === 'seed') owned.seed({}, 'private', Date.now());
@@ -64,9 +88,15 @@ for (const firstUse of ['read', 'prefetch', 'seed', 'write']) {
 
 // A subscriber may arrive before any read. Logout must clear that listener slot too.
 {
-  const watched = defineResource({ name: 'subscribe-first', key: () => 'account', fetch: async () => 'private' });
+  const watched = defineResource({
+    name: 'subscribe-first',
+    key: () => 'account',
+    fetch: async () => 'private',
+  });
   let publications = 0;
-  const stop = watched.subscribe({}, () => { publications += 1; });
+  const stop = watched.subscribe({}, () => {
+    publications += 1;
+  });
   clearAllResources();
   assert.equal(publications, 1, 'logout notifies a subscriber-only resource');
   watched.write({}, 'next account');
@@ -80,7 +110,8 @@ let calls = 0;
 let answer = ['old'];
 let pending;
 const resource = defineResource({
-  name: 'regression', key: ({ id }) => id,
+  name: 'regression',
+  key: ({ id }) => id,
   fetch: async () => {
     calls += 1;
     return pending ? pending.promise : answer;
@@ -88,7 +119,9 @@ const resource = defineResource({
 });
 const args = { id: 'account-a' };
 let publications = 0;
-const unsubscribe = resource.subscribe(args, () => { publications += 1; });
+const unsubscribe = resource.subscribe(args, () => {
+  publications += 1;
+});
 
 // A mutation on a subscriber-only key must install an answer without starting a read.
 resource.write(args, ['created']);
@@ -157,19 +190,27 @@ unsubscribe();
 // Each upstream has its own slots: four hung Derpibooru reads cannot hold back a PicPony read.
 {
   const started = [];
-  const hang = (name) => defineResource({
-    name, lane: name === 'forum' ? 'picpony' : 'derpi', key: ({ id }) => id,
-    fetch: (_, signal) => new Promise((_, reject) => {
-      started.push(name);
-      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-    }),
-  });
+  const hang = (name) =>
+    defineResource({
+      name,
+      lane: name === 'forum' ? 'picpony' : 'derpi',
+      key: ({ id }) => id,
+      fetch: (_, signal) =>
+        new Promise((_, reject) => {
+          started.push(name);
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+    });
   const pages = hang('pages');
   const forum = hang('forum');
   const reads = [1, 2, 3, 4, 5].map((id) => pages.read({ id: String(id) }));
   forum.read({ id: 'thread' }).catch(() => {});
   await tick();
-  assert.equal(started.filter((name) => name === 'pages').length, 4, 'the Derpibooru lane caps at four');
+  assert.equal(
+    started.filter((name) => name === 'pages').length,
+    4,
+    'the Derpibooru lane caps at four',
+  );
   assert.ok(started.includes('forum'), 'the PicPony lane is not blocked by it');
   clearAllResources();
   await Promise.allSettled(reads);
@@ -178,8 +219,21 @@ unsubscribe();
 // A superseded first read nobody watches gives its slot back; a watched one is kept.
 {
   let aborted = 0;
-  const release = defineResource({ name: 'release', key: ({ id }) => id,
-    fetch: (_, signal) => new Promise((_, reject) => signal.addEventListener('abort', () => { aborted += 1; reject(signal.reason); }, { once: true })) });
+  const release = defineResource({
+    name: 'release',
+    key: ({ id }) => id,
+    fetch: (_, signal) =>
+      new Promise((_, reject) =>
+        signal.addEventListener(
+          'abort',
+          () => {
+            aborted += 1;
+            reject(signal.reason);
+          },
+          { once: true },
+        ),
+      ),
+  });
   const pendingA = release.read({ id: 'a' });
   pendingA.catch(() => {});
   release.release('a');
@@ -198,8 +252,16 @@ unsubscribe();
 {
   let attempt = 0;
   let fail = false;
-  const stale = defineResource({ name: 'stale', key: () => 'k', ttl: 1,
-    fetch: async () => { attempt += 1; if (fail) throw new Error('offline'); return attempt; } });
+  const stale = defineResource({
+    name: 'stale',
+    key: () => 'k',
+    ttl: 1,
+    fetch: async () => {
+      attempt += 1;
+      if (fail) throw new Error('offline');
+      return attempt;
+    },
+  });
   const unsubscribe = stale.subscribe({}, () => {});
   await stale.read({});
   await tick();
@@ -218,13 +280,24 @@ unsubscribe();
 // Invalidating keeps the mounted answer; a write in the same tick wins without a request.
 {
   let fetches = 0;
-  const list = defineResource({ name: 'list', key: ({ page }) => String(page), fetch: async () => { fetches += 1; return ['server']; } });
+  const list = defineResource({
+    name: 'list',
+    key: ({ page }) => String(page),
+    fetch: async () => {
+      fetches += 1;
+      return ['server'];
+    },
+  });
   const unsubscribe = list.subscribe({ page: 1 }, () => {});
   list.write({ page: 1 }, ['old']);
   list.write({ page: 2 }, ['old page two']);
   await tick();
   list.invalidate();
-  assert.deepEqual(list.peek({ page: 1 }).data, ['old'], 'the mounted page keeps its rows while re-read');
+  assert.deepEqual(
+    list.peek({ page: 1 }).data,
+    ['old'],
+    'the mounted page keeps its rows while re-read',
+  );
   list.write({ page: 1 }, []);
   await tick();
   assert.equal(fetches, 0, 'the write replaced the pending re-read before it was sent');
@@ -238,4 +311,6 @@ unsubscribe();
   clearAllResources();
 }
 
-console.log('Resource regressions passed: writes, refreshes, invalidation, races, account clear, lanes, release.');
+console.log(
+  'Resource regressions passed: writes, refreshes, invalidation, races, account clear, lanes, release.',
+);

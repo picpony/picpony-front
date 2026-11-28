@@ -11,7 +11,13 @@ import Modal from '@/components/Modal';
 import StatusView from '@/components/StatusView';
 import { settingsHref } from '@/app/settings/tabs';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
-import { getDerpiFilterTags, MAX_GROUP_NAME, MAX_TAGS_PER_LIST, type DerpiFilterSummary, type ImportedFilter } from '@/lib/api/blockGroups';
+import {
+  getDerpiFilterTags,
+  MAX_GROUP_NAME,
+  MAX_TAGS_PER_LIST,
+  type DerpiFilterSummary,
+  type ImportedFilter,
+} from '@/lib/api/blockGroups';
 import { ICON } from '@/lib/icons';
 import { SKIP, useResource } from '@/lib/resource';
 import { derpiFilters } from '@/lib/resources';
@@ -27,7 +33,9 @@ export interface FilterImport {
 }
 
 export function importOf(filter: ImportedFilter): FilterImport {
-  const name = Array.from(filter.name.trim() || 'Derpibooru 过滤器').slice(0, MAX_GROUP_NAME).join('');
+  const name = Array.from(filter.name.trim() || 'Derpibooru 过滤器')
+    .slice(0, MAX_GROUP_NAME)
+    .join('');
   const hidden = filter.hidden.slice(0, MAX_TAGS_PER_LIST);
   const spoilered = filter.spoilered.slice(0, MAX_TAGS_PER_LIST);
   return {
@@ -49,7 +57,14 @@ interface DerpiFilterImportProps {
 }
 
 function FilterRows() {
-  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载过滤规则…" className="min-h-36" />;
+  return (
+    <PageLoadingIndicator
+      size="inline"
+      indicatorSize="md"
+      label="正在加载过滤规则…"
+      className="min-h-36"
+    />
+  );
 }
 
 /**
@@ -58,7 +73,13 @@ function FilterRows() {
  * names, plus the plain tags its expressions name). A filter that is only expressions and
  * wildcards has nothing a block group can hold, and says so rather than making an empty group.
  */
-export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, onImport }: DerpiFilterImportProps) {
+export default function DerpiFilterImport({
+  isOpen,
+  onClose,
+  apiKey,
+  canCreate,
+  onImport,
+}: DerpiFilterImportProps) {
   const read = useResource(derpiFilters, isOpen && apiKey ? { apiKey } : SKIP);
   const [importing, setImporting] = useState<number | null>(null);
   const [problem, setProblem] = useState<{ id: number; message: string } | null>(null);
@@ -73,10 +94,14 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
     } else {
       const result = importOf(read.value);
       if (result.hidden.length === 0 && result.spoilered.length === 0) {
-        setProblem({ id: filter.id, message: '此过滤器仅包含搜索表达式或通配符，没有可导入的标签' });
+        setProblem({
+          id: filter.id,
+          message: '此过滤器仅包含搜索表达式或通配符，没有可导入的标签',
+        });
       } else {
         const imported = await settle(onImport(result));
-        if (!imported.ok) setProblem({ id: filter.id, message: apiErrorMessage(imported.error, '导入失败') });
+        if (!imported.ok)
+          setProblem({ id: filter.id, message: apiErrorMessage(imported.error, '导入失败') });
       }
     }
     setImporting(null);
@@ -91,11 +116,7 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
         title="需要绑定 API Key"
         description="需在设置中绑定 Derpibooru API Key，以读取你的过滤器"
         action={
-          <ButtonLink
-            href={settingsHref('account')}
-            onClick={onClose}
-            variant="filled"
-          >
+          <ButtonLink href={settingsHref('account')} onClick={onClose} variant="filled">
             前往设置
           </ButtonLink>
         }
@@ -130,10 +151,16 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
         )}
         <div role="list">
           {read.data.map((filter) => (
-            <div role="listitem" key={filter.id} className="m3-row bg-surface-container-highest p-4">
+            <div
+              role="listitem"
+              key={filter.id}
+              className="m3-row bg-surface-container-highest p-4"
+            >
               <div className="flex items-center gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-label-l text-on-surface" title={filter.name}>{filter.name}</p>
+                  <p className="truncate text-label-l text-on-surface" title={filter.name}>
+                    {filter.name}
+                  </p>
                   <p className="mt-0.5 line-clamp-2 wrap-anywhere text-body-s text-on-surface-variant">
                     {filter.description || '暂无简介'}
                   </p>
@@ -149,7 +176,9 @@ export default function DerpiFilterImport({ isOpen, onClose, apiKey, canCreate, 
                 </Button>
               </div>
               {problem?.id === filter.id && (
-                <p className="mt-2 text-body-s text-error" role="alert">{problem.message}</p>
+                <p className="mt-2 text-body-s text-error" role="alert">
+                  {problem.message}
+                </p>
               )}
             </div>
           ))}

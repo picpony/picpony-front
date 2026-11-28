@@ -9,8 +9,10 @@ export function queueSettingsUpdate<T>(account: string, update: () => Promise<T>
   const previous = queues.get(account) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(update);
   queues.set(account, next);
-  void next.finally(() => {
-    if (queues.get(account) === next) queues.delete(account);
-  }).catch(() => {});
+  void next
+    .finally(() => {
+      if (queues.get(account) === next) queues.delete(account);
+    })
+    .catch(() => {});
   return next;
 }

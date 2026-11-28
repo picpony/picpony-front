@@ -1,6 +1,14 @@
 'use client';
 
-import { startTransition, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type SyntheticEvent } from 'react';
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import { MdPlayArrow } from '@/components/icons/common';
 import { MediaLoadingPlaceholder } from '@/components/LoadingIndicator';
 import { ICON } from '@/lib/icons';
@@ -76,11 +84,16 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
       return;
     }
     setLoad((state) => {
-      if (state.shown !== shown || state.attempt !== state.shown || state.attempt.giveUp) return state;
+      if (state.shown !== shown || state.attempt !== state.shown || state.attempt.giveUp)
+        return state;
       const next = resilient
         ? resolveNextAttempt(rawUrl, state.attempt)
         : { ...state.attempt, giveUp: true };
-      return { ...state, attempt: next, shown: next.delayMs > 0 && !next.giveUp ? state.shown : next };
+      return {
+        ...state,
+        attempt: next,
+        shown: next.delayMs > 0 && !next.giveUp ? state.shown : next,
+      };
     });
   };
 
@@ -93,11 +106,14 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   };
 
   /* A changed source or an unmounted card ends both playing and still-pending previews. */
-  useEffect(() => () => {
-    preview.current?.();
-    preview.current = null;
-    setHoverPlaying(false);
-  }, [displayKey, near]);
+  useEffect(
+    () => () => {
+      preview.current?.();
+      preview.current = null;
+      setHoverPlaying(false);
+    },
+    [displayKey, near],
+  );
 
   /* Attach the source once the card is within a screen of the viewport — the app scroller,
      or the overlay's own scroller when the grid sits behind an open picture. */
@@ -147,7 +163,7 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
   useEffect(() => {
     if (attempt === shown || attempt.giveUp) return;
     const timer = window.setTimeout(() => {
-      setLoad((state) => state.attempt === attempt ? { ...state, shown: attempt } : state);
+      setLoad((state) => (state.attempt === attempt ? { ...state, shown: attempt } : state));
     }, attempt.delayMs);
     return () => window.clearTimeout(timer);
   }, [attempt, shown]);
@@ -234,7 +250,9 @@ function ImageCardVideoInner({ src, onGiveUp }: ImageCardVideoProps) {
         onPlay={() => setHoverPlaying(true)}
         onPause={() => setHoverPlaying(false)}
         onEnded={() => setHoverPlaying(false)}
-        onError={(event) => { if (event.currentTarget === videoRef.current) fail(); }}
+        onError={(event) => {
+          if (event.currentTarget === videoRef.current) fail();
+        }}
         onPointerEnter={startPreview}
         onPointerLeave={stopPreview}
         className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity spring-default-effects ${

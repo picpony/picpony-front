@@ -53,7 +53,13 @@ interface BlockGroupEditorProps {
  * that leaves before it is read. 保存 is `filled`: saving is not destructive. A dialog with
  * changes asks before it is dismissed, by any route (✕, Esc, the scrim, Back).
  */
-export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onClose }: BlockGroupEditorProps) {
+export default function BlockGroupEditor({
+  isOpen,
+  initial,
+  saving,
+  onSave,
+  onClose,
+}: BlockGroupEditorProps) {
   const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState(initial);
   const [seen, setSeen] = useState(initial);
@@ -70,7 +76,10 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
     setErrors({});
   }
 
-  const chosen = useMemo(() => new Set([...draft.hidden, ...draft.spoilered]), [draft.hidden, draft.spoilered]);
+  const chosen = useMemo(
+    () => new Set([...draft.hidden, ...draft.spoilered]),
+    [draft.hidden, draft.spoilered],
+  );
   const dirty =
     draft.name !== initial.name ||
     draft.hidden.join('\n') !== initial.hidden.join('\n') ||
@@ -123,11 +132,15 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
 
   const requestClose = async () => {
     if (saving) return;
-    if (dirty && !(await confirm({
-      title: '确认放弃修改',
-      message: '确定要放弃对此屏蔽组的修改吗？',
-      tone: 'filled',
-    }))) return;
+    if (
+      dirty &&
+      !(await confirm({
+        title: '确认放弃修改',
+        message: '确定要放弃对此屏蔽组的修改吗？',
+        tone: 'filled',
+      }))
+    )
+      return;
     onClose();
   };
 
@@ -180,7 +193,12 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
               checked={target === 'hide'}
               onChange={() => setTarget('hide')}
               tone="error"
-              label={<span className="flex items-center gap-1.5"><MdBlock size={ICON.dense} aria-hidden="true" />隐藏</span>}
+              label={
+                <span className="flex items-center gap-1.5">
+                  <MdBlock size={ICON.dense} aria-hidden="true" />
+                  隐藏
+                </span>
+              }
             />
             <Radio
               name="block-group-target"
@@ -188,7 +206,12 @@ export default function BlockGroupEditor({ isOpen, initial, saving, onSave, onCl
               checked={target === 'spoiler'}
               onChange={() => setTarget('spoiler')}
               tone="warning"
-              label={<span className="flex items-center gap-1.5"><MdVisibilityOff size={ICON.dense} aria-hidden="true" />遮挡</span>}
+              label={
+                <span className="flex items-center gap-1.5">
+                  <MdVisibilityOff size={ICON.dense} aria-hidden="true" />
+                  遮挡
+                </span>
+              }
             />
           </div>
         </fieldset>

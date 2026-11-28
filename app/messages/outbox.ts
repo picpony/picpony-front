@@ -60,7 +60,10 @@ function publish(key: string, next: readonly OutboxItem[]) {
 function update(key: string, localId: string, patch: Partial<OutboxItem>) {
   const current = items.get(key) ?? EMPTY;
   if (!current.some((item) => item.localId === localId)) return;
-  publish(key, current.map((item) => (item.localId === localId ? { ...item, ...patch } : item)));
+  publish(
+    key,
+    current.map((item) => (item.localId === localId ? { ...item, ...patch } : item)),
+  );
 }
 
 function prune() {
@@ -85,7 +88,11 @@ function backendStamp(now: number): string {
 function transmit(token: string, key: string, item: OutboxItem) {
   const run = async () => {
     /* A session that changed while this waited in line is not the one that wrote it. */
-    if (readToken() !== token || !(items.get(key) ?? EMPTY).some((entry) => entry.localId === item.localId)) return;
+    if (
+      readToken() !== token ||
+      !(items.get(key) ?? EMPTY).some((entry) => entry.localId === item.localId)
+    )
+      return;
     try {
       await sendMessage(token, item.contactId, item.content, item.sendKey);
       update(key, item.localId, { status: 'sent' });
@@ -118,7 +125,10 @@ export function sendInLine(token: string, contactId: number, content: string): P
   };
   const result = (chains.get(key) ?? Promise.resolve()).then(run, run);
   /* The chain itself never rejects: a failed share must not fail the messages behind it. */
-  const chain = result.then(() => {}, () => {});
+  const chain = result.then(
+    () => {},
+    () => {},
+  );
   chains.set(key, chain);
   void chain.finally(() => {
     if (chains.get(key) === chain) chains.delete(key);
@@ -149,14 +159,25 @@ export function retryMessage(token: string, contactId: number, localId: string, 
   const item = (items.get(key) ?? EMPTY).find((entry) => entry.localId === localId);
   if (!item || item.status !== 'failed') return;
   /* To the end of the line: it is sent now, after anything written since. */
-  const retried: OutboxItem = { ...item, status: 'sending', afterId, createdAt: backendStamp(Date.now()) };
-  publish(key, [...(items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId), retried]);
+  const retried: OutboxItem = {
+    ...item,
+    status: 'sending',
+    afterId,
+    createdAt: backendStamp(Date.now()),
+  };
+  publish(key, [
+    ...(items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId),
+    retried,
+  ]);
   transmit(token, key, retried);
 }
 
 export function discardMessage(token: string, contactId: number, localId: string) {
   const key = keyOf(token, contactId);
-  publish(key, (items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId));
+  publish(
+    key,
+    (items.get(key) ?? EMPTY).filter((entry) => entry.localId !== localId),
+  );
 }
 
 /** Drop the sent items whose server copies the thread now shows. */

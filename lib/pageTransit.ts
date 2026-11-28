@@ -49,13 +49,15 @@ export function registerPageFooter(footer: HTMLElement): () => void {
 
 export function beginPageTransit(): () => void {
   transitDepth += 1;
-  if (transitDepth === 1) for (const footer of footers) footer.setAttribute('data-page-transit', '');
+  if (transitDepth === 1)
+    for (const footer of footers) footer.setAttribute('data-page-transit', '');
   let released = false;
   return () => {
     if (released) return;
     released = true;
     transitDepth = Math.max(0, transitDepth - 1);
-    if (transitDepth === 0) for (const footer of footers) footer.removeAttribute('data-page-transit');
+    if (transitDepth === 0)
+      for (const footer of footers) footer.removeAttribute('data-page-transit');
   };
 }
 
@@ -77,7 +79,8 @@ export function expectRouteContainer(to: string, withinMs: number) {
 
 /** Whether a container is expected to ride the route change to `to` — read once, by it. */
 export function takeRouteContainerExpectation(to: string): boolean {
-  const expected = expectation !== null && expectation.to === to && performance.now() < expectation.until;
+  const expected =
+    expectation !== null && expectation.to === to && performance.now() < expectation.until;
   expectation = null;
   return expected;
 }

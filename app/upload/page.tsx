@@ -2,7 +2,15 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdBrokenImage, MdCheck, MdClose, MdCloudUpload, MdKey, MdOpenInNew, MdSettings } from 'react-icons/md';
+import {
+  MdBrokenImage,
+  MdCheck,
+  MdClose,
+  MdCloudUpload,
+  MdKey,
+  MdOpenInNew,
+  MdSettings,
+} from 'react-icons/md';
 import Button from '@/components/Button';
 import ButtonLink from '@/components/ButtonLink';
 import Collapse from '@/components/Collapse';
@@ -162,7 +170,11 @@ function measureMedia(file: File, url: string): Promise<MediaSize | null> {
         video.load();
       };
       video.onloadedmetadata = () =>
-        finish(video.videoWidth > 0 && video.videoHeight > 0 ? { width: video.videoWidth, height: video.videoHeight } : null);
+        finish(
+          video.videoWidth > 0 && video.videoHeight > 0
+            ? { width: video.videoWidth, height: video.videoHeight }
+            : null,
+        );
       video.onerror = () => finish(null);
       video.src = url;
       return;
@@ -171,7 +183,12 @@ function measureMedia(file: File, url: string): Promise<MediaSize | null> {
     image.src = url;
     /* `decode`, not `load`: the preview then paints whole in the frame its box opens. */
     image.decode().then(
-      () => finish(image.naturalWidth > 0 ? { width: image.naturalWidth, height: image.naturalHeight } : null),
+      () =>
+        finish(
+          image.naturalWidth > 0
+            ? { width: image.naturalWidth, height: image.naturalHeight }
+            : null,
+        ),
       () => finish(null),
     );
   });
@@ -226,12 +243,21 @@ function FilePreview({
         src={preview.url}
         controls
         preload="metadata"
-        className={cn('pointer-events-auto rounded-md', size ? 'block size-full' : 'max-h-[40vh] max-w-full')}
+        className={cn(
+          'pointer-events-auto rounded-md',
+          size ? 'block size-full' : 'max-h-[40vh] max-w-full',
+        )}
       />
     );
   } else if (size) {
-    // eslint-disable-next-line @next/next/no-img-element -- a local blob preview
-    media = <img src={preview.url} alt="已选择的作品预览" className="block size-full rounded-md object-contain" />;
+    media = (
+      // eslint-disable-next-line @next/next/no-img-element -- a local blob preview
+      <img
+        src={preview.url}
+        alt="已选择的作品预览"
+        className="block size-full rounded-md object-contain"
+      />
+    );
   } else {
     media = (
       <div className="flex h-48 w-64 max-w-full flex-col items-center justify-center gap-2 rounded-md bg-surface-container-highest px-4 text-on-surface-variant forced-boundary">
@@ -256,7 +282,12 @@ function FilePreview({
           className="absolute -right-3 -top-3"
         />
       </div>
-      <p className={cn('max-w-full text-body-s tabular-nums', !dragging && 'text-on-surface-variant')}>
+      <p
+        className={cn(
+          'max-w-full text-body-s tabular-nums',
+          !dragging && 'text-on-surface-variant',
+        )}
+      >
         <span className="break-all">{file.name || '未命名文件'}</span> · {megabytes(file.size)} MB
         <span className="block">{video ? '点击视频以外区域更换文件' : '点击此区域更换文件'}</span>
       </p>
@@ -272,7 +303,10 @@ function FilePreview({
 function OutcomeNotice({ outcome, live }: { outcome: NoticeOutcome; live: boolean }) {
   if (outcome.kind === 'unconfirmed') {
     return (
-      <div role={live ? 'alert' : undefined} className="rounded-md bg-warning-container p-4 text-body-m text-on-warning-container">
+      <div
+        role={live ? 'alert' : undefined}
+        className="rounded-md bg-warning-container p-4 text-body-m text-on-warning-container"
+      >
         <p>{outcome.message}</p>
         <a
           href={DERPI_MY_UPLOADS}
@@ -287,7 +321,10 @@ function OutcomeNotice({ outcome, live }: { outcome: NoticeOutcome; live: boolea
     );
   }
   return (
-    <p role={live ? 'alert' : undefined} className="rounded-md bg-error-container p-4 text-body-m text-on-error-container">
+    <p
+      role={live ? 'alert' : undefined}
+      className="rounded-md bg-error-container p-4 text-body-m text-on-error-container"
+    >
       {outcome.message}
     </p>
   );
@@ -341,7 +378,8 @@ export default function UploadPage() {
   const router = useRouter();
   const { confirm, confirmDialog } = useConfirm();
   const { draft, job } = useUpload(token);
-  const apiKey = typeof user?.api_key === 'string' && user.api_key.trim() ? user.api_key.trim() : null;
+  const apiKey =
+    typeof user?.api_key === 'string' && user.api_key.trim() ? user.api_key.trim() : null;
   const username = typeof user?.username === 'string' ? user.username : undefined;
 
   const [errors, setErrors] = useState<Errors>({});
@@ -479,7 +517,8 @@ export default function UploadPage() {
   if (busy && job !== rowJob) setRowJob(job);
   const noticeOutcome = outcome && outcome.kind !== 'uploaded' && !landing ? outcome : null;
   const [notice, setNotice] = useState<{ outcome: NoticeOutcome; seq: number } | null>(null);
-  if (noticeOutcome && noticeOutcome !== notice?.outcome) setNotice({ outcome: noticeOutcome, seq: (notice?.seq ?? 0) + 1 });
+  if (noticeOutcome && noticeOutcome !== notice?.outcome)
+    setNotice({ outcome: noticeOutcome, seq: (notice?.seq ?? 0) + 1 });
 
   const chosen = useMemo(
     () => new Set(formDraft.rating ? [...formDraft.tags, formDraft.rating] : formDraft.tags),
@@ -520,7 +559,8 @@ export default function UploadPage() {
   };
 
   const toggleTag = (tag: string) => {
-    if (draft.tags.includes(tag)) edit({ tags: draft.tags.filter((item) => item !== tag) }, ['tags']);
+    if (draft.tags.includes(tag))
+      edit({ tags: draft.tags.filter((item) => item !== tag) }, ['tags']);
     else addTags([tag]);
   };
 
@@ -550,12 +590,15 @@ export default function UploadPage() {
     }
     /* Focus waits on the busy button, which keeps it (a disabled field would drop it). */
     submitRef.current?.focus();
-    if (!(await confirm({
-      title: '确认发布',
-      message:
-        '作品将通过当前绑定的 Derpibooru 账号直接发布。请确认拥有版权或授权、分级与标签准确，且 Derpibooru 尚无相同作品。多次违规可能导致账号被封禁。\n确定要发布此作品吗？',
-      tone: 'filled',
-    }))) return;
+    if (
+      !(await confirm({
+        title: '确认发布',
+        message:
+          '作品将通过当前绑定的 Derpibooru 账号直接发布。请确认拥有版权或授权、分级与标签准确，且 Derpibooru 尚无相同作品。多次违规可能导致账号被封禁。\n确定要发布此作品吗？',
+        tone: 'filled',
+      }))
+    )
+      return;
     if (readToken() !== token) return;
     const tagInput = uploadTagInput(draft.rating, draft.tags);
     void startUpload({
@@ -581,11 +624,7 @@ export default function UploadPage() {
         title="需要绑定 API Key"
         description="发布作品需绑定 Derpibooru API Key，作品将通过对应账号发布"
         action={
-          <ButtonLink
-            href={settingsHref('account')}
-            variant="filled"
-            icon={<MdSettings />}
-          >
+          <ButtonLink href={settingsHref('account')} variant="filled" icon={<MdSettings />}>
             前往设置
           </ButtonLink>
         }
@@ -594,22 +633,32 @@ export default function UploadPage() {
   } else {
     const staging = job?.phase === 'staging';
     const content = showResult ? (
-      <section aria-labelledby="upload-done" className="rounded-md bg-success-container p-8 text-center text-on-success-container">
-        <span className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-success-fill text-on-fill" aria-hidden="true">
+      <section
+        aria-labelledby="upload-done"
+        className="rounded-md bg-success-container p-8 text-center text-on-success-container"
+      >
+        <span
+          className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-success-fill text-on-fill"
+          aria-hidden="true"
+        >
           <MdCheck size={ICON.large} />
         </span>
-        <h2 id="upload-done" ref={doneRef} tabIndex={-1} className="mb-2 text-title-l focus-visible:outline-hidden">
+        <h2
+          id="upload-done"
+          ref={doneRef}
+          tabIndex={-1}
+          className="mb-2 text-title-l focus-visible:outline-hidden"
+        >
           发布成功
         </h2>
         <p className="text-body-m">
           图片 ID：<span className="text-body-m-emphasized font-mono">{uploaded}</span>
         </p>
-        <p className="mb-6 mt-1 text-body-s">Derpibooru 处理完成后作品才会显示，不符合规范的作品不会通过审核</p>
+        <p className="mb-6 mt-1 text-body-s">
+          Derpibooru 处理完成后作品才会显示，不符合规范的作品不会通过审核
+        </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <ButtonLink
-            href={`/pic/${uploaded}`}
-            variant="filled"
-          >
+          <ButtonLink href={`/pic/${uploaded}`} variant="filled">
             查看图片
           </ButtonLink>
           <Button variant="tonal" onClick={() => resetUpload(token)}>
@@ -625,15 +674,20 @@ export default function UploadPage() {
             disabled={showBusy}
             accept={UPLOAD_ACCEPT}
             onFile={pickFile}
-            onReject={() => setErrors((previous) => ({
-              ...previous,
-              file: '不支持此文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频',
-            }))}
+            onReject={() =>
+              setErrors((previous) => ({
+                ...previous,
+                file: '不支持此文件格式，请选择 PNG / JPG / GIF / WebP 图片或 WebM / MP4 视频',
+              }))
+            }
             filled={zone !== 'prompt'}
             aria-label={zone !== 'prompt' ? '更换文件' : '选择或拖拽要发布的图片或视频'}
           >
             {(dropState) => (
-              <SizeSwap contentKey={zone === 'preview' && preview ? `preview:${preview.url}` : zone} className="w-full">
+              <SizeSwap
+                contentKey={zone === 'preview' && preview ? `preview:${preview.url}` : zone}
+                className="w-full"
+              >
                 {zone !== 'prompt' && formDraft.file ? (
                   <FilePreview
                     file={zone === 'preview' && preview ? preview.file : formDraft.file}
@@ -646,13 +700,26 @@ export default function UploadPage() {
                   <div>
                     <MdCloudUpload
                       size={ICON.display}
-                      className={cn('mx-auto mb-4', dropState !== 'dragging' && 'text-on-surface-variant')}
+                      className={cn(
+                        'mx-auto mb-4',
+                        dropState !== 'dragging' && 'text-on-surface-variant',
+                      )}
                       aria-hidden="true"
                     />
-                    <p className={cn('mb-1 text-body-l-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
+                    <p
+                      className={cn(
+                        'mb-1 text-body-l-emphasized',
+                        dropState !== 'dragging' && 'text-on-surface',
+                      )}
+                    >
                       点击选择或拖拽文件到此处
                     </p>
-                    <p className={cn('text-body-m', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                    <p
+                      className={cn(
+                        'text-body-m',
+                        dropState !== 'dragging' && 'text-on-surface-variant',
+                      )}
+                    >
                       支持 PNG / JPG / GIF / WebP / WebM / MP4，最大 50 MB
                     </p>
                   </div>
@@ -675,7 +742,10 @@ export default function UploadPage() {
             void submit();
           }}
         >
-          <fieldset ref={ratingRef} aria-describedby={errors.rating ? 'upload-rating-error' : undefined}>
+          <fieldset
+            ref={ratingRef}
+            aria-describedby={errors.rating ? 'upload-rating-error' : undefined}
+          >
             <legend className="mb-2 text-label-l text-on-surface">
               分级<span className="text-on-surface-variant">（必选）</span>
             </legend>
@@ -718,7 +788,9 @@ export default function UploadPage() {
               level={2}
               title="已添加的标签"
               tags={formDraft.tags}
-              onRemove={(tag) => edit({ tags: draft.tags.filter((item) => item !== tag) }, ['tags'])}
+              onRemove={(tag) =>
+                edit({ tags: draft.tags.filter((item) => item !== tag) }, ['tags'])
+              }
               empty="暂无标签"
               disabled={showBusy}
             />
@@ -759,7 +831,11 @@ export default function UploadPage() {
             <Collapse open={noticeOutcome !== null}>
               {notice && (
                 <div className="pb-6">
-                  <OutcomeNotice key={notice.seq} outcome={notice.outcome} live={noticeOutcome !== null} />
+                  <OutcomeNotice
+                    key={notice.seq}
+                    outcome={notice.outcome}
+                    live={noticeOutcome !== null}
+                  />
                 </div>
               )}
             </Collapse>
@@ -779,9 +855,18 @@ export default function UploadPage() {
             </Collapse>
             <p className="text-body-s text-on-surface-variant">
               发布即表示确认拥有作品授权并遵守{' '}
-              <a href={DERPI_RULES} target="_blank" rel="noopener noreferrer" className="prose-link focus-visible:ring-2 focus-ring">
+              <a
+                href={DERPI_RULES}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="prose-link focus-visible:ring-2 focus-ring"
+              >
                 Derpibooru 上传规则
-                <MdOpenInNew size={ICON.dense} className="ml-0.5 inline align-[-0.125em]" aria-hidden="true" />
+                <MdOpenInNew
+                  size={ICON.dense}
+                  className="ml-0.5 inline align-[-0.125em]"
+                  aria-hidden="true"
+                />
               </a>
               ，勿重复上传已有图片
             </p>

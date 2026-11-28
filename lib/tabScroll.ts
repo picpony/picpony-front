@@ -32,7 +32,9 @@ const tabScrollMemory = new Map<string, Map<string, number>>();
 
 function groupKey(panel: HTMLElement): string {
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
-  const panels = [...document.querySelectorAll<HTMLElement>('[data-page-content] [data-tab-panel]')];
+  const panels = [
+    ...document.querySelectorAll<HTMLElement>('[data-page-content] [data-tab-panel]'),
+  ];
   const ordinal = Math.max(0, panels.indexOf(panel));
   return `${pathname}#${ordinal}`;
 }
@@ -97,7 +99,11 @@ export function tabPanelTop(panel: HTMLElement, scroller: HTMLElement) {
  * not the panel, so the offset is kept.
  */
 export function tabMayRestore(panel: HTMLElement, scroller: HTMLElement) {
-  if (panel.closest('[data-tab-window]') || panel.nextElementSibling?.hasAttribute('data-tab-follower')) return false;
+  if (
+    panel.closest('[data-tab-window]') ||
+    panel.nextElementSibling?.hasAttribute('data-tab-follower')
+  )
+    return false;
   return tabPanelTop(panel, scroller) <= TAB_SHARED_CHROME_PX;
 }
 

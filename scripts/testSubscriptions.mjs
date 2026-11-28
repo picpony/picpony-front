@@ -26,15 +26,24 @@ globalThis.sessionStorage = {
 };
 globalThis.window = {
   requestAnimationFrame: (callback) => setTimeout(callback, 0),
-  addEventListener() {}, removeEventListener() {},
-  dispatchEvent() { return true; },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {
+    return true;
+  },
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   location: { origin: 'https://app.invalid' },
   __picponyRoutePolicy: { api: 'direct', image: 'direct' },
 };
-globalThis.document = { visibilityState: 'visible', hidden: false, cookie: '', addEventListener() {}, removeEventListener() {} };
+globalThis.document = {
+  visibilityState: 'visible',
+  hidden: false,
+  cookie: '',
+  addEventListener() {},
+  removeEventListener() {},
+};
 
 /** Derpibooru's tags, as the stub answers them: name → record. */
 const TAGS = new Map([
@@ -43,12 +52,25 @@ const TAGS = new Map([
   ['rd', { slug: 'rd', images: 0, aliased_tag: 'rainbow+dash' }],
   ['oc:nyx', { slug: 'oc-colon-nyx', images: 3020 }],
 ]);
-const row = (name) => ({ name, slug: TAGS.get(name).slug, images: TAGS.get(name).images, aliases: TAGS.get(name).aliases ?? [], aliased_tag: TAGS.get(name).aliased_tag ?? null });
+const row = (name) => ({
+  name,
+  slug: TAGS.get(name).slug,
+  images: TAGS.get(name).images,
+  aliases: TAGS.get(name).aliases ?? [],
+  aliased_tag: TAGS.get(name).aliased_tag ?? null,
+});
 const unescape = (term) => term.replace(/\\(.)/g, '$1');
 
 const { opOf, rustError, rustResponse } = await import('./rustRoutes.mjs');
 /** A subscription row as the backend lists it. */
-const sub = (id, tag, image_count, unread_count = 0) => ({ id, tag, image_count, unread_count, checked_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z' });
+const sub = (id, tag, image_count, unread_count = 0) => ({
+  id,
+  tag,
+  image_count,
+  unread_count,
+  checked_at: '2026-01-01T00:00:00Z',
+  created_at: '2026-01-01T00:00:00Z',
+});
 
 let calls;
 /** PicPony operations (by their old action names) → answer; Derpibooru reads go to `derpi`. */
@@ -68,14 +90,19 @@ beforeEach(() => {
       for (const name of TAGS.keys()) {
         const record = TAGS.get(name);
         const loose = name.includes(wanted) || (record.aliases ?? []).includes(wanted);
-        if (field === 'slug:' ? record.slug === wanted : field === 'name:' ? name === wanted : loose) rows.push(row(name));
+        if (
+          field === 'slug:' ? record.slug === wanted : field === 'name:' ? name === wanted : loose
+        )
+          rows.push(row(name));
       }
     }
     return Response.json({ tags: rows, total: rows.length });
   };
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(String(input), 'https://app.invalid');
-    const action = url.pathname.startsWith('/api/v1/') ? opOf(init.method, url.href) : url.searchParams.get('action');
+    const action = url.pathname.startsWith('/api/v1/')
+      ? opOf(init.method, url.href)
+      : url.searchParams.get('action');
     calls.push({ url, init, action, body: init.body ? JSON.parse(init.body) : undefined });
     if (url.hostname === 'trixiebooru.org') return derpi(url);
     if (!(action in picpony)) throw new Error(`unexpected request: ${init.method ?? 'GET'} ${url}`);
@@ -100,7 +127,9 @@ const signIn = (token) => values.set('user_info', JSON.stringify({ id: 1, userna
 // --- the wire ---------------------------------------------------------------------------------
 
 test('the list is read with the token, in the backend’s order, each row with its id', async () => {
-  picpony.get_tag_subscriptions = { subscriptions: [sub(4, 'Fluttershy', 290000, 3), sub(9, 'oc:nyx', 3015)] };
+  picpony.get_tag_subscriptions = {
+    subscriptions: [sub(4, 'Fluttershy', 290000, 3), sub(9, 'oc:nyx', 3015)],
+  };
   const list = await api.getTagSubscriptions('tok');
   assert.deepEqual(list, [
     { id: 4, tagName: 'Fluttershy', imageCount: 290000, newCount: 3 },
@@ -110,27 +139,57 @@ test('the list is read with the token, in the backend’s order, each row with i
   assert.equal(url.pathname, '/api/v1/me/tag-subscriptions');
   assert.equal(new Headers(init.headers).get('authorization'), 'Bearer tok');
   picpony.get_tag_subscriptions = rustError(503, 'DATABASE_UNAVAILABLE', '数据库暂时不可用');
-  await assert.rejects(api.getTagSubscriptions('tok'), (error) => error instanceof ApiError && error.status === 503,
-    'a refusal is not an empty list');
+  await assert.rejects(
+    api.getTagSubscriptions('tok'),
+    (error) => error instanceof ApiError && error.status === 503,
+    'a refusal is not an empty list',
+  );
 });
 
 test('add, remove and seen speak the Rust routes, by subscription id; a duplicate is recognised', async () => {
   picpony.add_tag_subscription = { id: 12 };
-  picpony.get_tag_subscriptions = { subscriptions: [sub(9, 'oc:nyx', 3015), sub(4, 'Fluttershy', 290000), sub(12, 'rainbow dash', 315460)] };
+  picpony.get_tag_subscriptions = {
+    subscriptions: [
+      sub(9, 'oc:nyx', 3015),
+      sub(4, 'Fluttershy', 290000),
+      sub(12, 'rainbow dash', 315460),
+    ],
+  };
   picpony.remove_tag_subscription = null;
   picpony.mark_tag_subscription_seen = null;
   assert.deepEqual(await api.addTagSubscription('tok-ids', 'rainbow dash', 315460), { id: 12 });
   await api.removeTagSubscription('tok-ids', 'oc:nyx');
   await api.markTagSubscriptionSeen('tok-ids', 'fluttershy');
   await api.markTagSubscriptionSeen('tok-ids', 'Rainbow Dash');
-  assert.deepEqual(calls.map((call) => [call.action, call.init.method, call.url.pathname, call.body]), [
-    ['add_tag_subscription', 'POST', '/api/v1/me/tag-subscriptions', { tag: 'rainbow dash', image_count: 315460 }],
-    ['get_tag_subscriptions', 'GET', '/api/v1/me/tag-subscriptions', undefined],
-    ['remove_tag_subscription', 'DELETE', '/api/v1/me/tag-subscriptions/9', undefined],
-    ['mark_tag_subscription_seen', 'POST', '/api/v1/me/tag-subscriptions/4/read-receipts', undefined],
-    ['mark_tag_subscription_seen', 'POST', '/api/v1/me/tag-subscriptions/12/read-receipts', undefined],
-  ], 'an id the list or the subscribe gave is remembered; an unknown tag is looked up once');
-  assert.ok(calls.every((call) => new Headers(call.init.headers).get('authorization') === 'Bearer tok-ids'));
+  assert.deepEqual(
+    calls.map((call) => [call.action, call.init.method, call.url.pathname, call.body]),
+    [
+      [
+        'add_tag_subscription',
+        'POST',
+        '/api/v1/me/tag-subscriptions',
+        { tag: 'rainbow dash', image_count: 315460 },
+      ],
+      ['get_tag_subscriptions', 'GET', '/api/v1/me/tag-subscriptions', undefined],
+      ['remove_tag_subscription', 'DELETE', '/api/v1/me/tag-subscriptions/9', undefined],
+      [
+        'mark_tag_subscription_seen',
+        'POST',
+        '/api/v1/me/tag-subscriptions/4/read-receipts',
+        undefined,
+      ],
+      [
+        'mark_tag_subscription_seen',
+        'POST',
+        '/api/v1/me/tag-subscriptions/12/read-receipts',
+        undefined,
+      ],
+    ],
+    'an id the list or the subscribe gave is remembered; an unknown tag is looked up once',
+  );
+  assert.ok(
+    calls.every((call) => new Headers(call.init.headers).get('authorization') === 'Bearer tok-ids'),
+  );
   picpony.add_tag_subscription = rustError(409, 'ALREADY_EXISTS', '内容已存在或已被其他请求更新');
   const error = await api.addTagSubscription('tok-ids', 'x', 1).catch((caught) => caught);
   assert.equal(api.isAlreadySubscribed(error), true);
@@ -145,16 +204,26 @@ test('sync and finalise carry one sync_id, a version-4 UUID', async () => {
   assert.notEqual(api.newSyncToken(), token);
   await api.syncTagSubscriptions('tok', token, [{ subscription_id: 4, image_count: 290010 }]);
   assert.deepEqual(await api.finalizeTagSubscriptionSync('tok', token), { updatedTags: 2 });
-  assert.deepEqual(calls.map((call) => [call.url.pathname, call.body]), [
-    ['/api/v1/me/tag-subscription-syncs', { sync_id: token, updates: [{ subscription_id: 4, image_count: 290010 }] }],
-    [`/api/v1/me/tag-subscription-syncs/${token}/completion`, undefined],
-  ]);
+  assert.deepEqual(
+    calls.map((call) => [call.url.pathname, call.body]),
+    [
+      [
+        '/api/v1/me/tag-subscription-syncs',
+        { sync_id: token, updates: [{ subscription_id: 4, image_count: 290010 }] },
+      ],
+      [`/api/v1/me/tag-subscription-syncs/${token}/completion`, undefined],
+    ],
+  );
 });
 
 // --- the live count -------------------------------------------------------------------------
 
 test('a tag’s live count: the exact name first, one read', async () => {
-  assert.deepEqual(await api.lookupDerpiTag(' Fluttershy '), { name: 'fluttershy', count: 290010, aliasOf: null });
+  assert.deepEqual(await api.lookupDerpiTag(' Fluttershy '), {
+    name: 'fluttershy',
+    count: 290010,
+    aliasOf: null,
+  });
   assert.equal(derpiCalls().length, 1);
   assert.equal(derpiCalls()[0].url.searchParams.get('q'), 'name:fluttershy');
   assert.equal(derpiCalls()[0].url.searchParams.get('per_page'), '10');
@@ -163,7 +232,10 @@ test('a tag’s live count: the exact name first, one read', async () => {
 test('an alias record (0 pictures) is followed to the tag it stands for, and the subscription is to that', async () => {
   const found = await api.lookupDerpiTag('rd');
   assert.deepEqual(found, { name: 'rainbow dash', count: 315460, aliasOf: 'rd' });
-  assert.deepEqual(derpiCalls().map((call) => call.url.searchParams.get('q')), ['name:rd', `slug:${escapeTag('rainbow+dash')}`]);
+  assert.deepEqual(
+    derpiCalls().map((call) => call.url.searchParams.get('q')),
+    ['name:rd', `slug:${escapeTag('rainbow+dash')}`],
+  );
 });
 
 test('an alias found only in a tag’s list of aliases resolves through the original’s second read', async () => {
@@ -183,7 +255,10 @@ test('a tag Derpibooru does not have is not-found with its own sentence', async 
   const error = await api.lookupDerpiTag('notatag').catch((caught) => caught);
   assert.ok(error instanceof ApiError && error.notFound);
   assert.equal(error.message, api.TAG_NOT_FOUND_MESSAGE);
-  await assert.rejects(api.lookupDerpiTag('   '), (caught) => caught instanceof ApiError && caught.notFound);
+  await assert.rejects(
+    api.lookupDerpiTag('   '),
+    (caught) => caught instanceof ApiError && caught.notFound,
+  );
 });
 
 test('a count Derpibooru did not send refuses the subscription instead of recording 0 (G3-015)', async () => {
@@ -195,8 +270,11 @@ test('a count Derpibooru did not send refuses the subscription instead of record
     assert.equal(error.message, api.TAG_COUNT_UNREADABLE_MESSAGE);
   }
   TAGS.set('odd count', { slug: 'odd+count', images: 0 });
-  assert.deepEqual(await api.lookupDerpiTag('odd count'), { name: 'odd count', count: 0, aliasOf: null },
-    'an explicit 0 is a real tag with no pictures');
+  assert.deepEqual(
+    await api.lookupDerpiTag('odd count'),
+    { name: 'odd count', count: 0, aliasOf: null },
+    'an explicit 0 is a real tag with no pictures',
+  );
   TAGS.set('odd count', { slug: 'odd+count', images: '12' });
   assert.equal((await api.lookupDerpiTag('odd count')).count, 12, 'a numeric string is a count');
   TAGS.delete('odd count');
@@ -215,7 +293,10 @@ test('subscribing to a tag whose count is unreadable sends no add_tag_subscripti
   picpony.add_tag_subscription = { id: 77 };
   const outcome = await actions.subscribeToTag('g3-015', 'odd count');
   assert.deepEqual(outcome, { kind: 'failed', message: api.TAG_COUNT_UNREADABLE_MESSAGE });
-  assert.equal(actions.subscribeMessage(outcome)[0], `订阅失败：${api.TAG_COUNT_UNREADABLE_MESSAGE}`);
+  assert.equal(
+    actions.subscribeMessage(outcome)[0],
+    `订阅失败：${api.TAG_COUNT_UNREADABLE_MESSAGE}`,
+  );
   assert.equal(picponyCalls('add_tag_subscription').length, 0);
   TAGS.delete('odd count');
 });
@@ -240,29 +321,44 @@ test('a subscribe that shows its row waits briefly for the tag’s name, and ask
   await catalogue.tagSubscriptions.read({ token: 'named' });
   picpony.add_tag_subscription = { id: 77 };
   let answerName;
-  picpony.get_tag_translations = () => new Promise((resolve) => {
-    answerName = () => resolve(Response.json({ success: true, translations: { fluttershy: '小蝶' } }));
-  });
+  picpony.get_tag_translations = () =>
+    new Promise((resolve) => {
+      answerName = () =>
+        resolve(Response.json({ success: true, translations: { fluttershy: '小蝶' } }));
+    });
   let settled = false;
-  const pending = actions.subscribeToTag('named', 'fluttershy', { awaitName: true }).then((outcome) => {
-    settled = true;
-    return outcome;
-  });
+  const pending = actions
+    .subscribeToTag('named', 'fluttershy', { awaitName: true })
+    .then((outcome) => {
+      settled = true;
+      return outcome;
+    });
   await new Promise((resolve) => setTimeout(resolve, 60));
   assert.equal(settled, false, 'the write is done, the name is still on its way');
   assert.equal(picponyCalls('add_tag_subscription').length, 1);
-  assert.equal(picponyCalls('get_tag_translations').length, 1, 'asked beside the write, not after it');
+  assert.equal(
+    picponyCalls('get_tag_translations').length,
+    1,
+    'asked beside the write, not after it',
+  );
   answerName();
   assert.equal((await pending).kind, 'done');
   const { peekTagTranslations } = await import('../lib/tagTranslations.ts');
-  assert.deepEqual(peekTagTranslations(['fluttershy']), { fluttershy: '小蝶' }, 'the row’s first render can name it');
+  assert.deepEqual(
+    peekTagTranslations(['fluttershy']),
+    { fluttershy: '小蝶' },
+    'the row’s first render can name it',
+  );
 
   /* A dictionary that does not answer costs the button its grace period, no more. */
   signIn('slow-name');
   picpony.get_tag_translations = () => new Promise(() => {});
   TAGS.set('slowly named', { slug: 'slowly+named', images: 3 });
   const started = Date.now();
-  assert.equal((await actions.subscribeToTag('slow-name', 'slowly named', { awaitName: true })).kind, 'done');
+  assert.equal(
+    (await actions.subscribeToTag('slow-name', 'slowly named', { awaitName: true })).kind,
+    'done',
+  );
   assert.ok(Date.now() - started < 1500, `waited ${Date.now() - started}ms`);
   TAGS.delete('slowly named');
 
@@ -271,7 +367,10 @@ test('a subscribe that shows its row waits briefly for the tag’s name, and ask
   signIn('names-off');
   values.set('picpony_show_chinese_tags', 'false');
   TAGS.set('unnamed tag', { slug: 'unnamed+tag', images: 1 });
-  assert.equal((await actions.subscribeToTag('names-off', 'unnamed tag', { awaitName: true })).kind, 'done');
+  assert.equal(
+    (await actions.subscribeToTag('names-off', 'unnamed tag', { awaitName: true })).kind,
+    'done',
+  );
   assert.equal(picponyCalls('get_tag_translations').length, 0);
   TAGS.delete('unnamed tag');
 });
@@ -279,21 +378,34 @@ test('a subscribe that shows its row waits briefly for the tag’s name, and ask
 test('取消订阅 after its confirmation reads the session again: a changed account sends nothing (G3-018)', async () => {
   picpony.remove_tag_subscription = null;
   signIn('someone-else');
-  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'fluttershy'), { kind: 'stale-session' });
+  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'fluttershy'), {
+    kind: 'stale-session',
+  });
   assert.equal(picponyCalls('remove_tag_subscription').length, 0);
 
   signIn('confirmed-under');
   picpony.get_tag_subscriptions = { subscriptions: [sub(5, 'fluttershy', 1), sub(6, 'oc:nyx', 1)] };
   await catalogue.tagSubscriptions.read({ token: 'confirmed-under' });
-  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'Fluttershy'), { kind: 'done' });
-  assert.deepEqual(picponyCalls('remove_tag_subscription').map((call) => call.url.pathname), ['/api/v1/me/tag-subscriptions/5']);
+  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'Fluttershy'), {
+    kind: 'done',
+  });
+  assert.deepEqual(
+    picponyCalls('remove_tag_subscription').map((call) => call.url.pathname),
+    ['/api/v1/me/tag-subscriptions/5'],
+  );
   picpony.remove_tag_subscription = rustError(503, 'DATABASE_UNAVAILABLE', '服务暂不可用');
-  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'oc:nyx'),
-    { kind: 'failed', message: '取消订阅失败：服务暂时不可用，请稍后再试' });
+  assert.deepEqual(await actions.unsubscribeConfirmed('confirmed-under', 'oc:nyx'), {
+    kind: 'failed',
+    message: '取消订阅失败：服务暂时不可用，请稍后再试',
+  });
 });
 
 test('a rate limit surfaces as itself, not as a missing tag', async () => {
-  derpi = () => new Response('{"error":"slow down"}', { status: 429, headers: { 'content-type': 'application/json' } });
+  derpi = () =>
+    new Response('{"error":"slow down"}', {
+      status: 429,
+      headers: { 'content-type': 'application/json' },
+    });
   const error = await api.lookupDerpiTag('fluttershy').catch((caught) => caught);
   assert.equal(apiErrorStatus(error), 429);
   assert.equal(error.notFound, false);
@@ -318,9 +430,16 @@ test('a subscription’s address carries its tag as one segment, and reads back'
   assert.equal(href.subscriptionHref('oc:nyx'), '/subscriptions/oc%3Anyx');
   assert.equal(href.subscriptionHref(' 80s/90s style '), '/subscriptions/80s%2F90s%20style');
   for (const tag of ['oc:nyx', '80s/90s style', '小马', 'a%b', 'what?']) {
-    assert.equal(href.tagFromSegment(href.subscriptionHref(tag).slice('/subscriptions/'.length)), tag);
+    assert.equal(
+      href.tagFromSegment(href.subscriptionHref(tag).slice('/subscriptions/'.length)),
+      tag,
+    );
   }
-  assert.equal(href.tagFromSegment('%E0%A4%A'), '%E0%A4%A', 'a malformed segment is taken as written');
+  assert.equal(
+    href.tagFromSegment('%E0%A4%A'),
+    '%E0%A4%A',
+    'a malformed segment is taken as written',
+  );
   assert.equal(href.tagFromSegment('  fluttershy '), 'fluttershy');
 });
 
@@ -332,7 +451,8 @@ function subscriptions(count) {
 
 test('a run: the list, its live counts fifty at a time, each batch reported under one token, then finalise', async () => {
   signIn('sync-a');
-  for (let index = 0; index < 55; index += 1) TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 10 + index });
+  for (let index = 0; index < 55; index += 1)
+    TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 10 + index });
   picpony.get_tag_subscriptions = { subscriptions: subscriptions(55) };
   picpony.sync_tag_subscriptions = { updated_tags: 0 };
   picpony.finalize_tag_subscription_sync = { updated_tags: 3 };
@@ -346,28 +466,58 @@ test('a run: the list, its live counts fifty at a time, each batch reported unde
   assert.equal(posts[0].body.updates.length, 50);
   assert.deepEqual(posts[1].body.updates.at(-1), { subscription_id: 55, image_count: 64 });
   const [finalise] = picponyCalls('finalize_tag_subscription_sync');
-  assert.ok(posts.every((post) => finalise.url.pathname === `/api/v1/me/tag-subscription-syncs/${post.body.sync_id}/completion`), 'one sync id for the run');
-  assert.equal(sessionValues.get('tag_subscription_sync_v2_sync-a'), '5000000', 'stamped under the original’s key');
+  assert.ok(
+    posts.every(
+      (post) =>
+        finalise.url.pathname ===
+        `/api/v1/me/tag-subscription-syncs/${post.body.sync_id}/completion`,
+    ),
+    'one sync id for the run',
+  );
+  assert.equal(
+    sessionValues.get('tag_subscription_sync_v2_sync-a'),
+    '5000000',
+    'stamped under the original’s key',
+  );
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(picponyCalls('get_tag_subscriptions').length, 2, 'the list re-read for its new counts');
+  assert.equal(
+    picponyCalls('get_tag_subscriptions').length,
+    2,
+    'the list re-read for its new counts',
+  );
   for (let index = 0; index < 55; index += 1) TAGS.delete(`tag ${index}`);
 });
 
 test('a run that moved nothing does not read the list again; one that moved a count does', async () => {
   signIn('still');
-  for (let index = 0; index < 3; index += 1) TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 10 });
+  for (let index = 0; index < 3; index += 1)
+    TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 10 });
   picpony.get_tag_subscriptions = { subscriptions: subscriptions(3) };
   picpony.sync_tag_subscriptions = { updated_tags: 0 };
   picpony.finalize_tag_subscription_sync = { updated_tags: 0 };
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('still', () => 5_100_000), { ok: true, updatedTags: 0 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('still', () => 5_100_000), {
+    ok: true,
+    updatedTags: 0,
+  });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(picponyCalls('get_tag_subscriptions').length, 1, 'every count where the list had it: no second read');
+  assert.equal(
+    picponyCalls('get_tag_subscriptions').length,
+    1,
+    'every count where the list had it: no second read',
+  );
 
   signIn('shrunk');
   TAGS.set('tag 1', { slug: 'tag+1', images: 7 });
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('shrunk', () => 5_200_000), { ok: true, updatedTags: 0 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('shrunk', () => 5_200_000), {
+    ok: true,
+    updatedTags: 0,
+  });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(picponyCalls('get_tag_subscriptions').length, 3, 'a count that fell is a change the list shows');
+  assert.equal(
+    picponyCalls('get_tag_subscriptions').length,
+    3,
+    'a count that fell is a change the list shows',
+  );
   for (let index = 0; index < 3; index += 1) TAGS.delete(`tag ${index}`);
 });
 
@@ -375,7 +525,11 @@ test('the schedule: once per tab session at load, then ten minutes on, never wit
   assert.equal(sync.loadSyncDue('sched'), true, 'nothing ran in this tab session');
   sessionValues.set('tag_subscription_sync_v2_sched', '1');
   assert.equal(sync.loadSyncDue('sched'), false, 'the original’s own stamp counts');
-  assert.equal(sync.periodicSyncDue('sched', Date.now()), true, 'its time unknown: as old as it gets');
+  assert.equal(
+    sync.periodicSyncDue('sched', Date.now()),
+    true,
+    'its time unknown: as old as it gets',
+  );
   sessionValues.set('tag_subscription_sync_v2_sched', '1000000');
   assert.equal(sync.periodicSyncDue('sched', 1_000_000 + sync.SYNC_PERIOD_MS - 1), false);
   assert.equal(sync.periodicSyncDue('sched', 1_000_000 + sync.SYNC_PERIOD_MS), true);
@@ -384,7 +538,11 @@ test('the schedule: once per tab session at load, then ten minutes on, never wit
   picpony.get_tag_subscriptions = rustError(503, 'DATABASE_UNAVAILABLE', '服务暂不可用');
   const failed = await sync.syncTagSubscriptionsNow('sched-fail', () => 2_000_000);
   assert.deepEqual(failed, { ok: false, updatedTags: 0 });
-  assert.equal(sync.periodicSyncDue('sched-fail', 2_000_000 + 1000), false, 'a failed try waits a minute');
+  assert.equal(
+    sync.periodicSyncDue('sched-fail', 2_000_000 + 1000),
+    false,
+    'a failed try waits a minute',
+  );
   assert.equal(sync.periodicSyncDue('sched-fail', 2_000_000 + sync.SYNC_MIN_GAP_MS), true);
   assert.equal(derpiCalls().length, 0, 'no list, no Derpibooru reads');
 });
@@ -392,23 +550,32 @@ test('the schedule: once per tab session at load, then ten minutes on, never wit
 test('an empty list is a finished run with nothing sent', async () => {
   signIn('empty');
   picpony.get_tag_subscriptions = { subscriptions: [] };
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('empty', () => 3_000_000), { ok: true, updatedTags: 0 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('empty', () => 3_000_000), {
+    ok: true,
+    updatedTags: 0,
+  });
   assert.equal(calls.length, 1);
   assert.equal(sessionValues.get('tag_subscription_sync_v2_empty'), '3000000');
 });
 
 test('a rate limit ends the run’s reads; the batches already read still count', async () => {
   signIn('limited');
-  for (let index = 0; index < 60; index += 1) TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 1 });
+  for (let index = 0; index < 60; index += 1)
+    TAGS.set(`tag ${index}`, { slug: `tag+${index}`, images: 1 });
   picpony.get_tag_subscriptions = { subscriptions: subscriptions(120) };
   picpony.sync_tag_subscriptions = { updated_tags: 0 };
   picpony.finalize_tag_subscription_sync = { updated_tags: 0 };
   let reads = 0;
   derpi = (url) => {
     reads += 1;
-    if (reads === 2) return new Response('{}', { status: 429, headers: { 'content-type': 'application/json' } });
-    const rows = url.searchParams.get('q').split(' OR ').map((term) => unescape(term.slice('name:'.length)))
-      .filter((name) => TAGS.has(name)).map(row);
+    if (reads === 2)
+      return new Response('{}', { status: 429, headers: { 'content-type': 'application/json' } });
+    const rows = url.searchParams
+      .get('q')
+      .split(' OR ')
+      .map((term) => unescape(term.slice('name:'.length)))
+      .filter((name) => TAGS.has(name))
+      .map(row);
     return Response.json({ tags: rows, total: rows.length });
   };
   const result = await sync.syncTagSubscriptionsNow('limited', () => 4_000_000);
@@ -430,7 +597,10 @@ test('a sign-out midway stops the run before it writes again', async () => {
     values.delete('user_info');
     return inner(url);
   };
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('leaving', () => 6_000_000), { ok: false, updatedTags: 0 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('leaving', () => 6_000_000), {
+    ok: false,
+    updatedTags: 0,
+  });
   assert.equal(picponyCalls('sync_tag_subscriptions').length, 0);
   assert.equal(picponyCalls('finalize_tag_subscription_sync').length, 0);
   assert.equal(sessionValues.get('tag_subscription_sync_v2_leaving'), undefined, 'not stamped');
@@ -440,10 +610,16 @@ test('a sign-out midway stops the run before it writes again', async () => {
 test('a list that failed once does not block the next run (G3-017)', async () => {
   signIn('once-failed');
   picpony.get_tag_subscriptions = rustError(503, 'DATABASE_UNAVAILABLE', '服务暂不可用');
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('once-failed', () => 7_000_000), { ok: false, updatedTags: 0 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('once-failed', () => 7_000_000), {
+    ok: false,
+    updatedTags: 0,
+  });
   picpony.get_tag_subscriptions = { subscriptions: [] };
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('once-failed', () => 7_100_000), { ok: true, updatedTags: 0 },
-    'the failed read is retried, not taken for the answer');
+  assert.deepEqual(
+    await sync.syncTagSubscriptionsNow('once-failed', () => 7_100_000),
+    { ok: true, updatedTags: 0 },
+    'the failed read is retried, not taken for the answer',
+  );
   assert.equal(picponyCalls('get_tag_subscriptions').length, 2);
   assert.equal(sessionValues.get('tag_subscription_sync_v2_once-failed'), '7100000');
 });
@@ -457,10 +633,21 @@ test('a sign-out during finalize writes nothing more for that account (G3-023)',
     values.delete('user_info');
     return Response.json({ updated_tags: 1 });
   };
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('finalize-leave', () => 8_000_000), { ok: true, updatedTags: 1 });
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('finalize-leave', () => 8_000_000), {
+    ok: true,
+    updatedTags: 1,
+  });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(sessionValues.get('tag_subscription_sync_v2_finalize-leave'), undefined, 'not stamped');
-  assert.equal(picponyCalls('get_tag_subscriptions').length, 1, 'no forced re-read for a signed-out account');
+  assert.equal(
+    sessionValues.get('tag_subscription_sync_v2_finalize-leave'),
+    undefined,
+    'not stamped',
+  );
+  assert.equal(
+    picponyCalls('get_tag_subscriptions').length,
+    1,
+    'no forced re-read for a signed-out account',
+  );
   TAGS.delete('tag 0');
 });
 
@@ -500,10 +687,19 @@ test('the gallery reads one literal term, newest first, inside the device’s ex
     seen.push(url);
     return Response.json({ images: [], total: 0, interactions: [] });
   };
-  await catalogue.tagGallery.read({ tag: 'oc:nyx (pony)', page: 2, perPage: 24, contentFilter: 'safe', fp: 'x' });
+  await catalogue.tagGallery.read({
+    tag: 'oc:nyx (pony)',
+    page: 2,
+    perPage: 24,
+    contentFilter: 'safe',
+    fp: 'x',
+  });
   const [url] = seen;
   assert.equal(url.pathname, '/api/v1/json/search/images');
-  assert.ok(url.searchParams.get('q').startsWith(`(${escapeTag('oc:nyx (pony)')})`), url.searchParams.get('q'));
+  assert.ok(
+    url.searchParams.get('q').startsWith(`(${escapeTag('oc:nyx (pony)')})`),
+    url.searchParams.get('q'),
+  );
   assert.equal(url.searchParams.get('page'), '2');
   assert.equal(url.searchParams.get('per_page'), '24');
 });
@@ -513,19 +709,42 @@ test('the gallery reads one literal term, newest first, inside the device’s ex
 const { formatCount } = await import('../lib/format.ts');
 
 test('a subscribe says what happened, in the original’s words where it had them', () => {
-  assert.deepEqual(actions.subscribeMessage({ kind: 'done', tagName: 'fluttershy', count: 290010, aliasOf: null }),
-    [`已订阅「fluttershy」，当前记录 ${formatCount(290010)} 张图片`, 'success']);
-  assert.deepEqual(actions.subscribeMessage({ kind: 'done', tagName: 'rainbow dash', count: 315460, aliasOf: 'rd' }),
-    ['「rd」是「rainbow dash」的别名，已订阅「rainbow dash」', 'success']);
-  assert.deepEqual(actions.subscribeMessage({ kind: 'exists', tagName: 'oc:nyx' }), ['标签「oc:nyx」已在订阅中', 'warning']);
-  assert.deepEqual(actions.subscribeMessage({ kind: 'not-found' }), [api.TAG_NOT_FOUND_MESSAGE, 'warning']);
-  assert.deepEqual(actions.subscribeMessage({ kind: 'failed', message: '请求过于频繁，请稍后再试' }),
-    ['订阅失败：请求过于频繁，请稍后再试', 'error']);
+  assert.deepEqual(
+    actions.subscribeMessage({ kind: 'done', tagName: 'fluttershy', count: 290010, aliasOf: null }),
+    [`已订阅「fluttershy」，当前记录 ${formatCount(290010)} 张图片`, 'success'],
+  );
+  assert.deepEqual(
+    actions.subscribeMessage({
+      kind: 'done',
+      tagName: 'rainbow dash',
+      count: 315460,
+      aliasOf: 'rd',
+    }),
+    ['「rd」是「rainbow dash」的别名，已订阅「rainbow dash」', 'success'],
+  );
+  assert.deepEqual(actions.subscribeMessage({ kind: 'exists', tagName: 'oc:nyx' }), [
+    '标签「oc:nyx」已在订阅中',
+    'warning',
+  ]);
+  assert.deepEqual(actions.subscribeMessage({ kind: 'not-found' }), [
+    api.TAG_NOT_FOUND_MESSAGE,
+    'warning',
+  ]);
+  assert.deepEqual(
+    actions.subscribeMessage({ kind: 'failed', message: '请求过于频繁，请稍后再试' }),
+    ['订阅失败：请求过于频繁，请稍后再试', 'error'],
+  );
 });
 
 test('a failure says what failed once, even when the backend’s words already do', () => {
-  assert.equal(actions.failureSentence('取消订阅失败', '网络连接失败，请检查网络后再试'), '取消订阅失败：网络连接失败，请检查网络后再试');
-  assert.equal(actions.failureSentence('取消订阅失败', '取消订阅失败，请稍后再试'), '取消订阅失败，请稍后再试');
+  assert.equal(
+    actions.failureSentence('取消订阅失败', '网络连接失败，请检查网络后再试'),
+    '取消订阅失败：网络连接失败，请检查网络后再试',
+  );
+  assert.equal(
+    actions.failureSentence('取消订阅失败', '取消订阅失败，请稍后再试'),
+    '取消订阅失败，请稍后再试',
+  );
   assert.equal(actions.failureSentence('订阅失败', '订阅失败'), '订阅失败');
 });
 
@@ -541,24 +760,48 @@ test('a subscription is found as Derpibooru matches names', () => {
 const names = await import('../components/subscriptions/useTagNames.ts');
 
 test('a name slot is asked for, then named or the tag itself — and an answer once had is kept (M1-017)', () => {
-  const known = (patch = {}) => ({ enabled: true, peeked: {}, answers: {}, waited: new Set(), ...patch });
+  const known = (patch = {}) => ({
+    enabled: true,
+    peeked: {},
+    answers: {},
+    waited: new Set(),
+    ...patch,
+  });
   // still asking: the slot holds a placeholder
   assert.equal(names.tagNameOf('Rainbow Dash', known()), undefined);
   // answered: the name, keyed as the dictionary keys it (namespace off, lower case)
-  assert.equal(names.tagNameOf('Rainbow Dash', known({ answers: { 'rainbow dash': ' 云宝 ' } })), '云宝');
+  assert.equal(
+    names.tagNameOf('Rainbow Dash', known({ answers: { 'rainbow dash': ' 云宝 ' } })),
+    '云宝',
+  );
   assert.equal(names.tagNameOf('oc:Nyx', known({ answers: { nyx: '妮克丝' } })), '妮克丝');
   // the dictionary has none, or its wait ran out: the tag reads as itself
   assert.equal(names.tagNameOf('cute', known({ answers: { cute: null } })), null);
   assert.equal(names.tagNameOf('cute', known({ waited: new Set(['cute']) })), null);
   // a cached miss is an answer: never waited for, and an older name does not override it
-  assert.equal(names.tagNameOf('cute', known({ peeked: { cute: null }, answers: { cute: '可爱' } })), null);
+  assert.equal(
+    names.tagNameOf('cute', known({ peeked: { cute: null }, answers: { cute: '可爱' } })),
+    null,
+  );
   assert.equal(names.tagNameOf('cute', known({ peeked: { cute: '可爱' } })), '可爱');
   // a late answer replaces the tag the wait put there
-  assert.equal(names.tagNameOf('cute', known({ waited: new Set(['cute']), answers: { cute: '可爱' } })), '可爱');
+  assert.equal(
+    names.tagNameOf('cute', known({ waited: new Set(['cute']), answers: { cute: '可爱' } })),
+    '可爱',
+  );
   // a row on its way out is no longer among the tags peeked, and keeps the name it had
-  assert.equal(names.tagNameOf('Rainbow Dash', known({ peeked: { fluttershy: '小蝶' }, answers: { 'rainbow dash': '云宝' } })), '云宝');
+  assert.equal(
+    names.tagNameOf(
+      'Rainbow Dash',
+      known({ peeked: { fluttershy: '小蝶' }, answers: { 'rainbow dash': '云宝' } }),
+    ),
+    '云宝',
+  );
   // names off: always the tag; and no tag named like an object's own members reads as a name
-  assert.equal(names.tagNameOf('Rainbow Dash', known({ enabled: false, answers: { 'rainbow dash': '云宝' } })), null);
+  assert.equal(
+    names.tagNameOf('Rainbow Dash', known({ enabled: false, answers: { 'rainbow dash': '云宝' } })),
+    null,
+  );
   assert.equal(names.tagNameOf('constructor', known()), undefined);
   assert.equal(names.tagNameOf('toString', known({ waited: new Set(['tostring']) })), null);
 });
@@ -569,8 +812,23 @@ test('review P4-F5: a run that could read no counts at all is a failed run — n
   picpony.sync_tag_subscriptions = { updated_tags: 0 };
   picpony.finalize_tag_subscription_sync = { updated_tags: 0 };
   derpi = () => new Response('busy', { status: 503 });
-  assert.deepEqual(await sync.syncTagSubscriptionsNow('unread', () => 7_000_000), { ok: false, updatedTags: 0 });
-  assert.equal(picponyCalls('finalize_tag_subscription_sync').length, 0, 'nothing reported, nothing to finalise');
-  assert.equal(sessionValues.get('tag_subscription_sync_v2_unread'), undefined, 'not stamped as a finished run');
-  assert.equal(sync.periodicSyncDue('unread', 7_000_000 + sync.SYNC_MIN_GAP_MS), true, 'retried after a minute, not ten');
+  assert.deepEqual(await sync.syncTagSubscriptionsNow('unread', () => 7_000_000), {
+    ok: false,
+    updatedTags: 0,
+  });
+  assert.equal(
+    picponyCalls('finalize_tag_subscription_sync').length,
+    0,
+    'nothing reported, nothing to finalise',
+  );
+  assert.equal(
+    sessionValues.get('tag_subscription_sync_v2_unread'),
+    undefined,
+    'not stamped as a finished run',
+  );
+  assert.equal(
+    sync.periodicSyncDue('unread', 7_000_000 + sync.SYNC_MIN_GAP_MS),
+    true,
+    'retried after a minute, not ten',
+  );
 });

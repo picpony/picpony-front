@@ -185,7 +185,7 @@ export function prepareImageHero(
   if (!previewFrame) return null;
   const previewSrc = normalizeHeroSrc(
     fallback?.src ||
-    visual?.currentSrc ||
+      visual?.currentSrc ||
       visual?.getAttribute('src') ||
       previewSrcOverride ||
       (mediaType === 'video'
@@ -201,7 +201,8 @@ export function prepareImageHero(
       image.view_url ||
       '',
   );
-  if (captured && mediaType === 'image' && previewSrc) rememberPressFrame(image.id, previewSrc, captured);
+  if (captured && mediaType === 'image' && previewSrc)
+    rememberPressFrame(image.id, previewSrc, captured);
   const rect = getHeroRect(source);
   return {
     image,
@@ -229,8 +230,9 @@ export function prepareImageHeroStep(image: ImagePreview): ImageHeroSnapshot {
   if (warmedEntry && !warmed) warmedDetailFrames.delete(image.id);
   const cardFrame = visual ? captureHeroFrame(visual) : null;
   const usedWarmed = Boolean(
-    warmed && (!visual || !isVolatileVisualMedia(visual)) &&
-      (!cardFrame || warmed.asset.pixels > cardFrame.pixels),
+    warmed &&
+    (!visual || !isVolatileVisualMedia(visual)) &&
+    (!cardFrame || warmed.asset.pixels > cardFrame.pixels),
   );
   const previewFrame = usedWarmed ? warmed!.asset : cardFrame;
   /* With nothing decoded to show, the smallest rung that reads at the detail's size: `medium` for

@@ -8,8 +8,13 @@ import { SPRING_MS, springLinear } from '@/lib/spring';
 import { sampleEasing, sampledTrack } from '@/lib/sampledAnimation';
 import { maskProperty, supportsMask } from '@/lib/maskStyle';
 import {
-  freshStripLeg, lagSampler, stripProgress, turnStrip, STRIP_DURATION_MS,
-  type StripLeg, type StripSegment,
+  freshStripLeg,
+  lagSampler,
+  stripProgress,
+  turnStrip,
+  STRIP_DURATION_MS,
+  type StripLeg,
+  type StripSegment,
 } from '@/lib/tabStrip';
 import type { LeanPlan, PaneClip } from './tabGeometry';
 
@@ -325,8 +330,12 @@ export function playSharedAxis(opts: {
     if (held) animation.pause();
     return animation;
   };
-  const run = (node: HTMLElement, keyframes: Keyframe[], timing: KeyframeAnimationOptions, id = 'tab-strip') =>
-    adopt(node.animate(keyframes, timing), id);
+  const run = (
+    node: HTMLElement,
+    keyframes: Keyframe[],
+    timing: KeyframeAnimationOptions,
+    id = 'tab-strip',
+  ) => adopt(node.animate(keyframes, timing), id);
   const place = (along: number, y = 0) =>
     axis === 'x' ? `translate3d(${along}px, ${y}px, 0)` : `translate3d(0, ${along + y}px, 0)`;
 
@@ -343,7 +352,10 @@ export function playSharedAxis(opts: {
      scroller in a frame, never in the scroll event, and written only when it grows. */
   const scroller = getAppScroller();
   const bands: Array<{ node: HTMLElement; initial: PaneClip; band: PaneClip }> = [];
-  for (const [node, band] of [[leaving, opts.clip?.leaving], [entering, opts.clip?.entering]] as const) {
+  for (const [node, band] of [
+    [leaving, opts.clip?.leaving],
+    [entering, opts.clip?.entering],
+  ] as const) {
     if (!band || axis !== 'x') continue;
     clipped.set(node, node.style.clipPath);
     bands.push({ node, initial: band, band: { ...band } });
@@ -423,7 +435,11 @@ export function playSharedAxis(opts: {
       ],
       /* Arriving: the default effects spring, opacity and the short shift together — the reduced
          tier keeps no overshoot, so the shift needs no spatial clock of its own. */
-      { duration: SPRING_MS.defaultEffects * scale, easing: springLinear('defaultEffects'), fill: 'both' },
+      {
+        duration: SPRING_MS.defaultEffects * scale,
+        easing: springLinear('defaultEffects'),
+        fill: 'both',
+      },
     );
     if (follower) {
       const { node } = follower;
@@ -432,15 +448,23 @@ export function playSharedAxis(opts: {
         const from = place(0, start);
         const to = place(0, target);
         // Cross the layout change only while transparent. No visible long vertical travel.
-        const handoff = Math.abs(start - target) <= 0.5 ? [] : [
-          { offset: 0.5, transform: from, opacity: 0 },
-          { offset: 0.5, transform: to, opacity: 0, easing: ease },
-        ];
-        return run(node, [
-          { offset: 0, transform: from, opacity, easing: ease },
-          ...handoff,
-          { offset: 1, transform: handoff.length ? to : from, opacity: 1 },
-        ], { duration: SPRING_MS.defaultEffects * scale, fill: 'both' }, 'tab-follower');
+        const handoff =
+          Math.abs(start - target) <= 0.5
+            ? []
+            : [
+                { offset: 0.5, transform: from, opacity: 0 },
+                { offset: 0.5, transform: to, opacity: 0, easing: ease },
+              ];
+        return run(
+          node,
+          [
+            { offset: 0, transform: from, opacity, easing: ease },
+            ...handoff,
+            { offset: 1, transform: handoff.length ? to : from, opacity: 1 },
+          ],
+          { duration: SPRING_MS.defaultEffects * scale, fill: 'both' },
+          'tab-follower',
+        );
       };
       let followerRun = fade(follower.initial, follower.opacity, follower.entering);
       const reversePanes = turn;
@@ -474,7 +498,10 @@ export function playSharedAxis(opts: {
     const previousMask = style.getPropertyValue(property);
     style.marginLeft = style.marginRight = `${-reach}px`;
     style.paddingLeft = style.paddingRight = `${reach}px`;
-    style.setProperty(property, `linear-gradient(to right, transparent, black ${fade}px, black calc(100% - ${fade}px), transparent)`);
+    style.setProperty(
+      property,
+      `linear-gradient(to right, transparent, black ${fade}px, black calc(100% - ${fade}px), transparent)`,
+    );
     restoreEdge = () => {
       [style.marginLeft, style.marginRight, style.paddingLeft, style.paddingRight] = before;
       style.setProperty(property, previousMask);
@@ -538,16 +565,21 @@ export function playSharedAxis(opts: {
     historyPending = startTime === null;
     const samples = sampleEasing(stripProgress(next.launch));
     const travel = (p: number) => next.from + (next.to - next.from) * p;
-    const leavingTrack = () => sampledTrack(samples, (p) => ({
-      transform: place(-direction * distance * travel(p), leavingOffsetY),
-    }));
+    const leavingTrack = () =>
+      sampledTrack(samples, (p) => ({
+        transform: place(-direction * distance * travel(p), leavingOffsetY),
+      }));
     leavingKeyframes = () => leavingTrack().keyframes;
     const departing = leavingTrack();
     const timing = { duration: next.duration, easing: departing.easing, fill: 'both' as const };
     run(leaving, departing.keyframes, timing);
-    run(entering, sampledTrack(samples, (p) => ({
-      transform: place(direction * distance * (1 - travel(p))),
-    })).keyframes, timing);
+    run(
+      entering,
+      sampledTrack(samples, (p) => ({
+        transform: place(direction * distance * (1 - travel(p))),
+      })).keyframes,
+      timing,
+    );
     if (follower && followFrom !== undefined) {
       const followTo = next.to === 1 ? follower.entering : follower.leaving;
       followerLeg = { from: followFrom, to: followTo };
@@ -569,7 +601,9 @@ export function playSharedAxis(opts: {
     const fresh = prior.length === 0 && startTime === null;
     let lagAt: ((depth: number, tolerance: number) => Array<[number, number]>) | null = null;
     const lagOf = (depth: number) => {
-      const key = fresh ? `${scale}|${Math.round(distance)}|${next.from}|${next.to}|${next.duration}|${next.launch}|${depth}` : null;
+      const key = fresh
+        ? `${scale}|${Math.round(distance)}|${next.from}|${next.to}|${next.duration}|${next.launch}|${depth}`
+        : null;
       const kept = key ? freshLean.get(key) : undefined;
       if (kept) return kept;
       lagAt ??= lagSampler(history, at, scale);
@@ -586,17 +620,20 @@ export function playSharedAxis(opts: {
       const span = samples[samples.length - 1][0] - at;
       const peak = samples.reduce((most, [, lag]) => Math.max(most, Math.abs(lag)), 0);
       if (!(span > 0) || !(peak > 0)) continue;
-      const progress = samples.map(([t, lag]) => ({ offset: (t - at) / span, progress: lag / peak }));
+      const progress = samples.map(([t, lag]) => ({
+        offset: (t - at) / span,
+        progress: lag / peak,
+      }));
       for (const [base, els] of bases) {
         const tail = base && base !== 'none' ? ` ${base}` : '';
         const track = sampledTrack(progress, (p) => ({
           transform: `translate3d(${direction * distance * peak * p}px, 0px, 0px)${tail}`,
         }));
-        const model = new KeyframeEffect(
-          null,
-          track.keyframes,
-          { duration: span, easing: track.easing, fill: 'both' },
-        );
+        const model = new KeyframeEffect(null, track.keyframes, {
+          duration: span,
+          easing: track.easing,
+          fill: 'both',
+        });
         for (const el of els) {
           const effect = new KeyframeEffect(model);
           effect.target = el;
@@ -639,7 +676,8 @@ export function playSharedAxis(opts: {
       const elapsed = began === null ? 0 : at - began;
       const next = turnStrip(previous, elapsed, full);
       const p = previousFollow ? stripProgress(previous.launch)(elapsed / previous.duration) : 0;
-      const from = previousFollow && previousFollow.from + (previousFollow.to - previousFollow.from) * p;
+      const from =
+        previousFollow && previousFollow.from + (previousFollow.to - previousFollow.from) * p;
       reversed = next.to === 0;
       startLeg(next, began === null ? null : at, prior, from);
       return next;

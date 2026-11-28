@@ -95,7 +95,10 @@ function ResultCaption({
   return (
     <>
       <div className="mb-3 flex min-h-10 items-center gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-body-m tabular-nums text-on-surface-variant" role="status">
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-body-m tabular-nums text-on-surface-variant"
+          role="status"
+        >
           {entry && entry.cn && (
             <>
               <span className="min-w-0 truncate">
@@ -103,7 +106,9 @@ function ResultCaption({
                 {' · '}
                 {tagCategory(entry.category).label}
               </span>
-              <span aria-hidden="true" className="shrink-0">·</span>
+              <span aria-hidden="true" className="shrink-0">
+                ·
+              </span>
             </>
           )}
           <div className="shrink-0">
@@ -112,8 +117,7 @@ function ResultCaption({
               <Skeleton className="inline-block h-4 w-24 align-middle" />
             ) : (
               <>
-                共 {formatCount(total)} 张
-                {shownPage > 1 ? ` · 第 ${shownPage} 页` : ''}
+                共 {formatCount(total)} 张{shownPage > 1 ? ` · 第 ${shownPage} 页` : ''}
               </>
             )}
           </div>
@@ -232,7 +236,12 @@ export default function SearchResults({
   return (
     /* Scroll target for <Pagination>: a page turn lands on the caption, not above the field. */
     <div data-pagination-anchor>
-      <ResultCaption total={data.total} shownPage={shownPage} singleTag={singleTag} action={captionAction} />
+      <ResultCaption
+        total={data.total}
+        shownPage={shownPage}
+        singleTag={singleTag}
+        action={captionAction}
+      />
       {isPrevious && error ? (
         /* The page turn failed: the pictures below are the last page that loaded, and the
            screen says so rather than leaving the pager on a page it is not showing. */

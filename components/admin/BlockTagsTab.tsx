@@ -16,7 +16,12 @@ import { showToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { MOTION_SPEED_SCALE, motionTier } from '@/lib/appearance';
 import * as adminApi from '@/lib/api/admin';
-import { BLOCK_FILTER_KEYS, installBlockFilters, type BlockFilterKey, type BlockFilters } from '@/lib/blockFilters';
+import {
+  BLOCK_FILTER_KEYS,
+  installBlockFilters,
+  type BlockFilterKey,
+  type BlockFilters,
+} from '@/lib/blockFilters';
 import SectionHeader from './SectionHeader';
 import { AdminNote } from './AdminForm';
 import { defineAdminQuery, retryError, useAdminQuery } from './queries';
@@ -40,14 +45,17 @@ const RULES: Record<BlockFilterKey, { name: string; role: string }> = {
   onlyPony: { name: '只看小马', role: '允许的物种（任一即可）' },
 };
 
-const isRule = (value: string): value is BlockFilterKey => (BLOCK_FILTER_KEYS as readonly string[]).includes(value);
+const isRule = (value: string): value is BlockFilterKey =>
+  (BLOCK_FILTER_KEYS as readonly string[]).includes(value);
 
 /* The rules every visitor's searches carry: the rows (with the ids a removal names), and the same
    tags installed as this tab's live filters, so the console's own searches follow an edit at once. */
 const blockTagsQuery = defineAdminQuery<BlockTagsGroup>('block-tags', async (_token, signal) => {
   const data = await adminApi.getBlockTags(signal);
   const grouped: BlockTagsGroup = {};
-  const filters = Object.fromEntries(BLOCK_FILTER_KEYS.map((key) => [key, [] as string[]])) as BlockFilters;
+  const filters = Object.fromEntries(
+    BLOCK_FILTER_KEYS.map((key) => [key, [] as string[]]),
+  ) as BlockFilters;
   for (const row of data.tags) {
     if (!isRule(row.filter)) continue;
     (grouped[row.filter] ??= []).push({ id: row.id, tag_name: row.tag, filter_key: row.filter });
@@ -135,22 +143,27 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
   };
 
   const remove = (key: BlockFilterKey, tag: BlockTag) =>
-    confirmThen('确认移除标签', `确定要从「${RULES[key].name}」中移除 ${tag.tag_name} 吗？`, () =>
-      void removeMutation.run(
-        () => adminApi.adminRemoveBlockTag(token, tag.id),
-        () => showToast(`已从「${RULES[key].name}」中移除 ${tag.tag_name}`, 'success'),
-        '移除失败',
-        {
-          key: tag.id,
-          onCommitted: () => {
-            blockTagsQuery.write(token, (previous) => ({
-              ...(previous ?? {}),
-              [key]: (previous?.[key] ?? []).filter((row) => row.id !== tag.id),
-            }));
-            read.refresh();
+    confirmThen(
+      '确认移除标签',
+      `确定要从「${RULES[key].name}」中移除 ${tag.tag_name} 吗？`,
+      () =>
+        void removeMutation.run(
+          () => adminApi.adminRemoveBlockTag(token, tag.id),
+          () => showToast(`已从「${RULES[key].name}」中移除 ${tag.tag_name}`, 'success'),
+          '移除失败',
+          {
+            key: tag.id,
+            onCommitted: () => {
+              blockTagsQuery.write(token, (previous) => ({
+                ...(previous ?? {}),
+                [key]: (previous?.[key] ?? []).filter((row) => row.id !== tag.id),
+              }));
+              read.refresh();
+            },
           },
-        },
-      ), { tone: 'danger' });
+        ),
+      { tone: 'danger' },
+    );
 
   const toggleAdding = (key: BlockFilterKey) => {
     if (adding === key) {
@@ -173,9 +186,19 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
         以下规则作用于全站所有用户的搜索结果：前四项中的标签会作为排除项加入搜索，「只看小马」中的标签是允许的物种范围，满足其中任一即可。
       </AdminNote>
       {read.error && !read.data ? (
-        <ErrorRetry size="pane" {...retryError('屏蔽标签加载失败', read.error)} onRetry={read.retryable ? read.refresh : undefined} />
+        <ErrorRetry
+          size="pane"
+          {...retryError('屏蔽标签加载失败', read.error)}
+          onRetry={read.retryable ? read.refresh : undefined}
+        />
       ) : !read.data ? (
-        <PageLoadingIndicator size="pane" holdFooter delay={120} label="正在加载屏蔽标签…" className="min-h-60" />
+        <PageLoadingIndicator
+          size="pane"
+          holdFooter
+          delay={120}
+          label="正在加载屏蔽标签…"
+          className="min-h-60"
+        />
       ) : (
         <div className="space-y-4">
           {BLOCK_FILTER_KEYS.map((key) => {
@@ -210,7 +233,11 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                     id={collapseId}
                     open={open}
                     onTransitionEnd={(event) => {
-                      if (event.target === event.currentTarget && event.propertyName === 'grid-template-rows' && !open) {
+                      if (
+                        event.target === event.currentTarget &&
+                        event.propertyName === 'grid-template-rows' &&
+                        !open
+                      ) {
                         setClosing((current) => (current?.key === key ? null : current));
                       }
                     }}
@@ -254,7 +281,11 @@ export default function BlockTagsTab({ token }: AdminPanelProps) {
                     entries.length === 0 ? (
                       <EmptyState size="inline" title="暂无标签" />
                     ) : (
-                      <ul ref={ref} className="relative flex flex-wrap gap-2" aria-label={`「${RULES[key].name}」的标签`}>
+                      <ul
+                        ref={ref}
+                        className="relative flex flex-wrap gap-2"
+                        aria-label={`「${RULES[key].name}」的标签`}
+                      >
                         {entries.map(({ item: tag, key: entryKey, leaving }) => (
                           <li key={entryKey} data-presence-key={entryKey}>
                             <Chip

@@ -15,10 +15,12 @@ export function loadLottiePlayer() {
 }
 
 export function loadSearchArtwork(): Promise<unknown> {
-  search ??= import('@/lib/lottie/search.json').then((module) => module.default).catch((error) => {
-    search = null;
-    throw error;
-  });
+  search ??= import('@/lib/lottie/search.json')
+    .then((module) => module.default)
+    .catch((error) => {
+      search = null;
+      throw error;
+    });
   return search;
 }
 

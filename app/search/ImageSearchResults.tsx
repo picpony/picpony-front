@@ -48,7 +48,9 @@ export default function ImageSearchResults({
     );
   }
 
-  const images = result.images.filter(imageFilterFor(parseBrowsingFingerprint(fp), currentBlockFilters(), currentPublicBlacklist()));
+  const images = result.images.filter(
+    imageFilterFor(parseBrowsingFingerprint(fp), currentBlockFilters(), currentPublicBlacklist()),
+  );
   const hidden = result.found - images.length;
 
   return (
@@ -56,7 +58,13 @@ export default function ImageSearchResults({
       <div className="mb-6 flex items-center gap-3 sm:gap-4">
         {result.preview && (
           <div className="relative size-14 shrink-0 overflow-hidden rounded-md bg-surface-container-high">
-            <FadeInImage src={result.preview} alt="用于搜索的图片" fill sizes="56px" className="object-cover" />
+            <FadeInImage
+              src={result.preview}
+              alt="用于搜索的图片"
+              fill
+              sizes="56px"
+              className="object-cover"
+            />
           </div>
         )}
         <div className="min-w-0 flex-1">
@@ -69,7 +77,12 @@ export default function ImageSearchResults({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <Button variant="surface" icon={<MdImageSearch />} responsiveLabel onClick={onSearchAgain}>
+          <Button
+            variant="surface"
+            icon={<MdImageSearch />}
+            responsiveLabel
+            onClick={onSearchAgain}
+          >
             重新搜图
           </Button>
           <IconButton dismiss aria-label="关闭以图搜图结果" icon={<MdClose />} onClick={onClose} />

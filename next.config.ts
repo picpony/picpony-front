@@ -1,5 +1,5 @@
-import type { NextConfig } from "next";
-import { upstreamOrigin } from "./lib/upstream.server";
+import type { NextConfig } from 'next';
+import { upstreamOrigin } from './lib/upstream.server';
 
 /**
  * One id per build, inlined into the client bundle. Names the service worker's static cache: a
@@ -118,7 +118,7 @@ const nextConfig: NextConfig = {
     '192.168.31.153',
     '100.104.103.23',
     '192.168.31.36',
-    '223.109.140.237'
+    '223.109.140.237',
   ],
   // /api/v1 (the Rust backend) is proxied by app/api/v1/[...path]/route.ts rather
   // than a rewrite: the backend's `auth_bind` session cookie is marked Secure, and

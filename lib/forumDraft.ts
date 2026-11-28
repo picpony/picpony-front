@@ -53,11 +53,14 @@ export const EMPTY_DRAFT: ForumDraft = {
   images: [],
 };
 
-const keyOf = (userId: string, postId: number | null) => `${LS_KEYS.forumDraft}:${userId}:${postId ?? 'new'}`;
+const keyOf = (userId: string, postId: number | null) =>
+  `${LS_KEYS.forumDraft}:${userId}:${postId ?? 'new'}`;
 
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 const strings = (value: unknown) =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item !== '') : [];
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item !== '')
+    : [];
 
 /** Whether a draft holds nothing worth keeping. */
 export function isEmptyDraft(draft: ForumDraft): boolean {
@@ -155,7 +158,8 @@ export function readDraft(userId: string, postId: number | null): SavedDraft | n
   if (!legacy) return null;
   writeDraft(userId, null, legacy);
   try {
-    if (localStorage.getItem(keyOf(userId, null)) !== null) localStorage.removeItem(LS_KEYS.forumDraft);
+    if (localStorage.getItem(keyOf(userId, null)) !== null)
+      localStorage.removeItem(LS_KEYS.forumDraft);
   } catch {
     /* Kept where it was: the next visit adopts it again. */
   }
@@ -166,7 +170,11 @@ export function readDraft(userId: string, postId: number | null): SavedDraft | n
 export function writeDraft(userId: string, postId: number | null, draft: ForumDraft) {
   try {
     if (isEmptyDraft(draft)) localStorage.removeItem(keyOf(userId, postId));
-    else localStorage.setItem(keyOf(userId, postId), JSON.stringify({ ...draft, savedAt: Date.now() }));
+    else
+      localStorage.setItem(
+        keyOf(userId, postId),
+        JSON.stringify({ ...draft, savedAt: Date.now() }),
+      );
   } catch {
     /* Private mode or a full quota: the words are still on screen. */
   }

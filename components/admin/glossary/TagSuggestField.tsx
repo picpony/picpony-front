@@ -47,7 +47,9 @@ export default function TagSuggestField({
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const read = useResource(derpiTagSearch, query ? { query } : SKIP, { keepPrevious: 'glossary-suggest' });
+  const read = useResource(derpiTagSearch, query ? { query } : SKIP, {
+    keepPrevious: 'glossary-suggest',
+  });
   const options = query ? (read.data ?? []) : [];
 
   const lookUp = (text: string) => {
@@ -110,11 +112,17 @@ export default function TagSuggestField({
         aria-label="原站标签建议"
       >
         {options.map((tag, index) => (
-          <div key={tag.name} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
+          <div
+            key={tag.name}
+            {...box.getOptionProps(index)}
+            className={cn(ROW.className, box.optionClassName(index))}
+          >
             <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
               <span className={cn('size-2.5 rounded-full', tagCategoryDot(tag.category))} />
             </span>
-            <span className="min-w-0 flex-1 truncate font-mono text-label-l text-on-surface">{tag.name}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-label-l text-on-surface">
+              {tag.name}
+            </span>
             <span className="shrink-0 text-label-m tabular-nums text-on-surface-variant">
               {`${formatCount(tag.images)} 图`}
             </span>

@@ -17,7 +17,11 @@ function focusedElement(): HTMLElement | null {
  * a conditional or a `finally`, and the whole hook went uncompiled for one. A callback that throws
  * is a failure of the write, as it was when both lived in the hook's own `try`.
  */
-async function attempt<T>(request: () => Promise<T>, done: (result: T) => void, failed: (failure: unknown) => void) {
+async function attempt<T>(
+  request: () => Promise<T>,
+  done: (result: T) => void,
+  failed: (failure: unknown) => void,
+) {
   try {
     done(await request());
   } catch (failure) {
@@ -39,22 +43,55 @@ export function useCatalogMutation(token: string) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [uncertain, setUncertain] = useState(false);
-  useEffect(() => { active.current = true; const version = lifetime.current; return () => { active.current = false; lifetime.current = version + 1; lock.current = false; }; }, [token]);
-  async function run<T>(request: () => Promise<T>, success: (data: T) => void, committed?: (data: T) => void) {
+  useEffect(() => {
+    active.current = true;
+    const version = lifetime.current;
+    return () => {
+      active.current = false;
+      lifetime.current = version + 1;
+      lock.current = false;
+    };
+  }, [token]);
+  async function run<T>(
+    request: () => Promise<T>,
+    success: (data: T) => void,
+    committed?: (data: T) => void,
+  ) {
     if (lock.current || uncertain || !token || readToken() !== token) return;
-    lock.current = true; setBusy(true); setError('');
+    lock.current = true;
+    setBusy(true);
+    setError('');
     const version = lifetime.current;
     const current = () => active.current && lifetime.current === version && readToken() === token;
-    await attempt(request, (result) => {
-      if (readToken() === token) committed?.(result);
-      if (current()) success(result);
-    }, (failure) => {
-      if (!current()) return;
-      const unknown = failure instanceof CatalogOutcomeUnknown;
-      if (unknown) origin.current = focusedElement();
-      setError(apiErrorMessage(failure)); setUncertain(unknown);
-    });
-    if (current()) { lock.current = false; setBusy(false); }
+    await attempt(
+      request,
+      (result) => {
+        if (readToken() === token) committed?.(result);
+        if (current()) success(result);
+      },
+      (failure) => {
+        if (!current()) return;
+        const unknown = failure instanceof CatalogOutcomeUnknown;
+        if (unknown) origin.current = focusedElement();
+        setError(apiErrorMessage(failure));
+        setUncertain(unknown);
+      },
+    );
+    if (current()) {
+      lock.current = false;
+      setBusy(false);
+    }
   }
-  return { busy, error, uncertain, origin, run, report: setError, acknowledge: () => { setUncertain(false); setError(''); } };
+  return {
+    busy,
+    error,
+    uncertain,
+    origin,
+    run,
+    report: setError,
+    acknowledge: () => {
+      setUncertain(false);
+      setError('');
+    },
+  };
 }

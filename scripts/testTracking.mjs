@@ -20,13 +20,22 @@ globalThis.localStorage = {
 };
 globalThis.window = {
   requestAnimationFrame: (callback) => setTimeout(callback, 0),
-  addEventListener() {}, removeEventListener() {},
-  dispatchEvent() { return true; },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {
+    return true;
+  },
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
   location: { origin: 'https://app.invalid' },
 };
-globalThis.document = { visibilityState: 'visible', hidden: false, cookie: '', addEventListener() {}, removeEventListener() {} };
+globalThis.document = {
+  visibilityState: 'visible',
+  hidden: false,
+  cookie: '',
+  addEventListener() {},
+  removeEventListener() {},
+};
 
 let calls;
 let respond;
@@ -44,29 +53,49 @@ const visitor = await import('../lib/visitor.ts');
 const { trackVisitor } = await import('../lib/api/tracking.ts');
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
+const EDGE =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
 /** What the repo's CDP probes present — measured on this machine's Edge. */
-const HEADLESS_EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
+const HEADLESS_EDGE =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0';
 
 // --- who is counted -----------------------------------------------------------------------
 
 test('only a production build in an ordinary browser counts visits', () => {
   assert.equal(visitor.trackingAllowed('production', { webdriver: false, userAgent: EDGE }), true);
-  assert.equal(visitor.trackingAllowed('development', { webdriver: false, userAgent: EDGE }), false,
-    'the dev server proxies to the real backend: the team must not count');
+  assert.equal(
+    visitor.trackingAllowed('development', { webdriver: false, userAgent: EDGE }),
+    false,
+    'the dev server proxies to the real backend: the team must not count',
+  );
   assert.equal(visitor.trackingAllowed('test', { webdriver: false, userAgent: EDGE }), false);
   assert.equal(visitor.trackingAllowed(undefined, { webdriver: false, userAgent: EDGE }), false);
-  assert.equal(visitor.trackingAllowed('production', { webdriver: true, userAgent: EDGE }), false, 'the Playwright suites');
-  assert.equal(visitor.trackingAllowed('production', { webdriver: false, userAgent: HEADLESS_EDGE }), false,
-    'the CDP probes run headless without the automation flag');
+  assert.equal(
+    visitor.trackingAllowed('production', { webdriver: true, userAgent: EDGE }),
+    false,
+    'the Playwright suites',
+  );
+  assert.equal(
+    visitor.trackingAllowed('production', { webdriver: false, userAgent: HEADLESS_EDGE }),
+    false,
+    'the CDP probes run headless without the automation flag',
+  );
   assert.equal(visitor.trackingAllowed('production', undefined), false, 'no browser at all');
-  assert.equal(visitor.trackingAllowed('production', {}), true, 'a browser that says nothing about itself is a browser');
+  assert.equal(
+    visitor.trackingAllowed('production', {}),
+    true,
+    'a browser that says nothing about itself is a browser',
+  );
 });
 
 // --- the anonymous id -----------------------------------------------------------------------
 
 test('a stored id is kept when it has the original front end’s shape, and replaced otherwise', () => {
-  assert.equal(visitor.isVisitorId('vmfz1k2x3-a1b2c3d4e5-f6g7h8i9j0'), true, 'the original’s own ids survive');
+  assert.equal(
+    visitor.isVisitorId('vmfz1k2x3-a1b2c3d4e5-f6g7h8i9j0'),
+    true,
+    'the original’s own ids survive',
+  );
   assert.equal(visitor.isVisitorId('A_b-' + 'x'.repeat(12)), true);
   assert.equal(visitor.isVisitorId('short'), false);
   assert.equal(visitor.isVisitorId('x'.repeat(97)), false);
@@ -104,8 +133,15 @@ test('a count names the pathname alone: never the query, never the hash', () => 
 test('a segment that is somebody’s words or a share’s identity becomes its route’s name', () => {
   assert.equal(visitor.visitorPath('/subscriptions/oc%3Anyx'), '/subscriptions/[tag]');
   assert.equal(visitor.visitorPath('/subscriptions/rainbow%20dash/'), '/subscriptions/[tag]');
-  assert.equal(visitor.visitorPath('/subscriptions'), '/subscriptions', 'the list itself is a route');
-  assert.equal(visitor.visitorPath('/favorites/shared/alice/12'), '/favorites/shared/[username]/[folderId]');
+  assert.equal(
+    visitor.visitorPath('/subscriptions'),
+    '/subscriptions',
+    'the list itself is a route',
+  );
+  assert.equal(
+    visitor.visitorPath('/favorites/shared/alice/12'),
+    '/favorites/shared/[username]/[folderId]',
+  );
   assert.equal(visitor.visitorPath('/favorites/privacy/7'), '/favorites/privacy/[ownerId]');
   assert.equal(visitor.visitorPath('/user/1'), '/user/1', 'a public profile id is not private');
 });
@@ -119,19 +155,35 @@ test('a path is capped at the original’s 255 characters and the backend’s 51
   assert.equal(capped, `/forum/${'帖'.repeat(168)}`);
   const astral = visitor.visitorPath(`/${'😀'.repeat(300)}`);
   assert.ok(new TextEncoder().encode(astral).length <= 512);
-  assert.ok(Array.from(astral).slice(1).every((c) => c === '😀'), 'a surrogate pair is never split');
+  assert.ok(
+    Array.from(astral)
+      .slice(1)
+      .every((c) => c === '😀'),
+    'a surrogate pair is never split',
+  );
 });
 
 // --- when -----------------------------------------------------------------------------------
 
 function harness(overrides = {}) {
-  const state = { now: 1_000_000, hidden: false, signedIn: false, stored: null, stores: 0, sent: [], pending: null };
+  const state = {
+    now: 1_000_000,
+    hidden: false,
+    signedIn: false,
+    stored: null,
+    stores: 0,
+    sent: [],
+    pending: null,
+  };
   const tracker = visitor.createVisitorTracker({
     now: () => state.now,
     isHidden: () => state.hidden,
     isSignedIn: () => state.signedIn,
     readId: () => state.stored,
-    storeId: (id) => { state.stored = id; state.stores += 1; },
+    storeId: (id) => {
+      state.stored = id;
+      state.stores += 1;
+    },
     pathname: () => '/search',
     send: (id, path) => {
       state.sent.push({ id, path });
@@ -171,7 +223,9 @@ test('a hidden tab and a signed-in visitor are never counted, and get no id', as
 test('one count in flight at a time, and the guard lifts when it settles', async () => {
   let release;
   const { state, tracker } = harness();
-  state.pending = new Promise((resolve) => { release = resolve; });
+  state.pending = new Promise((resolve) => {
+    release = resolve;
+  });
   const first = tracker.visit();
   state.now += visitor.VISIT_MIN_GAP_MS;
   assert.equal(await tracker.visit(), false, 'still in flight');
@@ -183,7 +237,9 @@ test('one count in flight at a time, and the guard lifts when it settles', async
 
 test('an id that is not one is replaced, and a failed send still lifts the guard', async () => {
   const { state, tracker } = harness({
-    send: async () => { throw new Error('boom'); },
+    send: async () => {
+      throw new Error('boom');
+    },
   });
   state.stored = 'bad id';
   await assert.rejects(tracker.visit());
@@ -208,19 +264,29 @@ test('track_visitor: POST /api/v1/site-visits {visitor_id, path}, no token, kept
   const [{ url, init }] = calls;
   assert.equal(url.pathname, '/api/v1/site-visits');
   assert.equal(init.method, 'POST');
-  assert.deepEqual(JSON.parse(init.body), { visitor_id: 'vabc-12345678-12345678', path: '/search' });
+  assert.deepEqual(JSON.parse(init.body), {
+    visitor_id: 'vabc-12345678-12345678',
+    path: '/search',
+  });
   assert.equal(init.keepalive, true);
   const headers = new Headers(init.headers);
-  assert.equal(headers.get('Authorization'), null, 'a signed-in request is not counted by the backend');
+  assert.equal(
+    headers.get('Authorization'),
+    null,
+    'a signed-in request is not counted by the backend',
+  );
   assert.equal(headers.get('X-CSRF-Token'), null, 'the route takes no session');
 });
 
 test('track_visitor never rejects — a dead line, a 500 and a refusal all resolve', async () => {
-  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
   globalThis.fetch = async () => new Response('oops', { status: 500 });
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
-  globalThis.fetch = async () => Response.json({ error: { code: 'RATE_LIMITED', message: '请求过于频繁' } }, { status: 429 });
+  globalThis.fetch = async () =>
+    Response.json({ error: { code: 'RATE_LIMITED', message: '请求过于频繁' } }, { status: 429 });
   assert.equal(await trackVisitor('vabc-12345678-12345678', '/'), undefined);
 });
 
@@ -232,10 +298,19 @@ test('track_share is gone: the share module exports no counter; a share is one l
   const sent = [];
   globalThis.fetch = async (url, init = {}) => {
     sent.push({ url: String(url), method: init.method });
-    return Response.json({ share_id: 'TrackingShareId000000001', preview_status: 'generic' }, { status: 201 });
+    return Response.json(
+      { share_id: 'TrackingShareId000000001', preview_status: 'generic' },
+      { status: 201 },
+    );
   };
-  const link = await share.createShareLink({ targetUrl: 'https://app.invalid/pic/1', title: 't', desc: 'd' }, { token: 'tok' });
+  const link = await share.createShareLink(
+    { targetUrl: 'https://app.invalid/pic/1', title: 't', desc: 'd' },
+    { token: 'tok' },
+  );
   assert.equal(link.short, true);
   assert.match(link.url, /\/share\.php\?id=TrackingShareId000000001$/);
-  assert.deepEqual(sent.map((r) => `${r.method} ${r.url}`), ['POST /api/v1/share-links']);
+  assert.deepEqual(
+    sent.map((r) => `${r.method} ${r.url}`),
+    ['POST /api/v1/share-links'],
+  );
 });

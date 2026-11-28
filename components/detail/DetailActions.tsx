@@ -1,7 +1,16 @@
 'use client';
 
 import { useLayoutEffect, useRef, type ComponentProps, type ReactNode, type Ref } from 'react';
-import { MdDownload, MdFlag, MdLibraryAdd, MdOpenInNew, MdShare, MdStar, MdStarBorder, MdTranslate } from 'react-icons/md';
+import {
+  MdDownload,
+  MdFlag,
+  MdLibraryAdd,
+  MdOpenInNew,
+  MdShare,
+  MdStar,
+  MdStarBorder,
+  MdTranslate,
+} from 'react-icons/md';
 import Button from '@/components/Button';
 import IconButton, { iconButtonClasses } from '@/components/IconButton';
 import { useTooltip } from '@/components/Tooltip';
@@ -11,7 +20,11 @@ const DERPI_LABEL = '在 Derpibooru 查看';
 
 /** An inert flight copy needs the primitive's geometry, without tooltip hooks or navigation. */
 function ActionIconCopy(props: ComponentProps<typeof IconButton>) {
-  return <span aria-hidden="true" className={iconButtonClasses(props)}>{props.icon}</span>;
+  return (
+    <span aria-hidden="true" className={iconButtonClasses(props)}>
+      {props.icon}
+    </span>
+  );
 }
 
 interface DetailActionsProps {
@@ -68,9 +81,11 @@ export default function DetailActions({
   const ActionIcon = passive ? ActionIconCopy : IconButton;
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLDivElement>(null);
-  const { anchorRef: derpiRef, anchorProps: derpiProps, tooltip: derpiTooltip } = useTooltip(
-    passive ? undefined : DERPI_LABEL,
-  );
+  const {
+    anchorRef: derpiRef,
+    anchorProps: derpiProps,
+    tooltip: derpiTooltip,
+  } = useTooltip(passive ? undefined : DERPI_LABEL);
 
   /* Match the wide-row secondary capsule to the primary actions' total width.
      Both favourite labels share one grid cell so toggling never shifts the row.
@@ -104,7 +119,10 @@ export default function DetailActions({
       className="@container w-full"
     >
       <div className="flex flex-col gap-3 @3xl:grid @3xl:grid-cols-[1fr_minmax(16rem,26rem)_1fr] @3xl:items-center @3xl:gap-x-4">
-        <div ref={primaryRef} className="grid grid-cols-2 gap-2 @3xl:flex @3xl:items-center @3xl:justify-self-start">
+        <div
+          ref={primaryRef}
+          className="grid grid-cols-2 gap-2 @3xl:flex @3xl:items-center @3xl:justify-self-start"
+        >
           <Button
             variant="filled"
             icon={<MdDownload />}
@@ -120,15 +138,30 @@ export default function DetailActions({
             aria-label={passive ? undefined : '收藏'}
             aria-pressed={passive ? undefined : isFaved}
             loading={faveBusy}
-            className={cn('w-full @3xl:w-auto', isFaved && 'rounded-md data-pressed:rounded-sm forced-selected')}
-            icon={isFaved ? <MdStar className={cn(faveFill && 'animate-reaction-fill')} /> : <MdStarBorder />}
+            className={cn(
+              'w-full @3xl:w-auto',
+              isFaved && 'rounded-md data-pressed:rounded-sm forced-selected',
+            )}
+            icon={
+              isFaved ? (
+                <MdStar className={cn(faveFill && 'animate-reaction-fill')} />
+              ) : (
+                <MdStarBorder />
+              )
+            }
             onClick={onFave}
           >
             <span className="grid place-items-center">
-              <span aria-hidden={!isFaved || undefined} className={cn('col-start-1 row-start-1', !isFaved && 'invisible')}>
+              <span
+                aria-hidden={!isFaved || undefined}
+                className={cn('col-start-1 row-start-1', !isFaved && 'invisible')}
+              >
                 已收藏
               </span>
-              <span aria-hidden={isFaved || undefined} className={cn('col-start-1 row-start-1', isFaved && 'invisible')}>
+              <span
+                aria-hidden={isFaved || undefined}
+                className={cn('col-start-1 row-start-1', isFaved && 'invisible')}
+              >
                 收藏
               </span>
             </span>

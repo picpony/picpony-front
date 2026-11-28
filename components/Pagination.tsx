@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntentPrefetch } from '@/lib/useIntentPrefetch';
-import { MdRefresh, MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from '@/components/icons/common';
+import {
+  MdRefresh,
+  MdChevronLeft,
+  MdChevronRight,
+  MdFirstPage,
+  MdLastPage,
+} from '@/components/icons/common';
 import Button from './Button';
 import { scrollAppToTop, scrollAppToElement } from '@/lib/scrollTo';
 import { clamp, cn } from '@/lib/utils';
@@ -189,7 +195,10 @@ export default function Pagination({
         disabled={!canPrev || disabled}
         aria-label="上一页"
         data-ripple
-        className={cn(navBtn, '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-3 @xl/pagination:pr-4')}
+        className={cn(
+          navBtn,
+          '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-3 @xl/pagination:pr-4',
+        )}
       >
         <MdChevronLeft size={ICON.control} className="shrink-0" aria-hidden="true" />
         <span className="@max-xl/pagination:hidden text-label-l">上一页</span>
@@ -229,7 +238,8 @@ export default function Pagination({
                   : 'text-label-l text-on-surface-variant state-layer ripple-primary',
                 // A dialog and a column beside the app drawer can both be
                 // narrow on a wide viewport. The pager owns this breakpoint.
-                (page < compactStart || page >= compactStart + compactCount) && '@max-xl/pagination:hidden',
+                (page < compactStart || page >= compactStart + compactCount) &&
+                  '@max-xl/pagination:hidden',
                 // Three numbers (including 4-5 digit counts) plus two 48dp touch
                 // targets need ~288px. Below that, keep the current page between arrows.
                 !active && '@max-2xs/pagination:hidden',
@@ -248,7 +258,10 @@ export default function Pagination({
         disabled={!canNext || disabled}
         aria-label="下一页"
         data-ripple
-        className={cn(navBtn, '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-4 @xl/pagination:pr-3')}
+        className={cn(
+          navBtn,
+          '@xl/pagination:w-auto @xl/pagination:gap-1 @xl/pagination:pl-4 @xl/pagination:pr-3',
+        )}
       >
         <span className="@max-xl/pagination:hidden text-label-l">下一页</span>
         <MdChevronRight size={ICON.control} className="shrink-0" aria-hidden="true" />
@@ -314,9 +327,7 @@ export function LoadMoreButton({ onClick, isLoading, disabled }: LoadMoreButtonP
           </span>
         }
         icon={
-          <MdRefresh
-            className="transition-[rotate] spring-fast-spatial group-hover/load-more:rotate-180 no-motion:group-hover/load-more:rotate-0"
-          />
+          <MdRefresh className="transition-[rotate] spring-fast-spatial group-hover/load-more:rotate-180 no-motion:group-hover/load-more:rotate-0" />
         }
       >
         {isLoading ? '正在加载' : '加载更多'}

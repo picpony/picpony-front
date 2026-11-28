@@ -78,9 +78,14 @@ const TagComboField = forwardRef<TagComboFieldHandle, TagComboFieldProps>(functi
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
 
-  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, { keepPrevious: 'group-tag-field' });
+  const read = useResource(tagSuggestions, keyword ? { keyword } : SKIP, {
+    keepPrevious: 'group-tag-field',
+  });
   const options = useMemo<TagSuggestion[]>(
-    () => (keyword ? (read.data ?? []) : []).filter((tag) => !chosen.has(tag.en.toLowerCase())).slice(0, 10),
+    () =>
+      (keyword ? (read.data ?? []) : [])
+        .filter((tag) => !chosen.has(tag.en.toLowerCase()))
+        .slice(0, 10),
     [keyword, read.data, chosen],
   );
 
@@ -121,7 +126,9 @@ const TagComboField = forwardRef<TagComboFieldHandle, TagComboFieldProps>(functi
     onSelect: (tag) => {
       /* Typed tags before the one being looked up go in with the pick: 「pony, flutt」 then a
          pick of fluttershy adds both. */
-      const earlier = splitTags(text).slice(0, -1).filter((typed) => !HAN.test(typed));
+      const earlier = splitTags(text)
+        .slice(0, -1)
+        .filter((typed) => !HAN.test(typed));
       onAdd([...earlier, tag.en.toLowerCase()]);
       reset();
       setHint(null);
@@ -185,14 +192,22 @@ const TagComboField = forwardRef<TagComboFieldHandle, TagComboFieldProps>(functi
         aria-label="标签建议"
       >
         {options.map((tag, index) => (
-          <div key={tag.en} {...box.getOptionProps(index)} className={cn(ROW.className, box.optionClassName(index))}>
+          <div
+            key={tag.en}
+            {...box.getOptionProps(index)}
+            className={cn(ROW.className, box.optionClassName(index))}
+          >
             <span className="grid size-6 shrink-0 place-items-center" aria-hidden="true">
               <span className={cn('size-2.5 rounded-full', tagCategoryDot(tag.category))} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-label-l text-on-surface">{tag.cn || tag.en}</span>
+              <span className="block truncate text-label-l text-on-surface">
+                {tag.cn || tag.en}
+              </span>
               <span className="block truncate text-body-s text-on-surface-variant">
-                {tag.cn ? `${tag.en} · ${tagCategory(tag.category).label}` : tagCategory(tag.category).label}
+                {tag.cn
+                  ? `${tag.en} · ${tagCategory(tag.category).label}`
+                  : tagCategory(tag.category).label}
               </span>
             </span>
             <span className="shrink-0 text-label-m tabular-nums text-on-surface-variant">

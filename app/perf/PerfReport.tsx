@@ -294,7 +294,8 @@ function ScenarioRow({ scenario, refreshHz }: { scenario: PerfScenario; refreshH
           <div>
             {stress && (
               <p className="mb-1.5 text-label-m text-on-surface-variant">
-                帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}（不计入总体结论）
+                帧数据{s.frameVerdict ? ` · ${VERDICT_LABEL[s.frameVerdict]}` : ''}
+                （不计入总体结论）
               </p>
             )}
             <div className="flex flex-col gap-3 rounded-sm bg-surface-container px-3.5 py-3 forced-boundary @2xl:flex-row @2xl:items-center @2xl:gap-4">
@@ -408,14 +409,30 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
         <table className="w-full min-w-128 text-left text-body-s tabular-nums">
           <thead className="text-label-m text-on-surface-variant">
             <tr className="border-b border-outline-variant">
-              <th scope="col" className="px-3 py-1.5 whitespace-nowrap">轮</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">响应延迟</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">完成用时</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">帧数</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">掉帧</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">最长帧</th>
-              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">长帧</th>
-              <th scope="col" className="px-3 py-1.5 whitespace-nowrap">状态</th>
+              <th scope="col" className="px-3 py-1.5 whitespace-nowrap">
+                轮
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                响应延迟
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                完成用时
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                帧数
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                掉帧
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                最长帧
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right whitespace-nowrap">
+                长帧
+              </th>
+              <th scope="col" className="px-3 py-1.5 whitespace-nowrap">
+                状态
+              </th>
             </tr>
           </thead>
           <tbody className="text-on-surface">
@@ -425,17 +442,25 @@ function RoundsTable({ samples }: { samples: PerfSample[] }) {
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{ms(sample.latencyMs)}</td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{ms(sample.settleMs)}</td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.frames.frames}</td>
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.frames.dropped}</td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  {sample.frames.dropped}
+                </td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">
                   {ms(sample.frames.worstFrameMs)}
                 </td>
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">{sample.longFrames.count}</td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  {sample.longFrames.count}
+                </td>
                 <td className="px-3 py-1.5 whitespace-nowrap">
                   <span className="flex items-center gap-2">
                     {sample.completed ? (
-                      <Badge size="sm" tone="success">完成</Badge>
+                      <Badge size="sm" tone="success">
+                        完成
+                      </Badge>
                     ) : (
-                      <Badge size="sm" tone="error">未完成</Badge>
+                      <Badge size="sm" tone="error">
+                        未完成
+                      </Badge>
                     )}
                     {sample.note && <span className="text-on-surface-variant">{sample.note}</span>}
                   </span>
@@ -505,7 +530,10 @@ function parseWorst(detail: string): Breakdown | null {
     if (match[1] === '脚本') {
       result.scriptMs = value;
       result.callers = match[3]
-        ? match[3].split('；').map((caller) => caller.trim()).filter(Boolean)
+        ? match[3]
+            .split('；')
+            .map((caller) => caller.trim())
+            .filter(Boolean)
         : [];
     } else if (match[1] === '其中强制布局') result.forcedMs = value;
     else if (match[1] === '渲染回调') result.renderMs = value;

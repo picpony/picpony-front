@@ -62,19 +62,27 @@ export function playForumContainerTransform(card: HTMLElement, origin: ForumOrig
     /* The card was closing back into its row when Forward brought its thread back. */
     const closing = claimable(key, 'open');
     if (closing) {
-      const rowCopy = crossFade?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(origin.id)}"]`);
+      const rowCopy = crossFade?.querySelector<HTMLElement>(
+        `[data-forum-row="${CSS.escape(origin.id)}"]`,
+      );
       if (rowCopy) hide(rowCopy, 'visibility', hidden);
-      if (toBox && turnFlight(closing, 'open', card, { to: surfaceOf(card, toBox), hidden })) flight = closing;
+      if (toBox && turnFlight(closing, 'open', card, { to: surfaceOf(card, toBox), hidden }))
+        flight = closing;
       else {
         if (!toBox) dismissFlight(closing);
         reveal(hidden);
       }
       return;
     }
-    const rowCopy = crossFade?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(origin.id)}"]`);
+    const rowCopy = crossFade?.querySelector<HTMLElement>(
+      `[data-forum-row="${CSS.escape(origin.id)}"]`,
+    );
     const rowBox = rowCopy ? rectOf(rowCopy) : null;
     const fromBox = rowBox && view ? visibleBox(rowBox, view) : null;
-    const incoming = fromBox && toBox && crossFade ? captureVisualClone(card, crossFade, { keepImages: true }) : null;
+    const incoming =
+      fromBox && toBox && crossFade
+        ? captureVisualClone(card, crossFade, { keepImages: true })
+        : null;
     if (!rowCopy || !rowBox || !fromBox || !toBox || !incoming) {
       reveal(hidden);
       return;
@@ -124,7 +132,9 @@ export function playForumReturn(row: HTMLElement, origin: ForumOrigin): () => vo
   const view = rectOf(crossFade);
   const rowBox = rectOf(row);
   const rowShown = visibleBox(rowBox, view);
-  const cardCopy = crossFade.querySelector<HTMLElement>(`[data-forum-card="${CSS.escape(origin.id)}"]`);
+  const cardCopy = crossFade.querySelector<HTMLElement>(
+    `[data-forum-card="${CSS.escape(origin.id)}"]`,
+  );
   const opening = claimable(key, 'back');
   if (opening) {
     /* A row the restored offset leaves off screen has nowhere to be flown to. */

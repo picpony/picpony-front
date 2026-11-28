@@ -53,7 +53,13 @@ export default function ForumAuthor({
   const href = `/user/${userId}`;
   return (
     <div className={cn('flex min-w-0 items-start gap-3', className)}>
-      <Link href={href} scroll={false} tabIndex={-1} aria-hidden="true" className="shrink-0 rounded-full">
+      <Link
+        href={href}
+        scroll={false}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="shrink-0 rounded-full"
+      >
         <Avatar src={avatar} name={username} size={40} />
       </Link>
       <div className="min-w-0 flex-1">
@@ -75,10 +81,16 @@ export default function ForumAuthor({
               <UserBadge key={badge.badge_name} name={badge.badge_name} color={badge.badge_color} />
             ))}
           </div>
-          {actions && <div className="-me-1.5 flex shrink-0 items-center gap-1 pointer-coarse:gap-4">{actions}</div>}
+          {actions && (
+            <div className="-me-1.5 flex shrink-0 items-center gap-1 pointer-coarse:gap-4">
+              {actions}
+            </div>
+          )}
         </div>
         {meta && (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-body-s text-on-surface-variant">{meta}</div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-body-s text-on-surface-variant">
+            {meta}
+          </div>
         )}
         {children}
       </div>

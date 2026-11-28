@@ -75,7 +75,9 @@ export function taskDocumentOf(data: WireTasks): TaskDocument {
 
 /** The level card and every category's progress. */
 export async function getTasks(token: string, signal?: AbortSignal): Promise<TaskDocument> {
-  return taskDocumentOf(await api<WireTasks>('GET', '/me/tasks', { token, cache: 'no-store', signal }));
+  return taskDocumentOf(
+    await api<WireTasks>('GET', '/me/tasks', { token, cache: 'no-store', signal }),
+  );
 }
 
 /** What a claim paid out, as the server reported it. */
@@ -166,14 +168,23 @@ export async function getCoinTransactions(
   page: number = 1,
   signal?: AbortSignal,
 ): Promise<CoinLedgerPage> {
-  const result = await ledgerPager.read(`coins:${token}`, page, async (before, s) => {
-    const data = await api<{ transactions: WireLedgerRow[]; next_cursor: number | null }>('GET', '/me/coins/transactions', {
-      token,
-      query: { before, limit: COIN_LEDGER_PAGE },
-      cache: 'no-store',
-      signal: s,
-    });
-    return { rows: data.transactions, next: data.next_cursor };
-  }, signal);
+  const result = await ledgerPager.read(
+    `coins:${token}`,
+    page,
+    async (before, s) => {
+      const data = await api<{ transactions: WireLedgerRow[]; next_cursor: number | null }>(
+        'GET',
+        '/me/coins/transactions',
+        {
+          token,
+          query: { before, limit: COIN_LEDGER_PAGE },
+          cache: 'no-store',
+          signal: s,
+        },
+      );
+      return { rows: data.transactions, next: data.next_cursor };
+    },
+    signal,
+  );
   return { transactions: result.rows.map(coinTransactionOf), totalPages: result.totalPages };
 }

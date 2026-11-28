@@ -162,7 +162,11 @@ export function masonryLayout(items: readonly Sized[]): MasonryLayout {
       )
       .filter((height): height is string => height !== null);
     grid[`--mh${count}`] =
-      heights.length === 0 ? '0px' : heights.length === 1 ? heights[0] : `max(${heights.join(', ')})`;
+      heights.length === 0
+        ? '0px'
+        : heights.length === 1
+          ? heights[0]
+          : `max(${heights.join(', ')})`;
   }
 
   return { grid, items: placed };
@@ -171,7 +175,10 @@ export function masonryLayout(items: readonly Sized[]): MasonryLayout {
 /** A CSS length as the grid declares it (`1rem`, `8px`), in pixels. */
 function cssPixels(value: string): number {
   const raw = value.trim();
-  if (raw.endsWith('rem')) return parseFloat(raw) * parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+  if (raw.endsWith('rem'))
+    return (
+      parseFloat(raw) * parseFloat(getComputedStyle(document.documentElement).fontSize || '16')
+    );
   return parseFloat(raw) || 0;
 }
 
@@ -194,7 +201,9 @@ type ColumnCount = (typeof MASONRY_COLUMN_COUNTS)[number];
  */
 function columnCountOf(grid: HTMLElement): ColumnCount {
   const count = Number(getComputedStyle(grid).getPropertyValue('--masonry-n'));
-  return (MASONRY_COLUMN_COUNTS as readonly number[]).includes(count) ? (count as ColumnCount) : MASONRY_COLUMN_COUNTS[0];
+  return (MASONRY_COLUMN_COUNTS as readonly number[]).includes(count)
+    ? (count as ColumnCount)
+    : MASONRY_COLUMN_COUNTS[0];
 }
 
 /** A grid's live geometry: its box, and its column count, column width and gap as resolved. */
@@ -215,7 +224,10 @@ export function gridGeometry(grid: HTMLElement): GridGeometry | null {
 }
 
 /** Where a placed item sits inside its grid, in pixels: its slot's top left and its height. */
-export function slotBox(item: Record<string, string> | undefined, geometry: GridGeometry): { x: number; y: number; height: number } {
+export function slotBox(
+  item: Record<string, string> | undefined,
+  geometry: GridGeometry,
+): { x: number; y: number; height: number } {
   if (!item) return { x: 0, y: 0, height: 0 };
   const { count, width, gap } = geometry;
   return {
@@ -226,7 +238,10 @@ export function slotBox(item: Record<string, string> | undefined, geometry: Grid
 }
 
 /** The height a placement gives its grid at `geometry` — the `--mh` the stylesheet resolves. */
-export function placedHeight(items: readonly Record<string, string>[], geometry: GridGeometry): number {
+export function placedHeight(
+  items: readonly Record<string, string>[],
+  geometry: GridGeometry,
+): number {
   let height = 0;
   for (const item of items) {
     const slot = slotBox(item, geometry);
@@ -300,7 +315,9 @@ export function replacedSkeleton(): boolean {
 /** The card for picture `id` inside `root`, or null. */
 export function findCard(root: ParentNode | null | undefined, id: number): HTMLElement | null {
   if (!root) return null;
-  return root.querySelector<HTMLElement>(`[data-image-hero-role='thumbnail'][data-image-hero-id='${id}']`);
+  return root.querySelector<HTMLElement>(
+    `[data-image-hero-role='thumbnail'][data-image-hero-id='${id}']`,
+  );
 }
 
 /**

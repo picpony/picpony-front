@@ -25,27 +25,43 @@ export default function ButtonContent({
     <>
       <span data-ripple-host="" aria-hidden="true" />
       {icon && (
-        <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center [&>svg]:block">
+        <span
+          aria-hidden="true"
+          className="inline-flex shrink-0 items-center justify-center [&>svg]:block"
+        >
           {loading ? busyIcon : icon}
         </span>
       )}
       {loading && !hasIcon && (
         <span
           aria-hidden="true"
-          className={replaceLabel ? 'pointer-events-none absolute inset-0 grid place-items-center' : 'shrink-0'}
+          className={
+            replaceLabel
+              ? 'pointer-events-none absolute inset-0 grid place-items-center'
+              : 'shrink-0'
+          }
         >
           {busyIcon}
         </span>
       )}
       {children && (
-        <span className={cn('min-w-0 truncate', responsiveLabel && 'max-sm:hidden', replaceLabel && 'opacity-0')}>
+        <span
+          className={cn(
+            'min-w-0 truncate',
+            responsiveLabel && 'max-sm:hidden',
+            replaceLabel && 'opacity-0',
+          )}
+        >
           {children}
         </span>
       )}
       {trailingIcon && (
         <span
           aria-hidden="true"
-          className={cn('inline-flex shrink-0 items-center justify-center [&>svg]:block', responsiveLabel && icon && 'max-sm:hidden')}
+          className={cn(
+            'inline-flex shrink-0 items-center justify-center [&>svg]:block',
+            responsiveLabel && icon && 'max-sm:hidden',
+          )}
         >
           {loading && !icon ? busyIcon : trailingIcon}
         </span>

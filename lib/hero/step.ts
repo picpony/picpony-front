@@ -45,8 +45,16 @@ const REDUCED_STEP_TRAVEL_PX = TRAVEL_PX.small;
 /* The springs a released leg flies, in normalised time (`springRate`, `lib/spring.ts`): a picture
    leaving on the fast effects spring, and one docking back into its slot on the layout spring —
    the flight's and the pull's, since a picture returning to where it belongs never overshoots. */
-const EFFECTS_RESPONSE: SpringResponse = { rate: springRate(SPRINGS.fastEffects), velocity: 0, damping: 1 };
-const LAYOUT_RESPONSE: SpringResponse = { rate: springRate(SPRINGS.layout), velocity: 0, damping: 1 };
+const EFFECTS_RESPONSE: SpringResponse = {
+  rate: springRate(SPRINGS.fastEffects),
+  velocity: 0,
+  damping: 1,
+};
+const LAYOUT_RESPONSE: SpringResponse = {
+  rate: springRate(SPRINGS.layout),
+  velocity: 0,
+  damping: 1,
+};
 /** Keyframes per released leg — the table size `sampleProgress` is tuned for. */
 const RELEASE_SAMPLES = 24;
 
@@ -99,7 +107,11 @@ function takePose(element: HTMLElement) {
   return pose;
 }
 
-function track(element: HTMLElement, animations: Animation[], arrival: Animation | null = null): StepMotion {
+function track(
+  element: HTMLElement,
+  animations: Animation[],
+  arrival: Animation | null = null,
+): StepMotion {
   running.set(element, animations);
   if (arrival) arrivals.set(element, arrival);
   else arrivals.delete(element);
@@ -143,7 +155,11 @@ function releasedKeyframes(
  *
  * Returns a finished motion when motion is off: the swap is then a cut.
  */
-export function playStepExit(element: HTMLElement, direction: StepDirection, speed = 0): StepMotion {
+export function playStepExit(
+  element: HTMLElement,
+  direction: StepDirection,
+  speed = 0,
+): StepMotion {
   const pose = takePose(element);
   if (motionTier('image') === 'off') return DONE;
   const { duration, easing } = springTiming('fastEffects', 'image');
@@ -344,11 +360,14 @@ export function bindStepSwipe({
 
   const speed = (event?: PointerEvent) =>
     tracker.velocity(
-      event ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY } : undefined,
+      event
+        ? { time: event.timeStamp, x: event.clientX - startX, y: event.clientY - startY }
+        : undefined,
     ).x;
 
   const track = (event: PointerEvent) => {
-    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    const coalesced =
+      typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
     for (const point of coalesced.length ? coalesced : [event]) {
       tracker.add(point.timeStamp, point.clientX - startX, point.clientY - startY);
     }
@@ -397,7 +416,12 @@ export function bindStepSwipe({
       else reset();
       return;
     }
-    if (event.pointerType !== 'touch' || !event.isPrimary || startsOnMediaControls(event) || !canStart()) {
+    if (
+      event.pointerType !== 'touch' ||
+      !event.isPrimary ||
+      startsOnMediaControls(event) ||
+      !canStart()
+    ) {
       return;
     }
     pointerId = event.pointerId;

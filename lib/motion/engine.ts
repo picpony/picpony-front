@@ -18,7 +18,6 @@ setMotionScaleListener((scale) => {
   gsap.globalTimeline.timeScale(scale > 0 ? 1 / scale : 1);
 });
 
-
 /**
  * The motion system's GSAP face (`lib/spring.ts`). There are no bezier curves here any more: every
  * motion is one of the seven springs, registered as GSAP eases by **shape** — `spring-effects`,
@@ -37,8 +36,14 @@ export const SPRING = SPRING_DURATION;
  * its duration and takes the critically damped shape (`shapeFor`), mirroring the CSS rule.
  * The duration compensates for the global clock with `motionRatio`, as every category spring does.
  */
-export function spring(name: SpringName, category: MotionCategory = 'feedback'): { duration: number; ease: string } {
-  return { duration: SPRING_DURATION[name] * motionRatio(category), ease: `spring-${shapeFor(name, category)}` };
+export function spring(
+  name: SpringName,
+  category: MotionCategory = 'feedback',
+): { duration: number; ease: string } {
+  return {
+    duration: SPRING_DURATION[name] * motionRatio(category),
+    ease: `spring-${shapeFor(name, category)}`,
+  };
 }
 
 /**
@@ -49,11 +54,17 @@ export function surfaceArrival(
   size: 'fast' | 'default' | 'slow' = 'default',
   category: MotionCategory = 'overlay',
 ): { spatial: { duration: number; ease: string }; effects: { duration: number; ease: string } } {
-  return { spatial: spring(`${size}Spatial`, category), effects: spring(`${size}Effects`, category) };
+  return {
+    spatial: spring(`${size}Spatial`, category),
+    effects: spring(`${size}Effects`, category),
+  };
 }
 
 /** A surface leaving: everything on one effects spring (rule 4 in `lib/spring.ts`). */
-export function surfaceDeparture(size: 'fast' | 'default' = 'default', category: MotionCategory = 'overlay') {
+export function surfaceDeparture(
+  size: 'fast' | 'default' = 'default',
+  category: MotionCategory = 'overlay',
+) {
   return spring(`${size}Effects`, category);
 }
 
@@ -65,7 +76,11 @@ gsap.ticker.lagSmoothing(100, 33);
 
 /* Matches the CSS safety net: a tween that names no motion is a default-effects spring. No
    `motionScale()` here: `gsap.globalTimeline.timeScale` above already scales every tween. */
-gsap.defaults({ ease: 'spring-effects', duration: SPRING_DURATION.defaultEffects, overwrite: 'auto' });
+gsap.defaults({
+  ease: 'spring-effects',
+  duration: SPRING_DURATION.defaultEffects,
+  overwrite: 'auto',
+});
 
 /** One registration shared by every motion consumer. */
 export { Flip, gsap, useGSAP, Observer };

@@ -29,7 +29,8 @@ export default function LegacySharedSearch() {
       window.location.replace(picture);
       return;
     }
-    const href = legacySharedSearchHref(window.location.hash) ?? legacyFavoritesHref(window.location.hash);
+    const href =
+      legacySharedSearchHref(window.location.hash) ?? legacyFavoritesHref(window.location.hash);
     if (href) router.replace(href, { scroll: false });
   }, [router]);
   return null;

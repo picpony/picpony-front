@@ -14,18 +14,18 @@ A forced server policy overrides local switches. Settings show the named line wi
 
 ## Line mapping
 
-| API line | Destination |
-| --- | --- |
-| `direct` | Canonical `trixiebooru.org/api/v1/json/...` |
-| `api_accel` | `PROXY_API_BASE` plus encoded Derpibooru URL; GET / HEAD / OPTIONS only |
-| `picpony_api` | Same-origin `/relay?url=…&xp_user=…` |
-| `third_party` | Admin-supplied origin with the Derpibooru path and query |
+| API line      | Destination                                                             |
+| ------------- | ----------------------------------------------------------------------- |
+| `direct`      | Canonical `trixiebooru.org/api/v1/json/...`                             |
+| `api_accel`   | `PROXY_API_BASE` plus encoded Derpibooru URL; GET / HEAD / OPTIONS only |
+| `picpony_api` | Same-origin `/relay?url=…&xp_user=…`                                    |
+| `third_party` | Admin-supplied origin with the Derpibooru path and query                |
 
-| Image line | Destination |
-| --- | --- |
-| `direct` | Canonical `derpicdn.net` URL |
-| `cdn` | `IMAGE_CDN_BASE` plus encoded URL |
-| `picpony` | `IMAGE_WORKER_BASE` plus encoded URL and thumbnail marker |
+| Image line | Destination                                               |
+| ---------- | --------------------------------------------------------- |
+| `direct`   | Canonical `derpicdn.net` URL                              |
+| `cdn`      | `IMAGE_CDN_BASE` plus encoded URL                         |
+| `picpony`  | `IMAGE_WORKER_BASE` plus encoded URL and thumbnail marker |
 
 Apply policy per request over a canonical URL. Do not mutate exported base constants.
 
@@ -51,13 +51,13 @@ Forced API lines and `picpony_api` retry in place under the existing three-attem
 
 Under `auto`, `useHongKongRelay` defaults on. The relay has no failover. For users who disable it, the reachable ladder is direct → acceleration → direct with cooldown.
 
-| Rule | Value or behaviour |
-| --- | --- |
-| API cooldown | 30 seconds; ten minutes after 403 / 503 |
+| Rule                  | Value or behaviour                                            |
+| --------------------- | ------------------------------------------------------------- |
+| API cooldown          | 30 seconds; ten minutes after 403 / 503                       |
 | Direct recovery probe | After ten seconds, then exponential backoff up to ten minutes |
-| API attempt deadline | 12 seconds |
-| Whole retry ladder | 25 seconds, including pauses |
-| Line notices | Once per line notice per session |
+| API attempt deadline  | 12 seconds                                                    |
+| Whole retry ladder    | 25 seconds, including pauses                                  |
+| Line notices          | Once per line notice per session                              |
 
 Only network failures and designated proxy statuses retry. Cancellation, 429 and keyed-request 403 must not trigger failover. A GET resolves only with an OK response; exhausted failures retain their last status in `ApiError`. A user search's 400 is `kind: 'syntax'` and does not offer a retry action.
 

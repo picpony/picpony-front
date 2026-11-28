@@ -80,9 +80,10 @@ function publish(source: ImageSequenceSource | null) {
 export function openFromSequence(source: ImageSequenceSource) {
   if (snapshot.source === source) return;
   unsubscribeSource?.();
-  unsubscribeSource = source.subscribe?.(() => {
-    if (snapshot.source === source) publish(source);
-  }) ?? null;
+  unsubscribeSource =
+    source.subscribe?.(() => {
+      if (snapshot.source === source) publish(source);
+    }) ?? null;
   publish(source);
 }
 
@@ -109,19 +110,31 @@ export function imageNeighbours(id: number, source = snapshot.source): ImageNeig
   const ids = source?.ids() ?? [];
   const index = ids.indexOf(id);
   if (!source || index === -1) {
-    return { previous: null, next: null, canLoadPrevious: false, canLoadNext: false, inSequence: false };
+    return {
+      previous: null,
+      next: null,
+      canLoadPrevious: false,
+      canLoadNext: false,
+      inSequence: false,
+    };
   }
   return {
     previous: index > 0 ? ids[index - 1] : null,
     next: index < ids.length - 1 ? ids[index + 1] : null,
-    canLoadPrevious: index === 0 && Boolean(source.loadPrevious) && (source.hasPrevious?.() ?? false),
-    canLoadNext: index === ids.length - 1 && Boolean(source.loadNext) && (source.hasNext?.() ?? false),
+    canLoadPrevious:
+      index === 0 && Boolean(source.loadPrevious) && (source.hasPrevious?.() ?? false),
+    canLoadNext:
+      index === ids.length - 1 && Boolean(source.loadNext) && (source.hasNext?.() ?? false),
     inSequence: true,
   };
 }
 
 export function useImageNeighbours(id: number): ImageNeighbours {
-  const current = useSyncExternalStore(subscribeImageSequence, () => snapshot, () => SERVER_SNAPSHOT);
+  const current = useSyncExternalStore(
+    subscribeImageSequence,
+    () => snapshot,
+    () => SERVER_SNAPSHOT,
+  );
   return imageNeighbours(id, current.source);
 }
 

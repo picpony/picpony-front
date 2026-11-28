@@ -14,53 +14,111 @@ function load(file, overrides = {}, cache = new Map()) {
   const code = ts.transpileModule(readFileSync(path.join(root, file), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText;
-  vm.runInNewContext(code, { exports, Error, Response, URL, URLSearchParams, AbortController,
-    require: (name) => {
-      if (name in overrides) return overrides[name];
-      const target = name.startsWith('@/') ? name.slice(2) : path.join(path.dirname(file), name);
-      return load(`${target}.ts`, overrides, cache);
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      Error,
+      Response,
+      URL,
+      URLSearchParams,
+      AbortController,
+      require: (name) => {
+        if (name in overrides) return overrides[name];
+        const target = name.startsWith('@/') ? name.slice(2) : path.join(path.dirname(file), name);
+        return load(`${target}.ts`, overrides, cache);
+      },
     },
-  }, { filename: file });
+    { filename: file },
+  );
   return exports;
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('R9-026 blank coins are omitted, explicit zero is retained, and unsafe numbers are refused', () => {
   const { wholeNumber, wealthPayload } = load('components/admin/wealth.ts');
-  for (const invalid of ['', ' ', '-1', '1.5', '1e3', 'Infinity', '9007199254740992']) assert.equal(wholeNumber(invalid), null);
+  for (const invalid of ['', ' ', '-1', '1.5', '1e3', 'Infinity', '9007199254740992'])
+    assert.equal(wholeNumber(invalid), null);
   const user = { id: 5, experience: 10, coins: 100 };
-  const form = { experience: '10', experienceReason: '', coinsOp: 'set', coinsValue: '', coinsReason: '' };
+  const form = {
+    experience: '10',
+    experienceReason: '',
+    coinsOp: 'set',
+    coinsValue: '',
+    coinsReason: '',
+  };
   assert.equal(wealthPayload(user, form), null);
   /* `PATCH /admin/users/{id}/wealth` names the balances it was made against (409 when they moved). */
-  assert.deepEqual(plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })), { expected_coins: 100, expected_experience: 10, experience: 12, experience_reason: '活动' });
-  assert.deepEqual(plain(wealthPayload(user, { ...form, coinsValue: '0', coinsReason: '调整' })), { expected_coins: 100, expected_experience: 10, coins: { operation: 'set', amount: 0 }, coins_reason: '调整' });
+  assert.deepEqual(
+    plain(wealthPayload(user, { ...form, experience: '12', experienceReason: '活动' })),
+    { expected_coins: 100, expected_experience: 10, experience: 12, experience_reason: '活动' },
+  );
+  assert.deepEqual(plain(wealthPayload(user, { ...form, coinsValue: '0', coinsReason: '调整' })), {
+    expected_coins: 100,
+    expected_experience: 10,
+    coins: { operation: 'set', amount: 0 },
+    coins_reason: '调整',
+  });
 });
 
 test('badge audiences reject a bad ID instead of silently granting to a shorter list', () => {
   const { parseUserIds, grantPayload } = load('components/admin/badges.ts');
   assert.deepEqual(plain(parseUserIds('2，3、2 4')), [2, 3, 4]);
-  for (const text of ['2,0', '2,-3', '2,three', '2,1.5', '2,9007199254740992']) assert.equal(parseUserIds(text), null);
-  const form = { name: ' 活动 ', color: '#abcdef', target: 'dates', userIds: '2,3', startDate: '2026-09-01', endDate: '2026-09-30', permanent: false, expiresAt: '2026-12-31' };
-  assert.deepEqual(plain(grantPayload(form)), { name: '活动', color: '#abcdef', registered_from: '2026-09-01', registered_through: '2026-09-30', expires_on: '2026-12-31' });
-  assert.deepEqual(plain(grantPayload({ ...form, target: 'users', permanent: true })), { name: '活动', color: '#abcdef', user_ids: [2, 3] });
+  for (const text of ['2,0', '2,-3', '2,three', '2,1.5', '2,9007199254740992'])
+    assert.equal(parseUserIds(text), null);
+  const form = {
+    name: ' 活动 ',
+    color: '#abcdef',
+    target: 'dates',
+    userIds: '2,3',
+    startDate: '2026-09-01',
+    endDate: '2026-09-30',
+    permanent: false,
+    expiresAt: '2026-12-31',
+  };
+  assert.deepEqual(plain(grantPayload(form)), {
+    name: '活动',
+    color: '#abcdef',
+    registered_from: '2026-09-01',
+    registered_through: '2026-09-30',
+    expires_on: '2026-12-31',
+  });
+  assert.deepEqual(plain(grantPayload({ ...form, target: 'users', permanent: true })), {
+    name: '活动',
+    color: '#abcdef',
+    user_ids: [2, 3],
+  });
 });
 
 test('R9-023 a malformed price or stock never becomes a free or unavailable item', () => {
   const { shopForm, shopPayload } = load('components/admin/shop.ts');
   const form = { ...shopForm(), name: '商品' };
-  for (const field of ['price', 'stock']) for (const value of ['', '-1', '2.5', '1e3', '9007199254740992']) {
-    const result = shopPayload({ ...form, [field]: value });
-    assert.ok(result.errors[field]);
-    assert.equal(result.payload, undefined);
-  }
+  for (const field of ['price', 'stock'])
+    for (const value of ['', '-1', '2.5', '1e3', '9007199254740992']) {
+      const result = shopPayload({ ...form, [field]: value });
+      assert.ok(result.errors[field]);
+      assert.equal(result.payload, undefined);
+    }
   assert.equal(shopPayload({ ...form, price: '0', stock: '0' }).payload.price, 0);
 });
 
 test('R9-033/035 glossary exports round-trip translated names and aliases, without inventing translations', () => {
   const { parseImport, exportText, pageSizeOf } = load('components/admin/glossary/model.ts');
-  const tags = [{ en: 'twilight sparkle', cn: '紫悦', aliases: ['暮光闪闪', 'ts'] }, { en: 'pony', cn: '未翻译', aliases: [] }];
+  const tags = [
+    { en: 'twilight sparkle', cn: '紫悦', aliases: ['暮光闪闪', 'ts'] },
+    { en: 'pony', cn: '未翻译', aliases: [] },
+  ];
   const result = parseImport(exportText(tags));
-  assert.deepEqual(plain(result.tasks), [{ en: 'twilight sparkle', cn: '紫悦', aliases: ['暮光闪闪', 'ts'], cat: 'general', count: 0, description: '' }]);
+  assert.deepEqual(plain(result.tasks), [
+    {
+      en: 'twilight sparkle',
+      cn: '紫悦',
+      aliases: ['暮光闪闪', 'ts'],
+      cat: 'general',
+      count: 0,
+      description: '',
+    },
+  ]);
   assert.equal(result.skipped, 0);
   assert.equal(pageSizeOf('50'), 50);
   for (const value of ['', null, 'garbage', 3, 151]) assert.equal(pageSizeOf(value), 100);
@@ -72,7 +130,11 @@ test('glossary history uses the cached original editor UTC contract and displays
   assert.equal(historyTime('2026-09-24 12:00:00'), historyTime('2026-09-24T12:00:00Z'));
   assert.match(historyTime('2026-09-24 12:00:00'), /20:00/);
   assert.match(historyTime('2026-09-24T12:00:00+08:00'), /12:00/);
-  assert.equal(historyTime('2026-09-24 17:30:00'), '2026/09/25 01:30', 'a UTC evening is the next Beijing morning');
+  assert.equal(
+    historyTime('2026-09-24 17:30:00'),
+    '2026/09/25 01:30',
+    'a UTC evening is the next Beijing morning',
+  );
   assert.equal(historyTime(null), '');
   assert.equal(historyTime('not a time'), 'not a time');
 });
@@ -86,7 +148,11 @@ test('G4-018 the three UTC columns and every other stamp are read by one parser 
   assert.equal(iso(format.parseBackendTime('2026-08-31 17:30:00')), '2026-08-31T09:30:00.000Z');
   assert.equal(iso(format.parseBackendUtcTime('2026-08-31 17:30:00')), '2026-08-31T17:30:00.000Z');
   /* A stamp that names its zone is taken as written by both. */
-  for (const zoned of ['2026-08-31T17:30:00Z', '2026-09-01T01:30:00+08:00', '2026-09-01T01:30:00+0800']) {
+  for (const zoned of [
+    '2026-08-31T17:30:00Z',
+    '2026-09-01T01:30:00+08:00',
+    '2026-09-01T01:30:00+0800',
+  ]) {
     assert.equal(iso(format.parseBackendUtcTime(zoned)), iso(format.parseBackendTime(zoned)));
   }
   assert.equal(format.parseBackendUtcTime(''), null);
@@ -100,13 +166,24 @@ test('G4-018 a late-night view lands on its Beijing day, and a day boundary spli
   const format = load('lib/format.ts');
   const errors = load('lib/api/errors.ts');
   const http = { api: async () => null, seg: String };
-  const history = load('lib/api/history.ts', { './http': http, './errors': errors, '@/lib/utils': { randomId: () => 'k' } });
+  const history = load('lib/api/history.ts', {
+    './http': http,
+    './errors': errors,
+    '@/lib/utils': { randomId: () => 'k' },
+  });
   /* The shape testPersonalScreens pins: ISO with Z, whole seconds kept whole. */
   assert.equal(history.utcStamp('2026-10-01 12:00:00'), '2026-10-01T12:00:00Z');
   assert.equal(history.utcStamp('2026-10-01T20:00:00+08:00'), '2026-10-01T12:00:00Z');
   assert.equal(history.utcStamp('garbage'), null);
   /* The backend's row: `viewed_at` is UTC. */
-  const at = (stamp) => history.historyEntryOf({ image_id: 7, preview_url: '', uploader: '', viewed_at: stamp, previous_viewed_at: null }).viewedAt;
+  const at = (stamp) =>
+    history.historyEntryOf({
+      image_id: 7,
+      preview_url: '',
+      uploader: '',
+      viewed_at: stamp,
+      previous_viewed_at: null,
+    }).viewedAt;
   /* 17:30 UTC on 31 August is 01:30 on 1 September in Beijing: that day's group, at that clock. */
   assert.equal(format.beijingDateKey(at('2026-08-31 17:30:00')), '2026-09-01');
   assert.equal(format.formatClock(at('2026-08-31 17:30:00')), '01:30');
@@ -118,7 +195,17 @@ test('G4-018 a late-night view lands on its Beijing day, and a day boundary spli
 /* G4-015: a figure that did not arrive is never a zero in the console that sets it. */
 test('G4-015 admin figures read absent as absent: tables print a dash, forms open empty', () => {
   const figures = load('components/admin/figures.ts');
-  for (const absent of [undefined, null, '', '  ', true, false, 'abc', Number.NaN, Number.POSITIVE_INFINITY]) {
+  for (const absent of [
+    undefined,
+    null,
+    '',
+    '  ',
+    true,
+    false,
+    'abc',
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ]) {
     assert.equal(figures.figureOf(absent), null, String(absent));
     assert.equal(figures.figureText(absent), '—');
     assert.equal(figures.figureField(absent), '');
@@ -132,11 +219,24 @@ test('G4-015 admin figures read absent as absent: tables print a dash, forms ope
   /* `GET /admin/shop/items` always answers integer prices and stock (`shop_items` NOT NULL), so the
      form reads them as they are; a field the operator clears is still refused. */
   const { shopForm, shopPayload } = load('components/admin/shop.ts');
-  const present = shopForm({ id: 4, name: 'x', description: '', image_url: null, price: 0, stock: 7, active: true });
+  const present = shopForm({
+    id: 4,
+    name: 'x',
+    description: '',
+    image_url: null,
+    price: 0,
+    stock: 7,
+    active: true,
+  });
   assert.deepEqual([present.price, present.stock], ['0', '7']);
-  assert.ok(shopPayload({ ...present, price: '' }, { id: 4 }).errors.price, 'a save cannot write a price nobody typed');
+  assert.ok(
+    shopPayload({ ...present, price: '' }, { id: 4 }).errors.price,
+    'a save cannot write a price nobody typed',
+  );
 
-  const { teamForm } = load('components/admin/team.ts', { '@/lib/roles': { roleInfo: () => ({ label: '' }) } });
+  const { teamForm } = load('components/admin/team.ts', {
+    '@/lib/roles': { roleInfo: () => ({ label: '' }) },
+  });
   /* `order_num` is a NOT NULL integer on `GET /team-members`. */
   assert.equal(teamForm({ id: 1, name: '成员', order_num: 0 }).order, '0');
   assert.equal(teamForm({ id: 1, name: '成员', order_num: -2 }).order, '-2');
@@ -144,21 +244,48 @@ test('G4-015 admin figures read absent as absent: tables print a dash, forms ope
   /* The wealth form always knows the balances (`GET /admin/users` answers both), so a blank field is
      simply "unchanged". */
   const { wealthPayload } = load('components/admin/wealth.ts');
-  const form = { experience: '', experienceReason: '', coinsOp: 'set', coinsValue: '5', coinsReason: '补发' };
-  assert.deepEqual(plain(wealthPayload({ id: 9, username: 'u', coins: 1, experience: 2 }, form)), { expected_coins: 1, expected_experience: 2, coins: { operation: 'set', amount: 5 }, coins_reason: '补发' },
-    'an experience left blank is not sent');
+  const form = {
+    experience: '',
+    experienceReason: '',
+    coinsOp: 'set',
+    coinsValue: '5',
+    coinsReason: '补发',
+  };
+  assert.deepEqual(
+    plain(wealthPayload({ id: 9, username: 'u', coins: 1, experience: 2 }, form)),
+    {
+      expected_coins: 1,
+      expected_experience: 2,
+      coins: { operation: 'set', amount: 5 },
+      coins_reason: '补发',
+    },
+    'an experience left blank is not sent',
+  );
 });
 
 /* G4-011: one rule for a failure's two lines, table or not. */
 test('G4-011 a failure prints its title once and the own sentence of the error only when it adds one', () => {
   const queries = load('components/admin/queries.ts', {
-    '@/lib/resource': { defineResource: (options) => options, SKIP: Symbol('skip'), useResource: () => ({}) },
+    '@/lib/resource': {
+      defineResource: (options) => options,
+      SKIP: Symbol('skip'),
+      useResource: () => ({}),
+    },
     '@/lib/hooks': { readToken: () => 'token' },
   });
-  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', '屏蔽库加载失败')), { title: '屏蔽库加载失败' });
-  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', '网络连接失败，请检查网络后再试')), { title: '屏蔽库加载失败', message: '网络连接失败，请检查网络后再试' });
-  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', undefined)), { title: '屏蔽库加载失败' });
-  assert.deepEqual(plain(queries.tableError('屏蔽库加载失败', '屏蔽库加载失败')), { error: '屏蔽库加载失败' });
+  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', '屏蔽库加载失败')), {
+    title: '屏蔽库加载失败',
+  });
+  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', '网络连接失败，请检查网络后再试')), {
+    title: '屏蔽库加载失败',
+    message: '网络连接失败，请检查网络后再试',
+  });
+  assert.deepEqual(plain(queries.retryError('屏蔽库加载失败', undefined)), {
+    title: '屏蔽库加载失败',
+  });
+  assert.deepEqual(plain(queries.tableError('屏蔽库加载失败', '屏蔽库加载失败')), {
+    error: '屏蔽库加载失败',
+  });
   assert.deepEqual(plain(queries.tableError('屏蔽库加载失败', undefined)), {});
 });
 
@@ -176,8 +303,10 @@ test('R9-043 admin reads forward cancellation and the feedback queue reads by cu
         requests.push({ method, path: apiPath, options });
         if (apiPath === '/dictionary/tags') return { tags: [{ en: 'PONY' }] };
         if (apiPath === '/editor/dictionary/feedback') return { feedback: [], next_cursor: null };
-        if (apiPath === '/admin/notifications') return { notifications: [], total: 0, total_pages: 1 };
-        if (apiPath === '/team-members' || apiPath === '/admin/team-members') return { revision: 1, members: [] };
+        if (apiPath === '/admin/notifications')
+          return { notifications: [], total: 0, total_pages: 1 };
+        if (apiPath === '/team-members' || apiPath === '/admin/team-members')
+          return { revision: 1, members: [] };
         return {};
       },
       seg: (value) => encodeURIComponent(String(value)),
@@ -187,7 +316,8 @@ test('R9-043 admin reads forward cancellation and the feedback queue reads by cu
   assert.equal(await api.checkTagExists('fixture', 'pony', controller.signal), true);
   assert.equal(await api.checkTagExists('fixture', 'missing', controller.signal), false);
   assert.ok(requests.every(({ options }) => options.signal === controller.signal));
-  const feedback = requests.find(({ path: p }) => p === '/editor/dictionary/feedback').options.query;
+  const feedback = requests.find(({ path: p }) => p === '/editor/dictionary/feedback').options
+    .query;
   assert.equal(feedback.status, 'pending');
   assert.equal(feedback.before, 41);
 });
@@ -199,30 +329,64 @@ function loadDataTable(tier = 'standard') {
   const source = readFileSync(path.join(root, 'components/DataTable.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     fileName: 'DataTable.tsx',
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
   const stub = () => null;
   const modules = {
-    react: { Component: class { constructor(props) { this.props = props; } }, Fragment: 'Fragment' },
+    react: {
+      Component: class {
+        constructor(props) {
+          this.props = props;
+        }
+      },
+      Fragment: 'Fragment',
+    },
     'react/jsx-runtime': { jsx: stub, jsxs: stub },
     '@/lib/utils': { cn: (...names) => names.filter(Boolean).join(' ') },
     '@/lib/appearance': { motionTier: () => tier },
     '@/lib/springTiming': { springTiming: () => ({ duration: 100, easing: 'linear' }) },
     '@/lib/tabPaneVisibility': { insideConcealedPane: () => false },
-    '@/components/admin/tableMotion': { dropMove: stub, followersOf: () => [], markLayoutOwned: stub, precedersOf: () => [], startMove: stub },
-    './LoadingIndicator': { PageLoadingIndicator: stub }, './EmptyState': stub, './ErrorRetry': stub,
+    '@/components/admin/tableMotion': {
+      dropMove: stub,
+      followersOf: () => [],
+      markLayoutOwned: stub,
+      precedersOf: () => [],
+      startMove: stub,
+    },
+    './LoadingIndicator': { PageLoadingIndicator: stub },
+    './EmptyState': stub,
+    './ErrorRetry': stub,
   };
-  vm.runInNewContext(code, { exports, document: {}, require: (name) => {
-    assert.ok(name in modules, `unmocked dependency: ${name}`);
-    return modules[name];
-  } }, { filename: 'DataTable.tsx' });
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      document: {},
+      require: (name) => {
+        assert.ok(name in modules, `unmocked dependency: ${name}`);
+        return modules[name];
+      },
+    },
+    { filename: 'DataTable.tsx' },
+  );
   const DataTable = exports.default;
   const base = { columns: [], rowKey: (row) => row.id };
   /** One render's derived state, from the previous one. */
-  const step = (state, props) => ({ ...state, ...DataTable.getDerivedStateFromProps({ ...base, ...props }, state) });
+  const step = (state, props) => ({
+    ...state,
+    ...DataTable.getDerivedStateFromProps({ ...base, ...props }, state),
+  });
   const initial = (props) => step(new DataTable({ ...base, ...props }).state, props);
-  const keys = (state) => state.entries.map((entry) => (entry.leaving ? `(${entry.key})` : entry.key)).join(' ').replace(/\u0000/g, '#');
+  const keys = (state) =>
+    state.entries
+      .map((entry) => (entry.leaving ? `(${entry.key})` : entry.key))
+      .join(' ')
+      .replace(/\u0000/g, '#');
   return { step, initial, keys };
 }
 const rowsOf = (...ids) => ids.map((id) => ({ id }));
@@ -282,7 +446,10 @@ test('M1-031 the empty and failure rows come and go as entries; a leaving row ke
   assert.equal(keys(state), '(1) (#empty) 9');
 
   const editor = { type: 'InlineEditorPanel' };
-  let edited = initial({ rows: rowsOf(1, 2), expandedRow: (row) => (row.id === 2 ? editor : null) });
+  let edited = initial({
+    rows: rowsOf(1, 2),
+    expandedRow: (row) => (row.id === 2 ? editor : null),
+  });
   assert.equal(edited.expanded.get('2'), editor);
   /* Deleted from its own editor: the editor closes in the same commit the row goes in. */
   edited = step(edited, { rows: rowsOf(1), expandedRow: () => null });
@@ -291,21 +458,40 @@ test('M1-031 the empty and failure rows come and go as entries; a leaving row ke
   assert.equal(leaver.expanded, editor, 'the editor leaves with its row instead of vanishing');
 
   let failed = initial({ rows: rowsOf(1, 2) });
-  failed = step(failed, { rows: rowsOf(1, 2), error: '第 2 页加载失败', errorDetail: '请求超时，请稍后再试' });
-  assert.equal(keys(failed), '#error 1 2', 'a failed page turn shows above the rows still on screen');
+  failed = step(failed, {
+    rows: rowsOf(1, 2),
+    error: '第 2 页加载失败',
+    errorDetail: '请求超时，请稍后再试',
+  });
+  assert.equal(
+    keys(failed),
+    '#error 1 2',
+    'a failed page turn shows above the rows still on screen',
+  );
   failed = step(failed, { rows: rowsOf(1, 2) });
   const gone = failed.entries[0];
   assert.equal(keys(failed), '(#error) 1 2');
-  assert.deepEqual(plain(gone.failure), { title: '第 2 页加载失败', detail: '请求超时，请稍后再试' }, 'it leaves with its own words');
+  assert.deepEqual(
+    plain(gone.failure),
+    { title: '第 2 页加载失败', detail: '请求超时，请稍后再试' },
+    'it leaves with its own words',
+  );
 });
 
-test('a dropped leaver\'s columns are held through the merges that follow, and let go by an outright replacement', () => {
+test("a dropped leaver's columns are held through the merges that follow, and let go by an outright replacement", () => {
   const { step, initial, keys } = loadDataTable();
   /* `drop` writes the widths it read with the leaver still laid out; the next renders must keep them. */
-  let state = { ...initial({ rows: rowsOf(1, 2, 3), listKey: 'p1' }), held: [40, 523.5, 261.75, 260] };
+  let state = {
+    ...initial({ rows: rowsOf(1, 2, 3), listKey: 'p1' }),
+    held: [40, 523.5, 261.75, 260],
+  };
   state = step(state, { rows: rowsOf(1, 3), listKey: 'p1' });
   assert.equal(keys(state), '1 (2) 3');
-  assert.deepEqual(state.held, [40, 523.5, 261.75, 260], 'a delete, an undo or an arrival keeps the floor');
+  assert.deepEqual(
+    state.held,
+    [40, 523.5, 261.75, 260],
+    'a delete, an undo or an arrival keeps the floor',
+  );
   state = step(state, { rows: rowsOf(1, 3, 4), listKey: 'p1' });
   assert.deepEqual(state.held, [40, 523.5, 261.75, 260]);
   for (const [label, props] of [
@@ -328,27 +514,44 @@ test('tableMotion stops at modal scroll containers and marks FLIP layout ownersh
       this.previousElementSibling = null;
       this.nextElementSibling = null;
     }
-    hasAttribute(name) { return this.attrs.has(name); }
-    setAttribute(name) { this.attrs.add(name); }
-    removeAttribute(name) { this.attrs.delete(name); }
-    getBoundingClientRect() { return { top: 100, bottom: 160, height: 60 }; }
+    hasAttribute(name) {
+      return this.attrs.has(name);
+    }
+    setAttribute(name) {
+      this.attrs.add(name);
+    }
+    removeAttribute(name) {
+      this.attrs.delete(name);
+    }
+    getBoundingClientRect() {
+      return { top: 100, bottom: 160, height: 60 };
+    }
   }
   const source = readFileSync(path.join(root, 'components/admin/tableMotion.ts'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, {
-    exports,
-    HTMLElement: FakeElement,
-    getComputedStyle: () => ({ position: 'static', transform: 'none' }),
-    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
-    cancelAnimationFrame: (id) => { frames[id - 1] = null; },
-    require: (name) => {
-      assert.equal(name, '@/lib/tabPaneVisibility');
-      return { insideConcealedPane: () => false };
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      HTMLElement: FakeElement,
+      getComputedStyle: () => ({ position: 'static', transform: 'none' }),
+      requestAnimationFrame: (fn) => {
+        frames.push(fn);
+        return frames.length;
+      },
+      cancelAnimationFrame: (id) => {
+        frames[id - 1] = null;
+      },
+      require: (name) => {
+        assert.equal(name, '@/lib/tabPaneVisibility');
+        return { insideConcealedPane: () => false };
+      },
     },
-  }, { filename: 'tableMotion.ts' });
+    { filename: 'tableMotion.ts' },
+  );
 
   const link = (parent, children) => {
     children.forEach((child, i) => {
@@ -372,17 +575,31 @@ test('tableMotion stops at modal scroll containers and marks FLIP layout ownersh
   link(table, [row, nextRow]);
 
   const band = { top: 0, bottom: 900 };
-  assert.deepEqual(plain(exports.followersOf(row, band).map((el) => el.name)), ['next-row', 'after-table'],
-    'modal table followers stay inside the dialog scroll body and never move dialog footer');
-  assert.deepEqual(plain(exports.precedersOf(row, band).map((el) => el.name)), ['intro'],
-    'modal table preceders stop at the dialog scroll body and never move dialog header');
+  assert.deepEqual(
+    plain(exports.followersOf(row, band).map((el) => el.name)),
+    ['next-row', 'after-table'],
+    'modal table followers stay inside the dialog scroll body and never move dialog footer',
+  );
+  assert.deepEqual(
+    plain(exports.precedersOf(row, band).map((el) => el.name)),
+    ['intro'],
+    'modal table preceders stop at the dialog scroll body and never move dialog header',
+  );
 
   exports.markLayoutOwned(table);
   assert.equal(table.hasAttribute('data-layout-owned'), true);
   frames.shift()();
-  assert.equal(table.hasAttribute('data-layout-owned'), true, 'still marked through the first paint frame');
+  assert.equal(
+    table.hasAttribute('data-layout-owned'),
+    true,
+    'still marked through the first paint frame',
+  );
   frames.shift()();
-  assert.equal(table.hasAttribute('data-layout-owned'), false, 'cleared after two animation frames');
+  assert.equal(
+    table.hasAttribute('data-layout-owned'),
+    false,
+    'cleared after two animation frames',
+  );
 });
 
 test('FollowHeight track never clips growing loading panes and holds primed presses silently', async () => {
@@ -392,41 +609,72 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   const timers = [];
   const animations = [];
   class FakeResizeObserver {
-    constructor(cb) { this.cb = cb; resizeCallbacks.push(cb); }
+    constructor(cb) {
+      this.cb = cb;
+      resizeCallbacks.push(cb);
+    }
     observe() {}
     disconnect() {}
   }
   class FakeMutationObserver {
-    constructor(cb) { this.cb = cb; mutationCallbacks.push(cb); }
+    constructor(cb) {
+      this.cb = cb;
+      mutationCallbacks.push(cb);
+    }
     observe() {}
     disconnect() {}
   }
   const makeNode = (height, attrs = {}) => ({
     _height: height,
-    _attrs: new Set(Object.entries(attrs).filter(([, v]) => v).map(([k]) => k)),
+    _attrs: new Set(
+      Object.entries(attrs)
+        .filter(([, v]) => v)
+        .map(([k]) => k),
+    ),
     style: { height: '', clipPath: '' },
     parentElement: { _minHeight: 552, _pad: 0 },
     getBoundingClientRect() {
       const parsed = parseFloat(this.style.height);
       return { height: Number.isFinite(parsed) ? parsed : this._height };
     },
-    setAttribute(name) { this._attrs.add(name); },
-    removeAttribute(name) { this._attrs.delete(name); },
-    hasAttribute(name) { return this._attrs.has(name); },
+    setAttribute(name) {
+      this._attrs.add(name);
+    },
+    removeAttribute(name) {
+      this._attrs.delete(name);
+    },
+    hasAttribute(name) {
+      return this._attrs.has(name);
+    },
     querySelector(sel) {
       if (sel === '[data-tab-primed]') return this._attrs.has('data-tab-primed') ? this : null;
-      if (sel === '[data-tab-pane-leaving]') return this._attrs.has('data-tab-pane-leaving') ? this : null;
+      if (sel === '[data-tab-pane-leaving]')
+        return this._attrs.has('data-tab-pane-leaving') ? this : null;
       if (sel === '[data-layout-owned]') return null;
       return null;
     },
     querySelectorAll(sel) {
-      if (sel === '[data-page-loading]') return this._attrs.has('data-page-loading') ? [{ checkVisibility: () => true }] : [];
+      if (sel === '[data-page-loading]')
+        return this._attrs.has('data-page-loading') ? [{ checkVisibility: () => true }] : [];
       return [];
     },
     animate(keyframes) {
       let resolveFinish;
-      const finished = new Promise((r) => { resolveFinish = r; });
-      const anim = { keyframes, cancelled: false, cancel() { this.cancelled = true; resolveFinish(); }, finish() { resolveFinish(); }, finished };
+      const finished = new Promise((r) => {
+        resolveFinish = r;
+      });
+      const anim = {
+        keyframes,
+        cancelled: false,
+        cancel() {
+          this.cancelled = true;
+          resolveFinish();
+        },
+        finish() {
+          resolveFinish();
+        },
+        finished,
+      };
       animations.push(anim);
       return anim;
     },
@@ -434,30 +682,58 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   const source = readFileSync(path.join(root, 'components/FollowHeight.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     fileName: 'FollowHeight.tsx',
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
   const stub = () => null;
   const modules = {
-    react: { Component: class { constructor(props) { this.props = props; } } },
+    react: {
+      Component: class {
+        constructor(props) {
+          this.props = props;
+        }
+      },
+    },
     'react/jsx-runtime': { jsx: stub, jsxs: stub },
     '@/lib/appearance': { motionTier: () => 'standard' },
     '@/lib/springTiming': { springTiming: () => ({ duration: 200, easing: 'linear' }) },
   };
-  vm.runInNewContext(code, {
-    exports,
-    ResizeObserver: FakeResizeObserver,
-    MutationObserver: FakeMutationObserver,
-    getComputedStyle: (el) => ({ minHeight: `${el._minHeight ?? 0}px`, paddingTop: '0px', paddingBottom: '0px' }),
-    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
-    cancelAnimationFrame: (id) => { frames[id - 1] = null; },
-    setTimeout: (fn) => { timers.push(fn); return timers.length; },
-    clearTimeout: (id) => { timers[id - 1] = null; },
-    require: (name) => {
-      assert.ok(name in modules, `unmocked dependency: ${name}`);
-      return modules[name];
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      ResizeObserver: FakeResizeObserver,
+      MutationObserver: FakeMutationObserver,
+      getComputedStyle: (el) => ({
+        minHeight: `${el._minHeight ?? 0}px`,
+        paddingTop: '0px',
+        paddingBottom: '0px',
+      }),
+      requestAnimationFrame: (fn) => {
+        frames.push(fn);
+        return frames.length;
+      },
+      cancelAnimationFrame: (id) => {
+        frames[id - 1] = null;
+      },
+      setTimeout: (fn) => {
+        timers.push(fn);
+        return timers.length;
+      },
+      clearTimeout: (id) => {
+        timers[id - 1] = null;
+      },
+      require: (name) => {
+        assert.ok(name in modules, `unmocked dependency: ${name}`);
+        return modules[name];
+      },
     },
-  }, { filename: 'FollowHeight.tsx' });
+    { filename: 'FollowHeight.tsx' },
+  );
 
   const FollowHeight = exports.default;
   const fh = new FollowHeight({ track: true, children: null });
@@ -487,7 +763,11 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   assert.equal(animations.length, 1, 'shrinking loading pane holds at 900');
   assert.equal(outer.style.height, '900px');
   resize(1100);
-  assert.equal(animations.length, 2, 'growing past the held height releases and animates immediately');
+  assert.equal(
+    animations.length,
+    2,
+    'growing past the held height releases and animates immediately',
+  );
   assert.deepEqual(plain(animations[1].keyframes), [{ height: '900px' }, { height: '1100px' }]);
   animations[1].finish();
   await Promise.resolve();
@@ -510,7 +790,11 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   outer._height = 320;
   mutationCallbacks.at(-1)();
   while (frames.length) frames.shift()?.();
-  assert.equal(animations.length, beforePrime, 'cancelled prime releases silently with no height animation');
+  assert.equal(
+    animations.length,
+    beforePrime,
+    'cancelled prime releases silently with no height animation',
+  );
   assert.equal(outer.style.height, '');
   assert.equal(outer.style.clipPath, '');
 
@@ -522,13 +806,21 @@ test('FollowHeight track never clips growing loading panes and holds primed pres
   inner.removeAttribute('data-tab-primed');
   mutationCallbacks.at(-1)();
   while (frames.length) frames.shift()?.();
-  assert.equal(animations.length, beforePrime + 1, 'playing a primed taller tab expands immediately');
+  assert.equal(
+    animations.length,
+    beforePrime + 1,
+    'playing a primed taller tab expands immediately',
+  );
   assert.deepEqual(plain(animations.at(-1).keyframes), [{ height: '552px' }, { height: '1100px' }]);
 });
 
 test('admin registry loads panels lazily without Suspense throttling and recovers on chunk failure', async () => {
   const source = readFileSync(path.join(root, 'components/admin/registry.tsx'), 'utf8');
-  assert.equal(/from ['"]next\/dynamic['"]/.test(source), false, 'registry avoids next/dynamic Suspense 300ms fallback throttle');
+  assert.equal(
+    /from ['"]next\/dynamic['"]/.test(source),
+    false,
+    'registry avoids next/dynamic Suspense 300ms fallback throttle',
+  );
 
   const states = [];
   let cursor = 0;
@@ -537,39 +829,58 @@ test('admin registry loads panels lazily without Suspense throttling and recover
     useState(initial) {
       const idx = cursor++;
       if (!(idx in states)) states[idx] = typeof initial === 'function' ? initial() : initial;
-      return [states[idx], (next) => { states[idx] = typeof next === 'function' ? next(states[idx]) : next; }];
+      return [
+        states[idx],
+        (next) => {
+          states[idx] = typeof next === 'function' ? next(states[idx]) : next;
+        },
+      ];
     },
-    useEffect(effect) { pendingEffects.push(effect); },
+    useEffect(effect) {
+      pendingEffects.push(effect);
+    },
   };
   const jsx = (type, props) => ({ type, props });
   const exports = {};
   const code = ts.transpileModule(source + '\nexports._panel = panel;', {
     fileName: 'registry.tsx',
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const sections = load('components/admin/sections.ts', {
     'react-icons/md': new Proxy({}, { get: (_, name) => name }),
   });
-  vm.runInNewContext(code, {
-    exports,
-    require: (name) => {
-      if (name === 'react') return react;
-      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' };
-      if (name === '@/components/ErrorRetry') return { default: 'ErrorRetry' };
-      if (name === './AdminPaneSkeleton') return { default: 'AdminPaneSkeleton' };
-      if (name === './sections') return sections;
-      if (name === '@/lib/icons') return { ICON: { standard: 24 } };
-      return new Proxy({}, { get: (_, k) => (k === '__esModule' ? true : String(k)) });
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      require: (name) => {
+        if (name === 'react') return react;
+        if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' };
+        if (name === '@/components/ErrorRetry') return { default: 'ErrorRetry' };
+        if (name === './AdminPaneSkeleton') return { default: 'AdminPaneSkeleton' };
+        if (name === './sections') return sections;
+        if (name === '@/lib/icons') return { ICON: { standard: 24 } };
+        return new Proxy({}, { get: (_, k) => (k === '__esModule' ? true : String(k)) });
+      },
     },
-  }, { filename: 'registry.tsx' });
+    { filename: 'registry.tsx' },
+  );
 
   let calls = 0;
   let resolveSecond;
-  const Loaded = function LoadedTab() { return 'loaded'; };
+  const Loaded = function LoadedTab() {
+    return 'loaded';
+  };
   const Lazy = exports._panel(() => {
     calls += 1;
     if (calls === 1) return Promise.reject(new Error('offline'));
-    return new Promise((resolve) => { resolveSecond = () => resolve({ default: Loaded }); });
+    return new Promise((resolve) => {
+      resolveSecond = () => resolve({ default: Loaded });
+    });
   }, '商店管理');
 
   const render = () => {

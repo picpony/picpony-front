@@ -7,17 +7,25 @@ import ts from 'typescript';
 
 function load(file, dependencies = {}, globals = {}) {
   const source = ts.transpileModule(readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(source, {
-    exports,
-    require(name) {
-      assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
-      return dependencies[name];
+  vm.runInNewContext(
+    source,
+    {
+      exports,
+      require(name) {
+        assert.ok(name in dependencies, `Unexpected dependency: ${name}`);
+        return dependencies[name];
+      },
+      ...globals,
     },
-    ...globals,
-  }, { filename: file });
+    { filename: file },
+  );
   return exports;
 }
 
@@ -32,54 +40,128 @@ function videoPreviewHarness() {
         if (!listeners.has(name)) listeners.set(name, new Set());
         listeners.get(name).add(listener);
       },
-      removeEventListener(name, listener) { listeners.get(name)?.delete(listener); },
-      emit(name) { for (const listener of [...(listeners.get(name) ?? [])]) listener(); },
-      count() { return [...listeners.values()].reduce((sum, set) => sum + set.size, 0); },
+      removeEventListener(name, listener) {
+        listeners.get(name)?.delete(listener);
+      },
+      emit(name) {
+        for (const listener of [...(listeners.get(name) ?? [])]) listener();
+      },
+      count() {
+        return [...listeners.values()].reduce((sum, set) => sum + set.size, 0);
+      },
     };
   };
-  const appearance = new Set(), hero = new Set();
-  const subscribe = (set) => (listener) => { set.add(listener); return () => set.delete(listener); };
+  const appearance = new Set(),
+    hero = new Set();
+  const subscribe = (set) => (listener) => {
+    set.add(listener);
+    return () => set.delete(listener);
+  };
   const state = { tier: 'standard', saveData: false, imageId: null, covered: false };
   const document = { ...events(), visibilityState: 'visible' };
   const connection = events();
   const observers = [];
   class Observer {
-    constructor(callback) { this.callback = callback; this.targets = []; this.live = true; observers.push(this); }
-    observe(target, options) { this.targets.push({ target, options }); }
-    disconnect() { this.live = false; }
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      this.live = true;
+      observers.push(this);
+    }
+    observe(target, options) {
+      this.targets.push({ target, options });
+    }
+    disconnect() {
+      this.live = false;
+    }
   }
   const requests = [];
   const video = {
-    ...events(), isConnected: true, paused: true, readyState: 2, currentTime: 0.1, plays: 0, pauses: 0,
+    ...events(),
+    isConnected: true,
+    paused: true,
+    readyState: 2,
+    currentTime: 0.1,
+    plays: 0,
+    pauses: 0,
     parentElement: { parentElement: { parentElement: null } },
-    closest: () => state.covered ? {} : null,
+    closest: () => (state.covered ? {} : null),
     play() {
-      this.plays += 1; this.paused = false;
+      this.plays += 1;
+      this.paused = false;
       return new Promise((resolve, reject) => requests.push({ resolve, reject }));
     },
-    pause() { this.pauses += 1; this.paused = true; this.emit('pause'); },
+    pause() {
+      this.pauses += 1;
+      this.paused = true;
+      this.emit('pause');
+    },
   };
-  const { startCardVideoPreview } = load('lib/cardVideoPreview.ts', {
-    '@/lib/appearance': { motionTier: () => state.tier, subscribeAppearance: subscribe(appearance) },
-    '@/lib/hero/runtime': { getImageHeroRuntime: () => state, subscribeImageHeroRuntime: subscribe(hero) },
-    '@/lib/imageLoader': { saveDataRequested: () => state.saveData },
-  }, { document, navigator: { connection }, MutationObserver: Observer, IntersectionObserver: Observer });
-  const activeSubscriptions = () => appearance.size + hero.size + document.count() + video.count() + connection.count();
+  const { startCardVideoPreview } = load(
+    'lib/cardVideoPreview.ts',
+    {
+      '@/lib/appearance': {
+        motionTier: () => state.tier,
+        subscribeAppearance: subscribe(appearance),
+      },
+      '@/lib/hero/runtime': {
+        getImageHeroRuntime: () => state,
+        subscribeImageHeroRuntime: subscribe(hero),
+      },
+      '@/lib/imageLoader': { saveDataRequested: () => state.saveData },
+    },
+    {
+      document,
+      navigator: { connection },
+      MutationObserver: Observer,
+      IntersectionObserver: Observer,
+    },
+  );
+  const activeSubscriptions = () =>
+    appearance.size + hero.size + document.count() + video.count() + connection.count();
   return {
-    state, document, connection, video, requests, observers, appearance, hero, activeSubscriptions,
+    state,
+    document,
+    connection,
+    video,
+    requests,
+    observers,
+    appearance,
+    hero,
+    activeSubscriptions,
     start: () => startCardVideoPreview(video),
-    emit(set) { for (const listener of [...set]) listener(); },
+    emit(set) {
+      for (const listener of [...set]) listener();
+    },
   };
 }
 
 test('hover video stops on reduced motion, a hidden document/pane, a hero, data saver or leaving the viewport', async () => {
   const cases = {
-    reduced: (h) => { h.state.tier = 'reduced'; h.emit(h.appearance); },
-    off: (h) => { h.state.tier = 'off'; h.emit(h.appearance); },
-    hidden: (h) => { h.document.visibilityState = 'hidden'; h.document.emit('visibilitychange'); },
-    pane: (h) => { h.state.covered = true; h.observers[0].callback([]); },
-    hero: (h) => { h.state.imageId = 42; h.emit(h.hero); },
-    saver: (h) => { h.state.saveData = true; h.connection.emit('change'); },
+    reduced: (h) => {
+      h.state.tier = 'reduced';
+      h.emit(h.appearance);
+    },
+    off: (h) => {
+      h.state.tier = 'off';
+      h.emit(h.appearance);
+    },
+    hidden: (h) => {
+      h.document.visibilityState = 'hidden';
+      h.document.emit('visibilitychange');
+    },
+    pane: (h) => {
+      h.state.covered = true;
+      h.observers[0].callback([]);
+    },
+    hero: (h) => {
+      h.state.imageId = 42;
+      h.emit(h.hero);
+    },
+    saver: (h) => {
+      h.state.saveData = true;
+      h.connection.emit('change');
+    },
     offscreen: (h) => h.observers[1].callback([{ isIntersecting: false }]),
   };
   for (const [reason, hide] of Object.entries(cases)) {
@@ -92,10 +174,19 @@ test('hover video stops on reduced motion, a hidden document/pane, a hero, data 
     assert.equal(h.video.paused, true, reason);
     assert.equal(h.video.currentTime, 0.1, `${reason}: back to the still`);
     assert.equal(h.activeSubscriptions(), 0, `${reason}: nothing listens after stopping`);
-    assert.ok(h.observers.every((observer) => !observer.live), reason);
-    h.state.tier = 'standard'; h.state.covered = false; h.state.imageId = null; h.state.saveData = false;
+    assert.ok(
+      h.observers.every((observer) => !observer.live),
+      reason,
+    );
+    h.state.tier = 'standard';
+    h.state.covered = false;
+    h.state.imageId = null;
+    h.state.saveData = false;
     h.document.visibilityState = 'visible';
-    h.document.emit('visibilitychange'); h.connection.emit('change'); h.emit(h.appearance); h.emit(h.hero);
+    h.document.emit('visibilitychange');
+    h.connection.emit('change');
+    h.emit(h.appearance);
+    h.emit(h.hero);
     assert.equal(h.video.plays, 1, `${reason}: restoring visibility never resumes on its own`);
     stop();
     assert.equal(h.video.pauses, 1, `${reason}: cleanup is idempotent`);
@@ -105,12 +196,17 @@ test('hover video stops on reduced motion, a hidden document/pane, a hero, data 
 test('video preview guards exist only during a hover, and observe ancestor attributes without a subtree', async () => {
   const h = videoPreviewHarness();
   assert.equal(h.activeSubscriptions(), 0);
-  h.state.tier = 'reduced'; h.start()();
+  h.state.tier = 'reduced';
+  h.start()();
   assert.equal(h.video.plays, 0);
   assert.equal(h.observers.length, 0);
   h.state.tier = 'standard';
   const stop = h.start();
-  assert.equal(h.observers.length, 2, 'one ancestor observer and one visibility observer for the playing card');
+  assert.equal(
+    h.observers.length,
+    2,
+    'one ancestor observer and one visibility observer for the playing card',
+  );
   assert.equal(h.observers[0].targets.length, 2);
   for (const { options } of h.observers[0].targets) {
     assert.equal(options.attributes, true);
@@ -132,7 +228,11 @@ test('a refused play releases the hover guard, and a previous pause cannot stop 
   assert.equal(h.activeSubscriptions(), 0);
   const stop = h.start();
   h.video.emit('pause');
-  assert.equal(h.video.paused, false, 'queued pause from the previous hover has no authority over new playback');
+  assert.equal(
+    h.video.paused,
+    false,
+    'queued pause from the previous hover has no authority over new playback',
+  );
   assert.ok(h.activeSubscriptions() > 0);
   stop();
   assert.equal(h.activeSubscriptions(), 0);
@@ -140,16 +240,20 @@ test('a refused play releases the hover guard, and a previous pause cannot stop 
 
 test('hero return targets the active profile pane and preserves the flight-hidden source', () => {
   let candidates = [];
-  const { findImageHeroThumbnail } = load('lib/hero/dom.ts', {
-    './constants': { HERO_BACKGROUND_VISUAL_SELECTOR: '[data-image-detail-background]' },
-  }, {
-    document: { querySelectorAll: () => candidates },
-    CSS: { escape: (value) => value },
-  });
+  const { findImageHeroThumbnail } = load(
+    'lib/hero/dom.ts',
+    {
+      './constants': { HERO_BACKGROUND_VISUAL_SELECTOR: '[data-image-detail-background]' },
+    },
+    {
+      document: { querySelectorAll: () => candidates },
+      CSS: { escape: (value) => value },
+    },
+  );
   const thumbnail = (active, hasLayout, sourceKey = 'card:42') => ({
     dataset: { imageHeroSourceKey: sourceKey },
-    closest: () => active === null ? null : { hasAttribute: () => active },
-    getClientRects: () => hasLayout ? [{}] : [],
+    closest: () => (active === null ? null : { hasAttribute: () => active }),
+    getClientRects: () => (hasLayout ? [{}] : []),
     // Visibility may be leased by the flight; it must not decide the target.
     style: { visibility: 'hidden' },
   });
@@ -171,29 +275,39 @@ test('stored preferences use stable SSR defaults and react to both settings and 
   const values = new Map();
   let snapshot;
   let denied = false;
-  const hooks = load('lib/hooks.ts', {
-    './hero/runtime': { getImageHeroRuntime: () => null, interruptImageHero: () => false, subscribeImageHeroRuntime: () => () => {} },
-    './constants': constants,
-    react: {
-      useCallback: (callback) => callback,
-      useSyncExternalStore: (subscribe, read, server) => {
-        snapshot = { subscribe, read, server };
-        return read();
+  const hooks = load(
+    'lib/hooks.ts',
+    {
+      './hero/runtime': {
+        getImageHeroRuntime: () => null,
+        interruptImageHero: () => false,
+        subscribeImageHeroRuntime: () => () => {},
+      },
+      './constants': constants,
+      react: {
+        useCallback: (callback) => callback,
+        useSyncExternalStore: (subscribe, read, server) => {
+          snapshot = { subscribe, read, server };
+          return read();
+        },
       },
     },
-  }, {
-    window: {
-      addEventListener: (name, listener) => listeners.set(name, listener),
-      removeEventListener: (name, listener) => {
-        assert.equal(listeners.get(name), listener);
-        listeners.delete(name);
+    {
+      window: {
+        addEventListener: (name, listener) => listeners.set(name, listener),
+        removeEventListener: (name, listener) => {
+          assert.equal(listeners.get(name), listener);
+          listeners.delete(name);
+        },
+      },
+      localStorage: {
+        getItem: (key) => {
+          if (denied) throw new Error('Storage denied');
+          return values.get(key) ?? null;
+        },
       },
     },
-    localStorage: { getItem: (key) => {
-      if (denied) throw new Error('Storage denied');
-      return values.get(key) ?? null;
-    } },
-  });
+  );
   assert.equal(hooks.useStoredBoolean('counts'), false);
   assert.equal(snapshot.server(), 'false');
   assert.equal(hooks.useStoredBoolean('translations', true), true);
@@ -223,12 +337,20 @@ test('stored preferences use stable SSR defaults and react to both settings and 
 test('file validation does not read pixels, and failed or aborted readers never resolve as images', async () => {
   const readers = [];
   class Reader {
-    constructor() { readers.push(this); }
-    readAsDataURL(file) { this.file = file; }
+    constructor() {
+      readers.push(this);
+    }
+    readAsDataURL(file) {
+      this.file = file;
+    }
   }
-  const { validateImageFile, processImageFile } = load('lib/utils.ts', { './constants': constants }, {
-    FileReader: Reader,
-  });
+  const { validateImageFile, processImageFile } = load(
+    'lib/utils.ts',
+    { './constants': constants },
+    {
+      FileReader: Reader,
+    },
+  );
   const file = { type: 'image/png', size: 1024 };
   validateImageFile(file);
   assert.equal(readers.length, 0);
@@ -256,18 +378,39 @@ test('clipboard fallback always removes staging and restores focus, including on
   let fail = false;
   class Element {
     isConnected = true;
-    focus(options) { assert.equal(options.preventScroll, true); focused++; }
+    focus(options) {
+      assert.equal(options.preventScroll, true);
+      focused++;
+    }
   }
-  const clipboard = { writeText: async () => { throw new Error('Clipboard denied'); } };
-  const { copyText } = load('lib/utils.ts', { './constants': constants }, {
-    navigator: { clipboard }, window: { isSecureContext: true }, HTMLElement: Element,
-    document: {
-      activeElement: new Element(),
-      body: { appendChild: () => appended++ },
-      createElement: () => ({ style: {}, setAttribute() {}, select() {}, remove: () => removed++ }),
-      execCommand: () => { if (fail) throw new Error('Copy denied'); return true; },
+  const clipboard = {
+    writeText: async () => {
+      throw new Error('Clipboard denied');
     },
-  });
+  };
+  const { copyText } = load(
+    'lib/utils.ts',
+    { './constants': constants },
+    {
+      navigator: { clipboard },
+      window: { isSecureContext: true },
+      HTMLElement: Element,
+      document: {
+        activeElement: new Element(),
+        body: { appendChild: () => appended++ },
+        createElement: () => ({
+          style: {},
+          setAttribute() {},
+          select() {},
+          remove: () => removed++,
+        }),
+        execCommand: () => {
+          if (fail) throw new Error('Copy denied');
+          return true;
+        },
+      },
+    },
+  );
   assert.equal(await copyText('example'), true);
   assert.equal(removed, 1);
   assert.equal(focused, 1);
@@ -284,30 +427,58 @@ test('all date shapes accept backend timestamps and ISO offsets without corrupti
   /* Pinned to an absolute instant: PicPony writes Beijing wall-clock time with no offset, so the
      answers must not depend on the zone this test (or a server, or a visitor) runs in. */
   const now = new Date('2026-09-14T12:00:00+08:00').getTime();
-  class ClockDate extends Date { static now() { return now; } }
+  class ClockDate extends Date {
+    static now() {
+      return now;
+    }
+  }
   const format = load('lib/format.ts', {}, { Date: ClockDate, Intl });
   assert.equal(format.formatDateTime('2026-09-14 09:26:00'), '2026/09/14 09:26');
   assert.equal(format.formatShortDateTime('2026-09-14 09:26:00'), '09/14 09:26');
   assert.equal(format.formatDate('2026-09-14 09:26:00'), '2026/09/14');
   assert.equal(format.formatMonthDay('2026-09-14 09:26:00'), '09/14');
   assert.equal(format.formatClock('2026-09-14 09:26:00'), '09:26');
-  for (const name of ['formatDateTime', 'formatShortDateTime', 'formatDate', 'formatMonthDay', 'formatCompactDate']) {
+  for (const name of [
+    'formatDateTime',
+    'formatShortDateTime',
+    'formatDate',
+    'formatMonthDay',
+    'formatCompactDate',
+  ]) {
     assert.equal(format[name]('invalid date'), 'invalid date');
     assert.equal(format[name](new Date(NaN)), '');
   }
   /* Offset-less means Beijing; an explicit zone is taken as written and shown in Beijing. */
-  assert.equal(format.parseBackendTime('2026-09-14 09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
-  assert.equal(format.parseBackendTime('2026-09-14T09:26:00').toISOString(), '2026-09-14T01:26:00.000Z');
+  assert.equal(
+    format.parseBackendTime('2026-09-14 09:26:00').toISOString(),
+    '2026-09-14T01:26:00.000Z',
+  );
+  assert.equal(
+    format.parseBackendTime('2026-09-14T09:26:00').toISOString(),
+    '2026-09-14T01:26:00.000Z',
+  );
   assert.equal(format.parseBackendTime('2026-09-14').toISOString(), '2026-09-13T16:00:00.000Z');
-  assert.equal(format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(), '2026-09-14T01:26:00.000Z');
-  assert.equal(format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(), '2026-09-14T01:26:00.000Z');
-  assert.equal(format.parseBackendTime('2026-11-23T14:29:37.837878+00:00').toISOString(), '2026-11-23T14:29:37.837Z');
+  assert.equal(
+    format.parseBackendTime('2026-09-14T01:26:00Z').toISOString(),
+    '2026-09-14T01:26:00.000Z',
+  );
+  assert.equal(
+    format.parseBackendTime('2026-09-14T01:26:00+0000').toISOString(),
+    '2026-09-14T01:26:00.000Z',
+  );
+  assert.equal(
+    format.parseBackendTime('2026-11-23T14:29:37.837878+00:00').toISOString(),
+    '2026-11-23T14:29:37.837Z',
+  );
   assert.equal(format.formatDateTime('2026-09-14T01:26:00Z'), '2026/09/14 09:26');
   assert.equal(format.formatDateTime('2026-11-23T14:29:37.837878+00:00'), '2026/11/23 22:29');
   assert.equal(format.parseBackendTime(''), null);
   assert.equal(format.parseBackendTime('not a date'), null);
-  assert.ok(format.backendTimeValue('2026-09-14 09:26:00') < format.backendTimeValue('2026-09-14T01:27:00Z'),
-    'a Beijing stamp and a UTC one sort on one clock');
+  assert.ok(
+    format.backendTimeValue('2026-09-14 09:26:00') <
+      format.backendTimeValue('2026-09-14T01:27:00Z'),
+    'a Beijing stamp and a UTC one sort on one clock',
+  );
 
   /* The year appears only when it is not this one. */
   assert.equal(format.formatCompactDateTime('2026-02-03 16:36:00'), '02/03 16:36');
@@ -329,9 +500,19 @@ test('all date shapes accept backend timestamps and ISO offsets without corrupti
   assert.equal(format.formatRelativeTime('2026-09-14 08:36:00'), '3 小时前');
   assert.equal(format.formatRelativeTime('2026-09-12 11:00:00'), '2 天前');
   assert.equal(format.formatRelativeTime('2026-07-20 10:00:00'), '2026/07/20');
-  assert.equal(format.formatRelativeTime('2026-09-14 12:05:00'), '刚刚', 'a skewed future stamp is not negative');
-  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:57:00') }, { online: true, text: '在线' });
-  assert.deepEqual({ ...format.lastOnlineStatus('2026-09-14 11:48:00') }, { online: false, text: '12 分钟前' });
+  assert.equal(
+    format.formatRelativeTime('2026-09-14 12:05:00'),
+    '刚刚',
+    'a skewed future stamp is not negative',
+  );
+  assert.deepEqual(
+    { ...format.lastOnlineStatus('2026-09-14 11:57:00') },
+    { online: true, text: '在线' },
+  );
+  assert.deepEqual(
+    { ...format.lastOnlineStatus('2026-09-14 11:48:00') },
+    { online: false, text: '12 分钟前' },
+  );
   assert.equal(format.formatLastOnline(new Date(now - 12 * 60_000).toISOString()), '12 分钟前');
   assert.equal(format.formatLastOnline('2020-01-01T00:00:00Z'), '2020/01/01');
   assert.equal(format.formatLastOnline('invalid date'), 'invalid date');
@@ -361,19 +542,30 @@ function stateHarness() {
       useState(initial) {
         const index = cursor++;
         if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
-        return [slots[index], (value) => {
-          slots[index] = typeof value === 'function' ? value(slots[index]) : value;
-          changed = true;
-        }];
+        return [
+          slots[index],
+          (value) => {
+            slots[index] = typeof value === 'function' ? value(slots[index]) : value;
+            changed = true;
+          },
+        ];
       },
-      useRef(initial) { return slots[cursor++] ??= { current: initial }; },
+      useRef(initial) {
+        return (slots[cursor++] ??= { current: initial });
+      },
       useCallback: (callback) => callback,
       useMemo: (create) => create(),
       useEffect(callback, dependencies) {
         const index = cursor++;
-        if (!slots[index] || dependencies.some((value, offset) => !Object.is(value, slots[index][offset]))) {
+        if (
+          !slots[index] ||
+          dependencies.some((value, offset) => !Object.is(value, slots[index][offset]))
+        ) {
           slots[index] = dependencies;
-          effects.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
+          effects.push(() => {
+            cleanups[index]?.();
+            cleanups[index] = callback();
+          });
         }
       },
       useSyncExternalStore: (_subscribe, read) => read(),
@@ -393,7 +585,9 @@ function stateHarness() {
       pending.forEach((effect) => effect());
       await new Promise((resolve) => setImmediate(resolve));
     },
-    dispose() { cleanups.forEach((cleanup) => cleanup?.()); },
+    dispose() {
+      cleanups.forEach((cleanup) => cleanup?.());
+    },
   };
 }
 
@@ -402,7 +596,10 @@ test('paged reads retain rows only within their resource and explicit account/fi
   const { useResource, SKIP } = load('lib/resource.ts', { react: harness.react });
   const empty = { data: undefined, error: undefined, isLoading: false, isStale: false };
   const snapshots = new Map();
-  const source = { keyOf: ({ page }) => String(page), peekKey: (key) => snapshots.get(key) ?? empty };
+  const source = {
+    keyOf: ({ page }) => String(page),
+    peekKey: (key) => snapshots.get(key) ?? empty,
+  };
   let page = 1;
   let scope = 'first-user:safe';
   let args = () => ({ page });
@@ -415,9 +612,17 @@ test('paged reads retain rows only within their resource and explicit account/fi
   assert.equal(render().data, first, 'a page change keeps the list height');
   assert.equal(render().isPrevious, true, 'retained rows say they belong to another key');
   snapshots.set('2', { ...empty, error: new Error('Offline') });
-  assert.equal(render().data, first, 'failed next pages keep the previous answer with the new error');
+  assert.equal(
+    render().data,
+    first,
+    'failed next pages keep the previous answer with the new error',
+  );
   assert.equal(render().error.message, 'Offline');
-  assert.equal(render().isPrevious, true, 'a failed page turn is distinguishable from a loaded page');
+  assert.equal(
+    render().isPrevious,
+    true,
+    'a failed page turn is distinguishable from a loaded page',
+  );
   scope = 'first-user:developer';
   assert.equal(render().data, undefined, 'a filter change cannot retain the previous filter');
   scope = 'first-user:safe';
@@ -439,7 +644,10 @@ test('paged reads retain rows only within their resource and explicit account/fi
   scope = true;
   render();
   const otherResource = { ...source, peekKey: () => empty };
-  assert.equal(harness.render(() => useResource(otherResource, { page }, { keepPrevious: true })).data, undefined);
+  assert.equal(
+    harness.render(() => useResource(otherResource, { page }, { keepPrevious: true })).data,
+    undefined,
+  );
 });
 
 test('Derpi upload pagination restores separate user/filter pages on a live switch and a return visit', () => {
@@ -479,18 +687,34 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/lib/constants': { LS_KEYS: { contentFilter: 'contentFilter' } },
     '@/lib/searchQuery': { parseContentFilter: (value) => value },
     '@/lib/screenState': screenState,
-    '@/lib/resources': { derpiUserProfile: 'profile', derpiUserUploads: 'uploads', useBrowsingFingerprint: () => 'fingerprint' },
-    '@/lib/resource': { SKIP: Symbol('skip'), useResource: (resource, args) => {
-      if (resource === 'profile') return {
-        data: { id: args.id === 'first-user' ? 42 : 43, name: args.id, uploads_count: 90 }, refresh() {},
-      };
-      queries.push(args);
-      const total = args.contentFilter === 'safe' ? safeTotal : 90;
-      const images = args.page <= Math.ceil(total / args.perPage)
-        ? [{ id: args.page * 100 + args.id, score: 0, representations: { small: '/fixture.png' } }]
-        : [];
-      return { data: { images, total }, refresh() {}, isLoading: false };
-    } },
+    '@/lib/resources': {
+      derpiUserProfile: 'profile',
+      derpiUserUploads: 'uploads',
+      useBrowsingFingerprint: () => 'fingerprint',
+    },
+    '@/lib/resource': {
+      SKIP: Symbol('skip'),
+      useResource: (resource, args) => {
+        if (resource === 'profile')
+          return {
+            data: { id: args.id === 'first-user' ? 42 : 43, name: args.id, uploads_count: 90 },
+            refresh() {},
+          };
+        queries.push(args);
+        const total = args.contentFilter === 'safe' ? safeTotal : 90;
+        const images =
+          args.page <= Math.ceil(total / args.perPage)
+            ? [
+                {
+                  id: args.page * 100 + args.id,
+                  score: 0,
+                  representations: { small: '/fixture.png' },
+                },
+              ]
+            : [];
+        return { data: { images, total }, refresh() {}, isLoading: false };
+      },
+    },
     '@/components/Pagination': { default: 'Pagination' },
     '@/components/Skeleton': { default: 'Skeleton' },
     '@/components/MasonryGrid': { default: 'MasonryGrid' },
@@ -504,10 +728,15 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     '@/components/Button': { default: 'Button', buttonClasses: () => '' },
     '@/components/ButtonLink': { default: 'ButtonLink' },
     '@/components/FailedTurnHold': { default: 'FailedTurnHold' },
-    '@/components/Tooltip': { useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }) },
+    '@/components/Tooltip': {
+      useTooltip: () => ({ anchorRef: null, anchorProps: {}, tooltip: null }),
+    },
     '@/components/SectionHeading': { default: 'SectionHeading' },
     './DerpiDescription': { default: 'DerpiDescription' },
-    './derpiLinks': { derpiProfileUrl: () => 'https://derpibooru.org/profiles/x', derpiFallbackUrl: () => 'https://derpibooru.org/profiles/x' },
+    './derpiLinks': {
+      derpiProfileUrl: () => 'https://derpibooru.org/profiles/x',
+      derpiFallbackUrl: () => 'https://derpibooru.org/profiles/x',
+    },
     '@/lib/icons': { ICON: {} },
   });
   let instance;
@@ -520,11 +749,18 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
     activeHarness = instance.hooks;
     return activeHarness.render(() => element.type(element.props));
   };
-  const leave = () => { instance.hooks.dispose(); instance = undefined; };
+  const leave = () => {
+    instance.hooks.dispose();
+    instance = undefined;
+  };
   function find(node, type) {
     if (Array.isArray(node)) return node.map((child) => find(child, type)).find(Boolean);
     if (!node?.props) return undefined;
-    return node.type === type ? node : Object.values(node.props).map((child) => find(child, type)).find(Boolean);
+    return node.type === type
+      ? node
+      : Object.values(node.props)
+          .map((child) => find(child, type))
+          .find(Boolean);
   }
 
   let tree = render();
@@ -537,7 +773,11 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   tree = render();
   assert.equal(queries.at(-1).page, 1, 'the first safe read cannot inherit developer page 3');
   assert.equal(queries.at(-1).contentFilter, 'safe');
-  assert.equal(find(tree, 'EmptyState'), undefined, 'ten available uploads must not render as empty');
+  assert.equal(
+    find(tree, 'EmptyState'),
+    undefined,
+    'ten available uploads must not render as empty',
+  );
   assert.equal(find(tree, 'Pagination'), undefined, 'one page needs no pager');
 
   filter = 'developer';
@@ -549,18 +789,30 @@ test('Derpi upload pagination restores separate user/filter pages on a live swit
   filter = 'developer';
   assert.equal(find(render(), 'Pagination').props.currentPage, 3);
   userId = 'second-user';
-  assert.equal(find(render(), 'Pagination').props.currentPage, 1, 'another user owns another page history');
+  assert.equal(
+    find(render(), 'Pagination').props.currentPage,
+    1,
+    'another user owns another page history',
+  );
   assert.equal(queries.at(-1).id, 43);
 
   userId = 'first-user';
   filter = 'safe';
   assert.equal(find(render(), 'Pagination').props.currentPage, 2);
   leave();
-  assert.equal(find(render(), 'Pagination').props.currentPage, 2, 'a return visit restores the safe page');
+  assert.equal(
+    find(render(), 'Pagination').props.currentPage,
+    2,
+    'a return visit restores the safe page',
+  );
   filter = 'developer';
   leave();
   tree = render();
-  assert.equal(find(tree, 'Pagination').props.currentPage, 3, 'a return visit restores the developer page');
+  assert.equal(
+    find(tree, 'Pagination').props.currentPage,
+    3,
+    'a return visit restores the developer page',
+  );
   assert.equal(queries.at(-1).page, 3);
   assert.equal(queries.at(-1).contentFilter, 'developer');
   assert.ok(find(tree, 'PageBack'), 'the page keeps its back affordance');
@@ -577,43 +829,60 @@ test('developer-mode writes preserve accepted settings after closing without upd
   let statusSignal;
   const jsx = (type, props) => ({ type, props });
   const errorsModule = load('lib/api/errors.ts', {}, { Error, TypeError });
-  const { default: DeveloperGuide } = load('components/DeveloperGuideModal.tsx', {
-    react: harness.react,
-    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    '@/components/Modal': { default: 'Modal' },
-    '@/components/Button': { default: 'Button' },
-    '@/components/FollowHeight': { default: 'FollowHeight' },
-    '@/components/Input': { Input: 'Input' },
-    '@/components/LoadingIndicator': { PageLoadingIndicator: 'PageLoadingIndicator' },
-    '@/components/ErrorRetry': { default: 'ErrorRetry' },
-    '@/components/Toast': { showToast: (...args) => notices.push(args) },
-    // One realm for both modules, so `instanceof Error` holds across them as in the browser.
-    '@/lib/api/errors': errorsModule,
-    '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
-    '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
-    '@/lib/settingsSync': { enforceContentGate: () => {} },
-    '@/lib/icons': { ICON: {} },
-    'react-icons/md': {},
-    '@/lib/api/picpony': {
-      getDeveloperStatus: async (_token, signal) => {
-        statusSignal = signal;
-        return { is_developer: false, is_developer_banned: false,
-          prerequisites: { logged_in: true, api_bound: true, level_gt_3: true } };
+  const { default: DeveloperGuide } = load(
+    'components/DeveloperGuideModal.tsx',
+    {
+      react: harness.react,
+      'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+      '@/components/Modal': { default: 'Modal' },
+      '@/components/Button': { default: 'Button' },
+      '@/components/FollowHeight': { default: 'FollowHeight' },
+      '@/components/Input': { Input: 'Input' },
+      '@/components/LoadingIndicator': { PageLoadingIndicator: 'PageLoadingIndicator' },
+      '@/components/ErrorRetry': { default: 'ErrorRetry' },
+      '@/components/Toast': { showToast: (...args) => notices.push(args) },
+      // One realm for both modules, so `instanceof Error` holds across them as in the browser.
+      '@/lib/api/errors': errorsModule,
+      '@/lib/hooks': { useSession: () => ({ token, ready: true }), readToken: () => token },
+      '@/lib/constants': { LS_KEYS: { developer: 'developer' } },
+      '@/lib/settingsSync': { enforceContentGate: () => {} },
+      '@/lib/icons': { ICON: {} },
+      'react-icons/md': {},
+      '@/lib/api/picpony': {
+        getDeveloperStatus: async (_token, signal) => {
+          statusSignal = signal;
+          return {
+            is_developer: false,
+            is_developer_banned: false,
+            prerequisites: { logged_in: true, api_bound: true, level_gt_3: true },
+          };
+        },
+        /* The Rust adapter resolves with the access state (`DeveloperState`) or throws `ApiError`. */
+        enableDeveloperMode: (account, credential) =>
+          new Promise((resolve, reject) => requests.push({ account, credential, resolve, reject })),
+        disableDeveloperMode: async () => ({ active: false }),
       },
-      /* The Rust adapter resolves with the access state (`DeveloperState`) or throws `ApiError`. */
-      enableDeveloperMode: (account, credential) =>
-        new Promise((resolve, reject) => requests.push({ account, credential, resolve, reject })),
-      disableDeveloperMode: async () => ({ active: false }),
     },
-  }, {
-    AbortController, Event, queueMicrotask, Error,
-    window: { dispatchEvent() {} },
-    localStorage: { setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) },
-  });
+    {
+      AbortController,
+      Event,
+      queueMicrotask,
+      Error,
+      window: { dispatchEvent() {} },
+      localStorage: {
+        setItem: (key, value) => stored.set(key, value),
+        removeItem: (key) => stored.delete(key),
+      },
+    },
+  );
   function find(node, type) {
     if (Array.isArray(node)) return node.map((child) => find(child, type)).find(Boolean);
     if (!node?.props) return undefined;
-    return node.type === type ? node : Object.values(node.props).map((child) => find(child, type)).find(Boolean);
+    return node.type === type
+      ? node
+      : Object.values(node.props)
+          .map((child) => find(child, type))
+          .find(Boolean);
   }
   const render = () => harness.render(() => DeveloperGuide({ isOpen: open, onClose() {} }));
   async function fillPassword() {
@@ -632,7 +901,11 @@ test('developer-mode writes preserve accepted settings after closing without upd
   assert.equal(statusSignal.aborted, true);
   requests[0].resolve({ active: true });
   await first;
-  assert.equal(stored.get('developer'), 'true', 'the same account keeps its accepted setting after closing');
+  assert.equal(
+    stored.get('developer'),
+    'true',
+    'the same account keeps its accepted setting after closing',
+  );
   assert.equal(notices.length, 0, 'closed forms cannot publish a success notice');
 
   // Start the failure case with the mode off on both sides.
@@ -640,7 +913,13 @@ test('developer-mode writes preserve accepted settings after closing without upd
   open = true;
   button = await fillPassword();
   const failed = button.props.onClick();
-  requests[1].reject(new errorsModule.ApiError('http', { status: 403, code: 'DEVELOPER_PASSWORD_INVALID', serverMessage: '开启失败' }));
+  requests[1].reject(
+    new errorsModule.ApiError('http', {
+      status: 403,
+      code: 'DEVELOPER_PASSWORD_INVALID',
+      serverMessage: '开启失败',
+    }),
+  );
   await failed;
   assert.equal(stored.size, 0, 'a refused grant cannot enable the local mode');
   assert.equal(find(render(), 'Input').props.error, '开启失败');
@@ -662,7 +941,8 @@ for (const kind of ['Image', 'Video']) {
         useState: (initial) => [typeof initial === 'function' ? initial() : initial, () => {}],
         useRef: (current) => ({ current }),
         useCallback: (callback) => callback,
-        useEffect() {}, useLayoutEffect() {},
+        useEffect() {},
+        useLayoutEffect() {},
         startTransition: (callback) => callback(),
       };
       const dependencies = {
@@ -673,11 +953,20 @@ for (const kind of ['Image', 'Video']) {
         './IconButton': { default: 'IconButton' },
         './LoadingIndicator': { MediaLoadingPlaceholder: 'MediaLoadingPlaceholder' },
         './ErrorRetry': { default: 'ErrorRetry' },
-        '@/lib/hero/geometry': { getHeroMediaResponsiveSizes: () => '', getHeroMediaPreviewSizes: () => '' },
+        '@/lib/hero/geometry': {
+          getHeroMediaResponsiveSizes: () => '',
+          getHeroMediaPreviewSizes: () => '',
+        },
         '@/lib/hero/constants': { HERO_PREVIEW_FALLBACK_MS: 1000 },
-        '@/lib/detailFinalSource': { isDetailFinalOptimized: () => false, shouldBypassImageOptimization: () => true },
+        '@/lib/detailFinalSource': {
+          isDetailFinalOptimized: () => false,
+          shouldBypassImageOptimization: () => true,
+        },
         '@/lib/imageLoader': {},
-        '@/lib/constants': { IMAGE_CDN_BASE: 'https://cdn.invalid', IMAGE_WORKER_BASE: 'https://worker.invalid' },
+        '@/lib/constants': {
+          IMAGE_CDN_BASE: 'https://cdn.invalid',
+          IMAGE_WORKER_BASE: 'https://worker.invalid',
+        },
         '@/lib/spring': { SPRING_MS: {} },
         '@/lib/appearance': { MOTION_SPEED_SCALE: {} },
         '@/lib/hero': {},
@@ -686,7 +975,10 @@ for (const kind of ['Image', 'Video']) {
       };
       const { default: Detail } = load(`components/Detail${kind}.tsx`, dependencies, {
         window: { setTimeout: () => 1, clearTimeout() {} },
-        requestAnimationFrame: (callback) => { frames.set(++frameId, callback); return frameId; },
+        requestAnimationFrame: (callback) => {
+          frames.set(++frameId, callback);
+          return frameId;
+        },
         cancelAnimationFrame: (id) => frames.delete(id),
         HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
       });
@@ -695,23 +987,43 @@ for (const kind of ['Image', 'Video']) {
       let handedOff = 0;
       let failed = 0;
       const tree = Detail({
-        imageId: 4, surfaceId: 'test-surface', previewSrc: 'preview.png', finalSrc: 'final.png',
-        width: 400, height: 300, alt: 'fixture', style: {}, heroActive: true, preloadFinal: true,
+        imageId: 4,
+        surfaceId: 'test-surface',
+        previewSrc: 'preview.png',
+        finalSrc: 'final.png',
+        width: 400,
+        height: 300,
+        alt: 'fixture',
+        style: {},
+        heroActive: true,
+        preloadFinal: true,
         // Intentionally leave React's state update pending, as a busy commit can do.
-        onPreviewFailed: () => { failed++; },
+        onPreviewFailed: () => {
+          failed++;
+        },
         onPreviewReady: () => {
           handedOff++;
           assert.equal(attributes.get('data-image-detail-final-ready'), 'true');
-          assert.equal(attributes.get('data-image-detail-hero-active'), 'false', 'Handoff must not expose the hidden final');
+          assert.equal(
+            attributes.get('data-image-detail-hero-active'),
+            'false',
+            'Handoff must not expose the hidden final',
+          );
         },
       });
       tree.props.ref.current = target;
       const children = tree.props.children.filter(Boolean);
-      const preview = children.find((node) => node.props?.['data-image-detail-layer'] === 'preview');
+      const preview = children.find(
+        (node) => node.props?.['data-image-detail-layer'] === 'preview',
+      );
       const final = children.find((node) => node.props?.['data-image-detail-layer'] === 'final');
       const decoded = {
-        currentSrc: 'final.png', isConnected: true, complete: true, naturalWidth: 400,
-        readyState: 2, decode: async () => {},
+        currentSrc: 'final.png',
+        isConnected: true,
+        complete: true,
+        naturalWidth: 400,
+        readyState: 2,
+        decode: async () => {},
       };
       if (kind === 'Video') final.props.ref(decoded);
       const decode = async () => {
@@ -762,17 +1074,28 @@ test('tag groups keep their distinct navigation actions and independent expansio
     '@/components/EmptyState': { default: 'EmptyState' },
     '@/components/FollowHeight': { default: 'FollowHeight' },
     '@/components/detail/DetailTagSections': tagSections,
-    '@/components/Tooltip': { useTooltip: (label) => ({ anchorRef: null, anchorProps: { tip: label }, tooltip: null }) },
+    '@/components/Tooltip': {
+      useTooltip: (label) => ({ anchorRef: null, anchorProps: { tip: label }, tooltip: null }),
+    },
     '@/lib/format': { formatCount: (value) => String(value) },
     '@/lib/tagCategories': {
       tagCategoryChip: (category) => category,
       ratingTagRank: (tag) => (tag === 'safe' ? 0 : tag === 'grimdark' ? 5 : -1),
-      ratingTagChip: (tag) => (tag === 'safe' ? 'rating:green' : tag === 'grimdark' ? 'rating:purple' : undefined),
+      ratingTagChip: (tag) =>
+        tag === 'safe' ? 'rating:green' : tag === 'grimdark' ? 'rating:purple' : undefined,
     },
     '@/lib/tagTranslations': { tagTranslationKey: (name) => name.toLowerCase() },
   });
   const tree = TagList({
-    tags: ['artist:one & two', 'artist:second', 'oc:pony', 'oc:other', 'smile', 'safe', 'spoiler:omit'],
+    tags: [
+      'artist:one & two',
+      'artist:second',
+      'oc:pony',
+      'oc:other',
+      'smile',
+      'safe',
+      'spoiler:omit',
+    ],
     visibleTagLimits: { imageId: 4, artists: 1, ocs: 1, regular: 1 },
     translations: { safe: '安全' },
     counts: { safe: 0 },
@@ -789,14 +1112,20 @@ test('tag groups keep their distinct navigation actions and independent expansio
   const chips = collect(tree, 'Chip');
   assert.equal(chips.length, 3);
   chips.forEach((chip) => chip.props.onClick());
-  assert.equal(new URL(pushes[0][0], 'https://app.invalid').searchParams.get('q'), 'artist:one & two');
+  assert.equal(
+    new URL(pushes[0][0], 'https://app.invalid').searchParams.get('q'),
+    'artist:one & two',
+  );
   assert.equal(new URL(pushes[1][0], 'https://app.invalid').searchParams.get('q'), 'oc:pony');
   assert.deepEqual(selected, ['safe']);
   /* The glossary's name is shown, the real tag is named on demand, and the count sits outside the
      truncating label, so a long name cannot hide it. */
   const spans = collect(chips[2], 'span');
   assert.equal(spans.find((span) => span.props.className === 'truncate').props.children, '安全');
-  assert.equal(spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children, '0');
+  assert.equal(
+    spans.find((span) => String(span.props.className).includes('tabular-nums')).props.children,
+    '0',
+  );
   assert.equal(chips[2].props.tip, 'safe');
   assert.equal(chips[2].props.colors, 'rating:green');
   assert.equal(chips[0].props.tip, undefined);
@@ -817,18 +1146,23 @@ function hookHarness() {
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
       return [
         slots[index],
-        (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; },
+        (next) => {
+          slots[index] = typeof next === 'function' ? next(slots[index]) : next;
+        },
       ];
     },
     useRef(initial) {
       const index = cursor++;
-      return slots[index] ??= { current: initial };
+      return (slots[index] ??= { current: initial });
     },
     useEffect(callback, deps) {
       const index = cursor++;
       if (changed(slots[index], deps)) {
         slots[index] = deps;
-        pendingEffects.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
+        pendingEffects.push(() => {
+          cleanups[index]?.();
+          cleanups[index] = callback();
+        });
       }
     },
   };
@@ -836,15 +1170,25 @@ function hookHarness() {
   return {
     react,
     jsxRuntime: { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    render(fn) { cursor = 0; return fn(); },
-    reset() { slots.length = 0; cleanups.length = 0; pendingEffects = []; cursor = 0; },
+    render(fn) {
+      cursor = 0;
+      return fn();
+    },
+    reset() {
+      slots.length = 0;
+      cleanups.length = 0;
+      pendingEffects = [];
+      cursor = 0;
+    },
     async flushEffects() {
       const work = pendingEffects;
       pendingEffects = [];
       work.forEach((effect) => effect());
       await new Promise((resolve) => setImmediate(resolve));
     },
-    dispose() { cleanups.forEach((cleanup) => cleanup?.()); },
+    dispose() {
+      cleanups.forEach((cleanup) => cleanup?.());
+    },
   };
 }
 
@@ -865,14 +1209,19 @@ function lottiePlayerMock(totalFrames) {
       goToAndStop: (frame, isFrame) => events.push(['goToAndStop', frame, isFrame]),
       goToAndPlay: (frame, isFrame) => events.push(['goToAndPlay', frame, isFrame]),
       addEventListener() {},
-      destroy() { this.destroyed = true; events.push(['destroy']); },
+      destroy() {
+        this.destroyed = true;
+        events.push(['destroy']);
+      },
     };
     instances.push(instance);
     return instance;
   };
   return {
     instances,
-    get loads() { return loads; },
+    get loads() {
+      return loads;
+    },
     player: { default: { loadAnimation } },
   };
 }
@@ -883,21 +1232,28 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     const mock = lottiePlayerMock(267);
     const state = { tier, scale: tier === 'off' ? 0 : 1 };
     let artworkLoads = 0;
-    const { default: LottieIcon } = load('components/LottieIcon.tsx', {
-      react: hooks.react,
-      'react/jsx-runtime': hooks.jsxRuntime,
-      '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
-      '@/lib/appearance': {
-        motionTier: () => state.tier,
-        motionScale: () => state.scale,
-        useMotionTier: () => state.tier,
-        useMotionScale: () => state.scale,
+    const { default: LottieIcon } = load(
+      'components/LottieIcon.tsx',
+      {
+        react: hooks.react,
+        'react/jsx-runtime': hooks.jsxRuntime,
+        '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+        '@/lib/appearance': {
+          motionTier: () => state.tier,
+          motionScale: () => state.scale,
+          useMotionTier: () => state.tier,
+          useMotionScale: () => state.scale,
+        },
+        '@/lib/lottieAssets': { loadLottiePlayer: async () => mock.player },
       },
-      '@/lib/lottieAssets': { loadLottiePlayer: async () => mock.player },
-    }, { performance: { now: () => 100 } });
+      { performance: { now: () => 100 } },
+    );
 
     const fallback = { type: 'Fallback', props: {} };
-    const loadData = async () => { artworkLoads += 1; return { op: 267 }; };
+    const loadData = async () => {
+      artworkLoads += 1;
+      return { op: 267 };
+    };
     const mount = (props) => {
       const tree = hooks.render(() => LottieIcon(props));
       tree.props.children[0].props.ref.current = { tagName: 'SPAN' };
@@ -916,26 +1272,35 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     const lastHooks = hookHarness();
     const lastMock = lottiePlayerMock(267);
     let lastLoads = 0;
-    const { default: LastFrameIcon } = load('components/LottieIcon.tsx', {
-      react: lastHooks.react,
-      'react/jsx-runtime': lastHooks.jsxRuntime,
-      '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
-      '@/lib/appearance': {
-        motionTier: () => state.tier,
-        motionScale: () => state.scale,
-        useMotionTier: () => state.tier,
-        useMotionScale: () => state.scale,
+    const { default: LastFrameIcon } = load(
+      'components/LottieIcon.tsx',
+      {
+        react: lastHooks.react,
+        'react/jsx-runtime': lastHooks.jsxRuntime,
+        '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
+        '@/lib/appearance': {
+          motionTier: () => state.tier,
+          motionScale: () => state.scale,
+          useMotionTier: () => state.tier,
+          useMotionScale: () => state.scale,
+        },
+        '@/lib/lottieAssets': { loadLottiePlayer: async () => lastMock.player },
       },
-      '@/lib/lottieAssets': { loadLottiePlayer: async () => lastMock.player },
-    }, { performance: { now: () => 100 } });
+      { performance: { now: () => 100 } },
+    );
 
     const renderLast = () => {
-      const tree = lastHooks.render(() => LastFrameIcon({
-        load: async () => { lastLoads += 1; return { op: 267 }; },
-        fallback,
-        aspect: 3257 / 2148,
-        staticMode: 'last-frame',
-      }));
+      const tree = lastHooks.render(() =>
+        LastFrameIcon({
+          load: async () => {
+            lastLoads += 1;
+            return { op: 267 };
+          },
+          fallback,
+          aspect: 3257 / 2148,
+          staticMode: 'last-frame',
+        }),
+      );
       tree.props.children[0].props.ref.current = { tagName: 'SPAN' };
       return tree;
     };
@@ -946,7 +1311,11 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     assert.equal(lastMock.instances[0].options.autoplay, false);
     assert.deepEqual(lastMock.instances[0].events, [['goToAndStop', 266, true]]);
     const settled = renderLast();
-    assert.equal(settled.props.children[1], false, `${tier} hides fallback once last frame is ready`);
+    assert.equal(
+      settled.props.children[1],
+      false,
+      `${tier} hides fallback once last frame is ready`,
+    );
     assert.ok(!String(settled.props.children[0].props.className).includes('invisible'));
 
     // Switching back to standard replays without tearing down, and returning snaps back to the last frame.
@@ -956,7 +1325,11 @@ test('LottieIcon staticMode="last-frame" holds the final frame under reduced and
     await lastHooks.flushEffects();
     assert.equal(lastMock.loads, 1, 'tier switch reuses the loaded instance');
     const playEvents = lastMock.instances[0].events.slice(1);
-    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
+    assert.ok(
+      playEvents.some(
+        ([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true,
+      ),
+    );
     assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
 
     state.tier = tier;
@@ -977,7 +1350,11 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
   ]) {
     const hooks = hookHarness();
     const mock = lottiePlayerMock(140);
-    const state = { tier: scenario.tier, scale: scenario.tier === 'off' ? 0 : 1, entrance: scenario.entrance };
+    const state = {
+      tier: scenario.tier,
+      scale: scenario.tier === 'off' ? 0 : 1,
+      entrance: scenario.entrance,
+    };
     const { default: AboutContent } = load('app/about/AboutContent.tsx', {
       react: hooks.react,
       'react/jsx-runtime': hooks.jsxRuntime,
@@ -1005,7 +1382,12 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
       '@/lib/utils': { getAssetUrl: (u) => u },
       '@/lib/icons': { ICON: { dense: 16 } },
       '@/components/Avatar': { default: 'Avatar' },
-      './AboutFrame': { default: 'AboutFrame', ROSTER_GRID: '', TeamCard: 'TeamCard', TeamSkeleton: 'TeamSkeleton' },
+      './AboutFrame': {
+        default: 'AboutFrame',
+        ROSTER_GRID: '',
+        TeamCard: 'TeamCard',
+        TeamSkeleton: 'TeamSkeleton',
+      },
     });
 
     const extractTrace = (Component, targetHooks) => {
@@ -1023,11 +1405,19 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
     };
 
     const tree = renderTrace();
-    assert.equal(tree.props.children.type, 'div', `${scenario.name} renders the Lottie host instead of monochrome Logo`);
+    assert.equal(
+      tree.props.children.type,
+      'div',
+      `${scenario.name} renders the Lottie host instead of monochrome Logo`,
+    );
     await hooks.flushEffects();
     assert.equal(mock.loads, 1);
     assert.equal(mock.instances[0].options.autoplay, false);
-    assert.deepEqual(mock.instances[0].events, [['goToAndStop', 139, true]], `${scenario.name} stops on frame 139`);
+    assert.deepEqual(
+      mock.instances[0].events,
+      [['goToAndStop', 139, true]],
+      `${scenario.name} stops on frame 139`,
+    );
 
     // Switching to standard + entrance plays; switching back snaps to the last frame.
     state.tier = 'standard';
@@ -1037,7 +1427,11 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
     await hooks.flushEffects();
     assert.equal(mock.loads, 1);
     const playEvents = mock.instances[0].events.slice(1);
-    assert.ok(playEvents.some(([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true));
+    assert.ok(
+      playEvents.some(
+        ([name, frame, isFrame]) => name === 'goToAndPlay' && frame === 0 && isFrame === true,
+      ),
+    );
     assert.ok(playEvents.some(([name, speed]) => name === 'setSpeed' && speed === 1));
 
     state.tier = scenario.tier;
@@ -1065,7 +1459,11 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
         useMotionScale: () => state.scale,
         useMotionTier: () => state.tier,
       },
-      '@/lib/lottieAssets': { loadLottiePlayer: async () => { throw new Error('chunk failed'); } },
+      '@/lib/lottieAssets': {
+        loadLottiePlayer: async () => {
+          throw new Error('chunk failed');
+        },
+      },
       '@/lib/lottie/logoNonParallel.json': { default: { op: 140 } },
       '@/components/EmptyState': { default: 'EmptyState' },
       '@/components/ErrorRetry': { default: 'ErrorRetry' },
@@ -1077,18 +1475,28 @@ test('About page TraceHeader holds logoNonParallel last frame under reduced/off/
       '@/lib/utils': { getAssetUrl: (u) => u },
       '@/lib/icons': { ICON: { dense: 16 } },
       '@/components/Avatar': { default: 'Avatar' },
-      './AboutFrame': { default: 'AboutFrame', ROSTER_GRID: '', TeamCard: 'TeamCard', TeamSkeleton: 'TeamSkeleton' },
+      './AboutFrame': {
+        default: 'AboutFrame',
+        ROSTER_GRID: '',
+        TeamCard: 'TeamCard',
+        TeamSkeleton: 'TeamSkeleton',
+      },
     });
     const failTrace = extractTrace(FailingAbout, failHooks);
     const renderFail = () => {
       const node = failHooks.render(() => failTrace.type(failTrace.props));
-      if (node.props.children?.props?.ref) node.props.children.props.ref.current = { tagName: 'DIV' };
+      if (node.props.children?.props?.ref)
+        node.props.children.props.ref.current = { tagName: 'DIV' };
       return node;
     };
     renderFail();
     await failHooks.flushEffects();
     const fallbackTree = renderFail();
-    assert.equal(fallbackTree.props.children.type, 'Logo', `${scenario.name} falls back to Logo on load error`);
+    assert.equal(
+      fallbackTree.props.children.type,
+      'Logo',
+      `${scenario.name} falls back to Logo on load error`,
+    );
     failHooks.dispose();
   }
 
@@ -1106,18 +1514,30 @@ test('SettingsRow keeps @max-*/row wrap utilities on a descendant of @container/
     '@/components/Button': { default: 'Button' },
     '@/components/ToggleSwitch': { default: 'ToggleSwitch' },
     '@/components/SectionHeading': { default: 'SectionHeading' },
-    '@/components/Tooltip': { useTooltip: () => ({ anchorRef: { current: null }, anchorProps: {}, tooltip: null }) },
+    '@/components/Tooltip': {
+      useTooltip: () => ({ anchorRef: { current: null }, anchorProps: {}, tooltip: null }),
+    },
     '@/lib/hooks': { useMediaQuery: () => true },
     '@/lib/constants': { MEDIA: { sm: '(min-width: 640px)' } },
     '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') },
   });
   for (const children of [undefined, { type: 'div', props: {} }]) {
-    const tree = SettingsRow({ label: '内容分级', supporting: '说明', action: 'control', wrap: 'md', children });
+    const tree = SettingsRow({
+      label: '内容分级',
+      supporting: '说明',
+      action: 'control',
+      wrap: 'md',
+      children,
+    });
     const outerClass = String(tree.props.className ?? '');
     assert.match(outerClass, /@container\/row/, 'outer row establishes @container/row');
     assert.doesNotMatch(outerClass, /@max-md\/row:flex-wrap/, 'container must not query itself');
     const inner = Array.isArray(tree.props.children) ? tree.props.children[0] : tree.props.children;
-    assert.match(String(inner.props.className ?? ''), /@max-md\/row:flex-wrap/, 'inner flex row wraps below breakpoint');
+    assert.match(
+      String(inner.props.className ?? ''),
+      /@max-md\/row:flex-wrap/,
+      'inner flex row wraps below breakpoint',
+    );
   }
 });
 
@@ -1131,40 +1551,61 @@ test('AnnouncementModal formats RFC3339 announcement timestamps instead of print
     useState(initial) {
       const i = cursor++;
       if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
-      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+      return [
+        states[i],
+        (next) => {
+          states[i] = typeof next === 'function' ? next(states[i]) : next;
+        },
+      ];
     },
-    useRef(initial) { return { current: initial }; },
-    useEffect(fn) { effects.push(fn); },
+    useRef(initial) {
+      return { current: initial };
+    },
+    useEffect(fn) {
+      effects.push(fn);
+    },
     useSyncExternalStore: (_sub, read) => read(),
   };
-  const { default: AnnouncementModal } = load('components/AnnouncementModal.tsx', {
-    react,
-    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    '@/lib/api/picpony': {
-      getAnnouncement: async () => ({
-        success: true,
-        announcement: {
-          id: 9,
-          version: 'v2.4.0',
-          title: '系统更新',
-          content: '<p>正文</p>',
-          date: '2026-11-23T14:29:37.837878+00:00',
+  const { default: AnnouncementModal } = load(
+    'components/AnnouncementModal.tsx',
+    {
+      react,
+      'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+      '@/lib/api/picpony': {
+        getAnnouncement: async () => ({
+          success: true,
+          announcement: {
+            id: 9,
+            version: 'v2.4.0',
+            title: '系统更新',
+            content: '<p>正文</p>',
+            date: '2026-11-23T14:29:37.837878+00:00',
+          },
+        }),
+      },
+      './Modal': { default: 'Modal' },
+      './Button': { default: 'Button' },
+      '@/components/SectionHeading': { default: 'SectionHeading' },
+      '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
+      '@/lib/format': format,
+      '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
+      '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
+      '@/lib/utils': {
+        runWhenIdle: (fn) => {
+          fn();
+          return () => {};
         },
-      }),
+      },
     },
-    './Modal': { default: 'Modal' },
-    './Button': { default: 'Button' },
-    '@/components/SectionHeading': { default: 'SectionHeading' },
-    '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
-    '@/lib/format': format,
-    '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
-    '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
-    '@/lib/utils': { runWhenIdle: (fn) => { fn(); return () => {}; } },
-  }, {
-    localStorage: { getItem: () => null, setItem() {} },
-  });
+    {
+      localStorage: { getItem: () => null, setItem() {} },
+    },
+  );
 
-  const render = () => { cursor = 0; return AnnouncementModal(); };
+  const render = () => {
+    cursor = 0;
+    return AnnouncementModal();
+  };
   render();
   for (const fn of effects.splice(0)) fn();
   await new Promise((resolve) => setImmediate(resolve));
@@ -1181,7 +1622,10 @@ test('AnnouncementModal formats RFC3339 announcement timestamps instead of print
   const findTag = (node, tag) => {
     if (!node || typeof node !== 'object') return null;
     if (Array.isArray(node)) {
-      for (const child of node) { const hit = findTag(child, tag); if (hit) return hit; }
+      for (const child of node) {
+        const hit = findTag(child, tag);
+        if (hit) return hit;
+      }
       return null;
     }
     if (node.type === tag) return node;
@@ -1208,34 +1652,58 @@ test('AnnouncementModal forwards saved readAnnouncementVersion as skipVersion to
     useState(initial) {
       const i = cursor++;
       if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
-      return [states[i], (next) => { states[i] = typeof next === 'function' ? next(states[i]) : next; }];
+      return [
+        states[i],
+        (next) => {
+          states[i] = typeof next === 'function' ? next(states[i]) : next;
+        },
+      ];
     },
-    useRef(initial) { return { current: initial }; },
-    useEffect(fn) { effects.push(fn); },
+    useRef(initial) {
+      return { current: initial };
+    },
+    useEffect(fn) {
+      effects.push(fn);
+    },
     useSyncExternalStore: (_sub, read) => read(),
   };
-  const { default: AnnouncementModal } = load('components/AnnouncementModal.tsx', {
-    react,
-    'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
-    '@/lib/api/picpony': {
-      getAnnouncement: async (signal, options) => {
-        calls.push({ signal, options });
-        return { success: true };
+  const { default: AnnouncementModal } = load(
+    'components/AnnouncementModal.tsx',
+    {
+      react,
+      'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
+      '@/lib/api/picpony': {
+        getAnnouncement: async (signal, options) => {
+          calls.push({ signal, options });
+          return { success: true };
+        },
+      },
+      './Modal': { default: 'Modal' },
+      './Button': { default: 'Button' },
+      '@/components/SectionHeading': { default: 'SectionHeading' },
+      '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
+      '@/lib/format': format,
+      '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
+      '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
+      '@/lib/utils': {
+        runWhenIdle: (fn) => {
+          fn();
+          return () => {};
+        },
       },
     },
-    './Modal': { default: 'Modal' },
-    './Button': { default: 'Button' },
-    '@/components/SectionHeading': { default: 'SectionHeading' },
-    '@/lib/constants': { LS_KEYS: { readAnnouncementVersion: 'read_announcement_version' } },
-    '@/lib/format': format,
-    '@/lib/overlay': { isScreenQuiet: () => true, subscribeScreenQuiet: () => () => {} },
-    '@/lib/overlayScrollbar': { useRichTextScrollbars() {} },
-    '@/lib/utils': { runWhenIdle: (fn) => { fn(); return () => {}; } },
-  }, {
-    localStorage: { getItem: (k) => (k === 'read_announcement_version' ? 'v2.4.0' : null), setItem() {} },
-  });
+    {
+      localStorage: {
+        getItem: (k) => (k === 'read_announcement_version' ? 'v2.4.0' : null),
+        setItem() {},
+      },
+    },
+  );
 
-  const render = () => { cursor = 0; return AnnouncementModal(); };
+  const render = () => {
+    cursor = 0;
+    return AnnouncementModal();
+  };
   render();
   for (const fn of effects.splice(0)) fn();
   await new Promise((resolve) => setImmediate(resolve));

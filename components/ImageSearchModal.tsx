@@ -80,7 +80,10 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         setStatus({ kind: 'idle' });
       });
     }
-    return () => { active.current = false; generation.current += 1; };
+    return () => {
+      active.current = false;
+      generation.current += 1;
+    };
   }, [isOpen]);
 
   const close = () => {
@@ -109,7 +112,8 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
         setStatus({ kind: 'error', message: apiErrorMessage(err, '无法读取此图片') });
       }
     } finally {
-      if (active.current && current === generation.current && request === fileRead.current) setIsReading(false);
+      if (active.current && current === generation.current && request === fileRead.current)
+        setIsReading(false);
     }
   };
 
@@ -127,14 +131,20 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
 
     try {
       const byFile = Boolean(selectedFile);
-      const data = byFile && selectedFile
-        ? await searchImage(selectedFile, distance)
-        : await searchImageByUrl(linkTarget as string, distance);
+      const data =
+        byFile && selectedFile
+          ? await searchImage(selectedFile, distance)
+          : await searchImageByUrl(linkTarget as string, distance);
       if (!active.current || current !== generation.current) return;
 
       const images = Array.isArray(data?.images) ? (data.images as PonyImage[]) : [];
       if (images.length > 0) {
-        onResult({ kind: 'images', images, total: Number(data.total) || images.length, preview: byFile ? selectedImage : null });
+        onResult({
+          kind: 'images',
+          images,
+          total: Number(data.total) || images.length,
+          preview: byFile ? selectedImage : null,
+        });
         close();
       } else if (typeof data?.searchQuery === 'string' && data.searchQuery.trim()) {
         onResult({ kind: 'query', query: data.searchQuery.trim() });
@@ -164,7 +174,12 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
           <Button variant="text" type="button" onClick={close}>
             取消
           </Button>
-          <Button variant="filled" onClick={() => void handleSubmit()} disabled={!ready} loading={isUploading}>
+          <Button
+            variant="filled"
+            onClick={() => void handleSubmit()}
+            disabled={!ready}
+            loading={isUploading}
+          >
             开始搜索
           </Button>
         </>
@@ -199,7 +214,12 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
                       className="object-contain rounded-md"
                     />
                   </div>
-                  <p className={cn('text-body-s mt-3', dropState !== 'dragging' && 'text-on-surface-variant')}>
+                  <p
+                    className={cn(
+                      'text-body-s mt-3',
+                      dropState !== 'dragging' && 'text-on-surface-variant',
+                    )}
+                  >
                     点击或拖拽以更换图片
                   </p>
                 </>
@@ -211,7 +231,12 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
                     size={ICON.display}
                     className={cn('mb-3', dropState !== 'dragging' && 'text-on-surface-variant')}
                   />
-                  <p className={cn('text-body-m-emphasized', dropState !== 'dragging' && 'text-on-surface')}>
+                  <p
+                    className={cn(
+                      'text-body-m-emphasized',
+                      dropState !== 'dragging' && 'text-on-surface',
+                    )}
+                  >
                     点击或拖拽图片到此处
                   </p>
                 </>
@@ -251,7 +276,9 @@ export default function ImageSearchModal({ isOpen, onClose, onResult }: ImageSea
           <div className="mb-2 flex items-center justify-between">
             <p className="text-label-l text-on-surface">容差</p>
             {/* A value is text: `on-surface`, not the brand ink (2.5:1 at this size). */}
-            <span className="text-label-l-emphasized text-on-surface tabular-nums">{distance.toFixed(2)}</span>
+            <span className="text-label-l-emphasized text-on-surface tabular-nums">
+              {distance.toFixed(2)}
+            </span>
           </div>
           <Slider
             min={0.01}

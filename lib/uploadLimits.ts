@@ -44,7 +44,12 @@ export function uploadSourceUrl(value: unknown): string | null {
   if (!text || text.length > UPLOAD_MAX_SOURCE_URL) return null;
   try {
     const url = new URL(text);
-    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password || !url.hostname) {
+    if (
+      (url.protocol !== 'https:' && url.protocol !== 'http:') ||
+      url.username ||
+      url.password ||
+      !url.hostname
+    ) {
       return null;
     }
     return url.href;

@@ -23,7 +23,9 @@ export { completeProgress, runSummary, type ProgressState } from './progressStat
  */
 export function progressLanding(): Promise<void> {
   if (motionTier('overlay') === 'off') return Promise.resolve();
-  return new Promise((resolve) => window.setTimeout(resolve, COMPONENT_SPRING_MS.progress * MOTION_SPEED_SCALE.slow));
+  return new Promise((resolve) =>
+    window.setTimeout(resolve, COMPONENT_SPRING_MS.progress * MOTION_SPEED_SCALE.slow),
+  );
 }
 
 /**
@@ -44,7 +46,11 @@ export function ProgressBody({ state }: { state: ProgressState }) {
           {state.summary}
         </p>
       ) : (
-        <p key="running" className="text-body-m text-on-surface-variant tabular-nums" aria-live="polite">
+        <p
+          key="running"
+          className="text-body-m text-on-surface-variant tabular-nums"
+          aria-live="polite"
+        >
           {`${state.detail}（${state.done} / ${state.total}）`}
         </p>
       )}
@@ -68,7 +74,14 @@ export function StopButton({
   autoFocus?: boolean;
 }) {
   return (
-    <Button variant="text" onClick={onStop} loading={state.stopping} data-autofocus="" autoFocus={autoFocus} className={className}>
+    <Button
+      variant="text"
+      onClick={onStop}
+      loading={state.stopping}
+      data-autofocus=""
+      autoFocus={autoFocus}
+      className={className}
+    >
       停止
     </Button>
   );
@@ -85,7 +98,13 @@ export function StopButton({
  * it, and read directly the title and the line emptied and the meter ran back to zero while the
  * dialog faded — work being undone, on screen. The last state is held through the exit.
  */
-export default function ProgressDialog({ state, onStop }: { state: ProgressState | null; onStop: () => void }) {
+export default function ProgressDialog({
+  state,
+  onStop,
+}: {
+  state: ProgressState | null;
+  onStop: () => void;
+}) {
   const [shown, setShown] = useState(state);
   if (state && state !== shown) setShown(state);
   const view = state ?? shown;

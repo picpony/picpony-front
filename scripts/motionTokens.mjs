@@ -36,12 +36,18 @@ for (const [shape, easing] of Object.entries(spring.SPRING_BEZIER)) {
   lines.push(`  --motion-fallback-${shapeName[shape]}: ${easing};`);
 }
 for (const [name, spec] of Object.entries(spring.SPRINGS)) {
-  lines.push(`  --motion-base-spring-${kebab(name)}: ${spring.SPRING_MS[name]}ms; /* ζ${spec.damping} k${spec.stiffness} */`);
+  lines.push(
+    `  --motion-base-spring-${kebab(name)}: ${spring.SPRING_MS[name]}ms; /* ζ${spec.damping} k${spec.stiffness} */`,
+  );
 }
 for (const [name, spec] of Object.entries(spring.COMPONENT_SPRINGS)) {
-  lines.push(`  --motion-base-spring-${kebab(name)}: ${spring.springDurationMs(spec)}ms; /* ζ${spec.damping} k${spec.stiffness} */`);
+  lines.push(
+    `  --motion-base-spring-${kebab(name)}: ${spring.springDurationMs(spec)}ms; /* ζ${spec.damping} k${spec.stiffness} */`,
+  );
 }
-lines.push(`  --motion-base-handoff: ${Math.round(spring.SPRING_MS.fastEffects / 2)}ms; /* half a fast-effects fade: a follower starts as its leader is ~90% there */`);
+lines.push(
+  `  --motion-base-handoff: ${Math.round(spring.SPRING_MS.fastEffects / 2)}ms; /* half a fast-effects fade: a follower starts as its leader is ~90% there */`,
+);
 const block = `${START}${lines.join('\n')}\n${END}`;
 
 const source = readFileSync(CSS, 'utf8');

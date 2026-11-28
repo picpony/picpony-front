@@ -49,7 +49,8 @@ const widestCount = (unit: string) => `已选择 888 ${unit}`;
 function fitFor(width: number, commands: readonly SelectionCommand[], countText: string): Fit {
   const room = width - CHROME - countWidth(countText);
   const labelled = commands.reduce(
-    (sum, command) => sum + LABELLED_BASE + Array.from(command.maxLabel ?? command.label).length * CHARACTER + GAP,
+    (sum, command) =>
+      sum + LABELLED_BASE + Array.from(command.maxLabel ?? command.label).length * CHARACTER + GAP,
     0,
   );
   if (room >= labelled) return { form: 'labelled' };
@@ -142,7 +143,12 @@ export default function SelectionBar({
   useEffect(() => {
     if (!active) return;
     const focused = document.activeElement;
-    if (!focused || focused === document.body || !focused.isConnected || focused.closest('[inert]')) {
+    if (
+      !focused ||
+      focused === document.body ||
+      !focused.isConnected ||
+      focused.closest('[inert]')
+    ) {
       closeRef.current?.focus({ preventScroll: true });
     }
   }, [active]);
@@ -159,7 +165,8 @@ export default function SelectionBar({
   useLayoutEffect(() => {
     const spacer = roomRef.current;
     if (active || !roomHeld) return;
-    const scroller = spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+    const scroller =
+      spacer?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
     /* Below the viewport (or with no box at all, in a pane out of sight), the room can go: the
        page under the reader does not change, and nothing clamps the offset. */
     const free = () => {
@@ -186,107 +193,126 @@ export default function SelectionBar({
     };
   }, [active, roomHeld]);
 
-  const fit = width > 0 ? fitFor(width, shown.commands, widestCount(unit)) : { form: 'icons' as const };
+  const fit =
+    width > 0 ? fitFor(width, shown.commands, widestCount(unit)) : { form: 'icons' as const };
   const inline = fit.form === 'compact' ? shown.commands.slice(0, fit.shown) : shown.commands;
   const overflow = fit.form === 'compact' ? shown.commands.slice(fit.shown) : [];
 
   return (
     <>
-    <div
-      ref={roomRef}
-      className={cn('shrink-0 transition-[height]', room ? 'h-20 spring-layout' : 'h-0 spring-fast-effects')}
-      aria-hidden="true"
-    />
-    {/* `z-page-chrome`: the page's own floating chrome, as the home pill is — a stated step of the
+      <div
+        ref={roomRef}
+        className={cn(
+          'shrink-0 transition-[height]',
+          room ? 'h-20 spring-layout' : 'h-0 spring-fast-effects',
+        )}
+        aria-hidden="true"
+      />
+      {/* `z-page-chrome`: the page's own floating chrome, as the home pill is — a stated step of the
         app's order rather than a number that agrees with the shop's bar by luck (G3-026). */}
-    <div ref={slotRef} className="pointer-events-none sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-page-chrome h-0">
-      <div className="absolute inset-x-0 bottom-0 flex justify-center px-2">
-        {/* The fade: one opacity, on the effects spring both ways. */}
-        <div
-          role="toolbar"
-          aria-label={label}
-          inert={!active}
-          className={cn(
-            'max-w-full transition-opacity',
-            /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
-            active ? 'pointer-events-auto opacity-100 spring-default-effects' : 'opacity-0 spring-fast-effects',
-          )}
-        >
-          {/* The travel: up into place on the spatial spring, back down on the effects one. */}
+      <div
+        ref={slotRef}
+        className="pointer-events-none sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-page-chrome h-0"
+      >
+        <div className="absolute inset-x-0 bottom-0 flex justify-center px-2">
+          {/* The fade: one opacity, on the effects spring both ways. */}
           <div
-            data-selection-travel=""
-            data-hidden={active ? undefined : ''}
+            role="toolbar"
+            aria-label={label}
+            inert={!active}
             className={cn(
-              'flex h-14 max-w-full items-center gap-1 rounded-full bg-surface-container-high px-2 text-on-surface shadow-e2 forced-boundary',
-              'transition-[translate]',
-              active ? 'translate-y-0 spring-default-spatial' : 'translate-y-4 spring-fast-effects',
+              'max-w-full transition-opacity',
+              /* Arriving, the fade is the effects spring of the travel's size (rule 5). */
+              active
+                ? 'pointer-events-auto opacity-100 spring-default-effects'
+                : 'opacity-0 spring-fast-effects',
             )}
           >
-            <IconButton ref={closeRef} dismiss icon={<MdClose />} aria-label="退出选择" onClick={onExit} />
-            {/* As wide as its widest count (the `Select` technique): the live text and an
+            {/* The travel: up into place on the spatial spring, back down on the effects one. */}
+            <div
+              data-selection-travel=""
+              data-hidden={active ? undefined : ''}
+              className={cn(
+                'flex h-14 max-w-full items-center gap-1 rounded-full bg-surface-container-high px-2 text-on-surface shadow-e2 forced-boundary',
+                'transition-[translate]',
+                active
+                  ? 'translate-y-0 spring-default-spatial'
+                  : 'translate-y-4 spring-fast-effects',
+              )}
+            >
+              <IconButton
+                ref={closeRef}
+                dismiss
+                icon={<MdClose />}
+                aria-label="退出选择"
+                onClick={onExit}
+              />
+              {/* As wide as its widest count (the `Select` technique): the live text and an
                 invisible three-digit one share one cell, so the bar never re-forms or re-centres
                 as the count grows. */}
-            <span className="grid shrink-0 px-2 text-label-l whitespace-nowrap tabular-nums">
-              <span aria-hidden="true" className="invisible col-start-1 row-start-1">
-                {widestCount(unit)}
+              <span className="grid shrink-0 px-2 text-label-l whitespace-nowrap tabular-nums">
+                <span aria-hidden="true" className="invisible col-start-1 row-start-1">
+                  {widestCount(unit)}
+                </span>
+                <span aria-live="polite" className="col-start-1 row-start-1">
+                  {countText}
+                </span>
               </span>
-              <span aria-live="polite" className="col-start-1 row-start-1">
-                {countText}
-              </span>
-            </span>
-            {inline.map((command) =>
-              fit.form === 'labelled' ? (
-                <Button
-                  key={command.value}
-                  variant={command.destructive ? 'danger-text' : 'text'}
-                  icon={command.icon}
-                  disabled={command.disabled}
-                  onClick={command.onSelect}
-                  className="whitespace-nowrap"
-                >
-                  {command.label}
-                </Button>
-              ) : (
-                <IconButton
-                  key={command.value}
-                  variant={command.destructive ? 'danger-text' : 'standard'}
-                  icon={command.icon}
-                  aria-label={command.label}
-                  disabled={command.disabled}
-                  onClick={command.onSelect}
-                />
-              ),
-            )}
-            {overflow.length > 0 && (
-              <>
-                <IconButton
-                  ref={moreRef}
-                  icon={<MdMoreVert />}
-                  aria-label="更多操作"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  onClick={() => setMenuOpen((open) => !open)}
-                />
-                <Menu
-                  open={menuOpen}
-                  onClose={() => setMenuOpen(false)}
-                  anchorRef={moreRef}
-                  aria-label="更多操作"
-                  items={overflow.map((command) => ({
-                    value: command.value,
-                    label: command.label,
-                    icon: command.icon,
-                    disabled: command.disabled,
-                    destructive: command.destructive,
-                  }))}
-                  onSelect={(value) => overflow.find((command) => command.value === value)?.onSelect()}
-                />
-              </>
-            )}
+              {inline.map((command) =>
+                fit.form === 'labelled' ? (
+                  <Button
+                    key={command.value}
+                    variant={command.destructive ? 'danger-text' : 'text'}
+                    icon={command.icon}
+                    disabled={command.disabled}
+                    onClick={command.onSelect}
+                    className="whitespace-nowrap"
+                  >
+                    {command.label}
+                  </Button>
+                ) : (
+                  <IconButton
+                    key={command.value}
+                    variant={command.destructive ? 'danger-text' : 'standard'}
+                    icon={command.icon}
+                    aria-label={command.label}
+                    disabled={command.disabled}
+                    onClick={command.onSelect}
+                  />
+                ),
+              )}
+              {overflow.length > 0 && (
+                <>
+                  <IconButton
+                    ref={moreRef}
+                    icon={<MdMoreVert />}
+                    aria-label="更多操作"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    onClick={() => setMenuOpen((open) => !open)}
+                  />
+                  <Menu
+                    open={menuOpen}
+                    onClose={() => setMenuOpen(false)}
+                    anchorRef={moreRef}
+                    aria-label="更多操作"
+                    items={overflow.map((command) => ({
+                      value: command.value,
+                      label: command.label,
+                      icon: command.icon,
+                      disabled: command.disabled,
+                      destructive: command.destructive,
+                    }))}
+                    onSelect={(value) =>
+                      overflow.find((command) => command.value === value)?.onSelect()
+                    }
+                  />
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </>
   );
 }

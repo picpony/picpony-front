@@ -22,7 +22,9 @@ type BlacklistItem = adminApi.AdminBlock;
 
 const EMPTY: BlacklistItem[] = [];
 /* The list and the policy revision every add or removal names (`expected_revision`). */
-const blacklistQuery = defineAdminQuery<adminApi.AdminBlocklist>('blacklist', (token, signal) => adminApi.adminGetBlacklist(token, signal));
+const blacklistQuery = defineAdminQuery<adminApi.AdminBlocklist>('blacklist', (token, signal) =>
+  adminApi.adminGetBlacklist(token, signal),
+);
 
 /** The revision a write answered, for the next write from the same cache. */
 const nextRevision = (data: Record<string, unknown>, fallback: number) =>
@@ -51,7 +53,9 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return items;
-    return items.filter((item) => String(item.image_id) === keyword || item.reason?.toLowerCase().includes(keyword));
+    return items.filter(
+      (item) => String(item.image_id) === keyword || item.reason?.toLowerCase().includes(keyword),
+    );
   }, [search, items]);
   const paged = usePagedRows(filtered, search.trim());
 
@@ -72,7 +76,13 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       `确定要屏蔽图片 #${id} 吗？屏蔽后全站的图库、搜索和个人主页都不会再显示该图片。`,
       () =>
         void addMutation.run(
-          () => adminApi.adminAddBlacklist(token, blacklistQuery.peek(token).data?.revision ?? revision, id, reason.trim()),
+          () =>
+            adminApi.adminAddBlacklist(
+              token,
+              blacklistQuery.peek(token).data?.revision ?? revision,
+              id,
+              reason.trim(),
+            ),
           () => {
             showToast(`已屏蔽图片 #${id}`, 'success');
             setImageId('');
@@ -81,7 +91,10 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
           '屏蔽失败',
           {
             onCommitted: (data) => {
-              blacklistQuery.write(token, (previous) => ({ revision: nextRevision(data, previous?.revision ?? revision), items: previous?.items ?? [] }));
+              blacklistQuery.write(token, (previous) => ({
+                revision: nextRevision(data, previous?.revision ?? revision),
+                items: previous?.items ?? [],
+              }));
               read.refresh();
             },
           },
@@ -148,7 +161,9 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
       header: '时间',
       width: 'auto',
       className: 'tabular-nums',
-      render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
+      render: (item) => (
+        <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>
+      ),
     },
     {
       key: 'actions',
@@ -198,7 +213,13 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
             fieldClassName="min-w-0 @lg/form:flex-1"
             onChange={(event) => setReason(event.target.value)}
           />
-          <Button type="submit" size="lg" variant="danger" icon={<MdBlock />} loading={addMutation.busy}>
+          <Button
+            type="submit"
+            size="lg"
+            variant="danger"
+            icon={<MdBlock />}
+            loading={addMutation.busy}
+          >
             屏蔽图片
           </Button>
         </div>
@@ -220,7 +241,9 @@ export default function BlacklistTab({ token }: AdminPanelProps) {
           page={paged.page}
           totalPages={paged.totalPages}
           onPageChange={paged.setPage}
-          summary={read.data ? (keyword ? `找到 ${paged.total} 条` : `共 ${paged.total} 条`) : undefined}
+          summary={
+            read.data ? (keyword ? `找到 ${paged.total} 条` : `共 ${paged.total} 条`) : undefined
+          }
         />
       </AdminListAnchor>
       {confirmDialog}

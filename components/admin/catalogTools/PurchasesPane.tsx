@@ -23,52 +23,196 @@ import MutationResult from './MutationResult';
 type Params = { token: string; keyword: string; legacy: boolean; before?: number };
 type Row = Purchase | LegacyPurchase;
 /* One cursor page per read (`before` → `next_cursor`): the backend never says how many there are. */
-const query = defineResource<Params, api.PurchasePage<Row>>({ name: 'admin-catalog-purchases', key: (p) => JSON.stringify(p), ttl: 60000, maxEntries: 12, fetch: (p, signal) => {
-  if (readToken() !== p.token) throw new Error(FAILURE_MESSAGES.unauthorized);
-  return p.legacy ? api.getLegacyShopPurchases(p.token, p.keyword, p.before, signal) : api.getShopPurchases(p.token, p.keyword, p.before, signal);
-} });
-export default function PurchasesPane({ token, legacy = false }: { token: string; legacy?: boolean }) {
+const query = defineResource<Params, api.PurchasePage<Row>>({
+  name: 'admin-catalog-purchases',
+  key: (p) => JSON.stringify(p),
+  ttl: 60000,
+  maxEntries: 12,
+  fetch: (p, signal) => {
+    if (readToken() !== p.token) throw new Error(FAILURE_MESSAGES.unauthorized);
+    return p.legacy
+      ? api.getLegacyShopPurchases(p.token, p.keyword, p.before, signal)
+      : api.getShopPurchases(p.token, p.keyword, p.before, signal);
+  },
+});
+export default function PurchasesPane({
+  token,
+  legacy = false,
+}: {
+  token: string;
+  legacy?: boolean;
+}) {
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState('');
   const scope = `${token}:${legacy}:${filter}`;
   const pages = useCursorPages(scope);
-  const read = useResource(query, { token, keyword: filter, legacy, before: pages.cursor }, { keepPrevious: scope });
+  const read = useResource(
+    query,
+    { token, keyword: filter, legacy, before: pages.cursor },
+    { keepPrevious: scope },
+  );
   if (read.data && !read.isPrevious && !read.error) pages.learn(pages.page, read.data.next);
   const listKey = useShownListKey(`${scope}\n${pages.page}`, read.isPrevious);
   const mutation = useCatalogMutation(token);
   const { confirmThen, confirmDialog } = useConfirm();
-  const committed = () => { query.expire({ token, keyword: filter, legacy, before: pages.cursor }); shopItems.expire(); };
+  const committed = () => {
+    query.expire({ token, keyword: filter, legacy, before: pages.cursor });
+    shopItems.expire();
+  };
   const columns: Column<Row>[] = [
-    { key: 'user', header: '用户', primary: true, width: 'minmax(0, 1.2fr)', className: 'tabular-nums', render: (row) => `${row.username || '用户'}（#${row.user_id}）` },
-    { key: 'item', header: legacy ? '原因' : '商品', width: 'minmax(0, 2fr)', render: (row) => 'reason' in row ? row.reason : <span className="tabular-nums">{`${row.item_name} × ${row.quantity}`}</span> },
+    {
+      key: 'user',
+      header: '用户',
+      primary: true,
+      width: 'minmax(0, 1.2fr)',
+      className: 'tabular-nums',
+      render: (row) => `${row.username || '用户'}（#${row.user_id}）`,
+    },
+    {
+      key: 'item',
+      header: legacy ? '原因' : '商品',
+      width: 'minmax(0, 2fr)',
+      render: (row) =>
+        'reason' in row ? (
+          row.reason
+        ) : (
+          <span className="tabular-nums">{`${row.item_name} × ${row.quantity}`}</span>
+        ),
+    },
     /* Exact and grouped, never 万/亿: a refund amount has to be checkable against a balance.
        A legacy row's amount is a signed ledger entry, a purchase's total is what was paid. */
-    { key: 'amount', header: '金币', width: 'auto', className: 'tabular-nums', render: (row) => 'amount' in row ? formatSignedCount(row.amount) : formatExactCount(row.total_amount) },
-    { key: 'time', header: '时间', width: 'auto', className: 'tabular-nums', render: (row) => formatDateTime(row.created_at) },
-    { key: 'status', header: '状态', width: 'auto', render: (row) => <Badge size="md" tone={'status' in row ? (row.status === 'completed' ? 'success' : row.status === 'refunded' ? 'neutral' : 'warning') : 'neutral'}>{'status' in row ? row.status === 'completed' ? '已完成' : row.status === 'refunded' ? '已退款' : '待核对' : '旧版流水'}</Badge> },
-    ...(!legacy ? [{ key: 'actions', header: '操作', actions: true, render: (row: Row) => 'status' in row && row.status === 'completed' ? <Button size="xs" variant="danger-text" disabled={mutation.busy || mutation.uncertain} onClick={() => confirmThen('确认退款', `确定要将订单 #${row.id}「${row.item_name}」的 ${row.total_amount} 金币退还给 ${row.username || '用户'}（#${row.user_id}）吗？将恢复 ${row.quantity} 件库存，此操作无法恢复。`, () => void mutation.run(() => api.refundShopPurchase(token, row.id), () => showToast(`已退还 ${row.total_amount} 金币`, 'success'), committed), { tone: 'danger' })}>退款</Button> : <span className="text-body-m text-on-surface-variant">—</span> }] : []),
+    {
+      key: 'amount',
+      header: '金币',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (row) =>
+        'amount' in row ? formatSignedCount(row.amount) : formatExactCount(row.total_amount),
+    },
+    {
+      key: 'time',
+      header: '时间',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (row) => formatDateTime(row.created_at),
+    },
+    {
+      key: 'status',
+      header: '状态',
+      width: 'auto',
+      render: (row) => (
+        <Badge
+          size="md"
+          tone={
+            'status' in row
+              ? row.status === 'completed'
+                ? 'success'
+                : row.status === 'refunded'
+                  ? 'neutral'
+                  : 'warning'
+              : 'neutral'
+          }
+        >
+          {'status' in row
+            ? row.status === 'completed'
+              ? '已完成'
+              : row.status === 'refunded'
+                ? '已退款'
+                : '待核对'
+            : '旧版流水'}
+        </Badge>
+      ),
+    },
+    ...(!legacy
+      ? [
+          {
+            key: 'actions',
+            header: '操作',
+            actions: true,
+            render: (row: Row) =>
+              'status' in row && row.status === 'completed' ? (
+                <Button
+                  size="xs"
+                  variant="danger-text"
+                  disabled={mutation.busy || mutation.uncertain}
+                  onClick={() =>
+                    confirmThen(
+                      '确认退款',
+                      `确定要将订单 #${row.id}「${row.item_name}」的 ${row.total_amount} 金币退还给 ${row.username || '用户'}（#${row.user_id}）吗？将恢复 ${row.quantity} 件库存，此操作无法恢复。`,
+                      () =>
+                        void mutation.run(
+                          () => api.refundShopPurchase(token, row.id),
+                          () => showToast(`已退还 ${row.total_amount} 金币`, 'success'),
+                          committed,
+                        ),
+                      { tone: 'danger' },
+                    )
+                  }
+                >
+                  退款
+                </Button>
+              ) : (
+                <span className="text-body-m text-on-surface-variant">—</span>
+              ),
+          },
+        ]
+      : []),
   ];
-  return <div className="@container space-y-6">
-    {legacy && <AdminNote>旧版流水仅供人工核对，不提供自动退款。</AdminNote>}
-    <form
-      role="search"
-      aria-label={legacy ? '查询旧版流水' : '查询消费记录'}
-      noValidate
-      className="flex flex-col gap-3 @md:flex-row @md:items-center"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setFilter(keyword.trim());
-        if (filter === keyword.trim()) read.refresh();
-      }}
-    >
-      <SearchInput value={keyword} maxLength={200} onChange={setKeyword} placeholder={legacy ? '用户或原因关键词…' : '用户或商品关键词…'} className="min-w-0 @md:flex-1" />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="filled">查询</Button>
-        <RefreshButton onClick={read.refresh} label="刷新记录" loading={read.isLoading && read.data !== undefined} />
-      </div>
-    </form>
-    <MutationResult mutation={mutation} />
-    <AdminListAnchor><DataTable columns={columns} rows={read.data?.rows ?? []} listKey={listKey} rowKey={(row) => row.id} loading={read.data === undefined && !read.error} {...tableError(legacy ? '旧版流水加载失败' : '消费记录加载失败', read.error ? apiErrorMessage(read.error) : undefined)} onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined} empty={legacy ? '暂无旧版流水' : '暂无消费记录'} /><AdminPager page={pages.page} totalPages={pages.totalPages} onPageChange={pages.setPage} disabled={read.isLoading} /></AdminListAnchor>
-    {confirmDialog}
-  </div>;
+  return (
+    <div className="@container space-y-6">
+      {legacy && <AdminNote>旧版流水仅供人工核对，不提供自动退款。</AdminNote>}
+      <form
+        role="search"
+        aria-label={legacy ? '查询旧版流水' : '查询消费记录'}
+        noValidate
+        className="flex flex-col gap-3 @md:flex-row @md:items-center"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setFilter(keyword.trim());
+          if (filter === keyword.trim()) read.refresh();
+        }}
+      >
+        <SearchInput
+          value={keyword}
+          maxLength={200}
+          onChange={setKeyword}
+          placeholder={legacy ? '用户或原因关键词…' : '用户或商品关键词…'}
+          className="min-w-0 @md:flex-1"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" variant="filled">
+            查询
+          </Button>
+          <RefreshButton
+            onClick={read.refresh}
+            label="刷新记录"
+            loading={read.isLoading && read.data !== undefined}
+          />
+        </div>
+      </form>
+      <MutationResult mutation={mutation} />
+      <AdminListAnchor>
+        <DataTable
+          columns={columns}
+          rows={read.data?.rows ?? []}
+          listKey={listKey}
+          rowKey={(row) => row.id}
+          loading={read.data === undefined && !read.error}
+          {...tableError(
+            legacy ? '旧版流水加载失败' : '消费记录加载失败',
+            read.error ? apiErrorMessage(read.error) : undefined,
+          )}
+          onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
+          empty={legacy ? '暂无旧版流水' : '暂无消费记录'}
+        />
+        <AdminPager
+          page={pages.page}
+          totalPages={pages.totalPages}
+          onPageChange={pages.setPage}
+          disabled={read.isLoading}
+        />
+      </AdminListAnchor>
+      {confirmDialog}
+    </div>
+  );
 }

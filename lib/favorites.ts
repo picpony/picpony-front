@@ -151,7 +151,11 @@ export function withholdFromDevice(
     if (image && !pulled.has(id)) ordered.push(image);
   }
   const images = ordered.filter((image) => !isWithheldBy(image.tags, settings, filters));
-  return { images, filtered: ordered.length - images.length, missing: asked.length - ordered.length };
+  return {
+    images,
+    filtered: ordered.length - images.length,
+    missing: asked.length - ordered.length,
+  };
 }
 
 /** 本页有 3 张收藏因当前的内容筛选设置未显示，2 张已被删除或无法访问 */
@@ -182,14 +186,20 @@ export function transferSummary(
   const verb = VERB[mode];
   if (result.targets.length === 0) {
     const done = result.affected ?? count;
-    return { text: `已${verb} ${done} 张${done < count ? `，${count - done} 张失败` : ''}`, partial: done < count };
+    return {
+      text: `已${verb} ${done} 张${done < count ? `，${count - done} 张失败` : ''}`,
+      partial: done < count,
+    };
   }
-  const partial = result.targets.some((target) => target.failed > 0 || target.succeeded < target.requested);
+  const partial = result.targets.some(
+    (target) => target.failed > 0 || target.succeeded < target.requested,
+  );
   if (!partial) {
     const names = result.targets.map((target) => `「${target.folderName || UNNAMED_FOLDER}」`);
     const where = names.length <= 3 ? names.join('、') : `${names.length} 个收藏夹`;
     const counts = new Set(result.targets.map((target) => target.succeeded));
-    if (counts.size === 1) return { text: `已${verb} ${result.targets[0].succeeded} 张到${where}`, partial: false };
+    if (counts.size === 1)
+      return { text: `已${verb} ${result.targets[0].succeeded} 张到${where}`, partial: false };
   }
   const lines = result.targets.map((target) => {
     const name = `「${target.folderName || UNNAMED_FOLDER}」`;
@@ -231,7 +241,8 @@ export function resolveDefaultFolder(
     return { id: chosen.id, name, corrected: name !== stored.name };
   }
   const main = folders.find((folder) => folder.isMain);
-  if (!main) return { ...NO_DEFAULT_FOLDER, corrected: stored.id !== 0 || stored.name !== MAIN_FOLDER_NAME };
+  if (!main)
+    return { ...NO_DEFAULT_FOLDER, corrected: stored.id !== 0 || stored.name !== MAIN_FOLDER_NAME };
   return { id: main.id, name: folderLabel(main), corrected: true };
 }
 
@@ -251,7 +262,9 @@ export function goesToPrivacySpace(input: {
   tags: readonly string[] | undefined;
 }): boolean {
   if (input.alreadyFaved || !input.autoPrivacy || input.contentFilter !== 'developer') return false;
-  return (input.tags ?? []).some((tag) => typeof tag === 'string' && tag.trim().toLowerCase() === 'explicit');
+  return (input.tags ?? []).some(
+    (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === 'explicit',
+  );
 }
 
 /** The unlock durations the privacy space offers, in seconds — the original front end's set. */
@@ -261,7 +274,9 @@ export const DEFAULT_PRIVACY_UNLOCK_SECONDS: PrivacyUnlockSeconds = 15;
 
 export function parseUnlockSeconds(value: unknown): PrivacyUnlockSeconds | undefined {
   const n = typeof value === 'string' ? Number.parseInt(value, 10) : Number(value);
-  return (PRIVACY_UNLOCK_SECONDS as readonly number[]).includes(n) ? (n as PrivacyUnlockSeconds) : undefined;
+  return (PRIVACY_UNLOCK_SECONDS as readonly number[]).includes(n)
+    ? (n as PrivacyUnlockSeconds)
+    : undefined;
 }
 
 /** 15 秒, 1 分钟, 1 小时 — the duration's label. */

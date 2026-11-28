@@ -46,10 +46,7 @@ function ClaimSkeleton() {
 /** The way out of the card: the account's own page when there is one, else home. */
 function ExitLink({ profileHref, emphasized }: { profileHref: string; emphasized: boolean }) {
   return (
-    <ButtonLink
-      href={profileHref}
-      variant={emphasized ? 'filled' : 'tonal'}
-    >
+    <ButtonLink href={profileHref} variant={emphasized ? 'filled' : 'tonal'}>
       {profileHref === '/' ? '回到首页' : '返回个人主页'}
     </ButtonLink>
   );
@@ -90,7 +87,12 @@ export default function ClaimBadgeContent({ claimToken }: { claimToken: string }
             <SignInRequired size="pane" description="登录后即可领取此徽章" />
           </Card>
         ) : (
-          <ClaimForm key={`${token}:${claimToken}`} token={token} claimToken={claimToken} profileHref={profileHref} />
+          <ClaimForm
+            key={`${token}:${claimToken}`}
+            token={token}
+            claimToken={claimToken}
+            profileHref={profileHref}
+          />
         )}
       </div>
     </>
@@ -118,15 +120,19 @@ type Outcome =
  */
 async function readEarnedBadge(token: string, name: string): Promise<EarnedLook | null> {
   let timer = 0;
-  const look = Promise.allSettled([myBadges.read({ token }, { force: true }), badgeDictionary.read({})]).then(
-    ([held, dictionary]): EarnedLook => {
-      if (held.status === 'rejected') myBadges.expire({ token });
-      return {
-        color: held.status === 'fulfilled' ? (held.value.badges.find((badge) => badge.name === name)?.color ?? '') : '',
-        description: dictionary.status === 'fulfilled' ? (dictionary.value[name] ?? null) : null,
-      };
-    },
-  );
+  const look = Promise.allSettled([
+    myBadges.read({ token }, { force: true }),
+    badgeDictionary.read({}),
+  ]).then(([held, dictionary]): EarnedLook => {
+    if (held.status === 'rejected') myBadges.expire({ token });
+    return {
+      color:
+        held.status === 'fulfilled'
+          ? (held.value.badges.find((badge) => badge.name === name)?.color ?? '')
+          : '',
+      description: dictionary.status === 'fulfilled' ? (dictionary.value[name] ?? null) : null,
+    };
+  });
   const late = new Promise<null>((resolve) => {
     timer = window.setTimeout(() => resolve(null), EARNED_BADGE_WAIT_MS);
   });
@@ -136,11 +142,21 @@ async function readEarnedBadge(token: string, name: string): Promise<EarnedLook 
 }
 
 /** The badge just earned, as it will appear on the profile, under its description. */
-function EarnedBadgeLook({ name, look, className }: { name: string; look: EarnedLook; className?: string }) {
+function EarnedBadgeLook({
+  name,
+  look,
+  className,
+}: {
+  name: string;
+  look: EarnedLook;
+  className?: string;
+}) {
   return (
     <div className={cn('mt-4 flex flex-col items-center gap-2', className)}>
       <UserBadge name={name} color={look.color} size="md" />
-      {look.description && <p className="max-w-md text-body-s text-on-surface-variant">{look.description}</p>}
+      {look.description && (
+        <p className="max-w-md text-body-s text-on-surface-variant">{look.description}</p>
+      )}
     </div>
   );
 }
@@ -154,7 +170,8 @@ function LateEarnedBadge({ token, name }: { token: string; name: string }) {
   const held = useResource(myBadges, { token });
   const dictionary = useResource(badgeDictionary, {});
   const badge = held.data?.badges.find((item) => item.name === name);
-  const colourKnown = badge !== undefined || held.error !== undefined || (held.data !== undefined && !held.isLoading);
+  const colourKnown =
+    badge !== undefined || held.error !== undefined || (held.data !== undefined && !held.isLoading);
   const descriptionKnown = dictionary.data !== undefined || dictionary.error !== undefined;
   if (!colourKnown || !descriptionKnown) {
     return (
@@ -193,7 +210,15 @@ function CardState({ swap, children }: { swap: boolean; children: React.ReactNod
  * 入场动画 switch says, and `StatusView` stands its own entrance down for it (`entrance={false}`)
  * — the two must not both run on one block, and the result must not depend on the switch.
  */
-function ClaimForm({ token, claimToken, profileHref }: { token: string; claimToken: string; profileHref: string }) {
+function ClaimForm({
+  token,
+  claimToken,
+  profileHref,
+}: {
+  token: string;
+  claimToken: string;
+  profileHref: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   /* Pressed at least once: from then on every change of state is a swap, never an arrival. */
@@ -204,7 +229,9 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
   useEffect(() => {
     const target = outcome
       ? cardRef.current?.querySelector('h2')
-      : busy ? cardRef.current?.querySelector('button') : null;
+      : busy
+        ? cardRef.current?.querySelector('button')
+        : null;
     if (!target) return;
     const focus = () => {
       if (outcome) return focusLanding(target);
@@ -226,7 +253,9 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
       }
     };
     void landAfterReveal();
-    return () => { current = false; };
+    return () => {
+      current = false;
+    };
   }, [outcome, busy]);
 
   const submit = async () => {
@@ -275,13 +304,24 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         description="徽章已加入当前账号，可在个人主页佩戴"
         action={home}
       >
-        {outcome.name && (outcome.look
-          ? <EarnedBadgeLook name={outcome.name} look={outcome.look} />
-          : <LateEarnedBadge token={token} name={outcome.name} />)}
+        {outcome.name &&
+          (outcome.look ? (
+            <EarnedBadgeLook name={outcome.name} look={outcome.look} />
+          ) : (
+            <LateEarnedBadge token={token} name={outcome.name} />
+          ))}
       </StatusView>
     );
   } else if (outcome?.kind === 'refused') {
-    content = <ErrorRetry size="pane" entrance={!pressed} title="未能领取徽章" message={outcome.message} action={home} />;
+    content = (
+      <ErrorRetry
+        size="pane"
+        entrance={!pressed}
+        title="未能领取徽章"
+        message={outcome.message}
+        action={home}
+      />
+    );
   } else if (outcome?.kind === 'unknown') {
     content = (
       <ErrorRetry
@@ -301,7 +341,12 @@ function ClaimForm({ token, claimToken, profileHref }: { token: string; claimTok
         icon={<MdEmojiEvents size={ICON.display} />}
         title="待领取徽章"
         action={
-          <Button variant="filled" onClick={() => void submit()} loading={busy} icon={<MdEmojiEvents />}>
+          <Button
+            variant="filled"
+            onClick={() => void submit()}
+            loading={busy}
+            icon={<MdEmojiEvents />}
+          >
             领取徽章
           </Button>
         }

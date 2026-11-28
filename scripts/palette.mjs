@@ -127,16 +127,32 @@ const THEMES = [
     from:
       '吉祥物鬃毛 #E06C9F（H355.7）向珊瑚方向偏 9.7° 至 H5.4：A 的暖色上沿 T86。' +
       '偏转是为与碧琪（H353 T82）在浅、深两色方案都拉开 ΔE ≥ 6（6.9 / 6.1）：原色相在 T82–T86 与她仅差 ΔE 0.9–4.7',
-    second: { hue: 272, chroma: 18, from: 'mascot2 毛色暗部 #BFC3E0（H276，约 8% 像素）与蝴蝶结之间：长春花薰衣草' },
-    spark: { hue: 268, chroma: 36, from: '两张吉祥物图的蝴蝶结 H270 / H267（各约 1% 像素）：长春花蓝' },
-    neutral: { light: 48, dark: 285, from: '光下取两张图的奶油毛色 H51 / H46，影中取毛色暗部 H276 与薰衣草 H298 之间' },
+    second: {
+      hue: 272,
+      chroma: 18,
+      from: 'mascot2 毛色暗部 #BFC3E0（H276，约 8% 像素）与蝴蝶结之间：长春花薰衣草',
+    },
+    spark: {
+      hue: 268,
+      chroma: 36,
+      from: '两张吉祥物图的蝴蝶结 H270 / H267（各约 1% 像素）：长春花蓝',
+    },
+    neutral: {
+      light: 48,
+      dark: 285,
+      from: '光下取两张图的奶油毛色 H51 / H46，影中取毛色暗部 H276 与薰衣草 H298 之间',
+    },
   },
   {
     id: 'applejack',
     label: '苹果嘉儿',
     fill: { hue: 73, tone: 86, register: 'light' },
     from: '毛色 Fill #FABA62（H73）：A 的暖金浅色下沿 T86，保留苹果嘉儿的金橙色相',
-    second: { hue: 130, chroma: 16, from: '可爱标志的叶子 #6BB944（H138）与眼睛（H142），向黄侧移到 H130：淡叶色' },
+    second: {
+      hue: 130,
+      chroma: 16,
+      from: '可爱标志的叶子 #6BB944（H138）与眼睛（H142），向黄侧移到 H130：淡叶色',
+    },
     spark: { hue: 130, chroma: 40, from: '叶子 H130，离 success 足够远；金色鬃毛落在橄榄区' },
   },
   {
@@ -145,15 +161,27 @@ const THEMES = [
     fill: { hue: 95, tone: 92, register: 'light' },
     from: '毛色 Fill #FAF5AB（T95.4），保留已定 H95 黄油色：A 的黄色上沿 T92',
     second: { hue: 352, chroma: 18, from: '鬃毛 Fill #F3B5CF（H352）：玫瑰粉' },
-    spark: { hue: 192, chroma: 36, from: '可爱标志的蝴蝶 #69C8C3（H193）与眼睛 #02ACA4（H191）：蝴蝶青' },
+    spark: {
+      hue: 192,
+      chroma: 36,
+      from: '可爱标志的蝴蝶 #69C8C3（H193）与眼睛 #02ACA4（H191）：蝴蝶青',
+    },
   },
   {
     id: 'lyra',
     label: '天琴',
     fill: { hue: 172, tone: 88, register: 'light' },
     from: '毛色 Fill #8CFFDB（H174 T92.7）：A 的薄荷上沿 T88，大面积彩度上限 C36',
-    second: { hue: 50, chroma: 14, from: '眼睛渐变顶端 #E66100（H44.5）的淡色，向黄 5°：杏色（鬃毛的水青离主色只有 28°，看不出）' },
-    spark: { hue: 44, chroma: 40, from: '眼睛渐变顶端 #E66100（H44.5）：竖琴的金离 warning 只有 8°' },
+    second: {
+      hue: 50,
+      chroma: 14,
+      from: '眼睛渐变顶端 #E66100（H44.5）的淡色，向黄 5°：杏色（鬃毛的水青离主色只有 28°，看不出）',
+    },
+    spark: {
+      hue: 44,
+      chroma: 40,
+      from: '眼睛渐变顶端 #E66100（H44.5）：竖琴的金离 warning 只有 8°',
+    },
   },
   {
     id: 'chrysalis',
@@ -161,7 +189,11 @@ const THEMES = [
     fill: { hue: 190, tone: 42, register: 'deep' },
     from: '甲壳中段 #1E837F（H193 T49.6），保留深青甲壳身份：A 的深色上沿 T42',
     second: { hue: 231, chroma: 16, from: '鬃毛 Fill #1E5972（H232）' },
-    spark: { hue: 130, chroma: 40, from: '眼睛渐变底部 #CDE67E（H123）与魔法光 #00F600（H142）之间：青柠绿' },
+    spark: {
+      hue: 130,
+      chroma: 40,
+      from: '眼睛渐变底部 #CDE67E（H123）与魔法光 #00F600（H142）之间：青柠绿',
+    },
   },
   {
     id: 'rainbow',
@@ -335,7 +367,12 @@ const skyAccentsOf = (phase) => ({
 const skyGenerated = new Map(
   SKY_PHASES.map((phase) => {
     const fill = hexFromHct(phase.primary.hue, phase.primary.chroma, phase.primary.tone);
-    return [phase.id, deriveTheme(fill, fill, skyAccentsOf(phase), 'built-in', { rampChromaCap: phase.rampChromaCap })];
+    return [
+      phase.id,
+      deriveTheme(fill, fill, skyAccentsOf(phase), 'built-in', {
+        rampChromaCap: phase.rampChromaCap,
+      }),
+    ];
   }),
 );
 
@@ -352,7 +389,9 @@ function fillsOf(theme) {
 const accentsOf = (theme) => ({
   second: { hue: theme.second.hue, chroma: theme.second.chroma },
   spark: { hue: theme.spark.hue, chroma: theme.spark.chroma },
-  ...(theme.neutral ? { neutralHue: { light: theme.neutral.light, dark: theme.neutral.dark } } : {}),
+  ...(theme.neutral
+    ? { neutralHue: { light: theme.neutral.light, dark: theme.neutral.dark } }
+    : {}),
 });
 
 /** themeId -> the whole DerivedTheme: `{ meta, light, dark, mono }` (light/dark are 多色's). */
@@ -435,7 +474,13 @@ function oklchToHex(L, C, hueDeg) {
     const v = Math.min(1, Math.max(0, x));
     return v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
   };
-  return `#${linear.map((x) => Math.round(encode(x) * 255).toString(16).padStart(2, '0')).join('')}`;
+  return `#${linear
+    .map((x) =>
+      Math.round(encode(x) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
 }
 
 /* ---------------------------------------------------------------------------
@@ -444,10 +489,12 @@ function oklchToHex(L, C, hueDeg) {
 
 const css = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
 // Keep alpha colours in sync with both default schemes and runtime custom palettes.
-const withSurfaceChannels = (source) => source.replace(
-  /(  --md-sys-color-on-surface: (#[0-9a-f]{6});)(\r?\n)(?:  --md-sys-color-on-surface-rgb: [\d ]+;\r?\n)?/g,
-  (_, declaration, hex, eol) => `${declaration}${eol}  --md-sys-color-on-surface-rgb: ${colorChannels(hex)};${eol}`,
-);
+const withSurfaceChannels = (source) =>
+  source.replace(
+    /(  --md-sys-color-on-surface: (#[0-9a-f]{6});)(\r?\n)(?:  --md-sys-color-on-surface-rgb: [\d ]+;\r?\n)?/g,
+    (_, declaration, hex, eol) =>
+      `${declaration}${eol}  --md-sys-color-on-surface-rgb: ${colorChannels(hex)};${eol}`,
+  );
 const darkAt = css.indexOf('.dark {');
 if (darkAt < 0) throw new Error('cannot find the .dark block in globals.css');
 
@@ -457,7 +504,9 @@ for (const m of css.matchAll(/--md-sys-color-([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;/
 }
 /** The categorical scale's containers, per scheme — the tag and role chips an accent must not pass for. */
 const categorical = { light: {}, dark: {} };
-for (const m of css.matchAll(/--md-sys-color-(accent-[a-z]+):\s*oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)\s*;/g)) {
+for (const m of css.matchAll(
+  /--md-sys-color-(accent-[a-z]+):\s*oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)\s*;/g,
+)) {
   categorical[m.index < darkAt ? 'light' : 'dark'][m[1]] = oklchToHex(+m[2], +m[3], +m[4]);
 }
 
@@ -522,7 +571,12 @@ const ACCENT_PAIRS = [
   ['tertiary', 'surface-container-highest', 3, 'the accent on the highest card'],
   ['tertiary', 'tertiary-container', 3, 'the level meter: its fill against its own track'],
   ['secondary', 'secondary-container', 3, 'every other meter: its fill against its track'],
-  ['on-secondary-container', 'secondary-container', 4.5, 'text in a selected row, a bubble, a tonal button'],
+  [
+    'on-secondary-container',
+    'secondary-container',
+    4.5,
+    'text in a selected row, a bubble, a tonal button',
+  ],
   ['focus', 'surface', 3, 'the focus ring on the page (2.4.11)'],
   ['focus', 'surface-container-highest', 3, 'the focus ring on the highest step'],
   ['focus', 'secondary-container', 3, 'the focus ring beside a selected row'],
@@ -545,7 +599,10 @@ for (const theme of THEMES) {
   for (const variant of VARIANTS) {
     const roles = rolesOf(theme.id, variant);
     for (const [token, , lightTone, darkTone] of ROLES) {
-      const [lightAsk, darkAsk] = (variant === 'multi' && MULTI_TONES[token]) || [lightTone, darkTone];
+      const [lightAsk, darkAsk] = (variant === 'multi' && MULTI_TONES[token]) || [
+        lightTone,
+        darkTone,
+      ];
       for (const [scheme, raw] of [
         ['light', lightAsk],
         ['dark', darkAsk],
@@ -727,16 +784,23 @@ for (const variant of VARIANTS) {
         const v = contrast(g[a], g[b]);
         if (theme.id !== 'default') {
           const d = v - ref;
-          cells.push(`${theme.id.slice(0, 4)} ${v.toFixed(2)}${d >= 0 ? '+' : '-'}${Math.abs(d).toFixed(2)}`);
+          cells.push(
+            `${theme.id.slice(0, 4)} ${v.toFixed(2)}${d >= 0 ? '+' : '-'}${Math.abs(d).toFixed(2)}`,
+          );
         }
         const where = `${theme.id} ${VARIANT_LABEL[variant]} ${scheme} ${a}/${b}`;
         if (kind === 'spread') {
-          if (Math.abs(v - ref) > SPREAD) failures.push(`${where}: ${v.toFixed(2)} vs default ${ref.toFixed(2)}`);
-          if (ref >= bar && v < bar) failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1 (default clears it)`);
+          if (Math.abs(v - ref) > SPREAD)
+            failures.push(`${where}: ${v.toFixed(2)} vs default ${ref.toFixed(2)}`);
+          if (ref >= bar && v < bar)
+            failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1 (default clears it)`);
         }
-        if (kind === 'floor' && v < bar) failures.push(`${where}: ${v.toFixed(2)} under the ${bar}:1 floor`);
+        if (kind === 'floor' && v < bar)
+          failures.push(`${where}: ${v.toFixed(2)} under the ${bar}:1 floor`);
       }
-      console.log(`    ${pad(kind, 7)}${pad(`${a} / ${b}`, 42)} ref ${ref.toFixed(2).padStart(5)}  ${cells.join('  ')}`);
+      console.log(
+        `    ${pad(kind, 7)}${pad(`${a} / ${b}`, 42)} ref ${ref.toFixed(2).padStart(5)}  ${cells.join('  ')}`,
+      );
     }
   }
 }
@@ -796,7 +860,9 @@ for (const [a, b] of HUE_EXEMPT) {
       ` ${dark.toFixed(1)} dark (reported)`,
   );
   if (d < READS_AS_ONE) {
-    failures.push(`${a} and ${b} share a hue and their fills are only ΔE ${d.toFixed(1)} apart — the exemption needs a second axis`);
+    failures.push(
+      `${a} and ${b} share a hue and their fills are only ΔE ${d.toFixed(1)} apart — the exemption needs a second axis`,
+    );
   }
 }
 
@@ -882,7 +948,9 @@ for (const theme of THEMES) {
   for (const scheme of ['light', 'dark']) {
     for (const [a, b] of [...ONE_HUE, ...SELECTION]) {
       if (g.mono[scheme][a] !== g.mono[scheme][b]) {
-        failures.push(`${theme.id} 单色 ${scheme} ${a} ${g.mono[scheme][a]} is not its ${b} ${g.mono[scheme][b]}`);
+        failures.push(
+          `${theme.id} 单色 ${scheme} ${a} ${g.mono[scheme][a]} is not its ${b} ${g.mono[scheme][b]}`,
+        );
       }
     }
   }
@@ -900,13 +968,17 @@ for (const theme of THEMES) {
   ]) {
     const c = contrast(m.onPrimary, fill);
     if (c < BAR_TEXT) {
-      failures.push(`${theme.id} ${scheme} bar ${fill}: its ink ${m.onPrimary} is ${c.toFixed(2)}:1, under ${BAR_TEXT}:1`);
+      failures.push(
+        `${theme.id} ${scheme} bar ${fill}: its ink ${m.onPrimary} is ${c.toFixed(2)}:1, under ${BAR_TEXT}:1`,
+      );
     }
     if (theme.fill) {
       const chroma = hctOf(fill).chroma;
       const ceiling = theme.fill.register === 'light' ? 36 : 48;
       if (chroma > ceiling + 0.5) {
-        failures.push(`${theme.id} ${scheme} fill ${fill} chroma ${chroma.toFixed(2)} exceeds its area ceiling ${ceiling}`);
+        failures.push(
+          `${theme.id} ${scheme} fill ${fill} chroma ${chroma.toFixed(2)} exceeds its area ceiling ${ceiling}`,
+        );
       }
     }
   }
@@ -959,14 +1031,24 @@ for (const theme of THEMES) {
       const roles = rolesOf(theme.id, variant)[scheme];
       const full = contrast(roles['on-primary'], roles.primary);
       const quiet = contrast(roles['on-primary-variant'], roles.primary);
-      if (variant === 'multi') barInk.push(`${theme.id.slice(0, 4)} ${scheme[0]} ${full.toFixed(2)}→${quiet.toFixed(2)}`);
+      if (variant === 'multi')
+        barInk.push(`${theme.id.slice(0, 4)} ${scheme[0]} ${full.toFixed(2)}→${quiet.toFixed(2)}`);
       const where = `${theme.id} ${VARIANT_LABEL[variant]} ${scheme} on-primary-variant ${roles['on-primary-variant']}`;
-      if (quiet < ON_PRIMARY_VARIANT_FLOOR - BAR_INK_SLACK) failures.push(`${where}: ${quiet.toFixed(2)}:1 on the bar, under ${ON_PRIMARY_VARIANT_FLOOR}:1`);
-      if (quiet > full + BAR_INK_SLACK) failures.push(`${where}: ${quiet.toFixed(2)}:1, above on-primary's ${full.toFixed(2)}:1`);
+      if (quiet < ON_PRIMARY_VARIANT_FLOOR - BAR_INK_SLACK)
+        failures.push(
+          `${where}: ${quiet.toFixed(2)}:1 on the bar, under ${ON_PRIMARY_VARIANT_FLOOR}:1`,
+        );
+      if (quiet > full + BAR_INK_SLACK)
+        failures.push(`${where}: ${quiet.toFixed(2)}:1, above on-primary's ${full.toFixed(2)}:1`);
       /* Lighter than the bar, it is a tint: 邪茧's came out a saturated aqua at the ramp's C45.7. */
       const quietHct = hctOf(roles['on-primary-variant']);
-      if (quietHct.tone > hctOf(roles.primary).tone && quietHct.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA + 0.5) {
-        failures.push(`${where}: chroma ${quietHct.chroma.toFixed(1)} on a deep bar, over the tint's ${ON_PRIMARY_VARIANT_TINT_CHROMA}`);
+      if (
+        quietHct.tone > hctOf(roles.primary).tone &&
+        quietHct.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA + 0.5
+      ) {
+        failures.push(
+          `${where}: chroma ${quietHct.chroma.toFixed(1)} on a deep bar, over the tint's ${ON_PRIMARY_VARIANT_TINT_CHROMA}`,
+        );
       }
     }
   }
@@ -988,12 +1070,16 @@ for (const theme of THEMES) {
   const g = generated.get(theme.id);
   const gap = Math.abs(norm180(theme.second.hue - g.meta.hue));
   if (gap < SECOND_GAP) {
-    failures.push(`${theme.id} second colour H${theme.second.hue} is ${gap.toFixed(0)}° from its primary, under ${SECOND_GAP}° — 多色 would render as 单色`);
+    failures.push(
+      `${theme.id} second colour H${theme.second.hue} is ${gap.toFixed(0)}° from its primary, under ${SECOND_GAP}° — 多色 would render as 单色`,
+    );
   }
   for (const scheme of ['light', 'dark']) {
     const d = deltaE(g[scheme].tertiary, g[scheme]['primary-ink']);
     if (d < READS_AS_ONE) {
-      failures.push(`${theme.id} ${scheme} accent ${g[scheme].tertiary} is ΔE ${d.toFixed(1)} from primary-ink — it reads as the brand`);
+      failures.push(
+        `${theme.id} ${scheme} accent ${g[scheme].tertiary} is ΔE ${d.toFixed(1)} from primary-ink — it reads as the brand`,
+      );
     }
   }
 }
@@ -1009,7 +1095,10 @@ for (const theme of THEMES) {
         const key = `${VARIANT_LABEL[variant]} ${a} / ${b}`;
         const min = accentMinimum.get(key);
         if (!min || v < min.v) accentMinimum.set(key, { v, bar, who: `${theme.id} ${scheme}` });
-        if (v < bar) failures.push(`${theme.id} ${VARIANT_LABEL[variant]} ${scheme} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`);
+        if (v < bar)
+          failures.push(
+            `${theme.id} ${VARIANT_LABEL[variant]} ${scheme} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`,
+          );
       }
     }
   }
@@ -1033,7 +1122,9 @@ for (const theme of THEMES) {
   for (const scheme of ['light', 'dark']) {
     for (const token of ACCENT_TOKENS) {
       if (DislikeAnalyzer.isDisliked(hctOf(g[scheme][token]))) {
-        failures.push(`${theme.id} 多色 ${scheme} ${token} ${g[scheme][token]} is in the disliked yellow-green band`);
+        failures.push(
+          `${theme.id} 多色 ${scheme} ${token} ${g[scheme][token]} is in the disliked yellow-green band`,
+        );
       }
     }
   }
@@ -1057,7 +1148,9 @@ for (const theme of THEMES) {
     ['accent', theme.spark],
   ]) {
     if (isGuardedHue(accent.hue)) {
-      failures.push(`${theme.id} ${name} H${accent.hue} is inside a guarded band (a severity or the olive shoulder)`);
+      failures.push(
+        `${theme.id} ${name} H${accent.hue} is inside a guarded band (a severity or the olive shoulder)`,
+      );
     }
   }
 }
@@ -1069,7 +1162,9 @@ for (const band of HUE_GUARDS) {
     const h = hctOf(hex).hue;
     const margin = Math.min(h - band.from, band.to - h);
     if (margin < GUARD_MARGIN) {
-      failures.push(`${token} ${hex} (H${h.toFixed(1)}) sits ${margin.toFixed(1)}° inside its guard ${band.from}–${band.to}, under ${GUARD_MARGIN}°`);
+      failures.push(
+        `${token} ${hex} (H${h.toFixed(1)}) sits ${margin.toFixed(1)}° inside its guard ${band.from}–${band.to}, under ${GUARD_MARGIN}°`,
+      );
     }
   }
 }
@@ -1082,8 +1177,12 @@ for (const theme of THEMES) {
     for (const severity of ['error', 'success', 'warning']) {
       for (const hex of [roles[severity], current.light[`${severity}-fill`]]) {
         const d = deltaE(roles.tertiary, hex);
-        if (d < closestToSeverity.d) closestToSeverity = { d, who: `${theme.id} ${scheme} vs ${severity} ${hex}` };
-        if (d < READS_AS_ONE) failures.push(`${theme.id} ${scheme} accent ${roles.tertiary} is ΔE ${d.toFixed(1)} from ${severity} ${hex}`);
+        if (d < closestToSeverity.d)
+          closestToSeverity = { d, who: `${theme.id} ${scheme} vs ${severity} ${hex}` };
+        if (d < READS_AS_ONE)
+          failures.push(
+            `${theme.id} ${scheme} accent ${roles.tertiary} is ΔE ${d.toFixed(1)} from ${severity} ${hex}`,
+          );
       }
       for (const [token, floor] of [
         ['secondary-container', READS_AS_ONE],
@@ -1091,15 +1190,20 @@ for (const theme of THEMES) {
       ]) {
         const d = deltaE(roles[token], roles[`${severity}-container`]);
         const best = closestContainer[token];
-        if (!best || d < best.d) closestContainer[token] = { d, who: `${theme.id} ${scheme} vs ${severity}-container` };
+        if (!best || d < best.d)
+          closestContainer[token] = { d, who: `${theme.id} ${scheme} vs ${severity}-container` };
         if (d < floor) {
-          failures.push(`${theme.id} ${scheme} ${token} ${roles[token]} is ΔE ${d.toFixed(1)} from ${severity}-container, under ${floor}`);
+          failures.push(
+            `${theme.id} ${scheme} ${token} ${roles[token]} is ΔE ${d.toFixed(1)} from ${severity}-container, under ${floor}`,
+          );
         }
       }
     }
   }
 }
-console.log(`\n  closest accent mark to a severity:           ΔE ${closestToSeverity.d.toFixed(1)} (${closestToSeverity.who})`);
+console.log(
+  `\n  closest accent mark to a severity:           ΔE ${closestToSeverity.d.toFixed(1)} (${closestToSeverity.who})`,
+);
 for (const [token, { d, who }] of Object.entries(closestContainer)) {
   console.log(`  closest ${pad(token, 22)} to a severity: ΔE ${d.toFixed(1)} (${who})`);
 }
@@ -1157,7 +1261,9 @@ for (const theme of THEMES) {
   for (const scheme of ['light', 'dark']) {
     for (const [token] of SELECTION) {
       if (g[scheme][token] !== g.mono[scheme][token]) {
-        failures.push(`${theme.id} ${scheme} ${token} is ${g[scheme][token]} in 多色 and ${g.mono[scheme][token]} in 单色`);
+        failures.push(
+          `${theme.id} ${scheme} ${token} is ${g[scheme][token]} in 多色 and ${g.mono[scheme][token]} in 单色`,
+        );
       }
     }
   }
@@ -1179,7 +1285,8 @@ const SWEEP_FILLS = [
 const SWEEP_ACCENTS = [null, 'analogous', 'triadic', 'complement', 150];
 const sweepSeeds = ['#808080', '#1f1f1f', '#f2f2f2'];
 for (let hue = 0; hue < 360; hue += 15) {
-  for (const [tone, share] of SWEEP_FILLS) sweepSeeds.push(hexFromHct(hue, share * maxChroma(hue, tone), tone));
+  for (const [tone, share] of SWEEP_FILLS)
+    sweepSeeds.push(hexFromHct(hue, share * maxChroma(hue, tone), tone));
 }
 let sweepFailures = 0;
 for (const sweepSeed of sweepSeeds) {
@@ -1193,7 +1300,9 @@ for (const sweepSeed of sweepSeeds) {
           const v = contrast(maps[scheme][a], maps[scheme][b]);
           if (v < bar) {
             sweepFailures += 1;
-            failures.push(`${where} ${VARIANT_LABEL[variant]} ${scheme} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`);
+            failures.push(
+              `${where} ${VARIANT_LABEL[variant]} ${scheme} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`,
+            );
           }
         }
       }
@@ -1207,27 +1316,42 @@ for (const sweepSeed of sweepSeeds) {
     for (const scheme of ['light', 'dark']) {
       const full = contrast(d[scheme]['on-primary'], d[scheme].primary);
       const quiet = contrast(d[scheme]['on-primary-variant'], d[scheme].primary);
-      if (quiet < Math.min(ON_PRIMARY_VARIANT_FLOOR, full) - BAR_INK_SLACK || quiet > full + BAR_INK_SLACK) {
+      if (
+        quiet < Math.min(ON_PRIMARY_VARIANT_FLOOR, full) - BAR_INK_SLACK ||
+        quiet > full + BAR_INK_SLACK
+      ) {
         sweepFailures += 1;
-        failures.push(`${where} ${scheme} on-primary-variant: ${quiet.toFixed(2)}:1 against on-primary's ${full.toFixed(2)}:1`);
+        failures.push(
+          `${where} ${scheme} on-primary-variant: ${quiet.toFixed(2)}:1 against on-primary's ${full.toFixed(2)}:1`,
+        );
       }
       const inkOn = contrast(d[scheme]['on-primary-ink'], d[scheme]['primary-ink']);
       if (inkOn < 4.5) {
         sweepFailures += 1;
-        failures.push(`${where} ${scheme} on-primary-ink/primary-ink: ${inkOn.toFixed(2)}:1 under 4.5:1`);
+        failures.push(
+          `${where} ${scheme} on-primary-ink/primary-ink: ${inkOn.toFixed(2)}:1 under 4.5:1`,
+        );
       }
       for (const target of ['surface', 'secondary-container']) {
         const secInk = contrast(d[scheme]['secondary-ink'], d[scheme][target]);
         if (secInk < 3) {
           sweepFailures += 1;
-          failures.push(`${where} ${scheme} secondary-ink/${target}: ${secInk.toFixed(2)}:1 under 3:1`);
+          failures.push(
+            `${where} ${scheme} secondary-ink/${target}: ${secInk.toFixed(2)}:1 under 3:1`,
+          );
         }
       }
     }
     const own = hctOf(sweepSeed);
-    if (accent === null && own.chroma >= MIN_SEED_CHROMA && Math.abs(norm180(hue - own.hue)) < SECOND_GAP) {
+    if (
+      accent === null &&
+      own.chroma >= MIN_SEED_CHROMA &&
+      Math.abs(norm180(hue - own.hue)) < SECOND_GAP
+    ) {
       sweepFailures += 1;
-      failures.push(`${where}: 自动 put the 副色相 ${Math.abs(norm180(hue - own.hue)).toFixed(0)}° from the seed`);
+      failures.push(
+        `${where}: 自动 put the 副色相 ${Math.abs(norm180(hue - own.hue)).toFixed(0)}° from the seed`,
+      );
     }
   }
 }
@@ -1292,8 +1416,14 @@ console.log('\nSKY PHASES (天空)');
 {
   let expectedStart = 0;
   for (const phase of SKY_PHASES) {
-    if (phase.startHour !== expectedStart || phase.endHour <= phase.startHour || phase.endHour > 24) {
-      failures.push(`sky ${phase.id}: invalid hour window ${phase.startHour}–${phase.endHour} (expected start ${expectedStart})`);
+    if (
+      phase.startHour !== expectedStart ||
+      phase.endHour <= phase.startHour ||
+      phase.endHour > 24
+    ) {
+      failures.push(
+        `sky ${phase.id}: invalid hour window ${phase.startHour}–${phase.endHour} (expected start ${expectedStart})`,
+      );
     }
     expectedStart = phase.endHour;
   }
@@ -1312,29 +1442,41 @@ console.log('\nSKY PHASES (天空)');
     const monoRoles = g.mono[scheme];
 
     if (m.fillChroma < MIN_SEED_CHROMA) {
-      failures.push(`sky ${phase.id} fill ${multiRoles.primary} chroma ${m.fillChroma.toFixed(1)} < ${MIN_SEED_CHROMA}`);
+      failures.push(
+        `sky ${phase.id} fill ${multiRoles.primary} chroma ${m.fillChroma.toFixed(1)} < ${MIN_SEED_CHROMA}`,
+      );
     }
     if (DislikeAnalyzer.isDisliked(hctOf(multiRoles.primary))) {
-      failures.push(`sky ${phase.id} primary ${multiRoles.primary} is in the disliked yellow-green band`);
+      failures.push(
+        `sky ${phase.id} primary ${multiRoles.primary} is in the disliked yellow-green band`,
+      );
     }
 
     for (const variant of VARIANTS) {
       const roles = skyRolesOf(phase, variant);
       const ref = rolesOf('default', variant)[scheme];
       for (const [token, , lightTone, darkTone] of ROLES) {
-        const [lightAsk, darkAsk] = (variant === 'multi' && MULTI_TONES[token]) || [lightTone, darkTone];
+        const [lightAsk, darkAsk] = (variant === 'multi' && MULTI_TONES[token]) || [
+          lightTone,
+          darkTone,
+        ];
         const raw = scheme === 'light' ? lightAsk : darkAsk;
         if (typeof raw !== 'number') continue;
         const got = hctOf(roles[token]).tone;
         if (Math.abs(got - raw) > 0.5) {
-          failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${token}: asked tone ${raw}, got ${got.toFixed(2)}`);
+          failures.push(
+            `sky ${phase.id} ${VARIANT_LABEL[variant]} ${token}: asked tone ${raw}, got ${got.toFixed(2)}`,
+          );
         }
       }
-      const nvTarget = variant === 'mono' ? HARMONY.neutralVariant.chroma : phase.neutral.variantChroma;
+      const nvTarget =
+        variant === 'mono' ? HARMONY.neutralVariant.chroma : phase.neutral.variantChroma;
       for (const token of NV_TOKENS) {
         const got = hctOf(roles[token]).chroma;
         if (Math.abs(got - nvTarget) > 1) {
-          failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${token} chroma ${got.toFixed(2)} off ${nvTarget.toFixed(2)}`);
+          failures.push(
+            `sky ${phase.id} ${VARIANT_LABEL[variant]} ${token} chroma ${got.toFixed(2)} off ${nvTarget.toFixed(2)}`,
+          );
         }
       }
       for (const [a, b, rawBar, kind] of PAIRS) {
@@ -1343,23 +1485,34 @@ console.log('\nSKY PHASES (天空)');
         const refVal = contrast(ref[a], ref[b]);
         const where = `sky ${phase.id} ${VARIANT_LABEL[variant]} ${a}/${b}`;
         if (kind === 'spread') {
-          if (Math.abs(v - refVal) > SPREAD) failures.push(`${where}: ${v.toFixed(2)} vs default ${refVal.toFixed(2)}`);
+          if (Math.abs(v - refVal) > SPREAD)
+            failures.push(`${where}: ${v.toFixed(2)} vs default ${refVal.toFixed(2)}`);
           if (refVal >= bar && v < bar) failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1`);
         }
         if (kind === 'floor' && v < bar) failures.push(`${where}: ${v.toFixed(2)} under ${bar}:1`);
       }
       for (const [a, b, bar] of ACCENT_PAIRS) {
         const v = contrast(roles[a], roles[b]);
-        if (v < bar) failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`);
+        if (v < bar)
+          failures.push(
+            `sky ${phase.id} ${VARIANT_LABEL[variant]} ${a}/${b}: ${v.toFixed(2)} under ${bar}:1`,
+          );
       }
       const full = contrast(roles['on-primary'], roles.primary);
       const quiet = contrast(roles['on-primary-variant'], roles.primary);
       if (quiet < ON_PRIMARY_VARIANT_FLOOR - BAR_INK_SLACK || quiet > full + BAR_INK_SLACK) {
-        failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant: ${quiet.toFixed(2)}:1 vs ${full.toFixed(2)}:1`);
+        failures.push(
+          `sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant: ${quiet.toFixed(2)}:1 vs ${full.toFixed(2)}:1`,
+        );
       }
       const quietHct = hctOf(roles['on-primary-variant']);
-      if (quietHct.tone > hctOf(roles.primary).tone && quietHct.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA + 0.5) {
-        failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant tint chroma ${quietHct.chroma.toFixed(1)} > ${ON_PRIMARY_VARIANT_TINT_CHROMA}`);
+      if (
+        quietHct.tone > hctOf(roles.primary).tone &&
+        quietHct.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA + 0.5
+      ) {
+        failures.push(
+          `sky ${phase.id} ${VARIANT_LABEL[variant]} on-primary-variant tint chroma ${quietHct.chroma.toFixed(1)} > ${ON_PRIMARY_VARIANT_TINT_CHROMA}`,
+        );
       }
     }
 
@@ -1370,7 +1523,9 @@ console.log('\nSKY PHASES (天空)');
     for (const name of ['secondary', 'neutral', 'neutralVariant']) {
       for (const tone of TONES_USED) {
         if (ours[name].tone(tone) !== spec[`${name}Palette`].tone(tone)) {
-          failures.push(`sky ${phase.id} mono ${name} at tone ${tone} drifted from SchemeTonalSpot`);
+          failures.push(
+            `sky ${phase.id} mono ${name} at tone ${tone} drifted from SchemeTonalSpot`,
+          );
         }
       }
     }
@@ -1387,9 +1542,12 @@ console.log('\nSKY PHASES (天空)');
 
     /* 多色 hue gap, guards, severity distance, disliked colours, dark clarity */
     const secGap = Math.abs(norm180(phase.second.hue - m.hue));
-    if (secGap < SECOND_GAP) failures.push(`sky ${phase.id} second hue gap ${secGap.toFixed(0)}° < ${SECOND_GAP}°`);
-    if (isGuardedHue(phase.second.hue)) failures.push(`sky ${phase.id} second hue H${phase.second.hue} is guarded`);
-    if (isGuardedHue(phase.spark.hue)) failures.push(`sky ${phase.id} spark hue H${phase.spark.hue} is guarded`);
+    if (secGap < SECOND_GAP)
+      failures.push(`sky ${phase.id} second hue gap ${secGap.toFixed(0)}° < ${SECOND_GAP}°`);
+    if (isGuardedHue(phase.second.hue))
+      failures.push(`sky ${phase.id} second hue H${phase.second.hue} is guarded`);
+    if (isGuardedHue(phase.spark.hue))
+      failures.push(`sky ${phase.id} spark hue H${phase.spark.hue} is guarded`);
     if (deltaE(multiRoles.tertiary, multiRoles['primary-ink']) < READS_AS_ONE) {
       failures.push(`sky ${phase.id} tertiary too close to primary-ink`);
     }
@@ -1401,12 +1559,18 @@ console.log('\nSKY PHASES (天空)');
     for (const severity of ['error', 'success', 'warning']) {
       for (const hex of [multiRoles[severity], current.light[`${severity}-fill`]]) {
         const d = deltaE(multiRoles.tertiary, hex);
-        if (d < READS_AS_ONE) failures.push(`sky ${phase.id} tertiary ΔE ${d.toFixed(1)} from ${severity}`);
+        if (d < READS_AS_ONE)
+          failures.push(`sky ${phase.id} tertiary ΔE ${d.toFixed(1)} from ${severity}`);
       }
-      if (deltaE(multiRoles['secondary-container'], multiRoles[`${severity}-container`]) < READS_AS_ONE) {
+      if (
+        deltaE(multiRoles['secondary-container'], multiRoles[`${severity}-container`]) <
+        READS_AS_ONE
+      ) {
         failures.push(`sky ${phase.id} secondary-container too close to ${severity}-container`);
       }
-      if (deltaE(multiRoles['tertiary-container'], multiRoles[`${severity}-container`]) < SAME_SWATCH) {
+      if (
+        deltaE(multiRoles['tertiary-container'], multiRoles[`${severity}-container`]) < SAME_SWATCH
+      ) {
         failures.push(`sky ${phase.id} tertiary-container too close to ${severity}-container`);
       }
     }
@@ -1419,7 +1583,9 @@ console.log('\nSKY PHASES (天空)');
         const bar = Math.min(SECOND_AREA_CAP, SECOND_CLARITY * deep);
         const got = hctOf(multiRoles[token]).chroma;
         if (got < bar - CLARITY_ROUNDING) {
-          failures.push(`sky ${phase.id} dark ${token} chroma ${got.toFixed(1)} under ${bar.toFixed(1)}`);
+          failures.push(
+            `sky ${phase.id} dark ${token} chroma ${got.toFixed(1)} under ${bar.toFixed(1)}`,
+          );
         }
       }
     }
@@ -1431,20 +1597,27 @@ console.log('\nSKY PHASES (天空)');
         for (const active of THEMES) {
           const gap = Math.abs(page - hctOf(rolesOf(active.id, variant)[scheme][token]).tone);
           if (gap < TILE_SEPARATION) {
-            failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (${active.id})`);
+            failures.push(
+              `sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (${active.id})`,
+            );
           }
         }
         for (const activeSky of SKY_PHASES) {
           if (activeSky.scheme !== scheme) continue;
           const gap = Math.abs(page - hctOf(skyRolesOf(activeSky, variant)[token]).tone);
           if (gap < TILE_SEPARATION) {
-            failures.push(`sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (sky:${activeSky.id})`);
+            failures.push(
+              `sky ${phase.id} ${VARIANT_LABEL[variant]} tile page ${gap.toFixed(1)} L* from ${where} (sky:${activeSky.id})`,
+            );
           }
         }
       }
     }
 
-    const dNext = deltaE(multiRoles.primary, skyGenerated.get(nextPhase.id)[nextPhase.scheme].primary);
+    const dNext = deltaE(
+      multiRoles.primary,
+      skyGenerated.get(nextPhase.id)[nextPhase.scheme].primary,
+    );
     if (dNext < 8) {
       failures.push(`sky ${phase.id} -> ${nextPhase.id} primary ΔE ${dNext.toFixed(1)} under 8`);
     }
@@ -1459,7 +1632,9 @@ console.log('\nSKY PHASES (天空)');
 /* REPORT — asserted nowhere. How close a selection container comes to a tag or role chip: the
  * categorical scale owns the tone-90 plane, and what keeps a selected row from reading as a tag is
  * the chip rule (an accent never wears a chip), not distance — 单色 was as close for five themes. */
-console.log('\nREPORT — the nearest categorical container to each selection container (ΔE, both schemes)');
+console.log(
+  '\nREPORT — the nearest categorical container to each selection container (ΔE, both schemes)',
+);
 for (const variant of VARIANTS) {
   const cells = [];
   for (const theme of THEMES) {
@@ -1503,7 +1678,7 @@ const paletteCss = (() => {
     ' * accent return to the primary’s hue, and the default’s coat neutrals to TonalSpot’s. 多色 is',
     ' * the default, so it is the attribute’s absence — and the default theme’s 多色 is `:root`',
     ' * itself, so its only blocks here are its 单色 pair. The eleventh palette is the user’s own and',
-    " * is not here either — `app/layout.tsx` renders its blocks into <head> from the spec in their",
+    ' * is not here either — `app/layout.tsx` renders its blocks into <head> from the spec in their',
     ' * cookie, through the same `paletteBlocksCss` that shapes these.',
     ' *',
     ' * Every pair declares the **same** set of names in both schemes, and that is what makes the',
@@ -1523,7 +1698,9 @@ const paletteCss = (() => {
     const g = generated.get(theme.id);
     const m = g.meta;
     if (theme.id === 'default') {
-      lines.push(`/* ${theme.label} — 单色 only: its 多色 is \`:root\` and \`.dark\` in globals.css. */`);
+      lines.push(
+        `/* ${theme.label} — 单色 only: its 多色 is \`:root\` and \`.dark\` in globals.css. */`,
+      );
       lines.push(paletteBlocksCss(theme.id, g, { multi: false }));
     } else {
       lines.push(
@@ -1542,9 +1719,15 @@ const paletteCss = (() => {
     }
     lines.push('');
   }
-  lines.push(`/* ${SKY_LABEL} — dynamic time-of-day palette, eight phases, each with a single fixed scheme.`);
-  lines.push('   多色 blocks sit at (0,2,1), 单色 delta blocks at (0,3,1); `html.dark` carries dark shared');
-  lines.push('   semantic/categorical/glass tokens during night phases while scheme switching is locked. */');
+  lines.push(
+    `/* ${SKY_LABEL} — dynamic time-of-day palette, eight phases, each with a single fixed scheme.`,
+  );
+  lines.push(
+    '   多色 blocks sit at (0,2,1), 单色 delta blocks at (0,3,1); `html.dark` carries dark shared',
+  );
+  lines.push(
+    '   semantic/categorical/glass tokens during night phases while scheme switching is locked. */',
+  );
   lines.push('');
   for (const phase of SKY_PHASES) {
     const g = skyGenerated.get(phase.id);
@@ -1671,7 +1854,12 @@ const themeFacesTs = (() => {
     `{ page: '${f.page}', pick: '${f.pick}', accent: '${f.accent}', monoPage: '${f.monoPage}', monoPick: '${f.monoPick}' }`;
   const entries = THEMES.map((theme) => {
     const f = themeFace(generated.get(theme.id));
-    return [`  ${theme.id}: {`, `    light: ${face(f.light)},`, `    dark: ${face(f.dark)},`, '  },'].join('\n');
+    return [
+      `  ${theme.id}: {`,
+      `    light: ${face(f.light)},`,
+      `    dark: ${face(f.dark)},`,
+      '  },',
+    ].join('\n');
   });
   const skyFaceEntries = SKY_PHASES.map((phase) => {
     const f = skyPhaseFace(skyGenerated.get(phase.id), phase.scheme);
@@ -1726,11 +1914,16 @@ const sameText = (a, b) => a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n')
 // shared globals separately from installation. It never writes into the source tree.
 const exportArgument = process.argv.find((arg) => arg.startsWith('--output-dir='));
 const exportValue = exportArgument?.slice('--output-dir='.length).trim();
-if (exportArgument && !exportValue) throw new Error('--output-dir needs a directory outside the repository');
+if (exportArgument && !exportValue)
+  throw new Error('--output-dir needs a directory outside the repository');
 const exportDirectory = exportValue ? resolve(exportValue) : null;
 if (exportDirectory) {
   const fromRepository = relative(fileURLToPath(new URL('../', import.meta.url)), exportDirectory);
-  if (!(isAbsolute(fromRepository) || fromRepository === '..' || fromRepository.startsWith(`..${sep}`))) {
+  if (!(
+    isAbsolute(fromRepository) ||
+    fromRepository === '..' ||
+    fromRepository.startsWith(`..${sep}`)
+  )) {
     throw new Error('--output-dir must be outside the repository; use --write to install');
   }
 }
@@ -1807,13 +2000,22 @@ if (writing || exportDirectory) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
   }
-  console.log(`\n${exportDirectory ? 'exported' : 'wrote'} ${written} declarations for app/globals.css`);
+  console.log(
+    `\n${exportDirectory ? 'exported' : 'wrote'} ${written} declarations for app/globals.css`,
+  );
   if (exportDirectory) {
-    writeFileSync(join(outputRoot, 'palette-data.json'), JSON.stringify({
-      themes: THEMES,
-      generated: Object.fromEntries(generated),
-      globalsChanges: changed,
-    }, null, 2));
+    writeFileSync(
+      join(outputRoot, 'palette-data.json'),
+      JSON.stringify(
+        {
+          themes: THEMES,
+          generated: Object.fromEntries(generated),
+          globalsChanges: changed,
+        },
+        null,
+        2,
+      ),
+    );
     console.log(`exported review files to ${exportDirectory}`);
   }
   console.log(

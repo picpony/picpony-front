@@ -10,31 +10,68 @@ import { formatChineseDay } from '../lib/statsDates.ts';
 const root = path.resolve(import.meta.dirname, '..');
 
 const metrics = {};
-vm.runInNewContext(ts.transpileModule(readFileSync(path.join(root, 'app/stats/statsMetrics.ts'), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, { exports: metrics, require: (name) => {
-  assert.equal(name, '@/lib/statsDates');
-  return { formatChineseDay };
-} });
+vm.runInNewContext(
+  ts.transpileModule(readFileSync(path.join(root, 'app/stats/statsMetrics.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText,
+  {
+    exports: metrics,
+    require: (name) => {
+      assert.equal(name, '@/lib/statsDates');
+      return { formatChineseDay };
+    },
+  },
+);
 
 const metricFixture = {
   granularity: 'day',
   totals: { users: 990, chinese_tags: 880, posts: 770, comments: 660, favorites: 550, badges: 440 },
   window: { visitors: 17, hits: 140 },
   series: [
-    { date: '2025-12-29', total_users: 90, new_users: 7, total_chinese_tags: 49, new_chinese_tags: 0,
-      total_posts: 30, new_posts: 3, total_comments: 45, new_comments: 5,
-      total_favorites: 56, new_favorites: 6, total_badges: 7, new_badges: 0, visitors: 10, hits: 60 },
-    { date: '2026-01-05', total_users: 102, new_users: 12, total_chinese_tags: 51, new_chinese_tags: 2,
-      total_posts: 31, new_posts: 1, total_comments: 53, new_comments: 8,
-      total_favorites: 60, new_favorites: 4, total_badges: 7, new_badges: 0, visitors: 12, hits: 80 },
+    {
+      date: '2025-12-29',
+      total_users: 90,
+      new_users: 7,
+      total_chinese_tags: 49,
+      new_chinese_tags: 0,
+      total_posts: 30,
+      new_posts: 3,
+      total_comments: 45,
+      new_comments: 5,
+      total_favorites: 56,
+      new_favorites: 6,
+      total_badges: 7,
+      new_badges: 0,
+      visitors: 10,
+      hits: 60,
+    },
+    {
+      date: '2026-01-05',
+      total_users: 102,
+      new_users: 12,
+      total_chinese_tags: 51,
+      new_chinese_tags: 2,
+      total_posts: 31,
+      new_posts: 1,
+      total_comments: 53,
+      new_comments: 8,
+      total_favorites: 60,
+      new_favorites: 4,
+      total_badges: 7,
+      new_badges: 0,
+      visitors: 12,
+      hits: 80,
+    },
   ],
 };
 
 function entries(section, view, data = metricFixture) {
   const definition = metrics.STATS_SECTIONS.find((item) => item.value === `stats-${section}`);
   const model = metrics.chartMetrics(definition, data, view);
-  return [model.overviewLabel, Object.fromEntries(model.series.map(({ key, summary }) => [key, summary]))];
+  return [
+    model.overviewLabel,
+    Object.fromEntries(model.series.map(({ key, summary }) => [key, summary])),
+  ];
 }
 
 test('statistics growth overviews follow the selected buckets rather than the all-time totals', () => {
@@ -42,25 +79,45 @@ test('statistics growth overviews follow the selected buckets rather than the al
   assert.deepEqual(entries('users', 'added'), ['区间新增', { new_users: 19 }]);
   assert.deepEqual(entries('tags', 'total'), ['区间末累计', { total_chinese_tags: 51 }]);
   assert.deepEqual(entries('tags', 'added'), ['区间新增', { new_chinese_tags: 2 }]);
-  assert.deepEqual(entries('users', 'total', { ...metricFixture, series: [] }), ['区间末累计', { total_users: null }]);
-  assert.deepEqual(entries('users', 'added', { ...metricFixture, series: [] }), ['区间新增', { new_users: null }]);
+  assert.deepEqual(entries('users', 'total', { ...metricFixture, series: [] }), [
+    '区间末累计',
+    { total_users: null },
+  ]);
+  assert.deepEqual(entries('users', 'added', { ...metricFixture, series: [] }), [
+    '区间新增',
+    { new_users: null },
+  ]);
 });
 
 test('traffic keeps server window counts and community metrics stay separate in both views', () => {
   for (const view of ['total', 'added']) {
     assert.deepEqual(entries('visits', view), ['区间合计', { visitors: 17, hits: 140 }]);
   }
-  assert.deepEqual(entries('community', 'total'), ['区间末累计', {
-    total_posts: 31, total_comments: 53, total_favorites: 60, total_badges: 7,
-  }]);
-  assert.deepEqual(entries('community', 'added'), ['区间新增', {
-    new_posts: 4, new_comments: 13, new_favorites: 10, new_badges: 0,
-  }]);
+  assert.deepEqual(entries('community', 'total'), [
+    '区间末累计',
+    {
+      total_posts: 31,
+      total_comments: 53,
+      total_favorites: 60,
+      total_badges: 7,
+    },
+  ]);
+  assert.deepEqual(entries('community', 'added'), [
+    '区间新增',
+    {
+      new_posts: 4,
+      new_comments: 13,
+      new_favorites: 10,
+      new_badges: 0,
+    },
+  ]);
 });
 
 test('compact tick labels and full inspection labels distinguish days, weeks and months', () => {
   for (const [granularity, tick, detail] of [
-    ['day', '1/5', '2026年1月5日'], ['week', '1/5', '2026年1月5日当周'], ['month', '2026/1', '2026年1月'],
+    ['day', '1/5', '2026年1月5日'],
+    ['week', '1/5', '2026年1月5日当周'],
+    ['month', '2026/1', '2026年1月'],
   ]) {
     const [, last] = metrics.chartBuckets({ ...metricFixture, granularity });
     assert.equal(last.key, '2026-01-05');
@@ -77,16 +134,21 @@ function fixture() {
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
-      return [slots[index], (next) => {
-        slots[index] = typeof next === 'function' ? next(slots[index]) : next;
-        dirty = true;
-      }];
+      return [
+        slots[index],
+        (next) => {
+          slots[index] = typeof next === 'function' ? next(slots[index]) : next;
+          dirty = true;
+        },
+      ];
     },
     useRef(initial) {
       const index = cursor++;
-      return slots[index] ??= { current: initial };
+      return (slots[index] ??= { current: initial });
     },
-    useLayoutEffect() { cursor++; },
+    useLayoutEffect() {
+      cursor++;
+    },
   };
   const jsx = (type, props) => ({ type, props });
   const dependencies = {
@@ -98,13 +160,23 @@ function fixture() {
     '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   };
   const exports = {};
-  const source = ts.transpileModule(readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  vm.runInNewContext(source, { exports, require: (name) => {
-    assert.ok(name in dependencies, `Unexpected import: ${name}`);
-    return dependencies[name];
-  } });
+  const source = ts.transpileModule(
+    readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    },
+  ).outputText;
+  vm.runInNewContext(source, {
+    exports,
+    require: (name) => {
+      assert.ok(name in dependencies, `Unexpected import: ${name}`);
+      return dependencies[name];
+    },
+  });
   return (contentKey, children) => {
     let tree;
     for (let turns = 0; turns < 10; turns++) {
@@ -121,12 +193,18 @@ const departing = (tree) => tree.props.children[0]?.props.children;
 const arriving = (tree) => tree.props.children[1].props.children;
 
 const range = {};
-vm.runInNewContext(ts.transpileModule(readFileSync(path.join(root, 'components/slider/range.ts'), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, { exports: range, require: (name) => {
-  assert.equal(name, '@/lib/utils');
-  return { clamp: (value, min, max) => Math.min(max, Math.max(min, value)) };
-} });
+vm.runInNewContext(
+  ts.transpileModule(readFileSync(path.join(root, 'components/slider/range.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText,
+  {
+    exports: range,
+    require: (name) => {
+      assert.equal(name, '@/lib/utils');
+      return { clamp: (value, min, max) => Math.min(max, Math.max(min, value)) };
+    },
+  },
+);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test('crossing a range handle preserves its stationary endpoint in both directions', () => {
@@ -141,9 +219,18 @@ test('crossing a range handle preserves its stationary endpoint in both directio
 });
 
 test('range normalization clamps, orders and snaps without inventing an unreachable step', () => {
-  assert.deepEqual(plain(range.normalizeRange({ start: 20, end: -10 }, 0, 10, 3)), { start: 0, end: 9 });
-  assert.deepEqual(plain(range.normalizeRange({ start: 0.64, end: 0.26 }, 0, 1, 0.1)), { start: 0.3, end: 0.6 });
-  assert.deepEqual(plain(range.normalizeRange({ start: -1, end: 1 }, 0, 0, 1)), { start: 0, end: 0 });
+  assert.deepEqual(plain(range.normalizeRange({ start: 20, end: -10 }, 0, 10, 3)), {
+    start: 0,
+    end: 9,
+  });
+  assert.deepEqual(plain(range.normalizeRange({ start: 0.64, end: 0.26 }, 0, 1, 0.1)), {
+    start: 0.3,
+    end: 0.6,
+  });
+  assert.deepEqual(plain(range.normalizeRange({ start: -1, end: 1 }, 0, 0, 1)), {
+    start: 0,
+    end: 0,
+  });
 });
 
 test('a chart resize stays still and the next swap leaves from its measured geometry', () => {
@@ -214,15 +301,25 @@ function hookRuntime() {
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
-      return [slots[index], (next) => {
-        const value = typeof next === 'function' ? next(slots[index]) : next;
-        if (!Object.is(value, slots[index])) dirty = true;
-        slots[index] = value;
-      }];
+      return [
+        slots[index],
+        (next) => {
+          const value = typeof next === 'function' ? next(slots[index]) : next;
+          if (!Object.is(value, slots[index])) dirty = true;
+          slots[index] = value;
+        },
+      ];
     },
-    useRef(initial) { return slots[cursor++] ??= { current: initial }; },
-    useId() { return `stats-test-${cursor++}`; },
-    useCallback(callback) { cursor++; return callback; },
+    useRef(initial) {
+      return (slots[cursor++] ??= { current: initial });
+    },
+    useId() {
+      return `stats-test-${cursor++}`;
+    },
+    useCallback(callback) {
+      cursor++;
+      return callback;
+    },
     useSyncExternalStore(_subscribe, read, serverRead) {
       cursor++;
       return hydrating ? serverRead() : read();
@@ -233,11 +330,16 @@ function hookRuntime() {
       if (!previous || !deps || deps.some((value, i) => !Object.is(value, previous.deps?.[i]))) {
         const effect = { deps, setup, cleanup: null };
         slots[index] = effect;
-        effects.push(() => { previous?.cleanup?.(); effect.cleanup = setup(); });
+        effects.push(() => {
+          previous?.cleanup?.();
+          effect.cleanup = setup();
+        });
       }
     },
     // Tested components do not perform passive side effects in these source-only fixtures.
-    useEffect() { cursor++; },
+    useEffect() {
+      cursor++;
+    },
   };
   return {
     react,
@@ -264,13 +366,21 @@ function hookRuntime() {
       }
     },
     unmount() {
-      for (const effect of slots.filter((slot) => typeof slot?.setup === 'function')) effect.cleanup?.();
+      for (const effect of slots.filter((slot) => typeof slot?.setup === 'function'))
+        effect.cleanup?.();
     },
   };
 }
 
-function seriesFixture({ hydrate = false, entrance = 'standard', feedback = 'standard', allowEntrance = true,
-  route = false, active = true, inert = false } = {}) {
+function seriesFixture({
+  hydrate = false,
+  entrance = 'standard',
+  feedback = 'standard',
+  allowEntrance = true,
+  route = false,
+  active = true,
+  inert = false,
+} = {}) {
   const hooks = hookRuntime();
   const modes = { entrance, feedback };
   const scales = { entrance: 1, feedback: 1 };
@@ -279,10 +389,19 @@ function seriesFixture({ hydrate = false, entrance = 'standard', feedback = 'sta
   const jsx = (type, props) => ({ type, props });
   const group = {
     ownerSVGElement: { parentElement: {} },
-    closest: () => inert ? {} : null,
+    closest: () => (inert ? {} : null),
     animate(frames, options) {
-      const run = { frames: plain(frames), options: plain(options), cancelled: false,
-        cancel() { this.cancelled = true; }, finish() { this.onfinish?.(); } };
+      const run = {
+        frames: plain(frames),
+        options: plain(options),
+        cancelled: false,
+        cancel() {
+          this.cancelled = true;
+        },
+        finish() {
+          this.onfinish?.();
+        },
+      };
       runs.push(run);
       return run;
     },
@@ -290,29 +409,41 @@ function seriesFixture({ hydrate = false, entrance = 'standard', feedback = 'sta
   const dependencies = {
     react: hooks.react,
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    '@/components/EmptyState': {}, '@/components/Skeleton': {}, '@/components/SwapContent': {},
+    '@/components/EmptyState': {},
+    '@/components/Skeleton': {},
+    '@/components/SwapContent': {},
     '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
     '@/lib/format': { formatExactCount: String },
     '@/lib/appearance': {
       entranceMotion: () => allowEntrance,
       useMotionTier: (category) => modes[category],
-      useMotionScale: (category) => modes[category] === 'off' ? 0 : scales[category],
+      useMotionScale: (category) => (modes[category] === 'off' ? 0 : scales[category]),
       scaledMs: (ms, category) => ms * (modes[category] === 'off' ? 0 : scales[category]),
     },
     '@/lib/pageTransit': { routeTransitActive: () => route },
     '@/lib/motionTokens': { HANDOFF_MS: 50 },
-    '@/lib/springTiming': { springTiming: (role, category) => {
-      timings.push({ role, category });
-      return { duration: 100 * scales[category], easing: 'linear' };
-    } },
+    '@/lib/springTiming': {
+      springTiming: (role, category) => {
+        timings.push({ role, category });
+        return { duration: 100 * scales[category], easing: 'linear' };
+      },
+    },
   };
   const exports = {};
-  const source = ts.transpileModule(readFileSync(path.join(root, 'components/StatChart.tsx'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
+  const source = ts.transpileModule(
+    readFileSync(path.join(root, 'components/StatChart.tsx'), 'utf8'),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    },
+  ).outputText;
   // Test the private paint component without adding a production export or copying its logic.
   vm.runInNewContext(source + '\nexports.StatSeriesPaint = StatSeriesPaint;', {
-    exports, require: (name) => {
+    exports,
+    require: (name) => {
       assert.ok(name in dependencies, `Unexpected chart dependency: ${name}`);
       return dependencies[name];
     },
@@ -320,13 +451,29 @@ function seriesFixture({ hydrate = false, entrance = 'standard', feedback = 'sta
   const props = { dataKey: 'total:1,2', active, children: [] };
   const render = (updates = {}, hydration = false) => {
     Object.assign(props, updates);
-    return hooks.render(exports.StatSeriesPaint, props, (tree) => { tree.props.ref.current = group; }, hydration);
+    return hooks.render(
+      exports.StatSeriesPaint,
+      props,
+      (tree) => {
+        tree.props.ref.current = group;
+      },
+      hydration,
+    );
   };
   render({}, hydrate);
-  return { runs, timings, modes, scales, render, replay: () => hooks.strictReplay(), unmount: () => hooks.unmount() };
+  return {
+    runs,
+    timings,
+    modes,
+    scales,
+    render,
+    replay: () => hooks.strictReplay(),
+    unmount: () => hooks.unmount(),
+  };
 }
 
-const animatedProperties = (run) => [...new Set(run.frames.flatMap((frame) => Object.keys(frame)))].sort();
+const animatedProperties = (run) =>
+  [...new Set(run.frames.flatMap((frame) => Object.keys(frame)))].sort();
 
 function rangeFixture() {
   const hooks = hookRuntime();
@@ -338,32 +485,80 @@ function rangeFixture() {
   const dependencies = {
     react: hooks.react,
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' '), clamp01: (v) => Math.min(1, Math.max(0, v)) },
+    '@/lib/utils': {
+      cn: (...classes) => classes.filter(Boolean).join(' '),
+      clamp01: (v) => Math.min(1, Math.max(0, v)),
+    },
     '@/components/slider/range': range,
-    '@/components/slider/paint': { SLIDER_INPUT: '', SliderHandle: {}, SliderPaint: {}, SliderRail: {}, SliderTrack: {} },
-    '@/components/slider/useSliderPaint': { useSliderPaint: () => ({
-      railRef: paintRef, positionRef: paintRef, endPositionRef: paintRef, activeRef: limits,
-      inactiveRef: limits, inactiveStartRef: limits, queueJump() {}, cancelJump() {}, pose: {},
-    }) },
+    '@/components/slider/paint': {
+      SLIDER_INPUT: '',
+      SliderHandle: {},
+      SliderPaint: {},
+      SliderRail: {},
+      SliderTrack: {},
+    },
+    '@/components/slider/useSliderPaint': {
+      useSliderPaint: () => ({
+        railRef: paintRef,
+        positionRef: paintRef,
+        endPositionRef: paintRef,
+        activeRef: limits,
+        inactiveRef: limits,
+        inactiveStartRef: limits,
+        queueJump() {},
+        cancelJump() {},
+        pose: {},
+      }),
+    },
   };
   const exports = {};
-  const source = ts.transpileModule(readFileSync(path.join(root, 'components/RangeSlider.tsx'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
+  const source = ts.transpileModule(
+    readFileSync(path.join(root, 'components/RangeSlider.tsx'), 'utf8'),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    },
+  ).outputText;
   const document = { activeElement: null };
-  vm.runInNewContext(source, { exports, document, queueMicrotask, require: (name) => {
-    assert.ok(name in dependencies, `Unexpected range dependency: ${name}`);
-    return dependencies[name];
-  } });
+  vm.runInNewContext(source, {
+    exports,
+    document,
+    queueMicrotask,
+    require: (name) => {
+      assert.ok(name in dependencies, `Unexpected range dependency: ${name}`);
+      return dependencies[name];
+    },
+  });
   let tree;
-  const props = { min: 0, max: 100, step: 1, value: { start: 20, end: 40 }, startLabel: 'start', endLabel: 'end',
+  const props = {
+    min: 0,
+    max: 100,
+    step: 1,
+    value: { start: 20, end: 40 },
+    startLabel: 'start',
+    endLabel: 'end',
     onCommit: (value) => commits.push(plain(value)),
-    onValueChange: (value) => { drafts.push(plain(value)); props.value = plain(value); render(); } };
-  function inputs() { return tree.props.children[0].props.children.slice(0, 2); }
+    onValueChange: (value) => {
+      drafts.push(plain(value));
+      props.value = plain(value);
+      render();
+    },
+  };
+  function inputs() {
+    return tree.props.children[0].props.children.slice(0, 2);
+  }
   function render() {
     tree = hooks.render(exports.default, props, (next) => {
       for (const input of next.props.children[0].props.children.slice(0, 2)) {
-        const node = { focus() { document.activeElement = node; }, matches: () => false };
+        const node = {
+          focus() {
+            document.activeElement = node;
+          },
+          matches: () => false,
+        };
         input.props.ref.current = node;
       }
     });
@@ -375,10 +570,15 @@ function rangeFixture() {
 
 test('native keyboard/AT commits survive a synchronous controlled draft echo and still deduplicate', () => {
   const control = rangeFixture();
-  const change = (handle, value) => control.inputs()[handle].props.onChange({ currentTarget: { value: String(value) } });
+  const change = (handle, value) =>
+    control.inputs()[handle].props.onChange({ currentTarget: { value: String(value) } });
   change(0, 21);
   assert.deepEqual(control.drafts, [{ start: 21, end: 40 }]);
-  assert.deepEqual(control.commits, [{ start: 21, end: 40 }], 'a parent flush must not swallow the semantic commit');
+  assert.deepEqual(
+    control.commits,
+    [{ start: 21, end: 40 }],
+    'a parent flush must not swallow the semantic commit',
+  );
   change(0, 21);
   control.inputs()[0].props.onBlur();
   assert.equal(control.drafts.length, 1);
@@ -413,28 +613,50 @@ test('cold stats entrance uses its own category, and resize/Strict replay do not
   assert.equal(chart.runs[0].options.delay, 0);
   chart.render({ width: 310 });
   assert.equal(chart.runs.length, 1);
-  assert.equal(chart.runs[0].cancelled, false, 'percentage clips/opacity do not cancel for a parent measurement');
+  assert.equal(
+    chart.runs[0].cancelled,
+    false,
+    'percentage clips/opacity do not cancel for a parent measurement',
+  );
   chart.replay();
   assert.equal(chart.runs[0].cancelled, true);
-  assert.equal(chart.runs.length, 2, 'Strict replay must rebuild the unfinished entrance before paint');
+  assert.equal(
+    chart.runs.length,
+    2,
+    'Strict replay must rebuild the unfinished entrance before paint',
+  );
   assert.equal(chart.runs[1].cancelled, false);
   chart.runs[1].finish();
   chart.replay();
   assert.equal(chart.runs.length, 2, 'a completed event must not replay');
   chart.render({ dataKey: 'daily:2,2' });
-  assert.equal(chart.runs.length, 2, 'custom feedback off must not disable or reuse entrance motion');
+  assert.equal(
+    chart.runs.length,
+    2,
+    'custom feedback off must not disable or reuse entrance motion',
+  );
   chart.unmount();
 });
 
 test('off, inactive, inert, route-owned and disabled entrances stay static but real updates retain feedback', () => {
-  for (const options of [{ entrance: 'off' }, { active: false }, { inert: true }, { route: true }, { allowEntrance: false }]) {
+  for (const options of [
+    { entrance: 'off' },
+    { active: false },
+    { inert: true },
+    { route: true },
+    { allowEntrance: false },
+  ]) {
     const chart = seriesFixture(options);
     assert.equal(chart.runs.length, 0, JSON.stringify(options));
     chart.render({ active: true });
     assert.equal(chart.runs.length, 0, 'activation may not replay a consumed entrance');
     if (!options.inert) {
       chart.render({ dataKey: 'daily:1,1' });
-      assert.equal(chart.runs.length, 1, 'real data/view updates belong to feedback even with entrances off');
+      assert.equal(
+        chart.runs.length,
+        1,
+        'real data/view updates belong to feedback even with entrances off',
+      );
       assert.deepEqual(chart.timings[0], { role: 'defaultEffects', category: 'feedback' });
     }
     chart.unmount();
@@ -447,10 +669,25 @@ function swapEffectsFixture({ tier = 'standard', active = true } = {}) {
   const animate = (frames, options) => {
     let resolve;
     let reject;
-    const finished = new Promise((yes, no) => { resolve = yes; reject = no; });
-    const run = { frames, options, finished, settled: false, cancelled: false,
-      finish() { this.settled = true; resolve(); },
-      cancel() { if (!this.settled) this.cancelled = true; reject(new Error('cancelled')); } };
+    const finished = new Promise((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    const run = {
+      frames,
+      options,
+      finished,
+      settled: false,
+      cancelled: false,
+      finish() {
+        this.settled = true;
+        resolve();
+      },
+      cancel() {
+        if (!this.settled) this.cancelled = true;
+        reject(new Error('cancelled'));
+      },
+    };
     runs.push(run);
     return run;
   };
@@ -459,31 +696,53 @@ function swapEffectsFixture({ tier = 'standard', active = true } = {}) {
     react: hooks.react,
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
-    '@/lib/appearance': { useMotionTier: () => tier, useMotionScale: () => tier === 'off' ? 0 : 1, scaledMs: (ms) => ms },
+    '@/lib/appearance': {
+      useMotionTier: () => tier,
+      useMotionScale: () => (tier === 'off' ? 0 : 1),
+      scaledMs: (ms) => ms,
+    },
     '@/lib/motionTokens': { TRAVEL_PX: { small: 8 }, HANDOFF_MS: 50 },
-    '@/lib/springTiming': { springTiming: () => ({ duration: 50 }),
-      surfaceArrival: () => ({ effects: { duration: 100 }, spatial: { duration: 200 } }) },
+    '@/lib/springTiming': {
+      springTiming: () => ({ duration: 50 }),
+      surfaceArrival: () => ({ effects: { duration: 100 }, spatial: { duration: 200 } }),
+    },
   };
   const exports = {};
-  const source = ts.transpileModule(readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  vm.runInNewContext(source, { exports, queueMicrotask, require: (name) => {
-    assert.ok(name in dependencies, `Unexpected swap dependency: ${name}`);
-    return dependencies[name];
-  } });
+  const source = ts.transpileModule(
+    readFileSync(path.join(root, 'components/SwapContent.tsx'), 'utf8'),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    },
+  ).outputText;
+  vm.runInNewContext(source, {
+    exports,
+    queueMicrotask,
+    require: (name) => {
+      assert.ok(name in dependencies, `Unexpected swap dependency: ${name}`);
+      return dependencies[name];
+    },
+  });
   const props = { contentKey: 'total', children: { key: 'total' }, active };
   const render = (updates = {}) => {
     Object.assign(props, updates);
     return hooks.render(exports.default, props, (tree) => {
-      for (const child of tree.props.children.filter(Boolean)) child.props.ref.current = { animate };
+      for (const child of tree.props.children.filter(Boolean))
+        child.props.ref.current = { animate };
     });
   };
   render();
   return { render, runs, unmount: () => hooks.unmount() };
 }
 
-const microtasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+const microtasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+};
 
 test('a plot swap waits for both incoming tracks before clearing its inert departure', async () => {
   const swap = swapEffectsFixture();
@@ -491,7 +750,10 @@ test('a plot swap waits for both incoming tracks before clearing its inert depar
   assert.equal(swap.runs.length, 3);
   swap.runs[2].finish(); // Short exit ends first; incoming spatial tail still belongs to this run.
   await microtasks();
-  assert.ok(departing(swap.render()), 'the exit alone must not clear the snapshot/cancel incoming tracks');
+  assert.ok(
+    departing(swap.render()),
+    'the exit alone must not clear the snapshot/cancel incoming tracks',
+  );
   assert.equal(swap.runs[0].cancelled, false);
   assert.equal(swap.runs[1].cancelled, false);
   swap.runs[0].finish();
@@ -539,13 +801,21 @@ test('rapid series updates cancel obsolete effects; tab/pref changes settle with
   assert.equal(chart.runs.length, 2);
   chart.modes.feedback = 'reduced';
   chart.render();
-  assert.equal(chart.runs.length, 2, 'tier changes finish existing data rather than inventing an entrance');
+  assert.equal(
+    chart.runs.length,
+    2,
+    'tier changes finish existing data rather than inventing an entrance',
+  );
   chart.render({ dataKey: 'daily:2,2' });
   assert.deepEqual(animatedProperties(chart.runs[2]), ['opacity']);
   chart.modes.entrance = 'off';
   chart.scales.entrance = 1.4;
   chart.render();
-  assert.equal(chart.runs[2].cancelled, false, 'unrelated entrance preferences cannot cancel active feedback');
+  assert.equal(
+    chart.runs[2].cancelled,
+    false,
+    'unrelated entrance preferences cannot cancel active feedback',
+  );
   assert.equal(chart.runs.length, 3);
   chart.scales.feedback = 1.4;
   chart.render();
@@ -561,9 +831,16 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   const hooks = hookRuntime();
   const jsx = (type, props) => ({ type, props });
   const exports = {};
-  const source = ts.transpileModule(readFileSync(path.join(root, 'components/TabPanes.tsx'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
+  const source = ts.transpileModule(
+    readFileSync(path.join(root, 'components/TabPanes.tsx'), 'utf8'),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+      },
+    },
+  ).outputText;
   vm.runInNewContext(source, {
     exports,
     require: (name) => {
@@ -580,9 +857,17 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
       assert.fail(`Unexpected TabPanes dependency: ${name}`);
     },
   });
-  const tree = exports.TabPanes({ value: 'stats-users', following: { type: 'RangeCard' }, children: [] });
+  const tree = exports.TabPanes({
+    value: 'stats-users',
+    following: { type: 'RangeCard' },
+    children: [],
+  });
   assert.equal(tree.type, 'div');
-  assert.equal(tree.props['data-tab-window'], undefined, 'following must not impose a column-tight data-tab-window clip');
+  assert.equal(
+    tree.props['data-tab-window'],
+    undefined,
+    'following must not impose a column-tight data-tab-window clip',
+  );
   assert.equal(tree.props.className, 'isolate');
   const [panes, follower] = tree.props.children;
   assert.equal(panes.type, 'Fragment');
@@ -591,9 +876,12 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   assert.ok(follower.props.className.split(/\s+/).includes('bg-surface'), follower.props.className);
 
   const tabScroll = {};
-  const scrollSource = ts.transpileModule(readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  }).outputText;
+  const scrollSource = ts.transpileModule(
+    readFileSync(path.join(root, 'lib/tabScroll.ts'), 'utf8'),
+    {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    },
+  ).outputText;
   vm.runInNewContext(scrollSource, {
     exports: tabScroll,
     require: (name) => {
@@ -604,7 +892,9 @@ test('TabPanes following keeps the enclosing strip window while retaining a surf
   const scroller = { scrollTop: 0, getBoundingClientRect: () => ({ top: 0 }) };
   const panel = (hasWindow, hasFollower) => ({
     closest: (selector) => (hasWindow && selector === '[data-tab-window]' ? {} : null),
-    nextElementSibling: hasFollower ? { hasAttribute: (attr) => attr === 'data-tab-follower' } : null,
+    nextElementSibling: hasFollower
+      ? { hasAttribute: (attr) => attr === 'data-tab-follower' }
+      : null,
     getBoundingClientRect: () => ({ top: 24 }),
   });
   assert.equal(tabScroll.tabMayRestore(panel(false, false), scroller), true);

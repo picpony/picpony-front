@@ -18,7 +18,14 @@ import Pagination from '@/components/Pagination';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
 import RichTextRenderer from '@/components/RichTextRenderer';
-import { ListRowsSkeleton, OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
+import {
+  ListRowsSkeleton,
+  OwnerHiddenNote,
+  PaneFailure,
+  PaneHidden,
+  useVisited,
+  type ProfilePaneProps,
+} from './ProfilePaneStates';
 
 function target(comment: UserComment): { href: string; label: string; icon: React.ReactNode } {
   return comment.type === 'post'
@@ -34,25 +41,35 @@ function target(comment: UserComment): { href: string; label: string; icon: Reac
  * is a sibling laid under the row's content — the `DropZone` arrangement: the content lets the
  * pointer through to it, except on a link of the comment's own.
  */
-export default function CommentsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
+export default function CommentsPane({
+  profile,
+  id,
+  own,
+  ready,
+  active,
+  token,
+  now,
+}: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:comments', id, 1);
   const visible = tabVisible(profile, 'comments', own);
-  const read = useResource(userComments, ready && visited && visible ? { id, page, token } : SKIP, { keepPrevious: id });
+  const read = useResource(userComments, ready && visited && visible ? { id, page, token } : SKIP, {
+    keepPrevious: id,
+  });
 
   if (!ready) return <ListRowsSkeleton />;
   if (!visible) return <PaneHidden />;
   const data = read.data;
   if (data === undefined) {
-    return read.error ? <PaneFailure error={read.error} title="评论加载失败" onRetry={read.refresh} /> : <ListRowsSkeleton />;
+    return read.error ? (
+      <PaneFailure error={read.error} title="评论加载失败" onRetry={read.refresh} />
+    ) : (
+      <ListRowsSkeleton />
+    );
   }
   if (data.comments.length === 0 && !read.isPrevious) {
     return (
-      <EmptyState
-        size="pane"
-        icon={<MdChatBubbleOutline size={ICON.display} />}
-        title="暂无评论"
-      />
+      <EmptyState size="pane" icon={<MdChatBubbleOutline size={ICON.display} />} title="暂无评论" />
     );
   }
 
@@ -70,12 +87,20 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
           />
         </div>
       )}
-      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
+      <div
+        className={cn(
+          'transition-opacity spring-default-effects',
+          read.isLoading ? 'paging-dim' : 'opacity-100',
+        )}
+      >
         {data.comments.map((comment, index) => {
           const where = target(comment);
           const when = formatCompactDateTime(comment.created_at, now);
           return (
-            <article key={`${comment.type}-${comment.id}-${index}`} className="m3-row relative bg-surface-container-low p-4">
+            <article
+              key={`${comment.type}-${comment.id}-${index}`}
+              className="m3-row relative bg-surface-container-low p-4"
+            >
               <Link
                 scroll={false}
                 href={where.href}
@@ -95,7 +120,13 @@ export default function CommentsPane({ profile, id, own, ready, active, token, n
               <div className="pointer-events-none relative flex items-start gap-3 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
                 {comment.cover_image ? (
                   <div className="relative size-14 shrink-0 overflow-hidden rounded-sm bg-surface-container-highest">
-                    <FadeInImage src={getAssetUrl(comment.cover_image)} alt="" fill sizes="56px" className="object-cover" />
+                    <FadeInImage
+                      src={getAssetUrl(comment.cover_image)}
+                      alt=""
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                    />
                   </div>
                 ) : null}
                 <div className="min-w-0 flex-1">

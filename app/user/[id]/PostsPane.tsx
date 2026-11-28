@@ -15,33 +15,48 @@ import FadeInImage from '@/components/FadeInImage';
 import Pagination from '@/components/Pagination';
 import EmptyState from '@/components/EmptyState';
 import ErrorRetry from '@/components/ErrorRetry';
-import { ListRowsSkeleton, OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
+import {
+  ListRowsSkeleton,
+  OwnerHiddenNote,
+  PaneFailure,
+  PaneHidden,
+  useVisited,
+  type ProfilePaneProps,
+} from './ProfilePaneStates';
 
 /**
  * 发布的帖子 — the grouped rows the forum and history lists use. A row is the post's link, and a
  * press hands the row's rectangle to the thread's container transform (`rememberForumOrigin`),
  * so a post opened from a profile grows out of its row as it does from the forum.
  */
-export default function PostsPane({ profile, id, own, ready, active, token, now }: ProfilePaneProps) {
+export default function PostsPane({
+  profile,
+  id,
+  own,
+  ready,
+  active,
+  token,
+  now,
+}: ProfilePaneProps) {
   const visited = useVisited(active);
   const [page, setPage] = useScreenStateFor('profile:posts', id, 1);
   const visible = tabVisible(profile, 'posts', own);
-  const read = useResource(userPosts, ready && visited && visible ? { id, page, token } : SKIP, { keepPrevious: id });
+  const read = useResource(userPosts, ready && visited && visible ? { id, page, token } : SKIP, {
+    keepPrevious: id,
+  });
 
   if (!ready) return <ListRowsSkeleton />;
   if (!visible) return <PaneHidden />;
   const data = read.data;
   if (data === undefined) {
-    return read.error ? <PaneFailure error={read.error} title="帖子加载失败" onRetry={read.refresh} /> : <ListRowsSkeleton />;
+    return read.error ? (
+      <PaneFailure error={read.error} title="帖子加载失败" onRetry={read.refresh} />
+    ) : (
+      <ListRowsSkeleton />
+    );
   }
   if (data.posts.length === 0 && !read.isPrevious) {
-    return (
-      <EmptyState
-        size="pane"
-        icon={<MdArticle size={ICON.display} />}
-        title="暂无帖子"
-      />
-    );
+    return <EmptyState size="pane" icon={<MdArticle size={ICON.display} />} title="暂无帖子" />;
   }
 
   const failedTurn = read.isPrevious && Boolean(read.error);
@@ -61,7 +76,12 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
           />
         </div>
       )}
-      <div className={cn('transition-opacity spring-default-effects', read.isLoading ? 'paging-dim' : 'opacity-100')}>
+      <div
+        className={cn(
+          'transition-opacity spring-default-effects',
+          read.isLoading ? 'paging-dim' : 'opacity-100',
+        )}
+      >
         {data.posts.map((post) => (
           <Link
             scroll={false}
@@ -74,13 +94,23 @@ export default function PostsPane({ profile, id, own, ready, active, token, now 
             <div className="flex items-start gap-3">
               {post.cover_image ? (
                 <div className="relative size-14 shrink-0 overflow-hidden rounded-sm bg-surface-container-highest">
-                  <FadeInImage src={getAssetUrl(post.cover_image)} alt="" fill sizes="56px" className="object-cover" />
+                  <FadeInImage
+                    src={getAssetUrl(post.cover_image)}
+                    alt=""
+                    fill
+                    sizes="56px"
+                    className="object-cover"
+                  />
                 </div>
               ) : null}
               <div className="min-w-0 flex-1">
-                <h3 className="mb-1.5 line-clamp-2 wrap-anywhere text-title-m-emphasized text-on-surface">{post.title}</h3>
+                <h3 className="mb-1.5 line-clamp-2 wrap-anywhere text-title-m-emphasized text-on-surface">
+                  {post.title}
+                </h3>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-label-m text-on-surface-variant">
-                  <span className="tabular-nums">{formatCompactDateTime(post.created_at, now)}</span>
+                  <span className="tabular-nums">
+                    {formatCompactDateTime(post.created_at, now)}
+                  </span>
                   <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
                     <MdComment size={ICON.dense} aria-hidden="true" />
                     <span className="sr-only">回复数</span>

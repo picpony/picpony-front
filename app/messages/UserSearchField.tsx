@@ -66,7 +66,8 @@ export default function UserSearchField({
       .map((person): Option => ({ kind: 'user', person }));
     const list = [...matches, ...people];
     if (searching) list.push({ kind: 'status', text: '正在搜索用户…', busy: true });
-    else if (error !== undefined) list.push({ kind: 'status', text: `用户搜索失败：${apiErrorMessage(error)}`, busy: false });
+    else if (error !== undefined)
+      list.push({ kind: 'status', text: `用户搜索失败：${apiErrorMessage(error)}`, busy: false });
     else if (list.length === 0) list.push({ kind: 'status', text: '未找到用户', busy: false });
     return list;
   }, [keyword, contacts, users, myId, searching, error]);
@@ -89,7 +90,9 @@ export default function UserSearchField({
     resetKey: keyword,
   });
 
-  const hasGroupHeader = options.some((option, i) => i > 0 && options[i - 1].kind !== option.kind && option.kind !== 'status');
+  const hasGroupHeader = options.some(
+    (option, i) => i > 0 && options[i - 1].kind !== option.kind && option.kind !== 'status',
+  );
 
   return (
     <>
@@ -123,12 +126,18 @@ export default function UserSearchField({
         estimatedHeight={estimateMenuHeight(options.length, ROW.height) + (hasGroupHeader ? 30 : 0)}
       >
         {options.map((option, index) => {
-          const kindChanged = index > 0 && options[index - 1].kind !== option.kind && option.kind !== 'status';
+          const kindChanged =
+            index > 0 && options[index - 1].kind !== option.kind && option.kind !== 'status';
           return (
-            <Fragment key={option.kind === 'status' ? 'status' : `${option.kind}:${option.person.id}`}>
+            <Fragment
+              key={option.kind === 'status' ? 'status' : `${option.kind}:${option.person.id}`}
+            >
               {/* A caption between the two groups — seen, not read: each row says which it is. */}
               {kindChanged && (
-                <div aria-hidden="true" className="px-2 pt-2 pb-1 text-label-m text-on-surface-variant">
+                <div
+                  aria-hidden="true"
+                  className="px-2 pt-2 pb-1 text-label-m text-on-surface-variant"
+                >
                   其他用户
                 </div>
               )}
@@ -153,7 +162,9 @@ export default function UserSearchField({
                   <>
                     <Avatar src={option.person.avatar} name={option.person.username} size={40} />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-label-l-emphasized text-on-surface">{option.person.username}</span>
+                      <span className="truncate text-label-l-emphasized text-on-surface">
+                        {option.person.username}
+                      </span>
                       <span className="truncate text-body-s text-on-surface-variant">
                         {option.kind === 'contact' ? '联系人' : '新对话'}
                       </span>

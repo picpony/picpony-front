@@ -43,14 +43,21 @@ type Audience = 'user' | 'all';
 const PAGE_SIZE = 20;
 
 /** Paged on the server by cursor (`before` → `next_cursor`), newest first. */
-const notificationsQuery = defineResource<{ token: string; filter: Filter; before?: number; keyword: string }, NotificationPage>({
+const notificationsQuery = defineResource<
+  { token: string; filter: Filter; before?: number; keyword: string },
+  NotificationPage
+>({
   name: 'admin-notifications',
   key: ({ token, filter, before, keyword }) => `${token}:${filter}:${before ?? ''}:${keyword}`,
   ttl: 60_000,
   maxEntries: 12,
   fetch: async ({ token, filter, before, keyword }, signal) => {
     if (readToken() !== token) throw new Error('登录状态已失效，请重新登录');
-    const data = await adminApi.adminGetNotifications(token, { scope: filter, before, limit: PAGE_SIZE, keyword }, signal);
+    const data = await adminApi.adminGetNotifications(
+      token,
+      { scope: filter, before, limit: PAGE_SIZE, keyword },
+      signal,
+    );
     return { rows: data.notifications, next: data.next };
   },
 });
@@ -87,25 +94,35 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [important, setImportant] = useState(false);
-  const [errors, setErrors] = useState<{ audience?: string; recipient?: string; title?: string; content?: string }>({});
+  const [errors, setErrors] = useState<{
+    audience?: string;
+    recipient?: string;
+    title?: string;
+    content?: string;
+  }>({});
   const sending = sendMutation.busy;
 
   const typedId = accountId(recipient);
   const settledId = useSettled(typedId, typedId ? 400 : 0);
-  const lookup = useResource(userProfile, audience === 'user' && settledId ? { id: String(settledId) } : SKIP);
+  const lookup = useResource(
+    userProfile,
+    audience === 'user' && settledId ? { id: String(settledId) } : SKIP,
+  );
   const lookupCurrent = settledId === typedId;
   const recipientName = lookupCurrent ? lookup.data?.username : undefined;
   const recipientMissing = lookupCurrent && lookup.error !== undefined && isNotFound(lookup.error);
 
   const recipientHelper = (() => {
     if (audience !== 'user' || !typedId) return undefined;
-    if (!lookupCurrent || (lookup.data === undefined && lookup.error === undefined)) return '正在查找该用户…';
+    if (!lookupCurrent || (lookup.data === undefined && lookup.error === undefined))
+      return '正在查找该用户…';
     if (recipientName) return `将发送给「${recipientName}」`;
     if (lookup.error !== undefined && !recipientMissing) return '暂时无法确认该用户';
     return undefined;
   })();
 
-  const clear = (field: keyof typeof errors) => setErrors((previous) => ({ ...previous, [field]: undefined }));
+  const clear = (field: keyof typeof errors) =>
+    setErrors((previous) => ({ ...previous, [field]: undefined }));
 
   const send = () => {
     if (sendMutation.isPending()) return;
@@ -123,29 +140,37 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
     const broadcast = audience === 'all';
     const who = broadcast
       ? '全站所有用户'
-      : recipientName ? `用户「${recipientName}」（#${typedId}）` : `ID 为 ${typedId} 的用户`;
-    const mail = important ? (broadcast ? '\n通知还会以邮件发给所有用户，耗时较长。' : '\n通知还会以邮件发给该用户。') : '';
+      : recipientName
+        ? `用户「${recipientName}」（#${typedId}）`
+        : `ID 为 ${typedId} 的用户`;
+    const mail = important
+      ? broadcast
+        ? '\n通知还会以邮件发给所有用户，耗时较长。'
+        : '\n通知还会以邮件发给该用户。'
+      : '';
     confirmThen(
       broadcast ? '确认全站广播' : '确认发送通知',
       `确定要向${who}发送此通知吗？${mail}`,
-      () => void sendMutation.run(
-        () => adminApi.adminSendNotification(token, {
-          recipient_id: broadcast ? null : (typedId as number),
-          title: title.trim(),
-          content: content.trim(),
-          important,
-        }),
-        () => {
-          showToast(broadcast ? '已发送全站广播' : '已发送通知', 'success');
-          setAudience(null);
-          setRecipient('');
-          setTitle('');
-          setContent('');
-          setImportant(false);
-        },
-        '发送失败',
-        { onCommitted: () => notificationsQuery.invalidate() },
-      ),
+      () =>
+        void sendMutation.run(
+          () =>
+            adminApi.adminSendNotification(token, {
+              recipient_id: broadcast ? null : (typedId as number),
+              title: title.trim(),
+              content: content.trim(),
+              important,
+            }),
+          () => {
+            showToast(broadcast ? '已发送全站广播' : '已发送通知', 'success');
+            setAudience(null);
+            setRecipient('');
+            setTitle('');
+            setContent('');
+            setImportant(false);
+          },
+          '发送失败',
+          { onCommitted: () => notificationsQuery.invalidate() },
+        ),
       { tone: broadcast ? 'danger' : 'filled' },
     );
   };
@@ -170,19 +195,23 @@ export default function NotificationsTab({ token }: AdminPanelProps) {
     if (rows.length === 0 && currentPage > 1 && !history.isLoading) pages.setPage(currentPage - 1);
     else pages.learn(currentPage, history.data.next);
   }
-  const listKey = useShownListKey(`${scope}
-${currentPage}`, history.isPrevious);
+  const listKey = useShownListKey(
+    `${scope}
+${currentPage}`,
+    history.isPrevious,
+  );
 
   const remove = (item: NotificationItem) => {
     confirmThen(
       '确认删除通知',
       `确定要删除通知「${item.title}」吗？删除后接收者将无法在信箱中查看该通知。`,
-      () => void deleteMutation.run(
-        () => adminApi.adminDeleteNotification(token, item.id),
-        () => showToast('已删除通知', 'success'),
-        '删除失败',
-        { key: item.id, onCommitted: () => notificationsQuery.invalidate() },
-      ),
+      () =>
+        void deleteMutation.run(
+          () => adminApi.adminDeleteNotification(token, item.id),
+          () => showToast('已删除通知', 'success'),
+          '删除失败',
+          { key: item.id, onCommitted: () => notificationsQuery.invalidate() },
+        ),
       { tone: 'danger' },
     );
   };
@@ -192,7 +221,9 @@ ${currentPage}`, history.isPrevious);
       key: 'title',
       header: '标题',
       primary: true,
-      render: (item) => <span className="text-body-m-emphasized text-on-surface">{item.title}</span>,
+      render: (item) => (
+        <span className="text-body-m-emphasized text-on-surface">{item.title}</span>
+      ),
     },
     {
       key: 'content',
@@ -207,7 +238,9 @@ ${currentPage}`, history.isPrevious);
       width: 'auto',
       render: (item) =>
         item.recipient_id === null ? (
-          <Badge tone="primary" size="md">{item.kind === 'announcement' ? '公告推送' : '全站广播'}</Badge>
+          <Badge tone="primary" size="md">
+            {item.kind === 'announcement' ? '公告推送' : '全站广播'}
+          </Badge>
         ) : (
           <span>
             {item.username || '用户'}
@@ -220,7 +253,9 @@ ${currentPage}`, history.isPrevious);
       header: '时间',
       width: 'auto',
       className: 'tabular-nums',
-      render: (item) => <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>,
+      render: (item) => (
+        <span className="text-on-surface-variant">{formatDateTime(item.created_at)}</span>
+      ),
     },
     {
       key: 'actions',
@@ -240,7 +275,10 @@ ${currentPage}`, history.isPrevious);
   ];
 
   const historyError = history.error
-    ? tableError(history.isPrevious ? `通知记录第 ${currentPage} 页加载失败` : '通知记录加载失败', apiErrorMessage(history.error))
+    ? tableError(
+        history.isPrevious ? `通知记录第 ${currentPage} 页加载失败` : '通知记录加载失败',
+        apiErrorMessage(history.error),
+      )
     : {};
 
   return (
@@ -248,8 +286,13 @@ ${currentPage}`, history.isPrevious);
       <SectionHeader section="notifications" />
 
       <AdminForm onSubmit={send} aria-labelledby="notifications-send-heading">
-        <SectionHeading as="h3" id="notifications-send-heading">发送通知</SectionHeading>
-        <fieldset className="min-w-0 border-0 p-0" aria-describedby={errors.audience ? 'notifications-audience-error' : undefined}>
+        <SectionHeading as="h3" id="notifications-send-heading">
+          发送通知
+        </SectionHeading>
+        <fieldset
+          className="min-w-0 border-0 p-0"
+          aria-describedby={errors.audience ? 'notifications-audience-error' : undefined}
+        >
           <legend className="mb-2 text-label-l text-on-surface-variant">发送对象</legend>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Radio
@@ -259,7 +302,10 @@ ${currentPage}`, history.isPrevious);
               checked={audience === 'user'}
               tone={errors.audience ? 'error' : 'neutral'}
               disabled={sending}
-              onChange={() => { setAudience('user'); clear('audience'); }}
+              onChange={() => {
+                setAudience('user');
+                clear('audience');
+              }}
             />
             <Radio
               name="notification-audience"
@@ -268,11 +314,19 @@ ${currentPage}`, history.isPrevious);
               checked={audience === 'all'}
               tone={errors.audience ? 'error' : 'neutral'}
               disabled={sending}
-              onChange={() => { setAudience('all'); clear('audience'); clear('recipient'); }}
+              onChange={() => {
+                setAudience('all');
+                clear('audience');
+                clear('recipient');
+              }}
             />
           </div>
           {errors.audience && (
-            <p id="notifications-audience-error" role="alert" className="mt-2 text-body-s text-error">
+            <p
+              id="notifications-audience-error"
+              role="alert"
+              className="mt-2 text-body-s text-error"
+            >
               {errors.audience}
             </p>
           )}
@@ -287,7 +341,10 @@ ${currentPage}`, history.isPrevious);
                 error={errors.recipient}
                 helper={recipientHelper}
                 fieldClassName="@sm/form:w-80"
-                onChange={(event) => { setRecipient(event.target.value); clear('recipient'); }}
+                onChange={(event) => {
+                  setRecipient(event.target.value);
+                  clear('recipient');
+                }}
               />
             </div>
           </Collapse>
@@ -298,7 +355,10 @@ ${currentPage}`, history.isPrevious);
           readOnly={sending}
           error={errors.title}
           placeholder="例如：你的稿件已通过审核"
-          onChange={(event) => { setTitle(event.target.value); clear('title'); }}
+          onChange={(event) => {
+            setTitle(event.target.value);
+            clear('title');
+          }}
         />
         <Textarea
           label="通知正文"
@@ -308,7 +368,10 @@ ${currentPage}`, history.isPrevious);
           readOnly={sending}
           error={errors.content}
           placeholder="通知的详细内容…"
-          onChange={(event) => { setContent(event.target.value); clear('content'); }}
+          onChange={(event) => {
+            setContent(event.target.value);
+            clear('content');
+          }}
         />
         <ToggleSwitch
           layout="row"
@@ -326,9 +389,16 @@ ${currentPage}`, history.isPrevious);
       </AdminForm>
 
       <section aria-labelledby="admin-sent-notifications-heading" className="space-y-4">
-        <SectionHeading as="h3" id="admin-sent-notifications-heading">已发送的通知</SectionHeading>
+        <SectionHeading as="h3" id="admin-sent-notifications-heading">
+          已发送的通知
+        </SectionHeading>
         <div className="flex flex-col gap-3 @md:flex-row @md:items-center">
-          <SearchInput value={search} onChange={setSearch} placeholder="搜索标题、正文或接收者…" className="min-w-0 @md:flex-1" />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="搜索标题、正文或接收者…"
+            className="min-w-0 @md:flex-1"
+          />
           <Select
             size="sm"
             value={filter}
@@ -349,11 +419,7 @@ ${currentPage}`, history.isPrevious);
             onRetry={history.error && isRetryable(history.error) ? history.refresh : undefined}
             empty={keyword ? '没有匹配的通知' : '暂无通知记录'}
           />
-          <AdminPager
-            page={currentPage}
-            totalPages={totalPages}
-            onPageChange={pages.setPage}
-          />
+          <AdminPager page={currentPage} totalPages={totalPages} onPageChange={pages.setPage} />
         </AdminListAnchor>
       </section>
       {confirmDialog}

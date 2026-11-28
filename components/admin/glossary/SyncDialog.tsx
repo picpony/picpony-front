@@ -32,8 +32,14 @@ export interface SyncResult {
  * empty, or `current()` says the run was stopped or the account changed. A failed page is counted
  * and the run goes on; nothing is retried.
  */
-async function syncPages(range: { from: number; to: number }, token: string, current: () => boolean, result: SyncResult,
-  onPage: (page: number) => void, controller: { current: AbortController | null }) {
+async function syncPages(
+  range: { from: number; to: number },
+  token: string,
+  current: () => boolean,
+  result: SyncResult,
+  onPage: (page: number) => void,
+  controller: { current: AbortController | null },
+) {
   for (let page = range.from; page <= range.to; page++) {
     if (!current()) break;
     onPage(page);
@@ -53,9 +59,11 @@ async function syncPages(range: { from: number; to: number }, token: string, cur
       if (!current()) break;
       result.failedPages += 1;
       /* One sentence for the first failed page; the tally says how many. */
-      if (result.failedPages === 1) showToast(apiErrorMessage(error, `第 ${page} 页同步失败`), 'error');
+      if (result.failedPages === 1)
+        showToast(apiErrorMessage(error, `第 ${page} 页同步失败`), 'error');
     }
-    if (page < range.to && current()) await new Promise((resolve) => setTimeout(resolve, PAGE_PAUSE_MS));
+    if (page < range.to && current())
+      await new Promise((resolve) => setTimeout(resolve, PAGE_PAUSE_MS));
   }
 }
 
@@ -83,7 +91,9 @@ export default function SyncDialog({
   const [start, setStart] = useState('1');
   const [end, setEnd] = useState('20');
   const [errors, setErrors] = useState<{ start?: string; end?: string }>({});
-  const [progress, setProgress] = useState<{ done: number; total: number; page: number } | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; page: number } | null>(
+    null,
+  );
   const [stopping, setStopping] = useState(false);
   const run = useRef(0);
   const locked = useRef(false);
@@ -117,13 +127,26 @@ export default function SyncDialog({
     const ticket = ++run.current;
     const current = () => run.current === ticket && readToken() === token;
     const total = range.to - range.from + 1;
-    const result: SyncResult = { created: 0, skipped: 0, failedTags: 0, failedPages: 0, stopped: false };
+    const result: SyncResult = {
+      created: 0,
+      skipped: 0,
+      failedTags: 0,
+      failedPages: 0,
+      stopped: false,
+    };
     setStopping(false);
     setProgress({ done: 0, total, page: range.from });
     onRunningChange(true);
     /* The cleanup is the promise's `finally`, not a `try` statement's: the React Compiler cannot
        lower a `try` without a `catch`, and skipped this whole dialog for it. */
-    await syncPages(range, token, current, result, (page) => setProgress({ done: page - range.from, total, page }), controller).finally(() => {
+    await syncPages(
+      range,
+      token,
+      current,
+      result,
+      (page) => setProgress({ done: page - range.from, total, page }),
+      controller,
+    ).finally(() => {
       result.stopped = run.current !== ticket;
       controller.current = null;
       locked.current = false;
@@ -139,7 +162,9 @@ export default function SyncDialog({
   return (
     <Modal
       isOpen={open}
-      onClose={() => { if (!locked.current) onClose(); }}
+      onClose={() => {
+        if (!locked.current) onClose();
+      }}
       closeOnEscape={!running}
       hideCloseButton={running}
       title="同步原站热门标签"
@@ -161,15 +186,24 @@ export default function SyncDialog({
         )
       }
     >
-      <AdminForm id={FORM_ID} onSubmit={() => void submit()} className="max-w-none" aria-label="同步原站热门标签">
-        <AdminNote>按原站图片数量从高到低拉取标签，每页 50 个；词库中已有的标签会跳过，新标签记为未翻译。</AdminNote>
+      <AdminForm
+        id={FORM_ID}
+        onSubmit={() => void submit()}
+        className="max-w-none"
+        aria-label="同步原站热门标签"
+      >
+        <AdminNote>
+          按原站图片数量从高到低拉取标签，每页 50 个；词库中已有的标签会跳过，新标签记为未翻译。
+        </AdminNote>
         <FollowHeight watch={running}>
           <SwapContent contentKey={running ? 'running' : 'idle'}>
             {running ? (
               <div className="space-y-2" aria-live="polite">
                 <ProgressBar value={(progress.done / progress.total) * 100} label="同步进度" />
                 <p className="text-body-m tabular-nums text-on-surface-variant">
-                  {stopping ? '正在停止…' : `正在同步第 ${progress.page} 页 · 已完成 ${progress.done} / ${progress.total} 页`}
+                  {stopping
+                    ? '正在停止…'
+                    : `正在同步第 ${progress.page} 页 · 已完成 ${progress.done} / ${progress.total} 页`}
                 </p>
               </div>
             ) : (

@@ -57,9 +57,18 @@ export function ChoiceSurface({
   if (!opened && !isOpen) return null;
   if (!wide) {
     return (
-      <Sheet isOpen={isOpen} onClose={onClose} onExited={onExited} title={title} closeOnEscape={!busy} closeOnOverlayClick={!busy}>
+      <Sheet
+        isOpen={isOpen}
+        onClose={onClose}
+        onExited={onExited}
+        title={title}
+        closeOnEscape={!busy}
+        closeOnOverlayClick={!busy}
+      >
         {children}
-        <div className="sticky bottom-0 mt-2 flex flex-wrap justify-end gap-3 bg-surface-container-low pt-3 pb-1">{actions}</div>
+        <div className="sticky bottom-0 mt-2 flex flex-wrap justify-end gap-3 bg-surface-container-low pt-3 pb-1">
+          {actions}
+        </div>
       </Sheet>
     );
   }
@@ -84,7 +93,9 @@ function FolderRowLabel({ folder }: { folder: FaveFolder }) {
   return (
     <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
       <span className="truncate text-body-l text-on-surface">{folderLabel(folder)}</span>
-      <span className="shrink-0 text-body-s text-on-surface-variant tabular-nums">{formatCount(folder.itemCount)} 张</span>
+      <span className="shrink-0 text-body-s text-on-surface-variant tabular-nums">
+        {formatCount(folder.itemCount)} 张
+      </span>
     </span>
   );
 }
@@ -186,7 +197,10 @@ export function NewFolderRow({
       setName('');
       setError(null);
       if (outcome.value) onCreated(outcome.value);
-      showToast(outcome.value ? `已创建「${value}」` : `已创建「${value}」，收藏夹列表更新失败`, outcome.value ? 'success' : 'warning');
+      showToast(
+        outcome.value ? `已创建「${value}」` : `已创建「${value}」，收藏夹列表更新失败`,
+        outcome.value ? 'success' : 'warning',
+      );
     } else if (isRefusal(outcome.error)) {
       setError(apiErrorMessage(outcome.error, '创建失败'));
     } else {
@@ -261,7 +275,9 @@ export function TransferDialog({
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const verb = mode === 'move' ? '移动' : '复制';
-  const validTargets = folders.filter((folder) => targets.has(folder.id)).map((folder) => folder.id);
+  const validTargets = folders
+    .filter((folder) => targets.has(folder.id))
+    .map((folder) => folder.id);
 
   const close = () => {
     if (busy || creating) return;
@@ -298,20 +314,42 @@ export function TransferDialog({
           <Button variant="text" onClick={close} disabled={busy || creating}>
             取消
           </Button>
-          <Button variant="filled" onClick={confirm} loading={busy} disabled={creating || validTargets.length === 0 || loading || Boolean(error)}>
+          <Button
+            variant="filled"
+            onClick={confirm}
+            loading={busy}
+            disabled={creating || validTargets.length === 0 || loading || Boolean(error)}
+          >
             {verb}
           </Button>
         </>
       }
     >
-      {error ? <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} /> : loading ? (
-        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
+      {error ? (
+        <ErrorRetry
+          size="inline"
+          title="收藏夹加载失败"
+          message={apiErrorMessage(error)}
+          onRetry={onRetry}
+        />
+      ) : loading ? (
+        <PageLoadingIndicator
+          size="inline"
+          indicatorSize="md"
+          label="正在加载收藏夹…"
+          className="min-h-32"
+        />
       ) : folders.length === 0 ? (
         <EmptyState size="inline" title="暂无其他收藏夹" />
       ) : (
         <FolderChecklist folders={folders} checked={targets} onChange={toggle} disabled={busy} />
       )}
-      <NewFolderRow token={token} disabled={busy || loading || Boolean(error)} onBusyChange={setCreating} onCreated={(folder) => toggle(folder.id, true)} />
+      <NewFolderRow
+        token={token}
+        disabled={busy || loading || Boolean(error)}
+        onBusyChange={setCreating}
+        onCreated={(folder) => toggle(folder.id, true)}
+      />
     </ChoiceSurface>
   );
 }
@@ -339,7 +377,10 @@ export function MergeDialog({
   const [busy, setBusy] = useState(false);
   /* Followed while the choice is being made; held once it is being carried out and for the exit. */
   if (open && !busy && folders !== offered) setFolders(offered);
-  const target = chosen !== null && folders.some((folder) => folder.id === chosen) ? chosen : (folders[0]?.id ?? null);
+  const target =
+    chosen !== null && folders.some((folder) => folder.id === chosen)
+      ? chosen
+      : (folders[0]?.id ?? null);
   const radioName = useId();
 
   const close = () => {
@@ -375,7 +416,13 @@ export function MergeDialog({
       <p className="mb-2 text-body-m text-on-surface-variant">
         选择要保留的收藏夹，其余 {others} 个收藏夹的图片将并入其中
       </p>
-      <FolderRadioList folders={folders} value={target} onChange={setChosen} name={radioName} disabled={busy} />
+      <FolderRadioList
+        folders={folders}
+        value={target}
+        onChange={setChosen}
+        name={radioName}
+        disabled={busy}
+      />
     </ChoiceSurface>
   );
 }
@@ -434,8 +481,20 @@ export function FolderChoiceDialog({
         </>
       }
     >
-      {error ? <ErrorRetry size="inline" title="收藏夹加载失败" message={apiErrorMessage(error)} onRetry={onRetry} /> : loading ? (
-        <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载收藏夹…" className="min-h-32" />
+      {error ? (
+        <ErrorRetry
+          size="inline"
+          title="收藏夹加载失败"
+          message={apiErrorMessage(error)}
+          onRetry={onRetry}
+        />
+      ) : loading ? (
+        <PageLoadingIndicator
+          size="inline"
+          indicatorSize="md"
+          label="正在加载收藏夹…"
+          className="min-h-32"
+        />
       ) : (
         <FolderRadioList folders={folders} value={shown} onChange={setChosen} name={radioName} />
       )}

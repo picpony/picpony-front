@@ -99,11 +99,13 @@ export default function SwapContent({
     if (!leaving) return;
     let alive = true;
     const complete = () => {
-      if (alive) setLeaving((current) => current === leaving ? null : current);
+      if (alive) setLeaving((current) => (current === leaving ? null : current));
     };
     if (!active || tier === 'off') {
       queueMicrotask(complete);
-      return () => { alive = false; };
+      return () => {
+        alive = false;
+      };
     }
     const { spatial, effects } = surfaceArrival('fast', 'feedback');
     const exit = springTiming('fastEffects', 'feedback');
@@ -111,16 +113,24 @@ export default function SwapContent({
     const at = { delay: scaledMs(HANDOFF_MS, 'feedback'), fill: 'backwards' as const };
     const animations = [
       enteringRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { ...effects, ...at }),
-      enteringRef.current?.animate([{ transform: arrive }, { transform: 'none' }], { ...spatial, ...at }),
+      enteringRef.current?.animate([{ transform: arrive }, { transform: 'none' }], {
+        ...spatial,
+        ...at,
+      }),
     ];
     const run = leavingRef.current?.animate(
-      [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: depart }],
+      [
+        { opacity: 1, transform: 'none' },
+        { opacity: 0, transform: depart },
+      ],
       { ...exit, fill: 'forwards' },
     );
     animations.push(run);
     // The departure is shorter than the arrival. Keep its inert snapshot until the whole
     // handoff finishes so clearing the slot cannot cancel an incoming spring mid-tail.
-    const running = animations.filter((animation): animation is Animation => animation !== undefined);
+    const running = animations.filter(
+      (animation): animation is Animation => animation !== undefined,
+    );
     Promise.all(running.map((animation) => animation.finished)).then(complete, () => {});
     return () => {
       alive = false;

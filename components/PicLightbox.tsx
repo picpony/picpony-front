@@ -99,17 +99,24 @@ export default function PicLightbox({
 }) {
   const scale = useMotionScale('image');
   const portalId = useId();
-  const releaseBackground = useRef<{ acquireDepth: () => void; releaseDepth: () => void; releaseBackdrop: () => void } | null>(null);
+  const releaseBackground = useRef<{
+    acquireDepth: () => void;
+    releaseDepth: () => void;
+    releaseBackdrop: () => void;
+  } | null>(null);
   const closeTurn = useRef(0);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    closeTurn.current += 1;
-    if (exitTimer.current !== null) clearTimeout(exitTimer.current);
-    releaseBackground.current?.releaseDepth();
-    releaseBackground.current?.releaseBackdrop();
-    releaseBackground.current = null;
-  }, [open]);
+  useEffect(
+    () => () => {
+      closeTurn.current += 1;
+      if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+      releaseBackground.current?.releaseDepth();
+      releaseBackground.current?.releaseBackdrop();
+      releaseBackground.current = null;
+    },
+    [open],
+  );
 
   const finishClose = async () => {
     const turn = ++closeTurn.current;
@@ -118,9 +125,12 @@ export default function PicLightbox({
     // through the app's remaining departure, including an explicit standard preference.
     if (animations.length) {
       await Promise.race([
-        Promise.allSettled(animations.map(animation => animation.finished)),
-        new Promise<void>(resolve => {
-          exitTimer.current = setTimeout(resolve, SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow);
+        Promise.allSettled(animations.map((animation) => animation.finished)),
+        new Promise<void>((resolve) => {
+          exitTimer.current = setTimeout(
+            resolve,
+            SPRING_MS.defaultEffects * MOTION_SPEED_SCALE.slow,
+          );
         }),
       ]);
       if (turn !== closeTurn.current) return;
@@ -205,7 +215,14 @@ export default function PicLightbox({
       }}
       /* A counter reading 1 / 1 says nothing, and neither does a download control with nothing
          behind it. */
-      plugins={[Zoom, ...(slides.length > 1 ? [Counter] : []), Fullscreen, ...(onDownload ? [Download] : []), Video, ...(slideshow ? [Slideshow] : [])]}
+      plugins={[
+        Zoom,
+        ...(slides.length > 1 ? [Counter] : []),
+        Fullscreen,
+        ...(onDownload ? [Download] : []),
+        Video,
+        ...(slideshow ? [Slideshow] : []),
+      ]}
       slideshow={{ autoplay: slideshow, delay: 5000, ref: slideshowController }}
       /* These numbers also drive the library's JS lifetime and zoom/swipe
          tracks. A CSS-only fade left slow exits cut off at 250ms and kept an

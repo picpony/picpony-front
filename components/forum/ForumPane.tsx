@@ -61,7 +61,13 @@ const SEARCH_DEBOUNCE_MS = 450;
  * server can render into a cold `/?tab=forum` (`seed`). A link to a filtered list is not a thing
  * the original front end had either.
  */
-export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | null; active?: boolean }) {
+export default function ForumPane({
+  seed,
+  active = true,
+}: {
+  seed?: ForumSeed | null;
+  active?: boolean;
+}) {
   const router = useRouter();
   const { openAuth } = useAuthModal();
   const { token, ready } = useSession();
@@ -99,9 +105,13 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
      "now", which would swallow a post created after this read — and the badge clears at once,
      then the server's own count has the last word. Only while the pane is on screen (it stays
      mounted, hidden, behind the gallery) and only when something is counted. */
-  const newest = data && data.signedIn && !read.isPrevious && page === 1 && category === 'all' && search === ''
-    ? data.posts.reduce<string | null>((max, post) => (max === null || post.created_at > max ? post.created_at : max), null)
-    : null;
+  const newest =
+    data && data.signedIn && !read.isPrevious && page === 1 && category === 'all' && search === ''
+      ? data.posts.reduce<string | null>(
+          (max, post) => (max === null || post.created_at > max ? post.created_at : max),
+          null,
+        )
+      : null;
   const receiptRef = useRef<string | null>(null);
   useEffect(() => {
     if (!active || !token || !newest || receiptRef.current === `${token}\n${newest}`) return;
@@ -163,7 +173,9 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
      would be sent. Enter searches at once; clearing, too. */
   useEffect(() => {
     if (typed.trim() === search || composing.current) return;
-    const timer = window.setTimeout(() => { if (!composing.current) commitSearch(typed); }, SEARCH_DEBOUNCE_MS);
+    const timer = window.setTimeout(() => {
+      if (!composing.current) commitSearch(typed);
+    }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [typed, search, commitSearch]);
 
@@ -196,7 +208,9 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
     if (!origin) return;
     let stop: (() => void) | null = null;
     const frame = requestAnimationFrame(() => {
-      const row = rootRef.current?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(origin.id)}"]`);
+      const row = rootRef.current?.querySelector<HTMLElement>(
+        `[data-forum-row="${CSS.escape(origin.id)}"]`,
+      );
       clearForumReturn();
       if (row) stop = playForumReturn(row, origin);
     });
@@ -225,7 +239,11 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
         size="pane"
         icon={<MdSearchOff size={ICON.display} />}
         title="未找到相关帖子"
-        description={category === 'all' ? `没有标题、正文或作者包含「${search}」的帖子` : `「${categoryLabel(category)}」中没有包含「${search}」的帖子`}
+        description={
+          category === 'all'
+            ? `没有标题、正文或作者包含「${search}」的帖子`
+            : `「${categoryLabel(category)}」中没有包含「${search}」的帖子`
+        }
         action={
           <Button
             variant="tonal"
@@ -281,7 +299,9 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
           <div className="mb-4">
             <ErrorRetry
               size="inline"
-              title={landedView.split('|')[0] !== String(page) ? `第 ${page} 页加载失败` : '帖子加载失败'}
+              title={
+                landedView.split('|')[0] !== String(page) ? `第 ${page} 页加载失败` : '帖子加载失败'
+              }
               message={apiErrorMessage(read.error)}
               onRetry={isRetryable(read.error) ? read.refresh : undefined}
             />
@@ -312,7 +332,12 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
           </Button>
         }
       />
-      <form role="search" aria-label="搜索帖子" className="mb-3 flex items-center gap-2" onSubmit={onSubmit}>
+      <form
+        role="search"
+        aria-label="搜索帖子"
+        className="mb-3 flex items-center gap-2"
+        onSubmit={onSubmit}
+      >
         <SearchInput
           className="min-w-0 flex-1"
           value={typed}
@@ -332,7 +357,14 @@ export default function ForumPane({ seed, active = true }: { seed?: ForumSeed | 
             commitSearch(event.currentTarget.value);
           }}
         />
-        <Select size="sm" shape="pill" value={sort} options={[...FORUM_SORTS]} onChange={changeSort} aria-label="排序" />
+        <Select
+          size="sm"
+          shape="pill"
+          value={sort}
+          options={[...FORUM_SORTS]}
+          onChange={changeSort}
+          aria-label="排序"
+        />
       </form>
       <div
         ref={categoryRowRef}

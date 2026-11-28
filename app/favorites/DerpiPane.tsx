@@ -28,7 +28,12 @@ import Skeleton from '@/components/Skeleton';
 import { showToast } from '@/components/Toast';
 import { WithheldNotice, useDeviceRules } from '@/components/favorites/FaveGrid';
 import ImportDialog from '@/components/favorites/ImportDialog';
-import { completeProgress, progressLanding, runSummary, type ProgressState } from '@/components/favorites/ProgressDialog';
+import {
+  completeProgress,
+  progressLanding,
+  runSummary,
+  type ProgressState,
+} from '@/components/favorites/ProgressDialog';
 import { settingsHref } from '@/app/settings/tabs';
 
 /** Derpibooru's own page size: one search a page. */
@@ -40,7 +45,8 @@ function importSentence(
   stopped: boolean,
 ): [string, 'success' | 'warning' | 'error'] {
   const failed = result.failed.length;
-  if (failed > 0 && result.imported.length === 0) return [apiErrorMessage(result.failed[0].error, '导入失败'), 'error'];
+  if (failed > 0 && result.imported.length === 0)
+    return [apiErrorMessage(result.failed[0].error, '导入失败'), 'error'];
   const summary = runSummary('已导入', result.imported.length, failed);
   return [stopped ? `已停止：${summary}` : summary, failed > 0 ? 'warning' : 'success'];
 }
@@ -59,11 +65,22 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
   const key = session.data?.kind === 'ok' ? session.data.user.api_key : undefined;
   const apiKey = session.data ? (typeof key === 'string' && key ? key : null) : undefined;
   const [page, setPage] = useScreenStateFor('favorites:derpi', token, 1);
-  const read = useResource(derpiFaves, apiKey ? { apiKey, page } : SKIP, { keepPrevious: apiKey ?? '' });
+  const read = useResource(derpiFaves, apiKey ? { apiKey, page } : SKIP, {
+    keepPrevious: apiKey ?? '',
+  });
   const rules = useDeviceRules();
 
   const data = read.data;
-  const shown = useMemo(() => (data ? rules.withhold(data.images, data.images.map((image) => image.id)) : undefined), [data, rules]);
+  const shown = useMemo(
+    () =>
+      data
+        ? rules.withhold(
+            data.images,
+            data.images.map((image) => image.id),
+          )
+        : undefined,
+    [data, rules],
+  );
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PER_PAGE)) : 1;
 
   const [dataPage, setDataPage] = useState(page);
@@ -78,7 +95,12 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
     async (target: number) => {
       if (!apiKey) return [];
       const result = await derpiFaves.read({ apiKey, page: target });
-      return rules.withhold(result.images, result.images.map((image) => image.id)).images.map((image) => image.id);
+      return rules
+        .withhold(
+          result.images,
+          result.images.map((image) => image.id),
+        )
+        .images.map((image) => image.id);
     },
     [apiKey, rules],
   );
@@ -94,8 +116,15 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
             pageSize: PER_PAGE,
             fetchPage: async (target) => {
               const result = await derpiFaves.read({ apiKey, page: target });
-              const kept = rules.withhold(result.images, result.images.map((image) => image.id)).images;
-              return { ids: kept.map((image) => image.id), previews: kept, totalPages: Math.max(1, Math.ceil(result.total / PER_PAGE)) };
+              const kept = rules.withhold(
+                result.images,
+                result.images.map((image) => image.id),
+              ).images;
+              return {
+                ids: kept.map((image) => image.id),
+                previews: kept,
+                totalPages: Math.max(1, Math.ceil(result.total / PER_PAGE)),
+              };
             },
             reveal,
           })
@@ -111,7 +140,12 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const run = useRef<AbortController | null>(null);
-  useEffect(() => () => { run.current?.abort(); }, []);
+  useEffect(
+    () => () => {
+      run.current?.abort();
+    },
+    [],
+  );
 
   const startImport = async () => {
     if (!images || checking || progress) return;
@@ -143,11 +177,16 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
     const outcome = await settled(
       importFavourites(token, ids, folderId, {
         signal: controller.signal,
-        onProgress: (done, total) => setProgress((current) => (current ? { ...current, done, total } : current)),
+        onProgress: (done, total) =>
+          setProgress((current) => (current ? { ...current, done, total } : current)),
       }),
     );
     if (outcome.ok && !controller.signal.aborted) {
-      setProgress(completeProgress(runSummary('已导入', outcome.value.imported.length, outcome.value.failed.length)));
+      setProgress(
+        completeProgress(
+          runSummary('已导入', outcome.value.imported.length, outcome.value.failed.length),
+        ),
+      );
       await progressLanding();
     }
     run.current = null;
@@ -174,7 +213,9 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         />
       );
     }
-    return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载账号信息…" />;
+    return (
+      <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载账号信息…" />
+    );
   }
   if (apiKey === null) {
     return (
@@ -218,9 +259,16 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
   return (
     <div ref={setPane} aria-busy={read.isLoading || undefined} data-pagination-anchor="">
       <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="text-body-m text-on-surface-variant tabular-nums">共 {formatCount(data.total)} 张</p>
+        <p className="text-body-m text-on-surface-variant tabular-nums">
+          共 {formatCount(data.total)} 张
+        </p>
         {shown.images.length > 0 && (
-          <Button variant="tonal" icon={<MdCloudUpload />} loading={checking} onClick={() => void startImport()}>
+          <Button
+            variant="tonal"
+            icon={<MdCloudUpload />}
+            loading={checking}
+            onClick={() => void startImport()}
+          >
             导入本页到云端
           </Button>
         )}
@@ -240,11 +288,7 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
         shown.filtered > 0 ? (
           <EmptyState size="pane" title="本页没有可显示的图片" />
         ) : (
-          <EmptyState
-            size="pane"
-            icon={<MdStarBorder size={ICON.display} />}
-            title="暂无收藏"
-          />
+          <EmptyState size="pane" icon={<MdStarBorder size={ICON.display} />} title="暂无收藏" />
         )
       ) : (
         <div
@@ -253,7 +297,12 @@ export default function DerpiPane({ token, active }: { token: string; active: bo
             turning ? 'paging-dim' : 'opacity-100'
           }`}
         >
-          <MasonryGrid images={shown.images} entrance={false} sequence={sequence} listKey={listKey} />
+          <MasonryGrid
+            images={shown.images}
+            entrance={false}
+            sequence={sequence}
+            listKey={listKey}
+          />
         </div>
       )}
       {totalPages > 1 && (

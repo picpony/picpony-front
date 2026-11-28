@@ -54,7 +54,13 @@ function TagGroupRow({
       data-presence-key={presenceKey}
       control={
         empty ? (
-          <Button variant="tonal" icon={<MdSearch />} responsiveLabel disabled aria-label={searchLabel}>
+          <Button
+            variant="tonal"
+            icon={<MdSearch />}
+            responsiveLabel
+            disabled
+            aria-label={searchLabel}
+          >
             搜索
           </Button>
         ) : (
@@ -78,7 +84,9 @@ function TagGroupRow({
             { value: 'edit', label: '编辑标签组', icon: <MdEdit /> },
             { value: 'delete', label: '删除标签组', icon: <MdDeleteOutline />, destructive: true },
           ]}
-          onSelect={(value) => (value === 'share' ? onShare(group) : value === 'edit' ? onEdit(group) : onDelete(group))}
+          onSelect={(value) =>
+            value === 'share' ? onShare(group) : value === 'edit' ? onEdit(group) : onDelete(group)
+          }
         />
       }
     >

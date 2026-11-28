@@ -13,29 +13,46 @@ function captureBlocks(root: HTMLElement, page: HTMLElement): Block[] {
   const blocks: Block[] = [];
   const visit = (element: HTMLElement, depth: number) => {
     if (blocks.length >= BLOCK_LIMIT) return;
-    if (element.hasAttribute('data-tab-pane') && (
-      element.hasAttribute('data-tab-pane-done') ||
-      !element.matches('[data-tab-pane-active],[data-tab-pane-leaving],[data-tab-pane-entering]')
-    )) return;
+    if (
+      element.hasAttribute('data-tab-pane') &&
+      (element.hasAttribute('data-tab-pane-done') ||
+        !element.matches('[data-tab-pane-active],[data-tab-pane-leaving],[data-tab-pane-entering]'))
+    )
+      return;
     const rect = element.getBoundingClientRect();
     const style = getComputedStyle(element);
     if (style.position === 'fixed' || style.position === 'sticky') return;
-    if (style.display !== 'contents' && (
-      rect.width <= 0 || rect.height <= 0 ||
-      rect.bottom < view.top - view.height || rect.top > view.bottom + view.height
-    )) return;
-    const bare = (
+    if (
+      style.display !== 'contents' &&
+      (rect.width <= 0 ||
+        rect.height <= 0 ||
+        rect.bottom < view.top - view.height ||
+        rect.top > view.bottom + view.height)
+    )
+      return;
+    const bare =
       (style.backgroundColor === 'transparent' || style.backgroundColor === 'rgba(0, 0, 0, 0)') &&
-      style.backgroundImage === 'none' && style.boxShadow === 'none' &&
-      ![style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth]
-        .some((border) => parseFloat(border) > 0) &&
-      style.overflowX === 'visible' && style.overflowY === 'visible'
+      style.backgroundImage === 'none' &&
+      style.boxShadow === 'none' &&
+      ![
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth,
+      ].some((border) => parseFloat(border) > 0) &&
+      style.overflowX === 'visible' &&
+      style.overflowY === 'visible';
+    const children = Array.from(element.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
     );
-    const children = Array.from(element.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
-    if (depth < 12 && children.length && !element.hasAttribute('data-masonry-id') && (
-      style.display === 'contents' || element.hasAttribute('data-tab-pane') ||
-      (bare && rect.height > 64)
-    )) {
+    if (
+      depth < 12 &&
+      children.length &&
+      !element.hasAttribute('data-masonry-id') &&
+      (style.display === 'contents' ||
+        element.hasAttribute('data-tab-pane') ||
+        (bare && rect.height > 64))
+    ) {
       children.forEach((child) => visit(child, depth + 1));
     } else if (style.display !== 'inline' && style.display !== 'contents') {
       blocks.push({ element, rect });
@@ -80,10 +97,13 @@ export function useSidebarResize(
       return;
     }
 
-    const transitions = () => sidebar.getAnimations().filter(
-      (animation): animation is CSSTransition =>
-        animation instanceof CSSTransition && animation.playState === 'running',
-    );
+    const transitions = () =>
+      sidebar
+        .getAnimations()
+        .filter(
+          (animation): animation is CSSTransition =>
+            animation instanceof CSSTransition && animation.playState === 'running',
+        );
     const running = transitions();
     if (!running.length) {
       finish.current();
@@ -116,37 +136,69 @@ export function useSidebarResize(
     const after = before.map((block) => {
       const next = block.element.getBoundingClientRect();
       const computed = getComputedStyle(block.element);
-      return { ...block, next, base: computed.transform === 'none' ? '' : computed.transform,
-        position: computed.position, zIndex: computed.zIndex };
+      return {
+        ...block,
+        next,
+        base: computed.transform === 'none' ? '' : computed.transform,
+        position: computed.position,
+        zIndex: computed.zIndex,
+      };
     });
     // The drawer already owns the overlay layout spring, including shortened CSS
     // reversals and category speed. Its exact clock also drives the content tracks.
-    const leader = running.find((animation) => animation.transitionProperty === 'width') ?? running[0];
+    const leader =
+      running.find((animation) => animation.transitionProperty === 'width') ?? running[0];
     const timing = leader.effect!.getTiming();
-    for (const { element, rect, next, base, position: computedPosition, zIndex: computedZIndex } of after) {
-      if (next.width <= 0 || next.height <= 0 ||
-        Math.max(rect.bottom, next.bottom) < view.top || Math.min(rect.top, next.top) > view.bottom) continue;
+    for (const {
+      element,
+      rect,
+      next,
+      base,
+      position: computedPosition,
+      zIndex: computedZIndex,
+    } of after) {
+      if (
+        next.width <= 0 ||
+        next.height <= 0 ||
+        Math.max(rect.bottom, next.bottom) < view.top ||
+        Math.min(rect.top, next.top) > view.bottom
+      )
+        continue;
       const x = rect.left - next.left;
       const y = rect.top - next.top;
       const sx = rect.width / next.width;
       const sy = rect.height / next.height;
-      if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5 &&
-        Math.abs(rect.width - next.width) < 0.5 && Math.abs(rect.height - next.height) < 0.5) continue;
+      if (
+        Math.abs(x) < 0.5 &&
+        Math.abs(y) < 0.5 &&
+        Math.abs(rect.width - next.width) < 0.5 &&
+        Math.abs(rect.height - next.height) < 0.5
+      )
+        continue;
       const position = element.style.position;
       const zIndex = element.style.zIndex;
       if (computedZIndex === 'auto') {
         if (computedPosition === 'static') element.style.position = 'relative';
         element.style.zIndex = '1';
       }
-      const animation = element.animate([
-        { transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy}) ${base}`, transformOrigin: '0 0' },
-        { transform: base || 'none', transformOrigin: '0 0' },
-      ], { duration: timing.duration, easing: timing.easing, fill: 'both' });
+      const animation = element.animate(
+        [
+          {
+            transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy}) ${base}`,
+            transformOrigin: '0 0',
+          },
+          { transform: base || 'none', transformOrigin: '0 0' },
+        ],
+        { duration: timing.duration, easing: timing.easing, fill: 'both' },
+      );
       if (leader.startTime !== null) animation.startTime = leader.startTime;
-      moves.current.push({ animation, restore: () => {
-        element.style.position = position;
-        element.style.zIndex = zIndex;
-      } });
+      moves.current.push({
+        animation,
+        restore: () => {
+          element.style.position = position;
+          element.style.zIndex = zIndex;
+        },
+      });
     }
 
     let active = true;
@@ -172,7 +224,9 @@ export function useSidebarResize(
     };
     settle();
     // A new mode captures the current transforms and retains the scrolling window.
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [sidebarRef, pageRef, mode, overlay]);
 
   useLayoutEffect(() => {

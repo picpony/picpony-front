@@ -3,7 +3,13 @@
 import { defineResource } from '@/lib/resource';
 import { readToken } from '@/lib/hooks';
 import { ApiError } from '@/lib/api/errors';
-import { getDictionary, getDictionaryDuplicates, getDictionaryTagHistory, type DictionaryHistoryRow, type DictionaryStats } from '@/lib/api/picpony';
+import {
+  getDictionary,
+  getDictionaryDuplicates,
+  getDictionaryTagHistory,
+  type DictionaryHistoryRow,
+  type DictionaryStats,
+} from '@/lib/api/picpony';
 import { searchDerpiTags } from '@/lib/api/derpi';
 import * as adminApi from '@/lib/api/admin';
 import type { DerpiTagRow, GlossaryTag } from './model';
@@ -15,7 +21,8 @@ import type { DerpiTagRow, GlossaryTag } from './model';
  */
 
 function signedIn(token: string) {
-  if (readToken() !== token) throw new ApiError('http', { status: 401, message: '登录状态已失效，请重新登录' });
+  if (readToken() !== token)
+    throw new ApiError('http', { status: 401, message: '登录状态已失效，请重新登录' });
 }
 
 export interface DictionaryArgs {
@@ -36,19 +43,32 @@ export interface DictionaryPage {
 
 export const dictionaryPage = defineResource<DictionaryArgs, DictionaryPage>({
   name: 'admin-dictionary',
-  key: (args) => [args.token, args.page, args.limit, args.keyword, args.sort, args.category, args.untranslated ? 1 : 0].join('\n'),
+  key: (args) =>
+    [
+      args.token,
+      args.page,
+      args.limit,
+      args.keyword,
+      args.sort,
+      args.category,
+      args.untranslated ? 1 : 0,
+    ].join('\n'),
   ttl: 60_000,
   maxEntries: 8,
   fetch: async (args, signal) => {
     signedIn(args.token);
-    const data = await getDictionary(args.token, {
-      page: args.page,
-      limit: args.limit,
-      keyword: args.keyword,
-      sort: args.sort,
-      category: args.category,
-      untranslated: args.untranslated ? 1 : 0,
-    }, signal);
+    const data = await getDictionary(
+      args.token,
+      {
+        page: args.page,
+        limit: args.limit,
+        keyword: args.keyword,
+        sort: args.sort,
+        category: args.category,
+        untranslated: args.untranslated ? 1 : 0,
+      },
+      signal,
+    );
     return {
       tags: data.tags as GlossaryTag[],
       /* `total_matches` is the backend's count of the filtered list (`null` only when it did not
@@ -110,12 +130,16 @@ export const tagFeedback = defineResource<
   maxEntries: 8,
   fetch: async ({ token, status, before, keyword }, signal) => {
     signedIn(token);
-    const data = await adminApi.getTagFeedback(token, {
-      status: status === 'all' ? undefined : status,
-      keyword: keyword || undefined,
-      before,
-      limit: FEEDBACK_PAGE_SIZE,
-    }, signal);
+    const data = await adminApi.getTagFeedback(
+      token,
+      {
+        status: status === 'all' ? undefined : status,
+        keyword: keyword || undefined,
+        before,
+        limit: FEEDBACK_PAGE_SIZE,
+      },
+      signal,
+    );
     return { rows: data.feedback, next: data.next };
   },
 });

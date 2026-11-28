@@ -68,13 +68,25 @@ function remember(token: string, tag: string, id: number) {
 }
 
 /** `GET /me/tag-subscriptions` → the list, in the backend's order (most unread first). A refusal throws. */
-export async function getTagSubscriptions(token: string, signal?: AbortSignal): Promise<TagSubscription[]> {
-  const data = await api<{ subscriptions: SubscriptionRow[] }>('GET', '/me/tag-subscriptions', { token, signal, cache: 'no-store' });
+export async function getTagSubscriptions(
+  token: string,
+  signal?: AbortSignal,
+): Promise<TagSubscription[]> {
+  const data = await api<{ subscriptions: SubscriptionRow[] }>('GET', '/me/tag-subscriptions', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
   const ids = new Map<string, number>();
   knownIds.set(token, ids);
   return data.subscriptions.map((row) => {
     ids.set(normaliseTagName(row.tag), row.id);
-    return { id: row.id, tagName: row.tag, imageCount: row.image_count, newCount: row.unread_count };
+    return {
+      id: row.id,
+      tagName: row.tag,
+      imageCount: row.image_count,
+      newCount: row.unread_count,
+    };
   });
 }
 
@@ -85,7 +97,13 @@ async function subscriptionId(token: string, tagName: string): Promise<number> {
   if (known !== undefined) return known;
   const list = await getTagSubscriptions(token);
   const hit = list.find((entry) => normaliseTagName(entry.tagName) === key);
-  if (!hit) throw new ApiError('http', { status: 404, notFound: true, code: 'SUBSCRIPTION_NOT_FOUND', message: '订阅不存在' });
+  if (!hit)
+    throw new ApiError('http', {
+      status: 404,
+      notFound: true,
+      code: 'SUBSCRIPTION_NOT_FOUND',
+      message: '订阅不存在',
+    });
   return hit.id;
 }
 
@@ -95,21 +113,34 @@ export function isAlreadySubscribed(error: unknown): boolean {
 }
 
 /** `POST /me/tag-subscriptions {tag, image_count}` → the new subscription's id. The count is the live one, looked up first. */
-export async function addTagSubscription(token: string, tagName: string, imageCount: number): Promise<{ id: number }> {
-  const data = await api<{ id: number }>('POST', '/me/tag-subscriptions', { token, json: { tag: tagName, image_count: imageCount } });
+export async function addTagSubscription(
+  token: string,
+  tagName: string,
+  imageCount: number,
+): Promise<{ id: number }> {
+  const data = await api<{ id: number }>('POST', '/me/tag-subscriptions', {
+    token,
+    json: { tag: tagName, image_count: imageCount },
+  });
   remember(token, tagName, data.id);
   return { id: data.id };
 }
 
 /** `DELETE /me/tag-subscriptions/{id}`, by tag. */
 export async function removeTagSubscription(token: string, tagName: string): Promise<void> {
-  await api('DELETE', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}`, { token });
+  await api('DELETE', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}`, {
+    token,
+  });
   knownIds.get(token)?.delete(normaliseTagName(tagName));
 }
 
 /** `POST /me/tag-subscriptions/{id}/read-receipts`, by tag — its new pictures have been looked at. */
 export async function markTagSubscriptionSeen(token: string, tagName: string): Promise<void> {
-  await api('POST', `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}/read-receipts`, { token });
+  await api(
+    'POST',
+    `/me/tag-subscriptions/${seg(await subscriptionId(token, tagName))}/read-receipts`,
+    { token },
+  );
 }
 
 export interface TagCountUpdate {
@@ -133,15 +164,23 @@ export async function syncTagSubscriptions(
 }
 
 /** `POST /me/tag-subscription-syncs/{sync_id}/completion` → how many subscriptions gained pictures. */
-export async function finalizeTagSubscriptionSync(token: string, syncId: string): Promise<{ updatedTags: number }> {
-  const data = await api<{ updated_tags: number }>('POST', `/me/tag-subscription-syncs/${seg(syncId)}/completion`, { token });
+export async function finalizeTagSubscriptionSync(
+  token: string,
+  syncId: string,
+): Promise<{ updatedTags: number }> {
+  const data = await api<{ updated_tags: number }>(
+    'POST',
+    `/me/tag-subscription-syncs/${seg(syncId)}/completion`,
+    { token },
+  );
   return { updatedTags: data.updated_tags };
 }
 
 /** A fresh `sync_id`: a version-4 UUID, as the backend requires. */
 export function newSyncToken(): string {
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') crypto.getRandomValues(bytes);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function')
+    crypto.getRandomValues(bytes);
   else for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
@@ -170,14 +209,22 @@ function tagRows(data: { tags?: unknown }): DerpiTagRow[] {
       name: String(row.name),
       slug: typeof row.slug === 'string' ? row.slug : '',
       images: wholeNumber(row.images),
-      aliases: (Array.isArray(row.aliases) ? (row.aliases as unknown[]) : []).filter((alias): alias is string => typeof alias === 'string'),
+      aliases: (Array.isArray(row.aliases) ? (row.aliases as unknown[]) : []).filter(
+        (alias): alias is string => typeof alias === 'string',
+      ),
       aliasedTag: typeof row.aliased_tag === 'string' && row.aliased_tag ? row.aliased_tag : null,
     }));
 }
 
-async function searchTags(query: string, perPage: number, signal?: AbortSignal): Promise<DerpiTagRow[]> {
+async function searchTags(
+  query: string,
+  perPage: number,
+  signal?: AbortSignal,
+): Promise<DerpiTagRow[]> {
   const url = `${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=${perPage}`;
-  const data = await readObject<{ tags?: unknown }>(await proxyFetch(url, { cache: 'no-store', signal }));
+  const data = await readObject<{ tags?: unknown }>(
+    await proxyFetch(url, { cache: 'no-store', signal }),
+  );
   if (!Array.isArray(data.tags)) throw new ApiError('invalid');
   return tagRows(data);
 }
@@ -213,12 +260,17 @@ export function tagSlug(name: string): string {
   for (const char of spelled) {
     if (/[A-Za-z0-9\-._~]/.test(char)) out += char;
     else if (char === ' ') out += '+';
-    else out += Array.from(new TextEncoder().encode(char), (byte) => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`).join('');
+    else
+      out += Array.from(
+        new TextEncoder().encode(char),
+        (byte) => `%${byte.toString(16).toUpperCase().padStart(2, '0')}`,
+      ).join('');
   }
   return out;
 }
 
-const notFound = () => new ApiError('http', { status: 404, notFound: true, message: TAG_NOT_FOUND_MESSAGE });
+const notFound = () =>
+  new ApiError('http', { status: 404, notFound: true, message: TAG_NOT_FOUND_MESSAGE });
 
 /**
  * The count a subscription starts from, or a refusal. A count Derpibooru did not send cannot be
@@ -248,7 +300,8 @@ export async function lookupDerpiTag(tag: string, signal?: AbortSignal): Promise
   const wanted = normaliseTagName(tag);
   if (!wanted) throw notFound();
   const wantedSlug = tagSlug(wanted);
-  const same = (row: DerpiTagRow) => normaliseTagName(row.name) === wanted || row.slug === wantedSlug || row.slug === wanted;
+  const same = (row: DerpiTagRow) =>
+    normaliseTagName(row.name) === wanted || row.slug === wantedSlug || row.slug === wanted;
 
   let hit = (await searchTags(`name:${escapeTag(wanted)}`, 10, signal)).find(same);
   /* Matched through a tag's list of aliases: already the tag the alias stands for. */
@@ -257,7 +310,9 @@ export async function lookupDerpiTag(tag: string, signal?: AbortSignal): Promise
     const rows = await searchTags(escapeTag(wanted), 50, signal);
     hit = rows.find(same);
     if (!hit) {
-      hit = rows.find((row) => row.aliases.some((alias) => alias === wantedSlug || alias === wanted));
+      hit = rows.find((row) =>
+        row.aliases.some((alias) => alias === wantedSlug || alias === wanted),
+      );
       listedAlias = Boolean(hit);
     }
   }

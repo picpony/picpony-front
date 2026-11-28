@@ -49,7 +49,13 @@ const PER_PAGE = SUBSCRIPTION_PER_PAGE;
  * It answers for any tag, subscribed or not — a notification's link can outlive its subscription
  * — and 订阅 / 已订阅 sits in the header either way.
  */
-export default function SubscriptionView({ tag, contentFilter }: { tag: string; contentFilter: string }) {
+export default function SubscriptionView({
+  tag,
+  contentFilter,
+}: {
+  tag: string;
+  contentFilter: string;
+}) {
   const { token, ready } = useSession();
   const back = useBackOrParent('/subscriptions');
   useEscapeBack(back);
@@ -65,7 +71,11 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
 
   /* What arrived since the last visit, kept for this one: marking seen sets the account's count
      to 0 at once, and the line above the pictures must not lose it while they are looked at. */
-  const [arrived, setArrived] = useScreenStateFor<number | null>('subscription:arrived', scope, null);
+  const [arrived, setArrived] = useScreenStateFor<number | null>(
+    'subscription:arrived',
+    scope,
+    null,
+  );
   const pending = token && subscription && subscription.newCount > 0 ? subscription : null;
   useEffect(() => {
     if (!token || !pending) return;
@@ -90,7 +100,9 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
   const listKey = `subscription:${scope}:${contentFilter}:${fp}`;
   const readPage = useCallback(
     async (target: number) =>
-      (await tagGallery.read({ tag, page: target, perPage: PER_PAGE, contentFilter, fp })).images.map((image) => image.id),
+      (
+        await tagGallery.read({ tag, page: target, perPage: PER_PAGE, contentFilter, fp })
+      ).images.map((image) => image.id),
     [tag, contentFilter, fp],
   );
   const reveal = useListReveal(readPage, page, setPage, () => grid);
@@ -106,7 +118,13 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
             current: { ids: images.map((image) => image.id), previews: images, totalPages },
             pageSize: PER_PAGE,
             fetchPage: async (target) => {
-              const result = await tagGallery.read({ tag, page: target, perPage: PER_PAGE, contentFilter, fp });
+              const result = await tagGallery.read({
+                tag,
+                page: target,
+                perPage: PER_PAGE,
+                contentFilter,
+                fp,
+              });
               return {
                 ids: result.images.map((image) => image.id),
                 previews: result.images,
@@ -126,9 +144,10 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
     status = <Skeleton className="inline-block h-4 w-48 align-middle" />;
   } else if (subscription) {
     const fresh = arrived ?? subscription.newCount;
-    status = fresh > 0
-      ? `自上次查看新增 ${formatCount(fresh)} 张 · 记录 ${formatCount(subscription.imageCount)} 张`
-      : `暂无新图片 · 记录 ${formatCount(subscription.imageCount)} 张`;
+    status =
+      fresh > 0
+        ? `自上次查看新增 ${formatCount(fresh)} 张 · 记录 ${formatCount(subscription.imageCount)} 张`
+        : `暂无新图片 · 记录 ${formatCount(subscription.imageCount)} 张`;
   } else {
     status = token ? '未订阅此标签' : '登录后可订阅此标签';
   }
@@ -154,7 +173,11 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
         <EmptyState
           size="pane"
           title="此页暂无图片"
-          action={<Button variant="tonal" onClick={() => setPage(1)}>回到第一页</Button>}
+          action={
+            <Button variant="tonal" onClick={() => setPage(1)}>
+              回到第一页
+            </Button>
+          }
         />
       ) : (
         <EmptyState
@@ -196,7 +219,9 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
             currentPage={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            onPrefetchPage={(next) => tagGallery.prefetch({ tag, page: next, perPage: PER_PAGE, contentFilter, fp })}
+            onPrefetchPage={(next) =>
+              tagGallery.prefetch({ tag, page: next, perPage: PER_PAGE, contentFilter, fp })
+            }
             disabled={read.isLoading}
           />
         )}
@@ -227,7 +252,10 @@ export default function SubscriptionView({ tag, contentFilter }: { tag: string; 
               <p className="mt-0.5 text-body-m text-on-surface-variant wrap-anywhere">
                 {/* Held open by the very text it will show, unseen, so it is exactly that tall. */}
                 <NameFade name={chinese === undefined ? undefined : tagName}>
-                  <span aria-hidden={chinese === undefined || undefined} className={cn(chinese === undefined && 'invisible')}>
+                  <span
+                    aria-hidden={chinese === undefined || undefined}
+                    className={cn(chinese === undefined && 'invisible')}
+                  >
                     {tagName}
                   </span>
                 </NameFade>

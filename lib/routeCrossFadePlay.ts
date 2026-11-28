@@ -23,7 +23,8 @@ function maskRouteWindow(layer: HTMLElement, clone: HTMLElement, page: HTMLEleme
   const scroller = getAppScroller();
   const plane = page.parentElement;
   /* A page's column is its root, inside the content wrapper; the clone has the same structure. */
-  const column = (root: HTMLElement) => root.firstElementChild?.firstElementChild?.getBoundingClientRect() ?? null;
+  const column = (root: HTMLElement) =>
+    root.firstElementChild?.firstElementChild?.getBoundingClientRect() ?? null;
   const leaving = column(clone);
   const arriving = column(page);
   if (!scroller || !plane || !leaving || !arriving) return null;
@@ -336,8 +337,12 @@ function playUnderContainer(
       /* Between two pages that both have one it stays put, as `PageBack` does: the live one shows
          and its copy goes, with no fade. */
       if (chrome && arrivingBack) chrome.remove();
-      const leaving = [clone, chrome && !arrivingBack ? chrome : null].filter((el): el is HTMLElement => el?.isConnected ?? false);
-      const arriving = [page, slot && arrivingBack && !chrome ? slot : null].filter((el): el is HTMLElement => el !== null);
+      const leaving = [clone, chrome && !arrivingBack ? chrome : null].filter(
+        (el): el is HTMLElement => el?.isConnected ?? false,
+      );
+      const arriving = [page, slot && arrivingBack && !chrome ? slot : null].filter(
+        (el): el is HTMLElement => el !== null,
+      );
       for (const el of hidden) {
         el.style.visibility = '';
         if (!arriving.includes(el)) el.style.opacity = '';

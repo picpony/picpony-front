@@ -54,13 +54,14 @@ const dataPromises: Partial<Record<TraceKind, Promise<unknown>>> = {};
  * being written rather than filled in.
  */
 function loadTrace(kind: TraceKind) {
-  dataPromises[kind] ??=
-    (kind === 'intro'
+  dataPromises[kind] ??= (
+    kind === 'intro'
       ? import('@/lib/lottie/logoNonParallel.json').then((m) => m.default)
-      : import('@/lib/lottie/logoTrace.json').then((m) => m.default)).catch((error) => {
-      delete dataPromises[kind];
-      throw error;
-    });
+      : import('@/lib/lottie/logoTrace.json').then((m) => m.default)
+  ).catch((error) => {
+    delete dataPromises[kind];
+    throw error;
+  });
   return Promise.all([loadLottiePlayer(), dataPromises[kind]!] as const);
 }
 
@@ -85,7 +86,8 @@ export const INTRO_LATEST_START_MS = 2500;
  * network — spent the deadline before the splash was on screen, and it was dismissed unplayed.
  */
 export function sinceFirstByte(): number {
-  const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const entry = performance.getEntriesByType('navigation')[0] as
+    PerformanceNavigationTiming | undefined;
   return performance.now() - (entry?.responseStart || 0);
 }
 
@@ -145,27 +147,39 @@ export default function Logo({
   }, []);
 
   /** The player for `kind`, created on demand; null when the tier or the node says no. */
-  const ensure = useCallback(async (kind: TraceKind) => {
-    if (motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard' || !hostRef.current) return null;
-    if (animationRef.current?.kind === kind) return animationRef.current.animation;
-    const generation = generationRef.current;
-    const [player, data] = await loadTrace(kind);
-    const host = hostRef.current;
-    // A second request may have resolved first, or the node may have gone.
-    if (!host || generation !== generationRef.current || motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard') return null;
-    if (animationRef.current?.kind === kind) return animationRef.current.animation;
-    destroy();
-    const animation = player.default.loadAnimation({
-      container: host,
-      renderer: 'svg',
-      loop: false,
-      autoplay: false,
-      animationData: data as object,
-    }) as unknown as TraceAnimation;
-    animation.setSpeed((kind === 'intro' ? INTRO_SPEED : 1) / motionScale(kind === 'intro' ? 'entrance' : 'ambient'));
-    animationRef.current = { kind, animation };
-    return animation;
-  }, [destroy]);
+  const ensure = useCallback(
+    async (kind: TraceKind) => {
+      if (motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard' || !hostRef.current)
+        return null;
+      if (animationRef.current?.kind === kind) return animationRef.current.animation;
+      const generation = generationRef.current;
+      const [player, data] = await loadTrace(kind);
+      const host = hostRef.current;
+      // A second request may have resolved first, or the node may have gone.
+      if (
+        !host ||
+        generation !== generationRef.current ||
+        motionTier(kind === 'intro' ? 'entrance' : 'ambient') !== 'standard'
+      )
+        return null;
+      if (animationRef.current?.kind === kind) return animationRef.current.animation;
+      destroy();
+      const animation = player.default.loadAnimation({
+        container: host,
+        renderer: 'svg',
+        loop: false,
+        autoplay: false,
+        animationData: data as object,
+      }) as unknown as TraceAnimation;
+      animation.setSpeed(
+        (kind === 'intro' ? INTRO_SPEED : 1) /
+          motionScale(kind === 'intro' ? 'entrance' : 'ambient'),
+      );
+      animationRef.current = { kind, animation };
+      return animation;
+    },
+    [destroy],
+  );
 
   /* Whatever cut is loaded goes with a tier change or unmount; the generation also
      invalidates an import that resolves afterwards. */
@@ -185,7 +199,10 @@ export default function Logo({
   useEffect(() => {
     const loaded = animationRef.current;
     if (loaded && motionTier(loaded.kind === 'intro' ? 'entrance' : 'ambient') === 'standard') {
-      loaded.animation.setSpeed((loaded.kind === 'intro' ? INTRO_SPEED : 1) / motionScale(loaded.kind === 'intro' ? 'entrance' : 'ambient'));
+      loaded.animation.setSpeed(
+        (loaded.kind === 'intro' ? INTRO_SPEED : 1) /
+          motionScale(loaded.kind === 'intro' ? 'entrance' : 'ambient'),
+      );
     }
   }, [speed, tier]);
 
@@ -209,23 +226,25 @@ export default function Logo({
       return;
     }
     const late = window.setTimeout(() => answer(false), remaining);
-    void ensure('intro').then((animation) => {
-      window.clearTimeout(late);
-      if (answered) return;
-      if (!animation) return answer(false);
-      hostRef.current?.setAttribute('data-shown', '');
-      /* The base steps aside once the mark is written (`.logo-intro` in globals.css says why),
+    void ensure('intro')
+      .then((animation) => {
+        window.clearTimeout(late);
+        if (answered) return;
+        if (!animation) return answer(false);
+        hostRef.current?.setAttribute('data-shown', '');
+        /* The base steps aside once the mark is written (`.logo-intro` in globals.css says why),
          and the splash leaves on the same signal — the player's own completion, not a second
          copy of the duration, which a chunk arriving late would run ahead of. */
-      animation.addEventListener('complete', () => {
-        rootRef.current?.setAttribute('data-settled', '');
-        answer(true);
+        animation.addEventListener('complete', () => {
+          rootRef.current?.setAttribute('data-settled', '');
+          answer(true);
+        });
+        animation.goToAndPlay(0, true);
+      })
+      .catch(() => {
+        window.clearTimeout(late);
+        answer(false);
       });
-      animation.goToAndPlay(0, true);
-    }).catch(() => {
-      window.clearTimeout(late);
-      answer(false);
-    });
     return () => {
       answered = true;
       window.clearTimeout(late);
@@ -243,18 +262,22 @@ export default function Logo({
       loaded.animation.goToAndPlay(0, true);
       return;
     }
-    void ensure('hover').then((animation) => {
-      // The pointer may have left while the chunk was in flight.
-      if (
-        animation && animationRef.current?.animation === animation && wantedRef.current &&
-        motionTier('ambient') === 'standard'
-      ) {
-        hostRef.current?.setAttribute('data-shown', '');
-        animation.goToAndPlay(0, true);
-      }
-    }).catch(() => {
-      hostRef.current?.removeAttribute('data-shown');
-    });
+    void ensure('hover')
+      .then((animation) => {
+        // The pointer may have left while the chunk was in flight.
+        if (
+          animation &&
+          animationRef.current?.animation === animation &&
+          wantedRef.current &&
+          motionTier('ambient') === 'standard'
+        ) {
+          hostRef.current?.setAttribute('data-shown', '');
+          animation.goToAndPlay(0, true);
+        }
+      })
+      .catch(() => {
+        hostRef.current?.removeAttribute('data-shown');
+      });
   }, [ensure, interactive]);
 
   const onLeave = useCallback(() => {

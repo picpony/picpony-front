@@ -42,14 +42,19 @@ export function roleChoice(
   const current = roleOf(target.role);
   const root = viewer.id === ROOT_ACCOUNT_ID;
   const option = (role: Role) => ({ value: role, label: roleInfo(role).label });
-  const lockedTo = (reason: string): RoleChoice => ({ options: [option(current)], locked: reason, note: null });
+  const lockedTo = (reason: string): RoleChoice => ({
+    options: [option(current)],
+    locked: reason,
+    note: null,
+  });
 
   if (target.id === viewer.id) return lockedTo('不能修改自己的角色');
   /* The backend's rules: account #1 stays 创始人 and nobody is made 创始人 through the console
      (`ROLE_GRANT_FORBIDDEN`); only 创始人 may grant 管理员. */
   if (target.id === ROOT_ACCOUNT_ID) return lockedTo('站点 1 号账号的创始人角色不能修改');
   if (current === 'super_admin' && !root) return lockedTo('创始人的角色只能由站点的 1 号账号修改');
-  if (current === 'admin' && viewer.role !== 'super_admin') return lockedTo('仅创始人可以修改管理员的角色');
+  if (current === 'admin' && viewer.role !== 'super_admin')
+    return lockedTo('仅创始人可以修改管理员的角色');
 
   const grantable = ROLE_ORDER.filter((role) => {
     if (role === 'super_admin') return false;
@@ -60,7 +65,8 @@ export function roleChoice(
   return {
     options: ROLE_ORDER.filter((role) => roles.includes(role)).map(option),
     locked: null,
-    note: viewer.role === 'super_admin' ? '创始人角色不能通过后台授予' : '仅创始人可以授予管理员角色',
+    note:
+      viewer.role === 'super_admin' ? '创始人角色不能通过后台授予' : '仅创始人可以授予管理员角色',
   };
 }
 
@@ -160,7 +166,9 @@ const ALPHABET = LETTERS + DIGITS;
  * from the platform's cryptographic generator. Look-alike characters (0/O, 1/l/I) are left out:
  * an administrator reads this to somebody.
  */
-export function randomPassword(random: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes)): string {
+export function randomPassword(
+  random: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes),
+): string {
   /* Rejection sampling: a byte at or above the largest multiple of the alphabet's size would
      favour the alphabet's first characters. */
   const limit = 256 - (256 % ALPHABET.length);

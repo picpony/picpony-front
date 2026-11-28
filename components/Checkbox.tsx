@@ -78,7 +78,9 @@ export default function Checkbox({
       data-ripple-own=""
       onPointerDown={(event) => {
         if (disabled) return;
-        startCenteredRipple(event.nativeEvent, rippleHostRef.current, () => Boolean(inputRef.current?.matches(':disabled')));
+        startCenteredRipple(event.nativeEvent, rippleHostRef.current, () =>
+          Boolean(inputRef.current?.matches(':disabled')),
+        );
       }}
       className={cn(
         'group/checkbox inline-flex min-w-0 max-w-full items-center gap-3 select-none touch-manipulation',
@@ -87,39 +89,44 @@ export default function Checkbox({
         className,
       )}
     >
-      <span className={cn('relative flex size-4.5 shrink-0 items-center justify-center', !label && 'touch-target')}>
-      <input
-        ref={inputRef}
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledBy}
-        onChange={(e) => onChange(e.target.checked)}
-        className="peer sr-only"
-      />
+      <span
+        className={cn(
+          'relative flex size-4.5 shrink-0 items-center justify-center',
+          !label && 'touch-target',
+        )}
+      >
+        <input
+          ref={inputRef}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer sr-only"
+        />
 
-      {/* The 40dp state-layer and press-wave circle (same structure as `ToggleSwitch`): a single
+        {/* The 40dp state-layer and press-wave circle (same structure as `ToggleSwitch`): a single
           clipped, isolated host holding the tint layer inside it, so hover/focus/press share one
           circle without clipping `touch-target` on the parent wrapper. The box itself fills with
           `primary-ink` when checked, so the centred press wave carries `ripple-primary`. */}
-      <span
-        ref={rippleHostRef}
-        aria-hidden="true"
-        className={`ripple-primary pointer-events-none absolute isolate size-10 overflow-hidden rounded-full ${
-          checked ? 'text-primary-ink' : 'text-on-surface'
-        }`}
-      >
         <span
-          className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
-            disabled
-              ? ''
-              : 'group-hover/checkbox:opacity-[var(--md-sys-state-hover-opacity)] no-motion:group-active/checkbox:opacity-[var(--md-sys-state-pressed-opacity)] group-has-[:focus-visible]/checkbox:opacity-[var(--md-sys-state-focus-opacity)]'
+          ref={rippleHostRef}
+          aria-hidden="true"
+          className={`ripple-primary pointer-events-none absolute isolate size-10 overflow-hidden rounded-full ${
+            checked ? 'text-primary-ink' : 'text-on-surface'
           }`}
-        />
-      </span>
+        >
+          <span
+            className={`absolute inset-0 rounded-full bg-current opacity-0 transition-opacity spring-fast-effects ${
+              disabled
+                ? ''
+                : 'group-hover/checkbox:opacity-[var(--md-sys-state-hover-opacity)] no-motion:group-active/checkbox:opacity-[var(--md-sys-state-pressed-opacity)] group-has-[:focus-visible]/checkbox:opacity-[var(--md-sys-state-focus-opacity)]'
+            }`}
+          />
+        </span>
 
-      {/* `rounded-xs` (4dp), M3's corner for this control — the card step reads
+        {/* `rounded-xs` (4dp), M3's corner for this control — the card step reads
           as a radio button on an 18px box.
 
           `peer-focus-visible:focus-ring`, not `peer-focus-ring`: a Tailwind
@@ -128,44 +135,50 @@ export default function Checkbox({
           The outline half comes back under forced colors, where the ring is not
           painted; the checked fill is a mark that mode would flatten, so it takes
           the system highlight (and the tick the highlight's own ink). */}
-      <span
-        aria-hidden="true"
-        className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight] ${
-          /* `Checkbox.kt`'s `colorAnimationSpecForState`: the box fills on DefaultEffects ("box
+        <span
+          aria-hidden="true"
+          className={`peer-focus-visible:focus-ring peer-focus-visible:outline-hidden forced-colors:peer-focus-visible:outline-solid forced-colors:peer-focus-visible:outline-2 forced-colors:peer-focus-visible:outline-offset-2 forced-colors:peer-focus-visible:outline-[color:Highlight] ${
+            /* `Checkbox.kt`'s `colorAnimationSpecForState`: the box fills on DefaultEffects ("box
              in") and empties on FastEffects ("box out"). */
-          checked ? 'spring-default-effects' : 'spring-fast-effects'
-        } transition-[background-color,border-color,box-shadow] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
-          checked
-            ? cn('bg-primary-ink border-primary-ink forced-mark forced-colors:border-[color:Highlight]', justChecked && 'animate-control-pop')
-            : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —
+            checked ? 'spring-default-effects' : 'spring-fast-effects'
+          } transition-[background-color,border-color,box-shadow] pointer-events-none relative size-4.5 rounded-xs border-2 peer-focus-visible:ring-2 ${
+            checked
+              ? cn(
+                  'bg-primary-ink border-primary-ink forced-mark forced-colors:border-[color:Highlight]',
+                  justChecked && 'animate-control-pop',
+                )
+              : /* Transparent, which is `Checkbox.kt`'s own `uncheckedBoxColor` —
                  `CheckboxTokens` defines no unselected container at all, because
                  an unchecked box is an outline and nothing else. An opaque box
                  colour here shows as a seam on every container step darker than
                  the page. */
-              'border-on-surface-variant bg-transparent'
-        }`}
-      />
-      <CheckGlyph
-        className="text-on-primary-ink pointer-events-none absolute size-3 forced-color-adjust-none forced-colors:text-[color:HighlightText]"
-        pathProps={{
-          /* Dash L, gap L, then a short dash before the period wraps (L = 10.5, the path is
+                'border-on-surface-variant bg-transparent'
+          }`}
+        />
+        <CheckGlyph
+          className="text-on-primary-ink pointer-events-none absolute size-3 forced-color-adjust-none forced-colors:text-[color:HighlightText]"
+          pathProps={{
+            /* Dash L, gap L, then a short dash before the period wraps (L = 10.5, the path is
              10.26): offset L is fully hidden, 0 fully drawn, and a *negative* offset — the
              spatial spring's overshoot — reads the wrapped dash, so the tick stays fully drawn
              instead of opening a gap at its start. That is Compose's own clamp: it draws
              `getSegment(0, length × fraction)`, and a fraction past 1 is simply the whole path. */
-          strokeDasharray: '10.5 10.5 1 0',
-          strokeDashoffset: checked ? 0 : 10.5,
-          /* `Checkbox.kt`'s `checkDrawFraction`: checking draws the mark on **DefaultSpatial**
+            strokeDasharray: '10.5 10.5 1 0',
+            strokeDashoffset: checked ? 0 : 10.5,
+            /* `Checkbox.kt`'s `checkDrawFraction`: checking draws the mark on **DefaultSpatial**
              from the same frame as the box; unchecking **snaps** after `SnapAnimationDelay`
              (100ms) while the box empties on FastEffects. */
-          className: checked
-            ? 'spring-default-spatial transition-[stroke-dashoffset]'
-            : 'transition-[stroke-dashoffset]',
-          style: checked
-            ? undefined
-            : { transitionDuration: '0s', transitionDelay: `calc(${CHECK_SNAP_DELAY_MS}ms * var(--motion-scale))` },
-        }}
-      />
+            className: checked
+              ? 'spring-default-spatial transition-[stroke-dashoffset]'
+              : 'transition-[stroke-dashoffset]',
+            style: checked
+              ? undefined
+              : {
+                  transitionDuration: '0s',
+                  transitionDelay: `calc(${CHECK_SNAP_DELAY_MS}ms * var(--motion-scale))`,
+                },
+          }}
+        />
       </span>
       {/* `label-l`, matching `Radio` and `ToggleSwitch` — one type role for the
           same object across all three selection controls. A control's label is a

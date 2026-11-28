@@ -24,7 +24,8 @@ export function philomenaSlug(name: string): string {
 
 /** The account's page: the slug the API sent, else the one its name makes. */
 export function derpiProfileUrl(profile: { name: string; slug?: unknown }): string {
-  const slug = typeof profile.slug === 'string' && profile.slug ? profile.slug : philomenaSlug(profile.name);
+  const slug =
+    typeof profile.slug === 'string' && profile.slug ? profile.slug : philomenaSlug(profile.name);
   /* `+` is the slug's own space and is kept; everything else a path segment cannot carry is encoded. */
   return `https://derpibooru.org/profiles/${encodeURIComponent(slug).replaceAll('%2B', '+')}`;
 }
@@ -34,6 +35,7 @@ export function derpiProfileUrl(profile: { name: string; slug?: unknown }): stri
  * which the site's pages do not take — the account's uploads, the one public view keyed by id.
  */
 export function derpiFallbackUrl(routeId: string): string {
-  if (/^[1-9]\d{0,15}$/.test(routeId)) return `https://derpibooru.org/search?q=${encodeURIComponent(`uploader_id:${routeId}`)}`;
+  if (/^[1-9]\d{0,15}$/.test(routeId))
+    return `https://derpibooru.org/search?q=${encodeURIComponent(`uploader_id:${routeId}`)}`;
   return derpiProfileUrl({ name: routeId });
 }

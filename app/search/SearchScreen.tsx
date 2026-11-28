@@ -21,7 +21,12 @@ import { ICON } from '@/lib/icons';
 import { createPagedSequence, type ImageSequenceSource } from '@/lib/imageSequence';
 import { loadSearchArtwork } from '@/lib/lottieAssets';
 import { SKIP, useResource } from '@/lib/resource';
-import { searchFeed, semanticQuery, syncBrowsingCookie, useBrowsingFingerprint } from '@/lib/resources';
+import {
+  searchFeed,
+  semanticQuery,
+  syncBrowsingCookie,
+  useBrowsingFingerprint,
+} from '@/lib/resources';
 import {
   NO_SEARCH_FILTERS,
   composeQuery,
@@ -65,7 +70,10 @@ import { useSemanticConfig } from '@/lib/useSiteStatus';
  * picture reader) is only needed once somebody asks for it. `loading` keeps a first open from
  * suspending to the route's boundary.
  */
-const ImageSearchModal = dynamic(() => import('@/components/ImageSearchModal'), { ssr: false, loading: () => null });
+const ImageSearchModal = dynamic(() => import('@/components/ImageSearchModal'), {
+  ssr: false,
+  loading: () => null,
+});
 
 /** Derpibooru's page size for a search — the request's own, which the skeleton matches. */
 const PAGE_SIZE = 50;
@@ -78,7 +86,8 @@ const MAX_REACHABLE_PAGE = 999;
 /** How long a list turning its page for a return flight may take before the flight gives up. */
 const REVEAL_TIMEOUT_MS = 4000;
 
-const pagesFor = (total: number) => Math.max(1, Math.min(MAX_REACHABLE_PAGE, Math.ceil(total / PAGE_SIZE)));
+const pagesFor = (total: number) =>
+  Math.max(1, Math.min(MAX_REACHABLE_PAGE, Math.ceil(total / PAGE_SIZE)));
 
 /* ---------------------------------------------------------------------------------------------
  * History. /search's URL is its whole state (`readSearchLocation`), and the screen writes its own
@@ -115,7 +124,8 @@ function hrefOf(state: SearchLocation, fallbackSort: string): string {
 
 /** The Navigation API's entry key — stable for one history slot — or the URL where it is missing. */
 function entryKey(): string {
-  const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } }).navigation;
+  const nav = (window as unknown as { navigation?: { currentEntry?: { key?: string } | null } })
+    .navigation;
   return nav?.currentEntry?.key ?? `url:${window.location.pathname}${window.location.search}`;
 }
 
@@ -168,7 +178,11 @@ function unionTags(first: readonly string[], second: readonly string[]): string[
  * the next entry. Reads go through resources — the semantic parse, the result pages, the
  * dictionary — so coming back to a search costs nothing.
  */
-export default function SearchScreen({ semantic: initialSemantic }: { semantic: SemanticSearchConfig }) {
+export default function SearchScreen({
+  semantic: initialSemantic,
+}: {
+  semantic: SemanticSearchConfig;
+}) {
   const semantic = useSemanticConfig(initialSemantic);
   const pathname = usePathname();
   const params = useBackgroundSearchParams();
@@ -191,7 +205,9 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
         // Storage can be disabled; searching still works with the default order.
       }
       setPrefs((previous) =>
-        previous.ready && previous.defaultSort === defaultSort ? previous : { ready: true, defaultSort },
+        previous.ready && previous.defaultSort === defaultSort
+          ? previous
+          : { ready: true, defaultSort },
       );
       syncBrowsingCookie();
     };
@@ -206,12 +222,18 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   }, []);
 
   /* ----- what the query means ----- */
-  const { terms: baseTerms, filters } = useMemo(() => parseSearchFilters(location.query), [location.query]);
+  const { terms: baseTerms, filters } = useMemo(
+    () => parseSearchFilters(location.query),
+    [location.query],
+  );
   const baseText = baseTerms.join(', ');
-  const semanticCandidate = !location.image && semantic.availability !== 'off' && isSemanticText(baseText);
+  const semanticCandidate =
+    !location.image && semantic.availability !== 'off' && isSemanticText(baseText);
   const parse = useResource(
     semanticQuery,
-    semanticCandidate && !location.literal ? { text: baseText, timeoutMs: semantic.timeoutMs } : SKIP,
+    semanticCandidate && !location.literal
+      ? { text: baseText, timeoutMs: semantic.timeoutMs }
+      : SKIP,
   );
 
   let interpretation: Interpretation = { kind: 'plain' };
@@ -221,7 +243,12 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     else if (location.tags) {
       /* The parse's order first, so a chip left out stays where it was rather than moving to
          the end of the row under the pointer that just tapped it. */
-      interpretation = { kind: 'converted', included: location.tags, tags: unionTags(parsed, location.tags), fromParse: false };
+      interpretation = {
+        kind: 'converted',
+        included: location.tags,
+        tags: unionTags(parsed, location.tags),
+        fromParse: false,
+      };
     } else if (parse.data === undefined && !parse.error) interpretation = { kind: 'pending' };
     else if (parse.data === undefined) {
       interpretation = {
@@ -233,12 +260,14 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     else if (parsed.length === 0) interpretation = { kind: 'untagged' };
     else interpretation = { kind: 'converted', included: parsed, tags: parsed, fromParse: true };
   }
-  const effectiveQuery = interpretation.kind === 'pending'
-    ? null
-    : interpretation.kind === 'converted'
-      ? composeQuery(interpretation.included, filters)
-      : location.query;
-  const rankingText = interpretation.kind === 'converted' ? interpretation.included.join(', ') : baseText;
+  const effectiveQuery =
+    interpretation.kind === 'pending'
+      ? null
+      : interpretation.kind === 'converted'
+        ? composeQuery(interpretation.included, filters)
+        : location.query;
+  const rankingText =
+    interpretation.kind === 'converted' ? interpretation.included.join(', ') : baseText;
 
   /* ----- the read ----- */
   const sortBy = effectiveSearchSort(location.sort, prefs.defaultSort, rankingText);
@@ -247,7 +276,11 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   /* The page lives in the URL; an override holds a page the list turned to while it was the
      background of an open picture, until its own entry is current again and can say so. */
   const [pageOverride, setPageOverride] = useState<{ set: string; page: number } | null>(null);
-  if (pageOverride && (pageOverride.set !== resultSet || (pathname === '/search' && location.page === pageOverride.page))) {
+  if (
+    pageOverride &&
+    (pageOverride.set !== resultSet ||
+      (pathname === '/search' && location.page === pageOverride.page))
+  ) {
     setPageOverride(null);
   }
   const page = pageOverride && pageOverride.set === resultSet ? pageOverride.page : location.page;
@@ -256,7 +289,9 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   const sortKnown = prefs.ready || location.sort !== '';
   const read = useResource(
     searchFeed,
-    effectiveQuery && sortKnown ? { query: effectiveQuery, page, sortField: sortBy, sortDir, fp } : SKIP,
+    effectiveQuery && sortKnown
+      ? { query: effectiveQuery, page, sortField: sortBy, sortDir, fp }
+      : SKIP,
     /* Retention scoped to one result set: a page turn keeps its rows (dimmed) so the scroller
        keeps its height; a new query, sort or content setting never shows the previous answer
        as if it were the new one. */
@@ -288,7 +323,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       const anchor = resultsRef.current;
       const scroller = getAppScroller();
       if (!anchor || !scroller) return;
-      if (anchor.getBoundingClientRect().top < scroller.getBoundingClientRect().top) scrollAppToElement(anchor);
+      if (anchor.getBoundingClientRect().top < scroller.getBoundingClientRect().top)
+        scrollAppToElement(anchor);
     });
   };
 
@@ -315,7 +351,10 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   };
 
   /* ----- pin the tags a parse produced, so reload and share run the same search at once ----- */
-  const pinned = interpretation.kind === 'converted' && interpretation.fromParse ? interpretation.included.join(',') : '';
+  const pinned =
+    interpretation.kind === 'converted' && interpretation.fromParse
+      ? interpretation.included.join(',')
+      : '';
   useEffect(() => {
     if (!pinned) return;
     /* A task of its own: this can land in the commit that answers a history traversal, and a
@@ -344,16 +383,23 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
 
   /* ----- the list's side of 上一张 / 下一张 (decision 19) ----- */
   const gridRef = useRef<HTMLDivElement>(null);
-  const pendingReveal = useRef<{ id: number; resolve: (ok: boolean) => void; frame: number } | null>(null);
+  const pendingReveal = useRef<{
+    id: number;
+    resolve: (ok: boolean) => void;
+    frame: number;
+  } | null>(null);
   /* A screen leaving mid-reveal answers "no card" rather than leaving the flight waiting. */
-  useEffect(() => () => {
-    const pending = pendingReveal.current;
-    pendingReveal.current = null;
-    if (pending) {
-      cancelAnimationFrame(pending.frame);
-      pending.resolve(false);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      const pending = pendingReveal.current;
+      pendingReveal.current = null;
+      if (pending) {
+        cancelAnimationFrame(pending.frame);
+        pending.resolve(false);
+      }
+    },
+    [],
+  );
   const sequenceKeyOf = (set: string) => `search:${set}`;
 
   /* The reveal, registered for this result set on every commit so it acts on what is on screen:
@@ -361,45 +407,46 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   useLayoutEffect(() => {
     if (!resultSet) return;
     const key = sequenceKeyOf(resultSet);
-    const reveal = (id: number, targetPage: number) => new Promise<boolean>((resolve) => {
-      const previous = pendingReveal.current;
-      if (previous) {
-        cancelAnimationFrame(previous.frame);
-        previous.resolve(false);
-      }
-      pendingReveal.current = null;
-      if (targetPage === shownPage) {
-        const card = findCard(gridRef.current, id);
-        if (card) bringIntoView(card);
-        resolve(Boolean(card));
-        return;
-      }
-      /* Watched for frame by frame rather than on this screen's own commits: the grid renders a
-         new page in a deferred pass of its own (it keeps the page it had meanwhile), so the card
-         arrives in a commit this screen never sees. */
-      const deadline = performance.now() + REVEAL_TIMEOUT_MS;
-      const pending = { id, resolve, frame: 0 };
-      const watch = () => {
-        if (pendingReveal.current !== pending) return;
-        const card = findCard(gridRef.current, id);
-        if (card || performance.now() > deadline) {
-          pendingReveal.current = null;
+    const reveal = (id: number, targetPage: number) =>
+      new Promise<boolean>((resolve) => {
+        const previous = pendingReveal.current;
+        if (previous) {
+          cancelAnimationFrame(previous.frame);
+          previous.resolve(false);
+        }
+        pendingReveal.current = null;
+        if (targetPage === shownPage) {
+          const card = findCard(gridRef.current, id);
           if (card) bringIntoView(card);
           resolve(Boolean(card));
           return;
         }
+        /* Watched for frame by frame rather than on this screen's own commits: the grid renders a
+         new page in a deferred pass of its own (it keeps the page it had meanwhile), so the card
+         arrives in a commit this screen never sees. */
+        const deadline = performance.now() + REVEAL_TIMEOUT_MS;
+        const pending = { id, resolve, frame: 0 };
+        const watch = () => {
+          if (pendingReveal.current !== pending) return;
+          const card = findCard(gridRef.current, id);
+          if (card || performance.now() > deadline) {
+            pendingReveal.current = null;
+            if (card) bringIntoView(card);
+            resolve(Boolean(card));
+            return;
+          }
+          pending.frame = requestAnimationFrame(watch);
+        };
+        pendingReveal.current = pending;
         pending.frame = requestAnimationFrame(watch);
-      };
-      pendingReveal.current = pending;
-      pending.frame = requestAnimationFrame(watch);
-      /* The page-turn path when the list is on screen; under an open picture its entry is not
+        /* The page-turn path when the list is on screen; under an open picture its entry is not
          current, so the page changes through state and the URL catches up once it is. */
-      if (window.location.pathname === '/search') {
-        writeHistory(hrefOf({ ...liveLocation(), page: targetPage }, sortBy), 'replace');
-      } else {
-        setPageOverride({ set: resultSet, page: targetPage });
-      }
-    });
+        if (window.location.pathname === '/search') {
+          writeHistory(hrefOf({ ...liveLocation(), page: targetPage }, sortBy), 'replace');
+        } else {
+          setPageOverride({ set: resultSet, page: targetPage });
+        }
+      });
     revealers.set(key, reveal);
     return () => {
       if (revealers.get(key) === reveal) revealers.delete(key);
@@ -412,7 +459,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     const timer = setTimeout(() => {
       if (window.location.pathname !== '/search') return;
       const live = liveLocation();
-      if (live.page !== pageOverride.page) writeHistory(hrefOf({ ...live, page: pageOverride.page }, sortBy), 'replace');
+      if (live.page !== pageOverride.page)
+        writeHistory(hrefOf({ ...live, page: pageOverride.page }, sortBy), 'replace');
     }, 0);
     return () => clearTimeout(timer);
   }, [pageOverride, pathname, sortBy]);
@@ -421,10 +469,13 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
      card keeps the pages the detail already loaded (decision 19). Adjusted during render, the
      documented pattern for state that follows other state. */
   const data = read.data;
-  const sequenceKey = effectiveQuery && data && data.images.length > 0
-    ? [resultSet, shownPage, data.images.map((image) => image.id).join(',')].join('|')
-    : '';
-  const [sequenceState, setSequenceState] = useState<{ key: string; source?: ImageSequenceSource }>({ key: '' });
+  const sequenceKey =
+    effectiveQuery && data && data.images.length > 0
+      ? [resultSet, shownPage, data.images.map((image) => image.id).join(',')].join('|')
+      : '';
+  const [sequenceState, setSequenceState] = useState<{ key: string; source?: ImageSequenceSource }>(
+    { key: '' },
+  );
   if (sequenceState.key !== sequenceKey) {
     let source: ImageSequenceSource | undefined;
     if (sequenceKey && effectiveQuery && data) {
@@ -433,11 +484,25 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       source = createPagedSequence({
         key,
         page: shownPage,
-        current: { ids: data.images.map((image) => image.id), previews: data.images, totalPages: pagesFor(data.total) },
+        current: {
+          ids: data.images.map((image) => image.id),
+          previews: data.images,
+          totalPages: pagesFor(data.total),
+        },
         pageSize: PAGE_SIZE,
         fetchPage: async (next) => {
-          const result = await searchFeed.read({ query, page: next, sortField: sortBy, sortDir, fp });
-          return { ids: result.images.map((image) => image.id), previews: result.images, totalPages: pagesFor(result.total) };
+          const result = await searchFeed.read({
+            query,
+            page: next,
+            sortField: sortBy,
+            sortDir,
+            fp,
+          });
+          return {
+            ids: result.images.map((image) => image.id),
+            previews: result.images,
+            totalPages: pagesFor(result.total),
+          };
         },
         reveal: (id, targetPage) => revealers.get(key)?.(id, targetPage) ?? Promise.resolve(false),
       });
@@ -460,8 +525,11 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
   const pendingRestore = useRef<{ key: string; offset: number } | null>(null);
   /* The entry's own content is on screen: the restore waits for it, or the browser clamps the
      offset to a skeleton's height. */
-  const settled = location.image !== null || !location.query ||
-    (read.data !== undefined && !read.isPrevious) || (read.data === undefined && Boolean(read.error));
+  const settled =
+    location.image !== null ||
+    !location.query ||
+    (read.data !== undefined && !read.isPrevious) ||
+    (read.data === undefined && Boolean(read.error));
   useLayoutEffect(() => {
     if (pathname !== '/search') {
       shownEntry.current = null;
@@ -497,7 +565,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     const record = () => {
       frame = 0;
       const shown = shownEntry.current;
-      if (shown && !pendingRestore.current && shown.key === entryKey()) offsets.set(shown.key, scroller.scrollTop);
+      if (shown && !pendingRestore.current && shown.key === entryKey())
+        offsets.set(shown.key, scroller.scrollTop);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(record);
@@ -522,7 +591,9 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     if (pathname !== '/search') return;
     document.title = location.image
       ? '以图搜图结果 - PicPony'
-      : location.query ? `搜索：${location.query.slice(0, 40)} - PicPony` : '搜索 - PicPony';
+      : location.query
+        ? `搜索：${location.query.slice(0, 40)} - PicPony`
+        : '搜索 - PicPony';
   }, [location.image, location.query, pathname]);
 
   /* ----- 以图搜图 ----- */
@@ -581,7 +652,12 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       semanticState = { kind: 'pending', text: baseText, estimateMs: semantic.estimateMs };
       break;
     case 'converted':
-      semanticState = { kind: 'converted', text: baseText, tags: interpretation.tags, included: interpretation.included };
+      semanticState = {
+        kind: 'converted',
+        text: baseText,
+        tags: interpretation.tags,
+        included: interpretation.included,
+      };
       break;
     case 'literal':
     case 'untagged':
@@ -589,7 +665,12 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       semanticState = { kind: interpretation.kind, text: baseText };
       break;
     case 'failed':
-      semanticState = { kind: 'failed', text: baseText, timedOut: interpretation.timedOut, retryable: interpretation.retryable };
+      semanticState = {
+        kind: 'failed',
+        text: baseText,
+        timedOut: interpretation.timedOut,
+        retryable: interpretation.retryable,
+      };
       break;
   }
 
@@ -598,7 +679,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     /* The panel applies to what is in the field — words typed and not yet searched included —
        and so is a new search when those words differ; a chip only ever edits the search on
        screen. */
-    const fieldTerms = from === 'panel' ? parseSearchFilters(normalizeSearchText(inputValue)).terms : baseTerms;
+    const fieldTerms =
+      from === 'panel' ? parseSearchFilters(normalizeSearchText(inputValue)).terms : baseTerms;
     const query = composeQuery(fieldTerms, next);
     if (!query) {
       showToast('请输入关键词或设置筛选条件', 'info');
@@ -615,7 +697,11 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       return {
         title: '此页没有图片',
         description: `当前结果共 ${pagesFor(total)} 页`,
-        action: <Button variant="tonal" onClick={() => refine({})}>回到第一页</Button>,
+        action: (
+          <Button variant="tonal" onClick={() => refine({})}>
+            回到第一页
+          </Button>
+        ),
       };
     }
     const blocked = effectiveQuery ? excludedTermsIn(effectiveQuery, excluded) : [];
@@ -623,21 +709,33 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       return {
         title: '没有可显示的图片',
         description: `「${blocked.join('」「')}」已被当前内容筛选设置排除`,
-        action: <ButtonLink href="/settings" variant="tonal">前往设置</ButtonLink>,
+        action: (
+          <ButtonLink href="/settings" variant="tonal">
+            前往设置
+          </ButtonLink>
+        ),
       };
     }
     if (countSearchFilters(filters) > 0) {
       return {
         title: '没有找到匹配的图片',
         description: baseTerms.length === 0 ? '请放宽筛选条件后再试' : '请放宽筛选条件或更换关键词',
-        action: <Button variant="tonal" onClick={() => applyFilters(NO_SEARCH_FILTERS, 'chip')}>清除筛选条件</Button>,
+        action: (
+          <Button variant="tonal" onClick={() => applyFilters(NO_SEARCH_FILTERS, 'chip')}>
+            清除筛选条件
+          </Button>
+        ),
       };
     }
     if (interpretation.kind === 'converted') {
       return {
         title: '没有找到匹配的图片',
         description: '可减少部分标签，或改用原文搜索',
-        action: <Button variant="tonal" onClick={() => refine({ literal: true, tags: null })}>搜索原文</Button>,
+        action: (
+          <Button variant="tonal" onClick={() => refine({ literal: true, tags: null })}>
+            搜索原文
+          </Button>
+        ),
       };
     }
     return {
@@ -646,10 +744,12 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
     };
   };
 
-  const singleTag = effectiveQuery && isSingleTagQuery(effectiveQuery) ? splitQueryTerms(effectiveQuery)[0] : null;
-  const feedback = semanticCandidate && parse.data?.modelUsed
-    ? <SemanticFeedback query={baseText} tags={parse.data.tags} engines={parse.data.engines} />
-    : null;
+  const singleTag =
+    effectiveQuery && isSingleTagQuery(effectiveQuery) ? splitQueryTerms(effectiveQuery)[0] : null;
+  const feedback =
+    semanticCandidate && parse.data?.modelUsed ? (
+      <SemanticFeedback query={baseText} tags={parse.data.tags} engines={parse.data.engines} />
+    ) : null;
 
   const placeholder = semantic.availability === 'off' ? '搜索图片…' : '搜索图片或输入中文描述…';
 
@@ -757,7 +857,14 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
               if (next >= 1) writeHistory(hrefFor({ page: next }), 'replace');
             }}
             onPrefetchPage={(next) => {
-              if (effectiveQuery) searchFeed.prefetch({ query: effectiveQuery, page: next, sortField: sortBy, sortDir, fp });
+              if (effectiveQuery)
+                searchFeed.prefetch({
+                  query: effectiveQuery,
+                  page: next,
+                  sortField: sortBy,
+                  sortDir,
+                  fp,
+                });
             }}
             sequence={sequence}
             gridRef={gridRef}
@@ -772,7 +879,8 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
                 href={hrefFor({
                   page: 1,
                   sharedBy: null,
-                  tags: interpretation.kind === 'converted' ? interpretation.included : location.tags,
+                  tags:
+                    interpretation.kind === 'converted' ? interpretation.included : location.tags,
                 })}
                 query={location.query}
               />
@@ -782,7 +890,11 @@ export default function SearchScreen({ semantic: initialSemantic }: { semantic: 
       </div>
 
       {imageSearchMounted && (
-        <ImageSearchModal isOpen={imageSearchOpen} onClose={() => setImageSearchOpen(false)} onResult={handleImageSearch} />
+        <ImageSearchModal
+          isOpen={imageSearchOpen}
+          onClose={() => setImageSearchOpen(false)}
+          onResult={handleImageSearch}
+        />
       )}
     </div>
   );

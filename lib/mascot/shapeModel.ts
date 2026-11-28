@@ -24,7 +24,12 @@ export interface MascotShape {
 }
 
 /** The runs of a `w` × `h` alpha grid, row by row. */
-export function shapeRows(alpha: ArrayLike<number>, w: number, h: number, min = MASCOT_SHAPE_ALPHA): number[][] {
+export function shapeRows(
+  alpha: ArrayLike<number>,
+  w: number,
+  h: number,
+  min = MASCOT_SHAPE_ALPHA,
+): number[][] {
   const rows: number[][] = [];
   for (let y = 0; y < h; y += 1) {
     const runs: number[] = [];
@@ -46,14 +51,16 @@ export function shapeRows(alpha: ArrayLike<number>, w: number, h: number, min = 
 export function parseMascotShape(value: unknown): MascotShape | null {
   if (!value || typeof value !== 'object') return null;
   const { w, h, rows } = value as Record<string, unknown>;
-  const cells = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 256;
+  const cells = (n: unknown): n is number =>
+    Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 256;
   if (!cells(w) || !cells(h) || !Array.isArray(rows) || rows.length !== h) return null;
   for (const runs of rows) {
     if (!Array.isArray(runs) || runs.length % 2 !== 0 || runs.length > w + 1) return null;
     let last = -1;
     for (let i = 0; i < runs.length; i += 1) {
       const x = runs[i];
-      if (!Number.isInteger(x) || x < 0 || x > w || x < last || (i % 2 === 1 && x === runs[i - 1])) return null;
+      if (!Number.isInteger(x) || x < 0 || x > w || x < last || (i % 2 === 1 && x === runs[i - 1]))
+        return null;
       last = x;
     }
   }
@@ -79,7 +86,8 @@ export function shapePath(shape: MascotShape, width: number, height: number, pad
   let top = 0;
   const flush = (bottom: number) => {
     if (bottom <= top) return;
-    for (let i = 0; i < open.length; i += 2) path += `M${open[i]} ${top}H${open[i + 1]}V${bottom}H${open[i]}Z`;
+    for (let i = 0; i < open.length; i += 2)
+      path += `M${open[i]} ${top}H${open[i + 1]}V${bottom}H${open[i]}Z`;
   };
   for (let y = 0; y < shape.h; y += 1) {
     const spans: [number, number][] = [];
@@ -92,7 +100,8 @@ export function shapePath(shape: MascotShape, width: number, height: number, pad
       const gap = Math.max(0, Math.abs(dy) - 1) * ch;
       if (dy !== 0 && gap >= pad) continue;
       const grow = Math.sqrt(pad * pad - gap * gap);
-      for (let i = 0; i < runs.length; i += 2) spans.push([runs[i] * cw - grow, runs[i + 1] * cw + grow]);
+      for (let i = 0; i < runs.length; i += 2)
+        spans.push([runs[i] * cw - grow, runs[i + 1] * cw + grow]);
     }
     spans.sort((a, b) => a[0] - b[0]);
     const row: number[] = [];
@@ -100,7 +109,8 @@ export function shapePath(shape: MascotShape, width: number, height: number, pad
       const start = Math.max(0, Math.floor(a));
       const end = Math.min(width, Math.ceil(b));
       if (end <= start) continue;
-      if (row.length && start <= row[row.length - 1] + 1) row[row.length - 1] = Math.max(row[row.length - 1], end);
+      if (row.length && start <= row[row.length - 1] + 1)
+        row[row.length - 1] = Math.max(row[row.length - 1], end);
       else row.push(start, end);
     }
     const y0 = Math.round(y * ch);
@@ -132,7 +142,13 @@ export interface ShapeBox {
  * How far `box` has to rise to keep `clear` px off the character — 0 where it already does. The
  * first row the box comes near decides it: the box has to stand above that row, whatever is below.
  */
-export function shapeLift(shape: MascotShape, width: number, height: number, box: ShapeBox, clear: number): number {
+export function shapeLift(
+  shape: MascotShape,
+  width: number,
+  height: number,
+  box: ShapeBox,
+  clear: number,
+): number {
   const cw = width / shape.w;
   const ch = height / shape.h;
   for (let y = 0; y < shape.h; y += 1) {
@@ -140,7 +156,8 @@ export function shapeLift(shape: MascotShape, width: number, height: number, box
     if (top >= box.bottom + clear) return 0;
     const runs = shape.rows[y];
     for (let i = 0; i < runs.length; i += 2) {
-      if (runs[i + 1] * cw > box.left - clear && runs[i] * cw < box.right + clear) return box.bottom + clear - top;
+      if (runs[i + 1] * cw > box.left - clear && runs[i] * cw < box.right + clear)
+        return box.bottom + clear - top;
     }
   }
   return 0;

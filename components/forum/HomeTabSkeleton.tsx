@@ -24,7 +24,11 @@ export function ForumPaneSkeleton() {
       </div>
       <div className="-mx-4 mb-4 flex gap-2 overflow-hidden px-4 sm:mx-0 sm:px-0">
         {[16, 22, 22, 26].map((width, i) => (
-          <Skeleton key={i} className="h-8 shrink-0 rounded-sm pointer-coarse:my-1" style={{ width: `${width * 4}px` }} />
+          <Skeleton
+            key={i}
+            className="h-8 shrink-0 rounded-sm pointer-coarse:my-1"
+            style={{ width: `${width * 4}px` }}
+          />
         ))}
       </div>
       <ForumListSkeleton />

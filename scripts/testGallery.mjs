@@ -19,17 +19,25 @@ globalThis.localStorage = {
 };
 globalThis.window = {
   requestAnimationFrame: (callback) => setTimeout(callback, 0),
-  addEventListener() {}, removeEventListener() {},
-  dispatchEvent() { return true; },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {
+    return true;
+  },
   setTimeout: (...args) => setTimeout(...args),
   clearTimeout: (...args) => clearTimeout(...args),
   matchMedia: () => ({ matches: false }),
 };
 globalThis.document = {
-  visibilityState: 'visible', hidden: false, cookie: '',
-  addEventListener() {}, removeEventListener() {},
+  visibilityState: 'visible',
+  hidden: false,
+  cookie: '',
+  addEventListener() {},
+  removeEventListener() {},
 };
-globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
+globalThis.fetch = async (url) => {
+  throw new Error(`Unexpected network request: ${url}`);
+};
 
 const loader = await import('../lib/imageLoader.ts');
 const { describeImage } = await import('../lib/imageDescription.ts');
@@ -50,7 +58,9 @@ const RAW = 'https://derpicdn.net/img/2026/9/25/3901421/medium.png';
 
 beforeEach(() => {
   values.clear();
-  globalThis.fetch = async (url) => { throw new Error(`Unexpected network request: ${url}`); };
+  globalThis.fetch = async (url) => {
+    throw new Error(`Unexpected network request: ${url}`);
+  };
 });
 
 // --- lib/imageLoader.ts -------------------------------------------------------------------
@@ -65,7 +75,11 @@ test('the first attempt is the optimizer on the raw URL, line-free, so it cannot
   );
   const direct = loader.createInitialAttempt(RAW, { line: 'cdn', optimize: false });
   assert.equal(direct.optimized, false);
-  assert.equal(direct.url, `${IMAGE_CDN_BASE}${encodeURIComponent(RAW)}`, 'an unoptimized start takes the server’s line');
+  assert.equal(
+    direct.url,
+    `${IMAGE_CDN_BASE}${encodeURIComponent(RAW)}`,
+    'an unoptimized start takes the server’s line',
+  );
 });
 
 test('an optimizer failure is not retried on the same URL: it goes browser-direct on the visitor’s line', () => {
@@ -79,7 +93,10 @@ test('every retry waits: a beat on the worker, an exponential backoff on the dir
   let attempt = loader.createInitialAttempt(RAW, { optimize: false, line: 'picpony' });
   attempt = loader.resolveNextAttempt(RAW, attempt);
   assert.equal(attempt.tier, 0);
-  assert.ok(attempt.delayMs >= 300 && attempt.delayMs <= 500, `worker retry waits a beat (${attempt.delayMs})`);
+  assert.ok(
+    attempt.delayMs >= 300 && attempt.delayMs <= 500,
+    `worker retry waits a beat (${attempt.delayMs})`,
+  );
   assert.match(attempt.url, /retry=\d+/, 'and busts the cached failure');
   attempt = loader.resolveNextAttempt(RAW, attempt);
   assert.ok(attempt.tier === 1 || attempt.tier === 2, 'then steps down a line');
@@ -100,7 +117,11 @@ test('every retry waits: a beat on the worker, an exponential backoff on the dir
     assert.ok(waits[i] > waits[i - 1] * 1.1, `the backoff grows (${waits.join(', ')})`);
   }
   assert.ok(waits[0] >= 375 && waits.at(-1) <= 8_000 * 1.25, 'bounded: half a second to eight');
-  assert.equal(loader.resolveNextAttempt(RAW, attempt), attempt, 'a given-up attempt stays given up');
+  assert.equal(
+    loader.resolveNextAttempt(RAW, attempt),
+    attempt,
+    'a given-up attempt stays given up',
+  );
 });
 
 test('the backoff is jittered and capped', () => {
@@ -113,16 +134,27 @@ test('the backoff is jittered and capped', () => {
 
 test('an animated card takes the smallest rendition wide enough, not the 800px medium (R12-001)', () => {
   const reps = Object.fromEntries(
-    ['thumb_small', 'thumb', 'small', 'medium', 'large'].map((name) => [name, `https://derpicdn.net/img/1/${name}.gif`]),
+    ['thumb_small', 'thumb', 'small', 'medium', 'large'].map((name) => [
+      name,
+      `https://derpicdn.net/img/1/${name}.gif`,
+    ]),
   );
   /* The R12 evidence: a 749×421 GIF in a 256px desktop column. */
-  assert.equal(loader.pickRendition(reps, 749, 421, 256), reps.thumb, '250px wide is within 10% of 256');
+  assert.equal(
+    loader.pickRendition(reps, 749, 421, 256),
+    reps.thumb,
+    '250px wide is within 10% of 256',
+  );
   assert.equal(loader.pickRendition(reps, 749, 421, 256 * 1.5), reps.medium);
   /* Portrait: `small` is a 320×240 box, so a tall picture gets narrower there than in `thumb`. */
   assert.equal(loader.renditionWidth('small', 600, 800), 180);
   assert.equal(loader.renditionWidth('thumb', 600, 800), 188);
   assert.equal(loader.pickRendition(reps, 600, 800, 256), reps.medium);
-  assert.equal(loader.pickRendition({ thumb: reps.thumb }, 3000, 2000, 900), reps.thumb, 'the largest there is');
+  assert.equal(
+    loader.pickRendition({ thumb: reps.thumb }, 3000, 2000, 900),
+    reps.thumb,
+    'the largest there is',
+  );
   assert.equal(loader.renditionWidth('medium', 300, 200), 300, 'never upscaled past the original');
 });
 
@@ -137,26 +169,60 @@ test('line URLs unwrap to the raw Derpibooru URL', () => {
 
 test('a card is named by its content, never by the upload’s file name (R11-002)', () => {
   assert.equal(
-    describeImage({ id: 1, name: 'GOAwF74aMAAC6KH.jpg?name=orig', tags: ['earth pony', 'female', 'g4', 'pinkie pie', 'safe', 'solo', 'artist:floratavy'] }),
+    describeImage({
+      id: 1,
+      name: 'GOAwF74aMAAC6KH.jpg?name=orig',
+      tags: ['earth pony', 'female', 'g4', 'pinkie pie', 'safe', 'solo', 'artist:floratavy'],
+    }),
     'pinkie pie，作者 floratavy',
   );
   assert.equal(
-    describeImage({ id: 2, tags: ['anthro', 'belly', 'bracelet', 'clothes', 'sweetie belle', 'artist:a', 'artist:b', 'artist:c'] }),
+    describeImage({
+      id: 2,
+      tags: [
+        'anthro',
+        'belly',
+        'bracelet',
+        'clothes',
+        'sweetie belle',
+        'artist:a',
+        'artist:b',
+        'artist:c',
+      ],
+    }),
     'sweetie belle、anthro、belly，作者 a、b',
     'characters first, three subjects, two artists',
   );
   assert.equal(describeImage({ id: 3, tags: ['safe', 'g4', 'solo'] }), '图片 #3');
   assert.equal(describeImage({ id: 4, tags: ['safe', 'artist:only'] }), '图片 #4，作者 only');
-  assert.equal(describeImage({ id: 5, tags: ['oc:fluffy', 'oc only', 'series:x', 'twilight sparkle'] }), 'fluffy、twilight sparkle');
+  assert.equal(
+    describeImage({ id: 5, tags: ['oc:fluffy', 'oc only', 'series:x', 'twilight sparkle'] }),
+    'fluffy、twilight sparkle',
+  );
   assert.equal(describeImage({ id: 6 }), '图片 #6');
 });
 
 test('a description teaser is plain text: markup removed, spoilers dropped, cut with an ellipsis (R4-054)', () => {
-  assert.equal(descriptionTeaser('> **Commission** for [someone](https://x.y) ||big spoiler|| done!\n\nsecond'), 'Commission for someone done!');
-  assert.equal(descriptionTeaser('\\#mlp #mylittlepony\n\nArt by me #mlp #scitwi'), 'Art by me', 'a paragraph of hashtags is skipped');
-  assert.equal(descriptionTeaser('Use `code` and _italic_ and snake_case_name and 2*3*4'), 'Use code and italic and snake_case_name and 2*3*4');
+  assert.equal(
+    descriptionTeaser(
+      '> **Commission** for [someone](https://x.y) ||big spoiler|| done!\n\nsecond',
+    ),
+    'Commission for someone done!',
+  );
+  assert.equal(
+    descriptionTeaser('\\#mlp #mylittlepony\n\nArt by me #mlp #scitwi'),
+    'Art by me',
+    'a paragraph of hashtags is skipped',
+  );
+  assert.equal(
+    descriptionTeaser('Use `code` and _italic_ and snake_case_name and 2*3*4'),
+    'Use code and italic and snake_case_name and 2*3*4',
+  );
   assert.equal(descriptionTeaser('```\ncode\n```\n\nReal &amp; more &#65;'), 'Real & more A');
-  assert.equal(descriptionTeaser('"Textile":https://e.x and [spoiler]x[/spoiler]ok'), 'Textile and ok');
+  assert.equal(
+    descriptionTeaser('"Textile":https://e.x and [spoiler]x[/spoiler]ok'),
+    'Textile and ok',
+  );
   assert.equal(descriptionTeaser('  \n  '), '');
   assert.equal(descriptionTeaser(null), '');
   const long = descriptionTeaser('字'.repeat(300));
@@ -165,16 +231,41 @@ test('a description teaser is plain text: markup removed, spoilers dropped, cut 
 });
 
 test('the banner is judged by the feed’s own rules (R4-025)', () => {
-  const settings = { contentFilter: 'safe', banAnthro: false, banDiscomfort: true, onlyPony: false, hiddenTags: [] };
+  const settings = {
+    contentFilter: 'safe',
+    banAnthro: false,
+    banDiscomfort: true,
+    onlyPony: false,
+    hiddenTags: [],
+  };
   const f = DEFAULT_BLOCK_FILTERS;
-  assert.equal(isWithheldBy(['pony', 'suggestive'], settings, f), true, 'the safe filter’s own tags');
-  assert.equal(isWithheldBy(['pony', 'suggestive'], { ...settings, contentFilter: 'developer' }, f), false);
+  assert.equal(
+    isWithheldBy(['pony', 'suggestive'], settings, f),
+    true,
+    'the safe filter’s own tags',
+  );
+  assert.equal(
+    isWithheldBy(['pony', 'suggestive'], { ...settings, contentFilter: 'developer' }, f),
+    false,
+  );
   assert.equal(isWithheldBy(['pony', 'safe'], settings, f), false);
   assert.equal(isWithheldBy(['anthro', 'safe'], { ...settings, banAnthro: true }, f), true);
-  assert.equal(isWithheldBy(['obese', 'safe'], settings, f), true, 'the discomfort toggle is on by default');
+  assert.equal(
+    isWithheldBy(['obese', 'safe'], settings, f),
+    true,
+    'the discomfort toggle is on by default',
+  );
   assert.equal(isWithheldBy(['obese', 'safe'], { ...settings, banDiscomfort: false }, f), false);
-  assert.equal(isWithheldBy(['Guitar', 'safe'], { ...settings, hiddenTags: ['guitar'] }, f), true, 'case-insensitive');
-  assert.equal(isWithheldBy(['human', 'safe'], { ...settings, onlyPony: true }, f), true, 'only-pony requires a pony tag');
+  assert.equal(
+    isWithheldBy(['Guitar', 'safe'], { ...settings, hiddenTags: ['guitar'] }, f),
+    true,
+    'case-insensitive',
+  );
+  assert.equal(
+    isWithheldBy(['human', 'safe'], { ...settings, onlyPony: true }, f),
+    true,
+    'only-pony requires a pony tag',
+  );
   assert.equal(isWithheldBy(['pony', 'safe'], { ...settings, onlyPony: true }, f), false);
 });
 
@@ -190,7 +281,10 @@ test('a card’s width follows the container column thresholds beside the docked
   assert.match(masonry.MASONRY_CARD_SIZES, /^\(max-width: 551px\) calc\(\(100vw - 40px\) \/ 2\)/);
   assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 879px\) calc\(\(100vw - 368px\) \/ 2\)/);
   assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1179px\) calc\(\(100vw - 392px\) \/ 3\)/);
-  assert.match(masonry.MASONRY_CARD_SIZES, /\(max-width: 1639px\) calc\(\(100vw - 408px\) \/ 4\), 308px$/);
+  assert.match(
+    masonry.MASONRY_CARD_SIZES,
+    /\(max-width: 1639px\) calc\(\(100vw - 408px\) \/ 4\), 308px$/,
+  );
   assert.match(masonry.GALLERY_BLOCK_SIZES, /\(max-width: 1639px\) calc\(100vw - 360px\), 1280px$/);
   assert.equal(masonry.clampedCardAspect(100, 1000), masonry.MASONRY_MAX_RATIO);
   assert.equal(masonry.clampedCardAspect(1000, 100), masonry.MASONRY_MIN_RATIO);
@@ -199,8 +293,14 @@ test('a card’s width follows the container column thresholds beside the docked
 // --- keys ------------------------------------------------------------------------------------
 
 test('the server’s seeds and the client’s resources build one key', () => {
-  assert.equal(catalogue.homeFeed.keyOf({ page: 3, sort: 'score', fp: 'safe|-|d|-|' }), homeFeedKey(3, 'score', 'safe|-|d|-|'));
-  assert.equal(catalogue.featuredImage.keyOf({ contentFilter: 'developer' }), featuredKey(undefined, 'developer'));
+  assert.equal(
+    catalogue.homeFeed.keyOf({ page: 3, sort: 'score', fp: 'safe|-|d|-|' }),
+    homeFeedKey(3, 'score', 'safe|-|d|-|'),
+  );
+  assert.equal(
+    catalogue.featuredImage.keyOf({ contentFilter: 'developer' }),
+    featuredKey(undefined, 'developer'),
+  );
   assert.notEqual(
     catalogue.featuredImage.keyOf({ apiKey: 'k', contentFilter: 'safe' }),
     featuredKey(undefined, 'safe'),
@@ -227,18 +327,32 @@ test('本站讨论: a page of ids with PicPony’s counts, read from /api/v1', a
   assert.equal(asked.pathname, '/api/v1/images/discussed');
   assert.equal(asked.searchParams.get('limit'), '50');
   assert.equal(asked.searchParams.get('page'), '2');
-  assert.deepEqual(page.images.map((row) => [row.imageId, row.comments]), [[922467, 3], [3898930, 1]]);
+  assert.deepEqual(
+    page.images.map((row) => [row.imageId, row.comments]),
+    [
+      [922467, 3],
+      [3898930, 1],
+    ],
+  );
   assert.equal(page.total, 248);
   assert.equal(page.totalPages, 5);
-  globalThis.fetch = async () => json({ error: { code: 'UNAVAILABLE', message: '服务不可用' } }, { status: 503 });
-  await assert.rejects(gallery.getDiscussedImages(1), ApiError, 'a refusal is a failure, not an empty page');
+  globalThis.fetch = async () =>
+    json({ error: { code: 'UNAVAILABLE', message: '服务不可用' } }, { status: 503 });
+  await assert.rejects(
+    gallery.getDiscussedImages(1),
+    ApiError,
+    'a refusal is a failure, not an empty page',
+  );
 });
 
 test('PicPony comment counts: one POST per page', async () => {
   let body;
   globalThis.fetch = async (url, init) => {
     body = JSON.parse(init.body);
-    assert.equal(new URL(String(url), 'https://app.invalid').pathname, '/api/v1/images/comment-counts');
+    assert.equal(
+      new URL(String(url), 'https://app.invalid').pathname,
+      '/api/v1/images/comment-counts',
+    );
     assert.equal(init.method, 'POST');
     return json({ counts: { 1: 2, 3: 4 } });
   };
@@ -258,7 +372,9 @@ test('the featured seed is anonymous, keyed like the resource, and carries the d
     reads.push(target);
     assert.equal(target.searchParams.get('key'), null, 'no user key reaches a shared server read');
     assert.ok(init?.signal, 'bounded by the document’s wait');
-    return json({ image: { id: 9, tags: ['pony', 'guitar'], representations: { large: RAW }, view_url: RAW } });
+    return json({
+      image: { id: 9, tags: ['pony', 'guitar'], representations: { large: RAW }, view_url: RAW },
+    });
   };
   const plain = await feedServer.readFeatured('safe|-|d|-|');
   assert.equal(plain.key, featuredKey(undefined, 'safe'));
@@ -269,9 +385,17 @@ test('the featured seed is anonymous, keyed like the resource, and carries the d
   assert.equal(reads.length, 1, 'one upstream read per content filter, shared');
   const developer = await feedServer.readFeatured('developer|-|d|-|');
   assert.equal(developer.key, featuredKey(undefined, 'developer'));
-  assert.equal(reads.at(-1).searchParams.get('filter_id'), '56027', 'developer mode reads through its own filter');
+  assert.equal(
+    reads.at(-1).searchParams.get('filter_id'),
+    '56027',
+    'developer mode reads through its own filter',
+  );
   const unknown = await feedServer.readFeatured('unmirrorable');
-  assert.equal(unknown.hidden, true, 'a device whose hidden tags the server cannot see gets no picture from it');
+  assert.equal(
+    unknown.hidden,
+    true,
+    'a device whose hidden tags the server cannot see gets no picture from it',
+  );
   const lined = feedServer.featuredOnImageLine(plain, 'cdn');
   assert.ok(lined.data.representations.large.startsWith(IMAGE_CDN_BASE));
   assert.equal(plain.data.representations.large, RAW, 'the shared memo entry is never rewritten');
@@ -291,6 +415,10 @@ test('the feed seed reads the page in the address, and only a bounded range of t
   const seed = await feedServer.readHomeFeed('safe|-|d|-|', 'created_at', 3);
   assert.equal(pages.at(-1), '3');
   assert.equal(seed.key.startsWith('created_at:3:'), true);
-  assert.equal(await feedServer.readHomeFeed('safe|-|d|-|', 'created_at', 21), null, 'past the seeded range the client reads');
+  assert.equal(
+    await feedServer.readHomeFeed('safe|-|d|-|', 'created_at', 21),
+    null,
+    'past the seeded range the client reads',
+  );
   assert.equal(await feedServer.readHomeFeed('safe|-|d|-|', 'created_at', 0), null);
 });

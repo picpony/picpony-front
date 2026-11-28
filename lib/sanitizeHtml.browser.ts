@@ -152,13 +152,34 @@ const TEXT_NODE = 3;
 
 /* Native prototype getters saved at load time so `<form><input name="attributes">`-style
    DOM clobbering on parsed nodes can never hijack or crash traversal. */
-const nodeTypeOf = typeof Node !== 'undefined' ? Object.getOwnPropertyDescriptor(Node.prototype, 'nodeType')?.get : undefined;
-const nodeValueOf = typeof Node !== 'undefined' ? Object.getOwnPropertyDescriptor(Node.prototype, 'nodeValue')?.get : undefined;
-const firstChildOf = typeof Node !== 'undefined' ? Object.getOwnPropertyDescriptor(Node.prototype, 'firstChild')?.get : undefined;
-const nextSiblingOf = typeof Node !== 'undefined' ? Object.getOwnPropertyDescriptor(Node.prototype, 'nextSibling')?.get : undefined;
-const localNameOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'localName')?.get : undefined;
-const namespaceOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'namespaceURI')?.get : undefined;
-const attributesOf = typeof Element !== 'undefined' ? Object.getOwnPropertyDescriptor(Element.prototype, 'attributes')?.get : undefined;
+const nodeTypeOf =
+  typeof Node !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Node.prototype, 'nodeType')?.get
+    : undefined;
+const nodeValueOf =
+  typeof Node !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Node.prototype, 'nodeValue')?.get
+    : undefined;
+const firstChildOf =
+  typeof Node !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Node.prototype, 'firstChild')?.get
+    : undefined;
+const nextSiblingOf =
+  typeof Node !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Node.prototype, 'nextSibling')?.get
+    : undefined;
+const localNameOf =
+  typeof Element !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Element.prototype, 'localName')?.get
+    : undefined;
+const namespaceOf =
+  typeof Element !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Element.prototype, 'namespaceURI')?.get
+    : undefined;
+const attributesOf =
+  typeof Element !== 'undefined'
+    ? Object.getOwnPropertyDescriptor(Element.prototype, 'attributes')?.get
+    : undefined;
 const bodyOf =
   typeof Document !== 'undefined'
     ? (Object.getOwnPropertyDescriptor(Document.prototype, 'body')?.get ??
@@ -173,7 +194,8 @@ const bodyOf =
 export function sanitizeAnnouncementUrl(attr: 'href' | 'src', raw: string): string | null {
   const cleaned = raw.replace(/[\u0000-\u001f\u007f-\u009f]+/g, '').trim();
   if (attr === 'src' && !cleaned) return null;
-  if (cleaned.startsWith('//') || cleaned.startsWith('\\') || cleaned.startsWith('/\\')) return null;
+  if (cleaned.startsWith('//') || cleaned.startsWith('\\') || cleaned.startsWith('/\\'))
+    return null;
   const authorityPrefix = cleaned.split(/[/?#]/, 1)[0];
   const colon = authorityPrefix.indexOf(':');
   if (colon !== -1) {
@@ -245,12 +267,18 @@ function escapeText(value: string): string {
 }
 
 function escapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function serializeChildren(parent: Node): string {
   let out = '';
-  let child: Node | null = firstChildOf ? (firstChildOf.call(parent) as Node | null) : parent.firstChild;
+  let child: Node | null = firstChildOf
+    ? (firstChildOf.call(parent) as Node | null)
+    : parent.firstChild;
   while (child) {
     out += serializeNode(child);
     child = nextSiblingOf ? (nextSiblingOf.call(child) as Node | null) : child.nextSibling;

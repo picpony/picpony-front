@@ -33,7 +33,11 @@ interface TagGroupRow {
 
 /** `GET /me/tag-groups` — oldest first. */
 export async function getTagGroups(token: string, signal?: AbortSignal): Promise<TagGroup[]> {
-  const data = await api<{ groups: TagGroupRow[] }>('GET', '/me/tag-groups', { token, signal, cache: 'no-store' });
+  const data = await api<{ groups: TagGroupRow[] }>('GET', '/me/tag-groups', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
   return data.groups.map(({ id, name, tags, revision }) => ({ id, name, tags, revision }));
 }
 
@@ -48,9 +52,9 @@ export async function saveTagGroup(
   const body = { name: input.name, tags: [...input.tags] };
   return input.id
     ? api<{ id: number; revision: number }>('PUT', `/me/tag-groups/${seg(input.id)}`, {
-      token,
-      json: { ...body, expected_revision: input.revision },
-    })
+        token,
+        json: { ...body, expected_revision: input.revision },
+      })
     : api<{ id: number; revision: number }>('POST', '/me/tag-groups', { token, json: body });
 }
 

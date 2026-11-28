@@ -12,7 +12,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 function git(args) {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return '';
   }
@@ -30,9 +33,20 @@ function base() {
 }
 
 const from = base();
-const result = spawnSync('git', [
-  '-c', 'core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol',
-  'diff', '--check', from, '--', '.', ':(exclude)public/companions/browserponies.js',
-], { stdio: 'inherit' });
-if (result.status === 0) console.log(`format:check: no whitespace errors since ${from.slice(0, 12)}`);
+const result = spawnSync(
+  'git',
+  [
+    '-c',
+    'core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol',
+    'diff',
+    '--check',
+    from,
+    '--',
+    '.',
+    ':(exclude)public/companions/browserponies.js',
+  ],
+  { stdio: 'inherit' },
+);
+if (result.status === 0)
+  console.log(`format:check: no whitespace errors since ${from.slice(0, 12)}`);
 process.exit(result.status ?? 1);

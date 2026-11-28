@@ -20,7 +20,13 @@ import { useTooltip } from '@/components/Tooltip';
 import { SettingsSection, SettingsRow, ROW_STACK_CLASS } from '@/app/settings/SettingsRow';
 import { useSession, readToken } from '@/lib/hooks';
 import { ponyCatalog, myPonies } from '@/lib/desktopPonies/queries';
-import { filterPonies, PONY_PAGE_SIZE, ponyNameParts, ponyPreview, samePonySelection } from '@/lib/desktopPonies/chooser';
+import {
+  filterPonies,
+  PONY_PAGE_SIZE,
+  ponyNameParts,
+  ponyPreview,
+  samePonySelection,
+} from '@/lib/desktopPonies/chooser';
 import { useResource, SKIP } from '@/lib/resource';
 import { MAX_PONIES, saveMyPonies, type PonyChoice } from '@/lib/api/desktopPonies';
 import { apiErrorMessage, isRetryable } from '@/lib/api/errors';
@@ -71,16 +77,22 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
   /* A saved draft gives way only once the resource shows it: `write` publishes on a paint boundary,
      so clearing the draft as the save landed showed the previous selection for one frame — the
      lineup reverted and replayed its motion 0.7s after the choice (M1-040). */
-  if (draft && saveState === 'saved' && selection.data && samePonySelection(selection.data, draft)) setDraft(null);
+  if (draft && saveState === 'saved' && selection.data && samePonySelection(selection.data, draft))
+    setDraft(null);
   const chosen = draft ?? saved;
   const canEdit = !!token && selection.data !== undefined && catalog.data?.enabled === true;
   const ponies = catalog.data?.ponies ?? [];
   const matches = filterPonies(ponies, query, onlySelected, chosen);
   const pages = Math.max(1, Math.ceil(matches.length / PONY_PAGE_SIZE));
   const currentPage = clamp(page, 1, pages);
-  const pageChoices = matches.slice((currentPage - 1) * PONY_PAGE_SIZE, currentPage * PONY_PAGE_SIZE);
+  const pageChoices = matches.slice(
+    (currentPage - 1) * PONY_PAGE_SIZE,
+    currentPage * PONY_PAGE_SIZE,
+  );
   const atLimit = chosen.length >= MAX_PONIES;
-  const offline = catalog.data ? chosen.filter((name) => !ponies.some((pony) => pony.name === name)) : [];
+  const offline = catalog.data
+    ? chosen.filter((name) => !ponies.some((pony) => pony.name === name))
+    : [];
 
   async function flush() {
     window.clearTimeout(timer.current);
@@ -116,7 +128,13 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
     /* A newer selection arrived while this one was on the wire: send it now. The same one that
        just failed waits for 重试 — retrying it in a loop would hammer a backend that said no. */
     const pending = latest.current;
-    if (pending && !(failed && samePonySelection(pending, next)) && readToken() === token && !timer.current) void flush();
+    if (
+      pending &&
+      !(failed && samePonySelection(pending, next)) &&
+      readToken() === token &&
+      !timer.current
+    )
+      void flush();
   }
   function change(next: string[]) {
     if (!canEdit || next.length > MAX_PONIES) return;
@@ -128,21 +146,34 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
     setSaveError(undefined);
     window.clearTimeout(timer.current);
     timer.current = 0;
-    if (settled) { setSaveState('idle'); return; }
+    if (settled) {
+      setSaveState('idle');
+      return;
+    }
     setSaveState('pending');
     timer.current = window.setTimeout(() => void flush(), SAVE_AFTER_MS);
   }
   /* The toast's 撤销 runs after this render's closures have gone stale. */
   const changeLatest = useRef(change);
-  useEffect(() => { changeLatest.current = change; });
+  useEffect(() => {
+    changeLatest.current = change;
+  });
   function replaceAll(next: string[], message: string) {
     const before = chosen;
     change(next);
-    showToast(message, 'success', { action: { label: '撤销', onClick: () => changeLatest.current(before) } });
+    showToast(message, 'success', {
+      action: { label: '撤销', onClick: () => changeLatest.current(before) },
+    });
   }
   function toggle(name: string, selected: boolean) {
-    if (selected) { change(chosen.filter((item) => item !== name)); return; }
-    if (atLimit) { showToast(`最多选择 ${MAX_PONIES} 个角色`, 'info'); return; }
+    if (selected) {
+      change(chosen.filter((item) => item !== name));
+      return;
+    }
+    if (atLimit) {
+      showToast(`最多选择 ${MAX_PONIES} 个角色`, 'info');
+      return;
+    }
     change([...chosen, name]);
   }
   /* Leaving the page with a choice still waiting sends it rather than dropping it. Through a ref:
@@ -160,82 +191,228 @@ function PonySelection({ token, ready }: { token: string | null; ready: boolean 
 
   /* A failed read blocks the section only while there is nothing to show; a refresh that fails
      under a shown selection leaves it in place, as every read in the app does. */
-  const problem = (catalog.data === undefined ? catalog.error : undefined) ?? (selection.data === undefined ? selection.error : undefined);
-  const refresh = () => { catalog.refresh(); selection.refresh(); };
+  const problem =
+    (catalog.data === undefined ? catalog.error : undefined) ??
+    (selection.data === undefined ? selection.error : undefined);
+  const refresh = () => {
+    catalog.refresh();
+    selection.refresh();
+  };
   const loading = catalog.data === undefined || selection.data === undefined;
   const status =
-    saveState === 'pending' || saveState === 'saving' ? '正在保存…'
-    : saveState === 'error' ? `未能保存：${apiErrorMessage(saveError)}`
-    : saveState === 'saved' ? '已保存'
-    : offline.length ? `${offline.join('、')}已下线，不会出现在页面上`
-    : `最多 ${MAX_PONIES} 个；减弱或关闭动画时暂停显示`;
+    saveState === 'pending' || saveState === 'saving'
+      ? '正在保存…'
+      : saveState === 'error'
+        ? `未能保存：${apiErrorMessage(saveError)}`
+        : saveState === 'saved'
+          ? '已保存'
+          : offline.length
+            ? `${offline.join('、')}已下线，不会出现在页面上`
+            : `最多 ${MAX_PONIES} 个；减弱或关闭动画时暂停显示`;
   const action =
-    saveState === 'error' ? <Button variant="tonal" size="xs" onClick={() => void flush()}>重试</Button>
-    : offline.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll(chosen.filter((name) => !offline.includes(name)), '已移除下线角色')}>移除已下线</Button>
-    : chosen.length ? <Button variant="text" size="xs" disabled={!canEdit} onClick={() => replaceAll([], '已清空桌面小马')}>清空</Button>
-    : undefined;
+    saveState === 'error' ? (
+      <Button variant="tonal" size="xs" onClick={() => void flush()}>
+        重试
+      </Button>
+    ) : offline.length ? (
+      <Button
+        variant="text"
+        size="xs"
+        disabled={!canEdit}
+        onClick={() =>
+          replaceAll(
+            chosen.filter((name) => !offline.includes(name)),
+            '已移除下线角色',
+          )
+        }
+      >
+        移除已下线
+      </Button>
+    ) : chosen.length ? (
+      <Button
+        variant="text"
+        size="xs"
+        disabled={!canEdit}
+        onClick={() => replaceAll([], '已清空桌面小马')}
+      >
+        清空
+      </Button>
+    ) : undefined;
 
   const refreshing = catalog.isLoading || selection.isLoading;
-  return <SettingsSection
-    title="桌面小马" icon={<MdPets size={ICON.control} />}
-    actions={token ? <IconButton aria-label="刷新桌面小马" loading={refreshing} onClick={refresh} icon={<MdRefresh />} /> : undefined}
-    status={problem !== undefined && <ErrorRetry size="inline" title="桌面小马加载失败" message={apiErrorMessage(problem)} onRetry={isRetryable(problem) ? refresh : undefined} />}
-  >
-    {ready && !token ? <SignInRequired size="inline" description="登录后即可选择并保存桌面小马" />
-      : catalog.data && !catalog.data.enabled ? <EmptyState title="桌面小马暂未开放" size="inline" />
-      : loading && problem === undefined ? <ChooserSkeleton />
-      : problem !== undefined ? null
-      : !ponies.length ? <EmptyState title="暂无可选角色" size="inline" />
-      : <>
-        <SettingsRow
-          label={
-            <span className="tabular-nums">
-              {chosen.length ? (atLimit ? `已选满 ${MAX_PONIES} 个` : `已选 ${chosen.length} / ${MAX_PONIES}`) : '尚未选择角色'}
-            </span>
-          }
-          supporting={<span role="status" aria-atomic="true">{status}</span>}
-          action={action}
-        >
-          <Lineup
-            names={chosen}
-            ponies={ponies}
-            disabled={!canEdit}
-            fallbackFocus={() => search.current}
-            onRemove={(name) => toggle(name, true)}
+  return (
+    <SettingsSection
+      title="桌面小马"
+      icon={<MdPets size={ICON.control} />}
+      actions={
+        token ? (
+          <IconButton
+            aria-label="刷新桌面小马"
+            loading={refreshing}
+            onClick={refresh}
+            icon={<MdRefresh />}
           />
-        </SettingsRow>
-        <div className={cn(ROW_STACK_CLASS, styles.chooser)} data-pagination-anchor="">
-          <div className="flex items-center gap-3">
-            <SearchInput ref={search} value={query} placeholder="搜索角色名称…" aria-label="搜索桌面小马" className="min-w-0 flex-1"
-              onChange={(value) => { setQuery(value); setPage(1); }} />
-            <Chip variant="filter" selected={onlySelected} onClick={() => { setOnlySelected((value) => !value); setPage(1); }}>只看已选</Chip>
-          </div>
-          {matches.length ? <>
-            <p className="flex items-center justify-between gap-3 text-body-s text-on-surface-variant">
-              <span className="tabular-nums">{query.trim() ? `找到 ${matches.length} 个角色` : onlySelected ? '已选的角色' : '全部角色'}</span>
-              {pages > 1 && <span className="tabular-nums">{`${(currentPage - 1) * PONY_PAGE_SIZE + 1}–${Math.min(currentPage * PONY_PAGE_SIZE, matches.length)} / ${matches.length}`}</span>}
-            </p>
-            <div className={styles.grid} role="group" aria-label="桌面小马角色">
-              {pageChoices.map((pony) => {
-                const selected = chosen.includes(pony.name);
-                const display = ponyNameParts(pony.name);
-                return <Card key={pony.name} interactive variant="filled" padding="sm" className={styles.choice} aria-pressed={selected} aria-label={pony.name}
-                  onClick={() => toggle(pony.name, selected)}>
-                  <span className={styles.mark} aria-hidden="true"><CheckGlyph className="size-4" /></span>
-                  <PonyPreview key={pony.path} pony={pony} />
-                  <span className={cn(styles.name, selected ? 'text-label-l-emphasized' : 'text-label-l')}>{display.name}</span>
-                  <span className={cn(styles.variant, 'text-body-s', !selected && 'text-on-surface-variant')}>{display.variant || ' '}</span>
-                </Card>;
-              })}
+        ) : undefined
+      }
+      status={
+        problem !== undefined && (
+          <ErrorRetry
+            size="inline"
+            title="桌面小马加载失败"
+            message={apiErrorMessage(problem)}
+            onRetry={isRetryable(problem) ? refresh : undefined}
+          />
+        )
+      }
+    >
+      {ready && !token ? (
+        <SignInRequired size="inline" description="登录后即可选择并保存桌面小马" />
+      ) : catalog.data && !catalog.data.enabled ? (
+        <EmptyState title="桌面小马暂未开放" size="inline" />
+      ) : loading && problem === undefined ? (
+        <ChooserSkeleton />
+      ) : problem !== undefined ? null : !ponies.length ? (
+        <EmptyState title="暂无可选角色" size="inline" />
+      ) : (
+        <>
+          <SettingsRow
+            label={
+              <span className="tabular-nums">
+                {chosen.length
+                  ? atLimit
+                    ? `已选满 ${MAX_PONIES} 个`
+                    : `已选 ${chosen.length} / ${MAX_PONIES}`
+                  : '尚未选择角色'}
+              </span>
+            }
+            supporting={
+              <span role="status" aria-atomic="true">
+                {status}
+              </span>
+            }
+            action={action}
+          >
+            <Lineup
+              names={chosen}
+              ponies={ponies}
+              disabled={!canEdit}
+              fallbackFocus={() => search.current}
+              onRemove={(name) => toggle(name, true)}
+            />
+          </SettingsRow>
+          <div className={cn(ROW_STACK_CLASS, styles.chooser)} data-pagination-anchor="">
+            <div className="flex items-center gap-3">
+              <SearchInput
+                ref={search}
+                value={query}
+                placeholder="搜索角色名称…"
+                aria-label="搜索桌面小马"
+                className="min-w-0 flex-1"
+                onChange={(value) => {
+                  setQuery(value);
+                  setPage(1);
+                }}
+              />
+              <Chip
+                variant="filter"
+                selected={onlySelected}
+                onClick={() => {
+                  setOnlySelected((value) => !value);
+                  setPage(1);
+                }}
+              >
+                只看已选
+              </Chip>
             </div>
-          </> : <EmptyState size="inline"
-            title={onlySelected && !chosen.length ? '尚未选择角色' : '无匹配角色'}
-            description={query.trim() ? '可尝试输入角色的中文或英文名称' : undefined}
-            action={<Button variant="text" onClick={() => { setQuery(''); setOnlySelected(false); setPage(1); search.current?.focus(); }}>查看全部角色</Button>} />}
-          {pages > 1 && <Pagination currentPage={currentPage} totalPages={pages} onPageChange={setPage} siblings={1} className="mt-0" />}
-        </div>
-      </>}
-  </SettingsSection>;
+            {matches.length ? (
+              <>
+                <p className="flex items-center justify-between gap-3 text-body-s text-on-surface-variant">
+                  <span className="tabular-nums">
+                    {query.trim()
+                      ? `找到 ${matches.length} 个角色`
+                      : onlySelected
+                        ? '已选的角色'
+                        : '全部角色'}
+                  </span>
+                  {pages > 1 && (
+                    <span className="tabular-nums">{`${(currentPage - 1) * PONY_PAGE_SIZE + 1}–${Math.min(currentPage * PONY_PAGE_SIZE, matches.length)} / ${matches.length}`}</span>
+                  )}
+                </p>
+                <div className={styles.grid} role="group" aria-label="桌面小马角色">
+                  {pageChoices.map((pony) => {
+                    const selected = chosen.includes(pony.name);
+                    const display = ponyNameParts(pony.name);
+                    return (
+                      <Card
+                        key={pony.name}
+                        interactive
+                        variant="filled"
+                        padding="sm"
+                        className={styles.choice}
+                        aria-pressed={selected}
+                        aria-label={pony.name}
+                        onClick={() => toggle(pony.name, selected)}
+                      >
+                        <span className={styles.mark} aria-hidden="true">
+                          <CheckGlyph className="size-4" />
+                        </span>
+                        <PonyPreview key={pony.path} pony={pony} />
+                        <span
+                          className={cn(
+                            styles.name,
+                            selected ? 'text-label-l-emphasized' : 'text-label-l',
+                          )}
+                        >
+                          {display.name}
+                        </span>
+                        <span
+                          className={cn(
+                            styles.variant,
+                            'text-body-s',
+                            !selected && 'text-on-surface-variant',
+                          )}
+                        >
+                          {display.variant || ' '}
+                        </span>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <EmptyState
+                size="inline"
+                title={onlySelected && !chosen.length ? '尚未选择角色' : '无匹配角色'}
+                description={query.trim() ? '可尝试输入角色的中文或英文名称' : undefined}
+                action={
+                  <Button
+                    variant="text"
+                    onClick={() => {
+                      setQuery('');
+                      setOnlySelected(false);
+                      setPage(1);
+                      search.current?.focus();
+                    }}
+                  >
+                    查看全部角色
+                  </Button>
+                }
+              />
+            )}
+            {pages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={pages}
+                onPageChange={setPage}
+                siblings={1}
+                className="mt-0"
+              />
+            )}
+          </div>
+        </>
+      )}
+    </SettingsSection>
+  );
 }
 
 function LineupSlot({
@@ -253,7 +430,9 @@ function LineupSlot({
   sprite: ReactNode;
   onRemove: (name: string) => void;
 }) {
-  const { anchorRef, anchorProps, tooltip } = useTooltip(disabled || leaving ? undefined : `移除 ${name}`);
+  const { anchorRef, anchorProps, tooltip } = useTooltip(
+    disabled || leaving ? undefined : `移除 ${name}`,
+  );
   return (
     <>
       <button
@@ -304,8 +483,11 @@ function Lineup({
   const sprite = (name: string) => {
     const pony = ponies.find((item) => item.name === name);
     const src = pony ? ponyPreview(pony) : null;
+    if (!src) {
+      return <MdPets size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />;
+    }
     /* eslint-disable-next-line @next/next/no-img-element -- the bundled first-frame previews, as in the grid. */
-    return src ? <img src={src} alt="" draggable={false} className={styles.slotSprite} /> : <MdPets size={ICON.standard} className="text-on-surface-variant" aria-hidden="true" />;
+    return <img src={src} alt="" draggable={false} className={styles.slotSprite} />;
   };
   return (
     <div className="relative">
@@ -314,9 +496,19 @@ function Lineup({
           <span key={index} className={styles.slot} />
         ))}
       </div>
-      <PresenceList items={names} getKey={(name) => name} variant="grid" fallbackFocus={fallbackFocus}>
+      <PresenceList
+        items={names}
+        getKey={(name) => name}
+        variant="grid"
+        fallbackFocus={fallbackFocus}
+      >
         {(entries, ref) => (
-          <div ref={ref} className={cn('absolute inset-0', styles.lineup)} role="group" aria-label="已选桌面小马">
+          <div
+            ref={ref}
+            className={cn('absolute inset-0', styles.lineup)}
+            role="group"
+            aria-label="已选桌面小马"
+          >
             {entries.map(({ item: name, key, leaving }) => (
               <LineupSlot
                 key={key}
@@ -337,5 +529,7 @@ function Lineup({
 
 /** Placeholder while the dynamic desktop pony catalog and user selection load. */
 function ChooserSkeleton() {
-  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载桌面小马…" />;
+  return (
+    <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载桌面小马…" />
+  );
 }

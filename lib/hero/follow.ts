@@ -32,7 +32,10 @@ export type HeroScrollFollow = {
 /** Measured before the route's reveal changes its styles; see docs/hero.md#rendering-constraints. */
 export type HeroScrollFollowStart = { source: number; target: number; range: number };
 
-type ScrollTimelineCtor = new (options: { source: Element; axis?: 'block' | 'inline' | 'x' | 'y' }) => AnimationTimeline;
+type ScrollTimelineCtor = new (options: {
+  source: Element;
+  axis?: 'block' | 'inline' | 'x' | 'y';
+}) => AnimationTimeline;
 
 function scrollTimelineCtor(): ScrollTimelineCtor | null {
   if (typeof window === 'undefined') return null;
@@ -67,7 +70,7 @@ export function followHeroWindowScroll(
   const original = { clip: clip.style.translate, content: content.style.translate };
   let fallback = false;
   let released = false;
-  const offset = () => released ? 0 : top - source.scrollTop;
+  const offset = () => (released ? 0 : top - source.scrollTop);
   const sync = () => {
     const distance = offset();
     clip.style.translate = `0 ${distance}px`;
@@ -78,8 +81,15 @@ export function followHeroWindowScroll(
     try {
       const timeline = new Ctor({ source, axis: 'block' });
       const timing = { timeline, fill: 'both', easing: 'linear' } as KeyframeAnimationOptions;
-      animations.push(clip.animate([{ translate: `0 ${top}px` }, { translate: `0 ${top - range}px` }], timing));
-      animations.push(content.animate([{ translate: `0 ${-top}px` }, { translate: `0 ${range - top}px` }], timing));
+      animations.push(
+        clip.animate([{ translate: `0 ${top}px` }, { translate: `0 ${top - range}px` }], timing),
+      );
+      animations.push(
+        content.animate(
+          [{ translate: `0 ${-top}px` }, { translate: `0 ${range - top}px` }],
+          timing,
+        ),
+      );
     } catch {
       animations.forEach((animation) => animation.cancel());
       animations.length = 0;

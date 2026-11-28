@@ -14,7 +14,10 @@ function linkImageReferences(markdown: string): string {
     .map((part, index) =>
       index % 2 === 1
         ? part
-        : part.replace(/(^|[^\w>[\]/])>>(\d{1,9})[stp]?(?![\w])/g, (_, lead: string, id: string) => `${lead}[>>${id}](/pic/${id})`),
+        : part.replace(
+            /(^|[^\w>[\]/])>>(\d{1,9})[stp]?(?![\w])/g,
+            (_, lead: string, id: string) => `${lead}[>>${id}](/pic/${id})`,
+          ),
     )
     .join('');
 }

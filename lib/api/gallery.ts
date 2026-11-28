@@ -25,7 +25,10 @@ export const DISCUSSED_PAGE_SIZE = 50;
  * `GET /images/discussed?page=&limit=` → `{ images: [{ image_id, comment_count,
  * last_commented_at }], total, total_pages }`, most recently discussed first.
  */
-export async function getDiscussedImages(page: number, signal?: AbortSignal): Promise<DiscussedPage> {
+export async function getDiscussedImages(
+  page: number,
+  signal?: AbortSignal,
+): Promise<DiscussedPage> {
   const data = await api<{
     images: { image_id: number; comment_count: number; last_commented_at: string }[];
     total: number;

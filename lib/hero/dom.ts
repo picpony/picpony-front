@@ -1,6 +1,10 @@
 'use client';
 
-import { HERO_BACKGROUND_SELECTOR, HERO_BACKGROUND_VISUAL_SELECTOR, HERO_UNCLIP_SELECTOR } from './constants';
+import {
+  HERO_BACKGROUND_SELECTOR,
+  HERO_BACKGROUND_VISUAL_SELECTOR,
+  HERO_UNCLIP_SELECTOR,
+} from './constants';
 import type { HeroRect } from './geometry';
 
 export type VisualMedia = HTMLImageElement | HTMLVideoElement;
@@ -167,18 +171,28 @@ export function findImageHeroThumbnail(imageId: number, sourceKey?: string | nul
      keeps both trees. Land in the active pane rather than the first DOM match.
      Check layout, not visibility: the flight itself hides the real thumbnail
      while its captured frame is on screen. */
-  const candidates = [...document.querySelectorAll<HTMLElement>(
-    `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
-  )].filter((candidate) => {
+  const candidates = [
+    ...document.querySelectorAll<HTMLElement>(
+      `[data-image-hero-role="thumbnail"][data-image-hero-id="${id}"]`,
+    ),
+  ].filter((candidate) => {
     /* Every enclosing pane, not only the nearest: a concealed pane keeps its layout
        (`content-visibility: hidden`), so a card in the active inner pane of a concealed outer
        one still has client rects — and reading them would lay the hidden subtree out. */
-    for (let pane = candidate.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
+    for (
+      let pane = candidate.closest('[data-tab-pane]');
+      pane;
+      pane = pane.parentElement?.closest('[data-tab-pane]') ?? null
+    ) {
       if (!pane.hasAttribute('data-tab-pane-active')) return false;
     }
     return candidate.getClientRects().length > 0;
   });
-  return candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ?? candidates[0] ?? null;
+  return (
+    candidates.find((candidate) => candidate.dataset.imageHeroSourceKey === sourceKey) ??
+    candidates[0] ??
+    null
+  );
 }
 
 /** The card link around a picture's thumbnail — where focus returns as its detail closes. */

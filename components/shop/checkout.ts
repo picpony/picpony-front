@@ -25,7 +25,9 @@ function purchaseKey(account: string, lines: readonly CheckoutLine[]): string {
 }
 
 /** The session's coin balance, or `null` when it does not carry one (a session from before). */
-export function balanceOf(user: Readonly<Record<string, unknown>> | null | undefined): number | null {
+export function balanceOf(
+  user: Readonly<Record<string, unknown>> | null | undefined,
+): number | null {
   const value = user?.coins;
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) return null;
   const coins = Number(value);
@@ -57,7 +59,14 @@ export type CheckoutOutcome =
 export function isCheckoutRefusal(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
   const status = error.status;
-  return error.kind === 'http' && status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+  return (
+    error.kind === 'http' &&
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 429
+  );
 }
 
 /** Every read a purchase can change, refreshed underneath what is on screen. */
@@ -92,7 +101,8 @@ export function runCheckout(
   account: string,
   lines: readonly CheckoutLine[],
 ): Promise<CheckoutOutcome> {
-  if (readToken() !== token) return Promise.resolve({ kind: 'stale-session', message: '登录状态已变化，请重新确认购买' });
+  if (readToken() !== token)
+    return Promise.resolve({ kind: 'stale-session', message: '登录状态已变化，请重新确认购买' });
   const pending = inFlight.get(account);
   if (pending) return pending;
   const purchase = performCheckout(token, account, lines).finally(() => {
@@ -102,9 +112,14 @@ export function runCheckout(
   return purchase;
 }
 
-async function performCheckout(token: string, account: string, lines: readonly CheckoutLine[]): Promise<CheckoutOutcome> {
+async function performCheckout(
+  token: string,
+  account: string,
+  lines: readonly CheckoutLine[],
+): Promise<CheckoutOutcome> {
   /* A confirmation may outlive the session that opened it, especially in another tab. */
-  if (readToken() !== token) return { kind: 'stale-session', message: '登录状态已变化，请重新确认购买' };
+  if (readToken() !== token)
+    return { kind: 'stale-session', message: '登录状态已变化，请重新确认购买' };
   const key = purchaseKey(account, lines);
   let result: CheckoutResult;
   try {
@@ -129,7 +144,10 @@ async function performCheckout(token: string, account: string, lines: readonly C
   /* A smaller cart than the one storage accepted a moment ago: a refusal here would need storage
      to have been withdrawn mid-purchase, and the re-read stock then says what is left anyway. */
   unconfirmed.delete(account);
-  consumeFromCart(account, lines.map(({ item, quantity }) => ({ id: item.id, quantity })));
+  consumeFromCart(
+    account,
+    lines.map(({ item, quantity }) => ({ id: item.id, quantity })),
+  );
   const stored = readUserInfo();
   if (stored?.token === token) updateUserInfo(token, { coins: result.balance });
   /* The shell folds this entry into storage whenever it changes; corrected too, so a republish of

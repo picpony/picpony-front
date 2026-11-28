@@ -36,9 +36,18 @@ export function coinsAfter(current: number, op: CoinsOp, value: number): number 
  */
 export function wealthPayload(
   user: WealthUser,
-  form: { experience: string; experienceReason: string; coinsOp: CoinsOp; coinsValue: string; coinsReason: string },
+  form: {
+    experience: string;
+    experienceReason: string;
+    coinsOp: CoinsOp;
+    coinsValue: string;
+    coinsReason: string;
+  },
 ): WealthAdjustment | null {
-  const payload: WealthAdjustment = { expected_coins: user.coins, expected_experience: user.experience };
+  const payload: WealthAdjustment = {
+    expected_coins: user.coins,
+    expected_experience: user.experience,
+  };
   const experience = wholeNumber(form.experience);
   if (experience !== null && experience !== user.experience) {
     payload.experience = experience;
@@ -48,7 +57,10 @@ export function wealthPayload(
   /* Adding or deducting nothing is not a change (review P6-F8): it would only write an empty line
      into the user's bill. Setting the balance to 0 is one. */
   if (coins !== null && (coins > 0 || form.coinsOp === 'set')) {
-    payload.coins = { operation: form.coinsOp === 'sub' ? 'subtract' : form.coinsOp, amount: coins };
+    payload.coins = {
+      operation: form.coinsOp === 'sub' ? 'subtract' : form.coinsOp,
+      amount: coins,
+    };
     payload.coins_reason = form.coinsReason.trim();
   }
   return payload.experience !== undefined || payload.coins !== undefined ? payload : null;

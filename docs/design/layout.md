@@ -6,13 +6,13 @@ Page columns, spacing, control sizes and responsive enclosure rules. Visual shap
 
 Use the 4 dp grid. Half-steps such as `gap-1.5` are allowed in dense chrome; arbitrary spacing values are not.
 
-| Content | Column |
-| --- | --- |
-| Rows or article | `max-w-4xl` |
-| Masonry/image grid, shop grid | `max-w-7xl` |
+| Content                                             | Column      |
+| --------------------------------------------------- | ----------- |
+| Rows or article                                     | `max-w-4xl` |
+| Masonry/image grid, shop grid                       | `max-w-7xl` |
 | Form, upload, search/filter form inside a grid page | `max-w-2xl` |
-| Media-led detail or profile | `max-w-5xl` |
-| Admin tables | `max-w-6xl` |
+| Media-led detail or profile                         | `max-w-5xl` |
+| Admin tables                                        | `max-w-6xl` |
 
 A tab or block takes the width of its own role. Do not widen a list because the neighbouring pane is a grid, or invent a sixth intermediate width.
 
@@ -41,26 +41,26 @@ The image-detail secondary action capsule uses a 40 dp height with 32 dp `IconBu
 
 The enclosure selects the height; pointer type selects the minimum target.
 
-| Enclosure | Height | Type |
-| --- | --- | --- |
-| Form field | 56 dp | `body-l` |
-| Dense chat field and accessories | 48 dp | `body-l` for text |
-| Filter/admin toolbar or row control | 40 dp | `body-m` text, `label-l` choices/actions |
-| App-bar action | 48 dp | Primitive-owned |
-| Dense row action or chip dismiss | 32 dp | `label-l` |
+| Enclosure                           | Height | Type                                     |
+| ----------------------------------- | ------ | ---------------------------------------- |
+| Form field                          | 56 dp  | `body-l`                                 |
+| Dense chat field and accessories    | 48 dp  | `body-l` for text                        |
+| Filter/admin toolbar or row control | 40 dp  | `body-m` text, `label-l` choices/actions |
+| App-bar action                      | 48 dp  | Primitive-owned                          |
+| Dense row action or chip dismiss    | 32 dp  | `label-l`                                |
 
 A 40 dp text field is a project refinement and is unlabelled only. It reserves one 32 dp trailing control. Labelled fields retain the 56 dp notch geometry.
 
 Both ordinary labelled and unlabelled inputs are 56 dp. `size="lg"` selects the 56 dp search pill, not a larger form field. Button uses the default 40 dp step.
 
-| Component step | Uses |
-| --- | --- |
-| 32 dp | `Button size="xs"`, `IconButton size="sm"`, Chip |
-| 40 dp | Default Button/IconButton, small Input/Select, Pagination |
-| 48 dp | Tabs, app-bar actions, chat composer, pointer drawer row |
-| 56 dp | Large Button/IconButton, ordinary fields, search, Select, ColorSwatch, CodeInput |
-| 64 dp | Top app bar, drawer account block, message contact row |
-| 72 dp | Standard two-line list item and touch toggle row |
+| Component step | Uses                                                                             |
+| -------------- | -------------------------------------------------------------------------------- |
+| 32 dp          | `Button size="xs"`, `IconButton size="sm"`, Chip                                 |
+| 40 dp          | Default Button/IconButton, small Input/Select, Pagination                        |
+| 48 dp          | Tabs, app-bar actions, chat composer, pointer drawer row                         |
+| 56 dp          | Large Button/IconButton, ordinary fields, search, Select, ColorSwatch, CodeInput |
+| 64 dp          | Top app bar, drawer account block, message contact row                           |
+| 72 dp          | Standard two-line list item and touch toggle row                                 |
 
 Button inline padding is 16 / 16 / 24 dp across its size steps, with an 8 dp icon gap. Button and IconButton own their glyph sizes.
 
@@ -74,12 +74,12 @@ Do not expand inline prose links into surrounding lines. Keep `touch-manipulatio
 
 ### Dense rows and chat composer
 
-| Row | Fine pointer | Coarse pointer |
-| --- | --- | --- |
-| Menu / Select option | 40 dp | 40 dp |
-| Drawer navigation | 48 dp | 56 dp |
-| Message contact | 64 dp | 64 dp |
-| Drawer account | 64 dp | 64 dp |
+| Row                  | Fine pointer | Coarse pointer |
+| -------------------- | ------------ | -------------- |
+| Menu / Select option | 40 dp        | 40 dp          |
+| Drawer navigation    | 48 dp        | 56 dp          |
+| Message contact      | 64 dp        | 64 dp          |
+| Drawer account       | 64 dp        | 64 dp          |
 
 Message contacts use a 40 dp portrait with 12 dp leading and 20 dp trailing padding when expanded (12 dp symmetric when collapsed) so trailing timestamps stay clear of the pill's arc. The collapsed rail is 80 dp including its insets.
 
@@ -92,13 +92,13 @@ PicPony refinement; neither narrow triggers nor pointer density change their row
 
 Use `ICON` from `lib/icons.ts`; do not choose a literal at the call site. Shared shell and core routes (`/`, `/messages`, `/settings`) import exact 24×24 Material inline SVG glyphs from `components/icons/` (`shell.tsx`, `common.tsx`, `messages.tsx`, `settings.tsx`) rather than `react-icons/md` so low-frequency route glyphs stay out of initial document chunks.
 
-| Name | Size | Use |
-| --- | --- | --- |
-| `dense` | 18 dp | Chip or metadata |
-| `control` | 20 dp | Small control |
+| Name       | Size  | Use                                       |
+| ---------- | ----- | ----------------------------------------- |
+| `dense`    | 18 dp | Chip or metadata                          |
+| `control`  | 20 dp | Small control                             |
 | `standard` | 24 dp | Row, navigation, app bar, field adornment |
-| `large` | 36 dp | Prominent affordance |
-| `display` | 48 dp | Status illustration |
+| `large`    | 36 dp | Prominent affordance                      |
+| `display`  | 48 dp | Status illustration                       |
 
 Primitive-owned supporting marks are exceptions: Badge uses 14 / 16 dp, and Select uses a 16 dp light check inside a 20 dp slot. Do not override them with `ICON.dense`.
 

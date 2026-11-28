@@ -213,8 +213,8 @@ export function overallVerdict(scenarios: PerfScenario[]): Verdict {
 }
 
 const LONG_FRAME_LABEL: Record<PerfDevice['longFrameSource'], string> = {
-  'none': '不支持',
-  'longtask': '长任务',
+  none: '不支持',
+  longtask: '长任务',
   'long-animation-frame': '长动画帧',
 };
 

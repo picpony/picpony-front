@@ -66,7 +66,11 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
     const token = readToken();
     if (!token) return;
     current.current?.controller.abort();
-    const entry: Upload = { preview: URL.createObjectURL(file), progress: 0, controller: new AbortController() };
+    const entry: Upload = {
+      preview: URL.createObjectURL(file),
+      progress: 0,
+      controller: new AbortController(),
+    };
     current.current = entry;
     setUpload(entry);
     setError(null);
@@ -120,7 +124,13 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={preview} alt="封面" className="absolute inset-0 size-full object-cover" />
             ) : preview === null ? (
-              <FadeInImage src={getAssetUrl(value)} alt="封面" fill sizes="320px" className="object-cover" />
+              <FadeInImage
+                src={getAssetUrl(value)}
+                alt="封面"
+                fill
+                sizes="320px"
+                className="object-cover"
+              />
             ) : null}
           </div>
           <IconButton
@@ -134,7 +144,13 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
           />
         </div>
       ) : (
-        <DropZone size="sm" accept="image/*" onFile={(file) => void start(file)} aria-label="选择或拖拽封面图片" className="flex-row gap-2">
+        <DropZone
+          size="sm"
+          accept="image/*"
+          onFile={(file) => void start(file)}
+          aria-label="选择或拖拽封面图片"
+          className="flex-row gap-2"
+        >
           <MdImage size={ICON.control} aria-hidden="true" />
           <span className="text-body-m">选择或拖拽封面图片</span>
         </DropZone>
@@ -142,7 +158,9 @@ export default function CoverField({ value, onChange, onBusyChange }: CoverField
       <p
         id={helperId}
         role={error ? 'alert' : undefined}
-        className={error ? 'mt-1 text-body-s text-error' : 'mt-1 text-body-s text-on-surface-variant'}
+        className={
+          error ? 'mt-1 text-body-s text-error' : 'mt-1 text-body-s text-on-surface-variant'
+        }
       >
         {error ?? '最大 5 MB，超出时将自动压缩'}
       </p>

@@ -45,7 +45,13 @@ interface TagGroupEditorProps {
  * full one are said under the tag field. 保存 is `filled`. A dialog with changes asks before it
  * is dismissed, by any route (✕, Esc, the scrim, Back).
  */
-export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClose }: TagGroupEditorProps) {
+export default function TagGroupEditor({
+  isOpen,
+  initial,
+  saving,
+  onSave,
+  onClose,
+}: TagGroupEditorProps) {
   const { confirm, confirmDialog } = useConfirm();
   const [draft, setDraft] = useState(initial);
   const [seen, setSeen] = useState(initial);
@@ -70,9 +76,10 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
     const taken = fresh.slice(0, room);
     setErrors((previous) => ({
       ...previous,
-      tags: taken.length < fresh.length
-        ? `一个标签组最多 ${MAX_TAGS_PER_TAG_GROUP} 个标签${taken.length > 0 ? `，有 ${fresh.length - taken.length} 个没有加入` : ''}`
-        : undefined,
+      tags:
+        taken.length < fresh.length
+          ? `一个标签组最多 ${MAX_TAGS_PER_TAG_GROUP} 个标签${taken.length > 0 ? `，有 ${fresh.length - taken.length} 个没有加入` : ''}`
+          : undefined,
     }));
     if (taken.length === 0) return 0;
     setDraft((previous) => ({ ...previous, tags: [...previous.tags, ...taken] }));
@@ -100,11 +107,15 @@ export default function TagGroupEditor({ isOpen, initial, saving, onSave, onClos
 
   const requestClose = async () => {
     if (saving) return;
-    if (dirty && !(await confirm({
-      title: '确认放弃修改',
-      message: '确定要放弃对此标签组的修改吗？',
-      tone: 'filled',
-    }))) return;
+    if (
+      dirty &&
+      !(await confirm({
+        title: '确认放弃修改',
+        message: '确定要放弃对此标签组的修改吗？',
+        tone: 'filled',
+      }))
+    )
+      return;
     onClose();
   };
 

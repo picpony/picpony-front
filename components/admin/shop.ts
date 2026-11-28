@@ -26,7 +26,8 @@ export interface ShopFormValues {
 export type ShopFormErrors = Partial<Record<'name' | 'imageUrl' | 'price' | 'stock', string>>;
 
 export function shopForm(item?: ShopItemRow | null): ShopFormValues {
-  if (!item) return { name: '', description: '', imageUrl: '', price: '10', stock: '100', active: true };
+  if (!item)
+    return { name: '', description: '', imageUrl: '', price: '10', stock: '100', active: true };
   return {
     name: item.name ?? '',
     description: item.description ?? '',
@@ -59,7 +60,11 @@ export function shopPayload(
      a product without a picture. */
   const imageUrl = values.imageUrl.trim();
   if (imageUrl) {
-    try { assetUrl(imageUrl); } catch (error) { errors.imageUrl = error instanceof Error ? error.message : '请输入有效的图片链接'; }
+    try {
+      assetUrl(imageUrl);
+    } catch (error) {
+      errors.imageUrl = error instanceof Error ? error.message : '请输入有效的图片链接';
+    }
   }
   if (Object.keys(errors).length > 0) return { errors };
   return {

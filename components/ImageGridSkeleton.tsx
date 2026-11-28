@@ -79,7 +79,9 @@ export default function ImageGridSkeleton({
                   proxyThumb
                   eager
                   shimmer={false}
-                  className={seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'}
+                  className={
+                    seedCroppedTall ? 'size-full object-cover object-top' : 'size-full object-cover'
+                  }
                 />
               </div>
             </div>

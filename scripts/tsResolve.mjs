@@ -55,7 +55,8 @@ registerHooks({
     return {
       url,
       shortCircuit: true,
-      format: resolved.endsWith('.ts') || resolved.endsWith('.tsx') ? 'module-typescript' : undefined,
+      format:
+        resolved.endsWith('.ts') || resolved.endsWith('.tsx') ? 'module-typescript' : undefined,
     };
   },
 });

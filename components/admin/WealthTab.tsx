@@ -53,12 +53,18 @@ export default function WealthTab({ token }: AdminPanelProps) {
   const users: readonly WealthUser[] = read.data?.rows ?? EMPTY;
   const mutation = useAdminMutation(token);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<{ user: WealthUser; open: boolean; session: number } | null>(null);
+  const [editing, setEditing] = useState<{
+    user: WealthUser;
+    open: boolean;
+    session: number;
+  } | null>(null);
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return users;
-    return users.filter((user) => String(user.id) === keyword || user.username?.toLowerCase().includes(keyword));
+    return users.filter(
+      (user) => String(user.id) === keyword || user.username?.toLowerCase().includes(keyword),
+    );
   }, [users, query]);
   const paged = usePagedRows(filtered, query.trim());
 
@@ -74,10 +80,22 @@ export default function WealthTab({ token }: AdminPanelProps) {
       key: 'name',
       header: '用户名',
       primary: true,
-      render: (user) => <span className="text-body-m-emphasized text-on-surface">{user.username}</span>,
+      render: (user) => (
+        <span className="text-body-m-emphasized text-on-surface">{user.username}</span>
+      ),
     },
-    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (user) => `#${user.id}` },
-    { key: 'exp', header: '经验', render: (user) => <span className="tabular-nums">{figureText(user.experience)}</span> },
+    {
+      key: 'id',
+      header: 'ID',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (user) => `#${user.id}`,
+    },
+    {
+      key: 'exp',
+      header: '经验',
+      render: (user) => <span className="tabular-nums">{figureText(user.experience)}</span>,
+    },
     {
       key: 'coins',
       header: '金币',
@@ -121,7 +139,13 @@ export default function WealthTab({ token }: AdminPanelProps) {
           page={paged.page}
           totalPages={paged.totalPages}
           onPageChange={paged.setPage}
-          summary={read.data ? (keyword ? `找到 ${paged.total} 位用户` : `共 ${paged.total} 位用户`) : undefined}
+          summary={
+            read.data
+              ? keyword
+                ? `找到 ${paged.total} 位用户`
+                : `共 ${paged.total} 位用户`
+              : undefined
+          }
         />
       </AdminListAnchor>
       {editing && (
@@ -140,7 +164,8 @@ export default function WealthTab({ token }: AdminPanelProps) {
               },
               '修改失败',
               { key: editing.user.id, onCommitted: read.refresh },
-            )}
+            )
+          }
         />
       )}
     </div>
@@ -182,20 +207,30 @@ function WealthDialog({
   const coins = wholeNumber(form.coinsValue);
   /* 设为 needs no balance; adding or deducting does, so an unknown one previews nothing. */
   const coinsResult =
-    coins === null ? null : form.coinsOp === 'set' ? coins : currentCoins === null ? null : coinsAfter(currentCoins, form.coinsOp, coins);
+    coins === null
+      ? null
+      : form.coinsOp === 'set'
+        ? coins
+        : currentCoins === null
+          ? null
+          : coinsAfter(currentCoins, form.coinsOp, coins);
 
   const submit = () => {
     if (busy) return;
     const next: typeof errors = {};
     /* Blank is "leave it": an experience the row did not carry opens empty, and must not stop a
        coin change from being sent. */
-    if (form.experience.trim() && experience === null) next.experience = '经验值必须是不小于 0 的整数';
-    if (expChanged && !form.experienceReason.trim()) next.experienceReason = '请填写经验值变动的原因';
+    if (form.experience.trim() && experience === null)
+      next.experience = '经验值必须是不小于 0 的整数';
+    if (expChanged && !form.experienceReason.trim())
+      next.experienceReason = '请填写经验值变动的原因';
     if (form.coinsValue.trim() && coins === null) next.coinsValue = '金币数值必须是不小于 0 的整数';
     /* 增加 0 / 扣除 0 changes nothing and still writes a line into the user's 金币账单 under the
        reason typed (review P6-F8). 设为 0 is a real change and stays allowed. */
-    else if (coins === 0 && form.coinsOp !== 'set') next.coinsValue = `${form.coinsOp === 'add' ? '增加' : '扣除'}的金币须大于 0`;
-    if (coinsResult !== null && coinsResult < 0) next.coinsValue = `扣除后金币为 ${figureText(coinsResult)}，不能少于 0`;
+    else if (coins === 0 && form.coinsOp !== 'set')
+      next.coinsValue = `${form.coinsOp === 'add' ? '增加' : '扣除'}的金币须大于 0`;
+    if (coinsResult !== null && coinsResult < 0)
+      next.coinsValue = `扣除后金币为 ${figureText(coinsResult)}，不能少于 0`;
     if (coins !== null && !form.coinsReason.trim()) next.coinsReason = '请填写金币变动的原因';
     if (!Object.values(next).some(Boolean)) {
       const payload = wealthPayload(user, form);
@@ -227,8 +262,15 @@ function WealthDialog({
       }
     >
       <FollowHeight>
-        <AdminForm id={formId} onSubmit={submit} className="max-w-none" aria-label={`修改 ${user.username} 的资产`}>
-          <SectionHeading as="h3" aside={`当前 ${figureText(user.experience)}`}>经验值</SectionHeading>
+        <AdminForm
+          id={formId}
+          onSubmit={submit}
+          className="max-w-none"
+          aria-label={`修改 ${user.username} 的资产`}
+        >
+          <SectionHeading as="h3" aside={`当前 ${figureText(user.experience)}`}>
+            经验值
+          </SectionHeading>
           <Input
             label="设为"
             inputMode="numeric"
@@ -236,7 +278,11 @@ function WealthDialog({
             value={form.experience}
             readOnly={busy}
             error={errors.experience}
-            helper={expChanged ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}` : undefined}
+            helper={
+              expChanged
+                ? `当前 ${figureText(user.experience)} → 修改后 ${figureText(experience)}`
+                : undefined
+            }
             onChange={(event) => set('experience', event.target.value)}
             data-autofocus=""
           />
@@ -249,7 +295,9 @@ function WealthDialog({
               onChange={(event) => set('experienceReason', event.target.value)}
             />
           )}
-          <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>金币</SectionHeading>
+          <SectionHeading as="h3" aside={`当前 ${figureText(user.coins)}`}>
+            金币
+          </SectionHeading>
           <FormGrid from="sm">
             <Select
               label="操作"
@@ -265,7 +313,11 @@ function WealthDialog({
               value={form.coinsValue}
               readOnly={busy}
               error={errors.coinsValue}
-              helper={coinsResult !== null && coinsResult >= 0 ? `当前 ${figureText(user.coins)} → 修改后 ${figureText(coinsResult)}` : '留空则不变动金币'}
+              helper={
+                coinsResult !== null && coinsResult >= 0
+                  ? `当前 ${figureText(user.coins)} → 修改后 ${figureText(coinsResult)}`
+                  : '留空则不变动金币'
+              }
               onChange={(event) => set('coinsValue', event.target.value)}
             />
           </FormGrid>

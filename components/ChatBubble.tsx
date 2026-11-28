@@ -191,9 +191,7 @@ export function ChatRun({
   className?: string;
 }) {
   return (
-    <div
-      className={cn('flex items-start gap-2', own ? 'flex-row-reverse' : 'flex-row', className)}
-    >
+    <div className={cn('flex items-start gap-2', own ? 'flex-row-reverse' : 'flex-row', className)}>
       <div className="sticky top-2 h-8 w-8 shrink-0 self-start" aria-hidden="true">
         {avatar}
       </div>

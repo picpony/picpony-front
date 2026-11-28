@@ -37,7 +37,9 @@ import { figureText } from './figures';
 const EMPTY: TeamMemberRow[] = [];
 /* The roster with its bound accounts, and the revision every roster write names. /about's public
    read (`teamMembers`) is refreshed beside it. */
-const membersQuery = defineAdminQuery('team', (token: string, signal: AbortSignal) => adminApi.adminGetTeamMembers(token, signal));
+const membersQuery = defineAdminQuery('team', (token: string, signal: AbortSignal) =>
+  adminApi.adminGetTeamMembers(token, signal),
+);
 /** The roster revision as it is when a write is sent (confirmations can sit open across a refresh). */
 const rosterRevision = (token: string) => membersQuery.peek(token).data?.revision ?? 0;
 
@@ -93,7 +95,9 @@ export default function TeamTab({ token }: AdminPanelProps) {
       () => adminApi.updateTeamMember(token, rosterRevision(token), member.id, payload),
       () => {
         showToast(`已保存成员「${String(payload.name)}」`, 'success');
-        setEditing((current) => (current?.id === member.id ? { id: member.id, closing: true } : current));
+        setEditing((current) =>
+          current?.id === member.id ? { id: member.id, closing: true } : current,
+        );
       },
       '保存失败',
       { key: member.id, onCommitted: committed },
@@ -103,19 +107,23 @@ export default function TeamTab({ token }: AdminPanelProps) {
     confirmThen(
       '确认删除成员',
       `确定要删除团队成员「${member.name}」吗？删除后关于页将不再显示该成员。`,
-      () => void deleteMutation.run(
-        () => adminApi.deleteTeamMember(token, rosterRevision(token), member.id),
-        () => showToast(`已删除成员「${member.name}」`, 'success'),
-        '删除失败',
-        {
-          key: member.id,
-          onCommitted: () => {
-            setEditing((current) => (current?.id === member.id ? null : current));
-            membersQuery.write(token, (previous) => ({ revision: previous?.revision ?? 0, members: previous?.members.filter((row) => row.id !== member.id) ?? [] }));
-            committed();
+      () =>
+        void deleteMutation.run(
+          () => adminApi.deleteTeamMember(token, rosterRevision(token), member.id),
+          () => showToast(`已删除成员「${member.name}」`, 'success'),
+          '删除失败',
+          {
+            key: member.id,
+            onCommitted: () => {
+              setEditing((current) => (current?.id === member.id ? null : current));
+              membersQuery.write(token, (previous) => ({
+                revision: previous?.revision ?? 0,
+                members: previous?.members.filter((row) => row.id !== member.id) ?? [],
+              }));
+              committed();
+            },
           },
-        },
-      ),
+        ),
       { tone: 'danger' },
     );
 
@@ -147,15 +155,27 @@ export default function TeamTab({ token }: AdminPanelProps) {
       primary: true,
       render: (member) => (
         <span className="flex min-w-0 items-center gap-3">
-          <Avatar src={member.account_avatar || member.avatar_url} name={member.name} size={40} unoptimized />
+          <Avatar
+            src={member.account_avatar || member.avatar_url}
+            name={member.name}
+            size={40}
+            unoptimized
+          />
           <span className="min-w-0">
             <span className="block text-body-m-emphasized text-on-surface">{member.name}</span>
-            {member.role && <span className="block text-body-s text-on-surface-variant">{member.role}</span>}
+            {member.role && (
+              <span className="block text-body-s text-on-surface-variant">{member.role}</span>
+            )}
           </span>
         </span>
       ),
     },
-    { key: 'category', header: '栏目', width: 'auto', render: (member) => categoryLabel(member.category) },
+    {
+      key: 'category',
+      header: '栏目',
+      width: 'auto',
+      render: (member) => categoryLabel(member.category),
+    },
     {
       key: 'account',
       header: '关联用户',
@@ -178,7 +198,8 @@ export default function TeamTab({ token }: AdminPanelProps) {
       actions: true,
       render: (member) => {
         const open = editing?.id === member.id && !editing.closing;
-        const busy = saveMutation.pendingKeys.has(member.id) || deleteMutation.pendingKeys.has(member.id);
+        const busy =
+          saveMutation.pendingKeys.has(member.id) || deleteMutation.pendingKeys.has(member.id);
         return (
           <>
             <IconButton
@@ -217,7 +238,9 @@ export default function TeamTab({ token }: AdminPanelProps) {
         id={teamEditorId(member.id)}
         label={`编辑成员 ${current.name}`}
         isClosing={editing.closing}
-        onExitComplete={() => setEditing((state) => (state?.id === member.id && state.closing ? null : state))}
+        onExitComplete={() =>
+          setEditing((state) => (state?.id === member.id && state.closing ? null : state))
+        }
         onEscape={saveMutation.pendingKeys.has(member.id) ? undefined : closeEditor}
       >
         <TeamMemberForm
@@ -245,7 +268,9 @@ export default function TeamTab({ token }: AdminPanelProps) {
         />
       </div>
       <section aria-labelledby="admin-team-members-heading" className="space-y-4">
-        <SectionHeading as="h3" id="admin-team-members-heading">成员列表</SectionHeading>
+        <SectionHeading as="h3" id="admin-team-members-heading">
+          成员列表
+        </SectionHeading>
         <AdminNote>
           小编团队自动同步词库贡献榜前 16 名；姓名、头衔、关联用户与备用头像支持手动编辑。
         </AdminNote>
@@ -262,7 +287,14 @@ export default function TeamTab({ token }: AdminPanelProps) {
             onRetry={read.retryable ? read.refresh : undefined}
             empty="暂无成员"
           />
-          <AdminPager page={paged.page} totalPages={paged.totalPages} onPageChange={(page) => { setEditing(null); paged.setPage(page); }} />
+          <AdminPager
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={(page) => {
+              setEditing(null);
+              paged.setPage(page);
+            }}
+          />
         </AdminListAnchor>
       </section>
       {confirmDialog}
@@ -300,13 +332,18 @@ function TeamMemberForm({
   const external = member ? externalLink(member.link_url) : null;
 
   const initial = teamForm(member);
-  const dirty = (Object.keys(initial) as (keyof TeamFormValues)[]).some((key) => initial[key] !== values[key]);
+  const dirty = (Object.keys(initial) as (keyof TeamFormValues)[]).some(
+    (key) => initial[key] !== values[key],
+  );
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
-  useEffect(() => () => {
-    generation.current += 1;
-  }, []);
+  useEffect(
+    () => () => {
+      generation.current += 1;
+    },
+    [],
+  );
 
   const set = <K extends keyof TeamFormValues>(field: K, value: TeamFormValues[K]) => {
     /* Editing what an import is about to overwrite makes that import obsolete. */
@@ -322,7 +359,10 @@ function TeamMemberForm({
     const text = values.userId.trim();
     const uid = boundUser(text);
     if (!/^\d+$/.test(text) || !uid) {
-      setErrors((previous) => ({ ...previous, userId: text ? '站内用户 ID 须为正整数' : '请先填写要导入的站内用户 ID' }));
+      setErrors((previous) => ({
+        ...previous,
+        userId: text ? '站内用户 ID 须为正整数' : '请先填写要导入的站内用户 ID',
+      }));
       return;
     }
     const ticket = ++generation.current;
@@ -337,7 +377,8 @@ function TeamMemberForm({
     if (generation.current !== ticket) return;
     setImporting(false);
     if (outcome.error) {
-      if (isNotFound(outcome.error)) setErrors((previous) => ({ ...previous, userId: `没有 ID 为 ${uid} 的用户` }));
+      if (isNotFound(outcome.error))
+        setErrors((previous) => ({ ...previous, userId: `没有 ID 为 ${uid} 的用户` }));
       else showToast(apiErrorMessage(outcome.error, '导入失败'), 'error');
       return;
     }
@@ -353,7 +394,9 @@ function TeamMemberForm({
       name: profile.username,
       /* The bound account's own avatar is what /about shows; `avatar_url` takes only an HTTPS
          address, so a site-relative avatar path is not copied into it. */
-      avatarUrl: /^https:\/\//.test(profile.avatar ?? '') ? profile.avatar ?? '' : previous.avatarUrl,
+      avatarUrl: /^https:\/\//.test(profile.avatar ?? '')
+        ? (profile.avatar ?? '')
+        : previous.avatarUrl,
       /* A title already typed is the admin's; the role's suggestion only fills a blank one. */
       title: previous.title.trim() ? previous.title : suggested.title,
       category: previous.title.trim() ? previous.category : suggested.category,
@@ -378,7 +421,11 @@ function TeamMemberForm({
     /* Above the list this form is the region, named by its heading; under a row the editor's panel
        is (`InlineEditorPanel`'s label), so the form inside it is not a second landmark (G4-031). */
     <AdminForm onSubmit={submit} aria-labelledby={member ? undefined : `${prefix}-heading`}>
-      {heading && <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>}
+      {heading && (
+        <SectionHeading as="h3" id={`${prefix}-heading`}>
+          {heading}
+        </SectionHeading>
+      )}
       <FormGrid>
         <Input
           id={`${prefix}-user`}
@@ -391,7 +438,13 @@ function TeamMemberForm({
           helper="关联后，关于页显示该用户当前的头像，成员卡片链接到其个人主页"
           onChange={(event) => set('userId', event.target.value)}
           trailing={
-            <Button type="button" variant="text" loading={importing} disabled={busy} onClick={() => void importProfile()}>
+            <Button
+              type="button"
+              variant="text"
+              loading={importing}
+              disabled={busy}
+              onClick={() => void importProfile()}
+            >
               导入资料
             </Button>
           }

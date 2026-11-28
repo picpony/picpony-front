@@ -64,8 +64,7 @@ export function getHeroMediaRenderedWidth(
  *  so landscape phones (`~390px` viewport height) never crush the picture to a 126px postage stamp.
  *  Split mode overrides `--image-detail-media-max-height` on both Stage and route so both resolve
  *  the exact sticky media pane height with no JS layout race. */
-const MEDIA_MAX_HEIGHT =
-  `var(--image-detail-media-max-height, min(${HERO_MAX_HEIGHT_DVH}dvh, max(220px, calc(100dvh - ${HERO_MEDIA_VIEWPORT_CHROME_PX}px))))`;
+const MEDIA_MAX_HEIGHT = `var(--image-detail-media-max-height, min(${HERO_MAX_HEIGHT_DVH}dvh, max(220px, calc(100dvh - ${HERO_MEDIA_VIEWPORT_CHROME_PX}px))))`;
 
 export function getHeroMediaStyle(image: HeroMediaDimensions): CSSProperties {
   const { width, height, aspectRatio } = getHeroMediaDimensions(image);

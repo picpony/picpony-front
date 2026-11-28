@@ -115,7 +115,8 @@ export const MIN_SEED_CHROMA = 15;
  * grey be a theme: near-monochrome, not a grey bar over a randomly-hued ramp.
  */
 export const rampChroma = (hue: number, fillChroma: number) => {
-  const floor = Math.min(BRAND_CHROMA, maxChroma(hue, CHROMA_REFERENCE_TONE)) * hueConfidence(fillChroma);
+  const floor =
+    Math.min(BRAND_CHROMA, maxChroma(hue, CHROMA_REFERENCE_TONE)) * hueConfidence(fillChroma);
   return Math.max(fillChroma, floor);
 };
 
@@ -162,13 +163,7 @@ const fromHex = (hex: string) => {
 };
 
 export type PaletteName =
-  | 'primary'
-  | 'secondary'
-  | 'neutral'
-  | 'neutralVariant'
-  | 'error'
-  | 'success'
-  | 'warning';
+  'primary' | 'secondary' | 'neutral' | 'neutralVariant' | 'error' | 'success' | 'warning';
 
 /* --- Exact installation: the displayed seed is `primary` -------------------
  * A wallpaper style decides `primary` at a dark P40/P80 and three of five don't
@@ -182,7 +177,10 @@ export type PaletteName =
 export function paletteSet(hue: number, chroma: number): Record<PaletteName, TonalPalette> {
   return {
     primary: TonalPalette.fromHueAndChroma(hue, chroma),
-    secondary: TonalPalette.fromHueAndChroma(hue + HARMONY.secondary.dHue, HARMONY.secondary.chroma),
+    secondary: TonalPalette.fromHueAndChroma(
+      hue + HARMONY.secondary.dHue,
+      HARMONY.secondary.chroma,
+    ),
     neutral: TonalPalette.fromHueAndChroma(hue, NEUTRAL_CHROMA),
     neutralVariant: TonalPalette.fromHueAndChroma(
       hue + HARMONY.neutralVariant.dHue,
@@ -265,9 +263,10 @@ export function onPrimaryVariant(
   const fillTone = Math.round(hctOf(fill).tone);
   const step = inkTone < fillTone ? 1 : -1;
   /* Down from white the ink is a tint of the ramp's hue; up from a dark ink it is the ramp itself. */
-  const tint = step < 0 && ramp.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA
-    ? TonalPalette.fromHueAndChroma(ramp.hue, ON_PRIMARY_VARIANT_TINT_CHROMA)
-    : ramp;
+  const tint =
+    step < 0 && ramp.chroma > ON_PRIMARY_VARIANT_TINT_CHROMA
+      ? TonalPalette.fromHueAndChroma(ramp.hue, ON_PRIMARY_VARIANT_TINT_CHROMA)
+      : ramp;
   let best = ink;
   for (let tone = inkTone + step; step > 0 ? tone < fillTone : tone > fillTone; tone += step) {
     const hex = hexFromArgb(tint.tone(tone)).toLowerCase();
@@ -336,18 +335,26 @@ function inkTones(
   const surfaceDark = hexFromArgb(palettes.neutral.tone(readable ? 30 : 6)).toLowerCase();
   const bar = readable ? 4.5 : WHITE_INK_BAR;
 
-  const white =
-    contrast('#ffffff', light) >= bar && contrast('#ffffff', dark) >= bar;
+  const white = contrast('#ffffff', light) >= bar && contrast('#ffffff', dark) >= bar;
 
   let inkLight = Math.round(hctOf(light).tone);
-  while (inkLight > 10 && contrast(p(inkLight), surfaceLight) < (readable ? BUILT_IN_INK_CONTRAST : LIGHT_INK)) inkLight -= 1;
+  while (
+    inkLight > 10 &&
+    contrast(p(inkLight), surfaceLight) < (readable ? BUILT_IN_INK_CONTRAST : LIGHT_INK)
+  )
+    inkLight -= 1;
 
   let inkDark = Math.round(hctOf(dark).tone);
-  while (inkDark < 95 && contrast(p(inkDark), surfaceDark) < (readable ? BUILT_IN_INK_CONTRAST : DARK_SEPARATION)) inkDark += 1;
+  while (
+    inkDark < 95 &&
+    contrast(p(inkDark), surfaceDark) < (readable ? BUILT_IN_INK_CONTRAST : DARK_SEPARATION)
+  )
+    inkDark += 1;
 
   let onTone = 20;
   if (readable && !white) {
-    while (onTone > 0 && Math.min(contrast(p(onTone), light), contrast(p(onTone), dark)) < bar) onTone -= 1;
+    while (onTone > 0 && Math.min(contrast(p(onTone), light), contrast(p(onTone), dark)) < bar)
+      onTone -= 1;
   }
   const ink = white ? '#ffffff' : p(onTone);
   const inkTone = white ? 100 : onTone;
@@ -535,7 +542,10 @@ export function relatedHue(seedHue: number, relation: 'auto' | AccentPreset): nu
  */
 export function customAccents(seed: string, accent: AccentChoice): Accents {
   if (typeof accent === 'number') {
-    return { second: { hue: accent, chroma: SECOND_CHROMA }, spark: { hue: accent, chroma: SPARK_CHROMA } };
+    return {
+      second: { hue: accent, chroma: SECOND_CHROMA },
+      spark: { hue: accent, chroma: SPARK_CHROMA },
+    };
   }
   const fill = hctOf(seed);
   const hue = relatedHue(fill.hue, accent ?? 'auto');
@@ -597,76 +607,76 @@ export type Role = readonly [token: string, slot: Slot, light: ToneSpec, dark: T
  */
 export const ROLES: readonly Role[] = [
   // token,                     slot,             light,             dark
-  ['primary',                   'primary',        'primary-light',   'primary-dark'],
+  ['primary', 'primary', 'primary-light', 'primary-dark'],
   /* One value on purpose: `primary` does not invert between schemes, so a filled
      button cannot read as two different components depending on the scheme. */
-  ['on-primary',                'primary',        'on-primary',      'on-primary'],
+  ['on-primary', 'primary', 'on-primary', 'on-primary'],
   /* The app bar's own ink, a step quieter than `on-primary`: see `onPrimaryVariant`. */
-  ['on-primary-variant',        'primary',        'on-primary-variant-light', 'on-primary-variant-dark'],
-  ['primary-container',         'primary',        90,                30],
-  ['on-primary-container',      'primary',        10,                90],
-  ['inverse-primary',           'primary',        80,                40],
+  ['on-primary-variant', 'primary', 'on-primary-variant-light', 'on-primary-variant-dark'],
+  ['primary-container', 'primary', 90, 30],
+  ['on-primary-container', 'primary', 10, 90],
+  ['inverse-primary', 'primary', 80, 40],
   /* The brand as *ink* — a mark, never lighter than the brand in light, never
      darker in dark. Fill and ink may differ: one is a surface, one a mark. */
-  ['primary-ink',               'primary',        'ink-light',       'ink-dark'],
+  ['primary-ink', 'primary', 'ink-light', 'ink-dark'],
   /* Paired foreground on a `primary-ink` mark (e.g. a checked checkbox tick): flips with
      `primary-ink`, clearing 4.5:1 in both schemes where non-flipping `on-primary` does not. */
-  ['on-primary-ink',            'primary',        'on-ink-light',    'on-ink-dark'],
+  ['on-primary-ink', 'primary', 'on-ink-light', 'on-ink-dark'],
   /* Navigable text: the brand hue at a text tone. Prose links carry a rest-state
      underline so the affordance no longer rests on hue alone. */
-  ['link',                      'primary',        40,                80],
-  ['link-hover',                'primary',        35,                85],
+  ['link', 'primary', 40, 80],
+  ['link-hover', 'primary', 35, 85],
 
-  ['secondary',                 'secondary',      40,                80],
+  ['secondary', 'secondary', 40, 80],
   /* High-chroma ink of the secondary family, for anticipatory press ripples on controls whose
      destination state is `secondary-container` (sidebar nav, pill/rail tabs, select options). */
-  ['secondary-ink',             'secondary',      'secondary-ink-light', 'secondary-ink-dark'],
-  ['on-secondary',              'secondary',      100,               20],
-  ['secondary-container',       'secondary',      90,                30],
-  ['on-secondary-container',    'secondary',      10,                90],
+  ['secondary-ink', 'secondary', 'secondary-ink-light', 'secondary-ink-dark'],
+  ['on-secondary', 'secondary', 100, 20],
+  ['secondary-container', 'secondary', 90, 30],
+  ['on-secondary-container', 'secondary', 10, 90],
 
   /* 多色 draws `tertiary` itself at `SPARK_TONE` in light — a mark, see there. */
-  ['tertiary',                  'tertiary',       40,                80],
-  ['on-tertiary',               'tertiary',       100,               20],
-  ['tertiary-container',        'tertiary',       90,                30],
-  ['on-tertiary-container',     'tertiary',       10,                90],
+  ['tertiary', 'tertiary', 40, 80],
+  ['on-tertiary', 'tertiary', 100, 20],
+  ['tertiary-container', 'tertiary', 90, 30],
+  ['on-tertiary-container', 'tertiary', 10, 90],
 
   /* The focus ring: M3's secondary, and TonalSpot's in both 配色方案. */
-  ['focus',                     'selection',      40,                80],
+  ['focus', 'selection', 40, 80],
   /* A selected filter chip: the secondary container pair, TonalSpot's in both. */
-  ['chip-selected',             'selection',      90,                30],
-  ['on-chip-selected',          'selection',      10,                90],
+  ['chip-selected', 'selection', 90, 30],
+  ['on-chip-selected', 'selection', 10, 90],
 
-  ['error',                     'error',          40,                80],
-  ['on-error',                  'error',          100,               20],
-  ['error-container',           'error',          90,                30],
-  ['on-error-container',        'error',          10,                90],
+  ['error', 'error', 40, 80],
+  ['on-error', 'error', 100, 20],
+  ['error-container', 'error', 90, 30],
+  ['on-error-container', 'error', 10, 90],
 
   // Not M3 slots; the app needs them and generates them the same way.
-  ['success',                   'success',        40,                80],
-  ['on-success',                'success',        100,               20],
-  ['success-container',         'success',        90,                30],
-  ['on-success-container',      'success',        10,                90],
-  ['warning',                   'warning',        40,                80],
-  ['on-warning',                'warning',        100,               20],
-  ['warning-container',         'warning',        90,                30],
-  ['on-warning-container',      'warning',        10,                90],
+  ['success', 'success', 40, 80],
+  ['on-success', 'success', 100, 20],
+  ['success-container', 'success', 90, 30],
+  ['on-success-container', 'success', 10, 90],
+  ['warning', 'warning', 40, 80],
+  ['on-warning', 'warning', 100, 20],
+  ['warning-container', 'warning', 90, 30],
+  ['on-warning-container', 'warning', 10, 90],
 
-  ['surface',                   'neutral',        98,                6],
-  ['surface-dim',               'neutral',        87,                6],
-  ['surface-bright',            'neutral',        98,                24],
-  ['surface-container-lowest',  'neutral',        100,               4],
-  ['surface-container-low',     'neutral',        96,                10],
-  ['surface-container',         'neutral',        94,                12],
-  ['surface-container-high',    'neutral',        92,                17],
-  ['surface-container-highest', 'neutral',        90,                22],
-  ['on-surface',                'neutral',        10,                90],
-  ['inverse-surface',           'neutral',        20,                90],
-  ['inverse-on-surface',        'neutral',        95,                20],
+  ['surface', 'neutral', 98, 6],
+  ['surface-dim', 'neutral', 87, 6],
+  ['surface-bright', 'neutral', 98, 24],
+  ['surface-container-lowest', 'neutral', 100, 4],
+  ['surface-container-low', 'neutral', 96, 10],
+  ['surface-container', 'neutral', 94, 12],
+  ['surface-container-high', 'neutral', 92, 17],
+  ['surface-container-highest', 'neutral', 90, 22],
+  ['on-surface', 'neutral', 10, 90],
+  ['inverse-surface', 'neutral', 20, 90],
+  ['inverse-on-surface', 'neutral', 95, 20],
 
-  ['on-surface-variant',        'neutralVariant', 30,                80],
-  ['outline',                   'neutralVariant', 50,                60],
-  ['outline-variant',           'neutralVariant', 80,                30],
+  ['on-surface-variant', 'neutralVariant', 30, 80],
+  ['outline', 'neutralVariant', 50, 60],
+  ['outline-variant', 'neutralVariant', 80, 30],
 ];
 
 /** 多色's one tone of its own: the accent as a mark in light. */
@@ -801,7 +811,8 @@ export function deriveTheme(
   const light = lightHex.toLowerCase();
   const f = hctOf(light);
   const baseChroma = rampChroma(f.hue, f.chroma);
-  const chroma = options?.rampChromaCap !== undefined ? Math.min(baseChroma, options.rampChromaCap) : baseChroma;
+  const chroma =
+    options?.rampChromaCap !== undefined ? Math.min(baseChroma, options.rampChromaCap) : baseChroma;
   const palettes = paletteSet(f.hue, chroma);
 
   const derivedDark = !darkHex;
@@ -820,7 +831,11 @@ export function deriveTheme(
     'on-ink-dark': brand.onPrimaryInkDark,
   };
 
-  const tonalSpot: SlotPalettes = { ...palettes, tertiary: palettes.secondary, selection: palettes.secondary };
+  const tonalSpot: SlotPalettes = {
+    ...palettes,
+    tertiary: palettes.secondary,
+    selection: palettes.secondary,
+  };
   const mono = resolveRoles({ light: tonalSpot, dark: tonalSpot }, named);
 
   let multi = mono;
@@ -830,7 +845,10 @@ export function deriveTheme(
     const second = TonalPalette.fromHueAndChroma(accents.second.hue, accents.second.chroma);
     const secondDeep =
       inkPolicy === 'built-in'
-        ? TonalPalette.fromHueAndChroma(accents.second.hue, deepSecondChroma(accents.second.hue, accents.second.chroma))
+        ? TonalPalette.fromHueAndChroma(
+            accents.second.hue,
+            deepSecondChroma(accents.second.hue, accents.second.chroma),
+          )
         : second;
     const spark = TonalPalette.fromHueAndChroma(accents.spark.hue, accents.spark.chroma);
     const neutralC = accents.neutralChroma?.neutral ?? NEUTRAL_CHROMA;
@@ -915,7 +933,10 @@ export function skyPhaseFace(derived: DerivedTheme, scheme: 'light' | 'dark'): F
 
 /** A palette's whole tile — the bar per scheme and the face — what `data-palette-tones` packs. */
 export function paletteTones(derived: DerivedTheme): CustomTones {
-  const bar = (s: 'light' | 'dark') => ({ primary: derived[s].primary!, onPrimary: derived[s]['on-primary']! });
+  const bar = (s: 'light' | 'dark') => ({
+    primary: derived[s].primary!,
+    onPrimary: derived[s]['on-primary']!,
+  });
   return { light: bar('light'), dark: bar('dark'), face: themeFace(derived) };
 }
 
@@ -923,7 +944,8 @@ export function paletteTones(derived: DerivedTheme): CustomTones {
 export function monoTokens(derived: DerivedTheme): string[] {
   return THEMED_TOKENS.filter(
     (token) =>
-      derived.mono.light[token] !== derived.light[token] || derived.mono.dark[token] !== derived.dark[token],
+      derived.mono.light[token] !== derived.light[token] ||
+      derived.mono.dark[token] !== derived.dark[token],
   );
 }
 
@@ -1147,7 +1169,11 @@ export interface ScoredCluster {
 export function scoreClusters(quantised: Map<number, number>): ScoredCluster[] {
   let total = 0;
   for (const population of quantised.values()) total += population;
-  const clusters = [...quantised].map(([argb, population]) => ({ argb, share: population / total, hct: Hct.fromInt(argb) }));
+  const clusters = [...quantised].map(([argb, population]) => ({
+    argb,
+    share: population / total,
+    hct: Hct.fromInt(argb),
+  }));
   const hueShare = new Array<number>(360).fill(0);
   for (const { hct, share } of clusters) hueShare[Math.floor(hct.hue) % 360] += share;
   const neighbourhood = new Array<number>(360).fill(0);
@@ -1159,7 +1185,11 @@ export function scoreClusters(quantised: Map<number, number>): ScoredCluster[] {
       const { chroma, hue } = cluster.hct;
       const proportion = neighbourhood[Math.round(hue) % 360];
       const weight = chroma < TARGET_CHROMA ? WEIGHT_CHROMA_BELOW : WEIGHT_CHROMA_ABOVE;
-      return { ...cluster, proportion, score: proportion * 100 * WEIGHT_PROPORTION + (chroma - TARGET_CHROMA) * weight };
+      return {
+        ...cluster,
+        proportion,
+        score: proportion * 100 * WEIGHT_PROPORTION + (chroma - TARGET_CHROMA) * weight,
+      };
     })
     .sort((a, b) => b.score - a.score);
 }
@@ -1169,13 +1199,20 @@ export function scoreClusters(quantised: Map<number, number>): ScoredCluster[] {
  * difference, 90° down to 15°, at which `desired` candidates exist, or the 15° yield if none. Only
  * ever colours of the picture: where nothing passes the answer is empty, never Google Blue.
  */
-export function monetPicks(scored: readonly ScoredCluster[], desired: number, minChroma: number): number[] {
-  const passing = scored.filter(({ hct, proportion }) => hct.chroma >= minChroma && proportion > CUTOFF_EXCITED_PROPORTION);
+export function monetPicks(
+  scored: readonly ScoredCluster[],
+  desired: number,
+  minChroma: number,
+): number[] {
+  const passing = scored.filter(
+    ({ hct, proportion }) => hct.chroma >= minChroma && proportion > CUTOFF_EXCITED_PROPORTION,
+  );
   let chosen: ScoredCluster[] = [];
   for (let difference = 90; difference >= 15; difference--) {
     chosen = [];
     for (const cluster of passing) {
-      if (!chosen.some((other) => differenceDegrees(cluster.hct.hue, other.hct.hue) < difference)) chosen.push(cluster);
+      if (!chosen.some((other) => differenceDegrees(cluster.hct.hue, other.hct.hue) < difference))
+        chosen.push(cluster);
       if (chosen.length >= desired) break;
     }
     if (chosen.length >= desired) break;
@@ -1191,15 +1228,25 @@ export function monetPicks(scored: readonly ScoredCluster[], desired: number, mi
  * darker tone of one they have (a deep and a pale pink are two themes), so a one-hue picture can
  * still offer choices without offering the same colour twice.
  */
-function morePictureColours(scored: readonly ScoredCluster[], chosen: readonly number[], count: number): number[] {
+function morePictureColours(
+  scored: readonly ScoredCluster[],
+  chosen: readonly number[],
+  count: number,
+): number[] {
   if (count <= 0) return [];
   const ranked = scored.filter(
-    ({ argb, hct, share }) => hct.chroma >= THEME_MIN_CHROMA && share >= EXTRA_MIN_SHARE && !chosen.includes(argb),
+    ({ argb, hct, share }) =>
+      hct.chroma >= THEME_MIN_CHROMA && share >= EXTRA_MIN_SHARE && !chosen.includes(argb),
   );
   const taken = chosen.map((argb) => Hct.fromInt(argb));
-  const newHue = (hct: Hct) => taken.every((t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP);
+  const newHue = (hct: Hct) =>
+    taken.every((t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP);
   const newTone = (hct: Hct) =>
-    taken.every((t) => differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP || Math.abs(hct.tone - t.tone) >= EXTRA_TONE_GAP);
+    taken.every(
+      (t) =>
+        differenceDegrees(hct.hue, t.hue) >= EXTRA_HUE_GAP ||
+        Math.abs(hct.tone - t.tone) >= EXTRA_TONE_GAP,
+    );
   const picked: number[] = [];
   for (const accepts of [newHue, newTone]) {
     for (const { argb, hct } of ranked) {

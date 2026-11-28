@@ -78,8 +78,20 @@ function BlockGroupRow({
     >
       {!empty && (
         <>
-          <TagMarks tags={group.hidden_tags} preview={PREVIEW} label="隐藏标签" icon={<MdBlock size={ICON.dense} />} active={active} />
-          <TagMarks tags={group.spoilered_tags} preview={PREVIEW} label="遮挡标签" icon={<MdVisibilityOff size={ICON.dense} />} active={active} />
+          <TagMarks
+            tags={group.hidden_tags}
+            preview={PREVIEW}
+            label="隐藏标签"
+            icon={<MdBlock size={ICON.dense} />}
+            active={active}
+          />
+          <TagMarks
+            tags={group.spoilered_tags}
+            preview={PREVIEW}
+            label="遮挡标签"
+            icon={<MdVisibilityOff size={ICON.dense} />}
+            active={active}
+          />
         </>
       )}
     </GroupRow>

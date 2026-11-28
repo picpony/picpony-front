@@ -69,7 +69,12 @@ export type PerfRunGroup = 'scroll' | 'hero' | 'stress';
 /** Status steps a run of these groups announces: the chip's `x/y`. */
 export function perfRunSteps(rounds: number, include: Partial<Record<PerfRunGroup, boolean>> = {}) {
   const on = (group: PerfRunGroup) => include[group] !== false;
-  return 2 + (on('scroll') ? rounds : 0) + (on('hero') ? rounds * 3 : 0) + (on('stress') ? rounds * 4 : 0);
+  return (
+    2 +
+    (on('scroll') ? rounds : 0) +
+    (on('hero') ? rounds * 3 : 0) +
+    (on('stress') ? rounds * 4 : 0)
+  );
 }
 
 const THUMB_SELECTOR = '.image-card [data-image-hero-role="thumbnail"]';
@@ -1029,9 +1034,11 @@ class PerfRun {
     text.className = 'min-w-0 text-label-l wrap-anywhere';
     text.textContent = '准备中…';
     const track = document.createElement('span');
-    track.className = 'relative mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-on-surface-variant forced-boundary';
+    track.className =
+      'relative mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-on-surface-variant forced-boundary';
     const bar = document.createElement('span');
-    bar.className = 'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary forced-mark';
+    bar.className =
+      'absolute inset-y-0 left-0 block w-0 rounded-full bg-inverse-primary forced-mark';
     track.append(bar);
     body.append(head, text, track);
     const cancel = document.createElement('button');

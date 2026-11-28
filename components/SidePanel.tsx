@@ -1,6 +1,6 @@
 'use client';
 /* `'use no memo'` for the same reason `Sheet` carries it: this component passes a hand-tuned
-   `useGSAP` dependency list and deliberately omits `revertOnUpdate`. */'use no memo';
+   `useGSAP` dependency list and deliberately omits `revertOnUpdate`. */ 'use no memo';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -151,11 +151,12 @@ export default function SidePanel({
            (`showMotion`) — its ~1.5% overshoot lands on the edge skirt, never a gap — and leaves
            on FastEffects (`hideMotion`). The scrim fades on DefaultEffects both ways, as
            `ModalBottomSheet`'s `ScrimAlphaAnimation`. */
-        const timing = isOpen ? spring('defaultSpatial', 'overlay') : spring('fastEffects', 'overlay');
+        const timing = isOpen
+          ? spring('defaultSpatial', 'overlay')
+          : spring('fastEffects', 'overlay');
         const scrimTiming = spring('defaultEffects', 'overlay');
         gsap.to(panel, { x: isOpen ? 0 : '100%', ...timing, overwrite: true });
-        if (scrim)
-          gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
+        if (scrim) gsap.to(scrim, { opacity: isOpen ? 1 : 0, ...scrimTiming, overwrite: true });
       });
       if (isOpen) enterFrame.current = requestAnimationFrame(start);
       else start();
@@ -180,93 +181,88 @@ export default function SidePanel({
 
   return createPortal(
     <OverlayLayerContext.Provider value={layer}>
-    <div
-      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
-      /* A side sheet is a dialog docked to the right edge, so it shares the dialog
+      <div
+        style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
+        /* A side sheet is a dialog docked to the right edge, so it shares the dialog
          layer — see the stacking-order block in globals.css. */
-      className={cn('fixed inset-0 flex z-dialog')}
-      /* A drag selection that starts inside the panel and releases on the scrim must not dismiss it. */
-      onPointerDown={(event) => {
-        pressOnScrim.current = event.target === scrimRef.current;
-      }}
-      /* `inert` while leaving — the panel outlives its own `isOpen` so the exit
+        className={cn('fixed inset-0 flex z-dialog')}
+        /* A drag selection that starts inside the panel and releases on the scrim must not dismiss it. */
+        onPointerDown={(event) => {
+          pressOnScrim.current = event.target === scrimRef.current;
+        }}
+        /* `inert` while leaving — the panel outlives its own `isOpen` so the exit
          tween has a target, as on `Modal` and `Sheet`. */
-      inert={!isOpen}
-    >
-      <div
-        ref={scrimRef}
-        className="bg-scrim-veil absolute inset-0"
-        onClick={
-          closeOnOverlayClick
-            ? () => {
-                const started = pressOnScrim.current;
-                pressOnScrim.current = false;
-                if (started) handleClose();
-              }
-            : undefined
-        }
-      />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : (ariaLabel ?? '对话框')}
-        tabIndex={-1}
-        className={cn(
-          'relative ml-auto flex h-dvh w-full max-w-md flex-col overflow-hidden focus-visible:outline-hidden',
-          'bg-surface-container-low text-on-surface rounded-l-2xl edge-skirt-r forced-boundary',
-          className,
-        )}
+        inert={!isOpen}
       >
-        {hasHeader && (
-          <div
-            ref={headerRef}
-            className="relative flex shrink-0 items-center justify-between gap-4 pl-6 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
-          >
-            {title ? (
-              <h2 id={titleId} className="text-title-l min-w-0 wrap-anywhere text-on-surface">
-                {title}
-              </h2>
-            ) : (
-              <span />
-            )}
-            {!hideCloseButton && (
-              <IconButton
-                onClick={handleClose}
-                aria-label="关闭"
-                dismiss
-                icon={<MdClose />}
-              />
-            )}
-          </div>
-        )}
-        <ScrollArea
-          axis="both"
-          enabled={bodyScrollable}
-          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
-          viewportRef={bodyRef}
-          /* `data-app-scroll-container`, like `Modal`'s and `Sheet`'s bodies: this is
-             the box that scrolls, so anything inside that wants to scroll to an
-             element has to find this rather than the page behind the panel. */
-          viewportProps={{ 'data-app-scroll-container': '' }}
-          viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1',
-            bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
-            bodyClassName ||
-              cn(
-                'pb-4 pl-6 pr-[max(1.5rem,env(safe-area-inset-right))]',
-                hasHeader ? 'pt-2' : 'pt-[max(1.5rem,env(safe-area-inset-top))]',
-              ),
+        <div
+          ref={scrimRef}
+          className="bg-scrim-veil absolute inset-0"
+          onClick={
+            closeOnOverlayClick
+              ? () => {
+                  const started = pressOnScrim.current;
+                  pressOnScrim.current = false;
+                  if (started) handleClose();
+                }
+              : undefined
+          }
+        />
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? titleId : undefined}
+          aria-label={title ? undefined : (ariaLabel ?? '对话框')}
+          tabIndex={-1}
+          className={cn(
+            'relative ml-auto flex h-dvh w-full max-w-md flex-col overflow-hidden focus-visible:outline-hidden',
+            'bg-surface-container-low text-on-surface rounded-l-2xl edge-skirt-r forced-boundary',
+            className,
           )}
         >
-          {children}
-        </ScrollArea>
-        {/* Docked to the screen edge, so the panel owns the home-indicator inset,
+          {hasHeader && (
+            <div
+              ref={headerRef}
+              className="relative flex shrink-0 items-center justify-between gap-4 pl-6 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1.25rem,env(safe-area-inset-top))] pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+            >
+              {title ? (
+                <h2 id={titleId} className="text-title-l min-w-0 wrap-anywhere text-on-surface">
+                  {title}
+                </h2>
+              ) : (
+                <span />
+              )}
+              {!hideCloseButton && (
+                <IconButton onClick={handleClose} aria-label="关闭" dismiss icon={<MdClose />} />
+              )}
+            </div>
+          )}
+          <ScrollArea
+            axis="both"
+            enabled={bodyScrollable}
+            className="os-slot-overlay flex min-h-0 flex-1 flex-col"
+            viewportRef={bodyRef}
+            /* `data-app-scroll-container`, like `Modal`'s and `Sheet`'s bodies: this is
+             the box that scrolls, so anything inside that wants to scroll to an
+             element has to find this rather than the page behind the panel. */
+            viewportProps={{ 'data-app-scroll-container': '' }}
+            viewportClassName={cn(
+              'popover-scrollbar min-h-0 flex-1',
+              bodyScrollable ? 'overflow-y-auto overscroll-y-contain' : 'overflow-hidden',
+              bodyClassName ||
+                cn(
+                  'pb-4 pl-6 pr-[max(1.5rem,env(safe-area-inset-right))]',
+                  hasHeader ? 'pt-2' : 'pt-[max(1.5rem,env(safe-area-inset-top))]',
+                ),
+            )}
+          >
+            {children}
+          </ScrollArea>
+          {/* Docked to the screen edge, so the panel owns the home-indicator inset,
             as the bottom sheet's dock does. */}
-        <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
+          <div className="h-[max(1rem,env(safe-area-inset-bottom))] shrink-0" />
+        </div>
       </div>
-    </div>
     </OverlayLayerContext.Provider>,
     document.body,
   );

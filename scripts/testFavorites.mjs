@@ -11,14 +11,45 @@ import { opOf } from './rustRoutes.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 assert.ok(existsSync(path.join(root, '.next/BUILD_ID')), 'Run npm run build first');
-const user = { id: 1, username: 'fixture', token: 'favorites-regression', csrfToken: 'favorites-csrf', role: 'user', api_key: '' };
+const user = {
+  id: 1,
+  username: 'fixture',
+  token: 'favorites-regression',
+  csrfToken: 'favorites-csrf',
+  role: 'user',
+  api_key: '',
+};
 /** `GET /me`'s `user` (`MeUser`, `lib/api/picpony.ts`). */
 const meFixture = () => ({
-  id: 1, username: 'fixture', email: null, email_verified: false, role: 'user', coins: 0, experience: 0,
-  avatar: null, banner: null, bio: '', gender: '', race: '', birthday: null, created_at: '2024-01-01T00:00:00Z',
-  profile_revision: 1, settings_revision: 1, upstream_identity: null,
-  developer_access: { user_id: 1, revision: 1, enabled: false, active: false, banned: false, source: null,
-    maintenance_generation: 0, maintenance_expires_at: null, inactive_reason: null, attempts: 0 },
+  id: 1,
+  username: 'fixture',
+  email: null,
+  email_verified: false,
+  role: 'user',
+  coins: 0,
+  experience: 0,
+  avatar: null,
+  banner: null,
+  bio: '',
+  gender: '',
+  race: '',
+  birthday: null,
+  created_at: '2024-01-01T00:00:00Z',
+  profile_revision: 1,
+  settings_revision: 1,
+  upstream_identity: null,
+  developer_access: {
+    user_id: 1,
+    revision: 1,
+    enabled: false,
+    active: false,
+    banned: false,
+    source: null,
+    maintenance_generation: 0,
+    maintenance_expires_at: null,
+    inactive_reason: null,
+    attempts: 0,
+  },
 });
 let favorites = Array.from({ length: 120 }, (_, i) => 2000 + i);
 let mutations = 0;
@@ -27,25 +58,50 @@ const translatedTags = new Set();
 const json = (value) => ({ body: JSON.stringify(value), contentType: 'application/json' });
 /* PicPony's Rust backend (`/api/v1`), answered by operation (`scripts/rustRoutes.mjs`) in its own
    shapes — a bare DTO, no `success` envelope. */
-const folderRow = () => ({ id: 1, name: '主收藏夹', is_main: true, created_at: '2024-01-01T00:00:00Z', image_count: favorites.length, latest_image_id: 2000 });
+const folderRow = () => ({
+  id: 1,
+  name: '主收藏夹',
+  is_main: true,
+  created_at: '2024-01-01T00:00:00Z',
+  image_count: favorites.length,
+  latest_image_id: 2000,
+});
 function fixture(rawUrl, body, method = 'GET') {
   const url = new URL(rawUrl);
   const op = isPicponyApi(url) ? opOf(method, url.href) : null;
   if (op === 'get_user') return json({ user: { ...meFixture(), settings: {} } });
   if (op === 'get_fave_folders') {
-    return json({ folders: [folderRow()], privacy_space: { owner_id: 1, has_password: false, unlock_seconds: 0, active: false, unlocked: false, expires_at: null, visible: false, image_count: null } });
+    return json({
+      folders: [folderRow()],
+      privacy_space: {
+        owner_id: 1,
+        has_password: false,
+        unlock_seconds: 0,
+        active: false,
+        unlocked: false,
+        expires_at: null,
+        visible: false,
+        image_count: null,
+      },
+    });
   }
   if (op === 'get_faves') {
     const page = Number(url.searchParams.get('page')) || 1;
     const perPage = Number(url.searchParams.get('per_page')) || 100;
-    const items = favorites.map((id) => ({ image_id: id, created_at: '2024-01-01T00:00:00Z', folder_ids: [1] }));
+    const items = favorites.map((id) => ({
+      image_id: id,
+      created_at: '2024-01-01T00:00:00Z',
+      folder_ids: [1],
+    }));
     return json({ items: items.slice((page - 1) * perPage, page * perPage), total: items.length });
   }
   if (op === 'toggle_fave') {
     const id = Number(url.pathname.split('/').at(-1));
     const { saved } = JSON.parse(body);
     mutations++;
-    favorites = saved ? [id, ...favorites.filter((value) => value !== id)] : favorites.filter((value) => value !== id);
+    favorites = saved
+      ? [id, ...favorites.filter((value) => value !== id)]
+      : favorites.filter((value) => value !== id);
     return json({ image_id: id, folder_ids: saved ? [1] : [], favorited: saved });
   }
   if (op === 'get_tag_translations') {
@@ -56,7 +112,9 @@ function fixture(rawUrl, body, method = 'GET') {
   if (target.pathname.endsWith('/search/images')) {
     /* Positive `id:` terms only: a list query also carries the public blacklist as `-id:N`
        exclusions, and matching those answered an id search nobody made (B2, F3). */
-    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map((match) => Number(match[1]));
+    const ids = [...(target.searchParams.get('q') ?? '').matchAll(/(?<![-\w])id:(\d+)/g)].map(
+      (match) => Number(match[1]),
+    );
     if (mutations === 1 && ids.includes(2100) && failRefresh) {
       failRefresh = false;
       return { ...json({ error: 'Retry this refresh' }), status: 429 };
@@ -64,7 +122,9 @@ function fixture(rawUrl, body, method = 'GET') {
     if (ids.length) return json({ images: ids.map((id) => image(id)), total: ids.length });
   }
   if (target.pathname.endsWith('/images/2010')) {
-    return json({ image: { ...image(2010), tags: ['safe', 'species:__proto__', 'species:constructor'] } });
+    return json({
+      image: { ...image(2010), tags: ['safe', 'species:__proto__', 'species:constructor'] },
+    });
   }
   return stubFor(rawUrl, method);
 }
@@ -73,12 +133,25 @@ const upstream = createServer((req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
     const isLookup = url.pathname === '/__fixture';
-    const raw = isLookup ? url.searchParams.get('url') : url.pathname.startsWith('/api/v1/json')
-      ? `https://trixiebooru.org${req.url}` : url.href;
-    const answer = fixture(raw, isLookup ? url.searchParams.get('body') : null, isLookup ? url.searchParams.get('method') ?? 'GET' : req.method);
-    if (isLookup) return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer));
+    const raw = isLookup
+      ? url.searchParams.get('url')
+      : url.pathname.startsWith('/api/v1/json')
+        ? `https://trixiebooru.org${req.url}`
+        : url.href;
+    const answer = fixture(
+      raw,
+      isLookup ? url.searchParams.get('body') : null,
+      isLookup ? (url.searchParams.get('method') ?? 'GET') : req.method,
+    );
+    if (isLookup)
+      return void res
+        .writeHead(200, { 'content-type': 'application/json' })
+        .end(JSON.stringify(answer));
     if (!answer) return void res.writeHead(404).end();
-    res.writeHead(answer.status ?? 200, { 'content-type': answer.contentType, 'cache-control': 'no-store' });
+    res.writeHead(answer.status ?? 200, {
+      'content-type': answer.contentType,
+      'cache-control': 'no-store',
+    });
     res.end(answer.binary ? Buffer.from(answer.body, 'base64') : answer.body);
   } catch (error) {
     res.writeHead(500).end(String(error));
@@ -91,12 +164,21 @@ await new Promise((resolve) => reservation.listen(0, '127.0.0.1', resolve));
 const port = reservation.address().port;
 await new Promise((resolve) => reservation.close(resolve));
 const origin = `http://127.0.0.1:${port}`;
-const server = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'start', '-p', String(port)], {
-  cwd: root, windowsHide: true, stdio: 'ignore', env: {
-    ...process.env, PICPONY_UPSTREAM_ORIGIN: upstreamOrigin,
-    PICPONY_DERPI_ORIGIN: `${upstreamOrigin}/api/v1/json`, PICPONY_SERVER_MEMO_TTL_MS: '0',
+const server = spawn(
+  process.execPath,
+  [path.join(root, 'node_modules/next/dist/bin/next'), 'start', '-p', String(port)],
+  {
+    cwd: root,
+    windowsHide: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      PICPONY_UPSTREAM_ORIGIN: upstreamOrigin,
+      PICPONY_DERPI_ORIGIN: `${upstreamOrigin}/api/v1/json`,
+      PICPONY_SERVER_MEMO_TTL_MS: '0',
+    },
   },
-});
+);
 const python = String.raw`
 import sys, json, re, base64, urllib.request, urllib.parse
 from playwright.sync_api import sync_playwright, expect
@@ -202,19 +284,30 @@ try {
   let ready = false;
   for (let attempt = 0; attempt < 120; attempt++) {
     if (server.exitCode !== null) throw new Error('Test server exited before startup');
-    try { ready = (await fetch(`${origin}/policy`)).ok; } catch { /* Starting up. */ }
+    try {
+      ready = (await fetch(`${origin}/policy`)).ok;
+    } catch {
+      /* Starting up. */
+    }
     if (ready) break;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   assert.ok(ready, 'Test server did not start');
   const result = await new Promise((resolve, reject) => {
-    const child = spawn('python', ['-X', 'utf8', '-c', python, origin, upstreamOrigin, JSON.stringify(user)], { stdio: 'inherit', windowsHide: true });
+    const child = spawn(
+      'python',
+      ['-X', 'utf8', '-c', python, origin, upstreamOrigin, JSON.stringify(user)],
+      { stdio: 'inherit', windowsHide: true },
+    );
     child.on('error', reject);
     child.on('exit', resolve);
   });
   assert.equal(result, 0, 'Browser regression failed');
   assert.equal(mutations, 2);
-  assert.ok(translatedTags.has('__proto__') && translatedTags.has('constructor'), 'Reserved tag names must also be queried');
+  assert.ok(
+    translatedTags.has('__proto__') && translatedTags.has('constructor'),
+    'Reserved tag names must also be queried',
+  );
 } finally {
   server.kill();
   upstream.closeAllConnections();

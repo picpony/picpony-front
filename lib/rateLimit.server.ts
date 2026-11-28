@@ -54,7 +54,8 @@ export function createRateLimiter(options: RateLimit, now: () => number = Date.n
       entry = { start: at, count: 0 };
       windows.set(key, entry);
     }
-    if (entry.count >= options.limit) return Math.max(1, Math.ceil((entry.start + options.windowMs - at) / 1000));
+    if (entry.count >= options.limit)
+      return Math.max(1, Math.ceil((entry.start + options.windowMs - at) / 1000));
     entry.count += 1;
     return 0;
   };
@@ -64,6 +65,9 @@ export function createRateLimiter(options: RateLimit, now: () => number = Date.n
 export function rateLimited(retryAfterSeconds: number): Response {
   return Response.json(
     { success: false, message: '请求过于频繁，请稍后再试' },
-    { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'private, no-store' } },
+    {
+      status: 429,
+      headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'private, no-store' },
+    },
   );
 }

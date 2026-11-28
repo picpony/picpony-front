@@ -61,9 +61,18 @@ interface BlockGroupRow {
 
 /** `GET /me/block-groups` — oldest first. */
 export async function getBlockGroups(token: string, signal?: AbortSignal): Promise<BlockGroup[]> {
-  const data = await api<{ groups: BlockGroupRow[] }>('GET', '/me/block-groups', { token, signal, cache: 'no-store' });
+  const data = await api<{ groups: BlockGroupRow[] }>('GET', '/me/block-groups', {
+    token,
+    signal,
+    cache: 'no-store',
+  });
   return data.groups.map(({ id, name, hidden_tags, spoilered_tags, active, revision }) => ({
-    id, name, hidden_tags, spoilered_tags, active, revision,
+    id,
+    name,
+    hidden_tags,
+    spoilered_tags,
+    active,
+    revision,
   }));
 }
 
@@ -83,7 +92,10 @@ export interface BlockGroupInput {
  * `{name, hidden_tags, spoilered_tags, active, expected_revision}`. **An edit must send `active`**:
  * the backend writes it, and its default is on. Resolves with the group's id and new revision.
  */
-export async function saveBlockGroup(token: string, input: BlockGroupInput): Promise<{ id: number; revision: number }> {
+export async function saveBlockGroup(
+  token: string,
+  input: BlockGroupInput,
+): Promise<{ id: number; revision: number }> {
   const body = {
     name: input.name,
     hidden_tags: [...input.hidden],
@@ -92,9 +104,9 @@ export async function saveBlockGroup(token: string, input: BlockGroupInput): Pro
   };
   return input.id
     ? api<{ id: number; revision: number }>('PUT', `/me/block-groups/${seg(input.id)}`, {
-      token,
-      json: { ...body, expected_revision: input.revision },
-    })
+        token,
+        json: { ...body, expected_revision: input.revision },
+      })
     : api<{ id: number; revision: number }>('POST', '/me/block-groups', { token, json: body });
 }
 
@@ -104,11 +116,20 @@ export async function deleteBlockGroup(token: string, id: number): Promise<void>
 }
 
 /** `PUT /me/block-groups/{id}/activation {active, expected_revision}` → the group's new revision. */
-export async function toggleBlockGroup(token: string, id: number, active: boolean, revision: number): Promise<{ revision: number }> {
-  const data = await api<{ active: boolean; revision: number }>('PUT', `/me/block-groups/${seg(id)}/activation`, {
-    token,
-    json: { active, expected_revision: revision },
-  });
+export async function toggleBlockGroup(
+  token: string,
+  id: number,
+  active: boolean,
+  revision: number,
+): Promise<{ revision: number }> {
+  const data = await api<{ active: boolean; revision: number }>(
+    'PUT',
+    `/me/block-groups/${seg(id)}/activation`,
+    {
+      token,
+      json: { active, expected_revision: revision },
+    },
+  );
   return { revision: data.revision };
 }
 
@@ -123,9 +144,14 @@ export interface DerpiFilterSummary {
 }
 
 /** `GET /filters/user?key=` — the filters the key's own account made. */
-export async function getDerpiUserFilters(apiKey: string, signal?: AbortSignal): Promise<DerpiFilterSummary[]> {
+export async function getDerpiUserFilters(
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<DerpiFilterSummary[]> {
   const data = await readObject<{ filters?: unknown }>(
-    await proxyFetch(`${DERPIBOORU_API_BASE}/filters/user?key=${encodeURIComponent(apiKey)}`, { signal }),
+    await proxyFetch(`${DERPIBOORU_API_BASE}/filters/user?key=${encodeURIComponent(apiKey)}`, {
+      signal,
+    }),
   );
   if (!Array.isArray(data.filters)) throw new ApiError('invalid');
   return (data.filters as Record<string, unknown>[])
@@ -140,15 +166,23 @@ export async function getDerpiUserFilters(apiKey: string, signal?: AbortSignal):
 /** Only a union of plain tags can be represented by a block group's tag lists. */
 export function complexTerms(expression: unknown): string[] {
   if (typeof expression !== 'string' || !expression.trim()) return [];
-  const terms = expression.split(/[,，\n]|\s+(?:OR|\|\|)\s+/i).map((term) => term.trim()).filter(Boolean);
-  return tagList(terms.map((term) => {
-    const quoted = /^"([^"]+)"$/.exec(term);
-    if (quoted) return quoted[1];
-    if (/^[-!]|[()!:*?"&|]|\b(?:NOT|AND)\b/i.test(term)) {
-      throw new ApiError('invalid', { message: '该过滤器包含无法转换为标签列表的条件，请先简化过滤器', retryable: false });
-    }
-    return term;
-  }));
+  const terms = expression
+    .split(/[,，\n]|\s+(?:OR|\|\|)\s+/i)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  return tagList(
+    terms.map((term) => {
+      const quoted = /^"([^"]+)"$/.exec(term);
+      if (quoted) return quoted[1];
+      if (/^[-!]|[()!:*?"&|]|\b(?:NOT|AND)\b/i.test(term)) {
+        throw new ApiError('invalid', {
+          message: '该过滤器包含无法转换为标签列表的条件，请先简化过滤器',
+          retryable: false,
+        });
+      }
+      return term;
+    }),
+  );
 }
 
 /** Tag ids as names, fifty to a request — a filter's own lists are ids, not names. */
@@ -158,7 +192,10 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
     const batch = ids.slice(start, start + 50);
     const query = batch.map((id) => `id:${id}`).join(' OR ');
     const data = await readObject<{ tags?: unknown }>(
-      await proxyFetch(`${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=50`, { signal }),
+      await proxyFetch(
+        `${DERPIBOORU_API_BASE}/search/tags?q=${encodeURIComponent(query)}&per_page=50`,
+        { signal },
+      ),
     );
     for (const tag of Array.isArray(data.tags) ? (data.tags as Record<string, unknown>[]) : []) {
       if (tag && typeof tag.name === 'string') names.push(tag.name);
@@ -168,7 +205,9 @@ async function tagNames(ids: readonly number[], signal?: AbortSignal): Promise<s
 }
 
 function ids(value: unknown): number[] {
-  return (Array.isArray(value) ? value : []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+  return (Array.isArray(value) ? value : [])
+    .map(Number)
+    .filter((id) => Number.isSafeInteger(id) && id > 0);
 }
 
 export interface ImportedFilter {
@@ -181,11 +220,21 @@ export interface ImportedFilter {
  * `GET /filters/<id>?key=` as two tag lists: the filter's hidden and spoilered tag ids resolved to
  * names, plus the plain tags its two expressions name. A tag in both is hidden — hiding wins.
  */
-export async function getDerpiFilterTags(apiKey: string, filterId: number, signal?: AbortSignal): Promise<ImportedFilter> {
+export async function getDerpiFilterTags(
+  apiKey: string,
+  filterId: number,
+  signal?: AbortSignal,
+): Promise<ImportedFilter> {
   const data = await readObject<{ filter?: unknown }>(
-    await proxyFetch(`${DERPIBOORU_API_BASE}/filters/${filterId}?key=${encodeURIComponent(apiKey)}`, { signal }),
+    await proxyFetch(
+      `${DERPIBOORU_API_BASE}/filters/${filterId}?key=${encodeURIComponent(apiKey)}`,
+      { signal },
+    ),
   );
-  const filter = data.filter && typeof data.filter === 'object' ? (data.filter as Record<string, unknown>) : null;
+  const filter =
+    data.filter && typeof data.filter === 'object'
+      ? (data.filter as Record<string, unknown>)
+      : null;
   if (!filter) throw new ApiError('invalid');
   const hidden = tagList([
     ...(await tagNames(ids(filter.hidden_tag_ids), signal)),
@@ -199,7 +248,10 @@ export async function getDerpiFilterTags(apiKey: string, filterId: number, signa
     ...complexTerms(filter.spoilered_complex),
   ]).filter((tag) => !hiddenSet.has(tag));
   return {
-    name: typeof filter.name === 'string' && filter.name.trim() ? filter.name.trim() : `过滤器 ${filterId}`,
+    name:
+      typeof filter.name === 'string' && filter.name.trim()
+        ? filter.name.trim()
+        : `过滤器 ${filterId}`,
     hidden,
     spoilered,
   };

@@ -33,11 +33,7 @@ export function ProfileMissing() {
         title="用户不存在"
         description="该用户可能已注销，或链接地址有误"
         action={
-          <ButtonLink
-            href="/"
-            variant="filled"
-            icon={<MdHome />}
-          >
+          <ButtonLink href="/" variant="filled" icon={<MdHome />}>
             回到首页
           </ButtonLink>
         }
@@ -51,7 +47,12 @@ export function ProfileFailure({ error, onRetry }: { error: unknown; onRetry?: (
   return (
     <>
       <ProfileBack />
-      <ErrorRetry fill title="用户资料加载失败" message={apiErrorMessage(error)} onRetry={onRetry} />
+      <ErrorRetry
+        fill
+        title="用户资料加载失败"
+        message={apiErrorMessage(error)}
+        onRetry={onRetry}
+      />
     </>
   );
 }

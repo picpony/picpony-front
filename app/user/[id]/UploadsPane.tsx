@@ -23,7 +23,13 @@ import ButtonLink from '@/components/ButtonLink';
 /* 编辑资料, the API key, the privacy switches: all of them are 账户's, and the bare address opens
    偏好 (review P5-F3). */
 import { settingsHref } from '@/app/settings/tabs';
-import { OwnerHiddenNote, PaneFailure, PaneHidden, useVisited, type ProfilePaneProps } from './ProfilePaneStates';
+import {
+  OwnerHiddenNote,
+  PaneFailure,
+  PaneHidden,
+  useVisited,
+  type ProfilePaneProps,
+} from './ProfilePaneStates';
 
 /** A page of the grid — also `lib/prefetchRoute.ts`'s `PROFILE_PER_PAGE`, which warms page 1. */
 export const UPLOADS_PER_PAGE = 12;
@@ -73,7 +79,9 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
   const listKey = `profile-uploads:${id}:${fp}`;
   const readPage = useCallback(
     async (target: number) =>
-      (await userUploads.read({ id, page: target, perPage: UPLOADS_PER_PAGE, token, fp })).uploads.map((image) => image.id),
+      (
+        await userUploads.read({ id, page: target, perPage: UPLOADS_PER_PAGE, token, fp })
+      ).uploads.map((image) => image.id),
     [id, token, fp],
   );
   const reveal = useListReveal(readPage, page, setPage, () => pane);
@@ -88,8 +96,18 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
             current: { ids: uploads.map((image) => image.id), previews: uploads, totalPages },
             pageSize: UPLOADS_PER_PAGE,
             fetchPage: async (target) => {
-              const result = await userUploads.read({ id, page: target, perPage: UPLOADS_PER_PAGE, token, fp });
-              return { ids: result.uploads.map((image) => image.id), previews: result.uploads, totalPages: result.totalPages };
+              const result = await userUploads.read({
+                id,
+                page: target,
+                perPage: UPLOADS_PER_PAGE,
+                token,
+                fp,
+              });
+              return {
+                ids: result.uploads.map((image) => image.id),
+                previews: result.uploads,
+                totalPages: result.totalPages,
+              };
             },
             reveal,
           })
@@ -102,7 +120,8 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
 
   const data = read.data;
   if (data === undefined) {
-    if (read.error) return <PaneFailure error={read.error} title="上传记录加载失败" onRetry={read.refresh} />;
+    if (read.error)
+      return <PaneFailure error={read.error} title="上传记录加载失败" onRetry={read.refresh} />;
     return <UploadsSkeleton />;
   }
   if (data.binding === 'hidden') return <PaneHidden />;
@@ -114,11 +133,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         title="需要绑定 API Key"
         description="绑定 Derpibooru API Key 后，你上传的图片会显示在这里"
         action={
-          <ButtonLink
-            href={settingsHref('account')}
-            variant="tonal"
-            icon={<MdSettings />}
-          >
+          <ButtonLink href={settingsHref('account')} variant="tonal" icon={<MdSettings />}>
             前往设置
           </ButtonLink>
         }
@@ -140,7 +155,11 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         <EmptyState
           size="pane"
           title="此页暂无图片"
-          action={<Button variant="tonal" onClick={() => setPage(1)}>回到第一页</Button>}
+          action={
+            <Button variant="tonal" onClick={() => setPage(1)}>
+              回到第一页
+            </Button>
+          }
         />
       );
     }
@@ -151,11 +170,7 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
         title="暂无上传记录"
         description="在当前内容筛选设置下，暂无可显示的图片"
         action={
-          <ButtonLink
-            href="/upload"
-            variant="tonal"
-            icon={<MdUpload />}
-          >
+          <ButtonLink href="/upload" variant="tonal" icon={<MdUpload />}>
             发布图片
           </ButtonLink>
         }
@@ -177,7 +192,9 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
       {/* The count is the viewer's: the search runs inside their content settings. The search
           link opens the same pictures in /search, where they can be sorted and filtered. */}
       <div className="mb-4 flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <p className="text-body-m text-on-surface-variant tabular-nums">共 {formatCount(data.total)} 张</p>
+        <p className="text-body-m text-on-surface-variant tabular-nums">
+          共 {formatCount(data.total)} 张
+        </p>
         {term && (
           <ButtonLink
             href={`/search?q=${encodeURIComponent(term)}`}
@@ -213,7 +230,9 @@ export default function UploadsPane({ profile, id, own, ready, active, token }: 
           currentPage={page}
           totalPages={data.totalPages}
           onPageChange={setPage}
-          onPrefetchPage={(next) => userUploads.prefetch({ id, page: next, perPage: UPLOADS_PER_PAGE, token, fp })}
+          onPrefetchPage={(next) =>
+            userUploads.prefetch({ id, page: next, perPage: UPLOADS_PER_PAGE, token, fp })
+          }
           disabled={read.isLoading}
           className="mt-8"
         />

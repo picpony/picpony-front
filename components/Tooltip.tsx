@@ -240,7 +240,10 @@ type TooltipAnchorProps = Pick<
   | 'onContextMenu'
 >;
 
-export function useTooltip(label?: string, externalTarget?: HTMLElement | null): {
+export function useTooltip(
+  label?: string,
+  externalTarget?: HTMLElement | null,
+): {
   anchorRef: RefObject<HTMLElement | null>;
   anchorProps: TooltipAnchorProps;
   tooltip: ReactElement | null;
@@ -289,85 +292,94 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
     hideTimer.current = null;
   }, []);
 
-  const showForPointer = useCallback((event: { pointerType: string }) => {
-    // A finger has no hover; its path is the long press below.
-    if (event.pointerType === 'touch') return;
-    keepOpen();
-    if (showTimer.current !== null) window.clearTimeout(showTimer.current);
-    // Rest delay describes intent, so only the fade reads the motion preference.
-    showTimer.current = window.setTimeout(() => {
-      showTimer.current = null;
-      setOpen(true);
-    }, HOVER_DELAY_MS);
-  }, [keepOpen]);
+  const showForPointer = useCallback(
+    (event: { pointerType: string }) => {
+      // A finger has no hover; its path is the long press below.
+      if (event.pointerType === 'touch') return;
+      keepOpen();
+      if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+      // Rest delay describes intent, so only the fade reads the motion preference.
+      showTimer.current = window.setTimeout(() => {
+        showTimer.current = null;
+        setOpen(true);
+      }, HOVER_DELAY_MS);
+    },
+    [keepOpen],
+  );
 
-  const leaveForPointer = useCallback((event: { pointerType: string }) => {
-    if (event.pointerType === 'touch') return;
-    if (showTimer.current !== null) window.clearTimeout(showTimer.current);
-    showTimer.current = null;
-    hideAfter(LEAVE_GRACE_MS);
-  }, [hideAfter]);
+  const leaveForPointer = useCallback(
+    (event: { pointerType: string }) => {
+      if (event.pointerType === 'touch') return;
+      if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+      showTimer.current = null;
+      hideAfter(LEAVE_GRACE_MS);
+    },
+    [hideAfter],
+  );
 
   /* A press dismisses the bubble — except a finger's, which may be the start of a long
      press asking for it. */
-  const onPress = useCallback((event: PointerEvent | React.PointerEvent) => {
-    touchPress.current?.disarm();
-    touchPress.current = null;
-    if (event.pointerType !== 'touch') {
+  const onPress = useCallback(
+    (event: PointerEvent | React.PointerEvent) => {
+      touchPress.current?.disarm();
+      touchPress.current = null;
+      if (event.pointerType !== 'touch') {
+        hide();
+        return;
+      }
       hide();
-      return;
-    }
-    hide();
-    const anchor = event.currentTarget as HTMLElement;
-    /* On a link a long press already means something — the platform's link menu (open in a
+      const anchor = event.currentTarget as HTMLElement;
+      /* On a link a long press already means something — the platform's link menu (open in a
        new tab, copy the address) — and a label is not worth taking that away. */
-    if (anchor.closest('a[href]')) return;
-    const press: { shown: boolean; disarm: () => void } = { shown: false, disarm: () => {} };
-    touchPress.current = press;
-    trackPress(
-      event,
-      {
-        press: () => {
-          if (touchPress.current !== press) return;
-          press.shown = true;
-          setOpen(true);
-          /* Swallow the click this press ends in, in the capture phase on `window`,
+      if (anchor.closest('a[href]')) return;
+      const press: { shown: boolean; disarm: () => void } = { shown: false, disarm: () => {} };
+      touchPress.current = press;
+      trackPress(
+        event,
+        {
+          press: () => {
+            if (touchPress.current !== press) return;
+            press.shown = true;
+            setOpen(true);
+            /* Swallow the click this press ends in, in the capture phase on `window`,
              ahead of React's own listener at the root. */
-          const swallow = (e: MouseEvent) => {
-            if (e.target instanceof Node && anchor.contains(e.target)) {
-              e.preventDefault();
-              e.stopPropagation();
-            }
+            const swallow = (e: MouseEvent) => {
+              if (e.target instanceof Node && anchor.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              press.disarm();
+            };
+            let expiry: number | null = null;
+            press.disarm = () => {
+              window.removeEventListener('click', swallow, true);
+              if (expiry !== null) window.clearTimeout(expiry);
+              expiry = null;
+            };
+            window.addEventListener('click', swallow, true);
+            // Belt and braces: a release that produces no click must not leave it armed.
+            expiry = window.setTimeout(() => press.disarm(), LONG_PRESS_MS + 5000);
+          },
+          release: () => {
+            if (touchPress.current !== press) return;
+            // The finger is gone: nothing is holding this control any more.
+            touchPress.current = null;
+            hideAfter(TOUCH_HOLD_MS);
+            /* The click follows the release at once; after a beat, nothing is coming. */
+            window.setTimeout(() => press.disarm(), 400);
+          },
+          cancel: () => {
+            if (touchPress.current !== press) return;
             press.disarm();
-          };
-          let expiry: number | null = null;
-          press.disarm = () => {
-            window.removeEventListener('click', swallow, true);
-            if (expiry !== null) window.clearTimeout(expiry);
-            expiry = null;
-          };
-          window.addEventListener('click', swallow, true);
-          // Belt and braces: a release that produces no click must not leave it armed.
-          expiry = window.setTimeout(() => press.disarm(), LONG_PRESS_MS + 5000);
+            touchPress.current = null;
+            if (press.shown) hide();
+          },
         },
-        release: () => {
-          if (touchPress.current !== press) return;
-          // The finger is gone: nothing is holding this control any more.
-          touchPress.current = null;
-          hideAfter(TOUCH_HOLD_MS);
-          /* The click follows the release at once; after a beat, nothing is coming. */
-          window.setTimeout(() => press.disarm(), 400);
-        },
-        cancel: () => {
-          if (touchPress.current !== press) return;
-          press.disarm();
-          touchPress.current = null;
-          if (press.shown) hide();
-        },
-      },
-      LONG_PRESS_MS,
-    );
-  }, [hide, hideAfter]);
+        LONG_PRESS_MS,
+      );
+    },
+    [hide, hideAfter],
+  );
 
   /* A long press is also the platform's context-menu gesture (Edge on a Windows touch
      screen opens the page menu over the bubble). While a finger is holding this control
@@ -377,12 +389,15 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
     if (touchPress.current) event.preventDefault();
   }, []);
 
-  const showForFocus = useCallback((event: { target: EventTarget | null }) => {
-    if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) {
-      keepOpen();
-      setOpen(true);
-    }
-  }, [keepOpen]);
+  const showForFocus = useCallback(
+    (event: { target: EventTarget | null }) => {
+      if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) {
+        keepOpen();
+        setOpen(true);
+      }
+    },
+    [keepOpen],
+  );
 
   // Third-party toolbars own their buttons. Bind the same behaviour directly
   // instead of adding another tooltip recipe or a wrapper around their DOM.
@@ -405,16 +420,31 @@ export function useTooltip(label?: string, externalTarget?: HTMLElement | null):
       externalTarget.removeEventListener('contextmenu', onContextMenu);
       if (anchorRef.current === externalTarget) anchorRef.current = null;
     };
-  }, [externalTarget, label, showForPointer, leaveForPointer, onPress, showForFocus, hide, cancel, onContextMenu]);
+  }, [
+    externalTarget,
+    label,
+    showForPointer,
+    leaveForPointer,
+    onPress,
+    showForFocus,
+    hide,
+    cancel,
+    onContextMenu,
+  ]);
 
   useLayoutEffect(() => {
     if (!externalTarget || !label || !open) return;
-    const ids = new Set(externalTarget.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean));
+    const ids = new Set(
+      externalTarget.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean),
+    );
     ids.add(id);
     externalTarget.setAttribute('aria-describedby', [...ids].join(' '));
     return () => {
-      const remaining = externalTarget.getAttribute('aria-describedby')?.split(/\s+/)
-        .filter((value) => value && value !== id).join(' ');
+      const remaining = externalTarget
+        .getAttribute('aria-describedby')
+        ?.split(/\s+/)
+        .filter((value) => value && value !== id)
+        .join(' ');
       if (remaining) externalTarget.setAttribute('aria-describedby', remaining);
       else externalTarget.removeAttribute('aria-describedby');
     };

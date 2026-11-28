@@ -167,7 +167,8 @@ function positionOf(state: unknown): HistoryPosition {
 
 function stateWithMarker(marker: HeroMarker) {
   const current = window.history.state;
-  const state = current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
+  const state =
+    current && typeof current === 'object' ? { ...(current as Record<string, unknown>) } : {};
   // A rung is never a layer entry.
   delete state[HISTORY_LAYER_KEY];
   return { ...state, [HISTORY_STATE_KEY]: { version: 2, ...marker } };
@@ -426,7 +427,10 @@ class HeroHistoryDriver {
         (marker, href) => href === expectedHref && !marker,
         record.token,
       );
-      const landed = current() && confirmed && !this.currentMarker() &&
+      const landed =
+        current() &&
+        confirmed &&
+        !this.currentMarker() &&
         normalizeHref(window.location.href) === expectedHref;
       if (landed) this.position = 'background';
       return landed;
@@ -452,7 +456,10 @@ class HeroHistoryDriver {
         (marker, href) => !marker && href === expected,
         ownerToken,
       );
-      const landed = current() && confirmed && !this.currentMarker() &&
+      const landed =
+        current() &&
+        confirmed &&
+        !this.currentMarker() &&
         normalizeHref(window.location.href) === expected;
       if (landed) this.position = 'background';
       return landed;
@@ -699,7 +706,10 @@ class HeroHistoryDriver {
   private enqueue<T>(fallback: T, work: () => Promise<T>): Promise<T> {
     this.queuedTransactions += 1;
     // Step counts assume a ladder rung is current: unwind any dialog above it first.
-    const run = this.transaction.then(settleHistoryLayers).then(work, work).catch(() => fallback);
+    const run = this.transaction
+      .then(settleHistoryLayers)
+      .then(work, work)
+      .catch(() => fallback);
     const observed = run.then(
       (value) => {
         this.queuedTransactions = Math.max(0, this.queuedTransactions - 1);

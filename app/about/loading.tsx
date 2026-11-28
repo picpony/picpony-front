@@ -15,7 +15,9 @@ import AboutFrame, { TeamCard, TeamSkeleton } from './AboutFrame';
 export default function AboutLoading() {
   return (
     <>
-      <div role="status" className="sr-only">加载中…</div>
+      <div role="status" className="sr-only">
+        加载中…
+      </div>
       <AboutFrame
         team={
           <TeamCard>

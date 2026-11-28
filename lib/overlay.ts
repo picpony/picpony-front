@@ -1,6 +1,16 @@
 'use client';
 
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react';
 import { getAppScroller } from '@/lib/appScroller';
 import { MOTION_SPEED_SCALE } from '@/lib/appearance';
 import { useHistoryLayer, type HistoryLayer } from '@/lib/historyLayers';
@@ -154,8 +164,11 @@ function rootsOf(layer: OverlayLayer): HTMLElement[] {
 }
 
 function available(el: HTMLElement): boolean {
-  return !el.closest('[inert], [hidden], [aria-hidden="true"]') &&
-    el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  return (
+    !el.closest('[inert], [hidden], [aria-hidden="true"]') &&
+    el.getClientRects().length > 0 &&
+    getComputedStyle(el).visibility !== 'hidden'
+  );
 }
 
 function activeLayers(): OverlayLayer[] {
@@ -170,7 +183,11 @@ function focusScope(): { layer: OverlayLayer; roots: HTMLElement[]; contained: b
   const index = active.findLastIndex((layer) => layer.options.current.modal !== false);
   if (index < 0) return null;
   const layer = active[index];
-  return { layer, roots: active.slice(index).flatMap(rootsOf), contained: layer.options.current.containFocus !== false };
+  return {
+    layer,
+    roots: active.slice(index).flatMap(rootsOf),
+    contained: layer.options.current.containFocus !== false,
+  };
 }
 
 /** The scope Tab cycles inside and focus is held in; null where focus may leave. */
@@ -187,15 +204,21 @@ function focusPanel(layer: OverlayLayer): void {
 }
 
 function focusableItems(roots: HTMLElement[]): HTMLElement[] {
-  return Array.from(new Set(roots.flatMap((root) => [
-    ...(root.matches(FOCUSABLE) ? [root] : []),
-    ...root.querySelectorAll<HTMLElement>(FOCUSABLE),
-  ]))).filter((el) => {
+  return Array.from(
+    new Set(
+      roots.flatMap((root) => [
+        ...(root.matches(FOCUSABLE) ? [root] : []),
+        ...root.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ]),
+    ),
+  ).filter((el) => {
     if (el.matches(':disabled') || !available(el)) return false;
     // Native editing hosts are tabbable without a tabindex attribute (their
     // DOM tabIndex property is nevertheless -1). Explicit -1 still opts out.
-    return el.tabIndex >= 0 || (!el.hasAttribute('tabindex') && el.isContentEditable &&
-      !el.parentElement?.isContentEditable);
+    return (
+      el.tabIndex >= 0 ||
+      (!el.hasAttribute('tabindex') && el.isContentEditable && !el.parentElement?.isContentEditable)
+    );
   });
 }
 
@@ -240,8 +263,9 @@ export function moveFocusFrom(
 ): void {
   if (!anchor) return;
   const scope = containingScope();
-  const items = focusableItems(scope?.roots ?? [document.body])
-    .filter((el) => !exclude?.contains(el));
+  const items = focusableItems(scope?.roots ?? [document.body]).filter(
+    (el) => !exclude?.contains(el),
+  );
   const index = items.indexOf(anchor);
   if (index < 0 || !items.length) return;
   const next = (index + (backwards ? -1 : 1) + items.length) % items.length;
@@ -256,10 +280,15 @@ export function moveFocusFrom(
  */
 export function skipCoveredTabStops(event: KeyboardEvent, covered: HTMLElement): void {
   if (
-    event.key !== 'Tab' || event.defaultPrevented || event.isComposing ||
-    event.altKey || event.ctrlKey || event.metaKey ||
+    event.key !== 'Tab' ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
     covered.getAttribute('aria-hidden') !== 'true'
-  ) return;
+  )
+    return;
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || covered.contains(active)) return;
   const direction = event.shiftKey
@@ -292,8 +321,12 @@ function onOverlayKeyDown(event: KeyboardEvent): void {
   const index = items.indexOf(document.activeElement as HTMLElement);
   // The initial focus is normally the panel (tabIndex=-1). Both Tab directions
   // must enter the cycle from there; Shift+Tab must never escape to the page.
-  if (items.length === 0 || index < 0 || (!event.shiftKey && index === items.length - 1) ||
-    (event.shiftKey && index === 0)) {
+  if (
+    items.length === 0 ||
+    index < 0 ||
+    (!event.shiftKey && index === items.length - 1) ||
+    (event.shiftKey && index === 0)
+  ) {
     event.preventDefault();
     const target = event.shiftKey ? items.at(-1) : items[0];
     if (target) target.focus({ preventScroll: true });
@@ -328,10 +361,12 @@ function isModal(layer: OverlayLayer) {
 
 function syncBackground() {
   const root = document.querySelector<HTMLElement>('[data-app-root]');
-  const covered = Boolean(root) && layers.some((layer) => {
-    const panel = layer.panelRef.current;
-    return isModal(layer) && Boolean(panel?.isConnected) && !root!.contains(panel);
-  });
+  const covered =
+    Boolean(root) &&
+    layers.some((layer) => {
+      const panel = layer.panelRef.current;
+      return isModal(layer) && Boolean(panel?.isConnected) && !root!.contains(panel);
+    });
   if (inertRoot && (inertRoot !== root || !covered)) {
     inertRoot.inert = false;
     inertRoot = null;
@@ -380,7 +415,8 @@ export function subscribeScreenQuiet(listener: () => void): () => void {
     attributeFilter: ['data-image-hero-transition', 'data-image-hero-state'],
   });
   const scroller = getAppScroller();
-  if (scroller) observer.observe(scroller, { attributes: true, attributeFilter: ['data-route-transit'] });
+  if (scroller)
+    observer.observe(scroller, { attributes: true, attributeFilter: ['data-route-transit'] });
   return () => {
     modalListeners.delete(listener);
     observer.disconnect();
@@ -414,7 +450,9 @@ export function useOverlayLayer(
     () => ({ panelRef, options: latest, parent, depth: (parent?.depth ?? -1) + 1, history }),
     [panelRef, parent, history],
   );
-  useLayoutEffect(() => { latest.current = options; });
+  useLayoutEffect(() => {
+    latest.current = options;
+  });
   useEffect(() => {
     if (!isOpen) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -436,8 +474,11 @@ export function useOverlayLayer(
         frame = requestAnimationFrame(enter);
         return;
       }
-      if (focusScope()?.layer === layer &&
-        !rootsOf(layer).some((root) => root.contains(document.activeElement))) focusPanel(layer);
+      if (
+        focusScope()?.layer === layer &&
+        !rootsOf(layer).some((root) => root.contains(document.activeElement))
+      )
+        focusPanel(layer);
     };
     frame = requestAnimationFrame(enter);
     return () => {
@@ -446,7 +487,8 @@ export function useOverlayLayer(
       const index = layers.indexOf(layer);
       // React has already made the departing panel inert by cleanup time, so
       // its former place in the modal stack cannot be read from activeLayers.
-      const wasTopModal = layers.findLast((candidate) => candidate.options.current.modal !== false) === layer;
+      const wasTopModal =
+        layers.findLast((candidate) => candidate.options.current.modal !== false) === layer;
       if (index >= 0) layers.splice(index, 1);
       if (layers.length === 0) {
         document.removeEventListener('keydown', onOverlayKeyDown);
@@ -465,23 +507,38 @@ export function useOverlayLayer(
            departed (it stays mounted through its exit), so the departing-roots test below
            cannot tell them apart. Moving it pulled focus to the first field mid-typing: text
            meant for a second field landed in the first. */
-        if (active instanceof HTMLElement && scope && scope.roots.some((root) => root.contains(active))) return;
+        if (
+          active instanceof HTMLElement &&
+          scope &&
+          scope.roots.some((root) => root.contains(active))
+        )
+          return;
         // A hero return exposes the gallery before its old route unmounts. Preserve a
         // new focus choice made there (or in a newer overlay) during that interval.
-        if (active instanceof HTMLElement && active !== document.body && available(active) &&
-          !departingRoots.some((root) => root.contains(active))) return;
+        if (
+          active instanceof HTMLElement &&
+          active !== document.body &&
+          available(active) &&
+          !departingRoots.some((root) => root.contains(active))
+        )
+          return;
         const preferred = latest.current.returnFocus?.();
         const target = preferred ?? previous;
         /* A surface that does not contain focus leaves the rest of the app live, so a control out
            there — the app bar's 登录 under the image detail — is a place focus may return to. */
-        if (target && target !== document.body && available(target) &&
-          (!scope || !scope.contained || scope.roots.some((root) => root.contains(target)))) {
+        if (
+          target &&
+          target !== document.body &&
+          available(target) &&
+          (!scope || !scope.contained || scope.roots.some((root) => root.contains(target)))
+        ) {
           target.focus({ preventScroll: true });
           /* A landing target (a page heading `focusLanding` gave a temporary tabindex) lost that
              tabindex when this dialog took the focus, so focusing it again is a silent no-op.
              After a password change the sign-out remount had landed on the heading, the
              sign-in dialog opened from there, and closing it left focus on the body. */
-          if (document.activeElement !== target && !focusLanding(target) && wasTopModal && !scope) focusPageLanding();
+          if (document.activeElement !== target && !focusLanding(target) && wasTopModal && !scope)
+            focusPageLanding();
         } else if (wasTopModal && scope) {
           focusPanel(scope.layer);
         } else if (wasTopModal) {

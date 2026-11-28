@@ -3,27 +3,63 @@
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
 import Select from '@/components/Select';
-import { commitMotionCustom, commitMotionEffects, useMotionCustom, useMotionEffects } from '@/lib/appearance';
 import {
-  MOTION_CATEGORIES, MOTION_PRESETS, MOTION_EFFECTS, motionPreset, motionEffectPreset,
+  commitMotionCustom,
+  commitMotionEffects,
+  useMotionCustom,
+  useMotionEffects,
+} from '@/lib/appearance';
+import {
+  MOTION_CATEGORIES,
+  MOTION_PRESETS,
+  MOTION_EFFECTS,
+  motionPreset,
+  motionEffectPreset,
   type MotionCategory,
 } from '@/lib/motionPreferences';
 import { SettingsRow } from './SettingsRow';
 
-interface DialogProps { isOpen: boolean; onClose: () => void }
+interface DialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
 
 export function MotionSpeedDialog(props: DialogProps) {
   const speeds = useMotionCustom();
-  return <MotionOptionsDialog {...props} kind="速度" values={speeds} options={[...MOTION_PRESETS]} makePreset={motionPreset} onChange={commitMotionCustom} />;
+  return (
+    <MotionOptionsDialog
+      {...props}
+      kind="速度"
+      values={speeds}
+      options={[...MOTION_PRESETS]}
+      makePreset={motionPreset}
+      onChange={commitMotionCustom}
+    />
+  );
 }
 
 export function MotionEffectsDialog(props: DialogProps) {
   const effects = useMotionEffects();
-  return <MotionOptionsDialog {...props} kind="效果" values={effects} options={[...MOTION_EFFECTS]} makePreset={motionEffectPreset} onChange={commitMotionEffects} />;
+  return (
+    <MotionOptionsDialog
+      {...props}
+      kind="效果"
+      values={effects}
+      options={[...MOTION_EFFECTS]}
+      makePreset={motionEffectPreset}
+      onChange={commitMotionEffects}
+    />
+  );
 }
 
 function MotionOptionsDialog<T extends string>({
-  isOpen, onClose, kind, values, options, makePreset, onChange,
+  isOpen,
+  onClose,
+  kind,
+  values,
+  options,
+  makePreset,
+  onChange,
 }: DialogProps & {
   kind: '速度' | '效果';
   values: Record<MotionCategory, T>;
@@ -39,7 +75,11 @@ function MotionOptionsDialog<T extends string>({
       isOpen={isOpen}
       onClose={onClose}
       title={`自定义动画${kind}`}
-      footer={<Button variant="filled" onClick={onClose}>完成</Button>}
+      footer={
+        <Button variant="filled" onClick={onClose}>
+          完成
+        </Button>
+      }
     >
       <div className="mb-4">
         <SettingsRow
@@ -53,7 +93,9 @@ function MotionOptionsDialog<T extends string>({
               value={preset}
               placeholder="逐项配置"
               options={options}
-              onChange={(value) => { if (value !== '') onChange(makePreset(value)); }}
+              onChange={(value) => {
+                if (value !== '') onChange(makePreset(value));
+              }}
             />
           }
         />

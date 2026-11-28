@@ -62,11 +62,7 @@ export function OwnerHiddenNote({ tab }: { tab: ProfileTab }) {
         <MdVisibilityOff size={ICON.dense} aria-hidden="true" />
         你的{what}已对其他人隐藏
       </span>
-      <ButtonLink
-        href={settingsHref('account')}
-        variant="text"
-        size="xs"
-      >
+      <ButtonLink href={settingsHref('account')} variant="text" size="xs">
         前往设置
       </ButtonLink>
     </div>
@@ -79,14 +75,38 @@ export function OwnerHiddenNote({ tab }: { tab: ProfileTab }) {
  * the server's own sentence, with no 重试 that could only get the same answer (R7-020). Anything
  * else is the failure preset with the error's sentence and 重试.
  */
-export function PaneFailure({ error, title, onRetry }: { error: unknown; title: string; onRetry: () => void }) {
+export function PaneFailure({
+  error,
+  title,
+  onRetry,
+}: {
+  error: unknown;
+  title: string;
+  onRetry: () => void;
+}) {
   if (!isRetryable(error)) {
-    return <EmptyState size="pane" icon={<MdBlock size={ICON.display} />} title={apiErrorMessage(error)} />;
+    return (
+      <EmptyState
+        size="pane"
+        icon={<MdBlock size={ICON.display} />}
+        title={apiErrorMessage(error)}
+      />
+    );
   }
-  return <ErrorRetry size="pane" title={title} message={apiErrorMessage(error)} onRetry={onRetry} />;
+  return (
+    <ErrorRetry size="pane" title={title} message={apiErrorMessage(error)} onRetry={onRetry} />
+  );
 }
 
 /** Placeholder while a profile's post or comment rows are unknown. */
 export function ListRowsSkeleton() {
-  return <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载列表…" className="mx-auto max-w-4xl" />;
+  return (
+    <PageLoadingIndicator
+      size="pane"
+      indicatorSize="lg"
+      holdFooter
+      label="正在加载列表…"
+      className="mx-auto max-w-4xl"
+    />
+  );
 }

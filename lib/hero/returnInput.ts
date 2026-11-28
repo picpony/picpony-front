@@ -1,6 +1,12 @@
 'use client';
 
-import { HERO_INPUT_TRANSFER_QUIET_MS, noteDetachedHeroInput, observeHeroTouchTarget, readHeroScrollInput, subscribeHeroInteraction } from './input';
+import {
+  HERO_INPUT_TRANSFER_QUIET_MS,
+  noteDetachedHeroInput,
+  observeHeroTouchTarget,
+  readHeroScrollInput,
+  subscribeHeroInteraction,
+} from './input';
 
 type EndReason = 'ended' | 'superseded';
 
@@ -16,7 +22,13 @@ export type HeroReturnInput = {
  * or confirmed native destination scroll. See docs/hero.md#input.
  */
 export function takeOverHeroReturnInput({
-  source, destination, lineHeight, pageHeight, onWheel, onTouch, onEnd,
+  source,
+  destination,
+  lineHeight,
+  pageHeight,
+  onWheel,
+  onTouch,
+  onEnd,
 }: {
   source: HTMLElement;
   destination: HTMLElement;
@@ -28,10 +40,12 @@ export function takeOverHeroReturnInput({
 }): HeroReturnInput | null {
   const snapshot = readHeroScrollInput();
   const inside = (target: EventTarget | null) => target instanceof Node && source.contains(target);
-  const touch = snapshot.touches.length === 1 && inside(snapshot.touches[0].target)
-    ? snapshot.touches[0] : null;
-  const wheel = snapshot.touches.length === 0 && inside(snapshot.wheel?.target ?? null)
-    ? snapshot.wheel : null;
+  const touch =
+    snapshot.touches.length === 1 && inside(snapshot.touches[0].target)
+      ? snapshot.touches[0]
+      : null;
+  const wheel =
+    snapshot.touches.length === 0 && inside(snapshot.wheel?.target ?? null) ? snapshot.wheel : null;
   if (!touch && !wheel) return null;
 
   let active = true;
@@ -50,11 +64,14 @@ export function takeOverHeroReturnInput({
   const waitWheelEnd = () => {
     if (wheelIdle) window.clearTimeout(wheelIdle);
     const remaining = HERO_INPUT_TRANSFER_QUIET_MS - (performance.now() - (wheel?.seenAt ?? 0));
-    wheelIdle = window.setTimeout(() => {
-      wheelIdle = 0;
-      if (readHeroScrollInput().wheel?.id === wheel?.id) waitWheelEnd();
-      else finish('ended');
-    }, Math.max(1, Math.ceil(remaining) + 1));
+    wheelIdle = window.setTimeout(
+      () => {
+        wheelIdle = 0;
+        if (readHeroScrollInput().wheel?.id === wheel?.id) waitWheelEnd();
+        else finish('ended');
+      },
+      Math.max(1, Math.ceil(remaining) + 1),
+    );
   };
   const forwardWheel = (event: WheelEvent) => {
     if (!active || !wheel || handled.has(event)) return handled.has(event);
@@ -65,19 +82,27 @@ export function takeOverHeroReturnInput({
     }
     handled.add(event);
     if (event.cancelable) event.preventDefault();
-    const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? lineHeight
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? pageHeight : 1;
+    const unit =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? lineHeight
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? pageHeight
+          : 1;
     onWheel(event.deltaX * unit, event.deltaY * unit);
     waitWheelEnd();
     return true;
   };
-  const wheelListener = (event: WheelEvent) => { forwardWheel(event); };
+  const wheelListener = (event: WheelEvent) => {
+    forwardWheel(event);
+  };
   if (wheel) {
     window.addEventListener('wheel', wheelListener, { capture: true, passive: false });
     cleanups.push(() => window.removeEventListener('wheel', wheelListener, true));
     if (wheel.target) {
       wheel.target.addEventListener('wheel', wheelListener as EventListener, { passive: false });
-      cleanups.push(() => wheel.target?.removeEventListener('wheel', wheelListener as EventListener));
+      cleanups.push(() =>
+        wheel.target?.removeEventListener('wheel', wheelListener as EventListener),
+      );
     }
     waitWheelEnd();
   }
@@ -90,13 +115,16 @@ export function takeOverHeroReturnInput({
         finish('superseded');
         return;
       }
-      const moved = Array.from(event.changedTouches).find((entry) => entry.identifier === touch.identifier);
+      const moved = Array.from(event.changedTouches).find(
+        (entry) => entry.identifier === touch.identifier,
+      );
       if (moved) {
         onTouch(x - moved.clientX, y - moved.clientY);
         x = moved.clientX;
         y = moved.clientY;
       }
-      if (!Array.from(event.touches).some((entry) => entry.identifier === touch.identifier)) finish('ended');
+      if (!Array.from(event.touches).some((entry) => entry.identifier === touch.identifier))
+        finish('ended');
     };
     for (const type of ['touchmove', 'touchend', 'touchcancel']) {
       touch.target.addEventListener(type, touchListener, { passive: true });
@@ -105,11 +133,14 @@ export function takeOverHeroReturnInput({
     const newWheel = () => finish('superseded');
     window.addEventListener('wheel', newWheel, { capture: true, passive: true });
     cleanups.push(() => window.removeEventListener('wheel', newWheel, true));
-    cleanups.push(subscribeHeroInteraction(() => {
-      // A real end is handled above. Losing the shared contact through blur or its safety
-      // timeout cancels pending movement, even if a background tab cannot drain its frame.
-      if (!readHeroScrollInput().touches.some((entry) => entry.identifier === touch.identifier)) finish('superseded');
-    }));
+    cleanups.push(
+      subscribeHeroInteraction(() => {
+        // A real end is handled above. Losing the shared contact through blur or its safety
+        // timeout cancels pending movement, even if a background tab cannot drain its frame.
+        if (!readHeroScrollInput().touches.some((entry) => entry.identifier === touch.identifier))
+          finish('superseded');
+      }),
+    );
   }
   const supersede = () => finish('superseded');
   for (const type of ['pointerdown', 'touchstart']) {

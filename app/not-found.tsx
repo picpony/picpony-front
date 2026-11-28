@@ -26,11 +26,7 @@ export default function NotFound() {
       title="这里什么都没有"
       description="页面可能已被删除，或链接地址有误"
       action={
-        <ButtonLink
-          href="/"
-          variant="filled"
-          icon={<MdHome />}
-        >
+        <ButtonLink href="/" variant="filled" icon={<MdHome />}>
           回到首页
         </ButtonLink>
       }

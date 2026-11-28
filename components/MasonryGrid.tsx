@@ -97,7 +97,11 @@ function revealCard(grid: string, id: number): boolean {
  * the engine lay the hidden subtree out (docs/transitions.md#tab-state-and-history), so a grid there is not measured.
  */
 function inShownPanes(el: Element): boolean {
-  for (let pane = el.closest('[data-tab-pane]'); pane; pane = pane.parentElement?.closest('[data-tab-pane]') ?? null) {
+  for (
+    let pane = el.closest('[data-tab-pane]');
+    pane;
+    pane = pane.parentElement?.closest('[data-tab-pane]') ?? null
+  ) {
     if (!pane.hasAttribute('data-tab-pane-active')) return false;
   }
   return true;
@@ -188,7 +192,9 @@ function editOf(rendered: MountedRun, images: ImagePreview[]): MountedRun | null
     /* Still fading from an earlier edit, unless it came back (撤销): then it is live again. */
     for (const leaver of rendered.leaving) {
       if (nextIndex.has(leaver.image.id)) continue;
-      leaving.push(leaver.after !== null && live.has(leaver.after) ? leaver : { ...leaver, after: null });
+      leaving.push(
+        leaver.after !== null && live.has(leaver.after) ? leaver : { ...leaver, after: null },
+      );
     }
     previous.forEach((image, index) => {
       if (nextIndex.has(image.id) || index < rendered.from || index >= rendered.to) return;
@@ -230,13 +236,18 @@ const FOLLOWER_MARGIN = 200;
 function followersOf(from: HTMLElement): HTMLElement[] {
   const result: HTMLElement[] = [];
   const bottom = window.innerHeight + FOLLOWER_MARGIN;
-  for (let node: HTMLElement | null = from; node && !node.hasAttribute('data-page-content'); node = node.parentElement) {
+  for (
+    let node: HTMLElement | null = from;
+    node && !node.hasAttribute('data-page-content');
+    node = node.parentElement
+  ) {
     for (let sibling = node.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
       if (!(sibling instanceof HTMLElement)) continue;
       const position = getComputedStyle(sibling).position;
       if (position === 'sticky' || position === 'fixed' || position === 'absolute') continue;
       const rect = sibling.getBoundingClientRect();
-      if (rect.height > 0 && rect.top < bottom && rect.bottom > -FOLLOWER_MARGIN) result.push(sibling);
+      if (rect.height > 0 && rect.top < bottom && rect.bottom > -FOLLOWER_MARGIN)
+        result.push(sibling);
     }
   }
   return result;
@@ -268,7 +279,10 @@ interface Hold {
  * by 28px before the hold existed (measured at 1440). One per column count, as the stylesheet
  * picks, so no script has to ask which.
  */
-function heldGrid(grid: Record<string, string>, before: Record<string, string>): Record<string, string> {
+function heldGrid(
+  grid: Record<string, string>,
+  before: Record<string, string>,
+): Record<string, string> {
   const held = { ...grid };
   for (const count of MASONRY_COLUMN_COUNTS) {
     const key = `--mh${count}`;
@@ -332,7 +346,8 @@ function playEdit({
     const before = Math.max(placedHeight(edit.items, geometry), hold?.floor ?? 0);
     const natural = placedHeight(items, geometry);
     if (natural < before - 0.5) {
-      const need = scroller.scrollTop + scroller.clientHeight - (scroller.scrollHeight - geometry.rect.height);
+      const need =
+        scroller.scrollTop + scroller.clientHeight - (scroller.scrollHeight - geometry.rect.height);
       if (need > natural + 0.5) floor = Math.ceil(Math.min(need, before));
     }
     lift = Math.max(natural, floor) - before;
@@ -371,10 +386,16 @@ function playEdit({
       const at = shift ? `translate(${shift.x}px, ${shift.y}px)` : '';
       moves.get(el)?.cancel();
       const fade = el.animate(
-        [{ opacity: 1, transform: at || 'none' }, { opacity: 0, transform: `${at} scale(${ENTER_SCALE.item})` }],
+        [
+          { opacity: 1, transform: at || 'none' },
+          { opacity: 0, transform: `${at} scale(${ENTER_SCALE.item})` },
+        ],
         { ...springTiming('fastEffects', 'list'), fill: 'forwards' },
       );
-      fade.finished.then(() => onLeft(id), () => {});
+      fade.finished.then(
+        () => onLeft(id),
+        () => {},
+      );
       continue;
     }
     /* Back from leaving (撤销): its fade is cancelled, and it comes in like an arrival. */
@@ -388,7 +409,10 @@ function playEdit({
     if (at === undefined) continue;
     if (!was || returning) {
       el.animate([{ opacity: 0 }, { opacity: 1 }], springTiming('defaultEffects', 'list'));
-      track(el, el.animate([{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }], move));
+      track(
+        el,
+        el.animate([{ transform: `scale(${ENTER_SCALE.item})` }, { transform: 'none' }], move),
+      );
       continue;
     }
     const from = slotBox(was, geometry);
@@ -400,12 +424,18 @@ function playEdit({
       moves.get(el)?.cancel();
       continue;
     }
-    track(el, el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], move));
+    track(
+      el,
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], move),
+    );
   }
 
   for (const el of followers) {
     const shift = shifts.get(el) ?? { x: 0, y: 0 };
-    track(el, el.animate([{ transform: `translateY(${shift.y - lift}px)` }, { transform: 'none' }], move));
+    track(
+      el,
+      el.animate([{ transform: `translateY(${shift.y - lift}px)` }, { transform: 'none' }], move),
+    );
   }
 }
 
@@ -522,11 +552,21 @@ export default memo(function MasonryGrid({
      first chunk too, aimed. */
   const arriving = (): MountedRun => {
     const first = Math.min(images.length, FIRST_CHUNK);
-    const fresh = { list: images, key: shown.key, from: 0, to: first, aim: true, leaving: [], edit: null };
+    const fresh = {
+      list: images,
+      key: shown.key,
+      from: 0,
+      to: first,
+      aim: true,
+      leaving: [],
+      edit: null,
+    };
     if (rendered.key !== shown.key) return fresh;
     const same =
-      rendered.list.length === images.length && rendered.list.every((image, index) => image.id === images[index]?.id);
-    if (same) return { ...rendered, list: images, to: Math.min(images.length, rendered.to), edit: null };
+      rendered.list.length === images.length &&
+      rendered.list.every((image, index) => image.id === images[index]?.id);
+    if (same)
+      return { ...rendered, list: images, to: Math.min(images.length, rendered.to), edit: null };
     return editOf(rendered, images) ?? fresh;
   };
   const current = rendered.list === images && rendered.key === shown.key;
@@ -548,11 +588,16 @@ export default memo(function MasonryGrid({
     queueMicrotask(() => {
       if (cancelled) return;
       const grid = gridRef.current;
-      const scroller = grid?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+      const scroller =
+        grid?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
       const port = scroller?.getBoundingClientRect();
       const band = grid && port ? slotsInBand(layout.items, grid, port.top, port.bottom) : null;
       if (!band || (band.from >= from && band.to <= to)) {
-        startTransition(() => setRendered((state) => (state.list === images && state.aim ? { ...state, aim: false } : state)));
+        startTransition(() =>
+          setRendered((state) =>
+            state.list === images && state.aim ? { ...state, aim: false } : state,
+          ),
+        );
         return;
       }
       const target =
@@ -560,7 +605,9 @@ export default memo(function MasonryGrid({
           ? { from: Math.min(from, band.from), to: Math.max(to, band.to) }
           : band;
       flushSync(() =>
-        setRendered((state) => (state.list === images && state.aim ? { ...state, ...target, aim: false } : state)),
+        setRendered((state) =>
+          state.list === images && state.aim ? { ...state, ...target, aim: false } : state,
+        ),
       );
     });
     return () => {
@@ -585,7 +632,8 @@ export default memo(function MasonryGrid({
     const tick = () => {
       frame = 0;
       const grid = gridRef.current;
-      const scroller = grid?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
+      const scroller =
+        grid?.closest<HTMLElement>('[data-app-scroll-container]') ?? getAppScroller();
       const port = grid && inShownPanes(grid) ? scroller?.getBoundingClientRect() : undefined;
       const band = grid && port ? slotsInBand(layout.items, grid, port.top, port.bottom) : null;
       if (band && (band.from < from || band.to > to)) {
@@ -692,12 +740,20 @@ export default memo(function MasonryGrid({
   );
   const activeSequence = sequence ?? pageSequence;
 
-  const ids = useMemo(() => (images.length > 0 ? images.map((image) => image.id) : EMPTY_IDS), [images]);
+  const ids = useMemo(
+    () => (images.length > 0 ? images.map((image) => image.id) : EMPTY_IDS),
+    [images],
+  );
   const counts = useResource(siteCommentCounts, siteComments || ids.length === 0 ? SKIP : { ids });
   const onSite = siteComments ?? counts.data;
 
   /* A slot: a live card at its place in the list, or one that left, held where it was. */
-  const slot = (image: ImagePreview, index: number, style: Record<string, string>, left: boolean) => (
+  const slot = (
+    image: ImagePreview,
+    index: number,
+    style: Record<string, string>,
+    left: boolean,
+  ) => (
     <div
       key={image.id}
       role="listitem"
@@ -710,7 +766,12 @@ export default memo(function MasonryGrid({
       className={cn('masonry-item', left && 'pointer-events-none')}
       style={style as CSSProperties}
     >
-      <ImageCard image={image} index={index} sequence={activeSequence} siteComments={onSite?.[image.id]} />
+      <ImageCard
+        image={image}
+        index={index}
+        sequence={activeSequence}
+        siteComments={onSite?.[image.id]}
+      />
       {selection && (
         <CardSelection
           image={image}
@@ -726,7 +787,8 @@ export default memo(function MasonryGrid({
   /* The leavers follow the card they followed, so a fading card is never moved in the DOM. */
   const children: ReactNode[] = [];
   const after = (id: number | null) => {
-    for (const leaver of leaving) if (leaver.after === id) children.push(slot(leaver.image, leaver.index, leaver.style, true));
+    for (const leaver of leaving)
+      if (leaver.after === id) children.push(slot(leaver.image, leaver.index, leaver.style, true));
   };
   after(null);
   images.slice(from, to).forEach((image, offset) => {
@@ -738,7 +800,13 @@ export default memo(function MasonryGrid({
   return (
     <>
       <div className="masonry">
-        <div ref={gridRef} role="list" data-masonry-grid={listId} className="masonry-grid" style={gridStyle as CSSProperties}>
+        <div
+          ref={gridRef}
+          role="list"
+          data-masonry-grid={listId}
+          className="masonry-grid"
+          style={gridStyle as CSSProperties}
+        >
           {children}
         </div>
       </div>
@@ -869,7 +937,8 @@ const CardSelection = memo(function CardSelection({
 
   /* The card under the checkbox is out of reach for the mode's length. */
   useLayoutEffect(() => {
-    const card = buttonRef.current?.parentElement?.querySelector<HTMLElement>(':scope > .image-card');
+    const card =
+      buttonRef.current?.parentElement?.querySelector<HTMLElement>(':scope > .image-card');
     if (!active || !card) return;
     const hadFocus = card.contains(document.activeElement);
     card.inert = true;
@@ -889,8 +958,12 @@ const CardSelection = memo(function CardSelection({
       inert={!active}
       data-select-card=""
       data-ripple=""
-      onPointerDown={() => { heldPress.current = false; }}
-      onContextMenu={(event) => { if (heldPress.current) event.preventDefault(); }}
+      onPointerDown={() => {
+        heldPress.current = false;
+      }}
+      onContextMenu={(event) => {
+        if (heldPress.current) event.preventDefault();
+      }}
       onClick={(event) => {
         if (heldPress.current) {
           heldPress.current = false;
@@ -900,7 +973,8 @@ const CardSelection = memo(function CardSelection({
         onToggle(id, event.shiftKey);
       }}
       onTransitionEnd={(event) => {
-        if (!active && event.target === event.currentTarget && event.propertyName === 'opacity') setShownSelected(selected);
+        if (!active && event.target === event.currentTarget && event.propertyName === 'opacity')
+          setShownSelected(selected);
       }}
       className={cn(
         'group ripple-on-media absolute inset-0 z-10 block overflow-hidden rounded-lg select-none touch-manipulation',
@@ -938,7 +1012,11 @@ const CardSelection = memo(function CardSelection({
             /* An effects spring: a dash offset that overshoots draws past the end of the path and
                retracts. The press step lets the disc settle before the stroke starts. */
             className: 'spring-fast-effects transition-[stroke-dashoffset]',
-            style: { transitionDelay: ticked ? 'calc(var(--motion-base-handoff) * var(--motion-scale))' : '0ms' },
+            style: {
+              transitionDelay: ticked
+                ? 'calc(var(--motion-base-handoff) * var(--motion-scale))'
+                : '0ms',
+            },
           }}
         />
       </span>

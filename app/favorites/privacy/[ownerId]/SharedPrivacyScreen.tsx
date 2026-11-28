@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { MdDownload, MdLock, MdLockOpen, MdPersonOff } from 'react-icons/md';
 import { useResource } from '@/lib/resource';
 import { sharedPrivacyFaves, userProfile } from '@/lib/resources';
-import { isPasswordMismatch, verifySharedPrivacyPassword, type SharedPrivacyAnswer } from '@/lib/api/favorites';
+import {
+  isPasswordMismatch,
+  verifySharedPrivacyPassword,
+  type SharedPrivacyAnswer,
+} from '@/lib/api/favorites';
 import { apiErrorMessage, isAborted, isNotFound, isRetryable } from '@/lib/api/errors';
 import { clearImageSequence } from '@/lib/imageSequence';
 import { favoritesHref, settled } from '@/lib/favorites';
@@ -35,7 +39,12 @@ import { usePictureBatch } from '@/components/favorites/usePictureBatch';
 const COLUMN = 'mx-auto flex w-full max-w-7xl flex-1 flex-col page-back-room-7xl';
 
 /** The password, then the space read again — its answer is what the screen shows next. */
-async function openSharedSpace(token: string, ownerId: number, password: string, signal: AbortSignal) {
+async function openSharedSpace(
+  token: string,
+  ownerId: number,
+  password: string,
+  signal: AbortSignal,
+) {
   await verifySharedPrivacyPassword(token, ownerId, password);
   signal.throwIfAborted();
   if (readToken() !== token) throw new DOMException('session changed', 'AbortError');
@@ -96,7 +105,9 @@ export default function SharedPrivacyScreen({ ownerId }: { ownerId: number }) {
       </>
     );
   }
-  return <SharedSpace key={`${token}:${ownerId}`} token={token} ownerId={ownerId} pageBack={pageBack} />;
+  return (
+    <SharedSpace key={`${token}:${ownerId}`} token={token} ownerId={ownerId} pageBack={pageBack} />
+  );
 }
 
 /** Your own space's link, followed: it lives on /favorites, behind your own password. */
@@ -107,7 +118,9 @@ function OwnSpace() {
       fill
       icon={<MdLock size={ICON.display} />}
       title="这是你自己的隐私空间"
-      description={showPrivacy ? '可在「我的收藏」中查看和管理' : '在设置中开启「显示隐私空间」后即可查看'}
+      description={
+        showPrivacy ? '可在「我的收藏」中查看和管理' : '在设置中开启「显示隐私空间」后即可查看'
+      }
       action={
         <ButtonLink href={showPrivacy ? favoritesHref('privacy') : '/settings'} variant="tonal">
           {showPrivacy ? '前往我的隐私空间' : '前往设置'}
@@ -117,7 +130,15 @@ function OwnSpace() {
   );
 }
 
-function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: number; pageBack: React.ReactNode }) {
+function SharedSpace({
+  token,
+  ownerId,
+  pageBack,
+}: {
+  token: string;
+  ownerId: number;
+  pageBack: React.ReactNode;
+}) {
   const read = useResource(sharedPrivacyFaves, { token, ownerId }, { refetchInterval: 30_000 });
   const owner = useResource(userProfile, { id: String(ownerId) });
   const ownerName = owner.data?.username ?? null;
@@ -129,7 +150,16 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
   const [page, setPage] = useScreenStateFor('favorites:shared-privacy', ownerId, 1);
   const listKey = `fave-shared-privacy:${token}:${ownerId}`;
   const rules = useDeviceRules();
-  const allowed = useMemo(() => images ? rules.withhold(images, images.map((image) => image.id)).images : [], [images, rules]);
+  const allowed = useMemo(
+    () =>
+      images
+        ? rules.withhold(
+            images,
+            images.map((image) => image.id),
+          ).images
+        : [],
+    [images, rules],
+  );
   useEffect(() => {
     const args = { token, ownerId };
     const conceal = () => {
@@ -172,7 +202,14 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
   const title = ownerName ? `${ownerName} 的隐私空间` : '隐私空间';
 
   if (owner.data === null || isNotFound(owner.error)) {
-    return <>{pageBack}<div className={COLUMN}><EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" /></div></>;
+    return (
+      <>
+        {pageBack}
+        <div className={COLUMN}>
+          <EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" />
+        </div>
+      </>
+    );
   }
 
   if (answer === undefined) {
@@ -189,7 +226,12 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
         {pageBack}
         <div className={COLUMN}>
           {isNotFound(read.error) ? (
-            <EmptyState fill icon={<MdPersonOff size={ICON.display} />} title="用户不存在" description="分享该隐私空间的用户不存在或已注销" />
+            <EmptyState
+              fill
+              icon={<MdPersonOff size={ICON.display} />}
+              title="用户不存在"
+              description="分享该隐私空间的用户不存在或已注销"
+            />
           ) : (
             <ErrorRetry
               fill
@@ -209,7 +251,12 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
         {pageBack}
         <div key="locked" className={swap}>
           <PageHeader title={title} />
-          <SharedUnlockForm token={token} ownerId={ownerId} ownerName={ownerName} message={answer.message} />
+          <SharedUnlockForm
+            token={token}
+            ownerId={ownerId}
+            ownerName={ownerName}
+            message={answer.message}
+          />
         </div>
       </>
     );
@@ -225,7 +272,12 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
           subtitle={<span className="tabular-nums">共 {formatCount(list.length)} 张</span>}
           actions={
             allowed.length > 0 ? (
-              <Button variant="tonal" icon={<MdDownload />} loading={batch.busy} onClick={() => void batch.download(allowed)}>
+              <Button
+                variant="tonal"
+                icon={<MdDownload />}
+                loading={batch.busy}
+                onClick={() => void batch.download(allowed)}
+              >
                 下载全部
               </Button>
             ) : undefined
@@ -238,7 +290,9 @@ function SharedSpace({ token, ownerId, pageBack }: { token: string; ownerId: num
             setPage={setPage}
             listKey={listKey}
             failureTitle="隐私空间加载失败"
-            empty={<EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="暂无图片" />}
+            empty={
+              <EmptyState size="pane" icon={<MdLock size={ICON.display} />} title="暂无图片" />
+            }
           />
         </div>
       </div>
@@ -265,8 +319,15 @@ function SharedUnlockForm({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
-  useEffect(() => () => { pending.current?.abort(); }, []);
-  const form = useFieldErrors<'password'>(() => [['password', validateRequired(password, '请输入隐私密码')]]);
+  useEffect(
+    () => () => {
+      pending.current?.abort();
+    },
+    [],
+  );
+  const form = useFieldErrors<'password'>(() => [
+    ['password', validateRequired(password, '请输入隐私密码')],
+  ]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -308,7 +369,13 @@ function SharedUnlockForm({
             form.clear('password');
           }}
         />
-        <Button type="submit" variant="filled" icon={<MdLockOpen />} loading={busy} className="self-end">
+        <Button
+          type="submit"
+          variant="filled"
+          icon={<MdLockOpen />}
+          loading={busy}
+          className="self-end"
+        >
           解锁
         </Button>
       </form>

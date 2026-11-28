@@ -15,19 +15,44 @@ type DateInputProps = Omit<ComponentProps<typeof Input>, 'type'>;
  * (the 56dp field less its 28px line, divided by two); CSS hides the native empty segments only
  * on engines that support that pseudo-element.
  */
-export default function DateInput({ value, fieldClassName, onFocus, onBlur, ...props }: DateInputProps) {
+export default function DateInput({
+  value,
+  fieldClassName,
+  onFocus,
+  onBlur,
+  ...props
+}: DateInputProps) {
   const [focused, setFocused] = useState(false);
   const empty = !value && !focused;
   return (
-    <div className={cn(styles.field, 'relative', fieldClassName)} data-empty={empty ? '' : undefined}>
+    <div
+      className={cn(styles.field, 'relative', fieldClassName)}
+      data-empty={empty ? '' : undefined}
+    >
       <Input
         {...props}
         type="date"
         value={value}
-        onFocus={(event) => { setFocused(true); onFocus?.(event); }}
-        onBlur={(event) => { setFocused(false); onBlur?.(event); }}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
       />
-      {empty && <span aria-hidden="true" className={cn(styles.hint, 'pointer-events-none absolute start-4 top-3.5 text-body-l text-on-surface-variant')}>年 / 月 / 日</span>}
+      {empty && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            styles.hint,
+            'pointer-events-none absolute start-4 top-3.5 text-body-l text-on-surface-variant',
+          )}
+        >
+          年 / 月 / 日
+        </span>
+      )}
     </div>
   );
 }

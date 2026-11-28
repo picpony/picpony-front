@@ -52,11 +52,14 @@ export function derpiMarkdown(body: string | null | undefined): string {
  * A link that names a comment on Derpibooru (`…/images/232093#comment_10184427`, absolute or
  * not): its picture and comment ids, so a click can scroll to it when it is on screen here.
  */
-export function derpiCommentTarget(href: string | null | undefined): { imageId: number; commentId: number } | null {
+export function derpiCommentTarget(
+  href: string | null | undefined,
+): { imageId: number; commentId: number } | null {
   if (!href) return null;
-  const match = /^(?:https?:\/\/(?:www\.)?(?:derpibooru\.org|trixiebooru\.org))?\/(?:images\/)?(\d+)#comment_(\d+)$/i.exec(
-    href.trim(),
-  );
+  const match =
+    /^(?:https?:\/\/(?:www\.)?(?:derpibooru\.org|trixiebooru\.org))?\/(?:images\/)?(\d+)#comment_(\d+)$/i.exec(
+      href.trim(),
+    );
   if (!match) return null;
   return { imageId: Number(match[1]), commentId: Number(match[2]) };
 }
@@ -77,12 +80,14 @@ function stripBbcode(text: string, keepQuotes: boolean): string {
       out = out.replace(/\[quote(?:=[^\]]*)?\](?:(?!\[quote)[\s\S])*?\[\/quote\]/gi, '');
     } while (out !== previous);
   }
-  return out
-    .replace(/\[img[^\]]*\][\s\S]*?\[\/img\]/gi, '')
-    .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
-    /* Only the tags the editor and the renderer know: a Markdown link's `[text]` is words. */
-    .replace(BBCODE_TAG, (tag) => (BLOCK_TAG.test(tag) ? '\n' : ''))
-    .replace(/<[^>]+>/g, '');
+  return (
+    out
+      .replace(/\[img[^\]]*\][\s\S]*?\[\/img\]/gi, '')
+      .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
+      /* Only the tags the editor and the renderer know: a Markdown link's `[text]` is words. */
+      .replace(BBCODE_TAG, (tag) => (BLOCK_TAG.test(tag) ? '\n' : ''))
+      .replace(/<[^>]+>/g, '')
+  );
 }
 
 /**
@@ -92,7 +97,10 @@ function stripBbcode(text: string, keepQuotes: boolean): string {
  */
 export function plainTextOf(
   body: string | null | undefined,
-  { max = Number.POSITIVE_INFINITY, keepQuotes = true }: { max?: number; keepQuotes?: boolean } = {},
+  {
+    max = Number.POSITIVE_INFINITY,
+    keepQuotes = true,
+  }: { max?: number; keepQuotes?: boolean } = {},
 ): string {
   if (!body) return '';
   /* A picture reference survives the Markdown rules (which would read `>>` as a quote marker). */
@@ -113,5 +121,10 @@ export function plainTextOf(
     .map((paragraph) => paragraph.replace(/\u0001(\d+)\u0001/g, '>>$1'));
   const text = paragraphs.join('\n\n');
   const chars = Array.from(text);
-  return chars.length > max ? `${chars.slice(0, Math.max(0, max - 1)).join('').trimEnd()}…` : text;
+  return chars.length > max
+    ? `${chars
+        .slice(0, Math.max(0, max - 1))
+        .join('')
+        .trimEnd()}…`
+    : text;
 }

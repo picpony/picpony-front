@@ -124,23 +124,37 @@ async function relay(request: NextRequest): Promise<Response> {
      from. */
   if (response.status >= 300 && response.status < 400) {
     void response.body?.cancel().catch(() => {});
-    return Response.json({ success: false, message: 'PicPony API 线路返回了重定向' }, { status: 502 });
+    return Response.json(
+      { success: false, message: 'PicPony API 线路返回了重定向' },
+      { status: 502 },
+    );
   }
 
   /* Even /api/ can answer an HTML error or challenge page. Serving that document from our
      origin would grant upstream scripts access to localStorage. Only JSON is a relay answer;
      the body-less HEAD/204 cases do not carry executable content. */
   const mediaType = response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
-  if (request.method !== 'HEAD' && response.status !== 204 && response.status !== 205 &&
-      mediaType !== 'application/json' && !/^application\/[\w.+-]+\+json$/.test(mediaType ?? '')) {
+  if (
+    request.method !== 'HEAD' &&
+    response.status !== 204 &&
+    response.status !== 205 &&
+    mediaType !== 'application/json' &&
+    !/^application\/[\w.+-]+\+json$/.test(mediaType ?? '')
+  ) {
     void response.body?.cancel().catch(() => {});
     /* A client error is an answer, not a dead line. Derpibooru answers a deleted picture or a
        missing account with a plain-text 404, and as a 502 it reached the screen as a failing
        line offering 重试, never as 不存在. Its status passes through; its body never does. */
     if (response.status >= 400 && response.status < 500) {
-      return Response.json({ success: false, message: `Derpibooru 返回 ${response.status}` }, { status: response.status });
+      return Response.json(
+        { success: false, message: `Derpibooru 返回 ${response.status}` },
+        { status: response.status },
+      );
     }
-    return Response.json({ success: false, message: 'PicPony API 线路返回了非 JSON 内容' }, { status: 502 });
+    return Response.json(
+      { success: false, message: 'PicPony API 线路返回了非 JSON 内容' },
+      { status: 502 },
+    );
   }
 
   const headers = forwardableResponseHeaders(response.headers, EXTRA_SKIPPED_HEADERS);

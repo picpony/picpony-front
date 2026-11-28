@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { showToast } from '@/components/Toast';
 import { apiErrorMessage } from '@/lib/api/errors';
-import { deleteBrowsingHistoryItem, restoreBrowsingHistoryItem, type HistoryEntry } from '@/lib/api/history';
+import {
+  deleteBrowsingHistoryItem,
+  restoreBrowsingHistoryItem,
+  type HistoryEntry,
+} from '@/lib/api/history';
 import { readToken } from '@/lib/hooks';
 import { browsingHistory } from '@/lib/resources';
 
@@ -61,48 +65,58 @@ export function useHistoryDeletes(
     setHidden((previous) => new Set([...previous].filter((id) => !back.has(id))));
   }, []);
 
-  const send = useCallback(async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
-    clearTimeout(timer.current);
-    const batch = [...held.current.values()];
-    held.current.clear();
-    if (batch.length === 0) return;
-    const startedIn = generation.current;
-    const work = (async () => {
-      const done: Held[] = [];
-      const failed: Held[] = [];
-      let reason: unknown = null;
-      await Promise.all(batch.map(async (item) => {
-        try {
-          await deleteBrowsingHistoryItem(item.token, item.entry.id, { keepalive });
-          done.push(item);
-        } catch (error) {
-          failed.push(item);
-          reason = error;
+  const send = useCallback(
+    async ({ keepalive = false }: { keepalive?: boolean } = {}) => {
+      clearTimeout(timer.current);
+      const batch = [...held.current.values()];
+      held.current.clear();
+      if (batch.length === 0) return;
+      const startedIn = generation.current;
+      const work = (async () => {
+        const done: Held[] = [];
+        const failed: Held[] = [];
+        let reason: unknown = null;
+        await Promise.all(
+          batch.map(async (item) => {
+            try {
+              await deleteBrowsingHistoryItem(item.token, item.entry.id, { keepalive });
+              done.push(item);
+            } catch (error) {
+              failed.push(item);
+              reason = error;
+            }
+          }),
+        );
+        if (keepalive) return;
+        const current = readToken();
+        const owned = done.filter((item) => item.token === current);
+        if (owned.length > 0 && current) {
+          const gone = new Set(owned.map((item) => item.entry.id));
+          const args = { token: current, ...viewRef.current };
+          const shown = browsingHistory.peek(args).data;
+          browsingHistory.invalidate();
+          if (shown)
+            browsingHistory.write(args, {
+              ...shown,
+              entries: shown.entries.filter((entry) => !gone.has(entry.id)),
+            });
+          browsingHistory.expire(args);
+          if (generation.current === startedIn)
+            sent.current = { token: current, entries: owned.map((item) => item.entry) };
         }
-      }));
-      if (keepalive) return;
-      const current = readToken();
-      const owned = done.filter((item) => item.token === current);
-      if (owned.length > 0 && current) {
-        const gone = new Set(owned.map((item) => item.entry.id));
-        const args = { token: current, ...viewRef.current };
-        const shown = browsingHistory.peek(args).data;
-        browsingHistory.invalidate();
-        if (shown) browsingHistory.write(args, { ...shown, entries: shown.entries.filter((entry) => !gone.has(entry.id)) });
-        browsingHistory.expire(args);
-        if (generation.current === startedIn) sent.current = { token: current, entries: owned.map((item) => item.entry) };
-      }
-      show([...done, ...failed].map((item) => item.entry.id));
-      if (failed.length > 0 && failed.some((item) => item.token === current)) {
-        showToast(`${failed.length} 条浏览记录删除失败：${apiErrorMessage(reason)}`, 'error');
-      }
-    })();
-    const previous = sending.current;
-    const pending = previous ? Promise.all([previous, work]).then(() => {}) : work;
-    sending.current = pending;
-    await pending;
-    if (sending.current === pending) sending.current = null;
-  }, [show]);
+        show([...done, ...failed].map((item) => item.entry.id));
+        if (failed.length > 0 && failed.some((item) => item.token === current)) {
+          showToast(`${failed.length} 条浏览记录删除失败：${apiErrorMessage(reason)}`, 'error');
+        }
+      })();
+      const previous = sending.current;
+      const pending = previous ? Promise.all([previous, work]).then(() => {}) : work;
+      sending.current = pending;
+      await pending;
+      if (sending.current === pending) sending.current = null;
+    },
+    [show],
+  );
 
   const undo = useCallback(async () => {
     /* A toast can outlive navigation, which sends the batch before its undo window ends. */
@@ -120,25 +134,34 @@ export function useHistoryDeletes(
     const batch = sent.current;
     sent.current = null;
     if (!batch || readToken() !== batch.token) return;
-    const results = await Promise.allSettled(batch.entries.map((entry) => restoreBrowsingHistoryItem(batch.token, entry)));
+    const results = await Promise.allSettled(
+      batch.entries.map((entry) => restoreBrowsingHistoryItem(batch.token, entry)),
+    );
     if (readToken() !== batch.token) return;
     browsingHistory.invalidate();
-    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    const failed = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
     if (failed) showToast(`浏览记录恢复失败：${apiErrorMessage(failed.reason)}`, 'error');
     else showToast('已恢复浏览记录', 'success');
   }, [show]);
 
-  const remove = useCallback((entry: HistoryEntry) => {
-    if (!token || readToken() !== token) return;
-    held.current.set(entry.id, { entry, token });
-    sent.current = null;
-    setHidden((previous) => new Set(previous).add(entry.id));
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => void send(), UNDO_WINDOW_MS);
-    /* One toast for the whole run: an identical message restarts the one on screen and takes the
+  const remove = useCallback(
+    (entry: HistoryEntry) => {
+      if (!token || readToken() !== token) return;
+      held.current.set(entry.id, { entry, token });
+      sent.current = null;
+      setHidden((previous) => new Set(previous).add(entry.id));
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => void send(), UNDO_WINDOW_MS);
+      /* One toast for the whole run: an identical message restarts the one on screen and takes the
        newest 撤销, and 撤销 brings back every row still held. */
-    showToast('已删除浏览记录', 'success', { action: { label: '撤销', onClick: () => void undo() } });
-  }, [token, send, undo]);
+      showToast('已删除浏览记录', 'success', {
+        action: { label: '撤销', onClick: () => void undo() },
+      });
+    },
+    [token, send, undo],
+  );
 
   /** 清空记录 makes every held delete moot: forget them without sending. */
   const forget = useCallback(() => {

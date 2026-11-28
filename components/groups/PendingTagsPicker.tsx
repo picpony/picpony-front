@@ -40,13 +40,21 @@ interface PendingTagsPickerProps {
  * level="group"`, G4-031) over a tonal box. The hint is the box's first line and describes the
  * chips, rather than sitting in the caption, where it would become part of the heading's name.
  */
-export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = false }: PendingTagsPickerProps) {
+export default function PendingTagsPicker({
+  chosen,
+  onAdd,
+  confirm,
+  disabled = false,
+}: PendingTagsPickerProps) {
   const library = usePendingTags();
   const headingId = useId();
   const hintId = useId();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
   /* A pick for a tag that left the library (another tab, 删除选中) is not a pick. */
-  const selection = useMemo(() => library.filter((tag) => picked.has(tag) && !chosen.has(tag)), [library, picked, chosen]);
+  const selection = useMemo(
+    () => library.filter((tag) => picked.has(tag) && !chosen.has(tag)),
+    [library, picked, chosen],
+  );
 
   if (library.length === 0) return null;
 
@@ -65,11 +73,14 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
   };
 
   const remove = async () => {
-    if (!(await confirm({
-      title: '确认移除',
-      message: `确定要从待定标签库移除所选的 ${selection.length} 个标签吗？`,
-      tone: 'danger',
-    }))) return;
+    if (
+      !(await confirm({
+        title: '确认移除',
+        message: `确定要从待定标签库移除所选的 ${selection.length} 个标签吗？`,
+        tone: 'danger',
+      }))
+    )
+      return;
     if (!removePendingTags(selection)) {
       showToast('移除失败', 'error');
       return;
@@ -78,7 +89,10 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
   };
 
   const clear = async () => {
-    if (!(await confirm({ title: '确认清空', message: '确定要清空待定标签库吗？', tone: 'danger' }))) return;
+    if (
+      !(await confirm({ title: '确认清空', message: '确定要清空待定标签库吗？', tone: 'danger' }))
+    )
+      return;
     if (!clearPendingTags()) {
       showToast('清空失败', 'error');
       return;
@@ -90,7 +104,13 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
 
   return (
     <section aria-labelledby={headingId}>
-      <SectionHeading as="h3" level="group" id={headingId} icon={<MdInventory2 size={ICON.dense} />} className="px-0">
+      <SectionHeading
+        as="h3"
+        level="group"
+        id={headingId}
+        icon={<MdInventory2 size={ICON.dense} />}
+        className="px-0"
+      >
         待定标签库
       </SectionHeading>
       <div className="rounded-md bg-surface-container-highest p-3 forced-boundary">
@@ -99,7 +119,12 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
             其中 {inList} 个已在列表中
           </p>
         )}
-        <div role="group" aria-label="待定标签" aria-describedby={inList > 0 ? hintId : undefined} className="flex flex-wrap gap-2">
+        <div
+          role="group"
+          aria-label="待定标签"
+          aria-describedby={inList > 0 ? hintId : undefined}
+          className="flex flex-wrap gap-2"
+        >
           {library.map((tag) => {
             const added = chosen.has(tag);
             return (
@@ -121,13 +146,33 @@ export default function PendingTagsPicker({ chosen, onAdd, confirm, disabled = f
             a submit — a press on 删除选中 or 清空全部 also saved the group and closed the editor
             under its own question. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button type="button" size="xs" variant="tonal" className="tabular-nums" disabled={disabled || selection.length === 0} onClick={add}>
+          <Button
+            type="button"
+            size="xs"
+            variant="tonal"
+            className="tabular-nums"
+            disabled={disabled || selection.length === 0}
+            onClick={add}
+          >
             {selection.length > 0 ? `添加所选（${selection.length}）` : '添加所选'}
           </Button>
-          <Button type="button" size="xs" variant="danger-text" disabled={disabled || selection.length === 0} onClick={() => void remove()}>
+          <Button
+            type="button"
+            size="xs"
+            variant="danger-text"
+            disabled={disabled || selection.length === 0}
+            onClick={() => void remove()}
+          >
             移除所选
           </Button>
-          <Button type="button" size="xs" variant="danger-text" className="ml-auto" disabled={disabled} onClick={() => void clear()}>
+          <Button
+            type="button"
+            size="xs"
+            variant="danger-text"
+            className="ml-auto"
+            disabled={disabled}
+            onClick={() => void clear()}
+          >
             清空全部
           </Button>
         </div>

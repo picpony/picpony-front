@@ -31,12 +31,19 @@ function answer(request: NextRequest): Response {
     const page = new URL(`/api/v1/share-links/${encodeURIComponent(id)}/page`, upstreamOrigin());
     return new Response(null, {
       status: 302,
-      headers: { Location: page.href, 'Cache-Control': 'private, no-store', 'Content-Security-Policy': POLICY },
+      headers: {
+        Location: page.href,
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': POLICY,
+      },
     });
   }
   return Response.json(
     { error: { code: 'SHARE_LINK_NOT_FOUND', message: '分享链接无效' } },
-    { status: 404, headers: { 'Cache-Control': 'private, no-store', 'Content-Security-Policy': POLICY } },
+    {
+      status: 404,
+      headers: { 'Cache-Control': 'private, no-store', 'Content-Security-Policy': POLICY },
+    },
   );
 }
 

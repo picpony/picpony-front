@@ -27,7 +27,13 @@ const HAS_BG = /(?:^|\s)bg-\S+/;
 /** Matches `--motion-base-sweep` (1600 ms) so negative phase offsets stay within one cycle. */
 const SWEEP_CYCLE_MS = 1600;
 
-export default function Skeleton({ className = '', delay, style, variant = 'surface', ...rest }: SkeletonProps) {
+export default function Skeleton({
+  className = '',
+  delay,
+  style,
+  variant = 'surface',
+  ...rest
+}: SkeletonProps) {
   const phase = delay && delay > 0 ? delay % SWEEP_CYCLE_MS : 0;
   const mergedStyle = phase
     ? ({ '--skeleton-delay': `${phase}ms`, ...style } as CSSProperties)

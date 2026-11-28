@@ -144,7 +144,9 @@ export function MediaBadge({
   corner,
   ...props
 }: Pick<BadgeProps, 'children' | 'icon'> & { corner: MediaBadgeCorner }) {
-  return <Badge {...props} tone="media" size="sm" className={cn('absolute', MEDIA_CORNERS[corner])} />;
+  return (
+    <Badge {...props} tone="media" size="sm" className={cn('absolute', MEDIA_CORNERS[corner])} />
+  );
 }
 
 /**

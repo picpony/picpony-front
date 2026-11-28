@@ -43,7 +43,13 @@ const TABS: { value: ProfileTab; label: string }[] = [
  * The id comes from the route's own props, never `useParams()`: the intercepted image route also
  * has an `id`, and the background page must keep its own while the foreground changes.
  */
-export default function ProfileContent({ id, profileSeed }: { id: string; profileSeed: ProfileSeed | null }) {
+export default function ProfileContent({
+  id,
+  profileSeed,
+}: {
+  id: string;
+  profileSeed: ProfileSeed | null;
+}) {
   const { user, token, ready } = useSession();
   const clock = useNow();
   const now = clock ?? profileSeed?.generatedAt ?? null;
@@ -80,7 +86,11 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
   if (profileRead.data === null) return <ProfileMissing />;
 
   const sessionId = Number(user?.id);
-  const own = ready && profile !== undefined && Number.isSafeInteger(sessionId) && sessionId === Number(profile.id);
+  const own =
+    ready &&
+    profile !== undefined &&
+    Number.isSafeInteger(sessionId) &&
+    sessionId === Number(profile.id);
   const canMessage = ready && profile !== undefined && user !== null && !own;
   /* The default tab stays on public data, so the server and every viewer choose the same one. */
   const tab = pickedTab ?? (profile ? defaultProfileTab(profile) : 'uploads');
@@ -106,22 +116,60 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
                `closest()`, and a page turn lands on the tab row rather than replaying the banner.
                One anchor for all four tabs (R7-036). */
             <div data-pagination-anchor className="mt-8">
-              <Tabs<ProfileTab> tabs={TABS} value={tab} onChange={setPickedTab} label="用户资料标签页" className="mb-6" />
+              <Tabs<ProfileTab>
+                tabs={TABS}
+                value={tab}
+                onChange={setPickedTab}
+                label="用户资料标签页"
+                className="mb-6"
+              />
               {/* The layered departure. Safe here because every pane's first-load placeholder
                   carries `data-page-loading` (the lean stands down while one is on screen, so a
                   first visit slides as one plane) and no pane holds an entrance of its own. */}
               <TabPanes value={tab} lean>
                 <TabPane value="uploads">
-                  <UploadsPane profile={shown} id={id} own={own} ready={ready} active={tab === 'uploads'} token={token} now={now ?? 0} />
+                  <UploadsPane
+                    profile={shown}
+                    id={id}
+                    own={own}
+                    ready={ready}
+                    active={tab === 'uploads'}
+                    token={token}
+                    now={now ?? 0}
+                  />
                 </TabPane>
                 <TabPane value="faves">
-                  <FoldersPane profile={shown} id={id} own={own} ready={ready} active={tab === 'faves'} token={token} now={now ?? 0} />
+                  <FoldersPane
+                    profile={shown}
+                    id={id}
+                    own={own}
+                    ready={ready}
+                    active={tab === 'faves'}
+                    token={token}
+                    now={now ?? 0}
+                  />
                 </TabPane>
                 <TabPane value="posts">
-                  <PostsPane profile={shown} id={id} own={own} ready={ready} active={tab === 'posts'} token={token} now={now ?? 0} />
+                  <PostsPane
+                    profile={shown}
+                    id={id}
+                    own={own}
+                    ready={ready}
+                    active={tab === 'posts'}
+                    token={token}
+                    now={now ?? 0}
+                  />
                 </TabPane>
                 <TabPane value="comments">
-                  <CommentsPane profile={shown} id={id} own={own} ready={ready} active={tab === 'comments'} token={token} now={now ?? 0} />
+                  <CommentsPane
+                    profile={shown}
+                    id={id}
+                    own={own}
+                    ready={ready}
+                    active={tab === 'comments'}
+                    token={token}
+                    now={now ?? 0}
+                  />
                 </TabPane>
               </TabPanes>
             </div>
@@ -129,7 +177,12 @@ export default function ProfileContent({ id, profileSeed }: { id: string; profil
             /* Tabs depend on the profile and viewer's permissions; wait with one centred
                indicator under the fixed profile header until the record confirms the layout. */
             <div className="mt-8">
-              <PageLoadingIndicator size="pane" indicatorSize="lg" holdFooter label="正在加载用户内容…" />
+              <PageLoadingIndicator
+                size="pane"
+                indicatorSize="lg"
+                holdFooter
+                label="正在加载用户内容…"
+              />
             </div>
           )}
         </div>

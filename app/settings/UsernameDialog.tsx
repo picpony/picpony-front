@@ -73,7 +73,13 @@ export default function UsernameDialog({
           <Button variant="text" type="button" onClick={close} disabled={busy}>
             取消
           </Button>
-          <Button variant="filled" type="submit" form="username-form" loading={busy} disabled={!trimmed || trimmed === current}>
+          <Button
+            variant="filled"
+            type="submit"
+            form="username-form"
+            loading={busy}
+            disabled={!trimmed || trimmed === current}
+          >
             保存
           </Button>
         </>

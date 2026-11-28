@@ -18,18 +18,35 @@ const root = path.resolve(import.meta.dirname, '..');
 /* ----- a fake browser, enough for the modules under test ----------------------------------- */
 
 class MemoryStorage {
-  constructor() { this.map = new Map(); this.refuse = false; }
-  getItem(key) { return this.map.has(key) ? this.map.get(key) : null; }
-  setItem(key, value) { if (this.refuse) throw new Error('QuotaExceededError'); this.map.set(key, String(value)); }
-  removeItem(key) { this.map.delete(key); }
-  clear() { this.map.clear(); }
+  constructor() {
+    this.map = new Map();
+    this.refuse = false;
+  }
+  getItem(key) {
+    return this.map.has(key) ? this.map.get(key) : null;
+  }
+  setItem(key, value) {
+    if (this.refuse) throw new Error('QuotaExceededError');
+    this.map.set(key, String(value));
+  }
+  removeItem(key) {
+    this.map.delete(key);
+  }
+  clear() {
+    this.map.clear();
+  }
 }
 
 const storage = new MemoryStorage();
 const originalFetch = globalThis.fetch;
 globalThis.localStorage = storage;
-globalThis.window = { __picponyRoutePolicy: { api: 'direct', image: 'direct' }, location: { origin: 'https://app.invalid' } };
-globalThis.fetch = async () => { throw new Error('Unexpected request during initialization'); };
+globalThis.window = {
+  __picponyRoutePolicy: { api: 'direct', image: 'direct' },
+  location: { origin: 'https://app.invalid' },
+};
+globalThis.fetch = async () => {
+  throw new Error('Unexpected request during initialization');
+};
 
 const model = await import('../lib/forumModel.ts');
 const forum = await import('../lib/api/forum.ts');
@@ -58,11 +75,32 @@ after(() => {
 
 /* ----- the model ---------------------------------------------------------------------------- */
 
-const author = { id: 3, username: 'u', avatar: null, role: 'admin', experience: 250, equipped_badges: [{ id: 1, name: 'A', color: '#fff' }] };
+const author = {
+  id: 3,
+  username: 'u',
+  avatar: null,
+  role: 'admin',
+  experience: 250,
+  equipped_badges: [{ id: 1, name: 'A', color: '#fff' }],
+};
 const wirePost = (overrides = {}) => ({
-  id: 7, user_id: 3, title: 'T', excerpt: '  简介  ', content: { type: 'discussion', html: 'c' }, cover_image: '  ',
-  category: 'discussion', is_pinned: true, views: 12, revision: 4, created_at: '2026-01-01T02:00:00Z',
-  updated_at: '2026-01-02T02:00:00Z', author, reply_count: 0, like_count: 2, is_liked: true, ...overrides,
+  id: 7,
+  user_id: 3,
+  title: 'T',
+  excerpt: '  简介  ',
+  content: { type: 'discussion', html: 'c' },
+  cover_image: '  ',
+  category: 'discussion',
+  is_pinned: true,
+  views: 12,
+  revision: 4,
+  created_at: '2026-01-01T02:00:00Z',
+  updated_at: '2026-01-02T02:00:00Z',
+  author,
+  reply_count: 0,
+  like_count: 2,
+  is_liked: true,
+  ...overrides,
 });
 
 test('rows are read at the boundary: the author, the badges, the body by kind', () => {
@@ -77,28 +115,59 @@ test('rows are read at the boundary: the author, the badges, the body by kind', 
   assert.deepEqual(post.badges, [{ badge_name: 'A', badge_color: '#fff' }]);
   assert.equal(model.sortOf('views'), 'views');
 
-  const commission = model.postOf(wirePost({ category: 'commission', content: { type: 'commission', description: '[b]d[/b]', commission_link: 'https://x.test' } }));
-  assert.deepEqual([commission.content, commission.commission_link, commission.shared_groups], ['[b]d[/b]', 'https://x.test', null]);
-  const share = model.postOf(wirePost({
-    category: 'taggroups',
-    content: { type: 'taggroups', description: '说明', tag_groups: [{ name: '小马', tags: ['pony'] }], block_groups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }] },
-  }));
+  const commission = model.postOf(
+    wirePost({
+      category: 'commission',
+      content: { type: 'commission', description: '[b]d[/b]', commission_link: 'https://x.test' },
+    }),
+  );
+  assert.deepEqual(
+    [commission.content, commission.commission_link, commission.shared_groups],
+    ['[b]d[/b]', 'https://x.test', null],
+  );
+  const share = model.postOf(
+    wirePost({
+      category: 'taggroups',
+      content: {
+        type: 'taggroups',
+        description: '说明',
+        tag_groups: [{ name: '小马', tags: ['pony'] }],
+        block_groups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }],
+      },
+    }),
+  );
   assert.equal(share.content, '说明');
-  assert.deepEqual(share.shared_groups, {
-    tagGroups: [{ name: '小马', tags: ['pony'] }],
-    blockGroups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }],
-  }, 'a shared block group carries its hidden and its 打码 tags');
+  assert.deepEqual(
+    share.shared_groups,
+    {
+      tagGroups: [{ name: '小马', tags: ['pony'] }],
+      blockGroups: [{ name: '屏蔽', hidden_tags: ['gore'], spoilered_tags: ['blood'] }],
+    },
+    'a shared block group carries its hidden and its 打码 tags',
+  );
 });
 
 test('a post is written as the backend’s typed document, by kind', () => {
-  assert.deepEqual(model.contentWire('discussion', 'c', '', null), { type: 'discussion', html: 'c' });
-  assert.deepEqual(model.contentWire('commission', 'd', ' https://x.test ', null), { type: 'commission', description: 'd', commission_link: 'https://x.test' });
+  assert.deepEqual(model.contentWire('discussion', 'c', '', null), {
+    type: 'discussion',
+    html: 'c',
+  });
+  assert.deepEqual(model.contentWire('commission', 'd', ' https://x.test ', null), {
+    type: 'commission',
+    description: 'd',
+    commission_link: 'https://x.test',
+  });
   assert.deepEqual(
     model.contentWire('taggroups', '说明', '', {
       tag_groups: [{ name: 'g', tags: ['a'] }],
       block_groups: [{ name: 'b', hidden_tags: ['x'], spoilered_tags: ['y'] }],
     }),
-    { type: 'taggroups', description: '说明', tag_groups: [{ name: 'g', tags: ['a'] }], block_groups: [{ name: 'b', hidden_tags: ['x'], spoilered_tags: ['y'] }] },
+    {
+      type: 'taggroups',
+      description: '说明',
+      tag_groups: [{ name: 'g', tags: ['a'] }],
+      block_groups: [{ name: 'b', hidden_tags: ['x'], spoilered_tags: ['y'] }],
+    },
   );
   assert.equal(model.isCommissionLink('http://x.test'), true);
   assert.equal(model.isCommissionLink('ftp://x.test'), false);
@@ -106,20 +175,40 @@ test('a post is written as the backend’s typed document, by kind', () => {
 
 test('the list key normalises its defaults, so the server seed and the first read agree', () => {
   assert.equal(forumListKey({ page: 1 }), forumListKey(DEFAULT_FORUM_LIST));
-  assert.equal(forumListKey({ page: 1, category: 'all', sort: 'updated_at', search: '  ', token: null }), forumListKey({ page: 1 }));
-  assert.notEqual(forumListKey({ page: 1, token: 'a' }), forumListKey({ page: 1 }), 'a signed-in list is its own answer');
+  assert.equal(
+    forumListKey({ page: 1, category: 'all', sort: 'updated_at', search: '  ', token: null }),
+    forumListKey({ page: 1 }),
+  );
+  assert.notEqual(
+    forumListKey({ page: 1, token: 'a' }),
+    forumListKey({ page: 1 }),
+    'a signed-in list is its own answer',
+  );
 });
 
 /* ----- the transport ------------------------------------------------------------------------- */
 
 test('the list read sends the category, the order and a trimmed search, and names the session', async () => {
-  respond = () => Response.json({ posts: [wirePost({ id: 1 })], total: 1, page: 2, total_pages: 0 });
-  const list = await forum.getForumPosts({ page: 2, category: 'commission', sort: 'views', search: '  pony ', token: 'T' });
+  respond = () =>
+    Response.json({ posts: [wirePost({ id: 1 })], total: 1, page: 2, total_pages: 0 });
+  const list = await forum.getForumPosts({
+    page: 2,
+    category: 'commission',
+    sort: 'views',
+    search: '  pony ',
+    token: 'T',
+  });
   assert.equal(calls[0].url.pathname, '/api/v1/forum/posts');
   const query = calls[0].url.searchParams;
-  assert.deepEqual([query.get('page'), query.get('category'), query.get('sort'), query.get('search')], ['2', 'commission', 'views', 'pony']);
+  assert.deepEqual(
+    [query.get('page'), query.get('category'), query.get('sort'), query.get('search')],
+    ['2', 'commission', 'views', 'pony'],
+  );
   assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer T');
-  assert.deepEqual(list.posts.map((post) => post.id), [1]);
+  assert.deepEqual(
+    list.posts.map((post) => post.id),
+    [1],
+  );
   assert.deepEqual([list.total, list.totalPages, list.signedIn], [1, 1, true]);
 
   await forum.getForumPosts({ page: 1, category: 'all', search: '   ' });
@@ -128,36 +217,63 @@ test('the list read sends the category, the order and a trimmed search, and name
 });
 
 test('a thread is its post and a page of replies; past its last page it is that page; a missing thread is not found', async () => {
-  respond = ({ url }) => url.pathname.endsWith('/comments')
-    ? Response.json({
-      comments: url.searchParams.get('page') === '2'
-        ? [{ id: 21, post_id: 5, user_id: 3, content: 'r', created_at: 'x', author }]
-        : [],
-      total: 21, total_pages: 2,
-    })
-    : Response.json({ post: wirePost({ id: 5 }) });
+  respond = ({ url }) =>
+    url.pathname.endsWith('/comments')
+      ? Response.json({
+          comments:
+            url.searchParams.get('page') === '2'
+              ? [{ id: 21, post_id: 5, user_id: 3, content: 'r', created_at: 'x', author }]
+              : [],
+          total: 21,
+          total_pages: 2,
+        })
+      : Response.json({ post: wirePost({ id: 5 }) });
   const detail = await forum.getForumPostDetail('5', 9999, undefined, 'T');
   assert.equal(detail.page, 2);
   assert.equal(detail.total_comments, 21);
-  assert.deepEqual(detail.comments.map((row) => [row.id, row.username]), [[21, 'u']]);
-  assert.equal(calls.filter((call) => call.url.pathname === '/api/v1/forum/posts/5').length, 1, 'the post is read once');
-  respond = () => Response.json({ error: { code: 'POST_NOT_FOUND', message: '帖子不存在' } }, { status: 404 });
-  await assert.rejects(forum.getForumPostDetail('404'), (error) => error instanceof ApiError && error.notFound && !error.retryable);
-  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '无效' } }, { status: 400 });
-  await assert.rejects(forum.getForumPostDetail('x'), (error) => error instanceof ApiError && error.notFound, 'a malformed id is not found too');
+  assert.deepEqual(
+    detail.comments.map((row) => [row.id, row.username]),
+    [[21, 'u']],
+  );
+  assert.equal(
+    calls.filter((call) => call.url.pathname === '/api/v1/forum/posts/5').length,
+    1,
+    'the post is read once',
+  );
+  respond = () =>
+    Response.json({ error: { code: 'POST_NOT_FOUND', message: '帖子不存在' } }, { status: 404 });
+  await assert.rejects(
+    forum.getForumPostDetail('404'),
+    (error) => error instanceof ApiError && error.notFound && !error.retryable,
+  );
+  respond = () =>
+    Response.json({ error: { code: 'BAD_REQUEST', message: '无效' } }, { status: 400 });
+  await assert.rejects(
+    forum.getForumPostDetail('x'),
+    (error) => error instanceof ApiError && error.notFound,
+    'a malformed id is not found too',
+  );
 });
 
 test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences', async () => {
   respond = () => Response.json({ id: 42, revision: 0 }, { status: 201 });
   const body = {
-    title: '标题标题标题', excerpt: '', content: 'c', commission_link: '', category: 'discussion', cover_image: null,
+    title: '标题标题标题',
+    excerpt: '',
+    content: 'c',
+    commission_link: '',
+    category: 'discussion',
+    cover_image: null,
     shared_groups: null,
   };
   assert.equal(await forum.createForumPost('T', body, 'k1'), 42);
   assert.equal(calls[0].url.pathname, '/api/v1/forum/posts');
   assert.equal(new Headers(calls[0].init.headers).get('Idempotency-Key'), 'k1');
   assert.deepEqual(JSON.parse(calls[0].init.body), {
-    title: '标题标题标题', excerpt: '', content: { type: 'discussion', html: 'c' }, cover_image: null,
+    title: '标题标题标题',
+    excerpt: '',
+    content: { type: 'discussion', html: 'c' },
+    cover_image: null,
   });
 
   respond = () => Response.json({ id: 42, revision: 5 });
@@ -168,40 +284,83 @@ test('writes speak /api/v1, carry their Idempotency-Key, and fail as sentences',
 
   respond = () => new Response(null, { status: 204 });
   await forum.deleteForumPost('T', 42);
-  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/posts/42']);
+  assert.deepEqual(
+    [calls.at(-1).init.method, calls.at(-1).url.pathname],
+    ['DELETE', '/api/v1/forum/posts/42'],
+  );
   await forum.deleteForumComment('T', 9);
-  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname], ['DELETE', '/api/v1/forum/comments/9']);
+  assert.deepEqual(
+    [calls.at(-1).init.method, calls.at(-1).url.pathname],
+    ['DELETE', '/api/v1/forum/comments/9'],
+  );
 
   respond = () => Response.json({ id: 1, content: 'hi' }, { status: 201 });
   await forum.createForumComment('T', { postId: 42, content: 'hi', replyToUserId: 3 }, 'k3');
   assert.equal(calls.at(-1).url.pathname, '/api/v1/forum/posts/42/comments');
   assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'hi', reply_to_user_id: 3 });
   await forum.createForumComment('T', { postId: 42, content: 'top' }, 'k4');
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { content: 'top' }, 'a top-level reply names nobody');
+  assert.deepEqual(
+    JSON.parse(calls.at(-1).init.body),
+    { content: 'top' },
+    'a top-level reply names nobody',
+  );
 
   respond = () => Response.json({ liked: true, like_count: 8 });
   assert.deepEqual(await forum.setForumPostLike('T', 42, true), { liked: true, count: 8 });
-  assert.deepEqual([calls.at(-1).init.method, calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
-    ['PUT', '/api/v1/me/forum/posts/42/like', { liked: true }]);
+  assert.deepEqual(
+    [calls.at(-1).init.method, calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
+    ['PUT', '/api/v1/me/forum/posts/42/like', { liked: true }],
+  );
 
-  respond = () => Response.json({ error: { code: 'POST_VERSION_CONFLICT', message: '帖子已更新，请刷新后重试' } }, { status: 409 });
-  await assert.rejects(forum.updateForumPost('T', 42, body, 4, 'k5'), (error) => error instanceof ApiError && error.message === '帖子已更新，请刷新后重试');
+  respond = () =>
+    Response.json(
+      { error: { code: 'POST_VERSION_CONFLICT', message: '帖子已更新，请刷新后重试' } },
+      { status: 409 },
+    );
+  await assert.rejects(
+    forum.updateForumPost('T', 42, body, 4, 'k5'),
+    (error) => error instanceof ApiError && error.message === '帖子已更新，请刷新后重试',
+  );
 
   respond = () => Response.json({ id: 9, revision: 0 }, { status: 201 });
-  await forum.createForumPost('T', {
-    ...body, category: 'taggroups', shared_groups: { tag_groups: [], block_groups: [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }] },
-  }, 'k6');
-  assert.deepEqual(JSON.parse(calls.at(-1).init.body).content.block_groups, [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }],
-    'a block group\'s 打码 tags travel in a share');
+  await forum.createForumPost(
+    'T',
+    {
+      ...body,
+      category: 'taggroups',
+      shared_groups: {
+        tag_groups: [],
+        block_groups: [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }],
+      },
+    },
+    'k6',
+  );
+  assert.deepEqual(
+    JSON.parse(calls.at(-1).init.body).content.block_groups,
+    [{ name: 'b', hidden_tags: [], spoilered_tags: ['s'] }],
+    "a block group's 打码 tags travel in a share",
+  );
 
   respond = () => Response.json({ id: 1, revision: 0 }, { status: 201 });
   await forum.importSharedTagGroup('T', { name: 'g', tags: ['a'] });
-  assert.deepEqual([calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)], ['/api/v1/me/tag-group-imports', { name: 'g', tags: ['a'] }]);
+  assert.deepEqual(
+    [calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
+    ['/api/v1/me/tag-group-imports', { name: 'g', tags: ['a'] }],
+  );
   await forum.importSharedBlockGroup('T', { name: 'b', hidden_tags: ['x'], spoilered_tags: [] });
-  assert.deepEqual([calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
-    ['/api/v1/me/block-group-imports', { name: 'b', hidden_tags: ['x'], spoilered_tags: [], active: false }]);
+  assert.deepEqual(
+    [calls.at(-1).url.pathname, JSON.parse(calls.at(-1).init.body)],
+    [
+      '/api/v1/me/block-group-imports',
+      { name: 'b', hidden_tags: ['x'], spoilered_tags: [], active: false },
+    ],
+  );
 
-  respond = () => Response.json({ tag_groups: [{ id: 1, name: 'g', tags: ['a'], revision: 0 }], block_groups: [{ id: 2, name: 'b', hidden_tags: ['h'], spoilered_tags: [], revision: 1 }] });
+  respond = () =>
+    Response.json({
+      tag_groups: [{ id: 1, name: 'g', tags: ['a'], revision: 0 }],
+      block_groups: [{ id: 2, name: 'b', hidden_tags: ['h'], spoilered_tags: [], revision: 1 }],
+    });
   assert.deepEqual(await forum.getMyShareableGroups('T'), {
     tagGroups: [{ id: 1, name: 'g', tags: ['a'] }],
     blockGroups: [{ id: 2, name: 'b', hidden_tags: ['h'], spoilered_tags: [] }],
@@ -217,10 +376,19 @@ class FakeXHR {
     this.status = 0;
     this.responseText = '';
   }
-  open(method, url) { this.method = method; this.url = url; }
-  setRequestHeader(name, value) { this.headers[name] = value; }
-  send(body) { this.body = body; }
-  abort() { this.onabort?.(); }
+  open(method, url) {
+    this.method = method;
+    this.url = url;
+  }
+  setRequestHeader(name, value) {
+    this.headers[name] = value;
+  }
+  send(body) {
+    this.body = body;
+  }
+  abort() {
+    this.onabort?.();
+  }
   respond(status, body) {
     this.status = status;
     this.responseText = typeof body === 'string' ? body : JSON.stringify(body);
@@ -230,27 +398,53 @@ class FakeXHR {
 
 test('a picture uploads over XHR with progress and the session’s CSRF token, and every failure is a sentence', async () => {
   globalThis.XMLHttpRequest = FakeXHR;
-  globalThis.FormData = class { constructor() { this.parts = []; } append(...args) { this.parts.push(args); } };
+  globalThis.FormData = class {
+    constructor() {
+      this.parts = [];
+    }
+    append(...args) {
+      this.parts.push(args);
+    }
+  };
   const asset = 'a'.repeat(64);
   const progress = [];
-  let pending = forum.uploadForumImage('T', new Blob(['x']), { onProgress: (fraction) => progress.push(fraction) });
+  let pending = forum.uploadForumImage('T', new Blob(['x']), {
+    onProgress: (fraction) => progress.push(fraction),
+  });
   const xhr = FakeXHR.last;
   assert.equal(xhr.method, 'POST');
   assert.equal(xhr.url, '/api/v1/me/uploads/forum-images');
   assert.equal(xhr.headers.Authorization, 'Bearer T');
   assert.equal(xhr.body.parts[0][0], 'image');
   xhr.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
-  xhr.respond(201, { asset, url: `/api/v1/media/${asset}`, mime: 'image/png', size_bytes: 1, width: 1, height: 1, expires_at: 'x', max_bytes: 5 });
+  xhr.respond(201, {
+    asset,
+    url: `/api/v1/media/${asset}`,
+    mime: 'image/png',
+    size_bytes: 1,
+    width: 1,
+    height: 1,
+    expires_at: 'x',
+    max_bytes: 5,
+  });
   assert.equal(await pending, `/api/v1/media/${asset}`);
   assert.deepEqual(progress, [0.5, 1]);
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
-  FakeXHR.last.respond(413, { error: { code: 'FILE_TOO_LARGE', message: '文件超过该用途的上传限制' } });
-  await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片太大，服务器拒绝了此次上传');
+  FakeXHR.last.respond(413, {
+    error: { code: 'FILE_TOO_LARGE', message: '文件超过该用途的上传限制' },
+  });
+  await assert.rejects(
+    pending,
+    (error) => error instanceof ApiError && error.message === '图片太大，服务器拒绝了此次上传',
+  );
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(400, { error: { code: 'BAD_REQUEST', message: '图片格式不支持' } });
-  await assert.rejects(pending, (error) => error instanceof ApiError && error.message === '图片格式不支持');
+  await assert.rejects(
+    pending,
+    (error) => error instanceof ApiError && error.message === '图片格式不支持',
+  );
 
   pending = forum.uploadForumImage('T', new Blob(['x']));
   FakeXHR.last.respond(201, '<html></html>');
@@ -259,44 +453,80 @@ test('a picture uploads over XHR with progress and the session’s CSRF token, a
   const controller = new AbortController();
   pending = forum.uploadForumImage('T', new Blob(['x']), { signal: controller.signal });
   controller.abort();
-  await assert.rejects(pending, (error) => error.name === 'AbortError', 'a cancelled upload stays a cancellation');
+  await assert.rejects(
+    pending,
+    (error) => error.name === 'AbortError',
+    'a cancelled upload stays a cancellation',
+  );
 });
 
 test('a picture is checked before it is sent: kind, size, and a GIF is never redrawn', async () => {
   const file = (type, size) => ({ type, size, name: 'f' });
   await assert.rejects(images.prepareForumImage(file('text/plain', 10)), /请选择图片文件/);
   await assert.rejects(images.prepareForumImage(file('image/png', 60 * 1024 * 1024)), /50 MB/);
-  await assert.rejects(images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)), /动图超过 5 MB/);
+  await assert.rejects(
+    images.prepareForumImage(file('image/gif', 6 * 1024 * 1024)),
+    /动图超过 5 MB/,
+  );
   const small = file('image/gif', 1024);
   assert.equal(await images.prepareForumImage(small), small, 'a small picture goes as it is');
-  globalThis.createImageBitmap = async () => { throw new Error('cannot decode'); };
-  await assert.rejects(images.prepareForumImage(file('image/heic', 6 * 1024 * 1024)), /无法在浏览器中压缩/);
-  assert.equal(images.storedAssetPath(`https://picpony.top/api/v1/media/${'a'.repeat(64)}`), `/api/v1/media/${'a'.repeat(64)}`);
+  globalThis.createImageBitmap = async () => {
+    throw new Error('cannot decode');
+  };
+  await assert.rejects(
+    images.prepareForumImage(file('image/heic', 6 * 1024 * 1024)),
+    /无法在浏览器中压缩/,
+  );
+  assert.equal(
+    images.storedAssetPath(`https://picpony.top/api/v1/media/${'a'.repeat(64)}`),
+    `/api/v1/media/${'a'.repeat(64)}`,
+  );
   assert.equal(images.storedAssetPath('https://derpicdn.net/a.png'), 'https://derpicdn.net/a.png');
 });
 
 /* ----- words ---------------------------------------------------------------------------------- */
 
 test('a quote is built from the words it answers: no tags, no nested quote, no cut mid-tag (R6-031)', () => {
-  const quoted = text.replyQuote('fl"utter]shy', '[quote="a"]旧的[/quote]逆天图？[img]/uploads/forum/x.png[/img]');
+  const quoted = text.replyQuote(
+    'fl"utter]shy',
+    '[quote="a"]旧的[/quote]逆天图？[img]/uploads/forum/x.png[/img]',
+  );
   assert.match(quoted, /^\[quote="fluttershy"\]\n/);
   assert.doesNotMatch(quoted, /\[img\]|旧的/);
   assert.match(quoted, /逆天图？/);
   assert.match(quoted, /\[图片\]/);
-  const long = text.replyQuote('u', `[url=https://example.test/${'a'.repeat(200)}]链接[/url]${'字'.repeat(150)}`);
+  const long = text.replyQuote(
+    'u',
+    `[url=https://example.test/${'a'.repeat(200)}]链接[/url]${'字'.repeat(150)}`,
+  );
   const inner = long.slice(long.indexOf('\n') + 1, long.indexOf('\n[/quote]'));
   assert.ok(Array.from(inner).length <= text.QUOTE_LENGTH + 1);
   assert.doesNotMatch(inner, /\[|\]/, 'nothing left open');
-  assert.equal(text.replyQuote('u', '[img]/a.png[/img]').includes('[图片]'), true, 'a picture alone is 「[图片]」');
+  assert.equal(
+    text.replyQuote('u', '[img]/a.png[/img]').includes('[图片]'),
+    true,
+    'a picture alone is 「[图片]」',
+  );
 });
 
 test('a teaser prefers the 简介, then the body’s own words', () => {
   const base = { title: '标题', excerpt: '', category: 'discussion' };
   assert.equal(text.forumTeaser({ ...base, excerpt: '简介', content: '正文' }), '简介');
   assert.equal(text.forumTeaser({ ...base, content: '[img]/a.png[/img]正文[b]粗[/b]' }), '正文粗');
-  assert.equal(text.forumTeaser({ ...base, category: 'commission', content: '', commission_link: 'https://x.test' }), '附有约稿链接');
+  assert.equal(
+    text.forumTeaser({
+      ...base,
+      category: 'commission',
+      content: '',
+      commission_link: 'https://x.test',
+    }),
+    '附有约稿链接',
+  );
   const shared_groups = { tagGroups: [{ name: 'a', tags: [] }], blockGroups: [] };
-  assert.equal(text.forumTeaser({ ...base, category: 'taggroups', content: '', shared_groups }), '分享了 1 个标签组');
+  assert.equal(
+    text.forumTeaser({ ...base, category: 'taggroups', content: '', shared_groups }),
+    '分享了 1 个标签组',
+  );
   assert.equal(text.isBlankRichText('[p][br][/p]'), true);
   assert.equal(text.isBlankRichText('[img]/a.png[/img]'), false, 'a picture is something to send');
 });
@@ -323,15 +553,27 @@ test('a draft is kept per account and per post, and an empty one is not kept (R6
 });
 
 test('the original front end’s draft is adopted once, by the first account to write', () => {
-  storage.setItem('forum_post_draft', JSON.stringify({
-    title: '旧草稿', excerpt: '', content: '<p><br></p>', category: 'commission', commissionLink: 'https://x.test',
-    taggroupsDescription: '', draftImages: ['/uploads/forum/a.png'],
-  }));
+  storage.setItem(
+    'forum_post_draft',
+    JSON.stringify({
+      title: '旧草稿',
+      excerpt: '',
+      content: '<p><br></p>',
+      category: 'commission',
+      commissionLink: 'https://x.test',
+      taggroupsDescription: '',
+      draftImages: ['/uploads/forum/a.png'],
+    }),
+  );
   const adopted = drafts.readDraft('1', null);
   assert.equal(adopted.title, '旧草稿');
   assert.equal(adopted.category, 'commission');
   assert.equal(adopted.commissionLink, 'https://x.test');
-  assert.deepEqual(adopted.images, [], 'its pictures were staged on the old backend, which the new one refuses');
+  assert.deepEqual(
+    adopted.images,
+    [],
+    'its pictures were staged on the old backend, which the new one refuses',
+  );
   assert.equal(storage.getItem('forum_post_draft'), null, 'removed once it is this account’s');
   assert.equal(drafts.readDraft('2', null), null, 'and nobody else adopts it');
   assert.equal(drafts.readDraft('1', null).title, '旧草稿');
@@ -341,16 +583,36 @@ test('the original front end’s draft is adopted once, by the first account to 
 
 function load(file, dependencies = {}, globals = {}) {
   const code = ts.transpileModule(readFileSync(path.join(root, file), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, {
-    exports, require: (name) => {
-      if (name in dependencies) return dependencies[name];
-      if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
-      return new Proxy({}, { get: (_, key) => key === '__esModule' ? true : `${name}:${String(key)}` });
-    }, URLSearchParams, URL, setTimeout, clearTimeout, queueMicrotask, console, JSON, ...globals,
-  }, { filename: file });
+  vm.runInNewContext(
+    code,
+    {
+      exports,
+      require: (name) => {
+        if (name in dependencies) return dependencies[name];
+        if (name === 'next/dynamic') return { default: () => 'DynamicComponent' };
+        return new Proxy(
+          {},
+          { get: (_, key) => (key === '__esModule' ? true : `${name}:${String(key)}`) },
+        );
+      },
+      URLSearchParams,
+      URL,
+      setTimeout,
+      clearTimeout,
+      queueMicrotask,
+      console,
+      JSON,
+      ...globals,
+    },
+    { filename: file },
+  );
   return exports;
 }
 
@@ -363,11 +625,16 @@ function harness() {
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
-      return [slots[index], (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
+      return [
+        slots[index],
+        (next) => {
+          slots[index] = typeof next === 'function' ? next(slots[index]) : next;
+        },
+      ];
     },
     useRef(initial) {
       const index = cursor++;
-      return slots[index] ??= { current: initial };
+      return (slots[index] ??= { current: initial });
     },
     useId: () => 'id',
     useEffect(callback, deps) {
@@ -375,7 +642,10 @@ function harness() {
       const previous = slots[index];
       if (!deps || !previous || deps.some((value, offset) => !Object.is(value, previous[offset]))) {
         slots[index] = deps ?? [];
-        pending.push(() => { cleanups[index]?.(); cleanups[index] = callback(); });
+        pending.push(() => {
+          cleanups[index]?.();
+          cleanups[index] = callback();
+        });
       }
     },
   };
@@ -383,8 +653,15 @@ function harness() {
   const jsx = (type, props) => ({ type, props });
   return {
     dependencies: { react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' } },
-    render: (component) => { cursor = 0; return component(); },
-    effects: () => { const run = pending; pending = []; run.forEach((effect) => effect()); },
+    render: (component) => {
+      cursor = 0;
+      return component();
+    },
+    effects: () => {
+      const run = pending;
+      pending = [];
+      run.forEach((effect) => effect());
+    },
     dispose: () => cleanups.forEach((cleanup) => cleanup?.()),
   };
 }
@@ -392,7 +669,10 @@ function harness() {
 function find(tree, predicate) {
   if (!tree || typeof tree !== 'object') return undefined;
   if (Array.isArray(tree)) {
-    for (const item of tree) { const result = find(item, predicate); if (result) return result; }
+    for (const item of tree) {
+      const result = find(item, predicate);
+      if (result) return result;
+    }
     return undefined;
   }
   if (predicate(tree)) return tree;
@@ -416,37 +696,56 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   const done = [];
   const timers = [];
   const fakeWindow = {
-    setTimeout: (callback) => { timers.push(callback); return timers.length; },
+    setTimeout: (callback) => {
+      timers.push(callback);
+      return timers.length;
+    },
     clearTimeout: () => {},
-    addEventListener() {}, removeEventListener() {},
+    addEventListener() {},
+    removeEventListener() {},
   };
-  const { default: PostComposer } = load('components/forum/PostComposer.tsx', {
-    ...hooks.dependencies,
-    '@/components/ConfirmDialog': { useConfirm: () => ({ confirm: async () => true, confirmDialog: null }) },
-    '@/components/Toast': { showToast: (message) => toasts.push(message) },
-    '@/components/RichTextEditorShell': { EditorPlaceholder: 'EditorPlaceholder' },
-    '@/components/forum/SharedGroupsPicker': { default: 'SharedGroupsPicker', sharedGroupsOf: () => ({ tag_groups: [], block_groups: [] }) },
-    '@/lib/api/forum': {
-      ...model,
-      createForumPost: async (token, body, key) => { created.push({ token, body, key }); return createReply(); },
-      updateForumPost: async () => {},
+  const { default: PostComposer } = load(
+    'components/forum/PostComposer.tsx',
+    {
+      ...hooks.dependencies,
+      '@/components/ConfirmDialog': {
+        useConfirm: () => ({ confirm: async () => true, confirmDialog: null }),
+      },
+      '@/components/Toast': { showToast: (message) => toasts.push(message) },
+      '@/components/RichTextEditorShell': { EditorPlaceholder: 'EditorPlaceholder' },
+      '@/components/forum/SharedGroupsPicker': {
+        default: 'SharedGroupsPicker',
+        sharedGroupsOf: () => ({ tag_groups: [], block_groups: [] }),
+      },
+      '@/lib/api/forum': {
+        ...model,
+        createForumPost: async (token, body, key) => {
+          created.push({ token, body, key });
+          return createReply();
+        },
+        updateForumPost: async () => {},
+      },
+      '@/lib/api/errors': { apiErrorMessage: (error, fallback) => error?.message || fallback },
+      '@/lib/api/idempotency': await import('../lib/api/idempotency.ts'),
+      '@/lib/bbcode': { firstImageOf: (value) => /\[img\](.*?)\[\/img\]/.exec(value)?.[1] ?? null },
+      '@/lib/forumDraft': {
+        EMPTY_DRAFT: drafts.EMPTY_DRAFT,
+        readDraft: () => null,
+        writeDraft: (...args) => saved.push(args),
+        clearDraft: (...args) => cleared.push(args),
+      },
+      '@/lib/forumImages': { storedAssetPath: images.storedAssetPath },
+      '@/lib/forumText': { isBlankRichText: text.isBlankRichText },
+      '@/lib/format': { formatShortDateTime: () => 'time' },
+      '@/lib/hooks': { readToken: () => 'T' },
+      '@/lib/icons': { ICON: { control: 20, dense: 18 } },
+      '@/lib/resources': { shareableGroups: { peek: () => ({ data: undefined }) } },
     },
-    '@/lib/api/errors': { apiErrorMessage: (error, fallback) => error?.message || fallback },
-    '@/lib/api/idempotency': await import('../lib/api/idempotency.ts'),
-    '@/lib/bbcode': { firstImageOf: (value) => /\[img\](.*?)\[\/img\]/.exec(value)?.[1] ?? null },
-    '@/lib/forumDraft': {
-      EMPTY_DRAFT: drafts.EMPTY_DRAFT,
-      readDraft: () => null,
-      writeDraft: (...args) => saved.push(args),
-      clearDraft: (...args) => cleared.push(args),
+    {
+      window: fakeWindow,
+      document: { addEventListener() {}, removeEventListener() {}, visibilityState: 'visible' },
     },
-    '@/lib/forumImages': { storedAssetPath: images.storedAssetPath },
-    '@/lib/forumText': { isBlankRichText: text.isBlankRichText },
-    '@/lib/format': { formatShortDateTime: () => 'time' },
-    '@/lib/hooks': { readToken: () => 'T' },
-    '@/lib/icons': { ICON: { control: 20, dense: 18 } },
-    '@/lib/resources': { shareableGroups: { peek: () => ({ data: undefined }) } },
-  }, { window: fakeWindow, document: { addEventListener() {}, removeEventListener() {}, visibilityState: 'visible' } });
+  );
 
   const props = { userId: '1', token: 'T', onDone: (...args) => done.push(args), onCancel() {} };
   let tree = hooks.render(() => PostComposer(props));
@@ -462,32 +761,54 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   tree = hooks.render(() => PostComposer(props));
   await submit();
   assert.equal(created.length, 0);
-  assert.equal(byLabel(tree, '标题').props.error, '标题至少需要 5 个字符', 'the message is the field’s');
-  assert.equal(byType(tree, 'DynamicComponent').props.invalid, true, 'and an empty body is flagged at the editor');
+  assert.equal(
+    byLabel(tree, '标题').props.error,
+    '标题至少需要 5 个字符',
+    'the message is the field’s',
+  );
+  assert.equal(
+    byType(tree, 'DynamicComponent').props.invalid,
+    true,
+    'and an empty body is flagged at the editor',
+  );
   assert.deepEqual(toasts, [], 'no toast for a problem that belongs to a field');
 
   byLabel(tree, '标题').props.onChange({ target: { value: '一个足够长的标题' } });
   tree = hooks.render(() => PostComposer(props));
-  byType(tree, 'DynamicComponent').props.onChange(`[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`);
+  byType(tree, 'DynamicComponent').props.onChange(
+    `[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`,
+  );
   byType(tree, 'DynamicComponent').props.onUploaded(`/api/v1/media/${'c'.repeat(64)}`);
   byType(tree, '@/components/forum/CoverField:default').props.onBusyChange(true);
   tree = hooks.render(() => PostComposer(props));
   assert.equal(byLabel(tree, '标题').props.error, undefined, 'typing clears the field’s message');
   await submit();
   assert.equal(created.length, 0, 'a cover still uploading holds the post');
-  assert.ok(find(tree, (node) => node.type === 'p' && node.props.children === '图片还在上传，请稍候'));
+  assert.ok(
+    find(tree, (node) => node.type === 'p' && node.props.children === '图片还在上传，请稍候'),
+  );
 
   byType(tree, '@/components/forum/CoverField:default').props.onBusyChange(false);
   tree = hooks.render(() => PostComposer(props));
-  createReply = async () => { throw new ApiError('network'); };
+  createReply = async () => {
+    throw new ApiError('network');
+  };
   await submit();
   assert.equal(created.length, 1);
   /* Through JSON: the component runs in its own realm, whose objects have their own prototype. */
-  assert.deepEqual(JSON.parse(JSON.stringify(created[0].body)), {
-    title: '一个足够长的标题', excerpt: '', category: 'discussion',
-    content: `[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`, commission_link: '',
-    cover_image: `/api/v1/media/${'c'.repeat(64)}`, shared_groups: null,
-  }, 'the first picture stands in for the cover, in its stored form');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(created[0].body)),
+    {
+      title: '一个足够长的标题',
+      excerpt: '',
+      category: 'discussion',
+      content: `[img]https://picpony.top/api/v1/media/${'c'.repeat(64)}[/img]正文`,
+      commission_link: '',
+      cover_image: `/api/v1/media/${'c'.repeat(64)}`,
+      shared_groups: null,
+    },
+    'the first picture stands in for the cover, in its stored form',
+  );
   assert.equal(done.length, 0);
   assert.equal(cleared.length, 0, 'a failed publish keeps the draft');
 
@@ -497,9 +818,20 @@ test('the post form checks every field, blocks on an upload, sends once and keep
   createReply = async () => 88;
   await submit();
   assert.equal(created.length, 2, 'retried by the writer');
-  assert.equal(created[1].key, created[0].key, 'a retry after a lost answer is the same post (one Idempotency-Key)');
-  assert.deepEqual(done.map(([id]) => id), [88]);
-  assert.deepEqual(JSON.parse(JSON.stringify(cleared.at(-1))), ['1', null], 'published: the draft goes');
+  assert.equal(
+    created[1].key,
+    created[0].key,
+    'a retry after a lost answer is the same post (one Idempotency-Key)',
+  );
+  assert.deepEqual(
+    done.map(([id]) => id),
+    [88],
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(cleared.at(-1))),
+    ['1', null],
+    'published: the draft goes',
+  );
   assert.deepEqual(toasts, ['已发布']);
   const savesBefore = saved.length;
   timers.splice(0).forEach((callback) => callback());
@@ -508,7 +840,10 @@ test('the post form checks every field, blocks on an upload, sends once and keep
 });
 
 test('a reply’s floor number does not assume the page size (R6-038)', () => {
-  const { floorOf } = load('components/forum/ThreadComments.tsx', { react: { memo: (component) => component }, 'react/jsx-runtime': { jsx() {}, jsxs() {} } });
+  const { floorOf } = load('components/forum/ThreadComments.tsx', {
+    react: { memo: (component) => component },
+    'react/jsx-runtime': { jsx() {}, jsxs() {} },
+  });
   assert.equal(floorOf(0, 1, 3, 15, 40), 1);
   assert.equal(floorOf(4, 2, 3, 15, 40), 20, 'a full page before the last');
   assert.equal(floorOf(0, 3, 3, 10, 40), 31, 'the last page ends at the total');
@@ -537,7 +872,8 @@ test('the container transform’s clip is the container at every sample, in both
     for (let i = 0; i <= 20; i += 1) {
       const box = container.boxAt(from, to, container.forumTransformProgress(i / 20));
       const { clip, origin } = container.resolveShutter(levels, box);
-      for (const key of ['left', 'top', 'width', 'height']) assert.ok(Math.abs(clip[key] - box[key]) < 1e-6, `${key} at ${i}`);
+      for (const key of ['left', 'top', 'width', 'height'])
+        assert.ok(Math.abs(clip[key] - box[key]) < 1e-6, `${key} at ${i}`);
       /* The content frame sits at the container's top left: the contents ride it, unscaled. */
       assert.ok(Math.abs(origin[0] - box.left) < 1e-6 && Math.abs(origin[1] - box.top) < 1e-6);
     }
@@ -563,14 +899,16 @@ test('the container flies the picture flight’s spring: Compose’s shared-elem
   const fastest = steps.indexOf(Math.max(...steps));
   assert.ok(fastest >= 1 && fastest <= 4, `fastest frame ${fastest}`);
   const at = (q) => {
-    for (let ms = 0; ms <= container.FORUM_TRANSFORM_MS; ms += 0.5) if (p(ms / container.FORUM_TRANSFORM_MS) >= q) return ms;
+    for (let ms = 0; ms <= container.FORUM_TRANSFORM_MS; ms += 0.5)
+      if (p(ms / container.FORUM_TRANSFORM_MS) >= q) return ms;
     return Infinity;
   };
   /* Unhurried but not slow: half by ~53ms, nine tenths by ~123ms, then a soft settle. */
   assert.ok(at(0.5) < 100, `half at ${at(0.5)}`);
   assert.ok(at(0.9) < 220, `nine tenths at ${at(0.9)}`);
   assert.ok(steps.at(-1) < 0.003, `last frame ${steps.at(-1)}`);
-  for (let t = 0; t < 1; t += 0.01) assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
+  for (let t = 0; t < 1; t += 0.01)
+    assert.ok(p(t + 0.01) >= p(t), 'monotone: nothing overshoots its rectangle');
 });
 
 test('the contents hand over on the flight’s windows, one after the other', () => {
@@ -586,7 +924,10 @@ test('the contents hand over on the flight’s windows, one after the other', ()
   /* Never two contents on screen at once: anchored at one corner and unscaled, two lines of text
      that do not line up read as one doubled line. */
   for (const leg of [open, back]) {
-    assert.ok(leg.outgoing.end <= leg.incoming.start + 1e-9, 'the outgoing content is gone before the incoming one comes');
+    assert.ok(
+      leg.outgoing.end <= leg.incoming.start + 1e-9,
+      'the outgoing content is gone before the incoming one comes',
+    );
     for (let p = 0; p <= 1; p += 0.01) {
       const shown = container.fadeAt(leg.outgoing, p, true) + container.fadeAt(leg.incoming, p);
       assert.ok(shown <= 1 + 1e-9, `both at ${p}`);
@@ -597,7 +938,12 @@ test('the contents hand over on the flight’s windows, one after the other', ()
 
 test('the container starts from what is on screen of a card, and not at all from nothing', () => {
   const view = { left: 300, top: 76, width: 1128, height: 812 };
-  assert.deepEqual(container.visibleBox({ left: 416, top: -400, width: 896, height: 2385 }, view), { left: 416, top: 76, width: 896, height: 812 });
+  assert.deepEqual(container.visibleBox({ left: 416, top: -400, width: 896, height: 2385 }, view), {
+    left: 416,
+    top: 76,
+    width: 896,
+    height: 812,
+  });
   assert.equal(container.visibleBox({ left: 416, top: 900, width: 896, height: 112 }, view), null);
   assert.deepEqual(container.radiiAt([12, 12, 12, 12], [4, 4, 16, 16], 0.5), [8, 8, 14, 14]);
 });
@@ -625,7 +971,10 @@ function trackAt(track, u) {
   for (let i = 1; i < track.length; i += 1) {
     const a = track[i - 1];
     const b = track[i];
-    if (u <= b.offset) return b.offset === a.offset ? b.opacity : a.opacity + ((b.opacity - a.opacity) * (u - a.offset)) / (b.offset - a.offset);
+    if (u <= b.offset)
+      return b.offset === a.offset
+        ? b.opacity
+        : a.opacity + ((b.opacity - a.opacity) * (u - a.offset)) / (b.offset - a.offset);
   }
   return track[track.length - 1].opacity;
 }
@@ -639,12 +988,16 @@ test('a turned leg sends each content back over the same stretch of travel it ca
     for (const p of [0.02, 0.1, 0.3, 0.45, 0.62, 0.8, 0.95, 1]) {
       for (const to of [0, 1]) {
         const track = container.fadeTrack(window, p, to, out);
-        for (let i = 1; i < track.length; i += 1) assert.ok(track[i].offset > track[i - 1].offset, 'offsets climb');
+        for (let i = 1; i < track.length; i += 1)
+          assert.ok(track[i].offset > track[i - 1].offset, 'offsets climb');
         assert.equal(track[0].offset, 0);
         assert.equal(track.at(-1).offset, 1);
         for (let u = 0; u <= 1.0001; u += 0.025) {
           const expected = container.fadeAt(window, p + (to - p) * Math.min(1, u), out);
-          assert.ok(Math.abs(trackAt(track, Math.min(1, u)) - expected) < 1e-9, `p ${p} → ${to} at ${u}`);
+          assert.ok(
+            Math.abs(trackAt(track, Math.min(1, u)) - expected) < 1e-9,
+            `p ${p} → ${to} at ${u}`,
+          );
         }
         /* It leaves from exactly what was on screen at the turn: no step in the content's opacity. */
         assert.ok(Math.abs(track[0].opacity - container.fadeAt(window, p, out)) < 1e-12);
@@ -666,14 +1019,16 @@ test('a turn leaves from where the container is, at once, on the curve, over wha
        never under its floor. */
     const share = Math.max(
       heroConstants.HERO_REVERSE_MIN_DURATION_MS / full,
-      heroConstants.HERO_REVERSE_BASE_RATIO + heroConstants.HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(p),
+      heroConstants.HERO_REVERSE_BASE_RATIO +
+        heroConstants.HERO_REVERSE_TRAVEL_RATIO * Math.sqrt(p),
     );
     assert.ok(Math.abs(turned.duration - full * share) < 1e-9, `duration ${turned.duration}`);
     assert.ok(turned.duration <= full + 1e-9);
     /* It moves on its first frame, the way it was sent, and lands on its end without passing it. */
     const travel = (ms) => container.legAt(turned, ms).travel;
     assert.ok(travel(frame) < turned.from - 1e-6, `elapsed ${elapsed}: still on the first frame`);
-    for (let ms = 0; ms < turned.duration; ms += 1) assert.ok(travel(ms + 1) <= travel(ms) + 1e-12, 'one way');
+    for (let ms = 0; ms < turned.duration; ms += 1)
+      assert.ok(travel(ms + 1) <= travel(ms) + 1e-12, 'one way');
     assert.ok(Math.abs(travel(turned.duration)) < 1e-12, 'lands on the first end');
   }
   /* A turn of a turn heads for the second end again, from where the turned leg had got to. */
@@ -687,9 +1042,20 @@ test('a turn leaves from where the container is, at once, on the curve, over wha
 test('a turn reads the container off the leg on the display’s clock: the clip the shutters draw then, tone and corners with it', () => {
   const full = container.FORUM_TRANSFORM_MS;
   const leg = container.freshContainerLeg(full);
-  const card = { box: { left: 603, top: 309, width: 253, height: 249.8 }, radii: [12, 12, 12, 12], colour: 'rgb(232, 222, 248)' };
-  const page = { box: { left: 334, top: 100, width: 1060, height: 788 }, radii: [0, 0, 0, 0], colour: 'rgb(255, 248, 248)' };
-  for (const levels of [container.shutterLevels(null), container.shutterLevels({ left: 416, width: 896 })]) {
+  const card = {
+    box: { left: 603, top: 309, width: 253, height: 249.8 },
+    radii: [12, 12, 12, 12],
+    colour: 'rgb(232, 222, 248)',
+  };
+  const page = {
+    box: { left: 334, top: 100, width: 1060, height: 788 },
+    radii: [0, 0, 0, 0],
+    colour: 'rgb(255, 248, 248)',
+  };
+  for (const levels of [
+    container.shutterLevels(null),
+    container.shutterLevels({ left: 416, width: 896 }),
+  ]) {
     for (const elapsed of [0, 1000 / 60, 90, 200, 333, full, full + 50]) {
       const pose = container.containerPose(leg, card, page, elapsed);
       const p = container.forumTransformProgress(Math.min(1, elapsed / full));
@@ -699,7 +1065,10 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
         const [ax, ay] = level.translate(card.box);
         const [bx, by] = level.translate(page.box);
         const [x, y] = level.translate(pose.box);
-        assert.ok(Math.abs(ax + (bx - ax) * p - x) < 1e-6 && Math.abs(ay + (by - ay) * p - y) < 1e-6, `level at ${elapsed}`);
+        assert.ok(
+          Math.abs(ax + (bx - ax) * p - x) < 1e-6 && Math.abs(ay + (by - ay) * p - y) < 1e-6,
+          `level at ${elapsed}`,
+        );
       });
       assert.ok(Math.abs(pose.radii[0] - 12 * (1 - p)) < 1e-9, `corner at ${elapsed}`);
     }
@@ -707,9 +1076,15 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
   assert.deepEqual(container.containerPose(leg, card, page, 0).box, card.box);
   assert.deepEqual(container.containerPose(leg, card, page, full).box, page.box);
   /* The tone too, between two computed colours; one the browser would not print stays at its end. */
-  assert.equal(container.colourAt('rgb(0, 0, 0)', 'rgba(255, 255, 255, 0.5)', 0.5), 'rgba(128, 128, 128, 0.75)');
+  assert.equal(
+    container.colourAt('rgb(0, 0, 0)', 'rgba(255, 255, 255, 0.5)', 0.5),
+    'rgba(128, 128, 128, 0.75)',
+  );
   assert.equal(container.colourAt('rgb(1, 2, 3)', 'rgb(1, 2, 3)', 0.3), 'rgb(1, 2, 3)');
-  assert.equal(container.colourAt('color(display-p3 1 0 0)', 'rgb(0, 0, 0)', 0.2), 'color(display-p3 1 0 0)');
+  assert.equal(
+    container.colourAt('color(display-p3 1 0 0)', 'rgb(0, 0, 0)', 0.2),
+    'color(display-p3 1 0 0)',
+  );
   /* The turned leg starts exactly there: its own first pose is the pose it was turned at. */
   const elapsed = 120;
   const now = container.containerPose(leg, card, page, elapsed);
@@ -719,10 +1094,34 @@ test('a turn reads the container off the leg on the display’s clock: the clip 
 
 test('a shared cover morph stays isotropic and covers every edge of its clipping box at every sample', () => {
   const cases = [
-    { ratio: 16 / 9, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 173 }, aY: 0.5, bY: 0.5 },
-    { ratio: 3 / 4, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 411 }, aY: 0.5, bY: 0.5 },
-    { ratio: 1, from: { left: 0, top: 0, width: 240, height: 180 }, to: { left: 0, top: 0, width: 308, height: 308 }, aY: 0.5, bY: 0.5 },
-    { ratio: 0.3, from: { left: 0, top: 0, width: 308, height: 231 }, to: { left: 0, top: 0, width: 308, height: 462 }, aY: 0.5, bY: 0 },
+    {
+      ratio: 16 / 9,
+      from: { left: 0, top: 0, width: 308, height: 231 },
+      to: { left: 0, top: 0, width: 308, height: 173 },
+      aY: 0.5,
+      bY: 0.5,
+    },
+    {
+      ratio: 3 / 4,
+      from: { left: 0, top: 0, width: 308, height: 231 },
+      to: { left: 0, top: 0, width: 308, height: 411 },
+      aY: 0.5,
+      bY: 0.5,
+    },
+    {
+      ratio: 1,
+      from: { left: 0, top: 0, width: 240, height: 180 },
+      to: { left: 0, top: 0, width: 308, height: 308 },
+      aY: 0.5,
+      bY: 0.5,
+    },
+    {
+      ratio: 0.3,
+      from: { left: 0, top: 0, width: 308, height: 231 },
+      to: { left: 0, top: 0, width: 308, height: 462 },
+      aY: 0.5,
+      bY: 0,
+    },
   ];
   for (const { ratio, from, to, aY, bY } of cases) {
     const a = container.coverImageRect(from.width, from.height, ratio, aY);
@@ -766,28 +1165,44 @@ test('shared content alignment keeps the slot locked onto the flying picture and
       const u = Math.min(1, p);
       const box = container.boxAt(card, page, u);
       const shared = container.boxAt(cover, slot0, u);
-      const outShift = { x: container.lerp(outA.x, outB.x, u), y: container.lerp(outA.y, outB.y, u) };
+      const outShift = {
+        x: container.lerp(outA.x, outB.x, u),
+        y: container.lerp(outA.y, outB.y, u),
+      };
       const inShift = { x: container.lerp(inA.x, inB.x, u), y: container.lerp(inA.y, inB.y, u) };
       const exactIn = container.sharedContentShift(box, shared, inOffset);
-      assert.ok(Math.abs(inShift.x - exactIn.x) < 1e-9 && Math.abs(inShift.y - exactIn.y) < 1e-9, `affine inShift at ${u}`);
+      assert.ok(
+        Math.abs(inShift.x - exactIn.x) < 1e-9 && Math.abs(inShift.y - exactIn.y) < 1e-9,
+        `affine inShift at ${u}`,
+      );
       /* Incoming slot #0 sits at `box + inOffset + inShift`, matching the flying picture exactly. */
       assert.ok(Math.abs(box.left + inOffset.x + inShift.x - shared.left) < 1e-9, `slot x at ${u}`);
       assert.ok(Math.abs(box.top + inOffset.y + inShift.y - shared.top) < 1e-9, `slot y at ${u}`);
       /* Outgoing cover slot sits at `box + outOffset + outShift`, matching the flying picture too. */
-      assert.ok(Math.abs(box.left + outOffset.x + outShift.x - shared.left) < 1e-9, `out x at ${u}`);
+      assert.ok(
+        Math.abs(box.left + outOffset.x + outShift.x - shared.left) < 1e-9,
+        `out x at ${u}`,
+      );
       assert.ok(Math.abs(box.top + outOffset.y + outShift.y - shared.top) < 1e-9, `out y at ${u}`);
     }
   }
 });
 
 test('forum list always requests summary=1 and renders taggroup counts in teasers', async () => {
-  const summaryShare = model.postOf(wirePost({
-    id: 55,
-    excerpt: '',
-    category: 'taggroups',
-    content_summary: true,
-    content: { type: 'taggroups', description: '推荐合集', tag_group_count: 2, block_group_count: 3 },
-  }));
+  const summaryShare = model.postOf(
+    wirePost({
+      id: 55,
+      excerpt: '',
+      category: 'taggroups',
+      content_summary: true,
+      content: {
+        type: 'taggroups',
+        description: '推荐合集',
+        tag_group_count: 2,
+        block_group_count: 3,
+      },
+    }),
+  );
   assert.equal(summaryShare.summary, true);
   assert.equal(summaryShare.shared_groups, null);
   assert.deepEqual(summaryShare.shared_group_counts, { tagGroups: 2, blockGroups: 3 });
@@ -795,12 +1210,15 @@ test('forum list always requests summary=1 and renders taggroup counts in teaser
 
   // Sends summary=1 directly with no legacy retry.
   calls.length = 0;
-  respond = () => Response.json({
-    posts: [wirePost({ id: 55, content_summary: true, content: { type: 'discussion', html: '' } })],
-    total: 1,
-    page: 1,
-    total_pages: 1,
-  });
+  respond = () =>
+    Response.json({
+      posts: [
+        wirePost({ id: 55, content_summary: true, content: { type: 'discussion', html: '' } }),
+      ],
+      total: 1,
+      page: 1,
+      total_pages: 1,
+    });
   const slim = await forum.getForumPosts({ page: 1 });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url.searchParams.get('summary'), '1');
@@ -808,81 +1226,96 @@ test('forum list always requests summary=1 and renders taggroup counts in teaser
 
   // 400 validation errors propagate directly without a fallback retry.
   calls.length = 0;
-  respond = () => Response.json({ error: { code: 'BAD_REQUEST', message: '搜索词过长' } }, { status: 400 });
+  respond = () =>
+    Response.json({ error: { code: 'BAD_REQUEST', message: '搜索词过长' } }, { status: 400 });
   await assert.rejects(() => forum.getForumPosts({ page: 1, search: 'x'.repeat(200) }));
   assert.equal(calls.length, 1);
 });
 
 test('truncated summary rows strip unclosed BBCode tags, trailing partial tags and split entities', () => {
-  const truncatedPost = model.postOf(wirePost({
-    id: 56,
-    excerpt: '',
-    content_summary: true,
-    content: {
-      type: 'discussion',
-      html: '[p][center][b]欢迎来到小马&amp;同人论坛[quote="alice"]这段引用被截断没有闭合',
-    },
-  }));
+  const truncatedPost = model.postOf(
+    wirePost({
+      id: 56,
+      excerpt: '',
+      content_summary: true,
+      content: {
+        type: 'discussion',
+        html: '[p][center][b]欢迎来到小马&amp;同人论坛[quote="alice"]这段引用被截断没有闭合',
+      },
+    }),
+  );
   assert.equal(truncatedPost.summary, true);
   assert.equal(text.forumTeaser(truncatedPost), '欢迎来到小马&同人论坛');
 
-  const splitTail = model.postOf(wirePost({
-    id: 57,
-    excerpt: '',
-    content_summary: true,
-    content: {
-      type: 'discussion',
-      html: '[p]长文开头[img]/api/v1/media/abcdef012345',
-    },
-  }));
+  const splitTail = model.postOf(
+    wirePost({
+      id: 57,
+      excerpt: '',
+      content_summary: true,
+      content: {
+        type: 'discussion',
+        html: '[p]长文开头[img]/api/v1/media/abcdef012345',
+      },
+    }),
+  );
   assert.equal(text.forumTeaser(splitTail), '长文开头');
 
-  const partialTagAndEntity = model.postOf(wirePost({
-    id: 58,
-    excerpt: '',
-    content_summary: true,
-    content: {
-      type: 'discussion',
-      html: '[p]测试正文 A &amp',
-    },
-  }));
+  const partialTagAndEntity = model.postOf(
+    wirePost({
+      id: 58,
+      excerpt: '',
+      content_summary: true,
+      content: {
+        type: 'discussion',
+        html: '[p]测试正文 A &amp',
+      },
+    }),
+  );
   assert.equal(text.forumTeaser(partialTagAndEntity), '测试正文 A');
 
-  const partialTagOnly = model.postOf(wirePost({
-    id: 59,
-    excerpt: '',
-    content_summary: true,
-    content: {
-      type: 'discussion',
-      html: '[p]链接测试[url=https://example.test/very-long',
-    },
-  }));
+  const partialTagOnly = model.postOf(
+    wirePost({
+      id: 59,
+      excerpt: '',
+      content_summary: true,
+      content: {
+        type: 'discussion',
+        html: '[p]链接测试[url=https://example.test/very-long',
+      },
+    }),
+  );
   assert.equal(text.forumTeaser(partialTagOnly), '链接测试');
 
-  const literalBracket = model.postOf(wirePost({
-    id: 60,
-    excerpt: '',
-    content_summary: true,
-    content: {
-      type: 'discussion',
-      html: '[p][原创] 作品分享',
-    },
-  }));
+  const literalBracket = model.postOf(
+    wirePost({
+      id: 60,
+      excerpt: '',
+      content_summary: true,
+      content: {
+        type: 'discussion',
+        html: '[p][原创] 作品分享',
+      },
+    }),
+  );
   assert.equal(text.forumTeaser(literalBracket), '[原创] 作品分享');
 });
 
 test('edit page ignores summary previews and waits for the full forumThread payload', () => {
-  const summaryPreview = model.postOf(wirePost({
-    id: 77,
-    user_id: 3,
-    content_summary: true,
-    content: { type: 'discussion', html: '' },
-  }));
-  const fullPost = model.postOf(wirePost({
-    id: 77,
-    user_id: 3,
-    content: { type: 'discussion', html: '[p]完整正文内容[/p]' },
-  }));
+  const summaryPreview = model.postOf(
+    wirePost({
+      id: 77,
+      user_id: 3,
+      content_summary: true,
+      content: { type: 'discussion', html: '' },
+    }),
+  );
+  const fullPost = model.postOf(
+    wirePost({
+      id: 77,
+      user_id: 3,
+      content: { type: 'discussion', html: '[p]完整正文内容[/p]' },
+    }),
+  );
 
   const makePage = (cachedPreview, readData) => {
     const hooks = harness();
@@ -897,13 +1330,26 @@ test('edit page ignores summary previews and waits for the full forumThread payl
       '@/components/SignInRequired': { default: 'SignInRequired' },
       '@/components/forum/ComposerSkeleton': { default: 'ComposerSkeleton' },
       '@/components/forum/PostComposer': { default: 'PostComposer' },
-      '@/lib/api/errors': { apiErrorMessage: () => 'err', isNotFound: () => false, isRetryable: () => true },
+      '@/lib/api/errors': {
+        apiErrorMessage: () => 'err',
+        isNotFound: () => false,
+        isRetryable: () => true,
+      },
       '@/lib/backNavigation': { useBackOrParent: () => () => {} },
       '@/lib/useDocumentTitle': { useDocumentTitle: () => {} },
       '@/lib/forumCache': { patchListedPost: () => {}, patchThreadPage: () => {} },
-      '@/lib/forumTransition': { readForumPreview: () => cachedPreview, rememberForumPreview: () => {} },
-      '@/lib/hooks': { useEscapeBack: () => {}, useSession: () => ({ user: { id: 3 }, token: 'T', ready: true }) },
-      '@/lib/resource': { useResource: () => ({ data: readData, error: undefined, refresh: () => {} }), SKIP: Symbol('SKIP') },
+      '@/lib/forumTransition': {
+        readForumPreview: () => cachedPreview,
+        rememberForumPreview: () => {},
+      },
+      '@/lib/hooks': {
+        useEscapeBack: () => {},
+        useSession: () => ({ user: { id: 3 }, token: 'T', ready: true }),
+      },
+      '@/lib/resource': {
+        useResource: () => ({ data: readData, error: undefined, refresh: () => {} }),
+        SKIP: Symbol('SKIP'),
+      },
       '@/lib/resources': { forumThread: { invalidate: () => {} } },
     });
     return hooks.render(() => EditForumPostPage());
@@ -931,17 +1377,37 @@ test('edit page ignores summary previews and waits for the full forumThread payl
 test('rememberForumOrigin ignores summary list previews and never arms container transform for loading cards', () => {
   const expected = [];
   const row = { getBoundingClientRect: () => ({ left: 10, top: 20, width: 600, height: 100 }) };
-  const transition = load('lib/forumTransition.ts', {
-    '@/lib/appScroller': { heroOwnsScreen: () => false },
-    '@/lib/appearance': { motionTier: () => 'standard' },
-    '@/lib/pageTransit': { expectRouteContainer: (path) => expected.push(path) },
-    '@/lib/forumTransitionPlay': { forumReturnInFlight: () => false },
-  }, { performance: { now: () => 1000 } });
-  const summaryPost = model.postOf(wirePost({ id: 88, content_summary: true, content: { type: 'discussion', html: '[p]摘要[/p]' } }));
-  const fullPost = model.postOf(wirePost({ id: 88, content_summary: false, content: { type: 'discussion', html: '[p]完整正文[/p]' } }));
+  const transition = load(
+    'lib/forumTransition.ts',
+    {
+      '@/lib/appScroller': { heroOwnsScreen: () => false },
+      '@/lib/appearance': { motionTier: () => 'standard' },
+      '@/lib/pageTransit': { expectRouteContainer: (path) => expected.push(path) },
+      '@/lib/forumTransitionPlay': { forumReturnInFlight: () => false },
+    },
+    { performance: { now: () => 1000 } },
+  );
+  const summaryPost = model.postOf(
+    wirePost({
+      id: 88,
+      content_summary: true,
+      content: { type: 'discussion', html: '[p]摘要[/p]' },
+    }),
+  );
+  const fullPost = model.postOf(
+    wirePost({
+      id: 88,
+      content_summary: false,
+      content: { type: 'discussion', html: '[p]完整正文[/p]' },
+    }),
+  );
 
   transition.rememberForumOrigin(88, row, summaryPost);
-  assert.equal(transition.readForumPreview(88), null, 'summary row is not stored as a complete preview');
+  assert.equal(
+    transition.readForumPreview(88),
+    null,
+    'summary row is not stored as a complete preview',
+  );
   assert.deepEqual(expected, [], 'cold summary click does not arm route container transform');
 
   transition.rememberForumOrigin(88, row, fullPost);
@@ -949,5 +1415,9 @@ test('rememberForumOrigin ignores summary list previews and never arms container
   assert.deepEqual(expected, ['/forum/88'], 'complete post arms route container transform');
 
   transition.rememberForumOrigin(88, row, summaryPost);
-  assert.equal(transition.readForumPreview(88)?.content, '[p]完整正文[/p]', 'summary click never downgrades a cached full preview');
+  assert.equal(
+    transition.readForumPreview(88)?.content,
+    '[p]完整正文[/p]',
+    'summary click never downgrades a cached full preview',
+  );
 });

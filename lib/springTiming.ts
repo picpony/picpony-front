@@ -25,8 +25,14 @@ export function shapeFor(name: SpringName, category: MotionCategory = 'feedback'
   return motionTier(category) === 'reduced' ? 'effects' : shapeOf(name);
 }
 
-export function springTiming(name: SpringName, category: MotionCategory = 'feedback'): SpringTiming {
-  return { duration: scaledMs(SPRING_MS[name], category), easing: springEasing(shapeFor(name, category)) };
+export function springTiming(
+  name: SpringName,
+  category: MotionCategory = 'feedback',
+): SpringTiming {
+  return {
+    duration: scaledMs(SPRING_MS[name], category),
+    easing: springEasing(shapeFor(name, category)),
+  };
 }
 
 /**
@@ -49,6 +55,9 @@ export function surfaceArrival(
  * A surface leaving: everything — opacity and transform — on one effects spring (rule 4), `fast`
  * for a control or a small surface, `default` for anything partial- or full-screen.
  */
-export function surfaceDeparture(size: 'fast' | 'default' = 'default', category: MotionCategory = 'overlay'): SpringTiming {
+export function surfaceDeparture(
+  size: 'fast' | 'default' = 'default',
+  category: MotionCategory = 'overlay',
+): SpringTiming {
   return springTiming(`${size}Effects`, category);
 }

@@ -108,7 +108,8 @@ function watchContextLoss(canvas: HTMLCanvasElement) {
 
 function isCanvasLost(canvas: HTMLCanvasElement) {
   if (lostPrimaries.has(canvas)) return true;
-  const context = canvas.getContext('2d') as (CanvasRenderingContext2D & { isContextLost?: () => boolean }) | null;
+  const context = canvas.getContext('2d') as
+    (CanvasRenderingContext2D & { isContextLost?: () => boolean }) | null;
   return !context || context.isContextLost?.() === true;
 }
 

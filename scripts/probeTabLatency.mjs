@@ -77,7 +77,10 @@ const profileDir = mkdtempSync(path.join(tmpdir(), 'picpony-tablat-'));
 const upstream = createHttpServer((req, res) => {
   const stub = stubFor(`http://127.0.0.1:${upstreamPort}${req.url}`, req.method);
   if (!stub) return res.writeHead(404).end();
-  res.writeHead(stub.status ?? 200, { 'content-type': stub.contentType, 'cache-control': 'no-store' });
+  res.writeHead(stub.status ?? 200, {
+    'content-type': stub.contentType,
+    'cache-control': 'no-store',
+  });
   res.end(stub.binary ? Buffer.from(stub.body, 'base64') : stub.body);
 });
 await new Promise((r) => upstream.listen(upstreamPort, '127.0.0.1', r));
@@ -189,8 +192,14 @@ socket.addEventListener('message', async (e) => {
 await send('Network.enable');
 await send('Network.setBypassServiceWorker', { bypass: true });
 await send('Fetch.enable', { patterns: [{ urlPattern: '*' }] });
-await send('Emulation.setDeviceMetricsOverride', { width: WIDTH, height: HEIGHT, deviceScaleFactor: DESKTOP ? 1 : DPR, mobile: !DESKTOP });
-if (!DESKTOP) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+await send('Emulation.setDeviceMetricsOverride', {
+  width: WIDTH,
+  height: HEIGHT,
+  deviceScaleFactor: DESKTOP ? 1 : DPR,
+  mobile: !DESKTOP,
+});
+if (!DESKTOP)
+  await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
 await send('Page.addScriptToEvaluateOnNewDocument', {
   source: `try{localStorage.setItem('picpony_motion','standard')}catch(e){}`,
 });
@@ -264,15 +273,30 @@ async function tap(selector, label) {
   if (!box) return false;
   if (DESKTOP) {
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
-    const down = send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+    const down = send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: box.x,
+      y: box.y,
+      button: 'left',
+      clickCount: 1,
+    });
     await sleep(HOLD);
     await down;
-    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: box.x,
+      y: box.y,
+      button: 'left',
+      clickCount: 1,
+    });
     return true;
   }
   /* The hold is wall-clock from sending the touch, not from its acknowledgement: a busy page
      acknowledges late, and a finger does not wait for it. */
-  const down = send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x, y: box.y }] });
+  const down = send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: box.x, y: box.y }],
+  });
   await sleep(HOLD);
   await down;
   await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -282,7 +306,9 @@ async function tap(selector, label) {
 /** The main thread's top-level work between two trace times (µs), self time by event name. */
 function breakdown(events, fromUs, toUs) {
   const main = new Set(
-    events.filter((e) => e.name === 'thread_name' && e.args?.name === 'CrRendererMain').map((e) => `${e.pid}:${e.tid}`),
+    events
+      .filter((e) => e.name === 'thread_name' && e.args?.name === 'CrRendererMain')
+      .map((e) => `${e.pid}:${e.tid}`),
   );
   const slices = events
     .filter((e) => main.has(`${e.pid}:${e.tid}`) && e.ph === 'X' && e.ts >= fromUs && e.ts < toUs)
@@ -301,7 +327,8 @@ function breakdown(events, fromUs, toUs) {
   return [...byName].sort((a, b) => b[1] - a[1]).slice(0, 16);
 }
 
-const fmt = (v) => (v === null || v === undefined || Number.isNaN(v) ? '   -' : String(Math.round(v)).padStart(4));
+const fmt = (v) =>
+  v === null || v === undefined || Number.isNaN(v) ? '   -' : String(Math.round(v)).padStart(4);
 const median = (list) => {
   const v = list.filter((x) => typeof x === 'number' && !Number.isNaN(x)).sort((a, b) => a - b);
   return v.length ? v[Math.floor((v.length - 1) / 2)] : null;
@@ -343,7 +370,9 @@ async function measure(name, selector, label) {
     });
     await sleep(300);
   }
-  await evaluate(`(() => { const l = window.__lat; for (const k of ['events', 'loafs', 'frames', 'marks', 'anims']) l[k].length = 0; l.lean = 0; return true; })()`);
+  await evaluate(
+    `(() => { const l = window.__lat; for (const k of ['events', 'loafs', 'frames', 'marks', 'anims']) l[k].length = 0; l.lean = 0; return true; })()`,
+  );
   const sampling = evaluate(`(${SAMPLE})(1300)`);
   await sleep(30);
   const ok = await tap(selector, label);
@@ -354,7 +383,9 @@ async function measure(name, selector, label) {
     await done;
   }
   /* The profile's clock is the monotonic one in µs; `performance.timeOrigin` aligns it. */
-  const clock = profiling ? await evaluate(`({ now: performance.now(), origin: performance.timeOrigin })`) : null;
+  const clock = profiling
+    ? await evaluate(`({ now: performance.now(), origin: performance.timeOrigin })`)
+    : null;
   const profile = profiling ? (await send('Profiler.stop'))?.profile : null;
   const lat = await evaluate(`window.__lat`);
   if (!ok || !lat) return console.log(`${name.padEnd(26)} no tab "${label}"`);
@@ -365,7 +396,11 @@ async function measure(name, selector, label) {
   const started = lat.frames.find((f) => typeof f.start === 'number');
   const at = (ms) => {
     const f = [...lat.frames].reverse().find((frame) => frame.t <= lift + ms);
-    return f && f.p !== null ? Math.round(f.p * 100) : f && started && f.t > started.start ? 100 : 0;
+    return f && f.p !== null
+      ? Math.round(f.p * 100)
+      : f && started && f.t > started.start
+        ? 100
+        : 0;
   };
   const settled = started ? lat.frames.find((f) => f.t > started.start && !f.live) : null;
   const metrics = {
@@ -385,25 +420,41 @@ async function measure(name, selector, label) {
       `  p@50 ${fmt(metrics.p50)}%  p@100 ${fmt(metrics.p100)}%  p@150 ${fmt(metrics.p150)}%  done ${fmt(metrics.done)}  lean ${metrics.lean}`,
   );
   if (DUMP) {
-    for (const m of lat.marks) console.log(`      ${m.type} timeStamp ${fmt(m.ts - lift)}, handled ${fmt(m.at - lift)}`);
-    for (const e of lat.events.filter((e) => !/^(pointer|mouse)(over|out|enter|leave)$/.test(e.name))) {
-      console.log(`      event ${e.name.padEnd(18)} processing ${fmt(e.ps - lift)} .. ${fmt(e.pe - lift)}`);
+    for (const m of lat.marks)
+      console.log(`      ${m.type} timeStamp ${fmt(m.ts - lift)}, handled ${fmt(m.at - lift)}`);
+    for (const e of lat.events.filter(
+      (e) => !/^(pointer|mouse)(over|out|enter|leave)$/.test(e.name),
+    )) {
+      console.log(
+        `      event ${e.name.padEnd(18)} processing ${fmt(e.ps - lift)} .. ${fmt(e.pe - lift)}`,
+      );
     }
     const frames = lat.frames.filter((f) => f.t > lift - 120).slice(0, 14);
-    console.log(`      frames ${frames.map((f) => `${Math.round(f.t - lift)}${f.p === null ? '' : `:${Math.round(f.p * 100)}%`}`).join(' ')}`);
-    for (const l of lat.loafs.filter((l) => l.start + l.dur > (down?.ts ?? lift) - 5 && l.start < lift + 400)) {
+    console.log(
+      `      frames ${frames.map((f) => `${Math.round(f.t - lift)}${f.p === null ? '' : `:${Math.round(f.p * 100)}%`}`).join(' ')}`,
+    );
+    for (const l of lat.loafs.filter(
+      (l) => l.start + l.dur > (down?.ts ?? lift) - 5 && l.start < lift + 400,
+    )) {
       const scripts = l.scripts
         .filter((s) => s.dur >= 3)
-        .map((s) => `${s.invoker}${s.fn ? `(${s.fn})` : ''} ${s.dur}ms${s.forced ? ` [forced ${s.forced}]` : ''}`)
+        .map(
+          (s) =>
+            `${s.invoker}${s.fn ? `(${s.fn})` : ''} ${s.dur}ms${s.forced ? ` [forced ${s.forced}]` : ''}`,
+        )
         .join('; ');
-      console.log(`      long frame ${fmt(l.start - lift)} ${Math.round(l.dur)}ms (blocking ${Math.round(l.blocking)}) ${scripts}`);
+      console.log(
+        `      long frame ${fmt(l.start - lift)} ${Math.round(l.dur)}ms (blocking ${Math.round(l.blocking)}) ${scripts}`,
+      );
     }
   }
   if (profile && down) {
     /* Align on the profile's end, taken just after the read of `performance.now()` above. */
     const shift = profile.endTime - clock.now * 1000;
     const until = started ? started.start : lift + 300;
-    console.log(`      JavaScript from the press to the strip's start (${Math.round(until - down.ts)}ms), self time:`);
+    console.log(
+      `      JavaScript from the press to the strip's start (${Math.round(until - down.ts)}ms), self time:`,
+    );
     for (const [key, ms] of profileTop(profile, down.ts, until, shift)) {
       if (ms >= 0.8) console.log(`        ${ms.toFixed(1).padStart(6)}ms  ${key}`);
     }
@@ -414,17 +465,26 @@ async function measure(name, selector, label) {
     traceFiles += 1;
     writeFileSync(
       `${process.env.PROBE_TRACE_OUT}-${traceFiles}.json`,
-      JSON.stringify({ traceEvents, lift, clickProcessingStart: click?.ps ?? null, stripStart: started?.start ?? null }),
+      JSON.stringify({
+        traceEvents,
+        lift,
+        clickProcessingStart: click?.ps ?? null,
+        stripStart: started?.start ?? null,
+      }),
     );
   }
   if (tracing && click && started && down) {
     /* Trace time is µs on the monotonic clock; align it on the click's own dispatch. */
-    const dispatch = traceEvents.find((e) => e.name === 'EventDispatch' && e.args?.data?.type === 'click');
+    const dispatch = traceEvents.find(
+      (e) => e.name === 'EventDispatch' && e.args?.data?.type === 'click',
+    );
     if (dispatch) {
       const offset = dispatch.ts - click.ps * 1000;
       const from = down.ts * 1000 + offset;
       const to = started.start * 1000 + offset;
-      console.log(`      main thread from the press to the strip's start (${Math.round((to - from) / 1000)}ms):`);
+      console.log(
+        `      main thread from the press to the strip's start (${Math.round((to - from) / 1000)}ms):`,
+      );
       for (const [key, us] of breakdown(traceEvents, from, to)) {
         if (us >= 1000) console.log(`        ${(us / 1000).toFixed(1).padStart(6)}ms  ${key}`);
       }
@@ -479,7 +539,10 @@ for (const { route, taps } of scenarios) {
   await send('Page.navigate', { url: `${origin}${route}` });
   await sleep(9000);
   await evaluate(INSTALL);
-  if (NO_LEAN) await evaluate(`document.querySelectorAll('[data-tab-lean]').forEach((el) => el.removeAttribute('data-tab-lean'))`);
+  if (NO_LEAN)
+    await evaluate(
+      `document.querySelectorAll('[data-tab-lean]').forEach((el) => el.removeAttribute('data-tab-lean'))`,
+    );
   for (let round = 0; round < REPEAT; round += 1) {
     for (const [name, selector, label] of taps) {
       if (ONLY && !name.includes(ONLY)) continue;

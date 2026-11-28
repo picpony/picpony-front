@@ -67,9 +67,16 @@ export function badgeDateProblems(
   today = beijingToday(),
 ): { badgeExpiresAt?: string; linkExpiresAt?: string } {
   const problems: { badgeExpiresAt?: string; linkExpiresAt?: string } = {};
-  if (dates.badgeExpiresAt && dates.badgeExpiresAt < today) problems.badgeExpiresAt = '徽章到期日期不能早于今天';
-  if (dates.linkExpiresAt && dates.linkExpiresAt < today) problems.linkExpiresAt = '链接失效日期不能早于今天';
-  if (!problems.badgeExpiresAt && dates.badgeExpiresAt && dates.linkExpiresAt && dates.badgeExpiresAt < dates.linkExpiresAt) {
+  if (dates.badgeExpiresAt && dates.badgeExpiresAt < today)
+    problems.badgeExpiresAt = '徽章到期日期不能早于今天';
+  if (dates.linkExpiresAt && dates.linkExpiresAt < today)
+    problems.linkExpiresAt = '链接失效日期不能早于今天';
+  if (
+    !problems.badgeExpiresAt &&
+    dates.badgeExpiresAt &&
+    dates.linkExpiresAt &&
+    dates.badgeExpiresAt < dates.linkExpiresAt
+  ) {
     problems.badgeExpiresAt = '徽章到期日期不能早于链接失效日期，否则后期领取的徽章会立即过期';
   }
   return problems;

@@ -131,7 +131,8 @@ function revealTab(list: HTMLElement, tab: HTMLElement, smooth: boolean, vertica
   const end = start + tabBox.width;
   let left: number | null = null;
   if (start - EDGE_ROOM < list.scrollLeft) left = start - EDGE_ROOM;
-  else if (end + EDGE_ROOM > list.scrollLeft + list.clientWidth) left = end + EDGE_ROOM - list.clientWidth;
+  else if (end + EDGE_ROOM > list.scrollLeft + list.clientWidth)
+    left = end + EDGE_ROOM - list.clientWidth;
   if (left === null) return;
   list.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'instant' });
 }
@@ -173,7 +174,10 @@ export default function Tabs<T extends string = string>({
   label = '标签页',
   panelId,
 }: TabsProps<T>) {
-  const { containerRef, indicatorRef, glideTo } = useSlidingIndicator<HTMLDivElement, HTMLSpanElement>(value);
+  const { containerRef, indicatorRef, glideTo } = useSlidingIndicator<
+    HTMLDivElement,
+    HTMLSpanElement
+  >(value);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const revealed = useRef(false);
   /* The rail's active state is its own container fill, so it has nothing to
@@ -281,7 +285,13 @@ export default function Tabs<T extends string = string>({
     clearPointer.current?.();
     const press = pressed.current;
     pressed.current = null;
-    if (event.pointerType !== 'touch' || !press || press.to !== to || press.pointerId !== event.pointerId) return;
+    if (
+      event.pointerType !== 'touch' ||
+      !press ||
+      press.to !== to ||
+      press.pointerId !== event.pointerId
+    )
+      return;
     if (event.timeStamp - press.at >= LONG_PRESS_MS) return;
     const panel = panelFor(to);
     if (!panel || !playPrimedTabTransition(panel, to)) return;
@@ -458,7 +468,11 @@ export default function Tabs<T extends string = string>({
               : 'ripple-primary'
             : 'ripple-secondary',
           selected
-            ? cn(variant === 'rail' && 'bg-secondary-container', activeInk, variant !== 'underline' && 'forced-selected')
+            ? cn(
+                variant === 'rail' && 'bg-secondary-container',
+                activeInk,
+                variant !== 'underline' && 'forced-selected',
+              )
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
@@ -475,7 +489,10 @@ export default function Tabs<T extends string = string>({
         <span className={cn('grid min-w-0', variant === 'rail' && 'flex-1')}>
           {/* Reserve the emphasized label's width in both states, so selecting
               a tab cannot shove its neighbours or the moving indicator. */}
-          <span aria-hidden="true" className="invisible col-start-1 row-start-1 truncate text-title-s-emphasized">
+          <span
+            aria-hidden="true"
+            className="invisible col-start-1 row-start-1 truncate text-title-s-emphasized"
+          >
             {tab.label}
           </span>
           <span className="col-start-1 row-start-1 truncate">{tab.label}</span>

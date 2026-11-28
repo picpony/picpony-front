@@ -26,31 +26,31 @@ Next.js 16 App Router, standalone output, React Compiler through Babel, React 19
 TypeScript 5.9, Tailwind CSS 4, GSAP, Bun and Node.js ≥ 22.18. Development uses port 3100.
 Exact versions and script definitions are in [package.json](package.json).
 
-| Command | When |
-| --- | --- |
-| `bun run dev` | Local development |
-| `bun run check` | Before every commit: whitespace, lint, types, unit suites and generated-output checks |
-| `bun run architecture:check` | After changing import directions between `lib/`, `components/` and `app/` |
-| `bun run colors:write`, `bun run motion:write`, `bun run emoji:write` | Regenerate owned output; never hand-edit it |
-| `bun run test:hero`, `bun run test:overlays` | After changing image detail, Hero or overlays |
-| `bun run net:audit` | After changing screen reads or prefetch |
-| `bun run test:browser` | Browser regressions |
-| `bun run perf:weight` and relevant probes | Bundle or interaction measurement |
+| Command                                                               | When                                                                                  |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `bun run dev`                                                         | Local development                                                                     |
+| `bun run check`                                                       | Before every commit: whitespace, lint, types, unit suites and generated-output checks |
+| `bun run architecture:check`                                          | After changing import directions between `lib/`, `components/` and `app/`             |
+| `bun run colors:write`, `bun run motion:write`, `bun run emoji:write` | Regenerate owned output; never hand-edit it                                           |
+| `bun run test:hero`, `bun run test:overlays`                          | After changing image detail, Hero or overlays                                         |
+| `bun run net:audit`                                                   | After changing screen reads or prefetch                                               |
+| `bun run test:browser`                                                | Browser regressions                                                                   |
+| `bun run perf:weight` and relevant probes                             | Bundle or interaction measurement                                                     |
 
 `bun run format:check` rejects trailing whitespace on changed lines, including Markdown.
 
 ## Code ownership
 
-| Path | Responsibility |
-| --- | --- |
-| `app/globals.css` | Design tokens: colour, shape, elevation, layers and motion |
-| `components/` | Reusable primitives |
-| `lib/resource.ts`, `lib/resources.ts` | Resource lifecycle and catalogue |
-| `lib/api/` | Backend adapters; `http.ts` is the shared transport |
-| `lib/spring.ts`, `lib/motion.ts`, `lib/motion/` | Spring definitions and motion implementations |
-| `lib/hero/` | Image-detail shared-element engine |
-| `lib/route.ts` | Request-line policy and maintenance state |
-| `lib/generated/` | Generated output |
+| Path                                            | Responsibility                                             |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| `app/globals.css`                               | Design tokens: colour, shape, elevation, layers and motion |
+| `components/`                                   | Reusable primitives                                        |
+| `lib/resource.ts`, `lib/resources.ts`           | Resource lifecycle and catalogue                           |
+| `lib/api/`                                      | Backend adapters; `http.ts` is the shared transport        |
+| `lib/spring.ts`, `lib/motion.ts`, `lib/motion/` | Spring definitions and motion implementations              |
+| `lib/hero/`                                     | Image-detail shared-element engine                         |
+| `lib/route.ts`                                  | Request-line policy and maintenance state                  |
+| `lib/generated/`                                | Generated output                                           |
 
 ## Global rules
 
@@ -117,26 +117,26 @@ before relying on variants, comment removal, inline transforms or stack margins.
 
 ## Read before you touch
 
-| Area | Read first |
-| --- | --- |
-| Markdown, README, agent instructions | [Writing guide](docs/writing-guide.md) |
-| Controls, dialogs, sheets, menus, tabs, toasts, loading and empty states | [Primitives](docs/design/primitives.md) |
-| Colours, themes, focus, forced colors | [Colour](docs/design/colour.md) |
-| Corners, elevation, layers, state and ripple | [Surfaces](docs/design/surfaces.md) |
-| Fonts, rich text, UI strings | [Typography and copy](docs/design/typography-and-copy.md) |
-| Widths, spacing, rows, controls and icons | [Layout](docs/design/layout.md) |
-| Motion | [Motion system](docs/motion-system.md), then [Component motion](docs/motion.md) |
-| Routes, Back, tabs, container transforms, lightbox | [Transitions](docs/transitions.md) |
-| Image detail or `lib/hero/` | [Transitions](docs/transitions.md), then [Hero engine](docs/hero.md) |
-| Scroll, paging, image lines and sharpness | [Scrolling](docs/scrolling.md) |
-| Mascot and desktop ponies | [Companions](docs/companions.md) |
-| Service Worker, offline, PWA | [Offline](docs/offline.md) |
-| Bundles, React Compiler, Next upgrades, probes | [Performance](docs/performance.md) |
-| Versions, security, lockfiles, patches | [Dependencies](docs/dependencies.md) |
-| Imports, lazy loading, storage keys | [Module boundaries](docs/module-boundaries.md), [Architecture](docs/architecture-guide.md) |
-| API adapters and auth | [Backend API](docs/backend-api.md) |
-| Resources, caching, SSR, prefetch, settings sync | [Data requests](docs/data-requests.md) |
-| Request lines, relay, maintenance, `proxy.ts` | [Request lines](docs/request-lines.md) |
+| Area                                                                     | Read first                                                                                 |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Markdown, README, agent instructions                                     | [Writing guide](docs/writing-guide.md)                                                     |
+| Controls, dialogs, sheets, menus, tabs, toasts, loading and empty states | [Primitives](docs/design/primitives.md)                                                    |
+| Colours, themes, focus, forced colors                                    | [Colour](docs/design/colour.md)                                                            |
+| Corners, elevation, layers, state and ripple                             | [Surfaces](docs/design/surfaces.md)                                                        |
+| Fonts, rich text, UI strings                                             | [Typography and copy](docs/design/typography-and-copy.md)                                  |
+| Widths, spacing, rows, controls and icons                                | [Layout](docs/design/layout.md)                                                            |
+| Motion                                                                   | [Motion system](docs/motion-system.md), then [Component motion](docs/motion.md)            |
+| Routes, Back, tabs, container transforms, lightbox                       | [Transitions](docs/transitions.md)                                                         |
+| Image detail or `lib/hero/`                                              | [Transitions](docs/transitions.md), then [Hero engine](docs/hero.md)                       |
+| Scroll, paging, image lines and sharpness                                | [Scrolling](docs/scrolling.md)                                                             |
+| Mascot and desktop ponies                                                | [Companions](docs/companions.md)                                                           |
+| Service Worker, offline, PWA                                             | [Offline](docs/offline.md)                                                                 |
+| Bundles, React Compiler, Next upgrades, probes                           | [Performance](docs/performance.md)                                                         |
+| Versions, security, lockfiles, patches                                   | [Dependencies](docs/dependencies.md)                                                       |
+| Imports, lazy loading, storage keys                                      | [Module boundaries](docs/module-boundaries.md), [Architecture](docs/architecture-guide.md) |
+| API adapters and auth                                                    | [Backend API](docs/backend-api.md)                                                         |
+| Resources, caching, SSR, prefetch, settings sync                         | [Data requests](docs/data-requests.md)                                                     |
+| Request lines, relay, maintenance, `proxy.ts`                            | [Request lines](docs/request-lines.md)                                                     |
 
 All documentation follows the [documentation standard](docs/writing-guide.md). Source comments
 link directly to current topic sections.

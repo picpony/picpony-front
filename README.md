@@ -33,14 +33,14 @@ bun run dev
 
 打开 [localhost:3100](http://localhost:3100)。开始修改前阅读 [AGENTS.md](AGENTS.md)。
 
-| 命令 | 作用 |
-| --- | --- |
-| `bun run dev` | 本地开发，端口 3100 |
-| `bun run build` | 生产构建 |
-| `bun run start` | 启动生产服务 |
-| `bun run check` | 格式、Lint、类型、测试与生成产物校验 |
-| `bun run colors:write` | 重新生成主题配色 |
-| `bun run package:standalone` | 打包独立部署产物 |
+| 命令                         | 作用                                 |
+| ---------------------------- | ------------------------------------ |
+| `bun run dev`                | 本地开发，端口 3100                  |
+| `bun run build`              | 生产构建                             |
+| `bun run start`              | 启动生产服务                         |
+| `bun run check`              | 格式、Lint、类型、测试与生成产物校验 |
+| `bun run colors:write`       | 重新生成主题配色                     |
+| `bun run package:standalone` | 打包独立部署产物                     |
 
 ## 技术架构
 
@@ -48,14 +48,14 @@ bun run dev
   <img src="./assets/readme/architecture.svg" width="100%" alt="浏览器包含组件、资源缓存、API 适配器和动效引擎；Next.js 负责路由、SSR、缓存、限流、代理和图片优化；上游为 PicPony 后端与 Derpibooru。">
 </p>
 
-| 层 | 选型 |
-| --- | --- |
-| 框架 | Next.js 16，App Router、standalone 输出、Babel React Compiler |
-| 界面 | React 19、TypeScript 5.9、Tailwind CSS 4 |
-| 设计系统 | Material 3，配色由 `@material/material-color-utilities` 生成 |
-| 动效 | GSAP、共享弹簧系统、Lottie |
-| 富文本 | remark / rehype、`rehype-sanitize`、wangEditor |
-| 图片 | `sharp` 服务端优化、Service Worker 缓存 |
+| 层       | 选型                                                          |
+| -------- | ------------------------------------------------------------- |
+| 框架     | Next.js 16，App Router、standalone 输出、Babel React Compiler |
+| 界面     | React 19、TypeScript 5.9、Tailwind CSS 4                      |
+| 设计系统 | Material 3，配色由 `@material/material-color-utilities` 生成  |
+| 动效     | GSAP、共享弹簧系统、Lottie                                    |
+| 富文本   | remark / rehype、`rehype-sanitize`、wangEditor                |
+| 图片     | `sharp` 服务端优化、Service Worker 缓存                       |
 
 目录职责与修改入口见[架构导读](docs/architecture-guide.md)。
 
@@ -63,12 +63,12 @@ bun run dev
 
 以下变量均可省略；默认后端是生产服务。
 
-| 变量 | 默认值 | 作用 |
-| --- | --- | --- |
-| `PICPONY_UPSTREAM_ORIGIN` | `https://api.picpony.top` | 后端地址，仅接受裸 HTTP(S) 源 |
-| `PICPONY_DERPI_ORIGIN` | `https://trixiebooru.org/api/v1/json` | Derpibooru 图源 API |
-| `NEXT_PUBLIC_BUILD_ID` | 构建时间戳 | Service Worker 构建标识，CI 可传提交哈希 |
-| `PICPONY_SERVER_MEMO_TTL_MS` | 未设置 | 覆盖服务端缓存时长；测试可设为 `0` |
+| 变量                         | 默认值                                | 作用                                     |
+| ---------------------------- | ------------------------------------- | ---------------------------------------- |
+| `PICPONY_UPSTREAM_ORIGIN`    | `https://api.picpony.top`             | 后端地址，仅接受裸 HTTP(S) 源            |
+| `PICPONY_DERPI_ORIGIN`       | `https://trixiebooru.org/api/v1/json` | Derpibooru 图源 API                      |
+| `NEXT_PUBLIC_BUILD_ID`       | 构建时间戳                            | Service Worker 构建标识，CI 可传提交哈希 |
+| `PICPONY_SERVER_MEMO_TTL_MS` | 未设置                                | 覆盖服务端缓存时长；测试可设为 `0`       |
 
 ## 验证
 

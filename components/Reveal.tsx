@@ -85,10 +85,22 @@ export default function Reveal({
       const el = child as HTMLElement;
       /* `backwards`, so the start state holds through the delay — without it a staggered child
          sits at rest until its turn, then jumps. */
-      const at = { delay: scaledMs((delay + Math.min(index * step, STAGGER.max)) * 1000, 'entrance'), fill: 'backwards' as const };
+      const at = {
+        delay: scaledMs((delay + Math.min(index * step, STAGGER.max)) * 1000, 'entrance'),
+        fill: 'backwards' as const,
+      };
       return [
-        el.animate([{ opacity: 0, visibility: 'hidden' }, { opacity: 1, visibility: 'visible' }], { ...effects, ...at }),
-        el.animate([{ transform: `translateY(${rise}px)` }, { transform: 'none' }], { ...spatial, ...at }),
+        el.animate(
+          [
+            { opacity: 0, visibility: 'hidden' },
+            { opacity: 1, visibility: 'visible' },
+          ],
+          { ...effects, ...at },
+        ),
+        el.animate([{ transform: `translateY(${rise}px)` }, { transform: 'none' }], {
+          ...spatial,
+          ...at,
+        }),
       ];
     });
 

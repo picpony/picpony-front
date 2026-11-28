@@ -51,7 +51,9 @@ function SettingsScreen() {
   const tabParam = useSearchParams().get('tab');
   const requested = isSettingsTab(tabParam) ? tabParam : null;
 
-  const [tab, setTab] = useState<SettingsTab>(() => landingTab(requested ?? 'preferences', signedIn));
+  const [tab, setTab] = useState<SettingsTab>(() =>
+    landingTab(requested ?? 'preferences', signedIn),
+  );
   /* Signed out, a link into 账户 lands on 偏好 and is kept, to open once the visitor signs in. */
   const [pending, setPending] = useState<SettingsTab | null>(() =>
     !signedIn && requested && landingTab(requested, false) !== requested ? requested : null,
@@ -70,7 +72,11 @@ function SettingsScreen() {
 
   /* Signed in on the spot: the kept request opens once the sign-in dialog has gone, so the tab
      changes in view. */
-  const quiet = useSyncExternalStore(signedIn && pending ? subscribeScreenQuiet : noSubscription, isScreenQuiet, notQuiet);
+  const quiet = useSyncExternalStore(
+    signedIn && pending ? subscribeScreenQuiet : noSubscription,
+    isScreenQuiet,
+    notQuiet,
+  );
   if (signedIn && pending && quiet) {
     setPending(null);
     setTab(landingTab(pending, true));
@@ -122,7 +128,13 @@ function SettingsScreen() {
           />
         </div>
       )}
-      <Tabs tabs={settingsTabs(signedIn)} value={shown} onChange={select} label={TAB_ROW_LABEL} className="mb-6" />
+      <Tabs
+        tabs={settingsTabs(signedIn)}
+        value={shown}
+        onChange={select}
+        label={TAB_ROW_LABEL}
+        className="mb-6"
+      />
       {/* Leaning: the three panes are static once mounted (docs/transitions.md#window-and-lean), and a pane still
           showing placeholders marks itself loading, which the lean stands down for. */}
       <TabPanes value={shown} lean>

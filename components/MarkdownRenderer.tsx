@@ -23,7 +23,10 @@ export function warmMarkdownDocument() {
 
 function Placeholder({ content }: { content: string }) {
   return (
-    <div className="rich-text-content invisible whitespace-pre-line wrap-anywhere" aria-hidden="true">
+    <div
+      className="rich-text-content invisible whitespace-pre-line wrap-anywhere"
+      aria-hidden="true"
+    >
       {content}
     </div>
   );

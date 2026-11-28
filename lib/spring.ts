@@ -216,7 +216,7 @@ let linearSupport: boolean | undefined;
 
 export function supportsLinearEasing(): boolean {
   if (typeof CSS === 'undefined') return true;
-  return linearSupport ??= CSS.supports('transition-timing-function', 'linear(0, 1)');
+  return (linearSupport ??= CSS.supports('transition-timing-function', 'linear(0, 1)'));
 }
 
 export function springEasing(shape: SpringShape): string {

@@ -67,9 +67,12 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy> {
   const fallback = async (): Promise<InlineRoutePolicy> => ({
     /* An empty API policy asks the browser to retry policy loading; it can still use the
        server's public filter definitions for the very first resource key. */
-    api: '', image: 'auto', thirdPartyUrl: '', thirdPartyPassApiKey: false,
+    api: '',
+    image: 'auto',
+    thirdPartyUrl: '',
+    thirdPartyPassApiKey: false,
     blockFilters: await filters,
-    blacklist: [...await blacklist],
+    blacklist: [...(await blacklist)],
   });
   try {
     /* `GET /api/v1/routing-policy` (`app_config::website_get`): public, already sanitised by the
@@ -90,7 +93,7 @@ export async function readRoutePolicy(): Promise<InlineRoutePolicy> {
       thirdPartyUrl: policy.third_party_url ?? '',
       thirdPartyPassApiKey: policy.third_party_pass_api_key,
       blockFilters: await filters,
-      blacklist: [...await blacklist],
+      blacklist: [...(await blacklist)],
     };
   } catch {
     /* A timeout, an offline upstream, an unreadable body — all mean "no policy", which the

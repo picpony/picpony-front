@@ -94,12 +94,88 @@ const TABLE = [
  * image, this one uses the system's own font.
  */
 const UNICODE = [
-  '😀', '😁', '😂', '🤣', '😊', '😍', '🥰', '😘', '😜', '🤪', '😎', '🥳', '😭', '😢', '😅', '😆',
-  '😋', '🤔', '🤗', '😴', '🥵', '🥶', '😱', '😡', '🤬', '😇', '🤫', '🤭', '🥺', '😏', '🙄', '😬',
-  '👍', '👎', '👏', '🙏', '💪', '👌', '✌️', '🤞', '🤝', '👀', '❤️', '🧡', '💛', '💚', '💙', '💜',
-  '🖤', '💖', '💕', '💔', '❣️', '💘', '✨', '🌟', '⭐', '🔥', '💯', '🎉', '🎊', '🎁', '🌈', '☀️',
-  '🌙', '⚡', '🍰', '🍭', '🍎', '🍺', '🎂', '🎈', '🏆', '🎀', '🐴', '🦄', '🐾', '🐱', '🐶', '🐰',
-  '🦊', '🐻',
+  '😀',
+  '😁',
+  '😂',
+  '🤣',
+  '😊',
+  '😍',
+  '🥰',
+  '😘',
+  '😜',
+  '🤪',
+  '😎',
+  '🥳',
+  '😭',
+  '😢',
+  '😅',
+  '😆',
+  '😋',
+  '🤔',
+  '🤗',
+  '😴',
+  '🥵',
+  '🥶',
+  '😱',
+  '😡',
+  '🤬',
+  '😇',
+  '🤫',
+  '🤭',
+  '🥺',
+  '😏',
+  '🙄',
+  '😬',
+  '👍',
+  '👎',
+  '👏',
+  '🙏',
+  '💪',
+  '👌',
+  '✌️',
+  '🤞',
+  '🤝',
+  '👀',
+  '❤️',
+  '🧡',
+  '💛',
+  '💚',
+  '💙',
+  '💜',
+  '🖤',
+  '💖',
+  '💕',
+  '💔',
+  '❣️',
+  '💘',
+  '✨',
+  '🌟',
+  '⭐',
+  '🔥',
+  '💯',
+  '🎉',
+  '🎊',
+  '🎁',
+  '🌈',
+  '☀️',
+  '🌙',
+  '⚡',
+  '🍰',
+  '🍭',
+  '🍎',
+  '🍺',
+  '🎂',
+  '🎈',
+  '🏆',
+  '🎀',
+  '🐴',
+  '🦄',
+  '🐾',
+  '🐱',
+  '🐶',
+  '🐰',
+  '🦊',
+  '🐻',
 ];
 
 /** A PNG's width and height, from its IHDR chunk — no image library for eight bytes. */
@@ -112,13 +188,21 @@ function pngSize(file) {
 }
 
 function build() {
-  const files = readdirSync(FOLDER).filter((name) => name.endsWith('.png')).map((name) => name.slice(0, -4));
+  const files = readdirSync(FOLDER)
+    .filter((name) => name.endsWith('.png'))
+    .map((name) => name.slice(0, -4));
   const named = new Set(TABLE.map(([name]) => name));
   const problems = [
-    ...files.filter((name) => !named.has(name)).map((name) => `${name}.png has no entry in the table`),
-    ...TABLE.filter(([name]) => !files.includes(name)).map(([name]) => `${name} is named but has no PNG`),
+    ...files
+      .filter((name) => !named.has(name))
+      .map((name) => `${name}.png has no entry in the table`),
+    ...TABLE.filter(([name]) => !files.includes(name)).map(
+      ([name]) => `${name} is named but has no PNG`,
+    ),
   ];
-  const duplicates = TABLE.map(([name]) => name).filter((name, index, all) => all.indexOf(name) !== index);
+  const duplicates = TABLE.map(([name]) => name).filter(
+    (name, index, all) => all.indexOf(name) !== index,
+  );
   problems.push(...duplicates.map((name) => `${name} is named twice`));
   for (const [name] of TABLE) {
     if (!/^[a-zA-Z0-9_]+$/.test(name)) problems.push(`${name} cannot travel in a $emoji_…$ marker`);
@@ -155,7 +239,10 @@ function build() {
     '',
     '/** The everyday Unicode set, drawn by the system font. */',
     'export const UNICODE_EMOJI: readonly string[] = [',
-    ...chunk(UNICODE.map((glyph) => JSON.stringify(glyph)), 16).map((line) => `  ${line.join(', ')},`),
+    ...chunk(
+      UNICODE.map((glyph) => JSON.stringify(glyph)),
+      16,
+    ).map((line) => `  ${line.join(', ')},`),
     '];',
     '',
   ].join('\n');
@@ -179,8 +266,12 @@ if (process.argv.includes('--check')) {
     console.error('emoji: lib/generated/emoji.ts is stale — run `node scripts/emoji.mjs`');
     process.exit(1);
   }
-  console.log(`emoji: lib/generated/emoji.ts is current (${TABLE.length} pony, ${UNICODE.length} Unicode)`);
+  console.log(
+    `emoji: lib/generated/emoji.ts is current (${TABLE.length} pony, ${UNICODE.length} Unicode)`,
+  );
 } else {
   writeFileSync(OUTPUT, output);
-  console.log(`emoji: wrote lib/generated/emoji.ts (${TABLE.length} pony, ${UNICODE.length} Unicode)`);
+  console.log(
+    `emoji: wrote lib/generated/emoji.ts (${TABLE.length} pony, ${UNICODE.length} Unicode)`,
+  );
 }

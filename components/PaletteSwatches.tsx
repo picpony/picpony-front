@@ -111,7 +111,8 @@ const CARD_CLASS =
 /** Concentric inside the 12dp card with a 4dp bezel: 12 − 4 = 8dp (`rounded-sm`). Restores
  * `forced-color-adjust: auto` so a selected card's `forced-selected` opt-out never leaks raw
  * palette fills into only the active tile under forced colours. */
-const PREVIEW_CLASS = 'forced-boundary forced-color-adjust-auto relative -z-10 h-14 w-full overflow-hidden rounded-sm';
+const PREVIEW_CLASS =
+  'forced-boundary forced-color-adjust-auto relative -z-10 h-14 w-full overflow-hidden rounded-sm';
 
 /** The label inside a card; `px-1` pairs with the card's 4dp bezel for 8dp horizontal clearance. */
 const labelClass = (selected: boolean) =>
@@ -187,7 +188,11 @@ export default function PaletteSwatches({ className }: { className?: string }) {
      screen, so starting it at the confirm froze the leaving dialog and its scrim into the
      old theme's picture and dragged them away with it — two exits for one gesture. The
      recipe resolves while the dialog leaves, so nothing is waited for twice. */
-  const pendingPick = useRef<{ install: Promise<CustomPaletteInstall | null>; from: PickerId; origin: HTMLButtonElement | null } | null>(null);
+  const pendingPick = useRef<{
+    install: Promise<CustomPaletteInstall | null>;
+    from: PickerId;
+    origin: HTMLButtonElement | null;
+  } | null>(null);
   /* One counter per dialog, two jobs. Non-zero is the **latch**: each dialog is
      rendered with `isOpen={false}` rather than conditionally, so `dynamic()` alone
      would fetch the chunk at mount — the latch mounts it only once it has ever
@@ -272,7 +277,11 @@ export default function PaletteSwatches({ className }: { className?: string }) {
    * install is resolved now and applied once the dialog has gone (`applyPending`).
    */
   const confirmCustom = (spec: CustomSpec, from: PickerId) => {
-    pendingPick.current = { install: resolveCustomPalette(spec), from, origin: openedTrigger.current };
+    pendingPick.current = {
+      install: resolveCustomPalette(spec),
+      from,
+      origin: openedTrigger.current,
+    };
   };
 
   /**
@@ -440,7 +449,10 @@ export default function PaletteSwatches({ className }: { className?: string }) {
                  distinct in both light and dark — and opens the colour picker directly on click. */
               <span
                 aria-hidden="true"
-                className={cn(PREVIEW_CLASS, 'grid place-items-center bg-surface-container-low text-on-surface-variant')}
+                className={cn(
+                  PREVIEW_CLASS,
+                  'grid place-items-center bg-surface-container-low text-on-surface-variant',
+                )}
               >
                 <MdPalette size={ICON.standard} />
               </span>
@@ -527,9 +539,7 @@ export default function PaletteSwatches({ className }: { className?: string }) {
             {customSeed ? <span className="font-mono tabular-nums">{customSeed}</span> : '未设置'}
             {/* The 副色相 only means something under 多色, and only once a colour exists. */}
             {customSeed && (
-              <span className="mono:hidden">
-                {` · 副色相 ${accentName(customAccent)}`}
-              </span>
+              <span className="mono:hidden">{` · 副色相 ${accentName(customAccent)}`}</span>
             )}
           </p>
         </div>

@@ -150,13 +150,17 @@ async function run(token: string, now: () => number): Promise<SyncResult> {
   /* The new counts, and — when there are any — the notifications that came with them. A run that
      found every count where the list already had it changed nothing the list shows, and the shell
      has just read it: a second read would only repeat the drawer's. */
-  if (updatedTags > 0 || moved) void tagSubscriptions.read({ token }, { force: true, priority: 'background' }).catch(() => {});
+  if (updatedTags > 0 || moved)
+    void tagSubscriptions.read({ token }, { force: true, priority: 'background' }).catch(() => {});
   if (updatedTags > 0) unreadCounts.expire({ token });
   return { ok: true, updatedTags };
 }
 
 /** Run once now, joining a run already going for the same account. */
-export function syncTagSubscriptionsNow(token: string, now: () => number = Date.now): Promise<SyncResult> {
+export function syncTagSubscriptionsNow(
+  token: string,
+  now: () => number = Date.now,
+): Promise<SyncResult> {
   if (running?.token === token) return running.promise;
   attempts.set(token, now());
   const promise = run(token, now).finally(() => {
@@ -172,7 +176,9 @@ export function syncTagSubscriptionsNow(token: string, now: () => number = Date.
  * run nor the handler (a toast) may leave an unhandled rejection behind (G3-016).
  */
 export function attemptSync(token: string, onResult: (result: SyncResult) => void): Promise<void> {
-  return syncTagSubscriptionsNow(token).then(onResult).catch(() => {});
+  return syncTagSubscriptionsNow(token)
+    .then(onResult)
+    .catch(() => {});
 }
 
 /** The first run of a tab session for this account: due when nothing has run yet. */

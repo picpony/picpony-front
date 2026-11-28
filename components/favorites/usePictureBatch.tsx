@@ -20,12 +20,28 @@ import {
   transferFromPrivacy,
   transferPictures,
 } from '@/lib/favoritesActions';
-import { archiveName, packArchives, packedSentence, originalUrl, saveArchive } from '@/lib/favoritesDownload';
-import { addPrivacyPictures, reloadPrivacy, removeFromPrivacy, restoreToPrivacy } from '@/lib/favoritesPrivacy';
+import {
+  archiveName,
+  packArchives,
+  packedSentence,
+  originalUrl,
+  saveArchive,
+} from '@/lib/favoritesDownload';
+import {
+  addPrivacyPictures,
+  reloadPrivacy,
+  removeFromPrivacy,
+  restoreToPrivacy,
+} from '@/lib/favoritesPrivacy';
 import { readToken } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
 import type { PonyImage } from '@/lib/types/image';
-import ProgressDialog, { completeProgress, progressLanding, runSummary, type ProgressState } from './ProgressDialog';
+import ProgressDialog, {
+  completeProgress,
+  progressLanding,
+  runSummary,
+  type ProgressState,
+} from './ProgressDialog';
 import { TransferDialog } from './FolderDialogs';
 
 /**
@@ -34,7 +50,8 @@ import { TransferDialog } from './FolderDialogs';
  * signed-in account's own space, so on someone else's it would have moved your pictures while
  * you looked at theirs.
  */
-export type BatchSource = { kind: 'folder'; folderId: number } | { kind: 'privacy' } | { kind: 'shared-privacy' };
+export type BatchSource =
+  { kind: 'folder'; folderId: number } | { kind: 'privacy' } | { kind: 'shared-privacy' };
 type OwnSource = Exclude<BatchSource, { kind: 'shared-privacy' }>;
 
 type Progress = (done: number, total: number) => void;
@@ -67,7 +84,8 @@ async function runRemoval(
       source.folderId,
       { signal, onProgress },
     );
-    const only = images.length === 1 && outcome.succeeded.length === 1 ? outcome.succeeded[0] : null;
+    const only =
+      images.length === 1 && outcome.succeeded.length === 1 ? outcome.succeeded[0] : null;
     const previous = only !== null ? (outcome.previous.get(only) ?? [source.folderId]) : [];
     return {
       left: outcome.succeeded,
@@ -89,9 +107,18 @@ async function runRemoval(
 }
 
 /** `已移出 3 张，1 张失败`, the tone it is said in, and whether it is the backend's own refusal. */
-function countSentence(done: number, failed: unknown[], verb: string, fallback: string): { text: string; tone: ToastType } {
-  if (done === 0 && failed.length > 0) return { text: apiErrorMessage(failed[0], fallback), tone: 'error' };
-  return { text: runSummary(verb, done, failed.length), tone: failed.length > 0 ? 'warning' : 'success' };
+function countSentence(
+  done: number,
+  failed: unknown[],
+  verb: string,
+  fallback: string,
+): { text: string; tone: ToastType } {
+  if (done === 0 && failed.length > 0)
+    return { text: apiErrorMessage(failed[0], fallback), tone: 'error' };
+  return {
+    text: runSummary(verb, done, failed.length),
+    tone: failed.length > 0 ? 'warning' : 'success',
+  };
 }
 
 /**
@@ -130,7 +157,9 @@ export function usePictureBatch({
 }) {
   const router = useRouter();
   const showPrivacy = useSyncedSetting('showPrivacyFaves');
-  const [transfer, setTransfer] = useState<{ mode: TransferMode; images: PonyImage[] } | null>(null);
+  const [transfer, setTransfer] = useState<{ mode: TransferMode; images: PonyImage[] } | null>(
+    null,
+  );
   /* The transfer the dialog shows — held through its exit, let go once it has played, and the
      folder list read for as long (M1-008, M1-009): read only while `transfer` was set, the dialog
      dropped to its loading rows and read 移动 0 张到… on its way out. */
@@ -144,7 +173,12 @@ export function usePictureBatch({
   const [busy, setBusy] = useState(false);
   const run = useRef<AbortController | null>(null);
   const running = useRef(false);
-  useEffect(() => () => { run.current?.abort(); }, []);
+  useEffect(
+    () => () => {
+      run.current?.abort();
+    },
+    [],
+  );
 
   /** Claims the run, or `null` when one is already going. */
   const begin = (title: string, detail: string, total: number, show: boolean) => {
@@ -185,7 +219,12 @@ export function usePictureBatch({
     const imageIds = images.map((image) => image.id);
     const outcome = await settled(
       source.kind === 'folder'
-        ? transferPictures(token, { imageIds, sourceFolderId: source.folderId, targetFolderIds: targetIds, mode })
+        ? transferPictures(token, {
+            imageIds,
+            sourceFolderId: source.folderId,
+            targetFolderIds: targetIds,
+            mode,
+          })
         : transferFromPrivacy(token, { imageIds, targetFolderIds: targetIds, mode }),
     );
     if (readToken() !== token) return false;
@@ -218,8 +257,15 @@ export function usePictureBatch({
     }
     const controller = begin(`正在移出${where}`, '正在移出', images.length, !single);
     if (!controller) return;
-    const outcome = await settled(runRemoval(token, source, images, controller.signal, step('正在移出')));
-    await end(controller, !single && outcome.ok ? runSummary('已移出', outcome.value.left.length, outcome.value.failed.length) : null);
+    const outcome = await settled(
+      runRemoval(token, source, images, controller.signal, step('正在移出')),
+    );
+    await end(
+      controller,
+      !single && outcome.ok
+        ? runSummary('已移出', outcome.value.left.length, outcome.value.failed.length)
+        : null,
+    );
     if (readToken() !== token) return;
     if (!outcome.ok) {
       if (!isAborted(outcome.error)) showToast(apiErrorMessage(outcome.error, '移出失败'), 'error');
@@ -232,7 +278,11 @@ export function usePictureBatch({
       showToast(`已移出${where}`, 'success', {
         action: {
           label: '撤销',
-          onClick: () => void settled(undo()).then((result) => !result.ok && showToast(apiErrorMessage(result.error, '撤销失败'), 'error')),
+          onClick: () =>
+            void settled(undo()).then(
+              (result) =>
+                !result.ok && showToast(apiErrorMessage(result.error, '撤销失败'), 'error'),
+            ),
         },
       });
     } else if (report.left.length > 0 || report.failed.length > 0) {
@@ -252,14 +302,24 @@ export function usePictureBatch({
     const several = images.length > 1;
     const controller = begin('正在移入隐私空间', '正在移入', images.length, several);
     if (!controller) return;
-    const outcome = await settled(moveToPrivacy(token, images, { signal: controller.signal, onProgress: step('正在移入') }));
-    await end(controller, several && outcome.ok ? runSummary('已移入', outcome.value.succeeded.length, outcome.value.failed.length) : null);
+    const outcome = await settled(
+      moveToPrivacy(token, images, { signal: controller.signal, onProgress: step('正在移入') }),
+    );
+    await end(
+      controller,
+      several && outcome.ok
+        ? runSummary('已移入', outcome.value.succeeded.length, outcome.value.failed.length)
+        : null,
+    );
     if (readToken() !== token) return;
     if (!outcome.ok) {
       if (outcome.error instanceof NoPrivacyPasswordError) {
         showToast(outcome.error.message, 'warning', {
           action: showPrivacy
-            ? { label: '前往', onClick: () => router.push(favoritesHref('privacy'), { scroll: false }) }
+            ? {
+                label: '前往',
+                onClick: () => router.push(favoritesHref('privacy'), { scroll: false }),
+              }
             : { label: '设置', onClick: () => router.push('/settings', { scroll: false }) },
         });
       } else {
@@ -269,7 +329,10 @@ export function usePictureBatch({
     }
     const moved = outcome.value.succeeded;
     // A successful add remains in the space even if the following removal failed.
-    addPrivacyPictures(token, images.filter((image) => outcome.value.added.includes(image.id)));
+    addPrivacyPictures(
+      token,
+      images.filter((image) => outcome.value.added.includes(image.id)),
+    );
     if (outcome.value.failed.length === 0 && !controller.signal.aborted) onSettled?.(moved);
     const sentence = countSentence(
       moved.length,
@@ -286,7 +349,12 @@ export function usePictureBatch({
       const image = images[0];
       const controller = begin('正在下载', '正在下载', 1, false);
       if (!controller) return;
-      const outcome = await settled(downloadOriginal({ id: image.id, url: originalUrl(image), format: image.format }, controller.signal));
+      const outcome = await settled(
+        downloadOriginal(
+          { id: image.id, url: originalUrl(image), format: image.format },
+          controller.signal,
+        ),
+      );
       await end(controller, null);
       if (readToken() !== token || controller.signal.aborted) return;
       if (outcome.ok) showToast('已开始下载');
@@ -308,7 +376,12 @@ export function usePictureBatch({
         },
       }),
     );
-    await end(controller, outcome.ok && !outcome.value.cancelled ? runSummary('已打包', outcome.value.packed, outcome.value.failed) : null);
+    await end(
+      controller,
+      outcome.ok && !outcome.value.cancelled
+        ? runSummary('已打包', outcome.value.packed, outcome.value.failed)
+        : null,
+    );
     if (readToken() !== token) return;
     if (!outcome.ok) {
       if (!isAborted(outcome.error)) showToast(apiErrorMessage(outcome.error, '下载失败'), 'error');
@@ -316,23 +389,31 @@ export function usePictureBatch({
     }
     const packed = outcome.value;
     if (packed.cancelled) {
-      showToast(packed.archives > 0 ? `已停止下载，已保存 ${packed.archives} 个压缩包` : '已停止下载', 'info');
+      showToast(
+        packed.archives > 0 ? `已停止下载，已保存 ${packed.archives} 个压缩包` : '已停止下载',
+        'info',
+      );
     } else if (packed.archives === 0) {
       showToast('所选图片均下载失败', 'error');
     } else {
-      showToast(packedSentence(packed.packed, packed.failed, packed.archives), packed.failed > 0 ? 'warning' : 'success');
+      showToast(
+        packedSentence(packed.packed, packed.failed, packed.archives),
+        packed.failed > 0 ? 'warning' : 'success',
+      );
     }
   };
 
   const shareOne = (image: PonyImage) =>
     share({ kind: 'image', imageId: image.id, thumbUrl: shareThumbUrl(image.representations) });
 
-  const targets = source.kind === 'folder' ? folders.filter((folder) => folder.id !== source.folderId) : folders;
+  const targets =
+    source.kind === 'folder' ? folders.filter((folder) => folder.id !== source.folderId) : folders;
 
   return {
     busy,
     openTransfer: (mode: TransferMode, images: PonyImage[]) => {
-      if (!running.current && images.length > 0 && source.kind !== 'shared-privacy') setTransfer({ mode, images });
+      if (!running.current && images.length > 0 && source.kind !== 'shared-privacy')
+        setTransfer({ mode, images });
     },
     remove,
     toPrivacy,

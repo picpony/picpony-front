@@ -2,7 +2,15 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdContentCopy, MdDeleteOutline, MdMoreVert, MdPublic, MdPublicOff, MdSend, MdStar } from 'react-icons/md';
+import {
+  MdContentCopy,
+  MdDeleteOutline,
+  MdMoreVert,
+  MdPublic,
+  MdPublicOff,
+  MdSend,
+  MdStar,
+} from 'react-icons/md';
 import IconButton from '@/components/IconButton';
 import Menu, { type MenuAction } from '@/components/Menu';
 import { showToast } from '@/components/Toast';
@@ -14,7 +22,11 @@ import { favoritesHref, folderLabel, settled, type DefaultFolder } from '@/lib/f
 import { deleteFolders } from '@/lib/favoritesActions';
 import { readToken, readUserInfo } from '@/lib/hooks';
 import { useSyncedSetting } from '@/lib/settingsSync';
-import { readFavouriteSetting, setDefaultFaveFolder, setFolderPublic } from '@/lib/favoritesSettings';
+import {
+  readFavouriteSetting,
+  setDefaultFaveFolder,
+  setFolderPublic,
+} from '@/lib/favoritesSettings';
 import { copyFolderLink } from '@/lib/favoritesShare';
 import { settingsHref } from '@/app/settings/tabs';
 
@@ -54,7 +66,8 @@ export function useFolderCommands({
   const { confirm, confirmDialog } = useConfirm();
   const { share, shareDialog } = useShareToContact();
 
-  const setPublic = (folder: FaveFolder, on: boolean) => setFolderPublic(token, folders, folder.id, on);
+  const setPublic = (folder: FaveFolder, on: boolean) =>
+    setFolderPublic(token, folders, folder.id, on);
 
   const run = async (folder: FaveFolder, command: FolderCommand) => {
     if (readToken() !== token) return;
@@ -71,7 +84,10 @@ export function useFolderCommands({
         if (on && !showFaves) {
           /* Public, and still shown to nobody: 公开我的收藏 is the switch above every folder's. */
           showToast(`「${name}」已设为公开，开启公开我的收藏后才会显示在个人主页`, 'info', {
-            action: { label: '前往设置', onClick: () => router.push(settingsHref('account'), { scroll: false }) },
+            action: {
+              label: '前往设置',
+              onClick: () => router.push(settingsHref('account'), { scroll: false }),
+            },
           });
         } else {
           showToast(on ? `「${name}」已在个人主页公开` : `「${name}」已在个人主页隐藏`, 'success', {
@@ -87,7 +103,10 @@ export function useFolderCommands({
            the way there is a toast's action, as for the same condition one case above (G3-005). */
         if (!showFaves) {
           showToast('公开我的收藏已关闭，对方打开链接时将无法查看', 'info', {
-            action: { label: '前往设置', onClick: () => router.push(settingsHref('account'), { scroll: false }) },
+            action: {
+              label: '前往设置',
+              onClick: () => router.push(settingsHref('account'), { scroll: false }),
+            },
           });
           return;
         }
@@ -102,7 +121,12 @@ export function useFolderCommands({
           setPublic(folder, true);
         }
         if (command === 'share') {
-          share({ kind: 'fave-folder', ownerUsername: username, folderId: folder.id, folderName: name });
+          share({
+            kind: 'fave-folder',
+            ownerUsername: username,
+            folderId: folder.id,
+            folderName: name,
+          });
         } else {
           const copied = await copyFolderLink(token, username, folder.id, name);
           if (readToken() !== token) return;
@@ -135,11 +159,22 @@ export function useFolderCommands({
     const isDefault = folder.id === defaultFolder.id;
     const shown = isFolderPublic(folder.id, publicIds);
     return [
-      { value: 'default', label: isDefault ? '已是默认收藏夹' : '设为默认收藏夹', icon: <MdStar />, disabled: isDefault },
-      { value: 'public', label: shown ? '在个人主页隐藏' : '在个人主页公开', icon: shown ? <MdPublicOff /> : <MdPublic /> },
+      {
+        value: 'default',
+        label: isDefault ? '已是默认收藏夹' : '设为默认收藏夹',
+        icon: <MdStar />,
+        disabled: isDefault,
+      },
+      {
+        value: 'public',
+        label: shown ? '在个人主页隐藏' : '在个人主页公开',
+        icon: shown ? <MdPublicOff /> : <MdPublic />,
+      },
       { value: 'share', label: '分享给联系人', icon: <MdSend /> },
       { value: 'copy', label: '复制链接', icon: <MdContentCopy /> },
-      ...(folder.isMain ? [] : [{ value: 'delete', label: '删除收藏夹', icon: <MdDeleteOutline />, destructive: true }]),
+      ...(folder.isMain
+        ? []
+        : [{ value: 'delete', label: '删除收藏夹', icon: <MdDeleteOutline />, destructive: true }]),
     ];
   };
 

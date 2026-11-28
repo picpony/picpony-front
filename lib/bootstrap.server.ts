@@ -116,13 +116,17 @@ async function readRemainingBlacklistPages(
   signal: AbortSignal,
 ): Promise<number[] | null> {
   const ids = new Set<number>(firstPage);
-  const revParam = typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
+  const revParam =
+    typeof revision === 'number' && Number.isSafeInteger(revision) ? `&revision=${revision}` : '';
   for (let page = 2; page <= MAX_BLACKLIST_PAGES; page += 1) {
     const response = await fetch(
       `${UPSTREAM_ORIGIN}/api/v1/image-blocklist?page=${page}&limit=${PUBLIC_BLACKLIST_PAGE_LIMIT}${revParam}`,
       {
         signal,
-        next: { revalidate: cacheSeconds(BOOTSTRAP_REVALIDATE_S), tags: [PUBLIC_BLACKLIST_CACHE_TAG] },
+        next: {
+          revalidate: cacheSeconds(BOOTSTRAP_REVALIDATE_S),
+          tags: [PUBLIC_BLACKLIST_CACHE_TAG],
+        },
       },
     );
     if (response.status === 409) {
@@ -167,7 +171,11 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     let blacklist: number[] = [...new Set(page1)].sort((a, b) => a - b);
     if (raw.image_blocklist?.has_more) {
       try {
-        const whole = await readRemainingBlacklistPages(blacklist, raw.image_blocklist.revision, signal);
+        const whole = await readRemainingBlacklistPages(
+          blacklist,
+          raw.image_blocklist.revision,
+          signal,
+        );
         /* Preserve valid maintenance, routing policy, block filters and page-1 blacklist even if
            a later blacklist page fails or times out. */
         if (whole) blacklist = whole;
@@ -178,7 +186,8 @@ async function fetchSiteBootstrapRaw(): Promise<SiteBootstrap | null> {
     const maintenance: MaintenanceState = maint.maintenance_mode
       ? {
           active: true,
-          message: typeof maint.maintenance_message === 'string' ? maint.maintenance_message.trim() : '',
+          message:
+            typeof maint.maintenance_message === 'string' ? maint.maintenance_message.trim() : '',
         }
       : { active: false, message: '' };
     const routePolicy: InlineRoutePolicy = {

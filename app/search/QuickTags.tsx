@@ -21,7 +21,14 @@ const GROUP_LABELS: Record<QuickTagGroup, string> = {
 
 /** Placeholder while quick-tag categories and dynamic chip widths load. */
 export function QuickTagsSkeleton() {
-  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载快捷标签…" className="min-h-28" />;
+  return (
+    <PageLoadingIndicator
+      size="inline"
+      indicatorSize="md"
+      label="正在加载快捷标签…"
+      className="min-h-28"
+    />
+  );
 }
 
 function QuickTagRow({
@@ -39,7 +46,10 @@ function QuickTagRow({
   useScrollFade(rowRef);
   return (
     <div className="flex h-10 min-w-0 items-center gap-3">
-      <span className="w-8 shrink-0 text-label-l text-on-surface-variant" id={`quick-tags-${group}`}>
+      <span
+        className="w-8 shrink-0 text-label-l text-on-surface-variant"
+        id={`quick-tags-${group}`}
+      >
         {GROUP_LABELS[group]}
       </span>
       <div
@@ -86,20 +96,16 @@ export default function QuickTags({
   excluded: ReadonlySet<string>;
 }) {
   const read = useResource(quickTags, {});
-  const groups = QUICK_TAG_GROUPS
-    .map((group) => ({
-      group,
-      tags: (read.data?.[group] ?? []).filter((tag) => !excluded.has(tag.en.toLowerCase())),
-    }))
-    .filter((entry) => entry.tags.length > 0);
+  const groups = QUICK_TAG_GROUPS.map((group) => ({
+    group,
+    tags: (read.data?.[group] ?? []).filter((tag) => !excluded.has(tag.en.toLowerCase())),
+  })).filter((entry) => entry.tags.length > 0);
 
   if (read.data !== undefined && groups.length === 0) return null;
 
   return (
     <section className="mb-8">
-      <SectionHeading className="mb-2">
-        快捷标签
-      </SectionHeading>
+      <SectionHeading className="mb-2">快捷标签</SectionHeading>
       {read.data === undefined ? (
         read.error ? (
           <ErrorRetry

@@ -27,7 +27,15 @@ const warmDictionary = () => badgeDictionary.prefetch({});
  * layer and the inner ripple host — and `UserBadge`'s paint, so the mark beside a name and the
  * control that explains it are one colour pair.
  */
-function BadgeChip({ badge, expired, onOpen }: { badge: HeldBadge; expired: boolean; onOpen: () => void }) {
+function BadgeChip({
+  badge,
+  expired,
+  onOpen,
+}: {
+  badge: HeldBadge;
+  expired: boolean;
+  onOpen: () => void;
+}) {
   const paint = badgePaint(badge.color);
   return (
     <button
@@ -87,7 +95,9 @@ export default function BadgeWall({ badges, equipped, now, onManage }: BadgeWall
   if (badges.length === 0) return null;
 
   const ordered = [...badges].sort(
-    (a, b) => Number(badgeValidity(a.expiresAt, now).expired) - Number(badgeValidity(b.expiresAt, now).expired),
+    (a, b) =>
+      Number(badgeValidity(a.expiresAt, now).expired) -
+      Number(badgeValidity(b.expiresAt, now).expired),
   );
   const validity = selected ? badgeValidity(selected.expiresAt, now) : null;
   const description = selected ? dictionary.data?.[selected.name] : undefined;
@@ -125,12 +135,19 @@ export default function BadgeWall({ badges, equipped, now, onManage }: BadgeWall
         ))}
       </ul>
 
-      <Modal isOpen={open} onClose={() => setOpen(false)} title={selected?.name ?? ''} maxWidth="sm">
+      <Modal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selected?.name ?? ''}
+        maxWidth="sm"
+      >
         {selected && (
           <div className="flex flex-col items-start gap-3">
             <UserBadge name={selected.name} color={selected.color} size="md" />
             {description !== undefined ? (
-              <p className="text-body-m text-on-surface whitespace-pre-wrap wrap-anywhere">{description}</p>
+              <p className="text-body-m text-on-surface whitespace-pre-wrap wrap-anywhere">
+                {description}
+              </p>
             ) : dictionary.data !== undefined ? (
               <p className="text-body-m text-on-surface-variant">暂无简介</p>
             ) : dictionary.error ? (

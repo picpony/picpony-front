@@ -34,7 +34,10 @@ function useSettledOffline(): boolean {
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     if (offline === settled) return;
-    const timer = window.setTimeout(() => setSettled(offline), offline ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
+    const timer = window.setTimeout(
+      () => setSettled(offline),
+      offline ? OPEN_AFTER_MS : CLOSE_AFTER_MS,
+    );
     return () => window.clearTimeout(timer);
   }, [offline, settled]);
   return settled;
@@ -69,12 +72,7 @@ export default function OfflineBanner({ inert }: { inert?: boolean }) {
       <div role="status" className="sr-only">
         {isOffline ? MESSAGE : ''}
       </div>
-      <Collapse
-        open={isOffline}
-        aria-hidden="true"
-        inert={inert}
-        className="shrink-0"
-      >
+      <Collapse open={isOffline} aria-hidden="true" inert={inert} className="shrink-0">
         <div className="bg-warning-fill text-on-fill text-label-l flex select-none items-center justify-center gap-2 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
           <MdWifiOff size={ICON.dense} className="shrink-0" aria-hidden="true" />
           <span className="min-w-0 text-center">{MESSAGE}</span>

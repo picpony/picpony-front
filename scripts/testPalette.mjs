@@ -52,8 +52,12 @@ const root = {
   dataset: {},
   classList: {
     contains: (name) => classes.has(name),
-    add: (name) => { classes.add(name); },
-    remove: (name) => { classes.delete(name); },
+    add: (name) => {
+      classes.add(name);
+    },
+    remove: (name) => {
+      classes.delete(name);
+    },
     toggle: (name, force) => {
       const next = force === undefined ? !classes.has(name) : Boolean(force);
       if (next) classes.add(name);
@@ -93,11 +97,27 @@ const appearance = await import('../lib/appearance.ts');
 const { COOKIE_KEYS, LS_KEYS } = await import('../lib/constants.ts');
 
 test('a custom palette is stored as its seed and its 副色相, and a bare seed still reads', () => {
-  assert.deepEqual(spec.parseCustomSpec('#E06C9F'), { seed: '#e06c9f', accent: null }, 'the old cookie, as 自动');
-  assert.deepEqual(spec.parseCustomSpec(' #e06c9f/triadic '), { seed: '#e06c9f', accent: 'triadic' });
+  assert.deepEqual(
+    spec.parseCustomSpec('#E06C9F'),
+    { seed: '#e06c9f', accent: null },
+    'the old cookie, as 自动',
+  );
+  assert.deepEqual(spec.parseCustomSpec(' #e06c9f/triadic '), {
+    seed: '#e06c9f',
+    accent: 'triadic',
+  });
   assert.deepEqual(spec.parseCustomSpec('#e06c9f/272'), { seed: '#e06c9f', accent: 272 });
   assert.deepEqual(spec.parseCustomSpec('#e06c9f/0'), { seed: '#e06c9f', accent: 0 });
-  for (const bad of ['#e06c9f/360', '#e06c9f/-3', '#e06c9f/auto', '#e06c9', 'e06c9f', '', null, 7]) {
+  for (const bad of [
+    '#e06c9f/360',
+    '#e06c9f/-3',
+    '#e06c9f/auto',
+    '#e06c9',
+    'e06c9f',
+    '',
+    null,
+    7,
+  ]) {
     assert.equal(spec.parseCustomSpec(bad), null, `${bad} is not a spec`);
   }
   for (const value of [
@@ -107,7 +127,11 @@ test('a custom palette is stored as its seed and its 副色相, and a bare seed 
   ]) {
     assert.deepEqual(spec.parseCustomSpec(spec.formatCustomSpec(value)), value, 'round trip');
   }
-  assert.equal(spec.formatCustomSpec({ seed: '#123456', accent: null }), '#123456', '自动 writes what old builds read');
+  assert.equal(
+    spec.formatCustomSpec({ seed: '#123456', accent: null }),
+    '#123456',
+    '自动 writes what old builds read',
+  );
   assert.equal(spec.parseAccent('271'), 271);
   assert.equal(spec.parseAccent(12.5), undefined, 'a hue is a whole degree');
   assert.equal(spec.parseAccent(undefined), undefined);
@@ -123,21 +147,49 @@ test('自动 is a quarter-turn that never lands on a severity or the olive shoul
       assert.equal(rule.isGuardedHue(rule.relatedHue(hue, preset)), false, `${preset} of ${hue}`);
     }
   }
-  assert.equal(rule.relatedHue(355.7, 'auto'), 266, 'the brand pink lands on the mascot’s periwinkle bows');
-  assert.equal(rule.relatedHue(150, 'auto'), 240, 'a green seed turns the other way: −90° is the warning band');
-  assert.equal(rule.isGuardedHue(22) && rule.isGuardedHue(76) && rule.isGuardedHue(152) && rule.isGuardedHue(100), true);
+  assert.equal(
+    rule.relatedHue(355.7, 'auto'),
+    266,
+    'the brand pink lands on the mascot’s periwinkle bows',
+  );
+  assert.equal(
+    rule.relatedHue(150, 'auto'),
+    240,
+    'a green seed turns the other way: −90° is the warning band',
+  );
+  assert.equal(
+    rule.isGuardedHue(22) &&
+      rule.isGuardedHue(76) &&
+      rule.isGuardedHue(152) &&
+      rule.isGuardedHue(100),
+    true,
+  );
 });
 
 test('a relation tapers with the seed’s hue, a named hue is taken at its word', () => {
   /* A neutral grey is chroma 1.9 in HCT, not 0, so its accents keep the same sliver of hue. */
   const grey = rule.customAccents('#808080', null);
-  assert.ok(grey.second.chroma < 5 && grey.spark.chroma < 5, 'a grey seed gets accents as grey as it is');
+  assert.ok(
+    grey.second.chroma < 5 && grey.spark.chroma < 5,
+    'a grey seed gets accents as grey as it is',
+  );
   const confidence = rule.hctOf('#808080').chroma / rule.MIN_SEED_CHROMA;
-  assert.ok(Math.abs(grey.spark.chroma - rule.SPARK_CHROMA * confidence) < 1e-9, 'scaled by the seed’s own confidence');
+  assert.ok(
+    Math.abs(grey.spark.chroma - rule.SPARK_CHROMA * confidence) < 1e-9,
+    'scaled by the seed’s own confidence',
+  );
   const named = rule.customAccents('#808080', 150);
-  assert.deepEqual(named.spark, { hue: 150, chroma: rule.SPARK_CHROMA }, 'a guarded hue the user named stays');
+  assert.deepEqual(
+    named.spark,
+    { hue: 150, chroma: rule.SPARK_CHROMA },
+    'a guarded hue the user named stays',
+  );
   const pink = rule.customAccents('#e06c9f', 'triadic');
-  assert.equal(pink.second.hue, pink.spark.hue, 'one 副色相, shared by the second colour and the accent');
+  assert.equal(
+    pink.second.hue,
+    pink.spark.hue,
+    'one 副色相, shared by the second colour and the accent',
+  );
   assert.equal(pink.second.chroma, rule.SECOND_CHROMA);
 });
 
@@ -154,7 +206,11 @@ test('单色 is one hue; 多色 gives the second colour and the accent, and keep
     assert.notEqual(d[scheme].secondary, mono.secondary, '多色 moves the selection colour');
     assert.equal(d[scheme].primary, mono.primary, 'and never the primary');
   }
-  assert.equal(Math.round(rule.hctOf(d.light.tertiary).tone), rule.SPARK_TONE, 'the accent is a mark tone in light');
+  assert.equal(
+    Math.round(rule.hctOf(d.light.tertiary).tone),
+    rule.SPARK_TONE,
+    'the accent is a mark tone in light',
+  );
 });
 
 test('a tile is drawn from the theme’s own roles, and 单色’s face is one hue', () => {
@@ -168,9 +224,21 @@ test('a tile is drawn from the theme’s own roles, and 单色’s face is one h
     for (const scheme of ['light', 'dark']) {
       const face = tones.face[scheme];
       assert.equal(tones[scheme].primary, d[scheme].primary, 'the bar is the primary');
-      assert.equal(tones[scheme].onPrimary, d[scheme]['on-primary'], 'its tick is the primary’s ink');
-      assert.equal(face.page, d[scheme]['surface-container-lowest'], 'the page is the lowest surface');
-      assert.equal(face.pick, d[scheme]['secondary-container'], 'the pill is what a selection wears');
+      assert.equal(
+        tones[scheme].onPrimary,
+        d[scheme]['on-primary'],
+        'its tick is the primary’s ink',
+      );
+      assert.equal(
+        face.page,
+        d[scheme]['surface-container-lowest'],
+        'the page is the lowest surface',
+      );
+      assert.equal(
+        face.pick,
+        d[scheme]['secondary-container'],
+        'the pill is what a selection wears',
+      );
       assert.equal(face.accent, d[scheme].tertiary, 'the dot is the accent as a mark');
       assert.equal(face.monoPage, d.mono[scheme]['surface-container-lowest']);
       assert.equal(face.monoPick, d.mono[scheme]['secondary-container']);
@@ -182,7 +250,12 @@ test('a tile is drawn from the theme’s own roles, and 单色’s face is one h
 test('the tile’s page is the one surface step clear of every enclosure a tile is drawn on', () => {
   /* The reason for the page step, checked on the custom rule (ASSERTION 16 holds the ten): the
      lowest surface against the row, a dialog and a 副色相 tile, by tone. */
-  const enclosures = ['surface-container-low', 'surface-container-high', 'surface-container-highest', 'secondary-container'];
+  const enclosures = [
+    'surface-container-low',
+    'surface-container-high',
+    'surface-container-highest',
+    'secondary-container',
+  ];
   const tone = (hex) => rule.hctOf(hex).tone;
   for (const seed of ['#e06c9f', '#f9de84', '#30376c', '#808080']) {
     const d = rule.deriveCustomTheme({ seed, accent: null });
@@ -190,13 +263,22 @@ test('the tile’s page is the one surface step clear of every enclosure a tile 
       for (const scheme of ['light', 'dark']) {
         const page = tone(maps[scheme][rule.FACE_ROLES.page]);
         for (const token of enclosures) {
-          assert.ok(Math.abs(page - tone(maps[scheme][token])) >= 3.5, `${seed} ${scheme} page against ${token}`);
+          assert.ok(
+            Math.abs(page - tone(maps[scheme][token])) >= 3.5,
+            `${seed} ${scheme} page against ${token}`,
+          );
         }
         const row = tone(maps[scheme]['surface-container-low']);
         if (scheme === 'light') {
-          assert.ok(Math.abs(tone(maps[scheme].surface) - row) < 3.5, 'the theme’s own surface would not clear the row');
+          assert.ok(
+            Math.abs(tone(maps[scheme].surface) - row) < 3.5,
+            'the theme’s own surface would not clear the row',
+          );
         }
-        assert.ok(Math.abs(page - row) > Math.abs(tone(maps[scheme].surface) - row), 'the step is further from it');
+        assert.ok(
+          Math.abs(page - row) > Math.abs(tone(maps[scheme].surface) - row),
+          'the step is further from it',
+        );
       }
     }
   }
@@ -222,11 +304,19 @@ test('every palette’s blocks declare one set of names per pair, and 单色 car
   assert.deepEqual(blocks[2].names, blocks[3].names);
   assert.deepEqual(blocks[2].names, rule.monoTokens(d));
   assert.ok(!blocks[0].names.includes('error'), 'the severities are shared, not themed');
-  assert.equal(rule.paletteBlocksCss('default', d, { multi: false }).includes("html[data-palette='default'] {"), false);
+  assert.equal(
+    rule
+      .paletteBlocksCss('default', d, { multi: false })
+      .includes("html[data-palette='default'] {"),
+    false,
+  );
 });
 
 test('the generated file keeps the invariant for the ten static themes and eight sky phases', () => {
-  const css = readFileSync(new URL('../app/theme-palettes.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = readFileSync(new URL('../app/theme-palettes.css', import.meta.url), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  );
   const blocks = new Map(
     [...css.matchAll(/(html[^{]+)\{([^}]*)\}/g)].map(([, selector, body]) => [
       selector.trim(),
@@ -243,7 +333,10 @@ test('the generated file keeps the invariant for the ten static themes and eight
         assert.ok(names.length > 0, `${selector} carries mono overrides`);
       } else {
         skyMultiBlocks += 1;
-        assert.ok(names.includes('primary') && names.includes('on-surface-rgb'), `${selector} declares full sky theme`);
+        assert.ok(
+          names.includes('primary') && names.includes('on-surface-rgb'),
+          `${selector} declares full sky theme`,
+        );
       }
       continue;
     }
@@ -261,21 +354,42 @@ test('sky phase scheduling covers all 24 hours cleanly and computes exact next b
   const seen = new Set();
   for (let hour = 0; hour < 24; hour += 1) {
     const phase = sky.skyPhaseForHour(hour);
-    assert.ok(hour >= phase.startHour && hour < phase.endHour, `hour ${hour} falls inside ${phase.id}`);
+    assert.ok(
+      hour >= phase.startHour && hour < phase.endHour,
+      `hour ${hour} falls inside ${phase.id}`,
+    );
     seen.add(phase.id);
   }
-  assert.equal(seen.size, appearance.SKY_PHASES.length, 'every sky phase is reachable across 24 hours');
+  assert.equal(
+    seen.size,
+    appearance.SKY_PHASES.length,
+    'every sky phase is reachable across 24 hours',
+  );
   assert.equal(sky.skyPhaseForHour(-1).id, 'starlight', 'negative hour wraps cleanly');
   assert.equal(sky.skyPhaseForHour(24).id, 'midnight', 'hour 24 wraps to midnight');
-  assert.equal(sky.skyPhaseAtBeijing(new Date('2026-11-28T06:00:00Z')).id, 'afternoon', '14:00 Beijing is 晴午');
-  assert.equal(sky.skyPhaseAtBeijing(new Date('2026-11-28T13:30:00Z')).id, 'starlight', '21:30 Beijing is 星夜');
+  assert.equal(
+    sky.skyPhaseAtBeijing(new Date('2026-11-28T06:00:00Z')).id,
+    'afternoon',
+    '14:00 Beijing is 晴午',
+  );
+  assert.equal(
+    sky.skyPhaseAtBeijing(new Date('2026-11-28T13:30:00Z')).id,
+    'starlight',
+    '21:30 Beijing is 星夜',
+  );
   assert.equal(sky.skyPhaseRangeLabel(sky.skyPhaseEntry('morning')), '09:00–13:00');
   const nearEnd = new Date(2026, 10, 28, 12, 59, 50, 0);
   const waitMs = sky.msUntilNextSkyPhase(nearEnd);
-  assert.ok(waitMs >= 10_000 && waitMs <= 11_000, `10s before 13:00 boundary waits ~10.25s, got ${waitMs}`);
+  assert.ok(
+    waitMs >= 10_000 && waitMs <= 11_000,
+    `10s before 13:00 boundary waits ~10.25s, got ${waitMs}`,
+  );
   const nearMidnight = new Date(2026, 10, 28, 23, 59, 30, 0);
   const midnightWait = sky.msUntilNextSkyPhase(nearMidnight);
-  assert.ok(midnightWait >= 30_000 && midnightWait <= 31_000, `30s before midnight waits ~30.25s, got ${midnightWait}`);
+  assert.ok(
+    midnightWait >= 30_000 && midnightWait <= 31_000,
+    `30s before midnight waits ~30.25s, got ${midnightWait}`,
+  );
   assert.equal(sky.skyPrePaintSchedule().length, appearance.SKY_PHASES.length);
   assert.equal(sky.SKY_PHASES_DAY_FIRST[0].id, 'dawn');
   assert.equal(sky.SKY_PHASES_DAY_FIRST.at(-1).id, 'predawn');
@@ -308,10 +422,18 @@ test('sky palette locks light/dark switching without overwriting stored scheme, 
 
   /* Attempting to change scheme while on sky is a no-op and preserves stored localStorage scheme. */
   appearance.commitScheme('light');
-  assert.equal(values.get(LS_KEYS.darkMode), 'true', 'stored darkMode preference was not overwritten');
+  assert.equal(
+    values.get(LS_KEYS.darkMode),
+    'true',
+    'stored darkMode preference was not overwritten',
+  );
   assert.equal(values.get(LS_KEYS.followSystemScheme), 'false');
   appearance.commitScheme('system');
-  assert.equal(values.get(LS_KEYS.followSystemScheme), 'false', 'system switch ignored while sky is locked');
+  assert.equal(
+    values.get(LS_KEYS.followSystemScheme),
+    'false',
+    'system switch ignored while sky is locked',
+  );
   assert.equal(appearance.currentScheme(), 'light');
 
   /* Night phase flips root to dark automatically. */
@@ -349,7 +471,11 @@ test('sky palette locks light/dark switching without overwriting stored scheme, 
   });
   assert.equal(appearance.currentPalette(), 'custom');
   assert.equal('skyPhase' in root.dataset, false, 'leaving sky to custom clears data-sky-phase');
-  assert.equal(appearance.currentScheme(), 'dark', 'leaving sky to custom restores saved dark scheme');
+  assert.equal(
+    appearance.currentScheme(),
+    'dark',
+    'leaving sky to custom restores saved dark scheme',
+  );
   assert.equal(themeColorMeta.content, derivedCustom.dark.primary);
   /* Reset to clean light state for subsequent tests. */
   appearance.commitPalette('default');
@@ -359,27 +485,44 @@ test('sky palette locks light/dark switching without overwriting stored scheme, 
 test('an image’s combinations pair each seed with the picture’s own far, clean, chromatic partner', () => {
   const combos = rule.imageCombinations(['#cf7ba3', '#b98e69', '#8495d7', '#baa4c7']);
   assert.equal(combos[0].seed, '#cf7ba3');
-  assert.equal(Math.round(rule.norm180(combos[0].accent - 274)), 0, 'the mascot’s pink takes her periwinkle');
+  assert.equal(
+    Math.round(rule.norm180(combos[0].accent - 274)),
+    0,
+    'the mascot’s pink takes her periwinkle',
+  );
   for (const { seed, accent } of combos) {
     if (accent === null) continue;
     assert.ok(Math.abs(rule.norm180(accent - rule.hctOf(seed).hue)) >= rule.MIN_ACCENT_GAP);
     assert.equal(rule.isGuardedHue(accent), false);
   }
-  assert.deepEqual(rule.imageCombinations(['#e06c9f', '#e36a95']), [
-    { seed: '#e06c9f', accent: null },
-    { seed: '#e36a95', accent: null },
-  ], 'two pinks have no partner: 自动');
+  assert.deepEqual(
+    rule.imageCombinations(['#e06c9f', '#e36a95']),
+    [
+      { seed: '#e06c9f', accent: null },
+      { seed: '#e36a95', accent: null },
+    ],
+    'two pinks have no partner: 自动',
+  );
 });
 
 test('the image quantizer starts its k-means from Java’s generator, seeded as AOSP seeds it', () => {
   /* Reference values printed by java.util.Random itself (JDK 24). */
   const aosp = quantize.javaRandom(0x42688);
-  assert.deepEqual(Array.from({ length: 12 }, () => aosp.nextInt(128)), [49, 111, 34, 84, 13, 30, 91, 105, 9, 12, 118, 24],
-    'a power-of-two bound, the path the quantizer takes at 128 clusters');
+  assert.deepEqual(
+    Array.from({ length: 12 }, () => aosp.nextInt(128)),
+    [49, 111, 34, 84, 13, 30, 91, 105, 9, 12, 118, 24],
+    'a power-of-two bound, the path the quantizer takes at 128 clusters',
+  );
   const other = quantize.javaRandom(0x42688);
-  assert.deepEqual(Array.from({ length: 12 }, () => other.nextInt(100)), [61, 18, 60, 65, 41, 51, 70, 69, 55, 38, 61, 96]);
+  assert.deepEqual(
+    Array.from({ length: 12 }, () => other.nextInt(100)),
+    [61, 18, 60, 65, 41, 51, 70, 69, 55, 38, 61, 96],
+  );
   const small = quantize.javaRandom(42);
-  assert.deepEqual(Array.from({ length: 6 }, () => small.nextInt(7)), [1, 5, 6, 3, 5, 4]);
+  assert.deepEqual(
+    Array.from({ length: 6 }, () => small.nextInt(7)),
+    [1, 5, 6, 3, 5, 4],
+  );
 });
 
 test('the same picture gives the same colours on every read', () => {
@@ -421,7 +564,13 @@ function picture(fields) {
   let end = 0;
   for (const { share } of fields) bounds.push((end += Math.round(share * total)));
   for (let p = 0; p < total; p++) {
-    const field = fields[Math.min(bounds.findIndex((b) => p < b), fields.length - 1)] ?? fields.at(-1);
+    const field =
+      fields[
+        Math.min(
+          bounds.findIndex((b) => p < b),
+          fields.length - 1,
+        )
+      ] ?? fields.at(-1);
     const [r, g, b] = field.rgb;
     pixels.set([r + jitter(), g + jitter(), b + jitter(), 255], p * 4);
   }
@@ -445,13 +594,20 @@ test('Monet’s four come first, and the picture offers up to four more of its o
   const extras = eight.slice(four.length).map((hex) => rule.hctOf(hex));
   for (const hct of extras) assert.ok(hct.chroma >= 15, 'an extra defines a hue');
   const accent = rule.hctOf('#f05824');
-  assert.ok(extras.some((hct) => Math.abs(rule.norm180(hct.hue - accent.hue)) < 15), 'the small vivid subject is offered');
+  assert.ok(
+    extras.some((hct) => Math.abs(rule.norm180(hct.hue - accent.hue)) < 15),
+    'the small vivid subject is offered',
+  );
   const all = eight.map((hex) => rule.hctOf(hex));
   for (let i = 0; i < all.length; i++) {
     for (let j = i + 1; j < all.length; j++) {
       const sameHue = Math.abs(rule.norm180(all[i].hue - all[j].hue)) < 15;
-      assert.ok(!sameHue || Math.abs(all[i].tone - all[j].tone) >= 12 || i < four.length && j < four.length,
-        `${eight[i]} and ${eight[j]} are two options, not one`);
+      assert.ok(
+        !sameHue ||
+          Math.abs(all[i].tone - all[j].tone) >= 12 ||
+          (i < four.length && j < four.length),
+        `${eight[i]} and ${eight[j]} are two options, not one`,
+      );
     }
   }
 });
@@ -459,15 +615,31 @@ test('Monet’s four come first, and the picture offers up to four more of its o
 test('the ranking is Score’s own: at Monet’s floor the port answers as the library does', async () => {
   const { Score } = await import('@material/material-color-utilities');
   const pictures = [
-    picture([{ rgb: [207, 124, 165], share: 0.4 }, { rgb: [131, 151, 217], share: 0.3 }, { rgb: [212, 178, 83], share: 0.3 }]),
-    picture([{ rgb: [240, 240, 236], share: 0.7 }, { rgb: [90, 160, 110], share: 0.2 }, { rgb: [240, 88, 36], share: 0.1 }]),
-    picture([{ rgb: [30, 60, 140], share: 0.5 }, { rgb: [200, 60, 50], share: 0.25 }, { rgb: [250, 220, 90], share: 0.25 }]),
+    picture([
+      { rgb: [207, 124, 165], share: 0.4 },
+      { rgb: [131, 151, 217], share: 0.3 },
+      { rgb: [212, 178, 83], share: 0.3 },
+    ]),
+    picture([
+      { rgb: [240, 240, 236], share: 0.7 },
+      { rgb: [90, 160, 110], share: 0.2 },
+      { rgb: [240, 88, 36], share: 0.1 },
+    ]),
+    picture([
+      { rgb: [30, 60, 140], share: 0.5 },
+      { rgb: [200, 60, 50], share: 0.25 },
+      { rgb: [250, 220, 90], share: 0.25 },
+    ]),
   ];
   for (const pixels of pictures) {
     const argb = [];
-    for (let i = 0; i < pixels.length; i += 4) argb.push((255 << 24) | (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
+    for (let i = 0; i < pixels.length; i += 4)
+      argb.push((255 << 24) | (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2]);
     const quantised = quantize.quantizeCelebi(argb, 128);
-    assert.deepEqual(rule.monetPicks(rule.scoreClusters(quantised), 4, rule.MONET_MIN_CHROMA), Score.score(quantised, { desired: 4 }));
+    assert.deepEqual(
+      rule.monetPicks(rule.scoreClusters(quantised), 4, rule.MONET_MIN_CHROMA),
+      Score.score(quantised, { desired: 4 }),
+    );
   }
 });
 
@@ -482,12 +654,16 @@ test('the paper a sketch is drawn on is never offered as a theme', () => {
   ]);
   const options = rule.sourceColorsFromPixels(pixels, 8);
   assert.ok(options.length > 0);
-  for (const hex of options) assert.ok(rule.hctOf(hex).chroma >= rule.THEME_MIN_CHROMA, `${hex} defines a hue`);
+  for (const hex of options)
+    assert.ok(rule.hctOf(hex).chroma >= rule.THEME_MIN_CHROMA, `${hex} defines a hue`);
   /* A picture with no colour that reaches 15 still has options: Monet's own floor. */
-  const faint = rule.sourceColorsFromPixels(picture([
-    { rgb: [236, 226, 222], share: 0.6 },
-    { rgb: [214, 218, 226], share: 0.4 },
-  ]), 8);
+  const faint = rule.sourceColorsFromPixels(
+    picture([
+      { rgb: [236, 226, 222], share: 0.6 },
+      { rgb: [214, 218, 226], share: 0.4 },
+    ]),
+    8,
+  );
   assert.ok(faint.length > 0, 'a faint picture falls back instead of offering nothing');
 });
 
@@ -501,8 +677,11 @@ test('a one-hue picture offers its lighter and darker tones, never one colour tw
   assert.ok(options.length >= 3, 'the three tones come back');
   for (let i = 0; i < options.length; i++) {
     for (let j = i + 1; j < options.length; j++) {
-      assert.ok(Math.abs(options[i].tone - options[j].tone) >= 12 ||
-        Math.abs(rule.norm180(options[i].hue - options[j].hue)) >= 15, 'each option is its own colour');
+      assert.ok(
+        Math.abs(options[i].tone - options[j].tone) >= 12 ||
+          Math.abs(rule.norm180(options[i].hue - options[j].hue)) >= 15,
+        'each option is its own colour',
+      );
     }
   }
 });
@@ -522,7 +701,13 @@ test('配色方案 is an attribute present only for 单色, stored and mirrored 
 const tonesFixture = (primary) => {
   let n = 0x10;
   const next = () => `#${(n++).toString(16).padStart(2, '0').repeat(3)}`;
-  const face = () => ({ page: next(), pick: next(), accent: next(), monoPage: next(), monoPick: next() });
+  const face = () => ({
+    page: next(),
+    pick: next(),
+    accent: next(),
+    monoPage: next(),
+    monoPick: next(),
+  });
   return {
     light: { primary, onPrimary: '#ffffff' },
     dark: { primary: next(), onPrimary: '#ffffff' },
@@ -566,9 +751,16 @@ test('a delayed custom recovery never overwrites a newer seed, companion or pale
     await lazy.resolveCustomPalette(original);
     await new Promise((resolve) => setImmediate(resolve));
   };
-  for (const newer of [{ seed: '#3355aa', accent: null }, { seed: original.seed, accent: 272 }]) {
+  for (const newer of [
+    { seed: '#3355aa', accent: null },
+    { seed: original.seed, accent: 272 },
+  ]) {
     start();
-    appearance.commitCustomPalette({ ...newer, css: '/* newer rules */', tones: tonesFixture(newer.seed) });
+    appearance.commitCustomPalette({
+      ...newer,
+      css: '/* newer rules */',
+      tones: tonesFixture(newer.seed),
+    });
     await settled();
     assert.deepEqual(appearance.currentCustomSpec(), newer);
     assert.equal(values.get(LS_KEYS.paletteCustom), spec.formatCustomSpec(newer));
@@ -581,41 +773,72 @@ test('a delayed custom recovery never overwrites a newer seed, companion or pale
 
   start();
   await settled();
-  assert.deepEqual(appearance.currentCustomSpec(), original, 'an unchanged stored choice is recovered');
+  assert.deepEqual(
+    appearance.currentCustomSpec(),
+    original,
+    'an unchanged stored choice is recovered',
+  );
 });
 
 test('the static offline fallback and web manifest use the default palette', () => {
   const globals = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8');
   const offline = readFileSync(new URL('../public/offline.html', import.meta.url), 'utf8');
   const manifest = readFileSync(new URL('../app/manifest.ts', import.meta.url), 'utf8');
-  const painted = [globals.match(/(?:^|\n):root \{([\s\S]*?)\n\}/)[1], globals.match(/(?:^|\n)\.dark \{([\s\S]*?)\n\}/)[1]];
+  const painted = [
+    globals.match(/(?:^|\n):root \{([\s\S]*?)\n\}/)[1],
+    globals.match(/(?:^|\n)\.dark \{([\s\S]*?)\n\}/)[1],
+  ];
   const fallback = [...offline.matchAll(/:root \{([\s\S]*?)\}/g)].map((match) => match[1]);
   assert.equal(fallback.length, 2);
   for (let i = 0; i < 2; i++) {
     for (const token of ['surface', 'on-surface', 'on-surface-variant']) {
-      const color = (text, prefix) => text.match(new RegExp(`--${prefix}${token}:\\s*(#[0-9a-f]{6});`))[1];
-      assert.equal(color(fallback[i], ''), color(painted[i], 'md-sys-color-'), `${token} in ${i ? 'dark' : 'light'}`);
+      const color = (text, prefix) =>
+        text.match(new RegExp(`--${prefix}${token}:\\s*(#[0-9a-f]{6});`))[1];
+      assert.equal(
+        color(fallback[i], ''),
+        color(painted[i], 'md-sys-color-'),
+        `${token} in ${i ? 'dark' : 'light'}`,
+      );
     }
   }
   const lightSurface = painted[0].match(/--md-sys-color-surface:\s*(#[0-9a-f]{6});/)[1];
   const manifestBg = manifest.match(/background_color:\s*'(#[0-9a-f]{6})'/)[1];
-  assert.equal(manifestBg, lightSurface, 'manifest splash background matches default light surface');
+  assert.equal(
+    manifestBg,
+    lightSurface,
+    'manifest splash background matches default light surface',
+  );
 });
 
 test('on-primary-ink and secondary-ink meet contrast and hue-family invariants across custom seeds', () => {
-  for (const seed of ['#fdcad3', '#f9de84', '#30376c', '#e06c9f', '#118833', '#808080', '#ffffff', '#000000']) {
+  for (const seed of [
+    '#fdcad3',
+    '#f9de84',
+    '#30376c',
+    '#e06c9f',
+    '#118833',
+    '#808080',
+    '#ffffff',
+    '#000000',
+  ]) {
     const d = rule.deriveCustomTheme({ seed, accent: null });
     for (const scheme of ['light', 'dark']) {
       const ratio = rule.contrast(d[scheme]['on-primary-ink'], d[scheme]['primary-ink']);
       assert.ok(ratio >= 4.5, `${seed} ${scheme}: ${ratio.toFixed(2)}:1 under 4.5:1`);
       for (const bg of ['surface', 'secondary-container']) {
         const secRatio = rule.contrast(d[scheme]['secondary-ink'], d[scheme][bg]);
-        assert.ok(secRatio >= 3, `${seed} ${scheme} secondary-ink/${bg}: ${secRatio.toFixed(2)}:1 under 3:1`);
+        assert.ok(
+          secRatio >= 3,
+          `${seed} ${scheme} secondary-ink/${bg}: ${secRatio.toFixed(2)}:1 under 3:1`,
+        );
       }
       const cont = rule.hctOf(d[scheme]['secondary-container']);
       const ink = rule.hctOf(d[scheme]['secondary-ink']);
       if (cont.chroma >= 12) {
-        assert.ok(Math.abs(rule.norm180(ink.hue - cont.hue)) < 15, `${seed} ${scheme} secondary-ink follows secondary-container hue`);
+        assert.ok(
+          Math.abs(rule.norm180(ink.hue - cont.hue)) < 15,
+          `${seed} ${scheme} secondary-ink follows secondary-container hue`,
+        );
       } else {
         assert.ok(ink.chroma < 6, `${seed} ${scheme} achromatic secondary-ink stays neutral`);
       }
@@ -627,11 +850,16 @@ test('配色方案 and the 副色相 travel with the palette to the account', as
   const writes = [];
   globalThis.fetch = async (url, init = {}) => {
     const target = new URL(String(url), 'https://app.invalid');
-    if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT') throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
+    if (target.pathname !== '/api/v1/me/preferences' || init.method !== 'PUT')
+      throw new Error(`unexpected request: ${init.method} ${target.pathname}`);
     const body = JSON.parse(init.body);
     writes.push(body.settings);
     /* `PUT /me/preferences` answers with what it stored and the next revision. */
-    return Response.json({ settings: body.settings, revision: body.expected_revision + 1, adjustments: [] });
+    return Response.json({
+      settings: body.settings,
+      revision: body.expected_revision + 1,
+      adjustments: [],
+    });
   };
   const sync = await import('../lib/settingsSync.ts');
   sync.setSettingsSyncNotifier(() => {});
@@ -669,6 +897,10 @@ test('配色方案 and the 副色相 travel with the palette to the account', as
   assert.equal(writes.at(-1).themeCustomAccent, 200);
   appearance.commitCustomPalette({ seed: '#aa3355', accent: null, css: '', tones });
   await new Promise((resolve) => setTimeout(resolve, 700));
-  assert.equal(writes.at(-1).themeCustomAccent, null, '自动 is written out, so an old hue cannot ride through');
+  assert.equal(
+    writes.at(-1).themeCustomAccent,
+    null,
+    '自动 is written out, so an old hue cannot ride through',
+  );
   assert.deepEqual(sync.settingsSyncSnapshot().pending, {});
 });

@@ -57,23 +57,43 @@ const DAY_MS = 86_400_000;
 const FORMATS = {
   dateTime: new Intl.DateTimeFormat('zh-CN', {
     timeZone: BACKEND_TIME_ZONE,
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }),
   shortDateTime: new Intl.DateTimeFormat('zh-CN', {
     timeZone: BACKEND_TIME_ZONE,
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }),
   date: new Intl.DateTimeFormat('zh-CN', {
-    timeZone: BACKEND_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: BACKEND_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }),
-  monthDay: new Intl.DateTimeFormat('zh-CN', { timeZone: BACKEND_TIME_ZONE, month: '2-digit', day: '2-digit' }),
+  monthDay: new Intl.DateTimeFormat('zh-CN', {
+    timeZone: BACKEND_TIME_ZONE,
+    month: '2-digit',
+    day: '2-digit',
+  }),
   clock: new Intl.DateTimeFormat('zh-CN', {
-    timeZone: BACKEND_TIME_ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    timeZone: BACKEND_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }),
 };
 
 /** `YYYY-MM-DD`, optionally `[ T]HH:mm[:ss[.fff]]`, optionally a zone. */
-const TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
+const TIMESTAMP =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
 
 type DateInput = string | number | Date | null | undefined;
 
@@ -116,9 +136,13 @@ function parseIn(value: DateInput, offsetless: string): Date | null {
   const m = TIMESTAMP.exec(text);
   if (m) {
     const [, y, mo, d, h = '00', mi = '00', s = '00', fraction = '', zone] = m;
-    const offset = !zone ? offsetless
-      : zone.toUpperCase() === 'Z' ? 'Z'
-        : zone.includes(':') ? zone : `${zone.slice(0, 3)}:${zone.slice(3)}`;
+    const offset = !zone
+      ? offsetless
+      : zone.toUpperCase() === 'Z'
+        ? 'Z'
+        : zone.includes(':')
+          ? zone
+          : `${zone.slice(0, 3)}:${zone.slice(3)}`;
     const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}${fraction.slice(0, 4)}${offset}`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
@@ -196,14 +220,18 @@ export function formatClock(value: DateInput): string {
 export function formatCompactDateTime(value: DateInput, now: number = Date.now()): string {
   const d = parseBackendTime(value);
   if (!d) return typeof value === 'string' ? value : '';
-  return beijingYear(d.getTime()) === beijingYear(now) ? FORMATS.shortDateTime.format(d) : FORMATS.date.format(d);
+  return beijingYear(d.getTime()) === beijingYear(now)
+    ? FORMATS.shortDateTime.format(d)
+    : FORMATS.date.format(d);
 }
 
 /** `08/20` this year, `2024/08/20` otherwise — the tightest form that cannot lie about a year. */
 export function formatCompactDate(value: DateInput, now: number = Date.now()): string {
   const d = parseBackendTime(value);
   if (!d) return typeof value === 'string' ? value : '';
-  return beijingYear(d.getTime()) === beijingYear(now) ? FORMATS.monthDay.format(d) : FORMATS.date.format(d);
+  return beijingYear(d.getTime()) === beijingYear(now)
+    ? FORMATS.monthDay.format(d)
+    : FORMATS.date.format(d);
 }
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -213,7 +241,11 @@ const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '�
  * `昨天`, a weekday inside the last week, `8月20日` this year, `2024年8月20日` before. Days are
  * Beijing calendar days, like everything else here.
  */
-export function formatDayLabel(value: DateInput, now: number = Date.now(), { clock = true }: { clock?: boolean } = {}): string {
+export function formatDayLabel(
+  value: DateInput,
+  now: number = Date.now(),
+  { clock = true }: { clock?: boolean } = {},
+): string {
   const d = parseBackendTime(value);
   if (!d) return typeof value === 'string' ? value : '';
   const ms = d.getTime();
@@ -224,7 +256,9 @@ export function formatDayLabel(value: DateInput, now: number = Date.now(), { clo
   if (days > 1 && days < 7) return WEEKDAYS[local.getUTCDay()];
   const month = local.getUTCMonth() + 1;
   const day = local.getUTCDate();
-  return beijingYear(ms) === beijingYear(now) ? `${month}月${day}日` : `${local.getUTCFullYear()}年${month}月${day}日`;
+  return beijingYear(ms) === beijingYear(now)
+    ? `${month}月${day}日`
+    : `${local.getUTCFullYear()}年${month}月${day}日`;
 }
 
 /**
@@ -253,7 +287,10 @@ export const ONLINE_WINDOW_MS = 5 * 60_000;
  * otherwise. Returned as two fields so the screen can present 在线 as a state rather than as
  * 「上次在线：在线」.
  */
-export function lastOnlineStatus(value: DateInput, now: number = Date.now()): { online: boolean; text: string } {
+export function lastOnlineStatus(
+  value: DateInput,
+  now: number = Date.now(),
+): { online: boolean; text: string } {
   const d = parseBackendTime(value);
   if (!d) return { online: false, text: typeof value === 'string' ? value : '' };
   if (now - d.getTime() < ONLINE_WINDOW_MS) return { online: true, text: '在线' };

@@ -14,7 +14,12 @@ import { readToken, readUserInfo } from '@/lib/hooks';
 import { useFieldErrors } from '@/lib/useFieldErrors';
 import { sessionUser } from '@/lib/resources';
 import { cn } from '@/lib/utils';
-import { EMAIL_PENDING, EMAIL_PENDING_VERIFICATION, pendingEmailChange, saveAccountFields } from './useAccount';
+import {
+  EMAIL_PENDING,
+  EMAIL_PENDING_VERIFICATION,
+  pendingEmailChange,
+  saveAccountFields,
+} from './useAccount';
 
 export type EmailStep = 'change' | 'verify';
 
@@ -48,7 +53,9 @@ export default function EmailDialog({
     const user = readUserInfo();
     return user?.token === token ? pendingEmailChange(user) : null;
   });
-  const [step, setStep] = useState<EmailStep>(initialStep === 'verify' && pending ? 'verify' : 'change');
+  const [step, setStep] = useState<EmailStep>(
+    initialStep === 'verify' && pending ? 'verify' : 'change',
+  );
   /* A step reached inside the open dialog swaps in like a view (AuthModal's sign-up steps); the
      step a dialog opens on is simply there. The dialog is keyed per open, so this starts false. */
   const [stepChanged, setStepChanged] = useState(false);
@@ -62,7 +69,10 @@ export default function EmailDialog({
   const introId = useId();
 
   const change = useFieldErrors<'address' | 'password'>(() => [
-    ['address', validateEmail(address) ?? (address.trim() === email ? '这已是当前绑定的邮箱' : null)],
+    [
+      'address',
+      validateEmail(address) ?? (address.trim() === email ? '这已是当前绑定的邮箱' : null),
+    ],
     ['password', validateRequired(password, '请输入当前密码')],
   ]);
   /* The code row keeps its own error: it is one group of boxes, and focus goes to its first empty one. */
@@ -100,7 +110,10 @@ export default function EmailDialog({
     try {
       const data = await updateEmail(token, { new_email: next, current_password: password });
       if (!current()) return;
-      saveAccountFields(token, { [EMAIL_PENDING]: next, [EMAIL_PENDING_VERIFICATION]: data.verification });
+      saveAccountFields(token, {
+        [EMAIL_PENDING]: next,
+        [EMAIL_PENDING_VERIFICATION]: data.verification,
+      });
       setTarget(next);
       setVerification(data.verification);
       setPassword('');
@@ -111,7 +124,8 @@ export default function EmailDialog({
     } catch (error) {
       if (!current()) return;
       if (isRefusal(error, 'PASSWORD_MISMATCH')) change.set('password', apiErrorMessage(error));
-      else if (isRefusal(error, 'EMAIL_TAKEN', 'INVALID_INPUT')) change.set('address', apiErrorMessage(error));
+      else if (isRefusal(error, 'EMAIL_TAKEN', 'INVALID_INPUT'))
+        change.set('address', apiErrorMessage(error));
       else showToast(apiErrorMessage(error), 'error');
     } finally {
       setBusy(null);
@@ -127,7 +141,8 @@ export default function EmailDialog({
     setStep('change');
   };
 
-  const clearPending = () => saveAccountFields(token, { [EMAIL_PENDING]: '', [EMAIL_PENDING_VERIFICATION]: '' });
+  const clearPending = () =>
+    saveAccountFields(token, { [EMAIL_PENDING]: '', [EMAIL_PENDING_VERIFICATION]: '' });
 
   /* `value` because the last box's `onComplete` fires before the state it just set is readable. */
   const submitCode = async (value: string = code) => {
@@ -141,7 +156,11 @@ export default function EmailDialog({
     try {
       const data = await confirmEmailChange(token, verification, value.trim());
       if (!current()) return;
-      saveAccountFields(token, { email: data.email, [EMAIL_PENDING]: '', [EMAIL_PENDING_VERIFICATION]: '' });
+      saveAccountFields(token, {
+        email: data.email,
+        [EMAIL_PENDING]: '',
+        [EMAIL_PENDING_VERIFICATION]: '',
+      });
       void sessionUser.read({ token }, { force: true }).catch(() => {});
       cooldown.reset();
       showToast('已更换邮箱', 'success');
@@ -184,7 +203,12 @@ export default function EmailDialog({
             <Button variant="text" type="button" onClick={close} disabled={busy !== null}>
               取消
             </Button>
-            <Button variant="filled" type="submit" form="email-verify-form" loading={busy === 'verify'}>
+            <Button
+              variant="filled"
+              type="submit"
+              form="email-verify-form"
+              loading={busy === 'verify'}
+            >
               验证
             </Button>
           </>
@@ -193,7 +217,12 @@ export default function EmailDialog({
             <Button variant="text" type="button" onClick={close} disabled={busy !== null}>
               取消
             </Button>
-            <Button variant="filled" type="submit" form="email-change-form" loading={busy === 'change'}>
+            <Button
+              variant="filled"
+              type="submit"
+              form="email-change-form"
+              loading={busy === 'change'}
+            >
               保存
             </Button>
           </>

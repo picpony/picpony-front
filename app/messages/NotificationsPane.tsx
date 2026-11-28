@@ -77,7 +77,10 @@ export default function NotificationsPane({ token, type, active, unread }: Notif
     const tab = type === 'system' ? 'notification' : 'interaction';
     /* The badge follows the receipt rather than racing it: `markRead` re-reads the count, and a
        re-read that overtook the receipt would put the old number back. */
-    void markNotificationsRead(token, ids).then(() => markRead(token, tab, ids.length), () => {});
+    void markNotificationsRead(token, ids).then(
+      () => markRead(token, tab, ids.length),
+      () => {},
+    );
   }, [token, active, page, data, read.isPrevious, unread, type]);
 
   const lastPage = data && !read.isPrevious ? Math.max(1, data.totalPages) : null;
@@ -99,7 +102,13 @@ export default function NotificationsPane({ token, type, active, unread }: Notif
     return <ListRowsSkeleton />;
   }
   if (data.notifications.length === 0 && page === 1) {
-    return <EmptyState size="pane" icon={<MdNotificationsNone size={ICON.display} />} title={copy.empty} />;
+    return (
+      <EmptyState
+        size="pane"
+        icon={<MdNotificationsNone size={ICON.display} />}
+        title={copy.empty}
+      />
+    );
   }
 
   return (
@@ -142,12 +151,19 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
          once read), while read titles step up to `on-surface` so titles remain scannable. */
       className={cn(
         'm3-row p-4',
-        unread ? 'bg-secondary-container text-on-secondary-container forced-selected' : 'bg-surface-container-low text-on-surface-variant',
+        unread
+          ? 'bg-secondary-container text-on-secondary-container forced-selected'
+          : 'bg-surface-container-low text-on-surface-variant',
       )}
     >
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         {/* The pane's first level under the page's heading: the tab is the section. */}
-        <h2 className={cn('text-title-m-emphasized min-w-0 wrap-anywhere', !unread && 'text-on-surface')}>
+        <h2
+          className={cn(
+            'text-title-m-emphasized min-w-0 wrap-anywhere',
+            !unread && 'text-on-surface',
+          )}
+        >
           {unread && <span className="sr-only">未读：</span>}
           {item.title}
         </h2>
@@ -156,7 +172,9 @@ function NotificationRow({ item, now }: { item: Notification; now: number | null
           title={formatDateTime(item.created_at)}
           className="text-body-s shrink-0 tabular-nums"
         >
-          {now === null ? formatDateTime(item.created_at) : formatRelativeTime(item.created_at, now)}
+          {now === null
+            ? formatDateTime(item.created_at)
+            : formatRelativeTime(item.created_at, now)}
         </time>
       </div>
       {/* The body is plain text with the backend's link markers: its line breaks are kept. */}

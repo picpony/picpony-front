@@ -202,7 +202,8 @@ async function runEntry(imageId: number, entry: DetailEntry) {
       detailCache.delete(imageId);
       /* Kept for subscribers until the next request for this id clears it. A cancellation is
          not a failure anybody should be shown. */
-      if (!(error instanceof Error && error.name === 'AbortError')) detailErrors.set(imageId, error);
+      if (!(error instanceof Error && error.name === 'AbortError'))
+        detailErrors.set(imageId, error);
       notifyImageDetail(imageId);
     }
     entry.reject(error);
@@ -465,9 +466,15 @@ export function peekImageDetailError(id: number | string): unknown {
 /** The picture's own record over the list's row, and a row that is a video over one that is not. */
 export function mediaFacts(image: ImagePreview) {
   const reps = image.representations ?? {};
-  const preferMedium = (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
+  const preferMedium =
+    (image.size || 0) > 16 * 1024 * 1024 || (image.width || 0) * (image.height || 0) > 40_000_000;
   const imageSrc =
-    (preferMedium ? reps.medium : undefined) || reps.large || reps.medium || reps.full || image.view_url || '';
+    (preferMedium ? reps.medium : undefined) ||
+    reps.large ||
+    reps.medium ||
+    reps.full ||
+    image.view_url ||
+    '';
   const format = (image.format || imageSrc.split(/[?#]/)[0].split('.').pop() || '').toLowerCase();
   const isVideo = format === 'webm' || format === 'mp4';
   const videoSrc = reps.medium || reps.large || reps.full || image.view_url || '';
@@ -483,5 +490,7 @@ export function mediaFacts(image: ImagePreview) {
  */
 export function detailStillPreview(image: ImagePreview): string | undefined {
   const facts = mediaFacts(image);
-  return !facts.isVideo && facts.format !== 'gif' && !image.animated ? facts.reps.thumb || undefined : undefined;
+  return !facts.isVideo && facts.format !== 'gif' && !image.animated
+    ? facts.reps.thumb || undefined
+    : undefined;
 }

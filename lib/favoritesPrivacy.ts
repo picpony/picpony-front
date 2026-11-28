@@ -20,7 +20,15 @@ import { clearImageSequence } from '@/lib/imageSequence';
 import type { PonyImage } from '@/lib/types/image';
 
 export const HEARTBEAT_MS = 5_000;
-export type PrivacyStatus = 'unknown' | 'checking' | 'check-failed' | 'no-password' | 'locked' | 'loading' | 'open' | 'list-failed';
+export type PrivacyStatus =
+  | 'unknown'
+  | 'checking'
+  | 'check-failed'
+  | 'no-password'
+  | 'locked'
+  | 'loading'
+  | 'open'
+  | 'list-failed';
 
 export interface PrivacySnapshot {
   token: string | null;
@@ -32,7 +40,14 @@ export interface PrivacySnapshot {
   refreshing: boolean;
 }
 
-const INITIAL: PrivacySnapshot = { token: null, status: 'unknown', images: null, error: null, autoLocked: false, refreshing: false };
+const INITIAL: PrivacySnapshot = {
+  token: null,
+  status: 'unknown',
+  images: null,
+  error: null,
+  autoLocked: false,
+  refreshing: false,
+};
 let snapshot = INITIAL;
 let generation = 0;
 let listVersion = 0;
@@ -68,12 +83,17 @@ function publish(next: Partial<PrivacySnapshot>) {
 
 function unlockMs() {
   let raw: string | null = null;
-  try { raw = localStorage.getItem(LS_KEYS.privacyUnlockSeconds); } catch { /* The default remains. */ }
+  try {
+    raw = localStorage.getItem(LS_KEYS.privacyUnlockSeconds);
+  } catch {
+    /* The default remains. */
+  }
   return (parseUnlockSeconds(raw) ?? DEFAULT_PRIVACY_UNLOCK_SECONDS) * 1000;
 }
 
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
-const unlocked = () => snapshot.status === 'open' || snapshot.status === 'loading' || snapshot.status === 'list-failed';
+const unlocked = () =>
+  snapshot.status === 'open' || snapshot.status === 'loading' || snapshot.status === 'list-failed';
 
 function stopHeartbeat() {
   if (heartbeat !== null) clearInterval(heartbeat);
@@ -104,8 +124,14 @@ function startHeartbeat() {
   if (heartbeat !== null) return;
   presence(token, true);
   heartbeat = setInterval(() => {
-    if (readToken() !== token) { sessionChanged(); return; }
-    if (present === 0 || !visible() || !unlocked()) { leftScreen(); return; }
+    if (readToken() !== token) {
+      sessionChanged();
+      return;
+    }
+    if (present === 0 || !visible() || !unlocked()) {
+      leftScreen();
+      return;
+    }
     presence(token, true);
   }, HEARTBEAT_MS);
 }
@@ -173,7 +199,11 @@ async function loadList(token: string) {
   publish({ status: hasList ? 'open' : 'loading', refreshing: hasList, error: null });
   if (present > 0 && visible()) startHeartbeat();
   else leftScreen();
-  const current = () => generation === asked && listVersion === version && snapshot.token === token && readToken() === token;
+  const current = () =>
+    generation === asked &&
+    listVersion === version &&
+    snapshot.token === token &&
+    readToken() === token;
   try {
     const images = await api.getPrivacyFaves(token, controller.signal);
     if (!current()) return;
@@ -202,14 +232,21 @@ export function checkPrivacy(token: string): Promise<void> {
       const { hasPassword, unlocked: serverUnlocked } = await api.checkHasPrivacyPassword(token);
       if (generation !== asked || !ownSession(token)) return;
       if (hasPassword && serverUnlocked) await loadList(token);
-      else publish({ status: hasPassword ? 'locked' : 'no-password', images: null, refreshing: false });
+      else
+        publish({
+          status: hasPassword ? 'locked' : 'no-password',
+          images: null,
+          refreshing: false,
+        });
     } catch (error) {
       if (generation !== asked || !ownSession(token)) return;
       publish({ status: 'check-failed', error });
     }
   })();
   checking = work;
-  void work.finally(() => { if (checking === work) checking = null; });
+  void work.finally(() => {
+    if (checking === work) checking = null;
+  });
   return work;
 }
 
@@ -237,11 +274,16 @@ export function lockPrivacy(token: string, { auto = false }: { auto?: boolean } 
   cancelRead();
   stopHeartbeat();
   clearExpiry();
-  if (wasUnlocked) publish({ status: 'locked', images: null, error: null, autoLocked: auto, refreshing: false });
+  if (wasUnlocked)
+    publish({ status: 'locked', images: null, error: null, autoLocked: auto, refreshing: false });
   if (readToken() === token) void api.lockPrivacySpace(token, { keepalive: auto }).catch(() => {});
 }
 
-export async function changePrivacyPassword(token: string, oldPassword: string, newPassword: string) {
+export async function changePrivacyPassword(
+  token: string,
+  oldPassword: string,
+  newPassword: string,
+) {
   requireSession(token);
   await api.changePrivacyPassword(token, oldPassword, newPassword);
 }
@@ -250,7 +292,9 @@ export async function changePrivacyPassword(token: string, oldPassword: string, 
 export async function resetPrivacy(token: string, accountPassword: string) {
   requireSession(token);
   await api.verifyAccountPassword(token, accountPassword).catch((error: unknown) => {
-    throw Object.assign(error instanceof Error ? error : new Error(String(error)), { step: 'verify' as const });
+    throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+      step: 'verify' as const,
+    });
   });
   requireSession(token);
   await api.resetPrivacySpace(token, accountPassword);
@@ -261,7 +305,13 @@ export async function resetPrivacy(token: string, accountPassword: string) {
   stopHeartbeat();
   clearExpiry();
   knownIds = new Set();
-  publish({ status: 'no-password', images: null, error: null, autoLocked: false, refreshing: false });
+  publish({
+    status: 'no-password',
+    images: null,
+    error: null,
+    autoLocked: false,
+    refreshing: false,
+  });
   favouritesChanged(token);
 }
 
@@ -273,7 +323,8 @@ export async function reloadPrivacy(token: string) {
 
 export function forgetPrivacyPictures(token: string, ids: readonly number[]) {
   if (!ownSession(token) || ids.length === 0) return;
-  if (ids.some((id) => knownIds.has(id))) setKnown(new Set([...knownIds].filter((id) => !ids.includes(id))));
+  if (ids.some((id) => knownIds.has(id)))
+    setKnown(new Set([...knownIds].filter((id) => !ids.includes(id))));
   if (!snapshot.images) return;
   cancelRead();
   const gone = new Set(ids);
@@ -281,7 +332,8 @@ export function forgetPrivacyPictures(token: string, ids: readonly number[]) {
 }
 export function addPrivacyPictures(token: string, images: readonly PonyImage[]) {
   if (!ownSession(token)) return;
-  if (images.some((image) => !knownIds.has(image.id))) setKnown(new Set([...knownIds, ...images.map((image) => image.id)]));
+  if (images.some((image) => !knownIds.has(image.id)))
+    setKnown(new Set([...knownIds, ...images.map((image) => image.id)]));
   if (!snapshot.images) return;
   const known = new Set(snapshot.images.map((image) => image.id));
   const fresh = images.filter((image) => !known.has(image.id));
@@ -299,14 +351,21 @@ export async function restoreToPrivacy(token: string, image: PonyImage) {
 export async function removeFromPrivacy(
   token: string,
   ids: readonly number[],
-  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
+  {
+    signal,
+    onProgress,
+  }: { signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<{ removed: number[]; failed: { id: number; error: unknown }[] }> {
   const removed: number[] = [];
   const failed: { id: number; error: unknown }[] = [];
   for (const id of ids) {
     if (signal?.aborted || !ownSession(token)) break;
-    try { await api.removePrivacyFave(token, id); removed.push(id); }
-    catch (error) { failed.push({ id, error }); }
+    try {
+      await api.removePrivacyFave(token, id);
+      removed.push(id);
+    } catch (error) {
+      failed.push({ id, error });
+    }
     onProgress?.(removed.length + failed.length, ids.length);
   }
   forgetPrivacyPictures(token, removed);
@@ -332,10 +391,16 @@ export function enterPrivacyScreen(token: string): () => void {
 function subscribe(listener: () => void) {
   bind();
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => {
+    listeners.delete(listener);
+  };
 }
 export function usePrivacySpace(token: string | null): PrivacySnapshot {
-  const current = useSyncExternalStore(subscribe, () => snapshot, () => INITIAL);
+  const current = useSyncExternalStore(
+    subscribe,
+    () => snapshot,
+    () => INITIAL,
+  );
   return current.token === token ? current : { ...INITIAL, token };
 }
 /** Whether this session knows the picture is in the account's privacy space (see `knownIds`). */
@@ -343,7 +408,11 @@ export function isInPrivacySpace(token: string | null, imageId: number): boolean
   return token !== null && snapshot.token === token && knownIds.has(imageId);
 }
 export function usePrivacyFaved(token: string | null, imageId: number): boolean {
-  return useSyncExternalStore(subscribe, () => isInPrivacySpace(token, imageId), () => false);
+  return useSyncExternalStore(
+    subscribe,
+    () => isInPrivacySpace(token, imageId),
+    () => false,
+  );
 }
 
 /** The store's view for its regression tests. */

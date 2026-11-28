@@ -77,10 +77,33 @@ const PICPONY_UPSTREAM = upstreamOrigin();
  * payload.
  */
 const DETAIL_FIELDS = [
-  'id', 'width', 'height', 'aspect_ratio', 'representations', 'format', 'name', 'view_url',
-  'source_url', 'source_urls', 'uploader', 'uploader_id', 'created_at', 'updated_at', 'first_seen_at',
-  'size', 'score', 'comment_count', 'tags', 'description', 'upvotes', 'downvotes', 'faves',
-  'animated', 'duration', 'mime_type', 'spoilered',
+  'id',
+  'width',
+  'height',
+  'aspect_ratio',
+  'representations',
+  'format',
+  'name',
+  'view_url',
+  'source_url',
+  'source_urls',
+  'uploader',
+  'uploader_id',
+  'created_at',
+  'updated_at',
+  'first_seen_at',
+  'size',
+  'score',
+  'comment_count',
+  'tags',
+  'description',
+  'upvotes',
+  'downvotes',
+  'faves',
+  'animated',
+  'duration',
+  'mime_type',
+  'spoilered',
 ] as const;
 
 function trimRecord(image: PonyImage): PonyImage {
@@ -90,7 +113,10 @@ function trimRecord(image: PonyImage): PonyImage {
   return row as unknown as PonyImage;
 }
 
-async function readTranslations(tags: string[], deadline: number): Promise<Record<string, string | null> | null> {
+async function readTranslations(
+  tags: string[],
+  deadline: number,
+): Promise<Record<string, string | null> | null> {
   const keys = [...new Set(tags.map(tagTranslationKey).filter(Boolean))].slice(0, 500);
   if (keys.length === 0) return {};
   const budget = Math.min(TRANSLATION_BUDGET_MS, deadline - Date.now());
@@ -141,7 +167,9 @@ const read = createServerMemo<[number], DetailSeed>({
       const body = (await res.json()) as { image?: unknown };
       const image = body?.image as PonyImage | undefined;
       if (!image || typeof image !== 'object' || image.id !== id) return null;
-      const tags = Array.isArray(image.tags) ? image.tags.filter((tag): tag is string => typeof tag === 'string') : [];
+      const tags = Array.isArray(image.tags)
+        ? image.tags.filter((tag): tag is string => typeof tag === 'string')
+        : [];
       const translations = await readTranslations(tags, deadline);
       return { id, image: trimRecord(image), translations, generatedAt: Date.now() };
     } catch {
@@ -155,7 +183,8 @@ const read = createServerMemo<[number], DetailSeed>({
 /** The seed for `/pic/<id>`, or `null` when the id is not one or the read did not land in time. */
 export async function readImageDetailSeed(rawId: string | number): Promise<DetailSeed | null> {
   const id = typeof rawId === 'number' ? rawId : Number(rawId);
-  if (!Number.isSafeInteger(id) || id <= 0 || id > MAX_ID || String(id) !== String(rawId).trim()) return null;
+  if (!Number.isSafeInteger(id) || id <= 0 || id > MAX_ID || String(id) !== String(rawId).trim())
+    return null;
   return read(id);
 }
 
@@ -170,7 +199,10 @@ function onLine(url: unknown, tier: 0 | 1 | 2): string {
  * browser's own read gets from `applyImageLine`, so a server-rendered `<img src>` and its
  * hydration agree. `null` line means the defaults (the PicPony worker), as on the home page.
  */
-export function detailSeedOnImageLine(seed: DetailSeed | null, line: ImageLine | null): DetailSeed | null {
+export function detailSeedOnImageLine(
+  seed: DetailSeed | null,
+  line: ImageLine | null,
+): DetailSeed | null {
   if (!seed?.image) return seed;
   const tier = TIER_OF[line ?? 'picpony'];
   const image = seed.image;

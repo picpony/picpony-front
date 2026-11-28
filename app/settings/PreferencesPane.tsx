@@ -71,12 +71,19 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           wrap="md"
           supporting={
             <>
-              <span className="block">{FILTER_DESCRIPTIONS[filter] ?? FILTER_DESCRIPTIONS.safe}</span>
+              <span className="block">
+                {FILTER_DESCRIPTIONS[filter] ?? FILTER_DESCRIPTIONS.safe}
+              </span>
               {blocked && (
                 <span className="mt-0.5 flex flex-wrap items-center gap-x-3">
                   {SPOILERS_BLOCKED[blocked]}
                   {blocked === 'no-birthday' && (
-                    <Button variant="text" size="xs" onClick={onOpenAccount} className="-ms-3 -my-1.5">
+                    <Button
+                      variant="text"
+                      size="xs"
+                      onClick={onOpenAccount}
+                      className="-ms-3 -my-1.5"
+                    >
                       前往账户
                     </Button>
                   )}
@@ -93,7 +100,9 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
               options={[
                 { value: 'safe', label: '完全安全（Safe）' },
                 { value: 'spoilers', label: '中等限制（Spoilers）', disabled: blocked !== null },
-                ...(developer || filter === 'developer' ? [{ value: 'developer', label: '开发者模式' }] : []),
+                ...(developer || filter === 'developer'
+                  ? [{ value: 'developer', label: '开发者模式' }]
+                  : []),
               ]}
             />
           }
@@ -121,11 +130,7 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           label="屏蔽组"
           supporting="按标签隐藏图片，或给图片盖上遮罩"
           action={
-            <ButtonLink
-              href="/block-groups"
-              aria-label="管理屏蔽组"
-              variant="tonal"
-            >
+            <ButtonLink href="/block-groups" aria-label="管理屏蔽组" variant="tonal">
               管理
             </ButtonLink>
           }
@@ -211,11 +216,7 @@ export default function PreferencesPane({ onOpenAccount }: { onOpenAccount: () =
           label="性能测试"
           supporting="检测交互与滚动流畅度，并生成测试报告"
           action={
-            <ButtonLink
-              href="/perf"
-              aria-label="打开性能测试"
-              variant="tonal"
-            >
+            <ButtonLink href="/perf" aria-label="打开性能测试" variant="tonal">
               打开
             </ButtonLink>
           }

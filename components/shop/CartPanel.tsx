@@ -61,8 +61,17 @@ function Stepper({
 }) {
   return (
     <div role="group" aria-label={`${name} 的数量`} className="flex items-center gap-1">
-      <IconButton size="sm" aria-label="减少一件" icon={<MdRemove />} disabled={locked || quantity <= 1} onClick={() => onChange(quantity - 1)} />
-      <span className="min-w-8 text-center text-label-l-emphasized text-on-surface tabular-nums" aria-live="polite">
+      <IconButton
+        size="sm"
+        aria-label="减少一件"
+        icon={<MdRemove />}
+        disabled={locked || quantity <= 1}
+        onClick={() => onChange(quantity - 1)}
+      />
+      <span
+        className="min-w-8 text-center text-label-l-emphasized text-on-surface tabular-nums"
+        aria-live="polite"
+      >
         {quantity}
       </span>
       <IconButton
@@ -90,14 +99,19 @@ function EntryRow({
   locked,
   onQuantity,
   onRemove,
-}: { presenceKey: string; entry: CartEntry; locked: boolean } & Pick<CartPanelProps, 'onQuantity' | 'onRemove'>) {
-  const name = entry.kind === 'gone' ? entry.line.name || `商品 #${entry.line.id}` : entry.item.name;
+}: { presenceKey: string; entry: CartEntry; locked: boolean } & Pick<
+  CartPanelProps,
+  'onQuantity' | 'onRemove'
+>) {
+  const name =
+    entry.kind === 'gone' ? entry.line.name || `商品 #${entry.line.id}` : entry.item.name;
   /* Three states, three voices (G3-024): a refusal is an error; a quantity the app lowered to the
      stock is a warning — still buyable, but not what was asked for; a price is supporting text. */
   let note: { text: string; tone: 'variant' | 'warning' | 'error' };
   if (entry.kind === 'gone') note = { text: '该商品已下架，无法购买', tone: 'error' };
   else if (entry.kind === 'sold-out') note = { text: '已售罄，无法购买', tone: 'error' };
-  else if (entry.adjusted) note = { text: `库存仅剩 ${entry.quantity} 件，已按库存计算`, tone: 'warning' };
+  else if (entry.adjusted)
+    note = { text: `库存仅剩 ${entry.quantity} 件，已按库存计算`, tone: 'warning' };
   else note = { text: `${formatExactCount(entry.item.price)} 金币/件`, tone: 'variant' };
 
   return (
@@ -114,7 +128,11 @@ function EntryRow({
             <p
               className={cn(
                 'text-body-s tabular-nums',
-                note.tone === 'error' ? 'text-error' : note.tone === 'warning' ? 'text-warning' : 'text-on-surface-variant',
+                note.tone === 'error'
+                  ? 'text-error'
+                  : note.tone === 'warning'
+                    ? 'text-warning'
+                    : 'text-on-surface-variant',
               )}
             >
               {note.text}
@@ -136,7 +154,9 @@ function EntryRow({
               quantity={entry.quantity}
               limit={Math.min(entry.item.stock, MAX_LINE_QUANTITY)}
               locked={locked}
-              onChange={(next) => onQuantity(entry.item.id, next, Math.min(entry.item.stock, MAX_LINE_QUANTITY))}
+              onChange={(next) =>
+                onQuantity(entry.item.id, next, Math.min(entry.item.stock, MAX_LINE_QUANTITY))
+              }
             />
             <span className="ml-auto text-label-l-emphasized whitespace-nowrap text-on-surface tabular-nums">
               {formatExactCount(entry.item.price * entry.quantity)} 金币
@@ -165,29 +185,50 @@ function CartFooter({
   busy,
   tone,
   onCheckout,
-}: { summary: CartSummary; balance: number | null; busy: boolean; tone: string; onCheckout: () => void }) {
+}: {
+  summary: CartSummary;
+  balance: number | null;
+  busy: boolean;
+  tone: string;
+  onCheckout: () => void;
+}) {
   const short = shortfall(summary.total, balance);
-  const parts: FooterPart[] = [{ key: 'totals' }, ...(short > 0 ? [{ key: 'shortfall', short } as const] : []), { key: 'checkout' }];
+  const parts: FooterPart[] = [
+    { key: 'totals' },
+    ...(short > 0 ? [{ key: 'shortfall', short } as const] : []),
+    { key: 'checkout' },
+  ];
   return (
     <PresenceList items={parts} getKey={(part) => part.key} variant="list">
       {(entries, ref) => (
         /* On the surface's own tone, so lines scrolling under it do not show through. */
-        <div ref={ref} className={cn('sticky bottom-0 mt-2 border-t border-outline-variant pt-3 pb-1', tone)}>
+        <div
+          ref={ref}
+          className={cn('sticky bottom-0 mt-2 border-t border-outline-variant pt-3 pb-1', tone)}
+        >
           {entries.map(({ item: part, key }) => {
             if (part.key === 'totals') {
               return (
                 <dl key={key} data-presence-key={key} className="space-y-1">
                   <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-body-m text-on-surface-variant tabular-nums">合计（{summary.pieces} 件）</dt>
+                    <dt className="text-body-m text-on-surface-variant tabular-nums">
+                      合计（{summary.pieces} 件）
+                    </dt>
                     <dd className="inline-flex items-baseline gap-1 text-title-m-emphasized whitespace-nowrap text-on-surface tabular-nums">
-                      <MdToll size={ICON.dense} className="self-center text-primary-ink" aria-hidden="true" />
+                      <MdToll
+                        size={ICON.dense}
+                        className="self-center text-primary-ink"
+                        aria-hidden="true"
+                      />
                       {formatExactCount(summary.total)} 金币
                     </dd>
                   </div>
                   {balance !== null && (
                     <div className="flex items-baseline justify-between gap-3">
                       <dt className="text-body-s text-on-surface-variant">我的金币</dt>
-                      <dd className="text-body-s text-on-surface-variant tabular-nums">{formatExactCount(balance)}</dd>
+                      <dd className="text-body-s text-on-surface-variant tabular-nums">
+                        {formatExactCount(balance)}
+                      </dd>
                     </div>
                   )}
                 </dl>
@@ -234,7 +275,14 @@ function CartFooter({
  * No `data-page-loading`: the item list's own placeholder holds the footer.
  */
 function CartSkeleton() {
-  return <PageLoadingIndicator size="inline" indicatorSize="md" label="正在加载购物车…" className="min-h-36" />;
+  return (
+    <PageLoadingIndicator
+      size="inline"
+      indicatorSize="md"
+      label="正在加载购物车…"
+      className="min-h-36"
+    />
+  );
 }
 
 /**
@@ -271,7 +319,8 @@ export default function CartPanel({
   heading,
   surface,
 }: CartPanelProps) {
-  const footerTone = surface === 'sheet' ? 'bg-surface-container-low' : 'bg-surface-container-highest';
+  const footerTone =
+    surface === 'sheet' ? 'bg-surface-container-low' : 'bg-surface-container-highest';
   const face = summary === null ? null : summary.entries.length === 0 ? 'empty' : 'list';
 
   /* Where the focus goes when the line that held it leaves with no line beside it (N2): the docked
@@ -299,7 +348,9 @@ export default function CartPanel({
 
   let body: React.ReactNode;
   if (summary === null && itemsFailed) {
-    body = <p className="py-3 text-body-m text-on-surface-variant">商品信息未能加载，暂时无法结算</p>;
+    body = (
+      <p className="py-3 text-body-m text-on-surface-variant">商品信息未能加载，暂时无法结算</p>
+    );
   } else if (summary === null) {
     body = <CartSkeleton />;
   } else {
@@ -308,7 +359,12 @@ export default function CartPanel({
       <>
         <PresenceBlock show={entries.length > 0} fallbackFocus={landing}>
           <div className={cn(arrived === 'list' && 'animate-page-transition')}>
-            <PresenceList items={entries} getKey={(entry) => entry.line.id} variant="list" fallbackFocus={landing}>
+            <PresenceList
+              items={entries}
+              getKey={(entry) => entry.line.id}
+              variant="list"
+              fallbackFocus={landing}
+            >
               {(rows, ref) => (
                 <ul ref={ref} aria-label="购物车中的商品" className={DIVIDED}>
                   {rows.map(({ item: entry, key }) => (
@@ -324,14 +380,25 @@ export default function CartPanel({
                 </ul>
               )}
             </PresenceList>
-            <CartFooter summary={summary} balance={balance} busy={busy} tone={footerTone} onCheckout={onCheckout} />
+            <CartFooter
+              summary={summary}
+              balance={balance}
+              busy={busy}
+              tone={footerTone}
+              onCheckout={onCheckout}
+            />
           </div>
         </PresenceBlock>
         <PresenceBlock show={entries.length === 0}>
           <div className={cn(arrived === 'empty' && 'animate-page-transition')}>
             {/* Its entrance stands down where it replaces the list: that swap is the press's
                 answer, faded on the pane-swap clock, not an entrance the app volunteers. */}
-            <EmptyState size="inline" entrance={arrived !== 'empty'} title="购物车是空的" description="在商品上点击「加入购物车」" />
+            <EmptyState
+              size="inline"
+              entrance={arrived !== 'empty'}
+              title="购物车是空的"
+              description="在商品上点击「加入购物车」"
+            />
           </div>
         </PresenceBlock>
       </>

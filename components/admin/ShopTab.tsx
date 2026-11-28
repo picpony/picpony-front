@@ -23,14 +23,22 @@ import { AdminListAnchor, AdminPager, usePagedRows } from './paging';
 import { defineAdminQuery, useAdminQuery, tableError } from './queries';
 import { useAdminMutation } from './useAdminMutation';
 import type { AdminPanelProps } from './registry';
-import { shopForm, shopPayload, type ShopFormErrors, type ShopFormValues, type ShopItemRow } from './shop';
+import {
+  shopForm,
+  shopPayload,
+  type ShopFormErrors,
+  type ShopFormValues,
+  type ShopItemRow,
+} from './shop';
 import { figureText } from './figures';
 import Tabs from '@/components/Tabs';
 import TabPanes, { TabPane } from '@/components/TabPanes';
 import PurchasesPane from './catalogTools/PurchasesPane';
 
 const EMPTY: ShopItemRow[] = [];
-const itemsQuery = defineAdminQuery<ShopItemRow[]>('shop', (token, signal) => adminApi.adminGetShopItems(token, signal));
+const itemsQuery = defineAdminQuery<ShopItemRow[]>('shop', (token, signal) =>
+  adminApi.adminGetShopItems(token, signal),
+);
 
 function shopEditorId(itemId: number) {
   return `shop-inline-${itemId}-editor`;
@@ -52,7 +60,14 @@ function ItemThumb({ url }: { url?: string | null }) {
   return (
     <span className="relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-sm bg-surface-container-highest text-on-surface-variant">
       {src ? (
-        <FadeInImage src={src} unoptimized={unoptimized} alt="" fill sizes="56px" className="object-cover" />
+        <FadeInImage
+          src={src}
+          unoptimized={unoptimized}
+          alt=""
+          fill
+          sizes="56px"
+          className="object-cover"
+        />
       ) : (
         <MdCardGiftcard size={ICON.standard} aria-hidden="true" />
       )}
@@ -108,7 +123,9 @@ export default function ShopTab({ token }: AdminPanelProps) {
       () => adminApi.adminSaveShopItem(token, payload, { id: item.id, revision: item.revision }),
       () => {
         showToast(`已保存商品「${String(payload.name)}」`, 'success');
-        setEditing((current) => (current?.id === item.id ? { id: item.id, closing: true } : current));
+        setEditing((current) =>
+          current?.id === item.id ? { id: item.id, closing: true } : current,
+        );
       },
       '保存失败',
       { key: item.id, onCommitted: committed },
@@ -118,19 +135,23 @@ export default function ShopTab({ token }: AdminPanelProps) {
     confirmThen(
       '确认删除商品',
       `确定要删除商品「${item.name}」吗？删除后商店中将不再出售该商品。`,
-      () => void deleteMutation.run(
-        () => adminApi.adminDeleteShopItem(token, item.id),
-        () => showToast(`已删除商品「${item.name}」`, 'success'),
-        '删除失败',
-        {
-          key: item.id,
-          onCommitted: () => {
-            setEditing((current) => (current?.id === item.id ? null : current));
-            itemsQuery.write(token, (previous) => previous?.filter((row) => row.id !== item.id) ?? []);
-            committed();
+      () =>
+        void deleteMutation.run(
+          () => adminApi.adminDeleteShopItem(token, item.id),
+          () => showToast(`已删除商品「${item.name}」`, 'success'),
+          '删除失败',
+          {
+            key: item.id,
+            onCommitted: () => {
+              setEditing((current) => (current?.id === item.id ? null : current));
+              itemsQuery.write(
+                token,
+                (previous) => previous?.filter((row) => row.id !== item.id) ?? [],
+              );
+              committed();
+            },
           },
-        },
-      ),
+        ),
       { tone: 'danger' },
     );
 
@@ -168,13 +189,21 @@ export default function ShopTab({ token }: AdminPanelProps) {
           <span className="min-w-0">
             <span className="block text-body-m-emphasized text-on-surface">{item.name}</span>
             {item.description && (
-              <span className="line-clamp-2 text-body-s text-on-surface-variant">{item.description}</span>
+              <span className="line-clamp-2 text-body-s text-on-surface-variant">
+                {item.description}
+              </span>
             )}
           </span>
         </span>
       ),
     },
-    { key: 'id', header: 'ID', width: 'auto', className: 'tabular-nums', render: (item) => `#${item.id}` },
+    {
+      key: 'id',
+      header: 'ID',
+      width: 'auto',
+      className: 'tabular-nums',
+      render: (item) => `#${item.id}`,
+    },
     {
       key: 'price',
       header: '价格',
@@ -186,7 +215,12 @@ export default function ShopTab({ token }: AdminPanelProps) {
         </span>
       ),
     },
-    { key: 'stock', header: '库存', width: 'auto', render: (item) => <span className="tabular-nums">{figureText(item.stock)}</span> },
+    {
+      key: 'stock',
+      header: '库存',
+      width: 'auto',
+      render: (item) => <span className="tabular-nums">{figureText(item.stock)}</span>,
+    },
     {
       key: 'state',
       header: '状态',
@@ -203,7 +237,8 @@ export default function ShopTab({ token }: AdminPanelProps) {
       actions: true,
       render: (item) => {
         const open = editing?.id === item.id && !editing.closing;
-        const busy = saveMutation.pendingKeys.has(item.id) || deleteMutation.pendingKeys.has(item.id);
+        const busy =
+          saveMutation.pendingKeys.has(item.id) || deleteMutation.pendingKeys.has(item.id);
         return (
           <>
             <IconButton
@@ -242,7 +277,9 @@ export default function ShopTab({ token }: AdminPanelProps) {
         id={shopEditorId(item.id)}
         label={`编辑商品 ${current.name}`}
         isClosing={editing.closing}
-        onExitComplete={() => setEditing((state) => (state?.id === item.id && state.closing ? null : state))}
+        onExitComplete={() =>
+          setEditing((state) => (state?.id === item.id && state.closing ? null : state))
+        }
         onEscape={saveMutation.pendingKeys.has(item.id) ? undefined : closeEditor}
       >
         <ShopItemForm
@@ -261,49 +298,71 @@ export default function ShopTab({ token }: AdminPanelProps) {
 
   return (
     <div className="space-y-6">
-      <SectionHeader section="shop" onRefresh={tab === 'shop-items' ? read.refresh : undefined} isLoading={read.refreshing} />
-      <Tabs value={tab} onChange={setTab} activation="manual" label="商店管理分区" tabs={[{ value: 'shop-items', label: '商品管理' }, { value: 'shop-purchases', label: '消费记录' }, { value: 'shop-legacy', label: '旧版流水' }]} />
+      <SectionHeader
+        section="shop"
+        onRefresh={tab === 'shop-items' ? read.refresh : undefined}
+        isLoading={read.refreshing}
+      />
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        activation="manual"
+        label="商店管理分区"
+        tabs={[
+          { value: 'shop-items', label: '商品管理' },
+          { value: 'shop-purchases', label: '消费记录' },
+          { value: 'shop-legacy', label: '旧版流水' },
+        ]}
+      />
       <TabPanes value={tab}>
-      <TabPane value="shop-items"><div className="space-y-6">
-      <div className="space-y-4">
-        <ShopItemForm
-          token={token}
-          key={addSession}
-          heading="添加商品"
-          submitLabel="添加商品"
-          busy={addMutation.busy}
-          onSubmit={add}
-        />
-      </div>
-      <section aria-labelledby="admin-shop-items-heading" className="space-y-4">
-        <SectionHeading as="h3" id="admin-shop-items-heading">商品列表</SectionHeading>
-        <AdminListAnchor>
-          <DataTable<ShopItemRow>
-            columns={columns}
-            rows={paged.rows}
-            listKey={paged.listKey}
-            rowKey={(item) => item.id}
-            expandedRow={renderEditor}
-            loading={read.loading}
-            skeletonRows={5}
-            {...tableError('商品加载失败', read.error)}
-            onRetry={read.retryable ? read.refresh : undefined}
-            empty="暂无商品"
-          />
-          <AdminPager
-            page={paged.page}
-            totalPages={paged.totalPages}
-            onPageChange={(page) => {
-              setEditing(null);
-              paged.setPage(page);
-            }}
-            summary={read.data ? `共 ${paged.total} 件商品` : undefined}
-          />
-        </AdminListAnchor>
-      </section>
-      </div></TabPane>
-      <TabPane value="shop-purchases">{visited.includes('shop-purchases') && <PurchasesPane token={token} />}</TabPane>
-      <TabPane value="shop-legacy">{visited.includes('shop-legacy') && <PurchasesPane token={token} legacy />}</TabPane>
+        <TabPane value="shop-items">
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <ShopItemForm
+                token={token}
+                key={addSession}
+                heading="添加商品"
+                submitLabel="添加商品"
+                busy={addMutation.busy}
+                onSubmit={add}
+              />
+            </div>
+            <section aria-labelledby="admin-shop-items-heading" className="space-y-4">
+              <SectionHeading as="h3" id="admin-shop-items-heading">
+                商品列表
+              </SectionHeading>
+              <AdminListAnchor>
+                <DataTable<ShopItemRow>
+                  columns={columns}
+                  rows={paged.rows}
+                  listKey={paged.listKey}
+                  rowKey={(item) => item.id}
+                  expandedRow={renderEditor}
+                  loading={read.loading}
+                  skeletonRows={5}
+                  {...tableError('商品加载失败', read.error)}
+                  onRetry={read.retryable ? read.refresh : undefined}
+                  empty="暂无商品"
+                />
+                <AdminPager
+                  page={paged.page}
+                  totalPages={paged.totalPages}
+                  onPageChange={(page) => {
+                    setEditing(null);
+                    paged.setPage(page);
+                  }}
+                  summary={read.data ? `共 ${paged.total} 件商品` : undefined}
+                />
+              </AdminListAnchor>
+            </section>
+          </div>
+        </TabPane>
+        <TabPane value="shop-purchases">
+          {visited.includes('shop-purchases') && <PurchasesPane token={token} />}
+        </TabPane>
+        <TabPane value="shop-legacy">
+          {visited.includes('shop-legacy') && <PurchasesPane token={token} legacy />}
+        </TabPane>
       </TabPanes>
       {confirmDialog}
     </div>
@@ -339,7 +398,9 @@ function ShopItemForm({
   const prefix = item ? `shop-${item.id}` : 'shop-new';
 
   const initial = shopForm(item);
-  const dirty = (Object.keys(initial) as (keyof ShopFormValues)[]).some((key) => initial[key] !== values[key]);
+  const dirty = (Object.keys(initial) as (keyof ShopFormValues)[]).some(
+    (key) => initial[key] !== values[key],
+  );
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -363,7 +424,11 @@ function ShopItemForm({
     /* Above the list this form is the region, named by its heading; under a row the editor's panel
        is (`InlineEditorPanel`'s label), so the form inside it is not a second landmark (G4-031). */
     <AdminForm onSubmit={submit} aria-labelledby={item ? undefined : `${prefix}-heading`}>
-      {heading && <SectionHeading as="h3" id={`${prefix}-heading`}>{heading}</SectionHeading>}
+      {heading && (
+        <SectionHeading as="h3" id={`${prefix}-heading`}>
+          {heading}
+        </SectionHeading>
+      )}
       <FormGrid>
         <Input
           id={`${prefix}-name`}

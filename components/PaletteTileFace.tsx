@@ -10,10 +10,7 @@ import { cn } from '@/lib/utils';
  * pair in both harmony modes: the darker of `primary` / `onPrimary` in light and the lighter in
  * dark, so the wave follows the tile's own brand hue while contrasting against its miniature page.
  */
-export function tileRippleStyle(
-  tone: PaletteTone,
-  scheme: 'light' | 'dark',
-): CSSProperties {
+export function tileRippleStyle(tone: PaletteTone, scheme: 'light' | 'dark'): CSSProperties {
   const color =
     scheme === 'light'
       ? tone.onPrimary === '#ffffff'
@@ -96,13 +93,21 @@ export default function PaletteTileFace({
       />
       <span
         aria-hidden="true"
-        className={cn('absolute inset-x-0 bottom-0 -z-10 flex items-center justify-between', geometry.row)}
+        className={cn(
+          'absolute inset-x-0 bottom-0 -z-10 flex items-center justify-between',
+          geometry.row,
+        )}
       >
         <span
           className={cn('rounded-full', geometry.pick)}
           style={{ background: multi ? face.pick : face.monoPick }}
         />
-        {multi && <span className={cn('rounded-full', geometry.accent)} style={{ background: face.accent }} />}
+        {multi && (
+          <span
+            className={cn('rounded-full', geometry.accent)}
+            style={{ background: face.accent }}
+          />
+        )}
       </span>
       {selected && (
         <span

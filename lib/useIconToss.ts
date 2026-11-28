@@ -10,8 +10,12 @@ export function useIconToss(identity: string | number) {
 
   useLayoutEffect(() => {
     const active = flights.current;
-    const clear = () => { for (const stop of active) stop(false); };
-    const fadeOut = () => { for (const stop of active) stop(true); };
+    const clear = () => {
+      for (const stop of active) stop(false);
+    };
+    const fadeOut = () => {
+      for (const stop of active) stop(true);
+    };
     const unsubscribe = subscribeAppearance(clear);
     // A viewport-fixed decoration dissolves gently on scroll rather than popping out in one frame.
     window.addEventListener('scroll', fadeOut, { capture: true, passive: true });
@@ -42,8 +46,11 @@ export function useIconToss(identity: string | number) {
     flyer.setAttribute('aria-hidden', 'true');
     flyer.className = 'absolute';
     Object.assign(flyer.style, {
-      left: `${rect.left}px`, top: `${rect.top}px`,
-      width: `${rect.width}px`, height: `${rect.height}px`, color,
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      color,
     });
     flyer.append(glyph);
     // Clip at the viewport, above the app bar (`z-tooltip`) so high arcs are never decapitated.
@@ -58,9 +65,15 @@ export function useIconToss(identity: string | number) {
     // Near a screen edge, launch inward so the upward arc remains visible.
     const center = rect.left + rect.width / 2;
     const viewportWidth = document.documentElement.clientWidth;
-    const direction = center < viewportWidth * 0.2 ? 1
-      : center > viewportWidth * 0.8 ? -1 : Math.random() < 0.5 ? -1 : 1;
-    const angle = direction * (15 + Math.random() * 35) * Math.PI / 180;
+    const direction =
+      center < viewportWidth * 0.2
+        ? 1
+        : center > viewportWidth * 0.8
+          ? -1
+          : Math.random() < 0.5
+            ? -1
+            : 1;
+    const angle = (direction * (15 + Math.random() * 35) * Math.PI) / 180;
     const impulse = 360 + Math.random() * 100;
     const vx = Math.sin(angle) * impulse;
     const vy = -Math.cos(angle) * impulse;
@@ -76,12 +89,14 @@ export function useIconToss(identity: string | number) {
       return {
         offset,
         opacity,
-        transform: `translate3d(${vx * t}px, ${vy * t + gravity * t * t / 2}px, 0) rotate(${spin * t}deg)`,
+        transform: `translate3d(${vx * t}px, ${vy * t + (gravity * t * t) / 2}px, 0) rotate(${spin * t}deg)`,
       };
     });
     // The clock comes from the physical flight time, scaled by the ambient speed preference.
     const travel = flyer.animate(frames, {
-      duration: scaledMs(seconds * 1000, 'ambient'), easing: 'linear', fill: 'forwards',
+      duration: scaledMs(seconds * 1000, 'ambient'),
+      easing: 'linear',
+      fill: 'forwards',
     });
     let dying = false;
     const stop = (gentle = false) => {
@@ -94,13 +109,16 @@ export function useIconToss(identity: string | number) {
           easing: 'ease-out',
           fill: 'forwards',
         });
-        void fade.finished.then(() => {
-          layer.remove();
-          travel.cancel();
-        }, () => {
-          layer.remove();
-          travel.cancel();
-        });
+        void fade.finished.then(
+          () => {
+            layer.remove();
+            travel.cancel();
+          },
+          () => {
+            layer.remove();
+            travel.cancel();
+          },
+        );
         return;
       }
       dying = true;
@@ -110,7 +128,10 @@ export function useIconToss(identity: string | number) {
     };
     flights.current.add(stop);
     // Both completion and cancellation release the DOM and compositor animations.
-    void travel.finished.then(() => stop(false), () => stop(false));
+    void travel.finished.then(
+      () => stop(false),
+      () => stop(false),
+    );
     return () => stop(false);
   }, []);
 

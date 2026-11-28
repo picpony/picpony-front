@@ -117,7 +117,13 @@ export default function DropZone({
   const [drag, setDrag] = useState<'none' | 'ok' | 'invalid'>('none');
 
   const state: DropZoneState =
-    drag !== 'none' && !disabled ? (drag === 'ok' ? 'dragging' : 'invalid') : filled ? 'filled' : 'idle';
+    drag !== 'none' && !disabled
+      ? drag === 'ok'
+        ? 'dragging'
+        : 'invalid'
+      : filled
+        ? 'filled'
+        : 'idle';
 
   const take = useCallback(
     (file: File | undefined | null) => {
@@ -127,21 +133,27 @@ export default function DropZone({
     [onFile, disabled],
   );
 
-  const onDragEnter = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    if (disabled) return;
-    depth.current += 1;
-    setDrag(dragAcceptable(accept, e) ? 'ok' : 'invalid');
-  }, [disabled, accept]);
+  const onDragEnter = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      if (disabled) return;
+      depth.current += 1;
+      setDrag(dragAcceptable(accept, e) ? 'ok' : 'invalid');
+    },
+    [disabled, accept],
+  );
 
-  const onDragOver = useCallback((e: DragEvent) => {
-    // `dragover` must be prevented too or the browser navigates to the file.
-    e.preventDefault();
-    if (!e.dataTransfer) return;
-    /* `none` is the platform's own refusal: the no-drop cursor, and no `drop` event
+  const onDragOver = useCallback(
+    (e: DragEvent) => {
+      // `dragover` must be prevented too or the browser navigates to the file.
+      e.preventDefault();
+      if (!e.dataTransfer) return;
+      /* `none` is the platform's own refusal: the no-drop cursor, and no `drop` event
        when the button is let go. */
-    e.dataTransfer.dropEffect = disabled || !dragAcceptable(accept, e) ? 'none' : 'copy';
-  }, [disabled, accept]);
+      e.dataTransfer.dropEffect = disabled || !dragAcceptable(accept, e) ? 'none' : 'copy';
+    },
+    [disabled, accept],
+  );
 
   const onDragLeave = useCallback((e: DragEvent) => {
     e.preventDefault();
@@ -176,7 +188,8 @@ export default function DropZone({
         SIZES[size],
         disabled && 'disabled-content',
         state === 'idle' && 'border-dashed border-outline text-on-surface',
-        state === 'dragging' && 'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
+        state === 'dragging' &&
+          'border-dashed border-primary-ink bg-primary-container text-on-primary-container',
         state === 'invalid' && 'border-dashed border-error text-on-surface',
         state === 'filled' &&
           (surface === 'dialog'

@@ -15,7 +15,13 @@ export function CategoryIcon({ category, size }: { category: ForumCategory; size
 }
 
 /** Which kind of post this is: a mark beside the title, not a control. */
-export function CategoryBadge({ category, size = 'sm' }: { category: ForumCategory; size?: BadgeSize }) {
+export function CategoryBadge({
+  category,
+  size = 'sm',
+}: {
+  category: ForumCategory;
+  size?: BadgeSize;
+}) {
   return (
     <Badge size={size} icon={<CategoryIcon category={category} />} className="shrink-0">
       {categoryLabel(category)}

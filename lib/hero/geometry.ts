@@ -188,11 +188,7 @@ export function formatHeroContainerCompensator(pose: HeroBoxTransform) {
  * CSS rescales all radii when adjacent radii exceed a side, so capping here keeps our
  * arithmetic equal to what is painted; `npm run hero:path` asserts the cap never binds.
  */
-export function formatHeroContainerRadius(
-  pose: HeroBoxTransform,
-  host: HeroRect,
-  radius: number,
-) {
+export function formatHeroContainerRadius(pose: HeroBoxTransform, host: HeroRect, radius: number) {
   if (!(radius > 0)) return '0px';
   const wanted = radius / Math.min(pose.scaleX, pose.scaleY);
   const stepped = Math.ceil(wanted / HERO_MASK_RADIUS_STEP_PX) * HERO_MASK_RADIUS_STEP_PX;
@@ -485,7 +481,10 @@ function sampleHeroPointArc(arc: HeroPointArc, samples: number): HeroPointArcSam
 type HeroRectArcSamples = { lead: HeroPointArcSamples; trail: HeroPointArcSamples };
 
 function sampleHeroRectArc(arc: HeroRectArc, samples: number): HeroRectArcSamples {
-  return { lead: sampleHeroPointArc(arc.lead, samples), trail: sampleHeroPointArc(arc.trail, samples) };
+  return {
+    lead: sampleHeroPointArc(arc.lead, samples),
+    trail: sampleHeroPointArc(arc.trail, samples),
+  };
 }
 
 /** Writes `lerpHeroRectArc(arc @ bow, index / samples)` into `out` (no allocation). */

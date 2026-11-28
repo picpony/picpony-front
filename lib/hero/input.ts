@@ -42,14 +42,16 @@ export type HeroTouchInput = {
 };
 
 let wheelSequence = 0;
-let wheelStream: { id: number; target: EventTarget | null; at: number; seenAt: number } | null = null;
+let wheelStream: { id: number; target: EventTarget | null; at: number; seenAt: number } | null =
+  null;
 let touchInputs: HeroTouchInput[] = [];
 const touchTargets = new Map<EventTarget, EventListener>();
 
 function releaseTouchTarget(target: EventTarget) {
   const listener = touchTargets.get(target);
   if (!listener) return;
-  for (const type of ['touchmove', 'touchend', 'touchcancel']) target.removeEventListener(type, listener);
+  for (const type of ['touchmove', 'touchend', 'touchcancel'])
+    target.removeEventListener(type, listener);
   touchTargets.delete(target);
 }
 
@@ -189,7 +191,10 @@ const handleWheel = (event: WheelEvent) => {
 
 const handleTouch = (event: TouchEvent) => {
   touchInputs = Array.from(event.touches, ({ identifier, clientX, clientY, target }) => ({
-    identifier, clientX, clientY, target,
+    identifier,
+    clientX,
+    clientY,
+    target,
   }));
   for (const target of touchTargets.keys()) {
     if (!touchInputs.some((touch) => touch.target === target)) releaseTouchTarget(target);
@@ -292,7 +297,10 @@ export function noteHeroInteraction() {
 export function readHeroScrollInput() {
   initializeHeroInput();
   return {
-    wheel: wheelStream && now() - wheelStream.seenAt <= HERO_INPUT_TRANSFER_QUIET_MS ? wheelStream : null,
+    wheel:
+      wheelStream && now() - wheelStream.seenAt <= HERO_INPUT_TRANSFER_QUIET_MS
+        ? wheelStream
+        : null,
     touches: touchInputs,
   };
 }

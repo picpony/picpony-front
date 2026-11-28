@@ -91,7 +91,8 @@ function replaceHomeUrl(view: GalleryView, page: number) {
   const own: Record<string, unknown> = {};
   const state = window.history.state as Record<string, unknown> | null;
   for (const [key, value] of Object.entries(state ?? {})) {
-    if (key !== '__NA' && key !== '_N' && key !== '__PRIVATE_NEXTJS_INTERNALS_TREE') own[key] = value;
+    if (key !== '__NA' && key !== '_N' && key !== '__PRIVATE_NEXTJS_INTERNALS_TREE')
+      own[key] = value;
   }
   const query = params.toString();
   window.history.replaceState(own, '', query ? `/?${query}` : '/');
@@ -111,7 +112,8 @@ function replaceHomeUrl(view: GalleryView, page: number) {
  */
 function useGalleryNav() {
   const searchParams = useBackgroundSearchParams();
-  const urlView: GalleryView = searchParams.get('view') === 'discussed' ? 'home-discussed' : 'home-feed';
+  const urlView: GalleryView =
+    searchParams.get('view') === 'discussed' ? 'home-discussed' : 'home-feed';
   const urlPage = searchPage(searchParams.get('page'));
   const urlKey = `${urlView}:${urlPage}`;
   const ownEntry = usePathname() === '/';
@@ -143,13 +145,18 @@ function useGalleryNav() {
     return () => window.clearTimeout(timer);
   }, [ownEntry, desired, nav.url, view, page]);
 
-  const setView = useCallback((next: GalleryView) => setNav((current) => ({ ...current, view: next })), []);
+  const setView = useCallback(
+    (next: GalleryView) => setNav((current) => ({ ...current, view: next })),
+    [],
+  );
   const setFeedPage = useCallback(
-    (next: number) => setNav((current) => ({ ...current, pages: { ...current.pages, 'home-feed': next } })),
+    (next: number) =>
+      setNav((current) => ({ ...current, pages: { ...current.pages, 'home-feed': next } })),
     [],
   );
   const setDiscussedPage = useCallback(
-    (next: number) => setNav((current) => ({ ...current, pages: { ...current.pages, 'home-discussed': next } })),
+    (next: number) =>
+      setNav((current) => ({ ...current, pages: { ...current.pages, 'home-discussed': next } })),
     [],
   );
   return { view, pages: nav.pages, setView, setFeedPage, setDiscussedPage };
@@ -205,7 +212,11 @@ function PagedImages<T>({
   hasMore?: (data: T) => boolean;
   totalPages?: (data: T) => number;
   onPrefetchPage: (page: number) => void;
-  sequenceFor: (images: PonyImage[], dataPage: number, anchor: () => HTMLElement | null) => ReturnType<typeof createPagedSequence>;
+  sequenceFor: (
+    images: PonyImage[],
+    dataPage: number,
+    anchor: () => HTMLElement | null,
+  ) => ReturnType<typeof createPagedSequence>;
   siteComments?: (data: T) => Record<number, number> | undefined;
   notice?: (data: T) => React.ReactNode;
   empty: (data: T) => React.ReactNode;
@@ -226,7 +237,10 @@ function PagedImages<T>({
      on screen for a render, which is exactly what retention scoped to the fingerprint forbids
      (the rows the user just asked not to see), and the grid then took the new list for a page
      turn and mounted it a chunk at a time. */
-  const latest = useMemo(() => ({ data: read.data, page: dataPage, key: listKey }), [read.data, dataPage, listKey]);
+  const latest = useMemo(
+    () => ({ data: read.data, page: dataPage, key: listKey }),
+    [read.data, dataPage, listKey],
+  );
   const deferred = useDeferredValue(latest);
   const shown = deferred.key === latest.key ? deferred : latest;
   const data = shown.data;
@@ -241,7 +255,10 @@ function PagedImages<T>({
   /* Clicking 重试 after an error forces a fresh network read: show the loading grid immediately
      rather than hiding behind the 180ms warm-cache deferral (which blanked the list under the
      reloading banner). Cleared once data lands or the user switches list/filter. */
-  const [retryState, setRetryState] = useState<{ key: string; immediate: boolean }>({ key: listKey, immediate: false });
+  const [retryState, setRetryState] = useState<{ key: string; immediate: boolean }>({
+    key: listKey,
+    immediate: false,
+  });
   const retrying = retryState.key === listKey && retryState.immediate;
   if (retryState.key !== listKey) {
     setRetryState({ key: listKey, immediate: data === undefined && Boolean(read.error) });
@@ -293,7 +310,8 @@ function PagedImages<T>({
   }
 
   const isEmpty = images.length === 0 && !read.isPrevious;
-  if (isEmpty && page === 1 && (totalPages?.(data) ?? 1) <= 1 && !hasMore?.(data)) return <>{empty(data)}</>;
+  if (isEmpty && page === 1 && (totalPages?.(data) ?? 1) <= 1 && !hasMore?.(data))
+    return <>{empty(data)}</>;
 
   const busy = read.isLoading || settling;
   return (
@@ -322,7 +340,16 @@ function PagedImages<T>({
         {/* No entrance of its own: both lists live in swapping panes (全部 / 本站讨论), and a grid
             that mounts while its pane slides in — 本站讨论 warmed on intent does — would cascade
             its cards on a second clock under the pane's own. */}
-        {isEmpty ? empty(data) : <MasonryGrid images={images} sequence={sequence} siteComments={siteComments?.(data)} entrance={false} />}
+        {isEmpty ? (
+          empty(data)
+        ) : (
+          <MasonryGrid
+            images={images}
+            sequence={sequence}
+            siteComments={siteComments?.(data)}
+            entrance={false}
+          />
+        )}
       </div>
       <Pagination
         currentPage={page}
@@ -505,7 +532,10 @@ function FeedList({
     { keepPrevious: fp, initial: seed ?? undefined },
   );
 
-  const readPage = useCallback((target: number) => homeFeed.read({ page: target, sort, fp }), [sort, fp]);
+  const readPage = useCallback(
+    (target: number) => homeFeed.read({ page: target, sort, fp }),
+    [sort, fp],
+  );
   const reveal = useReveal(readPage, page, onPageChange);
   const sequenceFor = useCallback(
     (images: PonyImage[], dataPage: number, anchor: () => HTMLElement | null) =>
@@ -536,7 +566,9 @@ function FeedList({
       onPageChange={onPageChange}
       /* `total`, not "a full page means more": a feed whose last page is exactly full offered a
          next page that was empty. */
-      hasMore={(data) => (data.total > 0 ? page * FEED_PAGE_SIZE < data.total : data.images.length === FEED_PAGE_SIZE)}
+      hasMore={(data) =>
+        data.total > 0 ? page * FEED_PAGE_SIZE < data.total : data.images.length === FEED_PAGE_SIZE
+      }
       onPrefetchPage={(next) => homeFeed.prefetch({ page: next, sort, fp })}
       sequenceFor={sequenceFor}
       failureTitle="图片加载失败"
@@ -549,7 +581,11 @@ function FeedList({
           <EmptyState
             size="pane"
             title="此页没有图片"
-            action={<Button variant="tonal" onClick={() => onPageChange(1)}>回到第一页</Button>}
+            action={
+              <Button variant="tonal" onClick={() => onPageChange(1)}>
+                回到第一页
+              </Button>
+            }
           />
         ) : (
           <EmptyState
@@ -596,22 +632,35 @@ function DiscussedList({
      than starting on the server's default during hydration and being superseded a frame later. */
   const mounted = useMounted();
   const fp = useBrowsingFingerprint();
-  const read = useResource(discussedImages, enabled && mounted ? { page, fp } : SKIP, { keepPrevious: fp });
+  const read = useResource(discussedImages, enabled && mounted ? { page, fp } : SKIP, {
+    keepPrevious: fp,
+  });
 
-  const readPage = useCallback((target: number) => discussedImages.read({ page: target, fp }), [fp]);
+  const readPage = useCallback(
+    (target: number) => discussedImages.read({ page: target, fp }),
+    [fp],
+  );
   const reveal = useReveal(readPage, page, onPageChange);
   const sequenceFor = useCallback(
     (images: PonyImage[], dataPage: number, anchor: () => HTMLElement | null) =>
       createPagedSequence({
         key: `home-discussed:${fp}`,
         page: dataPage,
-        current: { ids: images.map((image) => image.id), previews: images, totalPages: read.data?.totalPages ?? null },
+        current: {
+          ids: images.map((image) => image.id),
+          previews: images,
+          totalPages: read.data?.totalPages ?? null,
+        },
         /* Pages come back short (the device's settings withhold some), so the end is known only
            from `totalPages`, which every page carries. */
         pageSize: Number.MAX_SAFE_INTEGER,
         fetchPage: async (target): Promise<SequencePage> => {
           const result = await readPage(target);
-          return { ids: result.images.map((image) => image.id), previews: result.images, totalPages: result.totalPages };
+          return {
+            ids: result.images.map((image) => image.id),
+            previews: result.images,
+            totalPages: result.totalPages,
+          };
         },
         reveal: (id, target) => reveal(id, target, anchor),
       }),
@@ -658,7 +707,11 @@ function DiscussedList({
           <EmptyState
             size="pane"
             title="此页没有图片"
-            action={<Button variant="tonal" onClick={() => onPageChange(1)}>回到第一页</Button>}
+            action={
+              <Button variant="tonal" onClick={() => onPageChange(1)}>
+                回到第一页
+              </Button>
+            }
           />
         ) : (
           <EmptyState size="pane" title="暂无讨论过的图片" />
@@ -708,10 +761,12 @@ function GalleryPane({
       <div
         className="contents"
         onPointerOver={(event) => {
-          if (onDiscussedTab(event.target) && !onDiscussedTab(event.relatedTarget)) discussedIntent.onPointerEnter();
+          if (onDiscussedTab(event.target) && !onDiscussedTab(event.relatedTarget))
+            discussedIntent.onPointerEnter();
         }}
         onPointerOut={(event) => {
-          if (onDiscussedTab(event.target) && !onDiscussedTab(event.relatedTarget)) discussedIntent.onPointerLeave();
+          if (onDiscussedTab(event.target) && !onDiscussedTab(event.relatedTarget))
+            discussedIntent.onPointerLeave();
         }}
         onFocus={(event) => {
           if (onDiscussedTab(event.target)) discussedIntent.onFocus();
@@ -747,7 +802,11 @@ function GalleryPane({
         </TabPane>
         {discussedMounted && (
           <TabPane value="home-discussed">
-            <DiscussedList page={pages['home-discussed']} onPageChange={setDiscussedPage} enabled={enabled} />
+            <DiscussedList
+              page={pages['home-discussed']}
+              onPageChange={setDiscussedPage}
+              enabled={enabled}
+            />
           </TabPane>
         )}
       </TabPanes>
@@ -845,9 +904,15 @@ export default function HomeContentRoot({
       fallback={
         <div className="max-w-7xl mx-auto">
           <FeaturedBannerSkeleton />
-          <div className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6" aria-hidden="true">
+          <div
+            className="mb-4 flex h-12 items-center border-b border-outline-variant sm:mb-6"
+            aria-hidden="true"
+          >
             {VIEW_TABS.map(({ value, label }) => (
-              <span key={value} className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant">
+              <span
+                key={value}
+                className="inline-flex h-full items-center px-4 text-title-s text-on-surface-variant"
+              >
                 {label}
               </span>
             ))}

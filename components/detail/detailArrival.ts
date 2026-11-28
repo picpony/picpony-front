@@ -7,9 +7,7 @@ import { springTiming } from '@/lib/springTiming';
  * Late detail content fades in at its final position, just like the content inside a flight.
  * Only settled details accept this entrance; see docs/hero.md#data-and-handoff.
  */
-export function playDetailArrival(
-  blocks: Iterable<Element>,
-): () => void {
+export function playDetailArrival(blocks: Iterable<Element>): () => void {
   if (typeof document === 'undefined' || !entranceMotion()) return () => {};
   const state = document.documentElement.dataset.imageHeroState;
   if (state && state !== 'detail-idle' && state !== 'gallery-idle') return () => {};

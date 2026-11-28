@@ -67,7 +67,13 @@ import {
   type ImportTask,
   type TagForm,
 } from './model';
-import { dictionaryPage, duplicateTags, tagFeedback, type DictionaryArgs, type Feedback } from './resources';
+import {
+  dictionaryPage,
+  duplicateTags,
+  tagFeedback,
+  type DictionaryArgs,
+  type Feedback,
+} from './resources';
 import TagEditor, { tagEditorId } from './TagEditor';
 import CreateTagDialog from './CreateTagDialog';
 import BatchImportDialog from './BatchImportDialog';
@@ -78,7 +84,10 @@ import HistoryDialog from './HistoryDialog';
 
 const EMPTY: GlossaryTag[] = [];
 
-const PAGE_SIZE_OPTIONS = PAGE_SIZES.map((size) => ({ value: String(size), label: `每页 ${size} 条` }));
+const PAGE_SIZE_OPTIONS = PAGE_SIZES.map((size) => ({
+  value: String(size),
+  label: `每页 ${size} 条`,
+}));
 
 const TOOLS = [
   { value: 'derpi', label: '搜原站标签', icon: <MdSearch size={ICON.standard} /> },
@@ -122,16 +131,31 @@ export default function GlossaryTab({ token }: AdminPanelProps) {
   const [page, setPage] = useState({ page: 1, scope: '' });
   const scope = [keyword, sort, category, untranslated ? 1 : 0, perPage].join('\n');
   const currentPage = page.scope === scope ? page.page : 1;
-  const args: DictionaryArgs = { token, page: currentPage, limit: perPage, keyword, sort, category, untranslated };
-  const list = useResource(dictionaryPage, !duplicates && token ? args : SKIP, { keepPrevious: `${token}\n${scope}` });
+  const args: DictionaryArgs = {
+    token,
+    page: currentPage,
+    limit: perPage,
+    keyword,
+    sort,
+    category,
+    untranslated,
+  };
+  const list = useResource(dictionaryPage, !duplicates && token ? args : SKIP, {
+    keepPrevious: `${token}\n${scope}`,
+  });
   const dupes = useResource(duplicateTags, duplicates && token ? token : SKIP);
   const read = duplicates ? dupes : list;
   const duplicatePage = usePagedRows(dupes.data ?? EMPTY, token, perPage);
   const rows = (duplicates ? duplicatePage.rows : list.data?.tags) ?? EMPTY;
-  const pageKey = useShownListKey(`${scope}
-${currentPage}`, list.isPrevious);
-  const listKey = duplicates ? `duplicates
-${duplicatePage.listKey}` : pageKey;
+  const pageKey = useShownListKey(
+    `${scope}
+${currentPage}`,
+    list.isPrevious,
+  );
+  const listKey = duplicates
+    ? `duplicates
+${duplicatePage.listKey}`
+    : pageKey;
   const total = duplicates ? duplicatePage.total : (list.data?.total ?? 0);
   const totalPages = duplicates ? 1 : Math.max(1, Math.ceil(total / perPage));
 
@@ -150,9 +174,11 @@ ${duplicatePage.listKey}` : pageKey;
     dirtyRef.current = dirty;
   }, []);
   const refreshAfterClose = useRef(false);
-  const [create, setCreate] = useState<{ open: boolean; prefill: Partial<DerpiTagRow> | null; session: number }>(
-    { open: false, prefill: null, session: 0 },
-  );
+  const [create, setCreate] = useState<{
+    open: boolean;
+    prefill: Partial<DerpiTagRow> | null;
+    session: number;
+  }>({ open: false, prefill: null, session: 0 });
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const [importDialog, setImportDialog] = useState({ open: false, session: 0 });
   const [syncOpen, setSyncOpen] = useState(false);
@@ -182,7 +208,13 @@ ${duplicatePage.listKey}` : pageKey;
     setCreate((current) => ({ open: true, prefill, session: current.session + 1 }));
   };
 
-  if (pendingTag && !duplicates && keyword.toLowerCase() === pendingTag && list.data && !list.isPrevious) {
+  if (
+    pendingTag &&
+    !duplicates &&
+    keyword.toLowerCase() === pendingTag &&
+    list.data &&
+    !list.isPrevious
+  ) {
     const match = list.data.tags.find((tag) => tag.en.toLowerCase() === pendingTag);
     setPendingTag(null);
     if (match) setEditing({ id: match.id, closing: false });
@@ -230,12 +262,18 @@ ${duplicatePage.listKey}` : pageKey;
              closed, so a row that no longer matches the filter does not vanish from under it. */
           if (inDuplicates) {
             if (duplicateTags.peek(token).data) {
-              duplicateTags.write(token, (previous) => (previous ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)));
+              duplicateTags.write(token, (previous) =>
+                (previous ?? []).map((row) =>
+                  row.id === tag.id ? savedTag(row, payload, revision) : row,
+                ),
+              );
             }
           } else if (dictionaryPage.peek(listArgs).data) {
             dictionaryPage.write(listArgs, (previous) => ({
               ...(previous as NonNullable<typeof previous>),
-              tags: (previous?.tags ?? []).map((row) => (row.id === tag.id ? savedTag(row, payload, revision) : row)),
+              tags: (previous?.tags ?? []).map((row) =>
+                row.id === tag.id ? savedTag(row, payload, revision) : row,
+              ),
             }));
           }
           refreshAfterClose.current = true;
@@ -275,21 +313,26 @@ ${duplicatePage.listKey}` : pageKey;
   };
 
   const remove = (tag: GlossaryTag) =>
-    confirmThen('确认删除标签', `确定要永久删除标签「${tag.en}」吗？此操作无法恢复。`, () =>
-      void deleteMutation.run(
-        () => deleteDictionaryTag(token, tag.id),
-        () => showToast(`已删除标签「${tag.en}」`, 'success'),
-        '删除失败',
-        {
-          key: tag.id,
-          onCommitted: () => {
-            tagEntry.invalidate();
-            setSelected((previous) => without(previous, [tag.id]));
-            setEditing((current) => (current?.id === tag.id ? null : current));
-            refreshLists();
+    confirmThen(
+      '确认删除标签',
+      `确定要永久删除标签「${tag.en}」吗？此操作无法恢复。`,
+      () =>
+        void deleteMutation.run(
+          () => deleteDictionaryTag(token, tag.id),
+          () => showToast(`已删除标签「${tag.en}」`, 'success'),
+          '删除失败',
+          {
+            key: tag.id,
+            onCommitted: () => {
+              tagEntry.invalidate();
+              setSelected((previous) => without(previous, [tag.id]));
+              setEditing((current) => (current?.id === tag.id ? null : current));
+              refreshLists();
+            },
           },
-        },
-      ), { tone: 'danger' });
+        ),
+      { tone: 'danger' },
+    );
 
   const removeSelected = () => {
     const ids = [...selected];
@@ -298,23 +341,29 @@ ${duplicatePage.listKey}` : pageKey;
        (review P6-O7) — the count alone hid entries on pages no longer in view. */
     const shownIds = new Set(rows.map((row) => row.id));
     const names = ids.map((id) => selectedNames.current.get(id) ?? `#${id}`);
-    const listed = names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
+    const listed =
+      names.slice(0, 12).join('、') + (names.length > 12 ? ` 等 ${names.length} 个` : '');
     const offscreen = ids.filter((id) => !shownIds.has(id)).length;
     const note = offscreen > 0 ? `其中 ${offscreen} 个不在当前页。` : '';
-    confirmThen('确认批量删除', `确定要永久删除选中的 ${ids.length} 个标签吗？${listed}。${note}此操作无法恢复。`, () =>
-      void bulkMutation.run(
-        () => adminApi.batchDeleteDictionaryTags(token, ids),
-        (data) => showToast(`已删除 ${data.deleted_count} 个标签`, 'success'),
-        '批量删除失败',
-        {
-          key: 'delete',
-          onCommitted: () => {
-            tagEntry.invalidate();
-            setSelected((previous) => without(previous, ids));
-            refreshLists();
+    confirmThen(
+      '确认批量删除',
+      `确定要永久删除选中的 ${ids.length} 个标签吗？${listed}。${note}此操作无法恢复。`,
+      () =>
+        void bulkMutation.run(
+          () => adminApi.batchDeleteDictionaryTags(token, ids),
+          (data) => showToast(`已删除 ${data.deleted_count} 个标签`, 'success'),
+          '批量删除失败',
+          {
+            key: 'delete',
+            onCommitted: () => {
+              tagEntry.invalidate();
+              setSelected((previous) => without(previous, ids));
+              refreshLists();
+            },
           },
-        },
-      ), { tone: 'danger' });
+        ),
+      { tone: 'danger' },
+    );
   };
 
   const importTags = (tasks: ImportTask[]) =>
@@ -327,7 +376,11 @@ ${duplicatePage.listKey}` : pageKey;
           (data) => {
             /* Each tag is its own create, so all three counts are known. */
             const { created, skipped, failed } = data;
-            const parts = [`已导入 ${created} 个标签`, skipped ? `跳过 ${skipped} 个已有的标签` : null, failed ? `${failed} 个导入失败` : null];
+            const parts = [
+              `已导入 ${created} 个标签`,
+              skipped ? `跳过 ${skipped} 个已有的标签` : null,
+              failed ? `${failed} 个导入失败` : null,
+            ];
             showToast(parts.filter(Boolean).join('，'), failed ? 'warning' : 'success');
             if (!failed) setImportDialog((current) => ({ ...current, open: false }));
           },
@@ -353,9 +406,14 @@ ${duplicatePage.listKey}` : pageKey;
       `跳过${amount(result.skipped)}`,
       result.failedTags ? `${result.failedTags} 个失败` : null,
       result.failedPages ? `${result.failedPages} 页失败` : null,
-    ].filter(Boolean).join('，');
+    ]
+      .filter(Boolean)
+      .join('，');
     const clean = !result.stopped && !result.failedTags && !result.failedPages;
-    showToast(`${result.stopped ? '已停止同步' : '已同步'}：${tally}`, clean ? 'success' : 'warning');
+    showToast(
+      `${result.stopped ? '已停止同步' : '已同步'}：${tally}`,
+      clean ? 'success' : 'warning',
+    );
     if (clean) setSyncOpen(false);
   };
 
@@ -364,7 +422,9 @@ ${duplicatePage.listKey}` : pageKey;
       showToast('当前页没有可导出的标签', 'info');
       return;
     }
-    const url = URL.createObjectURL(new Blob([exportText(rows)], { type: 'text/plain;charset=utf-8' }));
+    const url = URL.createObjectURL(
+      new Blob([exportText(rows)], { type: 'text/plain;charset=utf-8' }),
+    );
     const link = document.createElement('a');
     link.href = url;
     link.download = duplicates ? 'tags_duplicates.txt' : `tags_page_${currentPage}.txt`;
@@ -489,10 +549,14 @@ ${duplicatePage.listKey}` : pageKey;
       width: 'minmax(0, 1.5fr)',
       render: (tag) =>
         isUntranslated(tag.cn) ? (
-          <Badge tone="warning" size="md">未翻译</Badge>
+          <Badge tone="warning" size="md">
+            未翻译
+          </Badge>
         ) : (
           <span className="min-w-0">
-            <span className="block text-body-m-emphasized text-on-surface wrap-anywhere">{tag.cn}</span>
+            <span className="block text-body-m-emphasized text-on-surface wrap-anywhere">
+              {tag.cn}
+            </span>
             {tag.aliases.length > 0 && (
               <span className="block text-body-s text-on-surface-variant wrap-anywhere">{`别名：${tag.aliases.join('、')}`}</span>
             )}
@@ -526,7 +590,9 @@ ${duplicatePage.listKey}` : pageKey;
       width: 'minmax(0, 1.5fr)',
       render: (tag) =>
         tag.description ? (
-          <span className="line-clamp-2 text-on-surface-variant" title={tag.description}>{tag.description}</span>
+          <span className="line-clamp-2 text-on-surface-variant" title={tag.description}>
+            {tag.description}
+          </span>
         ) : (
           <span className="text-on-surface-variant">暂无简介</span>
         ),
@@ -571,17 +637,29 @@ ${duplicatePage.listKey}` : pageKey;
 
   return (
     <div className="@container/glossary space-y-6">
-      <SectionHeader section="glossary"
+      <SectionHeader
+        section="glossary"
         subtitle={
-          read.data !== undefined
-            ? (duplicates ? `${total} 个重复的英文标签` : `共 ${total} 条`)
-            : (token && !read.error ? <Skeleton className="my-0.5 inline-block h-4 w-20 align-middle" /> : undefined)
+          read.data !== undefined ? (
+            duplicates ? (
+              `${total} 个重复的英文标签`
+            ) : (
+              `共 ${total} 条`
+            )
+          ) : token && !read.error ? (
+            <Skeleton className="my-0.5 inline-block h-4 w-20 align-middle" />
+          ) : undefined
         }
         onRefresh={read.refresh}
         isLoading={read.isLoading && read.data !== undefined}
         actions={
           <>
-            <Button type="button" variant="tonal" icon={<MdFeedback />} onClick={() => setFeedbackOpen(true)}>
+            <Button
+              type="button"
+              variant="tonal"
+              icon={<MdFeedback />}
+              onClick={() => setFeedbackOpen(true)}
+            >
               用户反馈
             </Button>
             <Button
@@ -595,7 +673,12 @@ ${duplicatePage.listKey}` : pageKey;
             >
               工具
             </Button>
-            <Button type="button" variant="filled" icon={<MdAdd />} onClick={() => openCreate(null)}>
+            <Button
+              type="button"
+              variant="filled"
+              icon={<MdAdd />}
+              onClick={() => openCreate(null)}
+            >
               添加新标签
             </Button>
           </>
@@ -613,7 +696,12 @@ ${duplicatePage.listKey}` : pageKey;
       <div className="space-y-3">
         <div className="flex flex-col gap-3 @lg/glossary:flex-row @lg/glossary:items-center">
           <div className="min-w-0 @lg/glossary:flex-1">
-            <SearchInput value={search} onChange={setSearch} placeholder="搜索英文标签或中文翻译…" aria-label="搜索标签" />
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="搜索英文标签或中文翻译…"
+              aria-label="搜索标签"
+            />
           </div>
           <div className="grid grid-cols-2 gap-3 @lg/glossary:flex @lg/glossary:shrink-0 @lg/glossary:items-center">
             <Select
@@ -679,7 +767,12 @@ ${duplicatePage.listKey}` : pageKey;
 
       <AdminListAnchor>
         {turnFailed && (
-          <ErrorRetry size="inline" title={`词库第 ${currentPage} 页加载失败`} message={apiErrorMessage(list.error)} onRetry={isRetryable(list.error) ? list.refresh : undefined} />
+          <ErrorRetry
+            size="inline"
+            title={`词库第 ${currentPage} 页加载失败`}
+            message={apiErrorMessage(list.error)}
+            onRetry={isRetryable(list.error) ? list.refresh : undefined}
+          />
         )}
         <DataTable<GlossaryTag>
           columns={columns}
@@ -689,7 +782,9 @@ ${duplicatePage.listKey}` : pageKey;
           expandedRow={renderEditor}
           loading={Boolean(token) && read.data === undefined && !read.error}
           skeletonRows={Math.min(perPage, 8)}
-          {...(read.data === undefined ? tableError(duplicates ? '查重结果加载失败' : '词库加载失败', failure) : {})}
+          {...(read.data === undefined
+            ? tableError(duplicates ? '查重结果加载失败' : '词库加载失败', failure)
+            : {})}
           onRetry={read.error && isRetryable(read.error) ? read.refresh : undefined}
           empty={
             duplicates ? (
@@ -701,7 +796,13 @@ ${duplicatePage.listKey}` : pageKey;
             )
           }
         />
-        {duplicates && <AdminPager page={duplicatePage.page} totalPages={duplicatePage.totalPages} onPageChange={duplicatePage.setPage} />}
+        {duplicates && (
+          <AdminPager
+            page={duplicatePage.page}
+            totalPages={duplicatePage.totalPages}
+            onPageChange={duplicatePage.setPage}
+          />
+        )}
         {!duplicates && (
           <div className="flex flex-col items-center gap-3 @lg/glossary:flex-row @lg/glossary:justify-between">
             <Select
@@ -748,7 +849,9 @@ ${duplicatePage.listKey}` : pageKey;
             aside={
               <>
                 {'已翻译 '}
-                <span className="tabular-nums text-on-surface">{formatCount(stats.translated)}</span>
+                <span className="tabular-nums text-on-surface">
+                  {formatCount(stats.translated)}
+                </span>
                 {' / 共 '}
                 <span className="tabular-nums text-on-surface">{formatCount(stats.total)}</span>
                 {` 个标签（${share.toFixed(2)}%）`}
@@ -766,7 +869,14 @@ ${duplicatePage.listKey}` : pageKey;
         open={create.open}
         prefill={create.prefill}
         saving={saveMutation.pendingKeys.has('create')}
-        workOrder={workOrder && create.open && create.prefill?.name && sameTag(workOrder.tag, create.prefill.name) ? workOrder : null}
+        workOrder={
+          workOrder &&
+          create.open &&
+          create.prefill?.name &&
+          sameTag(workOrder.tag, create.prefill.name)
+            ? workOrder
+            : null
+        }
         duplicate={duplicate}
         onClose={() => {
           if (saveMutation.isPending('create')) return;
@@ -801,7 +911,12 @@ ${duplicatePage.listKey}` : pageKey;
           openCreate(tag);
         }}
       />
-      <FeedbackDialog open={feedbackOpen} token={token} onClose={() => setFeedbackOpen(false)} onHandle={handleFeedback} />
+      <FeedbackDialog
+        open={feedbackOpen}
+        token={token}
+        onClose={() => setFeedbackOpen(false)}
+        onHandle={handleFeedback}
+      />
       <HistoryDialog
         key={`history-${history?.tag.id ?? 0}`}
         token={token}

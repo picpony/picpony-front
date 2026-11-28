@@ -20,6 +20,10 @@ const subscribe = () => () => {};
  */
 export function useShowPrivacyTab(live: boolean): boolean {
   const hint = useContext(Hint);
-  const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
   return hydrated ? live : hint;
 }

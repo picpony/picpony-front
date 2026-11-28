@@ -32,7 +32,8 @@ import { cn, getAssetUrl } from '@/lib/utils';
  * The teaser holds the cover's height with the title (24 + 2 + 30 = 56), so a row is the same
  * height with a cover or without one, and the skeleton below is exactly this geometry.
  */
-const ROW_GRID = 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 p-3 sm:gap-x-4 sm:p-4';
+const ROW_GRID =
+  'grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 p-3 sm:gap-x-4 sm:p-4';
 const TEASER_HEIGHT = 'min-h-[30px]';
 
 interface ForumPostListProps {
@@ -48,12 +49,22 @@ interface ForumPostListProps {
   className?: string;
 }
 
-function ForumRow({ post, token, now }: { post: ForumPost; token: string | null; now: number | null }) {
+function ForumRow({
+  post,
+  token,
+  now,
+}: {
+  post: ForumPost;
+  token: string | null;
+  now: number | null;
+}) {
   /* **Warmed on the press, never on a hover** — a thread read counts a view on the server, so
      warming a thread the pointer merely crossed would inflate the count. A press is followed by
      its click ~100ms later (a finger's after the tap timeout, and not at all if it becomes a
      scroll), which is the head start worth having. */
-  const intent = useIntentPrefetch(() => forumThread.prefetch({ id: String(post.id), page: 1, token }));
+  const intent = useIntentPrefetch(() =>
+    forumThread.prefetch({ id: String(post.id), page: 1, token }),
+  );
   /* **The route's page, from a hover on, and at the press itself** — all a finger has. Its payload
      is the server's render of a client page and reads nothing, so it counts no view: warmed ahead,
      the press commits the thread in one piece and the row grows into its card at once
@@ -138,8 +149,14 @@ function ForumRow({ post, token, now }: { post: ForumPost; token: string | null;
       <span className="col-span-2 col-start-2 mt-1 flex min-w-0 items-center gap-3 text-body-s text-on-surface-variant">
         <span className="flex min-w-0 flex-1 items-center gap-1">
           <span className="min-w-0 truncate">{post.username}</span>
-          <span aria-hidden="true" className="shrink-0">·</span>
-          <time dateTime={post.created_at} title={formatDateTime(post.created_at)} className="shrink-0 tabular-nums">
+          <span aria-hidden="true" className="shrink-0">
+            ·
+          </span>
+          <time
+            dateTime={post.created_at}
+            title={formatDateTime(post.created_at)}
+            className="shrink-0 tabular-nums"
+          >
             {now === null ? formatDate(post.created_at) : formatCompactDate(post.created_at, now)}
           </time>
         </span>
@@ -190,7 +207,10 @@ export default function ForumPostList({
   const rowsRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const id = readForumLeft();
-    const row = id === null ? null : rowsRef.current?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(id)}"]`);
+    const row =
+      id === null
+        ? null
+        : rowsRef.current?.querySelector<HTMLElement>(`[data-forum-row="${CSS.escape(id)}"]`);
     if (!row) return;
     row.setAttribute('data-return-focus', '');
     return () => row.removeAttribute('data-return-focus');

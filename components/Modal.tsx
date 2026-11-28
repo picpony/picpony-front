@@ -262,7 +262,10 @@ export default function Modal({
       panel.animate([{ transform: fromTransform }, { transform }], travel),
     ];
     for (const animation of running) {
-      animation.finished.then(() => animation.cancel(), () => {});
+      animation.finished.then(
+        () => animation.cancel(),
+        () => {},
+      );
     }
     if (!isOpen) {
       // A reopen cancels these, which rejects `finished`: only a real exit reports.
@@ -324,87 +327,91 @@ export default function Modal({
 
   return createPortal(
     <OverlayLayerContext.Provider value={layer}>
-    <div
-      ref={overlayRef}
-      data-modal-overlay=""
-      // Portals can mount child-first, so DOM insertion order cannot decide
-      // which of two nested dialogs paints above the other.
-      style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
-      className={cn(
-        'fixed inset-0 flex items-center justify-center',
-        'pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]',
-        'sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]',
-        /* The shared dialog layer, unless the caller names one — see the
+      <div
+        ref={overlayRef}
+        data-modal-overlay=""
+        // Portals can mount child-first, so DOM insertion order cannot decide
+        // which of two nested dialogs paints above the other.
+        style={layer.depth ? { zIndex: `calc(var(--z-dialog) + ${layer.depth})` } : undefined}
+        className={cn(
+          'fixed inset-0 flex items-center justify-center',
+          'pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]',
+          'sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]',
+          /* The shared dialog layer, unless the caller names one — see the
            stacking-order block in globals.css. */
-        'z-dialog',
-      )}
-      /* A click is dispatched to the common ancestor of its press and its release, so a
+          'z-dialog',
+        )}
+        /* A click is dispatched to the common ancestor of its press and its release, so a
          text selection that starts in a field and is released over the scrim arrives
          here as a scrim click. Only a press that *began* on the scrim may close. */
-      onPointerDown={(event) => {
-        pressOnScrim.current = event.target === event.currentTarget || event.target === scrimRef.current;
-      }}
-      onClick={(event) => {
-        const started = pressOnScrim.current;
-        pressOnScrim.current = false;
-        const onScrim = event.target === event.currentTarget || event.target === scrimRef.current;
-        if (closeOnOverlayClick && started && onScrim) handleClose();
-      }}
-      /* `inert` while leaving, not `pointer-events: none`. The dialog is held in
-       * the tree so its exit has something to play on, and for those 200ms it
-       * was still a focusable subtree — the focus trap has already released, so
-       * Tab could walk into a dialog that was visibly scaling away. `inert`
-       * (React 19) removes the subtree from the tab order and the accessibility
-       * tree together. */
-      inert={!isOpen}
-    >
-      <div
-        ref={scrimRef}
-        data-modal-scrim=""
-        aria-hidden="true"
-        className={cn('absolute inset-0', danger ? 'danger-scrim bg-scrim-danger' : 'bg-scrim-veil')}
-      />
-      <div
-        ref={panelRef}
-        role={role}
-        aria-modal="true"
-        aria-labelledby={labelledBy ?? (title ? titleId : undefined)}
-        aria-label={labelledBy || title ? undefined : (ariaLabel ?? '对话框')}
-        aria-describedby={describedBy}
-        tabIndex={-1}
-        className={cn(
-          'relative flex max-h-full w-full flex-col overflow-hidden focus-visible:outline-hidden',
-          /* `surface-container-high` is M3's dialog container — tone first,
-             shadow second is the whole M3 depth recipe. */
-          'bg-surface-container-high text-on-surface rounded-2xl shadow-e3 forced-boundary',
-          MAX_WIDTHS[maxWidth],
-          panelClassName,
-        )}
+        onPointerDown={(event) => {
+          pressOnScrim.current =
+            event.target === event.currentTarget || event.target === scrimRef.current;
+        }}
+        onClick={(event) => {
+          const started = pressOnScrim.current;
+          pressOnScrim.current = false;
+          const onScrim = event.target === event.currentTarget || event.target === scrimRef.current;
+          if (closeOnOverlayClick && started && onScrim) handleClose();
+        }}
+        /* `inert` while leaving, not `pointer-events: none`. The dialog is held in
+         * the tree so its exit has something to play on, and for those 200ms it
+         * was still a focusable subtree — the focus trap has already released, so
+         * Tab could walk into a dialog that was visibly scaling away. `inert`
+         * (React 19) removes the subtree from the tab order and the accessibility
+         * tree together. */
+        inert={!isOpen}
       >
-        {hasHeader && (
-          <div
-            ref={headerRef}
-            className="relative flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
-          >
-            {title && (
-              <h2 id={titleId} className="text-headline-s min-w-0 wrap-anywhere text-on-surface">
-                {title}
-              </h2>
-            )}
-            {!hideCloseButton && (
-              <IconButton
-                onClick={handleClose}
-                aria-label="关闭"
-                dismiss
-                /* Centred on the headline's 32dp line, overhanging the row by 4dp vertically
+        <div
+          ref={scrimRef}
+          data-modal-scrim=""
+          aria-hidden="true"
+          className={cn(
+            'absolute inset-0',
+            danger ? 'danger-scrim bg-scrim-danger' : 'bg-scrim-veil',
+          )}
+        />
+        <div
+          ref={panelRef}
+          role={role}
+          aria-modal="true"
+          aria-labelledby={labelledBy ?? (title ? titleId : undefined)}
+          aria-label={labelledBy || title ? undefined : (ariaLabel ?? '对话框')}
+          aria-describedby={describedBy}
+          tabIndex={-1}
+          className={cn(
+            'relative flex max-h-full w-full flex-col overflow-hidden focus-visible:outline-hidden',
+            /* `surface-container-high` is M3's dialog container — tone first,
+             shadow second is the whole M3 depth recipe. */
+            'bg-surface-container-high text-on-surface rounded-2xl shadow-e3 forced-boundary',
+            MAX_WIDTHS[maxWidth],
+            panelClassName,
+          )}
+        >
+          {hasHeader && (
+            <div
+              ref={headerRef}
+              className="relative flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-2 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+            >
+              {title && (
+                <h2 id={titleId} className="text-headline-s min-w-0 wrap-anywhere text-on-surface">
+                  {title}
+                </h2>
+              )}
+              {!hideCloseButton && (
+                <IconButton
+                  onClick={handleClose}
+                  aria-label="关闭"
+                  dismiss
+                  /* Centred on the headline's 32dp line, overhanging the row by 4dp vertically
                    and matching the 20dp top clearance on the trailing edge (`24 - 4 = 20`). */
-                className="-my-1 -mr-1 ml-auto"
-                icon={<MdClose />}
-              />
-            )}
-          </div>
-        )}
-        {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
+                  className="-my-1 -mr-1 ml-auto"
+                  icon={<MdClose />}
+                />
+              )}
+            </div>
+          )}
+          {/* `bodyClassName` 完整接管 padding：cn 只拼接不解决 Tailwind
             冲突，所以默认内边距不能留在 base 里，否则会盖掉调用方传入的零内边距。
             Under a header the 16dp between the headline and the content is split
             8 + 8 rather than 12 + 4: a labelled field's floating label sits 6px above
@@ -414,35 +421,34 @@ export default function Modal({
             a `Pagination` in a dialog was turning a page and scrolling the *page
             behind the dialog* to the top. The scrollbar is the overlay style: an
             overlay reserves no gutter, or every dialog's text sits off-centre. */}
-        <ScrollArea
-          axis="both"
-          className="os-slot-overlay flex min-h-0 flex-1 flex-col"
-          slotProps={{
-            'data-os-round-top': !hasHeader ? '' : undefined,
-            'data-os-round-bottom': !footer ? '' : undefined,
-          }}
-          viewportRef={bodyRef}
-          viewportProps={{ 'data-app-scroll-container': '' }}
-          viewportClassName={cn(
-            'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain',
-            bodyClassName ||
-              cn('px-6', hasHeader ? 'pt-2' : 'pt-6', hasFooter ? 'pb-2' : 'pb-6'),
-          )}
-        >
-          {children}
-        </ScrollArea>
-        {/* Keep actions in the wrapping footer; a leading action uses an auto margin.
-            See docs/design/primitives.md#overlays-and-history. */}
-        {footer && (
-          <div
-            ref={footerRef}
-            className="relative flex shrink-0 flex-wrap justify-end gap-3 px-6 pt-4 pb-6 after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+          <ScrollArea
+            axis="both"
+            className="os-slot-overlay flex min-h-0 flex-1 flex-col"
+            slotProps={{
+              'data-os-round-top': !hasHeader ? '' : undefined,
+              'data-os-round-bottom': !footer ? '' : undefined,
+            }}
+            viewportRef={bodyRef}
+            viewportProps={{ 'data-app-scroll-container': '' }}
+            viewportClassName={cn(
+              'popover-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              bodyClassName || cn('px-6', hasHeader ? 'pt-2' : 'pt-6', hasFooter ? 'pb-2' : 'pb-6'),
+            )}
           >
-            {footer}
-          </div>
-        )}
+            {children}
+          </ScrollArea>
+          {/* Keep actions in the wrapping footer; a leading action uses an auto margin.
+            See docs/design/primitives.md#overlays-and-history. */}
+          {footer && (
+            <div
+              ref={footerRef}
+              className="relative flex shrink-0 flex-wrap justify-end gap-3 px-6 pt-4 pb-6 after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-px after:transition-[background-color] after:spring-fast-effects data-divided:after:bg-outline-variant"
+            >
+              {footer}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </OverlayLayerContext.Provider>,
     document.body,
   );
